@@ -66,6 +66,51 @@ exe @getExecuteCompletedItems(events) = [
   => for @e in @doneEvents => @e.id
 ]
 
+>> Get verified items that haven't been merged yet
+>> Returns items with item_done + verified + worktree_branch but no merge_done event
+exe @getVerifiedNotMerged(events) = [
+  >> Find all verified items with worktrees
+  let @verifiedEvents = for @e in @events when @e.event == "item_done" && @e.verified && @e.worktree_branch => @e
+
+  >> Find all merged item IDs
+  let @mergedIds = for @e in @events when @e.event == "merge_done" => @e.id
+
+  >> Filter to only unmerged items
+  let @unmergedWithNulls = for @v in @verifiedEvents [
+    let @isMerged = @mergedIds.includes(@v.id)
+    when !@isMerged => { ticket_id: @v.id, worktree_branch: @v.worktree_branch, commit_sha: @v.commit_sha }
+  ]
+  >> Remove nulls
+  => for @item in @unmergedWithNulls when @item => @item
+]
+
+>> Log successful merge of an item
+exe @logMergeDone(runDir, ticketId, commitSha) = [
+  => @logEvent(@runDir, { event: "merge_done", id: @ticketId, commit_sha: @commitSha })
+]
+
+>> Log failed merge of an item
+exe @logMergeFailed(runDir, ticketId, error) = [
+  => @logEvent(@runDir, { event: "merge_failed", id: @ticketId, error: @error })
+]
+
+>> Log item requiring manual review to a prominent file in project root
+>> File: <run-id>-manual-review-reqd.jsonl in @base/
+exe @logManualReview(runDir, ticketId, phase, reason, details) = [
+  >> Extract run ID from runDir path (last segment)
+  let @runId = @runDir.split("/").pop()
+  let @reviewFile = `@base/@runId-manual-review-reqd.jsonl`
+  let @entry = {
+    ts: @now,
+    ticket_id: @ticketId,
+    phase: @phase,
+    reason: @reason,
+    details: @details
+  }
+  let @_ = @entry | append "@reviewFile"
+  => @entry
+]
+
 /export {
   @logEvent,
   @logPhaseStart,
@@ -76,5 +121,9 @@ exe @getExecuteCompletedItems(events) = [
   @logItemDone,
   @loadEvents,
   @getCompletedItems,
-  @getExecuteCompletedItems
+  @getExecuteCompletedItems,
+  @getVerifiedNotMerged,
+  @logMergeDone,
+  @logMergeFailed,
+  @logManualReview
 }

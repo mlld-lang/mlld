@@ -6,8 +6,8 @@
 
 import { @claudePoll } from @mlld/claude-poll
 import { @updatePhaseStatus } from "../lib/state.mld"
-import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone } from "../lib/events.mld"
-import { @getTicket, @addTags, @hasTagPrefix, @isStale, @isImplDone } from "../lib/tickets.mld"
+import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone, @logEvent } from "../lib/events.mld"
+import { @getTicket, @addTags, @hasTagPrefix, @isStale, @isImplDone, @addEnrichNote, @wasRecentlyEnriched } from "../lib/tickets.mld"
 
 /needs { sh }
 
@@ -27,17 +27,21 @@ exe @buildEnrichPrompt(issueId, issueType, issuePriority, createdDate, issueCont
 >> Enrich a single ticket
 exe @enrichTicket(runDir, ticket, changelog) = [
   let @issueId = @ticket.id
-  let @issueType = @ticket.type ? @ticket.type : "task"
-  let @issuePriority = @ticket.priority ? @ticket.priority : "3"
-  let @createdDate = @ticket.created ? @ticket.created : @now
+  let @issueType = when first [@ticket.type => @ticket.type; * => "task"]
+  let @issuePriority = when first [@ticket.priority => `@ticket.priority`; * => "3"]
+  let @createdDate = when first [@ticket.created => @ticket.created; * => @now]
   let @alreadyEnriched = @hasTagPrefix(@ticket, "size-")
+  let @recentlyReviewed = @wasRecentlyEnriched(@issueId, 24)
 
   >> Check if already enriched (has size tag)
   when @alreadyEnriched => show `    Skipping @issueId (already enriched)`
+  >> Check if reviewed in last 24 hours
+  when @recentlyReviewed && !@alreadyEnriched => show `    Skipping @issueId (reviewed <24h ago)`
 
   >> Use when first for proper early return
   => when first [
     @alreadyEnriched => { ticket_id: @issueId, skipped: true, reason: "already-enriched" }
+    @recentlyReviewed => { ticket_id: @issueId, skipped: true, reason: "recently-reviewed" }
     * => @_doEnrichTicket(@runDir, @issueId, @issueType, @issuePriority, @createdDate, @changelog)
   ]
 ]
@@ -99,14 +103,10 @@ exe @_finishEnrichTicket(runDir, issueId, result) = [
     @addTags(@issueId, @tagsStr)
   ]
 
-  @logItemDone(@runDir, @issueId, "enriched", {})
+  >> Add timestamped note so we can skip re-enrichment for 24h
+  let @_ = @addEnrichNote(@issueId)
 
-  >> DEBUG: Check result param type and structure
-  show `    _finish DEBUG: typeof result = @result.type`
-  show `    _finish DEBUG: result has staleness = @result.staleness ? "yes" : "no"`
-  show `    _finish DEBUG: result.staleness.score = @result.staleness.score`
-
-  >> Build return object - try assigning to let first
+  >> Build return object
   let @returnObj = {
     ticket_id: @issueId,
     staleness: @result.staleness,
@@ -115,7 +115,9 @@ exe @_finishEnrichTicket(runDir, issueId, result) = [
     tags_added: @result.tags_to_add
   }
 
-  show `    _finish DEBUG: returnObj.staleness.score = @returnObj.staleness.score`
+  >> Append enrich_done event to events.jsonl
+  let @_ = @logEvent(@runDir, { event: "enrich_done", id: @issueId, ...@returnObj })
+  @logItemDone(@runDir, @issueId, "enriched", {})
 
   => @returnObj
 ]

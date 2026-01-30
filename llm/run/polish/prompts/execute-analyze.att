@@ -45,6 +45,10 @@ Strategy: @strategyContext
    ls tests/cases/<relevant>/
    ```
 
+<@prompts/chestertons-fence.md>
+
+If you suspect intentional design, set `auto_approve: false` and add a `design_question`.
+
 ## Design Philosophy
 
 Before proposing a fix, consider:
@@ -73,7 +77,8 @@ Write your analysis to `@outputPath`:
   "recommendation": {
     "confidence": 0.8,
     "design_fit": "high|medium|low",
-    "auto_approve": true
+    "auto_approve": true,
+    "design_question": null
   }
 }
 ```
@@ -82,3 +87,7 @@ Set `auto_approve: true` only if:
 - Confidence >= 0.8
 - Design fit is high or medium
 - The fix is straightforward and low-risk
+- No design questions (Chesterton's Fence passed)
+
+Set `design_question` to a string if you suspect this might be intentional design. Example:
+`"design_question": "The strict validation here might prevent ambiguous inputs. Is relaxing it safe?"`

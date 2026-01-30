@@ -114,6 +114,18 @@ exe @_doExecute(runDir, outputPath, items, config) = [
   let @batchNum = 1
   let @mergeResult = @mergeVerified(@runDir, @results, @baseBranchTrimmed, @batchNum, @dryRun)
 
+  >> Show merge failures if any
+  let @mergeFailed = when first [@mergeResult.failed_count => @mergeResult.failed_count; * => 0]
+  when @mergeFailed > 0 => [
+    show `  WARNING: @mergeFailed merge(s) failed!`
+    let @mergeResultsList = when first [@mergeResult.results => @mergeResult.results; * => []]
+    let @failedResults = for @r in @mergeResultsList when !@r.merged && @r.error => @r
+    for @f in @failedResults [
+      show `    @f.ticket_id: @f.error`
+    ]
+    show ``
+  ]
+
   >> === STAGE 4c: VERIFY ===
   show ``
   show `  --- Stage 4c: Verify ---`
@@ -121,7 +133,20 @@ exe @_doExecute(runDir, outputPath, items, config) = [
   let @verifyResult = @verifyMain(@runDir, @mergeResult, @baseBranchTrimmed, @dryRun)
 
   >> Check verification status
-  when @verifyResult.status == "fail" => show `  WARNING: Verification failed after merge!`
+  when @verifyResult.status == "fail" => [
+    show `  WARNING: Verification failed after merge!`
+    show ``
+    show `  Test output:`
+    show `    @verifyResult.test_output`
+    show ``
+    when @verifyResult.likely_cause => [
+      show `  Likely cause: @verifyResult.likely_cause.ticket_id`
+      show `    @verifyResult.likely_cause.reason`
+    ]
+    when @verifyResult.note => show `  Note: @verifyResult.note`
+    show `  Recommendation: @verifyResult.recommendation`
+    show ``
+  ]
 
   >> Build final results
   let @mergedCount = @mergeResult.merged_count ? @mergeResult.merged_count : 0

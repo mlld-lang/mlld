@@ -139,6 +139,47 @@ exe @getImplStatus(ticket) = [
   ]
 ]
 
+>> Shell helper for adding notes
+exe @shTkAddNote(id, note) = sh {tk add-note "$id" "$note" 2>/dev/null || echo "FAILED"}
+
+>> Add enrich review note with timestamp
+exe @addEnrichNote(id) = [
+  let @note = `Enrich reviewed: @now`
+  let @result = @shTkAddNote(@id, @note)
+  let @trimmed = @result.trim()
+  => when first [
+    @trimmed == "FAILED" => false
+    * => true
+  ]
+]
+
+>> Check if ticket was enriched recently (within hours threshold)
+>> Parses ticket content for "Enrich reviewed: <timestamp>" notes
+exe @wasRecentlyEnriched(id, hoursThreshold) = [
+  let @ticket = @getTicket(@id)
+  => when first [
+    !@ticket => false
+    * => @_checkEnrichTimestamp(@ticket, @hoursThreshold)
+  ]
+]
+
+>> Helper to check enrich timestamp (separate to isolate potential errors)
+exe @_checkEnrichTimestamp(ticket, hoursThreshold) = [
+  >> Coerce to string for regex matching
+  let @content = `@ticket`
+  let @match = @content.match(/Enrich reviewed: (\d{4}-\d{2}-\d{2}T[\d:.]+Z)/)
+  => when first [
+    !@match => false
+    * => [
+      let @lastEnrich = @match[1]
+      let @lastEnrichMs = js { return new Date(lastEnrich).getTime(); }
+      let @nowMs = js { return Date.now(); }
+      let @ageHours = (@nowMs - @lastEnrichMs) / (1000 * 60 * 60)
+      => @ageHours < @hoursThreshold
+    ]
+  ]
+]
+
 /export {
   @ticketsDir,
   @getOpenTickets,
@@ -154,5 +195,7 @@ exe @getImplStatus(ticket) = [
   @getSize,
   @getComplexity,
   @getRisk,
-  @getImplStatus
+  @getImplStatus,
+  @addEnrichNote,
+  @wasRecentlyEnriched
 }

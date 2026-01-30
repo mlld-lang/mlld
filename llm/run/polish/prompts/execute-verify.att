@@ -1,6 +1,6 @@
 ## Verify Merged Fixes
 
-You are verifying that merged fixes don't break the main branch.
+You are verifying that merged fixes don't break the main branch, then finalizing tickets.
 
 ## Context
 
@@ -31,16 +31,42 @@ npm run build
 npm test
 ```
 
-### 3. Record Results
+### 3. Handle Results
 
-**If tests pass:**
-All merged fixes are verified. The main branch is healthy.
+#### If Tests PASS
 
-**If tests fail:**
-Identify which merged fix likely caused the failure by:
-1. Looking at the test output
-2. Checking which files were changed in recent merges
-3. Cross-referencing with the merged items above
+For each merged item:
+
+1. **Close the ticket:**
+```bash
+tk close <ticket_id>
+```
+
+2. **Remove the worktree:**
+```bash
+wt remove <worktree_branch> -y
+```
+
+#### If Tests FAIL
+
+1. **Identify the likely cause** by:
+   - Looking at the test output
+   - Checking which files were changed in recent merges
+   - Cross-referencing with the merged items above
+
+2. **Tag the likely cause ticket:**
+```bash
+tk tag <ticket_id> verify-failed
+```
+
+3. **Add a note to the ticket:**
+```bash
+tk add-note <ticket_id> "Verify failed: <brief summary of test failure>. Worktree preserved: <worktree_branch>"
+```
+
+4. **Do NOT remove any worktrees** - they're needed for investigation
+
+5. **Do NOT close any tickets** - they need to be re-triaged
 
 ## Output
 
@@ -53,6 +79,8 @@ Write to `@outputPath`:
   "base_branch": "@baseBranch",
   "verified_count": @mergedCount,
   "test_summary": "All tests pass",
+  "tickets_closed": ["<ticket_id>", ...],
+  "worktrees_removed": ["<worktree_branch>", ...],
   "verified_at": "<timestamp>"
 }
 ```
@@ -64,9 +92,11 @@ Write to `@outputPath`:
   "base_branch": "@baseBranch",
   "test_output": "<relevant test failure output>",
   "likely_cause": {
-    "ticket_id": "mlld-xxx",
+    "ticket_id": "<ticket_id>",
+    "worktree_branch": "<worktree_branch>",
     "reason": "Why this fix likely caused the failure"
   },
+  "tickets_tagged": ["<ticket_id>"],
   "recommendation": "revert|investigate|manual",
   "verified_at": "<timestamp>"
 }

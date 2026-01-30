@@ -156,3 +156,4 @@ __pycache__/
 
 # QA testing output
 qa/
+core/version.ts

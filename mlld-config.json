@@ -23,6 +23,13 @@
         "config": {
           "basePath": "docs/user"
         }
+      },
+      {
+        "prefix": "@prompts/",
+        "resolver": "LOCAL",
+        "config": {
+          "basePath": "llm/prompts"
+        }
       }
     ]
   },

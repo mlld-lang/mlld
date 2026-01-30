@@ -46,10 +46,17 @@ Review each experiment in `@outputDir/@topic/` that has `status: "fail"` or `sta
 3. **Check the cookbook**: Does it show how this feature actually works?
    - Use **Grep** to search: pattern `<keyword>` in path `docs/llm/llms-cookbook.txt`
 
-4. **Classify the issue**:
+4. **Apply Chesterton's Fence** (before classifying as a bug):
+
+<@prompts/chestertons-fence.md>
+
+   If unsure, flag as `needs-human-design` rather than `genuine-bug`.
+
+5. **Classify the issue**:
    - `qa-insufficient-exploration`: You could have found the answer with more searching
    - `docs-could-be-clearer`: Docs are correct but the misunderstanding is understandable
    - `docs-genuinely-misleading`: Docs actively suggest wrong behavior
+   - `needs-human-design`: Behavior seems off but might be intentional (flag for human)
    - `genuine-bug`: The behavior really is wrong (test cases confirm your expectation)
 
 ## Output
@@ -70,14 +77,20 @@ For each experiment directory with issues, create or update `self_review.json`:
       "what_i_found": "What the test cases/cookbook revealed",
       "evidence": "File path or grep result that clarified this",
 
+      "chestertons_fence": {
+        "considered": true,
+        "why_might_this_be_intentional": "Possible reasons for current behavior",
+        "design_question": null
+      },
+
       "doc_clarity": {
-        "issue": "qa-insufficient-exploration | docs-could-be-clearer | docs-genuinely-misleading | genuine-bug",
+        "issue": "qa-insufficient-exploration | docs-could-be-clearer | docs-genuinely-misleading | needs-human-design | genuine-bug",
         "explanation": "Why I chose this classification",
         "suggestion": "What would have helped (if docs issue)",
         "affected_doc": "Which doc file/topic needs improvement"
       },
 
-      "revised_verdict": "not-a-bug | doc-improvement-needed | genuine-bug",
+      "revised_verdict": "not-a-bug | doc-improvement-needed | needs-human-design | genuine-bug",
       "revised_severity": "none | minor | major | blocker"
     }
   ],

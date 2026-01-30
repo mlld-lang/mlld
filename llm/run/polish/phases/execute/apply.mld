@@ -7,7 +7,7 @@
 >> Can run in parallel - each ticket gets its own worktree
 
 import { @claudePoll } from @mlld/claude-poll
-import { @logItemStart, @logItemDone } from "../../lib/events.mld"
+import { @logItemStart, @logItemDone, @logManualReview, @loadEvents, @logEvent } from "../../lib/events.mld"
 import { @getTicket, @addTags, @isImplDone } from "../../lib/tickets.mld"
 import { @debuglog } from "../../lib/debug.mld"
 
@@ -67,7 +67,11 @@ exe @_doAnalyzeTicket(runDir, ticketId, ticketContent, analysisPath, dryRun) = [
   let @response = @claudePoll(@analyzeFullPrompt, @analyzeModel, @base, @analyzeTools, @analysisPath)
 
   let @result = <@analysisPath>?
-  when @result => show `        Analysis complete`
+  when @result => [
+    show `        Analysis complete`
+    >> Append analysis_done event to events.jsonl
+    let @_ = @logEvent(@runDir, { event: "analysis_done", id: @ticketId, ...@result })
+  ]
   when !@result => show `        Analysis failed - no result file`
   let @finalResult = when first [@result => @result; * => { ticket_id: @ticketId, error: "analysis failed" }]
   => @finalResult
@@ -123,6 +127,9 @@ exe @_processAfterAnalysis(runDir, ticketId, baseBranch, dryRun, analysis) = [
   => when first [
     !@canApprove => [
       let @_ = @logItemDone(@runDir, @ticketId, "needs-review", { analysis: @analysis })
+      >> Log to prominent file in project root for visibility
+      let @reviewReason = @analysis.recommendation && @analysis.recommendation.notes ? @analysis.recommendation.notes : "confidence too low"
+      let @_ = @logManualReview(@runDir, @ticketId, "execute", @reviewReason, @analysis)
       => { ticket_id: @ticketId, status: "needs-review", analysis: @analysis }
     ]
     @dryRun => [
@@ -150,7 +157,11 @@ exe @_applyFix(runDir, ticketId, baseBranch, analysis) = [
   let @applyResponse = @claudePoll(@applyFullPrompt, "opus", @base, @applyTools, @resultPath)
 
   let @result = <@resultPath>?
-  when @result => show `        [apply] success for @ticketId`
+  when @result => [
+    show `        [apply] success for @ticketId`
+    >> Append apply_done event to events.jsonl
+    let @_ = @logEvent(@runDir, { event: "apply_done", id: @ticketId, ...@result })
+  ]
   when !@result => show `        [apply] failed for @ticketId`
 
   => when first [

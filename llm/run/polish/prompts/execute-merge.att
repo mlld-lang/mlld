@@ -53,11 +53,9 @@ Get the merge commit SHA:
 git rev-parse HEAD
 ```
 
-#### 4. Remove Worktree (on success only)
+#### 4. Do NOT Remove Worktree
 
-```bash
-wt remove <worktree_branch> -y
-```
+Worktree cleanup happens after verification. Leave the worktree intact.
 
 ### Skip Conditions
 
@@ -83,14 +81,14 @@ Write to `@outputPath`:
   "base_branch": "@baseBranch",
   "results": [
     {
-      "ticket_id": "mlld-xxx",
-      "worktree_branch": "polish/mlld-xxx",
+      "ticket_id": "m-xxx",
+      "worktree_branch": "polish/m-xxx",
       "merged": true,
       "merge_commit": "<sha>"
     },
     {
-      "ticket_id": "mlld-yyy",
-      "worktree_branch": "polish/mlld-yyy",
+      "ticket_id": "m-yyy",
+      "worktree_branch": "polish/m-yyy",
       "merged": false,
       "skip_reason": "tests failed"
     }
