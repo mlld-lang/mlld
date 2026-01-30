@@ -211,14 +211,24 @@ SlashVar "var directive"
       // So we pass the current position which is correct
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed array in /var directive. Expected ']' to close the array.", "]", location());
+      const reason = helpers.parserState.lastUnclosedReason;
+      if (reason === 'commentInside') {
+        helpers.mlldError("Comments (>>) are not allowed inside array literals. Place comments before the array or on a separate line.", ">>", location());
+      } else {
+        helpers.mlldError("Unclosed array in /var directive. Expected ']' to close the array.", "]", location());
+      }
     }
-    
+
   // Error: Unclosed object literal
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "{" &{
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed object in /var directive. Expected closing brace to close the object.", String.fromCharCode(125), location());
+      const reason = helpers.parserState.lastUnclosedReason;
+      if (reason === 'commentInside') {
+        helpers.mlldError("Comments (>>) are not allowed inside object literals. Place comments before the object or on a separate line.", ">>", location());
+      } else {
+        helpers.mlldError("Unclosed object in /var directive. Expected closing brace to close the object.", String.fromCharCode(125), location());
+      }
     }
     
   // Error: Unclosed string (double quotes)
