@@ -1,0 +1,66 @@
+>> Stage 4b: Merge
+>> Merges verified worktrees into the main branch
+>>
+>> Input: Results from apply stage (items with verified=true and worktree_branch)
+>> Output: merge-batch-N.json with merge results
+>>
+>> Runs sequentially - merge conflicts need ordered resolution
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logEvent } from "../../lib/events.mld"
+import { @debuglog } from "../../lib/debug.mld"
+
+/needs { sh }
+
+>> Tool permissions for merge agents
+var @mergeTools = "Read,Write,Glob,Grep,Bash(git:*),Bash(wt:*),Bash(cat:*),Bash(pwd)"
+
+>> Build merge prompt from template
+exe @buildMergePrompt(baseBranch, runDir, batchNum, mergeItemsJson, outputPath) = template "../../prompts/execute-merge.att"
+
+>> Merge verified worktrees into main branch
+exe @mergeVerified(runDir, results, baseBranch, batchNum, dryRun) = [
+  >> Collect items that are verified (tests passed in worktree)
+  let @verifiedItems = for @r in @results when @r.verified && @r.worktree_branch => { ticket_id: @r.ticket_id, worktree_branch: @r.worktree_branch, commit_sha: @r.commit_sha }
+
+  when @verifiedItems.length == 0 => show `    No verified items to merge`
+
+  => when first [
+    @verifiedItems.length == 0 => { merged_count: 0, skipped_count: 0, failed_count: 0 }
+    @dryRun => [
+      show `    [DRY RUN] Would merge @verifiedItems.length worktrees`
+      => { merged_count: 0, skipped_count: @verifiedItems.length, failed_count: 0, dry_run: true }
+    ]
+    * => @_doMerge(@runDir, @verifiedItems, @baseBranch, @batchNum)
+  ]
+]
+
+>> Internal function to do the actual merge
+exe @_doMerge(runDir, verifiedItems, baseBranch, batchNum) = [
+  show `    Merging @verifiedItems.length verified worktrees...`
+
+  >> Build and run merge prompt
+  let @mergeItemsJson = @verifiedItems | @json.llm
+  let @outputPath = `@runDir/execute/merge-batch-@batchNum.json`
+  let @prompt = @buildMergePrompt(@baseBranch, @runDir, @batchNum, @mergeItemsJson, @outputPath)
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON result to @outputPath using the Write tool.`
+
+  let @response = @claudePoll(@fullPrompt, "opus", @base, @mergeTools, @outputPath) | @debuglog("Merge batch @batchNum")
+
+  let @mergeResult = <@outputPath>?
+  when @mergeResult => show `    [merge] success for batch @batchNum`
+  when !@mergeResult => show `    [merge] failed for batch @batchNum`
+
+  => when first [
+    !@mergeResult => { merged_count: 0, error: "merge failed - no result" }
+    * => [
+      let @_ = @logEvent(@runDir, { event: "merge_complete", batch: @batchNum, merged: @mergeResult.merged_count })
+      => @mergeResult
+    ]
+  ]
+]
+
+/export {
+  @mergeVerified,
+  @_doMerge
+}

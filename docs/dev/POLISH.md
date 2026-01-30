@@ -1,5 +1,5 @@
 ---
-updated: 2026-01-28
+updated: 2026-01-29
 tags: #arch, #qa, #pipeline
 related-docs: docs/dev/DOCS-DEV.md
 related-code: llm/run/qa.mld, llm/run/polish/**/*.mld
@@ -9,15 +9,67 @@ related-code: llm/run/qa.mld, llm/run/polish/**/*.mld
 
 ## tldr
 
-Two-command workflow for discovering and fixing issues:
+```bash
+mlld run polish                   # Grind on existing tickets
+mlld run polish --batch 10        # Process more items per batch
+```
+
+For QA-driven discovery flow:
 
 ```bash
 mlld run qa --tier 1              # Discovery → qa/<date>/
 # [HUMAN ANSWERS strategy-questions.md]
-mlld run polish --batch 5         # Execution → pipeline/<run>/
+mlld run polish --qa --batch 5    # Include QA signals → pipeline/<run>/
 ```
 
 QA produces **signals** (may be hallucinated). Human review grounds them. Polish executes.
+
+## Common Workflows
+
+### Grind on existing tickets (default)
+
+Work through prioritized tickets:
+
+```bash
+mlld run polish --batch 10
+```
+
+This runs: reconcile (tickets only) → enrich → rank → execute
+
+### Continue executing a ranked run
+
+Resume an existing run that already has ranked items:
+
+```bash
+mlld run polish --phase execute --batch 10
+# Or specify a run explicitly:
+mlld run polish --phase execute --run 2026-01-29-5 --batch 10
+```
+
+### Test mode (no real changes)
+
+Validate the pipeline without making actual changes:
+
+```bash
+mlld run polish --dryRun
+```
+
+Uses haiku model, processes 2 items max, skips apply stage.
+
+### Full QA → Polish flow
+
+Complete workflow with QA discovery:
+
+```bash
+# 1. Run QA to discover issues
+mlld run qa --tier 1
+
+# 2. Answer strategy questions
+$EDITOR qa/2026-01-29/strategy-questions.md
+
+# 3. Execute fixes (--qa includes QA signals)
+mlld run polish --qa --batch 5
+```
 
 ## Principles
 
@@ -65,7 +117,7 @@ Phase 5 (Docs):       Doc fixes with QA validation loop
 **Key flags**:
 - `--batch N` - Items per execution batch (default 5)
 - `--dryRun` - Use haiku model, skip actual changes
-- `--noQa` - Skip interpret, work from tickets only
+- `--qa` - Include QA signals (requires prior `mlld run qa` + answered strategy-questions.md)
 - `--phase <name>` - Run single phase
 - `--run <id>` - Resume specific run
 
@@ -84,7 +136,11 @@ llm/run/
       reconcile.mld         # Merge QA + tickets
       enrich.mld            # Stale/scope/impl assessment
       rank.mld              # Clustering + prioritization
-      execute.mld           # Fix implementation
+      execute.mld           # Execute orchestrator
+      execute/
+        apply.mld           # Stage 4a: Analyze + apply (parallel)
+        merge.mld           # Stage 4b: Merge worktrees (sequential)
+        verify.mld          # Stage 4c: Test main after merges
       docs.mld              # Doc fixes with validation
     prompts/
       *.att                 # Phase prompt templates
@@ -116,12 +172,14 @@ pipeline/
 Three stages for safe code changes:
 
 ```
-4a: Analyze + Apply    Each ticket analyzed, fix applied in git worktree
-4b: Merge              Verified worktrees merged to main (one prompt)
-4c: Verify             Full test suite on main after merges
+4a: Apply (parallel)   Analyze + apply fixes in isolated worktrees (5 concurrent)
+4b: Merge (sequential) Merge verified worktrees to main
+4c: Verify             Run full test suite on main after merges
 ```
 
-Clusters (related items grouped under epic) are processed by one agent in sequence—shared context, no merge conflicts.
+Each ticket gets its own git worktree for isolation. Apply stage runs up to 5 tickets in parallel—each Claude agent works in its own worktree without conflicts.
+
+Clusters (related items grouped under epic) are processed by one agent in sequence—shared context ensures coherent fixes across related tickets.
 
 ### Ranking Criteria
 

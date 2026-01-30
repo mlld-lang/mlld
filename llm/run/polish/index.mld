@@ -8,13 +8,13 @@
 >>   --to <name>         Stop after a specific phase
 >>   --run <id>          Resume a specific run
 >>   --docs-only         Only process doc fixes
->>   --no-qa             Skip interpret phase (ticket-only mode)
+>>   --qa                Include QA signals (requires prior mlld run qa + answered strategy-questions.md)
 >>   --retry-failed      Re-attempt escalated items
 >>   --dryRun true       Test mode: haiku model, batch of 2, skip actual changes
 >>
->> Phases:
->>   0. interpret   - Parse human answers from strategy-questions.md
->>   1. reconcile   - Merge QA signals with existing tickets
+>> Phases (default: tickets only, skips interpret):
+>>   0. interpret   - Parse human answers from strategy-questions.md (--qa only)
+>>   1. reconcile   - Merge QA signals with existing tickets (or tickets only)
 >>   2. enrich      - Assess stale/scope/impl status
 >>   3. rank        - Prioritize and cluster work items
 >>   4. execute     - Implement fixes in worktrees
@@ -46,7 +46,7 @@ var @fromPhase = @p.from ? @p.from : null
 var @toPhase = @p.to ? @p.to : null
 var @runId = @p.run ? @p.run : null
 var @docsOnly = @p.docsOnly ? true : false
-var @noQa = @p.noQa ? true : false
+var @useQa = @p.qa ? true : false
 var @retryFailed = @p.retryFailed ? true : false
 var @dryRun = @p.dryRun ? true : false
 
@@ -138,7 +138,7 @@ when @phaseOnly => show `  Phase only: @phaseOnly`
 when @fromPhase => show `  From phase: @fromPhase`
 when @toPhase => show `  To phase: @toPhase`
 when @docsOnly => show `  Docs only: true`
-when @noQa => show `  No QA: true`
+when @useQa => show `  QA mode: including QA signals`
 when @dryRun => show `  DRY RUN: haiku model, batch 2, no actual changes`
 show ``
 
@@ -161,8 +161,8 @@ var @_1 = @logEvent(@runDir, { event: "run_start", run_id: @run.id })
 >> Execute phases
 var @phaseResults = {}
 
->> Phase 0: Interpret
-when @shouldRunPhase("interpret", @phaseOnly, @fromPhase, @toPhase) && !@noQa && !@docsOnly => [
+>> Phase 0: Interpret (only with --qa flag)
+when @shouldRunPhase("interpret", @phaseOnly, @fromPhase, @toPhase) && @useQa && !@docsOnly => [
   show `=== Phase 0: Interpret ===`
   let @result = @runInterpret(@runDir, @run.config.qa_run)
   @phaseResults += { interpret: @result }
@@ -172,8 +172,8 @@ when @shouldRunPhase("interpret", @phaseOnly, @fromPhase, @toPhase) && !@noQa &&
 >> Phase 1: Reconcile
 when @shouldRunPhase("reconcile", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => [
   show `=== Phase 1: Reconcile ===`
-  let @effectiveNoQa = @noQa || !@run.config.qa_run
-  let @result = @runReconcile(@runDir, @effectiveNoQa)
+  let @skipQa = !@useQa || !@run.config.qa_run
+  let @result = @runReconcile(@runDir, @skipQa)
   @phaseResults += { reconcile: @result }
   show ``
 ]

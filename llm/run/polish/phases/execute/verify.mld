@@ -1,0 +1,65 @@
+>> Stage 4c: Verify
+>> Verifies main branch after merges by running full test suite
+>>
+>> Input: Merge results from stage 4b
+>> Output: verification-result.json
+>>
+>> Runs after all merges complete
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logEvent } from "../../lib/events.mld"
+
+/needs { sh }
+
+>> Tool permissions for verify agents
+var @verifyTools = "Read,Write,Glob,Grep,Bash(npm run:*),Bash(npm test:*),Bash(git:*),Bash(cat:*)"
+
+>> Build verify prompt from template
+exe @buildVerifyPrompt(baseBranch, runDir, mergedCount, mergedItemsJson, outputPath) = template "../../prompts/execute-verify.att"
+
+>> Verify main branch after merge
+exe @verifyMain(runDir, mergeResult, baseBranch, dryRun) = [
+  let @mergedCount = @mergeResult.merged_count ? @mergeResult.merged_count : 0
+
+  when @mergedCount == 0 => show `    No merges to verify`
+
+  => when first [
+    @mergedCount == 0 => { status: "skipped", reason: "no merges" }
+    @dryRun => [
+      show `    [DRY RUN] Would verify main branch`
+      => { status: "skipped", dry_run: true }
+    ]
+    * => @_doVerify(@runDir, @mergeResult, @baseBranch, @mergedCount)
+  ]
+]
+
+>> Internal function to do the actual verification
+exe @_doVerify(runDir, mergeResult, baseBranch, mergedCount) = [
+  show `    Verifying main branch after @mergedCount merges...`
+
+  >> Build merged items list for context
+  let @mergeResults = @mergeResult.results ? @mergeResult.results : []
+  let @mergedItems = for @r in @mergeResults when @r.merged => @r
+  let @mergedItemsJson = @mergedItems | @json.llm
+
+  let @outputPath = `@runDir/execute/verification-result.json`
+  let @prompt = @buildVerifyPrompt(@baseBranch, @runDir, @mergedCount, @mergedItemsJson, @outputPath)
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON result to @outputPath using the Write tool.`
+
+  let @response = @claudePoll(@fullPrompt, "opus", @base, @verifyTools, @outputPath)
+
+  let @verifyResult = <@outputPath>?
+
+  => when first [
+    !@verifyResult => { status: "error", error: "verification failed - no result" }
+    * => [
+      let @_ = @logEvent(@runDir, { event: "verify_complete", status: @verifyResult.status })
+      => @verifyResult
+    ]
+  ]
+]
+
+/export {
+  @verifyMain,
+  @_doVerify
+}

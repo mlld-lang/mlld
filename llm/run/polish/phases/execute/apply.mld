@@ -1,0 +1,213 @@
+>> Stage 4a: Apply
+>> Analyzes tickets and applies fixes in isolated worktrees
+>>
+>> Input: work-plan.json (ranked items)
+>> Output: <ticket-id>-analysis.json, <ticket-id>-result.json per item
+>>
+>> Can run in parallel - each ticket gets its own worktree
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logItemStart, @logItemDone } from "../../lib/events.mld"
+import { @getTicket, @addTags, @isImplDone } from "../../lib/tickets.mld"
+import { @debuglog } from "../../lib/debug.mld"
+
+/needs { sh }
+
+>> Tool permissions for apply agents
+var @analyzeTools = "Read,Write,Glob,Grep,Bash(mlld:*),Bash(cat:*)"
+var @applyTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(wt:*),Bash(npm run:*),Bash(npm test:*),Bash(cat:*),Bash(pwd),Bash(head:*)"
+
+>> Build prompts from templates
+exe @buildAnalyzePrompt(ticketId, ticketType, ticketPriority, ticketContent, topics, strategyContext, outputPath) = template "../../prompts/execute-analyze.att"
+exe @buildApplyPrompt(ticketId, baseBranch, analysisJson, outputPath, rootCause, rootCauseLocation, approach) = template "../../prompts/execute-apply.att"
+
+>> Analyze a ticket and return analysis result
+exe @analyzeTicket(runDir, ticketId, dryRun) = [
+  let @analysisPath = `@runDir/execute/@ticketId-analysis.json`
+  let @existingAnalysis = <@analysisPath>?
+
+  >> Get ticket metadata - build path step by step (required due to template string parsing)
+  let @ext = ".md"
+  let @ticketsDir = `@base/.tickets`
+  let @ticketPath = `@ticketsDir/@ticketId@ext`
+  let @ticketContent = <@ticketPath>?
+
+  >> Show status
+  when @existingAnalysis => show `        Using cached analysis`
+
+  >> Use when first for proper early returns
+  => when first [
+    @existingAnalysis => @existingAnalysis
+    !@ticketContent => { ticket_id: @ticketId, error: "ticket file not found" }
+    * => @_doAnalyzeTicket(@runDir, @ticketId, @ticketContent, @analysisPath, @dryRun)
+  ]
+]
+
+>> Internal function to do the actual analysis
+exe @_doAnalyzeTicket(runDir, ticketId, ticketContent, analysisPath, dryRun) = [
+  >> Extract frontmatter metadata
+  let @typeMatch = @ticketContent.match(/^type:\s*(.+)$/m)
+  let @priorityMatch = @ticketContent.match(/^priority:\s*(\d+)$/m)
+  let @ticketType = when first [@typeMatch => @typeMatch[1]; * => "task"]
+  let @priorityNum = when first [@priorityMatch => @priorityMatch[1]; * => "2"]
+  let @ticketPriority = `p@priorityNum`
+
+  >> Load strategy context if available
+  let @strategyPath = `@runDir/interpret/strategy.json`
+  let @strategy = <@strategyPath>?
+  let @strategyContext = when first [@strategy => `@strategy`; * => "No strategy context available"]
+  let @topics = "N/A"
+
+  let @analyzeModel = when first [@dryRun => "haiku"; * => "opus"]
+
+  let @analyzePrompt = @buildAnalyzePrompt(@ticketId, @ticketType, @ticketPriority, @ticketContent, @topics, @strategyContext, @analysisPath)
+
+  let @analyzeFullPrompt = `@analyzePrompt\n\nIMPORTANT: Write your JSON response to @analysisPath using the Write tool. Write ONLY valid JSON.`
+  show `        Calling Claude (@analyzeModel) for analysis...`
+  let @response = @claudePoll(@analyzeFullPrompt, @analyzeModel, @base, @analyzeTools, @analysisPath)
+
+  let @result = <@analysisPath>?
+  when @result => show `        Analysis complete`
+  when !@result => show `        Analysis failed - no result file`
+  let @finalResult = when first [@result => @result; * => { ticket_id: @ticketId, error: "analysis failed" }]
+  => @finalResult
+]
+
+>> Process a single ticket (analyze + apply + verify in worktree)
+exe @processTicket(runDir, ticketId, baseBranch, dryRun) = [
+  let @ticket = @getTicket(@ticketId)
+
+  >> Check if already done via ticket tags (impl-done) - not just run-local events
+  let @ticketTags = @ticket && @ticket.mx && @ticket.mx.fm && @ticket.mx.fm.tags ? @ticket.mx.fm.tags : []
+  let @ticketObj = { tags: @ticketTags }
+  let @alreadyDone = @ticket && @isImplDone(@ticketObj)
+
+  when @alreadyDone => show `      Skipping @ticketId (impl-done)`
+  when !@ticket => show `      ERROR: @ticketId not found`
+
+  >> Use when first for proper early returns
+  => when first [
+    !@ticket => { ticket_id: @ticketId, error: "ticket not found" }
+    @alreadyDone => { ticket_id: @ticketId, skipped: true, reason: "impl-done" }
+    * => @_doProcessTicket(@runDir, @ticketId, @baseBranch, @dryRun)
+  ]
+]
+
+>> Internal function to process ticket after initial checks
+exe @_doProcessTicket(runDir, ticketId, baseBranch, dryRun) = [
+  >> Log item start
+  let @_ = @logItemStart(@runDir, @ticketId, "single")
+
+  show `      Analyzing @ticketId...`
+
+  >> Step 1: Analyze the ticket
+  let @analysis = @analyzeTicket(@runDir, @ticketId, @dryRun)
+
+  >> Use when first for conditional returns
+  => when first [
+    @analysis.error => @analysis
+    * => @_processAfterAnalysis(@runDir, @ticketId, @baseBranch, @dryRun, @analysis)
+  ]
+]
+
+>> Continue processing after analysis
+exe @_processAfterAnalysis(runDir, ticketId, baseBranch, dryRun, analysis) = [
+  >> Check if auto-approve
+  let @canApprove = @analysis.recommendation && @analysis.recommendation.auto_approve
+
+  when !@canApprove => show `        Needs manual review`
+
+  => when first [
+    !@canApprove => [
+      let @_ = @logItemDone(@runDir, @ticketId, "needs-review", { analysis: @analysis })
+      => { ticket_id: @ticketId, status: "needs-review", analysis: @analysis }
+    ]
+    @dryRun => [
+      show `      [DRY RUN] Skipping apply for @ticketId`
+      let @dryResult = { ticket_id: @ticketId, applied: false, verified: false, dry_run: true, analysis: @analysis }
+      let @_ = @logItemDone(@runDir, @ticketId, "dry-run", @dryResult)
+      => @dryResult
+    ]
+    * => @_applyFix(@runDir, @ticketId, @baseBranch, @analysis)
+  ]
+]
+
+>> Apply the fix
+exe @_applyFix(runDir, ticketId, baseBranch, analysis) = [
+  show `      Applying fix for @ticketId...`
+
+  let @resultPath = `@runDir/execute/@ticketId-result.json`
+  let @rootCause = @analysis.investigation.root_cause
+  let @rootCauseLocation = @analysis.investigation.root_cause_location
+  let @approach = @analysis.proposed_fix.approach
+  let @analysisJson = @analysis | @json.llm
+
+  let @applyPrompt = @buildApplyPrompt(@ticketId, @baseBranch, @analysisJson, @resultPath, @rootCause, @rootCauseLocation, @approach)
+  let @applyFullPrompt = `@applyPrompt\n\nIMPORTANT: Write your JSON result to @resultPath using the Write tool.`
+  let @applyResponse = @claudePoll(@applyFullPrompt, "opus", @base, @applyTools, @resultPath) | @debuglog("Apply fix @ticketId")
+
+  let @result = <@resultPath>?
+  when @result => show `        [apply] success for @ticketId`
+  when !@result => show `        [apply] failed for @ticketId`
+
+  => when first [
+    !@result => [
+      let @_ = @logItemDone(@runDir, @ticketId, "apply-failed", { error: "no result file" })
+      => { ticket_id: @ticketId, error: "apply failed - no result" }
+    ]
+    * => @_finishApply(@runDir, @ticketId, @result)
+  ]
+]
+
+>> Finish applying and tag ticket
+exe @_finishApply(runDir, ticketId, result) = [
+  >> Log completion
+  let @status = @result.verified ? "completed" : "fix-failed"
+  let @_ = @logItemDone(@runDir, @ticketId, @status, @result)
+
+  >> Tag ticket based on result
+  when @result.verified => [
+    let @_ = @addTags(@ticketId, "impl-done")
+    show `        Fix verified in worktree`
+  ]
+  when @result.applied && !@result.verified => [
+    let @_ = @addTags(@ticketId, "impl-blocked")
+    show `        Fix applied but verification failed`
+  ]
+
+  => @result
+]
+
+>> Process a cluster (epic + children in sequence)
+exe @processCluster(runDir, cluster, baseBranch, dryRun) = [
+  let @epicId = @cluster.epic_id
+  let @childIds = @cluster.tickets
+
+  show `    Processing cluster @epicId (@childIds.length children)`
+  show `    [debug] childIds = @childIds`
+
+  >> Process children first (in sequence to avoid conflicts)
+  let @childResults = for @childId in @childIds [
+    show `      [debug] processing child @childId`
+    => @processTicket(@runDir, @childId, @baseBranch, @dryRun)
+  ]
+
+  >> Count results
+  let @completed = for @r in @childResults when @r.verified => @r
+  let @failed = for @r in @childResults when @r.error => @r
+
+  show `    Cluster @epicId: @completed.length/@childIds.length completed`
+
+  => { epic_id: @epicId, children: @childIds, child_results: @childResults, completed_count: @completed.length, failed_count: @failed.length }
+]
+
+/export {
+  @analyzeTicket,
+  @processTicket,
+  @processCluster,
+  @_doAnalyzeTicket,
+  @_doProcessTicket,
+  @_processAfterAnalysis,
+  @_applyFix,
+  @_finishApply
+}
