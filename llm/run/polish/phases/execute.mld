@@ -45,7 +45,7 @@ exe @analyzeTicket(runDir, ticketId, dryRun) = [
   >> Use when first for proper early returns
   => when first [
     @existingAnalysis => @existingAnalysis
-    !@ticketContent => { ticket_id: @ticketId, epic_id: null, error: "ticket file not found" }
+    !@ticketContent => { ticket_id: @ticketId, error: "ticket file not found" }
     * => @_doAnalyzeTicket(@runDir, @ticketId, @ticketContent, @analysisPath, @dryRun)
   ]
 ]
@@ -76,7 +76,7 @@ exe @_doAnalyzeTicket(runDir, ticketId, ticketContent, analysisPath, dryRun) = [
   let @result = <@analysisPath>?
   when @result => show `        Analysis complete`
   when !@result => show `        Analysis failed - no result file`
-  let @finalResult = when first [@result => @result; * => { ticket_id: @ticketId, epic_id: null, error: "analysis failed" }]
+  let @finalResult = when first [@result => @result; * => { ticket_id: @ticketId, error: "analysis failed" }]
   => @finalResult
 ]
 
@@ -92,8 +92,8 @@ exe @processTicket(runDir, ticketId, baseBranch, dryRun) = [
 
   >> Use when first for proper early returns
   => when first [
-    !@ticket => { ticket_id: @ticketId, epic_id: null, error: "ticket not found" }
-    @alreadyCompleted => { ticket_id: @ticketId, epic_id: null, skipped: true, reason: "already completed" }
+    !@ticket => { ticket_id: @ticketId, error: "ticket not found" }
+    @alreadyCompleted => { ticket_id: @ticketId, skipped: true, reason: "already completed" }
     * => @_doProcessTicket(@runDir, @ticketId, @baseBranch, @dryRun)
   ]
 ]
@@ -125,11 +125,11 @@ exe @_processAfterAnalysis(runDir, ticketId, baseBranch, dryRun, analysis) = [
   => when first [
     !@canApprove => [
       let @_ = @logItemDone(@runDir, @ticketId, "needs-review", { analysis: @analysis })
-      => { ticket_id: @ticketId, epic_id: null, status: "needs-review", analysis: @analysis }
+      => { ticket_id: @ticketId, status: "needs-review", analysis: @analysis }
     ]
     @dryRun => [
       show `      [DRY RUN] Skipping apply for @ticketId`
-      let @dryResult = { ticket_id: @ticketId, epic_id: null, applied: false, verified: false, dry_run: true, analysis: @analysis }
+      let @dryResult = { ticket_id: @ticketId, applied: false, verified: false, dry_run: true, analysis: @analysis }
       let @_ = @logItemDone(@runDir, @ticketId, "dry-run", @dryResult)
       => @dryResult
     ]
@@ -158,7 +158,7 @@ exe @_applyFix(runDir, ticketId, baseBranch, analysis) = [
   => when first [
     !@result => [
       let @_ = @logItemDone(@runDir, @ticketId, "apply-failed", { error: "no result file" })
-      => { ticket_id: @ticketId, epic_id: null, error: "apply failed - no result" }
+      => { ticket_id: @ticketId, error: "apply failed - no result" }
     ]
     * => @_finishApply(@runDir, @ticketId, @result)
   ]
@@ -388,8 +388,7 @@ exe @_doExecute(runDir, outputPath, items, batchSize, dryRun) = [
   let @_ = @logPhaseComplete(@runDir, "execute", { processed: @results.length, completed: @completed.length, merged: @mergedCount, verified: @verifyResult.status })
 
   >> Summary
-  >> Note: singles need explicit epic_id: null in results due to field access bug (m-452a)
-  let @singles = for @r in @results when @r.ticket_id && @r.epic_id == null => @r
+  let @singles = for @r in @results when @r.ticket_id && !@r.epic_id => @r
   let @clusters = for @r in @results when @r.epic_id => @r
   let @verified = for @r in @singles when @r.verified => @r
   let @needsReview = for @r in @singles when @r.status == "needs-review" => @r
