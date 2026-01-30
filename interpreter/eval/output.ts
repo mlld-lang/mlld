@@ -17,7 +17,7 @@ import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
 import { materializeDisplayValue, resolveNestedValue } from '../utils/display-materialization';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
@@ -590,7 +590,7 @@ async function evaluateSimpleVariableSource(
     return { rawValue: value, text };
   } else if (typeof value === 'object') {
     // For objects/arrays, convert to JSON
-    const text = JSON.stringify(value, null, 2);
+    const text = stringifyStructured(value, 2);
     return { rawValue, text };
   } else {
     const text = String(value ?? '');

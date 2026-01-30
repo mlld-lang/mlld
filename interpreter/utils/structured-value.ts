@@ -128,6 +128,17 @@ export function isStructuredValue<T = unknown>(value: unknown): value is Structu
   );
 }
 
+export function stringifyStructured(value: unknown, space?: number): string {
+  return JSON.stringify(value, structuredValueJsonReplacer, space);
+}
+
+function structuredValueJsonReplacer(_key: string, val: unknown): unknown {
+  if (isStructuredValue(val)) {
+    return val.data;
+  }
+  return val;
+}
+
 export function asText(value: unknown): string {
   if (isStructuredValue(value)) {
     return value.text;
@@ -360,7 +371,7 @@ function deriveText(value: unknown): string {
   }
 
   try {
-    return JSON.stringify(value);
+    return stringifyStructured(value);
   } catch {
     return String(value);
   }
@@ -370,6 +381,7 @@ export const structuredValueUtils = {
   STRUCTURED_VALUE_SYMBOL,
   asText,
   asData,
+  stringifyStructured,
   looksLikeJsonString,
   parseAndWrapJson,
   wrapStructured,

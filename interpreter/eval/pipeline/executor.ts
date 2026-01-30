@@ -21,6 +21,7 @@ import {
   asData,
   isStructuredValue,
   wrapStructured,
+  stringifyStructured,
   extractSecurityDescriptor,
   applySecurityDescriptorToStructuredValue,
   type StructuredValueContext
@@ -1698,7 +1699,7 @@ export class PipelineExecutor {
 
 function safeJSONStringify(value: unknown): string {
   try {
-    return JSON.stringify(value);
+    return stringifyStructured(value);
   } catch {
     return String(value ?? '');
   }
