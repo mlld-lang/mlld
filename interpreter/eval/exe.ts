@@ -22,6 +22,7 @@ import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
+import { evaluateWhenExpression } from './when-expression';
 import { VariableImporter } from './import/VariableImporter';
 import * as path from 'path';
 import {
@@ -61,26 +62,50 @@ export async function evaluateExeBlock(
     }
   }
 
+  let returnValue: unknown = undefined;
+  let hasEarlyReturn = false;
+
   for (const stmt of block.values?.statements ?? []) {
     if (isLetAssignment(stmt)) {
       blockEnv = await evaluateLetAssignment(stmt, blockEnv);
     } else if (isAugmentedAssignment(stmt)) {
       blockEnv = await evaluateAugmentedAssignment(stmt, blockEnv);
+    } else if ((stmt as any)?.type === 'WhenExpression') {
+      // Handle WhenExpression with 'first' modifier to get early return behavior
+      const whenNode = stmt as any;
+      const nodeWithFirst = whenNode.meta?.modifier === 'first' ? whenNode : {
+        ...whenNode,
+        meta: { ...((whenNode.meta || {}) as Record<string, unknown>), modifier: 'first' as const }
+      };
+      const result = await evaluateWhenExpression(nodeWithFirst, blockEnv);
+      blockEnv = result.env || blockEnv;
+      // Early return: if when matched and returned a value, exit the block
+      // BUT don't break for side-effect tags (show, output) - those aren't real return values
+      if (result.value !== null && result.value !== undefined) {
+        if (typeof result.value === 'object' && (result.value as any).__whenEffect) {
+          continue;
+        }
+        returnValue = result.value;
+        hasEarlyReturn = true;
+        break;
+      }
     } else {
       const result = await evaluate(stmt, blockEnv);
       blockEnv = result.env || blockEnv;
     }
   }
 
-  let returnValue: unknown = undefined;
-  const returnNode = block.values?.return;
-  const hasReturnValue = returnNode?.meta?.hasValue !== false;
-  if (returnNode && hasReturnValue) {
-    const returnNodes = Array.isArray(returnNode.values) ? returnNode.values : [];
-    if (returnNodes.length > 0) {
-      const returnResult = await evaluate(returnNodes, blockEnv, { isExpression: true });
-      returnValue = returnResult.value;
-      blockEnv = returnResult.env || blockEnv;
+  // Only evaluate explicit return if no early return occurred
+  if (!hasEarlyReturn) {
+    const returnNode = block.values?.return;
+    const hasReturnValue = returnNode?.meta?.hasValue !== false;
+    if (returnNode && hasReturnValue) {
+      const returnNodes = Array.isArray(returnNode.values) ? returnNode.values : [];
+      if (returnNodes.length > 0) {
+        const returnResult = await evaluate(returnNodes, blockEnv, { isExpression: true });
+        returnValue = returnResult.value;
+        blockEnv = returnResult.env || blockEnv;
+      }
     }
   }
 
