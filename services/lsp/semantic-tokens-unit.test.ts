@@ -449,7 +449,7 @@ describe('Semantic Tokens - Unit Tests', () => {
     });
     
     it('handles when expressions', async () => {
-      const code = `/when @env first: [
+      const code = `/when @env: [
   "prod" => /show "Production"
   "dev" => /show "Development"
 ]`;

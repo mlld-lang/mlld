@@ -496,7 +496,7 @@ describe('Semantic Tokens', () => {
     });
     
     it('should handle when expressions with multiple conditions', async () => {
-      const code = `/when @request first: [
+      const code = `/when @request: [
   @method == "GET" && @path == "/users" => /show \`List users\`
   @method == "POST" => /show \`Create user\`
 ]`;

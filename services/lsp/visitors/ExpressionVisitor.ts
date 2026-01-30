@@ -186,25 +186,6 @@ export class ExpressionVisitor extends BaseVisitor {
       }
     }
 
-    // Handle 'first' modifier if present
-    if (node.meta?.modifier === 'first') {
-      const sourceText = this.document.getText();
-      const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
-      const firstIndex = nodeText.indexOf('first');
-
-      if (firstIndex !== -1) {
-        const firstOffset = node.location.start.offset + firstIndex;
-        const firstPos = this.document.positionAt(firstOffset);
-        this.tokenBuilder.addToken({
-          line: firstPos.line,
-          char: firstPos.character,
-          length: 5,
-          tokenType: 'keyword',
-          modifiers: []
-        });
-      }
-    }
-
     // Find and tokenize the ':' after 'when'
     const sourceText = this.document.getText();
     const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
