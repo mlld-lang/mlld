@@ -313,10 +313,18 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
               logger.debug('Variable not found during interpolation:', { varName, valueType: (baseNode as any).valueType });
             }
             // WHY: Preserve original syntax when variable is undefined for better error messages
+            // Must include any field access chain to reconstruct the full original text (e.g., @example.com)
+            const fields = (baseNode as any).fields as FieldAccessNode[] | undefined;
+            const fieldSuffix = fields?.map(f => {
+              if (f.type === 'field' && typeof f.value === 'string') {
+                return `.${f.value}`;
+              }
+              return '';
+            }).join('') ?? '';
             if ((baseNode as any).valueType === 'varInterpolation') {
-              pushPart(`{{${varName}}}`);  // {{var}} syntax
+              pushPart(`{{${varName}${fieldSuffix}}}`);  // {{var}} syntax
             } else {
-              pushPart(`@${varName}`);      // @var syntax
+              pushPart(`@${varName}${fieldSuffix}`);      // @var syntax
             }
             continue;
           }
