@@ -679,7 +679,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           sourceLocation: fieldAccessLocation
         });
         resolvedValue = (fieldResult as any).value;
-        if (resolvedValue === undefined) break;
+        if (resolvedValue === undefined || resolvedValue === null) break;
       }
     }
     

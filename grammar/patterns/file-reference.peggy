@@ -142,7 +142,7 @@ TemplatePipeChain "template pipe chain"
 
 // Field access chain for file references
 FileFieldChain "field chain"
-  = fields:AnyFieldAccess+ {
+  = fields:AnyFieldAccessOptional+ {
       return fields;
     }
 

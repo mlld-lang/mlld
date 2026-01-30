@@ -65,10 +65,10 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Creation: `/var` infers type from syntax; `/exe` builds executable variables (command/code/template/section/ref).
 - Reference vs invocation: `@fn` (reference executable) vs `@fn(...)` (exec invocation) is universal across contexts.
 - Resolution contexts (`utils/variable-resolution`):
-  - FieldAccess: preserve wrappers and access path; missing -> `undefined` in conditions.
+  - FieldAccess: preserve wrappers and access path; missing fields return null unless a condition requests undefined.
   - StringInterpolation: unwrap to primitives/strings; auto-exec executables when interpolated where appropriate.
   - Equality/Expression: strict comparisons without coercion; avoid auto-exec.
-- Field access: `utils/field-access.ts` supports dot/bracket/numeric; handles `variableIndex` indirection by resolving index variables.
+- Field access: `utils/field-access.ts` supports dot/bracket/numeric; `@obj.field?` is a valid optional suffix; handles `variableIndex` indirection by resolving index variables.
 - Array slicing: supports `@arr[a:b]`, negative indices, and open ranges; preserves metadata for special arrays.
 - Interpolation: `interpolate()` processes unified template/quote nodes, variable refs, file refs, and condensed pipes; escapes via `interpolation-context`.
 

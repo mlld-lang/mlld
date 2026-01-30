@@ -23,6 +23,28 @@ FieldAccess
       };
     }
 
+// Optional suffix for field access
+OptionalFieldAccessSuffix
+  = "?" &{ return helpers.isOptionalFieldAccessBoundary(input, offset()); }
+
+// DOT NOTATION FIELD ACCESS WITH OPTIONAL SUFFIX
+FieldAccessOptional
+  = DotSeparator fieldStart:("" { return peg$currPos; }) field:BaseIdentifier opt:OptionalFieldAccessSuffix? {
+      return { 
+        type: 'field', 
+        value: field,
+        optional: !!opt,
+        location: {
+          start: {
+            offset: fieldStart,
+            line: location().start.line,
+            column: location().start.column + 1
+          },
+          end: location().end
+        }
+      };
+    }
+
 // NUMERIC FIELD ACCESS
 // Example: obj.123, var.456 
 // Allows direct property access with numeric indices
@@ -31,6 +53,24 @@ NumericFieldAccess
       return { 
         type: 'numericField', 
         value: index,
+        location: {
+          start: {
+            offset: fieldStart,
+            line: location().start.line,
+            column: location().start.column + 1
+          },
+          end: location().end
+        }
+      };
+    }
+
+// NUMERIC FIELD ACCESS WITH OPTIONAL SUFFIX
+NumericFieldAccessOptional
+  = DotSeparator fieldStart:("" { return peg$currPos; }) index:NumberLiteral opt:OptionalFieldAccessSuffix? {
+      return { 
+        type: 'numericField', 
+        value: index,
+        optional: !!opt,
         location: {
           start: {
             offset: fieldStart,
@@ -66,7 +106,7 @@ SliceIndex
   = sign:"-"? num:NumberLiteral {
       return sign ? -num : num;
     }
-  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
+  / "@" id:BaseIdentifier fields:AnyFieldAccessOptional* {
       // Variable reference as slice index
       const normalizedId = helpers.normalizePathVar(id);
       return helpers.createVariableReferenceNode('varIdentifier', {
@@ -144,7 +184,7 @@ ExistingArrayIndex
         location: location()
       };
     }
-  / "[" _ "@" index:BaseIdentifier fields:AnyFieldAccess* _ "]" {
+  / "[" _ "@" index:BaseIdentifier fields:AnyFieldAccessOptional* _ "]" {
       return { 
         type: 'variableIndex', 
         value: helpers.createVariableReferenceNode('varIdentifier', {
@@ -162,12 +202,31 @@ ExistingArrayIndex
       };
     }
 
+ArrayAccessOptional
+  = base:SliceOperation opt:OptionalFieldAccessSuffix? {
+      if (!opt) return base;
+      return { ...base, optional: true, location: location() };
+    }
+  / base:FilterOperation opt:OptionalFieldAccessSuffix? {
+      if (!opt) return base;
+      return { ...base, optional: true, location: location() };
+    }
+  / base:ExistingArrayIndex opt:OptionalFieldAccessSuffix? {
+      if (!opt) return base;
+      return { ...base, optional: true, location: location() };
+    }
+
 // COMBINED FIELD ACCESS
 // Represents any type of field access (to be used in combined patterns)
 AnyFieldAccess
   = FieldAccess
   / NumericFieldAccess
   / ArrayAccess
+
+AnyFieldAccessOptional
+  = FieldAccessOptional
+  / NumericFieldAccessOptional
+  / ArrayAccessOptional
 
 // Extended field access for trailing method calls (e.g., .slice(0, 4))
 MethodCallAccess
@@ -189,4 +248,4 @@ MethodCallAccess
 
 PostFieldAccess
   = MethodCallAccess
-  / AnyFieldAccess
+  / AnyFieldAccessOptional

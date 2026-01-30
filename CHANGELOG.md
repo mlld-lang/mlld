@@ -145,10 +145,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/profiles` directive declares capability profiles and exposes the selected profile in `@mx.profile`
 - `mlld env` starts MCP servers from `@mcpConfig()` output and injects MCP connection env for spawned sessions
 - SDK analyze metadata includes module profiles
+- Optional field access suffix `?` for explicit missing-field access
 
 ### Fixed
 - Guard override lists accept unquoted `@guard` names
 - Resolver caching skips non-module resolvers, preserving metadata like `@input` taint
+- Missing field access returns null instead of throwing
 
 ## [2.0.0-rc81]
 

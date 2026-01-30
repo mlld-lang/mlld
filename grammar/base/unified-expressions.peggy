@@ -179,7 +179,7 @@ NewExpressionArgs "new expression args"
     }
 
 NewExpressionTarget "new expression target"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+  = "@" id:BaseIdentifier fields:AnyFieldAccessOptional* {
       const normalizedId = helpers.normalizePathVar(id);
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,

@@ -215,6 +215,38 @@ export const helpers = {
     // - At line start but not followed by directive keyword
     return true;
   },
+
+  // Checks if a trailing ? belongs to a field access suffix
+  isOptionalFieldAccessBoundary(input: string, pos: number): boolean {
+    let i = pos;
+    while (i < input.length) {
+      const ch = input[i];
+      if (ch === '\n' || ch === '\r') return true;
+      if (ch === ' ' || ch === '\t' || ch === '\u200B' || ch === '\u200C' || ch === '\u200D') {
+        i += 1;
+        continue;
+      }
+
+      const rest = input.substring(i);
+      const hasKeywordBoundary = (keyword: string) => {
+        if (!rest.startsWith(keyword)) return false;
+        const next = rest[keyword.length];
+        return !next || !/[A-Za-z0-9_]/.test(next);
+      };
+
+      if (hasKeywordBoundary('with') || hasKeywordBoundary('pipeline') || hasKeywordBoundary('as')) {
+        return true;
+      }
+      if (rest.startsWith('||')) return true;
+      if (ch === '|') return true;
+      if (rest.startsWith('!=')) return true;
+      if (ch === '#') return true;
+      if (ch === ',' || ch === ')' || ch === ']' || ch === '}') return true;
+      if ('=<>*/%&~'.includes(ch)) return true;
+      return false;
+    }
+    return true;
+  },
   
   /**
    * DEPRECATED: RHS slashes are no longer supported
@@ -358,10 +390,25 @@ export const helpers = {
           // Build the field access path
           let fieldPath = '';
           for (const field of fields) {
+            const optionalSuffix = field.optional ? '?' : '';
             if (field.type === 'field' || field.type === 'dot') {
-              fieldPath += `.${field.name || field.value}`;
-            } else if (field.type === 'array') {
-              fieldPath += `[${field.index}]`;
+              fieldPath += `.${field.name || field.value}${optionalSuffix}`;
+            } else if (field.type === 'numericField') {
+              fieldPath += `.${field.value ?? ''}${optionalSuffix}`;
+            } else if (field.type === 'array' || field.type === 'arrayIndex') {
+              const indexValue = field.index ?? field.value ?? '';
+              fieldPath += `[${indexValue}]${optionalSuffix}`;
+            } else if (field.type === 'stringIndex' || field.type === 'bracketAccess') {
+              fieldPath += `[${JSON.stringify(field.value ?? '')}]${optionalSuffix}`;
+            } else if (field.type === 'variableIndex') {
+              const ref = field.value;
+              fieldPath += `[${this.reconstructRawString(ref)}]${optionalSuffix}`;
+            } else if (field.type === 'arraySlice') {
+              const start = field.start ?? '';
+              const end = field.end ?? '';
+              fieldPath += `[${start}:${end}]${optionalSuffix}`;
+            } else if (field.type === 'arrayFilter') {
+              fieldPath += `[?${field.condition ?? ''}]${optionalSuffix}`;
             }
           }
           

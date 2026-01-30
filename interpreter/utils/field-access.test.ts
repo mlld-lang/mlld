@@ -69,3 +69,24 @@ describe('object mx utilities', () => {
     expect(entries).toEqual([['a', 1], ['b', 2], ['c', 3]]);
   });
 });
+
+describe('missing field access', () => {
+  it('returns null for missing object fields by default', async () => {
+    const result = await accessField({ a: 1 }, { type: 'field', value: 'missing' });
+    expect(result).toBeNull();
+  });
+
+  it('returns undefined for missing fields when configured', async () => {
+    const result = await accessField(
+      { a: 1 },
+      { type: 'field', value: 'missing' },
+      { returnUndefinedForMissing: true }
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it('returns null for out-of-bounds array indices', async () => {
+    const result = await accessField([1, 2], { type: 'arrayIndex', value: 5 });
+    expect(result).toBeNull();
+  });
+});

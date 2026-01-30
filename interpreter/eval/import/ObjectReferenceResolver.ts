@@ -93,8 +93,8 @@ export class ObjectReferenceResolver {
             if (result && typeof result === 'object' && field.value in result) {
               result = result[field.value];
             } else {
-              // Field not found - return undefined to match normal field access behavior
-              return undefined;
+              // Field not found - return null to match normal field access behavior
+              return null;
             }
           } else if (field.type === 'bracketAccess') {
             const key = field.value;
@@ -103,7 +103,7 @@ export class ObjectReferenceResolver {
             } else if (Array.isArray(result) && typeof key === 'number') {
               result = result[key];
             } else {
-              return undefined;
+              return null;
             }
           }
         }

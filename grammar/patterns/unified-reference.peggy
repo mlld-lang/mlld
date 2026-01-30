@@ -45,7 +45,7 @@ UnifiedReferenceForPipeline "unified reference for pipeline commands"
 // Handles: @obj.field.method(args) with optional tail modifiers
 
 FieldAccessExec "field access exec invocation"
-  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
+  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccessOptional+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
       helpers.debug('FieldAccessExec matched', { id, fields });
       
       // Extract the last field as the method name
@@ -80,7 +80,7 @@ FieldAccessExec "field access exec invocation"
     }
 
 FieldAccessExecNoTail "field access exec invocation without tail"
-  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* !TailModifiers {
+  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccessOptional+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* !TailModifiers {
       helpers.debug('FieldAccessExecNoTail matched', { id, fields });
       
       // Same logic as FieldAccessExec but no tail modifiers
@@ -154,7 +154,7 @@ SimpleExecNoTail "simple exec invocation without tail"
 // =============================================================================
 
 FieldAccessExecForPipeline "field access exec for pipeline"
-  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* {
+  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccessOptional+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* {
       // Same as FieldAccessExecNoTail but without the negative lookahead
       const lastField = fields[fields.length - 1];
       const methodName = lastField.value;
@@ -199,7 +199,7 @@ SimpleExecForPipeline "simple exec for pipeline"
     }
 
 VariableForPipeline "variable reference for pipeline"
-  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* {
+  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier !"(" fields:AnyFieldAccessOptional* {
       // Same as VariableNoTail but without the negative lookahead
       const normalizedId = helpers.normalizePathVar(id);
       const variable = helpers.createVariableReferenceNode('varIdentifier', {
@@ -223,7 +223,7 @@ VariableForPipeline "variable reference for pipeline"
 // Handles: @var.field with optional tail modifiers
 
 VariableWithTail "variable reference with optional tail modifiers"
-  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* tail:TailModifiers? {
+  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier !"(" fields:AnyFieldAccessOptional* tail:TailModifiers? {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -245,7 +245,7 @@ VariableWithTail "variable reference with optional tail modifiers"
     }
 
 VariableNoTail "variable reference without tail modifiers"
-  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* !TailModifiers {
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccessOptional* !TailModifiers {
       const normalizedId = helpers.normalizePathVar(id);
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,

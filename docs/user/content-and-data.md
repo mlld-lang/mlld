@@ -298,6 +298,8 @@ show @file                              >> Same as above (implicit)
 
 Always use `.mx` for metadata access - it's the canonical namespace.
 
+Missing fields return null by default. The optional suffix `?` is accepted for explicit optional access (for example, `@config.apiUrl?`).
+
 ### JSON File Metadata
 
 JSON files are automatically parsed:

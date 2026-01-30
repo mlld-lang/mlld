@@ -436,7 +436,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
                 }
               }
 
-              if (value === undefined) break;
+              if (value === undefined || value === null) break;
             }
           }
 

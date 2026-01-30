@@ -433,7 +433,7 @@ export async function evaluateShow(
           value = (fieldResult as any).value;
         }
         fieldTarget = value;
-        if (value === undefined) break;
+        if (value === undefined || value === null) break;
       }
     }
 

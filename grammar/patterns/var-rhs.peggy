@@ -89,7 +89,7 @@ ExecInvocationWithFields "exec invocation with post fields"
 // ALLIGATOR WITH FIELDS - Handles <file.md>.field syntax for direct assignment
 // This pattern allows field access after file references outside of template contexts
 AlligatorWithFields "alligator with field access"
-  = base:AlligatorExpression fields:AnyFieldAccess+ pipes:SpacedOrCondensedPipeChain? {
+  = base:AlligatorExpression fields:AnyFieldAccessOptional+ pipes:SpacedOrCondensedPipeChain? {
       helpers.debug('AlligatorWithFields matched', { 
         source: base.source,
         fieldCount: fields.length,
@@ -158,7 +158,7 @@ AlligatorWithPostPipes "alligator with external pipe chain"
 // VARIABLE WITH PIPES (outside template contexts)
 // Optional whitespace form that accepts full CommandArgumentList for args
 VariableWithSpacedPipes "variable with flexible pipe syntax"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* firstPipe:(_ pipeStart:("" { return peg$currPos; }) "|" _ command:PipeCommand { return { command, pipeStart }; })? restPipes:SpacedOrCondensedPipe* {
+  = "@" id:BaseIdentifier fields:AnyFieldAccessOptional* firstPipe:(_ pipeStart:("" { return peg$currPos; }) "|" _ command:PipeCommand { return { command, pipeStart }; })? restPipes:SpacedOrCondensedPipe* {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -238,7 +238,7 @@ SpacedOrCondensedPipeChain "flexible pipe chain"
 
 // FIELD ACCESS EXEC PATTERN - Matches @obj.field() with nested field access
 FieldAccessExecPattern "field access exec invocation"
-  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
+  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccessOptional+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
       // Extract the last field as the method name
       const lastField = fields[fields.length - 1];
       const methodName = lastField.value;

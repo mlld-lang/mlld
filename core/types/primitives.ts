@@ -50,6 +50,9 @@ export interface FieldAccessNode {
   
   // Operation-specific fields for filter operations
   condition?: FilterCondition;
+
+  // Optional access marker (e.g., @obj.field?)
+  optional?: boolean;
   
   location?: SourceLocation;
 }

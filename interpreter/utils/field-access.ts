@@ -150,7 +150,7 @@ export interface FieldAccessOptions {
   preserveContext?: boolean;
   /** Parent path for building access path */
   parentPath?: string[];
-  /** Whether to return undefined for missing fields instead of throwing */
+  /** Whether to return undefined for missing fields instead of null */
   returnUndefinedForMissing?: boolean;
   /** Environment for async operations like filters */
   env?: Environment;
@@ -278,6 +278,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     }
   }
   const fieldValue = field.value;
+  const missingValue = options?.returnUndefinedForMissing ? undefined : null;
   
   // DEBUG: Log what we're working with
   if (process.env.MLLD_DEBUG === 'true' && String(fieldValue) === 'try') {
@@ -463,6 +464,10 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = structuredCtx[name];
           break;
         }
+        if (rawValue === null || rawValue === undefined) {
+          accessedValue = missingValue;
+          break;
+        }
         const chain = [...(options?.parentPath || []), name];
         const msg = `Cannot access field "${name}" on non-object value (${typeof rawValue})`;
         throw new FieldAccessError(msg, {
@@ -493,16 +498,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           }
         }
         
-        {
-          const chain = [...(options?.parentPath || []), name];
-          const msg = `Field "${name}" not found in LoadContentResult`;
-          throw new FieldAccessError(msg, {
-            baseValue: rawValue,
-            fieldAccessChain: [],
-            failedAtIndex: Math.max(0, chain.length - 1),
-            failedKey: name
-          }, { sourceLocation: options?.sourceLocation, env: options?.env });
-        }
+        accessedValue = missingValue;
+        break;
       }
       
       // Handle StructuredValue arrays - special case for .text and .length
@@ -531,20 +528,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         // This is a Variable object, access fields in the value
         const actualValue = rawValue.value;
         if (!(name in actualValue)) {
-          if (options?.returnUndefinedForMissing) {
-            accessedValue = undefined;
-            break;
-          }
-          {
-            const chain = [...(options?.parentPath || []), name];
-            const msg = `Field "${name}" not found in object`;
-            throw new FieldAccessError(msg, {
-              baseValue: actualValue,
-              fieldAccessChain: [],
-              failedAtIndex: Math.max(0, chain.length - 1),
-              failedKey: name
-            }, { sourceLocation: options?.sourceLocation, env: options?.env });
-          }
+          accessedValue = missingValue;
+          break;
         }
         accessedValue = actualValue[name];
         break;
@@ -554,20 +539,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       if (isObjectAST(rawValue)) {
         // Access the field using helper that handles both formats
         if (!hasObjectField(rawValue, name)) {
-          if (options?.returnUndefinedForMissing) {
-            accessedValue = undefined;
-            break;
-          }
-          {
-            const chain = [...(options?.parentPath || []), name];
-            const msg = `Field "${name}" not found in object`;
-          throw new FieldAccessError(msg, {
-            baseValue: rawValue,
-            fieldAccessChain: [],
-            failedAtIndex: Math.max(0, chain.length - 1),
-            failedKey: name
-          }, { sourceLocation: options?.sourceLocation, env: options?.env });
-          }
+          accessedValue = missingValue;
+          break;
         }
         accessedValue = getObjectField(rawValue, name);
         break;
@@ -609,20 +582,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = structuredCtx[name];
           break;
         }
-        if (options?.returnUndefinedForMissing) {
-          accessedValue = undefined;
-          break;
-        }
-        const chain = [...(options?.parentPath || []), name];
-        const availableKeys = rawValue && typeof rawValue === 'object' ? Object.keys(rawValue) : [];
-        throw new FieldAccessError(`Field "${name}" not found in object`, {
-          baseValue: rawValue,
-          fieldAccessChain: [],
-          failedAtIndex: Math.max(0, chain.length - 1),
-          failedKey: name,
-          accessPath: chain,
-          availableKeys
-        }, { sourceLocation: options?.sourceLocation, env: options?.env });
+        accessedValue = missingValue;
+        break;
       }
       
       accessedValue = rawValue[name];
@@ -633,7 +594,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // Handle numeric property access (obj.123)
       const numKey = String(fieldValue);
       
-      if (typeof rawValue !== 'object' || rawValue === null) {
+      if (rawValue === null || rawValue === undefined) {
+        accessedValue = missingValue;
+        break;
+      }
+
+      if (typeof rawValue !== 'object') {
         const chain = [...(options?.parentPath || []), numKey];
         throw new FieldAccessError(`Cannot access numeric field "${numKey}" on non-object value`, {
           baseValue: rawValue,
@@ -652,18 +618,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // Handle normalized AST objects (with entries or properties)
       if (isObjectAST(rawValue)) {
         if (!hasObjectField(rawValue, numKey)) {
-          if (options?.returnUndefinedForMissing) {
-            accessedValue = undefined;
-            break;
-          }
-          const chain = [...(options?.parentPath || []), numKey];
-          throw new FieldAccessError(`Numeric field "${numKey}" not found in object`, {
-            baseValue: rawValue,
-            fieldAccessChain: [],
-            failedAtIndex: Math.max(0, chain.length - 1),
-            failedKey: numKey,
-            accessPath: chain
-          });
+          accessedValue = missingValue;
+          break;
         }
         accessedValue = getObjectField(rawValue, numKey);
         break;
@@ -671,18 +627,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       
       // Handle regular objects
       if (!(numKey in rawValue)) {
-        if (options?.returnUndefinedForMissing) {
-          accessedValue = undefined;
-          break;
-        }
-        const chain = [...(options?.parentPath || []), numKey];
-        throw new FieldAccessError(`Numeric field "${numKey}" not found in object`, {
-          baseValue: rawValue,
-          fieldAccessChain: [],
-          failedAtIndex: Math.max(0, chain.length - 1),
-          failedKey: numKey,
-          accessPath: chain
-        });
+        accessedValue = missingValue;
+        break;
       }
       
       accessedValue = rawValue[numKey];
@@ -692,20 +638,18 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     case 'arrayIndex': {
       // Handle array index access (arr[0])
       const index = Number(fieldValue);
+
+      if (rawValue === null || rawValue === undefined) {
+        accessedValue = missingValue;
+        break;
+      }
       
       // Handle normalized AST arrays
       if (rawValue && typeof rawValue === 'object' && rawValue.type === 'array' && rawValue.items) {
         const items = rawValue.items;
         if (index < 0 || index >= items.length) {
-          const chain = [...(options?.parentPath || []), String(index)];
-          throw new FieldAccessError(`Array index ${index} out of bounds (array length: ${items.length})`, {
-            baseValue: rawValue,
-            fieldAccessChain: [],
-            failedAtIndex: Math.max(0, chain.length - 1),
-            failedKey: index,
-            accessPath: chain,
-            availableKeys: Array.from({ length: items.length }, (_, i) => String(i))
-          });
+          accessedValue = missingValue;
+          break;
         }
         accessedValue = items[index];
         break;
@@ -744,14 +688,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
 
       if (index < 0 || index >= arrayData.length) {
-        const chain = [...(options?.parentPath || []), String(index)];
-        const msg = `Array index ${index} out of bounds (length: ${arrayData.length})`;
-        throw new FieldAccessError(msg, {
-          baseValue: arrayData,
-          fieldAccessChain: [],
-          failedAtIndex: Math.max(0, chain.length - 1),
-          failedKey: index
-        });
+        accessedValue = missingValue;
+        break;
       }
 
       accessedValue = arrayData[index];
@@ -869,9 +807,15 @@ export async function accessFields(
       if ((result as FieldAccessResult).isVariable && isVariable((result as FieldAccessResult).value)) {
         parentVar = (result as FieldAccessResult).value;
       }
+      if (current === null || current === undefined) {
+        break;
+      }
     } else {
       // Simple mode - just get the value
       current = result;
+      if (current === null || current === undefined) {
+        break;
+      }
     }
   }
   

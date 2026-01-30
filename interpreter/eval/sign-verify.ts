@@ -53,33 +53,34 @@ function formatFieldAccess(fields?: FieldAccessNode[]): string {
   let output = '';
   for (const field of fields) {
     if (!field) continue;
+    const optionalSuffix = field.optional ? '?' : '';
     switch (field.type) {
       case 'field':
       case 'numericField':
-        output += `.${field.value ?? ''}`;
+        output += `.${field.value ?? ''}${optionalSuffix}`;
         break;
       case 'array':
       case 'arrayIndex':
       case 'stringIndex':
-        output += `[${field.value ?? ''}]`;
+        output += `[${field.value ?? ''}]${optionalSuffix}`;
         break;
       case 'bracketAccess':
-        output += `[${JSON.stringify(field.value ?? '')}]`;
+        output += `[${JSON.stringify(field.value ?? '')}]${optionalSuffix}`;
         break;
       case 'variableIndex': {
         const ref = (field as any).value;
-        output += `[${renderVariableReference(ref)}]`;
+        output += `[${renderVariableReference(ref)}]${optionalSuffix}`;
         break;
       }
       case 'arraySlice': {
         const start = renderSliceIndex((field as any).start);
         const end = renderSliceIndex((field as any).end);
-        output += `[${start}:${end}]`;
+        output += `[${start}:${end}]${optionalSuffix}`;
         break;
       }
       case 'arrayFilter': {
         const condition = renderFilterCondition((field as any).condition);
-        output += `[?${condition}]`;
+        output += `[?${condition}]${optionalSuffix}`;
         break;
       }
       default:
