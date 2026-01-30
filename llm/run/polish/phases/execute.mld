@@ -12,41 +12,61 @@
 import { @processTicket, @processCluster } from "./execute/apply.mld"
 import { @mergeVerified } from "./execute/merge.mld"
 import { @verifyMain } from "./execute/verify.mld"
-import { @logPhaseStart, @logPhaseComplete, @logBatchStart, @logBatchDone } from "../lib/events.mld"
+import { @logPhaseStart, @logPhaseComplete, @logBatchStart, @logBatchDone, @loadEvents, @getExecuteCompletedItems } from "../lib/events.mld"
 
 /needs { sh }
 
 >> Main execute function
-exe @runExecute(runDir, batchSize, dryRun) = [
+>> Config: { batch, parallel, timeout, dryRun }
+>> Returns: { results, remaining } - remaining count for loop mode
+exe @runExecute(runDir, config) = [
   let @outputPath = `@runDir/execute/results.json`
 
   >> Load work plan
   let @workPlanPath = `@runDir/rank/work-plan.json`
   let @workPlan = <@workPlanPath>?
 
-  let @items = @workPlan && @workPlan.ranked_items ? @workPlan.ranked_items : []
+  let @allItems = @workPlan && @workPlan.ranked_items ? @workPlan.ranked_items : []
+
+  >> Filter out already-completed items
+  let @events = @loadEvents(@runDir)
+  let @completedIds = @getExecuteCompletedItems(@events)
+  let @items = for @item in @allItems [
+    let @itemId = @item.ticket_id ? @item.ticket_id : @item.epic_id
+    let @isCompleted = @completedIds.includes(@itemId)
+    when !@isCompleted => @item
+  ]
 
   >> Show status messages
   when !@workPlan => [
     show `  No work-plan.json found`
     show `  Run rank phase first`
   ]
-  when @workPlan && @items.length == 0 => show `  No items to execute`
+  when @workPlan && @allItems.length == 0 => show `  No items to execute`
+  when @items.length == 0 && @allItems.length > 0 => show `  All @allItems.length items already processed`
 
   >> Use when first for proper early returns
   => when first [
-    !@workPlan => null
-    @items.length == 0 => [
-      let @emptyResults = { created: @now, results: [] }
+    !@workPlan => { remaining: 0 }
+    @allItems.length == 0 => [
+      let @emptyResults = { created: @now, results: [], remaining: 0 }
       output @emptyResults to "@outputPath"
       => @emptyResults
     ]
-    * => @_doExecute(@runDir, @outputPath, @items, @batchSize, @dryRun)
+    @items.length == 0 => { created: @now, results: [], remaining: 0, all_complete: true }
+    * => @_doExecute(@runDir, @outputPath, @items, @config)
   ]
 ]
 
 >> Internal function to do the actual execute work
-exe @_doExecute(runDir, outputPath, items, batchSize, dryRun) = [
+>> Config: { batch, parallel, timeout, dryRun }
+exe @_doExecute(runDir, outputPath, items, config) = [
+  >> Extract config
+  let @batchSize = @config.batch ? @config.batch : 5
+  let @parallelLimit = @config.parallel ? @config.parallel : 10
+  let @parallelTimeout = @config.timeout ? @config.timeout : "10s"
+  let @dryRun = @config.dryRun ? true : false
+
   >> Log phase start
   let @_ = @logPhaseStart(@runDir, "execute")
 
@@ -67,10 +87,10 @@ exe @_doExecute(runDir, outputPath, items, batchSize, dryRun) = [
 
   >> === STAGE 4a: APPLY (parallel) ===
   show ``
-  show `  --- Stage 4a: Apply (parallel, concurrency: 5) ---`
+  show `  --- Stage 4a: Apply (parallel: @parallelLimit, timeout: @parallelTimeout) ---`
 
   >> Process items in parallel - each gets its own worktree
-  let @results = for parallel(5) @item in @batch [
+  let @results = for parallel(@parallelLimit, @parallelTimeout) @item in @batch [
     let @itemId = @item.ticket_id ? @item.ticket_id : @item.epic_id
     log `  [start] @item.type: @itemId`
 
@@ -104,7 +124,8 @@ exe @_doExecute(runDir, outputPath, items, batchSize, dryRun) = [
   >> Build final results
   let @mergedCount = @mergeResult.merged_count ? @mergeResult.merged_count : 0
   let @isDryRun = when first [@dryRun => true; * => false]
-  let @executeResults = { created: @now, base_branch: @baseBranchTrimmed, batch_size: @batch.length, total_items: @items.length, dry_run: @isDryRun, results: @results, merge: @mergeResult, verification: @verifyResult }
+  let @remaining = @items.length - @batch.length
+  let @executeResults = { created: @now, base_branch: @baseBranchTrimmed, batch_size: @batch.length, total_items: @items.length, remaining: @remaining, dry_run: @isDryRun, results: @results, merge: @mergeResult, verification: @verifyResult }
 
   output @executeResults to "@outputPath"
 
@@ -126,6 +147,7 @@ exe @_doExecute(runDir, outputPath, items, batchSize, dryRun) = [
   show `            @clusters.length clusters processed`
   show `    Merge:  @mergedCount merged`
   show `    Verify: @verifyResult.status`
+  when @remaining > 0 => show `    Remaining: @remaining items`
 
   => @executeResults
 ]

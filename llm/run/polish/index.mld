@@ -3,10 +3,13 @@
 >>
 >> Options:
 >>   --batch N           Process N items per run (default: 5)
+>>   --parallel N        Concurrent Claude calls in apply stage (default: 10)
+>>   --timeout Ns        Timeout per parallel item, e.g. 60s (default: 10s)
 >>   --phase <name>      Run only a specific phase
 >>   --from <name>       Start from a specific phase
 >>   --to <name>         Stop after a specific phase
 >>   --run <id>          Resume a specific run
+>>   --loop              Keep processing until all items complete
 >>   --docs-only         Only process doc fixes
 >>   --qa                Include QA signals (requires prior mlld run qa + answered strategy-questions.md)
 >>   --retry-failed      Re-attempt escalated items
@@ -41,10 +44,13 @@ exe @createSymlink(dir, target) = sh {cd "$dir" && rm -f current && ln -s "$targ
 import "@payload" as @p
 
 var @batchSize = @p.batch ? @p.batch * 1 : 5
+var @pl = @p.parallel ? @p.parallel * 1 : 10
+var @pt = @p.timeout ? @p.timeout : "10s"
 var @phaseOnly = @p.phase ? @p.phase : null
 var @fromPhase = @p.from ? @p.from : null
 var @toPhase = @p.to ? @p.to : null
 var @runId = @p.run ? @p.run : null
+var @loopMode = @p.loop ? true : false
 var @docsOnly = @p.docsOnly ? true : false
 var @useQa = @p.qa ? true : false
 var @retryFailed = @p.retryFailed ? true : false
@@ -134,6 +140,8 @@ show `=== Polish Pipeline v2 ===`
 show ``
 show `Config:`
 show `  Batch size: @batchSize`
+show `  Parallel: @pl concurrent, @pt timeout`
+when @loopMode => show `  Loop mode: run until all items complete`
 when @phaseOnly => show `  Phase only: @phaseOnly`
 when @fromPhase => show `  From phase: @fromPhase`
 when @toPhase => show `  To phase: @toPhase`
@@ -196,10 +204,36 @@ when @shouldRunPhase("rank", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => 
 
 >> Phase 4: Execute
 when @shouldRunPhase("execute", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => [
-  show `=== Phase 4: Execute ===`
-  let @result = @runExecute(@runDir, @batchSize, @dryRun)
-  @phaseResults += { execute: @result }
-  show ``
+  let @execConfig = { batch: @batchSize, parallel: @pl, timeout: @pt, dryRun: @dryRun }
+
+  when @loopMode => [
+    >> Loop mode: keep processing until all items complete
+    show `=== Phase 4: Execute (loop mode) ===`
+    let @loopResult = loop [
+      let @iteration = @mx.loop.iteration
+      let @prevRemaining = @input ? @input.remaining : null
+      show `--- Batch @iteration ---`
+      let @result = @runExecute(@runDir, @execConfig)
+      let @remaining = @result.remaining ? @result.remaining : 0
+
+      >> Exit when no items remaining
+      when @remaining == 0 => done { remaining: 0, last_result: @result }
+
+      >> Continue if more items
+      show `  @remaining items remaining, continuing...`
+      continue { remaining: @remaining, last_result: @result }
+    ]
+    @phaseResults += { execute: @loopResult.last_result }
+    show ``
+  ]
+
+  when !@loopMode => [
+    >> Single batch mode
+    show `=== Phase 4: Execute ===`
+    let @result = @runExecute(@runDir, @execConfig)
+    @phaseResults += { execute: @result }
+    show ``
+  ]
 ]
 
 >> Phase 5: Docs

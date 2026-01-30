@@ -69,26 +69,28 @@ Use your tools (Read, Glob, Grep) to check:
 
 Estimate the scope across three dimensions:
 
-**Size** (effort):
-- xs: < 1 hour, trivial
-- s: 1-4 hours, single file
-- m: 4-16 hours, multiple files
-- l: 2-5 days, significant feature
-- xl: 1+ weeks, major feature
+**Size** (effort) - use ONLY these exact tag values:
+- `size-xs`: < 1 hour, trivial
+- `size-s`: 1-4 hours, single file
+- `size-m`: 4-16 hours, multiple files
+- `size-l`: 2-5 days, significant feature
+- `size-xl`: 1+ weeks, major feature
 
-**Complexity** (technical difficulty):
-- xs: Trivial, copy existing pattern
-- s: Simple, clear solution
-- m: Moderate, some design decisions
-- l: Complex, multiple systems
-- xl: Very complex, research required
+**Complexity** (technical difficulty) - use ONLY these exact tag values:
+- `complexity-xs`: Trivial, copy existing pattern
+- `complexity-s`: Simple, clear solution
+- `complexity-m`: Moderate, some design decisions
+- `complexity-l`: Complex, multiple systems
+- `complexity-xl`: Very complex, research required
 
-**Risk** (uncertainty):
-- xs: Minimal, isolated change
-- s: Low, mostly isolated
-- m: Moderate, some dependencies
-- l: High, many dependencies
-- xl: Very high, core changes
+**Risk** (uncertainty) - use ONLY these exact tag values:
+- `risk-xs`: Minimal, isolated change
+- `risk-s`: Low, mostly isolated
+- `risk-m`: Moderate, some dependencies
+- `risk-l`: High, many dependencies
+- `risk-xl`: Very high, core changes
+
+IMPORTANT: Use exactly these tag formats. Never spell out sizes (no "large", "medium", "small").
 
 ## Output Format
 
@@ -107,17 +109,17 @@ Write ONLY a JSON object (no markdown code fences):
     "evidence": []
   },
   "scope": {
-    "size": "m",
-    "complexity": "s",
-    "risk": "m",
+    "size": "size-m",
+    "complexity": "complexity-s",
+    "risk": "risk-m",
     "reasoning": "Moderate effort, straightforward implementation"
   },
   "tags_to_add": ["size-m", "complexity-s", "risk-m", "stale-check-2", "impl-none"]
 }
 
-The `tags_to_add` array should include:
+The `tags_to_add` array should include (use exact tag names):
 - `stale-check-N` where N = floor(staleness_score * 10)
-- `size-X` where X is the size estimate
-- `complexity-X` where X is the complexity estimate
-- `risk-X` where X is the risk estimate
+- `size-{xs,s,m,l,xl}` - the size estimate
+- `complexity-{xs,s,m,l,xl}` - the complexity estimate
+- `risk-{xs,s,m,l,xl}` - the risk estimate
 - `impl-none`, `impl-partial`, or `impl-done` based on implementation status

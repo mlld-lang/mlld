@@ -15,6 +15,9 @@ import { @debuglog } from "../../lib/debug.mld"
 >> Tool permissions for merge agents
 var @mergeTools = "Read,Write,Glob,Grep,Bash(git:*),Bash(wt:*),Bash(cat:*),Bash(pwd)"
 
+>> Shell helper for worktree cleanup
+exe @wtRemove(branch) = sh {wt remove "$branch" -y 2>/dev/null || true}
+
 >> Build merge prompt from template
 exe @buildMergePrompt(baseBranch, runDir, batchNum, mergeItemsJson, outputPath) = template "../../prompts/execute-merge.att"
 
@@ -55,12 +58,32 @@ exe @_doMerge(runDir, verifiedItems, baseBranch, batchNum) = [
     !@mergeResult => { merged_count: 0, error: "merge failed - no result" }
     * => [
       let @_ = @logEvent(@runDir, { event: "merge_complete", batch: @batchNum, merged: @mergeResult.merged_count })
+      >> Cleanup worktrees for successfully merged items
+      let @_ = @cleanupMergedWorktrees(@mergeResult)
       => @mergeResult
     ]
   ]
 ]
 
+>> Cleanup worktrees after successful merge
+>> Claude may not have perms to run wt remove, so we do it here
+exe @cleanupMergedWorktrees(mergeResult) = [
+  let @results = @mergeResult.results ? @mergeResult.results : []
+  let @merged = for @r in @results when @r.merged && @r.worktree_branch => @r
+
+  when @merged.length > 0 => show `    Cleaning up @merged.length worktrees...`
+
+  for @item in @merged [
+    let @branch = @item.worktree_branch
+    let @_ = @wtRemove(@branch)
+    show `      Removed worktree: @branch`
+  ]
+
+  => @merged.length
+]
+
 /export {
   @mergeVerified,
-  @_doMerge
+  @_doMerge,
+  @cleanupMergedWorktrees
 }

@@ -36,6 +36,20 @@ mlld run polish --batch 10
 
 This runs: reconcile (tickets only) → enrich → rank → execute
 
+### Process all items (loop mode)
+
+Keep processing until work-plan is exhausted:
+
+```bash
+mlld run polish --loop
+```
+
+Loops execute phase until all items complete. Combine with parallel config:
+
+```bash
+mlld run polish --loop --batch 20 --parallel 15 --timeout 60s
+```
+
 ### Continue executing a ranked run
 
 Resume an existing run that already has ranked items:
@@ -116,6 +130,9 @@ Phase 5 (Docs):       Doc fixes with QA validation loop
 
 **Key flags**:
 - `--batch N` - Items per execution batch (default 5)
+- `--parallel N` - Concurrent Claude calls in apply stage (default 10)
+- `--timeout Ns` - Timeout per parallel item (default 10s)
+- `--loop` - Keep processing until all items in work-plan complete
 - `--dryRun` - Use haiku model, skip actual changes
 - `--qa` - Include QA signals (requires prior `mlld run qa` + answered strategy-questions.md)
 - `--phase <name>` - Run single phase
@@ -172,12 +189,14 @@ pipeline/
 Three stages for safe code changes:
 
 ```
-4a: Apply (parallel)   Analyze + apply fixes in isolated worktrees (5 concurrent)
-4b: Merge (sequential) Merge verified worktrees to main
+4a: Apply (parallel)   Analyze + apply fixes in isolated worktrees
+4b: Merge (sequential) Merge verified worktrees to main + cleanup worktrees
 4c: Verify             Run full test suite on main after merges
 ```
 
-Each ticket gets its own git worktree for isolation. Apply stage runs up to 5 tickets in parallel—each Claude agent works in its own worktree without conflicts.
+Each ticket gets its own git worktree for isolation. Apply stage runs items in parallel (default: 10 concurrent, 10s timeout)—each Claude agent works in its own worktree without conflicts.
+
+After successful merge, worktrees are automatically cleaned up via `wt remove`.
 
 Clusters (related items grouped under epic) are processed by one agent in sequence—shared context ensures coherent fixes across related tickets.
 
