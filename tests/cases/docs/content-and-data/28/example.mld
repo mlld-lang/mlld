@@ -1,7 +1,7 @@
-var @a = "first"
-var @b = ""
-var @c = "third"
+var @title = "Dr."
+var @nickname = ""
 
-var @list = [@a, @b?, @c]
-show @list
->> ["first", "third"] - @b was omitted because it's falsy
+var @greeting = "Hello @title?\"@title \"@name@nickname?\" (@nickname)\""
+show @greeting
+>> With @title="Dr." and @name="Ada": "Hello Dr. Ada"
+>> With @nickname="Ace": "Hello Ada (Ace)"

@@ -1,12 +1,17 @@
->> Path existence
-when @exists("config.json") => show "Config found"
+var @arr = [1, 2, 3]
+var @obj = {"name": "Alice"}
+var @str = "hello"
+var @num = 42
+var @bool = true
+var @nothing = null
 
->> Glob pattern existence (true if at least one match)
-when @exists(<*.md>) => show "Markdown files exist"
+show @arr.isArray()      >> true
+show @obj.isObject()     >> true
+show @str.isString()     >> true
+show @num.isNumber()     >> true
+show @bool.isBoolean()   >> true
+show @nothing.isNull()   >> true
 
->> Use in conditionals
-exe @loadConfig() = when first [
-  @exists("config.local.json") => <config.local.json>
-  @exists("config.json") => <config.json>
-  * => {}
-]
+>> isDefined() safely returns false for missing variables
+show @missing.isDefined()   >> false
+show @str.isDefined()       >> true

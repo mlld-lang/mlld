@@ -1,22 +1,14 @@
->> Process API data
-var @users = run {curl -s api.example.com/users}
-var @parsed = @users | @json
+>> Collect all module documentation
+var @modules = <modules/**/*.md>
 
->> Define filter function for active users
-exe @filterActive(users) = js {
-  return users.filter(u => u.status === "active")
-}
-var @active = @filterActive(@parsed)
+>> Build README with metadata
+var @readme = `# Project Modules
 
->> Generate report
-var @report = `# User Report
+Total modules: @modules.length
+Last updated: @now
 
-Active users: @active.length
-Generated: @now
-
-## Users
-@active
+@modules
 
 `
 
-output @report to "user-report.md"
+output @readme to "README.md"

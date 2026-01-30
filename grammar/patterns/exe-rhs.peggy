@@ -447,6 +447,8 @@ ProseContentParts "prose content parts"
 // This ensures ProseTextSegment handles plain text and stops at }
 ProseAtInterpolation "prose @ interpolation"
   = ConditionalTemplateSnippet   // @var?`...`
+  / NullCoalescingTight          // @var??"default"
+  / ConditionalVariableOmission  // @var?
   / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)

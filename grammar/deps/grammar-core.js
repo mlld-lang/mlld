@@ -339,6 +339,16 @@ export const helpers = {
                     const contentRaw = this.reconstructRawString(nodes.content || []);
                     return `${conditionRaw}?\`${contentRaw}\``;
                 }
+                if (nodes.type === 'ConditionalVarOmission') {
+                    const variableRaw = this.reconstructRawString(nodes.variable);
+                    return `${variableRaw}?`;
+                }
+                if (nodes.type === 'NullCoalescingTight') {
+                    const variableRaw = this.reconstructRawString(nodes.variable);
+                    const fallback = nodes.default || { quote: 'double', value: '' };
+                    const quote = fallback.quote === 'single' ? '\'' : '"';
+                    return `${variableRaw}??${quote}${fallback.value || ''}${quote}`;
+                }
             }
             return String(nodes || ''); // Fallback
         }
@@ -396,6 +406,16 @@ export const helpers = {
                 const contentRaw = this.reconstructRawString(node.content || []);
                 raw += `${conditionRaw}?\`${contentRaw}\``;
             }
+            else if (node.type === 'ConditionalVarOmission') {
+                const variableRaw = this.reconstructRawString(node.variable);
+                raw += `${variableRaw}?`;
+            }
+            else if (node.type === 'NullCoalescingTight') {
+                const variableRaw = this.reconstructRawString(node.variable);
+                const fallback = node.default || { quote: 'double', value: '' };
+                const quote = fallback.quote === 'single' ? '\'' : '"';
+                raw += `${variableRaw}??${quote}${fallback.value || ''}${quote}`;
+            }
             else if (typeof node === 'string') {
                 // Handle potential raw string segments passed directly
                 raw += node;
@@ -426,7 +446,9 @@ export const helpers = {
             hasVariables: parts.some(p => p && (p.type === NodeType.VariableReference ||
                 p.type === NodeType.ExecInvocation ||
                 p.type === 'ConditionalTemplateSnippet' ||
-                p.type === 'ConditionalStringFragment')),
+                p.type === 'ConditionalStringFragment' ||
+                p.type === 'ConditionalVarOmission' ||
+                p.type === 'NullCoalescingTight')),
             isTemplateContent: wrapperType === 'doubleBracket'
         };
     },

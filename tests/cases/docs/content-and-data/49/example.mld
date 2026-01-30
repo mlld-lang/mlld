@@ -1,5 +1,10 @@
 import templates from "@base/agents" as @agents(message, context)
-import templates from "@base/formatters" as @fmt(data)
 
-show @agents["alice"](@msg, @mx)    >> (message, context)
-show @fmt["json"](@result)           >> (data)
+>> All templates accept (message, context)
+show @agents["alice"](@msg, @mx)
+show @agents["bob"](@msg, @mx)
+
+>> Dynamic selection in loops
+for @name in ["alice", "bob", "charlie"] [
+  show @agents[@name](@msg, @mx)
+]

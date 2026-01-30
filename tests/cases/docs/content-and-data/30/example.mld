@@ -1,4 +1,7 @@
-var @config = {"tools": "json", "model": ""}
+var @a = "first"
+var @b = ""
+var @c = "third"
 
-run cmd { echo @config.tools?`--tools` @config.model?`--model` }
->> Output: --tools
+var @list = [@a, @b?, @c]
+show @list
+>> ["first", "third"] - @b was omitted because it's falsy

@@ -30,7 +30,8 @@ var @date = cmd {date}         >> command result
 var @readme = <README.md>      >> file contents
 ```
 
-**Conditional inclusion** (`@var?`): omit content when variable is falsy.
+**Conditional inclusion** (`@var?`): omit content when a variable is falsy.
+**Nullish fallback in templates** (`@var??"default"`): use the fallback when the value is null or undefined.
 
 ```mlld
 var @tools = "json"
@@ -39,6 +40,14 @@ var @empty = ""
 >> In commands: @var?`...`
 run cmd { echo @tools?`--tools "@tools"` @empty?`--empty` }
 >> Output: --tools "json" (--empty omitted)
+
+>> In templates: omit the variable itself
+var @title = "MyTitle"
+var @msg = `DEBUG:@title?`
+
+>> In templates: tight null coalescing
+var @missing = null
+var @hello = `Hello,@missing??"friend"`
 
 >> In arrays
 var @list = [@a, @b?, @c]   >> @b omitted if falsy
@@ -184,6 +193,12 @@ var @docs = <docs/**/*.md>
 show @docs.length
 for @doc in @docs => show @doc.mx.filename
 
+>> JSON globs - each item is auto-parsed
+var @configs = <configs/*.json>
+var @first = @configs[0]
+show @first.data.name                >> access parsed JSON
+show @first.mx.filename              >> file metadata still available
+
 >> With "as" template
 var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 ```
@@ -307,7 +322,7 @@ var @extracted = @llmResponse | @json.llm  >> extract from LLM response
 **Retry in pipelines:**
 
 ```mlld
-exe @validator(input) = when [
+exe @validator(input) = when first [
   @input.valid => @input
   @mx.try < 3 => retry "need more detail"
   * => "fallback"

@@ -285,7 +285,9 @@ export function isTemplateValue(value: unknown): value is ContentNodeArray {
     (node.type === 'Text' ||
       node.type === 'VariableReference' ||
       node.type === 'ConditionalTemplateSnippet' ||
-      node.type === 'ConditionalStringFragment')
+      node.type === 'ConditionalStringFragment' ||
+      node.type === 'ConditionalVarOmission' ||
+      node.type === 'NullCoalescingTight')
   );
 }
 

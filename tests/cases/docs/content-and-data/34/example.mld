@@ -1,13 +1,15 @@
->> Filter JSON array from command
-var @json = run {./mkjson.sh}
-exe @filterHigh(entries) = js {
-  return entries.filter(e => e.finding.startsWith("High"));
-}
-var @result = @filterHigh(@json.data)
+var @users = '[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]'
 
->> Process API response
-var @response = run {curl -s api.example.com/data}
-exe @getActive(data) = js {
-  return data.users.filter(u => u.active);
+>> Parse inside function
+exe @filter1(users) = js {
+  const data = JSON.parse(users);
+  return data.filter(u => u.age > 25);
 }
-var @active = @getActive(@response.data)
+run @filter1(@users)
+
+>> Parse before passing
+exe @filter2(users) = js {
+  return users.filter(u => u.age > 25);
+}
+run @filter2(@users.data)   >> .data parses JSON
+run @filter2(@users.json)   >> .json is alias

@@ -141,6 +141,8 @@ UnifiedBraceInterpolation "Brace interpolation"
 // @var style interpolation for double colons
 UnifiedAtInterpolation "At-sign interpolation"
   = ConditionalTemplateSnippet   // @var?`...`
+  / NullCoalescingTight          // @var??"default"
+  / ConditionalVariableOmission  // @var?
   / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)

@@ -1,0 +1,8 @@
+var @file = <config.json>
+
+>> ✗ JS receives unwrapped data by default - no .mx
+exe @process(file) = js { return file.mx.filename }  >> Error
+
+>> ✓ Use .keep to preserve metadata for JS
+exe @process(file) = js { return file.mx.filename }
+run @process(@file.keep)                              >> Works

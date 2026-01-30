@@ -17,7 +17,9 @@ import {
   TimeDurationNode,
   ExecInvocation,
   ConditionalTemplateSnippetNode,
-  ConditionalStringFragmentNode
+  ConditionalStringFragmentNode,
+  ConditionalVarOmissionNode,
+  NullCoalescingTightNode
 } from './primitives';
 import { WithClause } from './run';
 
@@ -42,7 +44,9 @@ export type ContentNodeArray = Array<
   VariableReferenceNode |
   ExecInvocation |
   ConditionalTemplateSnippetNode |
-  ConditionalStringFragmentNode
+  ConditionalStringFragmentNode |
+  ConditionalVarOmissionNode |
+  NullCoalescingTightNode
 >;
 
 /**

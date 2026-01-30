@@ -145,6 +145,16 @@ function reconstructRawString(nodes: any[] | any): string {
         const contentRaw = reconstructRawString(nodes.content || []);
         return `${conditionRaw}?\`${contentRaw}\``;
       }
+      if (nodes.type === 'ConditionalVarOmission') {
+        const variableRaw = reconstructRawString(nodes.variable);
+        return `${variableRaw}?`;
+      }
+      if (nodes.type === 'NullCoalescingTight') {
+        const variableRaw = reconstructRawString(nodes.variable);
+        const fallback = nodes.default || { quote: 'double', value: '' };
+        const quote = fallback.quote === 'single' ? '\'' : '"';
+        return `${variableRaw}??${quote}${fallback.value || ''}${quote}`;
+      }
       if (nodes.type === 'TemplateInlineShow') {
         return renderInlineShow(nodes);
       }
@@ -171,6 +181,14 @@ function reconstructRawString(nodes: any[] | any): string {
       const conditionRaw = reconstructRawString(node.condition);
       const contentRaw = reconstructRawString(node.content || []);
       raw += `${conditionRaw}?\`${contentRaw}\``;
+    } else if (node.type === 'ConditionalVarOmission') {
+      const variableRaw = reconstructRawString(node.variable);
+      raw += `${variableRaw}?`;
+    } else if (node.type === 'NullCoalescingTight') {
+      const variableRaw = reconstructRawString(node.variable);
+      const fallback = node.default || { quote: 'double', value: '' };
+      const quote = fallback.quote === 'single' ? '\'' : '"';
+      raw += `${variableRaw}??${quote}${fallback.value || ''}${quote}`;
     } else if (node.type === 'TemplateInlineShow') {
       raw += renderInlineShow(node);
     } else if (typeof node === 'string') {

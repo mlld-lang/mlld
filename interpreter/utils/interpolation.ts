@@ -16,6 +16,7 @@ import { EscapingStrategyFactory, InterpolationContext } from '../core/interpola
 import { interpreterLogger as logger } from '@core/utils/logger';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { evaluateConditionalInclusion } from '../eval/conditional-inclusion';
+import { isTruthy } from '../eval/expression';
 import { classifyShellValue } from '../utils/shell-value';
 import * as shellQuote from 'shell-quote';
 
@@ -154,7 +155,8 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
     };
 
     const { evaluate } = getDeps();
-    
+
+
     for (const node of nodes) {
       if (node.type === 'Text') {
         // Handle Text nodes - directly use string content
@@ -268,9 +270,24 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           const value = asText(variable.value);
           pushPart(strategy.escape(value));
         }
-      } else if (node.type === 'VariableReference' || node.type === 'VariableReferenceWithTail' || node.type === 'TemplateVariable') {
+      } else if (
+        node.type === 'VariableReference' ||
+        node.type === 'VariableReferenceWithTail' ||
+        node.type === 'TemplateVariable' ||
+        node.type === 'ConditionalVarOmission' ||
+        node.type === 'NullCoalescingTight'
+      ) {
         // Complex variable references (with field access, pipes, etc.)
-        const varName = (node as any).identifier || (node as any).name;
+        const isConditionalOmission = node.type === 'ConditionalVarOmission';
+        const isNullCoalescingTight = node.type === 'NullCoalescingTight';
+        const baseNode =
+          isConditionalOmission || isNullCoalescingTight
+            ? (node as any).variable
+            : (node as any).type === 'VariableReferenceWithTail' && (node as any).variable
+              ? (node as any).variable
+              : node;
+        const varName = (baseNode as any).identifier || (baseNode as any).name;
+        const fallbackValue = isNullCoalescingTight ? (node as any).default?.value ?? '' : '';
         let variable = env.getVariable(varName);
         
         // Allow resolver variables (async evaluation)
@@ -281,151 +298,178 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           }
         }
         
-        if (!variable) {
-          if (process.env.MLLD_DEBUG === 'true') {
-            logger.debug('Variable not found during interpolation:', { varName, valueType: node.valueType });
-          }
-          // WHY: Preserve original syntax when variable is undefined for better error messages
-          if (node.valueType === 'varInterpolation') {
-            pushPart(`{{${varName}}}`);  // {{var}} syntax
-          } else {
-            pushPart(`@${varName}`);      // @var syntax
-          }
-          continue;
-        }
-
-        collectDescriptor(variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined);
-
-        // Extract value based on variable type using new type guards
         let value: unknown = '';
-        
-        // Import isExecutableVariable dynamically
-        const { isExecutableVariable } = await import('@core/types/variable');
-        
-        // Special handling for executable variables
-        if (isExecutableVariable(variable)) {
-          const { evaluateExecInvocation } = await import('../eval/exec-invocation');
-          const commandRef = (node as any).commandRef || {
-            identifier: variable.name,
-            args: []
-          };
-          const execInvocation: ExecInvocation = {
-            type: 'ExecInvocation',
-            commandRef: {
-              identifier: commandRef.identifier || variable.name || (node as any).name || (node as any).identifier,
-              args: commandRef.args || []
-            },
-            location: commandRef.location || (node as any).location
-          };
-          const result = await evaluateExecInvocation(execInvocation, env);
-          collectDescriptor(extractInterpolationDescriptor(result.value));
-          const execOutput = asText(result.value);
-          const strategy = EscapingStrategyFactory.getStrategy(context);
-          pushPart(strategy.escape(execOutput));
-          continue;
-        }
-        
-        // Handle TemplateVariable references (e.g., ::{{var}}::)
-        if ((node as any).type === 'TemplateVariable') {
-          if ((node as any).content) {
-            value = await interpolateImpl((node as any).content as any[], env, InterpolationContext.Template, options);
-          } else if (variable.internal?.templateAst) {
-            value = await interpolateImpl(variable.internal.templateAst, env, InterpolationContext.Template, options);
+        let resolvedValueReady = false;
+
+        if (!variable) {
+          if (isConditionalOmission) {
+            continue;
           }
-          pushPart(String(value ?? ''));
-          continue;
-        }
-        
-        const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
-        const fields = (node as any).fields as any[] | undefined;
-        const hasMxField =
-          Array.isArray(fields) &&
-          fields.length > 0 &&
-          fields[0]?.type === 'field' &&
-          String(fields[0]?.value ?? '') === 'mx';
-        const resolutionContext = hasMxField ? ResolutionContext.FieldAccess : ResolutionContext.StringInterpolation;
-        
-        value = await resolveVariable(variable, env, resolutionContext);
-        collectDescriptor(extractInterpolationDescriptor(value));
-        
-        // Special handling for lazy reserved variables like DEBUG
-        if (value === null && variable.internal?.isReserved && variable.internal?.isLazy) {
-          // Need to resolve this as a resolver variable
-          const resolverVar = await env.getResolverVariable(varName);
-          if (resolverVar && resolverVar.value !== null) {
-            value = resolverVar.value;
-          }
-        }
-        
-        // Handle field access if present
-        let fieldsToProcess = node.fields || [];
-        if (fieldsToProcess.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
-          const { accessField } = await import('../utils/field-access');
-          for (const field of fieldsToProcess) {
-            // Handle variableIndex type - need to resolve the variable first
-            if (field.type === 'variableIndex') {
-              const { evaluateDataValue } = await import('../eval/data-value-evaluator');
-              const indexNode =
-                typeof field.value === 'object'
-                  ? (field.value as any)
-                  : {
-                      type: 'VariableReference',
-                      valueType: 'varIdentifier',
-                      identifier: String(field.value)
-                    };
-              const indexValue = await evaluateDataValue(indexNode as any, env);
-              // Create a new field with the resolved value
-              const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-              const fieldResult = await accessField(value, resolvedField, { 
-                preserveContext: true,
-                env 
-              });
-              value = (fieldResult as any).value;
+          if (isNullCoalescingTight) {
+            value = fallbackValue;
+            resolvedValueReady = true;
+          } else {
+            if (process.env.MLLD_DEBUG === 'true') {
+              logger.debug('Variable not found during interpolation:', { varName, valueType: (baseNode as any).valueType });
+            }
+            // WHY: Preserve original syntax when variable is undefined for better error messages
+            if ((baseNode as any).valueType === 'varInterpolation') {
+              pushPart(`{{${varName}}}`);  // {{var}} syntax
             } else {
-              const fieldResult = await accessField(value, field, { 
-                preserveContext: true,
-                env 
-              });
-              value = (fieldResult as any).value;
+              pushPart(`@${varName}`);      // @var syntax
             }
-            
-            // Handle null nodes from the grammar
-            if (value && typeof value === 'object' && 'type' in value) {
-              const nodeValue = value as Record<string, unknown>;
-              if (nodeValue.type === 'Null') {
-                value = null;
-              } else if (nodeValue.type === 'runExec' || nodeValue.type === 'ExecInvocation' || 
-                         nodeValue.type === 'command' || nodeValue.type === 'code' ||
-                         nodeValue.type === 'VariableReference' || nodeValue.type === 'path') {
-                // This is an unevaluated AST node from a complex object
-                // We need to evaluate it
-                value = await evaluateDataValue(value, env);
-              }
-            }
-            
-            if (value === undefined) break;
-          }
-        }
-        
-        // Handle pipes if present
-        if (node.pipes && node.pipes.length > 0) {
-          const { processPipeline } = await import('../eval/pipeline/unified-processor');
-          value = await processPipeline({
-            value,
-            env,
-            node,
-            identifier: node.identifier,
-            descriptorHint: variable?.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
-          });
-          if (typeof value === 'string') {
-            const strategy = EscapingStrategyFactory.getStrategy(context);
-            pushPart(strategy.escape(value));
             continue;
           }
         }
-        
+
+        if (!resolvedValueReady) {
+          collectDescriptor(variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined);
+
+          const { isExecutableVariable } = await import('@core/types/variable');
+
+          // Special handling for executable variables
+          if (isExecutableVariable(variable)) {
+            const { evaluateExecInvocation } = await import('../eval/exec-invocation');
+            const commandRef = (baseNode as any).commandRef || {
+              identifier: variable.name,
+              args: []
+            };
+            const execInvocation: ExecInvocation = {
+              type: 'ExecInvocation',
+              commandRef: {
+                identifier: commandRef.identifier || variable.name || (baseNode as any).name || (baseNode as any).identifier,
+                args: commandRef.args || []
+              },
+              location: commandRef.location || (baseNode as any).location
+            };
+            const result = await evaluateExecInvocation(execInvocation, env);
+            collectDescriptor(extractInterpolationDescriptor(result.value));
+            if (isConditionalOmission && !isTruthy(result.value)) {
+              continue;
+            }
+            if (isNullCoalescingTight && (result.value === null || result.value === undefined)) {
+              const strategy = EscapingStrategyFactory.getStrategy(context);
+              pushPart(strategy.escape(String(fallbackValue ?? '')));
+              continue;
+            }
+            const execOutput = asText(result.value);
+            const strategy = EscapingStrategyFactory.getStrategy(context);
+            pushPart(strategy.escape(execOutput));
+            continue;
+          }
+
+          // Handle TemplateVariable references (e.g., ::{{var}}::)
+          if ((baseNode as any).type === 'TemplateVariable') {
+            if ((baseNode as any).content) {
+              value = await interpolateImpl((baseNode as any).content as any[], env, InterpolationContext.Template, options);
+            } else if (variable.internal?.templateAst) {
+              value = await interpolateImpl(variable.internal.templateAst, env, InterpolationContext.Template, options);
+            }
+            pushPart(String(value ?? ''));
+            continue;
+          }
+
+          const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+          const fields = (baseNode as any).fields as any[] | undefined;
+          const hasMxField =
+            Array.isArray(fields) &&
+            fields.length > 0 &&
+            fields[0]?.type === 'field' &&
+            String(fields[0]?.value ?? '') === 'mx';
+          const resolutionContext = hasMxField ? ResolutionContext.FieldAccess : ResolutionContext.StringInterpolation;
+
+          value = await resolveVariable(variable, env, resolutionContext);
+          collectDescriptor(extractInterpolationDescriptor(value));
+
+          // Special handling for lazy reserved variables like DEBUG
+          if (value === null && variable.internal?.isReserved && variable.internal?.isLazy) {
+            // Need to resolve this as a resolver variable
+            const resolverVar = await env.getResolverVariable(varName);
+            if (resolverVar && resolverVar.value !== null) {
+              value = resolverVar.value;
+            }
+          }
+
+          // Handle field access if present
+          let fieldsToProcess = (baseNode as any).fields || [];
+          if (fieldsToProcess.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
+            const { accessField } = await import('../utils/field-access');
+            for (const field of fieldsToProcess) {
+              // Handle variableIndex type - need to resolve the variable first
+              if (field.type === 'variableIndex') {
+                const { evaluateDataValue } = await import('../eval/data-value-evaluator');
+                const indexNode =
+                  typeof field.value === 'object'
+                    ? (field.value as any)
+                    : {
+                        type: 'VariableReference',
+                        valueType: 'varIdentifier',
+                        identifier: String(field.value)
+                      };
+                const indexValue = await evaluateDataValue(indexNode as any, env);
+                // Create a new field with the resolved value
+                const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
+                const fieldResult = await accessField(value, resolvedField, {
+                  preserveContext: true,
+                  env
+                });
+                value = (fieldResult as any).value;
+              } else {
+                const fieldResult = await accessField(value, field, {
+                  preserveContext: true,
+                  env
+                });
+                value = (fieldResult as any).value;
+              }
+
+              // Handle null nodes from the grammar
+              if (value && typeof value === 'object' && 'type' in value) {
+                const nodeValue = value as Record<string, unknown>;
+                if (nodeValue.type === 'Null') {
+                  value = null;
+                } else if (nodeValue.type === 'runExec' || nodeValue.type === 'ExecInvocation' ||
+                           nodeValue.type === 'command' || nodeValue.type === 'code' ||
+                           nodeValue.type === 'VariableReference' || nodeValue.type === 'path') {
+                  // This is an unevaluated AST node from a complex object
+                  // We need to evaluate it
+                  value = await evaluateDataValue(value, env);
+                }
+              }
+
+              if (value === undefined) break;
+            }
+          }
+
+          // Handle pipes if present
+          if ((baseNode as any).pipes && (baseNode as any).pipes.length > 0) {
+            const { processPipeline } = await import('../eval/pipeline/unified-processor');
+            value = await processPipeline({
+              value,
+              env,
+              node: baseNode,
+              identifier: (baseNode as any).identifier,
+              descriptorHint: variable?.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
+            });
+            if (typeof value === 'string') {
+              const strategy = EscapingStrategyFactory.getStrategy(context);
+              pushPart(strategy.escape(value));
+              continue;
+            }
+          }
+        }
         const { resolveValue, ResolutionContext: ResContext } = await import('../utils/variable-resolution');
         value = await resolveValue(value, env, ResContext.StringInterpolation);
+
+        if (value && typeof value === 'object' && (value as any).type === 'Null') {
+          value = null;
+        }
+
+        if (isConditionalOmission && !isTruthy(value)) {
+          continue;
+        }
+        if (isNullCoalescingTight && (value === null || value === undefined)) {
+          value = fallbackValue;
+        }
         
         if (context === InterpolationContext.ShellCommand) {
           const classification = classifyShellValue(value);
@@ -543,7 +587,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           } else if (isStructuredValue(value) && value.type === 'array') {
             // StructuredValue arrays already have concatenated text
             stringValue = value.text;
-          } else if (variable && variable.internal?.isNamespace && node.fields?.length === 0) {
+          } else if (variable && variable.internal?.isNamespace && (baseNode as any).fields?.length === 0) {
             const { JSONFormatter } = await import('../core/json-formatter');
             stringValue = JSONFormatter.stringifyNamespace(value);
           } else if ((value as any).__executable) {
@@ -565,9 +609,9 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         const escapedValue = strategy.escape(stringValue);
         pushPart(escapedValue);
         
-        if (node.boundary) {
-          if (node.boundary.type === 'literal') {
-            pushPart(node.boundary.value);
+        if ((baseNode as any).boundary) {
+          if ((baseNode as any).boundary.type === 'literal') {
+            pushPart((baseNode as any).boundary.value);
           }
         }
       } else if (node.type === 'ExecInvocation') {

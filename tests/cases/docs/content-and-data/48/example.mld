@@ -1,8 +1,6 @@
->> In the published module
-exe @alice(msg, mx) = template "alice.att"
-exe @bob(msg, mx) = template "bob.att"
-export { @alice, @bob }
+>> Importing template files (use exe = template instead)
+import { @tpl } from "./file.att"    >> Error
+exe @tpl(x) = template "./file.att"  >> Correct
 
->> Import and use
-import { @alice, @bob } from @author/templates
-show @alice(@msg, @mx)
+>> For template directories:
+import templates from "./templates" as @tpl(x, y)

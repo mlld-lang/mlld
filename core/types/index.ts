@@ -72,6 +72,8 @@ import {
   TemplateInlineShowNode,
   ConditionalTemplateSnippetNode,
   ConditionalStringFragmentNode,
+  ConditionalVarOmissionNode,
+  NullCoalescingTightNode,
   ConditionalArrayElementNode
 } from './nodes';
 
@@ -118,6 +120,8 @@ export type MlldNode =
   | TemplateInlineShowNode
   | ConditionalTemplateSnippetNode
   | ConditionalStringFragmentNode
+  | ConditionalVarOmissionNode
+  | NullCoalescingTightNode
   | ConditionalArrayElementNode
   | WhenExpressionNode
   | ForExpression

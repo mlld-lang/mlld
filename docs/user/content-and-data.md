@@ -425,6 +425,20 @@ run cmd { echo @tools?`--tools "@tools"` @model?`--model "@model"` done }
 >> Output: --tools "json" done
 ```
 
+Use `@var?` to omit the variable itself in templates:
+
+```mlld
+var @title = "MyTitle"
+var @empty = ""
+
+var @msg1 = `DEBUG:@title?`
+var @msg2 = `DEBUG:@empty?`
+show @msg1
+show @msg2
+>> "DEBUG:MyTitle"
+>> "DEBUG:"
+```
+
 #### In Strings
 
 Use `@var?"..."` to conditionally include a quoted fragment:
@@ -437,6 +451,22 @@ var @greeting = "Hello @title?\"@title \"@name@nickname?\" (@nickname)\""
 show @greeting
 >> With @title="Dr." and @name="Ada": "Hello Dr. Ada"
 >> With @nickname="Ace": "Hello Ada (Ace)"
+```
+
+#### Null Coalescing in Templates
+
+Use `@var??"default"` (or single-quoted) to provide a fallback when the value is nullish. The `??` binding is tight in templates (no spaces).
+
+```mlld
+var @title = ""
+var @nickname = null
+
+show `Hello,@title??"friend"`
+show `Hello,@nickname??'pal'`
+show `Hello,@missing??"friend"`
+>> "Hello,"
+>> "Hello,pal"
+>> "Hello,friend"
 ```
 
 #### In Arrays

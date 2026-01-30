@@ -1,11 +1,5 @@
->> In directives
-show @name
+import templates from "@base/agents" as @agents(message, context)
+import templates from "@base/formatters" as @fmt(data)
 
->> In double quotes
-var @greeting = "Hello @name"
-
->> In command braces
-run cmd {echo "Welcome @name"}
-
->> NOT in single quotes (literal)
-var @literal = 'Hello @name'               >> Outputs: Hello @name
+show @agents["alice"](@msg, @mx)    >> (message, context)
+show @fmt["json"](@result)           >> (data)

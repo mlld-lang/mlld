@@ -1,9 +1,9 @@
-var @name = "Ada"
 var @title = ""
+var @nickname = null
 
-var @person = {
-  "name": @name,
-  "title"?: @title
-}
-show @person
->> {"name": "Ada"} - title was omitted because @title is falsy
+show `Hello,@title??"friend"`
+show `Hello,@nickname??'pal'`
+show `Hello,@missing??"friend"`
+>> "Hello,"
+>> "Hello,pal"
+>> "Hello,friend"

@@ -1,13 +1,12 @@
->> Format JSON with indentation
-var @data = <file.csv>
-var @tojson = @data | @json
-show @tojson
+>> Path existence
+when @exists("config.json") => show "Config found"
 
->> Convert to XML (SCREAMING_SNAKE_CASE)
-var @toxml = @data | @XML
-show @toxml
+>> Glob pattern existence (true if at least one match)
+when @exists(<*.md>) => show "Markdown files exist"
 
->> Convert arrays to CSV
-var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
-var @tocsv = @users | @CSV
-show @tocsv
+>> Use in conditionals
+exe @loadConfig() = when first [
+  @exists("config.local.json") => <config.local.json>
+  @exists("config.json") => <config.json>
+  * => {}
+]

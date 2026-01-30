@@ -210,6 +210,17 @@ export interface ConditionalStringFragmentNode extends BaseMlldNode {
   content: BaseMlldNode[];
 }
 
+export interface ConditionalVarOmissionNode extends BaseMlldNode {
+  type: 'ConditionalVarOmission';
+  variable: VariableReferenceNode;
+}
+
+export interface NullCoalescingTightNode extends BaseMlldNode {
+  type: 'NullCoalescingTight';
+  variable: VariableReferenceNode;
+  default: { type: 'string'; quote: 'single' | 'double'; value: string };
+}
+
 export interface ConditionalArrayElementNode extends BaseMlldNode {
   type: 'ConditionalArrayElement';
   condition: VariableReferenceNode;
