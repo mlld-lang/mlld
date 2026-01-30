@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- Binary and ternary expressions parse inside function arguments and array literals
+- Block expressions inside argument and array contexts surface a targeted parse error
 - **CLI file payload flags**: `mlld <file>` accepts extra `--flag value` pairs and exposes them via `@payload`
 - **Structured output JSON**: `/output` now writes clean JSON for structured arrays instead of emitting StructuredValue wrapper fields
 - **Function parameter scoping**: Function parameters no longer leak back to the caller's scope. Previously, when calling `@helper(data)` with a value, the `data` parameter would overwrite any `@data` variable in the caller's scope after the function returned. Parameters are now properly block-scoped like `let` bindings.
