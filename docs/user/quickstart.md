@@ -149,7 +149,7 @@ For multiple conditions, use the array form:
 
 ```mlld
 var @role = "admin"
-when first [
+when [
   @role == "admin" => show "Full access granted"
   @role == "user" => show "Limited access"
   * => show "Guest access"

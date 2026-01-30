@@ -13,7 +13,7 @@ updated: 2026-01-05
 **Value-returning when** (in exe):
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   * => "F"

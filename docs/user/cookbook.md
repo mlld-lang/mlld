@@ -18,10 +18,10 @@ The pattern `@prompt | cmd { ... }` pipes input to the command via stdin.
 
 ### With Options
 
-Handle optional parameters with `when first`:
+Handle optional parameters with `when`:
 
 ```mlld
-exe @claude(prompt, model, tools) = when first [
+exe @claude(prompt, model, tools) = when [
   @tools == "" => @prompt | cmd { claude -p --model @model --tools "" }
   @tools => @prompt | cmd { claude -p --model @model --allowedTools "@tools" }
   * => @prompt | cmd { claude -p --model @model }
@@ -53,7 +53,7 @@ exe @isValid(response) = [
   => @check.trim().toLowerCase().startsWith("yes")
 ]
 
-exe @gate(response) = when first [
+exe @gate(response) = when [
   @isValid(@response) => { pass: true, value: @response }
   * => { pass: false, reason: "Failed validation" }
 ]
@@ -73,12 +73,12 @@ show @result.pass
 Compose multiple checks:
 
 ```mlld
-exe @checkLength(text) = when first [
+exe @checkLength(text) = when [
   @text.length() > 10 => { pass: true }
   * => { pass: false, reason: "Too short" }
 ]
 
-exe @checkFormat(text) = when first [
+exe @checkFormat(text) = when [
   @text.startsWith("Answer:") => { pass: true }
   * => { pass: false, reason: "Wrong format" }
 ]
@@ -86,7 +86,7 @@ exe @checkFormat(text) = when first [
 exe @validate(text) = [
   let @len = @checkLength(@text)
   let @fmt = @checkFormat(@text)
-  => when first [
+  => when [
     !@len.pass => @len
     !@fmt.pass => @fmt
     * => { pass: true, value: @text }
@@ -140,13 +140,13 @@ exe @score(input) = [
   let @length = @input.length()
   let @hasQuestion = @input.includes("?")
 
-  let @base = when first [
+  let @base = when [
     @length > 100 => 0.5
     @length > 50 => 0.3
     * => 0.1
   ]
 
-  => when first [
+  => when [
     @hasQuestion => @base + 0.3
     * => @base
   ]
@@ -154,7 +154,7 @@ exe @score(input) = [
 
 exe @route(input) = [
   let @s = @score(@input)
-  => when first [
+  => when [
     @s >= @THRESHOLD => { handler: "detailed", score: @s }
     @s >= 0.3 => { handler: "quick", score: @s }
     * => { handler: "ignore", score: @s }
@@ -244,12 +244,12 @@ output @json to "reviews.json"
 Pass context between retry attempts:
 
 ```mlld
-exe @generate() = when first [
+exe @generate() = when [
   @mx.try == 1 => @haiku("Write a haiku about code")
   * => @haiku("Write a haiku about code. Hint: @mx.hint")
 ]
 
-exe @validate(text) = when first [
+exe @validate(text) = when [
   @text.includes("code") => @text
   @mx.try < 3 => retry "Must mention 'code'"
   * => "Failed after 3 tries"
@@ -372,7 +372,7 @@ loop(endless) until @state.stop [
 | `@input \| cmd { ... }` | Pipe to shell command |
 | `cmd:@dir { ... }` | Run in directory |
 | `exe @f(x) = [...]` | Multi-statement function |
-| `when first [...]` | Switch/match logic |
+| `when [...]` | Switch/match logic |
 | `for parallel(n) ...` | Concurrent processing |
 | `\|\| @a \|\| @b` | Parallel pipeline group |
 | `retry "hint"` | Retry with context |

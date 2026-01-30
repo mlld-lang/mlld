@@ -14,7 +14,7 @@ qa_tier: 2
 **Block actions** (side effects + return):
 
 ```mlld
-var @result = when first [
+var @result = when [
   @needsProcessing => [
     show "Processing..."
     let @processed = @transform(@data)

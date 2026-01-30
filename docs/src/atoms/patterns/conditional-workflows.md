@@ -14,7 +14,7 @@ updated: 2026-01-05
 import { @getPR, @commentOnPR } from @company/github
 
 var @pr = @getPR(@MLLD_PR_NUMBER)
-var @status = when first [
+var @status = when [
   @pr.mergeable => "ready"
   * => "blocked"
 ]

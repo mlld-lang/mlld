@@ -1,2 +1,6 @@
-var @fruits = ["apple", "banana", "cherry"]
-for @fruit in @fruits => show `Fruit: @fruit`
+exe @combine(a, b) = [
+  let @result = "@a-@b"
+  => @result
+]
+
+show @combine("hello", "world")

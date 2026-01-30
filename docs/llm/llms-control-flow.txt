@@ -1,7 +1,24 @@
 <MLLD_CONTROL_FLOW>
 
+<IF_FLOW>
+`if` runs imperative branches. Use block form for multi-statement paths and `else`.
+
+```mlld
+if @isProd [
+  show "Production mode"
+]
+
+exe @validate(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
+]
+```
+</IF_FLOW>
+
 <WHEN_DECISIONS>
-`when` handles conditionals. Three forms: simple, bare (all matches), first (switch-style).
+`when` selects a value or action based on the first matching condition. Use `if` for imperative flow.
 
 **Simple form:**
 
@@ -10,20 +27,10 @@ when @isProd => show "Production mode"
 when @score > 90 => show "Excellent!"
 ```
 
-**Bare form** (evaluates all matching conditions):
+**List form** (first match wins):
 
 ```mlld
 when [
-  @score > 90 => show "Excellent!"
-  @hasBonus => show "Bonus earned!"
-  none => show "No matches"        >> runs only if nothing matched
-]
-```
-
-**First form** (stops at first match, like switch):
-
-```mlld
-when first [
   @role == "admin" => show "Admin panel"
   @role == "user"  => show "User dashboard"
   * => show "Guest view"           >> wildcard catches all
@@ -33,7 +40,7 @@ when first [
 **Value-returning when** (in exe):
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   * => "F"
@@ -45,7 +52,7 @@ var @grade = @classify(85)  >> "B"
 **Block actions** (side effects + return):
 
 ```mlld
-var @result = when first [
+var @result = when [
   @needsProcessing => [
     show "Processing..."
     let @processed = @transform(@data)
@@ -85,7 +92,7 @@ exe @collect() = when [
 - Parentheses: `(@a || @b) && @c`
 
 ```mlld
-when first [
+when [
   @role == "admin" || @role == "mod" => show "Privileged"
   @active && @verified => show "Active user"
   !@banned => show "Allowed"
@@ -143,7 +150,7 @@ var @filtered = for @x in @items => when [
 ]
 
 >> Equivalent to inline filter, but allows complex logic
-var @processed = for @item in @data => when first [
+var @processed = for @item in @data => when [
   @item.type == "a" => @transformA(@item)
   @item.type == "b" => @transformB(@item)
   * => skip         >> unknown types dropped

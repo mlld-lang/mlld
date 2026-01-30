@@ -1,6 +1,6 @@
-var @score = 95
+var @role = "admin"
 when [
-  @score > 90 => show "Excellent!"
-  @score > 80 => show "Above average!"
-  @score == 95 => show "Perfect score!"
+  @role == "admin" => show "✓ Admin access granted"
+  @role == "user" => show "User access granted"
+  * => show "Access denied"
 ]

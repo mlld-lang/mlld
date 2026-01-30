@@ -45,7 +45,7 @@ For full context injection, use `llms-combined.txt` which contains all modules.
 </MODULES>
 
 <CORE_CONCEPTS>
-**Directives** - Commands: `var`, `show`, `run`, `for`, `loop`, `when`, `import`, `export`, `exe`
+**Directives** - Commands: `var`, `show`, `run`, `for`, `loop`, `when`, `if`, `import`, `export`, `exe`
 
 **Variables** - Always `@` prefixed: `var @x = 1`, then use `@x`
 
@@ -82,7 +82,11 @@ exe @process(items) = [
 
 **Control flow:**
 ```mlld
-when first [
+if @isProd [
+  show "Production mode"
+]
+
+when [
   @score >= 90 => show "Excellent"
   @score >= 70 => show "Good"
   * => show "Needs work"

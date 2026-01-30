@@ -3,7 +3,7 @@ exe @isValid(response) = [
   => @check.trim().toLowerCase().startsWith("yes")
 ]
 
-exe @gate(response) = when first [
+exe @gate(response) = when [
   @isValid(@response) => { pass: true, value: @response }
   * => { pass: false, reason: "Failed validation" }
 ]

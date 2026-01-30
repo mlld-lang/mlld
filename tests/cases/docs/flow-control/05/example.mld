@@ -1,9 +1,6 @@
-exe @classify(score) = when first [
-  @score >= 90 => "A"
-  @score >= 80 => "B"
-  @score >= 70 => "C"
-  * => "F"
+var @status = "unknown"
+when [
+  @status == "active" => show "Service running"
+  @status == "inactive" => show "Service stopped"
+  none => show "Unknown status"
 ]
-
-var @grade = @classify(85)
-show @grade

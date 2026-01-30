@@ -1,8 +1,16 @@
-exe @invokeAll(agents, msg) = [
-  let @results = for parallel @a in @agents => @invoke(@a, @msg)
-  => when [
-    @mx.errors.length == 0 => @results
-    @results.length >= 2 => @results  << 2/3 succeeded is acceptable
-    * => @repair(@results, @mx.errors, @msg)  << AI-driven repair
-  ]
-]
+exe @upper(s) = js { return String(s).toUpperCase() }
+
+>> Directive form (streams as done; order not guaranteed)
+for parallel @x in ["a","b","c","d"] => show @x
+
+>> Cap override and pacing between task starts
+for parallel(2, 1s) @n in [1,2,3,4] => show `Item: @n`
+
+>> Variable cap and pacing
+var @cap = 2
+var @pace = "1s"
+for parallel(@cap, @pace) @n in [1,2,3,4] => show `Item: @n`
+
+>> Collection form (preserves input order)
+var @res = for parallel(2) @x in ["x","y","z"] => @upper(@x)
+show @res

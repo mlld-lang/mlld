@@ -695,7 +695,7 @@ show @str.isDefined()       >> true
 Use type checks in conditionals:
 
 ```mlld
-exe @process(input) = when first [
+exe @process(input) = when [
   @input.isArray() => foreach @handle(@input)
   @input.isObject() => @handleObject(@input)
   @input.isString() => @handleString(@input)
@@ -715,7 +715,7 @@ when @exists("config.json") => show "Config found"
 when @exists(<*.md>) => show "Markdown files exist"
 
 >> Use in conditionals
-exe @loadConfig() = when first [
+exe @loadConfig() = when [
   @exists("config.local.json") => <config.local.json>
   @exists("config.json") => <config.json>
   * => {}

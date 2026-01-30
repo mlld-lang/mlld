@@ -1,7 +1,7 @@
-exe @greet(name) = [
+exe @format(name) = when [
   let @greeting = "Hello"
   let @punctuation = "!"
-  => "@greeting @name@punctuation"
+  * => "@greeting @name@punctuation"
 ]
 
-show @greet("World")
+show @format("World")

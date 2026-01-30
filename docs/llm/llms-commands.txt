@@ -232,7 +232,7 @@ Block rules:
 **When-first in exe** (value-returning):
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   @score >= 70 => "C"
@@ -240,7 +240,7 @@ exe @classify(score) = when first [
 ]
 
 >> With blocks for side effects
-exe @handler(input) = when first [
+exe @handler(input) = when [
   @input.valid => [
     show "Processing..."
     let @result = @transform(@input)

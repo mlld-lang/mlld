@@ -1,2 +1,9 @@
-var @config = {"host": "localhost", "port": 3000}
-for @value in @config => show `@value_key: @value`
+exe @countItems(items) = [
+  let @count = 0
+  for @item in @items [
+    let @count += 1
+  ]
+  => @count
+]
+
+show @countItems(["a", "b", "c"])

@@ -177,25 +177,22 @@ show @agentRegistry.alice.tldr
 </RULE_9_IMPORTS>
 
 <RULE_10_WHEN_DECISIONS>
-`when` for conditionals. Use `first` for switch-style (stops at first match).
+`when` selects the first matching condition. Use `if` for imperative flow.
 
 ```mlld
 >> Simple condition
 when @isProd => show "Production mode"
 
 >> Switch-style (first match wins)
-when first [
+when [
   @role == "admin" => show "Admin"
   @role == "user"  => show "User"
   * => show "Guest"
 ]
 
->> Bare when (evaluates all matches)
-when [
-  @score > 90 => show "Excellent!"
-  @hasBonus => show "Bonus earned!"
-  none => show "No matches"
-]
+>> Multiple independent conditions (use `if`)
+if @score > 90 [ show "Excellent!" ]
+if @hasBonus [ show "Bonus earned!" ]
 ```
 </RULE_10_WHEN_DECISIONS>
 

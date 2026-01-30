@@ -1,4 +1,2 @@
-for @item in ["a", "b", "c"] [
-  show "Processing: @item"
-  show "Done with: @item"
-]
+var @config = {"host": "localhost", "port": 3000}
+for @value in @config => show `@value_key: @value`

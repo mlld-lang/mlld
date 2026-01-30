@@ -1,7 +1,8 @@
-exe @countdown(n) = when [
-  @n <= 0 => done "finished"
-  * => continue (@n - 1)
+exe @validator(input) = when [
+  @input.valid => @input.value
+  @mx.try < 3 => retry "validation failed"
+  none => "fallback value"
 ]
 
-var @result = 5 | while(10) @countdown
+var @result = "invalid" | @validator
 show @result

@@ -1,6 +1,6 @@
 ---
 id: exe-when-first
-title: Exe When-First
+title: Exe When (First-Match)
 brief: Value-returning conditionals in function bodies
 category: commands
 parent: exe
@@ -10,10 +10,10 @@ related-code: [interpreter/eval/exe.ts, interpreter/eval/when.ts]
 updated: 2026-01-05
 ---
 
-**When-first in exe** (value-returning):
+**When in exe** (value-returning):
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   @score >= 70 => "C"
@@ -21,7 +21,7 @@ exe @classify(score) = when first [
 ]
 
 >> With blocks for side effects
-exe @handler(input) = when first [
+exe @handler(input) = when [
   @input.valid => [
     show "Processing..."
     let @result = @transform(@input)
@@ -30,3 +30,5 @@ exe @handler(input) = when first [
   * => { error: "Invalid input" }
 ]
 ```
+
+The `first` modifier is accepted and does not change behavior.

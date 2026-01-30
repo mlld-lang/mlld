@@ -1,4 +1,5 @@
-var @names = ["Alice", "Bob", "Charlie"]
-exe @greeting(name) = ::@name, welcome to the team!::
-var @welcomes = foreach @greeting(@names)
-show @welcomes
+for parallel(3) @task in @tasks [
+  let @result = @runTask(@task)
+  show `done:@task.id`
+]
+show `errors:@mx.errors.length`

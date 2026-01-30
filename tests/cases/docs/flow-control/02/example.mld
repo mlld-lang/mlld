@@ -1,6 +1,7 @@
-var @role = "admin"
-when first [
-  @role == "admin" => show "✓ Admin access granted"
-  @role == "user" => show "User access granted"
-  * => show "Access denied"
+exe @classify(score) = [
+  if @score >= 90 [
+    => "A"
+  ] else [
+    => "B"
+  ]
 ]

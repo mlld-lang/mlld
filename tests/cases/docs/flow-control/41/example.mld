@@ -1,5 +1,1 @@
-loop until @input >= 3 [
-  let @next = (@input ?? 0) + 1
-  show `@next`
-  continue @next
-]
+var @result = @initial | while(100, 1s) @processor

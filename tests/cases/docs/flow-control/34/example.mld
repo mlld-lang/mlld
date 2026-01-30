@@ -1,2 +1,6 @@
-var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @json
-show @data.users[0].name
+var @tpl = `
+/for @v in ["x","y"]
+- @v
+/end
+`
+show @tpl

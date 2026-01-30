@@ -196,7 +196,7 @@ Move heavy logic to helpers or modules. Keep orchestration simple.
 
 ```mlld
 >> Wrong (too much logic inline)
-var @result = for @item in @items => when first [
+var @result = for @item in @items => when [
   @item.type == "a" && @item.status == "active" => [
     let @x = @item.value * 2
     let @y = @transform(@x)

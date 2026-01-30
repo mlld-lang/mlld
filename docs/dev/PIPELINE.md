@@ -1127,7 +1127,7 @@ MlldError
 ### Execution Strategies
 
 1. **Sequential by Default**: Features execute in order, not parallel
-2. **Short-Circuit Evaluation**: `@when first` and `any` stop early
+2. **Short-Circuit Evaluation**: `when` stops early on the first match
 3. **Lazy Loading**: Complex operations defer until needed
 4. **Memory Limits**: Cartesian products capped at 10,000 combinations
 

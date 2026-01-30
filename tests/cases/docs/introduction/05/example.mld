@@ -1,4 +1,4 @@
-exe @check(input) = when first [
+exe @check(input) = when [
   let @review = @injcheck(@input)
   @review.includes("APPROVE") => @input
   @mx.try < 3 => retry "@review"

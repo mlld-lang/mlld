@@ -1,5 +1,12 @@
-exe @process(state) = when [
-  @mx.while.iteration > 5 => done @state
-  @mx.while.iteration == @mx.while.limit => done "hit cap"
-  * => continue @state
+exe @source() = when [
+  @mx.try == 1 => "draft"
+  * => "final"
 ]
+
+exe @validator() = when [
+  @mx.input == "draft" => retry "missing title"
+  * => `Used hint: @mx.hint`
+]
+
+var @result = @source() | @validator
+show @result

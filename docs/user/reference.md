@@ -145,28 +145,24 @@ exe @greet(name) = [
 show @greet("World")  >> => Hello World!
 ```
 
-### Conditionals (`when`)
+### Conditionals (`if` and `when`)
 
-Simple conditions:
+Imperative conditions:
+
+```mlld
+if @active [ show "User is active" ]
+```
+
+Value selection:
 
 ```mlld
 when @active => show "User is active"
 ```
 
-Multiple conditions (all matching execute):
+List form (first match wins):
 
 ```mlld
 when [
-  @score > 90 => show "Excellent!"
-  @bonus => show "Bonus applied!"
-  none => show "No conditions matched"
-]
-```
-
-Switch-style (first match only):
-
-```mlld
-when first [
   @role == "admin" => show "Admin access"
   @role == "user" => show "User access"
   * => show "Guest access"
@@ -183,7 +179,7 @@ when (@role == "admin" || @role == "mod") && @active => show "Privileged"
 Value-returning `/exe...when` patterns:
 
 ```mlld
-exe @getAccess(user) = when first [
+exe @getAccess(user) = when [
   @user.role == "admin" => "full"
   @user.verified && @user.premium => "premium"
   @user.verified => "standard"

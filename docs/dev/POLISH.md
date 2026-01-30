@@ -100,8 +100,8 @@ pipeline/
 
 ## Gotchas
 
-- `when condition [ => value ]` does NOT return—use `when first` for early returns
-- Ternary `x ? y : z` not supported in let assignments (use `when first`)
+- `when` returns a value; use `if` blocks with `=>` for early exe returns
+- Ternary `x ? y : z` not supported in let assignments (use `when` or `if`)
 - `sh {}` blocks use shell `$var` syntax—pass via exe params
 - `@json` is reserved—don't use as variable name
 

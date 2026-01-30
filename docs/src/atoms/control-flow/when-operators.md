@@ -17,7 +17,7 @@ qa_tier: 2
 - Parentheses: `(@a || @b) && @c`
 
 ```mlld
-when first [
+when [
   @role == "admin" || @role == "mod" => show "Privileged"
   @active && @verified => show "Active user"
   !@banned => show "Allowed"

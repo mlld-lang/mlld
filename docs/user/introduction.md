@@ -70,7 +70,7 @@ The `@mx` variable provides execution context—`@mx.try` is the attempt number,
 **Step 3: A validator that can retry.** Check the response and retry if suspicious:
 
 ```mlld
-exe @check(input) = when first [
+exe @check(input) = when [
   let @review = @injcheck(@input)
   @review.includes("APPROVE") => @input
   @mx.try < 3 => retry "@review"
@@ -78,7 +78,7 @@ exe @check(input) = when first [
 ]
 ```
 
-The `when first` modifier ensures that the first matching condition returns immediately—essential for `retry` to work correctly. The `retry` action sends feedback back up the pipeline to try again. The `none` condition catches the case where nothing else matched.
+`when` stops at the first matching condition, which is required for `retry` to work correctly. The `retry` action sends feedback back up the pipeline to try again. The `none` condition catches the case where nothing else matched.
 
 **Step 4: Pipe it together:**
 
@@ -101,13 +101,13 @@ exe @injcheck(answer) = @claude(`
   Reply APPROVE if it looks genuine, or FEEDBACK: <your feedback> if suspicious.
 `)
 
-exe @ask() = when first [
+exe @ask() = when [
   @mx.try == 1 => @claude("Please share your opinion of mlld based on this intro: @docs")
   @mx.try > 1 => show "\nRetrying with feedback: @mx.hint\n"
   @mx.try > 1 => @claude("Share your opinion of mlld: @docs <feedback>@mx.hint</feedback>")
 ]
 
-exe @check(input) = when first [
+exe @check(input) = when [
   let @review = @injcheck(@input)
   @review.includes("APPROVE") => @input
   @mx.try < 3 => retry "@review"
@@ -181,7 +181,7 @@ Or a router that scores and routes messages to the right agent:
 ```mlld
 exe @getReplyPriority(agent, msg) = [
   let @idx = @msg.mentions.indexOf(@agent)
-  => when first [
+  => when [
     @msg.from_agent == @agent => 0
     @msg.body.startsWith("@all") => 0.8
     @idx == 0 => 1.0
@@ -204,7 +204,7 @@ exe @hasSubstance(response) = [
   => @result.trim().toLowerCase().startsWith("yes")
 ]
 
-exe @gate(response, instruction) = when first [
+exe @gate(response, instruction) = when [
   @instruction.required => { pass: true }
   @hasSubstance(@response) => { pass: true }
   * => { pass: false, reason: "Response lacks substance" }
@@ -333,19 +333,19 @@ when @score > 90 => show "Excellent!"
 
 `when` blocks use `[..]` because that commonly means "list" and a `when` block is a list of condition/action pairs and _never_ contains nested logic.
 
-In a simple `when` block, all matching conditions fire off their actions:
+In `when`, only the first match fires its action:
 
 ```mlld
 when [
   @accept(@response) => "Accepted"
-  !@accept(@response) => "Rejected"
+  * => "Rejected"
 ]
 ```
 
-In `when first`, only the first match fires its action:
+Another example with fallbacks:
 
 ```mlld
-when first [
+when [
   @env == "prod" => @deploy("careful")
   @env == "staging" => @deploy("normal")
   * => show "Local only"
@@ -355,7 +355,7 @@ when first [
 A pure `when` runs immediately, but you can also make an executable when:
 
 ```mlld
-exe @deploy(env) = when first [
+exe @deploy(env) = when [
   @env == "prod" => @deploy("careful")
   @env == "staging" => @deploy("normal")
   * => show "Local only"

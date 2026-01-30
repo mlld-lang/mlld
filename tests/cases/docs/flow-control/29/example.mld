@@ -1,5 +1,3 @@
-var @runs = ["alpha", "beta", "gamma"]
-var @_ = for @name in @runs =>
-  `processed @name` | append "runs.log"
-
-show <runs.log>
+exe @wrap(x) = `[@x]`
+exe @wrapAll(items) = foreach @wrap(@items)
+show @wrapAll(["a","b"]) | @join(',')  >> => [a],[b]

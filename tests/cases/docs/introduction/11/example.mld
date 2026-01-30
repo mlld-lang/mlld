@@ -3,7 +3,7 @@ exe @hasSubstance(response) = [
   => @result.trim().toLowerCase().startsWith("yes")
 ]
 
-exe @gate(response, instruction) = when first [
+exe @gate(response, instruction) = when [
   @instruction.required => { pass: true }
   @hasSubstance(@response) => { pass: true }
   * => { pass: false, reason: "Response lacks substance" }

@@ -1,7 +1,7 @@
 ---
 id: when-bare
-title: When Bare (All Matches)
-brief: Evaluates all matching conditions
+title: When (Bare Form)
+brief: First match wins without modifiers
 category: control-flow
 parent: when
 tags: [conditionals, branching]
@@ -10,7 +10,7 @@ related-code: [interpreter/eval/when.ts]
 updated: 2026-01-05
 ---
 
-**Bare form** (evaluates all matching conditions):
+**Bare form** (default first-match):
 
 ```mlld
 when [
@@ -19,3 +19,5 @@ when [
   none => show "No matches"        >> runs only if nothing matched
 ]
 ```
+
+Use multiple `if` blocks when you need several actions to run.

@@ -17,7 +17,7 @@ exe @router(message, handlers) = [
     score: @h.scorer(@message)
   }
   let @best = @scores | @sortBy("score") | @first
-  => when first [
+  => when [
     @best.score > 0.7 => @handlers[@best.handler].handle(@message)
     * => null
   ]

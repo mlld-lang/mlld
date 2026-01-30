@@ -14,7 +14,7 @@ qa_tier: 2
 **Retry in pipelines:**
 
 ```mlld
-exe @validator(input) = when first [
+exe @validator(input) = when [
   @input.valid => @input
   @mx.try < 3 => retry "need more detail"
   * => "fallback"

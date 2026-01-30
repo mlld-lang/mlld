@@ -1,7 +1,1 @@
-for @user in @users [
-  let @status = when [
-    @user.active => "active"
-    * => "inactive"
-  ]
-  show "@user.name: @status"
-]
+for @x in ["red", "blue"] => for @y in [1, 2] => for @z in ["a", "b"] => show "@x-@y-@z"

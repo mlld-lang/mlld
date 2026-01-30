@@ -13,7 +13,7 @@ updated: 2026-01-05
 ```mlld
 exe @gate(response, config) = [
   let @check = @validate(@response)
-  => when first [
+  => when [
     !@config.required => { pass: true }
     @check.valid => { pass: true }
     * => { pass: false, reason: @check.error }

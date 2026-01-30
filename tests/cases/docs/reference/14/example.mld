@@ -1,4 +1,4 @@
-exe @getAccess(user) = when first [
+exe @getAccess(user) = when [
   @user.role == "admin" => "full"
   @user.verified && @user.premium => "premium"
   @user.verified => "standard"

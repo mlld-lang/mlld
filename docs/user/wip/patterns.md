@@ -26,7 +26,7 @@ Generate multiple responses and select the highest quality:
   return qualitySignals.filter(Boolean).length;
 }
 
-/exe @collectAndSelect(input) = when first [
+/exe @collectAndSelect(input) = when [
   @mx.try < 5 => retry
   * => js {
     const scored = @p.retries.all.map(r => ({
@@ -222,14 +222,14 @@ Combine configuration from multiple sources:
 Route data based on runtime conditions:
 
 ```mlld
-/exe @processRequest(type, data) = when first [
+/exe @processRequest(type, data) = when [
   @type == "json" => @parseJSON(@data) | @validateJSON
   @type == "csv" => @parseCSV(@data) | @validateCSV  
   @type == "xml" => @parseXML(@data) | @validateXML
   * => throw "Unsupported type: @type"
 ]
 
-/exe @routeByEnvironment(data) = when first [
+/exe @routeByEnvironment(data) = when [
   @env == "production" => @processProduction(@data)
   @env == "staging" => @processStaging(@data)
   @env == "development" => @processDevelopment(@data)
@@ -250,7 +250,7 @@ Handle failures gracefully with multiple fallback strategies:
 
 /exe @cachedFallback(request) = <cache/@request.json>
 
-/exe @resilientFetch(request) = when first [
+/exe @resilientFetch(request) = when [
   @mx.try == 1 => @primaryService(@request)
   @mx.try == 2 => @secondaryService(@request)  
   @mx.try == 3 => @cachedFallback(@request)
@@ -422,7 +422,7 @@ Manage different deployment environments:
 
 ```mlld
 # In @company/config.mld
-/exe @getConfig(env) = when first [
+/exe @getConfig(env) = when [
   @env == "production" => <config/prod.json>
   @env == "staging" => <config/staging.json>
   @env == "development" => <config/dev.json>

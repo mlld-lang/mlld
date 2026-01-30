@@ -4,13 +4,13 @@ exe @score(input) = [
   let @length = @input.length()
   let @hasQuestion = @input.includes("?")
 
-  let @base = when first [
+  let @base = when [
     @length > 100 => 0.5
     @length > 50 => 0.3
     * => 0.1
   ]
 
-  => when first [
+  => when [
     @hasQuestion => @base + 0.3
     * => @base
   ]
@@ -18,7 +18,7 @@ exe @score(input) = [
 
 exe @route(input) = [
   let @s = @score(@input)
-  => when first [
+  => when [
     @s >= @THRESHOLD => { handler: "detailed", score: @s }
     @s >= 0.3 => { handler: "quick", score: @s }
     * => { handler: "ignore", score: @s }

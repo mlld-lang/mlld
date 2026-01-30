@@ -1,9 +1,9 @@
-exe @generate() = when first [
+exe @generate() = when [
   @mx.try == 1 => @haiku("Write a haiku about code")
   * => @haiku("Write a haiku about code. Hint: @mx.hint")
 ]
 
-exe @validate(text) = when first [
+exe @validate(text) = when [
   @text.includes("code") => @text
   @mx.try < 3 => retry "Must mention 'code'"
   * => "Failed after 3 tries"

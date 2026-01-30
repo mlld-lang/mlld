@@ -51,7 +51,7 @@ Each atom is a markdown file with YAML frontmatter:
 ```markdown
 ---
 id: when-first
-title: When First (Switch-Style)
+title: When (First-Match)
 brief: Stops at first matching condition
 category: control-flow
 parent: when
@@ -61,12 +61,12 @@ related-code: [interpreter/eval/when.ts]
 updated: 2026-01-05
 ---
 
-## When First
+## When (First-Match)
 
-`when first` stops at the first matching condition, like a switch statement.
+`when` stops at the first matching condition, like a switch statement.
 
 \```mlld
-when first [
+when [
   @role == "admin" => show "Admin panel"
   @role == "user"  => show "User dashboard"
   * => show "Guest view"
@@ -114,7 +114,7 @@ import { @topic, @subtopic } from @payload
 var @matches = @filterByTopic(@atoms, @topic, @subtopic)
 
 >> Output the appropriate help
-when first [
+when [
   @subtopic => show @joinStripped(@exactMatches(@atoms, @fullId))
   @topic => show @joinStripped(@topicMatches(@atoms, @topic))
   * => show @buildTree(@atoms)
@@ -165,7 +165,7 @@ $ mlld howto
 MLLD HELP TOPICS
 
 control-flow/
-  when                     Conditionals (simple, bare, first)
+  when                     Conditionals (simple, bare, first-match)
   for                      Iteration (arrow, block, parallel)
   foreach                  Transform collections
   while                    Bounded loops
@@ -181,21 +181,21 @@ $ mlld howto when
 ## When Simple
 ...
 
-## When Bare
+## When List
 ...
 
-## When First
+## When (First-Match)
 ...
 ```
 
 ### Show specific subtopic
 
 ```bash
-$ mlld howto when first
+$ mlld howto when
 
-## When First (Switch-Style)
+## When (First-Match)
 
-`when first` stops at the first matching condition...
+`when` stops at the first matching condition...
 ```
 
 ## Building LLM Docs
@@ -214,7 +214,7 @@ var @whenAtoms = [
 var @content = for @a in @whenAtoms => @strip(@a)
 
 show `<WHEN_DECISIONS>
-\`when\` handles conditionals. Three forms: simple, bare, first.
+\`when\` handles conditionals. Three forms: simple, bare, first-match.
 
 @content.join("\n\n")
 </WHEN_DECISIONS>`

@@ -1,6 +1,9 @@
-var @mode = "active"
-when @mode: [
-  let @prefix = "Status:"
-  "active" => show "@prefix Active"
-  * => show "@prefix Unknown"
+exe @classify(score) = when [
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  @score >= 70 => "C"
+  * => "F"
 ]
+
+var @grade = @classify(85)
+show @grade

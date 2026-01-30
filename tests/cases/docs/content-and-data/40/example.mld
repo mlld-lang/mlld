@@ -1,4 +1,4 @@
-exe @process(input) = when first [
+exe @process(input) = when [
   @input.isArray() => foreach @handle(@input)
   @input.isObject() => @handleObject(@input)
   @input.isString() => @handleString(@input)

@@ -5,7 +5,7 @@ when @exists("config.json") => show "Config found"
 when @exists(<*.md>) => show "Markdown files exist"
 
 >> Use in conditionals
-exe @loadConfig() = when first [
+exe @loadConfig() = when [
   @exists("config.local.json") => <config.local.json>
   @exists("config.json") => <config.json>
   * => {}

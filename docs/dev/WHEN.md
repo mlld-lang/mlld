@@ -31,12 +31,12 @@ The /when directive produces two types of AST nodes:
      subtype: 'whenBlock',
      values: {
        variable?: BaseMlldNode[],    // Optional variable binding
-       modifier: BaseMlldNode[],     // Text node with 'first'|'all'|'any'
+       modifier: BaseMlldNode[],     // Text node with 'first' (alias)
        conditions: WhenConditionPair[], // Array of condition-action pairs
-       action?: BaseMlldNode[]       // Optional block action (for 'any')
+       action?: BaseMlldNode[]       // Optional block action
      },
      meta: {
-       modifier: 'first' | 'all' | 'any',
+       modifier: 'first' | 'default',
        conditionCount: number,
        hasVariable: boolean
      }
@@ -76,7 +76,7 @@ The grammar defines several key rules:
 1. **SlashWhen**: Main entry point, delegates to simple or block form
 2. **WhenSimpleForm**: Parses `/when <condition> => <action>`
 3. **WhenBlockForm**: Parses `/when <var> <modifier>: [...] => <action>`
-4. **WhenConditionExpression**: Now accepts:
+4. **WhenConditionExpression**: Accepts:
    - Expressions with operators (`@score > 90`, `@role == "admin"`)
    - CommandReference (`@command()` or `@command`)
    - VariableReference (`@variable`)
@@ -92,7 +92,7 @@ The grammar defines several key rules:
 
 ### Operator Support
 
-The grammar now supports full expression evaluation in conditions:
+The grammar supports full expression evaluation in conditions:
 - Comparison: `==`, `!=`, `>`, `<`, `>=`, `<=`
 - Logical: `&&`, `||`, `!`
 - Grouping: `()`
@@ -121,25 +121,13 @@ The grammar now supports full expression evaluation in conditions:
    - Routes to modifier-specific handler
    - Handles variable binding if present
 
-### Modifier Implementations
+### First-Match Behavior
 
 #### `first` Modifier
 - Evaluates conditions sequentially
 - Executes action of first truthy condition
 - Stops evaluation after first match
 - Binds variable to condition output if specified
-
-#### `all` Modifier
-- Evaluates all conditions
-- Executes actions for all truthy conditions
-- Concatenates outputs with newlines
-- Throws aggregated error if all fail
-
-#### `any` Modifier
-- Evaluates all conditions
-- If any is truthy, executes block action
-- Logs warnings for failed conditions
-- Returns empty if no conditions match
 
 ### Condition Evaluation
 
@@ -187,9 +175,9 @@ When a condition uses a command reference (e.g., `@is_true()`):
    - Executes via `env.executeCommand()`
    - Returns result with stdout/stderr/exitCode
 
-### Key Fix for Command Results
+### Command Result Preservation
 
-The interpreter's array evaluation was updated to preserve command execution metadata:
+The interpreter's array evaluation preserves command execution metadata:
 
 ```typescript
 // In evaluate() for arrays
@@ -216,14 +204,11 @@ This ensures command execution results flow through to condition evaluation.
 Custom error class for condition-specific failures:
 - Extends MlldDirectiveError
 - Includes modifier context
-- Supports error aggregation for 'all' modifier
 - Provides detailed command failure info
 
 ### Error Strategies by Modifier
 
 - **simple/first**: Throws on first error
-- **all**: Aggregates all errors, throws summary
-- **any**: Logs warnings, continues evaluation
 
 ## Environment Integration
 
@@ -235,7 +220,7 @@ The @when evaluator creates child environments for block evaluation:
 ## Performance Considerations
 
 1. **Sequential Evaluation**: Conditions evaluate in order, not parallel
-2. **Short-circuit Evaluation**: 'first' and 'any' stop early when possible
+2. **Short-circuit Evaluation**: 'first' stops early when possible
 3. **Memory**: Child environments for blocks add overhead
 4. **Command Execution**: Each condition may spawn a process
 
@@ -243,15 +228,13 @@ The @when evaluator creates child environments for block evaluation:
 
 ### Fixture Tests
 - Located in `tests/cases/valid/when/`
-- Cover all syntax forms and modifiers
+- Cover all syntax forms and first-match behavior
 - Test error scenarios in `tests/cases/exceptions/when/`
 
 ### Key Test Cases
 1. **when-simple**: Basic conditional execution
 2. **when-block-first**: First matching with variable binding
-3. **when-block-all**: Multiple action execution
-4. **when-block-any**: Combined condition checking
-5. **when-variable-binding**: Variable capture from conditions
+3. **when-variable-binding**: Variable capture from conditions
 
 ## WhenExpression Implementation
 

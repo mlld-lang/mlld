@@ -1,6 +1,6 @@
 exe @getReplyPriority(agent, msg) = [
   let @idx = @msg.mentions.indexOf(@agent)
-  => when first [
+  => when [
     @msg.from_agent == @agent => 0
     @msg.body.startsWith("@all") => 0.8
     @idx == 0 => 1.0

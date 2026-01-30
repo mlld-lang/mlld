@@ -2,9 +2,32 @@
 
 ## tldr
 
-mlld provides three control flow mechanisms: **conditionals** (`when`), **iteration** (`for` and `foreach`), and **pipelines** (`|`). Use `when` for decisions, `for` for actions per item, `foreach` for transforming collections, and pipelines for chaining transformations with retry logic.
+mlld provides three control flow mechanisms: **conditionals** (`if` and `when`), **iteration** (`for` and `foreach`), and **pipelines** (`|`). Use `if` for imperative flow, `when` for value selection, `for` for actions per item, `foreach` for transforming collections, and pipelines for chaining transformations with retry logic.
 
 ## Conditionals
+
+### Basic If
+
+Use `if` for imperative control flow:
+
+```mlld
+var @score = 85
+if @score > 80 [
+  show "Excellent work!"
+]
+```
+
+Use block form with `else` for multi-statement branches:
+
+```mlld
+exe @classify(score) = [
+  if @score >= 90 [
+    => "A"
+  ] else [
+    => "B"
+  ]
+]
+```
 
 ### Basic When
 
@@ -15,13 +38,13 @@ var @score = 85
 when @score > 80 => show "Excellent work!"
 ```
 
-### When First (Switch-Style)
+### When Lists (First-Match)
 
-Use `when first` to stop at the first matching condition:
+Use `when` to stop at the first matching condition:
 
 ```mlld
 var @role = "admin"
-when first [
+when [
   @role == "admin" => show "✓ Admin access granted"
   @role == "user" => show "User access granted"
   * => show "Access denied"
@@ -32,31 +55,22 @@ The `*` wildcard matches anything (catch-all). Use `none` when no conditions mat
 
 ```mlld
 var @status = "unknown"
-when first [
+when [
   @status == "active" => show "Service running"
   @status == "inactive" => show "Service stopped"
   none => show "Unknown status"
 ]
 ```
 
-### When All (Bare Form)
+### Multiple Independent Conditions
 
-Without `first`, all matching conditions execute:
+Use multiple `if` statements when you need several conditions to run:
 
 ```mlld
 var @score = 95
-when [
-  @score > 90 => show "Excellent!"
-  @score > 80 => show "Above average!"
-  @score == 95 => show "Perfect score!"
-]
-```
-
-Output:
-```
-Excellent!
-Above average!
-Perfect score!
+if @score > 90 [ show "Excellent!" ]
+if @score > 80 [ show "Above average!" ]
+if @score == 95 [ show "Perfect score!" ]
 ```
 
 ### Executable When Patterns
@@ -64,7 +78,7 @@ Perfect score!
 Use `/exe...when` to create value-returning conditional functions:
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   @score >= 70 => "C"
@@ -553,7 +567,7 @@ Alice
 Access pipeline context with `@mx` and pipeline history with `@p` (alias for `@pipeline`):
 
 ```mlld
-exe @validator(input) = when first [
+exe @validator(input) = when [
   @input.valid => @input.value
   @mx.try < 3 => retry "validation failed"
   none => "fallback value"
@@ -589,12 +603,12 @@ Gotchas:
 Use `retry` with hints to guide subsequent attempts:
 
 ```mlld
-exe @source() = when first [
+exe @source() = when [
   @mx.try == 1 => "draft"
   * => "final"
 ]
 
-exe @validator() = when first [
+exe @validator() = when [
   @mx.input == "draft" => retry "missing title"
   * => `Used hint: @mx.hint`
 ]
@@ -751,7 +765,7 @@ Notes:
 - Concurrency is capped by `MLLD_PARALLEL_LIMIT` (default `4`).
 - Leading `||` syntax avoids ambiguity with boolean OR expressions.
 - Use `(n, wait)` after the pipeline to override concurrency cap and add pacing between starts.
-- Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non‑parallel) stage if needed.
+- Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non-parallel) stage if needed.
 - Errors inside a parallel group are collected as `{ index, key?, message, error, value }` elements and exposed via `@mx.errors`; the pipeline continues so downstream stages can repair or decide whether to retry.
 - Inline effects attached to grouped commands run after each command completes.
 
@@ -781,7 +795,7 @@ exe @randomQuality(input) = js {
   return values[mx.try - 1] || 0.1;
 }
 
-exe @validateQuality(score) = when first [
+exe @validateQuality(score) = when [
   @score > 0.9 => `excellent: @score`
   @score > 0.8 => `good: @score`
   @mx.try < 5 => retry
@@ -794,7 +808,18 @@ show @result
 
 ## Error Handling
 
-mlld has no early exit (`return`/`exit`). Model different outcomes with `when` and state:
+Use `if` for early exits inside exe blocks. `=>` inside an `if` block returns from the enclosing exe:
+
+```mlld
+exe @validate(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
+]
+```
+
+Use `when` or flags for simple conditional actions:
 
 ```mlld
 var @validation = @validate(@input)
@@ -830,7 +855,7 @@ when [
 
 ```mlld
 exe @isProduction() = sh {test "$NODE_ENV" = "production" && echo "true"}
-when first [
+when [
   @isProduction() && @testsPass => run {npm run deploy:prod}
   @testsPass => run {npm run deploy:staging}
   * => show "Cannot deploy: tests failing"
@@ -841,7 +866,7 @@ when first [
 
 ```mlld
 var @files = ["config.json", "data.json", "users.json"]
-exe @processFile(file) = when first [
+exe @processFile(file) = when [
   @file.endsWith(".json") => `Processed: @file`
   * => `Skipped: @file`
 ]

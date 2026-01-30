@@ -1,6 +1,6 @@
-exe @combine(a, b) = [
-  let @result = "@a-@b"
-  => @result
+var @status = "ok"
+when @status: [
+  let @msg = "Completed"
+  "ok" => show @msg
 ]
-
-show @combine("hello", "world")
+>> @msg is not accessible here

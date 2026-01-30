@@ -32,14 +32,14 @@ exe @opus(prompt) = @prompt | cmd { claude -p --model opus --tools "" }
 >> - tools="" => disable all tools (--tools "")
 >> - tools="Read,Grep,..." => specific tools (--allowedTools "...")
 >> - tools=null/omitted => use Claude defaults (no flag)
-exe @claude(prompt, model, dir, tools) = when first [
+exe @claude(prompt, model, dir, tools) = when [
   @tools == "" => @prompt | cmd:@dir { claude -p --model @model --tools "" }
   @tools => @prompt | cmd:@dir { claude -p --model @model --allowedTools "@tools" }
   * => @prompt | cmd:@dir { claude -p --model @model }
 ]
 
 >> With system prompt (appends to preserve tool guidance)
-exe @claudeWithSystem(prompt, system, model, dir, tools) = when first [
+exe @claudeWithSystem(prompt, system, model, dir, tools) = when [
   @tools == "" => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" --tools "" }
   @tools => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" --allowedTools "@tools" }
   * => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" }
@@ -51,7 +51,7 @@ export { @haiku, @sonnet, @opus, @claude, @claudeWithSystem }
 **Key patterns:**
 - `@prompt | cmd { ... }` - Pipeline input to command via stdin
 - `cmd:@dir { ... }` - Execute in specific working directory
-- `when first [ ... ]` - Switch-style matching for argument handling
+- `when [ ... ]` - Switch-style matching for argument handling
 - Clean function signature with sensible defaults
 </RECIPE_1_LLM_LIBRARY>
 
@@ -93,7 +93,7 @@ exe @gate(response, instruction, message) = [
   >> Required responses always pass
   let @isOptional = @instruction.promptKey == "optional"
 
-  => when first [
+  => when [
     !@isOptional => { pass: true }
     @hasSubstance(@response) => { pass: true }
     * => { pass: false, reason: "Response lacks substance" }
@@ -207,7 +207,7 @@ exe @getReplyPressure(agent, msg) = [
   let @idx = @msg.mentions.indexOf(@agent)
   let @startsAt = @msg.body.trim().startsWith("@")
 
-  => when first [
+  => when [
     @isOwnMessage => 0
     @startsWithAll => 0.8
     @hasAll => 0.2
@@ -224,7 +224,7 @@ exe @evaluateAgent(agentId, msg, turnPressure) = [
   let @turnP = @turnPressure[@agentId]
 
   >> Turn pressure only applies if agent has some reply pressure
-  let @effectiveTurnP = when first [
+  let @effectiveTurnP = when [
     @replyP > 0 => @turnP
     * => 0
   ]
@@ -242,7 +242,7 @@ exe @evaluateAgent(agentId, msg, turnPressure) = [
 exe @classifyForExecution(eval) = [
   let @score = @eval.responseRequired
 
-  => when first [
+  => when [
     @score >= @THRESHOLD_REQUIRED => { ...@eval, promptKey: "primary", variant: null }
     @score >= @THRESHOLD_OPTIONAL => { ...@eval, promptKey: "optional", variant: "readonly" }
     * => null
@@ -318,7 +318,7 @@ for parallel(3) @instruction in @routing.toInvoke [
   let @result = @invokeAgent(@instruction, @message)
   let @check = @substanceGate(@result.response, @instruction, @message)
 
-  => when first [
+  => when [
     @check.pass => run cmd { mm post --as @result.agent "@result.response" }
     * => null
   ]

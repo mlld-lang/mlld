@@ -1,5 +1,7 @@
-var @greetings = ["Hello", "Hi", "Hey"]
-var @names = ["Alice", "Bob", "Charlie"]
-exe @custom_greeting(greet, name) = ::@greet, @name! Nice to see you.::
-var @messages = foreach @custom_greeting(@greetings, @names)
-show @messages
+exe @sum(values) = js {
+  if (!Array.isArray(values)) throw new Error('expected array input');
+  return values.reduce((total, value) => total + Number(value), 0);
+}
+
+var @total = for @n in [1, 2, 3, 4] => @n => | @sum
+show @total

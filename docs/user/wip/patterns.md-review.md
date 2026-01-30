@@ -31,7 +31,7 @@ I've carefully reviewed Prior Claude's patterns.md output against the MLLD synta
 **Problem**: Referencing mlld functions inside JS blocks
 **Examples**:
 ```mlld
-❌ /exe @collectAndSelect(input) = when first [
+❌ /exe @collectAndSelect(input) = when [
   * => js {
     const scored = @p.retries.all.map(r => ({
       response: r,
