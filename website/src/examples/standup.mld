@@ -32,7 +32,7 @@ involved in. Respond with APPROVE or DENY in all caps.
 
 exe @hasApproval(text) = @text.toLowerCase().includes("approve")
 
-exe @review(input) = when first [
+exe @review(input) = when [
   let @check = @claude(@reviewPrompt(@input))
   @hasApproval(@check) => @input
   @mx.try < 3 => retry

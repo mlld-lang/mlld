@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-30T01:50:24.531Z
+Generated: 2026-01-30T20:22:44.668Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -257,25 +257,22 @@ show @agentRegistry.alice.tldr
 </RULE_9_IMPORTS>
 
 <RULE_10_WHEN_DECISIONS>
-`when` for conditionals. Use `first` for switch-style (stops at first match).
+`when` selects the first matching condition. Use `if` for imperative flow.
 
 ```mlld
 >> Simple condition
 when @isProd => show "Production mode"
 
 >> Switch-style (first match wins)
-when first [
+when [
   @role == "admin" => show "Admin"
   @role == "user"  => show "User"
   * => show "Guest"
 ]
 
->> Bare when (evaluates all matches)
-when [
-  @score > 90 => show "Excellent!"
-  @hasBonus => show "Bonus earned!"
-  none => show "No matches"
-]
+>> Multiple independent conditions (use `if`)
+if @score > 90 [ show "Excellent!" ]
+if @hasBonus [ show "Bonus earned!" ]
 ```
 </RULE_10_WHEN_DECISIONS>
 
@@ -667,7 +664,7 @@ var @extracted = @llmResponse | @json.llm  >> extract from LLM response
 **Retry in pipelines:**
 
 ```mlld
-exe @validator(input) = when first [
+exe @validator(input) = when [
   @input.valid => @input
   @mx.try < 3 => retry "need more detail"
   * => "fallback"
@@ -943,7 +940,7 @@ Block rules:
 **When-first in exe** (value-returning):
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   @score >= 70 => "C"
@@ -951,7 +948,7 @@ exe @classify(score) = when first [
 ]
 
 >> With blocks for side effects
-exe @handler(input) = when first [
+exe @handler(input) = when [
   @input.valid => [
     show "Processing..."
     let @result = @transform(@input)
@@ -1311,8 +1308,33 @@ Suppress: `--no-stream` flag or `MLLD_NO_STREAM=true`
 
 <MLLD_CONTROL_FLOW>
 
+<IF_FLOW>
+`if` runs imperative branches. Use block form with optional `else`.
+
+```mlld
+if @isProd [
+  show "Production mode"
+] else [
+  show "Local mode"
+]
+```
+
+`if` works at top level and inside `exe` blocks:
+
+```mlld
+exe @validate(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
+]
+```
+
+Use `=>` only inside `exe` blocks.
+</IF_FLOW>
+
 <WHEN_DECISIONS>
-`when` handles conditionals. Three forms: simple, bare (all matches), first (switch-style).
+`when` selects the first matching condition. Use `if` for imperative flow.
 
 **Simple form:**
 
@@ -1321,7 +1343,7 @@ when @isProd => show "Production mode"
 when @score > 90 => show "Excellent!"
 ```
 
-**Bare form** (evaluates all matching conditions):
+**Bare form** (default first-match):
 
 ```mlld
 when [
@@ -1331,20 +1353,24 @@ when [
 ]
 ```
 
-**First form** (stops at first match, like switch):
+Use multiple `if` blocks when you need several actions to run.
+
+**First-match form** (switch-style):
 
 ```mlld
-when first [
+when [
   @role == "admin" => show "Admin panel"
   @role == "user"  => show "User dashboard"
   * => show "Guest view"           >> wildcard catches all
 ]
 ```
 
+The `first` modifier is accepted and does not change behavior.
+
 **Value-returning when** (in exe):
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   * => "F"
@@ -1356,7 +1382,7 @@ var @grade = @classify(85)  >> "B"
 **Block actions** (side effects + return):
 
 ```mlld
-var @result = when first [
+var @result = when [
   @needsProcessing => [
     show "Processing..."
     let @processed = @transform(@data)
@@ -1396,7 +1422,7 @@ exe @collect() = when [
 - Parentheses: `(@a || @b) && @c`
 
 ```mlld
-when first [
+when [
   @role == "admin" || @role == "mod" => show "Privileged"
   @active && @verified => show "Active user"
   !@banned => show "Allowed"
@@ -1454,7 +1480,7 @@ var @filtered = for @x in @items => when [
 ]
 
 >> Equivalent to inline filter, but allows complex logic
-var @processed = for @item in @data => when first [
+var @processed = for @item in @data => when [
   @item.type == "a" => @transformA(@item)
   @item.type == "b" => @transformB(@item)
   * => skip         >> unknown types dropped
@@ -1496,6 +1522,11 @@ for parallel(3) @task in @tasks => @runTask(@task)
 
 >> With pacing (delay between starts)
 for parallel(2, 1s) @x in @items => @process(@x)
+
+>> Variable cap and pacing
+var @cap = 2
+var @pace = "1s"
+for parallel(@cap, @pace) @x in @items => @process(@x)
 ```
 
 **Parallel blocks:**
@@ -1625,7 +1656,7 @@ var @result = @initial | while(100, 1s) @processor  >> 1s between iterations
 </WHILE_LOOPS>
 
 <NO_EARLY_EXIT>
-mlld has no `return` or `exit`. Model outcomes with `when` and flags.
+mlld has no top-level `return` or `exit`. Model outcomes with `when` and flags.
 
 ```mlld
 >> Instead of early return, use conditional flow
@@ -1633,6 +1664,17 @@ var @check = @validate(@input)
 when [
   @check.valid => @process(@input)
   !@check.valid => show `Error: @check.message`
+]
+```
+
+Inside `exe` blocks, use `if` and `=>` for early return:
+
+```mlld
+exe @guard(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
 ]
 ```
 </NO_EARLY_EXIT>
@@ -1961,7 +2003,7 @@ Route execution based on conditions.
 import { @getPR, @commentOnPR } from @company/github
 
 var @pr = @getPR(@MLLD_PR_NUMBER)
-var @status = when first [
+var @status = when [
   @pr.mergeable => "ready"
   * => "blocked"
 ]
@@ -1996,7 +2038,7 @@ exe @router(message, handlers) = [
     score: @h.scorer(@message)
   }
   let @best = @scores | @sortBy("score") | @first
-  => when first [
+  => when [
     @best.score > 0.7 => @handlers[@best.handler].handle(@message)
     * => null
   ]
@@ -2010,7 +2052,7 @@ Validate or filter before proceeding.
 ```mlld
 exe @gate(response, config) = [
   let @check = @validate(@response)
-  => when first [
+  => when [
     !@config.required => { pass: true }
     @check.valid => { pass: true }
     * => { pass: false, reason: @check.error }
@@ -2748,7 +2790,7 @@ Move heavy logic to helpers or modules. Keep orchestration simple.
 
 ```mlld
 >> Wrong (too much logic inline)
-var @result = for @item in @items => when first [
+var @result = for @item in @items => when [
   @item.type == "a" && @item.status == "active" => [
     let @x = @item.value * 2
     let @y = @transform(@x)
@@ -3174,6 +3216,7 @@ Where interpolation applies:
 | `run` | Execute command | `run cmd {echo hi}` |
 | `exe` | Define executable | `exe @f(x) = ...` |
 | `when` | Conditional | `when @x => show "yes"` |
+| `if` | Imperative conditional | `if @x [ show "yes" ]` |
 | `for` | Iteration | `for @x in @arr => ...` |
 | `loop` | Block iteration | `loop(10) [ ... ]` |
 | `import` | Import module | `import { @f } from @m/m` |
@@ -3339,14 +3382,14 @@ exe @opus(prompt) = @prompt | cmd { claude -p --model opus --tools "" }
 >> - tools="" => disable all tools (--tools "")
 >> - tools="Read,Grep,..." => specific tools (--allowedTools "...")
 >> - tools=null/omitted => use Claude defaults (no flag)
-exe @claude(prompt, model, dir, tools) = when first [
+exe @claude(prompt, model, dir, tools) = when [
   @tools == "" => @prompt | cmd:@dir { claude -p --model @model --tools "" }
   @tools => @prompt | cmd:@dir { claude -p --model @model --allowedTools "@tools" }
   * => @prompt | cmd:@dir { claude -p --model @model }
 ]
 
 >> With system prompt (appends to preserve tool guidance)
-exe @claudeWithSystem(prompt, system, model, dir, tools) = when first [
+exe @claudeWithSystem(prompt, system, model, dir, tools) = when [
   @tools == "" => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" --tools "" }
   @tools => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" --allowedTools "@tools" }
   * => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" }
@@ -3358,7 +3401,7 @@ export { @haiku, @sonnet, @opus, @claude, @claudeWithSystem }
 **Key patterns:**
 - `@prompt | cmd { ... }` - Pipeline input to command via stdin
 - `cmd:@dir { ... }` - Execute in specific working directory
-- `when first [ ... ]` - Switch-style matching for argument handling
+- `when [ ... ]` - Switch-style matching for argument handling
 - Clean function signature with sensible defaults
 </RECIPE_1_LLM_LIBRARY>
 
@@ -3400,7 +3443,7 @@ exe @gate(response, instruction, message) = [
   >> Required responses always pass
   let @isOptional = @instruction.promptKey == "optional"
 
-  => when first [
+  => when [
     !@isOptional => { pass: true }
     @hasSubstance(@response) => { pass: true }
     * => { pass: false, reason: "Response lacks substance" }
@@ -3514,7 +3557,7 @@ exe @getReplyPressure(agent, msg) = [
   let @idx = @msg.mentions.indexOf(@agent)
   let @startsAt = @msg.body.trim().startsWith("@")
 
-  => when first [
+  => when [
     @isOwnMessage => 0
     @startsWithAll => 0.8
     @hasAll => 0.2
@@ -3531,7 +3574,7 @@ exe @evaluateAgent(agentId, msg, turnPressure) = [
   let @turnP = @turnPressure[@agentId]
 
   >> Turn pressure only applies if agent has some reply pressure
-  let @effectiveTurnP = when first [
+  let @effectiveTurnP = when [
     @replyP > 0 => @turnP
     * => 0
   ]
@@ -3549,7 +3592,7 @@ exe @evaluateAgent(agentId, msg, turnPressure) = [
 exe @classifyForExecution(eval) = [
   let @score = @eval.responseRequired
 
-  => when first [
+  => when [
     @score >= @THRESHOLD_REQUIRED => { ...@eval, promptKey: "primary", variant: null }
     @score >= @THRESHOLD_OPTIONAL => { ...@eval, promptKey: "optional", variant: "readonly" }
     * => null
@@ -3625,7 +3668,7 @@ for parallel(3) @instruction in @routing.toInvoke [
   let @result = @invokeAgent(@instruction, @message)
   let @check = @substanceGate(@result.response, @instruction, @message)
 
-  => when first [
+  => when [
     @check.pass => run cmd { mm post --as @result.agent "@result.response" }
     * => null
   ]

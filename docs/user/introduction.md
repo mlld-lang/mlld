@@ -364,7 +364,7 @@ exe @deploy(env) = when [
 run @deploy("prod")
 ```
 
-No if/else, no nesting. mlld wants you to keep it simple.
+Use `if` for imperative branches and keep nesting shallow. mlld favors simple blocks.
 
 ### Alligators are your friends
 
@@ -530,7 +530,7 @@ mlld howto grep pattern # search across all help
 
 ## mlld wants to help you write simple, readable code
 
-There are things that Very Serious Programmers will dislike about mlld. Here's one!
+There are things that Very Serious Programmers dislike about mlld. Here's one!
 
 This is a `when` block: conditions on the left, actions on the right. In mlld, if you want to perform multiple actions based on the same condition, you repeat the condition like this:
 
@@ -551,9 +551,9 @@ when [
 
 I can see reasons both are elegant! But the first is extremely clear and keeps things unambiguous. And the great thing is that your brain immediately sees that visually as one chunk! "This is the same condition. Got it." mlld will save a lot of typing over implementing some of the same capabilities in another language, so we can get away with a little bit more typing in scenarios like this.
 
-Here's another thing Very Serious Programmers will dislike: there's no if/then/else!
+Here's another thing Very Serious Programmers dislike: `if` exists, but `when` handles most branching.
 
-Why? Because mlld wants to be written and read. We've got `when` for branching, blocks for complex logic, and if something's still too gnarly, put it somewhere else! Create a powerful abstraction in JS and then put it in a module and _abstract it away!_
+mlld wants to be written and read. Use `when` for branching, blocks for complex logic, and move heavy logic into modules.
 
 mlld is okay with disappointing Very Serious Programmers Who Will Certainly Not Take mlld Seriously At All. We're not here to impress anyone; we want to make doing interesting things with LLMs easy and hopefully fun. And here's the thing: inside every Very Serious Programmer is someone who remembers what it was like to fire up a blinking REPL, type in some words and have a COMPUTER TALK BACK. Now we're in an era where computers can *literally* talk back to us. And they say weird and sometimes unexpected things! So it might be useful to have a weird and unexpected language to work with them.
 

@@ -22,6 +22,88 @@ run cmd { echo @apiKey }  >> Blocked by guard
 
 Inline effects (`| output`, `| show`, `| append`, `| log`) use the same guard path as directives. Guard filters `op:output`/`op:show`/`op:append`/`op:log` cover both inline effects and directives.
 
+## Standard Policies
+
+mlld ships standard policy modules for common environments:
+
+- `@mlld/production` - strict defaults for production
+- `@mlld/development` - permissive defaults for development
+- `@mlld/sandbox` - maximum restriction defaults for untrusted code
+
+Use them with `/import policy`:
+
+```mlld
+import policy @prod from "@mlld/production"
+```
+
+## Signing and Verification
+
+Use `sign` and `verify` to bind content to a signature:
+
+```mlld
+var @prompt = ::Review @input::
+sign @prompt by "alice" with sha256
+verify @prompt
+```
+
+Policy defaults can auto-sign templates or variables and auto-verify prompts passed to `llm`-labeled executables:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    autosign: ["templates"],
+    autoverify: true
+  }
+}
+policy @p = union(@policyConfig)
+
+var @auditPrompt = ::Review @input::
+exe llm @audit() = run cmd { claude -p "@auditPrompt" }
+```
+
+Auto-sign variable name patterns with glob syntax:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    autosign: { variables: ["@*Prompt", "@*Instructions"] }
+  }
+}
+```
+
+Auto-verify supports custom instructions:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    autoverify: "./verify.att"
+  }
+}
+```
+
+When autoverify is enabled and a signed prompt reaches an `llm` exe, mlld injects `MLLD_VERIFY_VARS` and prepends verification instructions to the prompt. `MLLD_VERIFY_VARS` lists variable names without the `@` sigil. Autoverify implicitly allows `cmd:mlld:verify`.
+
+## Named Policies
+
+Define a policy object and export it:
+
+```mlld
+/policy @production = {
+  defaults: { unlabeled: "untrusted" },
+  capabilities: {
+    allow: ["cmd:git:*"],
+    danger: ["@keychain"]
+  }
+}
+/export { @production }
+```
+
+Import it like any other policy module:
+
+```mlld
+/import policy @production from "./policies.mld"
+```
+
 ## Data Labels
 
 Mark data as sensitive by adding labels to variable declarations:
@@ -59,9 +141,10 @@ show @header.mx.taint  >> ["secret"]
 ```
 
 Automatic taint labels:
-- `src:exec` — outputs from `/run` or `/exe`
+- `src:exec` — outputs from `run` or `exe`
 - `src:file` — loaded file content, plus `dir:/...` entries for every parent directory
 - `src:dynamic` — dynamic modules injected via `dynamicModules`
+- `src:env:<provider>` — outputs from environment providers
 
 Use taint in guards to block risky sources:
 
@@ -80,7 +163,7 @@ Guards enforce policies on labeled data or operations.
 ### Basic Guard Syntax
 
 ```
-/guard [@name] TIMING LABEL = when [
+guard [@name] TIMING LABEL = when [
   CONDITION => ACTION
   * => allow
 ]
@@ -91,13 +174,14 @@ Where:
 - `TIMING` is required: `before`, `after`, or `always`
 - `LABEL` is a data label (`secret`, `pii`) or operation filter (`op:run`, `op:exe`)
 
-**Syntactic sugar:** `/guard [@name] for LABEL = when [...]` is equivalent to `before` timing. Using explicit `before` is recommended for clarity.
+**Syntactic sugar:** `guard [@name] for LABEL = when [...]` is equivalent to `before` timing. Using explicit `before` is recommended for clarity.
 
 Actions:
 - `allow` - Operation proceeds
 - `deny "reason"` - Operation blocked
 - `retry "hint"` - Retry operation (pipelines only)
 - `allow @value` - Transform and allow
+- `env @config` - Selects an execution environment
 
 ### Guard on Data Labels
 
@@ -575,6 +659,46 @@ show @safe  >> Retries once, then succeeds
 ```
 
 Retry budget is shared across guard chain (max 3 attempts).
+
+## Signing and Verification
+
+Sign a prompt or template and verify it in another step:
+
+```mlld
+var @auditPrompt = `Review @input for policy issues.`
+sign @auditPrompt
+verify @auditPrompt
+```
+
+Autosign supports template categories and variable patterns:
+
+```mlld
+var @policyConfig = { defaults: { autosign: ["templates"] } }
+policy @p = union(@policyConfig)
+
+exe @auditPrompt(input) = template "./audit.att"
+```
+
+```mlld
+var @policyConfig = { defaults: { autosign: { variables: ["@*Prompt", "@*Instructions"] } } }
+policy @p = union(@policyConfig)
+```
+
+Autoverify prepends verification instructions for signed variables passed to llm-labeled executables and sets `MLLD_VERIFY_VARS`:
+
+```mlld
+var @policyConfig = { defaults: { autoverify: true } }
+policy @p = union(@policyConfig)
+
+exe llm @audit() = run cmd { claude -p "@auditPrompt" }
+```
+
+Custom instructions use a template path:
+
+```mlld
+var @policyConfig = { defaults: { autoverify: "./verify.att" } }
+policy @p = union(@policyConfig)
+```
 
 ## Best Practices
 

@@ -4,7 +4,7 @@ title: Introduction to mlld
 brief: What mlld is, mental model, and key concepts
 category: intro
 tags: [overview, quickstart, mental-model]
-updated: 2026-01-10
+updated: 2026-01-30
 ---
 
 ## Essential Commands
@@ -54,7 +54,7 @@ Think Docker Compose or GitHub Actions: declare what happens, don't program how.
 
 ## Key Concepts
 
-**Directives** - Commands: `var`, `show`, `run`, `for`, `when`, `import`, `export`
+**Directives** - Commands: `var`, `show`, `run`, `if`, `for`, `when`, `import`, `export`
 
 **Variables** - Always `@` prefixed: `@name`, `@data`, `@result`
 

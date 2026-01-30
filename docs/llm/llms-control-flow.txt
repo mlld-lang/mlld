@@ -1,13 +1,19 @@
 <MLLD_CONTROL_FLOW>
 
 <IF_FLOW>
-`if` runs imperative branches. Use block form for multi-statement paths and `else`.
+`if` runs imperative branches. Use block form with optional `else`.
 
 ```mlld
 if @isProd [
   show "Production mode"
+] else [
+  show "Local mode"
 ]
+```
 
+`if` works at top level and inside `exe` blocks:
+
+```mlld
 exe @validate(input) = [
   if !@input [
     => { error: "missing" }
@@ -15,10 +21,12 @@ exe @validate(input) = [
   => { ok: @input }
 ]
 ```
+
+Use `=>` only inside `exe` blocks.
 </IF_FLOW>
 
 <WHEN_DECISIONS>
-`when` selects a value or action based on the first matching condition. Use `if` for imperative flow.
+`when` selects the first matching condition. Use `if` for imperative flow.
 
 **Simple form:**
 
@@ -27,7 +35,19 @@ when @isProd => show "Production mode"
 when @score > 90 => show "Excellent!"
 ```
 
-**List form** (first match wins):
+**Bare form** (default first-match):
+
+```mlld
+when [
+  @score > 90 => show "Excellent!"
+  @hasBonus => show "Bonus earned!"
+  none => show "No matches"        >> runs only if nothing matched
+]
+```
+
+Use multiple `if` blocks when you need several actions to run.
+
+**First-match form** (switch-style):
 
 ```mlld
 when [
@@ -36,6 +56,8 @@ when [
   * => show "Guest view"           >> wildcard catches all
 ]
 ```
+
+The `first` modifier is accepted and does not change behavior.
 
 **Value-returning when** (in exe):
 
@@ -192,6 +214,11 @@ for parallel(3) @task in @tasks => @runTask(@task)
 
 >> With pacing (delay between starts)
 for parallel(2, 1s) @x in @items => @process(@x)
+
+>> Variable cap and pacing
+var @cap = 2
+var @pace = "1s"
+for parallel(@cap, @pace) @x in @items => @process(@x)
 ```
 
 **Parallel blocks:**
@@ -321,7 +348,7 @@ var @result = @initial | while(100, 1s) @processor  >> 1s between iterations
 </WHILE_LOOPS>
 
 <NO_EARLY_EXIT>
-mlld has no `return` or `exit`. Model outcomes with `when` and flags.
+mlld has no top-level `return` or `exit`. Model outcomes with `when` and flags.
 
 ```mlld
 >> Instead of early return, use conditional flow
@@ -329,6 +356,17 @@ var @check = @validate(@input)
 when [
   @check.valid => @process(@input)
   !@check.valid => show `Error: @check.message`
+]
+```
+
+Inside `exe` blocks, use `if` and `=>` for early return:
+
+```mlld
+exe @guard(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
 ]
 ```
 </NO_EARLY_EXIT>

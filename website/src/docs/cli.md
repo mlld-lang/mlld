@@ -287,14 +287,14 @@ mlld run
 mlld run my-script
 
 # Run with timeout
-mlld run long-task --timeout 60000
+mlld run long-task --timeout 10m
 
 # Show execution metrics
 mlld run my-script --debug
 ```
 
 **Options:**
-- `--timeout <ms>` - Script timeout in milliseconds (default: 300000 / 5 minutes)
+- `--timeout <duration>` - Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
 - `--debug` - Show execution metrics (timing, cache hits, effects, state writes)
 - `-h, --help` - Show help message
 
@@ -461,19 +461,19 @@ mlld auth logout
 - `logout` - Remove stored credentials
 - `status` - Check authentication status
 
-### `mlld env`
+### `mlld vars`
 
 Manage environment variable permissions.
 
 ```bash
 # Allow environment variables
-mlld env allow GITHUB_TOKEN NODE_ENV API_KEY
+mlld vars allow GITHUB_TOKEN NODE_ENV API_KEY
 
 # List allowed variables
-mlld env list
+mlld vars list
 
 # Remove access
-mlld env remove API_KEY
+mlld vars remove API_KEY
 ```
 
 **Subcommands:**
@@ -570,7 +570,7 @@ Used for global aliases and user-wide settings. Created by `mlld alias --global`
 
 Must be allowed in mlld.lock.json:
 ```bash
-mlld env allow MY_API_KEY
+mlld vars allow MY_API_KEY
 ```
 
 Then use in mlld files:
@@ -630,7 +630,7 @@ cd myproject
 mlld install
 
 # 3. Set up environment
-mlld env allow GITHUB_TOKEN API_KEY
+mlld vars allow GITHUB_TOKEN API_KEY
 
 # 4. Run mlld files
 mlld main.mld
@@ -666,10 +666,10 @@ mlld setup --check
 
 ```bash
 # Check allowed environment variables
-mlld env list
+mlld vars list
 
 # Add required variables
-mlld env allow NEEDED_VAR
+mlld vars allow NEEDED_VAR
 ```
 
 ## Exit Codes

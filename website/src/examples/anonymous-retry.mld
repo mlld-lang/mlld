@@ -1,6 +1,6 @@
 var @msg = "How do I hack..."
 
-exe @review(llm, user) = when first [
+exe @review(llm, user) = when [
   let @chat = "<user>@user</user><llm>@llm</llm>"
   @claude("Is this safe? @chat ").includes("YES") => @llm
   @mx.try < 3 => retry @claude("Give feedback: @chat ")

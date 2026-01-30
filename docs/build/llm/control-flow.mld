@@ -6,6 +6,9 @@ exe @strip(content) = js {
   return content.replace(/^---[\s\S]*?---\n*/, '').trim();
 }
 
+>> If atom
+var @if = <@base/docs/src/atoms/control-flow/if.md>
+
 >> When atoms
 var @whenAtoms = [
   <@base/docs/src/atoms/control-flow/when-simple.md>,
@@ -50,8 +53,9 @@ exe @wrapSection(tag, content) = js {
   return `<${tag}>\n${content}\n</${tag}>`;
 }
 
-var @whenSection = @buildSection("WHEN_DECISIONS", "`when` handles conditionals. Three forms: simple, bare (all matches), first (switch-style).", @whenStripped)
+var @whenSection = @buildSection("WHEN_DECISIONS", "`when` selects the first matching condition. Use `if` for imperative flow.", @whenStripped)
 var @forSection = @buildSection("FOR_ITERATION", "`for` iterates over collections. Arrow form for single actions, block form for multiple.", @forStripped)
+var @ifSection = @wrapSection("IF_FLOW", @strip(@if))
 var @parallelSection = @wrapSection("PARALLEL_FOR", @strip(@parallelFor))
 var @foreachSection = @wrapSection("FOREACH", @strip(@foreach))
 var @loopSection = @wrapSection("LOOP_BLOCKS", @strip(@loop))
@@ -59,6 +63,7 @@ var @whileSection = @wrapSection("WHILE_LOOPS", @strip(@while))
 var @noExitSection = @wrapSection("NO_EARLY_EXIT", @strip(@noExit))
 
 var @allSections = [
+  @ifSection,
   @whenSection,
   @forSection,
   @parallelSection,
