@@ -4,6 +4,7 @@ title: Run Command Basics
 brief: Execute shell commands or code
 category: commands
 parent: run
+aliases: [sh, cmd, shell]
 tags: [execution, commands, shell, code, javascript, python]
 related: [run-cwd, run-stdin, exe-simple, exe-shadow]
 related-code: [interpreter/eval/run.ts, grammar/patterns/run.peggy]

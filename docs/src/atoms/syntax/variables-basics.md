@@ -4,6 +4,7 @@ title: Variables Basics
 brief: Create primitives, arrays, objects, or assign from command/code results
 category: syntax
 parent: variables
+aliases: [var, variable]
 tags: [variables, primitives, arrays, objects]
 related: [variables-conditional, templates-basics, exe-simple]
 related-code: [interpreter/eval/var.ts, grammar/patterns/var.peggy]

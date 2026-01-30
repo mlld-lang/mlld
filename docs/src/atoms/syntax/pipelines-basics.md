@@ -4,6 +4,7 @@ title: Pipelines Basics
 brief: Chain stages with built-in and custom functions
 category: syntax
 parent: pipelines
+aliases: [pipeline, pipe]
 tags: [pipelines, transforms, builtins]
 related: [pipelines-context, pipelines-retry, pipelines-parallel]
 related-code: [interpreter/eval/pipeline.ts, core/builtins/pipeline-builtins.ts]

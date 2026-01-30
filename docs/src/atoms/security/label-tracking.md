@@ -4,6 +4,7 @@ title: Label Tracking
 brief: How labels flow through operations
 category: security
 parent: labels
+aliases: [label]
 tags: [security, labels, tracking, flow]
 related: [security-guards-basics, security-automatic-labels]
 related-code: [core/security/LabelTracker.ts]

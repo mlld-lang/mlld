@@ -4,6 +4,7 @@ title: Exe Simple Forms
 brief: Define reusable commands, code, and templates
 category: commands
 parent: exe
+aliases: [exec, function, func, js, py, javascript, python]
 tags: [functions, reusable, templates, commands, javascript, python]
 related: [exe-blocks, exe-shadow, exe-prose, run-basics, variables-basics]
 related-code: [interpreter/eval/exe.ts, grammar/patterns/exe.peggy]

@@ -4,6 +4,7 @@ title: Guards Basics
 brief: Protect data and operations with guards
 category: security
 parent: guards
+aliases: [guard]
 tags: [security, guards, labels, policies]
 related: [security-before-guards, security-after-guards, security-labels]
 related-code: [interpreter/eval/guard.ts, core/security/Guard.ts]

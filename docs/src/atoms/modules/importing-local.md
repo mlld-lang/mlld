@@ -4,6 +4,7 @@ title: Importing Local Files
 brief: Import from local filesystem paths
 category: modules
 parent: importing
+aliases: [import]
 tags: [modules, imports, local, files]
 related: [modules-importing-registry, modules-importing-namespace]
 related-code: [interpreter/eval/import.ts, core/resolvers/LocalResolver.ts]

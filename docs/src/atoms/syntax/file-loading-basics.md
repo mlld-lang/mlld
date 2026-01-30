@@ -4,6 +4,7 @@ title: File Loading Basics
 brief: Load file contents with angle brackets and globs
 category: syntax
 parent: file-loading
+aliases: [file, files, load]
 tags: [files, loading, angle-brackets, globs]
 related: [file-loading-ast, file-loading-metadata, variables-basics]
 related-code: [interpreter/eval/file-loading.ts, grammar/patterns/file-loading.peggy]

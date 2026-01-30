@@ -81,9 +81,10 @@ exe @flattenAtoms(allAtoms) = js {
   return all;
 }
 
->> Filter atoms by topic (matches id, parent, or category)
+>> Filter atoms by topic (matches id, parent, category, or aliases)
 exe @filterByTopic(atoms, topicId) = js {
   if (!topicId) return [];
+  const lowerTopic = topicId.toLowerCase();
   return atoms.filter(atom => {
     const text = typeof atom === 'string' ? atom : (atom.text || '');
     const match = text.match(/^---\n([\s\S]*?)\n---/);
@@ -91,12 +92,17 @@ exe @filterByTopic(atoms, topicId) = js {
     const idMatch = match[1].match(/^id:\s*(.+)$/m);
     const parentMatch = match[1].match(/^parent:\s*(.+)$/m);
     const categoryMatch = match[1].match(/^category:\s*(.+)$/m);
+    const aliasMatch = match[1].match(/^aliases:\s*\[([^\]]*)\]/m);
     const id = idMatch ? idMatch[1].trim() : '';
     const parent = parentMatch ? parentMatch[1].trim() : '';
     const category = categoryMatch ? categoryMatch[1].trim() : '';
+    // Parse aliases array from frontmatter
+    const aliases = aliasMatch
+      ? aliasMatch[1].split(',').map(a => a.trim().toLowerCase())
+      : [];
     // Skip index files
     if (id.startsWith('_')) return false;
-    return id === topicId || parent === topicId || category === topicId;
+    return id === topicId || parent === topicId || category === topicId || aliases.includes(lowerTopic);
   });
 }
 

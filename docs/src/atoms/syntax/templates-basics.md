@@ -4,6 +4,7 @@ title: Templates Basics
 brief: String interpolation with backticks and double-colon
 category: syntax
 parent: templates
+aliases: [template]
 tags: [templates, strings, interpolation]
 related: [templates-when-expr, templates-loops, variables-basics]
 related-code: [interpreter/eval/template.ts, grammar/patterns/template.peggy]

@@ -83,6 +83,7 @@ The `*` wildcard catches all unmatched cases.
 - **brief** (required): One-line summary
 - **category** (required): Top-level category
 - **parent** (optional): Parent topic ID for hierarchical grouping
+- **aliases** (optional): Array of alternate lookup names (e.g., `[sh, cmd]` for run-basics)
 - **tags** (optional): Array of tags for cross-referencing
 - **related** (optional): Array of related atom IDs
 - **related-code** (optional): Array of relevant source file paths
