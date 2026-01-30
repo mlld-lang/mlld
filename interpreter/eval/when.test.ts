@@ -85,7 +85,7 @@ describe('evaluateWhen', () => {
     });
   });
   
-  describe('block form with first modifier', () => {
+  describe('block form default behavior', () => {
     it('should execute first matching condition', async () => {
       const node: WhenBlockNode = {
         type: 'Directive',
@@ -93,7 +93,6 @@ describe('evaluateWhen', () => {
         subtype: 'whenBlock',
         nodeId: 'test',
         values: {
-          modifier: [{ type: 'Text', content: 'first', nodeId: 'mod1' }],
           conditions: [
             {
               condition: [{ type: 'Text', content: 'false', nodeId: 'cond1' }],
@@ -110,7 +109,7 @@ describe('evaluateWhen', () => {
           ]
         },
         meta: {
-          modifier: 'first',
+          modifier: 'default',
           conditionCount: 3,
           hasVariable: false
         }

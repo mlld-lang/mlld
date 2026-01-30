@@ -828,13 +828,8 @@ export async function prepareVarAssignment(
     
   } else if (valueNode && valueNode.type === 'WhenExpression') {
     // Handle when expressions
-    // Force 'first' modifier for value-returning when expressions (first-match semantics)
     const { evaluateWhenExpression } = await import('./when-expression');
-    const nodeWithFirst = valueNode.meta?.modifier === 'first' ? valueNode : {
-      ...valueNode,
-      meta: { ...(valueNode.meta || {}), modifier: 'first' as const }
-    };
-    const whenResult = await evaluateWhenExpression(nodeWithFirst as any, env, context);
+    const whenResult = await evaluateWhenExpression(valueNode as any, env, context);
     resolvedValue = whenResult.value;
     
   } else if (valueNode && valueNode.type === 'ExeBlock') {

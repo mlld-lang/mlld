@@ -6,9 +6,10 @@ import type { DirectiveNode, BaseMlldNode } from './nodes';
 import type { WithClause } from './run';
 
 /**
- * Modifiers for when block form that control evaluation behavior
+ * Modifier marker for when block form.
+ * The parser uses 'default' for first-match behavior.
  */
-export type WhenModifier = 'first';
+export type WhenModifier = 'default';
 
 /**
  * Represents a condition-action pair in when block form

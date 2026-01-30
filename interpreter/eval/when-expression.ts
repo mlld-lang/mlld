@@ -208,10 +208,6 @@ export async function evaluateWhenExpression(
   const denyMode = Boolean(options?.denyMode);
   let deniedHandlerRan = false;
   
-  // Default to first-match when no modifier is specified
-  const modifier = node.meta?.modifier;
-  const isFirstMode = modifier === 'first' || modifier === undefined || modifier === null || modifier === 'default';
-
   const boundIdentifier = (node as any).boundIdentifier || node.meta?.boundIdentifier;
   const hasBoundValue = Boolean((node as any).boundValue && typeof boundIdentifier === 'string' && boundIdentifier.length > 0);
   let boundValue: unknown;
@@ -234,12 +230,7 @@ export async function evaluateWhenExpression(
     targetEnv.setVariable(boundIdentifier, variable);
   };
   
-  // Track results from all matching conditions (for bare when)
-  let lastMatchValue: any = null;
-  let hasMatch = false;
-  let hasNonNoneMatch = false;
-  let hasValueProducingMatch = false;  // Track if any condition produced an actual return value (not just side effects)
-  let lastNoneValue: any = null;
+  // Track results from matching conditions
   let accumulatedEnv = env;
   const buildResult = (value: unknown, environment: Environment): EvalResult => ({
     value,
@@ -345,7 +336,7 @@ export async function evaluateWhenExpression(
           return buildResult(actionResult.value, accumulatedEnv);
         }
         accumulatedEnv.mergeChild(resultEnv);
-        // Direct actions are side effects, don't update lastMatchValue
+        // Direct actions are side effects, don't update the return value
       }
       continue;
     }
@@ -379,8 +370,6 @@ export async function evaluateWhenExpression(
       
       if (conditionResult) {
         // Condition matched - evaluate the action
-        hasMatch = true;
-        hasNonNoneMatch = true;
         const matchedDeniedCondition = conditionTargetsDenied(pair.condition);
         if (matchedDeniedCondition) {
           deniedHandlerRan = true;
@@ -432,14 +421,8 @@ export async function evaluateWhenExpression(
                   value = 'retry';
                 }
               }
-              // In "first" mode, return immediately after first match
-              if (isFirstMode) {
-                return buildResult(value, accumulatedEnv);
-              }
-              lastMatchValue = value;
-              hasMatch = true;
-              hasValueProducingMatch = true;  // action produces a value
-              continue;
+              // Return immediately after the first match
+              return buildResult(value, accumulatedEnv);
             }
           }
 
@@ -586,29 +569,8 @@ export async function evaluateWhenExpression(
             return buildResult(value, accumulatedEnv);
           }
 
-          // In "first" mode, return immediately after first match
-          if (isFirstMode) {
-            return buildResult(value, accumulatedEnv);
-          }
-
-          // For bare when, save the value and continue evaluating
-          lastMatchValue = value;
-          
-          // Check if this is a variable assignment (which shouldn't count as value-producing)
-          if (Array.isArray(pair.action) && pair.action.length === 1) {
-            const singleAction = pair.action[0];
-            if (singleAction && typeof singleAction === 'object' && 
-                singleAction.type === 'Directive' && singleAction.kind === 'var') {
-              // Variable assignment - don't mark as value-producing
-              // The value is just for internal chaining, not a return value
-            } else {
-              hasValueProducingMatch = true;  // This action produced a real value
-            }
-          } else {
-            hasValueProducingMatch = true;  // Multi-action or non-directive action produced a value
-          }
-          
-          // Continue to evaluate other matching conditions
+          // Return immediately after the first match
+          return buildResult(value, accumulatedEnv);
         } catch (actionError) {
           throw new MlldWhenExpressionError(
             `Error evaluating action for condition ${i + 1}: ${actionError.message}`,
@@ -629,8 +591,8 @@ export async function evaluateWhenExpression(
     }
   }
   
-  // Second pass: Evaluate none conditions if no value-producing conditions matched
-  if (!hasValueProducingMatch && !denyMode) {
+  // Second pass: Evaluate none conditions after scanning non-none conditions
+  if (!denyMode) {
     for (let i = 0; i < node.conditions.length; i++) {
       const entry = node.conditions[i];
 
@@ -681,14 +643,8 @@ export async function evaluateWhenExpression(
         // Merge variable assignments from this none-action into accumulator
         accumulatedEnv.mergeChild(actionEnv);
 
-        // In "first" mode, return immediately after first none match
-          if (isFirstMode) {
-            return buildResult(value, accumulatedEnv);
-          }
-
-        // For bare when, save the none value and continue
-        lastNoneValue = value;
-        hasMatch = true;
+        // Return immediately after the first none match
+        return buildResult(value, accumulatedEnv);
       } catch (actionError) {
         throw new MlldWhenExpressionError(
           `Error evaluating none action for condition ${i + 1}: ${actionError.message}`,
@@ -697,17 +653,8 @@ export async function evaluateWhenExpression(
         );
       }
     }
-    
-    // If we had none matches, use the last none value
-    if (lastNoneValue !== null) {
-      lastMatchValue = lastNoneValue;
-    }
   }
-  
-  // If we had any matches, return the last match value with accumulated environment
-  if (hasMatch) {
-    return buildResult(lastMatchValue, accumulatedEnv);
-  }
+
   
   // If we collected errors and no condition matched, report them
   if (errors.length > 0) {

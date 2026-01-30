@@ -545,11 +545,8 @@ async function evaluateWhenMatch(
 }
 
 /**
- * Evaluates a block when directive: @when <var> <modifier>: [...]
- * WHY: Block forms enable different conditional evaluation strategies - first match
- * (classic switch), all conditions (AND logic), any condition (OR logic), or
- * independent evaluation of each condition.
- * GOTCHA: Default behavior (no modifier) uses first-match evaluation.
+ * Evaluates a block when directive: @when <var>: [...]
+ * WHY: Block forms evaluate conditions in order and stop at the first match.
  * CONTEXT: Child environment ensures variable definitions inside when blocks are
  * scoped locally, preventing pollution of parent scope.
  */
@@ -557,11 +554,33 @@ async function evaluateWhenBlock(
   node: WhenBlockNode,
   env: Environment
 ): Promise<EvalResult> {
-  const modifier = node.meta.modifier;
-  const effectiveModifier =
-    modifier === 'first' || modifier === 'default' || modifier === undefined ? 'first' : modifier;
+  const modifier = node.meta?.modifier;
 
-  // For comparison-based modifiers (first, any, all), we need the expression to compare against
+  if (modifier && modifier !== 'default') {
+    if (modifier === 'all') {
+      throw new MlldConditionError(
+        'The \'all\' modifier has been removed. Use the && operator instead.\n' +
+        'Example: /when (@cond1 && @cond2) => action',
+        'all',
+        node.location
+      );
+    }
+    if (modifier === 'any') {
+      throw new MlldConditionError(
+        'The \'any\' modifier has been removed. Use the || operator instead.\n' +
+        'Example: /when (@cond1 || @cond2) => action',
+        'any',
+        node.location
+      );
+    }
+    throw new MlldConditionError(
+      `Invalid when modifier: ${modifier}`,
+      undefined,
+      node.location
+    );
+  }
+
+  // For comparison-based matching, we need the expression to compare against
   let expressionNodes: BaseMlldNode[] | undefined;
 
   // Store variable value if specified
@@ -605,42 +624,13 @@ async function evaluateWhenBlock(
   try {
     let result: EvalResult;
     
-    switch (effectiveModifier) {
-      case 'first':
-        result = await evaluateFirstMatch(
-          conditions,
-          childEnv,
-          variableName,
-          expressionNodes,
-          node.values.action
-        );
-        break;
-        
-      case 'all':
-        // 'all' modifier has been removed - this should never be reached
-        throw new MlldConditionError(
-          'The \'all\' modifier has been removed. Use the && operator instead.\n' +
-          'Example: /when (@cond1 && @cond2) => action',
-          'all',
-          node.location
-        );
-
-      case 'any':
-        // 'any' modifier has been removed - this should never be reached
-        throw new MlldConditionError(
-          'The \'any\' modifier has been removed. Use the || operator instead.\n' +
-          'Example: /when (@cond1 || @cond2) => action',
-          'any',
-          node.location
-        );
-        
-      default:
-        throw new MlldConditionError(
-          `Invalid when modifier: ${modifier}`,
-          modifier as 'first' | 'all' | 'any' | 'default',
-          node.location
-        );
-    }
+    result = await evaluateFirstMatch(
+      conditions,
+      childEnv,
+      variableName,
+      expressionNodes,
+      node.values.action
+    );
     
     // Merge child environment nodes back to parent
     // This ensures output nodes created by actions are preserved
@@ -672,7 +662,7 @@ async function evaluateWhenBlock(
 }
 
 /**
- * Evaluates conditions using 'first' modifier - executes first matching condition
+ * Evaluates conditions using first-match behavior.
  * WHY: Implements classic switch-case behavior where only the first matching branch
  * executes, providing mutual exclusion between conditions.
  * GOTCHA: Conditions are evaluated in order, so put more specific conditions first.
@@ -692,7 +682,7 @@ async function evaluateFirstMatch(
   if (blockAction && conditions.some(pair => pair.action)) {
     throw new MlldConditionError(
       'Invalid @when syntax: block action cannot combine with per-condition actions.',
-      'first',
+      undefined,
       undefined
     );
   }
@@ -724,7 +714,7 @@ async function evaluateFirstMatch(
   for (const pair of conditions) {
     // Check if this is a none condition
     if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
-      // For 'first' mode, none acts as a default case
+      // For first-match behavior, none acts as a default case
       if (!anyNonNoneMatched) {
         // Execute the action for 'none'
         const actionNodes = pair.action ?? blockAction;

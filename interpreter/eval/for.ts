@@ -571,12 +571,8 @@ export async function evaluateForDirective(
                   }
                 }
                 blockEnv = await evaluateAugmentedAssignment(actionNode, blockEnv);
-              } else if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
-                const nodeWithFirst = {
-                  ...actionNode,
-                  meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
-                };
-                const actionResult = await evaluateWhenExpression(nodeWithFirst as any, blockEnv);
+              } else if (actionNode.type === 'WhenExpression') {
+                const actionResult = await evaluateWhenExpression(actionNode as any, blockEnv);
                 blockEnv = actionResult.env || blockEnv;
                 if (isExeReturnControl(actionResult.value)) {
                   returnControl = actionResult.value;
@@ -599,12 +595,8 @@ export async function evaluateForDirective(
           } else {
             let actionResult: any = { value: undefined, env: childEnv };
             for (const actionNode of actionNodes) {
-              if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
-                const nodeWithFirst = {
-                  ...actionNode,
-                  meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
-                };
-                actionResult = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
+              if (actionNode.type === 'WhenExpression') {
+                actionResult = await evaluateWhenExpression(actionNode as any, childEnv);
               } else {
                 actionResult = await evaluate(actionNode, childEnv);
               }
@@ -807,12 +799,8 @@ export async function evaluateForExpression(
               continue;
             }
 
-            if ((node as any)?.type === 'WhenExpression' && (node as any).meta?.modifier !== 'first') {
-              const nodeWithFirst = {
-                ...(node as any),
-                meta: { ...(((node as any).meta || {}) as Record<string, unknown>), modifier: 'first' as const }
-              };
-              lastResult = await evaluateWhenExpression(nodeWithFirst as any, currentEnv);
+            if ((node as any)?.type === 'WhenExpression') {
+              lastResult = await evaluateWhenExpression(node as any, currentEnv);
               currentEnv = lastResult.env || currentEnv;
               // Early return: if when matched and returned a value, exit the sequence
               // BUT don't break for side-effect tags (show, output) - those aren't real return values

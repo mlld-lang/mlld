@@ -17,14 +17,14 @@ export class MlldConditionError extends MlldDirectiveError {
     stdout?: string;
     command?: string;
     conditionIndex?: number;
-    modifier?: 'first' | 'all' | 'any';
+    modifier?: 'all' | 'any';
     originalError?: Error;
     errors?: ErrorSummary[];
   };
 
   constructor(
     message: string,
-    modifier?: 'first' | 'all' | 'any',
+    modifier?: 'all' | 'any',
     location?: { line: number; column: number; filePath?: string },
     details: {
       exitCode?: number;
