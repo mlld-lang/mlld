@@ -6,6 +6,11 @@ for parallel @x in ["a","b","c","d"] => show @x
 >> Cap override and pacing between task starts
 for parallel(2, 1s) @n in [1,2,3,4] => show `Item: @n`
 
+>> Variable cap and pacing
+var @cap = 2
+var @pace = "1s"
+for parallel(@cap, @pace) @n in [1,2,3,4] => show `Item: @n`
+
 >> Collection form (preserves input order)
 var @res = for parallel(2) @x in ["x","y","z"] => @upper(@x)
 show @res
