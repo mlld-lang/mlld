@@ -28,6 +28,7 @@ import { getOperationLabels } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
+import yaml from 'js-yaml';
 
 function mergeInterpolatedDescriptors(
   env: Environment,
@@ -870,9 +871,14 @@ async function applyOutputFormat(
       }
       
     case 'yaml':
-      // TODO: Implement YAML formatting
-      // For now, return as-is
-      return content;
+      // Parse as JSON and serialize to YAML
+      try {
+        const parsed = JSON.parse(content);
+        return yaml.dump(parsed);
+      } catch {
+        // If not valid JSON, return as-is
+        return content;
+      }
       
     case 'text':
       // Plain text - strip any formatting
