@@ -79,6 +79,7 @@ UnifiedArgument "unified argument"
         return str.parts;
       }
     }
+  / ExpressionWithOperator     // Operator expressions (ternary, comparison, etc.)
   / varRef:VariableNoTail {  // Use unified variable pattern for all contexts
       return varRef;
     }

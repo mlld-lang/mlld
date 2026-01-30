@@ -1805,6 +1805,29 @@ async function evaluateExecInvocationInternal(
     } else if (arg && typeof arg === 'object' && 'type' in arg) {
       // AST nodes: evaluate based on type
       switch (arg.type) {
+        case 'BinaryExpression':
+        case 'TernaryExpression':
+        case 'UnaryExpression':
+        case 'ArrayFilterExpression':
+        case 'ArraySliceExpression': {
+          const { evaluateUnifiedExpression } = await import('./expressions');
+          const exprResult = await evaluateUnifiedExpression(arg as any, env, { isExpression: true });
+          argValueAny = exprResult.value;
+          if (argValueAny === undefined) {
+            argValue = 'undefined';
+          } else if (isStructuredValue(argValueAny)) {
+            argValue = asText(argValueAny);
+          } else if (typeof argValueAny === 'object') {
+            try {
+              argValue = JSON.stringify(argValueAny);
+            } catch {
+              argValue = String(argValueAny);
+            }
+          } else {
+            argValue = String(argValueAny);
+          }
+          break;
+        }
         case 'WhenExpression': {
           // Evaluate when-expression argument
           const { evaluateWhenExpression } = await import('./when-expression');

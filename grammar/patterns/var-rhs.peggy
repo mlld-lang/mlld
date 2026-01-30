@@ -69,7 +69,7 @@ ExpressionWithOperator
       // Only look within the current line/directive context
       const endOfContext = rest.search(/[\n\r]|(?:^|\s)\/\w+|(?:^|\s)>>/);
       const contextToSearch = endOfContext === -1 ? rest : rest.substring(0, endOfContext);
-      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?|!|[-+*/%]))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
+      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?\?|!|[-+*/%]))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
     }
     expr:Expression {
       return expr;

@@ -60,8 +60,9 @@ ArrayValue "array value"
   = AlligatorExpression     // <file.md> - load file content
   / ArrayLiteral            // nested arrays [1, [2, 3]]
   / DataObjectLiteral       // { key: value } objects
-  / ExecInvocationPattern   // @func() execution
   / ConditionalArrayElement // @var? conditional element
+  / ExpressionWithOperator  // Operator expressions (ternary, comparison, etc.)
+  / ExecInvocationPattern   // @func() execution
   / VariableWithTail        // @var with modifiers
   / AtVar                   // @var references
   / UnifiedQuoteOrTemplate      // `template`, [[template]], "string" (replaces TemplateStyleInterpolation)

@@ -117,6 +117,7 @@ DataArrayValue
   / CodeExecutionValue           // js {code} - preserve as-is
   / DataObjectLiteral            // Objects get typed
   / ArrayLiteral                 // Arrays: [1, 2, 3] - always arrays!
+  / ExpressionWithOperator       // Operator expressions (ternary, comparison, etc.)
   / AlligatorExpression          // File loading: <file.md> - always loading!
   / ExecResultMethodCall         // @func(args).method(args) - chained method calls
   / FieldAccessExecPattern       // @obj.method(args) - method calls on variables
