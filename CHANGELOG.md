@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **After-guard retry output**: Retryable after-guard flows emit output once after a successful retry
 - **Ternary expressions with arrays/objects**: Ternary expressions returning arrays or objects (e.g., `@tier ? @tier.split(",") : []`) now preserve the actual value instead of stringifying to JSON. Previously, `[].length` would return 2 (string length of `"[]"`) instead of 0.
 - **Ternary condition field access**: Accessing missing fields in ternary conditions now returns undefined instead of throwing, enabling patterns like `@p.tier ? @p.tier : ""` for optional payload fields
+- **Ternary values in complex objects**: Ternary expressions stored inside lazily-evaluated object values now resolve to their evaluated result instead of emitting raw AST nodes
 - **`run` is now silent by default**: `run` no longer shows "Running: ..." status messages or emits blank lines for commands with no output. Use `| log "message"` for custom progress logging, or `--show-progress` flag to restore old behavior
 - **For block return-only syntax**: `[ => @x * 2 ]` (return statement with no preceding statements) now parses correctly in for loops
 - **Conditional object keys**: Object keys with conditional syntax (`"key"?: @value`) now correctly include the key when the value is truthy. Previously, conditional keys were always omitted regardless of the value's truthiness.

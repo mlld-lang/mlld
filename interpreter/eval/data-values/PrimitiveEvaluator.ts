@@ -6,6 +6,23 @@ import { EvaluationStateManager } from './EvaluationStateManager';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
 
+const EXPRESSION_NODE_TYPES = new Set([
+  'BinaryExpression',
+  'TernaryExpression',
+  'UnaryExpression',
+  'ArrayFilterExpression',
+  'ArraySliceExpression'
+]);
+
+function isExpressionNode(value: unknown): value is { type: string } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    EXPRESSION_NODE_TYPES.has((value as { type: string }).type)
+  );
+}
+
 async function interpolateAndRecord(
   nodes: any,
   env: Environment,
@@ -61,6 +78,10 @@ export class PrimitiveEvaluator {
     if (value && typeof value === 'object' && value.type === 'RegexLiteral') {
       return true;
     }
+
+    if (isExpressionNode(value)) {
+      return true;
+    }
     
     // Handle wrapped string values (with content array and wrapperType)
     if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
@@ -109,6 +130,12 @@ export class PrimitiveEvaluator {
       const pattern = (value as any).pattern || '';
       const flags = (value as any).flags || '';
       return new RegExp(pattern, flags);
+    }
+
+    if (isExpressionNode(value)) {
+      const { evaluateUnifiedExpression } = await import('../expressions');
+      const result = await evaluateUnifiedExpression(value as any, env, { isExpression: true });
+      return result.value;
     }
     
     // Handle wrapped string values (quotes, backticks, or brackets)
