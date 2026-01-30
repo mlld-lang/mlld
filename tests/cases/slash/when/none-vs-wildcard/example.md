@@ -16,11 +16,11 @@
   none => show "None: no conditions matched"
 ]
 
->> When a condition matches, wildcard still executes but none doesn't
+>> When a condition matches, wildcard does not execute after the first match
 /var @match = 5
 /when [
   @match < 10 => show "Matched: less than 10"
-  * => show "Wildcard: still executes"
+  * => show "Wildcard: should not execute"
 ]
 
 /when [

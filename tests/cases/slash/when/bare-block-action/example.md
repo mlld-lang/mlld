@@ -2,7 +2,7 @@
 /var @condition2 = true
 /var @condition3 = true
 
-## Bare when block - evaluates ALL matching conditions
+## Bare when block - executes first match
 /when [
   @condition1 => show "First condition matched"
   @condition2 => show "Second condition matched"
@@ -12,7 +12,7 @@
 ## Test multiple none conditions in bare when block
 /var @value = 42
 
->> None of these conditions match, so both none conditions should execute
+>> None of these conditions match, so the first none executes
 /when [
   @value < 10 => show "Less than 10"
   @value > 100 => show "Greater than 100"

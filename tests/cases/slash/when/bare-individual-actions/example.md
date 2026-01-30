@@ -2,7 +2,7 @@
 /var @condition2 = false
 /var @condition3 = true
 
-# Bare when with individual actions - executes all matching
+# Bare when with individual actions - executes first match
 /when [
   @condition1 => show "Condition 1 matched"
   @condition2 => show "Condition 2 matched"

@@ -9,6 +9,7 @@ import { evaluateCondition } from './when';
 import { evaluateWhenExpression } from './when-expression';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
+import { isExeReturnControl } from './exe-return';
 
 interface LoopContextSnapshot {
   iteration: number;
@@ -19,7 +20,8 @@ interface LoopContextSnapshot {
 type LoopIterationResult =
   | { status: 'done'; value: unknown }
   | { status: 'continue'; value: StructuredValue }
-  | { status: 'until' };
+  | { status: 'until' }
+  | { status: 'exeReturn'; value: unknown };
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -191,6 +193,10 @@ async function runLoop(
 
         blockEnv = result.env || blockEnv;
 
+        if (isExeReturnControl(result.value)) {
+          return { status: 'exeReturn', value: result.value };
+        }
+
         if (isControlCandidate(result.value)) {
           const control = await resolveControlValue(result.value, blockEnv, state, {
             defaultBehavior: 'keep',
@@ -210,6 +216,9 @@ async function runLoop(
 
     if (iterationResult.status === 'until') {
       return null;
+    }
+    if (iterationResult.status === 'exeReturn') {
+      return iterationResult.value;
     }
     if (iterationResult.status === 'done') {
       return iterationResult.value ?? null;

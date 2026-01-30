@@ -10,9 +10,6 @@ Development mode
 
 Package manager found
 
-## Test 4: bare when block with individual actions
+## Test 4: bare when block with individual actions (first match)
 
 Node.js installed
-
-npm installed
-

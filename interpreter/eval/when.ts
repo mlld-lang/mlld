@@ -10,6 +10,7 @@ import { evaluate, interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { isVariable } from '../utils/variable-resolution';
 import { logger } from '@core/utils/logger';
+import { isExeReturnControl } from './exe-return';
 import {
   isTextLike,
   isArray as isArrayVariable,
@@ -220,6 +221,36 @@ export async function evaluateAugmentedAssignment(
   return env;
 }
 
+async function evaluateActionSequence(
+  actionNodes: BaseMlldNode[],
+  env: Environment
+): Promise<EvalResult> {
+  let currentEnv = env;
+  let lastResult: EvalResult = { value: '', env: currentEnv };
+
+  for (const actionNode of actionNodes) {
+    if (isLetAssignment(actionNode)) {
+      currentEnv = await evaluateLetAssignment(actionNode, currentEnv);
+      lastResult = { value: undefined, env: currentEnv };
+      continue;
+    }
+    if (isAugmentedAssignment(actionNode)) {
+      currentEnv = await evaluateAugmentedAssignment(actionNode, currentEnv);
+      lastResult = { value: undefined, env: currentEnv };
+      continue;
+    }
+
+    const result = await evaluate(actionNode, currentEnv);
+    if (isExeReturnControl(result.value)) {
+      return { value: result.value, env: result.env || currentEnv };
+    }
+    currentEnv = result.env || currentEnv;
+    lastResult = result;
+  }
+
+  return { value: lastResult.value, env: currentEnv };
+}
+
 function findIsolationRoot(env: Environment): Environment | undefined {
   let current: Environment | undefined = env;
   while (current) {
@@ -361,32 +392,22 @@ async function evaluateWhenSimple(
     if (isBlockForm) {
       // Execute block with child environment for proper scoping of let assignments
       let childEnv = env.createChild();
-      let lastResult: EvalResult = { value: '', env: childEnv };
-
-      for (const actionNode of actionNodes) {
-        if (isLetAssignment(actionNode)) {
-          childEnv = await evaluateLetAssignment(actionNode, childEnv);
-          lastResult = { value: undefined, env: childEnv };
-        } else if (isAugmentedAssignment(actionNode)) {
-          childEnv = await evaluateAugmentedAssignment(actionNode, childEnv);
-          lastResult = { value: undefined, env: childEnv };
-        } else {
-          lastResult = await evaluate(actionNode, childEnv);
-          if (lastResult.env) {
-            childEnv = lastResult.env;
-          }
-        }
-      }
+      const lastResult = await evaluateActionSequence(actionNodes, childEnv);
+      childEnv = lastResult.env;
 
       // Merge child environment nodes back to parent
       env.mergeChild(childEnv);
+
+      if (isExeReturnControl(lastResult.value)) {
+        return { value: lastResult.value, env };
+      }
 
       // Return the last result value with the parent env
       return { value: lastResult.value ?? '', env };
     }
 
     // Non-block form: execute action normally
-    const result = await evaluate(node.values.action, env);
+    const result = await evaluateActionSequence(actionNodes, env);
     return result;
   }
 
@@ -396,7 +417,7 @@ async function evaluateWhenSimple(
 
 /**
  * Evaluates a match when directive: @when <expression>: [value => action, ...]
- * Evaluates the expression once and executes actions for all matching conditions
+ * Evaluates the expression once and executes the first matching action
  */
 async function evaluateWhenMatch(
   node: WhenMatchNode,
@@ -481,11 +502,13 @@ async function evaluateWhenMatch(
         if (pair.action) {
           // Handle action which might be an array of nodes
           const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
-          for (const actionNode of actionNodes) {
-            await evaluate(actionNode, childEnv);
-          }
+          const actionResult = await evaluateActionSequence(actionNodes, childEnv);
+          childEnv = actionResult.env;
           // Merge child environment nodes back to parent
           env.mergeChild(childEnv);
+          if (isExeReturnControl(actionResult.value)) {
+            return { value: actionResult.value, env };
+          }
           // For @when, we don't want to propagate the action's output value to the document
           // The action should have already done what it needs to do (like @output writing to a file)
           return { value: '', env };
@@ -501,11 +524,13 @@ async function evaluateWhenMatch(
           if (pair.action) {
             // Handle action which might be an array of nodes
             const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
-            for (const actionNode of actionNodes) {
-              await evaluate(actionNode, childEnv);
-            }
+            const actionResult = await evaluateActionSequence(actionNodes, childEnv);
+            childEnv = actionResult.env;
             // Merge child environment nodes back to parent
             env.mergeChild(childEnv);
+            if (isExeReturnControl(actionResult.value)) {
+              return { value: actionResult.value, env };
+            }
             return { value: '', env };
           }
         }
@@ -524,9 +549,7 @@ async function evaluateWhenMatch(
  * WHY: Block forms enable different conditional evaluation strategies - first match
  * (classic switch), all conditions (AND logic), any condition (OR logic), or
  * independent evaluation of each condition.
- * GOTCHA: Default behavior (no modifier) differs based on presence of block action:
- *   - With action: acts like 'all:' (ALL conditions must match)
- *   - Without action: executes ALL matching individual actions
+ * GOTCHA: Default behavior (no modifier) uses first-match evaluation.
  * CONTEXT: Child environment ensures variable definitions inside when blocks are
  * scoped locally, preventing pollution of parent scope.
  */
@@ -535,6 +558,8 @@ async function evaluateWhenBlock(
   env: Environment
 ): Promise<EvalResult> {
   const modifier = node.meta.modifier;
+  const effectiveModifier =
+    modifier === 'first' || modifier === 'default' || modifier === undefined ? 'first' : modifier;
 
   // For comparison-based modifiers (first, any, all), we need the expression to compare against
   let expressionNodes: BaseMlldNode[] | undefined;
@@ -580,9 +605,15 @@ async function evaluateWhenBlock(
   try {
     let result: EvalResult;
     
-    switch (modifier) {
+    switch (effectiveModifier) {
       case 'first':
-        result = await evaluateFirstMatch(conditions, childEnv, variableName, expressionNodes);
+        result = await evaluateFirstMatch(
+          conditions,
+          childEnv,
+          variableName,
+          expressionNodes,
+          node.values.action
+        );
         break;
         
       case 'all':
@@ -602,17 +633,6 @@ async function evaluateWhenBlock(
           'any',
           node.location
         );
-        
-      case 'default':
-        // Bare @when behavior depends on whether there's a block action
-        if (node.values.action) {
-          // With block action: behave like 'all:' - execute action if ALL conditions are true
-          result = await evaluateAllMatches(conditions, childEnv, variableName, node.values.action);
-        } else {
-          // Without block action: execute all matching individual actions
-          result = await evaluateAllMatches(conditions, childEnv, variableName);
-        }
-        break;
         
       default:
         throw new MlldConditionError(
@@ -663,10 +683,19 @@ async function evaluateFirstMatch(
   conditions: WhenConditionPair[],
   env: Environment,
   variableName?: string,
-  expressionNodes?: BaseMlldNode[]
+  expressionNodes?: BaseMlldNode[],
+  blockAction?: BaseMlldNode[]
 ): Promise<EvalResult> {
   // Validate none placement
   validateNonePlacement(conditions);
+
+  if (blockAction && conditions.some(pair => pair.action)) {
+    throw new MlldConditionError(
+      'Invalid @when syntax: block action cannot combine with per-condition actions.',
+      'first',
+      undefined
+    );
+  }
   
   // If we have expression nodes, evaluate them to get the value to compare against
   let expressionValue: any;
@@ -698,11 +727,10 @@ async function evaluateFirstMatch(
       // For 'first' mode, none acts as a default case
       if (!anyNonNoneMatched) {
         // Execute the action for 'none'
-        if (pair.action) {
-          const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
-          for (const actionNode of actionNodes) {
-            await evaluate(actionNode, env);
-          }
+        const actionNodes = pair.action ?? blockAction;
+        if (actionNodes) {
+          const actionResult = await evaluateActionSequence(actionNodes, env);
+          return actionResult;
         }
         return { value: '', env };
       }
@@ -754,10 +782,9 @@ async function evaluateFirstMatch(
     
     if (matches) {
       anyNonNoneMatched = true;
-      if (pair.action) {
-        const result = await evaluate(pair.action, env);
-        // The action has already added its output nodes during evaluation
-        // Just return the result
+      const actionNodes = pair.action ?? blockAction;
+      if (actionNodes) {
+        const result = await evaluateActionSequence(actionNodes, env);
         return result;
       }
       return { value: '', env };
@@ -820,7 +847,7 @@ async function evaluateAllMatches(
       if (process.env.DEBUG_WHEN) {
         logger.debug('Executing block action', { envNodesBefore: env.nodes.length });
       }
-      const result = await evaluate(blockAction, env);
+      const result = await evaluateActionSequence(blockAction, env);
       if (process.env.DEBUG_WHEN) {
         logger.debug('Block action completed', {
           result,
@@ -849,7 +876,10 @@ async function evaluateAllMatches(
     if (conditionResult) {
       anyNonNoneMatched = true;
       if (pair.action) {
-        const actionResult = await evaluate(pair.action, env);
+        const actionResult = await evaluateActionSequence(pair.action, env);
+        if (isExeReturnControl(actionResult.value)) {
+          return actionResult;
+        }
         if (actionResult.value) {
           results.push(String(actionResult.value));
         }
@@ -863,7 +893,10 @@ async function evaluateAllMatches(
       // Only process none conditions in second pass
       if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
         if (pair.action) {
-          const actionResult = await evaluate(pair.action, env);
+          const actionResult = await evaluateActionSequence(pair.action, env);
+          if (isExeReturnControl(actionResult.value)) {
+            return actionResult;
+          }
           if (actionResult.value) {
             results.push(String(actionResult.value));
           }

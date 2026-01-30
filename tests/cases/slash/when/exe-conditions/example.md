@@ -23,7 +23,7 @@
 
 /when (@has_node() || @has_npm() || @has_yarn()) => show "Package manager found"
 
-## Test 4: bare when block with individual actions
+## Test 4: bare when block with individual actions (first match)
 /when [
   @has_node() => show "Node.js installed"
   @has_npm() => show "npm installed"

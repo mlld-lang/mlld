@@ -6,8 +6,10 @@ execution within /var assignments, not buffered until completion.
 ## Simple for loop in var assignment
 
 /exe @process(item) = when [
-  * => show "Processing: @item"
-  * => "result-@item"
+  * => [
+    show "Processing: @item"
+    => "result-@item"
+  ]
 ]
 
 /show "Start var-for test"
@@ -25,8 +27,10 @@ execution within /var assignments, not buffered until completion.
 }
 
 /exe @track(item) = when [
-  * => show "Item @item at position @counter()"
-  * => @item
+  * => [
+    show "Item @item at position @counter()"
+    => @item
+  ]
 ]
 
 /show "Start tracking test"
@@ -38,18 +42,24 @@ execution within /var assignments, not buffered until completion.
 ## Direct pipeline in var-for expression
 
 /exe @stage1(x) = when [
-  * => show "Stage1: @x"
-  * => "s1-@x"
+  * => [
+    show "Stage1: @x"
+    => "s1-@x"
+  ]
 ]
 
 /exe @stage2(x) = when [
-  * => show "Stage2: @x"
-  * => "s2-@x"
+  * => [
+    show "Stage2: @x"
+    => "s2-@x"
+  ]
 ]
 
 /exe @stage3(x) = when [
-  * => show "Stage3: @x"
-  * => "s3-@x"
+  * => [
+    show "Stage3: @x"
+    => "s3-@x"
+  ]
 ]
 
 /show "Start direct pipeline test"

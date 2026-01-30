@@ -40,8 +40,10 @@ describe('handleExecGuardDenial', () => {
     const { env, execEnv, effects } = createEnv();
     const whenExpr = parseWhenExpression(`
 /exe @process() = when [
-  denied => show "Operation blocked by policy"
-  denied => "Denied fallback"
+  denied => [
+    show "Operation blocked by policy"
+    => "Denied fallback"
+  ]
   * => show "Process"
 ]
     `);
@@ -88,8 +90,10 @@ describe('handleExecGuardDenial', () => {
     const { env, execEnv, effects } = createEnv();
     const whenExpr = parseWhenExpression(`
 /exe @process() = when [
-  denied => show "first denied handler"
-  denied => show "second denied handler"
+  denied => [
+    show "first denied handler"
+    show "second denied handler"
+  ]
   * => show "Process"
 ]
     `);
@@ -117,9 +121,11 @@ describe('handleExecGuardDenial', () => {
     const { env, execEnv, effects } = createEnv();
     const whenExpr = parseWhenExpression(`
 /exe @process(value) = when [
-  denied => show "Guard input: @mx.guard.input"
-  denied => show "Guard output: @mx.guard.output"
-  denied => show "Param value: @value"
+  denied => [
+    show "Guard input: @mx.guard.input"
+    show "Guard output: @mx.guard.output"
+    show "Param value: @value"
+  ]
   * => show "Process"
 ]
     `);

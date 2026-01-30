@@ -19,6 +19,7 @@ import { asText, isStructuredValue, ensureStructuredValue } from '../utils/struc
 import { VariableImporter } from './import/VariableImporter';
 import { extractVariableValue, isVariable } from '../utils/variable-resolution';
 import { isContinueLiteral, isDoneLiteral, type ContinueLiteralNode, type DoneLiteralNode } from '@core/types/control';
+import { isExeReturnControl } from './exe-return';
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
@@ -33,6 +34,38 @@ async function getInterpolateFn(): Promise<InterpolateFn> {
     cachedInterpolateFn = module.interpolate;
   }
   return cachedInterpolateFn;
+}
+
+async function evaluateActionNodes(
+  nodes: BaseMlldNode[],
+  env: Environment,
+  context?: EvaluationContext
+): Promise<EvalResult> {
+  let currentEnv = env;
+  let lastResult: EvalResult = { value: undefined, env: currentEnv };
+
+  for (const node of nodes) {
+    if (isLetAssignment(node)) {
+      currentEnv = await evaluateLetAssignment(node, currentEnv);
+      lastResult = { value: undefined, env: currentEnv };
+      continue;
+    }
+    if (isAugmentedAssignment(node)) {
+      currentEnv = await evaluateAugmentedAssignment(node, currentEnv);
+      lastResult = { value: undefined, env: currentEnv };
+      continue;
+    }
+
+    const result = await evaluate(node as any, currentEnv, context);
+    currentEnv = result.env || currentEnv;
+    lastResult = result;
+
+    if (isExeReturnControl(result.value)) {
+      return { value: result.value, env: currentEnv };
+    }
+  }
+
+  return { value: lastResult.value, env: currentEnv };
 }
 
 /**
@@ -175,8 +208,9 @@ export async function evaluateWhenExpression(
   const denyMode = Boolean(options?.denyMode);
   let deniedHandlerRan = false;
   
-  // Check if we have a "first" modifier (stop after first match)
-  const isFirstMode = node.meta?.modifier === 'first';
+  // Default to first-match when no modifier is specified
+  const modifier = node.meta?.modifier;
+  const isFirstMode = modifier === 'first' || modifier === undefined || modifier === null || modifier === 'default';
 
   const boundIdentifier = (node as any).boundIdentifier || node.meta?.boundIdentifier;
   const hasBoundValue = Boolean((node as any).boundValue && typeof boundIdentifier === 'string' && boundIdentifier.length > 0);
@@ -304,8 +338,13 @@ export async function evaluateWhenExpression(
         setBoundValue(actionEnv);
         // Pass the unwrapped entry (not wrapped in another array)
         const toEvaluate = Array.isArray(entry) ? entry : [unwrappedEntry];
-        await evaluate(toEvaluate, actionEnv, context);
-        accumulatedEnv.mergeChild(actionEnv);
+        const actionResult = await evaluateActionNodes(toEvaluate as BaseMlldNode[], actionEnv, context);
+        const resultEnv = actionResult.env || actionEnv;
+        if (isExeReturnControl(actionResult.value)) {
+          accumulatedEnv.mergeChild(resultEnv);
+          return buildResult(actionResult.value, accumulatedEnv);
+        }
+        accumulatedEnv.mergeChild(resultEnv);
         // Direct actions are side effects, don't update lastMatchValue
       }
       continue;
@@ -443,6 +482,7 @@ export async function evaluateWhenExpression(
             // Execute each statement sequentially, accumulating environment changes
             let blockEnv = actionEnv;
             let lastValue: unknown = undefined;
+            let blockResult: EvalResult | null = null;
             for (const actionNode of pair.action) {
               if (isLetAssignment(actionNode)) {
                 blockEnv = await evaluateLetAssignment(actionNode as any, blockEnv);
@@ -454,38 +494,29 @@ export async function evaluateWhenExpression(
                   blockEnv = result.env;
                 }
                 lastValue = result.value;
+                if (isExeReturnControl(result.value)) {
+                  blockResult = result;
+                  break;
+                }
               }
             }
-            actionResult = { value: lastValue, env: blockEnv };
-            value = lastValue;
-          } else {
-            // Handle AugmentedAssignment and LetAssignment nodes specially
-            // These are not handled by evaluate() and need direct evaluation
-            if (Array.isArray(pair.action) && pair.action.length === 1) {
-              const singleAction = pair.action[0];
-              if (singleAction && typeof singleAction === 'object' && singleAction.type === 'AugmentedAssignment') {
-                // Evaluate augmented assignment and update environment
-                const newEnv = await evaluateAugmentedAssignment(singleAction as any, actionEnv);
-                actionResult = { value: undefined, env: newEnv };
-                value = undefined;
-              } else if (singleAction && typeof singleAction === 'object' && singleAction.type === 'LetAssignment') {
-                // Evaluate let assignment and update environment
-                const newEnv = await evaluateLetAssignment(singleAction as any, actionEnv);
-                actionResult = { value: undefined, env: newEnv };
-                value = undefined;
-              } else {
-                // Normal evaluation
-                actionResult = await evaluate(pair.action, actionEnv, context);
-                value = actionResult.value;
-              }
+            if (blockResult) {
+              actionResult = blockResult;
+              value = blockResult.value;
             } else {
-              // Normal evaluation for multi-action or other cases
-              actionResult = await evaluate(pair.action, actionEnv, context);
-              value = actionResult.value;
+              actionResult = { value: lastValue, env: blockEnv };
+              value = lastValue;
             }
+          } else {
+            actionResult = await evaluateActionNodes(pair.action, actionEnv, context);
+            value = actionResult.value;
+          }
+          const executionEnv = actionResult?.env ?? actionEnv;
+          if (actionResult && isExeReturnControl(actionResult.value)) {
+            accumulatedEnv.mergeChild(executionEnv);
+            return buildResult(actionResult.value, accumulatedEnv);
           }
           value = await normalizeActionValue(value, actionEnv);
-          const executionEnv = actionResult?.env ?? actionEnv;
           if (isDoneLiteral(value as any)) {
             const resolved = await evaluateControlLiteral(value as any, executionEnv);
             value = { __whileControl: 'done', value: resolved };
@@ -633,7 +664,11 @@ export async function evaluateWhenExpression(
         const actionEnv = accumulatedEnv.createChild();
         // FIXED: Suppress side effects in when expressions used in /exe functions
         // Side effects should be handled by the calling context (e.g., /show @func())
-        const actionResult = await evaluate(pair.action, actionEnv, context);
+        const actionResult = await evaluateActionNodes(pair.action, actionEnv, context);
+        if (isExeReturnControl(actionResult.value)) {
+          accumulatedEnv.mergeChild(actionResult.env || actionEnv);
+          return buildResult(actionResult.value, accumulatedEnv);
+        }
         
         let value = actionResult.value;
         value = await normalizeActionValue(value, actionEnv);

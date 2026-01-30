@@ -16,6 +16,7 @@ import { evaluatePath } from './path';
 import { evaluateRun } from './run';
 import { evaluateImport } from './import';
 import { evaluateWhen } from './when';
+import { evaluateIf } from './if';
 import { evaluateOutput } from './output';
 import { evaluateAppend } from './append';
 import { evaluateVar, prepareVarAssignment, type VarAssignmentResult } from './var';
@@ -724,6 +725,9 @@ async function dispatchDirective(
 
     case 'when':
       return await evaluateWhen(directive as any, env);
+
+    case 'if':
+      return await evaluateIf(directive as any, env);
 
     case 'output':
       return await evaluateOutput(directive, env, evaluationContext);

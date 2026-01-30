@@ -13,8 +13,10 @@ are nested through exe function calls, mimicking the review-comments pattern.
 ## Define processing functions
 
 /exe @review_file(file, set_name) = when [
-  * => show "Reviewing @file in @set_name"
-  * => "reviewed-@file"
+  * => [
+    show "Reviewing @file in @set_name"
+    => "reviewed-@file"
+  ]
 ]
 
 /exe @process_file_set(file_set) = for @file in @file_set.files => @review_file(@file, @file_set.name)

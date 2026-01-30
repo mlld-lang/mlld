@@ -1,4 +1,2 @@
-# bare when executes each action for true conditions
+# bare when executes the first matching action
 Feature 1 is enabled
-Feature 2 is enabled
-Feature 3 is enabled

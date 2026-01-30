@@ -1,4 +1,4 @@
-import type { BaseMlldNode, DirectiveNode, ExeBlockNode, TextNode } from '@core/types';
+import type { BaseMlldNode, DirectiveNode, ExeBlockNode, ExeReturnNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable, ProseExecutable } from '@core/types/executable';
@@ -36,6 +36,7 @@ import { InterpolationContext } from '../core/interpolation-context';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { maybeAutosignVariable } from './auto-sign';
+import { isExeReturnControl, resolveExeReturnValue } from './exe-return';
 
 /**
  * Evaluate an exe block sequentially with local scope for let/+= assignments.
@@ -61,31 +62,45 @@ export async function evaluateExeBlock(
     }
   }
 
-  for (const stmt of block.values?.statements ?? []) {
-    if (isLetAssignment(stmt)) {
-      blockEnv = await evaluateLetAssignment(stmt, blockEnv);
-    } else if (isAugmentedAssignment(stmt)) {
-      blockEnv = await evaluateAugmentedAssignment(stmt, blockEnv);
-    } else {
+  blockEnv.pushExecutionContext('exe', { allowReturn: true });
+  try {
+    for (const stmt of block.values?.statements ?? []) {
+      if (isLetAssignment(stmt)) {
+        blockEnv = await evaluateLetAssignment(stmt, blockEnv);
+        continue;
+      }
+      if (isAugmentedAssignment(stmt)) {
+        blockEnv = await evaluateAugmentedAssignment(stmt, blockEnv);
+        continue;
+      }
+      if (stmt.type === 'ExeReturn') {
+        const returnResult = await resolveExeReturnValue(stmt as ExeReturnNode, blockEnv);
+        blockEnv = returnResult.env;
+        env.mergeChild(blockEnv);
+        return { value: returnResult.value, env };
+      }
+
       const result = await evaluate(stmt, blockEnv);
       blockEnv = result.env || blockEnv;
+      if (isExeReturnControl(result.value)) {
+        env.mergeChild(blockEnv);
+        return { value: result.value.value, env };
+      }
     }
-  }
 
-  let returnValue: unknown = undefined;
-  const returnNode = block.values?.return;
-  const hasReturnValue = returnNode?.meta?.hasValue !== false;
-  if (returnNode && hasReturnValue) {
-    const returnNodes = Array.isArray(returnNode.values) ? returnNode.values : [];
-    if (returnNodes.length > 0) {
-      const returnResult = await evaluate(returnNodes, blockEnv, { isExpression: true });
+    let returnValue: unknown = undefined;
+    const returnNode = block.values?.return;
+    if (returnNode) {
+      const returnResult = await resolveExeReturnValue(returnNode, blockEnv);
       returnValue = returnResult.value;
-      blockEnv = returnResult.env || blockEnv;
+      blockEnv = returnResult.env;
     }
-  }
 
-  env.mergeChild(blockEnv);
-  return { value: returnValue, env };
+    env.mergeChild(blockEnv);
+    return { value: returnValue, env };
+  } finally {
+    blockEnv.popExecutionContext('exe');
+  }
 }
 
 async function interpolateAndRecord(

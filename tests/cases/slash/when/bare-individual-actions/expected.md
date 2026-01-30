@@ -1,3 +1,2 @@
-# Bare when with individual actions - executes all matching
+# Bare when with individual actions - executes first match
 Condition 1 matched
-Condition 3 matched

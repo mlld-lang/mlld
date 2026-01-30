@@ -29,6 +29,10 @@ const VISITOR_MAP: Record<string, VisitorInfo> = {
     class: 'DirectiveVisitor',
     file: 'services/lsp/visitors/DirectiveVisitor.ts'
   },
+  'IfDirective': {
+    class: 'DirectiveVisitor',
+    file: 'services/lsp/visitors/DirectiveVisitor.ts'
+  },
   'ForDirective': {
     class: 'DirectiveVisitor',
     file: 'services/lsp/visitors/DirectiveVisitor.ts'

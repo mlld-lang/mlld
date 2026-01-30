@@ -49,6 +49,12 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
     requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
+  'IfDirective': {
+    expectedTokenTypes: ['keyword'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'DirectiveVisitor'
+  },
   'ForDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,

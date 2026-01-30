@@ -34,6 +34,7 @@ import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionPr
 import { evaluateWhenExpression } from './when-expression';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
+import { isExeReturnControl } from './exe-return';
 
 interface ForIterationError {
   index: number;
@@ -550,6 +551,7 @@ export async function evaluateForDirective(
 
       const actionNodes = directive.values.action;
       const retry = new RateLimitRetry();
+      let returnControl: unknown = null;
       while (true) {
         try {
           if (directive.meta?.actionType === 'block') {
@@ -576,12 +578,24 @@ export async function evaluateForDirective(
                 };
                 const actionResult = await evaluateWhenExpression(nodeWithFirst as any, blockEnv);
                 blockEnv = actionResult.env || blockEnv;
+                if (isExeReturnControl(actionResult.value)) {
+                  returnControl = actionResult.value;
+                  break;
+                }
               } else {
                 const actionResult = await evaluate(actionNode, blockEnv);
                 blockEnv = actionResult.env || blockEnv;
+                if (isExeReturnControl(actionResult.value)) {
+                  returnControl = actionResult.value;
+                  break;
+                }
               }
             }
             childEnv = blockEnv;
+            if (returnControl) {
+              retry.reset();
+              break;
+            }
           } else {
             let actionResult: any = { value: undefined, env: childEnv };
             for (const actionNode of actionNodes) {
@@ -595,6 +609,14 @@ export async function evaluateForDirective(
                 actionResult = await evaluate(actionNode, childEnv);
               }
               if (actionResult.env) childEnv = actionResult.env;
+              if (isExeReturnControl(actionResult.value)) {
+                returnControl = actionResult.value;
+                break;
+              }
+            }
+            if (returnControl) {
+              retry.reset();
+              break;
             }
             // Emit bare exec output as effect (legacy behavior)
             if (
@@ -639,15 +661,22 @@ export async function evaluateForDirective(
         }
       }
       childEnv.popExecutionContext('for');
-      return;
+      return returnControl;
     };
 
     if (effective?.parallel) {
       const cap = Math.min(effective.cap ?? getParallelLimit(), iterableArray.length);
-      await runWithConcurrency(iterableArray, cap, runOne, { ordered: false, paceMs: effective.rateMs });
+      const results = await runWithConcurrency(iterableArray, cap, runOne, { ordered: false, paceMs: effective.rateMs });
+      const returnControl = results.find(result => isExeReturnControl(result));
+      if (returnControl) {
+        return { value: returnControl, env };
+      }
     } else {
       for (let i = 0; i < iterableArray.length; i++) {
-        await runOne(iterableArray[i], i);
+        const result = await runOne(iterableArray[i], i);
+        if (isExeReturnControl(result)) {
+          return { value: result, env };
+        }
       }
     }
     

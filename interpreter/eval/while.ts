@@ -4,6 +4,7 @@ import { evaluate } from '../core/interpreter';
 import { wrapStructured, isStructuredValue, type StructuredValue } from '../utils/structured-value';
 import { createStructuredValueVariable, type VariableSource } from '@core/types/variable';
 import { resolveControlValue } from './control-flow';
+import { isExeReturnControl } from './exe-return';
 
 interface WhileContext {
   iteration: number;
@@ -89,6 +90,10 @@ export async function evaluateWhileStage(
       evalResult && typeof evalResult === 'object' && 'env' in (evalResult as Record<string, unknown>)
         ? (evalResult as any).env || iterEnv
         : iterEnv;
+
+    if (isExeReturnControl(value)) {
+      return value;
+    }
 
     const control = await resolveControlValue(value, resultEnv || iterEnv, state, {
       defaultBehavior: 'carry',
