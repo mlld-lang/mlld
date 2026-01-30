@@ -48,8 +48,7 @@ Test comprehensive truthiness behavior in @when directives.
 /var @mode = "true"
 
 >> With /when @variable: [...], the variable's value is compared to each condition
->> Only matching conditions fire their actions
->> This is NOT a switch - ALL matching conditions fire
+>> The first matching condition fires its action
 /when @mode: [
 "true" => show "Matched as boolean true"
 "false" => show "Matched as boolean false"
