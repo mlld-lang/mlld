@@ -14,6 +14,7 @@ VarRHSContent "var assignment value"
   / ExecInvocationWithFields    // Exec invocations followed by field/index access (must come before FieldAccessExecPattern)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
+  / EnvExpression               // env @config [...] - scoped environment with return value
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateWithPipeline        // Template content with pipeline support - MUST come before PrimitiveValue
   / VarBlock                    // Statement block for var evaluation
@@ -435,14 +436,19 @@ CommandContent
 
 // Code execution patterns (language + code without @run prefix)
 CodeExecution "code execution"
-  = "run" _ lang:VarCodeLanguage _ "{" _ content:CodeBlockContent _ "}" {
-      // Language-specific code execution (js, python, etc.)
-      return {
+  = "run" _ lang:VarCodeLanguage workingDir:WorkingDirPath? _ "{" _ content:CodeBlockContent _ "}" {
+      // Language-specific code execution (js, python, etc.) with optional working directory
+      const result = {
         type: 'code',
         language: lang,
         code: content,
         hasRunKeyword: true
       };
+      if (workingDir) {
+        result.workingDir = workingDir.parts;
+        result.meta = { workingDirMeta: workingDir.meta, hasWorkingDir: true };
+      }
+      return result;
     }
   / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
       // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
@@ -456,14 +462,19 @@ CodeExecution "code execution"
         meta: content.meta
       };
     }
-  / lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
-      // Shorthand: language + code without 'run' keyword
-      return {
+  / lang:VarCodeLanguage workingDir:WorkingDirPath? _ "{" _ code:CodeBlockContent _ "}" {
+      // Shorthand: language + code without 'run' keyword, with optional working directory
+      const result = {
         type: 'code',
         language: lang,
         code: code,
         hasRunKeyword: false
       };
+      if (workingDir) {
+        result.workingDir = workingDir.parts;
+        result.meta = { workingDirMeta: workingDir.meta, hasWorkingDir: true };
+      }
+      return result;
     }
   / content:CmdCommandBrackets {
       // Shorthand: cmd {...} without 'run' keyword
@@ -476,6 +487,41 @@ CodeExecution "code execution"
         hasRunKeyword: false,
         meta: content.meta
       };
+    }
+
+// ENV EXPRESSION - env @config [...] for scoped environment with return value
+// Used in /var assignments to execute code in a scoped environment and return the result
+EnvExpression "env expression"
+  = "env" _ config:EnvConfigExpression withClause:WithClause? _ block:ExeStatementBlock {
+      const values = {
+        config: [config],
+        block,
+        ...(withClause ? { withClause } : {})
+      };
+
+      const raw = {
+        config: helpers.reconstructRawString([config])
+      };
+
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true
+      };
+
+      if (withClause) {
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
+
+      return helpers.createStructuredDirective(
+        'env',
+        'env',
+        values,
+        raw,
+        meta,
+        location(),
+        'env'
+      );
     }
 
 // Language keywords for var code execution
