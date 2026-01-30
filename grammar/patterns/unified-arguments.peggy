@@ -52,9 +52,44 @@ UnifiedArgumentListItems
 // UNIFIED ARGUMENT - Individual argument handling
 // -------------------------------------------------------------
 
+BlockExpressionInArgsError "block expression in argument"
+  = "[" _ &{
+      let i = peg$currPos;
+      while (i < input.length) {
+        const ch = input[i];
+        if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+          i += 1;
+          continue;
+        }
+        if (input[i] === '>' && input[i + 1] === '>') {
+          i += 2;
+          while (i < input.length && input[i] !== '\n') i += 1;
+          continue;
+        }
+        if (input[i] === '<' && input[i + 1] === '<') {
+          i += 2;
+          while (i < input.length && input[i] !== '\n') i += 1;
+          continue;
+        }
+        break;
+      }
+      const rest = input.substring(i);
+      if (rest.startsWith('let')) return true;
+      if (rest.startsWith('=>')) return true;
+      if (/^@[_a-zA-Z]\w*\s*\+=/.test(rest)) return true;
+      return false;
+    } {
+      helpers.mlldError(
+        'Block expressions are not allowed inside function arguments. Move the block to a let/var and pass the variable instead.',
+        'argument',
+        location()
+      );
+    }
+
 // Use existing proven patterns from CommandArgument - handles all edge cases
 UnifiedArgument "unified argument"
-  = WhenExpression              // Allow when-expressions as arguments
+  = BlockExpressionInArgsError
+  / WhenExpression              // Allow when-expressions as arguments
   / ForeachCommandExpression    // Allow foreach as argument (returns array)
   / ExecResultMethodCall        // Allow chained helper calls (e.g., @secret.trim().slice())
   / FieldAccessExecPattern      // Allow builtin helpers invoked on variables (@var.trim())
