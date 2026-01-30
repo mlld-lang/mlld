@@ -1,25 +1,25 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawnSync } from 'child_process';
 
-const execAsync = promisify(exec);
 const mlldBin = path.resolve(process.cwd(), 'dist/cli.cjs');
 
-describe('Bash heredoc integration', () => {
+// These tests require low concurrency to avoid resource contention with parallel tests.
+// Run with: npm run test:heredoc
+describe.sequential('Bash heredoc integration', () => {
   let projectDir: string;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     projectDir = await mkdtemp(path.join(os.tmpdir(), 'mlld-heredoc-'));
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await rm(projectDir, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('reproduces large variable heredoc issue', async () => {
+  it('reproduces large variable heredoc issue', { timeout: 30000 }, async () => {
     const script = `run sh {
   head -c 215920 < /dev/zero | tr '\\0' 'a' > big.txt
 }
@@ -36,20 +36,30 @@ run { rm -f big.txt }
     const scriptPath = path.join(projectDir, 'large-variable.mld');
     await writeFile(scriptPath, script);
 
-    const MAX_BUFFER = 10 * 1024 * 1024; // 10MB for large outputs
-    const { stdout } = await execAsync(
-      `node "${mlldBin}" "${scriptPath}"`,
-      {
-        cwd: projectDir,
-        env: { ...process.env, MLLD_BASH_HEREDOC: '1' },
-        maxBuffer: MAX_BUFFER
-      }
-    );
+    // Create clean env without test-specific variables that might affect execution
+    const childEnv = { ...process.env, MLLD_BASH_HEREDOC: '1' };
+    delete childEnv.MLLD_TEST;
+    delete childEnv.MLLD_TEST_MODE;
+    delete childEnv.MLLD_STREAMING;
 
-    expect(stdout).toContain('shell executed');
-    // Should appear at least twice: once from /show, once from /run exec-invocation
+    const result = spawnSync(process.execPath, [mlldBin, scriptPath], {
+      cwd: projectDir,
+      env: childEnv,
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 25000,
+      // Don't inherit stdin to prevent pollution from test runner
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    const stdout = result.stdout || '';
+    const stderr = result.stderr || '';
     const nodeEchoCount = (stdout.match(/node executed/g) || []).length;
-    expect(nodeEchoCount).toBeGreaterThanOrEqual(2);
+
+    expect(result.status, `Exit code should be 0, stderr: ${stderr.slice(0, 200)}`).toBe(0);
+    expect(stdout).toContain('shell executed');
     expect(stdout).toContain('215920');
+    // Should appear at least twice: once from /show, once from /run exec-invocation
+    expect(nodeEchoCount, `node executed should appear 2+ times but got ${nodeEchoCount}`).toBeGreaterThanOrEqual(2);
   });
 });
