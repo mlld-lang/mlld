@@ -242,6 +242,7 @@ Directive
     / SlashExport   // Export directives (explicit exports)
     / SlashOutput   // Output directives (output routing)
     / SlashAppend   // Append directives (incremental file writing)
+    / SlashIf       // If directives (conditional blocks)
     / SlashWhen     // When directives (conditional execution)
     / SlashGuard    // Guard directives (security policies)
     / SlashPolicy   // Policy composition directives

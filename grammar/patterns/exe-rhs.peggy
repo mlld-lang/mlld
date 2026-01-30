@@ -686,6 +686,7 @@ ExeBlockStatement
   / AugmentedAssignment
   / WhenExpressionAny
   / ForNestedDirective
+  / SlashIf
   / ExeBlockAction
 
 ExeBlockAction
@@ -907,7 +908,15 @@ WhenBoundPatternAtom
   / value:Expression { return { kind: 'equals', value, location: location() }; }
 
 // Optional modifier for when-expression in /exe RHS (currently supports 'first')
-WhenExprModifier = mod:("first") { return mod; }
+WhenExprModifier = mod:("first") {
+      helpers.warn(
+        '`when first` is a no-op. Use `when` without `first`.',
+        'Remove `first`',
+        location(),
+        'when-first'
+      );
+      return mod;
+    }
 
 // Value-oriented condition list for when expressions
 // Reuses WhenConditionSeparator from when.peggy (shared abstraction)

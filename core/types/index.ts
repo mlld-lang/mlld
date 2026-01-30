@@ -30,6 +30,7 @@ export * from './path';
 export * from './run';
 export * from './output';
 export * from './when';
+export * from './if';
 export * from './var'; // New unified var directive
 export * from './for'; // For loop directive and expression
 export * from './loop'; // Loop directive and expression

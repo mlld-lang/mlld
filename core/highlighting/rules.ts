@@ -80,14 +80,14 @@ export const HIGHLIGHTING_RULES: HighlightingRules = {
   },
   
   directives: {
-    current: ['var', 'show', 'run', 'exe', 'env', 'import', 'when', 'output', 'path'],
+    current: ['var', 'show', 'run', 'exe', 'env', 'import', 'when', 'if', 'output', 'path'],
     deprecated: ['text', 'data', 'add', 'exec']
   },
   
   keywords: {
     commands: ['run', 'sh'],
     languages: ['js', 'node', 'python', 'bash'],
-    special: ['when', 'first', 'all', 'any', 'foreach', 'from', 'as', 'to', 'with', 'new', 'node']
+    special: ['when', 'if', 'else', 'first', 'all', 'any', 'foreach', 'from', 'as', 'to', 'with', 'new', 'node']
   }
 } as const;
 

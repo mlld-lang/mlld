@@ -41,6 +41,7 @@ export const DirectiveKind = {
   export: 'export',
   output: 'output',
   append: 'append',
+  if: 'if',
   when: 'when',
   guard: 'guard',
   // NO deprecated entries - clean break!

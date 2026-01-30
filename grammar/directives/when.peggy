@@ -355,6 +355,12 @@ WhenBareBlockForm
 
 WhenModifier
   = mod:("first") {
+      helpers.warn(
+        '`when first` is a no-op. Use `when` without `first`.',
+        'Remove `first`',
+        location(),
+        'when-first'
+      );
       return helpers.createNode(NodeType.Text, {
         content: mod,
         location: location()
@@ -701,6 +707,7 @@ WhenActionBlockStatement "when action block statement"
   = LetAssignment
   / AugmentedAssignment
   / WhenExpressionAny
+  / SlashIf
   / ForNestedDirective
   / WhenBlockAction
 

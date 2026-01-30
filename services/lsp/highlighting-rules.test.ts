@@ -106,6 +106,7 @@ describe('Highlighting Rules', () => {
       expect(current).toContain('run');
       expect(current).toContain('import');
       expect(current).toContain('when');
+      expect(current).toContain('if');
       expect(current).toContain('output');
       expect(current).toContain('path');
     });
@@ -154,6 +155,8 @@ describe('Highlighting Rules', () => {
     
     it('should have special keywords', () => {
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('when');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('if');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('else');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('foreach');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('from');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('as');

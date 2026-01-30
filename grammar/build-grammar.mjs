@@ -134,6 +134,7 @@ const allowedStartRules = [
   'WhenConditionList',
   'WhenExpressionConditionList',
   'WhenBoundExpressionConditionList',
+  'IfActionBlockBody',
   'GuardRuleList',
   'WhenActionBlockContent',
   'WhenActionBlockBody',

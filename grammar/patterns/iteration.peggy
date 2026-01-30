@@ -283,6 +283,7 @@ ForBlockStatement "for block statement"
   = LetAssignment
   / AugmentedAssignment
   / WhenExpressionAny
+  / SlashIf
   / ForNestedDirective
   / ForSingleAction
 
@@ -324,6 +325,7 @@ LoopBlockStatement "loop block statement"
   / DoneLiteral
   / ContinueLiteral
   / WhenExpressionAny
+  / SlashIf
   / ForNestedDirective
   / ForSingleAction
 

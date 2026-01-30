@@ -253,6 +253,7 @@ export type DirectiveKind =
   | 'path'
   | 'output'
   | 'append'
+  | 'if'
   | 'when'
   | 'guard'
   | 'stream'
@@ -287,6 +288,8 @@ export type DirectiveSubtype =
   | 'appendFile'
   // When subtypes
   | 'whenSimple' | 'whenBlock' | 'whenMatch'
+  // If subtype
+  | 'ifBlock'
   // Guard subtype
   | 'guard'
   // For subtype
