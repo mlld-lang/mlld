@@ -758,7 +758,7 @@ ExecAsNewTitle
 // Purpose: Allow when: [...] expressions that return values based on first matching condition
 
 WhenExpression "when expression"
-  // Bound-value: when <expr> [patterns] or when <expr> first [patterns]
+  // Bound-value: when <expr> [patterns]
   = "when" _ boundValue:Expression _ modifier:WhenExprModifier? _ "[" _ entries:WhenBoundExpressionConditionList _ "]" tail:TailModifiers? {
       const boundOffset =
         boundValue && typeof boundValue === 'object' && boundValue.location && boundValue.location.start
@@ -797,7 +797,7 @@ WhenExpression "when expression"
         mode: options.mode
       });
     }
-  // Standard: when [ ... ] (first-match; `when first` warns)
+  // Standard: when [ ... ] (first-match)
   / "when" _ modifier:WhenExprModifier? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
       helpers.debug('WhenExpression matched', { 
         conditionCount: conditions.length,
@@ -907,15 +907,13 @@ WhenBoundPatternAtom
   / op:UnifiedComparisonOp _ right:Expression { return { kind: 'compare', op, right, location: location() }; }
   / value:Expression { return { kind: 'equals', value, location: location() }; }
 
-// Optional modifier for when-expression in /exe RHS (currently supports 'first')
+// Optional modifier for when-expression in /exe RHS (rejected)
 WhenExprModifier = mod:("first") {
-      helpers.warn(
-        '`when first` is a no-op. Use `when` without `first`.',
-        'Remove `first`',
-        location(),
-        'when-first'
+      helpers.mlldError(
+        "The 'first' modifier is not needed. 'when' uses first-match semantics by default. Remove 'first' from your when expression.",
+        'when',
+        location()
       );
-      return mod;
     }
 
 // Value-oriented condition list for when expressions

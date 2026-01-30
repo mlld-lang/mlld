@@ -6,14 +6,11 @@
 
 The when directive provides conditional execution based on truthiness.
 It can be used in several forms:
-1. /when <condition> => <action>                    - Simple conditional
-2. /when <expression>: [conditions]                 - Match form (first match wins)
-3. /when <var> <modifier>: [conditions] => <action> - Block conditional with modifiers
+1. /when <condition> => <action>             - Simple conditional
+2. /when <expression>: [conditions]          - Match form (first match wins)
+3. /when <var>: [conditions] => <action>     - Block conditional
 
-Modifiers:
-- first: Alias for default first-match behavior
-
-For AND/OR logic, use && and || operators in conditions instead of deprecated any/all modifiers:
+For AND/OR logic, use && and || operators in conditions instead of any/all modifiers:
 - Use: /when (@cond1 && @cond2) => action  (instead of: /when all [@cond1 @cond2] => action)
 - Use: /when (@cond1 || @cond2) => action  (instead of: /when any [@cond1 @cond2] => action)
 */
@@ -45,7 +42,7 @@ SlashWhen
       );
     }
   / WhenBareBlockForm  // MUST come before WhenBlockForm to handle bare [...] syntax
-  // Bare block form with modifier: /when <modifier>: [...] => <action>
+  // Error recovery: /when <modifier>: [...] => <action>
   / DirectiveContext WhenKeyword _ modifier:WhenModifier _ ":"? _ block:WhenConditionBlock 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
@@ -131,7 +128,7 @@ SlashWhen
   // Error recovery: Invalid modifier - check it's not a valid modifier
   / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _
     modifier:BaseIdentifier &{ return modifier !== "first"; } _ ":"? _ "[" {
-      helpers.mlldError("Invalid when modifier: '" + modifier + "'. The only valid modifier is 'first'.\n" +
+      helpers.mlldError("Invalid when modifier: '" + modifier + "'. Modifiers are not supported.\n" +
             "For AND/OR logic, use && and || operators instead.\n\n" +
             "Examples:\n" +
             "  when @var [...] => action\n" +
@@ -355,16 +352,11 @@ WhenBareBlockForm
 
 WhenModifier
   = mod:("first") {
-      helpers.warn(
-        '`when first` is a no-op. Use `when` without `first`.',
-        'Remove `first`',
-        location(),
-        'when-first'
+      helpers.mlldError(
+        "The 'first' modifier is not needed. 'when' uses first-match semantics by default. Remove 'first' from your when block.",
+        'when',
+        location()
       );
-      return helpers.createNode(NodeType.Text, {
-        content: mod,
-        location: location()
-      });
     }
 
 // -------------------------------------------------------------
