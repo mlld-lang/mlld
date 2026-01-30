@@ -72,8 +72,8 @@ exe @resolveRunDir() = [
   >> Check for current symlink if no explicit run
   let @currentRun = !@explicitRun && !@runId ? @_checkCurrentRun() : null
 
-  >> Use when first for proper early returns
-  => when first [
+  >> Use when for proper early returns
+  => when [
     @explicitRun => @explicitRun
     @currentRun => @currentRun
     * => @_createNewRun()

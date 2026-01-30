@@ -29,7 +29,7 @@ exe @mergeVerified(runDir, results, baseBranch, batchNum, dryRun) = [
 
   when @verifiedItems.length == 0 => show `    No verified items to merge`
 
-  => when first [
+  => when [
     @verifiedItems.length == 0 => { merged_count: 0, skipped_count: 0, failed_count: 0 }
     @dryRun => [
       show `    [DRY RUN] Would merge @verifiedItems.length worktrees`
@@ -59,7 +59,7 @@ exe @_doMerge(runDir, verifiedItems, baseBranch, batchNum) = [
   ]
   when !@mergeResult => show `    [merge] failed for batch @batchNum`
 
-  => when first [
+  => when [
     !@mergeResult => { merged_count: 0, error: "merge failed - no result" }
     * => [
       >> Log individual merge events (cleanup happens in verify phase)

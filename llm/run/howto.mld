@@ -306,8 +306,8 @@ exe @buildSectionIndex(atoms, sectionName) = js {
   return lines.join('\n');
 }
 
->> Main output logic - use when first to ensure only one branch executes
-when first [
+>> Main output logic - use when to ensure only one branch executes
+when [
   @isGrep => show @grepAtoms(@allFlatAtoms, @subtopic)
   @isIntro => show @stripFrontmatter(@introAtom)
   @wantSection && @sectionMatches.length > 0 => show @joinStripped(@sectionMatches)

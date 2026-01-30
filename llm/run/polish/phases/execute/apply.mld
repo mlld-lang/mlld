@@ -35,8 +35,8 @@ exe @analyzeTicket(runDir, ticketId, dryRun) = [
   >> Show status
   when @existingAnalysis => show `        Using cached analysis`
 
-  >> Use when first for proper early returns
-  => when first [
+  >> Use when for proper early returns
+  => when [
     @existingAnalysis => @existingAnalysis
     !@ticketContent => { ticket_id: @ticketId, error: "ticket file not found" }
     * => @_doAnalyzeTicket(@runDir, @ticketId, @ticketContent, @analysisPath, @dryRun)
@@ -48,17 +48,17 @@ exe @_doAnalyzeTicket(runDir, ticketId, ticketContent, analysisPath, dryRun) = [
   >> Extract frontmatter metadata
   let @typeMatch = @ticketContent.match(/^type:\s*(.+)$/m)
   let @priorityMatch = @ticketContent.match(/^priority:\s*(\d+)$/m)
-  let @ticketType = when first [@typeMatch => @typeMatch[1]; * => "task"]
-  let @priorityNum = when first [@priorityMatch => @priorityMatch[1]; * => "2"]
+  let @ticketType = when [@typeMatch => @typeMatch[1]; * => "task"]
+  let @priorityNum = when [@priorityMatch => @priorityMatch[1]; * => "2"]
   let @ticketPriority = `p@priorityNum`
 
   >> Load strategy context if available
   let @strategyPath = `@runDir/interpret/strategy.json`
   let @strategy = <@strategyPath>?
-  let @strategyContext = when first [@strategy => `@strategy`; * => "No strategy context available"]
+  let @strategyContext = when [@strategy => `@strategy`; * => "No strategy context available"]
   let @topics = "N/A"
 
-  let @analyzeModel = when first [@dryRun => "haiku"; * => "opus"]
+  let @analyzeModel = when [@dryRun => "haiku"; * => "opus"]
 
   let @analyzePrompt = @buildAnalyzePrompt(@ticketId, @ticketType, @ticketPriority, @ticketContent, @topics, @strategyContext, @analysisPath)
 
@@ -73,7 +73,7 @@ exe @_doAnalyzeTicket(runDir, ticketId, ticketContent, analysisPath, dryRun) = [
     let @_ = @logEvent(@runDir, { event: "analysis_done", id: @ticketId, ...@result })
   ]
   when !@result => show `        Analysis failed - no result file`
-  let @finalResult = when first [@result => @result; * => { ticket_id: @ticketId, error: "analysis failed" }]
+  let @finalResult = when [@result => @result; * => { ticket_id: @ticketId, error: "analysis failed" }]
   => @finalResult
 ]
 
@@ -89,8 +89,8 @@ exe @processTicket(runDir, ticketId, baseBranch, dryRun) = [
   when @alreadyDone => show `      Skipping @ticketId (impl-done)`
   when !@ticket => show `      ERROR: @ticketId not found`
 
-  >> Use when first for proper early returns
-  => when first [
+  >> Use when for proper early returns
+  => when [
     !@ticket => { ticket_id: @ticketId, error: "ticket not found" }
     @alreadyDone => { ticket_id: @ticketId, skipped: true, reason: "impl-done" }
     * => @_doProcessTicket(@runDir, @ticketId, @baseBranch, @dryRun)
@@ -107,8 +107,8 @@ exe @_doProcessTicket(runDir, ticketId, baseBranch, dryRun) = [
   >> Step 1: Analyze the ticket
   let @analysis = @analyzeTicket(@runDir, @ticketId, @dryRun)
 
-  >> Use when first for conditional returns
-  => when first [
+  >> Use when for conditional returns
+  => when [
     @analysis.error => @analysis
     * => @_processAfterAnalysis(@runDir, @ticketId, @baseBranch, @dryRun, @analysis)
   ]
@@ -124,7 +124,7 @@ exe @_processAfterAnalysis(runDir, ticketId, baseBranch, dryRun, analysis) = [
     show `        Needs manual review: @notes`
   ]
 
-  => when first [
+  => when [
     !@canApprove => [
       let @_ = @logItemDone(@runDir, @ticketId, "needs-review", { analysis: @analysis })
       >> Log to prominent file in project root for visibility
@@ -164,7 +164,7 @@ exe @_applyFix(runDir, ticketId, baseBranch, analysis) = [
   ]
   when !@result => show `        [apply] failed for @ticketId`
 
-  => when first [
+  => when [
     !@result => [
       let @_ = @logItemDone(@runDir, @ticketId, "apply-failed", { error: "no result file" })
       => { ticket_id: @ticketId, error: "apply failed - no result" }

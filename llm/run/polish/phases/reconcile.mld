@@ -37,8 +37,8 @@ exe @runReconcile(runDir, noQa) = [
     show `  Run interpret phase first or use --no-qa`
   ]
 
-  >> Use when first for proper early returns
-  => when first [
+  >> Use when for proper early returns
+  => when [
     @existingOutput => @existingOutput
     !@strategy && !@noQa => null
     @noQa || !@strategy => @_doReconcileTicketOnly(@runDir, @outputPath)
@@ -112,7 +112,7 @@ exe @_doReconcileWithQa(runDir, outputPath, strategy) = [
   >> Handle failure
   when !@result => show `  ERROR: Failed to generate merged-items.json`
 
-  => when first [
+  => when [
     !@result => null
     * => @_finishReconcile(@runDir, @outputPath, @result)
   ]

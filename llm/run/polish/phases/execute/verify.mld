@@ -24,7 +24,7 @@ exe @verifyMain(runDir, mergeResult, baseBranch, dryRun) = [
 
   when @mergedCount == 0 => show `    No merges to verify`
 
-  => when first [
+  => when [
     @mergedCount == 0 => { status: "skipped", reason: "no merges" }
     @dryRun => [
       show `    [DRY RUN] Would verify main branch`
@@ -56,7 +56,7 @@ exe @_doVerify(runDir, mergeResult, baseBranch, mergedCount) = [
     let @_ = @logEvent(@runDir, { event: "verify_done", id: `verify-@runId`, ...@verifyResult })
   ]
 
-  => when first [
+  => when [
     !@verifyResult => { status: "error", error: "verification failed - no result" }
     * => @verifyResult
   ]

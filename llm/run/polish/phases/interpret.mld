@@ -18,7 +18,7 @@ exe @buildInterpretPrompt(qaDir, hasStrategyQuestions, outputPath) = template ".
 
 >> Main interpret function
 >> Returns strategy object or null if skipped
-exe @runInterpret(runDir, qaDir) = when first [
+exe @runInterpret(runDir, qaDir) = when [
   >> Early return if no QA data
   !@qaDir => [
     show `  No QA run directory specified`
@@ -36,7 +36,7 @@ exe @doInterpret(runDir, qaDir) = [
   let @trendReport = <@trendReportPath>?
 
   >> Early return if no trend report
-  => when first [
+  => when [
     !@trendReport => [
       show `  No trend report found at @trendReportPath`
       show `  Skipping interpret phase (no QA data)`
@@ -52,7 +52,7 @@ exe @doInterpretWithData(runDir, qaDir, trendReportPath) = [
   let @outputPath = `@runDir/interpret/strategy.json`
   let @existingStrategy = <@outputPath>?
 
-  => when first [
+  => when [
     @existingStrategy => [
       show `  Strategy already exists at @outputPath`
       show `  Skipping interpret phase`
@@ -86,7 +86,7 @@ exe @executeInterpret(runDir, qaDir, trendReportPath, outputPath) = [
   >> Load and return the strategy
   let @strategy = <@outputPath>
 
-  => when first [
+  => when [
     !@strategy => [
       show `  ERROR: Failed to generate strategy.json`
       => null

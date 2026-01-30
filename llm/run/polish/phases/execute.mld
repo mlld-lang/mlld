@@ -47,8 +47,8 @@ exe @runExecute(runDir, config) = [
   when @workPlan && @allItems.length == 0 => show `  No items to execute`
   when @items.length == 0 && @allItems.length > 0 => show `  All @allItems.length items already processed`
 
-  >> Use when first for proper early returns
-  => when first [
+  >> Use when for proper early returns
+  => when [
     !@workPlan => { remaining: 0 }
     @allItems.length == 0 => [
       let @emptyResults = { created: @now, results: [], remaining: 0 }
@@ -96,7 +96,7 @@ exe @_doExecute(runDir, outputPath, items, config) = [
     let @itemId = @item.ticket_id ? @item.ticket_id : @item.epic_id
     log `  [start] @item.type: @itemId`
 
-    let @itemResult = when first [
+    let @itemResult = when [
       @item.type == "cluster" => @processCluster(@runDir, @item, @baseBranchTrimmed, @dryRun)
       * => @processTicket(@runDir, @item.ticket_id, @baseBranchTrimmed, @dryRun)
     ]
@@ -115,10 +115,10 @@ exe @_doExecute(runDir, outputPath, items, config) = [
   let @mergeResult = @mergeVerified(@runDir, @results, @baseBranchTrimmed, @batchNum, @dryRun)
 
   >> Show merge failures if any
-  let @mergeFailed = when first [@mergeResult.failed_count => @mergeResult.failed_count; * => 0]
+  let @mergeFailed = when [@mergeResult.failed_count => @mergeResult.failed_count; * => 0]
   when @mergeFailed > 0 => [
     show `  WARNING: @mergeFailed merge(s) failed!`
-    let @mergeResultsList = when first [@mergeResult.results => @mergeResult.results; * => []]
+    let @mergeResultsList = when [@mergeResult.results => @mergeResult.results; * => []]
     let @failedResults = for @r in @mergeResultsList when !@r.merged && @r.error => @r
     for @f in @failedResults [
       show `    @f.ticket_id: @f.error`
@@ -150,7 +150,7 @@ exe @_doExecute(runDir, outputPath, items, config) = [
 
   >> Build final results
   let @mergedCount = @mergeResult.merged_count ? @mergeResult.merged_count : 0
-  let @isDryRun = when first [@dryRun => true; * => false]
+  let @isDryRun = when [@dryRun => true; * => false]
   let @remaining = @items.length - @batch.length
   let @executeResults = { created: @now, base_branch: @baseBranchTrimmed, batch_size: @batch.length, total_items: @items.length, remaining: @remaining, dry_run: @isDryRun, results: @results, merge: @mergeResult, verification: @verifyResult }
 

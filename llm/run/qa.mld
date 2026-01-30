@@ -57,7 +57,7 @@ exe @nextRunName(qaRoot, today) = [
 
 exe @latestRunName(qaRoot) = cmd {ls "@qaRoot" | grep '^20' | sort -r | head -1}
 
-exe @resolveRunName(qaRoot, today, run, needsNewRun) = when first [
+exe @resolveRunName(qaRoot, today, run, needsNewRun) = when [
   @run => @run
   @needsNewRun => @nextRunName(@qaRoot, @today)
   * => @latestRunName(@qaRoot)
@@ -71,7 +71,7 @@ when !@runName => show `Warning: No existing QA run found. Use --tier to start a
 var @qaTools = "Read,Write,Glob,Grep,Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(find:*),Bash(grep:*),Bash(uuidgen),Bash(tr:*),Bash(mlld:*)"
 
 >> Filter topics based on --topic (prefix) or --topics (comma list)
-exe @filterTopics(all, filter, list) = when first [
+exe @filterTopics(all, filter, list) = when [
   >> --topics (comma list) takes precedence
   @list => for @t in @all when @list.split(",").includes(@t) => @t
   >> --topic: prefix/exact match filter

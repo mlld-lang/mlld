@@ -27,7 +27,7 @@ exe @processDocFix(runDir, ticketId) = [
 
   when @alreadyCompleted => show `      Skipping @ticketId (already completed)`
 
-  => when first [
+  => when [
     @alreadyCompleted => { ticket_id: @ticketId, skipped: true }
     * => @_doProcessDocFix(@runDir, @ticketId)
   ]
@@ -42,7 +42,7 @@ exe @_doProcessDocFix(runDir, ticketId) = [
   let @ticketPath = `@base/.tickets/@ticketId.md`
   let @ticketContent = <@ticketPath>?
 
-  => when first [
+  => when [
     !@ticketContent => [
       @logItemDone(@runDir, @ticketId, "error", { error: "ticket not found" })
       => { ticket_id: @ticketId, error: "ticket not found" }
@@ -70,7 +70,7 @@ exe @_executeDocFix(runDir, ticketId, ticketContent) = [
   when @result => show `      [doc fix] success for @ticketId`
   when !@result => show `      [doc fix] failed for @ticketId`
 
-  => when first [
+  => when [
     !@result => [
       @logItemDone(@runDir, @ticketId, "failed", { error: "no result file" })
       => { ticket_id: @ticketId, error: "doc fix failed" }
@@ -121,7 +121,7 @@ exe @runDocs(runDir, pl, pt) = [
 
   when @uniqueDocIds.length == 0 => show `  No doc fix tickets found`
 
-  => when first [
+  => when [
     @uniqueDocIds.length == 0 => [
       let @emptyResults = { created: @now, results: [] }
       output @emptyResults to "@outputPath"

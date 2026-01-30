@@ -101,7 +101,7 @@ exe @build() = cmd { npm run build }
 
 for @file in <src/**/*.ts> => show @file.mx.relative
 
-when first [
+when [
   @data.enabled => show "Enabled"
   * => show "Disabled"
 ]

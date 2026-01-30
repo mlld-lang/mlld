@@ -27,9 +27,9 @@ exe @buildEnrichPrompt(issueId, issueType, issuePriority, createdDate, issueCont
 >> Enrich a single ticket
 exe @enrichTicket(runDir, ticket, changelog) = [
   let @issueId = @ticket.id
-  let @issueType = when first [@ticket.type => @ticket.type; * => "task"]
-  let @issuePriority = when first [@ticket.priority => `@ticket.priority`; * => "3"]
-  let @createdDate = when first [@ticket.created => @ticket.created; * => @now]
+  let @issueType = when [@ticket.type => @ticket.type; * => "task"]
+  let @issuePriority = when [@ticket.priority => `@ticket.priority`; * => "3"]
+  let @createdDate = when [@ticket.created => @ticket.created; * => @now]
   let @alreadyEnriched = @hasTagPrefix(@ticket, "size-")
   let @recentlyReviewed = @wasRecentlyEnriched(@issueId, 24)
 
@@ -38,8 +38,8 @@ exe @enrichTicket(runDir, ticket, changelog) = [
   >> Check if reviewed in last 24 hours
   when @recentlyReviewed && !@alreadyEnriched => show `    Skipping @issueId (reviewed <24h ago)`
 
-  >> Use when first for proper early return
-  => when first [
+  >> Use when for proper early return
+  => when [
     @alreadyEnriched => { ticket_id: @issueId, skipped: true, reason: "already-enriched" }
     @recentlyReviewed => { ticket_id: @issueId, skipped: true, reason: "recently-reviewed" }
     * => @_doEnrichTicket(@runDir, @issueId, @issueType, @issuePriority, @createdDate, @changelog)
@@ -55,7 +55,7 @@ exe @_doEnrichTicket(runDir, issueId, issueType, issuePriority, createdDate, cha
   >> If we already have a result, skip the LLM call
   when @existingResult => show `    @issueId: using existing enrich result`
 
-  => when first [
+  => when [
     @existingResult => @_finishEnrichTicket(@runDir, @issueId, @existingResult)
     * => @_callClaudeForEnrich(@runDir, @issueId, @issueType, @issuePriority, @createdDate, @changelog, @markerFile)
   ]
@@ -88,8 +88,8 @@ exe @_callClaudeForEnrich(runDir, issueId, issueType, issuePriority, createdDate
     @logItemDone(@runDir, @issueId, "error", {})
   ]
 
-  >> Use when first for proper conditional return
-  => when first [
+  >> Use when for proper conditional return
+  => when [
     !@result => { ticket_id: @issueId, error: true }
     * => @_finishEnrichTicket(@runDir, @issueId, @result)
   ]
@@ -143,8 +143,8 @@ exe @runEnrich(runDir, pl, pt) = [
     show `  Run reconcile phase first`
   ]
 
-  >> Use when first for proper early returns
-  => when first [
+  >> Use when for proper early returns
+  => when [
     @existingOutput => @existingOutput
     !@merged => null
     * => @_doEnrich(@runDir, @outputPath, @items, @pl, @pt)
@@ -164,7 +164,7 @@ exe @_doEnrich(runDir, outputPath, items, pl, pt) = [
   let @changelog = @headFile(@changelogPath)
 
   >> Get ticket details for each item
-  >> Note: Using ternary instead of when first due to mlld bug with loaded file objects
+  >> Note: Using ternary instead of when due to mlld bug with loaded file objects
   let @ticketsToEnrich = for @item in @items [
     let @ticket = @getTicket(@item.ticket_id)
     let @hasFm = @ticket && @ticket.mx && @ticket.mx.fm

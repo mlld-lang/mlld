@@ -52,21 +52,21 @@ This file tests all syntax highlighting features including the new operators and
 ## When Expressions
 
 ### Value-returning When
-/var @greeting = when: [
+/var @greeting = when [
   @time < 12 => "Good morning"
   @time < 18 => "Good afternoon"
   true => "Good evening"
 ]
 
 ### Exe with When Expression
-/exe @processData(type, data) = when: [
+/exe @processData(type, data) = when [
   @type == "json" => @jsonProcessor(@data)
   @type == "xml" => @xmlProcessor(@data)
   true => @genericProcessor(@data)
 ]
 
 ### When with Tail Modifiers
-/var @result = when: [
+/var @result = when [
   @lang == "es" => "Hola"
   @lang == "fr" => "Bonjour"
   true => "Hello"
@@ -103,7 +103,7 @@ This file tests all syntax highlighting features including the new operators and
   @z == "bye" => @transform() = @applyFilter(@data)
 ]
 
-/when first: [
+/when [
   @x == "implicit assignment" => @process()
   @y == "hello" => /var @y = "explicit assignment"
   @z == "bye" => @transform() = @applyFilter(@data)
@@ -243,7 +243,7 @@ This file tests all syntax highlighting features including the new operators and
 ## Mixed Complex Example
 /when @env == "production" && @users > 1000 => [
   @mode = "scaled"
-  @config = when: [
+  @config = when [
     @region == "us" => <config-us.json>
     @region == "eu" => <config-eu.json>  
     true => <config-default.json>
@@ -346,19 +346,19 @@ This is a template that contains @var
   @status == "pending" => show "Pending"  
   * => show "Unknown"
 ]
-/exe @handler() = when: [
+/exe @handler() = when [
   @valid => @value
   * => "default"
 ]
 /var @catch = * ? "yes" : "no"
 
-### When First Modifier (rc39)
-/when first [
+### When Block (rc39)
+/when [
   @role == "admin" => show "Admin panel"
   @role == "user" => show "User dashboard"
   * => show "Guest access"
 ]
-/exe @switch(val) = when first [
+/exe @switch(val) = when [
   @val == 1 => "one"
   @val == 2 => "two"
   @val == 3 => "three"
@@ -371,12 +371,12 @@ This is a template that contains @var
   @hasFeatureB => @enableB()
   none => show "No features enabled"
 ]
-/when first [
+/when [
   @x > 10 => show "high"
   @x > 5 => show "medium"
   none => show "low or zero"
 ]
-/exe @check() = when: [
+/exe @check() = when [
   @valid => @process()
   none => "invalid"
 ]

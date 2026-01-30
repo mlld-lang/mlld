@@ -36,7 +36,7 @@ exe @addTags(id, tags) = [
   >> Use tk tag command if available, otherwise update file directly
   let @result = @shTkTag(@id, @tags)
 
-  => when first [
+  => when [
     @result.trim() != "FALLBACK" => @id
     * => @_addTagsFallback(@id, @tags)
   ]
@@ -48,7 +48,7 @@ exe @_addTagsFallback(id, tags) = [
   let @path = `@ticketsDir/@id@ext`
   let @ticket = <@path>?
 
-  => when first [
+  => when [
     !@ticket => null
     * => @_doAddTags(@id, @path, @ticket, @tags)
   ]
@@ -66,7 +66,7 @@ exe @_doAddTags(id, path, ticket, tags) = [
 
   >> Update file
   let @hasTags = @ticket.includes("tags:")
-  let @updated = when first [
+  let @updated = when [
     @hasTags => @ticket.replace(/^tags:.*$/m, `tags: @tagsYaml`)
     * => @ticket.replace(/^(priority:.*)$/m, `$1\ntags: @tagsYaml`)
   ]
@@ -89,7 +89,7 @@ exe @hasTagPrefix(ticket, prefix) = [
 exe @getTagValue(ticket, prefix) = [
   let @tags = @ticket.tags ? @ticket.tags : []
   let @matching = for @_t in @tags when @_t.startsWith(@prefix) => @_t
-  => when first [
+  => when [
     @matching.length == 0 => null
     * => @matching[0].replace(@prefix, "")
   ]
@@ -98,7 +98,7 @@ exe @getTagValue(ticket, prefix) = [
 >> Check if ticket is stale (stale-check > 3)
 exe @isStale(ticket) = [
   let @value = @getTagValue(@ticket, "stale-check-")
-  => when first [
+  => when [
     !@value => false
     * => @value * 1 > 3
   ]
@@ -133,7 +133,7 @@ exe @getRisk(ticket) = [
 exe @getImplStatus(ticket) = [
   let @tags = @ticket.tags ? @ticket.tags : []
   let @implTags = for @_t in @tags when @_t.startsWith("impl-") => @_t
-  => when first [
+  => when [
     @implTags.length == 0 => "unchecked"
     * => @implTags[0]
   ]
@@ -147,7 +147,7 @@ exe @addEnrichNote(id) = [
   let @note = `Enrich reviewed: @now`
   let @result = @shTkAddNote(@id, @note)
   let @trimmed = @result.trim()
-  => when first [
+  => when [
     @trimmed == "FAILED" => false
     * => true
   ]
@@ -157,7 +157,7 @@ exe @addEnrichNote(id) = [
 >> Parses ticket content for "Enrich reviewed: <timestamp>" notes
 exe @wasRecentlyEnriched(id, hoursThreshold) = [
   let @ticket = @getTicket(@id)
-  => when first [
+  => when [
     !@ticket => false
     * => @_checkEnrichTimestamp(@ticket, @hoursThreshold)
   ]
@@ -168,7 +168,7 @@ exe @_checkEnrichTimestamp(ticket, hoursThreshold) = [
   >> Coerce to string for regex matching
   let @content = `@ticket`
   let @match = @content.match(/Enrich reviewed: (\d{4}-\d{2}-\d{2}T[\d:.]+Z)/)
-  => when first [
+  => when [
     !@match => false
     * => [
       let @lastEnrich = @match[1]

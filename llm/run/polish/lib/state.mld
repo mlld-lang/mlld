@@ -115,7 +115,7 @@ exe @updatePhaseStatus(runDir, phase, status) = [
 ]
 
 >> Get next incomplete phase
-exe @nextPhase(run) = when first [
+exe @nextPhase(run) = when [
   @run.phases.interpret.status != "complete" => "interpret"
   @run.phases.reconcile.status != "complete" => "reconcile"
   @run.phases.enrich.status != "complete" => "enrich"
@@ -139,8 +139,8 @@ exe @shouldRunPhase(phase, phaseFlag, fromFlag, toFlag) = [
   let @fromIdx = @fromFlag ? @phases.indexOf(@fromFlag) : 0
   let @toIdx = @toFlag ? @phases.indexOf(@toFlag) : 5
 
-  >> Use when first for proper early returns
-  => when first [
+  >> Use when for proper early returns
+  => when [
     >> If specific phase requested, only match that phase
     @phaseFlag && @phaseFlag != "all" => @phase == @phaseFlag
     >> If --from specified, skip phases before it

@@ -37,7 +37,7 @@ exe @runRank(runDir) = [
 
   >> Use enriched if available, otherwise fall back to merged
   let @source = @enriched ? "enriched" : "merged"
-  let @items = when first [
+  let @items = when [
     @enriched && @enriched.items => @enriched.items
     @merged && @merged.items => @merged.items
     * => []
@@ -62,8 +62,8 @@ exe @runRank(runDir) = [
     output @emptyPlan to "@outputPath"
   ]
 
-  >> Use when first for the entire function return
-  => when first [
+  >> Use when for the entire function return
+  => when [
     @existingOutput => @existingOutput
     !@enriched && !@merged => null
     @itemCount.length == 0 => { created: @now, ranked_items: [] }
@@ -96,8 +96,8 @@ exe @_doRank(runDir, outputPath, items) = [
   >> Handle group failure - show error message if failed
   when !@groups => show `  ERROR: Failed to generate groups`
 
-  >> Use when first for conditional return
-  => when first [
+  >> Use when for conditional return
+  => when [
     @groups => @_continueWithGroups(@runDir, @outputPath, @items, @groups, @groupMarker)
     * => null
   ]
@@ -110,42 +110,43 @@ exe @_continueWithGroups(runDir, outputPath, items, groups, groupMarker) = [
   let @clusters = for @grp in @groups when @grp.type == "cluster" => @grp
   show `    Generated @singles.length singles, @clusters.length clusters`
 
-  >> Step 2: Create epic tickets for clusters
-  when @clusters.length > 0 => [
-    show `    Creating epic tickets for clusters...`
-    for @cluster in @clusters [
-      let @epicTitle = `[@cluster.area] Grouped work`
-      let @ticketList = @cluster.tickets.join(", ")
-      let @epicId = @tkCreateEpic(@epicTitle, @ticketList, @cluster.rationale)
-      let @epicIdTrimmed = @epicId.trim()
+  >> Step 2: Create epic tickets for clusters and build updated list
+  let @clustersWithEpics = when [
+    @clusters.length == 0 => []
+    * => [
+      show `    Creating epic tickets for clusters...`
+      => for @cluster in @clusters [
+        let @epicTitle = `[@cluster.area] Grouped work`
+        let @ticketList = @cluster.tickets.join(", ")
+        let @epicId = @tkCreateEpic(@epicTitle, @ticketList, @cluster.rationale)
+        let @epicIdTrimmed = @epicId.trim()
 
-      >> Update cluster with epic ID
-      let @cluster = { ...@cluster, epic_id: @epicIdTrimmed }
-
-      >> Reparent children under the epic
-      for @childId in @cluster.tickets [
-        let @ext = ".md"
-        let @childPath = `@base/.tickets/@childId@ext`
-        let @childContent = <@childPath>?
-        when @childContent => [
-          let @hasParent = @childContent.includes("parent:")
-          let @updated = when first [
-            @hasParent => @childContent.replace(/^parent:.*$/m, `parent: @epicIdTrimmed`)
-            * => @childContent.replace(/^(priority:.*)$/m, `$1\nparent: @epicIdTrimmed`)
+        >> Reparent children under the epic
+        for @childId in @cluster.tickets [
+          let @ext = ".md"
+          let @childPath = `@base/.tickets/@childId@ext`
+          let @childContent = <@childPath>?
+          when @childContent => [
+            let @hasParent = @childContent.includes("parent:")
+            let @updated = when [
+              @hasParent => @childContent.replace(/^parent:.*$/m, `parent: @epicIdTrimmed`)
+              * => @childContent.replace(/^(priority:.*)$/m, `$1\nparent: @epicIdTrimmed`)
+            ]
+            output @updated to "@childPath"
           ]
-          output @updated to "@childPath"
         ]
-      ]
 
-      show `      Created epic @epicIdTrimmed for @cluster.area (@cluster.tickets.length items)`
+        show `      Created epic @epicIdTrimmed for @cluster.area (@cluster.tickets.length items)`
+        => { ...@cluster, epic_id: @epicIdTrimmed }
+      ]
     ]
   ]
 
-  >> Reload groups with epic IDs
-  let @updatedGroups = <@groupMarker>?
+  >> Combine singles and clusters with epic IDs
+  let @allGroups = @singles.concat(@clustersWithEpics)
 
   >> Step 3: Rank groups
-  let @groupsToUse = @updatedGroups ? @updatedGroups : @groups
+  let @groupsToUse = @allGroups
   let @assignmentsJson = @groupsToUse | @json
   let @itemDetailsJson = @items | @json
   let @rankPromptText = @buildRankPrompt(@assignmentsJson, @itemDetailsJson)
@@ -162,8 +163,8 @@ exe @_continueWithGroups(runDir, outputPath, items, groups, groupMarker) = [
   >> Handle rank failure - show error message if failed
   when !@ranked => show `  ERROR: Failed to generate ranking`
 
-  >> Use when first for conditional return
-  => when first [
+  >> Use when for conditional return
+  => when [
     @ranked => @_finishRanking(@runDir, @outputPath, @ranked)
     * => null
   ]
