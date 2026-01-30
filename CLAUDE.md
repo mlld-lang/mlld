@@ -67,11 +67,5 @@ mlld run <script>    # Run mlld script from script directory (default: llm/run/)
 - **Smart evaluators**: Each directive evaluator does all the work directly
 - **CLI/API integrated**: Both now use the new interpreter directly
 
-## Key Decisions & Context
-- **Parser returns arrays** - We handle this in evaluate()
-- **Newlines are nodes** - Preserved for markdown output
-- **Direct execution** - Evaluators read files and execute commands directly
-- **XML via llmxml** - Uses SCREAMING_SNAKE format for maximum clarity
-- **AST Parsing**: ALWAYS use the AST -- never use regex
-
-[... rest of the content remains the same ...]
+## Important notes
+- Don't ever run `mlld run polish` or `mlld run qa` -- have the user run them. They will take 30+ minutes to run.
