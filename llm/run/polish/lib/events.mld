@@ -37,8 +37,9 @@ exe @logItemStart(runDir, id, itemType) = [
 ]
 
 >> Log item complete (with optional extra data)
-exe @logItemDone(runDir, id, result, extra) = [
-  let @baseEvent = { event: "item_done", id: @id, result: @result }
+>> Note: Parameter renamed from @result to @status to avoid shadowing caller's @result variable
+exe @logItemDone(runDir, id, status, extra) = [
+  let @baseEvent = { event: "item_done", id: @id, result: @status }
   let @fullEvent = @extra ? { ...@baseEvent, ...@extra } : @baseEvent
   => @logEvent(@runDir, @fullEvent)
 ]
@@ -47,16 +48,21 @@ exe @logItemDone(runDir, id, result, extra) = [
 exe @loadEvents(runDir) = [
   let @eventLog = `@runDir/events.jsonl`
   let @content = <@eventLog>?
-  when !@content => []
-  >> Split by newlines and parse each line
-  let @lines = @content.split("\n")
-  let @events = for @line in @lines when @line.trim().length > 0 => @line.data
-  => @events
+  >> JSONL files are auto-parsed into arrays by mlld
+  => @content ? @content : []
 ]
 
->> Get completed items from events
+>> Get completed items from events (any phase)
 exe @getCompletedItems(events) = [
   let @doneEvents = for @e in @events when @e.event == "item_done" => @e
+  => for @e in @doneEvents => @e.id
+]
+
+>> Get items completed by execute phase (not enriched)
+>> These statuses indicate execute phase completion: completed, needs-review, dry-run, apply-failed, fix-failed
+exe @getExecuteCompletedItems(events) = [
+  let @executeStatuses = ["completed", "needs-review", "dry-run", "apply-failed", "fix-failed"]
+  let @doneEvents = for @e in @events when @e.event == "item_done" && @executeStatuses.includes(@e.result) => @e
   => for @e in @doneEvents => @e.id
 ]
 
@@ -69,5 +75,6 @@ exe @getCompletedItems(events) = [
   @logItemStart,
   @logItemDone,
   @loadEvents,
-  @getCompletedItems
+  @getCompletedItems,
+  @getExecuteCompletedItems
 }

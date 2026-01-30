@@ -58,30 +58,45 @@ var @phases = ["interpret", "reconcile", "enrich", "rank", "execute", "docs"]
 
 >> Find or create run directory
 exe @resolveRunDir() = [
-  >> If specific run requested, use it
-  when @runId => [
-    let @runDir = `@pipelineRoot/@runId`
-    let @exists = <@runDir/run.json>
-    when !@exists => [
-      show `ERROR: Run @runId not found`
-      => null
-    ]
-    => @runDir
-  ]
+  >> Check for explicit --run flag first
+  let @explicitRun = @runId ? @_checkExplicitRun(@runId) : null
 
-  >> Check for current symlink
+  >> Check for current symlink if no explicit run
+  let @currentRun = !@explicitRun && !@runId ? @_checkCurrentRun() : null
+
+  >> Use when first for proper early returns
+  => when first [
+    @explicitRun => @explicitRun
+    @currentRun => @currentRun
+    * => @_createNewRun()
+  ]
+]
+
+>> Check if explicit run ID exists
+exe @_checkExplicitRun(id) = [
+  let @runDir = `@pipelineRoot/@id`
+  let @hasRun = <@runDir/run.json>?
+  when !@hasRun => show `ERROR: Run @id not found`
+  => @hasRun ? @runDir : null
+]
+
+>> Check current symlink for incomplete run
+exe @_checkCurrentRun() = [
   let @currentLink = @readCurrentLink(@pipelineRoot)
   let @currentLinkTrimmed = @currentLink.trim()
-  when @currentLinkTrimmed => [
-    let @runDir = `@pipelineRoot/@currentLinkTrimmed`
-    let @run = @loadRun(@runDir)
-    when @run && @run.status != "complete" => [
-      show `Resuming run: @currentLinkTrimmed`
-      => @runDir
-    ]
-  ]
+  when !@currentLinkTrimmed => null
 
-  >> Create new run
+  let @runDir = `@pipelineRoot/@currentLinkTrimmed`
+  let @run = @loadRun(@runDir)
+  let @canResume = @run && @run.status != "complete"
+
+  when @canResume => show `Resuming run: @currentLinkTrimmed`
+
+  => @canResume ? @runDir : null
+]
+
+>> Create a new run
+exe @_createNewRun() = [
   let @today = sh {date +%Y-%m-%d}
   let @todayTrimmed = @today.trim()
 

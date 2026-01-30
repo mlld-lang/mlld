@@ -44,6 +44,21 @@ exe @enrichTicket(runDir, ticket, changelog) = [
 
 >> Internal function to do the actual ticket enrichment
 exe @_doEnrichTicket(runDir, issueId, issueType, issuePriority, createdDate, changelog) = [
+  >> Check if marker file already exists (skip claudePoll if so)
+  let @markerFile = `@runDir/enrich/@issueId-enrich.json`
+  let @existingResult = <@markerFile>?
+
+  >> If we already have a result, skip the LLM call
+  when @existingResult => show `    @issueId: using existing enrich result`
+
+  => when first [
+    @existingResult => @_finishEnrichTicket(@runDir, @issueId, @existingResult)
+    * => @_callClaudeForEnrich(@runDir, @issueId, @issueType, @issuePriority, @createdDate, @changelog, @markerFile)
+  ]
+]
+
+>> Actually call Claude for enrichment (only when no existing result)
+exe @_callClaudeForEnrich(runDir, issueId, issueType, issuePriority, createdDate, changelog, markerFile) = [
   >> Read full ticket content
   let @ext = ".md"
   let @ticketPath = `@base/.tickets/@issueId@ext`
@@ -55,7 +70,6 @@ exe @_doEnrichTicket(runDir, issueId, issueType, issuePriority, createdDate, cha
 
   >> Build and run prompt
   let @prompt = @buildEnrichPrompt(@issueId, @issueType, @issuePriority, @createdDate, @issueContent, @changelog, @commits)
-  let @markerFile = `@runDir/enrich/@issueId-enrich.json`
   let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON response to @markerFile using the Write tool. Write ONLY the JSON object as its contents.`
 
   @logItemStart(@runDir, @issueId, 0)
@@ -87,13 +101,23 @@ exe @_finishEnrichTicket(runDir, issueId, result) = [
 
   @logItemDone(@runDir, @issueId, "enriched", {})
 
-  => {
+  >> DEBUG: Check result param type and structure
+  show `    _finish DEBUG: typeof result = @result.type`
+  show `    _finish DEBUG: result has staleness = @result.staleness ? "yes" : "no"`
+  show `    _finish DEBUG: result.staleness.score = @result.staleness.score`
+
+  >> Build return object - try assigning to let first
+  let @returnObj = {
     ticket_id: @issueId,
     staleness: @result.staleness,
     implementation: @result.implementation,
     scope: @result.scope,
     tags_added: @result.tags_to_add
   }
+
+  show `    _finish DEBUG: returnObj.staleness.score = @returnObj.staleness.score`
+
+  => @returnObj
 ]
 
 >> Main enrich function
@@ -162,6 +186,16 @@ exe @_doEnrich(runDir, outputPath, items) = [
     => @enrichTicket(@runDir, @ticket, @changelog)
   ]
 
+  >> DEBUG: Show what parallel for returned
+  show `  DEBUG: results.length = @results.length`
+  when @results.length > 0 => [
+    let @first = @results[0]
+    show `  DEBUG: typeof first = @first.type`
+    show `  DEBUG: first.ticket_id = @first.ticket_id`
+    show `  DEBUG: first.staleness = @first.staleness`
+    >> Don't try .score if staleness is error object
+  ]
+
   >> Separate successful and filtered
   >> Note: Can't use !@r.skipped because mlld filter fails on missing fields (see bug-filter-missing-fields.md)
   >> Instead check for staleness field which exists on all successful enrichments
@@ -172,9 +206,16 @@ exe @_doEnrich(runDir, outputPath, items) = [
   >> Filter out stale and impl-done items
   let @staleItems = for @r in @enriched when @r.staleness && @r.staleness.score > 0.3 => @r
   let @implDoneItems = for @r in @enriched when @r.implementation && @r.implementation.status == "done" => @r
+
+  >> DEBUG: simpler filter to isolate issue
+  let @lowStale = for @r in @enriched when @r.staleness.score <= 0.3 => @r
+  let @notDone = for @r in @enriched when @r.implementation.status != "done" => @r
+  show `  DEBUG: lowStale = @lowStale.length, notDone = @notDone.length`
+
   let @activeItems = for @r in @enriched
     when (!@r.staleness || @r.staleness.score <= 0.3) && (!@r.implementation || @r.implementation.status != "done")
     => @r
+  show `  DEBUG: activeItems = @activeItems.length`
 
   >> Build output
   let @output = {

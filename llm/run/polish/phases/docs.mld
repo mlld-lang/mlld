@@ -8,6 +8,7 @@ import { @claudePoll } from @mlld/claude-poll
 import { @updatePhaseStatus } from "../lib/state.mld"
 import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone, @loadEvents, @getCompletedItems } from "../lib/events.mld"
 import { @getOpenTickets, @addTags, @getTicket } from "../lib/tickets.mld"
+import { @debuglog, @dbg } from "../lib/debug.mld"
 
 /needs { sh }
 
@@ -63,9 +64,11 @@ exe @_executeDocFix(runDir, ticketId, ticketContent) = [
   let @prompt = @buildDocFixPrompt(@ticketId, @ticketDescription, @outputPath)
   let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON result to @outputPath using the Write tool.`
 
-  let @response = @claudePoll(@fullPrompt, "sonnet", @base, @docTools, @outputPath)
+  let @response = @claudePoll(@fullPrompt, "sonnet", @base, @docTools, @outputPath) | @debuglog("Doc fix @ticketId")
 
   let @result = <@outputPath>?
+  when @result => show `      [doc fix] success for @ticketId`
+  when !@result => show `      [doc fix] failed for @ticketId`
 
   => when first [
     !@result => [
@@ -105,13 +108,16 @@ exe @runDocs(runDir) = [
   let @workPlan = <@workPlanPath>?
   let @workPlanItems = @workPlan && @workPlan.ranked_items ? @workPlan.ranked_items : []
 
-  >> Filter work plan for doc tickets
-  let @docFromWorkPlan = for @item in @workPlanItems when @item.area && @item.area.includes("doc") => @item
+  >> Filter work plan for doc tickets (singles only - clusters have epic_id not ticket_id)
+  let @docFromWorkPlan = for @item in @workPlanItems when @item.area && @item.area.includes("doc") && @item.ticket_id => @item
 
   >> Combine sources (simple concat - may have dupes but ok for now)
   let @docTicketIds = for @tkt in @docTickets => @tkt.id
   let @workPlanDocIds = for @item in @docFromWorkPlan => @item.ticket_id
   let @uniqueDocIds = @docTicketIds.concat(@workPlanDocIds)
+
+  >> Debug: show what we found
+  show `  [docs] @docTickets.length tickets from tk, @docFromWorkPlan.length from work plan`
 
   when @uniqueDocIds.length == 0 => show `  No doc fix tickets found`
 

@@ -16,11 +16,11 @@ exe @getOpenTickets() = [
   => @ticketData
 ]
 
->> Get ticket by ID
+>> Get ticket by ID (returns null if not found)
 exe @getTicket(id) = [
   let @ext = ".md"
   let @path = `@ticketsDir/@id@ext`
-  => <@path>
+  => <@path>?
 ]
 
 >> Create a ticket
@@ -35,14 +35,27 @@ exe @createTicket(title, type, priority, tags, description) = [
 exe @addTags(id, tags) = [
   >> Use tk tag command if available, otherwise update file directly
   let @result = @shTkTag(@id, @tags)
-  when @result.trim() != "FALLBACK" => @id
 
-  >> Fallback: update file directly
+  => when first [
+    @result.trim() != "FALLBACK" => @id
+    * => @_addTagsFallback(@id, @tags)
+  ]
+]
+
+>> Fallback: update file directly when tk tag not available
+exe @_addTagsFallback(id, tags) = [
   let @ext = ".md"
   let @path = `@ticketsDir/@id@ext`
-  let @ticket = <@path>
-  when !@ticket => null
+  let @ticket = <@path>?
 
+  => when first [
+    !@ticket => null
+    * => @_doAddTags(@id, @path, @ticket, @tags)
+  ]
+]
+
+>> Actually add tags to ticket file
+exe @_doAddTags(id, path, ticket, tags) = [
   >> Parse existing tags line
   let @match = @ticket.match(/^tags:\s*\[(.*)\]/m)
   let @existingStr = @match ? @match[1] : ""
@@ -63,25 +76,32 @@ exe @addTags(id, tags) = [
 ]
 
 >> Check if ticket has a specific tag prefix
+>> Expects built object with .tags field (from enrich.mld lines 145-151)
+>> Note: Using @_tag to avoid variable collision with caller's loop variables
 exe @hasTagPrefix(ticket, prefix) = [
   let @tags = @ticket.tags ? @ticket.tags : []
-  let @matching = for @t in @tags when @t.startsWith(@prefix) => @t
+  let @matching = for @_tag in @tags when @_tag.startsWith(@prefix) => @_tag
   => @matching.length > 0
 ]
 
 >> Get tag value by prefix
+>> Expects built object with .tags field
 exe @getTagValue(ticket, prefix) = [
   let @tags = @ticket.tags ? @ticket.tags : []
-  let @matching = for @t in @tags when @t.startsWith(@prefix) => @t
-  when @matching.length == 0 => null
-  => @matching[0].replace(@prefix, "")
+  let @matching = for @_t in @tags when @_t.startsWith(@prefix) => @_t
+  => when first [
+    @matching.length == 0 => null
+    * => @matching[0].replace(@prefix, "")
+  ]
 ]
 
 >> Check if ticket is stale (stale-check > 3)
 exe @isStale(ticket) = [
   let @value = @getTagValue(@ticket, "stale-check-")
-  when !@value => false
-  => @value * 1 > 3
+  => when first [
+    !@value => false
+    * => @value * 1 > 3
+  ]
 ]
 
 >> Check if ticket has impl-done tag
@@ -112,9 +132,11 @@ exe @getRisk(ticket) = [
 >> Get impl status
 exe @getImplStatus(ticket) = [
   let @tags = @ticket.tags ? @ticket.tags : []
-  let @implTags = for @t in @tags when @t.startsWith("impl-") => @t
-  when @implTags.length == 0 => "unchecked"
-  => @implTags[0]
+  let @implTags = for @_t in @tags when @_t.startsWith("impl-") => @_t
+  => when first [
+    @implTags.length == 0 => "unchecked"
+    * => @implTags[0]
+  ]
 ]
 
 /export {
@@ -123,6 +145,8 @@ exe @getImplStatus(ticket) = [
   @getTicket,
   @createTicket,
   @addTags,
+  @_addTagsFallback,
+  @_doAddTags,
   @hasTagPrefix,
   @getTagValue,
   @isStale,

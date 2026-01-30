@@ -45,11 +45,11 @@ Write the strategy.json file to: `@outputPath`
 
 ```json
 {
-  "generated_at": "<ISO timestamp>",
-  "qa_run": "<path to qa run directory>",
+  "generated_at": "[ISO timestamp]",
+  "qa_run": "[path to qa run directory]",
   "source": {
-    "trend_report": "<path to trend-report.json>",
-    "strategy_questions": "<path to strategy-questions.md or null>",
+    "trend_report": "[path to trend-report.json]",
+    "strategy_questions": "[path to strategy-questions.md or null]",
     "questions_answered": 3,
     "questions_total": 5,
     "questions_unanswered": 2

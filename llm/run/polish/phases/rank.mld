@@ -8,6 +8,7 @@ import { @claudePoll } from @mlld/claude-poll
 import { @updatePhaseStatus } from "../lib/state.mld"
 import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
 import { @createTicket } from "../lib/tickets.mld"
+import { @debuglog, @dbg } from "../lib/debug.mld"
 
 /needs { sh }
 
@@ -72,9 +73,10 @@ exe @_doRank(runDir, outputPath, items) = [
   let @groupFullPrompt = `@groupPrompt\n\nIMPORTANT: Write your JSON response to @groupMarker using the Write tool. Write ONLY the JSON array as its contents.`
 
   show `    Step 1: Grouping items...`
-  let @groupResponse = @claudePoll(@groupFullPrompt, "opus", @base, @rankTools, @groupMarker)
+  let @groupResponse = @claudePoll(@groupFullPrompt, "opus", @base, @rankTools, @groupMarker) | @debuglog("Grouping response")
 
   let @groups = <@groupMarker>?
+  show `    [rank] groups.length = @groups.length`
 
   >> Handle group failure - show error message if failed
   when !@groups => show `  ERROR: Failed to generate groups`
@@ -136,9 +138,11 @@ exe @_continueWithGroups(runDir, outputPath, items, groups, groupMarker) = [
   let @rankFullPrompt = `@rankPromptText\n\nIMPORTANT: Write your JSON response to @rankMarker using the Write tool. Write ONLY the JSON array as its contents.`
 
   show `    Step 2: Ranking assignments...`
-  let @rankResponse = @claudePoll(@rankFullPrompt, "sonnet", @base, @rankTools, @rankMarker)
+  let @rankResponse = @claudePoll(@rankFullPrompt, "sonnet", @base, @rankTools, @rankMarker) | @debuglog("Ranking response")
 
   let @ranked = <@rankMarker>?
+  show `    [rank] ranked.length = @ranked.length`
+  when @ranked.length > 100 => show `    [rank] WARNING: length > 100 suggests string not array`
 
   >> Handle rank failure - show error message if failed
   when !@ranked => show `  ERROR: Failed to generate ranking`
