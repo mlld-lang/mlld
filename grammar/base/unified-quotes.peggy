@@ -173,7 +173,6 @@ ConditionalStringFragmentContent
 // Content inside backtick templates - supports @var and @func(args) and <file.md>
 UnifiedBacktickInterpolation "Backtick interpolation content"
   = TemplateSlashForBlockBacktick    // Inline for-block
-  / TemplateInlineShow               // Inline /show
   / ConditionalTemplateSnippetInline // @var?`...` (inline, no newlines)
   / NullCoalescingTight
   / ConditionalVariableOmission
@@ -280,7 +279,6 @@ TemplateSlashForBlockBacktick "slash for-block (backtick)"
     }
     "/for" _ pattern:ForIterationPattern _ parts:(
       TemplateSlashForBlockBacktick
-      / TemplateInlineShow
       / UnifiedInterpolationContent
       / UnifiedBacktickTextSegment
     )* _ &{

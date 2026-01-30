@@ -51,7 +51,7 @@ describe('Template inline blocks', () => {
     expect(trimmed).toContain('- y');
   });
 
-  it('captures inline /show output inside templates', async () => {
+  it('treats /show as literal text inside templates', async () => {
     const source = `/var @msg = ::Header\n/show {echo "OK"}\n::
 /show @msg`;
 
@@ -63,6 +63,6 @@ describe('Template inline blocks', () => {
 
     const out = typeof result === 'string' ? result : (result as any).output;
     const trimmed = String(out).trim();
-    expect(trimmed).toContain('OK');
+    expect(trimmed).toContain('/show {echo "OK"}');
   });
 });

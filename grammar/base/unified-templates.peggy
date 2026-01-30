@@ -70,7 +70,6 @@ UnifiedTripleColon "Triple colon template"
 UnifiedDoubleColon "Double colon template"
   = '::' !":" parts:(
       TemplateSlashForBlockDouble
-      / TemplateInlineShow
       / UnifiedAtInterpolation
     )* '::' {
       helpers.debug('UnifiedDoubleColon matched ::...::', { parts });
@@ -116,8 +115,7 @@ UnifiedDoubleColon "Double colon template"
 // Double brackets with {{var}} interpolation
 UnifiedDoubleBracket "Double bracket template"
   = '[[' parts:(
-      TemplateInlineShow
-      / UnifiedBraceInterpolation
+      UnifiedBraceInterpolation
       / FileReferenceInterpolation
       / UnifiedBracketTextSegment
     )* ']]' {
@@ -217,7 +215,6 @@ TemplateSlashForBlockDouble "slash for-block (double-colon)"
     }
     "/for" _ pattern:ForIterationPattern _ parts:(
       TemplateSlashForBlockDouble
-      / TemplateInlineShow
       / UnifiedAtInterpolation
       / FileReferenceInterpolation
       / UnifiedDoubleColonTextSegment
@@ -288,12 +285,11 @@ TemplateInlineShow "inline show (template)"
 // TEMPLATE BODY START RULES (for .att/.mtt files)
 // -------------------------------------------------------------
 
-// ATT-style templates (@var interpolation, slash blocks, inline show)
+// ATT-style templates (@var interpolation, slash blocks)
 // Uses UnifiedAttTextSegment which allows :: as literal text (unlike double-colon templates)
 TemplateBodyAtt "template body for .att files"
   = parts:(
       TemplateSlashForBlockDouble
-      / TemplateInlineShow
       / UnifiedAtInterpolation
       / FileReferenceInterpolation
       / UnifiedAttTextSegment
@@ -306,11 +302,10 @@ UnifiedAttTextSegment "ATT text segment"
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
-// MTT-style templates ({{var}} interpolation, inline show)
+// MTT-style templates ({{var}} interpolation)
 TemplateBodyMtt "template body for .mtt files"
   = parts:(
-      TemplateInlineShow
-      / UnifiedBraceInterpolation
+      UnifiedBraceInterpolation
       / UnifiedTemplateTextSegment
     )* { return parts; }
 
