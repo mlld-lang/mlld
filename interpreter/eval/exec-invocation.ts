@@ -1540,6 +1540,7 @@ async function evaluateExecInvocationInternal(
 
           const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
           let resolvedValue = await resolveVariable(targetVar, env, ResolutionContext.FieldAccess);
+          let fieldMissing = false;
           if (varRef.fields && varRef.fields.length > 0) {
             const { accessField } = await import('../utils/field-access');
             const normalized = normalizeFields(varRef.fields);
@@ -1547,13 +1548,19 @@ async function evaluateExecInvocationInternal(
               const fieldResult = await accessField(resolvedValue, field, {
                 preserveContext: true,
                 env,
-                sourceLocation: nodeSourceLocation
+                sourceLocation: nodeSourceLocation,
+                returnUndefinedForMissing: true
               });
               resolvedValue = (fieldResult as any).value;
               if (resolvedValue === undefined) {
+                fieldMissing = true;
                 break;
               }
             }
+          }
+
+          if (fieldMissing) {
+            return finalizeExistsResult(false);
           }
 
           if (varRef.pipes && varRef.pipes.length > 0) {

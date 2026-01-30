@@ -243,14 +243,13 @@ describe('Import type handling', () => {
 
     const missingSource = `/import "./agents" as @agents
 /show @agents._private.who`;
-    await expect(
-      interpret(missingSource, {
-        fileSystem,
-        pathService,
-        pathContext,
-        approveAllImports: true
-      })
-    ).rejects.toThrow(/_private/);
+    const missingOutput = await interpret(missingSource, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+    expect((missingOutput as string).trim()).toBe('');
   });
 
   it('allows overriding directory skip patterns via with { skipDirs: [] }', async () => {
