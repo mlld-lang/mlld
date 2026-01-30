@@ -84,18 +84,22 @@ exe @_doAnalyzeTicket(runDir, ticketId, ticketContent, analysisPath, dryRun) = [
 exe @processTicket(runDir, ticketId, baseBranch, dryRun) = [
   let @ticket = @getTicket(@ticketId)
 
-  >> Check if already done via ticket tags (impl-done) - not just run-local events
+  >> Check if already done via ticket tags (impl-done) or ticket status (closed)
   let @ticketTags = @ticket && @ticket.mx && @ticket.mx.fm && @ticket.mx.fm.tags ? @ticket.mx.fm.tags : []
+  let @ticketStatus = @ticket && @ticket.mx && @ticket.mx.fm && @ticket.mx.fm.status ? @ticket.mx.fm.status : "open"
   let @ticketObj = { tags: @ticketTags }
-  let @alreadyDone = @ticket && @isImplDone(@ticketObj)
+  let @hasImplDone = @ticket && @isImplDone(@ticketObj)
+  let @isClosed = @ticketStatus == "closed"
+  let @alreadyDone = @hasImplDone || @isClosed
+  let @skipReason = when first [@hasImplDone => "impl-done"; @isClosed => "closed"; * => "unknown"]
 
-  when @alreadyDone => show `      Skipping @ticketId (impl-done)`
+  when @alreadyDone => show `      Skipping @ticketId (@skipReason)`
   when !@ticket => show `      ERROR: @ticketId not found`
 
   >> Use when first for proper early returns
   => when first [
     !@ticket => { ticket_id: @ticketId, error: "ticket not found" }
-    @alreadyDone => { ticket_id: @ticketId, skipped: true, reason: "impl-done" }
+    @alreadyDone => { ticket_id: @ticketId, skipped: true, reason: @skipReason }
     * => @_doProcessTicket(@runDir, @ticketId, @baseBranch, @dryRun)
   ]
 ]
