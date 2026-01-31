@@ -14,14 +14,16 @@ log `Events file: @eventsFile`
 
 >> The spec is the destination
 var @spec = <@base/todo/spec-security-2026-v4.md>
-log `Loaded spec: @spec.mx.tokens tokens`
+log `Loaded spec: @spec.length chars, @spec.mx.tokens tokens`
 
 >> Agent notes capture learnings across iterations
 var @agentNotes = <./agent.md>
+log `Loaded agent notes: @agentNotes.length chars`
 
 >> Jobs define what we're trying to accomplish
 var @jobs = <./jobs/*.md>
 log `Loaded @jobs.length jobs`
+for @job in @jobs => log `  - @job.mx.filename: @job.length chars`
 
 >> Task builder (template requires exe)
 exe @buildTask(spec, atoms, plan, agentNotes, jobs, eventsFile, iterationId) = template "./task.att"
@@ -33,12 +35,23 @@ exe @logEvent(eventsFile, event) = [
   => @eventWithTs
 ]
 
->> State for loop control
-var @state = { stop: false }
-
 log `Starting loop...`
 
-loop(endless) until @state.stop [
+>> TEST MODE: Set to number for testing, null for production
+>> Set @dryRun = true to skip agent spawn (just validate task builds)
+var @maxIterations = 1
+var @dryRun = true
+
+>> Main loop
+loop(endless) [
+  >> Test mode exit (check at start of each iteration)
+  when @maxIterations && @mx.loop.iteration > @maxIterations => [
+    log `TEST MODE: Completed @maxIterations iteration(s)`
+    => done
+  ]
+  >> Validate prerequisites (check each iteration in case files changed)
+  when @spec.length < 100 => done `FATAL: Spec file too short (@spec.length chars)`
+
   >> Fresh state each iteration
   var @atoms = <@base/docs/src/atoms/security/*.md>
   var @plan = <./plan.md>
@@ -58,47 +71,77 @@ loop(endless) until @state.stop [
   log `Started: @iterationId`
 
   >> Build task from template
+  log `Building task from template...`
+  log `  spec: @spec.length chars, @spec.mx.tokens tokens`
+  log `  atoms: @atoms.length files`
+  log `  plan: @plan.length chars`
+  log `  agentNotes: @agentNotes.length chars`
+  log `  jobs: @jobs.length files`
+
   var @task = @buildTask(@spec, @atoms, @plan, @agentNotes, @jobs, @eventsFile, @iterationId)
-  log `Task built, spawning agent...`
 
-  >> Do the work using poll pattern (works around claude -p hang bug)
-  var @result = @claudePollEvent(
-    @task,
-    "opus",
-    @base,
-    "Read,Write,Edit,Glob,Grep,Bash",
-    @eventsFile,
-    "iteration_done",
-    @iterationId
-  ) | log
+  >> CRITICAL: Validate task was built correctly
+  >> If @buildTask fails silently, @task will be undefined or literal "@task"
+  var @taskLen = @task.length ?? 0
+  log `Task built: @taskLen chars`
 
-  log `Agent completed: @iterationId`
-
-  >> Backpressure: validate atoms parse correctly
-  log `Validating atoms...`
-  var @validation = for parallel(5) @atom in @atoms [
-    let @check = run cmd { mlld validate "@atom.mx.path" } with { ok: true }
-    => { file: @atom.mx.filename, valid: @check.exitCode == 0, error: @check.stderr }
+  >> FATAL: Exit loop if task is too short
+  when @taskLen < 1000 => [
+    log `FATAL: Task too short (@taskLen chars) - template likely failed`
+    let @_ = @logEvent(@eventsFile, {
+      event: "fatal_error",
+      id: @iterationId,
+      error: "task_build_failed",
+      taskLength: @taskLen
+    })
+    => done `FATAL: Task build failed - got @taskLen chars, expected 1000+`
   ]
 
-  >> Report validation results
-  var @failures = for @v in @validation when !@v.valid => @v
-  var @passed = @validation.length - @failures.length
-  log `Validation: @passed/@validation.length passed`
+  var @taskPreview = @task.slice(0, 200)
+  log `Task preview: @taskPreview...`
 
-  if @failures.length > 0 [
-    log `Validation failures:`
-    for @f in @failures => log `  @f.file: @f.error`
-    let @_ = @logEvent(@eventsFile, { event: "validation_failed", id: @iterationId, failures: @failures.length })
+  >> Agent spawn - skip if dry run
+  if !@dryRun [
+    log `Spawning agent...`
+    let @_ = @logEvent(@eventsFile, { event: "agent_spawned", id: @iterationId, taskLen: @taskLen })
+    let @result = @claudePollEvent(@task, "opus", @base, "Read,Write,Edit,Glob,Grep,Bash", @eventsFile, "iteration_done", @iterationId) | log
+    log `Agent completed: @iterationId`
+    let @_ = @logEvent(@eventsFile, { event: "agent_completed", id: @iterationId })
   ]
 
-  >> Commit if all atoms are valid
-  if @failures.length == 0 [
-    log `Committing changes...`
-    run cmd { git add @base/docs/src/atoms/security/ @base/j2bd/security/ }
-    run cmd { git commit -m "j2bd security: iteration @mx.loop.iteration" } with { ok: true }
-    let @_ = @logEvent(@eventsFile, { event: "commit", id: @iterationId })
-    log `Committed iteration @mx.loop.iteration`
+  if @dryRun [
+    log `DRY RUN: Would spawn agent with @taskLen char task`
+    let @_ = @logEvent(@eventsFile, { event: "dry_run_skip", id: @iterationId, taskLen: @taskLen })
+    log `DRY RUN: Skipping validation and commit`
+  ]
+
+  >> Post-agent validation (backpressure check - agent should have committed already)
+  if !@dryRun [
+    >> Re-read atoms to get any new ones the agent created
+    let @currentAtoms = <@base/docs/src/atoms/security/*.md>
+
+    >> Validate all atoms parse correctly
+    log `Validating @currentAtoms.length atoms...`
+    let @validation = for parallel(5) @atom in @currentAtoms [
+      let @path = @atom.mx.path
+      let @check = run cmd { mlld validate "@path" } with { ok: true }
+      => { file: @atom.mx.filename, valid: @check.exitCode == 0, error: @check.stderr }
+    ]
+
+    let @failures = for @v in @validation when !@v.valid => @v
+    let @passed = @validation.length - @failures.length
+    log `Validation: @passed/@validation.length passed`
+
+    if @failures.length > 0 [
+      log `WARNING: Validation failures (agent should have fixed these):`
+      for @f in @failures => log `  @f.file: @f.error`
+      let @_ = @logEvent(@eventsFile, { event: "validation_warning", id: @iterationId, failures: @failures.length })
+    ]
+
+    >> Show recent events from this iteration for visibility
+    log `Events from this iteration:`
+    let @events = run cmd { grep "@iterationId" "@eventsFile" | tail -5 } with { ok: true }
+    log @events.stdout
   ]
 
   log `--- Iteration @mx.loop.iteration complete ---`

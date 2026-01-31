@@ -44,18 +44,52 @@ Options:
 - Working ```mlld examples (they will be validated)
 - Note implementation status if feature is partial/planned
 
-## After Your Work
+## Workflow
 
-1. Update plan.md to reflect what you did
-2. Add any learnings to agent.md
-3. If you created/modified atoms, they'll be validated automatically
-
-## CRITICAL: Signal Completion
-
-When you're done, you MUST append this event to signal completion:
-
+### 1. Log what you're doing
 ```bash
-echo '{"event": "iteration_done", "id": "@iterationId", "action": "<brief description of what you did>"}' >> @eventsFile
+echo '{"event": "work_started", "id": "@iterationId", "task": "<what you are doing>"}' >> @eventsFile
+```
+
+### 2. Do the work
+- Write or update atoms
+- Update plan.md to reflect what you did
+- Add any learnings to agent.md
+
+### 3. Validate your work
+Run validation on any atoms you created or modified:
+```bash
+mlld validate docs/src/atoms/security/<atom-name>.md
+```
+
+Log the result:
+```bash
+echo '{"event": "validation_run", "id": "@iterationId", "passed": true}' >> @eventsFile
+```
+
+If validation fails, fix the issue before proceeding.
+
+### 4. Commit your changes
+Stage and commit with a normal descriptive message (no special prefixes):
+```bash
+git add docs/src/atoms/security/ j2bd/security/plan.md j2bd/security/agent.md
+git commit -m "<what you did>"
+```
+
+Examples of good commit messages:
+- "Add labels-overview security documentation"
+- "Fix guard-composition examples to use correct syntax"
+- "Update security plan: mark labels-overview complete"
+
+Log the commit:
+```bash
+HASH=$(git rev-parse --short HEAD)
+echo "{\"event\": \"commit_made\", \"id\": \"@iterationId\", \"hash\": \"$HASH\", \"message\": \"<your commit message>\"}" >> @eventsFile
+```
+
+### 5. Signal completion
+```bash
+echo '{"event": "iteration_done", "id": "@iterationId", "action": "<summary of what you did>"}' >> @eventsFile
 ```
 
 The orchestrator is polling for this event. If you don't write it, the iteration will hang forever.
@@ -66,4 +100,6 @@ The orchestrator is polling for this event. If you don't write it, the iteration
 - Examples must actually work. If they don't, either fix the example or note it's blocked.
 - Keep atoms focused. One concept per atom.
 - Use strict mode (bare directives) in examples, not markdown mode.
+- ALWAYS validate before committing.
+- ALWAYS commit your work before signaling completion.
 - ALWAYS write the iteration_done event when finished.
