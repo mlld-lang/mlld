@@ -39,4 +39,4 @@ execute('./script.mld', { topic: 'foo', count: 5 });
 mlld run myscript --topic foo --count 5
 ```
 
-Unknown flags become `@payload` fields automatically.
+Unknown flags become `@payload` fields automatically. Kebab-case flags are converted to camelCase (e.g., `--dry-run` becomes `@dryRun`).

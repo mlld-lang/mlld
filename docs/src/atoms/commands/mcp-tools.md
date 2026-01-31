@@ -9,6 +9,8 @@ updated: 2026-01-24
 qa_tier: 2
 ---
 
+> **Requires MCP server context.** Run `mlld mcp <module>` to serve tools. See `mlld howto mcp`.
+
 Tool collections define what an agent sees and how tools behave.
 
 ```mlld

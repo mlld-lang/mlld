@@ -316,7 +316,7 @@ var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 Import from modules (modules should declare `export { ... }` to list public bindings; the auto-export fallback for modules without manifests is still supported for now):
 
 ```mlld
-import { @parallel, @retry } from @mlld/core
+import { @sortBy, @unique } from @mlld/array
 import @company/utils as @utils
 ```
 

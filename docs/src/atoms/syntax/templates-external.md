@@ -5,9 +5,9 @@ brief: Use exe with template keyword for .att files
 category: syntax
 parent: templates
 tags: [templates, files, att, interpolation]
-related: [exe-simple, modules-import-templates, mistake-att-angle-bracket]
+related: [exe-simple, modules-import-templates, mistake-att-angle-bracket, escaping-at]
 related-code: [interpreter/eval/exe.ts, grammar/patterns/exe.peggy]
-updated: 2026-01-12
+updated: 2026-01-31
 qa_tier: 2
 ---
 
@@ -38,6 +38,7 @@ end
 
 - Parameters from `exe @func(params)` are automatically available as `@param` in the template
 - `.att` supports `<file.md>` references, pipes, and `for`/`when` blocks
+- Use `@@` or `\@` to output a literal `@` symbol (e.g., `user@@example.com`)
 - Never load `.att` files with angle brackets - use `exe ... = template` instead
 
 **When to use external templates:**

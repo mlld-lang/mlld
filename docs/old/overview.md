@@ -87,12 +87,12 @@ When you need loops, error handling, or complex algorithms, modules provide thes
 
 ```mlld
 # Instead of language features, use modules:
-/import { forEach, parallel, retry } from @mlld/core
+/import { @unique, @sortBy } from @mlld/array
 /import { validateResponse, improveAnswer } from @company/ai-tools
 
 # Orchestrate with simple, readable syntax:
-/var @results = /run @parallel(@llmCalls, { concurrency: 3 })
-/var @refined = /run @validateResponse(@results) 
+/var @sorted = @sortBy(@llmCalls, "priority")
+/var @refined = /run @validateResponse(@sorted) 
 ```
 
 This separation keeps mlld scripts clean and focused on orchestration while modules handle implementation details.
@@ -208,36 +208,31 @@ Recent changes:
 
 mlld's true power comes from modules that encapsulate complex operations while keeping your scripts simple:
 
-### Example: Document Generation Module
+### Example: Array Operations Module
 
 ```javascript
-// @mlld/docgen module
-export async function generateDocs(config) {
-  const { dirs, template, format } = config;
-  const results = [];
-  
-  for (const dir of dirs) {
-    const files = await scanDirectory(dir);
-    const analysis = await analyzeCode(files);
-    const doc = await template({ dir, files, analysis });
-    results.push({ dir, doc });
-  }
-  
-  return format === 'summary' ? summarize(results) : results;
+// @mlld/array module
+export function sortBy(items, key) {
+  return [...items].sort((a, b) => {
+    if (a[key] < b[key]) return -1;
+    if (a[key] > b[key]) return 1;
+    return 0;
+  });
+}
+
+export function unique(items) {
+  return [...new Set(items)];
 }
 ```
 
 Used in mlld:
 ```mlld
-@import { generateDocs } from @mlld/docgen
+/import { @sortBy, @unique } from @mlld/array
 
-@text docs = @run @generateDocs({
-  dirs: ["src", "lib", "api"],
-  template: @techWriterPrompt,
-  format: "summary"
-})
+/var @sorted = @sortBy(@items, "priority")
+/var @uniq = @unique(@sorted)
 
-@add @docs
+/show @uniq
 ```
 
 ### Example: Multi-Model Consensus Module

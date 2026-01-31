@@ -5,9 +5,9 @@ brief: Output literal @ without variable interpolation
 category: syntax
 parent: escaping
 tags: [escaping, templates, special-characters]
-related: [templates-basics, escaping-defaults]
+related: [templates-basics, templates-external, escaping-defaults]
 related-code: []
-updated: 2026-01-11
+updated: 2026-01-31
 qa_tier: 1
 ---
 
@@ -16,11 +16,10 @@ qa_tier: 1
 **Solutions:**
 
 ```mlld
->> 1. Use a helper function
-exe @at(name) = js { return "@" + name }
-var @mention = @at("username")    >> "@username"
+>> 1. Use @@ escape sequence (recommended)
+var @email = `user@@example.com`  >> "user@example.com"
 
->> 2. Use escape sequence in templates
+>> 2. Use \@ escape sequence
 var @email = `user\@example.com`  >> "user@example.com"
 
 >> 3. String concatenation via variables
@@ -29,7 +28,18 @@ var @name = "username"
 var @handle = `@at@name`          >> "@username"
 ```
 
+Both `@@` and `\@` work in all template contexts: backtick strings, double-colon strings, and `.att` files.
+
+**In .att template files:**
+
+```att
+>> prompts/email.att
+Contact: user@@example.com
+Follow @@username on Twitter
+```
+
 **Common use cases:**
 - Email addresses in output
 - Social media @mentions
+- mlld code examples in prompts
 - Literal @ in generated code

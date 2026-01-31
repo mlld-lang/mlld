@@ -10,6 +10,8 @@ updated: 2026-01-24
 qa_tier: 2
 ---
 
+> **Requires MCP server context.** Run `mlld mcp <module>` to serve tools. See `mlld howto mcp`.
+
 The `@mx.tools` namespace tracks tool call history and availability during execution.
 
 **@mx.tools.calls - Call history:**

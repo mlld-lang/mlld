@@ -148,12 +148,12 @@ Updated: @now
 Transform API responses through validation and formatting:
 
 ```mlld
-/import { validateSchema, retry } from @mlld/core
+/import { @unique, @filter } from @mlld/array
 
 /exe @fetchUsers() = run {curl -s "https://api.example.com/users"}
 
 /exe @validateUsers(data) = when [
-  @validateSchema(@data, @userSchema) => @data
+  @data && @data.length() > 0 => @data
   @mx.try < 3 => retry "Invalid user data format"
   * => []
 ]

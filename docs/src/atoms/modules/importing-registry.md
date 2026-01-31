@@ -14,7 +14,7 @@ qa_tier: 2
 **Registry modules:**
 
 ```mlld
-import { @parallel, @retry } from @mlld/core
+import { @sortBy, @unique } from @mlld/array
 import @corp/utils as @corp
 
 >> With version

@@ -173,10 +173,10 @@ mlld provides conditional logic through operators and routing:
 This allows mlld to function as a logical router - making decisions and routing data based on runtime conditions. Combined with modules for complex algorithms:
 
 ```mlld
-/import { validateSchema, retry, parallel } from @mlld/core
+/import { @unique, @sortBy } from @mlld/array
 
-/var @results = @parallel(@tasks, { "concurrency": 5 })
-/var @validated = @validateSchema(@results, @schema)
+/var @sorted = @sortBy(@results, "priority")
+/var @uniqItems = @unique(@sorted)
 ```
 
 Your `.mld` files stay focused on orchestration and routing. Implementation complexity lives in testable, reusable modules.

@@ -158,7 +158,7 @@ Module imports for code reuse. Namespace imports avoid collisions.
 
 ```mlld
 >> Registry modules
-import { @parallel, @retry } from @mlld/core
+import { @sortBy, @unique } from @mlld/array
 import @corp/utils as @corp
 
 >> Local files

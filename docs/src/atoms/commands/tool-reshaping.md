@@ -10,6 +10,8 @@ updated: 2026-01-24
 qa_tier: 2
 ---
 
+> **Requires MCP server context.** Run `mlld mcp <module>` to serve tools. See `mlld howto mcp`.
+
 Reshape tool interfaces using `bind` and `expose` to control what parameters agents see.
 
 **bind - Pre-fill parameters:**

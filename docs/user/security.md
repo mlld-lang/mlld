@@ -218,7 +218,7 @@ show @sendData("test")  >> Blocked
 
 ## Denied Handlers
 
-Handle guard denials gracefully with `denied =>` branches:
+Handle guard denials gracefully with `denied =>` branches. Note: `deny` is a guard action that blocks an operation; `denied` is a when-condition that tests if we're in a denied context:
 
 ```mlld
 guard @secretBlock before secret = when [

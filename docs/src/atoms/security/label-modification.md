@@ -45,26 +45,21 @@ Adding `untrusted` replaces any existing `trusted` label. Adding `trusted` to al
 
 **Privileged operations:**
 
+Privileged guards can remove protected labels. Currently, only policy-generated guards are privileged:
+
 ```mlld
->> Blessing - remove untrusted, add trusted (privileged)
-guard privileged @validate after src:mcp = when [
-  @schema.valid(@output) => trusted! @output
-  * => deny "Invalid schema"
-]
-
->> Remove specific label (privileged)
-guard privileged @strip after pii = when [
-  @sanitized(@output) => !pii @output
-  * => allow @output
-]
-
->> Clear all non-factual labels (privileged)
-guard privileged @reset after processed = when [
-  * => clear! @output
-]
+policy @securityPolicy = {
+  deny: { labels: ["secret"] }
+}
 ```
 
-Privileged operations require the guard to be declared as privileged.
+Policy guards are automatically privileged and can enforce label removal that user-defined guards cannot.
+
+| Privileged action | Example | Effect |
+|-------------------|---------|--------|
+| Blessing | `=> trusted! @var` | Remove untrusted, add trusted |
+| Label removal | `=> !pii @var` | Remove specific label |
+| Clear labels | `=> clear! @var` | Remove all non-factual labels |
 
 **Trust label asymmetry:**
 
@@ -91,14 +86,16 @@ Labels starting with `src:` are factual - they record provenance facts. `clear!`
 
 **Guard context:**
 
+After guards receive `@output` with the operation result:
+
 ```mlld
-guard privileged @validateMcp after src:mcp = when [
-  @output.data?.valid => trusted! @output
+guard @validateMcp after src:mcp = when [
+  @output.data?.valid => allow @output
   * => deny "Invalid MCP response"
 ]
 ```
 
-The guard uses `after` timing to process output and applies blessing if validation passes.
+The guard uses `after` timing to process output. Note: blessing (`trusted!`) and label removal (`!label`) require privileged guards (policy-generated).
 
 **Trust conflict behavior:**
 

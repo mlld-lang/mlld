@@ -25,7 +25,7 @@ show @welcome(@userName)
 The `exe ... = template` form:
 
 - Automatically makes function parameters available as `@param` in the template
-- Supports `for`/`when` blocks, pipes, and file references inside the template
+- Supports `/for`/`/end` blocks, pipes, and file references inside the template
 - Handles escaping and edge cases correctly
 
 Using angle brackets treats the `.att` file as plain text with no interpolation.

@@ -481,6 +481,151 @@ mlld vars remove API_KEY
 import { GITHUB_TOKEN, NODE_ENV } from @input
 ```
 
+## Environment Commands
+
+### `mlld env`
+
+Manage AI agent environment modules. Environments package credentials, configuration, MCP tools, and security policies for spawning AI agents.
+
+```bash
+# List available environments
+mlld env list
+
+# Create environment from Claude config
+mlld env capture my-claude
+
+# Run agent with prompt
+mlld env spawn my-claude -- "Fix the bug"
+
+# Start interactive session
+mlld env shell my-claude
+```
+
+#### `mlld env list`
+
+List available environment modules.
+
+**Aliases:** `mlld env ls`
+
+```bash
+# Human-readable list
+mlld env list
+
+# JSON output for scripts
+mlld env list --json
+```
+
+Shows environments from:
+- `.mlld/env/` (project-local)
+- `~/.mlld/env/` (global)
+
+**Options:**
+- `--json` - Output as JSON
+
+#### `mlld env capture <name>`
+
+Create an environment module from your current Claude configuration.
+
+```bash
+# Create project-local environment
+mlld env capture my-claude
+
+# Create global environment
+mlld env capture my-claude --global
+```
+
+**What it does:**
+1. Extracts OAuth token from `~/.claude/.credentials.json`
+2. Stores token securely in macOS Keychain
+3. Copies `settings.json`, `CLAUDE.md`, `hooks.json`
+4. Generates `module.yml` and `index.mld`
+
+**Options:**
+- `--global` - Create in `~/.mlld/env/` instead of `.mlld/env/`
+
+**Output structure:**
+```
+.mlld/env/my-claude/
+├── module.yml          # Module manifest (type: environment)
+├── index.mld           # Entry point with @spawn, @shell exports
+└── .claude/            # Copied config files
+    ├── settings.json
+    ├── CLAUDE.md
+    └── hooks.json
+```
+
+#### `mlld env spawn <name> -- <prompt>`
+
+Run an agent with a prompt using the environment's credentials and configuration.
+
+```bash
+# Basic usage
+mlld env spawn my-claude -- "Fix the authentication bug"
+
+# Equivalent to running claude -p with the environment's config
+mlld env spawn my-claude -- claude -p "Refactor the tests"
+```
+
+The environment module's `@spawn` export is invoked with the prompt. Credentials are injected from the keychain.
+
+#### `mlld env shell <name>`
+
+Start an interactive agent session.
+
+```bash
+mlld env shell my-claude
+```
+
+Invokes the environment module's `@shell` export, which typically starts an interactive Claude session with the captured configuration.
+
+#### Environment Module Structure
+
+Environment modules use `type: environment` in their manifest:
+
+```yaml
+# module.yml
+name: my-claude
+type: environment
+about: "Development Claude environment"
+version: 1.0.0
+entry: index.mld
+```
+
+Required exports:
+- `@spawn(prompt)` - Run agent with prompt
+- `@shell()` - Start interactive session
+
+Optional exports:
+- `@mcpConfig()` - Return MCP server configuration
+
+**Example index.mld:**
+```mlld
+/needs { cmd: [claude] }
+/policy @env = {
+  auth: {
+    claude: { from: "keychain:mlld-env/my-claude", as: "CLAUDE_CODE_OAUTH_TOKEN" }
+  }
+}
+
+/exe @spawn(prompt) = run { \
+  CLAUDE_CONFIG_DIR=@fm.dir/.claude \
+  claude -p @prompt
+} using auth:claude
+
+/exe @shell() = run { \
+  CLAUDE_CONFIG_DIR=@fm.dir/.claude \
+  claude
+} using auth:claude
+
+/export { @spawn, @shell }
+```
+
+#### Security
+
+- Tokens are stored in macOS Keychain, not in files
+- Credentials are injected at runtime via `using auth:*` syntax
+- Config files (settings, hooks) are copied, not credentials
+
 ## Registry Commands
 
 ### `mlld registry`
