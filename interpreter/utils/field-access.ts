@@ -305,8 +305,10 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         console.error('[field-access] length access', {
           isVariable: isVariable(value),
           rawType: typeof rawValue,
+          isArray: Array.isArray(rawValue),
           rawKeys: rawValue && typeof rawValue === 'object' ? Object.keys(rawValue) : null,
-          rawValueTypeField: (rawValue as any)?.type
+          rawValueTypeField: (rawValue as any)?.type,
+          hasStructuredWrapper: !!structuredWrapper
         });
         try {
           const preview =
@@ -333,6 +335,14 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         } catch {}
       }
       if (structuredWrapper) {
+        // Handle .length on arrays - return element count, not content string length
+        if (name === 'length' && (structuredWrapper.type === 'array' || Array.isArray(rawValue))) {
+          const arrData = Array.isArray(rawValue) ? rawValue : (structuredWrapper.data as any[]);
+          if (Array.isArray(arrData)) {
+            accessedValue = arrData.length;
+            break;
+          }
+        }
         if (name === 'text') {
           if (
             rawValue &&
@@ -480,7 +490,25 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       
       // Handle LoadContentResult objects - access metadata properties
       if (isLoadContentResult(rawValue)) {
-        // First check if it's a metadata property that exists directly on LoadContentResult
+        // For JSON files, check if property exists on parsed JSON first
+        // This handles .length on arrays correctly (returns element count, not string length)
+        if (rawValue.json !== undefined) {
+          const jsonData = rawValue.json;
+          if (jsonData && typeof jsonData === 'object') {
+            // For arrays, handle .length specially
+            if (Array.isArray(jsonData) && name === 'length') {
+              accessedValue = jsonData.length;
+              break;
+            }
+            // Check for property on the JSON object
+            if (name in jsonData) {
+              accessedValue = jsonData[name];
+              break;
+            }
+          }
+        }
+
+        // Then check if it's a metadata property that exists directly on LoadContentResult
         if (name in rawValue) {
           const result = (rawValue as any)[name];
           if (result !== undefined) {
@@ -488,16 +516,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             break;
           }
         }
-        
-        // For JSON files, try to access properties in the parsed JSON
-        if (rawValue.json !== undefined) {
-          const jsonData = rawValue.json;
-          if (jsonData && typeof jsonData === 'object' && name in jsonData) {
-            accessedValue = jsonData[name];
-            break;
-          }
-        }
-        
+
         accessedValue = missingValue;
         break;
       }
@@ -571,6 +590,15 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         });
       }
       
+      // Handle plain arrays - check .length before falling through to generic object access
+      if (Array.isArray(rawValue) && name === 'length') {
+        if (process.env.MLLD_DEBUG_FIX === 'true') {
+          console.error('[field-access] plain array length', { length: rawValue.length });
+        }
+        accessedValue = rawValue.length;
+        break;
+      }
+
       // Handle regular objects (including Variables with type: 'object')
       if (!(name in rawValue)) {
         if (
@@ -585,7 +613,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         accessedValue = missingValue;
         break;
       }
-      
+
       accessedValue = rawValue[name];
       break;
     }
