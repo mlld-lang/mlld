@@ -1,13 +1,215 @@
 import type { Environment } from '../env/Environment';
 import { evaluate, type EvaluationContext } from '../core/interpreter';
 import { MlldDirectiveError } from '../../core/errors/MlldDirectiveError';
-import { isEqual, toNumber, isTruthy } from './expression';
 import {
   createEvaluatorResult,
   mergeEvaluatorDescriptors,
   type EvaluatorResult
 } from '../utils/evaluator-result';
 import { executeParallelExecInvocations } from './helpers/parallel-exec';
+import type { Variable } from '@core/types/variable';
+import {
+  isTextLike,
+  isArray as isArrayVariable,
+  isObject as isObjectVariable,
+  isCommandResult,
+  isPipelineInput
+} from '@core/types/variable';
+import { asText, assertStructuredValue, isStructuredValue } from '../utils/structured-value';
+
+/**
+ * Determines if a value is truthy according to mlld rules
+ */
+export function isTruthy(value: any): boolean {
+  // Handle Variable types
+  if (value && typeof value === 'object' && 'type' in value && 'name' in value) {
+    const variable = value as Variable;
+
+    // Type-specific truthiness for Variables
+    if (isTextLike(variable)) {
+      // Check for mlld falsy string values
+      const str = variable.value;
+      if (str === '' || str.toLowerCase() === 'false' || str === '0') {
+        return false;
+      }
+      return true;
+    } else if (isArrayVariable(variable)) {
+      return variable.value.length > 0;
+    } else if (isObjectVariable(variable)) {
+      return Object.keys(variable.value).length > 0;
+    } else if (isCommandResult(variable)) {
+      // Command results are truthy if they have output
+      return variable.value.trim().length > 0;
+    } else if (isPipelineInput(variable)) {
+      assertStructuredValue(variable.value, 'expression:isTruthy:pipeline-input');
+      return asText(variable.value).length > 0;
+    }
+
+    // For other variable types, use their value
+    return isTruthy(variable.value);
+  }
+
+  // Handle direct values
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value !== 0 && !isNaN(value);
+  }
+
+  if (typeof value === 'string') {
+    // Wildcard is always true
+    if (value === '*') {
+      return true;
+    }
+    // Empty string is false
+    if (value === '') {
+      return false;
+    }
+    // String "false" is false (case insensitive)
+    if (value.toLowerCase() === 'false') {
+      return false;
+    }
+    // String "0" is false
+    if (value === '0') {
+      return false;
+    }
+    // All other strings are true
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  // Handle StructuredValue types (e.g., from method calls like .includes())
+  if (isStructuredValue(value)) {
+    // For boolean StructuredValues, use the actual data value
+    if (value.type === 'boolean') {
+      return value.data === true;
+    }
+    // For other StructuredValues, check their text representation
+    return isTruthy(value.data);
+  }
+
+  if (typeof value === 'object') {
+    return Object.keys(value).length > 0;
+  }
+
+  // Default to JavaScript truthiness
+  return !!value;
+}
+
+/**
+ * Extract the raw value from a Variable or return the value as-is
+ */
+function extractValue(value: unknown): unknown {
+  if (value && typeof value === 'object' && 'type' in value && 'value' in value) {
+    const variable = value as Variable;
+    return extractValue(variable.value);
+  }
+  if (isStructuredValue(value)) {
+    return value.data ?? value.text;
+  }
+  return value;
+}
+
+/**
+ * mlld equality comparison
+ * Follows mlld's type coercion rules:
+ * - "true" == true
+ * - "false" == false
+ * - null == undefined
+ * - Numbers are compared numerically
+ * - Strings are compared as strings
+ */
+export function isEqual(a: unknown, b: unknown): boolean {
+  // Extract Variable values
+  const aValue = extractValue(a);
+  const bValue = extractValue(b);
+
+  // Handle null/undefined equality
+  if (aValue === null || aValue === undefined) {
+    return bValue === null || bValue === undefined;
+  }
+  if (bValue === null || bValue === undefined) {
+    return false;
+  }
+
+  // Handle boolean string coercion
+  if (typeof aValue === 'string' && typeof bValue === 'boolean') {
+    return (aValue === 'true' && bValue === true) || (aValue === 'false' && bValue === false);
+  }
+  if (typeof bValue === 'string' && typeof aValue === 'boolean') {
+    return (bValue === 'true' && aValue === true) || (bValue === 'false' && aValue === false);
+  }
+
+  // Handle numeric string comparison
+  if (typeof aValue === 'string' && typeof bValue === 'number') {
+    const numA = Number(aValue);
+    return !isNaN(numA) && numA === bValue;
+  }
+  if (typeof bValue === 'string' && typeof aValue === 'number') {
+    const numB = Number(bValue);
+    return !isNaN(numB) && numB === aValue;
+  }
+
+  // Default to strict equality
+  return aValue === bValue;
+}
+
+/**
+ * Convert a value to a number for numeric comparisons
+ * Follows mlld's type coercion rules:
+ * - Parse strings to numbers
+ * - true → 1, false → 0
+ * - null → 0, undefined → NaN
+ * - Non-numeric strings → NaN
+ */
+export function toNumber(value: unknown): number {
+  // Use extractValue to handle both Variables and StructuredValues
+  const extracted = extractValue(value);
+
+  // Handle null and undefined
+  if (extracted === null) {
+    return 0;
+  }
+  if (extracted === undefined) {
+    return NaN;
+  }
+
+  // Handle booleans
+  if (typeof extracted === 'boolean') {
+    return extracted ? 1 : 0;
+  }
+
+  // Handle numbers
+  if (typeof extracted === 'number') {
+    return extracted;
+  }
+
+  // Handle strings
+  if (typeof extracted === 'string') {
+    // Special case for boolean strings
+    if (extracted === 'true') {
+      return 1;
+    }
+    if (extracted === 'false') {
+      return 0;
+    }
+    // Try to parse as number
+    const num = Number(extracted);
+    return num;
+  }
+
+  // For objects and arrays, return NaN
+  return NaN;
+}
 
 /**
  * Unified expression evaluator for all expression types from the unified grammar

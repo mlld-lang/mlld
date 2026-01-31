@@ -16,7 +16,7 @@ import { EscapingStrategyFactory, InterpolationContext } from '../core/interpola
 import { interpreterLogger as logger } from '@core/utils/logger';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { evaluateConditionalInclusion } from '../eval/conditional-inclusion';
-import { isTruthy } from '../eval/expression';
+import { isTruthy } from '../eval/expressions';
 import { classifyShellValue } from '../utils/shell-value';
 import * as shellQuote from 'shell-quote';
 
@@ -731,8 +731,8 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         pushPart(strategy.escape(stringValue));
       } else if (node.type === 'UnaryExpression') {
         // Handle unary expressions (e.g., !@var, !@arr.includes("x"))
-        const { evaluateExpression } = await import('../eval/expression');
-        const result = await evaluateExpression(node as any, env, { isExpression: true });
+        const { evaluateUnifiedExpression } = await import('../eval/expressions');
+        const result = await evaluateUnifiedExpression(node as any, env, { isExpression: true });
         const stringValue = String(result.value);
         const strategy = EscapingStrategyFactory.getStrategy(context);
         pushPart(strategy.escape(stringValue));

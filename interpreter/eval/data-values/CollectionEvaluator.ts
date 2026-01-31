@@ -173,7 +173,7 @@ export class CollectionEvaluator {
             if (isStructuredValue(evaluated)) {
               evaluated = unwrapStructuredPrimitive(evaluated);
             }
-            const { isTruthy } = await import('../expression');
+            const { isTruthy } = await import('../expressions');
             if (isTruthy(evaluated)) {
               evaluatedObj[entry.key] = evaluated;
             }

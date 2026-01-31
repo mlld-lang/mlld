@@ -7,7 +7,7 @@
 
 import { MlldDirectiveError } from '@core/errors';
 import { asText, asData, isStructuredValue } from './structured-value';
-import { toNumber } from '../eval/expression';
+import { toNumber } from '../eval/expressions';
 
 /**
  * Check if a value is a plain object (not null, not array, not special type)
