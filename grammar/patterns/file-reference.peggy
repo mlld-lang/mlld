@@ -26,7 +26,13 @@ FileReferenceInterpolation "file reference interpolation"
       const closingIndex = rest.indexOf('>');
       if (closingIndex === -1) return false; // No closing >
 
-      let content = rest.substring(0, closingIndex).trim();
+      // Get raw content before trimming to check for newlines
+      const rawContent = rest.substring(0, closingIndex);
+      // Fail if content contains newlines - file references must be on a single line
+      // This prevents <...> from matching across line boundaries into unrelated content
+      if (/[\n\r]/.test(rawContent)) return false;
+
+      let content = rawContent.trim();
       // Exclude HTML comments like <!-- ... -->
       if (content.startsWith('!')) return false;
 
@@ -37,7 +43,8 @@ FileReferenceInterpolation "file reference interpolation"
       // Detect HTML/XML tag patterns - these should NOT be treated as file references
       // HTML tags have: tagname followed by space+attributes (e.g., <input type="...">)
       // Match pattern: word at start, then space, then attr="value" or attr='value' pattern
-      if (/^[a-zA-Z][a-zA-Z0-9-]*\s+[a-zA-Z][-a-zA-Z0-9]*\s*=\s*["']/.test(content)) {
+      // Note: Include underscores in tag/attribute names for custom XML elements (e.g., MLLD_GUIDE)
+      if (/^[a-zA-Z][a-zA-Z0-9_-]*\s+[a-zA-Z][-a-zA-Z0-9_]*\s*=\s*["']/.test(content)) {
         return false;
       }
 
@@ -157,6 +164,7 @@ UnifiedAngleBracketContent "Unified angle bracket content"
 
 // Literal angle brackets when not a file reference
 // Used when content doesn't match file reference patterns (no . * or @)
+// OR when content matches XML/HTML tag patterns (with attributes)
 // Only matches short, self-contained literals to avoid greedy consumption
 AngleBracketLiteral "Literal angle bracket text"
   = "<" &{
@@ -174,13 +182,27 @@ AngleBracketLiteral "Literal angle bracket text"
       // Fail if content contains newlines (likely spanning multiple logical elements)
       if (/[\n\r]/.test(content)) return false;
 
+      // Check for XML/HTML tag pattern with attributes
+      // This allows <MLLD_GUIDE version="1.0.0"> to be treated as literal text
+      // Match pattern: word at start, then space, then attr="value" or attr='value' pattern
+      // Note: Include underscores in tag/attribute names for custom XML elements
+      if (/^[a-zA-Z][a-zA-Z0-9_-]*\s+[a-zA-Z][-a-zA-Z0-9_]*\s*=\s*["']/.test(content)) {
+        return true;  // XML/HTML with attributes - allow even if it has . * @
+      }
+
       // Fail if content looks like a file reference (has . * or @)
       if (/[.*@]/.test(content)) return false;
 
       return true;
-    } chars:(!">" char:. { return char; })* ">" {
+    } chars:AngleBracketLiteralChar* ">" {
       return helpers.createNode(NodeType.Text, {
         content: '<' + chars.join('') + '>',
         location: location()
       });
     }
+
+// Character inside angle bracket literal - processes escape sequences
+AngleBracketLiteralChar "angle bracket literal character"
+  = StringEscapeSequence  // Process string escapes like \n, \t, \.
+  / EscapeSequence       // Process mlld syntax escapes like \@ and @@
+  / !">" char:. { return char; }  // Regular character

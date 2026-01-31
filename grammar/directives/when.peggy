@@ -188,8 +188,8 @@ WhenSimpleForm
     }
 
 // -------------------------------------------------------------
-// DEPRECATED FORM: /when <condition> [block] - now requires =>
-// Error recovery for old syntax that used space instead of arrow
+// ERROR: /when <condition> [block] - should use /if for imperative blocks
+// Error recovery for users trying to use when like if
 // -------------------------------------------------------------
 
 WhenSimpleBlockForm
@@ -197,24 +197,14 @@ WhenSimpleBlockForm
       // Extract condition text for error message
       const conditionText = helpers.reconstructRawString(condition);
       helpers.mlldError(
-        `Invalid when syntax: missing '=>' before block.\n\n` +
-        `Change:  when ${conditionText} [...]  =>  when ${conditionText} => [...]\n\n` +
-        `The 'when' directive has these forms:\n\n` +
-        `1. Single-line (condition => action):\n` +
+        `Use 'if' for imperative blocks, not 'when'.\n\n` +
+        `Change:  when ${conditionText} [...]  =>  if ${conditionText} [...]` +
+        `\n\n'when' is for pattern matching and value expressions:\n` +
         `   when @ready => show "go!"\n` +
-        `   when @error => [log @error; => null]\n\n` +
-        `2. First-match list:\n` +
-        `   when [\n` +
-        `     @x > 100 => "large"\n` +
-        `     @x > 10 => "medium"\n` +
-        `     * => "small"\n` +
-        `   ]\n\n` +
-        `3. Match form:\n` +
-        `   when @status: [\n` +
-        `     "ok" => "ready"\n` +
-        `     * => "unknown"\n` +
-        `   ]`,
-        "=>",
+        `   when [@x > 100 => "large"; * => "small"]\n\n` +
+        `'if' is for imperative blocks:\n` +
+        `   if ${conditionText} [log "action"; do @something]`,
+        "if",
         location()
       );
     }

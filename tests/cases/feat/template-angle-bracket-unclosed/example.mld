@@ -1,0 +1,2 @@
+show `<`
+when @x > 0 => show "ok"

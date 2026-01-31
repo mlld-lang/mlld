@@ -1,1 +1,1 @@
-Invalid when syntax: missing '=>' before block
+Use 'if' for imperative blocks, not 'when'.

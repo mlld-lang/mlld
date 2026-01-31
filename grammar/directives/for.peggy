@@ -46,11 +46,11 @@ SlashFor "for directive"
 
   // Error recovery patterns
   / DirectiveContext ForKeyword _ pattern:ForIterationPattern _ !"=>" {
-      helpers.mlldError("Missing '=>' in for directive. Expected: for @var in @collection => action", "=>", location());
+      helpers.mlldError("Missing '=>' or '[' in for directive. Expected: for @var in @collection => action  OR  for @var in @collection [...]", "=> or [", location());
     }
   / DirectiveContext ForKeyword _ "@" id:BaseIdentifier _ !"in" {
-      helpers.mlldError("Missing 'in' in for directive. Expected: for @var in @collection => action", "in", location());
+      helpers.mlldError("Missing 'in' in for directive. Expected: for @var in @collection => action  OR  for @var in @collection [...]", "in", location());
     }
   / DirectiveContext ForKeyword _ !"@" {
-      helpers.mlldError("Invalid for syntax. Expected: for @var in @collection => action", "@", location());
+      helpers.mlldError("Invalid for syntax. Expected: for @var in @collection => action  OR  for @var in @collection [...]", "@", location());
     }
