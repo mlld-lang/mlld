@@ -17,7 +17,7 @@ Security features have natural dependencies:
 
 ### Labels (Priority 1)
 - [x] labels-overview - what labels are, why they matter
-- [ ] labels-source-auto - src:mcp, src:exec, src:file, etc.
+- [x] labels-source-auto - src:mcp, src:exec, src:file, etc.
 - [ ] labels-sensitivity - secret, pii, sensitive
 - [ ] labels-trust - trusted/untrusted mechanics
 - [ ] labels-propagation - how labels flow through transforms
@@ -61,6 +61,7 @@ Security features have natural dependencies:
 ## Completed
 
 - [x] labels-overview - foundation of the security model, label categories, declaration syntax, propagation, security check flow
+- [x] labels-source-auto - automatic source labels (src:file, src:exec, dir:*), taint vs labels distinction
 
 ## Blocked
 
@@ -74,3 +75,4 @@ Security features have natural dependencies:
 - `exe <label> @name(params) = ...` syntax works, but only with specific RHS patterns (templates, when, run blocks) - not with bare `show @var`.
 - Label names on exe must be single identifiers like `network`, `destructive`, not namespaced like `net:w`.
 - The v4 spec mentions `net:w` but current implementation uses `network`, `destructive` etc.
+- Policy syntax: spec shows `policy @name = { ... }` but impl requires `var @config = { ... }` + `policy @p = union(@config)`

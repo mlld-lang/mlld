@@ -61,6 +61,9 @@ When writing atoms, note what's implemented vs planned.
 - `exe <label> @name(params) = ...` works but only with specific RHS (templates, when, run blocks)
 - Label names on exe must be identifiers like `network`, `destructive` - not namespaced like `net:w`
 - The v4 spec mentions `net:w` but implementation uses plain identifiers
+- Policy syntax differs from spec: use `var @config = {...}` + `policy @p = union(@config)` not `policy @name = {...}`
+- Testing taint: use `show @var.mx.taint | @json` to see full provenance
+- Taint includes both source markers (src:file, dir:*) AND user labels (secret, pii)
 
 ### 2026-01-30
 - Initial setup of j2bd loop
