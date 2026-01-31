@@ -113,7 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - AST stores withClause at `foreachExpression.execInvocation.withClause` as array of inlineValue objects
 - **`sh {}` blocks in `for parallel()`**: `sh {}` blocks now execute concurrently in parallel for loops. Previously, `sh {}` used `spawnSync()` which blocked the Node.js event loop, causing `for parallel(N)` to serialize all iterations.
 - **Empty comments consuming next line**: Comments with no content (`>>` alone) no longer consume the following line as comment content
-- **Array literals in expressions**: Empty arrays `[]` and array literals now work in ternary expressions and when-first result positions
+- **Array literals in expressions**: Empty arrays `[]` and array literals now work in ternary expressions and when result positions
 - **Ternary with method calls**: `@tier ? @tier.split(",") : []` now parses correctly
 - **Negation with method calls in templates**: `!@arr.includes("c")` in backtick templates now evaluates correctly instead of returning string `"!false"`
 - **for-when in exe blocks**: `let @result = for @x in @arr when ... => @x` now returns the array value, allowing `.length` and other array operations
@@ -135,6 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Variable shadowing in nested scopes**: `let` bindings in nested function scopes no longer clobber outer loop variables. Previously, if a function used `let @t = ...` and the caller had a `for @t in ...` loop, the function's `@t` would overwrite the loop variable on return. Let bindings now never merge back to parent scope.
 
 ### Removed
+- **`when` first-match modifier**: Removed the first-match modifier for `when` blocks and expressions. `when` uses first-match semantics by default.
 - **`.content` accessor on StructuredValue**: Use `.text` instead
   - `.content` was a non-enumerable getter alias that broke in complex data flows
   - `.text` is now the canonical text representation accessor
@@ -154,7 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/if` directive for conditional execution with optional `else` blocks and exe-level returns
 
 ### Changed
-- `when` defaults to first-match behavior for directive and expression forms; `when first` warns and behaves the same
+- `when` defaults to first-match behavior for directive and expression forms; the first-match modifier warns and behaves the same
 
 ### Fixed
 - Guard override lists accept unquoted `@guard` names
@@ -189,7 +190,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `mlld howto` - Show topic tree with intro pinned at top
   - `mlld howto intro` - Introduction with mental model and key concepts
   - `mlld howto <topic>` - Show all help for a specific topic (e.g., `mlld howto when`)
-  - `mlld howto <topic> <subtopic>` - Show specific subtopic (e.g., `mlld howto when first`)
+  - `mlld howto <topic> <subtopic>` - Show specific subtopic (e.g., `mlld howto when-inline`)
   - `mlld howto grep <pattern>` - Search across all atoms for matching lines
   - `mlld qs` / `mlld quickstart` - Quick start guide
   - Built on atom-based documentation architecture (docs/src/atoms/) enabling DRY content reuse
@@ -262,7 +263,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Block syntax for exe and for**: Multi-statement bodies using `[...]` delimiters
   - Exe blocks: `/exe @func() = [let @x = 1; let @y = 2; => @x + @y]` (statements separated by newlines or semicolons)
   - For blocks: `/for @item in @items [show @item; let @count += 1]` (`=>` optional for block bodies)
-  - When-expression exe block actions: `when first [ @cond => [...] ]` supports full exe block semantics (let, side effects, return)
+  - When-expression exe block actions: `when [ @cond => [...] ]` supports full exe block semantics (let, side effects, return)
   - `let @var = value` creates block-scoped variables; `let @var += value` for augmented assignment (arrays, strings, objects, numbers)
   - `=> @value` optional return must be the last statement when present in exe blocks
   - Nested for/when inside blocks supported; inner directives are slashless
@@ -982,7 +983,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Side effects in when expressions now work correctly without duplication
 
 ### Fixed
-- **Grammar ordering for `/when` bare blocks**: Fixed PEG parser ordering issue preventing bare `/when [...]` blocks from working
+- **Grammar ordering for `/when` blocks**: Fixed PEG parser ordering issue preventing block-only `/when [...]` syntax from working
   - `/when [ condition => action ]` now works correctly with all action types including `log`
   
 - **`/show` directive in for loops**: Fixed `/show` not working properly in for loops
@@ -1004,10 +1005,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`/log` directive**: New syntactic sugar for `/output to stdout` for more concise console output (#357)
 
 ### Fixed
-- **When expression behavior**: Bare `when` expressions now correctly evaluate ALL matching conditions
+- **When expression behavior**: Default `when` expressions now correctly evaluate ALL matching conditions
   - Previously, `when [...]` in `/exe` functions incorrectly stopped at the first match (switch-like behavior)
   - Now properly evaluates all conditions and returns the last matching value
-  - Added support for `when first [...]` modifier for explicit switch-case semantics
+  - Added support for a first-match modifier for explicit switch-case semantics
   - Fixed doubled output from `/show` directives in for loops with when expressions
   - Side effects (show, output directives) inside when expressions now execute correctly
 - **Field access in /output directive source**: Fixed field access not working when outputting object fields
@@ -1018,22 +1019,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Previously mlld allowed slashes in directives on the right side (`=> /show` or `= /run` etc)
   - Removed to emphasize the `/` is purposeful meaning "start of line interpreted as mlld"
   - Now if you use `/` on RHS, you get an educational error explaining the `/` is only for start of line
-- **When expression semantics**: Clear distinction between bare `when` and `when first`
+- **When expression semantics**: Clear distinction between default `when` and the first-match modifier
   - `when [...]` - Evaluates ALL matching conditions, returns last value
-  - `when first [...]` - Stops at first match (classic switch behavior)
-  - Updated 11 test files that expected switch-like behavior to use `when first`
-  - Grammar now properly supports `when first` modifier in `/exe` expressions
+  - First-match modifier - Stops at first match (classic switch behavior)
+  - Updated 11 test files that expected switch-like behavior to use the first-match modifier
+  - Grammar now properly supports the first-match modifier in `/exe` expressions
 
 ### Added
 - **None keyword for /when blocks**: New `none` keyword that matches when no other conditions have matched
   - Provides semantic fallback: `/when [ @x > 5 => show "high", none => show "default" ]`
-  - Multiple `none` conditions allowed at end of block: all execute in bare `/when`, first executes in `/when first`
+  - Multiple `none` conditions allowed at end of block: all execute in default `/when`, first executes with the first-match modifier
   - Works in `/exe` when expressions: `/exe @handler() = when: [ @valid => @value, none => "fallback" ]`
   - Must appear as the last condition(s) in a when block (validated at parse time)
   - Cannot appear after wildcard `*` (would be unreachable)
   - Clearer than using `*` or complex negations like `!(@a || @b || @c)`
-- **Test coverage for when expressions**: New test demonstrating bare `when` evaluates all conditions
-  - `tests/cases/valid/slash/when/exe-when-all-matches/` shows the difference between `when` and `when first`
+- **Test coverage for when expressions**: New test demonstrating default `when` evaluates all conditions
+  - `tests/cases/valid/slash/when/exe-when-all-matches/` shows the difference between default `when` and the first-match modifier
 
 ## [2.0.0-rc38]
 ### Added
@@ -1110,9 +1111,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **When/Exe syntax improvements**:
   - Optional colon support for `/when` block and match forms, and for `/exe` RHS when expressions
     - `when [ ... ]` works alongside `when: [ ... ]` (backward compatible)
-  - Grammar support for switch-style `/exe` when-expression modifier: `/exe @fn() = when first [ ... ]`
+  - Grammar support for switch-style `/exe` when-expression first-match modifier
     - Modifier is parsed and attached to `WhenExpression.meta.modifier`
-    - Interpreter behavior for `first` in exe when-expressions will land in the next release
+    - Interpreter behavior for the modifier in exe when-expressions lands in the next release
 
 ### Fixed
 - **Pipeline State Management**: Enhanced state tracking across pipeline stages with proper attempt counting and history preservation
