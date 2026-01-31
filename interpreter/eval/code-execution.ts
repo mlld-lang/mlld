@@ -1,11 +1,18 @@
+import type { ContentNodeArray, SourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import { resolveWorkingDirectory } from '../utils/working-directory';
 
 interface CodeExecutionNode {
   type: 'code';
   language: string;
   code: string;
   hasRunKeyword?: boolean;
+  workingDir?: ContentNodeArray;
+  meta?: {
+    hasWorkingDir?: boolean;
+    workingDirMeta?: unknown;
+  };
 }
 
 /**
@@ -14,13 +21,27 @@ interface CodeExecutionNode {
  */
 export async function evaluateCodeExecution(
   node: CodeExecutionNode,
-  env: Environment
+  env: Environment,
+  sourceLocation?: SourceLocation
 ): Promise<EvalResult> {
   const { language, code } = node;
-  
+
+  // Resolve working directory if provided
+  const workingDirectory = await resolveWorkingDirectory(
+    node.workingDir,
+    env,
+    { sourceLocation, directiveType: 'var' }
+  );
+
   // Delegate to environment's executeCode method which uses the proper executor
   // This ensures we use VM for Node.js, AsyncFunction for JS, etc.
-  const result = await env.executeCode(code, language);
+  const result = await env.executeCode(
+    code,
+    language,
+    undefined, // params
+    undefined, // metadata
+    workingDirectory ? { workingDirectory } : undefined // options
+  );
   
   // Apply automatic JSON parsing for shell commands that return JSON
   // (JavaScript/Node/Python executors handle their own return types)
