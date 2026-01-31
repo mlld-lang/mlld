@@ -2159,9 +2159,19 @@ export class DirectiveVisitor extends BaseVisitor {
             modifiers: []
           });
         }
+      } else if (pathNode.type === 'VariableReference' && pathNode.valueType === 'specialResolver' && pathNode.location) {
+        // Special resolvers like @payload, @state, @INPUT, @NOW, @TIME
+        // These are now properly parsed as VariableReference nodes
+        const originalForm = pathNode.originalForm || `@${pathNode.identifier}`;
+        this.tokenBuilder.addToken({
+          line: pathNode.location.start.line - 1,
+          char: pathNode.location.start.column - 1,
+          length: originalForm.length,
+          tokenType: 'variable',
+          modifiers: ['readonly']
+        });
       } else if (pathNode.type === 'Text' && pathNode.content?.startsWith('@')) {
-        // WORKAROUND: Grammar bug - special resolvers like @payLoad parsed as Text, not VariableReference
-        // TODO: Fix grammar to parse as VariableReference
+        // Backward compatibility: handle any remaining Text nodes starting with @
         this.tokenBuilder.addToken({
           line: pathNode.location.start.line - 1,
           char: pathNode.location.start.column - 1,
@@ -2347,10 +2357,10 @@ export class DirectiveVisitor extends BaseVisitor {
           modifiers: []
         });
 
-        // Token for alias name @agentTemplates (Text node has content without @)
+        // Token for alias name @agentTemplates (now VariableReference with identifier, or legacy Text with content)
         const namespaceNode = Array.isArray(values.namespace) ? values.namespace[0] : values.namespace;
         if (namespaceNode && namespaceNode.location) {
-          const aliasName = namespaceNode.content || directive.raw?.namespace?.slice(1); // Remove @ from raw
+          const aliasName = namespaceNode.identifier || namespaceNode.content || directive.raw?.namespace?.slice(1); // Support both node types
           if (aliasName) {
             // Find @ before the alias name
             const atMatch = directiveText.match(/as\s+(@\w+)/);

@@ -492,8 +492,8 @@ async function processTestCategory(categoryPath, validCategory, categoryType, st
   for (const dir of dirs) {
     const dirPath = path.join(categoryPath, dir);
     const dirEntries = await fs.readdir(dirPath);
-    const hasDirectMdFiles = dirEntries.some(f => f.startsWith('example') && f.endsWith('.md'));
-    
+    const hasDirectMdFiles = dirEntries.some(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
+
     if (hasDirectMdFiles) {
       // This is a test directory
       let testName;

@@ -373,7 +373,7 @@ export class ModuleInstaller {
       // Handle directory module installation
       if (metadata.isDirectory && metadata.directoryFiles) {
         // Validate moduleType against known types, fall back to 'library'
-        const validTypes: ModuleType[] = ['library', 'app', 'command', 'skill'];
+        const validTypes: ModuleType[] = ['library', 'app', 'command', 'skill', 'environment'];
         const rawType = metadata.moduleType as string;
         const moduleType: ModuleType = validTypes.includes(rawType as ModuleType)
           ? (rawType as ModuleType)
