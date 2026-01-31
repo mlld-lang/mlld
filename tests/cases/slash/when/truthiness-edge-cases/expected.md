@@ -20,7 +20,7 @@ Not empty
 
 Not zero
 
-## 3. Variable Comparison (NOT a switch - bare when)
+## 3. Variable Comparison (match form)
 
 Matched as boolean true
 
@@ -65,4 +65,3 @@ Mixed negation: || triggered
 Mixed negation: && triggered
 
 ## 13. Deeply Falsy Values
-

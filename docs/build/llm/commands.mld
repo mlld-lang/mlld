@@ -20,7 +20,7 @@ var @exeAtoms = [
   <@base/docs/src/atoms/commands/exe-metadata.md>,
   <@base/docs/src/atoms/commands/exe-prose.md>,
   <@base/docs/src/atoms/commands/exe-blocks.md>,
-  <@base/docs/src/atoms/commands/exe-when-first.md>,
+  <@base/docs/src/atoms/commands/exe-when.md>,
   <@base/docs/src/atoms/commands/exe-shadow.md>
 ]
 

@@ -1,2 +1,2 @@
-# Using bare when to execute the first matching condition
+# Using when block to execute the first matching condition
 Authentication enabled

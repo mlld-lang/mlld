@@ -2,7 +2,7 @@
 
 /var @status = "pending"
 
->> Bare when block with none fallback
+>> When block with none fallback
 /when [
   @status == "active" => show "System is active"
   @status == "error" => show "System error"

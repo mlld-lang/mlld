@@ -45,7 +45,7 @@ Messages:
 /show @getMessage("farewell")
 /show @getMessage("other")
 
-## Exe with bare when (first-match)
+## Exe with when block (first match)
 /exe @classifyNumber(n) = when [
   @n < 0 => "negative"
   @n == 0 => "zero"
@@ -55,7 +55,7 @@ Messages:
   none => "not a number"
 ]
 
->> First matching value is returned for bare when
+>> First matching value is returned for when block
 /show @classifyNumber(5)
 /show @classifyNumber(50)
 /show @classifyNumber(-10)

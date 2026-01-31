@@ -2,7 +2,7 @@
 /var @feature2 = "true"
 /var @feature3 = "on"
 
-# bare when executes the first matching action
+# When block executes the first matching action
 /when [
   @feature1 => show "Feature 1 is enabled"
   @feature2 => show "Feature 2 is enabled"

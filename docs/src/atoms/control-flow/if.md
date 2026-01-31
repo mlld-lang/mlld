@@ -4,7 +4,7 @@ title: If Blocks
 brief: Imperative branching with optional else
 category: control-flow
 tags: [conditionals, branching, blocks]
-related: [when-simple, exe-blocks]
+related: [when, when-inline, exe-blocks]
 related-code: [interpreter/eval/if.ts, grammar/directives/if.peggy]
 updated: 2026-01-30
 qa_tier: 2

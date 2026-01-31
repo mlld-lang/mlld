@@ -229,26 +229,17 @@ Block rules:
 - `let @var += value` for accumulation (arrays/strings/objects)
 - `=> value` required as last statement for return
 
-**When-first in exe** (value-returning):
+**When in exe** (first match wins):
 
 ```mlld
 exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
-  @score >= 70 => "C"
   * => "F"
 ]
-
->> With blocks for side effects
-exe @handler(input) = when [
-  @input.valid => [
-    show "Processing..."
-    let @result = @transform(@input)
-    => @result
-  ]
-  * => { error: "Invalid input" }
-]
 ```
+
+Use `if` for imperative flow where multiple branches can run.
 
 **Shadow environments** expose helpers to all code blocks of that language:
 

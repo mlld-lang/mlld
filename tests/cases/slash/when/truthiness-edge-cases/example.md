@@ -43,7 +43,7 @@ Test comprehensive truthiness behavior in @when directives.
 
 /when !@zero => show "Not zero"
 
-## 3. Variable Comparison (NOT a switch - bare when)
+## 3. Variable Comparison (match form)
 
 /var @mode = "true"
 

@@ -2,14 +2,14 @@
 /var @condition2 = true
 /var @condition3 = true
 
-## Bare when block - executes first match
+## When block - executes first match
 /when [
   @condition1 => show "First condition matched"
   @condition2 => show "Second condition matched"
   @condition3 => show "Third condition matched"
 ]
 
-## Test multiple none conditions in bare when block
+## Test multiple none conditions in when block
 /var @value = 42
 
 >> None of these conditions match, so the first none executes

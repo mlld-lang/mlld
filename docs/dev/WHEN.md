@@ -12,7 +12,7 @@ The /when directive provides conditional execution through a two-phase approach:
 
 The /when directive produces two types of AST nodes:
 
-1. **WhenSimpleNode**: For single-line conditionals
+1. **WhenSimpleNode**: For inline conditionals
    ```typescript
    {
      kind: 'when',
@@ -24,19 +24,18 @@ The /when directive produces two types of AST nodes:
    }
    ```
 
-2. **WhenBlockNode**: For block-form conditionals
+2. **WhenBlockNode**: For when block conditionals
    ```typescript
    {
      kind: 'when',
      subtype: 'whenBlock',
      values: {
-       variable?: BaseMlldNode[],    // Optional variable binding
-       modifier: BaseMlldNode[],     // Text node with 'first' (alias)
+       variable?: BaseMlldNode[],       // Optional variable binding
        conditions: WhenConditionPair[], // Array of condition-action pairs
-       action?: BaseMlldNode[]       // Optional block action
+       action?: BaseMlldNode[]          // Optional block action
      },
      meta: {
-       modifier: 'first' | 'default',
+       modifier: 'default',
        conditionCount: number,
        hasVariable: boolean
      }
@@ -73,10 +72,12 @@ The /when directive produces two types of AST nodes:
 
 The grammar defines several key rules:
 
-1. **SlashWhen**: Main entry point, delegates to simple or block form
-2. **WhenSimpleForm**: Parses `/when <condition> => <action>`
-3. **WhenBlockForm**: Parses `/when <var> <modifier>: [...] => <action>`
-4. **WhenConditionExpression**: Accepts:
+1. **SlashWhen**: Main entry point, delegates to inline, match, or block form
+2. **WhenInlineForm**: Parses `/when <condition> => <action>`
+3. **WhenBlockForm**: Parses `/when <var>: [...] => <action>`
+4. **WhenBareBlockForm**: Parses `/when [ ... ]`
+5. **WhenMatchForm**: Parses `/when <expression>: [ ... ]`
+6. **WhenConditionExpression**: Accepts:
    - Expressions with operators (`@score > 90`, `@role == "admin"`)
    - CommandReference (`@command()` or `@command`)
    - VariableReference (`@variable`)
@@ -85,7 +86,7 @@ The grammar defines several key rules:
    - TernaryExpression (in actions, not conditions)
    - Note: Direct `/run` is NOT supported by design
 
-5. **WhenExpression**: For value-returning when expressions in RHS
+7. **WhenExpression**: For value-returning when expressions in RHS
    - Used in `VarRHSContent` and `ExeRHSContent`
    - Returns first matching value
    - Returns null if no match
@@ -106,7 +107,7 @@ The grammar supports full expression evaluation in conditions:
    - Routes to appropriate handler based on subtype
    - Returns `EvalResult` with value and environment
 
-2. **Simple Form**: `evaluateWhenSimple()`
+2. **Inline Form**: `evaluateWhenSimple()`
    ```typescript
    // Pseudocode
    conditionResult = evaluateCondition(node.values.condition)
@@ -116,14 +117,13 @@ The grammar supports full expression evaluation in conditions:
    return { value: '', env }
    ```
 
-3. **Block Form**: `evaluateWhenBlock()`
-   - Extracts modifier from meta
-   - Routes to modifier-specific handler
+3. **When Block**: `evaluateWhenBlock()`
+   - Evaluates conditions in order
+   - Stops at first match
    - Handles variable binding if present
 
 ### First-Match Behavior
 
-#### `first` Modifier
 - Evaluates conditions sequentially
 - Executes action of first truthy condition
 - Stops evaluation after first match
@@ -203,12 +203,12 @@ This ensures command execution results flow through to condition evaluation.
 
 Custom error class for condition-specific failures:
 - Extends MlldDirectiveError
-- Includes modifier context
+- Includes condition context
 - Provides detailed command failure info
 
-### Error Strategies by Modifier
+### Error Strategies by Form
 
-- **simple/first**: Throws on first error
+- **inline/when block**: Throws on first error
 
 ## Environment Integration
 
@@ -220,7 +220,7 @@ The @when evaluator creates child environments for block evaluation:
 ## Performance Considerations
 
 1. **Sequential Evaluation**: Conditions evaluate in order, not parallel
-2. **Short-circuit Evaluation**: 'first' stops early when possible
+2. **Short-circuit Evaluation**: Stops early after the first match
 3. **Memory**: Child environments for blocks add overhead
 4. **Command Execution**: Each condition may spawn a process
 
@@ -232,8 +232,8 @@ The @when evaluator creates child environments for block evaluation:
 - Test error scenarios in `tests/cases/exceptions/when/`
 
 ### Key Test Cases
-1. **when-simple**: Basic conditional execution
-2. **when-block-first**: First matching with variable binding
+1. **when**: Basic conditional execution
+2. **when-block**: First matching with variable binding
 3. **when-variable-binding**: Variable capture from conditions
 
 ## WhenExpression Implementation

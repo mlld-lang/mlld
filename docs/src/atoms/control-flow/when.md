@@ -1,16 +1,15 @@
 ---
-id: when-bare
-title: When (Bare Form)
-brief: First match wins without modifiers
+id: when
+title: When
+brief: Select the first matching branch
 category: control-flow
-parent: when
 tags: [conditionals, branching]
-related: [when-simple, when-first]
+related: [when-inline, when-blocks, if]
 related-code: [interpreter/eval/when.ts]
-updated: 2026-01-05
+updated: 2026-01-31
 ---
 
-**Bare form** (default first-match):
+**When block** (first match wins):
 
 ```mlld
 when [
@@ -21,3 +20,5 @@ when [
 ```
 
 Use multiple `if` blocks when you need several actions to run.
+
+Inline form uses `when @cond => action`.

@@ -1,2 +1,2 @@
-# bare when executes the first matching action
+# When block executes the first matching action
 Feature 1 is enabled

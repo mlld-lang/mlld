@@ -71,7 +71,7 @@ npm install -g mlld
 /when @debug => log "Debug mode"
 
 # Define decision logic with /exe + when
-/exe @grade(score) = when first [
+/exe @grade(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   * => "C"
@@ -79,20 +79,20 @@ npm install -g mlld
 /show `Grade: @grade(91)`  # A
 
 # Retry until valid
-/exe @validate(input) = when first [
+/exe @validate(input) = when [
   @input.valid => @input
   @mx.try < 3 => retry "needs more detail"
   * => "fallback"
 ]
 
 # Local variables in when blocks
-/exe @format(score) = when first [
-  let @grade = when first [@score >= 90 => "A" @score >= 80 => "B" * => "C"]
+/exe @format(score) = when [
+  let @grade = when [@score >= 90 => "A" @score >= 80 => "B" * => "C"]
   * => `Score: @score (@grade)`
 ]
 
 # Switch-style (first match wins)
-/when first [
+/when [
   @role == "admin" => show "Admin panel"
   @role == "user" => show "Dashboard"
   * => show "Login required"
@@ -251,7 +251,7 @@ Validate and retry LLM responses:
 Chain an LLM call through a review function that can retry with feedback:
 
 ```mlld
-/exe @review(response, original) = when first [
+/exe @review(response, original) = when [
   let @chat = "<user>@original</user><response>@response</response>"
   @claude("Is this response appropriate? YES or NO: @chat").includes("YES") => @response
   @mx.try < 3 => retry @claude("Provide feedback for improvement: @chat")

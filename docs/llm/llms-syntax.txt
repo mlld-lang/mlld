@@ -134,12 +134,7 @@ The `@src/utils.ts` stays literal - mlld won't try to interpolate it.
 | `.att` | `@var` | `<file.md>` | Default, mlld-style |
 | `.mtt` | `{{var}}` | None | Content has `@path` or `<tag>` meant for LLMs |
 
-**When-expressions in templates:**
 
-```mlld
-var @status = when [ @score > 90 => "A" * => "F" ]
-var @arr = [ 1, when [ @flag => 2 ], 3 ]
-```
 
 **Template-embedded vs top-level:** Control flow inside templates uses bare `for`/`end` at line start. Top-level directives are separate statements.
 

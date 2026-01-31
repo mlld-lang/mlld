@@ -77,7 +77,7 @@ export function isDirectAction(entry: WhenEntry): entry is BaseMlldNode {
 }
 
 /**
- * Simple form of @when directive: @when <condition> => <action>
+ * Inline form of @when directive: @when <condition> => <action>
  */
 export interface WhenSimpleNode extends DirectiveNode {
   kind: 'when';
@@ -129,7 +129,7 @@ export interface WhenMatchNode extends DirectiveNode {
 export type WhenNode = WhenSimpleNode | WhenBlockNode | WhenMatchNode;
 
 /**
- * Type guard for when simple form
+ * Type guard for when inline form
  */
 export function isWhenSimpleNode(node: DirectiveNode): node is WhenSimpleNode {
   return node.kind === 'when' && node.subtype === 'whenSimple';

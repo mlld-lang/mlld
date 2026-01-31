@@ -15,7 +15,7 @@ multiple features working together. All examples use strict mode (bare directive
 <RECIPE_1_LLM_LIBRARY>
 A clean utility module for calling Claude models. Demonstrates:
 - Simple executable definitions
-- when-first for conditional logic
+- when block for conditional logic
 - Pipeline + cmd with working directory
 - Clean exports
 
@@ -174,7 +174,7 @@ A router that scores and routes messages to agents. Demonstrates:
 - Complex scoring logic with block syntax
 - for with inline filtering
 - Object spread in results
-- when-first for classification
+- when block for classification
 - Nested executables for clean organization
 
 ```mlld
@@ -277,7 +277,7 @@ export { @router }
 - `{ ...@eval, promptKey: "primary" }` - Object spread in result
 - `@agentRegistry.mx.keys` - Get all keys from object
 - `@msg.body.trim().startsWith("@")` - Method chaining on fields
-- Nested when-first in block for decision trees
+- Nested when blocks for decision trees
 </RECIPE_4_ROUTER>
 
 <RECIPE_5_ORCHESTRATOR>
@@ -285,7 +285,7 @@ An orchestrator that routes and executes in parallel. Demonstrates:
 - Multiple imports from different sources
 - Parallel for blocks
 - Chained execution (route → invoke → gate → post)
-- when-first inside parallel iteration
+- when block inside parallel iteration
 
 ```mlld
 >> Orchestrator: executes what router tells it
@@ -391,7 +391,7 @@ These six recipes cover the most common mlld patterns:
 
 | Recipe | Features Demonstrated |
 |--------|----------------------|
-| LLM Library | Pipelines, when-first, cmd:dir, exports |
+| LLM Library | Pipelines, when block, cmd:dir, exports |
 | Gate | Blocks, let/return, method chaining, structured returns |
 | Agent Definition | Frontmatter, templates, function objects |
 | Router | Complex scoring, for-filter, object spread, nested when |

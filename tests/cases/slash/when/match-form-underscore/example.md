@@ -2,9 +2,9 @@
 /var @adminRole = "admin" 
 /var @hasPermission = "false"
 
-# Testing bare when form (not a switch)
+# Testing match form (value comparison)
 >> @userRole's value ("guest") is compared to each literal condition
->> Only exact matches fire - "_" is NOT a wildcard in bare when
+>> Only exact matches fire - "_" is not a wildcard in match form
 /when @userRole: [
   "guest" => show "User is a guest"
   "admin" => show "User is an admin"

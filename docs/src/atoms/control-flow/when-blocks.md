@@ -5,9 +5,9 @@ brief: Side effects and return with block syntax
 category: control-flow
 parent: when
 tags: [conditionals, blocks]
-related: [when-first, exe-block]
+related: [when, exe-blocks, if]
 related-code: [interpreter/eval/when.ts, interpreter/eval/block.ts]
-updated: 2026-01-05
+updated: 2026-01-31
 qa_tier: 2
 ---
 
@@ -23,3 +23,5 @@ var @result = when [
   * => @data
 ]
 ```
+
+Conditions evaluate in order and the first match runs.

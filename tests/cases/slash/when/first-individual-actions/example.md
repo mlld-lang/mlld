@@ -6,10 +6,10 @@
   * => show "Always true"
 ]
 
-## Test none with first modifier
+## Test none with first-match semantics
 /var @category = "unknown"
 
->> First modifier stops at first match (including none)
+>> First-match semantics stop at first match (including none)
 /when [
   @category == "food" => show "Food category"
   @category == "tech" => show "Technology category"

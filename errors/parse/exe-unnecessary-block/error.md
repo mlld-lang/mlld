@@ -7,7 +7,7 @@ exe functions don't use curly braces.
 Examples:
 ✓ exe @greet(name) = show "Hello @name"
 ✓ exe @fetch() = run {curl api.com}
-✓ exe @pick(val) = when first [
+✓ exe @pick(val) = when [
     @val > 0 => "positive"
     * => "negative"
   ]

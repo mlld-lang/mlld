@@ -5,9 +5,9 @@ brief: Score and route to different handlers
 category: patterns
 parent: patterns
 tags: [patterns, routing, scoring, handlers]
-related: [when-first, for-block]
+related: [when, for-block]
 related-code: []
-updated: 2026-01-05
+updated: 2026-01-31
 ---
 
 ```mlld

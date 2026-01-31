@@ -4,7 +4,7 @@
  * Usage:
  *   mlld howto              # Show topic tree
  *   mlld howto when         # Show all when-related help
- *   mlld howto when first   # Show just when-first help
+ *   mlld howto when-inline  # Show just when-inline help
  *   mlld howto core-modules # Show available core modules
  *   mlld howto @mlld/claude # Show docs for a specific module
  *   mlld qs                 # Quick start (alias)
@@ -212,7 +212,7 @@ ${chalk.bold('Examples:')}
   mlld howto syntax             Show syntax topics index
   mlld howto syntax --all       Show ALL syntax docs (full content)
   mlld howto when               Show all when-related help
-  mlld howto when first         Show just when-first help
+  mlld howto when-inline        Show just when-inline help
   mlld howto for-parallel       Show just parallel for help
   mlld howto for-parallel -s    Show entire control-flow section
   mlld howto grep "default"     Search all docs for "default"

@@ -1,11 +1,11 @@
 /exe @is_true() = cmd {echo "true"}
 /exe @is_false() = cmd {echo ""}
 
-## Test 1: Simple conditional
+## Test 1: Inline conditional
 /when @is_true() => show "This should appear"
 /when @is_false() => show "This should NOT appear"
 
-## Test 2: Block switch
+## Test 2: Match form
 /var @mode = "development"
 
 /when @mode : [
@@ -21,7 +21,7 @@
 
 /when (@has_node() || @has_npm() || @has_yarn()) => show "Package manager found"
 
-## Test 4: bare when block with individual actions (first match)
+## Test 4: when block with individual actions (first match)
 /when [
   @has_node() => show "Node.js installed"
   @has_npm() => show "npm installed"

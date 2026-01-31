@@ -2,7 +2,7 @@
 
 Env has value
 
-## Test none with first modifier
+## Test none with first-match semantics
 
 Unknown category
 

@@ -104,16 +104,16 @@
     ],
     "description": "Simple conditional"
   },
-  "When First": {
-    "prefix": "whenfirst",
+  "When Block": {
+    "prefix": "whenblock",
     "body": [
-      "when @${1:variable} first: [",
-      "  \"${2:value1}\" => ${3:show `Case 1`}",
-      "  \"${4:value2}\" => ${5:show `Case 2`}",
-      "  _ => ${6:show `Default`}",
+      "when [",
+      "  @${1:condition1} => ${2:show `Case 1`}",
+      "  @${3:condition2} => ${4:show `Case 2`}",
+      "  * => ${5:show `Default`}",
       "]"
     ],
-    "description": "Switch-style conditional (first match)"
+    "description": "Block conditional (first match)"
   },
   "Output to File": {
     "prefix": "output",

@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-30T20:22:44.668Z
+Generated: 2026-01-31T00:41:42.577Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -476,12 +476,7 @@ The `@src/utils.ts` stays literal - mlld won't try to interpolate it.
 | `.att` | `@var` | `<file.md>` | Default, mlld-style |
 | `.mtt` | `{{var}}` | None | Content has `@path` or `<tag>` meant for LLMs |
 
-**When-expressions in templates:**
 
-```mlld
-var @status = when [ @score > 90 => "A" * => "F" ]
-var @arr = [ 1, when [ @flag => 2 ], 3 ]
-```
 
 **Template-embedded vs top-level:** Control flow inside templates uses bare `for`/`end` at line start. Top-level directives are separate statements.
 
@@ -937,26 +932,17 @@ Block rules:
 - `let @var += value` for accumulation (arrays/strings/objects)
 - `=> value` required as last statement for return
 
-**When-first in exe** (value-returning):
+**When in exe** (first match wins):
 
 ```mlld
 exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
-  @score >= 70 => "C"
   * => "F"
 ]
-
->> With blocks for side effects
-exe @handler(input) = when [
-  @input.valid => [
-    show "Processing..."
-    let @result = @transform(@input)
-    => @result
-  ]
-  * => { error: "Invalid input" }
-]
 ```
+
+Use `if` for imperative flow where multiple branches can run.
 
 **Shadow environments** expose helpers to all code blocks of that language:
 
@@ -1336,14 +1322,14 @@ Use `=>` only inside `exe` blocks.
 <WHEN_DECISIONS>
 `when` selects the first matching condition. Use `if` for imperative flow.
 
-**Simple form:**
+**Inline form:**
 
 ```mlld
 when @isProd => show "Production mode"
 when @score > 90 => show "Excellent!"
 ```
 
-**Bare form** (default first-match):
+**When block** (first match wins):
 
 ```mlld
 when [
@@ -1355,17 +1341,7 @@ when [
 
 Use multiple `if` blocks when you need several actions to run.
 
-**First-match form** (switch-style):
-
-```mlld
-when [
-  @role == "admin" => show "Admin panel"
-  @role == "user"  => show "User dashboard"
-  * => show "Guest view"           >> wildcard catches all
-]
-```
-
-The `first` modifier is accepted and does not change behavior.
+Inline form uses `when @cond => action`.
 
 **Value-returning when** (in exe):
 
@@ -1379,6 +1355,8 @@ exe @classify(score) = when [
 var @grade = @classify(85)  >> "B"
 ```
 
+`when` returns the first matching branch. Use `if` for imperative flow.
+
 **Block actions** (side effects + return):
 
 ```mlld
@@ -1391,6 +1369,8 @@ var @result = when [
   * => @data
 ]
 ```
+
+Conditions evaluate in order and the first match runs.
 
 **Local variables in when:**
 
@@ -2240,6 +2220,100 @@ For OpenProse specifically:
 
 See `mlld howto exe-prose` for syntax details. OpenProse docs: https://prose.md
 </PROSE_EXECUTION>
+
+<RALPH_LOOP>
+Autonomous agent loop with dynamic context assembly.
+
+```mlld
+>> ralph.mld - autonomous coding agent loop
+>> Run once per iteration, or use loop for continuous execution
+
+import { @claude } from "@lib/claude.mld"
+
+>> Load fresh context each iteration
+var @plan = <fix_plan.md>
+var @specs = <specs/*.md>
+
+>> Classify the most important task
+exe @classifyTask(plan) = [
+  let @prompt = `Given this plan, identify the SINGLE most important next task:
+@plan
+Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }`
+  => @haiku(@prompt) | @json.llm
+]
+
+>> Build context for the task (load only what's relevant)
+exe @buildContext(task, specs) = [
+  let @relevant = for @spec in @specs
+    when @task.type in @spec.mx.relative => @spec
+  let @code = for @file in @task.files => <@file>
+  => { specs: @relevant, code: @code }
+]
+
+>> Execute the task
+exe @executeTask(task, context) = [
+  let @prompt = `
+# Task
+@task.task
+
+# Relevant Specs
+@context.specs.join("\n\n")
+
+# Current Code
+@context.code.join("\n\n")
+
+Implement this task. Search before assuming not implemented.
+After implementing, run tests for just this change.
+`
+  => @claude(@prompt, "sonnet", ".", "Read,Edit,Write,Bash,Grep,Glob")
+]
+
+>> Validate with tests
+exe @validate() = [
+  let @output = cmd { npm test 2>&1 }
+  => { pass: @output.exitCode == 0, output: @output }
+]
+
+>> Single iteration
+var @task = @classifyTask(@plan)
+var @context = @buildContext(@task, @specs)
+var @result = @executeTask(@task, @context)
+var @check = @validate()
+
+when @check.pass => [
+  run cmd { git add -A && git commit -m "@task.task" && git push }
+  show "committed"
+]
+```
+
+The Ralph pattern runs autonomous coding loops with dynamic context assembly. Each iteration:
+
+1. **Load fresh context** - Reload plan and specs from disk
+2. **Classify task** - Use a cheap model to pick the most important work
+3. **Build context** - Load only relevant specs and code (saves tokens)
+4. **Execute** - Run the task with full agent capabilities
+5. **Validate** - Run tests as backpressure
+6. **Commit on success** - Only persist passing changes
+
+**With continuous loop:**
+
+```mlld
+loop(endless) until @state.stop [
+  var @plan = <fix_plan.md>
+  when @plan.trim() == "" => done "complete"
+
+  let @task = @classifyTask(@plan)
+  let @context = @buildContext(@task, <specs/*.md>)
+  let @result = @executeTask(@task, @context)
+  let @check = @validate()
+
+  when @check.pass => run cmd { git commit -am "@task.task" && git push }
+  continue
+]
+```
+
+**SDK control** - External processes can stop the loop by setting `@state.stop = true`.
+</RALPH_LOOP>
 
 </MLLD_PATTERNS>
 
@@ -3365,7 +3439,7 @@ multiple features working together. All examples use strict mode (bare directive
 <RECIPE_1_LLM_LIBRARY>
 A clean utility module for calling Claude models. Demonstrates:
 - Simple executable definitions
-- when-first for conditional logic
+- when block for conditional logic
 - Pipeline + cmd with working directory
 - Clean exports
 
@@ -3524,7 +3598,7 @@ A router that scores and routes messages to agents. Demonstrates:
 - Complex scoring logic with block syntax
 - for with inline filtering
 - Object spread in results
-- when-first for classification
+- when block for classification
 - Nested executables for clean organization
 
 ```mlld
@@ -3627,7 +3701,7 @@ export { @router }
 - `{ ...@eval, promptKey: "primary" }` - Object spread in result
 - `@agentRegistry.mx.keys` - Get all keys from object
 - `@msg.body.trim().startsWith("@")` - Method chaining on fields
-- Nested when-first in block for decision trees
+- Nested when blocks for decision trees
 </RECIPE_4_ROUTER>
 
 <RECIPE_5_ORCHESTRATOR>
@@ -3635,7 +3709,7 @@ An orchestrator that routes and executes in parallel. Demonstrates:
 - Multiple imports from different sources
 - Parallel for blocks
 - Chained execution (route → invoke → gate → post)
-- when-first inside parallel iteration
+- when block inside parallel iteration
 
 ```mlld
 >> Orchestrator: executes what router tells it
@@ -3741,7 +3815,7 @@ These six recipes cover the most common mlld patterns:
 
 | Recipe | Features Demonstrated |
 |--------|----------------------|
-| LLM Library | Pipelines, when-first, cmd:dir, exports |
+| LLM Library | Pipelines, when block, cmd:dir, exports |
 | Gate | Blocks, let/return, method chaining, structured returns |
 | Agent Definition | Frontmatter, templates, function objects |
 | Router | Complex scoring, for-filter, object spread, nested when |

@@ -50,18 +50,18 @@ Each atom is a markdown file with YAML frontmatter:
 
 ```markdown
 ---
-id: when-first
-title: When (First-Match)
-brief: Stops at first matching condition
+id: when
+title: When
+brief: Select the first matching branch
 category: control-flow
-parent: when
+parent: control-flow
 tags: [conditionals, branching]
-related: [when-simple, when-bare]
+related: [when-inline, when]
 related-code: [interpreter/eval/when.ts]
 updated: 2026-01-05
 ---
 
-## When (First-Match)
+## When
 
 `when` stops at the first matching condition, like a switch statement.
 
@@ -193,7 +193,7 @@ $ mlld howto when
 ```bash
 $ mlld howto when
 
-## When (First-Match)
+## When
 
 `when` stops at the first matching condition...
 ```
@@ -206,15 +206,14 @@ Create build scripts that assemble atoms into llm docs:
 >> docs/build/llm/control-flow.mld
 
 var @whenAtoms = [
-  <@base/docs/src/atoms/control-flow/when-simple.md>,
-  <@base/docs/src/atoms/control-flow/when-bare.md>,
-  <@base/docs/src/atoms/control-flow/when-first.md>
+  <@base/docs/src/atoms/control-flow/when-inline.md>,
+  <@base/docs/src/atoms/control-flow/when.md>
 ]
 
 var @content = for @a in @whenAtoms => @strip(@a)
 
 show `<WHEN_DECISIONS>
-\`when\` handles conditionals. Three forms: simple, bare, first-match.
+\`when\` selects the first matching condition.
 
 @content.join("\n\n")
 </WHEN_DECISIONS>`

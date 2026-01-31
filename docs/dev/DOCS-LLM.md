@@ -109,7 +109,7 @@ The overview module explains both modes, but examples throughout use strict mode
 `llms-cookbook.txt` contains annotated real-world examples showing feature composition. Each recipe is 30-80 lines with heavy comments explaining patterns.
 
 **Current recipes:**
-1. **LLM Library** - Clean utility module (pipelines, when-first, cmd:dir)
+1. **LLM Library** - Clean utility module (pipelines, when, cmd:dir)
 2. **Gate Pattern** - Validation with blocks and structured returns
 3. **Agent Definition** - Config module with frontmatter and templates
 4. **Router** - Complex scoring and decision logic
@@ -179,12 +179,12 @@ Detailed syntax coverage:
 ### llms-commands.txt
 All command directives:
 - `run cmd/sh/js` with decision tree
-- `exe` with blocks and when-first
+- `exe` with blocks and when
 - `output`, `log`, `append`
 - `stream`
 
 ### llms-control-flow.txt
-- `when` (simple, bare, first)
+- `when` (inline, block list, value-returning)
 - `for` (arrow, block, collection, parallel)
 - `skip` keyword for filtering
 - `foreach`
@@ -264,13 +264,13 @@ Each atom has YAML frontmatter:
 
 ```markdown
 ---
-id: when-first
-title: When First (Switch-Style)
-brief: Stops at first matching condition
+id: when
+title: When
+brief: Select the first matching branch
 category: control-flow
-parent: when
+parent: control-flow
 tags: [conditionals, branching]
-related: [when-simple, when-bare]
+related: [when-inline, when]
 related-code: [interpreter/eval/when.ts]
 updated: 2026-01-05
 ---

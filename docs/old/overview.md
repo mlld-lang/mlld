@@ -107,7 +107,7 @@ mlld can route data and actions based on conditions using built-in operators:
 /var @priority = @severity > 8 ? "high" : "normal"
 
 # Route actions based on conditions
-/when first [
+/when [
   @method == "GET" && @path == "/api/users" => @listUsers()
   @method == "POST" && @path == "/api/users" => @createUser()
   @method == "DELETE" => @deleteResource()
@@ -143,7 +143,7 @@ See: [Pipelines](./pipeline.md)
 Define conditional behavior inside /exe using when blocks:
 
 ```mlld
-/exe @grade(score) = when first [
+/exe @grade(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   * => "C"

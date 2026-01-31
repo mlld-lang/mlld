@@ -111,6 +111,13 @@ exe @isImplDone(ticket) = [
   => @done.length > 0
 ]
 
+>> Check if ticket needs human design review
+exe @needsHumanDesign(ticket) = [
+  let @tags = @ticket.tags ? @ticket.tags : []
+  let @matched = for @t in @tags when @t == "needs-human-design" => @t
+  => @matched.length > 0
+]
+
 >> Get size estimate
 exe @getSize(ticket) = [
   let @val = @getTagValue(@ticket, "size-")
@@ -192,6 +199,7 @@ exe @_checkEnrichTimestamp(ticket, hoursThreshold) = [
   @getTagValue,
   @isStale,
   @isImplDone,
+  @needsHumanDesign,
   @getSize,
   @getComplexity,
   @getRisk,

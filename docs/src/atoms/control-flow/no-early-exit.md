@@ -4,7 +4,7 @@ title: No Top-Level Early Exit
 brief: Top-level flow uses when and flags; exe blocks can return
 category: control-flow
 tags: [design, patterns]
-related: [if, when-simple]
+related: [if, when]
 updated: 2026-01-30
 ---
 

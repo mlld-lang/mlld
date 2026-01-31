@@ -7,7 +7,7 @@
 import { @claudePoll } from @mlld/claude-poll
 import { @updatePhaseStatus } from "../lib/state.mld"
 import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
-import { @getOpenTickets } from "../lib/tickets.mld"
+import { @getOpenTickets, @needsHumanDesign } from "../lib/tickets.mld"
 
 /needs { sh }
 
@@ -49,12 +49,16 @@ exe @runReconcile(runDir, noQa) = [
 >> Reconcile using existing tickets only (no QA data)
 exe @_doReconcileTicketOnly(runDir, outputPath) = [
   >> Load existing tickets
-  let @existingTickets = @getOpenTickets()
+  let @allTickets = @getOpenTickets()
+
+  >> Filter out tickets that need human design review
+  let @humanDesignTickets = for @tkt in @allTickets when @needsHumanDesign(@tkt) => @tkt
+  let @existingTickets = for @tkt in @allTickets when !@needsHumanDesign(@tkt) => @tkt
 
   >> Log phase start
   let @_ = @logPhaseStart(@runDir, "reconcile")
 
-  show `  Existing tickets: @existingTickets.length`
+  show `  Existing tickets: @allTickets.length (@humanDesignTickets.length need human design, skipped)`
   show `  Running in ticket-only mode (no QA reconciliation)`
 
   >> Build items from existing tickets only
@@ -88,14 +92,16 @@ exe @_doReconcileTicketOnly(runDir, outputPath) = [
 
 >> Full reconciliation with QA data
 exe @_doReconcileWithQa(runDir, outputPath, strategy) = [
-  >> Load existing tickets
-  let @existingTickets = @getOpenTickets()
+  >> Load existing tickets, filter out needs-human-design
+  let @allTickets = @getOpenTickets()
+  let @humanDesignTickets = for @tkt in @allTickets when @needsHumanDesign(@tkt) => @tkt
+  let @existingTickets = for @tkt in @allTickets when !@needsHumanDesign(@tkt) => @tkt
   let @existingJson = @existingTickets | @json
 
   >> Log phase start
   let @_ = @logPhaseStart(@runDir, "reconcile")
 
-  show `  Existing tickets: @existingTickets.length`
+  show `  Existing tickets: @allTickets.length (@humanDesignTickets.length need human design, skipped)`
   show `  Strategy classifications: @strategy.classifications.length`
 
   let @strategyJson = @strategy | @json

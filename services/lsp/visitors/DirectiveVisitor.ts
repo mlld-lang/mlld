@@ -1574,11 +1574,11 @@ export class DirectiveVisitor extends BaseVisitor {
         return;
       }
       
-      // Handle block form: /when @var: [...] or bare /when [...]
+      // Handle block form: /when @var: [...] or /when [...]
       if (node.values.conditions && Array.isArray(node.values.conditions)) {
-        // Handle bare when form: /when [...] 
+        // Handle when block form: /when [...]
         if (!node.values.variable && !node.values.expression && !node.values.modifier) {
-          // For bare form, find and tokenize the opening bracket after /when
+          // For block-only form, find and tokenize the opening bracket after /when
           const sourceText = this.document.getText();
           const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
           

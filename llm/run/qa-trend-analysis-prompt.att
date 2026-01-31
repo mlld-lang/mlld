@@ -102,7 +102,7 @@ Narrative report:
 ## Guidelines
 
 - **Cross-cutting patterns only**: Don't summarize individual topics. Identify patterns that span multiple topics.
-- **Be specific**: "Add See Also sections linking when-blocks, when-match, and when-bare howtos" beats "improve documentation."
+- **Be specific**: "Add See Also sections linking when-blocks, when-operators, and when howtos" beats "improve documentation."
 - **Cite evidence**: Name specific topics/experiments for each trend.
 - **Prioritize**: P0 = blocks users or breaks features. P1 = significant friction. P2 = quality improvement.
 - **Critique the QA process**: If Phase 1 agents make systematic errors, recommend prompt improvements.

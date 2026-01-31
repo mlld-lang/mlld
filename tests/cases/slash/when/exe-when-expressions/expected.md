@@ -21,7 +21,7 @@ Messages:
 ¡Hola!
 ¡Adiós!
 Unknown message type
-## Exe with bare when (first-match)
+## Exe with when block (first match)
 small positive
 medium positive
 negative

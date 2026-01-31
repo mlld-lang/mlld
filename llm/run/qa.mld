@@ -18,7 +18,7 @@
 >>   mlld run qa --tier 1 --phase 4                 # Strategy questions only (resumes latest run)
 >>   mlld run qa --tier 1 --phase all               # All four phases, new dated run
 >>   mlld run qa --topic variables                  # Test variables-* topics
->>   mlld run qa --topics when-simple,for-arrow     # Test specific list
+>>   mlld run qa --topics when-inline,for-arrow     # Test specific list
 >>   mlld run qa --tier 2 --run 2026-01-25          # Resume a specific prior run
 
 >> Get filters from payload (namespace import for optional fields)

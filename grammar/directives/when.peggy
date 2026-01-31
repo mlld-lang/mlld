@@ -6,7 +6,7 @@
 
 The when directive provides conditional execution based on truthiness.
 It can be used in several forms:
-1. /when <condition> => <action>             - Simple conditional
+1. /when <condition> => <action>             - Inline conditional
 2. /when <expression>: [conditions]          - Match form (first match wins)
 3. /when <var>: [conditions] => <action>     - Block conditional
 
@@ -41,7 +41,7 @@ SlashWhen
         location()
       );
     }
-  / WhenBareBlockForm  // MUST come before WhenBlockForm to handle bare [...] syntax
+  / WhenBareBlockForm  // MUST come before WhenBlockForm to handle block-only syntax
   // Error recovery: /when <modifier>: [...] => <action>
   / DirectiveContext WhenKeyword _ modifier:WhenModifier _ ":"? _ block:WhenConditionBlock 
     _ action:("=>" _ a:WhenAction { return a; })? {
@@ -84,9 +84,9 @@ SlashWhen
       );
     }
   / WhenBlockForm
-  // Error recovery: Missing => or [ in simple form
+  // Error recovery: Missing => or [ in inline form
   / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ !("=>" / "[") {
-      helpers.mlldError("Invalid when syntax. Expected '=>' or '[' after condition. Use: when @condition => action or when @condition [block]", "=> or [", location());
+      helpers.mlldError("Invalid when syntax. Expected '=>' or '[' after condition. Use: when @condition => action or when [block]", "=> or [", location());
     }
   // Error recovery: Missing action after =>
   / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ !. {
@@ -138,14 +138,14 @@ SlashWhen
   // Error recovery: Generic catch-all
   / DirectiveContext WhenKeyword {
       helpers.mlldError("Invalid when syntax. Valid forms:\\n" +
-            "  when @condition => action          (simple form)\\n" +
-            "  when @variable [...]              (switch form)\\n" +
+            "  when @condition => action          (inline form)\\n" +
+            "  when @variable [...]              (match form)\\n" +
             "  when @var [...] => action          (block form)\\n" +
-            "  when [...] => action               (bare block form)", "@", location());
+            "  when [...] => action               (block form)", "@", location());
     }
 
 // -------------------------------------------------------------
-// SIMPLE FORM: /when <condition> => <action> (no brackets needed)
+// INLINE FORM: /when <condition> => <action> (no brackets needed)
 // -------------------------------------------------------------
 
 WhenSimpleForm
@@ -338,7 +338,7 @@ WhenBareBlockForm
         values,
         raw,
         {
-          modifier: 'default',  // Bare when uses default first-match behavior
+          modifier: 'default',  // When blocks use default first-match behavior
           conditionCount: conditions.length,
           hasVariable: false
         },
@@ -363,7 +363,7 @@ WhenModifier
 // CONDITION EXPRESSIONS
 // -------------------------------------------------------------
 
-// Simple condition for @when simple form - uses unified expressions
+// Inline condition for @when inline form - uses unified expressions
 WhenSimpleCondition
   = expr:WhenConditionAdapter {
       // Wrap in array for consistency with existing code

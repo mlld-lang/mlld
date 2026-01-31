@@ -1,5 +1,5 @@
 ---
-updated: 2026-01-30
+updated: 2026-01-31
 tags: #arch, #qa, #pipeline
 related-docs: docs/dev/DOCS-DEV.md
 related-code: llm/run/polish/**/*.mld, llm/run/polish/lib/*.mld
@@ -97,6 +97,24 @@ pipeline/
 - `@getVerifiedNotMerged(events)` - Find items ready to merge
 - `@logMergeDone(runDir, id, sha)` - Log successful merge
 - `@logManualReview(runDir, id, phase, reason, details)` - Surface for human review
+
+### Manual Review Routing
+
+Tickets tagged `needs-human-design` are filtered out in reconcile phase before any work is done.
+
+For items that reach execute, Chesterton's Fence safeguards catch design concerns:
+
+```
+execute-analyze.att  →  auto_approve: false + design_question
+                     ↓
+apply.mld:120-133    →  terminates work, calls @logManualReview()
+                     ↓
+events.mld:97-112    →  writes to <run-id>-manual-review-reqd.jsonl in root
+```
+
+The analysis includes `recommendation.design_question` if the agent suspects intentional design.
+
+**QA path**: Items classified as `needs-human-design` during QA go through the strategy questions process instead (human answers in `strategy-questions.md`).
 
 ## Gotchas
 

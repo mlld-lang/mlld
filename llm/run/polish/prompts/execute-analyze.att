@@ -49,12 +49,7 @@ Strategy: @strategyContext
 
 If you suspect intentional design, set `auto_approve: false` and add a `design_question`.
 
-## Design Philosophy
-
-Before proposing a fix, consider:
-- **Consistency**: Does this match how similar features work?
-- **Simplicity**: Is this the minimal fix?
-- **User impact**: Common use case vs. edge case?
+<@prompts/design-philosophy.md>
 
 ## Output Format
 

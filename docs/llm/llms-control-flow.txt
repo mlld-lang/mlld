@@ -28,14 +28,14 @@ Use `=>` only inside `exe` blocks.
 <WHEN_DECISIONS>
 `when` selects the first matching condition. Use `if` for imperative flow.
 
-**Simple form:**
+**Inline form:**
 
 ```mlld
 when @isProd => show "Production mode"
 when @score > 90 => show "Excellent!"
 ```
 
-**Bare form** (default first-match):
+**When block** (first match wins):
 
 ```mlld
 when [
@@ -47,17 +47,7 @@ when [
 
 Use multiple `if` blocks when you need several actions to run.
 
-**First-match form** (switch-style):
-
-```mlld
-when [
-  @role == "admin" => show "Admin panel"
-  @role == "user"  => show "User dashboard"
-  * => show "Guest view"           >> wildcard catches all
-]
-```
-
-The `first` modifier is accepted and does not change behavior.
+Inline form uses `when @cond => action`.
 
 **Value-returning when** (in exe):
 
@@ -71,6 +61,8 @@ exe @classify(score) = when [
 var @grade = @classify(85)  >> "B"
 ```
 
+`when` returns the first matching branch. Use `if` for imperative flow.
+
 **Block actions** (side effects + return):
 
 ```mlld
@@ -83,6 +75,8 @@ var @result = when [
   * => @data
 ]
 ```
+
+Conditions evaluate in order and the first match runs.
 
 **Local variables in when:**
 
