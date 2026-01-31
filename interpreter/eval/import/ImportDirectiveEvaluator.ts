@@ -286,9 +286,9 @@ export class ImportDirectiveEvaluator {
 
     if (directive.subtype === 'importMcpNamespace') {
       const namespaceNodes = importDirective.values?.namespace;
-      const alias = (namespaceNodes && Array.isArray(namespaceNodes) && namespaceNodes[0]?.content)
-        ? namespaceNodes[0].content
-        : importDirective.values?.imports?.[0]?.alias;
+      const namespaceNode = namespaceNodes && Array.isArray(namespaceNodes) ? namespaceNodes[0] : undefined;
+      // Support both VariableReference (identifier) and Text (content) node types
+      const alias = namespaceNode?.identifier ?? namespaceNode?.content ?? importDirective.values?.imports?.[0]?.alias;
       if (!alias) {
         throw new MlldImportError('MCP tool namespace import requires an alias', {
           code: 'IMPORT_ALIAS_MISSING',
@@ -761,8 +761,9 @@ export class ImportDirectiveEvaluator {
       throw new Error('Resolver manager not available');
     }
 
-    // Try case-sensitive first, then uppercase for backward compatibility
-    const resolver = resolverManager.getResolver(resolverName) || 
+    // Try case-sensitive first, then lowercase (standard resolver name case), then uppercase
+    const resolver = resolverManager.getResolver(resolverName) ||
+                    resolverManager.getResolver(resolverName.toLowerCase()) ||
                     resolverManager.getResolver(resolverName.toUpperCase());
     if (!resolver) {
       throw new Error(`Resolver '${resolverName}' not found`);
@@ -1542,8 +1543,11 @@ export class ImportDirectiveEvaluator {
     const activePolicies = Array.isArray(existing.activePolicies)
       ? [...existing.activePolicies]
       : [];
+    // Support both VariableReference (identifier) and Text (content) node types
+    const namespaceNode = (directive.values as any)?.namespace?.[0];
     const alias =
-      (directive.values as any)?.namespace?.[0]?.content ||
+      namespaceNode?.identifier ||
+      namespaceNode?.content ||
       (directive.values as any)?.imports?.[0]?.alias ||
       (directive.values as any)?.imports?.[0]?.identifier ||
       source ||
@@ -1702,6 +1706,12 @@ export class ImportDirectiveEvaluator {
     const exportKeys = Object.keys(moduleObject || {}).filter(key => !key.startsWith('__'));
 
     if (directive.subtype !== 'importSelected') {
+      return;
+    }
+
+    // @payload and @state are dynamic modules where fields are optional CLI arguments.
+    // Missing fields should default to null rather than throwing an error.
+    if (source === '@payload' || source === '@state') {
       return;
     }
 

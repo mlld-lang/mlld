@@ -140,9 +140,12 @@ export class ImportPathResolver {
         };
       }
 
-      // Handle resolver imports with isSpecial flag
+      // Check if this is a special resolver (valueType: 'specialResolver')
+      const isSpecialResolver = varRef.valueType === 'specialResolver' || varRef.isSpecial;
+
+      // Handle resolver imports with isSpecial flag or specialResolver valueType
       // But only if there's no path following (e.g., @TIME alone, not @base/path)
-      if (varRef.isSpecial && varRef.identifier && pathNodes.length === 1) {
+      if (isSpecialResolver && varRef.identifier && pathNodes.length === 1) {
         const resolverManager = this.env.getResolverManager();
         if (resolverManager) {
           if (resolverManager.isResolverName(varRef.identifier)) {
@@ -167,7 +170,7 @@ export class ImportPathResolver {
       // (not resolver paths like @base or @local, which resolve to file system paths)
       // This supports Postel's Law - "be liberal in what you accept"
       const resolverManager = this.env.getResolverManager();
-      if (varRef.isSpecial && varRef.identifier) {
+      if (isSpecialResolver && varRef.identifier) {
         const potentialName = varRef.identifier;
 
         // If this is a known resolver (e.g., @base, @local), let it go through

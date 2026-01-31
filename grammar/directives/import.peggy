@@ -156,7 +156,7 @@ SlashImportMcpTools
       if (subtype === 'importMcpNamespace') {
         const alias = imports[0] && imports[0].alias;
         if (alias) {
-          values.namespace = [helpers.createNode(NodeType.Text, { content: alias, location: location() })];
+          values.namespace = [helpers.createVariableReferenceNode('importAlias', { identifier: alias }, location())];
         }
       }
 
@@ -193,7 +193,7 @@ SlashImportMcpTools
       helpers.debug('SlashImportMcpTools namespace matched', { alias, path, tail });
 
       const values = {
-        namespace: [helpers.createNode(NodeType.Text, { content: alias, location: location() })],
+        namespace: [helpers.createVariableReferenceNode('importAlias', { identifier: alias }, location())],
         imports: [
           helpers.createVariableReferenceNode('import', { identifier: '*', alias }, location())
         ],
@@ -287,7 +287,7 @@ SlashImportShorthand
       
       // Create values object with namespace import structure
       const values = {
-        namespace: [helpers.createNode(NodeType.Text, { content: namespace, location: location() })],  // Store namespace as array for consistency
+        namespace: [helpers.createVariableReferenceNode('importAlias', { identifier: namespace }, location())],
         templateParams,
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
@@ -354,7 +354,7 @@ SlashImportPolicy
   = DirectiveContext ImportKeyword _ "policy" _ alias:ImportAliasIdentifier _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashImportPolicy matched', { alias, path, tail });
 
-      const namespace = [helpers.createNode(NodeType.Text, { content: alias, location: location() })];
+      const namespace = [helpers.createVariableReferenceNode('importAlias', { identifier: alias }, location())];
       const values = {
         namespace,
         path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path),
@@ -553,7 +553,7 @@ ImportPath
         type: 'path',
         subtype: 'payloadPath',
         values: {
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'payload', originalForm: matched }, location())]
         },
         raw: {
           path: matched
@@ -571,7 +571,7 @@ ImportPath
         type: 'path',
         subtype: 'statePath',
         values: {
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'state', originalForm: matched }, location())]
         },
         raw: {
           path: matched
@@ -589,7 +589,7 @@ ImportPath
         type: 'path',
         subtype: 'inputPath',
         values: {
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'INPUT', originalForm: matched }, location())]
         },
         raw: {
           path: matched
@@ -606,10 +606,10 @@ ImportPath
       return {
         type: 'path',
         subtype: 'nowPath',
-        values: { 
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        values: {
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'NOW', originalForm: matched }, location())]
         },
-        raw: { 
+        raw: {
           path: matched
         },
         meta: {
@@ -624,10 +624,10 @@ ImportPath
       return {
         type: 'path',
         subtype: 'timePath',
-        values: { 
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        values: {
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'TIME', originalForm: matched }, location())]
         },
-        raw: { 
+        raw: {
           path: matched
         },
         meta: {
@@ -641,10 +641,10 @@ ImportPath
       return {
         type: 'path',
         subtype: 'inputPath',
-        values: { 
-          path: [helpers.createNode(NodeType.Text, { content: '@stdin', location: location() })]
+        values: {
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'stdin', originalForm: '@stdin' }, location())]
         },
-        raw: { 
+        raw: {
           path: '@stdin'
         },
         meta: {
@@ -661,7 +661,7 @@ ImportPath
         type: 'path',
         subtype: 'resolverPath',
         values: {
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'keychain', originalForm: matched }, location())]
         },
         raw: {
           path: matched

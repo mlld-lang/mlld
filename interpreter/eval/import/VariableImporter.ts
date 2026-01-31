@@ -835,9 +835,9 @@ export class VariableImporter {
   ): Promise<void> {
     // For shorthand imports, namespace is stored as an array in values.namespace
     const namespaceNodes = directive.values?.namespace;
-    const alias = (namespaceNodes && Array.isArray(namespaceNodes) && namespaceNodes[0]?.content) 
-      ? namespaceNodes[0].content 
-      : directive.values?.imports?.[0]?.alias;
+    const namespaceNode = namespaceNodes && Array.isArray(namespaceNodes) ? namespaceNodes[0] : undefined;
+    // Support both VariableReference (identifier) and Text (content) node types
+    const alias = namespaceNode?.identifier ?? namespaceNode?.content ?? directive.values?.imports?.[0]?.alias;
 
     if (!alias) {
       throw new Error('Namespace import missing alias');
@@ -920,11 +920,32 @@ export class VariableImporter {
     const importerFilePath = targetEnv.getCurrentFilePath();
     const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
 
+    // @payload and @state are dynamic modules where fields are optional CLI arguments.
+    // Missing fields should default to null rather than throwing an error.
+    const allowMissingImports = importDisplay === '@payload' || importDisplay === '@state';
+
     for (const importItem of imports) {
       const importName = importItem.identifier;
       const alias = importItem.alias || importName;
 
       if (!(importName in moduleObject)) {
+        if (allowMissingImports) {
+          // Create a null variable for missing imports from @payload/@state
+          const bindingLocation = importItem?.location
+            ? astLocationToSourceLocation(importItem.location, importerFilePath)
+            : astLocationToSourceLocation(directive.location, importerFilePath);
+          const bindingInfo = { source: importDisplay, location: bindingLocation };
+
+          this.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
+
+          const variable = this.createVariableFromValue(alias, null, importPath, importName, {
+            securityLabels,
+            env: targetEnv
+          });
+
+          this.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
+          continue;
+        }
         throw new Error(`Import '${importName}' not found in module`);
       }
 

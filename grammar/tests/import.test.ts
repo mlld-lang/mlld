@@ -18,7 +18,7 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check values
       expect(result.values.path).toBeDefined();
-      expect(result.values.namespace[0].content).toBe('file'); // Auto-derived from filename
+      expect(result.values.namespace[0].identifier).toBe('file'); // Auto-derived from filename
       
       // Check raw
       expect(result.raw.path).toBeDefined();
@@ -40,7 +40,7 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check values
       expect(result.values.path).toBeDefined();
-      expect(result.values.namespace[0].content).toBe('myModule'); // Explicit alias (stored without prefix)
+      expect(result.values.namespace[0].identifier).toBe('myModule'); // Explicit alias (stored without prefix)
       
       // Check raw
       expect(result.raw.path).toBeDefined();
@@ -63,7 +63,7 @@ describe('Import Directive Syntax Tests', () => {
       // Check path has a variable
       expect(result.values.path).toHaveLength(1);
       expect(result.values.path[0].type).toBe('VariableReference');
-      expect(result.values.namespace[0].content).toBe('config'); // Explicit alias required for variable paths
+      expect(result.values.namespace[0].identifier).toBe('config'); // Explicit alias required for variable paths
       
       // Check meta
       expect(result.meta.path.hasVariables).toBe(true);
@@ -76,7 +76,7 @@ describe('Import Directive Syntax Tests', () => {
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('import');
       expect(result.subtype).toBe('importNamespace');
-      expect(result.values.namespace[0].content).toBe('mx');
+      expect(result.values.namespace[0].identifier).toBe('mx');
       expect(result.raw.path).toBe('@context/agents.mld');
       expect(result.meta?.path?.extension).toBe('.mld');
       expect(result.meta?.path?.name).toBe('agents');
@@ -187,7 +187,7 @@ describe('Import Directive Syntax Tests', () => {
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('import');
       expect(result.subtype).toBe('importMcpNamespace');
-      expect(result.values.namespace[0].content).toBe('github');
+      expect(result.values.namespace[0].identifier).toBe('github');
     });
 
     it('should reject MCP namespace imports without alias', async () => {
