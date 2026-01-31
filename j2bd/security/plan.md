@@ -16,7 +16,7 @@ Security features have natural dependencies:
 ## Current Focus
 
 ### Labels (Priority 1)
-- [ ] labels-overview - what labels are, why they matter
+- [x] labels-overview - what labels are, why they matter
 - [ ] labels-source-auto - src:mcp, src:exec, src:file, etc.
 - [ ] labels-sensitivity - secret, pii, sensitive
 - [ ] labels-trust - trusted/untrusted mechanics
@@ -60,7 +60,7 @@ Security features have natural dependencies:
 
 ## Completed
 
-(Items move here when done)
+- [x] labels-overview - foundation of the security model, label categories, declaration syntax, propagation, security check flow
 
 ## Blocked
 
@@ -68,4 +68,9 @@ Security features have natural dependencies:
 
 ## Learnings
 
-(Capture discoveries here for agent.md)
+### 2026-01-31
+- `mlld validate` has a bug with labeled variables - fails with "Cannot use 'in' operator to search for 'body'" error. Files run correctly though. Use `mlld <file>` to test, not `mlld validate`.
+- Atom examples in markdown use bare directives (no `/` prefix) - this works in both .mld and .md files.
+- `exe <label> @name(params) = ...` syntax works, but only with specific RHS patterns (templates, when, run blocks) - not with bare `show @var`.
+- Label names on exe must be single identifiers like `network`, `destructive`, not namespaced like `net:w`.
+- The v4 spec mentions `net:w` but current implementation uses `network`, `destructive` etc.

@@ -11,13 +11,13 @@ mlld j2bd/security/index.mld
 Atoms should have working ```mlld examples. To test:
 
 ```bash
-# Validate atom parses
-mlld validate docs/src/atoms/security/some-atom.md
-
-# Extract and run examples (manual for now)
+# DON'T use validate for docs - it has a bug with labels
+# Instead, extract code blocks and run directly:
 # Copy code block to tmp/test.mld
 mlld tmp/test.mld
 ```
+
+**Note:** `mlld validate` fails on files with labeled variables due to a bug ("Cannot use 'in' operator to search for 'body'"). Use `mlld <file>` directly instead.
 
 ## Atom Format
 
@@ -55,7 +55,12 @@ When writing atoms, note what's implemented vs planned.
 
 ## Learnings
 
-(Add discoveries during iteration)
+### 2026-01-31
+- `mlld validate` has a bug with labeled variables - use `mlld <file>` to test directly
+- Atom examples use bare directives (no `/` prefix) - works in both .mld and .md
+- `exe <label> @name(params) = ...` works but only with specific RHS (templates, when, run blocks)
+- Label names on exe must be identifiers like `network`, `destructive` - not namespaced like `net:w`
+- The v4 spec mentions `net:w` but implementation uses plain identifiers
 
 ### 2026-01-30
 - Initial setup of j2bd loop
