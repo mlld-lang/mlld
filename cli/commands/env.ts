@@ -27,6 +27,20 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
+async function copyDir(src: string, dest: string): Promise<void> {
+  await fs.mkdir(dest, { recursive: true });
+  const entries = await fs.readdir(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      await copyDir(srcPath, destPath);
+    } else {
+      await fs.copyFile(srcPath, destPath);
+    }
+  }
+}
+
 class EnvModuleTypeError extends Error {
   readonly entries: Array<{ path: string; type?: string | null }>;
 
@@ -137,6 +151,23 @@ function getKeychainProviderOrExit() {
 
 function normalizeExportName(name: string): string {
   return name.startsWith('@') ? name.slice(1) : name;
+}
+
+export function extractPromptFromArgs(args: string[]): string {
+  if (args.length === 0) {
+    return '';
+  }
+  if (args.length === 1) {
+    return args[0];
+  }
+  // Look for -p or --prompt flag pattern (e.g., "claude -p prompt" or "claude --prompt prompt")
+  for (let i = 0; i < args.length; i++) {
+    if ((args[i] === '-p' || args[i] === '--prompt') && i + 1 < args.length) {
+      return args[i + 1];
+    }
+  }
+  // No prompt flag found - join all args as the prompt
+  return args.join(' ');
 }
 
 function isBuiltinExecutable(variable: ExecutableVariable): boolean {
@@ -479,27 +510,53 @@ async function scanEnvDir(dirPath: string): Promise<EnvInfo[]> {
   }
 }
 
+type AgentType = 'claude' | 'codex';
+
 async function captureEnvCommand(args: string[]): Promise<void> {
   const name = args[0];
   if (!name) {
     console.error(chalk.red('Error: Environment name required'));
-    console.error('Usage: mlld env capture <name>');
+    console.error('Usage: mlld env capture <name> [--local] [--codex] [--global]');
     process.exit(1);
   }
   assertValidEnvName(name);
 
-  const isGlobal = args.includes('--global');
-  const claudeDir = path.join(os.homedir(), '.claude');
-  const targetDir = isGlobal
+  const useLocal = args.includes('--local');
+  const useCodex = args.includes('--codex');
+  const storeGlobal = args.includes('--global');
+
+  const agentType: AgentType = useCodex ? 'codex' : 'claude';
+  const agentDirName = useCodex ? '.codex' : '.claude';
+  const agentCommand = useCodex ? 'codex' : 'claude';
+
+  // Determine source directory
+  const localSourceDir = path.join(process.cwd(), agentDirName);
+  const globalSourceDir = path.join(os.homedir(), agentDirName);
+
+  let sourceDir: string;
+  let sourceScope: 'local' | 'global';
+
+  if (useLocal) {
+    if (!await exists(localSourceDir)) {
+      console.error(chalk.red(`Error: ${agentType} config not found at ${localSourceDir}`));
+      console.error(chalk.gray(`Make sure you have a local ${agentDirName}/ directory in this project.`));
+      process.exit(1);
+    }
+    sourceDir = localSourceDir;
+    sourceScope = 'local';
+  } else {
+    if (!await exists(globalSourceDir)) {
+      console.error(chalk.red(`Error: ${agentType} config not found at ${globalSourceDir}`));
+      console.error(chalk.gray(`Make sure ${agentType === 'claude' ? 'Claude Code' : 'Codex'} is installed and configured.`));
+      process.exit(1);
+    }
+    sourceDir = globalSourceDir;
+    sourceScope = 'global';
+  }
+
+  const targetDir = storeGlobal
     ? path.join(os.homedir(), '.mlld/env', name)
     : path.join(process.cwd(), '.mlld/env', name);
-
-  // Check source exists
-  if (!await exists(claudeDir)) {
-    console.error(chalk.red('Error: Claude config not found at ~/.claude/'));
-    console.error(chalk.gray('Make sure Claude Code is installed and configured.'));
-    process.exit(1);
-  }
 
   // Check if environment already exists
   if (await exists(path.join(targetDir, 'module.yml'))) {
@@ -509,10 +566,10 @@ async function captureEnvCommand(args: string[]): Promise<void> {
   }
 
   // Create directories
-  await fs.mkdir(path.join(targetDir, '.claude'), { recursive: true });
+  await fs.mkdir(path.join(targetDir, agentDirName), { recursive: true });
 
   // Extract and store token
-  const credsPath = path.join(claudeDir, '.credentials.json');
+  const credsPath = path.join(sourceDir, '.credentials.json');
   let tokenStored = false;
   if (await exists(credsPath)) {
     try {
@@ -525,7 +582,7 @@ async function captureEnvCommand(args: string[]): Promise<void> {
         console.log(chalk.green('✓ Token stored in keychain'));
         tokenStored = true;
       }
-    } catch (error) {
+    } catch {
       console.error(chalk.yellow('Warning: Could not extract token from credentials'));
     }
   }
@@ -537,17 +594,25 @@ async function captureEnvCommand(args: string[]): Promise<void> {
   // Copy config files (NOT credentials)
   const filesToCopy = ['settings.json', 'CLAUDE.md', 'hooks.json'];
   for (const file of filesToCopy) {
-    const src = path.join(claudeDir, file);
+    const src = path.join(sourceDir, file);
     if (await exists(src)) {
-      await fs.copyFile(src, path.join(targetDir, '.claude', file));
+      await fs.copyFile(src, path.join(targetDir, agentDirName, file));
       console.log(chalk.green(`✓ Copied ${file}`));
     }
   }
 
+  // Copy skills directory if it exists
+  const skillsDir = path.join(sourceDir, 'skills');
+  if (await exists(skillsDir)) {
+    await copyDir(skillsDir, path.join(targetDir, agentDirName, 'skills'));
+    console.log(chalk.green('✓ Copied skills/'));
+  }
+
   // Generate module.yml
+  const aboutSource = sourceScope === 'local' ? `${agentDirName} (local)` : `~/${agentDirName}`;
   const moduleYml = `name: ${name}
 type: environment
-about: "Environment captured from ~/.claude"
+about: "Environment captured from ${aboutSource}"
 version: 1.0.0
 entry: index.mld
 `;
@@ -555,10 +620,13 @@ entry: index.mld
   console.log(chalk.green('✓ Created module.yml'));
 
   // Generate index.mld
-  const indexMld = `/needs { cmd: [claude] }
+  const configEnvVar = useCodex ? 'CODEX_CONFIG_DIR' : 'CLAUDE_CONFIG_DIR';
+  const tokenEnvVar = useCodex ? 'CODEX_OAUTH_TOKEN' : 'CLAUDE_CODE_OAUTH_TOKEN';
+
+  const indexMld = `/needs { cmd: [${agentCommand}] }
 /policy @env = {
   auth: {
-    claude: { from: "keychain:mlld-env/${name}", as: "CLAUDE_CODE_OAUTH_TOKEN" }
+    ${agentType}: { from: "keychain:mlld-env/${name}", as: "${tokenEnvVar}" }
   },
   capabilities: {
     danger: ["@keychain"]
@@ -566,14 +634,14 @@ entry: index.mld
 }
 
 /exe @spawn(prompt) = run { \\
-  CLAUDE_CONFIG_DIR=@fm.dir/.claude \\
-  claude -p @prompt
-} using auth:claude
+  ${configEnvVar}=@fm.dir/${agentDirName} \\
+  ${agentCommand} -p @prompt
+} using auth:${agentType}
 
 /exe @shell() = run { \\
-  CLAUDE_CONFIG_DIR=@fm.dir/.claude \\
-  claude
-} using auth:claude
+  ${configEnvVar}=@fm.dir/${agentDirName} \\
+  ${agentCommand}
+} using auth:${agentType}
 
 /export { @spawn, @shell }
 `;
@@ -582,10 +650,11 @@ entry: index.mld
 
   console.log();
   console.log(chalk.bold.green(`✓ Created environment: ${name}`));
+  console.log(chalk.gray(`  Source: ${sourceDir}`));
   console.log(chalk.gray(`  Location: ${targetDir}`));
   console.log();
   console.log(chalk.gray('Usage:'));
-  console.log(chalk.gray(`  mlld env spawn ${name} -- claude -p "Your prompt"`));
+  console.log(chalk.gray(`  mlld env spawn ${name} -- "Your prompt"`));
   console.log(chalk.gray(`  mlld env shell ${name}`));
 }
 
@@ -593,7 +662,7 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
   const name = args[0];
   if (!name) {
     console.error(chalk.red('Error: Environment name required'));
-    console.error('Usage: mlld env spawn <name> -- <command>');
+    console.error('Usage: mlld env spawn <name> -- <prompt>');
     process.exit(1);
   }
   assertValidEnvName(name);
@@ -601,12 +670,16 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
   // Check for -- separator
   const separatorIndex = args.indexOf('--');
   if (separatorIndex === -1 || separatorIndex === args.length - 1) {
-    console.error(chalk.red('Error: Command required after --'));
-    console.error('Usage: mlld env spawn <name> -- <command>');
+    console.error(chalk.red('Error: Prompt required after --'));
+    console.error('Usage: mlld env spawn <name> -- <prompt>');
     process.exit(1);
   }
 
-  const command = args.slice(separatorIndex + 1);
+  const commandArgs = args.slice(separatorIndex + 1);
+
+  // Extract prompt from command args
+  // Handles: "prompt", prompt, or command -p "prompt" / command --prompt "prompt"
+  const prompt = extractPromptFromArgs(commandArgs);
 
   // Find environment
   let envLocation: EnvModuleLocation | null = null;
@@ -644,7 +717,7 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
       }
     }
 
-    const spawnResult = await executeEnvExport(loaded, 'spawn', command);
+    const spawnResult = await executeEnvExport(loaded, 'spawn', [prompt]);
     if (!spawnResult) {
       console.error(chalk.red(`Error: Environment '${name}' does not export @spawn`));
       exitCode = 1;
@@ -727,14 +800,21 @@ ${chalk.bold('Usage:')} mlld env <command> [options]
 
 ${chalk.bold('Commands:')}
   list              List available environments
-  capture <name>    Create environment from ~/.claude config
-  spawn <name> -- <command>   Run command with environment
+  capture <name>    Create environment from config
+  spawn <name> -- <prompt>    Run agent with prompt
   shell <name>      Start interactive session
+
+${chalk.bold('Capture options:')}
+  --local           Capture from project .claude/ instead of ~/.claude
+  --codex           Capture from Codex config (.codex/) instead of Claude
+  --global          Store environment in ~/.mlld/env/ instead of .mlld/env/
 
 ${chalk.bold('Examples:')}
   mlld env capture claude-dev
+  mlld env capture project-env --local
+  mlld env capture codex-env --codex
   mlld env list
-  mlld env spawn claude-dev -- claude -p "Fix the bug"
+  mlld env spawn claude-dev -- "Fix the bug in main.ts"
   mlld env shell claude-dev
 
 ${chalk.gray('Environment modules package credentials, configuration,')}

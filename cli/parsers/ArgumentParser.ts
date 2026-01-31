@@ -412,8 +412,10 @@ export class ArgumentParser {
     nextArg?: string
   ): { key: string; value: unknown; consumed: boolean } | null {
     if (!arg.startsWith('-')) return null;
-    const key = arg.startsWith('--') ? arg.slice(2) : arg.slice(1);
-    if (!key) return null;
+    const rawKey = arg.startsWith('--') ? arg.slice(2) : arg.slice(1);
+    if (!rawKey) return null;
+    // Convert kebab-case to camelCase (e.g., dry-run -> dryRun)
+    const key = rawKey.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
     if (nextArg !== undefined && !nextArg.startsWith('-')) {
       return { key, value: nextArg, consumed: true };
     }

@@ -17,7 +17,7 @@ import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { ModuleType, MODULE_TYPE_PATHS } from '@core/registry/types';
 
-const VALID_MODULE_TYPES: ModuleType[] = ['library', 'app', 'command', 'skill'];
+const VALID_MODULE_TYPES: ModuleType[] = ['library', 'app', 'command', 'skill', 'environment'];
 
 export interface InitModuleOptions {
   name?: string;
@@ -638,6 +638,10 @@ license: CC0
       } else if (moduleType === 'skill') {
         console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
         console.log(chalk.gray(`  2. Add to your Claude Code skills`));
+      } else if (moduleType === 'environment') {
+        console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
+        console.log(chalk.gray(`  2. Use: mlld env spawn ${moduleName} -- "your prompt"`));
+        console.log(chalk.gray(`  3. Publish: mlld publish ${relPath}`));
       }
 
     } finally {
@@ -667,6 +671,17 @@ export { @greet }
 
 var @result = "Command ${name} executed"
 show @result
+`;
+    } else if (type === 'environment') {
+      return `>> ${about || name}
+>> AI agent environment configuration
+
+exe @spawn(prompt) = \\
+  claude -p @prompt
+
+exe @shell = bash
+
+export { @spawn, @shell }
 `;
     } else {
       return `>> ${about || name}
@@ -806,12 +821,14 @@ Module Types:
   library     Importable module         → llm/lib/<name>/
   command     Claude slash command      → .claude/commands/<name>/
   skill       Claude skill              → .claude/skills/<name>/
+  environment AI agent environment      → .mlld/env/<name>/
 
 Examples:
   mlld module app myapp              Create app in llm/run/myapp/
   mlld module library utils          Create library in llm/lib/utils/
   mlld module command review         Create command in .claude/commands/review/
   mlld module skill helper           Create skill in .claude/skills/helper/
+  mlld module environment myenv      Create environment in .mlld/env/myenv/
   mlld module app myapp --global     Create in ~/.mlld/run/myapp/
 
 Single-file modules (legacy):

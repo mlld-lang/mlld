@@ -45,7 +45,14 @@ describe('ArgumentParser custom payload flags', () => {
     const parser = new ArgumentParser();
     const options = parser.parseArgs(['script.mld', '--dry-run']);
 
-    expect(options.inject).toEqual(['@payload={"dry-run":true}']);
+    expect(options.inject).toEqual(['@payload={"dryRun":true}']);
+  });
+
+  it('converts kebab-case flags to camelCase in payload', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--output-format', 'json', '--max-retries', '3']);
+
+    expect(options.inject).toEqual(['@payload={"outputFormat":"json","maxRetries":"3"}']);
   });
 
   it('merges --inject with custom payload flags', () => {
