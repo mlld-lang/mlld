@@ -1,0 +1,8 @@
+var secret @secret = "sensitive-data"
+var @template = :::Contains {{secret}}:::
+
+guard @testSecretLabel before secret = when [
+  * => allow
+]
+
+show @template

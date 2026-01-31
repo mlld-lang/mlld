@@ -37,6 +37,109 @@ import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { maybeAutosignVariable } from './auto-sign';
+import { mergeDescriptors } from '@core/types/security';
+
+/**
+ * Extract security descriptors from template AST nodes without performing interpolation.
+ * This allows labels to persist through lazy template evaluation (triple-colon templates).
+ *
+ * @param nodes - The template AST nodes to analyze
+ * @param env - The environment to look up variable security descriptors
+ * @returns Merged security descriptor from all referenced variables, or undefined if none found
+ */
+function extractDescriptorsFromTemplateAst(
+  nodes: unknown,
+  env: Environment
+): SecurityDescriptor | undefined {
+  if (!nodes || !Array.isArray(nodes)) {
+    return undefined;
+  }
+
+  const descriptors: SecurityDescriptor[] = [];
+
+  const collectFromNode = (node: unknown): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+
+    const n = node as Record<string, unknown>;
+    const nodeType = n.type as string | undefined;
+
+    // Handle variable references - these are the primary sources of labels
+    if (nodeType === 'InterpolationVar' || nodeType === 'VariableReference' || nodeType === 'TemplateVariable') {
+      const varName = (n.identifier || n.name) as string | undefined;
+      if (varName) {
+        const variable = env.getVariable(varName);
+        if (variable?.mx) {
+          const descriptor = varMxToSecurityDescriptor(variable.mx);
+          if (descriptor && (descriptor.labels.length > 0 || descriptor.taint.length > 0 || descriptor.sources.length > 0)) {
+            descriptors.push(descriptor);
+          }
+        }
+      }
+    }
+
+    // Handle VariableReferenceWithTail - extract from inner variable
+    if (nodeType === 'VariableReferenceWithTail') {
+      const innerVar = n.variable as Record<string, unknown> | undefined;
+      if (innerVar) {
+        collectFromNode(innerVar);
+      }
+    }
+
+    // Handle ConditionalVarOmission and NullCoalescingTight
+    if (nodeType === 'ConditionalVarOmission' || nodeType === 'NullCoalescingTight') {
+      const innerVar = n.variable as Record<string, unknown> | undefined;
+      if (innerVar) {
+        collectFromNode(innerVar);
+      }
+    }
+
+    // Handle conditional template snippets - recurse into content
+    if (nodeType === 'ConditionalTemplateSnippet' || nodeType === 'ConditionalStringFragment') {
+      const content = n.content as unknown[];
+      if (Array.isArray(content)) {
+        for (const child of content) {
+          collectFromNode(child);
+        }
+      }
+    }
+
+    // Handle template for blocks - recurse into body
+    if (nodeType === 'TemplateForBlock') {
+      const body = n.body as unknown[];
+      if (Array.isArray(body)) {
+        for (const child of body) {
+          collectFromNode(child);
+        }
+      }
+      // Also check the source expression
+      if (n.source) {
+        collectFromNode(n.source);
+      }
+    }
+
+    // Handle ExecInvocation - the function might return labeled values
+    // but we can't know without executing it, so we skip for now
+
+    // Handle file references - files can have labels from their content
+    // but we can't know without loading, so we skip for now
+  };
+
+  for (const node of nodes) {
+    collectFromNode(node);
+  }
+
+  if (descriptors.length === 0) {
+    return undefined;
+  }
+
+  if (descriptors.length === 1) {
+    return descriptors[0];
+  }
+
+  return mergeDescriptors(...descriptors);
+}
 
 export interface VarAssignmentResult {
   identifier: string;
@@ -635,7 +738,7 @@ export async function prepareVarAssignment(
   } else if (valueNode.type === 'code') {
     // Code execution: run js { ... } or js { ... }
     const { evaluateCodeExecution } = await import('./code-execution');
-    const result = await evaluateCodeExecution(valueNode, env);
+    const result = await evaluateCodeExecution(valueNode, env, sourceLocation ?? undefined);
     resolvedValue = result.value;
     
     // Infer variable type from result
@@ -804,9 +907,18 @@ export async function prepareVarAssignment(
       if (directive.meta?.wrapperType === 'tripleColon') {
         // Triple colon uses {{var}} interpolation - store AST for lazy evaluation
         resolvedValue = valueNode; // Store the AST array as the value
+
+        // Extract security descriptors from the template AST so labels persist
+        // even before interpolation happens (fixes label persistence through templates)
+        const astDescriptor = extractDescriptorsFromTemplateAst(valueNode, env);
+        if (astDescriptor) {
+          mergeResolvedDescriptor(astDescriptor);
+        }
+
         logger.debug('Storing template AST for triple-colon template', {
           identifier,
-          ast: valueNode
+          ast: valueNode,
+          extractedLabels: astDescriptor?.labels
         });
       } else {
         // Double colon uses @var interpolation - interpolate now
@@ -964,6 +1076,12 @@ export async function prepareVarAssignment(
   } else if (valueNode && valueNode.type === 'LoopExpression') {
     const { evaluateLoopExpression } = await import('./loop');
     resolvedValue = await evaluateLoopExpression(valueNode, env);
+
+  } else if (valueNode && valueNode.type === 'Directive' && valueNode.kind === 'env') {
+    // env expression used as var RHS - evaluate and capture return value
+    const { evaluateEnv } = await import('./env');
+    const envResult = await evaluateEnv(valueNode, env, context);
+    resolvedValue = envResult.value;
 
   } else {
     // Default case - try to interpolate as text
@@ -1325,7 +1443,28 @@ export async function prepareVarAssignment(
       const options = applySecurityOptions(undefined, resolvedValueDescriptor);
       variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
     }
-    
+
+  } else if (valueNode.type === 'Directive' && valueNode.kind === 'env') {
+    // env expression result - create variable based on resolved value type
+    if (isStructuredValue(resolvedValue)) {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
+    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      if (Array.isArray(resolvedValue)) {
+        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+        variable = createArrayVariable(identifier, resolvedValue, false, source, options);
+      } else {
+        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+        variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
+      }
+    } else if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
+    } else {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
+    }
+
   } else if (directive.meta?.expressionType) {
     // Expression results - create appropriate variable type based on resolved value
     if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
@@ -1746,8 +1885,8 @@ async function evaluateArrayItem(
     case 'UnaryExpression':
       // Evaluate expression nodes inside arrays/objects
       {
-        const { evaluateExpression } = await import('./expression');
-        const res = await evaluateExpression(item as any, env, context);
+        const { evaluateUnifiedExpression } = await import('./expressions');
+        const res = await evaluateUnifiedExpression(item as any, env, context);
         return res.value as any;
       }
     case 'array':
