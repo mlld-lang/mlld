@@ -1,0 +1,70 @@
+>> J2BD Context Gathering
+>> Provides executables for gathering context for decision agent
+
+>> Shell helpers (exe params become $param in sh blocks)
+exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+exe @tailFile(path, limit) = sh { tail -n "$limit" "$path" 2>/dev/null }
+
+>> Load recent events from events.jsonl
+exe @loadRecentEvents(runDir, limit) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  let @fileCheck = @fileExists(@eventsFile)
+  when @fileCheck == "no" => []
+  let @lines = @tailFile(@eventsFile, @limit)
+  => for @line in @lines.split("\n") when @line.trim() => @line | @json
+]
+
+>> Count iterations from events
+exe @countIterations(runDir) = [
+  let @events = @loadRecentEvents(@runDir, 1000)
+  let @iterations = for @e in @events when @e.event == "iteration" => @e
+  => @iterations.length
+]
+
+>> Load run state from run.json
+exe @loadRunState(runDir) = [
+  let @stateFile = `@runDir/run.json`
+  let @content = <@stateFile>?
+  when !@content => {
+    lastWorkerResult: null,
+    lastTestResults: null,
+    lastError: null
+  }
+  => @content | @json
+]
+
+>> Save run state to run.json
+exe @saveRunState(runDir, run) = [
+  let @stateFile = `@runDir/run.json`
+  let @jsonContent = @run | @json
+  output @jsonContent to "@stateFile"
+]
+
+>> Load tickets for worktree
+exe @loadTickets(worktree) = [
+  let @result = cmd { tk list --dir "@worktree" --json } with { ok: true }
+  when !@result => []
+  => @result | @json
+]
+
+>> Load human answers from questions.md
+exe @loadAnswers(runDir) = [
+  let @questionsFile = `@runDir/questions.md`
+  let @fileCheck = @fileExists(@questionsFile)
+  when @fileCheck == "no" => null
+  => <@questionsFile>
+]
+
+>> Build full context for decision agent
+exe @buildContext(config, runDir, worktree, run) = {
+  spec: <@config.spec>,
+  job: <@config.jobFile>,
+  tickets: @loadTickets(@worktree),
+  recentEvents: @loadRecentEvents(@runDir, 20),
+  lastWorkerResult: @run.lastWorkerResult,
+  testResults: @run.lastTestResults,
+  lastError: @run.lastError,
+  humanAnswers: @loadAnswers(@runDir)
+}
+
+export { @loadRecentEvents, @countIterations, @loadRunState, @saveRunState, @loadTickets, @loadAnswers, @buildContext }

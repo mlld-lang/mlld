@@ -188,6 +188,20 @@ export class FileReferenceVisitor extends BaseVisitor {
           tokenType: 'alligatorClose',
           modifiers: []
         });
+
+        if (node.optional) {
+          const optionalOffset = node.location.end.offset - 1;
+          if (sourceText[optionalOffset] === '?') {
+            const optionalPos = this.document.positionAt(optionalOffset);
+            this.tokenBuilder.addToken({
+              line: optionalPos.line,
+              char: optionalPos.character,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
+        }
       } else {
         // Has section - need to handle # and section name
         const hashIndex = text.indexOf('#');
@@ -273,6 +287,20 @@ export class FileReferenceVisitor extends BaseVisitor {
             tokenType: 'alligatorClose',
             modifiers: []
           });
+        }
+
+        if (node.optional) {
+          const optionalOffset = node.location.end.offset - 1;
+          if (sourceText[optionalOffset] === '?') {
+            const optionalPos = this.document.positionAt(optionalOffset);
+            this.tokenBuilder.addToken({
+              line: optionalPos.line,
+              char: optionalPos.character,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
         }
       }
       
@@ -496,6 +524,20 @@ export class FileReferenceVisitor extends BaseVisitor {
         tokenType: 'alligatorClose',
         modifiers: []
       });
+
+      if (node.optional) {
+        const optionalOffset = node.location.end.offset - 1;
+        if (sourceText[optionalOffset] === '?') {
+          const optionalPos = this.document.positionAt(optionalOffset);
+          this.tokenBuilder.addToken({
+            line: optionalPos.line,
+            char: optionalPos.character,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+      }
     } else {
       // Has section - tokenize as: <, filename, #, section, >, [pipes]
       
@@ -593,6 +635,20 @@ export class FileReferenceVisitor extends BaseVisitor {
         tokenType: 'alligatorClose',
         modifiers: []
       });
+
+      if (node.optional) {
+        const optionalOffset = node.location.end.offset - 1;
+        if (sourceText[optionalOffset] === '?') {
+          const optionalPos = this.document.positionAt(optionalOffset);
+          this.tokenBuilder.addToken({
+            line: optionalPos.line,
+            char: optionalPos.character,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+      }
     }
     
     // Handle pipes if present

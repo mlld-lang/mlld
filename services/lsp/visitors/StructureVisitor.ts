@@ -82,6 +82,43 @@ export class StructureVisitor extends BaseVisitor {
 
         for (let i = 0; i < entries.length; i++) {
           const entry = entries[i];
+          if (entry.type === 'spread') {
+            const spreadValues = Array.isArray(entry.value) ? entry.value : [];
+
+            if (spreadValues.length > 0) {
+              const firstSpread = spreadValues[0];
+              const lastSpread = spreadValues[spreadValues.length - 1];
+
+              if (firstSpread?.location) {
+                const searchStart = Math.max(0, firstSpread.location.start.offset - 5);
+                const searchText = sourceText.substring(searchStart, firstSpread.location.start.offset);
+                const spreadIndex = searchText.lastIndexOf('...');
+                if (spreadIndex !== -1) {
+                  this.operatorHelper.addOperatorToken(searchStart + spreadIndex, 3);
+                }
+              }
+
+              for (const spreadValue of spreadValues) {
+                if (spreadValue && typeof spreadValue === 'object' && spreadValue.type) {
+                  this.mainVisitor.visitNode(spreadValue, context);
+                }
+              }
+
+              if (lastSpread?.location) {
+                lastPropertyEndOffset = lastSpread.location.end.offset;
+              }
+            }
+
+            if (i < entries.length - 1) {
+              this.operatorHelper.tokenizeOperatorBetween(
+                lastPropertyEndOffset,
+                node.location.end.offset,
+                ','
+              );
+            }
+            continue;
+          }
+
           const key = entry.key;
           const value = entry.value;
 

@@ -30,6 +30,13 @@ export class VariableVisitor extends BaseVisitor {
       console.log('[VAR-VISITOR]', { identifier, valueType, location: `${node.location.start.line}:${node.location.start.column}` });
     }
 
+    // Handle import aliases and special resolvers which may not include '@' at location
+    if (valueType === 'import' || valueType === 'importAlias' || valueType === 'specialResolver') {
+      const targetIdentifier = (node.alias && (identifier === '*' || !identifier)) ? node.alias : identifier;
+      this.handleImportLikeReference(node, targetIdentifier);
+      return;
+    }
+
     // Skip identifiers that are declarations (var/exe function names)
     // These are already tokenized by handleVariableDeclaration
     if (valueType === 'identifier') {
@@ -464,5 +471,45 @@ export class VariableVisitor extends BaseVisitor {
         }
       }
     }
+  }
+
+  private handleImportLikeReference(node: any, identifier: string): void {
+    if (!identifier || !node.location) return;
+
+    const source = this.document.getText();
+    const startOffset = node.location.start.offset;
+    const endOffset = node.location.end.offset;
+    const segment = source.substring(startOffset, endOffset);
+    const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    let matchIndex = -1;
+    let length = 0;
+
+    const atPattern = new RegExp(`@${escaped}\\b`);
+    const atMatch = segment.match(atPattern);
+    if (atMatch && atMatch.index !== undefined) {
+      matchIndex = atMatch.index;
+      length = identifier.length + 1;
+    } else {
+      const wordPattern = new RegExp(`\\b${escaped}\\b`);
+      const wordMatch = segment.match(wordPattern);
+      if (wordMatch && wordMatch.index !== undefined) {
+        matchIndex = wordMatch.index;
+        length = identifier.length;
+      }
+    }
+
+    if (matchIndex === -1) return;
+
+    const offset = startOffset + matchIndex;
+    const pos = this.document.positionAt(offset);
+
+    this.tokenBuilder.addToken({
+      line: pos.line,
+      char: pos.character,
+      length,
+      tokenType: 'variableRef',
+      modifiers: ['reference']
+    });
   }
 }

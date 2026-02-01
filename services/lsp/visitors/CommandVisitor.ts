@@ -798,6 +798,164 @@ export class CommandVisitor extends BaseVisitor {
                 }
               }
             }
+          } else if (lastField?.type === 'bracketAccess' || lastField?.type === 'stringIndex') {
+            // COMPUTED STRING PROPERTY CALL: @obj["key"](args)
+            this.mainVisitor.visitNode(node.commandRef.objectReference, context);
+
+            if (lastField.location) {
+              const sourceText = this.document.getText();
+              const openOffset = lastField.location.start.offset;
+              const closeOffset = lastField.location.end.offset - (lastField.optional ? 2 : 1);
+              const segment = sourceText.substring(openOffset, closeOffset + 1);
+
+              // Tokenize opening bracket
+              const openPos = this.document.positionAt(openOffset);
+              this.tokenBuilder.addToken({
+                line: openPos.line,
+                char: openPos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+
+              const doubleQuoteIndex = segment.indexOf('"');
+              const singleQuoteIndex = segment.indexOf('\'');
+              let quoteIndex = -1;
+              let quoteChar = '';
+
+              if (doubleQuoteIndex !== -1 && singleQuoteIndex !== -1) {
+                if (doubleQuoteIndex < singleQuoteIndex) {
+                  quoteIndex = doubleQuoteIndex;
+                  quoteChar = '"';
+                } else {
+                  quoteIndex = singleQuoteIndex;
+                  quoteChar = '\'';
+                }
+              } else if (doubleQuoteIndex !== -1) {
+                quoteIndex = doubleQuoteIndex;
+                quoteChar = '"';
+              } else if (singleQuoteIndex !== -1) {
+                quoteIndex = singleQuoteIndex;
+                quoteChar = '\'';
+              }
+
+              if (quoteIndex !== -1) {
+                const lastQuoteIndex = segment.lastIndexOf(quoteChar);
+                if (lastQuoteIndex > quoteIndex + 1) {
+                  const nameOffset = openOffset + quoteIndex + 1;
+                  const namePos = this.document.positionAt(nameOffset);
+                  this.tokenBuilder.addToken({
+                    line: namePos.line,
+                    char: namePos.character,
+                    length: lastQuoteIndex - quoteIndex - 1,
+                    tokenType: 'function',
+                    modifiers: ['reference']
+                  });
+                }
+              } else if (lastField.value !== undefined) {
+                const valueText = String(lastField.value);
+                const valueIndex = segment.indexOf(valueText);
+                if (valueIndex !== -1) {
+                  const nameOffset = openOffset + valueIndex;
+                  const namePos = this.document.positionAt(nameOffset);
+                  this.tokenBuilder.addToken({
+                    line: namePos.line,
+                    char: namePos.character,
+                    length: valueText.length,
+                    tokenType: 'function',
+                    modifiers: ['reference']
+                  });
+                }
+              }
+
+              // Tokenize closing bracket
+              const closePos = this.document.positionAt(closeOffset);
+              this.tokenBuilder.addToken({
+                line: closePos.line,
+                char: closePos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+
+              if (lastField.optional) {
+                const optionalOffset = lastField.location.end.offset - 1;
+                if (sourceText[optionalOffset] === '?') {
+                  const optionalPos = this.document.positionAt(optionalOffset);
+                  this.tokenBuilder.addToken({
+                    line: optionalPos.line,
+                    char: optionalPos.character,
+                    length: 1,
+                    tokenType: 'operator',
+                    modifiers: []
+                  });
+                }
+              }
+
+              methodEndOffset = lastField.location.end.offset;
+            }
+
+            // Handle args for computed property calls
+            if (node.commandRef.args && Array.isArray(node.commandRef.args)) {
+              // Find and tokenize opening paren
+              const openParenOffset = source.indexOf('(', methodEndOffset);
+              if (openParenOffset !== -1) {
+                const openParenPos = this.document.positionAt(openParenOffset);
+                this.tokenBuilder.addToken({
+                  line: openParenPos.line,
+                  char: openParenPos.character,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+
+              const newContext = {
+                ...context,
+                inCommand: true,
+                interpolationAllowed: true,
+                variableStyle: '@var' as const,
+                inFunctionArgs: true
+              };
+
+              // Visit each argument
+              for (let i = 0; i < node.commandRef.args.length; i++) {
+                const arg = node.commandRef.args[i];
+                if (typeof arg === 'object' && arg !== null && arg.type) {
+                  this.mainVisitor.visitNode(arg, newContext);
+                }
+
+                // Add comma between args
+                if (i < node.commandRef.args.length - 1) {
+                  if (arg.location && typeof arg === 'object' && arg.type) {
+                    const nextArg = node.commandRef.args[i + 1];
+                    if (nextArg.location && typeof nextArg === 'object' && nextArg.type) {
+                      this.operatorHelper.tokenizeOperatorBetween(
+                        arg.location.end.offset,
+                        nextArg.location.start.offset,
+                        ','
+                      );
+                    }
+                  }
+                }
+              }
+
+              // Find and tokenize closing paren
+              const lastArg = node.commandRef.args[node.commandRef.args.length - 1];
+              if (lastArg?.location) {
+                const closeParenOffset = source.indexOf(')', lastArg.location.end.offset);
+                if (closeParenOffset !== -1) {
+                  const closeParenPos = this.document.positionAt(closeParenOffset);
+                  this.tokenBuilder.addToken({
+                    line: closeParenPos.line,
+                    char: closeParenPos.character,
+                    length: 1,
+                    tokenType: 'operator',
+                    modifiers: []
+                  });
+                }
+              }
+            }
           } else if (lastField?.type === 'field' && lastField.location && lastField.value) {
             // REGULAR METHOD CALL: @obj.method(args)
             // Visit the objectReference for base variable

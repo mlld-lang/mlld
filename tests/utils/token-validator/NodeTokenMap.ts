@@ -177,6 +177,50 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
   },
 
   // =============================================================================
+  // CONDITIONAL INCLUSION
+  // =============================================================================
+  'ConditionalTemplateSnippet': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'ConditionalVisitor'
+  },
+  'ConditionalStringFragment': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'ConditionalVisitor'
+  },
+  'ConditionalVarOmission': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'ConditionalVisitor'
+  },
+  'ConditionalArrayElement': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'ConditionalVisitor'
+  },
+  'NullCoalescingTight': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'ConditionalVisitor'
+  },
+
+  // =============================================================================
+  // LABEL MODIFICATIONS
+  // =============================================================================
+  'LabelModification': {
+    expectedTokenTypes: ['keyword'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'LabelVisitor'
+  },
+
+  // =============================================================================
   // FIELD ACCESS - Property access needs tokens
   // =============================================================================
   'FieldAccessNode': {

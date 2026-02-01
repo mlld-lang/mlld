@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "J2BD Decision Action",
+  "description": "Action returned by the decision agent",
+  "type": "object",
+  "required": ["reasoning", "action"],
+  "properties": {
+    "reasoning": {
+      "type": "string",
+      "description": "Explanation of why this action was chosen"
+    },
+    "action": {
+      "type": "string",
+      "enum": ["work", "create_ticket", "close_ticket", "update_ticket", "blocked", "complete"]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "action": { "const": "work" } } },
+      "then": {
+        "required": ["ticket", "task_type"],
+        "properties": {
+          "ticket": { "type": "string", "pattern": "^m-[a-z0-9]+$" },
+          "task_type": { "type": "string", "enum": ["doc", "impl", "friction", "improvement"] },
+          "guidance": { "type": "string" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "create_ticket" } } },
+      "then": {
+        "required": ["type", "title"],
+        "properties": {
+          "type": { "type": "string", "enum": ["doc", "impl", "friction", "improvement"] },
+          "title": { "type": "string", "minLength": 1 },
+          "body": { "type": "string" },
+          "parent_ticket": { "type": ["string", "null"] },
+          "tags": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "close_ticket" } } },
+      "then": {
+        "required": ["ticket", "reason"],
+        "properties": {
+          "ticket": { "type": "string", "pattern": "^m-[a-z0-9]+$" },
+          "reason": { "type": "string" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "update_ticket" } } },
+      "then": {
+        "required": ["ticket"],
+        "properties": {
+          "ticket": { "type": "string", "pattern": "^m-[a-z0-9]+$" },
+          "add_note": { "type": "string" },
+          "add_tags": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "blocked" } } },
+      "then": {
+        "required": ["blocking_tickets", "questions"],
+        "properties": {
+          "blocking_tickets": { "type": "array", "items": { "type": "string" } },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["ticket", "question"],
+              "properties": {
+                "ticket": { "type": "string" },
+                "context": { "type": "string" },
+                "chestertons_fence": { "type": "string" },
+                "question": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "complete" } } },
+      "then": {
+        "required": ["summary"],
+        "properties": {
+          "summary": { "type": "string" }
+        }
+      }
+    }
+  ]
+}

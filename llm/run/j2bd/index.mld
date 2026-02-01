@@ -1,0 +1,322 @@
+>> J2BD V3 Orchestrator
+>> Usage: mlld run j2bd --topic <topic> [--job <job>] [--run <run-id>] [--max <n>] [--dryRun]
+>>
+>> LLM-first orchestration: decision agent makes all choices, orchestrator executes
+>>
+>> Examples:
+>>   mlld run j2bd --topic security                     # New run for security topic
+>>   mlld run j2bd --topic security --job prevent-exfil # Specific job only
+>>   mlld run j2bd --topic security --run 2026-01-31-002 # Resume existing run
+>>   mlld run j2bd --topic security --dryRun            # Dry run (no commits)
+>>   mlld run j2bd --topic security --max 10            # Limit iterations
+
+>> Imports
+import { @claudePoll } from @mlld/claude-poll
+import { @buildContext, @loadRunState, @saveRunState, @countIterations, @loadTickets } from "./lib/context.mld"
+import { @writeQuestionsFile, @logEvent } from "./lib/questions.mld"
+import "@payload" as @p
+
+>> Tool permissions for agents
+var @decisionTools = "Read,Glob,Grep"
+var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(tk:*)"
+
+>> Parse arguments (--topic is required)
+var @topic = @p.topic
+var @jobFilter = @p.job ?? null
+var @runId = @p.run ?? null
+var @maxIterations = @p.max ? @p.max * 1 : null
+var @dryRun = @p.dryRun ?? false
+
+>> Load topic config
+var @configPath = `@base/j2bd/@topic/config.mld`
+import { @config } from "@configPath"
+
+>> Shell helpers
+exe @countRunsForDate(dir, date) = sh { ls "$dir" 2>/dev/null | grep "^$date" | wc -l | tr -d ' ' }
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+exe @wtExists(branch) = sh { wt list --format=json | grep -q "\"branch\":\"$branch\"" && echo "true" || echo "false" }
+exe @wtCreate(branch) = sh { wt switch --create "$branch" -y 2>&1 }
+exe @wtPath(branch) = sh { wt list --format=json | jq -r ".[] | select(.branch==\"$branch\") | .path" }
+exe @wtSwitch(branch) = sh { wt switch "$branch" -y }
+exe @wtRemove(branch) = sh { wt remove "$branch" -y }
+exe @wtMerge(branch) = sh { wt merge "$branch" }
+exe @gitAddInWorktree(wtPath, file) = sh { cd "$wtPath" && git add "$file" }
+exe @gitCommitInWorktree(wtPath, msg) = sh { cd "$wtPath" && git commit -m "$msg" }
+exe @runTestsInWorktree(wtPath, testCmd) = sh { cd "$wtPath" && $testCmd }
+
+>> Resolve or create run directory
+var @today = @now.slice(0, 10)
+var @j2bdRoot = `@base/j2bd/@topic/runs`
+
+exe @nextRunId(root, today) = [
+  let @existing = @countRunsForDate(@root, @today)
+  let @count = @existing * 1
+  => `@today-@count`
+]
+
+exe @resolveRunId(root, today, runId) = when [
+  @runId => @runId
+  * => @nextRunId(@root, @today)
+]
+
+var @resolvedRunId = @resolveRunId(@j2bdRoot, @today, @runId)
+var @runDir = `@j2bdRoot/@resolvedRunId`
+
+>> Ensure run directory exists
+run @mkdirp(@runDir)
+
+>> Load or initialize run state
+var @run = @loadRunState(@runDir)
+var @worktree = when [@run.worktree => @run.worktree; * => `@config.worktree_prefix-@resolvedRunId`]
+
+if !@run.id [
+  >> Create worktree for this run
+  let @wtExistsResult = @wtExists(@worktree)
+  if @wtExistsResult == "false" [
+    show `Creating worktree: @worktree`
+    run @wtCreate(@worktree)
+  ]
+
+  >> Get worktree path
+  let @worktreePath = @wtPath(@worktree)
+  show `Worktree path: @worktreePath`
+
+  let @newRun = {
+    id: @resolvedRunId,
+    topic: @topic,
+    worktree: @worktree,
+    worktreePath: @worktreePath,
+    created: @now
+  }
+  @saveRunState(@runDir, @newRun)
+  @logEvent(@runDir, "run_start", { topic: @topic, worktree: @worktree, path: @worktreePath })
+]
+
+>> Ensure we have the worktree path (for resumed runs)
+var @worktreePath = when [@run.worktreePath => @run.worktreePath; * => @wtPath(@worktree)]
+
+>> Load jobs (TODO: for-when loses file metadata - use direct access for now)
+var @jobs = <@base/j2bd/@topic/jobs/*.md>
+
+if @jobs.length == 0 [
+  show `No jobs found for topic @topic`
+  done
+]
+
+>> Use first job for now (filter not yet working due to metadata loss in for loops)
+var @job = @jobs[0]
+
+>> Prompt templates
+exe @decisionPrompt(spec, job, tickets, recentEvents, humanAnswers) = template "./prompts/decision.att"
+exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode) = template "./prompts/doc-worker.att"
+exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles) = template "./prompts/impl-worker.att"
+exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs) = template "./prompts/friction-worker.att"
+
+>> Build worker prompt based on task type
+exe @buildWorkerPrompt(taskType, ticket, guidance, config, job) = [
+  let @spec = <@config.spec>
+  when @taskType [
+    "doc" => [
+      let @existingAtoms = <@config.docs_dir/*.md>
+      => @docWorkerPrompt(@ticket, @guidance, @spec, @existingAtoms, "")
+    ]
+    "impl" => [
+      => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "")
+    ]
+    "improvement" => [
+      => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "")
+    ]
+    "friction" => [
+      => @frictionWorkerPrompt(@ticket, @guidance, "", @spec, "", "")
+    ]
+  ]
+]
+
+>> Main loop
+show `═══════════════════════════════════════════════════════════════════`
+show `J2BD @topic - Run @resolvedRunId`
+show `═══════════════════════════════════════════════════════════════════`
+show `Job: @job.mx.filename`
+show `Worktree: @worktree`
+show `Run dir: @runDir`
+show `───────────────────────────────────────────────────────────────────`
+
+loop(endless) [
+  >> Check max iterations (hard guard)
+  let @iterationCount = @countIterations(@runDir)
+  if @maxIterations && @iterationCount >= @maxIterations [
+    @logEvent(@runDir, "run_stopped", { reason: "max_iterations", count: @iterationCount })
+    show `Max iterations (@maxIterations) reached. Stopping.`
+    done
+  ]
+
+  >> 1. Gather context
+  let @context = @buildContext(@config, @runDir, @worktree, @run)
+
+  >> 2. Call decision agent
+  let @decisionPromptText = @decisionPrompt(
+    @context.spec,
+    @context.job,
+    @context.tickets | @json,
+    @context.recentEvents | @json,
+    @context.humanAnswers
+  )
+
+  let @decisionOutputPath = `@runDir/decision-@iterationCount\.json`
+  let @decisionFullPrompt = `@decisionPromptText
+
+IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool. Write ONLY valid JSON.`
+  let @_ = @claudePoll(@decisionFullPrompt, "opus", @base, @decisionTools, @decisionOutputPath)
+  let @decision = <@decisionOutputPath>?
+
+  if !@decision [
+    show `Decision agent failed: no output at @decisionOutputPath`
+    @logEvent(@runDir, "error", { type: "decision_agent", error: "no output" })
+    continue
+  ]
+
+  show `Decision: @decision.action - @decision.reasoning`
+
+  >> Log iteration
+  @logEvent(@runDir, "iteration", {
+    decision: @decision.action,
+    ticket: @decision.ticket,
+    reasoning: @decision.reasoning
+  })
+
+  >> 3. Execute action
+  when @decision.action [
+    "work" => [
+      show `Working on ticket @decision.ticket (@decision.task_type)`
+
+      >> Get ticket content
+      let @ticket = cmd { tk show @decision.ticket --json }
+
+      >> Build and run worker (in worktree)
+      let @workerPrompt = @buildWorkerPrompt(@decision.task_type, @ticket, @decision.guidance, @config, @job)
+      let @workerOutputPath = `@runDir/worker-@decision.ticket-@iterationCount\.json`
+      let @workerFullPrompt = `@workerPrompt
+
+IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. Write ONLY valid JSON.`
+      let @_ = @claudePoll(@workerFullPrompt, "sonnet", @worktreePath, @workerTools, @workerOutputPath)
+      let @result = <@workerOutputPath>?
+
+      if !@result [
+        show `Worker failed: no output at @workerOutputPath`
+        @logEvent(@runDir, "error", { type: "worker", ticket: @decision.ticket, error: "no output" })
+        continue
+      ]
+
+      @logEvent(@runDir, "worker_result", { ticket: @decision.ticket, status: @result.status, standup: @result.standup })
+
+      >> Write files if work was done (files is { path: content, ... })
+      >> Paths are relative to worktree
+      if @result.work_done && @result.work_done.files [
+        for @path, @content in @result.work_done.files [
+          let @fullPath = `@worktreePath/@path`
+          output @content to "@fullPath"
+        ]
+      ]
+
+      >> Post-work verification
+      if @result.status == "completed" [
+        >> Run tests in worktree (empty string on failure with ok:true)
+        let @testOutput = @runTestsInWorktree(@worktreePath, @config.test_command) with { ok: true }
+        let @testsPassed = @testOutput != ""
+        @logEvent(@runDir, "tests_run", { passed: @testsPassed })
+
+        >> Commit if tests pass (unless dry run)
+        if @testsPassed && !@dryRun && @result.work_done && @result.work_done.files [
+          for @path, @_ in @result.work_done.files [
+            run @gitAddInWorktree(@worktreePath, @path)
+          ]
+          run @gitCommitInWorktree(@worktreePath, @result.work_done.commit_message)
+          let @filePaths = for @p, @_ in @result.work_done.files => @p
+          @logEvent(@runDir, "commit_made", {
+            files: @filePaths,
+            message: @result.work_done.commit_message
+          })
+          show `Committed: @result.work_done.commit_message`
+        ]
+      ]
+
+      show `Worker status: @result.status`
+    ]
+
+    "create_ticket" => [
+      show `Creating ticket: @decision.title`
+      let @ticketId = cmd { tk create --dir "@worktree/@decision.type" "@decision.title" -d "@decision.body" }
+      >> Add tags if present
+      if @decision.tags [
+        for @tag in @decision.tags [
+          cmd { tk tag @ticketId @tag }
+        ]
+      ]
+      @logEvent(@runDir, "ticket_created", {
+        id: @ticketId,
+        type: @decision.type,
+        title: @decision.title,
+        parent: @decision.parent_ticket
+      })
+    ]
+
+    "close_ticket" => [
+      show `Closing ticket: @decision.ticket - @decision.reason`
+      if @decision.note [
+        cmd { tk note @decision.ticket "@decision.note" }
+      ]
+      cmd { tk close @decision.ticket "@decision.reason" }
+      @logEvent(@runDir, "ticket_closed", { ticket: @decision.ticket, reason: @decision.reason })
+    ]
+
+    "update_ticket" => [
+      show `Updating ticket: @decision.ticket`
+      if @decision.add_note [
+        cmd { tk note @decision.ticket "@decision.add_note" }
+      ]
+      if @decision.add_tags [
+        for @tag in @decision.add_tags [
+          cmd { tk tag @decision.ticket @tag }
+        ]
+      ]
+      @logEvent(@runDir, "ticket_updated", { ticket: @decision.ticket })
+    ]
+
+    "blocked" => [
+      show `Blocked - writing questions.md`
+      @writeQuestionsFile(@runDir, @decision.blocking_tickets, @decision.questions, @topic, @resolvedRunId)
+      @logEvent(@runDir, "run_paused", { reason: "needs_human", tickets: @decision.blocking_tickets })
+      show `Human input needed. See: @runDir/questions.md`
+      show `Resume with: mlld run j2bd @topic --run @resolvedRunId`
+      done
+    ]
+
+    "complete" => [
+      >> Hard guards before merge
+      let @openTickets = @loadTickets(@worktree)
+      let @openList = for @t in @openTickets when @t.status != "closed" => @t
+      let @openCount = @openList.length
+      if @openCount > 0 [
+        show `Cannot complete: @openCount open tickets remain`
+        @logEvent(@runDir, "error", { type: "complete_blocked", reason: "open_tickets", count: @openCount })
+        continue
+      ]
+
+      show `Job complete: @decision.summary`
+      @logEvent(@runDir, "job_complete", { summary: @decision.summary })
+
+      >> Merge worktree (if not dry run)
+      if !@dryRun [
+        show `Merging worktree @worktree to main`
+        run @wtMerge(@worktree)
+        @logEvent(@runDir, "worktree_merged", { worktree: @worktree })
+      ]
+
+      done
+    ]
+  ]
+
+  >> Small delay between iterations
+  cmd { sleep 1 }
+  continue
+]

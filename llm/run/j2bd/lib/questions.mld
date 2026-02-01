@@ -1,0 +1,57 @@
+>> J2BD Questions File Handling
+>> Write and read questions.md for human handoff
+
+>> Write questions.md from blocked action
+exe @writeQuestionsFile(runDir, blockingTickets, questions, topic, runId) = [
+  let @questionsFile = `@runDir/questions.md`
+  let @now = @now.slice(0, 19).replace("T", " ")
+
+  let @header = `# J2BD Questions - @topic/@runId
+
+Generated: @now
+Status: Awaiting human input
+
+## Questions
+`
+
+  let @questionBlocks = for @q in @questions => `
+### #@q.ticket - Question
+
+**Context**:
+@q.context
+
+**Chesterton's Fence**:
+@q.chestertons_fence
+
+**Question**: @q.question
+
+**Answer**:
+<!-- Write your answer here -->
+
+---
+`
+
+  let @footer = `
+## To Resume
+
+After answering questions above:
+\`\`\`bash
+mlld run j2bd @topic --run @runId
+\`\`\`
+`
+
+  let @content = `@header@questionBlocks.join("")@footer`
+  output @content to "@questionsFile"
+  => @questionsFile
+]
+
+>> Log event to events.jsonl
+exe @logEvent(runDir, eventType, data) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  let @ts = @now
+  let @event = { ts: @ts, event: @eventType, ...@data }
+  let @jsonEvent = @event | @json
+  append @jsonEvent to "@eventsFile"
+]
+
+export { @writeQuestionsFile, @logEvent }

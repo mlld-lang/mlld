@@ -107,6 +107,7 @@ export class OperatorTokenHelper {
             tokenType: isTypeCheckMethod ? 'function' : 'property',
             modifiers: isTypeCheckMethod ? ['defaultLibrary'] : []
           });
+          this.addOptionalSuffixToken(field);
         } else {
           // If no dot found, the location might be off - try to find it
           console.error('[FIELD-ERROR] No dot found before field', {
@@ -140,6 +141,7 @@ export class OperatorTokenHelper {
             tokenType: 'property',
             modifiers: []
           });
+          this.addOptionalSuffixToken(field);
         } else {
           console.error('[NUMERIC-FIELD-ERROR] No dot found before numeric field', {
             fieldValue: field.value,
@@ -174,7 +176,8 @@ export class OperatorTokenHelper {
         }
 
         // Token for closing bracket
-        const closeBracketPos = this.document.positionAt(field.location.end.offset - 1);
+        const closeBracketOffset = field.location.end.offset - (field.optional ? 2 : 1);
+        const closeBracketPos = this.document.positionAt(closeBracketOffset);
         this.tokenBuilder.addToken({
           line: closeBracketPos.line,
           char: closeBracketPos.character,
@@ -182,6 +185,7 @@ export class OperatorTokenHelper {
           tokenType: 'operator',
           modifiers: []
         });
+        this.addOptionalSuffixToken(field);
       } else if (field.type === 'variableIndex') {
         // Token for opening bracket
         const openBracketPos = this.document.positionAt(field.location.start.offset);
@@ -197,7 +201,8 @@ export class OperatorTokenHelper {
         // For now, just tokenize brackets; the nested VariableReference will be handled by visitChildren
 
         // Token for closing bracket
-        const closeBracketPos = this.document.positionAt(field.location.end.offset - 1);
+        const closeBracketOffset = field.location.end.offset - (field.optional ? 2 : 1);
+        const closeBracketPos = this.document.positionAt(closeBracketOffset);
         this.tokenBuilder.addToken({
           line: closeBracketPos.line,
           char: closeBracketPos.character,
@@ -205,6 +210,78 @@ export class OperatorTokenHelper {
           tokenType: 'operator',
           modifiers: []
         });
+        this.addOptionalSuffixToken(field);
+      } else if (field.type === 'stringIndex' || field.type === 'bracketAccess') {
+        // Token for opening bracket
+        const openBracketPos = this.document.positionAt(field.location.start.offset);
+        this.tokenBuilder.addToken({
+          line: openBracketPos.line,
+          char: openBracketPos.character,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+
+        const sourceText = this.document.getText();
+        const closeBracketOffset = field.location.end.offset - (field.optional ? 2 : 1);
+        const segment = sourceText.substring(field.location.start.offset, closeBracketOffset + 1);
+
+        const doubleQuoteIndex = segment.indexOf('"');
+        const singleQuoteIndex = segment.indexOf('\'');
+        let quoteIndex = -1;
+        let quoteChar = '';
+
+        if (doubleQuoteIndex !== -1 && singleQuoteIndex !== -1) {
+          if (doubleQuoteIndex < singleQuoteIndex) {
+            quoteIndex = doubleQuoteIndex;
+            quoteChar = '"';
+          } else {
+            quoteIndex = singleQuoteIndex;
+            quoteChar = '\'';
+          }
+        } else if (doubleQuoteIndex !== -1) {
+          quoteIndex = doubleQuoteIndex;
+          quoteChar = '"';
+        } else if (singleQuoteIndex !== -1) {
+          quoteIndex = singleQuoteIndex;
+          quoteChar = '\'';
+        }
+
+        if (quoteIndex !== -1) {
+          const lastQuoteIndex = segment.lastIndexOf(quoteChar);
+          if (lastQuoteIndex > quoteIndex) {
+            const quoteOffset = field.location.start.offset + quoteIndex;
+            const quotePos = this.document.positionAt(quoteOffset);
+            this.tokenBuilder.addToken({
+              line: quotePos.line,
+              char: quotePos.character,
+              length: lastQuoteIndex - quoteIndex + 1,
+              tokenType: 'string',
+              modifiers: quoteChar === '\'' ? ['literal'] : []
+            });
+          }
+        } else if (field.value !== undefined) {
+          const valueText = String(field.value);
+          const valuePos = this.document.positionAt(field.location.start.offset + 1);
+          this.tokenBuilder.addToken({
+            line: valuePos.line,
+            char: valuePos.character,
+            length: valueText.length,
+            tokenType: 'string',
+            modifiers: []
+          });
+        }
+
+        // Token for closing bracket
+        const closeBracketPos = this.document.positionAt(closeBracketOffset);
+        this.tokenBuilder.addToken({
+          line: closeBracketPos.line,
+          char: closeBracketPos.character,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+        this.addOptionalSuffixToken(field);
       } else if (field.type === 'arraySlice') {
         // Token for opening bracket
         const openBracketPos = this.document.positionAt(field.location.start.offset);
@@ -262,7 +339,8 @@ export class OperatorTokenHelper {
         }
         
         // Token for closing bracket
-        const closeBracketPos = this.document.positionAt(field.location.end.offset - 1);
+        const closeBracketOffset = field.location.end.offset - (field.optional ? 2 : 1);
+        const closeBracketPos = this.document.positionAt(closeBracketOffset);
         this.tokenBuilder.addToken({
           line: closeBracketPos.line,
           char: closeBracketPos.character,
@@ -270,6 +348,7 @@ export class OperatorTokenHelper {
           tokenType: 'operator',
           modifiers: []
         });
+        this.addOptionalSuffixToken(field);
       }
       
       currentOffset = field.location.end.offset;
@@ -444,5 +523,17 @@ export class OperatorTokenHelper {
       tokenType,
       modifiers: []
     });
+  }
+
+  private addOptionalSuffixToken(field: any): void {
+    if (!field?.optional || !field.location) return;
+
+    const sourceText = this.document.getText();
+    const optionalOffset = field.location.end.offset - 1;
+    if (optionalOffset < field.location.start.offset) return;
+
+    if (sourceText[optionalOffset] === '?') {
+      this.addOperatorToken(optionalOffset, 1);
+    }
   }
 }

@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "J2BD Worker Result",
+  "description": "Result returned by worker agents",
+  "type": "object",
+  "required": ["status", "standup"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["completed", "partial", "blocked", "needs_human"],
+      "description": "Outcome of the work"
+    },
+    "work_done": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "files": {
+          "type": "object",
+          "description": "Map of file path to content",
+          "additionalProperties": { "type": "string" }
+        },
+        "commit_message": { "type": "string" }
+      }
+    },
+    "friction_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "description", "urgency"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["unclear_error", "missing_feature", "doc_gap", "design_question", "test_failure"]
+          },
+          "description": { "type": "string" },
+          "urgency": {
+            "type": "string",
+            "enum": ["high", "med", "low"]
+          },
+          "suggested_fix": { "type": "string" },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "chestertons_fence": {
+            "type": "object",
+            "properties": {
+              "current_behavior": { "type": "string" },
+              "possible_reason": { "type": "string" },
+              "change_impact": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "standup": {
+      "type": "object",
+      "required": ["progress"],
+      "properties": {
+        "progress": { "type": "string" },
+        "blockers": { "type": "string" },
+        "next": { "type": "string" }
+      }
+    }
+  }
+}

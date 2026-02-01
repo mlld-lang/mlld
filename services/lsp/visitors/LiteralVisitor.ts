@@ -18,19 +18,17 @@ export class LiteralVisitor extends BaseVisitor {
     if (valueType === 'wildcard' || valueType === 'none') {
       tokenType = 'keyword';
     } else if (valueType === 'retry') {
-      // Use 'modifier' type for standout pink color like var/exe
-      tokenType = 'modifier';
+      tokenType = 'keyword';
     } else if (valueType === 'done' || valueType === 'continue') {
       // For done/continue, tokenize just the keyword, not the entire expression
       // The node location spans the entire expression (e.g., "done @value")
       // but we only want to highlight the keyword itself
-      // Use 'modifier' type for standout pink color like var/exe
       const keywordLength = valueType.length; // 'done' = 4, 'continue' = 8
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
         char: node.location.start.column - 1,
         length: keywordLength,
-        tokenType: 'modifier',
+        tokenType: 'keyword',
         modifiers: []
       });
 

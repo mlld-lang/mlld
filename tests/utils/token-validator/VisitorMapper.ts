@@ -106,6 +106,40 @@ const VISITOR_MAP: Record<string, VisitorInfo> = {
     file: 'services/lsp/visitors/TemplateVisitor.ts'
   },
 
+  // Conditional inclusion
+  'ConditionalTemplateSnippet': {
+    class: 'ConditionalVisitor',
+    file: 'services/lsp/visitors/ConditionalVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+  'ConditionalStringFragment': {
+    class: 'ConditionalVisitor',
+    file: 'services/lsp/visitors/ConditionalVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+  'ConditionalVarOmission': {
+    class: 'ConditionalVisitor',
+    file: 'services/lsp/visitors/ConditionalVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+  'ConditionalArrayElement': {
+    class: 'ConditionalVisitor',
+    file: 'services/lsp/visitors/ConditionalVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+  'NullCoalescingTight': {
+    class: 'ConditionalVisitor',
+    file: 'services/lsp/visitors/ConditionalVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+
+  // Label modifications
+  'LabelModification': {
+    class: 'LabelVisitor',
+    file: 'services/lsp/visitors/LabelVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+
   // Field Access
   'FieldAccessNode': {
     class: 'StructureVisitor',

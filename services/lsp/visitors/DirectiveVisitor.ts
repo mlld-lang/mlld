@@ -81,6 +81,12 @@ export class DirectiveVisitor extends BaseVisitor {
       return;
     }
 
+    if (node.kind === 'if') {
+      this.visitIfDirective(node, context);
+      this.handleDirectiveComment(node);
+      return;
+    }
+
     if (node.kind === 'output') {
       this.visitOutputDirective(node, context);
       this.handleDirectiveComment(node);
@@ -1562,6 +1568,25 @@ export class DirectiveVisitor extends BaseVisitor {
             'modifier'
           );
         }
+
+        if (node.meta?.isBlockForm) {
+          const sourceText = this.document.getText();
+          const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+          const openBracketIndex = nodeText.indexOf('[');
+          const closeBracketIndex = nodeText.lastIndexOf(']');
+          if (openBracketIndex !== -1) {
+            this.operatorHelper.addOperatorToken(
+              node.location.start.offset + openBracketIndex,
+              1
+            );
+          }
+          if (closeBracketIndex !== -1) {
+            this.operatorHelper.addOperatorToken(
+              node.location.start.offset + closeBracketIndex,
+              1
+            );
+          }
+        }
         
         // Process action
         if (Array.isArray(node.values.action)) {
@@ -1939,6 +1964,100 @@ export class DirectiveVisitor extends BaseVisitor {
     // Handle end-of-line comments in when directives
     if (node.meta?.comment) {
       this.visitEndOfLineComment(node.meta.comment);
+    }
+  }
+
+  private visitIfDirective(node: any, context: VisitorContext): void {
+    const values = node.values;
+    if (!values || !node.location) return;
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    // Process condition
+    if (values.condition) {
+      if (Array.isArray(values.condition)) {
+        for (const cond of values.condition) {
+          this.mainVisitor.visitNode(cond, context);
+        }
+      } else {
+        this.mainVisitor.visitNode(values.condition, context);
+      }
+    }
+
+    // Tokenize opening/closing brackets for then block
+    const thenNodes = Array.isArray(values.then) ? values.then : [];
+    if (thenNodes.length > 0) {
+      const firstThen = thenNodes[0];
+      const lastThen = thenNodes[thenNodes.length - 1];
+
+      if (firstThen?.location) {
+        const openOffset = this.operatorHelper.findOperatorNear(firstThen.location.start.offset, '[', 40, 'backward');
+        if (openOffset !== null) {
+          this.operatorHelper.addOperatorToken(openOffset, 1);
+        }
+      }
+
+      if (lastThen?.location) {
+        const closeOffset = this.operatorHelper.findOperatorNear(lastThen.location.end.offset, ']', 40, 'forward');
+        if (closeOffset !== null) {
+          this.operatorHelper.addOperatorToken(closeOffset, 1);
+        }
+      }
+    }
+
+    // Tokenize else keyword and block if present
+    const elseNodes = Array.isArray(values.else) ? values.else : [];
+    if (elseNodes.length > 0) {
+      const elseMatch = directiveText.match(/\belse\b/);
+      if (elseMatch && elseMatch.index !== undefined) {
+        const elseOffset = node.location.start.offset + elseMatch.index;
+        const elsePos = this.document.positionAt(elseOffset);
+        this.tokenBuilder.addToken({
+          line: elsePos.line,
+          char: elsePos.character,
+          length: 4,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+      }
+
+      const firstElse = elseNodes[0];
+      const lastElse = elseNodes[elseNodes.length - 1];
+      if (firstElse?.location) {
+        const openOffset = this.operatorHelper.findOperatorNear(firstElse.location.start.offset, '[', 40, 'backward');
+        if (openOffset !== null) {
+          this.operatorHelper.addOperatorToken(openOffset, 1);
+        }
+      }
+      if (lastElse?.location) {
+        const closeOffset = this.operatorHelper.findOperatorNear(lastElse.location.end.offset, ']', 40, 'forward');
+        if (closeOffset !== null) {
+          this.operatorHelper.addOperatorToken(closeOffset, 1);
+        }
+      }
+    }
+
+    const handleBlock = (blockNodes: any[]): void => {
+      for (const blockNode of blockNodes) {
+        if (blockNode.type === 'LetAssignment') {
+          this.visitLetAssignment(blockNode, node, context);
+        } else if (blockNode.type === 'AugmentedAssignment') {
+          this.visitAugmentedAssignment(blockNode, node, context);
+        } else if (blockNode.type === 'Directive' && blockNode.kind === 'output') {
+          this.visitOutputDirective(blockNode, context);
+        } else {
+          this.mainVisitor.visitNode(blockNode, context);
+        }
+      }
+    };
+
+    if (thenNodes.length > 0) {
+      handleBlock(thenNodes);
+    }
+
+    if (elseNodes.length > 0) {
+      handleBlock(elseNodes);
     }
   }
 
@@ -2637,18 +2756,18 @@ export class DirectiveVisitor extends BaseVisitor {
       const returnRaw = values.return.raw;
       if (returnRaw && returnRaw.startsWith('=>')) {
         const arrowMatch = directiveText.match(/=>/);
-        if (arrowMatch && arrowMatch.index !== undefined) {
-          const arrowOffset = directive.location.start.offset + arrowMatch.index;
-          const arrowPosition = this.document.positionAt(arrowOffset);
-          this.tokenBuilder.addToken({
-            line: arrowPosition.line,
-            char: arrowPosition.character,
-            length: 2,
-            tokenType: 'modifier',
-            modifiers: []
-          });
+          if (arrowMatch && arrowMatch.index !== undefined) {
+            const arrowOffset = directive.location.start.offset + arrowMatch.index;
+            const arrowPosition = this.document.positionAt(arrowOffset);
+            this.tokenBuilder.addToken({
+              line: arrowPosition.line,
+              char: arrowPosition.character,
+              length: 2,
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
         }
-      }
 
       // Process return value expressions
       if (values.return.values && Array.isArray(values.return.values)) {

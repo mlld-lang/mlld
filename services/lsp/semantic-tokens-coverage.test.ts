@@ -276,6 +276,77 @@ describe('Semantic Tokens Coverage Tests', () => {
     });
   });
 
+  describe('Conditional Inclusion and Optional Access', () => {
+    it('tokenizes conditional omission in templates', async () => {
+      const code = '/var @msg = `Hello @name?`';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@msg', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'variable', text: '@name' },
+        { tokenType: 'operator', text: '?' }
+      ]);
+    });
+
+    it('tokenizes tight nullish coalescing in templates', async () => {
+      const code = '/var @msg = `Hello @name??"world"`';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@msg', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'operator', text: '??' },
+        { tokenType: 'string', text: '"world"' }
+      ]);
+    });
+
+    it('tokenizes conditional array elements', async () => {
+      const code = '/var @arr = [@a, @b?, @c]';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@arr', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'operator', text: '?' }
+      ]);
+    });
+
+    it('tokenizes optional field access', async () => {
+      const code = '/show @obj.field?';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/show' },
+        { tokenType: 'variable', text: '@obj', modifiers: ['reference'] },
+        { tokenType: 'operator', text: '?' }
+      ]);
+    });
+
+    it('tokenizes optional file loads', async () => {
+      const code = '/var @data = <foo>?';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@data', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'operator', text: '?' }
+      ]);
+    });
+
+    it('tokenizes label modifications', async () => {
+      const code = '/exe @f() = [=> pii @x]';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/exe' },
+        { tokenType: 'variable', text: '@f', modifiers: ['declaration'] },
+        { tokenType: 'keyword', text: 'pii' }
+      ]);
+    });
+
+    it('tokenizes if/else blocks', async () => {
+      const code = '/if @x [show "a"] else [show "b"]';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/if' },
+        { tokenType: 'variable', text: '@x', modifiers: ['reference'] },
+        { tokenType: 'keyword', text: 'else' }
+      ]);
+    });
+  });
+
   describe('Pipelines And With-Clause', () => {
     it('tokenizes parallel groups in shorthand pipelines', async () => {
       const code = '/var @out = @x | || @a || @b | @c';

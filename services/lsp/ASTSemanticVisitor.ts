@@ -19,6 +19,8 @@ import { LiteralVisitor } from '@services/lsp/visitors/LiteralVisitor';
 import { StructureVisitor } from '@services/lsp/visitors/StructureVisitor';
 import { FileReferenceVisitor } from '@services/lsp/visitors/FileReferenceVisitor';
 import { ForeachVisitor } from '@services/lsp/visitors/ForeachVisitor';
+import { ConditionalVisitor } from '@services/lsp/visitors/ConditionalVisitor';
+import { LabelVisitor } from '@services/lsp/visitors/LabelVisitor';
 import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 import type { VisitorDiagnostic } from '@tests/utils/token-validator/types.js';
@@ -73,6 +75,8 @@ export class ASTSemanticVisitor {
     const structureVisitor = new StructureVisitor(this.document, this.tokenBuilder);
     const fileReferenceVisitor = new FileReferenceVisitor(this.document, this.tokenBuilder);
     const foreachVisitor = new ForeachVisitor(this.document, this.tokenBuilder);
+    const conditionalVisitor = new ConditionalVisitor(this.document, this.tokenBuilder);
+    const labelVisitor = new LabelVisitor(this.document, this.tokenBuilder);
     
     directiveVisitor.setMainVisitor(this);
     variableVisitor.setMainVisitor(this);
@@ -82,6 +86,7 @@ export class ASTSemanticVisitor {
     structureVisitor.setMainVisitor(this);
     fileReferenceVisitor.setMainVisitor(this);
     foreachVisitor.setMainVisitor(this);
+    conditionalVisitor.setMainVisitor(this);
     
     this.registerVisitor('Directive', directiveVisitor);
     this.registerVisitor('VariableReference', variableVisitor);
@@ -122,6 +127,12 @@ export class ASTSemanticVisitor {
     this.registerVisitor('foreach-command', foreachVisitor);
     this.registerVisitor('LetAssignment', expressionVisitor);
     this.registerVisitor('ExeReturn', expressionVisitor);
+    this.registerVisitor('ConditionalTemplateSnippet', conditionalVisitor);
+    this.registerVisitor('ConditionalStringFragment', conditionalVisitor);
+    this.registerVisitor('ConditionalVarOmission', conditionalVisitor);
+    this.registerVisitor('ConditionalArrayElement', conditionalVisitor);
+    this.registerVisitor('NullCoalescingTight', conditionalVisitor);
+    this.registerVisitor('LabelModification', labelVisitor);
   }
   
   private registerVisitor(nodeType: string, visitor: INodeVisitor): void {
@@ -728,7 +739,7 @@ export class ASTSemanticVisitor {
         line: arrowPos.line,
         char: arrowPos.character,
         length: 2,
-        tokenType: 'modifier',
+        tokenType: 'operator',
         modifiers: []
       });
     }
