@@ -1055,7 +1055,8 @@ ForExpressionExe "for expression with actions"
         [normalizedWhen],  // Accepts directive actions or block statements
         location(),
         opts || null,
-        batchPipe || null
+        batchPipe || null,
+        pattern.key || null
       );
     }
   / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionExeBody batchPipe:ForBatchPipeline? {
@@ -1067,7 +1068,8 @@ ForExpressionExe "for expression with actions"
         action,  // Accepts directive actions or block statements
         location(),
         opts || null,
-        batchPipe || null
+        batchPipe || null,
+        pattern.key || null
       );
     }
   // Error recovery

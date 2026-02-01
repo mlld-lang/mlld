@@ -1,5 +1,3 @@
-var @xs = [1, null, 2, null, 3]
-var @filtered = for @x in @xs => when [
-  @x != null => @x
-  none => skip
-]
+var @names = ["Ann","Ben"]
+exe @hello(n) = `Hello @n`
+show foreach @hello(@names) with { separator: " | ", template: "{{index}}={{result}}" }

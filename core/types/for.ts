@@ -18,6 +18,8 @@ export interface ForDirective extends DirectiveNode {
   kind: 'for';
   subtype: 'for';
   values: {
+    /** Optional key variable (e.g., @key in for @key, @item in @collection) */
+    key?: VariableReferenceNode[];
     /** Iteration variable (e.g., @item) */
     variable: VariableReferenceNode[];
     /** Collection to iterate over */
@@ -45,6 +47,8 @@ export interface ForDirective extends DirectiveNode {
  */
 export interface ForExpression extends BaseMlldNode {
   type: 'ForExpression';
+  /** Optional key variable */
+  keyVariable?: VariableReferenceNode;
   /** Iteration variable */
   variable: VariableReferenceNode;
   /** Collection to iterate over */

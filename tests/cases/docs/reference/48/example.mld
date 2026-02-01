@@ -1,22 +1,13 @@
->> Basic Python
-exe @add(a, b) = py { print(int(a) + int(b)) }
-exe @square(x) = py {
-result = int(x) ** 2
-print(result)
-}
+>> JavaScript (in-process, fast, no require())
+exe @double(n) = js { return n * 2 }
+exe @upper(s) = js { return s.toUpperCase() }
 
->> Standard library access
-exe @parseJson(data) = py {
-import json
-obj = json.loads(data)
-print(json.dumps(obj, indent=2))
+>> Node.js (VM-isolated, full API)
+exe @readFile(path) = node {
+  const fs = require('fs');
+  return fs.readFileSync(path, 'utf8');
 }
-
->> Multi-line with variables
-var @numbers = [1, 2, 3, 4, 5]
-exe @sumList(items) = py {
-import json
-nums = json.loads(items)
-print(sum(nums))
+exe @hash(text) = node {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(text).digest('hex');
 }
-show @sumList(@numbers)  >> 15

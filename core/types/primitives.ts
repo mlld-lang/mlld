@@ -180,6 +180,7 @@ export interface ParameterNode extends BaseMlldNode {
 // Template for-block node used inside template interpolation contexts
 export interface TemplateForBlockNode extends BaseMlldNode {
   type: 'TemplateForBlock';
+  keyVariable?: VariableReferenceNode;
   variable: VariableReferenceNode;
   source: BaseMlldNode[];
   body: BaseMlldNode[];

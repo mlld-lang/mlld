@@ -102,7 +102,7 @@ The overview module explains both modes, but examples throughout use strict mode
 | Deprecated | Use Instead |
 |------------|-------------|
 | `run { ... }` | `run cmd { ... }` |
-| `@var_key` in iteration | `@var.mx.key` |
+| `@var_key` in iteration | `for @key, @value in @obj` or `@var.mx.key` |
 
 ## The Cookbook
 

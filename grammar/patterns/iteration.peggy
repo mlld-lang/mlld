@@ -1,11 +1,34 @@
 // ITERATION PATTERNS
 // Shared patterns for iteration constructs (for loops, etc.)
 
-// For iteration pattern: @var in @collection (supports dotted field access)
+// For iteration pattern: [@key,] @var in @collection (value supports dotted field access)
 ForIterationPattern "for iteration pattern"
-  = variable:UnifiedVariableNoTail _ "in" _ source:VarRHSContent {
-      return { 
-        variable, 
+  = key:UnifiedVariableNoTail _ "," _ variable:UnifiedVariableNoTail _ "in" _ source:VarRHSContent {
+      if (key.fields && key.fields.length > 0) {
+        const firstField = key.fields[0];
+        let fieldName = '';
+        if (firstField && (typeof firstField.value === 'string' || typeof firstField.value === 'number')) {
+          fieldName = String(firstField.value);
+        } else if (firstField && typeof firstField.name === 'string') {
+          fieldName = firstField.name;
+        }
+        const renderedField = fieldName ? `@${fieldName}` : '@field';
+        const keyName = key.identifier || 'key';
+        helpers.mlldError(
+          `Cannot access field "${renderedField}" on loop key "@${keyName}" - keys are primitive values (strings)`,
+          `@${keyName}`,
+          location()
+        );
+      }
+      return {
+        key,
+        variable,
+        source: Array.isArray(source) ? source : [source]
+      };
+    }
+  / variable:UnifiedVariableNoTail _ "in" _ source:VarRHSContent {
+      return {
+        variable,
         source: Array.isArray(source) ? source : [source]
       };
     }
@@ -219,20 +242,30 @@ ForNestedDirective
         ? actionVariant.action
         : [actionVariant.action];
 
+      const values = {
+        variable: [pattern.variable],
+        source: pattern.source,
+        action: normalizedAction,
+        forOptions: opts || undefined
+      };
+      if (pattern.key) {
+        values.key = [pattern.key];
+      }
+
+      const raw = {
+        variable: helpers.reconstructRawString(pattern.variable),
+        source: helpers.reconstructRawString(pattern.source),
+        action: actionVariant.raw
+      };
+      if (pattern.key) {
+        raw.key = helpers.reconstructRawString(pattern.key);
+      }
+
       const nestedFor = helpers.createStructuredDirective(
         'for',
         'for',
-        {
-          variable: [pattern.variable],
-          source: pattern.source,
-          action: normalizedAction,
-          forOptions: opts || undefined
-        },
-        {
-          variable: helpers.reconstructRawString(pattern.variable),
-          source: helpers.reconstructRawString(pattern.source),
-          action: actionVariant.raw
-        },
+        values,
+        raw,
         meta,
         location()
       );

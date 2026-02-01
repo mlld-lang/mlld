@@ -2501,6 +2501,13 @@ export class DirectiveVisitor extends BaseVisitor {
       if (closeOffset >= openOffset) this.operatorHelper.addOperatorToken(closeOffset, 1);
     }
     
+    // Process key variable (optional)
+    if (values.key && Array.isArray(values.key)) {
+      for (const keyNode of values.key) {
+        this.mainVisitor.visitNode(keyNode, context);
+      }
+    }
+
     // Process variable
     if (values.variable && Array.isArray(values.variable)) {
       for (const varNode of values.variable) {

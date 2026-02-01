@@ -1,4 +1,1 @@
-for @item in @items [
-  show "Processing: @item"
-  let @count += 1
-]
+for @x in ["A", "B"] => for @y in [1, 2] => show `@x-@y`

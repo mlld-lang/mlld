@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `@mx.for.key` - Key for objects, index string for arrays
   - `@mx.for.parallel` - Whether loop is parallel
   - Works in both sequential and `parallel()` for loops
+- **Key/value for loops**: `for @key, @value in @obj` binds the key variable and skips the implicit `@value_key` binding
 - **`for parallel` variables**: Cap and pacing parameters accept variables
 - **`when @condition => [block]`**: Conditional blocks with full statement support
   - Execute multiple statements when condition is true: `when @ready => [let @x = 1; show @x]`

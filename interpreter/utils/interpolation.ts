@@ -652,11 +652,17 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         for (const [key, value] of iterable as Iterable<[string | null, unknown]>) {
           const childEnv = env.createChildEnvironment();
           const varName = (node as any).variable?.identifier || (node as any).variable?.name || 'item';
+          const keyVarName = (node as any).keyVariable?.identifier;
           const iterationVar = importer.createVariableFromValue(varName, value, 'template-for', undefined, { env });
           childEnv.setVariable(varName, iterationVar);
           if (key !== null && key !== undefined) {
-            const keyVar = importer.createVariableFromValue(`${varName}_key`, key, 'template-for', undefined, { env });
-            childEnv.setVariable(`${varName}_key`, keyVar);
+            if (keyVarName) {
+              const keyVar = importer.createVariableFromValue(keyVarName, key, 'template-for', undefined, { env });
+              childEnv.setVariable(keyVarName, keyVar);
+            } else {
+              const keyVar = importer.createVariableFromValue(`${varName}_key`, key, 'template-for', undefined, { env });
+              childEnv.setVariable(`${varName}_key`, keyVar);
+            }
           }
           const bodyStr = await interpolateImpl((node as any).body as any[], childEnv, InterpolationContext.Template, options);
           pushPart(bodyStr);

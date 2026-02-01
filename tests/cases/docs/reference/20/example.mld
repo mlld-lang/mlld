@@ -1,2 +1,4 @@
-exe @greet(name) = ::Hi @name!::
-var @greetings = foreach @greet(@names)
+for @item in @items [
+  show "Processing: @item"
+  let @count += 1
+]

@@ -1,5 +1,5 @@
 ---
-updated: 2025-08-06
+updated: 2026-02-01
 tags: #arch, #interpreter, #iterators
 related-docs: docs/for.md, docs/foreach.md
 related-code: interpreter/eval/for.ts, interpreter/eval/data-value-evaluator.ts, interpreter/utils/cartesian-product.ts
@@ -45,7 +45,7 @@ The `/for` directive provides simple iteration with two forms:
 Key characteristics:
 - Single action per iteration (no block syntax, but actions can be nested for loops)
 - Child environment per iteration with Variable preservation
-- Object iteration exposes keys via `.mx.key` accessor (internal: `@var_key` binding)
+- Object iteration exposes keys via `.mx.key` accessor. Value-only loops bind `@var_key`; key/value loops bind the key variable and skip `@var_key`.
 - ForExpression returns ArrayVariable with metadata
 - Error collection continues execution
   
@@ -88,6 +88,7 @@ export async function evaluateForDirective(
   env: Environment
 ): Promise<void> {
   const iterable = toIterable(sourceResult);
+  const keyVarName = directive.values.key?.[0]?.identifier;
   
   for (const [key, value] of iterable) {
     const childEnv = env.createChildEnvironment();
@@ -95,7 +96,11 @@ export async function evaluateForDirective(
     
     // Object key binding pattern
     if (key !== null && typeof key === 'string') {
-      childEnv.set(`${varName}_key`, key);
+      if (keyVarName) {
+        childEnv.set(keyVarName, key);
+      } else {
+        childEnv.set(`${varName}_key`, key);
+      }
     }
     
     await evaluateNodes(directive.values.action, childEnv);

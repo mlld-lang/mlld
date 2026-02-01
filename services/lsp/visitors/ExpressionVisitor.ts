@@ -374,6 +374,11 @@ export class ExpressionVisitor extends BaseVisitor {
       if (closeOffset >= openOffset) this.operatorHelper.addOperatorToken(closeOffset, 1);
     }
     
+    // Process key variable (optional)
+    if (node.keyVariable) {
+      this.mainVisitor.visitNode(node.keyVariable, context);
+    }
+
     // Process variable
     if (node.variable) {
       // Handle both single node and array format

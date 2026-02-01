@@ -1,2 +1,2 @@
-import { @sortBy, @unique } from @mlld/array
-import @company/utils as @utils
+var @allDocs = <docs/*.md>
+var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"

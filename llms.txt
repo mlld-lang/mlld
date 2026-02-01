@@ -96,6 +96,8 @@ for @item in @items [
   let @result = @process(@item)
   show `Done: @result`
 ]
+
+for @key, @value in @config => show `@key: @value`
 ```
 
 **Parallel execution:**

@@ -226,10 +226,16 @@ Fruit: cherry
 
 ### Object Iteration with Keys
 
-When iterating objects, access keys with `_key`:
+When iterating objects, bind a key variable or use `_key` in the value-only form:
 
 ```mlld
 var @config = {"host": "localhost", "port": 3000}
+for @key, @value in @config => show `@key: @value`
+```
+
+Value-only form:
+
+```mlld
 for @value in @config => show `@value_key: @value`
 ```
 

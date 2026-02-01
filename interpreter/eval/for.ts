@@ -356,6 +356,31 @@ function formatFieldPath(fields?: FieldAccessNode[]): string | null {
     .join('');
 }
 
+function formatKeyField(fields?: FieldAccessNode[]): string {
+  if (!fields || fields.length === 0) return '@field';
+  const field = fields[0] as any;
+  let name = '';
+  if (typeof field?.value === 'string' || typeof field?.value === 'number') {
+    name = String(field.value);
+  } else if (typeof field?.name === 'string') {
+    name = field.name;
+  }
+  return `@${name || 'field'}`;
+}
+
+function assertKeyVariableHasNoFields(
+  keyNode: VariableReferenceNode | undefined,
+  sourceLocation?: SourceLocation
+): void {
+  if (!keyNode?.fields || keyNode.fields.length === 0) return;
+  const renderedField = formatKeyField(keyNode.fields);
+  throw new MlldDirectiveError(
+    `Cannot access field "${renderedField}" on loop key "@${keyNode.identifier}" - keys are primitive values (strings)`,
+    'for',
+    { location: sourceLocation ?? keyNode.location }
+  );
+}
+
 function enhanceFieldAccessError(
   error: unknown,
   options: { fieldPath?: string | null; varName: string; index: number; key: string | null; sourceLocation?: SourceLocation }
@@ -453,7 +478,10 @@ export async function evaluateForDirective(
   env: Environment
 ): Promise<EvalResult> {
   const varNode = directive.values.variable[0];
+  const keyNode = directive.values.key?.[0];
+  assertKeyVariableHasNoFields(keyNode, directive.location);
   const varName = varNode.identifier;
+  const keyVarName = keyNode?.identifier;
   const varFields = varNode.fields;
   const fieldPathString = formatFieldPath(varFields);
   
@@ -536,8 +564,13 @@ export async function evaluateForDirective(
         childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
       }
       if (key !== null && typeof key === 'string') {
-        const keyVar = ensureVariable(`${varName}_key`, key, env);
-        childEnv.setVariable(`${varName}_key`, keyVar);
+        if (keyVarName) {
+          const keyVar = ensureVariable(keyVarName, key, env);
+          childEnv.setVariable(keyVarName, keyVar);
+        } else {
+          const keyVar = ensureVariable(`${varName}_key`, key, env);
+          childEnv.setVariable(`${varName}_key`, keyVar);
+        }
       }
 
       // Set up for context for @mx.for access
@@ -684,6 +717,9 @@ export async function evaluateForExpression(
   expr: ForExpression,
   env: Environment
 ): Promise<ArrayVariable> {
+  const keyNode = expr.keyVariable;
+  assertKeyVariableHasNoFields(keyNode, expr.location);
+  const keyVarName = keyNode?.identifier;
   const varName = expr.variable.identifier;
   const varFields = expr.variable.fields;
   const fieldPathString = formatFieldPath(varFields);
@@ -756,8 +792,13 @@ export async function evaluateForExpression(
       childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
     }
     if (key !== null && typeof key === 'string') {
-      const keyVar = ensureVariable(`${varName}_key`, key, env);
-      childEnv.setVariable(`${varName}_key`, keyVar);
+      if (keyVarName) {
+        const keyVar = ensureVariable(keyVarName, key, env);
+        childEnv.setVariable(keyVarName, keyVar);
+      } else {
+        const keyVar = ensureVariable(`${varName}_key`, key, env);
+        childEnv.setVariable(`${varName}_key`, keyVar);
+      }
     }
 
     // Set up for context for @mx.for access (matching directive path)

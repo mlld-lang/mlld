@@ -22,20 +22,30 @@ SlashFor "for directive"
         meta.comment = ending.comment;
       }
       
+      const values = {
+        variable: [pattern.variable],
+        source: pattern.source,
+        action: actionVariant.action,
+        forOptions: opts || undefined
+      };
+      if (pattern.key) {
+        values.key = [pattern.key];
+      }
+
+      const raw = {
+        variable: helpers.reconstructRawString(pattern.variable),
+        source: helpers.reconstructRawString(pattern.source),
+        action: actionVariant.raw
+      };
+      if (pattern.key) {
+        raw.key = helpers.reconstructRawString(pattern.key);
+      }
+
       return helpers.createStructuredDirective(
         'for',
         'for', 
-        {
-          variable: [pattern.variable],
-          source: pattern.source,
-          action: actionVariant.action,
-          forOptions: opts || undefined
-        },
-        {
-          variable: helpers.reconstructRawString(pattern.variable),
-          source: helpers.reconstructRawString(pattern.source),
-          action: actionVariant.raw
-        },
+        values,
+        raw,
         meta,
         location()
       );

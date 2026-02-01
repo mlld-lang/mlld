@@ -1,3 +1,7 @@
-var @numbers = [1, 2, 3, 4]
-var @doubled = for @n in @numbers => js { return @n * 2 }
-show @doubled
+for @user in @users [
+  let @status = when [
+    @user.active => "active"
+    * => "inactive"
+  ]
+  show "@user.name: @status"
+]

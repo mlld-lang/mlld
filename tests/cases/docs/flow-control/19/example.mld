@@ -1,7 +1,4 @@
-for @user in @users [
-  let @status = when [
-    @user.active => "active"
-    * => "inactive"
-  ]
-  show "@user.name: @status"
+for @item in ["a", "b", "c"] [
+  show "Processing: @item"
+  show "Done with: @item"
 ]

@@ -287,13 +287,17 @@ TemplateSlashForBlockBacktick "slash for-block (backtick)"
       const prev = input[pos - 1];
       return prev === '\n' || prev === '\r';
     } "/end" {
-      return {
+      const node = {
         type: 'TemplateForBlock',
         variable: pattern.variable,
         source: pattern.source,
         body: parts,
         style: 'slash'
       };
+      if (pattern.key) {
+        node.keyVariable = pattern.key;
+      }
+      return node;
     }
 
 // -------------------------------------------------------------

@@ -1,13 +1,11 @@
->> JavaScript (in-process, fast, no require())
-exe @double(n) = js { return n * 2 }
-exe @upper(s) = js { return s.toUpperCase() }
+var @config = {
+  "database": {
+    "host": "localhost",
+    "ports": [5432, 5433]
+  },
+  "features": ["auth", "api", "cache"]
+}
 
->> Node.js (VM-isolated, full API)
-exe @readFile(path) = node {
-  const fs = require('fs');
-  return fs.readFileSync(path, 'utf8');
-}
-exe @hash(text) = node {
-  const crypto = require('crypto');
-  return crypto.createHash('sha256').update(text).digest('hex');
-}
+show @config.database.host  >> "localhost"
+show @config.database.ports[0]  >> 5432
+show @config.features[1]  >> "api"

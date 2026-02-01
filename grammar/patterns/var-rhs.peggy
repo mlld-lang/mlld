@@ -587,7 +587,8 @@ ForExpression "for expression"
         [normalizedWhen],
         location(),
         opts || null,
-        batchPipe || null
+        batchPipe || null,
+        pattern.key || null
       );
     }
   / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionBody batchPipe:ForBatchPipeline? {
@@ -599,7 +600,8 @@ ForExpression "for expression"
         action,
         location(),
         opts || null,
-        batchPipe || null
+        batchPipe || null,
+        pattern.key || null
       );
     }
   // Error recovery

@@ -224,13 +224,17 @@ TemplateSlashForBlockDouble "slash for-block (double-colon)"
       const prev = input[pos - 1];
       return prev === '\n' || prev === '\r';
     } "/end" {
-      return {
+      const node = {
         type: 'TemplateForBlock',
         variable: pattern.variable,
         source: pattern.source,
         body: parts,
         style: 'slash'
       };
+      if (pattern.key) {
+        node.keyVariable = pattern.key;
+      }
+      return node;
     }
 
 // No for-blocks in triple-colon (::: … :::) or double-bracket ([[ … ]]) templates

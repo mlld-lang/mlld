@@ -1401,7 +1401,7 @@ export const helpers = {
     /**
      * Creates a ForExpression node for for...in expressions in /var assignments
      */
-    createForExpression(variable, source, expression, location, opts, batchPipeline) {
+    createForExpression(variable, source, expression, location, opts, batchPipeline, keyVariable) {
         const meta = {
             isForExpression: true
         };
@@ -1411,7 +1411,7 @@ export const helpers = {
         if (batchPipeline) {
             meta.batchPipeline = batchPipeline;
         }
-        return {
+        const node = {
             type: 'ForExpression',
             nodeId: randomUUID(),
             variable: variable,
@@ -1420,6 +1420,10 @@ export const helpers = {
             location: location,
             meta
         };
+        if (keyVariable) {
+            node.keyVariable = keyVariable;
+        }
+        return node;
     },
     /**
      * Creates a LoopExpression node for loop expressions in /var and /exe assignments

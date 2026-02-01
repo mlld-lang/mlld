@@ -1,5 +1,5 @@
 ---
-updated: 2025-08-24
+updated: 2026-02-01
 tags: #arch, #interpreter
 related-docs: docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/RESOLVERS.md, docs/dev/SHADOW-ENV.md, docs/dev/IMPORTS.md, docs/dev/ITERATORS.md, docs/dev/ALLIGATOR.md, docs/dev/EXEC-VARS.md, llms.txt
 related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/executors/*.ts, interpreter/eval/pipeline/*, core/types/*
@@ -88,7 +88,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 ### Iteration
 
-- `/for`: `eval/for.ts` iterates arrays/objects; action per item; emits effects immediately (show/output/log); collection form returns array results; exposes key via `.mx.key` accessor.
+- `/for`: `eval/for.ts` iterates arrays/objects; action per item; emits effects immediately (show/output/log); collection form returns array results; exposes key via `.mx.key` accessor. `for @key, @value` binds the key variable and skips the implicit `@value_key` binding.
 - `foreach`: `eval/data-value-evaluator.ts` (Cartesian product) executes parameterized commands/templates over arrays; lazy complex data until needed; capped combinations for performance.
 
 ### Imports and Resolvers

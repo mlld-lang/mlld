@@ -1,5 +1,2 @@
-exe @validator(input) = when [
-  @input.valid => @input
-  @mx.try < 3 => retry "need more validation"
-  * => "fallback"
-]
+var @result = run {cat data.json} | @json | @csv
+var @processed = @data | @validate | @transform

@@ -7,7 +7,7 @@ parent: templates
 tags: [templates, loops, for]
 related: [for-block, templates-basics]
 related-code: [interpreter/eval/template.ts, interpreter/eval/for.ts]
-updated: 2026-01-11
+updated: 2026-02-01
 qa_tier: 2
 ---
 
@@ -25,6 +25,14 @@ var @toc = ::
 /end
 ::
 show @toc
+```
+
+**Key/value form in templates:**
+
+```mlld
+/for @k, @v in @items
+- @k: @v
+/end
 ```
 
 **Key differences:**

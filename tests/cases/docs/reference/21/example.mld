@@ -1,3 +1,2 @@
-var @names = ["Ann","Ben"]
-exe @hello(n) = `Hello @n`
-show foreach @hello(@names) with { separator: " | ", template: "{{index}}={{result}}" }
+exe @greet(name) = ::Hi @name!::
+var @greetings = foreach @greet(@names)
