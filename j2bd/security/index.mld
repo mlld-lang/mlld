@@ -40,7 +40,7 @@ log `Starting loop...`
 >> TEST MODE: Set to number for testing, null for production
 >> Set @dryRun = true to skip agent spawn (just validate task builds)
 var @maxIterations = 1
-var @dryRun = true
+var @dryRun = false
 
 >> Main loop
 loop(endless) [
@@ -63,8 +63,9 @@ loop(endless) [
   >> Check if we're done
   when @plan.match(/## Status: Complete/) => done "Security docs complete"
 
-  >> Generate iteration ID
-  var @iterationId = `iter-@mx.loop.iteration`
+  >> Generate unique iteration ID (includes timestamp to avoid matching stale events)
+  var @runTs = @now.split("T")[1].split(".")[0].replace(/:/g, "")
+  var @iterationId = `iter-@mx.loop.iteration-@runTs`
 
   >> Log iteration start
   let @_ = @logEvent(@eventsFile, { event: "iteration_start", id: @iterationId })
@@ -115,28 +116,11 @@ loop(endless) [
     log `DRY RUN: Skipping validation and commit`
   ]
 
-  >> Post-agent validation (backpressure check - agent should have committed already)
+  >> Post-agent summary (atoms are docs, not mlld modules - agent validates its own examples)
   if !@dryRun [
-    >> Re-read atoms to get any new ones the agent created
+    >> Re-read atoms to get count after agent work
     let @currentAtoms = <@base/docs/src/atoms/security/*.md>
-
-    >> Validate all atoms parse correctly
-    log `Validating @currentAtoms.length atoms...`
-    let @validation = for parallel(5) @atom in @currentAtoms [
-      let @path = @atom.mx.path
-      let @check = run cmd { mlld validate "@path" } with { ok: true }
-      => { file: @atom.mx.filename, valid: @check.exitCode == 0, error: @check.stderr }
-    ]
-
-    let @failures = for @v in @validation when !@v.valid => @v
-    let @passed = @validation.length - @failures.length
-    log `Validation: @passed/@validation.length passed`
-
-    if @failures.length > 0 [
-      log `WARNING: Validation failures (agent should have fixed these):`
-      for @f in @failures => log `  @f.file: @f.error`
-      let @_ = @logEvent(@eventsFile, { event: "validation_warning", id: @iterationId, failures: @failures.length })
-    ]
+    log `Atoms: @currentAtoms.length files`
 
     >> Show recent events from this iteration for visibility
     log `Events from this iteration:`

@@ -1,5 +1,7 @@
 You are a friction worker for a J2BD run. Your job is to fix a friction point that was discovered during doc or impl work.
 
+@onboarding
+
 ## Your Task
 
 <ticket>
@@ -34,8 +36,9 @@ Before fixing, understand the friction:
 
 1. **What's the actual problem?** - Reproduce it, understand the symptoms
 2. **Why does it exist?** - What's the root cause?
-3. **Is it intentional?** - Consider Chesterton's fence
-4. **What's the right fix?** - Minimal change that addresses the root cause
+3. **What's the right fix?** - Minimal change that addresses the root cause
+
+@chestertonsFence
 
 ## Types of Friction
 

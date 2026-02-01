@@ -1,12 +1,13 @@
 >> J2BD V3 Orchestrator
->> Usage: mlld run j2bd --topic <topic> [--job <job>] [--run <run-id>] [--max <n>] [--dryRun]
+>> Usage: mlld run j2bd --topic <topic> [--job <job>] [--new] [--run <run-id>] [--max <n>] [--dryRun]
 >>
 >> LLM-first orchestration: decision agent makes all choices, orchestrator executes
 >>
 >> Examples:
->>   mlld run j2bd --topic security                     # New run for security topic
+>>   mlld run j2bd --topic security                     # Resume most recent run (or create first)
+>>   mlld run j2bd --topic security --new              # Start a new run
+>>   mlld run j2bd --topic security --run 2026-01-31-2 # Resume specific run
 >>   mlld run j2bd --topic security --job prevent-exfil # Specific job only
->>   mlld run j2bd --topic security --run 2026-01-31-002 # Resume existing run
 >>   mlld run j2bd --topic security --dryRun            # Dry run (no commits)
 >>   mlld run j2bd --topic security --max 10            # Limit iterations
 
@@ -24,6 +25,7 @@ var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(tk:*)
 var @topic = @p.topic
 var @jobFilter = @p.job ?? null
 var @runId = @p.run ?? null
+var @newRun = @p.new ?? false
 var @maxIterations = @p.max ? @p.max * 1 : null
 var @dryRun = @p.dryRun ?? false
 
@@ -54,12 +56,23 @@ exe @nextRunId(root, today) = [
   => `@today-@count`
 ]
 
-exe @resolveRunId(root, today, runId) = when [
+>> Find most recent run directory (by name, which sorts chronologically)
+exe @mostRecentRun(root) = sh { ls -1 "$root" 2>/dev/null | sort -r | head -1 | tr -d '\n' }
+
+>> Resolve run ID: --run <id> > --new > resume most recent > create first
+exe @resolveRunId(root, today, runId, newRun) = when [
   @runId => @runId
-  * => @nextRunId(@root, @today)
+  @newRun => @nextRunId(@root, @today)
+  * => [
+    let @recent = @mostRecentRun(@root)
+    if @recent.length > 0 [
+      => @recent
+    ]
+    => @nextRunId(@root, @today)
+  ]
 ]
 
-var @resolvedRunId = @resolveRunId(@j2bdRoot, @today, @runId)
+var @resolvedRunId = @resolveRunId(@j2bdRoot, @today, @runId, @newRun)
 var @runDir = `@j2bdRoot/@resolvedRunId`
 
 >> Ensure run directory exists
@@ -106,11 +119,15 @@ if @jobs.length == 0 [
 >> Use first job for now (filter not yet working due to metadata loss in for loops)
 var @job = @jobs[0]
 
+>> Shared prompt snippets
+var @onboarding = <@base/llm/prompts/mlld-onboarding.md>
+var @chestertonsFence = <@base/llm/prompts/chestertons-fence.md>
+
 >> Prompt templates
-exe @decisionPrompt(spec, job, tickets, recentEvents, humanAnswers) = template "./prompts/decision.att"
-exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode) = template "./prompts/doc-worker.att"
-exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles) = template "./prompts/impl-worker.att"
-exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs) = template "./prompts/friction-worker.att"
+exe @decisionPrompt(spec, job, tickets, recentEvents, humanAnswers, chestertonsFence) = template "./prompts/decision.att"
+exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode, onboarding, chestertonsFence) = template "./prompts/doc-worker.att"
+exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onboarding, chestertonsFence) = template "./prompts/impl-worker.att"
+exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/friction-worker.att"
 
 >> Build worker prompt based on task type
 exe @buildWorkerPrompt(taskType, ticket, guidance, config, job) = [
@@ -118,16 +135,16 @@ exe @buildWorkerPrompt(taskType, ticket, guidance, config, job) = [
   when @taskType [
     "doc" => [
       let @existingAtoms = <@config.docs_dir/*.md>
-      => @docWorkerPrompt(@ticket, @guidance, @spec, @existingAtoms, "")
+      => @docWorkerPrompt(@ticket, @guidance, @spec, @existingAtoms, "", @onboarding, @chestertonsFence)
     ]
     "impl" => [
-      => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "")
+      => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
     ]
     "improvement" => [
-      => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "")
+      => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
     ]
     "friction" => [
-      => @frictionWorkerPrompt(@ticket, @guidance, "", @spec, "", "")
+      => @frictionWorkerPrompt(@ticket, @guidance, "", @spec, "", "", @onboarding, @chestertonsFence)
     ]
   ]
 ]
@@ -159,7 +176,8 @@ loop(endless) [
     @context.job,
     @context.tickets | @json,
     @context.recentEvents | @json,
-    @context.humanAnswers
+    @context.humanAnswers,
+    @chestertonsFence
   )
 
   let @decisionOutputPath = `@runDir/decision-@iterationCount\.json`

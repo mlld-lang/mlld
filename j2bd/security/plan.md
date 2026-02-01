@@ -18,7 +18,7 @@ Security features have natural dependencies:
 ### Labels (Priority 1)
 - [x] labels-overview - what labels are, why they matter
 - [x] labels-source-auto - src:mcp, src:exec, src:file, etc.
-- [ ] labels-sensitivity - secret, pii, sensitive
+- [x] labels-sensitivity - secret, pii, sensitive
 - [ ] labels-trust - trusted/untrusted mechanics
 - [ ] labels-propagation - how labels flow through transforms
 - [ ] labels-mx-context - @mx.labels, @mx.taint, @mx.sources
@@ -62,6 +62,7 @@ Security features have natural dependencies:
 
 - [x] labels-overview - foundation of the security model, label categories, declaration syntax, propagation, security check flow
 - [x] labels-source-auto - automatic source labels (src:file, src:exec, dir:*), taint vs labels distinction
+- [x] labels-sensitivity - sensitivity labels (secret, pii, sensitive), keychain auto-labeling, no-secret-exfil/no-sensitive-exfil rules
 
 ## Blocked
 
