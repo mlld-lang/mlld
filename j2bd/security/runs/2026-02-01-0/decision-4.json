@@ -1,0 +1,7 @@
+{
+  "reasoning": "Continuing documentation work. signing-overview and sign-verify atoms are complete and closed. Following the logical documentation order from the job spec: signing-overview → sign-verify → autosign-autoverify → labels-influenced → pattern-audit-guard. The autosign-autoverify atom (m-6c50) documents policy automation for signing and is the next in sequence. This atom explains how to configure automatic signing of templates and automatic verification for LLM-labeled exes, which users need to understand before the capstone pattern-audit-guard example.",
+  "action": "work",
+  "ticket": "m-6c50",
+  "task_type": "doc",
+  "guidance": "Create docs/src/atoms/security/autosign-autoverify.md. Cover: (1) policy defaults.autosign for automatic template signing, (2) policy defaults.autoverify for automatic verification, (3) how these integrate with exe llm declarations, (4) configuration examples. Reference the existing signing-overview and sign-verify atoms for foundational concepts. All mlld examples must validate with 'mlld validate'."
+}

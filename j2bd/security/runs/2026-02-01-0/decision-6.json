@@ -1,0 +1,7 @@
+{
+  "reasoning": "The previous decision closed m-6c50 (autosign-autoverify atom) after successful completion. Looking at the job spec's required atoms: signing-overview (done), sign-verify (done), autosign-autoverify (just closed), labels-influenced (m-7505 open), pattern-audit-guard (m-aa7e open). The labels-influenced atom is the next prerequisite before the capstone. m-7505 documents how LLM outputs from untrusted context get the 'influenced' label, which is essential for understanding the audit guard pattern.",
+  "action": "work",
+  "ticket": "m-7505",
+  "task_type": "doc",
+  "guidance": "Create docs/src/atoms/security/labels-influenced.md. Key points: (1) What 'influenced' means - LLM output from context containing untrusted data, (2) How it's auto-applied via policy rule 'untrusted-llms-get-influenced' in defaults.rules, (3) Label propagation through subsequent operations, (4) Why this matters for prompt injection defense. Reference existing atoms: labels-overview, labels-source-auto. Include working mlld example showing exe llm processing untrusted data and output receiving influenced label. Validate with mlld validate."
+}

@@ -1,0 +1,7 @@
+{
+  "reasoning": "Fresh run with 5 documentation atoms needed for multi-agent audit pattern. The signing-overview atom is the foundational concept explaining WHY we sign templates (to prevent prompt injection from tampering with auditor instructions). This must be written first as other atoms (sign-verify, autosign-autoverify, pattern-audit-guard) build upon this conceptual foundation. Starting documentation work in logical dependency order.",
+  "action": "work",
+  "ticket": "m-4bf6",
+  "task_type": "doc",
+  "guidance": "Write the signing-overview atom explaining: 1) The threat model (prompt injection can manipulate LLM decisions but cannot forge signatures), 2) Why we sign templates/control plane not data, 3) How verification works (auditor calls verify, compares against context), 4) What this prevents (instruction injection, modification, bypass). Keep it conceptual - the sign-verify atom will cover the actual syntax. Include a simple example showing the vulnerability without signing and how signing addresses it."
+}

@@ -1,0 +1,6 @@
+{
+  "reasoning": "The last worker completed m-7505 (labels-influenced atom) successfully. The file exists at docs/src/atoms/security/labels-influenced.md and comprehensively covers: what influenced means, how to enable via defaults.rules, label propagation, policy restrictions, prompt injection defense, and when the label is/isn't applied. All examples follow mlld patterns from existing test fixtures. Closing this ticket so we can proceed to the final capstone atom (pattern-audit-guard) which ties everything together.",
+  "action": "close_ticket",
+  "ticket": "m-7505",
+  "reason": "Atom completed successfully. Created docs/src/atoms/security/labels-influenced.md covering: what the influenced label means, enabling via untrusted-llms-get-influenced rule, label propagation through operations, restricting influenced outputs with policy, prompt injection defense strategy, and conditions for label application. Examples verified against test fixtures (feat/security/influenced-label-propagation)."
+}
