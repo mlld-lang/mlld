@@ -1367,38 +1367,43 @@ export function applyHeaderTransform(content: string, newHeader: string): string
   return lines.join('\n');
 }
 
-// We'll use llmxml for section extraction once it's properly set up
-// For now, keeping the basic implementation
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Extract a section from markdown content.
- * TODO: Replace with llmxml.getSection() once integrated
  */
 export function extractSection(content: string, sectionName: string): string {
   const lines = content.split('\\n');
-  const sectionRegex = new RegExp(`^#+\\s+${sectionName}\\s*$`, 'i');
+  const normalizedName = sectionName.replace(/^#+\\s*/, '').trim();
+  const escapedName = escapeRegExp(normalizedName);
+  const sectionRegex = new RegExp(`^#{1,6}\\s+${escapedName}\\s*$`, 'i');
   
   let inSection = false;
   let sectionLevel = 0;
   const sectionLines: string[] = [];
   
   for (const line of lines) {
+    const lineForMatch = line.trimEnd();
     // Check if this line starts our section
-    if (!inSection && sectionRegex.test(line)) {
+    if (!inSection && sectionRegex.test(lineForMatch)) {
       inSection = true;
-      sectionLevel = line.match(/^#+/)?.[0].length || 0;
-      continue; // Skip the header itself
+      sectionLevel = lineForMatch.match(/^#+/)?.[0].length || 0;
+      sectionLines.push(lineForMatch);
+      continue;
     }
     
     // If we're in the section
     if (inSection) {
       // Check if we've hit another header at the same or higher level
-      const headerMatch = line.match(/^(#+)\\s+/);
+      const headerMatch = lineForMatch.match(/^(#{1,6})\\s+/);
       if (headerMatch && headerMatch[1].length <= sectionLevel) {
         // We've left the section
         break;
       }
       
-      sectionLines.push(line);
+      sectionLines.push(lineForMatch);
     }
   }
   

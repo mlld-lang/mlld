@@ -1024,7 +1024,7 @@ export async function evaluateCondition(
       const { evaluateUnifiedExpression } = await import('./expressions');
       let resultValue: unknown;
       try {
-        const expressionResult = await evaluateUnifiedExpression(node as any, env);
+        const expressionResult = await evaluateUnifiedExpression(node as any, env, { isCondition: true });
         resultValue = expressionResult.value;
       } catch (err) {
         // Add operator and operand previews for helpful diagnostics

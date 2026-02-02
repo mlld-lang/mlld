@@ -157,6 +157,45 @@ describe('Content Loader with Glob Support', () => {
       expect(metadata?.filename).toBe('README.md');
       expectLoadContentMetadata(metadata);
     });
+
+    it('extracts sections with parentheses in the header', async () => {
+      await fileSystem.writeFile(
+        path.join(process.cwd(), 'README.md'),
+        [
+          '# Test README',
+          '',
+          '## Part 1: Labels (The Foundation)',
+          '',
+          'Content for part 1.',
+          '',
+          '## Part 2: Next Steps',
+          '',
+          'Content for part 2.'
+        ].join('\n')
+      );
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: 'README.md' }],
+          raw: 'README.md'
+        },
+        options: {
+          section: {
+            identifier: { type: 'Text', content: 'Part 1: Labels (The Foundation)' }
+          }
+        }
+      };
+
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
+
+      expect(typeof result).toBe('string');
+      expect(result as string).toContain('## Part 1: Labels (The Foundation)');
+      expect(result as string).toContain('Content for part 1.');
+      expect(result as string).not.toContain('Content for part 2.');
+    });
   });
 
   describe('Relative path resolution', () => {

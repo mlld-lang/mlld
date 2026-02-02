@@ -298,8 +298,13 @@ async function evaluateBinaryExpression(
     operator = operator[0];
   }
   
+  const isConditionContext =
+    Boolean(context?.isCondition) ||
+    Boolean(node?.meta?.isWhenCondition) ||
+    Boolean(node?.meta?.isBooleanContext);
   const isExecParallel =
     operator === '||' &&
+    !isConditionContext &&
     node.left?.type === 'ExecInvocation' &&
     node.right?.type === 'ExecInvocation';
   if (isExecParallel) {

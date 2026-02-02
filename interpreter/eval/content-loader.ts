@@ -987,18 +987,60 @@ async function extractSectionName(sectionNode: any, env: Environment): Promise<s
   });
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractSectionByHeading(content: string, sectionName: string): string | null {
+  const lines = content.split('\n');
+  const normalizedName = sectionName.replace(/^#+\s*/, '').trim();
+  const escapedName = escapeRegExp(normalizedName);
+  const sectionRegex = new RegExp(`^#{1,6}\\s+${escapedName}\\s*$`, 'i');
+  let inSection = false;
+  let sectionLevel = 0;
+  const sectionLines: string[] = [];
+
+  for (const line of lines) {
+    const lineForMatch = line.trimEnd();
+    if (!inSection && sectionRegex.test(lineForMatch)) {
+      inSection = true;
+      sectionLevel = lineForMatch.match(/^#+/)?.[0].length || 0;
+      sectionLines.push(lineForMatch);
+      continue;
+    }
+
+    if (inSection) {
+      const headerMatch = lineForMatch.match(/^(#{1,6})\s+/);
+      if (headerMatch && headerMatch[1].length <= sectionLevel) {
+        break;
+      }
+      sectionLines.push(lineForMatch);
+    }
+  }
+
+  if (!inSection) {
+    return null;
+  }
+
+  return sectionLines.join('\n').trim();
+}
+
 /**
  * Extract a section from markdown content
  */
 async function extractSection(content: string, sectionName: string, renamedTitle?: any, fileContext?: LoadContentResult, env?: Environment): Promise<string> {
   try {
-    let extracted;
+    let extracted: string | null | undefined;
     try {
       extracted = await llmxmlInstance.getSection(content, sectionName, {
         includeNested: true
       });
     } catch (llmxmlError: any) {
-      throw llmxmlError;
+      extracted = null;
+    }
+
+    if (!extracted) {
+      extracted = extractSectionByHeading(content, sectionName);
     }
 
     if (!extracted) {
