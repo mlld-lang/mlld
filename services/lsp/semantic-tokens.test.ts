@@ -442,6 +442,28 @@ describe('Semantic Tokens', () => {
       expect(comment).toBeDefined();
       expect(comment?.tokenType).toBe('comment');
     });
+
+    it('should highlight comments inside blocks', async () => {
+      const code = `/loop(endless) [
+  >> inside block
+  /show "hi"
+]`;
+      const tokens = await getSemanticTokens(code);
+
+      const comment = tokens.find(t => t.tokenType === 'comment');
+      expect(comment).toBeDefined();
+    });
+
+    it('should highlight comments inside when blocks', async () => {
+      const code = `/when [
+  >> when block comment
+  * => "ok"
+]`;
+      const tokens = await getSemanticTokens(code);
+
+      const comment = tokens.find(t => t.tokenType === 'comment');
+      expect(comment).toBeDefined();
+    });
   });
   
   describe('Literals', () => {

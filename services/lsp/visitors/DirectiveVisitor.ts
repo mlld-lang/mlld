@@ -355,6 +355,52 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
+  private collectBlockCommentSkipRanges(nodes: any[]): Array<{ start: number; end: number }> {
+    const ranges: Array<{ start: number; end: number }> = [];
+
+    const pushNode = (node: any): void => {
+      if (!node) return;
+      if (Array.isArray(node)) {
+        for (const entry of node) {
+          pushNode(entry);
+        }
+        return;
+      }
+      if (node.location?.start?.offset !== undefined && node.location?.end?.offset !== undefined) {
+        ranges.push({ start: node.location.start.offset, end: node.location.end.offset });
+      }
+      if (Array.isArray(node.meta?.leadingComments)) {
+        for (const comment of node.meta.leadingComments) {
+          pushNode(comment);
+        }
+      }
+      if (node.meta?.comment) {
+        pushNode(node.meta.comment);
+      }
+    };
+
+    for (const node of nodes) {
+      pushNode(node);
+    }
+
+    return ranges;
+  }
+
+  private tokenizeBlockComments(
+    openOffset: number | null,
+    closeOffset: number | null,
+    blockNodes: any[] = []
+  ): void {
+    if (openOffset === null || closeOffset === null) return;
+    if (closeOffset <= openOffset) return;
+
+    const skipRanges = this.collectBlockCommentSkipRanges(blockNodes);
+    this.commentHelper.tokenizeStandaloneCommentsInRange(openOffset + 1, closeOffset, {
+      skipRanges,
+      requireLineStart: true
+    });
+  }
+
   private handleVariableDeclaration(node: any, skipEquals: boolean = false): void {
     const identifierNodes = node.values.identifier;
     if (Array.isArray(identifierNodes) && identifierNodes.length > 0) {
@@ -1569,24 +1615,33 @@ export class DirectiveVisitor extends BaseVisitor {
           );
         }
 
-        if (node.meta?.isBlockForm) {
-          const sourceText = this.document.getText();
-          const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
-          const openBracketIndex = nodeText.indexOf('[');
-          const closeBracketIndex = nodeText.lastIndexOf(']');
-          if (openBracketIndex !== -1) {
-            this.operatorHelper.addOperatorToken(
-              node.location.start.offset + openBracketIndex,
-              1
-            );
+      if (node.meta?.isBlockForm) {
+        const sourceText = this.document.getText();
+        const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+        const openBracketIndex = nodeText.indexOf('[');
+        const closeBracketIndex = nodeText.lastIndexOf(']');
+        const actionOpenOffset = openBracketIndex !== -1
+          ? node.location.start.offset + openBracketIndex
+          : null;
+        const actionCloseOffset = closeBracketIndex !== -1
+          ? node.location.start.offset + closeBracketIndex
+          : null;
+        if (openBracketIndex !== -1) {
+          this.operatorHelper.addOperatorToken(
+            node.location.start.offset + openBracketIndex,
+            1
+          );
           }
-          if (closeBracketIndex !== -1) {
-            this.operatorHelper.addOperatorToken(
-              node.location.start.offset + closeBracketIndex,
-              1
-            );
-          }
+        if (closeBracketIndex !== -1) {
+          this.operatorHelper.addOperatorToken(
+            node.location.start.offset + closeBracketIndex,
+            1
+          );
         }
+        if (Array.isArray(node.values.action)) {
+          this.tokenizeBlockComments(actionOpenOffset, actionCloseOffset, node.values.action);
+        }
+      }
         
         // Process action
         if (Array.isArray(node.values.action)) {
@@ -1601,6 +1656,48 @@ export class DirectiveVisitor extends BaseVisitor {
       
       // Handle block form: /when @var: [...] or /when [...]
       if (node.values.conditions && Array.isArray(node.values.conditions)) {
+        const blockCommentNodes: any[] = [];
+        const registerBlockNode = (value: any): void => {
+          if (!value || typeof value !== 'object') return;
+          if (Array.isArray(value)) {
+            for (const entry of value) {
+              registerBlockNode(entry);
+            }
+            return;
+          }
+          blockCommentNodes.push(value);
+        };
+
+        for (const entry of node.values.conditions) {
+          registerBlockNode(entry);
+          if (entry?.condition) registerBlockNode(entry.condition);
+          if (entry?.action) registerBlockNode(entry.action);
+        }
+
+        let conditionsStartOffset: number | null = null;
+        let conditionsEndOffset: number | null = null;
+        for (const entry of blockCommentNodes) {
+          const startOffset = entry?.location?.start?.offset;
+          const endOffset = entry?.location?.end?.offset;
+          if (typeof startOffset === 'number') {
+            conditionsStartOffset = conditionsStartOffset === null
+              ? startOffset
+              : Math.min(conditionsStartOffset, startOffset);
+          }
+          if (typeof endOffset === 'number') {
+            conditionsEndOffset = conditionsEndOffset === null
+              ? endOffset
+              : Math.max(conditionsEndOffset, endOffset);
+          }
+        }
+
+        const conditionsOpenOffset = conditionsStartOffset !== null
+          ? this.operatorHelper.findOperatorNear(conditionsStartOffset, '[', 80, 'backward')
+          : null;
+        const conditionsCloseOffset = conditionsEndOffset !== null
+          ? this.operatorHelper.findOperatorNear(conditionsEndOffset, ']', 80, 'forward')
+          : null;
+
         // Handle when block form: /when [...]
         if (!node.values.variable && !node.values.expression && !node.values.modifier) {
           // For block-only form, find and tokenize the opening bracket after /when
@@ -1827,6 +1924,8 @@ export class DirectiveVisitor extends BaseVisitor {
             });
           }
         }
+
+        this.tokenizeBlockComments(conditionsOpenOffset, conditionsCloseOffset, blockCommentNodes);
         
         // Handle action for when blocks (after ] =>)
         if (node.values.action) {
@@ -1861,6 +1960,23 @@ export class DirectiveVisitor extends BaseVisitor {
             }
           } else {
             this.mainVisitor.visitNode(node.values.action, context);
+          }
+
+          if (Array.isArray(node.values.action) && node.values.action.length > 0) {
+            const firstAction = node.values.action[0];
+            const lastAction = node.values.action[node.values.action.length - 1];
+            const actionOpenOffset = firstAction?.location
+              ? this.operatorHelper.findOperatorNear(firstAction.location.start.offset, '[', 40, 'backward')
+              : null;
+            const actionCloseOffset = lastAction?.location
+              ? this.operatorHelper.findOperatorNear(lastAction.location.end.offset, ']', 40, 'forward')
+              : null;
+            if (actionOpenOffset !== null && actionCloseOffset !== null) {
+              const isAfterConditions = conditionsCloseOffset === null || actionOpenOffset > conditionsCloseOffset;
+              if (isAfterConditions) {
+                this.tokenizeBlockComments(actionOpenOffset, actionCloseOffset, node.values.action);
+              }
+            }
           }
         }
       } else if (node.values.condition) {
@@ -1987,27 +2103,31 @@ export class DirectiveVisitor extends BaseVisitor {
 
     // Tokenize opening/closing brackets for then block
     const thenNodes = Array.isArray(values.then) ? values.then : [];
+    let thenOpenOffset: number | null = null;
+    let thenCloseOffset: number | null = null;
     if (thenNodes.length > 0) {
       const firstThen = thenNodes[0];
       const lastThen = thenNodes[thenNodes.length - 1];
 
       if (firstThen?.location) {
-        const openOffset = this.operatorHelper.findOperatorNear(firstThen.location.start.offset, '[', 40, 'backward');
-        if (openOffset !== null) {
-          this.operatorHelper.addOperatorToken(openOffset, 1);
+        thenOpenOffset = this.operatorHelper.findOperatorNear(firstThen.location.start.offset, '[', 40, 'backward');
+        if (thenOpenOffset !== null) {
+          this.operatorHelper.addOperatorToken(thenOpenOffset, 1);
         }
       }
 
       if (lastThen?.location) {
-        const closeOffset = this.operatorHelper.findOperatorNear(lastThen.location.end.offset, ']', 40, 'forward');
-        if (closeOffset !== null) {
-          this.operatorHelper.addOperatorToken(closeOffset, 1);
+        thenCloseOffset = this.operatorHelper.findOperatorNear(lastThen.location.end.offset, ']', 40, 'forward');
+        if (thenCloseOffset !== null) {
+          this.operatorHelper.addOperatorToken(thenCloseOffset, 1);
         }
       }
     }
 
     // Tokenize else keyword and block if present
     const elseNodes = Array.isArray(values.else) ? values.else : [];
+    let elseOpenOffset: number | null = null;
+    let elseCloseOffset: number | null = null;
     if (elseNodes.length > 0) {
       const elseMatch = directiveText.match(/\belse\b/);
       if (elseMatch && elseMatch.index !== undefined) {
@@ -2025,15 +2145,15 @@ export class DirectiveVisitor extends BaseVisitor {
       const firstElse = elseNodes[0];
       const lastElse = elseNodes[elseNodes.length - 1];
       if (firstElse?.location) {
-        const openOffset = this.operatorHelper.findOperatorNear(firstElse.location.start.offset, '[', 40, 'backward');
-        if (openOffset !== null) {
-          this.operatorHelper.addOperatorToken(openOffset, 1);
+        elseOpenOffset = this.operatorHelper.findOperatorNear(firstElse.location.start.offset, '[', 40, 'backward');
+        if (elseOpenOffset !== null) {
+          this.operatorHelper.addOperatorToken(elseOpenOffset, 1);
         }
       }
       if (lastElse?.location) {
-        const closeOffset = this.operatorHelper.findOperatorNear(lastElse.location.end.offset, ']', 40, 'forward');
-        if (closeOffset !== null) {
-          this.operatorHelper.addOperatorToken(closeOffset, 1);
+        elseCloseOffset = this.operatorHelper.findOperatorNear(lastElse.location.end.offset, ']', 40, 'forward');
+        if (elseCloseOffset !== null) {
+          this.operatorHelper.addOperatorToken(elseCloseOffset, 1);
         }
       }
     }
@@ -2054,10 +2174,12 @@ export class DirectiveVisitor extends BaseVisitor {
 
     if (thenNodes.length > 0) {
       handleBlock(thenNodes);
+      this.tokenizeBlockComments(thenOpenOffset, thenCloseOffset, thenNodes);
     }
 
     if (elseNodes.length > 0) {
       handleBlock(elseNodes);
+      this.tokenizeBlockComments(elseOpenOffset, elseCloseOffset, elseNodes);
     }
   }
 
@@ -2658,6 +2780,9 @@ export class DirectiveVisitor extends BaseVisitor {
     
     // Check if using block syntax with [ ]
     const hasBlockSyntax = directive.meta?.actionType === 'block';
+    const openOffset = (hasBlockSyntax && directiveText.indexOf('[') !== -1)
+      ? directive.location.start.offset + directiveText.indexOf('[')
+      : null;
 
     if (hasBlockSyntax) {
       // Find and tokenize opening bracket '['
@@ -2709,12 +2834,17 @@ export class DirectiveVisitor extends BaseVisitor {
     if (hasBlockSyntax) {
       // Find and tokenize closing bracket ']'
       const closeBracketIndex = directiveText.lastIndexOf(']');
+      const closeOffset = closeBracketIndex !== -1
+        ? directive.location.start.offset + closeBracketIndex
+        : null;
       if (closeBracketIndex !== -1) {
         this.operatorHelper.addOperatorToken(
           directive.location.start.offset + closeBracketIndex,
           1
         );
       }
+      const actionNodes = Array.isArray(values.action) ? values.action : [];
+      this.tokenizeBlockComments(openOffset, closeOffset, actionNodes);
     }
 
     // Tokenize pipeline operators (| and ||) for batch pipelines
@@ -2730,6 +2860,9 @@ export class DirectiveVisitor extends BaseVisitor {
 
     // Find and tokenize opening bracket '['
     const openBracketIndex = directiveText.indexOf('[');
+    const openOffset = openBracketIndex !== -1
+      ? directive.location.start.offset + openBracketIndex
+      : null;
     if (openBracketIndex !== -1) {
       this.operatorHelper.addOperatorToken(
         directive.location.start.offset + openBracketIndex,
@@ -2779,12 +2912,21 @@ export class DirectiveVisitor extends BaseVisitor {
 
     // Find and tokenize closing bracket ']'
     const closeBracketIndex = directiveText.lastIndexOf(']');
+    const closeOffset = closeBracketIndex !== -1
+      ? directive.location.start.offset + closeBracketIndex
+      : null;
     if (closeBracketIndex !== -1) {
       this.operatorHelper.addOperatorToken(
         directive.location.start.offset + closeBracketIndex,
         1
       );
     }
+
+    const blockNodes = [
+      ...(Array.isArray(values.statements) ? values.statements : []),
+      ...(values.return ? [values.return] : [])
+    ];
+    this.tokenizeBlockComments(openOffset, closeOffset, blockNodes);
   }
 
   private visitGuardDirective(directive: any, context: VisitorContext): void {
@@ -3432,6 +3574,9 @@ export class DirectiveVisitor extends BaseVisitor {
     }
 
     const openBracketIndex = directiveText.indexOf('[');
+    const openOffset = openBracketIndex !== -1
+      ? node.location.start.offset + openBracketIndex
+      : null;
     if (openBracketIndex !== -1) {
       this.operatorHelper.addOperatorToken(
         node.location.start.offset + openBracketIndex,
@@ -3457,12 +3602,18 @@ export class DirectiveVisitor extends BaseVisitor {
     }
 
     const closeBracketIndex = directiveText.lastIndexOf(']');
+    const closeOffset = closeBracketIndex !== -1
+      ? node.location.start.offset + closeBracketIndex
+      : null;
     if (closeBracketIndex !== -1) {
       this.operatorHelper.addOperatorToken(
         node.location.start.offset + closeBracketIndex,
         1
       );
     }
+
+    const blockNodes = Array.isArray(values.block) ? values.block : [];
+    this.tokenizeBlockComments(openOffset, closeOffset, blockNodes);
   }
 
   private visitStreamDirective(node: any, context: VisitorContext): void {
