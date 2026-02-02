@@ -21,6 +21,7 @@ import { isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
+import { isContinueLiteral, isDoneLiteral } from '@core/types/control';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 import { VariableImporter } from './import/VariableImporter';
 import * as path from 'path';
@@ -107,6 +108,13 @@ export async function evaluateExeBlock(
         }
         return { value: result.value.value, env };
       }
+      const hasLoopContext = Boolean(
+        blockEnv.getExecutionContext('loop') || blockEnv.getExecutionContext('while')
+      );
+      if (hasLoopContext && isLoopControlValue(result.value)) {
+        env.mergeChild(blockEnv);
+        return { value: result.value, env };
+      }
     }
 
     let returnValue: unknown = undefined;
@@ -126,6 +134,25 @@ export async function evaluateExeBlock(
   } finally {
     blockEnv.popExecutionContext('exe');
   }
+}
+
+function isLoopControlValue(value: unknown): boolean {
+  const unwrapped = isStructuredValue(value) ? asData(value) : value;
+
+  if (unwrapped && typeof unwrapped === 'object') {
+    if ('__whileControl' in (unwrapped as Record<string, unknown>)) {
+      return true;
+    }
+    if (isDoneLiteral(unwrapped as any) || isContinueLiteral(unwrapped as any)) {
+      return true;
+    }
+    if ('valueType' in (unwrapped as Record<string, unknown>)) {
+      const valueType = (unwrapped as any).valueType;
+      return valueType === 'retry';
+    }
+  }
+
+  return unwrapped === 'done' || unwrapped === 'continue' || unwrapped === 'retry';
 }
 
 async function interpolateAndRecord(
