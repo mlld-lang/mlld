@@ -1,315 +1,133 @@
 ---
-updated: 2026-01-31
+updated: 2026-02-01
 tags: #arch, #pipeline, #docs
-related-docs: docs/dev/POLISH.md, docs/dev/DOCS.md
-related-code: j2bd/
+related-docs: docs/dev/POLISH.md, docs/dev/DOCS.md, .claude/skills/llm-first.md
+related-code: llm/run/j2bd/, j2bd/
 ---
 
-# Job-to-Be-Done (J2B) Loop
+# Job-to-Be-Done (J2BD) Pipeline
 
-Iterative documentation and feature development driven by user goals.
+LLM-first documentation and implementation pipeline. Decision agent makes all choices; orchestrator executes.
 
 ## tldr
 
 ```bash
-mlld j2bd/security/index.mld   # Run the security docs loop
+mlld run j2bd --topic security        # Resume most recent run
+mlld run j2bd --topic security --new  # Start fresh run
+mlld run j2bd --topic security --max 5  # Limit iterations
 ```
 
-The loop picks one task from the plan, does it, validates, commits if green, repeats.
+The orchestrator gathers context, asks a decision agent "what next?", executes that action, logs, repeats. No state machines, no phase logic—just the universal LLM-first pattern.
 
-## Concept
+## Principles
 
-J2B inverts the typical "document what exists" approach. Instead:
+See `.claude/skills/llm-first.md` for the full design philosophy. Key points:
 
-1. **Define jobs** - What users are trying to accomplish
-2. **Write atoms** - Documentation with working examples
-3. **Validate examples** - They must actually work
-4. **Surface gaps** - Missing features become tickets
-5. **Iterate** - Loop until jobs are completable
+- **Dumb orchestrator, smart decisions** - Code executes, LLM decides
+- **Decision calls, not agents** - Fresh context each iteration, no persistent state
+- **Prompts over predicates** - Edge cases as guidance, not conditionals
+- **Workers do the work** - Write files, validate, commit, report
+- **Revert + notes on failure** - Failed tests → revert → add learnings to ticket
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Jobs (what users want)                                         │
-│    "Prevent data exfiltration"                                  │
-│    "Sandbox an agent"                                           │
-│    "Package env config"                                         │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Loop                                                           │
-│    1. Load fresh: spec, atoms, plan, jobs                       │
-│    2. Pick ONE task from plan (highest priority)                │
-│    3. Write/fix atom OR note impl gap                           │
-│    4. Validate all atoms (backpressure)                         │
-│    5. Commit if green                                           │
-│    6. Continue                                                  │
-└─────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Outputs                                                        │
-│    - Working atoms with tested examples                         │
-│    - Tickets for impl gaps                                      │
-│    - Updated plan tracking progress                             │
-└─────────────────────────────────────────────────────────────────┘
+loop:
+  1. Gather context (spec, job, tickets, events)
+  2. Call decision agent (opus) → ONE action
+  3. Execute action (spawn worker, create ticket, close ticket, etc.)
+  4. Log event
+  5. Continue or exit
 ```
+
+**Decision agent actions:**
+- `work` - spawn worker for a ticket
+- `create_ticket` - create new ticket
+- `close_ticket` - close with reason
+- `update_ticket` - add notes/tags
+- `blocked` - exit with questions.md
+- `complete` - merge and exit
+
+**Workers:**
+- Write files directly (Write tool)
+- Commit their changes (git)
+- Run tests, revert on failure
+- Report status (not file content)
 
 ## Directory Structure
 
 ```
+llm/run/j2bd/
+├── index.mld              # Orchestrator (~200 lines)
+├── lib/
+│   ├── context.mld        # Context gathering
+│   └── questions.mld      # Human handoff
+└── prompts/
+    ├── decision.att       # Decision agent (opus)
+    ├── doc-worker.att     # Doc worker (sonnet)
+    ├── impl-worker.att    # Impl worker (sonnet)
+    └── friction-worker.att
+
 j2bd/<topic>/
-  index.mld           # The loop
-  plan.md             # What's done, what's next, priorities
-  agent.md            # Learnings, how to test, gotchas
-  task.att            # Prompt template for each iteration
-  jobs/
-    job-name.md       # Job specs (what users want to accomplish)
-  lib/                # Optional helpers
+├── config.mld             # Topic config (spec path, docs dir, etc.)
+├── jobs/                  # Job definitions
+└── runs/                  # Run state (events.jsonl, decision/worker outputs)
+
+.tickets/j2bd-<topic>/     # Tickets persist across runs
 ```
 
-## Key Files
-
-### index.mld
-
-The main loop. Runs until plan shows complete.
-
-```mlld
-var @spec = <path/to/spec.md>
-var @jobs = <./jobs/*.md>
-
-exe @buildTask(spec, atoms, plan, agentNotes, jobs) = template "./task.att"
-
-var @state = { stop: false }
-
-loop(endless) until @state.stop [
-  >> Fresh each iteration
-  var @atoms = <docs/src/atoms/topic/*.md>
-  var @plan = <./plan.md>
-
-  >> Exit condition
-  when @plan.match(/## Status: Complete/) => done "Done"
-
-  >> Build and run task
-  var @task = @buildTask(@spec, @atoms, @plan, @agentNotes, @jobs)
-  var @result = run cmd { claude -p "@task" }
-
-  >> Backpressure: validate atoms
-  var @validation = for parallel(5) @atom in @atoms [
-    let @check = run cmd { mlld validate "@atom.mx.path" } with { ok: true }
-    => { file: @atom.mx.filename, valid: @check.exitCode == 0, error: @check.stderr }
-  ]
-
-  >> Commit if valid
-  var @failures = for @v in @validation when !@v.valid => @v
-  if @failures.length == 0 [
-    run cmd { git add docs/src/atoms/topic/ j2bd/topic/ }
-    run cmd { git commit -m "j2b topic: iteration @mx.loop.iteration" } with { ok: true }
-  ]
-
-  continue
-]
-```
-
-### plan.md
-
-Tracks progress. Agent updates this each iteration.
-
-```markdown
-# Topic Documentation Plan
-
-## Status: In Progress
-
-## Priority Order
-
-1. **Foundation** - Core concepts everything else builds on
-2. **Common Use** - Most frequently needed features
-3. **Advanced** - Edge cases, power user features
-
-## Current Focus
-
-### Foundation (Priority 1)
-- [ ] concept-overview
-- [ ] concept-basics
-- [x] concept-syntax (done)
-
-### Common Use (Priority 2)
-- [ ] feature-a
-- [ ] feature-b
-
-## Completed
-- concept-syntax
-
-## Blocked
-- feature-c (needs impl work, see ticket m-xxxx)
-
-## Learnings
-(Discoveries during iteration)
-```
-
-### jobs/*.md
-
-Define what users are trying to accomplish. These provide context for prioritization.
-
-```markdown
-# Job: Do Something Useful
-
-## Scenario
-
-I want to [accomplish X] because [reason]. I need:
-
-1. Feature A working
-2. Feature B integrated with A
-3. Clear error when something goes wrong
-
-## Success Criteria
-
-- Working mlld code that demonstrates all features
-- Each feature documented in atoms
-- Clear onboarding path from nothing to working
-
-## Key Atoms Needed
-
-- feature-a-overview
-- feature-b-basics
-- feature-a-with-b
-
-## Example Code (Target)
-
-```mlld
->> What the user should be able to write when done
-var @x = doTheThingIWant()
-show @x
-```
-```
-
-### agent.md
-
-Captures learnings across iterations. Agent updates this when discovering gotchas.
-
-```markdown
-# Topic J2B Agent Notes
-
-## How to Run
+## CLI
 
 ```bash
-mlld j2bd/topic/index.mld
+mlld run j2bd --topic security                 # Resume most recent run
+mlld run j2bd --topic security --new           # Start new run
+mlld run j2bd --topic security --run 2026-02-01-0  # Resume specific run
+mlld run j2bd --topic security --max 10        # Limit iterations
+mlld run j2bd --topic security --dryRun        # No commits
 ```
 
-## How to Test Atoms
+## Creating a New Topic
 
 ```bash
-mlld validate docs/src/atoms/topic/some-atom.md
-```
+mkdir -p j2bd/newtopic/jobs
 
-## Atom Format
+# Create config
+cat > j2bd/newtopic/config.mld << 'EOF'
+var @config = {
+  name: "newtopic",
+  spec: `@base/path/to/spec.md`,
+  docs_dir: `@base/docs/src/atoms/newtopic/`,
+  test_command: "npm test",
+  worktree_prefix: "j2bd-newtopic"
+}
+export { @config }
+EOF
 
-Frontmatter required: id, title, brief, category, parent, tags, updated
-
-## Learnings
-
-### 2026-01-31
-- Feature X requires Y to be set first
-- Error message for Z is misleading (filed ticket m-xxxx)
-```
-
-### task.att
-
-The prompt template. Receives all context and instructs the agent what to do.
-
-```
-You are iterating on [topic] documentation.
-
-## Your Context
-
-### Spec
-<spec>
-{{spec}}
-</spec>
-
-### Current Atoms
-<atoms>
-{{atoms}}
-</atoms>
-
-### Plan
-<plan>
-{{plan}}
-</plan>
-
-### Jobs
-<jobs>
-{{jobs}}
-</jobs>
-
-## Your Task
-
-Do ONE thing from the plan. Pick the highest priority incomplete item.
-
-Options:
-1. Write a new atom with working examples
-2. Fix an existing atom
-3. Note an impl gap in plan.md Blocked section
-4. Update the plan
-
-## Requirements
-
-- ONE thing per iteration
-- Examples must work (they will be validated)
-- Keep atoms focused
-```
-
-## Creating a New J2B Loop
-
-```bash
-mkdir -p j2bd/newtopic/jobs j2bd/newtopic/lib
-
-# Copy template files
-cp j2bd/security/index.mld j2bd/newtopic/
-cp j2bd/security/task.att j2bd/newtopic/
-cp j2bd/security/agent.md j2bd/newtopic/
-
-# Edit paths in index.mld:
-#   - @spec path
-#   - @atoms path
-#   - git add paths
-
-# Create plan.md with your priorities
-# Create job specs in jobs/
-
+# Create job definitions in jobs/
 # Run
-mlld j2bd/newtopic/index.mld
+mlld run j2bd --topic newtopic
 ```
 
-## Principles
+## Gotchas
 
-**Fresh context each iteration** - State reloads from files, no context poisoning from failed attempts.
+- Tickets use `--dir j2bd-<topic>` to isolate from other work
+- Workers must commit before returning (orchestrator doesn't write files)
+- `npm test` runs after commit; failures trigger revert + notes
+- Nested `when` blocks don't propagate return values (m-d777)
+- `@local/claude-poll` must be available
 
-**One thing per iteration** - Focused work, easier to validate, cleaner commits.
+## Debugging
 
-**Backpressure via validation** - Atoms must parse. Examples must work. Failures block commits.
+Check run state:
+```bash
+cat j2bd/security/runs/2026-02-01-0/events.jsonl | tail -20
+cat j2bd/security/runs/2026-02-01-0/decision-N.json
+cat j2bd/security/runs/2026-02-01-0/worker-TICKET-N.prompt.md
+```
 
-**Self-documenting progress** - Plan and agent notes capture learnings for future iterations.
-
-**Jobs drive priorities** - What users want to accomplish determines what gets worked on.
-
-## Comparison to QA/Polish
-
-| Aspect | QA/Polish | J2B |
-|--------|-----------|-----|
-| Goal | Discover unknown issues | Validate known spec |
-| Input | Existing codebase | Spec + job definitions |
-| Discovery | Agents explore with limited context | Examples define what to test |
-| Output | Issues to fix | Working docs + impl gaps |
-| Loop | Phases (flail → review → fix) | Single unified loop |
-
-J2B is for building new documentation systematically. QA/Polish is for finding issues in existing code.
-
-## Parallelization
-
-The loop is sequential (one task at a time) to avoid conflicts. But within the loop:
-
-- Validation runs in parallel: `for parallel(5) @atom in @atoms`
-- Multiple atoms can be tested concurrently
-
-For independent topics, run separate J2B loops in different terminals.
+Check worktree:
+```bash
+cd /path/to/mlld.j2bd-security-2026-02-01-0
+git log --oneline -5
+git status
+```

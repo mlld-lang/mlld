@@ -7,7 +7,7 @@
 >>
 >> Produces triage/work-plan.json consumed by polish.mld
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @local/claude-poll
 
 >> Configuration
 var @ticketsDir = "@base/.tickets"

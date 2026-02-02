@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Policy defaults `autosign`**: Sign template content or variables selected by name patterns
 - **Policy defaults `autoverify`**: Prepend verify instructions for signed variables passed to llm-labeled executables and set `MLLD_VERIFY_VARS`
 - **Optional load syntax:** `<file.md>?` and `<**/*.md>?` returns null or empty array if file or glob results don't exist
+- **`claude-poll` debug hooks**: `MLLD_DEBUG_CLAUDE_POLL` emits poll diagnostics and `MLLD_CLAUDE_POLL_LOG` captures `claude` output
+- **Executor stdin debug flag**: `MLLD_DEBUG_EXEC_IO` logs stdin write failures with byte counts
 
 ### Changed
 - **`mlld init` renamed to `mlld module`**: Module creation is now `mlld module` (alias: `mlld mod`)
@@ -118,6 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Ternary with method calls**: `@tier ? @tier.split(",") : []` now parses correctly
 - **Negation with method calls in templates**: `!@arr.includes("c")` in backtick templates now evaluates correctly instead of returning string `"!false"`
 - **for-when in exe blocks**: `let @result = for @x in @arr when ... => @x` now returns the array value, allowing `.length` and other array operations
+- **Streaming stdin errors**: Unhandled EPIPE from child stdin writes now reports a command error with context instead of crashing
 - **When block accumulation in exe**: `when (condition) [let @x += value]` now correctly evaluates the condition and executes augmented assignments inside the block
 - **let bindings in when blocks**: let bindings that shadow outer variables now work correctly instead of silently failing
 - **Glob JSON parsing**: Glob-loaded JSON files (e.g., `<*.json>`) now auto-parse like single file loads

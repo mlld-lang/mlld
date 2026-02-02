@@ -6,7 +6,7 @@
 >>
 >> Runs sequentially - merge conflicts need ordered resolution
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @local/claude-poll
 import { @logEvent, @loadEvents, @getVerifiedNotMerged, @logMergeDone, @logMergeFailed } from "../../lib/events.mld"
 import { @debuglog } from "../../lib/debug.mld"
 

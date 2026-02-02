@@ -4,7 +4,7 @@
 >> Input: qa/<run>/trend-report.json, qa/<run>/strategy-questions.md
 >> Output: pipeline/<run>/interpret/strategy.json
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @local/claude-poll
 import { @updatePhaseStatus } from "../lib/state.mld"
 import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
 

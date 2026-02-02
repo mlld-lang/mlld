@@ -6,7 +6,7 @@
 >>
 >> Runs after all merges complete
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @local/claude-poll
 import { @logEvent } from "../../lib/events.mld"
 
 /needs { sh }

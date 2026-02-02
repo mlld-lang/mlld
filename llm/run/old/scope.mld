@@ -4,7 +4,7 @@
 >> Skips issues flagged as potentially stale (stale-check-4 or higher).
 >> Adds size-*, complexity-*, and risk-* tags (xs|s|m|l|xl).
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @local/claude-poll
 
 >> Configuration
 var @ticketsDir = "@base/.tickets"

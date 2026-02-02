@@ -13,7 +13,7 @@
 >> Without a trend report, runs in legacy mode (all items as potential code fixes).
 
 import { @claude } from @mlld/claude
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @local/claude-poll
 
 >> Payload options
 import "@payload" as @p

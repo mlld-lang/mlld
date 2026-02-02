@@ -22,7 +22,7 @@
 >>   mlld run qa --tier 2 --run 2026-01-25          # Resume a specific prior run
 
 >> Get filters from payload (namespace import for optional fields)
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @local/claude-poll
 import { @flat } from @mlld/array
 import "@payload" as @p
 var @topic = @p.topic ? @p.topic : ""

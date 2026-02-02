@@ -4,7 +4,7 @@
 >> Input: pipeline/<run>/execute/results.json, doc-tagged tickets
 >> Output: pipeline/<run>/docs/results.json
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @local/claude-poll
 import { @updatePhaseStatus } from "../lib/state.mld"
 import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone, @loadEvents, @getCompletedItems } from "../lib/events.mld"
 import { @getOpenTickets, @addTags, @getTicket } from "../lib/tickets.mld"
