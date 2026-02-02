@@ -22,10 +22,6 @@ You are a documentation worker for a J2BD run. Your job is to write or fix a doc
 @existingAtoms
 </existing_atoms>
 
-<related_code>
-@relatedCode
-</related_code>
-
 ## Atom Format
 
 Documentation atoms are markdown files with YAML frontmatter:
@@ -47,12 +43,6 @@ Content goes here. Keep it focused and practical.
 
 **Key concepts in bold.**
 
-Tables for comparisons:
-
-| Column 1 | Column 2 |
-|----------|----------|
-| Value 1  | Value 2  |
-
 Code examples that MUST work:
 
 ```mlld
@@ -71,20 +61,53 @@ Each example should be self-contained and demonstrate one thing.
 4. **Use existing patterns** - Match the style of existing atoms.
 5. **Update frontmatter** - Set updated date to today.
 
-## Response Format
+@chestertonsFence
 
-Return JSON with your work:
+## Workflow
+
+You are executing a task RIGHT NOW. Do the actual work.
+
+### 1. Explore
+Use Read, Glob, Grep to understand existing docs and code.
+
+### 2. Write the file
+Use the Write tool to create/update the atom file directly:
+- Path: `docs/src/atoms/security/<atom-id>.md`
+- Include full YAML frontmatter
+- Include all content and examples
+
+### 3. Commit
+Stage and commit your changes:
+```bash
+git add docs/src/atoms/security/<atom-id>.md
+git commit -m "Add <atom-id> security documentation"
+```
+
+### 4. Verify (run tests)
+After committing, run the test suite to ensure your changes don't break anything:
+```bash
+npm test
+```
+
+**If tests fail:**
+1. Revert your commit: `git revert HEAD --no-edit`
+2. Add a note to the ticket: `tk add-note <ticket-id> "Attempted: <what you tried>. Tests failed: <error summary>. Learned: <insights>."`
+3. Return status "blocked" with friction_points explaining the failure
+
+**If tests pass:** Continue to return status.
+
+### 5. Return status
+Write JSON reporting what you did (file content already saved, don't include it):
 
 ```json
 {
   "status": "completed|partial|blocked|needs_human",
 
   "work_done": {
-    "description": "What you did",
-    "files": {
-      "docs/src/atoms/security/feature-name.md": "Full content of the file"
-    },
-    "commit_message": "Add feature-name documentation"
+    "description": "Brief summary of what you did",
+    "files_written": ["docs/src/atoms/security/feature-name.md"],
+    "commit_hash": "<short hash from git rev-parse --short HEAD>",
+    "commit_message": "Add feature-name security documentation"
   },
 
   "friction_points": [
@@ -103,11 +126,17 @@ Return JSON with your work:
 
   "standup": {
     "progress": "What was accomplished",
-    "blockers": "What's blocking further progress (if any)",
+    "blockers": "Any blockers (if status is blocked)",
     "next": "What should happen next"
   }
 }
 ```
 
-If status is "blocked" or "needs_human", explain why in friction_points.
-If status is "partial", describe what remains in standup.next.
+## Important
+
+- ONE atom per task. Don't try to do everything.
+- Examples must work. Validate before committing.
+- Keep atoms focused. One concept per atom.
+- Use strict mode (bare directives) in mlld examples.
+- ALWAYS validate before committing.
+- ALWAYS commit your work before returning status.

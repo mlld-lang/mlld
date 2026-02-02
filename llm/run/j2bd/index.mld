@@ -57,7 +57,7 @@ exe @nextRunId(root, today) = [
 ]
 
 >> Find most recent run directory (by name, which sorts chronologically)
-exe @mostRecentRun(root) = sh { ls -1 "$root" 2>/dev/null | sort -r | head -1 | tr -d '\n' }
+exe @mostRecentRun(root) = sh { ls -1d "$root"/*/ 2>/dev/null | xargs -n1 basename | sort -r | head -1 | tr -d '\n' }
 
 >> Resolve run ID: --run <id> > --new > resume most recent > create first
 exe @resolveRunId(root, today, runId, newRun) = when [
@@ -124,29 +124,24 @@ var @onboarding = <@base/llm/prompts/mlld-onboarding.md>
 var @chestertonsFence = <@base/llm/prompts/chestertons-fence.md>
 
 >> Prompt templates
-exe @decisionPrompt(spec, job, tickets, recentEvents, humanAnswers, chestertonsFence) = template "./prompts/decision.att"
+exe @decisionPrompt(spec, job, tickets, recentEvents, lastWorkerResult, testResults, lastError, humanAnswers, chestertonsFence) = template "./prompts/decision.att"
 exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode, onboarding, chestertonsFence) = template "./prompts/doc-worker.att"
 exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onboarding, chestertonsFence) = template "./prompts/impl-worker.att"
 exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/friction-worker.att"
 
 >> Build worker prompt based on task type
-exe @buildWorkerPrompt(taskType, ticket, guidance, config, job) = [
+exe @buildWorkerPrompt(taskType, ticket, guidance, config, job, onboarding, chestertonsFence) = [
   let @spec = <@config.spec>
-  when @taskType [
-    "doc" => [
-      let @existingAtoms = <@config.docs_dir/*.md>
-      => @docWorkerPrompt(@ticket, @guidance, @spec, @existingAtoms, "", @onboarding, @chestertonsFence)
-    ]
-    "impl" => [
-      => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
-    ]
-    "improvement" => [
-      => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
-    ]
-    "friction" => [
-      => @frictionWorkerPrompt(@ticket, @guidance, "", @spec, "", "", @onboarding, @chestertonsFence)
-    ]
+  >> Pre-load atoms for doc type (workaround for m-d777: nested when blocks don't return)
+  let @existingAtoms = <@config.docs_dir/*.md>
+  let @prompt = when @taskType [
+    "doc" => @docWorkerPrompt(@ticket, @guidance, @spec, @existingAtoms, "", @onboarding, @chestertonsFence)
+    "impl" => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
+    "improvement" => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
+    "friction" => @frictionWorkerPrompt(@ticket, @guidance, "", @spec, "", "", @onboarding, @chestertonsFence)
+    * => `ERROR: Unknown task type: @taskType`
   ]
+  => @prompt
 ]
 
 >> Main loop
@@ -168,14 +163,17 @@ loop(endless) [
   ]
 
   >> 1. Gather context
-  let @context = @buildContext(@config, @runDir, @worktree, @run)
+  let @context = @buildContext(@config, @runDir, @topic, @run)
 
   >> 2. Call decision agent
   let @decisionPromptText = @decisionPrompt(
     @context.spec,
-    @context.job,
+    @job,
     @context.tickets | @json,
     @context.recentEvents | @json,
+    @context.lastWorkerResult | @json,
+    @context.testResults | @json,
+    @context.lastError,
     @context.humanAnswers,
     @chestertonsFence
   )
@@ -211,59 +209,74 @@ IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool.
       let @ticket = cmd { tk show @decision.ticket --json }
 
       >> Build and run worker (in worktree)
-      let @workerPrompt = @buildWorkerPrompt(@decision.task_type, @ticket, @decision.guidance, @config, @job)
+      let @workerPrompt = @buildWorkerPrompt(@decision.task_type, @ticket, @decision.guidance, @config, @job, @onboarding, @chestertonsFence)
       let @workerOutputPath = `@runDir/worker-@decision.ticket-@iterationCount\.json`
+      let @workerPromptPath = `@runDir/worker-@decision.ticket-@iterationCount\.prompt.md`
+
+      >> Debug: check if prompt was built
+      let @promptLength = @workerPrompt.length
+      show `  Prompt built: @promptLength chars`
+      if @promptLength < 100 [
+        show `  WARNING: Prompt suspiciously short!`
+        show `  Prompt content: @workerPrompt`
+      ]
+
       let @workerFullPrompt = `@workerPrompt
 
 IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. Write ONLY valid JSON.`
-      let @_ = @claudePoll(@workerFullPrompt, "sonnet", @worktreePath, @workerTools, @workerOutputPath)
+
+      >> Save prompt for debugging
+      output @workerFullPrompt to "@workerPromptPath"
+      show `  Prompt saved: @workerPromptPath`
+      show `  Output expected: @workerOutputPath`
+      show `  Working dir: @worktreePath`
+      show `  Tools: @workerTools`
+
+      >> Run worker and capture result
+      let @pollResult = @claudePoll(@workerFullPrompt, "sonnet", @worktreePath, @workerTools, @workerOutputPath)
+      show `  Poll result: @pollResult`
+
+      >> Try to read output
       let @result = <@workerOutputPath>?
 
       if !@result [
         show `Worker failed: no output at @workerOutputPath`
-        @logEvent(@runDir, "error", { type: "worker", ticket: @decision.ticket, error: "no output" })
+        >> Check if file exists but is empty or malformed
+        let @rawContent = sh { cat "@workerOutputPath" 2>&1 || echo "[file not found]" }
+        show `  Raw file content: @rawContent`
+        @logEvent(@runDir, "error", {
+          type: "worker",
+          ticket: @decision.ticket,
+          error: "no output",
+          poll_result: @pollResult,
+          raw_content: @rawContent,
+          prompt_path: @workerPromptPath
+        })
         continue
       ]
 
-      @logEvent(@runDir, "worker_result", { ticket: @decision.ticket, status: @result.status, standup: @result.standup })
+      >> Workers write files and commit themselves, then report what they did
+      @logEvent(@runDir, "worker_result", {
+        ticket: @decision.ticket,
+        status: @result.status,
+        work_done: @result.work_done,
+        standup: @result.standup
+      })
 
-      >> Write files if work was done (files is { path: content, ... })
-      >> Paths are relative to worktree
-      if @result.work_done && @result.work_done.files [
-        for @path, @content in @result.work_done.files [
-          let @fullPath = `@worktreePath/@path`
-          output @content to "@fullPath"
-        ]
-      ]
-
-      >> Post-work verification
-      if @result.status == "completed" [
-        >> Run tests in worktree (empty string on failure with ok:true)
-        let @testOutput = @runTestsInWorktree(@worktreePath, @config.test_command) with { ok: true }
-        let @testsPassed = @testOutput != ""
-        @logEvent(@runDir, "tests_run", { passed: @testsPassed })
-
-        >> Commit if tests pass (unless dry run)
-        if @testsPassed && !@dryRun && @result.work_done && @result.work_done.files [
-          for @path, @_ in @result.work_done.files [
-            run @gitAddInWorktree(@worktreePath, @path)
-          ]
-          run @gitCommitInWorktree(@worktreePath, @result.work_done.commit_message)
-          let @filePaths = for @p, @_ in @result.work_done.files => @p
-          @logEvent(@runDir, "commit_made", {
-            files: @filePaths,
-            message: @result.work_done.commit_message
-          })
-          show `Committed: @result.work_done.commit_message`
-        ]
+      >> Log friction points for decision agent to see
+      if @result.friction_points && @result.friction_points.length > 0 [
+        @logEvent(@runDir, "friction_reported", { ticket: @decision.ticket, points: @result.friction_points })
       ]
 
       show `Worker status: @result.status`
+      if @result.work_done && @result.work_done.commit_hash [
+        show `Committed: @result.work_done.commit_hash - @result.work_done.commit_message`
+      ]
     ]
 
     "create_ticket" => [
       show `Creating ticket: @decision.title`
-      let @ticketId = cmd { tk create --dir "@worktree/@decision.type" "@decision.title" -d "@decision.body" }
+      let @ticketId = cmd { tk create --dir "j2bd-@topic" "@decision.title" -d "@decision.body" }
       >> Add tags if present
       if @decision.tags [
         for @tag in @decision.tags [
@@ -281,7 +294,7 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
     "close_ticket" => [
       show `Closing ticket: @decision.ticket - @decision.reason`
       if @decision.note [
-        cmd { tk note @decision.ticket "@decision.note" }
+        cmd { tk add-note @decision.ticket "@decision.note" }
       ]
       cmd { tk close @decision.ticket "@decision.reason" }
       @logEvent(@runDir, "ticket_closed", { ticket: @decision.ticket, reason: @decision.reason })
@@ -290,7 +303,7 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
     "update_ticket" => [
       show `Updating ticket: @decision.ticket`
       if @decision.add_note [
-        cmd { tk note @decision.ticket "@decision.add_note" }
+        cmd { tk add-note @decision.ticket "@decision.add_note" }
       ]
       if @decision.add_tags [
         for @tag in @decision.add_tags [
@@ -311,7 +324,7 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
 
     "complete" => [
       >> Hard guards before merge
-      let @openTickets = @loadTickets(@worktree)
+      let @openTickets = @loadTickets(`j2bd-@topic`)
       let @openList = for @t in @openTickets when @t.status != "closed" => @t
       let @openCount = @openList.length
       if @openCount > 0 [

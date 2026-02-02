@@ -56,10 +56,10 @@ exe @loadAnswers(runDir) = [
 ]
 
 >> Build full context for decision agent
-exe @buildContext(config, runDir, worktree, run) = {
+>> Note: job is passed separately from index.mld, not via config
+exe @buildContext(config, runDir, topic, run) = {
   spec: <@config.spec>,
-  job: <@config.jobFile>,
-  tickets: @loadTickets(@worktree),
+  tickets: @loadTickets(`j2bd-@topic`),
   recentEvents: @loadRecentEvents(@runDir, 20),
   lastWorkerResult: @run.lastWorkerResult,
   testResults: @run.lastTestResults,
