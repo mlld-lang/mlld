@@ -64,10 +64,10 @@ VarBlock "var block"
 ExpressionWithOperator
   = &{
       // Look ahead to see if there's an operator somewhere IN THE CURRENT DIRECTIVE
-      // Stop at: newline, next directive (/), or comment (>>)
+      // Stop at: newline, next directive (/), or comment marker (>> or <<)
       const rest = input.substring(peg$currPos);
       // Only look within the current line/directive context
-      const endOfContext = rest.search(/[\n\r]|(?:^|\s)\/\w+|(?:^|\s)>>/);
+      const endOfContext = rest.search(/[\n\r]|(?:^|\s)\/\w+|(?:^|\s)(?:>>|<<)/);
       const contextToSearch = endOfContext === -1 ? rest : rest.substring(0, endOfContext);
       return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?\?|!|[-+*/%]))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
     }

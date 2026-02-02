@@ -904,8 +904,8 @@ WhenBoundPatternAnd
 WhenBoundPatternAtom
   = "(" _ inner:WhenBoundPatternExpression _ ")" { return inner; }
   / wc:WildcardLiteral { return { kind: 'wildcard', node: wc, location: location() }; }
-  / op:UnifiedComparisonOp _ right:Expression { return { kind: 'compare', op, right, location: location() }; }
-  / value:Expression { return { kind: 'equals', value, location: location() }; }
+  / op:UnifiedComparisonOp _ right:UnifiedComparison { return { kind: 'compare', op, right, location: location() }; }
+  / value:UnifiedComparison { return { kind: 'equals', value, location: location() }; }
 
 // Optional modifier for when-expression in /exe RHS (rejected)
 WhenExprModifier = mod:("first") {
