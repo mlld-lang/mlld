@@ -37,11 +37,12 @@ import { @config } from "@configPath"
 exe @countRunsForDate(dir, date) = sh { ls "$dir" 2>/dev/null | grep "^$date" | wc -l | tr -d ' ' }
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }
 exe @wtExists(branch) = sh { wt list --format=json | grep -q "\"branch\":\"$branch\"" && echo "true" || echo "false" }
-exe @wtCreate(branch) = sh { wt switch --create "$branch" -y 2>&1 }
+exe @wtCreate(branch, baseBranch) = sh { wt switch --create "$branch" --base="$baseBranch" -y 2>&1 }
 exe @wtPath(branch) = sh { wt list --format=json | jq -r ".[] | select(.branch==\"$branch\") | .path" }
 exe @wtSwitch(branch) = sh { wt switch "$branch" -y }
 exe @wtRemove(branch) = sh { wt remove "$branch" -y }
-exe @wtMerge(branch) = sh { wt merge "$branch" --stage tracked -y }
+exe @wtMerge(branch, target) = sh { wt merge "$target" --stage tracked -y }
+exe @getCurrentBranch() = sh { git branch --show-current }
 exe @gitAddInWorktree(wtPath, file) = sh { cd "$wtPath" && git add "$file" }
 exe @gitCommitInWorktree(wtPath, msg) = sh { cd "$wtPath" && git commit -m "$msg" }
 exe @runTestsInWorktree(wtPath, testCmd) = sh { cd "$wtPath" && $testCmd }
@@ -58,6 +59,9 @@ exe @nextRunId(root, today) = [
 
 >> Find most recent run directory (by name, which sorts chronologically)
 exe @mostRecentRun(root) = sh { ls -1d "$root"/*/ 2>/dev/null | xargs -n1 basename | sort -r | head -1 | tr -d '\n' }
+
+>> Capture current branch at startup (for worktree base and merge target)
+var @parentBranch = @getCurrentBranch()
 
 >> Resolve run ID: --run <id> > --new > resume most recent > create first
 exe @resolveRunId(root, today, runId, newRun) = when [
@@ -83,11 +87,11 @@ var @run = @loadRunState(@runDir)
 var @worktree = when [@run.worktree => @run.worktree; * => `@config.worktree_prefix-@resolvedRunId`]
 
 if !@run.id [
-  >> Create worktree for this run
+  >> Create worktree for this run (branched from current branch, not main)
   let @wtExistsResult = @wtExists(@worktree)
   if @wtExistsResult == "false" [
-    show `Creating worktree: @worktree`
-    run @wtCreate(@worktree)
+    show `Creating worktree: @worktree (from @parentBranch)`
+    run @wtCreate(@worktree, @parentBranch)
   ]
 
   >> Get worktree path
@@ -99,10 +103,11 @@ if !@run.id [
     topic: @topic,
     worktree: @worktree,
     worktreePath: @worktreePath,
+    parentBranch: @parentBranch,
     created: @now
   }
   @saveRunState(@runDir, @newRun)
-  @logEvent(@runDir, "run_start", { topic: @topic, worktree: @worktree, path: @worktreePath })
+  @logEvent(@runDir, "run_start", { topic: @topic, worktree: @worktree, path: @worktreePath, parentBranch: @parentBranch })
 ]
 
 >> Ensure we have the worktree path (for resumed runs)
@@ -138,6 +143,7 @@ exe @decisionPrompt(spec, job, tickets, recentEvents, lastWorkerResult, testResu
 exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode, onboarding, chestertonsFence) = template "./prompts/doc-worker.att"
 exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onboarding, chestertonsFence) = template "./prompts/impl-worker.att"
 exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/friction-worker.att"
+exe @mergeWorkerPrompt(sourceBranch, targetBranch, worktreePath, testCommand) = template "./prompts/merge-worker.att"
 
 >> Build worker prompt based on task type
 exe @buildWorkerPrompt(taskType, ticket, guidance, config, job, onboarding, chestertonsFence) = [
@@ -381,11 +387,78 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
       show `Job complete: @decision.summary`
       @logEvent(@runDir, "job_complete", { summary: @decision.summary })
 
-      >> Merge worktree (if not dry run)
+      >> Merge worktree using an agent (if not dry run)
       if !@dryRun [
-        show `Merging worktree @worktree to main`
-        run @wtMerge(@worktree)
-        @logEvent(@runDir, "worktree_merged", { worktree: @worktree })
+        >> Get target branch from run state or fallback to captured parent branch
+        let @targetBranch = @run.parentBranch ?? @parentBranch
+        show `Merging worktree @worktree to @targetBranch (agent-driven)`
+
+        >> Build and run merge worker
+        let @mergePromptText = @mergeWorkerPrompt(@worktree, @targetBranch, @worktreePath, @config.test_command)
+        let @mergeOutputPath = `@runDir/merge-@iterationCount\.json`
+        let @mergeFullPrompt = `@mergePromptText
+
+IMPORTANT: Write your JSON response to @mergeOutputPath using the Write tool. Write ONLY valid JSON.`
+
+        @logEvent(@runDir, "merge_worker_start", {
+          source: @worktree,
+          target: @targetBranch,
+          output_path: @mergeOutputPath
+        })
+
+        >> Run merge worker
+        let @mergePollResult = @claudePoll(@mergeFullPrompt, "sonnet", @worktreePath, @workerTools, @mergeOutputPath)
+        let @mergeResult = <@mergeOutputPath>?
+
+        if !@mergeResult [
+          show `Merge worker failed: no output`
+          @logEvent(@runDir, "error", { type: "merge_worker", error: "no output" })
+          let @run = {
+            ...@run,
+            lastError: "Merge worker failed to produce output"
+          }
+          @saveRunState(@runDir, @run)
+          continue
+        ]
+
+        if @mergeResult.status == "completed" [
+          show `Merge successful: @mergeResult.merge_result.commits_merged commits merged`
+          @logEvent(@runDir, "worktree_merged", {
+            worktree: @worktree,
+            target: @targetBranch,
+            commits: @mergeResult.merge_result.commits_merged,
+            merge_commit: @mergeResult.merge_result.merge_commit
+          })
+        ]
+
+        if @mergeResult.status == "blocked" || @mergeResult.status == "needs_human" [
+          show `Merge blocked: @mergeResult.standup.blockers`
+          >> Create urgent ticket for merge failure
+          let @frictionDesc = @mergeResult.friction_points[0].description ?? "Merge failed"
+          let @frictionDetails = @mergeResult.friction_points[0].details ?? ""
+          let @ticketBody = `Merge of @worktree to @targetBranch failed.
+
+**Issue**: @frictionDesc
+
+**Details**:
+@frictionDetails
+
+**Suggested action**: @mergeResult.friction_points[0].suggested_action`
+          let @ticketId = cmd { tk create --dir "j2bd-@topic" "URGENT: Merge failed - @frictionDesc" -d "@ticketBody" }
+          cmd { tk tag @ticketId urgency-critical }
+          @logEvent(@runDir, "merge_failed", {
+            worktree: @worktree,
+            target: @targetBranch,
+            reason: @frictionDesc,
+            ticket: @ticketId
+          })
+          let @run = {
+            ...@run,
+            lastError: `Merge failed: @frictionDesc - see ticket @ticketId`
+          }
+          @saveRunState(@runDir, @run)
+          continue
+        ]
       ]
 
       done
