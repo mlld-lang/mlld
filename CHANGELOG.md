@@ -77,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Block expressions inside argument and array contexts surface a targeted parse error
 - **CLI file payload flags**: `mlld <file>` accepts extra `--flag value` pairs and exposes them via `@payload`
 - **Structured output JSON**: `/output` now writes clean JSON for structured arrays instead of emitting StructuredValue wrapper fields
+- Return statements inside when-expression blocks bubble to the enclosing exe function
 - **Function parameter scoping**: Function parameters no longer leak back to the caller's scope. Previously, when calling `@helper(data)` with a value, the `data` parameter would overwrite any `@data` variable in the caller's scope after the function returned. Parameters are now properly block-scoped like `let` bindings.
 - **Shell alias resolution in `sh {}` blocks**: Commands available only as shell aliases (e.g., `claude`) now resolve correctly in `sh {}` blocks. Previously, only `cmd {}` blocks resolved aliases — `sh {}` blocks ran non-interactive bash where aliases aren't loaded, causing alias-only commands to silently fail with "command not found".
 - **`output ... to @variable` in when blocks**: Variable targets now work in output directives inside when blocks (e.g., `output @content to @path`). Previously, `WhenOutputTarget` only supported streams, env, and quoted strings.

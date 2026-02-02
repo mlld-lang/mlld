@@ -38,6 +38,7 @@ import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/type
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { maybeAutosignVariable } from './auto-sign';
 import { mergeDescriptors } from '@core/types/security';
+import { isExeReturnControl } from './exe-return';
 
 /**
  * Extract security descriptors from template AST nodes without performing interpolation.
@@ -947,7 +948,14 @@ export async function prepareVarAssignment(
   } else if (valueNode && valueNode.type === 'ExeBlock') {
     const { evaluateExeBlock } = await import('./exe');
     const blockEnv = env.createChild();
-    const blockResult = await evaluateExeBlock(valueNode as any, blockEnv);
+    const blockResult = await evaluateExeBlock(valueNode as any, blockEnv, {}, { scope: 'block' });
+    if (isExeReturnControl(blockResult.value)) {
+      return {
+        identifier,
+        variable: createSimpleTextVariable(identifier, '', source),
+        evalResultOverride: { value: blockResult.value, env }
+      };
+    }
     resolvedValue = blockResult.value;
 
   } else if (valueNode && valueNode.type === 'ExecInvocation') {
@@ -1633,6 +1641,9 @@ export async function evaluateVar(
 ): Promise<EvalResult> {
   const assignment =
     context?.precomputedVarAssignment ?? (await prepareVarAssignment(directive, env, context));
+  if (assignment.evalResultOverride && isExeReturnControl(assignment.evalResultOverride.value)) {
+    return assignment.evalResultOverride;
+  }
   env.setVariable(assignment.identifier, assignment.variable);
   await maybeAutosignVariable(assignment.identifier, assignment.variable, env);
   return assignment.evalResultOverride ?? { value: '', env };

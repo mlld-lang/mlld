@@ -149,7 +149,7 @@ export async function evaluateEnv(
     return { value: undefined, env };
   }
 
-  const result = await evaluateExeBlock(block, scopedEnv);
+  const result = await evaluateExeBlock(block, scopedEnv, {}, { scope: 'block' });
   env.mergeChild(scopedEnv);
   return { value: result.value, env };
 }

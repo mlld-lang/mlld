@@ -756,7 +756,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
 
   if (node.type === 'ExeBlock') {
     const { evaluateExeBlock } = await import('../eval/exe');
-    return evaluateExeBlock(node as any, env);
+    return evaluateExeBlock(node as any, env, {}, { scope: 'block' });
   }
   
   // Handle foreach expressions as first-class expressions
