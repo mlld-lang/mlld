@@ -267,8 +267,11 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
           prompt_path: @workerPromptPath
         })
         >> Persist error state
-        var @run.lastError = `Worker failed: no output for @decision.ticket`
-        var @run.lastWorkerResult = null
+        let @run = {
+          ...@run,
+          lastError: `Worker failed: no output for @decision.ticket`,
+          lastWorkerResult: null
+        }
         @saveRunState(@runDir, @run)
         continue
       ]
@@ -292,8 +295,11 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
       ]
 
       >> Persist worker result state
-      var @run.lastWorkerResult = @result
-      var @run.lastError = null
+      let @run = {
+        ...@run,
+        lastWorkerResult: @result,
+        lastError: null
+      }
       @saveRunState(@runDir, @run)
     ]
 
@@ -354,7 +360,10 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
         show `Cannot complete: @openCount open tickets remain`
         @logEvent(@runDir, "error", { type: "complete_blocked", reason: "open_tickets", count: @openCount })
         >> Persist error state so decision agent sees it
-        var @run.lastError = `Cannot complete: @openCount open tickets remain`
+        let @run = {
+          ...@run,
+          lastError: `Cannot complete: @openCount open tickets remain`
+        }
         @saveRunState(@runDir, @run)
         continue
       ]
@@ -380,5 +389,4 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
 
   >> Small delay between iterations
   cmd { sleep 1 }
-  continue
 ]

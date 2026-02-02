@@ -202,7 +202,7 @@ WhenRHSFunctionCall
 
 // Error recovery - catch exe definitions and provide helpful error
 WhenRHSExeDefinitionError
-  = "@" name:BaseIdentifier "(" args:CommandArgumentList? ")" _ "=" _ value:VarRHSContent {
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "=" _ value:VarRHSContent {
       helpers.mlldError(
         `Executable definitions are not allowed in when RHS contexts.\n\n` +
         `Instead of:\n` +

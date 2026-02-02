@@ -23,7 +23,8 @@ CommandReference "command reference"
 // All argument patterns now use UnifiedArgumentList directly
 
 // Temporary compatibility wrapper - still used by other files
-CommandArgumentList "command arguments list" = UnifiedArgumentListItems
+CommandArgumentList "command arguments list"
+  = _ args:UnifiedArgumentListItems { return args; }
 
 
 // Nested function call in command arguments

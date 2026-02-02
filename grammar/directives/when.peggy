@@ -1429,7 +1429,7 @@ WhenImplicitRichContent
 
 // Error recovery - catch implicit exe definitions and provide helpful error
 WhenImplicitExecDefinitionError
-  = "@" name:BaseIdentifier "(" args:CommandArgumentList? ")" _ "=" _ value:VarRHSContent {
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "=" _ value:VarRHSContent {
       helpers.mlldError(
         `Implicit executable definitions are not allowed in /when actions.\n\n` +
         `Instead of:\n` +
