@@ -6,24 +6,37 @@ category: security
 parent: security
 tags: [signing, verification, cryptography]
 related: [signing-overview, autosign-autoverify]
-related-code: [interpreter/eval/sign-verify.ts]
+related-code: [core/security/SignatureStore.ts, interpreter/eval/sign-verify.ts, cli/commands/verify.ts]
 updated: 2026-02-01
 ---
 
-Sign templates and verify their integrity.
+The `sign` and `verify` directives provide cryptographic integrity for templates. Sign to create a verifiable record; verify to detect tampering or injection.
+
+**Sign syntax:**
 
 ```mlld
->> Sign a variable
-sign @prompt with sha256
+sign @variable with sha256
+sign @variable by "signer" with sha256
+```
 
->> Sign with identity
-sign @prompt by "security-team" with sha256
+**What gets signed:**
 
->> Verify returns original content + metadata
+Templates are signed with placeholders intact, not interpolated:
+
+```mlld
+var @auditPrompt = ::Review @input and reject if unsafe::
+sign @auditPrompt by "security-team" with sha256
+```
+
+This signs `Review @input and reject if unsafe` - the `@input` placeholder remains.
+
+**Verify syntax:**
+
+```mlld
 verify @prompt
 ```
 
-**Verify output:**
+Returns verification result:
 
 ```json
 {
@@ -35,15 +48,47 @@ verify @prompt
 }
 ```
 
+| Field | Description |
+|-------|-------------|
+| `verified` | True if signature matches content |
+| `template` | Original signed content |
+| `hash` | Signature with algorithm prefix |
+| `signedby` | Signer identity (optional) |
+| `signedat` | ISO 8601 timestamp |
+
+**Verification failure:**
+
+If content changes after signing, `verified` is `false` but `template` still shows the ORIGINAL signed content - enabling detection of what changed.
+
 **CLI verification:**
 
 ```bash
 mlld verify auditCriteria
 MLLD_VERIFY_VARS=auditCriteria mlld verify
+mlld verify prompt instructions  # multiple variables
 ```
 
-**Notes:**
-- Signatures stored in `.mlld/sec/sigs/`
-- Templates signed with placeholders intact (not interpolated)
-- `verified: false` when content modified after signing
-- See `autosign-autoverify` for policy automation
+LLMs call `mlld verify` to check authenticity of their instructions.
+
+**Audit pattern example:**
+
+```mlld
+var @auditCriteria = ::
+Review @findings and approve only if:
+1. No secrets exposed
+2. No destructive operations
+3. All data sources trusted
+::
+
+sign @auditCriteria by "security-team" with sha256
+```
+
+Pass to an LLM with instructions to verify via `mlld verify auditCriteria`. The LLM compares verified content against its context to detect injection.
+
+**Signature storage:**
+
+Signatures stored in `.mlld/sec/sigs/`:
+- `{varname}.sig` - Metadata (hash, method, signer, timestamp)
+- `{varname}.content` - Signed content
+
+See `autosign-autoverify` for policy automation, `signing-overview` for threat model.

@@ -3,5 +3,6 @@
   "topic": "security",
   "worktree": "j2bd-security-2026-02-01-0",
   "worktreePath": "/Users/adam/dev/mlld.j2bd-security-2026-02-01-0",
-  "created": "2026-02-01T23:24:52.548Z"
+  "created": "2026-02-01T23:24:52.548Z",
+  "lastError": "Cannot complete: 1 open tickets remain"
 }

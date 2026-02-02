@@ -13,7 +13,7 @@
 
 >> Imports
 import { @claudePoll } from @local/claude-poll
-import { @buildContext, @loadRunState, @saveRunState, @countIterations, @loadTickets } from "./lib/context.mld"
+import { @buildContext, @loadRunState, @saveRunState, @countIterations, @loadTickets, @buildReferenceMaterial, @extractJobSections } from "./lib/context.mld"
 import { @writeQuestionsFile, @logEvent } from "./lib/questions.mld"
 import "@payload" as @p
 
@@ -139,7 +139,7 @@ var @onboarding = <@base/llm/prompts/mlld-onboarding.md>
 var @chestertonsFence = <@base/llm/prompts/chestertons-fence.md>
 
 >> Prompt templates
-exe @decisionPrompt(spec, job, tickets, recentEvents, lastWorkerResult, testResults, lastError, humanAnswers, chestertonsFence) = template "./prompts/decision.att"
+exe @decisionPrompt(jobSections, referenceMaterial, tickets, recentEvents, lastWorkerResult, testResults, lastError, humanAnswers, chestertonsFence) = template "./prompts/decision.att"
 exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode, onboarding, chestertonsFence) = template "./prompts/doc-worker.att"
 exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onboarding, chestertonsFence) = template "./prompts/impl-worker.att"
 exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/friction-worker.att"
@@ -181,10 +181,14 @@ loop(endless) [
   >> 1. Gather context
   let @context = @buildContext(@config, @runDir, @topic, @run)
 
-  >> 2. Call decision agent
+  >> 2. Build structured job context
+  let @jobSections = @extractJobSections(@job)
+  let @referenceMaterial = @buildReferenceMaterial(@config, @job)
+
+  >> 3. Call decision agent
   let @decisionPromptText = @decisionPrompt(
-    @context.spec,
-    @job,
+    @jobSections,
+    @referenceMaterial,
     @context.tickets ?? [],
     @context.recentEvents ?? [],
     @context.lastWorkerResult,

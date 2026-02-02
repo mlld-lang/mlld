@@ -30,15 +30,6 @@ Prompt injection can manipulate LLM decisions, but it cannot forge cryptographic
 
 Sign the template (control plane), not the interpolated result. The auditor calls `verify` to get the original signed instructions and compares against what's in its context. Injected content won't match.
 
-## Success Criteria
-
-- Working mlld code showing full audit guard pipeline
-- Demonstrates `influenced` label propagation through LLM calls
-- Shows signing of audit templates
-- Shows auditor calling verify and comparing instructions
-- Shows rejection when audit criteria are not met
-- Shows detection when auditor's instructions appear tampered
-
 ## Key Atoms Needed
 
 - signing-overview (why sign templates)
@@ -46,6 +37,52 @@ Sign the template (control plane), not the interpolated result. The auditor call
 - autosign-autoverify (policy defaults)
 - labels-influenced (auto-applied to LLM outputs)
 - pattern-audit-guard (the full pattern)
+
+## Relevant Spec Sections
+
+- Part 14: Signing & Verification
+- Part 1: Labels (The Foundation)
+- Part 3: Policy (Declarative Controls)
+- Part 4: Guards (Expressive Controls)
+
+## Success Criteria
+
+### Phase 1: Documentation
+
+All atoms written with working, validated mlld examples:
+
+- [ ] signing-overview atom - explains why sign templates (control plane security)
+- [ ] sign-verify atom - explains `sign` and `verify` directive syntax
+- [ ] autosign-autoverify atom - explains policy defaults for automatic signing/verification
+- [ ] labels-influenced atom - explains how LLM outputs get `influenced` label
+- [ ] pattern-audit-guard atom - capstone showing full multi-agent audit pattern
+
+Each atom should be 100-200 words with at least one working code example that passes `mlld validate`.
+
+### Phase 2: Implementation
+
+Create working demonstration of the full audit guard pattern:
+
+- [ ] Signed audit template that can be verified
+- [ ] First agent that processes untrusted data (outputs get `influenced` label)
+- [ ] Auditor agent that verifies its own instructions before trusting them
+- [ ] Guard that blocks action if audit fails or verification fails
+- [ ] End-to-end flow showing: untrusted input → influenced output → audit → action/rejection
+
+### Phase 3: Verification & Remediation
+
+- [ ] Run the target example code end-to-end
+- [ ] Verify `influenced` label is applied to LLM outputs
+- [ ] Verify `sign` and `verify` directives work
+- [ ] Verify `autoverify` policy triggers verification automatically
+- [ ] Test injection attack is detected (tampered instructions don't verify)
+- [ ] Identify any gaps in mlld that prevent the example from working
+- [ ] Create friction tickets for gaps; fix or escalate as needed
+- [ ] Re-verify after fixes
+
+### Exit Criteria
+
+All phases complete. The target example demonstrates defense-in-depth: even if the first agent is compromised by prompt injection, the auditor detects tampering via cryptographic verification.
 
 ## Example Code (Target)
 

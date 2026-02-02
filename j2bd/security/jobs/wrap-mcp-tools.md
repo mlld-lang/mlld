@@ -9,19 +9,57 @@ I want to give my agent access to MCP tools (GitHub, Slack, etc.) but ensure mll
 3. Policy controls which tools can be called with what data
 4. I can see audit trail of tool usage
 
-## Success Criteria
-
-- Working mlld code that imports MCP tools
-- Demonstrates automatic taint on tool outputs
-- Shows guard blocking tool call with tainted input
-- Shows policy restricting which tools are available
-
 ## Key Atoms Needed
 
-- mcp-import
-- mcp-security (src:mcp auto-taint)
-- mcp-policy (label flow rules for src:mcp)
-- mcp-guards (before/after tool calls)
+- mcp-import (importing MCP tools into mlld)
+- mcp-security (src:mcp auto-taint on outputs)
+- mcp-policy (label flow rules for MCP data)
+- mcp-guards (before/after guards for tool calls)
+
+## Relevant Spec Sections
+
+- Part 6: MCP Integration
+- Part 1: Labels (The Foundation)
+- Part 3: Policy (Declarative Controls)
+- Part 4: Guards (Expressive Controls)
+
+## Success Criteria
+
+### Phase 1: Documentation
+
+All atoms written with working, validated mlld examples:
+
+- [ ] mcp-import atom - explains `import tools from mcp "..." as @name` syntax
+- [ ] mcp-security atom - explains automatic src:mcp tainting on tool outputs
+- [ ] mcp-policy atom - explains policy rules for MCP data (what can flow where)
+- [ ] mcp-guards atom - explains `guard before op:mcp` and `guard after op:mcp` syntax
+
+Each atom should be 100-200 words with at least one working code example that passes `mlld validate`.
+
+### Phase 2: Implementation
+
+Create working MCP security demonstration:
+
+- [ ] Import MCP tools (use a real or mock MCP server)
+- [ ] Show that tool outputs have src:mcp taint automatically
+- [ ] Show guard blocking secret data from flowing to MCP tools
+- [ ] Show policy restricting which MCP tools are available
+- [ ] Show audit trail/logging of MCP tool usage
+
+### Phase 3: Verification & Remediation
+
+- [ ] Run the target example code end-to-end
+- [ ] Verify `import tools from mcp` syntax works
+- [ ] Verify automatic tainting works (`@result.mx.taint` includes "src:mcp")
+- [ ] Verify `guard before op:mcp` triggers on MCP calls
+- [ ] Verify secret data is blocked from flowing to MCP tools
+- [ ] Identify any gaps in mlld (e.g., MCP integration incomplete, taint not applied)
+- [ ] Create friction tickets for gaps; fix or escalate as needed
+- [ ] Re-verify after fixes
+
+### Exit Criteria
+
+All phases complete. The target example successfully imports MCP tools, demonstrates automatic tainting, and blocks secrets from flowing to MCP operations.
 
 ## Example Code (Target)
 
