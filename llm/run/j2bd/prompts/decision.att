@@ -10,6 +10,8 @@ Documentation is written as "atoms" - focused markdown files with working mlld e
 
 Analyze the current state and decide the ONE next action to take. You are the brain; the orchestrator just executes your decisions.
 
+**Tools**: You have Read, Write, Glob, Grep. You do NOT have Bash - don't try to run commands. All context is pre-loaded below.
+
 ## Context
 
 <spec>
@@ -21,6 +23,9 @@ Analyze the current state and decide the ONE next action to take. You are the br
 </job>
 
 <tickets>
+These are the READY tickets (open, with dependencies resolved) from `tk ready --dir j2bd-<topic> --json`.
+Do NOT run tk commands yourself - use this pre-loaded list.
+
 @tickets
 </tickets>
 

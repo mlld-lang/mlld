@@ -18,7 +18,7 @@ import { @writeQuestionsFile, @logEvent } from "./lib/questions.mld"
 import "@payload" as @p
 
 >> Tool permissions for agents
-var @decisionTools = "Read,Glob,Grep"
+var @decisionTools = "Read,Write,Glob,Grep"
 var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(tk:*)"
 
 >> Parse arguments (--topic is required)
@@ -41,7 +41,7 @@ exe @wtCreate(branch) = sh { wt switch --create "$branch" -y 2>&1 }
 exe @wtPath(branch) = sh { wt list --format=json | jq -r ".[] | select(.branch==\"$branch\") | .path" }
 exe @wtSwitch(branch) = sh { wt switch "$branch" -y }
 exe @wtRemove(branch) = sh { wt remove "$branch" -y }
-exe @wtMerge(branch) = sh { wt merge "$branch" }
+exe @wtMerge(branch) = sh { wt merge "$branch" --stage tracked -y }
 exe @gitAddInWorktree(wtPath, file) = sh { cd "$wtPath" && git add "$file" }
 exe @gitCommitInWorktree(wtPath, msg) = sh { cd "$wtPath" && git commit -m "$msg" }
 exe @runTestsInWorktree(wtPath, testCmd) = sh { cd "$wtPath" && $testCmd }
@@ -188,7 +188,7 @@ IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool.
     model: "opus",
     tools: @decisionTools
   })
-  let @_ = @claudePoll(@decisionFullPrompt, "opus", @base, @decisionTools, @decisionOutputPath)
+  let @_ = @claudePoll(@decisionFullPrompt, "opus", "@base", @decisionTools, @decisionOutputPath)
   let @decision = <@decisionOutputPath>?
 
   if !@decision [
