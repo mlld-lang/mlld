@@ -116,8 +116,18 @@ if @jobs.length == 0 [
   done
 ]
 
->> Use first job for now (filter not yet working due to metadata loss in for loops)
-var @job = @jobs[0]
+>> Filter to specific job if requested, otherwise use first
+var @jobFilterMd = `@jobFilter\.md`
+var @matchingJobs = when [
+  @jobFilter => for @j in @jobs when @j.mx.filename == @jobFilter || @j.mx.filename == @jobFilterMd => @j
+  * => @jobs
+]
+var @job = @matchingJobs[0]
+
+if !@job [
+  show `Job not found: @jobFilter`
+  done
+]
 
 >> Shared prompt snippets
 var @onboarding = <@base/llm/prompts/mlld-onboarding.md>
