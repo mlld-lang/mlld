@@ -21,12 +21,14 @@ import { VariableImporter } from './import/VariableImporter';
 import { logger } from '@core/utils/logger';
 import { DebugUtils } from '../env/DebugUtils';
 import { isLoadContentResult } from '@core/types/load-content';
+import { isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import {
   asData,
   asText,
   isStructuredValue,
   looksLikeJsonString,
-  normalizeWhenShowEffect
+  normalizeWhenShowEffect,
+  type StructuredValue
 } from '../utils/structured-value';
 import { materializeDisplayValue } from '../utils/display-materialization';
 import { accessFields } from '../utils/field-access';
@@ -187,6 +189,13 @@ function looksLikeFileData(value: unknown): value is Record<string, unknown> & {
   if (typeof obj.content !== 'string') return false;
   // Should have at least one file path property
   return typeof obj.filename === 'string' || typeof obj.relative === 'string' || typeof obj.absolute === 'string';
+}
+
+function shouldKeepStructuredForForExpression(value: StructuredValue): boolean {
+  if (value.internal && (value.internal as any).keepStructured) {
+    return true;
+  }
+  return isFileLoadedValue(value);
 }
 
 // Helper to ensure a value is wrapped as a Variable
@@ -823,6 +832,16 @@ export async function evaluateForExpression(
           nodesToEvaluate = (expr.expression[0] as any).content;
         }
 
+        const simpleVarRef = (() => {
+          if (nodesToEvaluate.length !== 1) return null;
+          const node = nodesToEvaluate[0] as any;
+          if (!node || node.type !== 'VariableReference') return null;
+          const hasFields = Array.isArray(node.fields) && node.fields.length > 0;
+          const hasPipes = Array.isArray(node.pipes) && node.pipes.length > 0;
+          if (hasFields || hasPipes) return null;
+          return node as VariableReferenceNode;
+        })();
+
         const evaluateSequence = async (nodes: unknown[], startEnv: Environment): Promise<EvalResult> => {
           let currentEnv = startEnv;
           let lastResult: EvalResult = { value: undefined, env: currentEnv };
@@ -866,11 +885,31 @@ export async function evaluateForExpression(
 
         if (result.env) childEnv = result.env;
         let branchValue = result?.value;
+        if (simpleVarRef) {
+          const refVar = childEnv.getVariable(simpleVarRef.identifier);
+          const refValue = refVar?.value;
+          if (isStructuredValue(refValue) && shouldKeepStructuredForForExpression(refValue)) {
+            branchValue = refValue;
+          }
+        }
         if (isStructuredValue(branchValue)) {
-          try {
-            branchValue = asData(branchValue);
-          } catch {
-            branchValue = asText(branchValue);
+          if (shouldKeepStructuredForForExpression(branchValue)) {
+            const derived = (() => {
+              try {
+                return asData(branchValue);
+              } catch {
+                return asText(branchValue);
+              }
+            })();
+            if (derived === 'skip') {
+              return SKIP as any;
+            }
+          } else {
+            try {
+              branchValue = asData(branchValue);
+            } catch {
+              branchValue = asText(branchValue);
+            }
           }
         }
         if (branchValue === 'skip') {
