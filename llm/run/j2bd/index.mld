@@ -12,7 +12,7 @@
 >>   mlld run j2bd --topic security --max 10            # Limit iterations
 
 >> Imports
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @local/claude-poll
 import { @buildContext, @loadRunState, @saveRunState, @countIterations, @loadTickets } from "./lib/context.mld"
 import { @writeQuestionsFile, @logEvent } from "./lib/questions.mld"
 import "@payload" as @p
@@ -166,13 +166,19 @@ loop(endless) [
   let @context = @buildContext(@config, @runDir, @topic, @run)
 
   >> 2. Call decision agent
+  >> Pre-compute piped values (can't pass piped expressions as function arguments)
+  let @ticketsJson = @context.tickets|@json
+  let @eventsJson = @context.recentEvents|@json
+  let @workerResultJson = @context.lastWorkerResult|@json
+  let @testResultsJson = @context.testResults|@json
+
   let @decisionPromptText = @decisionPrompt(
     @context.spec,
     @job,
-    @context.tickets | @json,
-    @context.recentEvents | @json,
-    @context.lastWorkerResult | @json,
-    @context.testResults | @json,
+    @ticketsJson,
+    @eventsJson,
+    @workerResultJson,
+    @testResultsJson,
     @context.lastError,
     @context.humanAnswers,
     @chestertonsFence
@@ -182,6 +188,12 @@ loop(endless) [
   let @decisionFullPrompt = `@decisionPromptText
 
 IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool. Write ONLY valid JSON.`
+  @logEvent(@runDir, "decision_prompt", {
+    length: @decisionPromptText.length,
+    output_path: @decisionOutputPath,
+    model: "opus",
+    tools: @decisionTools
+  })
   let @_ = @claudePoll(@decisionFullPrompt, "opus", @base, @decisionTools, @decisionOutputPath)
   let @decision = <@decisionOutputPath>?
 
@@ -231,6 +243,15 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
       show `  Output expected: @workerOutputPath`
       show `  Working dir: @worktreePath`
       show `  Tools: @workerTools`
+      @logEvent(@runDir, "worker_prompt", {
+        ticket: @decision.ticket,
+        task_type: @decision.task_type,
+        length: @promptLength,
+        prompt_path: @workerPromptPath,
+        output_path: @workerOutputPath,
+        model: "sonnet",
+        tools: @workerTools
+      })
 
       >> Run worker and capture result
       let @pollResult = @claudePoll(@workerFullPrompt, "sonnet", @worktreePath, @workerTools, @workerOutputPath)
@@ -241,8 +262,7 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
 
       if !@result [
         show `Worker failed: no output at @workerOutputPath`
-        >> Check if file exists but is empty or malformed
-        let @rawContent = sh { cat "@workerOutputPath" 2>&1 || echo "[file not found]" }
+        let @rawContent = <@workerOutputPath>? ?? "[file not found or empty]"
         show `  Raw file content: @rawContent`
         @logEvent(@runDir, "error", {
           type: "worker",
@@ -344,6 +364,11 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
       ]
 
       done
+    ]
+
+    * => [
+      show `Unknown action: @decision.action`
+      @logEvent(@runDir, "error", { type: "unknown_action", action: @decision.action })
     ]
   ]
 

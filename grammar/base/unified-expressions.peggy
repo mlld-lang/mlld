@@ -125,6 +125,8 @@ UnifiedAtomicExpression
   / NewExpression                  // new @Class(...) constructor expression
   / UnifiedArrayOperation
   / ExecResultMethodCall   // Support @func(args).method(args) in expressions
+  / AlligatorWithFields    // File with field access: <path>.field - must come before bare AlligatorExpression
+  / AlligatorExpression    // File/URL loading: <path> - enables <file> ?? default
   / UnifiedReferenceNoTail  // Handles @var, @var.field, @func(), @obj.method()
   / ArrayLiteral           // Array literals [1, 2, 3] or []
   / DataObjectLiteral      // Object literals { key: value }

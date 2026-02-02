@@ -1,0 +1,15 @@
+>> Test: AlligatorExpression in nullish coalescing
+>> Regression test for grammar fix: <file> ?? default
+
+>> File exists - should return file content
+output "hello" to "alligator-nullish-test.txt"
+var @fileContent = <alligator-nullish-test.txt> ?? "default"
+show @fileContent
+
+>> File doesn't exist - should return default
+var @missingFile = <nonexistent-file.txt>? ?? "fallback"
+show @missingFile
+
+>> Chained with other expressions
+var @chainedResult = <nonexistent.txt>? ?? "none" == "none"
+show @chainedResult

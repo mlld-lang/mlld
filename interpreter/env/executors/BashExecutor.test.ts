@@ -11,10 +11,11 @@ import { EventEmitter } from 'events';
  */
 function createMockChild(stdout = 'test output') {
   const stdinChunks: string[] = [];
-  const stdin = {
+  const stdinEmitter = new EventEmitter();
+  const stdin = Object.assign(stdinEmitter, {
     write: vi.fn((data: string) => { stdinChunks.push(data); }),
     end: vi.fn()
-  };
+  });
   const stdoutEmitter = new EventEmitter();
   const stderrEmitter = new EventEmitter();
   const child = new EventEmitter() as any;
