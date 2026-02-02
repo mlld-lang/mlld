@@ -4,17 +4,18 @@
 >> Write questions.md from blocked action
 exe @writeQuestionsFile(runDir, blockingTickets, questions, topic, runId) = [
   let @questionsFile = `@runDir/questions.md`
-  let @now = @now.slice(0, 19).replace("T", " ")
+  let @timestamp = @now.slice(0, 19).replace("T", " ")
 
   let @header = `# J2BD Questions - @topic/@runId
 
-Generated: @now
+Generated: @timestamp
 Status: Awaiting human input
 
 ## Questions
 `
 
-  let @questionBlocks = for @q in @questions => `
+  let @safeQuestions = @questions ?? []
+  let @questionBlocks = for @q in @safeQuestions => `
 ### #@q.ticket - Question
 
 **Context**:
@@ -50,8 +51,8 @@ exe @logEvent(runDir, eventType, data) = [
   let @eventsFile = `@runDir/events.jsonl`
   let @ts = @now
   let @event = { ts: @ts, event: @eventType, ...@data }
-  let @jsonEvent = @event | @json
-  append @jsonEvent to "@eventsFile"
+  >> @event will be auto-stringified as JSON by append
+  append @event to "@eventsFile"
 ]
 
 export { @writeQuestionsFile, @logEvent }

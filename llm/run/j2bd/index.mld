@@ -166,19 +166,13 @@ loop(endless) [
   let @context = @buildContext(@config, @runDir, @topic, @run)
 
   >> 2. Call decision agent
-  >> Pre-compute piped values (can't pass piped expressions as function arguments)
-  let @ticketsJson = @context.tickets|@json
-  let @eventsJson = @context.recentEvents|@json
-  let @workerResultJson = @context.lastWorkerResult|@json
-  let @testResultsJson = @context.testResults|@json
-
   let @decisionPromptText = @decisionPrompt(
     @context.spec,
     @job,
-    @ticketsJson,
-    @eventsJson,
-    @workerResultJson,
-    @testResultsJson,
+    @context.tickets ?? [],
+    @context.recentEvents ?? [],
+    @context.lastWorkerResult,
+    @context.testResults,
     @context.lastError,
     @context.humanAnswers,
     @chestertonsFence
@@ -272,6 +266,10 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
           raw_content: @rawContent,
           prompt_path: @workerPromptPath
         })
+        >> Persist error state
+        var @run.lastError = `Worker failed: no output for @decision.ticket`
+        var @run.lastWorkerResult = null
+        @saveRunState(@runDir, @run)
         continue
       ]
 
@@ -292,6 +290,11 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
       if @result.work_done && @result.work_done.commit_hash [
         show `Committed: @result.work_done.commit_hash - @result.work_done.commit_message`
       ]
+
+      >> Persist worker result state
+      var @run.lastWorkerResult = @result
+      var @run.lastError = null
+      @saveRunState(@runDir, @run)
     ]
 
     "create_ticket" => [
@@ -350,6 +353,9 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
       if @openCount > 0 [
         show `Cannot complete: @openCount open tickets remain`
         @logEvent(@runDir, "error", { type: "complete_blocked", reason: "open_tickets", count: @openCount })
+        >> Persist error state so decision agent sees it
+        var @run.lastError = `Cannot complete: @openCount open tickets remain`
+        @saveRunState(@runDir, @run)
         continue
       ]
 

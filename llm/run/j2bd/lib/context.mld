@@ -40,9 +40,9 @@ exe @saveRunState(runDir, run) = [
   output @jsonContent to "@stateFile"
 ]
 
->> Load tickets for worktree
+>> Load tickets for worktree (ready = open/in-progress with deps resolved)
 exe @loadTickets(worktree) = [
-  let @result = cmd { tk list --dir "@worktree" --json } with { ok: true }
+  let @result = cmd { tk ready --dir "@worktree" --json } with { ok: true }
   when !@result => []
   => @result | @json
 ]

@@ -22,9 +22,21 @@ You are a documentation worker for a J2BD run. Your job is to write or fix a doc
 @existingAtoms
 </existing_atoms>
 
-## Atom Format
+## Atom Style: Unix Man Pages Voice
 
-Documentation atoms are markdown files with YAML frontmatter:
+Atoms are **quick reference**, not tutorials. Write like unix man pages: terse, example-first, no fluff.
+
+**Target: 100-200 words** (excluding code blocks and frontmatter).
+
+### Exemplar Atom
+
+Read `docs/src/atoms/control-flow/for-parallel.md` - this is the target style:
+- One-line intro, straight to code
+- Multiple short examples showing variants
+- Minimal prose between examples
+- Bold labels for sections, not headers
+
+### Format
 
 ```markdown
 ---
@@ -34,32 +46,37 @@ brief: One sentence description
 category: security
 parent: security
 tags: [tag1, tag2]
-related: [other-atom-id, another-atom-id]
+related: [other-atom-id]
 related-code: [path/to/file.ts]
 updated: YYYY-MM-DD
 ---
 
-Content goes here. Keep it focused and practical.
-
-**Key concepts in bold.**
-
-Code examples that MUST work:
+One sentence describing what this does.
 
 ```mlld
-var @example = "this must actually run"
-show @example
+>> Most common usage
+var @x = example
 ```
 
-Each example should be self-contained and demonstrate one thing.
+**Variant:** Brief label, then code.
+
+```mlld
+>> Variant example
+var @y = other_example
 ```
 
-## Requirements
+**Notes:**
+- Bullet points for gotchas
+- Link to related atoms for deep dives
+```
 
-1. **Examples must work** - Every code block will be validated. Don't guess at syntax.
-2. **Keep it focused** - One concept per atom. Link to related atoms for tangents.
-3. **Show, don't tell** - Lead with examples, explain after.
-4. **Use existing patterns** - Match the style of existing atoms.
-5. **Update frontmatter** - Set updated date to today.
+### Requirements
+
+1. **Examples first** - Lead with code. Readers skim for syntax.
+2. **100-200 words** - If longer, split into multiple atoms.
+3. **No tutorials** - Atoms are reference, not education. Link elsewhere for "why".
+4. **Working code** - Every example will be validated.
+5. **Match existing atoms** - Read `for-parallel.md` before writing.
 
 @chestertonsFence
 
@@ -134,9 +151,9 @@ Write JSON reporting what you did (file content already saved, don't include it)
 
 ## Important
 
-- ONE atom per task. Don't try to do everything.
-- Examples must work. Validate before committing.
-- Keep atoms focused. One concept per atom.
-- Use strict mode (bare directives) in mlld examples.
-- ALWAYS validate before committing.
-- ALWAYS commit your work before returning status.
+- **100-200 words max** - If you're writing more, you're writing a tutorial, not an atom.
+- **Code first** - The first thing after the one-line intro should be a code block.
+- **ONE concept** - If covering multiple things, create multiple atoms.
+- **Strict mode** - Use bare directives in mlld examples.
+- **Validate** - Run `mlld validate` before committing.
+- **Commit** - Always commit your work before returning status.
