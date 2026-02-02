@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
+import { existsSync, statSync } from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -44,13 +45,26 @@ export interface RunResult {
   duration: number;
 }
 
+function shouldUseWrapper(distPath: string, sourcePath: string): boolean {
+  if (!existsSync(distPath)) return true;
+  if (!existsSync(sourcePath)) return false;
+  try {
+    return statSync(sourcePath).mtimeMs > statSync(distPath).mtimeMs;
+  } catch {
+    return false;
+  }
+}
+
 // Helper to run mlld in subprocess for isolation
 export async function runMLLD(
   scriptPath: string,
   options: RunOptions = {}
 ): Promise<RunResult> {
   const startTime = Date.now();
-  const mlldPath = path.join(__dirname, '../../../dist/cli.cjs');
+  const distPath = path.join(__dirname, '../../../dist/cli.cjs');
+  const sourcePath = path.join(__dirname, '../../../cli/cli-entry.ts');
+  const wrapperPath = path.join(__dirname, '../../../bin/mlld-wrapper.cjs');
+  const mlldPath = shouldUseWrapper(distPath, sourcePath) ? wrapperPath : distPath;
   
   return new Promise((resolve) => {
     // Use the current node executable path to avoid PATH issues

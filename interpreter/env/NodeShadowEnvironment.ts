@@ -23,7 +23,7 @@ export class NodeShadowEnvironment {
     this.shadowFunctions = new Map();
     
     // Create custom require function with proper module resolution
-    const customRequire = this.createCustomRequire();
+    const { require: customRequire, module: shadowModule, exports: shadowExports } = this.createCustomRequire();
     
     // Create wrapped timer functions that track active timers
     const wrappedSetTimeout = (callback: Function, delay?: number, ...args: any[]) => {
@@ -59,8 +59,8 @@ export class NodeShadowEnvironment {
       
       // Module system with custom require
       require: customRequire,
-      module,
-      exports,
+      module: typeof module !== 'undefined' ? module : shadowModule,
+      exports: typeof exports !== 'undefined' ? exports : shadowExports,
       
       // Path information
       __dirname: currentFile ? path.dirname(currentFile) : basePath,
@@ -265,7 +265,7 @@ export class NodeShadowEnvironment {
   /**
    * Create a custom require function that includes mlld's dependencies
    */
-  private createCustomRequire(): NodeRequire {
+  private createCustomRequire(): { require: NodeRequire; module: Module; exports: any } {
     const currentDir = this.currentFile ? path.dirname(this.currentFile) : this.basePath;
     
     // Build module paths including mlld's node_modules
@@ -276,8 +276,12 @@ export class NodeShadowEnvironment {
     dummyModule.filename = this.currentFile || path.join(currentDir, 'mlld-shadow-env.js');
     dummyModule.paths = modulePaths;
     
-    // Return the require function bound to this module
-    return dummyModule.require.bind(dummyModule);
+    // Return the module and require function bound to this module
+    return {
+      require: dummyModule.require.bind(dummyModule),
+      module: dummyModule,
+      exports: dummyModule.exports
+    };
   }
   
   /**

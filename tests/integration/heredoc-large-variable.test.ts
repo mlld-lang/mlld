@@ -1,10 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'fs/promises';
+import { existsSync, statSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { spawnSync } from 'child_process';
 
-const mlldBin = path.resolve(process.cwd(), 'dist/cli.cjs');
+const mlldBin = resolveMlldBin();
+
+function resolveMlldBin(): string {
+  const distPath = path.resolve(process.cwd(), 'dist/cli.cjs');
+  const sourcePath = path.resolve(process.cwd(), 'cli/cli-entry.ts');
+  const wrapperPath = path.resolve(process.cwd(), 'bin/mlld-wrapper.cjs');
+
+  if (!existsSync(distPath)) return wrapperPath;
+  if (!existsSync(sourcePath)) return distPath;
+  try {
+    return statSync(sourcePath).mtimeMs > statSync(distPath).mtimeMs ? wrapperPath : distPath;
+  } catch {
+    return distPath;
+  }
+}
 
 // These tests require low concurrency to avoid resource contention with parallel tests.
 // Run with: npm run test:heredoc

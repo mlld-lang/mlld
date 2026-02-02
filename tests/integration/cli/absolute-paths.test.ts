@@ -1,18 +1,32 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
+import { existsSync, statSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+const mlldBin = resolveMlldBin();
+
+function resolveMlldBin(): string {
+  const distPath = path.resolve(process.cwd(), 'dist/cli.cjs');
+  const sourcePath = path.resolve(process.cwd(), 'cli/cli-entry.ts');
+  const wrapperPath = path.resolve(process.cwd(), 'bin/mlld-wrapper.cjs');
+
+  if (!existsSync(distPath)) return wrapperPath;
+  if (!existsSync(sourcePath)) return distPath;
+  try {
+    return statSync(sourcePath).mtimeMs > statSync(distPath).mtimeMs ? wrapperPath : distPath;
+  } catch {
+    return distPath;
+  }
+}
 
 describe('Absolute Path Access with --allow-absolute flag', () => {
   let tempDir: string;
   let externalFile: string;
   let projectDir: string;
-  const mlldBin = path.resolve(process.cwd(), 'dist/cli.cjs');
-  
   beforeEach(async () => {
     // Create a temporary directory outside the project
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-abs-test-'));
