@@ -1459,7 +1459,14 @@ export const helpers = {
         return this.createBinaryExpression(first, rest, p.location);
       }
 
-      if (p.kind === 'wildcard') return p.node;
+      if (p.kind === 'wildcard') {
+        if (p.node && typeof p.node === 'object') return p.node;
+        return this.createNode('Literal', {
+          value: '*',
+          valueType: 'wildcard',
+          location: p.location
+        });
+      }
 
       if (p.kind === 'compare') {
         return this.createNode('BinaryExpression' as NodeTypeKey, {
