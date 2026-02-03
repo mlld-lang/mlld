@@ -9,6 +9,7 @@ import type {
   GuardHint,
   GuardResult
 } from '@core/types/guard';
+import { astLocationToSourceLocation } from '@core/types';
 import type { Variable, VariableSource } from '@core/types/variable';
 import { createArrayVariable, createSimpleTextVariable } from '@core/types/variable';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
@@ -1153,10 +1154,13 @@ async function evaluateGuardBlock(
     if (isAugmentedAssignment(entry)) {
       const existing = currentEnv.getVariable(entry.identifier);
       if (!existing) {
+        const location = astLocationToSourceLocation(entry.location, currentEnv.getCurrentFilePath());
         throw new MlldWhenExpressionError(
           `Cannot use += on undefined variable @${entry.identifier}. ` +
           `Use "let @${entry.identifier} = ..." first.`,
-          entry.location
+          location,
+          location?.filePath ? { filePath: location.filePath, sourceContent: currentEnv.getSource(location.filePath) } : undefined,
+          { env: currentEnv }
         );
       }
 
@@ -1249,9 +1253,12 @@ async function resolveGuardEnvConfig(
   guardEnv: Environment
 ): Promise<unknown> {
   if (!action.value || action.value.length === 0) {
+    const location = astLocationToSourceLocation(action.location, guardEnv.getCurrentFilePath());
     throw new MlldWhenExpressionError(
       'Guard env actions require a config value: env @config',
-      action.location
+      location,
+      location?.filePath ? { filePath: location.filePath, sourceContent: guardEnv.getSource(location.filePath) } : undefined,
+      { env: guardEnv }
     );
   }
   const result = await evaluate(action.value, guardEnv, { isExpression: true });

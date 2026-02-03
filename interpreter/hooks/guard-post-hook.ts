@@ -1,4 +1,5 @@
 import type { HookableNode } from '@core/types/hooks';
+import { astLocationToSourceLocation } from '@core/types';
 import type { GuardResult, GuardActionNode, GuardBlockNode, GuardHint } from '@core/types/guard';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { Variable, VariableSource } from '@core/types/variable';
@@ -812,9 +813,12 @@ async function evaluateGuard(options: {
   }
 
   if (action.decision === 'env') {
+    const location = astLocationToSourceLocation(action.location, guardEnv.getCurrentFilePath());
     throw new MlldWhenExpressionError(
       'Guard env actions apply only before execution',
-      action.location
+      location,
+      location?.filePath ? { filePath: location.filePath, sourceContent: guardEnv.getSource(location.filePath) } : undefined,
+      { env: guardEnv }
     );
   }
 
@@ -887,10 +891,13 @@ async function evaluateGuardBlock(block: GuardBlockNode, guardEnv: Environment):
     if (isAugmentedAssignment(entry)) {
       const existing = currentEnv.getVariable(entry.identifier);
       if (!existing) {
+        const location = astLocationToSourceLocation(entry.location, currentEnv.getCurrentFilePath());
         throw new MlldWhenExpressionError(
           `Cannot use += on undefined variable @${entry.identifier}. ` +
           `Use "let @${entry.identifier} = ..." first.`,
-          entry.location
+          location,
+          location?.filePath ? { filePath: location.filePath, sourceContent: currentEnv.getSource(location.filePath) } : undefined,
+          { env: currentEnv }
         );
       }
 

@@ -42,14 +42,24 @@ SlashIf
     }
   / IfKeyword _ condition:WhenConditionExpression _ "=>" {
       helpers.mlldError(
-        "Invalid if syntax: blocks use brackets. Example: if @cond [show \"ok\"]",
+        "Invalid if syntax: 'if' uses brackets for blocks.\n\n" +
+        "Mental model: 'if' runs actions; 'when' returns values.\n\n" +
+        "Valid forms:\n" +
+        "  if @cond [show \"ok\"]\n" +
+        "  if @cond [ ... ] else [ ... ]\n\n" +
+        "If you want a value:\n" +
+        "  var @x = when [@cond => \"ok\"; * => \"no\"]",
         "[",
         location()
       );
     }
   / IfKeyword _ !"[" {
       helpers.mlldError(
-        "Invalid if syntax. Expected a condition and a block: if @cond [ ... ]",
+        "Invalid if syntax: expected a condition and a bracketed block.\n\n" +
+        "Mental model: 'if' runs actions; 'when' returns values.\n\n" +
+        "Valid forms:\n" +
+        "  if @cond [action]\n" +
+        "  if @cond [ ... ] else [ ... ]",
         "[",
         location()
       );

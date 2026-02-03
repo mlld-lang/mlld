@@ -86,11 +86,30 @@ SlashWhen
   / WhenBlockForm
   // Error recovery: Missing => or [ in inline form
   / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ !("=>" / "[") {
-      helpers.mlldError("Invalid when syntax. Expected '=>' or '[' after condition. Use: when @condition => action or when [block]", "=> or [", location());
+      helpers.mlldError(
+        "Invalid when syntax: expected '=>' or '[' after the condition.\n\n" +
+        "Mental model: 'when' selects the first matching branch.\n\n" +
+        "Valid forms:\n" +
+        "  when @cond => action\n" +
+        "  when [@cond => value; * => default]\n" +
+        "  when @subject: [\"a\" => x; \"b\" => y]\n\n" +
+        "Fix: add '=>' for inline action or '[' to start a block.",
+        "=> or [",
+        location()
+      );
     }
   // Error recovery: Missing action after =>
   / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ !. {
-      helpers.mlldError("Missing action in when directive. Expected a directive after '=>'.", "directive", location());
+      helpers.mlldError(
+        "Missing action after '=>'.\n\n" +
+        "/when runs actions, so the right side must be a directive:\n" +
+        "  when @cond => show \"ok\"\n" +
+        "  when @cond => run { ... }\n\n" +
+        "If you want a value-returning expression:\n" +
+        "  var @x = when [@cond => \"ok\"; * => \"no\"]",
+        "directive",
+        location()
+      );
     }
   // Error recovery: deprecated 'all' modifier
   / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":"? _ "[" {
@@ -137,11 +156,16 @@ SlashWhen
     }
   // Error recovery: Generic catch-all
   / DirectiveContext WhenKeyword {
-      helpers.mlldError("Invalid when syntax. Valid forms:\\n" +
-            "  when @condition => action          (inline form)\\n" +
-            "  when @variable [...]              (match form)\\n" +
-            "  when @var [...] => action          (block form)\\n" +
-            "  when [...] => action               (block form)", "@", location());
+      helpers.mlldError(
+        "Invalid when syntax.\n\n" +
+        "Mental model: 'when' selects the first matching branch.\n\n" +
+        "Valid forms:\n" +
+        "  when @cond => action\n" +
+        "  when [@cond => value; * => default]\n" +
+        "  when @subject: [\"a\" => x; \"b\" => y]",
+        "@",
+        location()
+      );
     }
 
 // -------------------------------------------------------------
@@ -198,12 +222,14 @@ WhenSimpleBlockForm
       const conditionText = helpers.reconstructRawString(condition);
       helpers.mlldError(
         `Use 'if' for imperative blocks, not 'when'.\n\n` +
-        `Change:  when ${conditionText} [...]  =>  if ${conditionText} [...]` +
-        `\n\n'when' is for pattern matching and value expressions:\n` +
-        `   when @ready => show "go!"\n` +
-        `   when [@x > 100 => "large"; * => "small"]\n\n` +
-        `'if' is for imperative blocks:\n` +
-        `   if ${conditionText} [log "action"; do @something]`,
+        `Mental model: 'when' selects a value; 'if' controls flow.\n\n` +
+        `Valid forms:\n` +
+        `  when @cond => action\n` +
+        `  when [@cond => value; * => default]\n` +
+        `  when @subject: ["a" => x; "b" => y]\n` +
+        `  if ${conditionText} [action; action]\n\n` +
+        `Fix:\n` +
+        `  when ${conditionText} [...]  =>  if ${conditionText} [...]`,
         "if",
         location()
       );

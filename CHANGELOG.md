@@ -73,6 +73,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
+- **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
+- **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.
+- **If/when guidance**: Parse errors for `if` and `when` include mental model and valid forms to guide fixes.
 - Binary and ternary expressions parse inside function arguments and array literals
 - Block expressions inside argument and array contexts surface a targeted parse error
 - **CLI file payload flags**: `mlld <file>` accepts extra `--flag value` pairs and exposes them via `@payload`

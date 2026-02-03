@@ -1,9 +1,10 @@
 import type { WhenNode, WhenSimpleNode, WhenBlockNode, WhenMatchNode, WhenConditionPair, WhenEntry } from '@core/types/when';
-import type { BaseMlldNode } from '@core/types';
+import { astLocationToSourceLocation, type BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { Variable } from '@core/types/variable';
 import { MlldConditionError } from '@core/errors';
+import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode, isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
 import { VariableImporter } from './import/VariableImporter';
 import { evaluate, interpolate } from '../core/interpreter';
@@ -137,6 +138,34 @@ export async function evaluateLetAssignment(
   entry: LetAssignmentNode,
   env: Environment
 ): Promise<Environment> {
+  const existingOwner = findVariableOwner(env, entry.identifier);
+  if (existingOwner) {
+    const existingVariable = existingOwner.getVariable(entry.identifier);
+    const existingImportPath = existingVariable?.mx?.importPath;
+    const existingIsBlockScoped = existingImportPath === 'let' || existingImportPath === 'exe-param';
+    const existingIsImported = existingVariable?.mx?.isImported === true;
+    const whenExpressionContext = env.getExecutionContext<{ allowLetShadowing?: boolean }>('when-expression');
+    const allowShadowing = whenExpressionContext?.allowLetShadowing === true;
+    if (!existingIsBlockScoped && !existingIsImported && !allowShadowing) {
+      const existingLocation = existingVariable?.mx?.definedAt ?? existingVariable?.definedAt;
+      const newLocation = astLocationToSourceLocation(entry.location, env.getCurrentFilePath());
+      if (existingLocation && newLocation) {
+        throw VariableRedefinitionError.forSameFile(entry.identifier, existingLocation, newLocation);
+      }
+      throw new VariableRedefinitionError(
+        `Variable '${entry.identifier}' is already defined and cannot be redefined`,
+        {
+          context: {
+            variableName: entry.identifier,
+            existingLocation,
+            newLocation,
+            filePath: newLocation?.filePath
+          }
+        }
+      );
+    }
+  }
+
   const value = await evaluateAssignmentValue(entry, env);
 
   let variable: Variable;
@@ -176,19 +205,25 @@ export async function evaluateAugmentedAssignment(
   // Get existing variable - must exist
   const existing = env.getVariable(entry.identifier);
   if (!existing) {
+    const location = astLocationToSourceLocation(entry.location, env.getCurrentFilePath());
     throw new MlldWhenExpressionError(
       `Cannot use += on undefined variable @${entry.identifier}. ` +
       `Use "let @${entry.identifier} = ..." first.`,
-      entry.location
+      location,
+      location?.filePath ? { filePath: location.filePath, sourceContent: env.getSource(location.filePath) } : undefined,
+      { env }
     );
   }
 
   if (isolationRoot) {
     const owner = findVariableOwner(env, entry.identifier);
     if (!owner || !isDescendantEnvironment(owner, isolationRoot)) {
+      const location = astLocationToSourceLocation(entry.location, env.getCurrentFilePath());
       throw new MlldWhenExpressionError(
         `Parallel for block cannot mutate outer variable @${entry.identifier}.`,
-        entry.location
+        location,
+        location?.filePath ? { filePath: location.filePath, sourceContent: env.getSource(location.filePath) } : undefined,
+        { env }
       );
     }
   }

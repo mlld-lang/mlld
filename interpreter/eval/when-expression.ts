@@ -7,7 +7,7 @@
 
 import type { WhenExpressionNode, WhenConditionPair, WhenEntry } from '@core/types/when';
 import { isLetAssignment, isAugmentedAssignment, isConditionPair, isDirectAction } from '@core/types/when';
-import type { BaseMlldNode } from '@core/types';
+import { astLocationToSourceLocation, type BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { MlldWhenExpressionError } from '@core/errors';
@@ -34,6 +34,43 @@ async function getInterpolateFn(): Promise<InterpolateFn> {
     cachedInterpolateFn = module.interpolate;
   }
   return cachedInterpolateFn;
+}
+
+function getWhenExpressionSource(env: Environment): { filePath: string; source?: string } {
+  const filePath = env.getCurrentFilePath() ?? '<stdin>';
+  const source = env.getSource(filePath) ?? (filePath !== '<stdin>' ? env.getSource('<stdin>') : undefined);
+  return { filePath, source };
+}
+
+function getConditionLocation(
+  condition: BaseMlldNode[],
+  filePath: string
+): ReturnType<typeof astLocationToSourceLocation> {
+  const first = condition[0] as any;
+  if (!first?.location) return undefined;
+  return astLocationToSourceLocation(first.location, filePath);
+}
+
+function normalizeConditionText(text?: string, maxLength = 160): string | undefined {
+  if (!text) return undefined;
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return undefined;
+  return normalized.length > maxLength ? normalized.slice(0, maxLength) + '...' : normalized;
+}
+
+function getConditionText(condition: BaseMlldNode[], source?: string): string | undefined {
+  if (!source || condition.length === 0) return undefined;
+  const first = condition[0] as any;
+  const last = condition[condition.length - 1] as any;
+  const start = first?.location?.start?.offset;
+  const end = last?.location?.end?.offset ?? last?.location?.start?.offset;
+  if (typeof start !== 'number' || typeof end !== 'number' || end <= start) return undefined;
+  return normalizeConditionText(source.slice(start, end));
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
 }
 
 async function evaluateActionNodes(
@@ -150,7 +187,11 @@ async function evaluateControlLiteral(
  * Validate that 'none' conditions are placed correctly in a when block
  * Only checks condition pairs, not let assignments
  */
-function validateNonePlacement(entries: WhenEntry[]): void {
+function validateNonePlacement(
+  entries: WhenEntry[],
+  sourceInfo: { filePath: string; source?: string },
+  env: Environment
+): void {
   // Filter to only condition pairs for validation
   const conditionPairs = entries.filter(isConditionPair);
 
@@ -171,14 +212,24 @@ function validateNonePlacement(entries: WhenEntry[]): void {
     } else if (foundNone) {
       throw new MlldWhenExpressionError(
         'The "none" keyword can only appear as the last condition(s) in a when block',
-        condition[0]?.location
+        astLocationToSourceLocation(condition[0]?.location, sourceInfo.filePath),
+        {
+          filePath: sourceInfo.filePath,
+          sourceContent: sourceInfo.source
+        },
+        { env }
       );
     }
 
     if (foundWildcard && condition.length === 1 && isNoneCondition(condition[0])) {
       throw new MlldWhenExpressionError(
         'The "none" keyword cannot appear after "*" (wildcard) as it would never be reached',
-        condition[0].location
+        astLocationToSourceLocation(condition[0].location, sourceInfo.filePath),
+        {
+          filePath: sourceInfo.filePath,
+          sourceContent: sourceInfo.source
+        },
+        { env }
       );
     }
   }
@@ -199,12 +250,25 @@ export async function evaluateWhenExpression(
   context?: EvaluationContext,
   options?: WhenExpressionOptions
 ): Promise<EvalResult> {
+  return env.withExecutionContext('when-expression', { allowLetShadowing: true }, async () =>
+    evaluateWhenExpressionInternal(node, env, context, options)
+  );
+}
+
+async function evaluateWhenExpressionInternal(
+  node: WhenExpressionNode,
+  env: Environment,
+  context?: EvaluationContext,
+  options?: WhenExpressionOptions
+): Promise<EvalResult> {
   // console.error('🚨 WHEN-EXPRESSION EVALUATOR CALLED');
   
+  const sourceInfo = getWhenExpressionSource(env);
+
   // Validate none placement
-  validateNonePlacement(node.conditions);
+  validateNonePlacement(node.conditions, sourceInfo, env);
   
-  const errors: Error[] = [];
+  const errors: MlldWhenExpressionError[] = [];
   const denyMode = Boolean(options?.denyMode);
   let deniedHandlerRan = false;
   
@@ -291,10 +355,19 @@ export async function evaluateWhenExpression(
       });
 
       if (hasCodeExecution) {
+        const conditionText = getConditionText(pair.condition, sourceInfo.source);
         throw new MlldWhenExpressionError(
           'Code blocks are not supported in when expressions. Define your logic in a separate /exe function and call it instead.',
-          node.location,
-          { conditionIndex: i, phase: 'action', type: 'code-block-not-supported' }
+          astLocationToSourceLocation(node.location, sourceInfo.filePath),
+          {
+            conditionIndex: i,
+            phase: 'action',
+            type: 'code-block-not-supported',
+            conditionText,
+            filePath: sourceInfo.filePath,
+            sourceContent: sourceInfo.source
+          },
+          { env }
         );
       }
     }
@@ -572,10 +645,22 @@ export async function evaluateWhenExpression(
           // Return immediately after the first match
           return buildResult(value, accumulatedEnv);
         } catch (actionError) {
+          const conditionText = getConditionText(pair.condition, sourceInfo.source);
+          const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
+          const actionMessage = getErrorMessage(actionError);
           throw new MlldWhenExpressionError(
-            `Error evaluating action for condition ${i + 1}: ${actionError.message}`,
-            node.location,
-            { conditionIndex: i, phase: 'action', originalError: actionError }
+            `Error evaluating action for condition ${i + 1}${conditionText ? ` (${conditionText})` : ''}: ${actionMessage}`,
+            conditionLocation ?? astLocationToSourceLocation(node.location, sourceInfo.filePath),
+            {
+              conditionIndex: i,
+              phase: 'action',
+              originalError: actionError as Error,
+              conditionText,
+              conditionLocation,
+              filePath: sourceInfo.filePath,
+              sourceContent: sourceInfo.source
+            },
+            { env }
           );
         }
       }
@@ -583,10 +668,22 @@ export async function evaluateWhenExpression(
       // Let the error propagate - it's expected in retry scenarios
       
       // Collect condition errors but continue evaluating
+      const conditionText = getConditionText(pair.condition, sourceInfo.source);
+      const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
+      const conditionMessage = getErrorMessage(conditionError);
       errors.push(new MlldWhenExpressionError(
-        `Error evaluating condition ${i + 1}: ${conditionError.message}`,
-        node.location,
-        { conditionIndex: i, phase: 'condition', originalError: conditionError }
+        `Error evaluating condition ${i + 1}${conditionText ? ` (${conditionText})` : ''}: ${conditionMessage}`,
+        conditionLocation ?? astLocationToSourceLocation(node.location, sourceInfo.filePath),
+        {
+          conditionIndex: i,
+          phase: 'condition',
+          originalError: conditionError as Error,
+          conditionText,
+          conditionLocation,
+          filePath: sourceInfo.filePath,
+          sourceContent: sourceInfo.source
+        },
+        { env }
       ));
     }
   }
@@ -646,10 +743,22 @@ export async function evaluateWhenExpression(
         // Return immediately after the first none match
         return buildResult(value, accumulatedEnv);
       } catch (actionError) {
+        const conditionText = getConditionText(pair.condition, sourceInfo.source);
+        const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
+        const actionMessage = getErrorMessage(actionError);
         throw new MlldWhenExpressionError(
-          `Error evaluating none action for condition ${i + 1}: ${actionError.message}`,
-          node.location,
-          { conditionIndex: i, phase: 'action', originalError: actionError }
+          `Error evaluating none action for condition ${i + 1}${conditionText ? ` (${conditionText})` : ''}: ${actionMessage}`,
+          conditionLocation ?? astLocationToSourceLocation(node.location, sourceInfo.filePath),
+          {
+            conditionIndex: i,
+            phase: 'action',
+            originalError: actionError as Error,
+            conditionText,
+            conditionLocation,
+            filePath: sourceInfo.filePath,
+            sourceContent: sourceInfo.source
+          },
+          { env }
         );
       }
     }
@@ -658,10 +767,28 @@ export async function evaluateWhenExpression(
   
   // If we collected errors and no condition matched, report them
   if (errors.length > 0) {
+    const errorSummaries = errors.map((error, index) => {
+      const details = error.details;
+      const conditionIndex = typeof details?.conditionIndex === 'number' ? details.conditionIndex + 1 : index + 1;
+      const conditionText = details?.conditionText ? ` (${details.conditionText})` : '';
+      const message = details?.originalError ? getErrorMessage(details.originalError) : error.message;
+      const location = details?.conditionLocation;
+      const locationText = location
+        ? ` at line ${location.line}, column ${location.column}${location.filePath ? ` in ${location.filePath}` : ''}`
+        : '';
+      return `Condition ${conditionIndex}${conditionText} failed${locationText}: ${message}`;
+    });
+    const conditionErrors = errorSummaries.join('\n  ');
     throw new MlldWhenExpressionError(
       `When expression evaluation failed with ${errors.length} condition errors`,
-      node.location,
-      { errors }
+      astLocationToSourceLocation(node.location, sourceInfo.filePath),
+      {
+        errors: errorSummaries,
+        conditionErrors,
+        filePath: sourceInfo.filePath,
+        sourceContent: sourceInfo.source
+      },
+      { env }
     );
   }
   

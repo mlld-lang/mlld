@@ -1,1 +1,1 @@
-Invalid when syntax: missing '=>' before block
+Invalid when syntax: expected '=>' or '[' after the condition.

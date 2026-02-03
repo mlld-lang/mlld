@@ -1,8 +1,9 @@
-Actions like ${ACTION} cannot be used in exe when expressions
+Actions like ${ACTION} do not work inside exe when expressions
 
-exe functions must return values, not perform actions:
-  ✗ exe @${FUNCNAME}() = when: [ condition => ${ACTION} "text" ]
-  ✅ exe @${FUNCNAME}() = when: [ condition => "text" ]
+Mental model: exe + when returns a value; /when runs actions.
 
-To perform actions, use when at the directive level:
-  when: [ condition => ${ACTION} "text" ]
+Valid forms:
+  exe @${FUNCNAME}() = when [ condition => "text"; * => "default" ]
+  when [ condition => ${ACTION} "text" ]
+
+Fix: return a value from the exe when, or move the action to /when.
