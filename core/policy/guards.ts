@@ -339,8 +339,7 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
     };
   }
   if (denyMap && isDenied('sh', denyMap)) {
-    const firstWord = commandTokens[0]?.toLowerCase() ?? '';
-    if (firstWord === 'sh' || firstWord === 'bash') {
+    if (isShellInvocation(commandTokens)) {
       return {
         allowed: false,
         commandName,
@@ -448,5 +447,49 @@ function isDenied(
   const denyValue = deny[capability];
   if (denyValue === true) return true;
   if (Array.isArray(denyValue) && denyValue.includes('*')) return true;
+  return false;
+}
+
+const SHELL_BINARIES = new Set(['sh', 'bash', 'zsh', 'dash', 'fish', 'csh', 'tcsh', 'ksh', 'ash']);
+const COMMAND_WRAPPERS = new Set(['env', 'nice', 'nohup', 'timeout', 'strace', 'time']);
+
+function basename(token: string): string {
+  const slashIndex = token.lastIndexOf('/');
+  return slashIndex >= 0 ? token.substring(slashIndex + 1) : token;
+}
+
+const WRAPPER_FLAGS_WITH_ARGS = new Set(['-u', '-S', '--split-string', '-t', '--timeout', '-s', '--signal', '-n', '-p']);
+
+function isShellInvocation(commandTokens: string[]): boolean {
+  if (commandTokens.length === 0) return false;
+  const first = basename(commandTokens[0]!).toLowerCase();
+  if (SHELL_BINARIES.has(first)) return true;
+  if (COMMAND_WRAPPERS.has(first)) {
+    let i = 1;
+    while (i < commandTokens.length) {
+      const token = commandTokens[i]!;
+      if (token === '--') {
+        i++;
+        break;
+      }
+      if (token.startsWith('-')) {
+        if (WRAPPER_FLAGS_WITH_ARGS.has(token)) {
+          i += 2; // skip flag + its argument
+        } else {
+          i++;
+        }
+        continue;
+      }
+      if (token.includes('=')) {
+        i++;
+        continue;
+      }
+      break;
+    }
+    if (i < commandTokens.length) {
+      const resolved = basename(commandTokens[i]!).toLowerCase();
+      return SHELL_BINARIES.has(resolved);
+    }
+  }
   return false;
 }

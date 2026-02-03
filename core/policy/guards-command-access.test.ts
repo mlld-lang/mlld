@@ -69,4 +69,98 @@ describe('evaluateCommandAccess', () => {
     expect(allowed.allowed).toBe(true);
   });
 
+  describe('deny: ["sh"] blocks all shells and wrapper bypasses', () => {
+    const policy: PolicyConfig = {
+      deny: { sh: true }
+    };
+
+    it('blocks sh', () => {
+      const result = evaluateCommandAccess(policy, 'sh -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks bash', () => {
+      const result = evaluateCommandAccess(policy, 'bash -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks zsh', () => {
+      const result = evaluateCommandAccess(policy, 'zsh -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks dash', () => {
+      const result = evaluateCommandAccess(policy, 'dash -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks fish', () => {
+      const result = evaluateCommandAccess(policy, 'fish -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks ksh', () => {
+      const result = evaluateCommandAccess(policy, 'ksh -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks /bin/sh (path prefix)', () => {
+      const result = evaluateCommandAccess(policy, '/bin/sh -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks /usr/bin/bash (path prefix)', () => {
+      const result = evaluateCommandAccess(policy, '/usr/bin/bash -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks env sh (wrapper bypass)', () => {
+      const result = evaluateCommandAccess(policy, 'env sh -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks env bash (wrapper bypass)', () => {
+      const result = evaluateCommandAccess(policy, 'env bash -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks nice sh (wrapper bypass)', () => {
+      const result = evaluateCommandAccess(policy, 'nice sh -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks env -u VAR sh (wrapper with flags)', () => {
+      const result = evaluateCommandAccess(policy, 'env -u HOME sh -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('blocks /usr/bin/env sh (wrapper with path prefix)', () => {
+      const result = evaluateCommandAccess(policy, '/usr/bin/env sh -c "echo test"');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('Shell access denied by policy');
+    });
+
+    it('allows git status (not a shell)', () => {
+      const result = evaluateCommandAccess(policy, 'git status');
+      expect(result.allowed).toBe(true);
+    });
+
+    it('allows grep sh file.txt (sh not in command position)', () => {
+      const result = evaluateCommandAccess(policy, 'grep sh file.txt');
+      expect(result.allowed).toBe(true);
+    });
+  });
+
 });
