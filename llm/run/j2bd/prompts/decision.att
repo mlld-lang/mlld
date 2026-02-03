@@ -119,7 +119,7 @@ Exit cleanly and request human input.
 ```
 
 ### complete
-Job is done, merge and exit.
+Job is done.
 
 **BEFORE using "complete", you MUST verify:**
 1. Phase 1 items are ALL checked (atoms exist and validated)
