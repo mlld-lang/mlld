@@ -338,6 +338,16 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
       reason: `Command '${commandName}' denied by policy`
     };
   }
+  if (denyMap && isDenied('sh', denyMap)) {
+    const firstWord = commandTokens[0]?.toLowerCase() ?? '';
+    if (firstWord === 'sh' || firstWord === 'bash') {
+      return {
+        allowed: false,
+        commandName,
+        reason: 'Shell access denied by policy'
+      };
+    }
+  }
   if (allowListActive) {
     const allowPatterns = extractCommandPatterns(allow) ?? (allowMap?.cmd !== undefined ? normalizeCommandPatternList(allowMap.cmd) : undefined);
     if (!allowPatterns) {
