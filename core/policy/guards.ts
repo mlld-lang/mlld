@@ -154,19 +154,13 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
     guards.push({
       name: '__policy_deny_sh',
       filterKind: 'operation',
-      filterValue: 'op:cmd',
+      filterValue: 'op:sh',
       scope: 'perOperation',
       block: makeGuardBlock(),
       timing: 'before',
       privileged: true,
-      policyCondition: ({ operation }) => {
-        const commandText = getOperationCommandText(operation);
-        const tokens = getCommandTokens(commandText);
-        const firstWord = tokens[0] ?? '';
-        if (firstWord === 'sh' || firstWord === 'bash') {
-          return { decision: 'deny', reason: 'Shell access denied by policy' };
-        }
-        return { decision: 'allow' };
+      policyCondition: () => {
+        return { decision: 'deny', reason: 'Shell access denied by policy' };
       }
     });
   }
