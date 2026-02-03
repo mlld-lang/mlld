@@ -155,13 +155,40 @@ async function resolveEffectPayload(
   }
 }
 
+function collectEffectArgVariables(
+  effect: PipelineCommand,
+  env: Environment
+): Variable[] {
+  const args = effect.args ?? [];
+  const variables: Variable[] = [];
+  for (const arg of args) {
+    const nodes = Array.isArray(arg) ? arg : [arg];
+    for (const node of nodes) {
+      if (
+        node && typeof node === 'object' &&
+        node.type === 'VariableReference' &&
+        typeof node.identifier === 'string' &&
+        !node.fields?.length
+      ) {
+        const variable = env.getVariable(node.identifier);
+        if (variable) {
+          variables.push(variable);
+        }
+      }
+    }
+  }
+  return variables;
+}
+
 async function extractEffectGuardInputs(
   effect: PipelineCommand,
   stageOutput: unknown,
   env: Environment
 ): Promise<{ guardInputs: Variable[]; payload: unknown }> {
   const payload = await resolveEffectPayload(effect, stageOutput, env);
-  const guardInputs = materializeGuardInputs([payload], { nameHint: '__effect_input__' });
+  const argVariables = collectEffectArgVariables(effect, env);
+  const candidates = argVariables.length > 0 ? argVariables : [payload];
+  const guardInputs = materializeGuardInputs(candidates, { nameHint: '__effect_input__' });
   return { guardInputs, payload };
 }
 

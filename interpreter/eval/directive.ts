@@ -674,8 +674,11 @@ function buildOperationContext(
     trace: traceInfo.directive
   };
   const streamingEnabled = readStreamFlag(directive);
+  const effectiveKind = directive.kind === 'output' && directive.meta?.isLogSugar
+    ? 'log'
+    : directive.kind;
   const context: OperationContext = {
-    type: directive.kind,
+    type: effectiveKind,
     subtype: directive.subtype,
     labels,
     name: traceInfo.varName,
@@ -891,7 +894,8 @@ function applyOperationLabels(context: OperationContext, directive: DirectiveNod
     return;
   }
 
-  const opType = mapDirectiveToOpType(directive.kind);
+  const effectiveKind = context.type ?? directive.kind;
+  const opType = mapDirectiveToOpType(effectiveKind);
   if (!opType) {
     return;
   }
