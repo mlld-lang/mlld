@@ -1,0 +1,154 @@
+>>
+>> Sandbox Demo: Restricting Agent Capabilities
+>>
+>> Demonstrates environment-based sandboxing for AI agents:
+>> 1. Tool restrictions (Read/Write only, no Bash)
+>> 2. Filesystem access limits (specific directories only)
+>> 3. Network disabled
+>> 4. No MCP servers
+>> 5. Credential injection via sealed paths
+>>
+
+>> ============================================================
+>> STEP 1: Configure sandbox environment
+>> ============================================================
+
+>> Sandbox with Docker provider for process isolation.
+>> Tools limited to Read and Write - Bash is NOT available.
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  tools: ["Read", "Write"],
+  fs: { read: [".:/app"], write: ["/tmp"] },
+  net: "none",
+  mcps: []
+}
+
+log "Sandbox config: tools=Read,Write fs.read=.:/app fs.write=/tmp net=none mcps=[]"
+
+>> ============================================================
+>> STEP 2: Alternative configs showing different restrictions
+>> ============================================================
+
+>> Local execution (no provider) with auth and limited tools.
+>> Commands run locally but tool access is restricted.
+var @localRestricted = {
+  auth: "claude",
+  tools: ["Read", "Write"],
+  fs: { read: ["@base/**"], write: ["@base/tmp/**", "@base/workspace/**"] }
+}
+
+log "Local restricted config: tools=Read,Write fs.write=tmp,workspace"
+
+>> Read-only sandbox - agent can only observe, not modify.
+var @readOnly = @sandbox with { tools: ["Read"], fs: { read: [".:/app"], write: [] } }
+
+log "Read-only config derived from sandbox: tools=Read fs.write=[]"
+
+>> Workspace-limited sandbox - agent can only work in /workspace.
+var @workspaceSandbox = {
+  provider: "@mlld/env-docker",
+  tools: ["Read", "Write", "Bash"],
+  fs: { read: ["/workspace:/workspace"], write: ["/workspace:/workspace"] },
+  net: "none",
+  mcps: []
+}
+
+log "Workspace sandbox: tools=Read,Write,Bash limited to /workspace"
+
+>> ============================================================
+>> STEP 3: Policy with credential configuration
+>> ============================================================
+
+>> Define policy with auth credentials.
+>> Credentials flow through sealed paths - never exposed as strings.
+var @policyConfig = {
+  auth: {
+    claude: { from: "keychain:mlld-env-myproject/claude", as: "ANTHROPIC_API_KEY" },
+    openai: { from: "env:OPENAI_API_KEY", as: "OPENAI_API_KEY" }
+  },
+  capabilities: {
+    allow: ["cmd:git:*", "fs:r:**", "fs:w:@base/tmp/**"],
+    deny: ["sh"]
+  }
+}
+policy @p = union(@policyConfig)
+
+log "Policy configured with sealed auth paths"
+
+>> ============================================================
+>> STEP 4: Demonstrate environment block usage
+>> ============================================================
+
+>> The env block scopes tool access.
+>> Inside this block, only Read and Write tools are available.
+>> Bash commands would be blocked.
+
+var @demoConfig = { tools: ["Read", "Write"] }
+
+var @envResult = env @demoConfig [
+  >> Inside env block, tools are restricted
+  log "Inside env block with tools: Read, Write"
+  => "env block completed"
+]
+
+show @envResult
+
+>> ============================================================
+>> STEP 5: Credential injection pattern
+>> ============================================================
+
+>> The 'using auth:name' syntax injects credentials as env vars.
+>> The secret flows directly from source to env var - never a string.
+>>
+>> run cmd { claude -p @task } using auth:claude
+>>
+>> This would inject ANTHROPIC_API_KEY from keychain.
+>> The agent cannot read the credential as a string variable.
+
+log "Credential injection uses 'using auth:name' syntax"
+log "Example: run cmd { tool } using auth:claude"
+
+>> For explicit variable injection (computed secrets):
+>> run cmd { tool } using @token as TOOL_KEY
+
+>> ============================================================
+>> SUMMARY
+>> ============================================================
+
+show ::
+
+Sandbox Demo Complete
+=====================
+
+This demonstrated environment-based agent sandboxing:
+
+1. TOOL RESTRICTIONS
+   - tools: ["Read", "Write"] limits available tools
+   - Agent cannot use Bash or other unrestricted tools
+   - Enforced at runtime by mlld execution layer
+
+2. FILESYSTEM LIMITS
+   - fs.read: [".:/app"] limits read access
+   - fs.write: ["/tmp"] limits write access
+   - Paths use host:container format for Docker
+
+3. NETWORK DISABLED
+   - net: "none" blocks all network access
+   - Options: "none", "host", or { allow: [...] }
+
+4. NO MCP SERVERS
+   - mcps: [] provides no external tool servers
+   - Agent operates with only specified tools
+
+5. CREDENTIAL INJECTION
+   - policy.auth defines sealed credential paths
+   - 'using auth:name' injects as env var
+   - Secret never becomes interpolatable string
+   - Agent cannot read credential value directly
+
+Environment configs are composable values:
+- Use 'with' to derive restricted variants
+- Use 'new' for child environments
+- Policy controls overall capabilities
+
+::
