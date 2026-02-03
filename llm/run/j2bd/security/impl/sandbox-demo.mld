@@ -4,17 +4,21 @@
 >> ENFORCEMENT STATUS (as of 2026-02-03):
 >>
 >> WITH Docker provider (@mlld/env-docker):
->> - Filesystem limits: ENFORCED BY DOCKER PROVIDER via -v mounts with :ro (lines 67-85)
->> - Network restrictions: ENFORCED BY DOCKER PROVIDER via --network flag (lines 45-51)
->> - Resource limits: ENFORCED BY DOCKER PROVIDER via --memory and --cpus (lines 53-65)
->> - Credential protection: ENFORCED via policy label flow rules
->> - Tool attenuation: ENFORCED - child envs cannot expand parent's tool scope
+>> - Filesystem limits: ENFORCED BY DOCKER PROVIDER via -v mounts with :ro
+>> - Network restrictions: ENFORCED BY DOCKER PROVIDER via --network flag
+>> - Resource limits: ENFORCED BY DOCKER PROVIDER via --memory and --cpus
+>> - Credential protection: REQUIRES EXPLICIT GUARDS (labels work, defaults.rules not implemented)
+>> - capabilities.allow: ENFORCED via policy-generated guards
+>> - capabilities.deny: NOT IMPLEMENTED (denylist does not block)
+>> - defaults.rules: NOT IMPLEMENTED (rules like "no-secret-exfil" don't activate)
 >> - Tool restrictions: NOT ENFORCED at mlld level (ticket m-3ad1)
 >> - MCP restrictions: NOT ENFORCED at mlld level (ticket m-289d)
 >>
 >> WITHOUT a provider (local execution):
->> - Credential protection: ENFORCED via policy label flow rules
->> - Tool attenuation: ENFORCED - child envs cannot expand parent's tool scope
+>> - Credential protection: REQUIRES EXPLICIT GUARDS (same as above)
+>> - capabilities.allow: ENFORCED via policy-generated guards
+>> - capabilities.deny: NOT IMPLEMENTED
+>> - defaults.rules: NOT IMPLEMENTED
 >> - ALL OTHER RESTRICTIONS: NOT ENFORCED (require provider for isolation)
 >>
 >> Demonstrates environment-based sandboxing for AI agents:
@@ -77,27 +81,54 @@ log "Workspace sandbox: tools=Read,Write,Bash limited to /workspace"
 
 >> Define policy with auth credentials.
 >> Credentials flow through sealed paths - never exposed as strings.
+>> NOTE: capabilities.deny is NOT IMPLEMENTED - only allow works.
 var @policyConfig = {
   auth: {
     claude: { from: "keychain:mlld-env-myproject/claude", as: "ANTHROPIC_API_KEY" },
     openai: { from: "env:OPENAI_API_KEY", as: "OPENAI_API_KEY" }
   },
   capabilities: {
-    allow: ["cmd:git:*", "fs:r:**", "fs:w:@base/tmp/**"],
-    deny: ["sh"]
+    allow: ["cmd:git:*", "fs:r:**", "fs:w:@base/tmp/**"]
   }
 }
-policy @p = union(@policyConfig)
 
 log "Policy configured with sealed auth paths"
+log "NOTE: capabilities.deny removed - it is not enforced"
 
 >> ============================================================
->> STEP 4: Demonstrate environment block usage
+>> STEP 4: Guard for secret protection (REQUIRED for enforcement)
+>> ============================================================
+
+>> Secret labels propagate correctly but do NOT block by default.
+>> You MUST define explicit guards to block secret exfiltration.
+>> This guard blocks showing or interpolating secret-labeled data:
+
+guard @noSecretShow before op:show = when [
+  @mx.labels.includes("secret") => deny "Cannot show secret-labeled data"
+  * => allow
+]
+
+guard @noSecretInCmd before op:cmd = when [
+  @mx.labels.includes("secret") => deny "Cannot interpolate secrets into commands"
+  * => allow
+]
+
+>> Test the guard with a secret variable:
+var secret @testSecret = "sk-test-secret-value"
+log "Defined secret variable (value hidden because guards are active)"
+
+>> WITHOUT GUARDS: The secret would be shown/interpolated freely.
+>> WITH GUARDS (above): Attempting to show @testSecret will be blocked.
+>> Uncomment the line below to test blocking (will error):
+>> show @testSecret
+
+>> ============================================================
+>> STEP 5: Demonstrate environment block usage
 >> ============================================================
 
 >> The env block scopes tool access.
 >> Inside this block, only Read and Write tools are available.
->> Bash commands would be blocked.
+>> NOTE: Tool enforcement (m-3ad1) not implemented - this is declarative only.
 
 var @demoConfig = { tools: ["Read", "Write"] }
 
@@ -110,7 +141,7 @@ var @envResult = env @demoConfig [
 show @envResult
 
 >> ============================================================
->> STEP 5: Credential injection pattern
+>> STEP 6: Credential injection pattern
 >> ============================================================
 
 >> The 'using auth:name' syntax injects credentials as env vars.
@@ -140,30 +171,32 @@ This demonstrated environment-based agent sandboxing:
 
 1. FILESYSTEM LIMITS
    - WITH Docker provider: ENFORCED via -v mounts with :ro flag
-   - Docker @create() adds :ro suffix to read-only mounts (lines 76-78)
+   - Docker create() adds :ro suffix to read-only mounts
    - WITHOUT provider: NOT ENFORCED (local execution)
 
 2. NETWORK RESTRICTIONS
    - WITH Docker provider: ENFORCED via --network flag
-   - Docker @create() passes net: "none"|"host"|"bridge" (lines 45-51)
+   - Docker create() passes net: "none"|"host"|"bridge"
    - WITHOUT provider: NOT ENFORCED (local execution)
 
 3. RESOURCE LIMITS
    - WITH Docker provider: ENFORCED via --memory and --cpus flags
-   - Docker @create() passes limits.mem and limits.cpu (lines 53-65)
+   - Docker create() passes limits.mem and limits.cpu
    - WITHOUT provider: NOT ENFORCED (local execution)
 
-4. CREDENTIAL INJECTION (ENFORCED)
+4. CREDENTIAL INJECTION
    - policy.auth defines sealed credential paths
    - 'using auth:name' injects as env var
-   - Secret never becomes interpolatable string
-   - Policy label flow blocks secret interpolation into commands
-   - keychain.get() outputs are labeled 'secret' automatically
+   - Secret never becomes interpolatable string in that flow
+   - HOWEVER: bare secret labels do NOT block show/interpolation
+   - You MUST define explicit guards to block secret exfiltration
+   - defaults.rules: ["no-secret-exfil"] is NOT IMPLEMENTED
 
 5. TOOL RESTRICTIONS (NOT ENFORCED - ticket m-3ad1)
    - tools: ["Read", "Write"] sets tool scope
    - isToolAllowed() exists but is never called during execution
-   - WORKAROUND: Use policy capabilities.deny for actual enforcement
+   - capabilities.deny does NOT work as a workaround
+   - capabilities.allow DOES work (allowlist model enforced)
 
 6. MCP RESTRICTIONS (NOT ENFORCED - ticket m-289d)
    - mcps: [] syntax is parsed but not enforced
@@ -178,10 +211,14 @@ WHAT WORKS NOW:
 - Filesystem isolation (with Docker provider)
 - Network isolation (with Docker provider)
 - Resource limits (with Docker provider)
-- Tool attenuation (child cannot expand parent tools)
-- Secret label flow protection via policy
-- Credential injection via sealed paths
-- Policy capabilities.allow/deny
+- Policy capabilities.allow (allowlist model)
+- Credential injection via sealed 'using auth:name' paths
+- User-defined guards for label-based blocking
+
+WHAT DOES NOT WORK:
+- capabilities.deny (denylist not enforced)
+- defaults.rules (built-in rules not implemented)
+- Automatic secret label blocking (requires explicit guards)
 
 KNOWN LIMITATIONS (m-3ad1, m-289d):
 - env-level tool enforcement (isToolAllowed exists but not called)
