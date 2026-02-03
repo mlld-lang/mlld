@@ -7,6 +7,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors';
+import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import { DependencyDetector } from '@core/utils/dependency-detector';
 import { parseSync } from '@grammar/parser';
 import * as yaml from 'js-yaml';
@@ -626,8 +627,13 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       ast = parseSync(content, { mode });
     } catch (parseError: any) {
       result.valid = false;
+
+      // Try to enhance the error message
+      await initializePatterns();
+      const enhanced = await enhanceParseError(parseError, content, filepath);
+
       result.errors = [{
-        message: parseError.message,
+        message: enhanced?.message || parseError.message,
         line: parseError.location?.start?.line,
         column: parseError.location?.start?.column
       }];

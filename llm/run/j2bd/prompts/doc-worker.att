@@ -133,6 +133,7 @@ Write JSON reporting what you did (file content already saved, don't include it)
       "description": "What's wrong",
       "urgency": "high|med|low",
       "suggested_fix": "How to fix it",
+      "evidence": "REQUIRED - exact error, test output, or reproduction",
       "chestertons_fence": {
         "current_behavior": "What currently happens",
         "possible_reason": "Why it might be intentional",
@@ -149,6 +150,15 @@ Write JSON reporting what you did (file content already saved, don't include it)
 }
 ```
 
+## Verify Features Before Documenting
+
+Before documenting a feature, verify it works:
+1. Search `tests/cases/` for existing test coverage
+2. Run `npm run test:case -- <relevant-path>` to confirm behavior
+3. If claiming something "doesn't work", prove it with an actual error
+
+If you hit friction while documenting, include **evidence** (exact error, test command, reproduction).
+
 ## Important
 
 - **100-200 words max** - If you're writing more, you're writing a tutorial, not an atom.
@@ -157,3 +167,4 @@ Write JSON reporting what you did (file content already saved, don't include it)
 - **Strict mode** - Use bare directives in mlld examples.
 - **Validate** - Run `mlld validate` before committing.
 - **Commit** - Always commit your work before returning status.
+- **Verify** - Test features before documenting them. Don't speculate.

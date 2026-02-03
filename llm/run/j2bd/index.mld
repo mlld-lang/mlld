@@ -113,7 +113,7 @@ if !@run.id [
 >> Ensure we have the worktree path (for resumed runs)
 var @worktreePath = when [@run.worktreePath => @run.worktreePath; * => @wtPath(@worktree)]
 
->> Load jobs (TODO: for-when loses file metadata - use direct access for now)
+>> Load jobs
 var @jobs = <@base/j2bd/@topic/jobs/*.md>
 
 if @jobs.length == 0 [
@@ -263,12 +263,12 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
         length: @promptLength,
         prompt_path: @workerPromptPath,
         output_path: @workerOutputPath,
-        model: "sonnet",
+        model: "opus",
         tools: @workerTools
       })
 
       >> Run worker and capture result
-      let @pollResult = @claudePoll(@workerFullPrompt, "sonnet", @worktreePath, @workerTools, @workerOutputPath)
+      let @pollResult = @claudePoll(@workerFullPrompt, "opus", @worktreePath, @workerTools, @workerOutputPath)
       show `  Poll result: @pollResult`
 
       >> Try to read output

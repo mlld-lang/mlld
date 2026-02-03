@@ -110,6 +110,7 @@ Write JSON reporting what you did (file content already saved, don't include it)
       "description": "New friction discovered while fixing",
       "urgency": "high|med|low",
       "suggested_fix": "How to address it",
+      "evidence": "REQUIRED - exact error, test output, or reproduction steps",
       "chestertons_fence": {
         "current_behavior": "What currently happens",
         "possible_reason": "Why it might be intentional",
@@ -126,6 +127,15 @@ Write JSON reporting what you did (file content already saved, don't include it)
 }
 ```
 
+## Verify Before Reporting New Friction
+
+If you discover new friction while fixing, VERIFY it before reporting:
+1. Search `tests/cases/` for existing tests of the feature
+2. Run a test: `npm run test:case -- <path>` or create a minimal reproduction
+3. Include the **exact error** or **test output** in the "evidence" field
+
+Do not report "may not work" - either prove it doesn't work or don't report it.
+
 ## Important
 
 - Run tests BEFORE returning. If they fail, revert and report.
@@ -133,5 +143,6 @@ Write JSON reporting what you did (file content already saved, don't include it)
 - Minimal scope - fix this friction only.
 - ALWAYS commit your work before running tests.
 - If blocked, add notes to ticket so next attempt has context.
+- VERIFY new friction before reporting - include evidence.
 
 If the friction cannot be fixed without a design decision, set status to "needs_human" and explain in friction_points with type "design_question".
