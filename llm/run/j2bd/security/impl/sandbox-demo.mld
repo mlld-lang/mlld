@@ -1,6 +1,14 @@
 >>
 >> Sandbox Demo: Restricting Agent Capabilities
 >>
+>> ENFORCEMENT STATUS (as of 2026-02-02):
+>> - Tool restrictions: SYNTAX ONLY - not enforced at runtime (ticket m-3ad1)
+>> - Filesystem limits: SYNTAX ONLY - not enforced at runtime (ticket m-744d)
+>> - Network restrictions: SYNTAX ONLY - not enforced at runtime (ticket m-5e6d)
+>> - MCP restrictions: SYNTAX ONLY - not enforced at runtime (ticket m-289d)
+>> - Credential protection: ENFORCED via policy label flow rules
+>> - Tool attenuation: ENFORCED - child envs cannot expand parent's tool scope
+>>
 >> Demonstrates environment-based sandboxing for AI agents:
 >> 1. Tool restrictions (Read/Write only, no Bash)
 >> 2. Filesystem access limits (specific directories only)
@@ -122,33 +130,48 @@ Sandbox Demo Complete
 
 This demonstrated environment-based agent sandboxing:
 
-1. TOOL RESTRICTIONS
-   - tools: ["Read", "Write"] limits available tools
-   - Agent cannot use Bash or other unrestricted tools
-   - Enforced at runtime by mlld execution layer
+1. TOOL RESTRICTIONS (NOT ENFORCED - ticket m-3ad1)
+   - tools: ["Read", "Write"] sets tool scope
+   - isToolAllowed() exists but is never called during execution
+   - WORKAROUND: Use policy capabilities.deny for actual enforcement
 
-2. FILESYSTEM LIMITS
-   - fs.read: [".:/app"] limits read access
-   - fs.write: ["/tmp"] limits write access
-   - Paths use host:container format for Docker
+2. FILESYSTEM LIMITS (NOT ENFORCED - ticket m-744d)
+   - fs.read: [".:/app"] syntax is parsed but not enforced
+   - fs.write: ["/tmp"] syntax is parsed but not enforced
+   - WORKAROUND: Use policy capabilities for filesystem restrictions
+   - Docker provider enforces at container level if used
 
-3. NETWORK DISABLED
-   - net: "none" blocks all network access
-   - Options: "none", "host", or { allow: [...] }
+3. NETWORK DISABLED (NOT ENFORCED - ticket m-5e6d)
+   - net: "none" syntax is parsed but not enforced
+   - No mlld-level network blocking exists
+   - WORKAROUND: Docker provider enforces at container level
 
-4. NO MCP SERVERS
-   - mcps: [] provides no external tool servers
-   - Agent operates with only specified tools
+4. NO MCP SERVERS (NOT ENFORCED - ticket m-289d)
+   - mcps: [] syntax is parsed but not enforced
+   - No MCP filtering code exists in the codebase
 
-5. CREDENTIAL INJECTION
+5. CREDENTIAL INJECTION (ENFORCED)
    - policy.auth defines sealed credential paths
    - 'using auth:name' injects as env var
    - Secret never becomes interpolatable string
-   - Agent cannot read credential value directly
+   - Policy label flow blocks secret interpolation into commands
+   - keychain.get() outputs are labeled 'secret' automatically
 
 Environment configs are composable values:
 - Use 'with' to derive restricted variants
 - Use 'new' for child environments
 - Policy controls overall capabilities
+
+WHAT WORKS NOW:
+- Tool attenuation (child cannot expand parent tools)
+- Secret label flow protection via policy
+- Credential injection via sealed paths
+- Policy capabilities.allow/deny
+
+WHAT NEEDS IMPLEMENTATION:
+- env-level tool enforcement (call isToolAllowed before exec)
+- env-level filesystem enforcement (connect to filesystem-policy)
+- env-level network enforcement (new code needed)
+- env-level MCP filtering (new code needed)
 
 ::
