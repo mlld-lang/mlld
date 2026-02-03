@@ -258,9 +258,6 @@ export class BashExecutor extends BaseCommandExecutor {
         });
       };
 
-      child.stdin.write(enhancedCode);
-      child.stdin.end();
-
       child.stdout.on('data', (data: Buffer) => {
         const text = stdoutDecoder.write(data);
         stdoutBuffer += text;
@@ -275,6 +272,56 @@ export class BashExecutor extends BaseCommandExecutor {
 
       const result: CommandExecutionResult = await new Promise((resolve, reject) => {
         let settled = false;
+
+        const debugExecIo = (process.env.MLLD_DEBUG_EXEC_IO || '').toLowerCase();
+        const logStdinError = (err: NodeJS.ErrnoException, phase: 'write' | 'end') => {
+          if (debugExecIo !== '1' && debugExecIo !== 'true') return;
+          try {
+            console.error('[mlld][exec-io] bash stdin', {
+              phase,
+              code: err.code,
+              message: err.message
+            });
+          } catch {}
+        };
+
+        child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+          if (err?.code === 'EPIPE') {
+            logStdinError(err, 'write');
+            return;
+          }
+          if (settled) return;
+          settled = true;
+          reject(err);
+        });
+
+        try {
+          child.stdin.write(enhancedCode);
+        } catch (err) {
+          const ioErr = err as NodeJS.ErrnoException;
+          if (ioErr?.code !== 'EPIPE') {
+            if (!settled) {
+              settled = true;
+              reject(ioErr);
+            }
+            return;
+          }
+          logStdinError(ioErr, 'write');
+        }
+        try {
+          child.stdin.end();
+        } catch (err) {
+          const ioErr = err as NodeJS.ErrnoException;
+          if (ioErr?.code !== 'EPIPE') {
+            if (!settled) {
+              settled = true;
+              reject(ioErr);
+            }
+            return;
+          }
+          logStdinError(ioErr, 'end');
+        }
+
         child.on('error', (err) => {
           if (settled) return;
           settled = true;

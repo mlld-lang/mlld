@@ -369,11 +369,58 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
 
     return await new Promise<CommandExecutionResult>((resolve, reject) => {
       let settled = false;
+      const debugExecIo = (process.env.MLLD_DEBUG_EXEC_IO || '').toLowerCase();
+      const logStdinError = (err: NodeJS.ErrnoException, phase: 'write' | 'end') => {
+        if (debugExecIo !== '1' && debugExecIo !== 'true') return;
+        try {
+          console.error('[mlld][exec-io] command stdin', {
+            phase,
+            code: err.code,
+            message: err.message,
+            command: safeCommand
+          });
+        } catch {}
+      };
+
+      child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+        if (err?.code === 'EPIPE') {
+          logStdinError(err, 'write');
+          return;
+        }
+        if (settled) return;
+        settled = true;
+        reject(err);
+      });
+
       if (options?.input) {
-        child.stdin.write(options.input);
+        try {
+          child.stdin.write(options.input);
+        } catch (err) {
+          const ioErr = err as NodeJS.ErrnoException;
+          if (ioErr?.code !== 'EPIPE') {
+            if (!settled) {
+              settled = true;
+              reject(ioErr);
+            }
+            return;
+          }
+          logStdinError(ioErr, 'write');
+        }
       }
       // Always end stdin to avoid hangs
-      child.stdin.end();
+      try {
+        child.stdin.end();
+      } catch (err) {
+        const ioErr = err as NodeJS.ErrnoException;
+        if (ioErr?.code !== 'EPIPE') {
+          if (!settled) {
+            settled = true;
+            reject(ioErr);
+          }
+          return;
+        }
+        logStdinError(ioErr, 'end');
+      }
 
       child.stdout.on('data', (data: Buffer) => {
         const text = stdoutDecoder.write(data);
