@@ -1,14 +1,14 @@
 >> J2BD V3 Orchestrator
->> Usage: mlld run j2bd --topic <topic> [--job <job>] [--new] [--run <run-id>] [--max <n>] [--dryRun]
+>> Usage: mlld run j2bd --topic <topic> [--job <job>] [--new] [--run <run-id>] [--max <n>]
 >>
 >> LLM-first orchestration: decision agent makes all choices, orchestrator executes
+>> Workers commit directly to the current branch (no worktrees)
 >>
 >> Examples:
 >>   mlld run j2bd --topic security                     # Resume most recent run (or create first)
 >>   mlld run j2bd --topic security --new              # Start a new run
 >>   mlld run j2bd --topic security --run 2026-01-31-2 # Resume specific run
 >>   mlld run j2bd --topic security --job prevent-exfil # Specific job only
->>   mlld run j2bd --topic security --dryRun            # Dry run (no commits)
 >>   mlld run j2bd --topic security --max 10            # Limit iterations
 
 >> Imports
@@ -27,7 +27,6 @@ var @jobFilter = @p.job ?? null
 var @runId = @p.run ?? null
 var @newRun = @p.new ?? false
 var @maxIterations = @p.max ? @p.max * 1 : null
-var @dryRun = @p.dryRun ?? false
 
 >> Load topic config
 var @configPath = `@base/j2bd/@topic/config.mld`
@@ -36,16 +35,7 @@ import { @config } from "@configPath"
 >> Shell helpers
 exe @countRunsForDate(dir, date) = sh { ls "$dir" 2>/dev/null | grep "^$date" | wc -l | tr -d ' ' }
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }
-exe @wtExists(branch) = sh { wt list --format=json | grep -q "\"branch\":\"$branch\"" && echo "true" || echo "false" }
-exe @wtCreate(branch, baseBranch) = sh { wt switch --create "$branch" --base="$baseBranch" -y 2>&1 }
-exe @wtPath(branch) = sh { wt list --format=json | jq -r ".[] | select(.branch==\"$branch\") | .path" }
-exe @wtSwitch(branch) = sh { wt switch "$branch" -y }
-exe @wtRemove(branch) = sh { wt remove "$branch" -y }
-exe @wtMerge(branch, target) = sh { wt merge "$target" --stage tracked -y }
 exe @getCurrentBranch() = sh { git branch --show-current }
-exe @gitAddInWorktree(wtPath, file) = sh { cd "$wtPath" && git add "$file" }
-exe @gitCommitInWorktree(wtPath, msg) = sh { cd "$wtPath" && git commit -m "$msg" }
-exe @runTestsInWorktree(wtPath, testCmd) = sh { cd "$wtPath" && $testCmd }
 
 >> Resolve or create run directory
 var @today = @now.slice(0, 10)
@@ -60,8 +50,8 @@ exe @nextRunId(root, today) = [
 >> Find most recent run directory (by name, which sorts chronologically)
 exe @mostRecentRun(root) = sh { ls -1d "$root"/*/ 2>/dev/null | xargs -n1 basename | sort -r | head -1 | tr -d '\n' }
 
->> Capture current branch at startup (for worktree base and merge target)
-var @parentBranch = @getCurrentBranch()
+>> Capture current branch at startup
+var @currentBranch = @getCurrentBranch()
 
 >> Resolve run ID: --run <id> > --new > resume most recent > create first
 exe @resolveRunId(root, today, runId, newRun) = when [
@@ -84,34 +74,17 @@ run @mkdirp(@runDir)
 
 >> Load or initialize run state
 var @run = @loadRunState(@runDir)
-var @worktree = when [@run.worktree => @run.worktree; * => `@config.worktree_prefix-@resolvedRunId`]
 
 if !@run.id [
-  >> Create worktree for this run (branched from current branch, not main)
-  let @wtExistsResult = @wtExists(@worktree)
-  if @wtExistsResult == "false" [
-    show `Creating worktree: @worktree (from @parentBranch)`
-    run @wtCreate(@worktree, @parentBranch)
-  ]
-
-  >> Get worktree path
-  let @worktreePath = @wtPath(@worktree)
-  show `Worktree path: @worktreePath`
-
-  let @newRun = {
+  let @newRunState = {
     id: @resolvedRunId,
     topic: @topic,
-    worktree: @worktree,
-    worktreePath: @worktreePath,
-    parentBranch: @parentBranch,
+    branch: @currentBranch,
     created: @now
   }
-  @saveRunState(@runDir, @newRun)
-  @logEvent(@runDir, "run_start", { topic: @topic, worktree: @worktree, path: @worktreePath, parentBranch: @parentBranch })
+  @saveRunState(@runDir, @newRunState)
+  @logEvent(@runDir, "run_start", { topic: @topic, branch: @currentBranch })
 ]
-
->> Ensure we have the worktree path (for resumed runs)
-var @worktreePath = when [@run.worktreePath => @run.worktreePath; * => @wtPath(@worktree)]
 
 >> Load jobs
 var @jobs = <@base/j2bd/@topic/jobs/*.md>
@@ -143,7 +116,6 @@ exe @decisionPrompt(jobSections, referenceMaterial, tickets, recentEvents, lastW
 exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode, onboarding, chestertonsFence) = template "./prompts/doc-worker.att"
 exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onboarding, chestertonsFence) = template "./prompts/impl-worker.att"
 exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/friction-worker.att"
-exe @mergeWorkerPrompt(sourceBranch, targetBranch, worktreePath, testCommand) = template "./prompts/merge-worker.att"
 
 >> Build worker prompt based on task type
 exe @buildWorkerPrompt(taskType, ticket, guidance, config, job, onboarding, chestertonsFence) = [
@@ -165,7 +137,7 @@ show `════════════════════════�
 show `J2BD @topic - Run @resolvedRunId`
 show `═══════════════════════════════════════════════════════════════════`
 show `Job: @job.mx.filename`
-show `Worktree: @worktree`
+show `Branch: @currentBranch`
 show `Run dir: @runDir`
 show `───────────────────────────────────────────────────────────────────`
 
@@ -234,7 +206,7 @@ IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool.
       >> Get ticket content
       let @ticket = cmd { tk show @decision.ticket --json }
 
-      >> Build and run worker (in worktree)
+      >> Build and run worker
       let @workerPrompt = @buildWorkerPrompt(@decision.task_type, @ticket, @decision.guidance, @config, @job, @onboarding, @chestertonsFence)
       let @workerOutputPath = `@runDir/worker-@decision.ticket-@iterationCount\.json`
       let @workerPromptPath = `@runDir/worker-@decision.ticket-@iterationCount\.prompt.md`
@@ -255,7 +227,6 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
       output @workerFullPrompt to "@workerPromptPath"
       show `  Prompt saved: @workerPromptPath`
       show `  Output expected: @workerOutputPath`
-      show `  Working dir: @worktreePath`
       show `  Tools: @workerTools`
       @logEvent(@runDir, "worker_prompt", {
         ticket: @decision.ticket,
@@ -267,8 +238,8 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
         tools: @workerTools
       })
 
-      >> Run worker and capture result
-      let @pollResult = @claudePoll(@workerFullPrompt, "opus", @worktreePath, @workerTools, @workerOutputPath)
+      >> Run worker in repo root
+      let @pollResult = @claudePoll(@workerFullPrompt, "opus", "@base", @workerTools, @workerOutputPath)
       show `  Poll result: @pollResult`
 
       >> Try to read output
@@ -372,7 +343,7 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
     ]
 
     "complete" => [
-      >> Hard guards before merge
+      >> Hard guards before completion
       let @openTickets = @loadTickets(`j2bd-@topic`)
       let @openList = for @t in @openTickets when @t.status != "closed" => @t
       let @openCount = @openList.length
@@ -390,81 +361,6 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
 
       show `Job complete: @decision.summary`
       @logEvent(@runDir, "job_complete", { summary: @decision.summary })
-
-      >> Merge worktree using an agent (if not dry run)
-      if !@dryRun [
-        >> Get target branch from run state or fallback to captured parent branch
-        let @targetBranch = @run.parentBranch ?? @parentBranch
-        show `Merging worktree @worktree to @targetBranch (agent-driven)`
-
-        >> Build and run merge worker
-        let @mergePromptText = @mergeWorkerPrompt(@worktree, @targetBranch, @worktreePath, @config.test_command)
-        let @mergeOutputPath = `@runDir/merge-@iterationCount\.json`
-        let @mergeFullPrompt = `@mergePromptText
-
-IMPORTANT: Write your JSON response to @mergeOutputPath using the Write tool. Write ONLY valid JSON.`
-
-        @logEvent(@runDir, "merge_worker_start", {
-          source: @worktree,
-          target: @targetBranch,
-          output_path: @mergeOutputPath
-        })
-
-        >> Run merge worker
-        let @mergePollResult = @claudePoll(@mergeFullPrompt, "sonnet", @worktreePath, @workerTools, @mergeOutputPath)
-        let @mergeResult = <@mergeOutputPath>?
-
-        if !@mergeResult [
-          show `Merge worker failed: no output`
-          @logEvent(@runDir, "error", { type: "merge_worker", error: "no output" })
-          let @run = {
-            ...@run,
-            lastError: "Merge worker failed to produce output"
-          }
-          @saveRunState(@runDir, @run)
-          continue
-        ]
-
-        if @mergeResult.status == "completed" [
-          show `Merge successful: @mergeResult.merge_result.commits_merged commits merged`
-          @logEvent(@runDir, "worktree_merged", {
-            worktree: @worktree,
-            target: @targetBranch,
-            commits: @mergeResult.merge_result.commits_merged,
-            merge_commit: @mergeResult.merge_result.merge_commit
-          })
-        ]
-
-        if @mergeResult.status == "blocked" || @mergeResult.status == "needs_human" [
-          show `Merge blocked: @mergeResult.standup.blockers`
-          >> Create urgent ticket for merge failure
-          let @frictionDesc = @mergeResult.friction_points[0].description ?? "Merge failed"
-          let @frictionDetails = @mergeResult.friction_points[0].details ?? ""
-          let @ticketBody = `Merge of @worktree to @targetBranch failed.
-
-**Issue**: @frictionDesc
-
-**Details**:
-@frictionDetails
-
-**Suggested action**: @mergeResult.friction_points[0].suggested_action`
-          let @ticketId = cmd { tk create --dir "j2bd-@topic" "URGENT: Merge failed - @frictionDesc" -d "@ticketBody" }
-          cmd { tk tag @ticketId urgency-critical }
-          @logEvent(@runDir, "merge_failed", {
-            worktree: @worktree,
-            target: @targetBranch,
-            reason: @frictionDesc,
-            ticket: @ticketId
-          })
-          let @run = {
-            ...@run,
-            lastError: `Merge failed: @frictionDesc - see ticket @ticketId`
-          }
-          @saveRunState(@runDir, @run)
-          continue
-        ]
-      ]
-
       done
     ]
 

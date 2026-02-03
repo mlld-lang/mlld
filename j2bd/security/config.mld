@@ -6,7 +6,6 @@ var @config = {
   docs_dir: `@base/docs/src/atoms/security/`,
   src_dirs: [`@base/src/`, `@base/grammar/`],
   test_command: "npm test",
-  worktree_prefix: "j2bd-security",
   max_iterations: null
 }
 
