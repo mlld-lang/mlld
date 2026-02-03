@@ -39,8 +39,12 @@ export class DependencyDetector {
       }
       if ('values' in node && node.values) {
         for (const key in node.values) {
-          if (Array.isArray(node.values[key])) {
-            this.walkAST(node.values[key], callback);
+          const value = node.values[key];
+          // Only recurse into arrays of AST nodes (objects with a 'type' property)
+          // Skip arrays of primitives like securityLabels: ['untrusted']
+          if (Array.isArray(value) && value.length > 0 &&
+              typeof value[0] === 'object' && value[0] !== null && 'type' in value[0]) {
+            this.walkAST(value, callback);
           }
         }
       }
