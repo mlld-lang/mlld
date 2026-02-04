@@ -1,0 +1,33 @@
+>> Protection 3: PII Redaction
+>> PII data is redacted in logs/output via guard
+>>
+>> Expected: PII-labeled data gets redacted when shown
+>> Run: npx mlld docs/src/atoms/security/examples/protection-3-pii.mld
+
+>> Define a redaction function
+/exe @redactPii(text) = js {
+  return text
+    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL REDACTED]')
+    .replace(/\d{3}-\d{2}-\d{4}/g, '[SSN REDACTED]')
+    .replace(/\d{3}[-.]?\d{3}[-.]?\d{4}/g, '[PHONE REDACTED]');
+}
+
+>> Guard intercepts PII-labeled data before show/log and redacts it
+/guard @redactPiiOnShow before pii = when [
+  @mx.op.type == "show" => allow @redactPii(@input)
+  @mx.op.type == "log" => allow @redactPii(@input)
+  * => allow
+]
+
+>> PII data will be redacted when shown
+/var pii @userData = `Contact: user@@example.com, SSN: 123-45-6789, Phone: 555-123-4567`
+
+/show "Original PII data (redacted by guard):"
+/show @userData
+
+>> Compare with non-PII data
+/var @normalData = `Contact: user@@example.com, SSN: 123-45-6789, Phone: 555-123-4567`
+
+/show ""
+/show "Same content WITHOUT pii label (no redaction):"
+/show @normalData

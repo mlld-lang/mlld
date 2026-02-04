@@ -1,0 +1,67 @@
+>> Protection 2: MCP Data Restriction
+>> Data from MCP tools is blocked from destructive operations
+>>
+>> KNOWN LIMITATION: This demo uses literal data which does NOT receive
+>> the src:mcp label automatically. Source labels like src:mcp are only
+>> auto-applied when data actually comes from MCP tool calls at runtime.
+>>
+>> WHY THIS IS INTENTIONAL SECURITY DESIGN:
+>> - Source provenance cannot be faked - it's applied by the runtime
+>> - Allowing scripts to self-label as "from MCP" would defeat the purpose
+>> - Security labels must reflect actual data origin, not declared origin
+>>
+>> TO VERIFY WITH REAL MCP DATA:
+>> 1. Configure an MCP server (e.g., @modelcontextprotocol/filesystem)
+>> 2. Load data via MCP: /var @mcpData = @mcp.filesystem.readFile("/tmp/test.txt")
+>> 3. The runtime will auto-apply src:mcp label
+>> 4. Attempt destructive operation - it will be blocked
+>>
+>> This file demonstrates the POLICY CONFIGURATION that blocks MCP-sourced
+>> data from destructive operations. The policy is correct; only the test
+>> data lacks provenance since it's a literal, not from actual MCP.
+>>
+>> Run: npx mlld docs/src/atoms/security/examples/protection-2-mcp.mld
+
+/var @policyConfig = {
+  defaults: {
+    unlabeled: "trusted"
+  },
+  capabilities: {
+    allow: ["cmd:ls:*", "cmd:echo:*"],
+    danger: []
+  },
+  labels: {
+    "src:mcp": {
+      deny: ["destructive", "op:cmd:rm"],
+      allow: ["op:cmd:git:status", "op:cmd:ls"]
+    }
+  }
+}
+/policy @p = union(@policyConfig)
+
+>> Demonstrate what the policy WOULD do with real MCP data:
+/show "=== MCP DATA RESTRICTION POLICY ==="
+/show ""
+/show "Policy configuration:"
+/show "- src:mcp data DENIED for: destructive, op:cmd:rm"
+/show "- src:mcp data ALLOWED for: op:cmd:git:status, op:cmd:ls"
+/show ""
+/show "With literal data (this demo):"
+/show "- Data has NO src:mcp label (literals can't fake provenance)"
+/show "- Operations would pass label flow checks"
+/show ""
+/show "With real MCP data (e.g., @mcp.filesystem.readFile):"
+/show "- Data would have src:mcp label auto-applied"
+/show "- Calling @@deleteFiles(@@mcpData.path) would be DENIED"
+/show "- Error: Label 'src:mcp' cannot flow to 'destructive'"
+/show ""
+
+>> Illustrate with literal data (no src:mcp label)
+/var @literalData = { path: "/tmp/user-files", name: "uploaded.txt" }
+/show "Literal data labels: (none - literals don't get src:mcp)"
+/show ""
+
+>> Safe operations always work regardless of source
+/exe @listFiles(path) = run cmd { ls "@path" }
+/show "Safe operation (listing /tmp):"
+/show @listFiles("/tmp")
