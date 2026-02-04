@@ -1,15 +1,16 @@
 >> J2BD V3 Orchestrator
->> Usage: mlld run j2bd --topic <topic> [--job <job>] [--new] [--run <run-id>] [--max <n>]
+>> Usage: mlld run j2bd --topic <topic> [--job <job>] [--new] [--run <run-id>] [--max <n>] [--polish <level>]
 >>
 >> LLM-first orchestration: decision agent makes all choices, orchestrator executes
 >> Workers commit directly to the current branch (no worktrees)
 >>
 >> Examples:
->>   mlld run j2bd --topic security                     # Resume most recent run (or create first)
->>   mlld run j2bd --topic security --new              # Start a new run
->>   mlld run j2bd --topic security --run 2026-01-31-2 # Resume specific run
->>   mlld run j2bd --topic security --job prevent-exfil # Specific job only
->>   mlld run j2bd --topic security --max 10            # Limit iterations
+>>   mlld run j2bd --topic security                       # Resume most recent run (or create first)
+>>   mlld run j2bd --topic security --new                # Start a new run
+>>   mlld run j2bd --topic security --run 2026-01-31-2   # Resume specific run
+>>   mlld run j2bd --topic security --job prevent-exfil  # Specific job only
+>>   mlld run j2bd --topic security --max 10             # Limit iterations
+>>   mlld run j2bd --topic security --polish med         # Set quality bar (false|med|high)
 
 >> Imports
 import { @claudePoll } from @local/claude-poll
@@ -27,6 +28,16 @@ var @jobFilter = @p.job ?? null
 var @runId = @p.run ?? null
 var @newRun = @p.new ?? false
 var @maxIterations = @p.max ? @p.max * 1 : null
+var @polishArg = @p.polish ?? "false"
+
+>> Validate polish level
+var @validPolish = ["false", "med", "medium", "high"]
+if !@validPolish.includes(@polishArg) [
+  show `Invalid --polish value: @polishArg (must be: false, med, high)`
+  done
+]
+>> Normalize "medium" to "med"
+var @polish = when @polishArg [ "medium" => "med", * => @polishArg ]
 
 >> Load topic config
 var @configPath = `@base/j2bd/@topic/config.mld`
@@ -80,11 +91,15 @@ if !@run.id [
     id: @resolvedRunId,
     topic: @topic,
     branch: @currentBranch,
-    created: @now
+    created: @now,
+    polish: @polish
   }
   @saveRunState(@runDir, @newRunState)
-  @logEvent(@runDir, "run_start", { topic: @topic, branch: @currentBranch })
+  @logEvent(@runDir, "run_start", { topic: @topic, branch: @currentBranch, polish: @polish })
 ]
+
+>> Use polish from run state if resuming, otherwise use CLI arg
+var @effectivePolish = @run.polish ?? @polish
 
 >> Load jobs
 var @jobs = <@base/j2bd/@topic/jobs/*.md>
@@ -111,8 +126,22 @@ if !@job [
 var @onboarding = <@base/llm/prompts/mlld-onboarding.md>
 var @chestertonsFence = <@base/llm/prompts/chestertons-fence.md>
 
+>> Decision prompt modules
+var @phaseGuidance = <@base/llm/run/j2bd/prompts/decision/phases/impl.md>
+var @qualityDefault = <@base/llm/run/j2bd/prompts/decision/quality/default.md>
+var @qualityMed = <@base/llm/run/j2bd/prompts/decision/quality/med.md>?
+var @qualityHigh = <@base/llm/run/j2bd/prompts/decision/quality/high.md>?
+
+>> Build quality bar based on polish level (additive)
+var @qualityBar = when @effectivePolish [
+  "false" => @qualityDefault
+  "med" => `@qualityDefault\n\n@qualityMed`
+  "high" => `@qualityDefault\n\n@qualityMed\n\n@qualityHigh`
+  * => @qualityDefault
+]
+
 >> Prompt templates
-exe @decisionPrompt(jobSections, referenceMaterial, tickets, recentEvents, lastWorkerResult, testResults, lastError, humanAnswers, chestertonsFence) = template "./prompts/decision.att"
+exe @decisionPrompt(jobSections, referenceMaterial, tickets, recentEvents, lastWorkerResult, testResults, lastError, humanAnswers, chestertonsFence, phaseGuidance, qualityBar) = template "./prompts/decision/core.att"
 exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode, onboarding, chestertonsFence) = template "./prompts/workers/doc.att"
 exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onboarding, chestertonsFence) = template "./prompts/workers/impl.att"
 exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/workers/friction.att"
@@ -145,6 +174,7 @@ show `J2BD @topic - Run @resolvedRunId`
 show `═══════════════════════════════════════════════════════════════════`
 show `Job: @job.mx.filename`
 show `Branch: @currentBranch`
+show `Polish: @effectivePolish`
 show `Run dir: @runDir`
 show `───────────────────────────────────────────────────────────────────`
 
@@ -174,7 +204,9 @@ loop(endless) [
     @context.testResults,
     @context.lastError,
     @context.humanAnswers,
-    @chestertonsFence
+    @chestertonsFence,
+    @phaseGuidance,
+    @qualityBar
   )
 
   let @decisionOutputPath = `@runDir/decision-@iterationCount\.json`
