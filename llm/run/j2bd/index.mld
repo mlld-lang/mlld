@@ -30,14 +30,13 @@ var @newRun = @p.new ?? false
 var @maxIterations = @p.max ? @p.max * 1 : null
 var @polishArg = @p.polish ?? "false"
 
->> Validate polish level
-var @validPolish = ["false", "med", "medium", "high"]
-if !@validPolish.includes(@polishArg) [
+>> Validate and normalize polish level
+var @polishValid = @polishArg == "false" || @polishArg == "med" || @polishArg == "medium" || @polishArg == "high"
+if !@polishValid [
   show `Invalid --polish value: @polishArg (must be: false, med, high)`
   done
 ]
->> Normalize "medium" to "med"
-var @polish = when @polishArg [ "medium" => "med", * => @polishArg ]
+var @polish = when @polishArg [ "medium" => "med"; * => @polishArg ]
 
 >> Load topic config
 var @configPath = `@base/j2bd/@topic/config.mld`
