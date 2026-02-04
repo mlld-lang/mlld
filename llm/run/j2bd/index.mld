@@ -113,11 +113,11 @@ var @chestertonsFence = <@base/llm/prompts/chestertons-fence.md>
 
 >> Prompt templates
 exe @decisionPrompt(jobSections, referenceMaterial, tickets, recentEvents, lastWorkerResult, testResults, lastError, humanAnswers, chestertonsFence) = template "./prompts/decision.att"
-exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode, onboarding, chestertonsFence) = template "./prompts/doc-worker.att"
-exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onboarding, chestertonsFence) = template "./prompts/impl-worker.att"
-exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/friction-worker.att"
-exe @adversarialWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/adversarial-worker.att"
-exe @finalReviewWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/final-review-worker.att"
+exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode, onboarding, chestertonsFence) = template "./prompts/workers/doc.att"
+exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onboarding, chestertonsFence) = template "./prompts/workers/impl.att"
+exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/workers/friction.att"
+exe @adversarialWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/workers/adversarial.att"
+exe @finalReviewWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/workers/final-review.att"
 
 >> Build worker prompt based on task type
 exe @buildWorkerPrompt(taskType, ticket, guidance, config, job, onboarding, chestertonsFence) = [
