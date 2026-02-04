@@ -176,6 +176,10 @@ export class BashExecutor extends BaseCommandExecutor {
             lines.push(`IFS= read -r -d '' ${safeName} <<'${marker}' || true`);
             lines.push(v);
             lines.push(`${marker}`);
+            lines.push(
+              `while [[ $${safeName} == *$'\\n' ]]; do ${safeName}="` +
+              '${' + safeName + `%$'\\n'}` + '"; done'
+            );
             if (safeName !== k) {
               // Provide original name as alias for user code
               lines.push(`${k}="$${safeName}"`);

@@ -88,8 +88,8 @@ describe('BashExecutor - Heredoc Support', () => {
       expect(spawnSpy).toHaveBeenCalled();
       const script = mockChild._stdinChunks.join('');
 
-      // Verify heredoc structure using cat heredoc
-      expect(script).toContain("testvar=$(cat <<'MLLD_EOF_");
+      // Verify heredoc structure using read heredoc
+      expect(script).toContain("IFS= read -r -d '' testvar <<'MLLD_EOF_");
       expect(script).toContain(largeContent);
       // Oversized vars are no longer exported; they remain local shell vars
       expect(script).not.toContain('export testvar');
@@ -142,7 +142,7 @@ describe('BashExecutor - Heredoc Support', () => {
       const script = mockChild._stdinChunks.join('');
 
       // Should use sanitized name
-      expect(script).toContain("my_var_name=$(cat <<'MLLD_EOF_");
+      expect(script).toContain("IFS= read -r -d '' my_var_name <<'MLLD_EOF_");
       // No export for oversized vars; alias should map original -> sanitized
       expect(script).toContain('my-var-name="$my_var_name"');
     });
@@ -169,7 +169,7 @@ describe('BashExecutor - Heredoc Support', () => {
       const script = mockChild._stdinChunks.join('');
 
       // Extract the actual marker used
-      const markerMatch = script.match(/testvar=\$\(cat <<'(MLLD_EOF_[^']+)'/);
+      const markerMatch = script.match(/IFS= read -r -d '' testvar <<'(MLLD_EOF_[^']+)'/);
       expect(markerMatch).toBeTruthy();
       const marker = markerMatch![1];
 
@@ -201,8 +201,8 @@ describe('BashExecutor - Heredoc Support', () => {
       const spawnOptions = spawnSpy.mock.calls[0][2] as any;
 
       // Should have two heredocs
-      expect(script).toContain("var1=$(cat <<'MLLD_EOF_");
-      expect(script).toContain("var2=$(cat <<'MLLD_EOF_");
+      expect(script).toContain("IFS= read -r -d '' var1 <<'MLLD_EOF_");
+      expect(script).toContain("IFS= read -r -d '' var2 <<'MLLD_EOF_");
       // No exports for oversized vars
       expect(script).not.toContain('export var1');
       expect(script).not.toContain('export var2');
