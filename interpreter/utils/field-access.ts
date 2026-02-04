@@ -11,7 +11,8 @@ import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
-import { asData, asText, isStructuredValue } from './structured-value';
+import { asData, asText, isStructuredValue, extractSecurityDescriptor, applySecurityDescriptorToStructuredValue } from './structured-value';
+import { wrapExecResult } from './structured-exec';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import type { DataObjectValue } from '@core/types/var';
 
@@ -783,9 +784,17 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
   const provenanceSource = parentVariable ?? structuredWrapper ?? value;
   if (provenanceSource) {
-    inheritExpressionProvenance(accessedValue, provenanceSource);
+    const secDescriptor = extractSecurityDescriptor(provenanceSource);
+    if (secDescriptor && ((secDescriptor.labels?.length ?? 0) > 0 || (secDescriptor.taint?.length ?? 0) > 0)
+        && accessedValue != null && typeof accessedValue !== 'object') {
+      // Primitive values can't be keyed in WeakMap, so wrap in StructuredValue to carry security labels
+      accessedValue = wrapExecResult(accessedValue);
+      applySecurityDescriptorToStructuredValue(accessedValue, secDescriptor);
+    } else {
+      inheritExpressionProvenance(accessedValue, provenanceSource);
+    }
   }
-  
+
   // Check if we need to return context-preserving result
   if (options?.preserveContext) {
     const accessPath = [...(options.parentPath || []), fieldName];
@@ -798,7 +807,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       isVariable: resultIsVariable
     };
   }
-  
+
   // Return raw value for backward compatibility
   return accessedValue;
 }
