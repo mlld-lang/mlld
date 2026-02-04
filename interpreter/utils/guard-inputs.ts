@@ -33,9 +33,14 @@ export function materializeGuardInputs(
       if (isVariable(value)) {
         return value;
       }
+      // Extract security descriptor from original value before resolveNestedValue may strip it
+      const originalDescriptor = extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true });
       const normalized = resolveNestedValue(value, { preserveProvenance: true });
       const materialized = materializeExpressionValue(normalized, { name: nameHint });
       if (materialized) {
+        if (originalDescriptor && (originalDescriptor.labels?.length || originalDescriptor.taint?.length)) {
+          applyDescriptorFromValue(value, materialized);
+        }
         return materialized;
       }
       const fallback = createSimpleTextVariable(
@@ -44,7 +49,8 @@ export function materializeGuardInputs(
         FALLBACK_SOURCE,
         { mx: {} }
       );
-      applyDescriptorFromValue(normalized, fallback);
+      // Prefer original value's descriptor (preserves StructuredValue security labels)
+      applyDescriptorFromValue(originalDescriptor ? value : normalized, fallback);
       return fallback;
     })
     .filter((value): value is Variable => Boolean(value));
@@ -63,9 +69,14 @@ export function materializeGuardInputsWithMapping(
       if (isVariable(value)) {
         return value;
       }
+      // Extract security descriptor from original value before resolveNestedValue may strip it
+      const originalDescriptor = extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true });
       const normalized = resolveNestedValue(value, { preserveProvenance: true });
       const materialized = materializeExpressionValue(normalized, { name: nameHint });
       if (materialized) {
+        if (originalDescriptor && (originalDescriptor.labels?.length || originalDescriptor.taint?.length)) {
+          applyDescriptorFromValue(value, materialized);
+        }
         return materialized;
       }
       const fallback = createSimpleTextVariable(
@@ -74,7 +85,8 @@ export function materializeGuardInputsWithMapping(
         FALLBACK_SOURCE,
         { mx: {} }
       );
-      applyDescriptorFromValue(normalized, fallback);
+      // Prefer original value's descriptor (preserves StructuredValue security labels)
+      applyDescriptorFromValue(originalDescriptor ? value : normalized, fallback);
       return fallback;
     })();
 

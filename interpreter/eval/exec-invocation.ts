@@ -3465,10 +3465,19 @@ async function evaluateExecInvocationInternal(
             const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
             value = argResult?.value;
           }
-          if (typeof value === 'string') {
-            const paramVar = execEnv.getVariable(value);
-            if (paramVar?.internal?.isParameter) {
-              value = isStructuredValue(paramVar.value) ? paramVar.value : paramVar.value;
+          // Preserve security labels from source parameter variables through commandRef arg passing
+          const argIdentifier = !Array.isArray(argNode) && argNode && typeof argNode === 'object' && (argNode as any).type === 'VariableReference'
+            ? (argNode as any).identifier as string
+            : undefined;
+          if (argIdentifier) {
+            const sourceVar = execEnv.getVariable(argIdentifier);
+            if (sourceVar?.internal?.isParameter) {
+              const secDescriptor = sourceVar.mx ? varMxToSecurityDescriptor(sourceVar.mx as VariableContext) : undefined;
+              if (secDescriptor && ((secDescriptor.labels?.length ?? 0) > 0 || (secDescriptor.taint?.length ?? 0) > 0)) {
+                const structured = isStructuredValue(value) ? value : wrapExecResult(value);
+                applySecurityDescriptorToStructuredValue(structured, secDescriptor);
+                value = structured;
+              }
             }
           }
           if (value !== undefined) {
@@ -3512,11 +3521,23 @@ async function evaluateExecInvocationInternal(
         }
 
         // No commandArgs means just pass through the current invocation's args
+        // Preserve security labels from parameter variables onto passed-through args
+        const securedArgs = evaluatedArgs.map((arg: any, i: number) => {
+          const paramName = params[i];
+          if (!paramName) return arg;
+          const paramVar = execEnv.getVariable(paramName);
+          if (!paramVar?.internal?.isParameter) return arg;
+          const secDescriptor = paramVar.mx ? varMxToSecurityDescriptor(paramVar.mx as VariableContext) : undefined;
+          if (!secDescriptor || ((secDescriptor.labels?.length ?? 0) === 0 && (secDescriptor.taint?.length ?? 0) === 0)) return arg;
+          const structured = isStructuredValue(arg) ? arg : wrapExecResult(arg);
+          applySecurityDescriptorToStructuredValue(structured, secDescriptor);
+          return structured;
+        });
         const refInvocation: ExecInvocation = {
           type: 'ExecInvocation',
           commandRef: {
             identifier: refName,
-            args: evaluatedArgs  // Pass values directly like foreach does
+            args: securedArgs
           },
           // Pass along the pipeline if present
           ...(refWithClause ? { withClause: refWithClause } : {})
