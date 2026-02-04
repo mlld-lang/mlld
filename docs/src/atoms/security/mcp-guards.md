@@ -4,20 +4,20 @@ title: Guards for MCP Tool Calls
 brief: Inspect, block, and transform MCP tool calls with guards
 category: security
 parent: security
-tags: [mcp, guards, op:exe, src:mcp, security]
+tags: [mcp, guards, for secret, src:mcp, security]
 related: [mcp-security, mcp-import, guards-basics, before-guards, after-guards]
 related-code: [interpreter/eval/exec-invocation.ts, interpreter/eval/guard.ts]
 updated: 2026-02-04
 qa_tier: 2
 ---
 
-MCP tool calls execute as `op:exe` operations with `src:mcp` taint on their inputs. Guards target them by checking taint, not a separate operation type.
+Guards use data-label filters (like `for secret`) to catch labeled data flowing to MCP calls. The guard condition narrows to exe operations using `@mx.op.type == "exe"`, since MCP tool calls execute as exe operations.
 
 **Block MCP calls that carry secret data:**
 
 ```mlld
-guard @noSecretToMcp before op:exe = when [
-  @mx.taint.includes("src:mcp") and @input.any.mx.labels.includes("secret") => deny "Secrets cannot flow to MCP tools"
+guard @noSecretToMcp for secret = when [
+  @mx.op.type == "exe" => deny "Secret data cannot flow to executable operations"
   * => allow
 ]
 
@@ -26,7 +26,7 @@ import tools { @createIssue } from mcp "@github/issues"
 show @createIssue("title", @key)
 ```
 
-The guard fires before the MCP tool executes. Since `@key` carries the `secret` label, the call is denied.
+The guard fires before any exe operation that receives secret-labeled data. Since `@key` carries the `secret` label, the MCP tool call is denied.
 
 **Audit MCP tool usage:**
 

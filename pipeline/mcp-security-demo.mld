@@ -40,11 +40,10 @@ show @pong
 >> STEP 3: Guard blocking secret data from flowing to MCP tools
 >> ============================================================
 
->> Guard fires before any exe operation.
->> Checks if the operation has src:mcp taint AND any input carries secret labels.
->> MCP calls go through op:exe, so we filter on op:exe.
-guard @noSecretToMcp for op:exe = when [
-  @mx.taint.includes("src:mcp") && @input.any.mx.labels.includes("secret") => deny "Secrets cannot flow to MCP tools"
+>> Data-label guard fires when secret data flows through any operation.
+>> Condition narrows to exe calls only, which includes MCP tool calls.
+guard @noSecretToMcp for secret = when [
+  @mx.op.type == "exe" => deny "Secret data cannot flow to executable operations"
   * => allow
 ]
 
@@ -120,9 +119,9 @@ This demonstrated five MCP security scenarios:
    - Taint propagates through interpolation and transforms
 
 3. GUARD BLOCKS SECRETS FROM MCP
-   - guard for op:exe checks @mx.taint for src:mcp
-   - Checks @input.any.mx.labels for secret label
-   - Denies flow of secret-labeled data to MCP tools
+   - guard for secret fires when secret-labeled data is used
+   - Condition checks @mx.op.type == "exe" to target exe calls
+   - Blocks secret data from flowing to any exe, including MCP tools
 
 4. POLICY RESTRICTS MCP OPERATIONS
    - policy labels."src:mcp".deny blocks dangerous operations
@@ -132,7 +131,7 @@ This demonstrated five MCP security scenarios:
    - guard after for op:exe detects src:mcp taint
    - Appends audit info to output for provenance tracking
 
-Guards use op:exe (not op:mcp) because MCP calls execute as exe operations.
-The src:mcp taint is what identifies MCP-originated operations.
+Guards use data-label filters (for secret) to catch labeled data flowing to operations.
+MCP tool calls execute as exe operations, so for secret with @mx.op.type == "exe" catches them.
 
 ::
