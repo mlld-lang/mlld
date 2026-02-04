@@ -1,0 +1,138 @@
+>>
+>> MCP Security Demo: Restricting MCP Tool Access
+>>
+>> Demonstrates mlld security features for MCP tool integration:
+>> 1. Import MCP tools from a server
+>> 2. Automatic src:mcp taint on tool outputs
+>> 3. Guard blocking secret data from flowing to MCP tools
+>> 4. Policy restricting MCP tool operations
+>> 5. Audit trail of MCP tool usage via after-guard
+>>
+
+>> ============================================================
+>> STEP 1: Import MCP tools from fake server
+>> ============================================================
+
+>> Import specific tools from an MCP server.
+>> The server spec is a command that speaks MCP protocol over stdio.
+import tools { @echo, @ping } from mcp "node tests/support/mcp/fake-server.cjs"
+
+log "Imported MCP tools: @echo, @ping"
+
+>> ============================================================
+>> STEP 2: Show automatic src:mcp taint on tool outputs
+>> ============================================================
+
+>> Call an MCP tool. The output automatically carries src:mcp taint.
+>> This taint propagates through all transformations.
+var @echoResult = @echo({ text: "hello from mcp" })
+show @echoResult
+
+>> Taint propagates through transformations
+var @derived = `MCP said: @echoResult`
+log "Derived value still carries MCP taint through interpolation"
+
+>> Ping returns "pong" with src:mcp taint
+var @pong = @ping({})
+show @pong
+
+>> ============================================================
+>> STEP 3: Guard blocking secret data from flowing to MCP tools
+>> ============================================================
+
+>> Guard fires before any exe operation.
+>> Checks if the operation has src:mcp taint AND any input carries secret labels.
+>> MCP calls go through op:exe, so we filter on op:exe.
+guard @noSecretToMcp for op:exe = when [
+  @mx.taint.includes("src:mcp") && @input.any.mx.labels.includes("secret") => deny "Secrets cannot flow to MCP tools"
+  * => allow
+]
+
+>> Define a secret value
+var secret @apiKey = "sk-12345-super-secret"
+
+>> Safe call: no secrets involved
+var @safeResult = @echo({ text: "public data" })
+show @safeResult
+
+>> Attempted call with secret data handled via denied handler.
+>> The exe wraps the MCP call so the denial is caught gracefully.
+exe @tryEchoSecret(value) = when [
+  denied => `BLOCKED: @mx.guard.reason`
+  * => @echo({ text: @value })
+]
+
+var @blockedResult = @tryEchoSecret(@apiKey)
+show @blockedResult
+
+>> ============================================================
+>> STEP 4: Policy restricting MCP tool operations
+>> ============================================================
+
+>> Policy label flow rules restrict what MCP-tainted data can do.
+>> src:mcp data is denied from destructive operations.
+var @policyConfig = {
+  labels: {
+    "src:mcp": {
+      deny: ["destructive", "op:cmd:rm"]
+    }
+  }
+}
+policy @p = union(@policyConfig)
+
+log "Policy configured: src:mcp data denied from destructive ops and rm"
+
+>> ============================================================
+>> STEP 5: Audit trail via after-guard
+>> ============================================================
+
+>> After-guard runs after exe operations complete.
+>> When the operation has src:mcp taint, it appends audit info to the output.
+guard after @auditMcp for op:exe = when [
+  @mx.taint.includes("src:mcp") => allow `@output [audited: @mx.op.name]`
+  * => allow
+]
+
+>> Call MCP tool - the after-guard appends audit info
+var @auditedResult = @echo({ text: "audited call" })
+show @auditedResult
+
+var @auditedPong = @ping({})
+show @auditedPong
+
+>> ============================================================
+>> SUMMARY
+>> ============================================================
+
+show ::
+
+MCP Security Demo Complete
+===========================
+
+This demonstrated five MCP security scenarios:
+
+1. IMPORT MCP TOOLS
+   - import tools { @echo, @ping } from mcp "server-command"
+   - Tools are callable as regular mlld functions
+
+2. AUTOMATIC src:mcp TAINT
+   - All MCP tool outputs carry src:mcp in their taint
+   - Taint propagates through interpolation and transforms
+
+3. GUARD BLOCKS SECRETS FROM MCP
+   - guard for op:exe checks @mx.taint for src:mcp
+   - Checks @input.any.mx.labels for secret label
+   - Denies flow of secret-labeled data to MCP tools
+
+4. POLICY RESTRICTS MCP OPERATIONS
+   - policy labels."src:mcp".deny blocks dangerous operations
+   - MCP-tainted data cannot flow to destructive ops
+
+5. AUDIT TRAIL VIA AFTER-GUARD
+   - guard after for op:exe detects src:mcp taint
+   - Appends audit info to output for provenance tracking
+
+Guards use op:exe (not op:mcp) because MCP calls execute as exe operations.
+The src:mcp taint is what identifies MCP-originated operations.
+
+::
