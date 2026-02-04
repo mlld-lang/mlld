@@ -3465,6 +3465,13 @@ async function evaluateExecInvocationInternal(
             const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
             value = argResult?.value;
           }
+          // Resolve parameter variables: if value is a string matching a parameter name, use the parameter's actual value
+          if (typeof value === 'string') {
+            const paramVar = execEnv.getVariable(value);
+            if (paramVar?.internal?.isParameter) {
+              value = isStructuredValue(paramVar.value) ? paramVar.value : paramVar.value;
+            }
+          }
           // Preserve security labels from source parameter variables through commandRef arg passing
           const argIdentifier = !Array.isArray(argNode) && argNode && typeof argNode === 'object' && (argNode as any).type === 'VariableReference'
             ? (argNode as any).identifier as string

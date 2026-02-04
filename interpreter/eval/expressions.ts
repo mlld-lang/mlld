@@ -339,7 +339,9 @@ async function evaluateBinaryExpression(
   }
 
   if (operator === '??') {
-    const isNullish = leftValue === null || leftValue === undefined;
+    // Unwrap StructuredValue to check the inner data for nullish
+    const rawLeft = isStructuredValue(leftValue) ? leftValue.data : leftValue;
+    const isNullish = rawLeft === null || rawLeft === undefined;
     if (!isNullish) {
       return leftResult;
     }
