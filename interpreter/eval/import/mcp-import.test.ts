@@ -101,6 +101,37 @@ describe('MCP tool imports', () => {
     }
   });
 
+  it('blocks MCP-tainted data from flowing to labeled template exe via policy', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    const source = [
+      `/import tools { @echo } from mcp "${serverSpec}"`,
+      '/var @policyConfig = { labels: { "src:mcp": { deny: ["destructive"] } } }',
+      '/policy @p = union(@policyConfig)',
+      '/var @mcpData = @echo({ text: "mcp data" })',
+      '/exe destructive @destroy(data) = `destroyed: @data`',
+      '/var @result = @destroy(@mcpData)',
+      '/show @result'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      await expect(
+        interpret(source, {
+          fileSystem,
+          pathService,
+          pathContext,
+          format: 'markdown',
+          captureEnvironment: env => {
+            environment = env;
+          }
+        })
+      ).rejects.toThrow(/src:mcp.*cannot flow to.*destructive/);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('rejects MCP tool imports that collide with local bindings', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;

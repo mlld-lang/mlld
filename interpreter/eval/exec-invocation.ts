@@ -2290,6 +2290,19 @@ async function evaluateExecInvocationInternal(
         { env, sourceLocation: node.location }
       );
     }
+  } else {
+    const inputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(resultSecurityDescriptor));
+    if (inputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels: [],
+          exeLabels,
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation: node.location }
+      );
+    }
   }
   const finalizeResult = async (result: EvalResult): Promise<EvalResult> => {
     try {
@@ -2389,6 +2402,18 @@ async function evaluateExecInvocationInternal(
           descriptorPieces.length === 1
             ? descriptorPieces[0]
             : env.mergeSecurityDescriptors(...descriptorPieces);
+      }
+      const paramInputTaint = descriptorToInputTaint(resultSecurityDescriptor);
+      if (paramInputTaint.length > 0) {
+        policyEnforcer.checkLabelFlow(
+          {
+            inputTaint: paramInputTaint,
+            opLabels: operationContext.opLabels ?? [],
+            exeLabels,
+            flowChannel: 'arg'
+          },
+          { env, sourceLocation: node.location }
+        );
       }
       const outputDescriptor = policyEnforcer.applyOutputPolicyLabels(
         resultSecurityDescriptor,
