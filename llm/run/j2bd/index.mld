@@ -116,6 +116,8 @@ exe @decisionPrompt(jobSections, referenceMaterial, tickets, recentEvents, lastW
 exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode, onboarding, chestertonsFence) = template "./prompts/doc-worker.att"
 exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onboarding, chestertonsFence) = template "./prompts/impl-worker.att"
 exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/friction-worker.att"
+exe @adversarialWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/adversarial-worker.att"
+exe @finalReviewWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/final-review-worker.att"
 
 >> Build worker prompt based on task type
 exe @buildWorkerPrompt(taskType, ticket, guidance, config, job, onboarding, chestertonsFence) = [
@@ -127,6 +129,8 @@ exe @buildWorkerPrompt(taskType, ticket, guidance, config, job, onboarding, ches
     "impl" => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
     "improvement" => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
     "friction" => @frictionWorkerPrompt(@ticket, @guidance, "", @spec, "", "", @onboarding, @chestertonsFence)
+    "adversarial" => @adversarialWorkerPrompt(@ticket, @guidance, @spec, @job, @onboarding, @chestertonsFence)
+    "final_review" => @finalReviewWorkerPrompt(@ticket, @guidance, @spec, @job, @onboarding, @chestertonsFence)
     * => `ERROR: Unknown task type: @taskType`
   ]
   => @prompt

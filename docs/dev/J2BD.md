@@ -1,5 +1,5 @@
 ---
-updated: 2026-02-01
+updated: 2026-02-03
 tags: #arch, #pipeline, #docs
 related-docs: docs/dev/POLISH.md, docs/dev/DOCS.md, .claude/skills/llm-first.md
 related-code: llm/run/j2bd/, j2bd/
@@ -28,6 +28,8 @@ See `.claude/skills/llm-first.md` for the full design philosophy. Key points:
 - **Prompts over predicates** - Edge cases as guidance, not conditionals
 - **Workers do the work** - Write files, validate, commit, report
 - **Revert + notes on failure** - Failed tests → revert → add learnings to ticket
+- **Documentation integrity** - Workers fix implementations to match docs, never lower docs to match implementations. Descoping requires human approval via `blocked` action
+- **Adversarial verification** - Claims must be proven with execution evidence before completion. The adversarial worker tries to break things; only `status: "verified"` gates completion
 
 ## Architecture
 
@@ -46,13 +48,22 @@ loop:
 - `close_ticket` - close with reason
 - `update_ticket` - add notes/tags
 - `blocked` - exit with questions.md
-- `complete` - merge and exit
+- `complete` - requires re-reading the job and declaring unequivocal success
 
-**Workers:**
-- Write files directly (Write tool)
-- Commit their changes (git)
-- Run tests, revert on failure
-- Report status (not file content)
+**Worker types** (`task_type` field):
+- `doc` - write documentation atoms
+- `impl` - implement features, fix code
+- `friction` - investigate and resolve blockers
+- `improvement` - enhance existing work
+- `adversarial` - red team testing, tries to break claims
+
+**Phases** (inferred by decision agent from state, not tracked in code):
+1. Documentation - write atoms
+2. Implementation - build features
+3. Verification & Remediation - test, find gaps, fix
+4. Adversarial Verification - prove claims with execution evidence
+
+After adversarial failures: decision agent investigates code, creates targeted impl tickets, dispatches workers to fix. Only escalates to human when fixes need architectural decisions or descoping. Adversarial ticket stays open until adversarial worker returns `verified`.
 
 ## Directory Structure
 
@@ -63,10 +74,11 @@ llm/run/j2bd/
 │   ├── context.mld        # Context gathering
 │   └── questions.mld      # Human handoff
 └── prompts/
-    ├── decision.att       # Decision agent (opus)
-    ├── doc-worker.att     # Doc worker (sonnet)
-    ├── impl-worker.att    # Impl worker (sonnet)
-    └── friction-worker.att
+    ├── decision.att          # Decision agent (opus)
+    ├── doc-worker.att        # Doc worker
+    ├── impl-worker.att       # Impl worker
+    ├── friction-worker.att   # Friction worker
+    └── adversarial-worker.att # Red team verification
 
 j2bd/<topic>/
 ├── config.mld             # Topic config (spec path, docs dir, etc.)
@@ -115,6 +127,9 @@ mlld run j2bd --topic newtopic
 - `npm test` runs after commit; failures trigger revert + notes
 - Nested `when` blocks don't propagate return values (m-d777)
 - `@local/claude-poll` must be available
+- Tickets persist across runs. Fresh runs (`--new`) see closed tickets from prior runs. Decision prompt handles this: empty events log = must re-verify before completing
+- Adversarial workers must prove failures AND successes with execution evidence. Speculation is invalid in either direction
+- Complex remediation plans should be reviewed by adversarial worker before escalating to human
 
 ## Debugging
 
@@ -125,9 +140,4 @@ cat j2bd/security/runs/2026-02-01-0/decision-N.json
 cat j2bd/security/runs/2026-02-01-0/worker-TICKET-N.prompt.md
 ```
 
-Check worktree:
-```bash
-cd /path/to/mlld.j2bd-security-2026-02-01-0
-git log --oneline -5
-git status
-```
+Adversarial test files land in `tmp/` (e.g., `tmp/adv5-test-1-secret-show.mld`). Review these to understand what was tested and how.

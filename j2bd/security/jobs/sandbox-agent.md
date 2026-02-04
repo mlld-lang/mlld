@@ -63,9 +63,32 @@ Create working sandbox demonstration:
 - [ ] Create friction tickets for gaps; fix or escalate as needed
 - [ ] Re-verify after fixes
 
+### Phase 4: Adversarial Verification
+
+Red team testing to PROVE restrictions work (not just that they look correct):
+
+- [ ] Artifact runs end-to-end without error (`mlld sandbox-demo.mld` succeeds)
+- [ ] Tool restrictions PROVEN: Create test that attempts Bash inside env block, verify it is BLOCKED
+- [ ] Filesystem limits PROVEN: Create test that attempts write outside allowed paths, verify it is BLOCKED
+- [ ] Network restrictions PROVEN: Create test that attempts network request with `net: "none"`, verify it is BLOCKED
+- [ ] Credential protection PROVEN: Create test that attempts to `show` or interpolate a secret, verify it is BLOCKED
+
+Each test must include:
+- The exact mlld code run
+- The expected behavior (should be blocked)
+- The actual output (proving it was blocked)
+
 ### Exit Criteria
 
-All phases complete. The target example successfully spawns an agent that is restricted to Read/Write tools, limited filesystem, no network, and has credentials injected securely.
+All FOUR phases complete. Adversarial verification has PROVEN (with execution evidence) that:
+
+1. The artifact runs without error
+2. Tool restrictions block unauthorized tools (attempted and failed)
+3. Filesystem limits block writes outside allowed paths (attempted and failed)
+4. Network restrictions block requests when disabled (attempted and failed)
+5. Credentials flow to env vars but cannot be displayed or interpolated (attempted and failed)
+
+"Looks correct" is NOT sufficient. Each claim must have a documented test showing the restriction was ENFORCED.
 
 ## Example Code (Target)
 
