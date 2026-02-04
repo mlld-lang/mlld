@@ -172,11 +172,10 @@ export class BashExecutor extends BaseCommandExecutor {
               marker = `MLLD_EOF_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}_${counter}`;
             }
             
-            // Build heredoc using command substitution (portable in bash)
-            lines.push(`${safeName}=$(cat <<'${marker}'`);
+            // Build heredoc using read to avoid command substitution size limits
+            lines.push(`IFS= read -r -d '' ${safeName} <<'${marker}' || true`);
             lines.push(v);
             lines.push(`${marker}`);
-            lines.push(`)`);
             if (safeName !== k) {
               // Provide original name as alias for user code
               lines.push(`${k}="$${safeName}"`);
