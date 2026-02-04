@@ -173,8 +173,8 @@ This demonstrated environment-based agent sandboxing:
    - policy.auth defines sealed credential paths
    - 'using auth:name' injects as env var without exposing value
    - Guards enforce secret label: block show, log, and cmd interpolation
-   - policy.labels.secret.deny blocks show/log/cmd for secrets
-   - Guards provide additional protection for custom exe calls
+   - policy.labels.secret.deny can also block show/log/cmd declaratively
+   - Guards shown here cover custom exe calls and all operation types
    - var secret labels propagate through all transformations
 
 Environment configs are composable values:
