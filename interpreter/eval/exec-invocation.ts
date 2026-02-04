@@ -1851,19 +1851,28 @@ async function evaluateExecInvocationInternal(
           argValue = JSON.stringify(arr);
           break;
         }
-        case 'object':
+        case 'object': {
           // Object literals: recursively evaluate properties (may contain exec invocations, etc.)
           const { evaluateDataValue } = await import('./data-value-evaluator');
           argValueAny = await evaluateDataValue(arg, env);
           argValue = JSON.stringify(argValueAny);
+          // Collect security descriptors from inline object's variable references
+          const { extractDescriptorsFromDataAst: extractObjDesc } = await import('./var');
+          const objDescriptor = extractObjDesc(arg, env);
+          if (objDescriptor) mergeResultDescriptor(objDescriptor);
           break;
-          
-        case 'array':
+        }
+        case 'array': {
           // Array literals: recursively evaluate items (may contain variables, exec calls, etc.)
           const { evaluateDataValue: evalArray } = await import('./data-value-evaluator');
           argValueAny = await evalArray(arg, env);
           argValue = JSON.stringify(argValueAny);
+          // Collect security descriptors from inline array's variable references
+          const { extractDescriptorsFromDataAst: extractArrDesc } = await import('./var');
+          const arrDescriptor = extractArrDesc(arg, env);
+          if (arrDescriptor) mergeResultDescriptor(arrDescriptor);
           break;
+        }
           
         case 'VariableReference':
           // Special handling for variable references to preserve objects
@@ -2049,6 +2058,33 @@ async function evaluateExecInvocationInternal(
         if (baseVariable) {
           expressionSourceVariables[i] = baseVariable;
         }
+      }
+    } else if (
+      arg &&
+      typeof arg === 'object' &&
+      'type' in arg &&
+      (arg.type === 'object' || arg.type === 'array')
+    ) {
+      // Inline object/array literals: scan AST for variable references with security labels
+      const { extractDescriptorsFromDataAst } = await import('./var');
+      const dataDescriptor = extractDescriptorsFromDataAst(arg, env);
+      if (dataDescriptor && (dataDescriptor.labels.length > 0 || dataDescriptor.taint.length > 0)) {
+        const guardInputSource: VariableSource = {
+          directive: 'var',
+          syntax: 'expression',
+          hasInterpolation: false,
+          isMultiLine: false
+        };
+        const syntheticVar = createSimpleTextVariable(
+          '__inline_arg__',
+          evaluatedArgStrings[i] ?? '',
+          guardInputSource
+        );
+        syntheticVar.value = evaluatedArgs[i];
+        if (!syntheticVar.mx) syntheticVar.mx = {};
+        updateVarMxFromDescriptor(syntheticVar.mx as VariableContext, dataDescriptor);
+        if ((syntheticVar.mx as any).mxCache) delete (syntheticVar.mx as any).mxCache;
+        guardVariableCandidates[i] = syntheticVar;
       }
     }
   }

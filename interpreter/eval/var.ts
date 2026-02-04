@@ -147,7 +147,7 @@ function extractDescriptorsFromTemplateAst(
  * Walks the AST to find VariableReference nodes and collects their security metadata.
  * Used for complex (lazy) objects/arrays so labels propagate even before evaluation.
  */
-function extractDescriptorsFromDataAst(
+export function extractDescriptorsFromDataAst(
   valueNode: any,
   env: Environment
 ): SecurityDescriptor | undefined {
