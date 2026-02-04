@@ -83,7 +83,7 @@ export async function evaluateAppend(
         {
           inputTaint,
           opLabels,
-          exeLabels: [],
+          exeLabels: Array.from(env.getEnclosingExeLabels()),
           flowChannel: 'arg'
         },
         { env, sourceLocation: directive.location }

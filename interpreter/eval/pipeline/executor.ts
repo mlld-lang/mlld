@@ -821,7 +821,7 @@ export class PipelineExecutor {
           {
             inputTaint,
             opLabels,
-            exeLabels: [],
+            exeLabels: Array.from(stageEnv.getEnclosingExeLabels()),
             flowChannel: 'stdin',
             command: parsedCommand.command
           },

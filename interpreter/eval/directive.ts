@@ -450,7 +450,7 @@ async function enforcePolicyBeforeGuards(
         {
           inputTaint,
           opLabels,
-          exeLabels: [],
+          exeLabels: Array.from(env.getEnclosingExeLabels()),
           flowChannel: 'arg'
         },
         { env, sourceLocation }
@@ -478,7 +478,7 @@ async function enforcePolicyBeforeGuards(
           {
             inputTaint,
             opLabels,
-            exeLabels: [],
+            exeLabels: Array.from(env.getEnclosingExeLabels()),
             flowChannel: 'arg'
           },
           { env, sourceLocation }
@@ -497,7 +497,7 @@ async function enforcePolicyBeforeGuards(
         {
           inputTaint,
           opLabels,
-          exeLabels: [],
+          exeLabels: Array.from(env.getEnclosingExeLabels()),
           flowChannel: 'arg'
         },
         { env, sourceLocation }
@@ -537,12 +537,13 @@ async function enforcePolicyBeforeGuards(
       }
       const commandDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
       const inputTaint = descriptorToInputTaint(commandDescriptor);
+      const enclosingExeLabels = Array.from(env.getEnclosingExeLabels());
       if (inputTaint.length > 0) {
         enforcer.checkLabelFlow(
           {
             inputTaint,
             opLabels,
-            exeLabels: [],
+            exeLabels: enclosingExeLabels,
             flowChannel,
             command: parsed.command
           },
@@ -556,7 +557,7 @@ async function enforcePolicyBeforeGuards(
           {
             inputTaint: stdinTaint,
             opLabels,
-            exeLabels: [],
+            exeLabels: enclosingExeLabels,
             flowChannel: 'stdin',
             command: parsed.command
           },
@@ -575,7 +576,7 @@ async function enforcePolicyBeforeGuards(
           {
             inputTaint,
             opLabels,
-            exeLabels: [],
+            exeLabels: Array.from(env.getEnclosingExeLabels()),
             flowChannel: 'arg'
           },
           { env, sourceLocation }

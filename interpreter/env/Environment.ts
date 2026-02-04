@@ -1810,6 +1810,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.contextManager.updateOperation(update);
   }
 
+  getEnclosingExeLabels(): readonly string[] {
+    return this.contextManager.getEnclosingExeLabels();
+  }
+
   setToolsAvailability(allowed: readonly string[], denied: readonly string[]): void {
     this.contextManager.setToolAvailability(allowed, denied);
   }

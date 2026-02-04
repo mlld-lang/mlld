@@ -1263,7 +1263,7 @@ export async function evaluateShow(
         {
           inputTaint,
           opLabels,
-          exeLabels: [],
+          exeLabels: Array.from(env.getEnclosingExeLabels()),
           flowChannel: 'arg'
         },
         { env, sourceLocation: directiveLocation }

@@ -251,7 +251,7 @@ export async function runBuiltinEffect(
       {
         inputTaint,
         opLabels: operationContext.opLabels ?? [],
-        exeLabels: [],
+        exeLabels: Array.from(env.getEnclosingExeLabels()),
         flowChannel: 'arg'
       },
       { env, sourceLocation: operationContext.location ?? undefined }

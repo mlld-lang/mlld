@@ -148,6 +148,16 @@ export class ContextManager {
     return this.opStack[this.opStack.length - 1];
   }
 
+  getEnclosingExeLabels(): readonly string[] {
+    for (let i = this.opStack.length - 1; i >= 0; i--) {
+      const ctx = this.opStack[i];
+      if (ctx.type === 'exe' && ctx.labels && ctx.labels.length > 0) {
+        return ctx.labels;
+      }
+    }
+    return [];
+  }
+
   async withOperation<T>(context: OperationContext, fn: () => Promise<T> | T): Promise<T> {
     this.pushOperation(context);
     try {

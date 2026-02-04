@@ -190,7 +190,7 @@ export async function evaluateOutput(
           {
             inputTaint,
             opLabels,
-            exeLabels: [],
+            exeLabels: Array.from(env.getEnclosingExeLabels()),
             flowChannel: 'arg'
           },
           { env, sourceLocation: directive.location }

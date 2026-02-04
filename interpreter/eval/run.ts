@@ -404,7 +404,7 @@ export async function evaluateRun(
         {
           inputTaint: argTaint,
           opLabels,
-          exeLabels: [],
+          exeLabels: Array.from(env.getEnclosingExeLabels()),
           flowChannel: 'arg',
           command: parsedCommand.command
         },
@@ -537,7 +537,7 @@ export async function evaluateRun(
         {
           inputTaint: stdinTaint,
           opLabels,
-          exeLabels: [],
+          exeLabels: Array.from(env.getEnclosingExeLabels()),
           flowChannel: 'stdin',
           command: parsedCommand.command
         },
@@ -669,7 +669,7 @@ export async function evaluateRun(
         {
           inputTaint,
           opLabels,
-          exeLabels: [],
+          exeLabels: Array.from(env.getEnclosingExeLabels()),
           flowChannel: 'arg'
         },
         { env, sourceLocation: directive.location }
