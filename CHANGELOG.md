@@ -101,6 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **When expressions in var assignments**: Fixed when expressions without explicit `first` modifier to use first-match semantics, matching behavior in for/loop contexts
 - **Bound-value when expressions with wildcard fallback**: `*` patterns match instead of throwing condition errors
 - **Command stdin EPIPE handling**: stdin write errors no longer crash mlld; optional `MLLD_DEBUG_EXEC_IO` logging
+- **Bash env heredoc threshold**: large shell parameters now switch to heredoc at 64KB by default
 - **Pipeline context references**: @p[-1] and similar negative index references now correctly return evaluated string outputs when pipelines start with exe calls
 - **log/output falsy values**: Boolean `false` and `0` now output correctly instead of empty string when used with `/log` or `/output`
 - **Field access on 'type' property**: When accessing `.type` on objects that have a 'type' property in their data, mlld now correctly returns the data value instead of the internal Variable type discriminator

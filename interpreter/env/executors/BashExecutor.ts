@@ -145,7 +145,7 @@ export class BashExecutor extends BaseCommandExecutor {
       if (useHeredoc) {
         const MAX_SIZE = (() => {
           const v = process.env.MLLD_MAX_BASH_ENV_VAR_SIZE;
-          if (!v) return 128 * 1024; // 128KB default
+          if (!v) return 64 * 1024; // 64KB default
           const n = Number(v);
           return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
         })();
