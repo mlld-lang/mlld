@@ -2023,6 +2023,7 @@ async function evaluateExecInvocationInternal(
         const { isTemplate } = await import('@core/types/variable');
         if (isTemplate(variable) && typeof evaluatedArgs[i] === 'string') {
           originalVariables[i] = undefined;
+          guardVariableCandidates[i] = variable;
         } else {
           originalVariables[i] = variable;
           guardVariableCandidates[i] = variable;
