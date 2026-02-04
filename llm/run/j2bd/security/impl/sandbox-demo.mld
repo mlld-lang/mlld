@@ -14,7 +14,7 @@
 >> ============================================================
 
 >> Sandbox with Docker provider for process isolation.
->> Tools limited to Read and Write - Bash is NOT available.
+>> Tools scoped to Read and Write. Shell access blocked by policy deny:['sh'].
 var @sandbox = {
   provider: "@mlld/env-docker",
   tools: ["Read", "Write"],
@@ -29,8 +29,8 @@ log "Sandbox config: tools=Read,Write fs.read=.:/app fs.write=/tmp net=none mcps
 >> STEP 2: Alternative configs showing different restrictions
 >> ============================================================
 
->> Local execution (no provider) with auth and limited tools.
->> Commands run locally but tool access is restricted.
+>> Local execution (no provider) with auth and tool scoping.
+>> Command restrictions use policy capabilities, not tools field.
 var @localRestricted = {
   auth: "claude",
   tools: ["Read", "Write"],
@@ -109,9 +109,8 @@ log "Secret protection test: @showResult"
 >> STEP 4: Demonstrate environment block usage
 >> ============================================================
 
->> The env block scopes tool access.
->> Inside this block, only Read and Write tools are available.
->> Bash commands would be blocked.
+>> The env block scopes tool routing for MCP providers.
+>> Command-level restrictions use policy capabilities.deny/allow.
 
 var @demoConfig = { tools: ["Read", "Write"] }
 
@@ -153,9 +152,9 @@ Sandbox Demo Complete
 This demonstrated environment-based agent sandboxing:
 
 1. TOOL RESTRICTIONS
-   - tools: ["Read", "Write"] limits available tools
-   - Agent cannot use Bash or other unrestricted tools
-   - Enforced at runtime by mlld execution layer
+   - tools: ["Read", "Write"] scopes MCP tool routing
+   - capabilities.deny: ["sh"] blocks shell access via policy
+   - capabilities.allow list controls which commands can run
 
 2. FILESYSTEM LIMITS
    - fs.read: [".:/app"] limits read access
@@ -174,7 +173,8 @@ This demonstrated environment-based agent sandboxing:
    - policy.auth defines sealed credential paths
    - 'using auth:name' injects as env var without exposing value
    - Guards enforce secret label: block show, log, and cmd interpolation
-   - Guards are required until defaults.rules is implemented
+   - policy.labels.secret.deny blocks show/log/cmd for secrets
+   - Guards provide additional protection for custom exe calls
    - var secret labels propagate through all transformations
 
 Environment configs are composable values:
