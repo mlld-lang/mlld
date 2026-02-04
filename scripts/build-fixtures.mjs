@@ -608,8 +608,11 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         // Examples don't have expected files - they're for demonstrating syntax
         expectedContent = null;
       } else {
-        // Look for expected.md
-        const expectedFile = file.replace('example', 'expected');
+        // Look for expected.md (expected files are always .md even when example is .mld)
+        let expectedFile = file.replace('example', 'expected');
+        if (!files.includes(expectedFile) && expectedFile.endsWith('.mld')) {
+          expectedFile = expectedFile.replace(/\.mld$/, '.md');
+        }
         if (files.includes(expectedFile)) {
           expectedContent = await fs.readFile(path.join(dirPath, expectedFile), 'utf-8');
         }

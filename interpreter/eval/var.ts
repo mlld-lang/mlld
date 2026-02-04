@@ -142,6 +142,95 @@ function extractDescriptorsFromTemplateAst(
   return mergeDescriptors(...descriptors);
 }
 
+/**
+ * Extract security descriptors from object/array AST nodes without performing evaluation.
+ * Walks the AST to find VariableReference nodes and collects their security metadata.
+ * Used for complex (lazy) objects/arrays so labels propagate even before evaluation.
+ */
+function extractDescriptorsFromDataAst(
+  valueNode: any,
+  env: Environment
+): SecurityDescriptor | undefined {
+  if (!valueNode || typeof valueNode !== 'object') {
+    return undefined;
+  }
+
+  const descriptors: SecurityDescriptor[] = [];
+
+  const collectFromNode = (node: any): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+
+    if (node.type === 'VariableReference' && node.identifier) {
+      const variable = env.getVariable(node.identifier);
+      if (variable?.mx) {
+        const descriptor = varMxToSecurityDescriptor(variable.mx);
+        if (descriptor && (descriptor.labels.length > 0 || descriptor.taint.length > 0)) {
+          descriptors.push(descriptor);
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'VariableReferenceWithTail' && node.variable) {
+      collectFromNode(node.variable);
+      return;
+    }
+
+    // Walk object entries
+    if (Array.isArray(node.entries)) {
+      for (const entry of node.entries) {
+        if (entry.type === 'pair' && entry.value) {
+          collectFromNode(entry.value);
+        } else if (entry.type === 'spread' && entry.variable) {
+          collectFromNode(entry.variable);
+        } else if (entry.type === 'conditionalPair' && entry.value) {
+          collectFromNode(entry.value);
+        }
+      }
+    }
+
+    // Walk object properties (legacy format)
+    if (node.properties && typeof node.properties === 'object' && !Array.isArray(node.properties)) {
+      for (const value of Object.values(node.properties)) {
+        collectFromNode(value);
+      }
+    }
+
+    // Walk array items
+    if (Array.isArray(node.items)) {
+      for (const item of node.items) {
+        collectFromNode(item);
+      }
+    }
+
+    // Walk wrapped content (strings with interpolation)
+    if (Array.isArray(node.content)) {
+      for (const child of node.content) {
+        collectFromNode(child);
+      }
+    }
+
+    // Walk interpolation parts
+    if (Array.isArray(node.parts)) {
+      for (const part of node.parts) {
+        collectFromNode(part);
+      }
+    }
+  };
+
+  collectFromNode(valueNode);
+
+  if (descriptors.length === 0) {
+    return undefined;
+  }
+  if (descriptors.length === 1) {
+    return descriptors[0];
+  }
+  return mergeDescriptors(...descriptors);
+}
+
 export interface VarAssignmentResult {
   identifier: string;
   variable: Variable;
@@ -461,6 +550,11 @@ export async function prepareVarAssignment(
           valueNode
         });
       }
+      // Pre-scan AST for variable references to propagate security labels
+      const dataDescriptor = extractDescriptorsFromDataAst(valueNode, env);
+      if (dataDescriptor) {
+        mergeResolvedDescriptor(dataDescriptor);
+      }
       resolvedValue = valueNode;
     } else {
       // Process simple array items immediately
@@ -512,6 +606,11 @@ export async function prepareVarAssignment(
       
       if (isComplex) {
         // For complex objects, store the AST node for lazy evaluation
+        // Pre-scan AST for variable references to propagate security labels
+        const dataDescriptor = extractDescriptorsFromDataAst(valueNode, env);
+        if (dataDescriptor) {
+          mergeResolvedDescriptor(dataDescriptor);
+        }
         resolvedValue = valueNode;
       } else {
         // Process simple object properties immediately
@@ -1954,7 +2053,16 @@ async function evaluateArrayItem(
       if (!variable) {
         throw new Error(`Variable not found: ${item.identifier}`);
       }
-      
+
+      // Collect security descriptor from the variable for label propagation
+      if (collectDescriptor && variable.mx) {
+        const { varMxToSecurityDescriptor } = await import('@core/types/variable/VarMxHelpers');
+        const varDescriptor = varMxToSecurityDescriptor(variable.mx);
+        if (varDescriptor) {
+          collectDescriptor(varDescriptor);
+        }
+      }
+
       /**
        * Preserve Variable wrapper when storing in array elements
        * WHY: Array elements should maintain Variable metadata to enable proper
