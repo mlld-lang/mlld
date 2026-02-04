@@ -82,14 +82,14 @@ exe @loadSpecSection(specPath, sectionName) = [
 
 >> Check if an atom file exists
 exe @atomExists(atomsDir, atomName) = [
-  let @atomPath = `@atomsDir/@atomName.md`
+  let @atomPath = `@atomsDir/@atomName\.md`
   let @exists = @fileExists(@atomPath)
   => @exists == "yes"
 ]
 
 >> Load an atom file if it exists
 exe @loadAtom(atomsDir, atomName) = [
-  let @atomPath = `@atomsDir/@atomName.md`
+  let @atomPath = `@atomsDir/@atomName\.md`
   let @exists = @fileExists(@atomPath)
   when @exists == "no" => null
   => <@atomPath>

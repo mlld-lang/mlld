@@ -121,9 +121,12 @@ exe @finalReviewWorkerPrompt(ticket, guidance, spec, job, onboarding, chesterton
 
 >> Build worker prompt based on task type
 exe @buildWorkerPrompt(taskType, ticket, guidance, config, job, onboarding, chestertonsFence) = [
-  let @spec = <@config.spec>
-  >> Pre-load atoms for doc type (workaround for m-d777: nested when blocks don't return)
-  let @existingAtoms = <@config.docs_dir/*.md>
+  >> Scope spec and atoms to job-relevant sections instead of full dump
+  let @ref = @buildReferenceMaterial(@config, @job)
+  let @specParts = for @s in @ref.specSections => `## @s.name\n\n@s.content`
+  let @spec = @specParts.join("\n\n---\n\n")
+  let @atomParts = for @a in @ref.atoms => @a.content
+  let @existingAtoms = @atomParts.join("\n\n---\n\n")
   let @prompt = when @taskType [
     "doc" => @docWorkerPrompt(@ticket, @guidance, @spec, @existingAtoms, "", @onboarding, @chestertonsFence)
     "impl" => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
