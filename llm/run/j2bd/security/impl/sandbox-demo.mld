@@ -15,9 +15,10 @@
 
 >> Sandbox with Docker provider for process isolation.
 >> Tools scoped to Read and Write. Shell access blocked by policy deny:['sh'].
+>> tools field scopes MCP tool routing (see policy capabilities for command blocking)
 var @sandbox = {
   provider: "@mlld/env-docker",
-  tools: ["Read", "Write"],  // MCP tool routing (see policy for command blocking)
+  tools: ["Read", "Write"],
   fs: { read: [".:/app"], write: ["/tmp"] },
   net: "none",
   mcps: []
