@@ -45,17 +45,14 @@ policy @p = union(@strictPolicy)
 
 With `unlabeled: untrusted`, MCP data can only flow to explicitly allowed operations. The most-specific rule wins: `allow: [op:cmd:git:status]` overrides a broader `deny: [op:cmd:git]`.
 
-**Combining with source classification:**
+**Manual trust labeling:**
+
+MCP data gets `src:mcp` taint automatically, but trust classification requires explicit labeling:
 
 ```mlld
-var @config = {
-  sources: {
-    "src:mcp": "untrusted"
-  }
-}
-policy @p = union(@config)
+var untrusted @mcpData = @mcp.github.listIssues()
 ```
 
-Classifying `src:mcp` as untrusted means all built-in rules for untrusted data (like `no-untrusted-destructive`) apply automatically to MCP outputs.
+Now `@mcpData` has both `src:mcp` taint AND the `untrusted` label, so built-in rules like `no-untrusted-destructive` apply.
 
 See `policies` for general policy structure and `labels-source-auto` for source label details.
