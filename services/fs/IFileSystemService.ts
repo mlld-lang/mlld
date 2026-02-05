@@ -9,6 +9,6 @@ export interface IFileSystemService {
   mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void>;
   readdir(dirPath: string): Promise<string[]>;
   isDirectory(filePath: string): Promise<boolean>;
-  stat(filePath: string): Promise<{ isDirectory(): boolean; isFile(): boolean }>;
+  stat(filePath: string): Promise<{ isDirectory(): boolean; isFile(): boolean; size?: number }>;
   isVirtual?(): boolean;
 }

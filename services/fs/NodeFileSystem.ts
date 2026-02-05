@@ -49,11 +49,12 @@ export class NodeFileSystem implements IFileSystemService {
     }
   }
   
-  async stat(filePath: string): Promise<{ isDirectory(): boolean; isFile(): boolean }> {
+  async stat(filePath: string): Promise<{ isDirectory(): boolean; isFile(): boolean; size?: number }> {
     const stats = await fs.stat(filePath);
     return {
       isDirectory: () => stats.isDirectory(),
-      isFile: () => stats.isFile()
+      isFile: () => stats.isFile(),
+      size: stats.size
     };
   }
 }
