@@ -27,6 +27,8 @@ var @result = @process(@task)
 show @result.mx.labels  >> ["influenced"]
 ```
 
+The rule only auto-applies the label. Enforcement comes from `policy.labels.influenced`.
+
 **Restrict influenced outputs:**
 
 ```mlld

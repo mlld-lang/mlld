@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Policy capability denies enforce interpolated command checks for `/run` and exec invocations, and code execution respects allow/deny for `sh`, `js`, `node`, `py`, and `prose`.
 - Policy capability docs and fixtures cover interpolated command matching, network denies, and run/exec code blocks.
 - `untrusted-llms-get-influenced` auto-labeling applies across exec, run-exec, and pipeline execution paths.
+- Influenced label docs clarify auto-labeling and fixtures cover pipeline deny behavior.
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
 - **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.
