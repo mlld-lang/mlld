@@ -7,7 +7,7 @@ parent: security
 tags: [policy, capabilities, allow, deny, danger, filesystem, network]
 related: [security-policies, policy-auth, env-config]
 related-code: [core/policy/capability-patterns.ts, interpreter/policy/filesystem-policy.ts]
-updated: 2026-02-03
+updated: 2026-02-05
 ---
 
 The `capabilities` object controls what operations can run.
@@ -54,5 +54,7 @@ policy @p = union(@policyConfig)
 ```
 
 **Danger list:** Operations matching `danger` require explicit opt-in. Without `danger: ["@keychain"]`, keychain access is blocked even if other rules allow it.
+
+Keychain allow/deny patterns live under `policy.keychain` and match `service/account` paths (with `{projectname}` from `mlld-config.json`).
 
 See `policy-auth` for credential flow, `env-config` for environment restrictions.
