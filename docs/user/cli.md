@@ -622,7 +622,7 @@ Optional exports:
 
 #### Security
 
-- Tokens are stored in macOS Keychain, not in files
+- Tokens are stored in the system keychain (macOS Keychain or libsecret via secret-tool), not in files
 - Credentials are injected at runtime via `using auth:*` syntax
 - Config files (settings, hooks) are copied, not credentials
 

@@ -35,6 +35,8 @@ run cmd { claude -p "hello" } using auth:claude
 
 Keychain paths use `service/account` and support `{projectname}` from `mlld-config.json`. `policy.keychain.allow` and `policy.keychain.deny` use glob patterns on that `service/account` path. Keychain access requires `danger: ["@keychain"]`.
 
+Linux keychain access uses `secret-tool` (libsecret). Ensure `secret-tool` is on PATH.
+
 ```mlld
 var @policyConfig = {
   auth: {
