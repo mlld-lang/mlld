@@ -22,7 +22,8 @@ import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
 import {
   guardSnapshotDescriptor,
   applyGuardLabelModifications,
-  extractGuardLabelModifications
+  extractGuardLabelModifications,
+  logGuardLabelModifications
 } from './guard-utils';
 import { VariableImporter } from '../eval/import/VariableImporter';
 import { evaluate } from '../core/interpreter';
@@ -1229,6 +1230,7 @@ async function evaluateGuardReplacement(
     guard
   );
   const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
+  await logGuardLabelModifications(guardEnv, guard, labelModifications, [inputVariable]);
 
   if (action.value && action.value.length > 0) {
     const result = await evaluate(action.value, guardEnv, {

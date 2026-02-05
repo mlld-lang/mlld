@@ -260,13 +260,18 @@ async function isVariableSigned(
   store: SignatureStore,
   name: string,
   variable: Variable,
-  cache: Map<string, boolean>
+  cache: Map<string, boolean>,
+  caller?: string
 ): Promise<boolean> {
   const normalized = normalizeSignedVariableName(name);
   if (cache.has(normalized)) {
     return cache.get(normalized) ?? false;
   }
-  const result = await store.verify(normalized, getSignatureContent(variable));
+  const result = await store.verify(
+    normalized,
+    getSignatureContent(variable),
+    caller ? { caller } : undefined
+  );
   cache.set(normalized, result.verified);
   return result.verified;
 }
@@ -2736,6 +2741,9 @@ async function evaluateExecInvocationInternal(
         const signedCache = new Map<string, boolean>();
         const signedPromptTargets: string[] = [];
         const signedVarNames = new Set<string>();
+        const verifyCaller = commandName
+          ? `exe:${normalizeSignedVariableName(commandName)}`
+          : undefined;
 
         for (const identifier of templateIdentifiers) {
           const paramIndex = paramIndexByName.get(identifier);
@@ -2747,7 +2755,8 @@ async function evaluateExecInvocationInternal(
                 store,
                 originalName,
                 originalVar,
-                signedCache
+                signedCache,
+                verifyCaller
               );
               if (isSigned) {
                 signedVarNames.add(normalizeSignedVariableName(originalName));
@@ -2763,7 +2772,8 @@ async function evaluateExecInvocationInternal(
                 store,
                 identifier,
                 paramVar,
-                signedCache
+                signedCache,
+                verifyCaller
               );
               if (isSigned) {
                 signedVarNames.add(normalizeSignedVariableName(identifier));
@@ -2779,7 +2789,13 @@ async function evaluateExecInvocationInternal(
           if (!variable) {
             continue;
           }
-          const isSigned = await isVariableSigned(store, identifier, variable, signedCache);
+          const isSigned = await isVariableSigned(
+            store,
+            identifier,
+            variable,
+            signedCache,
+            verifyCaller
+          );
           if (isSigned) {
             signedVarNames.add(normalizeSignedVariableName(identifier));
             if (!signedPromptTargets.includes(identifier)) {

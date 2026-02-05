@@ -18,7 +18,7 @@ import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
 import { asText, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
-import { materializeDisplayValue, resolveNestedValue } from '../utils/display-materialization';
+import { materializeDisplayValue } from '../utils/display-materialization';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, type DataLabel, type SecurityDescriptor } from '@core/types/security';
@@ -28,6 +28,7 @@ import { getOperationLabels } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
+import { logFileWriteEvent } from '../utils/audit-log';
 import yaml from 'js-yaml';
 
 function mergeInterpolatedDescriptors(
@@ -157,7 +158,6 @@ export async function evaluateOutput(
     if (materializedContent.descriptor) {
       env.recordSecurityDescriptor(materializedContent.descriptor);
     }
-    const resolvedValue = resolveNestedValue(descriptorSource ?? content, { preserveProvenance: true });
     const snapshot = env.getSecuritySnapshot();
     const securityDescriptor = materializedContent.descriptor ??
       (snapshot
@@ -234,7 +234,7 @@ export async function evaluateOutput(
         });
       } else {
         // File output
-        await outputToFile(target as OutputTargetFile, content, env, directive, resolvedValue, securityDescriptor);
+        await outputToFile(target as OutputTargetFile, content, env, directive, securityDescriptor);
       }
     } else if (targetType === 'stream') {
       // Stream output (stdout/stderr)
@@ -705,7 +705,8 @@ async function outputToFile(
   target: OutputTargetFile,
   content: string,
   env: Environment,
-  directive: DirectiveNode
+  directive: DirectiveNode,
+  descriptor?: SecurityDescriptor
 ): Promise<void> {
   
   
@@ -752,6 +753,7 @@ async function outputToFile(
   
   // Write the file
   await fileSystem.writeFile(targetPath, content);
+  await logFileWriteEvent(env, targetPath, descriptor);
   
   // Also emit a file effect for tracking/logging purposes
   env.emitEffect('file', content, { 

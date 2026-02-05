@@ -314,6 +314,6 @@ export async function evaluateVerify(
   }
   const content = getSignatureContent(variable);
   const store = new SignatureStore(env.fileSystem, env.getProjectRoot());
-  const result = await store.verify(varName, content);
+  const result = await store.verify(varName, content, { caller: 'directive:verify' });
   return { value: result, env };
 }

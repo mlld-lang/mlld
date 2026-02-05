@@ -16,6 +16,7 @@ import { isGuardRetrySignal } from '@core/errors/GuardRetrySignal';
 import type { EvalResult } from '../../core/interpreter';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { collectInputDescriptor, descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { logFileWriteEvent } from '../../utils/audit-log';
 
 // Minimal builtin effects support for pipelines. These are inline effects that
 // do not create stages and run after the owning stage succeeds.
@@ -421,6 +422,7 @@ async function executeEffect(
             // Directory may already exist; ignore
           }
           await fileSystem.writeFile(resolvedPath, content);
+          await logFileWriteEvent(env, resolvedPath, materializedContent.descriptor);
 
           env.emitEffect('file', content, { path: resolvedPath });
           return { value: payloadVariable ?? materializedContent.text, env };
@@ -475,7 +477,10 @@ async function executeEffect(
         env.recordSecurityDescriptor(materializedPayload.descriptor);
       }
 
-      await appendContentToFile(target, finalPayload, env, { directiveKind: 'append' });
+      await appendContentToFile(target, finalPayload, env, {
+        directiveKind: 'append',
+        descriptor: materializedPayload.descriptor
+      });
       return { value: payloadVariable ?? finalPayload, env };
     }
 

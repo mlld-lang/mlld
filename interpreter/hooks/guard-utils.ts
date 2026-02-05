@@ -1,7 +1,9 @@
 import type { Environment } from '@interpreter/env/Environment';
 import type { GuardActionNode, GuardLabelModifications } from '@core/types/guard';
 import type { GuardDefinition } from '@interpreter/guards';
+import type { Variable } from '@core/types/variable';
 import { MlldSecurityError } from '@core/errors';
+import { appendAuditEvent } from '@core/security/AuditLogger';
 import {
   makeSecurityDescriptor,
   type SecurityDescriptor,
@@ -96,4 +98,59 @@ export function applyGuardLabelModifications(
     capability: descriptor.capability,
     policyContext
   });
+}
+
+function normalizeLabelList(labels?: readonly string[]): string[] {
+  if (!labels || labels.length === 0) {
+    return [];
+  }
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const label of labels) {
+    if (!label || seen.has(label)) {
+      continue;
+    }
+    seen.add(label);
+    result.push(label);
+  }
+  return result;
+}
+
+export async function logGuardLabelModifications(
+  env: Environment,
+  guard: GuardDefinition,
+  modifications: GuardLabelModifications | undefined,
+  variables: readonly Variable[]
+): Promise<void> {
+  if (!modifications) {
+    return;
+  }
+  const addLabels = normalizeLabelList(modifications.addLabels);
+  const removeLabels = normalizeLabelList(modifications.removeLabels);
+  if (addLabels.length === 0 && removeLabels.length === 0) {
+    return;
+  }
+  const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
+  const by = `guard:${guardLabel}`;
+  const isBlessing = guard.privileged === true && removeLabels.length > 0;
+  if (!isBlessing && addLabels.length === 0) {
+    return;
+  }
+
+  const varNames = variables
+    .map(variable => (variable.name ? `@${variable.name}` : undefined))
+    .filter((name): name is string => Boolean(name));
+  const targets = varNames.length > 0 ? varNames : [undefined];
+
+  await Promise.all(
+    targets.map(async (varName) => {
+      await appendAuditEvent(env.getFileSystemService(), env.getProjectRoot(), {
+        event: isBlessing ? 'bless' : 'label',
+        var: varName,
+        by,
+        ...(addLabels.length > 0 ? { add: addLabels } : {}),
+        ...(isBlessing && removeLabels.length > 0 ? { remove: removeLabels } : {})
+      });
+    })
+  );
 }

@@ -27,7 +27,8 @@ import type { Environment } from '../env/Environment';
 import {
   guardSnapshotDescriptor,
   applyGuardLabelModifications,
-  extractGuardLabelModifications
+  extractGuardLabelModifications,
+  logGuardLabelModifications
 } from './guard-utils';
 import type { OperationContext, GuardContextSnapshot } from '../env/ContextManager';
 import type { EvalResult } from '../core/interpreter';
@@ -340,6 +341,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
                 guard,
                 resultEntry.labelModifications
               );
+              await logGuardLabelModifications(env, guard, resultEntry.labelModifications, replacements);
               applyDescriptorToVariables(mergedDescriptor, replacements);
               currentDescriptor = mergedDescriptor;
               activeOutputs = replacements;
@@ -356,6 +358,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
             currentDescriptor = mergedDescriptor;
             const targetVars = activeOutputs.length > 0 ? activeOutputs : [currentInput];
             if (targetVars.length > 0) {
+              await logGuardLabelModifications(env, guard, resultEntry.labelModifications, targetVars);
               applyDescriptorToVariables(mergedDescriptor, targetVars);
             }
             transformsApplied = true;
@@ -414,6 +417,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
                 guard,
                 resultEntry.labelModifications
               );
+              await logGuardLabelModifications(env, guard, resultEntry.labelModifications, replacements);
               applyDescriptorToVariables(mergedDescriptor, replacements);
               currentDescriptor = mergedDescriptor;
               activeOutputs = replacements;
@@ -430,6 +434,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
             currentDescriptor = mergedDescriptor;
             const targetVars = activeOutputs.length > 0 ? activeOutputs : outputVariables;
             if (targetVars.length > 0) {
+              await logGuardLabelModifications(env, guard, resultEntry.labelModifications, targetVars);
               applyDescriptorToVariables(mergedDescriptor, targetVars);
             }
             transformsApplied = true;

@@ -1,6 +1,7 @@
 import * as path from 'path';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { HashUtils } from '@core/registry/utils/HashUtils';
+import { appendAuditEvent } from './AuditLogger';
 
 export type SignatureMethod = 'sha256';
 
@@ -41,9 +42,11 @@ function normalizeHash(method: SignatureMethod, hash: string): string {
 export class SignatureStore {
   private readonly fileSystem: IFileSystemService;
   private readonly baseDir: string;
+  private readonly projectRoot: string;
 
   constructor(fileSystem: IFileSystemService, projectRoot: string) {
     this.fileSystem = fileSystem;
+    this.projectRoot = projectRoot;
     this.baseDir = path.join(projectRoot, '.mlld', 'sec', 'sigs');
   }
 
@@ -66,6 +69,12 @@ export class SignatureStore {
 
     await this.fileSystem.writeFile(this.contentPath(varName), content);
     await this.fileSystem.writeFile(this.signaturePath(varName), JSON.stringify(record, null, 2));
+    await appendAuditEvent(this.fileSystem, this.projectRoot, {
+      event: 'sign',
+      var: this.formatAuditVarName(varName),
+      hash: record.hash,
+      by: record.signedby
+    });
     return record;
   }
 
@@ -90,7 +99,11 @@ export class SignatureStore {
     return this.sign(varName, content, { ...options, method });
   }
 
-  async verify(varName: string, content?: string): Promise<SignatureVerificationResult> {
+  async verify(
+    varName: string,
+    content?: string,
+    options?: { caller?: string }
+  ): Promise<SignatureVerificationResult> {
     const signature = await this.readSignature(varName);
     const template = await this.readContent(varName);
 
@@ -112,11 +125,18 @@ export class SignatureStore {
         ? this.computeHash(signature.method, content) === signature.hash
         : true;
 
-    return {
+    const result: SignatureVerificationResult = {
       ...signature,
       template,
       verified: signatureMatches && contentMatches
     };
+    await appendAuditEvent(this.fileSystem, this.projectRoot, {
+      event: 'verify',
+      var: this.formatAuditVarName(varName),
+      result: result.verified,
+      caller: options?.caller
+    });
+    return result;
   }
 
   private async readSignature(varName: string): Promise<SignatureRecord | null> {
@@ -165,5 +185,9 @@ export class SignatureStore {
 
   private contentPath(varName: string): string {
     return path.join(this.baseDir, `${varName}.content`);
+  }
+
+  private formatAuditVarName(varName: string): string {
+    return varName.startsWith('@') ? varName : `@${varName}`;
   }
 }

@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`using` auth injection**: `using auth:name` and `using @var as "ENV"` (plus `with { auth, using }`) pass credentials into exec/run from policy auth sources
 - **Policy defaults `autosign`**: Sign template content or variables selected by name patterns
 - **Policy defaults `autoverify`**: Prepend verify instructions for signed variables passed to llm-labeled executables and set `MLLD_VERIFY_VARS`
+- **Security audit log events**: Records sign/verify, label/bless, and file write taint entries in `.mlld/sec/audit.jsonl`
 - **Optional load syntax:** `<file.md>?` and `<**/*.md>?` returns null or empty array if file or glob results don't exist
 - **`claude-poll` debug hooks**: `MLLD_DEBUG_CLAUDE_POLL` emits poll diagnostics and `MLLD_CLAUDE_POLL_LOG` captures `claude` output
 - **Executor stdin debug flag**: `MLLD_DEBUG_EXEC_IO` logs stdin write failures with byte counts

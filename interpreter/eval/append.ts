@@ -13,11 +13,13 @@ import { getOperationLabels } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
+import { logFileWriteEvent } from '../utils/audit-log';
 
 interface AppendOptions {
   location?: SourceLocation;
   directiveKind?: string;
   format?: string;
+  descriptor?: SecurityDescriptor;
 }
 
 /**
@@ -94,7 +96,8 @@ export async function evaluateAppend(
   await appendContentToFile(target, content, env, {
     location: directive.location,
     directiveKind: 'append',
-    format
+    format,
+    descriptor: materialized.descriptor
   });
 
   (env as any).hasExplicitOutput = true;
@@ -126,6 +129,7 @@ export async function appendContentToFile(
   }
 
   await fileSystem.appendFile(resolvedPath, payload);
+  await logFileWriteEvent(env, resolvedPath, options.descriptor);
 
   env.emitEffect('file', payload, {
     path: resolvedPath,

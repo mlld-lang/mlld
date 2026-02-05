@@ -112,6 +112,38 @@ function formatAuditVarName(identifiers: string[]): string | undefined {
   return identifiers.map(identifier => `@${identifier}`).join(', ');
 }
 
+function diffLabels(
+  before: readonly DataLabel[] | undefined,
+  after: readonly DataLabel[] | undefined
+): { add: DataLabel[]; remove: DataLabel[] } {
+  const beforeSet = new Set(before ?? []);
+  const afterSet = new Set(after ?? []);
+  const add: DataLabel[] = [];
+  const remove: DataLabel[] = [];
+
+  for (const label of afterSet) {
+    if (!beforeSet.has(label)) {
+      add.push(label);
+    }
+  }
+
+  for (const label of beforeSet) {
+    if (!afterSet.has(label)) {
+      remove.push(label);
+    }
+  }
+
+  return { add, remove };
+}
+
+function hasBlessingModifier(modifiers: LabelModifierToken[]): boolean {
+  return modifiers.some(modifier =>
+    modifier.kind === 'bless' ||
+    modifier.kind === 'clear' ||
+    modifier.kind === 'remove'
+  );
+}
+
 async function warnTrustConflict(
   varName: string | undefined,
   policy: PolicyConfig | undefined,
@@ -348,6 +380,26 @@ export async function evaluateLabelModification(
     policy: nextEnv.getPolicySummary(),
     varName: auditVarName
   });
+  const auditEnv = nextEnv;
+  if (auditEnv) {
+    const changes = diffLabels(baseDescriptor.labels, modifiedDescriptor.labels);
+    if (changes.add.length > 0 || changes.remove.length > 0) {
+      const isBlessing = Boolean(context?.privileged) && hasBlessingModifier(node.modifiers);
+      const event = isBlessing ? 'bless' : 'label';
+      const payload = {
+        event,
+        var: auditVarName,
+        by: 'directive:label',
+        ...(changes.add.length > 0 ? { add: changes.add } : {}),
+        ...(isBlessing && changes.remove.length > 0 ? { remove: changes.remove } : {})
+      };
+      await appendAuditEvent(
+        auditEnv.getFileSystemService(),
+        auditEnv.getProjectRoot(),
+        payload
+      );
+    }
+  }
 
   const modifiedValue = applyDescriptorToValue(value, modifiedDescriptor);
   return { value: modifiedValue, env: nextEnv };
