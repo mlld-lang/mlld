@@ -78,7 +78,7 @@ Policy defines built-in rules that block dangerous flows:
 | Rule | Behavior |
 |------|----------|
 | `no-secret-exfil` | Blocks `secret` data from flowing to operations labeled `exfil` |
-| `no-sensitive-exfil` | Blocks `sensitive + untrusted` data from flowing to `exfil` operations |
+| `no-sensitive-exfil` | Blocks `sensitive` data from flowing to `exfil` operations |
 
 These rules are opt-in via policy configuration:
 

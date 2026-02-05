@@ -1,0 +1,8 @@
+var @policyConfig = {
+  defaults: { rules: ["no-untrusted-destructive"] }
+}
+policy @p = union(@policyConfig)
+
+var untrusted @payload = "data"
+exe destructive @wipe(data) = run cmd { echo "@data" }
+@wipe(@payload)
