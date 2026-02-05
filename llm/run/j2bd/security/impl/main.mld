@@ -18,6 +18,21 @@ var @policyConfig = {
 }
 policy @p = union(@policyConfig)
 
+>> Enforcement guard: autoverify injects verification instructions into the prompt,
+>> but doesn't guarantee the LLM actually calls verify. This guard enforces compliance
+>> by checking @mx.tools.calls after any llm-labeled exe runs.
+>>
+>> IMPORTANT: @mx.tools.calls requires MCP context (per tool-call-tracking.md atom).
+>> In this standalone demo without MCP, the guard would block all llm exes because
+>> @mx.tools.calls is empty. In production with MCP, the LLM would call verify and
+>> the guard would allow the operation.
+>>
+>> Syntax (valid mlld, disabled for standalone demo):
+>>   guard @ensureVerified after llm = when [
+>>     @mx.tools.calls.includes("verify") => allow
+>>     * => retry "Must verify signed instructions before proceeding"
+>>   ]
+
 >> ============================================================
 >> STEP 2: Define and sign the audit criteria template
 >> ============================================================
