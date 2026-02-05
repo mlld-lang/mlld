@@ -27,7 +27,7 @@ Assign a worker to a ticket.
   "reasoning": "Brief explanation",
   "action": "work",
   "ticket": "m-abc1",
-  "task_type": "doc|impl|friction|improvement|adversarial|final_review",
+  "task_type": "doc|impl|friction|improvement|adversarial|final_review|excellence",
   "guidance": "Optional specific instructions for the worker"
 }
 ```

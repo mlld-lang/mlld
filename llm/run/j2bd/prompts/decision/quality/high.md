@@ -2,9 +2,15 @@
 
 This run uses high polish (`--polish high`). Excellence is the target.
 
+### Rating Requirements
+
+**Final review must rate the work as "solid" or better** before proceeding to excellence assessment. If final review rates it as only "adequate", create tickets to address the gaps and iterate until you achieve "solid".
+
+High polish is for features that represent the project. Adequate is not acceptable.
+
 ### Additional Requirements
 
-9. After final review approves, create an excellence assessment ticket and dispatch a worker to evaluate the end-to-end user experience
+9. After final review approves with "solid" or better rating, create an excellence assessment ticket and dispatch a worker to evaluate the end-to-end user experience
 10. Polish gaps must be addressed:
     - Examples should be clear and self-contained
     - Error messages should guide users to solutions

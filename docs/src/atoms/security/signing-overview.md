@@ -17,8 +17,8 @@ Sign templates to create verifiable records of LLM instructions.
 var @prompt = `Review @input for safety.`
 sign @prompt with sha256
 
->> Verify returns the original template text
-var @original = verify @prompt
+>> Verify checks signature and logs the result
+verify @prompt
 ```
 
 **Sign templates, not interpolated results:**

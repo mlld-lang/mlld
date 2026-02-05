@@ -146,6 +146,7 @@ exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onbo
 exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/workers/friction.att"
 exe @adversarialWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/workers/adversarial.att"
 exe @finalReviewWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/workers/final-review.att"
+exe @excellenceWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/workers/excellence.att"
 
 >> Build worker prompt based on task type
 exe @buildWorkerPrompt(taskType, ticket, guidance, config, job, onboarding, chestertonsFence) = [
@@ -162,6 +163,7 @@ exe @buildWorkerPrompt(taskType, ticket, guidance, config, job, onboarding, ches
     "friction" => @frictionWorkerPrompt(@ticket, @guidance, "", @spec, "", "", @onboarding, @chestertonsFence)
     "adversarial" => @adversarialWorkerPrompt(@ticket, @guidance, @spec, @job, @onboarding, @chestertonsFence)
     "final_review" => @finalReviewWorkerPrompt(@ticket, @guidance, @spec, @job, @onboarding, @chestertonsFence)
+    "excellence" => @excellenceWorkerPrompt(@ticket, @guidance, @spec, @job, @onboarding, @chestertonsFence)
     * => `ERROR: Unknown task type: @taskType`
   ]
   => @prompt
