@@ -5,12 +5,13 @@ import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
 import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { MlldCommandExecutionError } from '@core/errors';
+import { MlldCommandExecutionError, MlldSecurityError } from '@core/errors';
 import type { OperationContext } from '../env/ContextManager';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { deriveCommandTaint } from '@core/security/taint';
 import { getOperationLabels, getOperationSources, parseCommand } from '@core/policy/operation-labels';
+import { evaluateCapabilityAccess, evaluateCommandAccess } from '@core/policy/guards';
 import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
 import type { SecurityManager } from '@security/SecurityManager';
 import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
@@ -392,11 +393,28 @@ export async function evaluateRun(
       command: parsedCommand.command,
       subcommand: parsedCommand.subcommand
     });
-    const opUpdate: Partial<OperationContext> = { opLabels, command };
+    const opMetadata = { ...(context?.operationContext?.metadata ?? {}) } as Record<string, unknown>;
+    opMetadata.commandPreview = command;
+    const opUpdate: Partial<OperationContext> = { opLabels, command, metadata: opMetadata };
     if (opSources.length > 0) {
       opUpdate.sources = opSources;
     }
     updateOperationContext(opUpdate);
+
+    const policySummary = env.getPolicySummary();
+    if (policySummary) {
+      const decision = evaluateCommandAccess(policySummary, command);
+      if (!decision.allowed) {
+        throw new MlldSecurityError(
+          decision.reason ?? `Command '${decision.commandName}' denied by policy`,
+          {
+            code: 'POLICY_CAPABILITY_DENIED',
+            sourceLocation: directive.location,
+            env
+          }
+        );
+      }
+    }
 
     const argTaint = descriptorToInputTaint(commandDescriptor);
     if (policyChecksEnabled && argTaint.length > 0) {
@@ -660,6 +678,22 @@ export async function evaluateRun(
         opUpdate.sources = opSources;
       }
       updateOperationContext(opUpdate);
+    }
+    if (opType) {
+      const policySummary = env.getPolicySummary();
+      if (policySummary) {
+        const decision = evaluateCapabilityAccess(policySummary, opType);
+        if (!decision.allowed) {
+          throw new MlldSecurityError(
+            decision.reason ?? `Capability '${opType}' denied by policy`,
+            {
+              code: 'POLICY_CAPABILITY_DENIED',
+              sourceLocation: directive.location,
+              env
+            }
+          );
+        }
+      }
     }
     const inputDescriptor =
       argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
@@ -936,11 +970,28 @@ export async function evaluateRun(
         command: parsedCommand.command,
         subcommand: parsedCommand.subcommand
       });
-      const opUpdate: Partial<OperationContext> = { opLabels, command };
+      const opMetadata = { ...(context?.operationContext?.metadata ?? {}) } as Record<string, unknown>;
+      opMetadata.commandPreview = command;
+      const opUpdate: Partial<OperationContext> = { opLabels, command, metadata: opMetadata };
       if (opSources.length > 0) {
         opUpdate.sources = opSources;
       }
       updateOperationContext(opUpdate);
+
+      const policySummary = env.getPolicySummary();
+      if (policySummary) {
+        const decision = evaluateCommandAccess(policySummary, command);
+        if (!decision.allowed) {
+          throw new MlldSecurityError(
+            decision.reason ?? `Command '${decision.commandName}' denied by policy`,
+            {
+              code: 'POLICY_CAPABILITY_DENIED',
+              sourceLocation: directive.location,
+              env
+            }
+          );
+        }
+      }
 
       const inputDescriptor =
         argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
@@ -1155,6 +1206,22 @@ export async function evaluateRun(
       const opLabels = opType ? getOperationLabels({ type: opType }) : [];
       if (opType && opLabels.length > 0) {
         updateOperationContext({ opLabels });
+      }
+      if (opType) {
+        const policySummary = env.getPolicySummary();
+        if (policySummary) {
+          const decision = evaluateCapabilityAccess(policySummary, opType);
+          if (!decision.allowed) {
+            throw new MlldSecurityError(
+              decision.reason ?? `Capability '${opType}' denied by policy`,
+              {
+                code: 'POLICY_CAPABILITY_DENIED',
+                sourceLocation: directive.location,
+                env
+              }
+            );
+          }
+        }
       }
       const inputDescriptor =
         argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;

@@ -27,7 +27,7 @@ import {
 } from '@core/types/variable';
 import type { Variable, VariableContext, VariableSource } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
-import { MlldInterpreterError, MlldCommandExecutionError, CircularReferenceError } from '@core/errors';
+import { MlldInterpreterError, MlldCommandExecutionError, MlldSecurityError, CircularReferenceError } from '@core/errors';
 import { CommandUtils } from '../env/CommandUtils';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
@@ -54,6 +54,7 @@ import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import { isEventEmitter, isLegacyStream, toJsValue, wrapNodeValue } from '../utils/node-interop';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
+import { evaluateCapabilityAccess, evaluateCommandAccess } from '@core/policy/guards';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
@@ -2253,6 +2254,20 @@ async function evaluateExecInvocationInternal(
     const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
     metadata.commandPreview = commandPreview;
     operationContext.metadata = metadata;
+    const policySummary = env.getPolicySummary();
+    if (policySummary) {
+      const decision = evaluateCommandAccess(policySummary, commandPreview);
+      if (!decision.allowed) {
+        throw new MlldSecurityError(
+          decision.reason ?? `Command '${decision.commandName}' denied by policy`,
+          {
+            code: 'POLICY_CAPABILITY_DENIED',
+            sourceLocation: node.location,
+            env
+          }
+        );
+      }
+    }
     const flowChannel =
       definition.withClause?.auth ||
       definition.withClause?.using ||
@@ -2298,6 +2313,22 @@ async function evaluateExecInvocationInternal(
     if (opLabels.length > 0) {
       operationContext.opLabels = opLabels;
     }
+    if (opType) {
+      const policySummary = env.getPolicySummary();
+      if (policySummary) {
+        const decision = evaluateCapabilityAccess(policySummary, opType);
+        if (!decision.allowed) {
+          throw new MlldSecurityError(
+            decision.reason ?? `Capability '${opType}' denied by policy`,
+            {
+              code: 'POLICY_CAPABILITY_DENIED',
+              sourceLocation: node.location,
+              env
+            }
+          );
+        }
+      }
+    }
     const inputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(resultSecurityDescriptor));
     if (opType && inputTaint.length > 0) {
       policyEnforcer.checkLabelFlow(
@@ -2314,6 +2345,20 @@ async function evaluateExecInvocationInternal(
     const opLabels = mergeLabelArrays(getOperationLabels({ type: 'node' }), toolLabels);
     if (opLabels.length > 0) {
       operationContext.opLabels = opLabels;
+    }
+    const policySummary = env.getPolicySummary();
+    if (policySummary) {
+      const decision = evaluateCapabilityAccess(policySummary, 'node');
+      if (!decision.allowed) {
+        throw new MlldSecurityError(
+          decision.reason ?? "Capability 'node' denied by policy",
+          {
+            code: 'POLICY_CAPABILITY_DENIED',
+            sourceLocation: node.location,
+            env
+          }
+        );
+      }
     }
     const inputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(resultSecurityDescriptor));
     if (inputTaint.length > 0) {

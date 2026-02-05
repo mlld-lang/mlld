@@ -23,6 +23,11 @@ export type CommandAccessDecision = {
   reason?: string;
 };
 
+export type CapabilityAccessDecision = {
+  allowed: boolean;
+  reason?: string;
+};
+
 function makeGuardAction(decision: 'allow' | 'deny', message?: string): GuardActionNode {
   return {
     type: 'GuardAction',
@@ -177,9 +182,7 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
       policyCondition: ({ operation }) => {
         const commandText = getOperationCommandText(operation);
         const tokens = getCommandTokens(commandText);
-        const firstWord = tokens[0] ?? '';
-        const networkCommands = ['curl', 'wget', 'nc', 'netcat', 'ssh', 'scp', 'rsync', 'ftp', 'telnet'];
-        if (networkCommands.includes(firstWord)) {
+        if (isNetworkCommand(tokens)) {
           return { decision: 'deny', reason: 'Network access denied by policy' };
         }
         return { decision: 'allow' };
@@ -293,6 +296,31 @@ function extractCommandPatterns(
   return undefined;
 }
 
+function formatCapabilityDeniedReason(capability: string): string {
+  switch (capability) {
+    case 'sh':
+      return 'Shell access denied by policy';
+    case 'network':
+      return 'Network access denied by policy';
+    case 'js':
+      return 'JavaScript access denied by policy';
+    case 'node':
+      return 'Node access denied by policy';
+    case 'py':
+      return 'Python access denied by policy';
+    case 'prose':
+      return 'Prose access denied by policy';
+    default:
+      return `Capability '${capability}' denied by policy`;
+  }
+}
+
+function isNetworkCommand(commandTokens: string[]): boolean {
+  const firstWord = commandTokens[0] ?? '';
+  const networkCommands = ['curl', 'wget', 'nc', 'netcat', 'ssh', 'scp', 'rsync', 'ftp', 'telnet'];
+  return networkCommands.includes(firstWord);
+}
+
 export function evaluateCommandAccess(policy: PolicyConfig, commandText: string): CommandAccessDecision {
   const commandTokens = getCommandTokens(commandText);
   const commandName = getCommandName(commandTokens, commandText);
@@ -347,6 +375,15 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
       };
     }
   }
+  if (denyMap && isDenied('network', denyMap)) {
+    if (isNetworkCommand(commandTokens)) {
+      return {
+        allowed: false,
+        commandName,
+        reason: 'Network access denied by policy'
+      };
+    }
+  }
   if (allowListActive) {
     const allowPatterns = extractCommandPatterns(allow) ?? (allowMap?.cmd !== undefined ? normalizeCommandPatternList(allowMap.cmd) : undefined);
     if (!allowPatterns) {
@@ -365,6 +402,52 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
     }
   }
   return { allowed: true, commandName };
+}
+
+export function evaluateCapabilityAccess(policy: PolicyConfig, capability: string): CapabilityAccessDecision {
+  const allow = policy.allow;
+  const deny = policy.deny;
+  const allowListActive = allow !== undefined && allow !== true;
+
+  if (deny === true) {
+    return { allowed: false, reason: formatCapabilityDeniedReason(capability) };
+  }
+
+  const denyMap =
+    deny && deny !== true && typeof deny === 'object' && !Array.isArray(deny)
+      ? deny
+      : undefined;
+  if (denyMap && isDenied(capability, denyMap)) {
+    return { allowed: false, reason: formatCapabilityDeniedReason(capability) };
+  }
+
+  if (allowListActive) {
+    const allowMap =
+      allow && typeof allow === 'object' && !Array.isArray(allow)
+        ? allow
+        : undefined;
+    if (!allowMap) {
+      return { allowed: false, reason: formatCapabilityDeniedReason(capability) };
+    }
+    const allowValue = (allowMap as Record<string, unknown>)[capability];
+    if (!allowValue) {
+      return { allowed: false, reason: formatCapabilityDeniedReason(capability) };
+    }
+    if (allowValue === true) {
+      return { allowed: true };
+    }
+    if (Array.isArray(allowValue)) {
+      return allowValue.length > 0
+        ? { allowed: true }
+        : { allowed: false, reason: formatCapabilityDeniedReason(capability) };
+    }
+    if (typeof allowValue === 'object') {
+      return { allowed: true };
+    }
+    return { allowed: true };
+  }
+
+  return { allowed: true };
 }
 
 function matchesPrefix(rule: string, target: string): boolean {
