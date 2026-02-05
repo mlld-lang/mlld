@@ -636,10 +636,12 @@ export async function executeCommandVariable(
   structuredInput?: StructuredValue,
   hookOptions?: CommandExecutionHookOptions
 ): Promise<CommandExecutionResult> {
+  let outputPolicyDescriptor: SecurityDescriptor | undefined;
   const finalizeResult = (
     value: unknown,
     options?: { type?: string; text?: string }
   ): CommandExecutionResult => {
+    let wrapped: CommandExecutionResult;
     if (
       typeof value === 'string' &&
       (!options || !options.type || options.type === 'text') &&
@@ -648,12 +650,22 @@ export async function executeCommandVariable(
       try {
         const parsed = JSON.parse(value.trim());
         const typeHint = Array.isArray(parsed) ? 'array' : 'object';
-        return wrapExecResult(parsed, { type: typeHint, text: options?.text ?? value });
+        wrapped = wrapExecResult(parsed, { type: typeHint, text: options?.text ?? value });
       } catch {
         // Fall through to default wrapping when JSON.parse fails
       }
     }
-    return wrapExecResult(value, options);
+    if (!wrapped) {
+      wrapped = wrapExecResult(value, options);
+    }
+    if (outputPolicyDescriptor && isStructuredValue(wrapped)) {
+      const existing = extractSecurityDescriptor(wrapped, { recursive: true, mergeArrayElements: true });
+      const merged = existing
+        ? env.mergeSecurityDescriptors(existing, outputPolicyDescriptor)
+        : outputPolicyDescriptor;
+      applySecurityDescriptorToStructuredValue(wrapped, merged);
+    }
+    return wrapped;
   };
 
   // Built-in transformer handling
@@ -994,6 +1006,10 @@ export async function executeCommandVariable(
         { env, sourceLocation: policyLocation }
       );
     }
+    outputPolicyDescriptor = policyEnforcer.applyOutputPolicyLabels(
+      undefined,
+      { inputTaint, exeLabels }
+    );
   } else if (execDef.type === 'code' && execDef.codeTemplate) {
     const opType = resolveOpTypeFromLanguage(stageLanguage);
     const opLabels = opType ? getOperationLabels({ type: opType }) : [];
@@ -1009,6 +1025,10 @@ export async function executeCommandVariable(
         { env, sourceLocation: policyLocation }
       );
     }
+    outputPolicyDescriptor = policyEnforcer.applyOutputPolicyLabels(
+      undefined,
+      { inputTaint, exeLabels }
+    );
   } else if (execDef.type === 'nodeFunction') {
     const opLabels = getOperationLabels({ type: 'node' });
     const inputTaint = descriptorToInputTaint(guardDescriptor);
@@ -1023,6 +1043,10 @@ export async function executeCommandVariable(
         { env, sourceLocation: policyLocation }
       );
     }
+    outputPolicyDescriptor = policyEnforcer.applyOutputPolicyLabels(
+      undefined,
+      { inputTaint, exeLabels }
+    );
   }
 
   if (hookNode && operationContext) {
@@ -1082,19 +1106,24 @@ export async function executeCommandVariable(
     const scopedEnvConfig = resolveEnvironmentConfig(execEnv, preDecision?.metadata);
     const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, execEnv.getPolicySummary());
     const outputDescriptor = buildEnvironmentOutputDescriptor(command, resolvedEnvConfig);
+    const mergedOutputDescriptor = outputPolicyDescriptor
+      ? outputDescriptor
+        ? env.mergeSecurityDescriptors(outputDescriptor, outputPolicyDescriptor)
+        : outputPolicyDescriptor
+      : outputDescriptor;
 
     const applyOutputDescriptor = (value: CommandExecutionResult): CommandExecutionResult => {
-      if (!outputDescriptor) {
+      if (!mergedOutputDescriptor) {
         return value;
       }
       if (value && typeof value === 'object' && isStructuredValue(value)) {
         const existing = extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true });
-        const merged = existing ? env.mergeSecurityDescriptors(existing, outputDescriptor) : outputDescriptor;
+        const merged = existing ? env.mergeSecurityDescriptors(existing, mergedOutputDescriptor) : mergedOutputDescriptor;
         applySecurityDescriptorToStructuredValue(value, merged);
         return value;
       }
       const wrapped = wrapExecResult(value);
-      applySecurityDescriptorToStructuredValue(wrapped, outputDescriptor);
+      applySecurityDescriptorToStructuredValue(wrapped, mergedOutputDescriptor);
       return wrapped;
     };
 
@@ -1152,7 +1181,7 @@ export async function executeCommandVariable(
           isRetryable: false,
           identifier: commandVar?.name,
           location: commandVar.mx?.definedAt,
-          descriptorHint: outputDescriptor
+          descriptorHint: mergedOutputDescriptor
         });
         if (processed === 'retry') {
           return 'retry';

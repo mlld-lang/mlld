@@ -1008,6 +1008,11 @@ export async function evaluateRun(
           { env, sourceLocation: directive.location }
         );
       }
+      const outputPolicyDescriptor = policyEnforcer.applyOutputPolicyLabels(
+        undefined,
+        { inputTaint, exeLabels }
+      );
+      mergePendingDescriptor(outputPolicyDescriptor);
 
       const commandTaint = deriveCommandTaint({ command });
       const scopedEnvConfig = resolveEnvironmentConfig(env, context?.guardMetadata);
@@ -1237,6 +1242,11 @@ export async function evaluateRun(
           { env, sourceLocation: directive.location }
         );
       }
+      const outputPolicyDescriptor = policyEnforcer.applyOutputPolicyLabels(
+        undefined,
+        { inputTaint, exeLabels }
+      );
+      mergePendingDescriptor(outputPolicyDescriptor);
 
       // Special handling for mlld-when expressions
       if (definition.language === 'mlld-when') {
