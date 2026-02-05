@@ -99,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Autosign/autoverify docs include an @mlld/claude demo block.
 - Linux keychain provider uses secret-tool for system keychain access.
 - Keychain docs note secret-tool and fixtures include a Linux manual test.
+- Draft j2bd security jobs cover audit ledger, policy composition, and defaults.rules demos.
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
 - **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.
