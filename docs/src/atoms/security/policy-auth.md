@@ -51,23 +51,20 @@ policy @p = union(@policyConfig)
 run cmd { claude -p "hello" } using auth:claude
 ```
 
-**Why `using auth:*` bypasses label deny rules:**
+**Label flow checks for `using auth:*`:**
 
-Secrets flow directly from source to env var - never interpolated into the command string:
+Auth injection keeps secrets out of command strings, but policy label flow checks still apply to env injection. Secrets injected via `using auth:*` are treated as `secret` input for policy checks, and `using @var as ENV` uses the variable's labels.
 
 ```mlld
 var @policyConfig = {
   auth: { api: { from: "env:SECRET", as: "API_KEY" } },
-  labels: { secret: { deny: ["op:cmd"] } }
+  labels: { secret: { deny: ["exfil"] } }
 }
 policy @p = union(@policyConfig)
 
->> BLOCKED: secret interpolated into command
-var secret @key = "abc"
-run cmd { curl -H "Auth: @key" ... }
-
->> ALLOWED: secret flows via env var
-run cmd { curl -H "Auth: $API_KEY" ... } using auth:api
+>> BLOCKED: secret flows to exfil-labeled operation
+exe exfil @send() = run cmd { curl -H "Auth: $API_KEY" ... } using auth:api
+@send()
 ```
 
 **Explicit variable injection:**

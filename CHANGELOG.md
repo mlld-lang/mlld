@@ -88,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Policy auth and capabilities docs cover keychain allow/deny patterns.
 - Security fixtures cover defaults.rules secret protection precedence.
 - Policy label flow checks now include `using auth:*` and `using @var as ENV` injections.
+- Security fixtures cover secret label flow for `using` env injection.
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
 - **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.
