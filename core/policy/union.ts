@@ -20,6 +20,12 @@ export type PolicyDefaults = {
   trustconflict?: PolicyTrustConflict;
 };
 
+export type PolicyKeychainConfig = {
+  provider?: string;
+  allow?: string[];
+  deny?: string[];
+};
+
 export type AuthConfig = {
   from: string;
   as: string;
@@ -57,6 +63,7 @@ export type PolicyConfig = {
   defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
   auth?: Record<string, AuthConfig>;
+  keychain?: PolicyKeychainConfig;
   allow?: Record<string, PolicyCapabilityValue> | string[] | true;
   deny?: Record<string, PolicyCapabilityValue> | string[] | true;
   danger?: string[] | string;
@@ -109,6 +116,7 @@ export function mergePolicyConfigs(
 
   const labels = mergePolicyLabels(normalizedBase.labels, normalizedIncoming.labels);
   const auth = mergePolicyAuth(normalizedBase.auth, normalizedIncoming.auth);
+  const keychain = mergePolicyKeychain(normalizedBase.keychain, normalizedIncoming.keychain);
   const defaultStance = mergePolicyDefault(normalizedBase.default, normalizedIncoming.default);
   const defaults = mergePolicyDefaults(normalizedBase.defaults, normalizedIncoming.defaults);
   const envConfig = mergePolicyEnv(normalizedBase.env, normalizedIncoming.env);
@@ -119,6 +127,7 @@ export function mergePolicyConfigs(
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
     ...(auth ? { auth } : {}),
+    ...(keychain ? { keychain } : {}),
     allow: fromAllowShape(mergedAllow),
     deny: fromDenyShape(mergedDeny),
     ...(danger && danger.length > 0 ? { danger } : {}),
@@ -154,6 +163,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     : undefined;
   const labels = normalizePolicyLabels(config.labels);
   const auth = normalizePolicyAuth(config.auth);
+  const keychain = normalizePolicyKeychain(config.keychain);
   const defaultStance = normalizePolicyDefault(config.default);
   const defaults = normalizePolicyDefaults(config.defaults);
   const envConfig = normalizePolicyEnv(config.env);
@@ -163,6 +173,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
     ...(auth ? { auth } : {}),
+    ...(keychain ? { keychain } : {}),
     allow,
     deny,
     ...(danger ? { danger } : {}),
@@ -971,6 +982,31 @@ function normalizePolicyAuth(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function normalizePolicyKeychain(
+  config?: PolicyConfig['keychain']
+): PolicyConfig['keychain'] | undefined {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return undefined;
+  }
+
+  const provider = typeof config.provider === 'string' ? config.provider.trim() : '';
+  const allow = normalizeStringList(config.allow);
+  const deny = normalizeStringList(config.deny);
+  const result: PolicyKeychainConfig = {};
+
+  if (provider) {
+    result.provider = provider;
+  }
+  if (allow !== undefined) {
+    result.allow = allow;
+  }
+  if (deny !== undefined) {
+    result.deny = deny;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 function normalizePolicyLabels(
   labels?: PolicyConfig['labels']
 ): PolicyConfig['labels'] | undefined {
@@ -1079,6 +1115,61 @@ function mergePolicyAuth(
     return undefined;
   }
   return { ...(base ?? {}), ...(incoming ?? {}) };
+}
+
+function mergePolicyKeychain(
+  base?: PolicyConfig['keychain'],
+  incoming?: PolicyConfig['keychain']
+): PolicyConfig['keychain'] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+
+  const normalizedBase = normalizePolicyKeychain(base);
+  const normalizedIncoming = normalizePolicyKeychain(incoming);
+  if (!normalizedBase && !normalizedIncoming) {
+    return undefined;
+  }
+
+  const provider = normalizedIncoming?.provider ?? normalizedBase?.provider;
+  const allow = mergeKeychainAllowList(normalizedBase?.allow, normalizedIncoming?.allow);
+  const deny = mergeStringLists(normalizedBase?.deny, normalizedIncoming?.deny);
+  const result: PolicyKeychainConfig = {};
+
+  if (provider) {
+    result.provider = provider;
+  }
+  if (allow !== undefined) {
+    result.allow = allow;
+  }
+  if (deny !== undefined) {
+    result.deny = deny;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function mergeKeychainAllowList(
+  base?: string[],
+  incoming?: string[]
+): string[] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  if (!base) {
+    return incoming;
+  }
+  if (!incoming) {
+    return base;
+  }
+  if (base.includes('*') || base.includes('**')) {
+    return incoming;
+  }
+  if (incoming.includes('*') || incoming.includes('**')) {
+    return base;
+  }
+  const incomingSet = new Set(incoming);
+  return base.filter(entry => incomingSet.has(entry));
 }
 
 function mergePolicyDefault(

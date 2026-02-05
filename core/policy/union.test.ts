@@ -91,3 +91,40 @@ describe('PolicyConfig capabilities', () => {
     expect(filesystem.write).toEqual(expect.arrayContaining(['@base/dist/**']));
   });
 });
+
+describe('PolicyConfig keychain', () => {
+  it('normalizes keychain provider and pattern lists', () => {
+    const config = normalizePolicyConfig({
+      keychain: {
+        provider: ' system ',
+        allow: ['mlld-env/*', '  ', 'mlld-env/*'],
+        deny: 'system/*'
+      }
+    } as PolicyConfig);
+
+    expect(config.keychain?.provider).toBe('system');
+    expect(config.keychain?.allow).toEqual(['mlld-env/*']);
+    expect(config.keychain?.deny).toEqual(['system/*']);
+  });
+
+  it('merges keychain allow by intersection and deny by union', () => {
+    const base: PolicyConfig = {
+      keychain: {
+        provider: 'system',
+        allow: ['mlld-env/*', 'company/*'],
+        deny: ['system/*']
+      }
+    };
+    const incoming: PolicyConfig = {
+      keychain: {
+        allow: ['company/*', 'other/*'],
+        deny: ['company/private/*']
+      }
+    };
+
+    const merged = mergePolicyConfigs(base, incoming);
+    expect(merged.keychain?.provider).toBe('system');
+    expect(merged.keychain?.allow).toEqual(['company/*']);
+    expect(merged.keychain?.deny?.sort()).toEqual(['company/private/*', 'system/*'].sort());
+  });
+});

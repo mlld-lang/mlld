@@ -43,4 +43,54 @@ describe('enforceKeychainAccess', () => {
     expect(() => enforceKeychainAccess(env)).not.toThrow();
   });
 
+  it('denies access when allow list does not match', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'mlld-config.json'),
+      JSON.stringify({ projectname: 'demo' }, null, 2)
+    );
+    const env = new Environment(new NodeFileSystem(), new PathService(), tempDir);
+    env.recordPolicyConfig('policy', {
+      capabilities: { danger: ['@keychain'] },
+      keychain: { allow: ['mlld-env-{projectname}/allowed'] }
+    });
+
+    expect(() => enforceKeychainAccess(env, { service: 'mlld-env-demo', account: 'blocked' }))
+      .toThrow('Keychain access denied');
+  });
+
+  it('denies access when deny list matches', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'mlld-config.json'),
+      JSON.stringify({ projectname: 'demo' }, null, 2)
+    );
+    const env = new Environment(new NodeFileSystem(), new PathService(), tempDir);
+    env.recordPolicyConfig('policy', {
+      capabilities: { danger: ['@keychain'] },
+      keychain: {
+        allow: ['mlld-env-{projectname}/*'],
+        deny: ['mlld-env-demo/blocked']
+      }
+    });
+
+    expect(() => enforceKeychainAccess(env, { service: 'mlld-env-demo', account: 'blocked' }))
+      .toThrow('Keychain access denied');
+  });
+
+  it('allows access when allow list matches and deny list does not', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'mlld-config.json'),
+      JSON.stringify({ projectname: 'demo' }, null, 2)
+    );
+    const env = new Environment(new NodeFileSystem(), new PathService(), tempDir);
+    env.recordPolicyConfig('policy', {
+      capabilities: { danger: ['@keychain'] },
+      keychain: {
+        allow: ['mlld-env-{projectname}/*'],
+        deny: ['mlld-env-demo/blocked']
+      }
+    });
+
+    expect(() => enforceKeychainAccess(env, { service: 'mlld-env-demo', account: 'ok' }))
+      .not.toThrow();
+  });
 });
