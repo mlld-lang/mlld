@@ -1,0 +1,13 @@
+# Local developer override
+# Additional tools for local development
+
+/var @config = {
+  allow: {
+    cmd: ["jq:*", "git:*", "echo"]
+  },
+  limits: {
+    timeout: 5000
+  }
+}
+
+/export { @config }
