@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Claude sign/verify demo script covers autoverify with @mlld/claude.
 - Claude manual tests share a claude path probe helper.
 - Claude sign/verify demo includes an env-gated integration test.
+- Autosign/autoverify docs include an @mlld/claude demo block.
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
 - **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.

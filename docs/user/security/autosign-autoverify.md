@@ -90,6 +90,33 @@ When `@audit()` runs:
 3. Verification instructions are prepended to the prompt
 4. LLM can call `mlld verify` to retrieve the original signed template
 
+**Claude CLI demo (module-based):**
+
+This demo assumes `claude` is available on your PATH.
+
+```mlld
+import { @claude } from @mlld/claude
+
+var @policyConfig = {
+  defaults: {
+    autosign: ["templates"],
+    autoverify: true
+  }
+}
+policy @p = union(@policyConfig)
+
+var @auditPrompt = ::
+Review the text below and reply only with "OK" if it is safe.
+
+<text>
+Hello from the autoverify demo.
+</text>
+::
+
+exe llm @audit() = @claude(@auditPrompt, "haiku", @base)
+show @audit()
+```
+
 **Custom verify instructions:**
 
 Provide your own verification template:

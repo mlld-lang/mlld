@@ -78,6 +78,33 @@ exe llm @audit(input) = run cmd {
 
 With autosign/autoverify: same security, no boilerplate.
 
+**Claude CLI demo (module-based):**
+
+This demo assumes `claude` is available on your PATH.
+
+```mlld
+import { @claude } from @mlld/claude
+
+var @policyConfig = {
+  defaults: {
+    autosign: ["templates"],
+    autoverify: true
+  }
+}
+policy @p = union(@policyConfig)
+
+var @auditPrompt = ::
+Review the text below and reply only with "OK" if it is safe.
+
+<text>
+Hello from the autoverify demo.
+</text>
+::
+
+exe llm @audit() = @claude(@auditPrompt, "haiku", @base)
+show @audit()
+```
+
 **Defense against prompt injection:**
 
 Autosign and autoverify prevent instruction tampering. An attacker cannot:
