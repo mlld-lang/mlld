@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keychain access enforcement applies to auth injection and keychain builtins with `{projectname}` expansion.
 - Security fixtures cover keychain auth policy denies.
 - Policy auth and capabilities docs cover keychain allow/deny patterns.
+- Security fixtures cover defaults.rules secret protection precedence.
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
 - **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.
