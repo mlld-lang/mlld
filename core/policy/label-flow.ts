@@ -1,4 +1,4 @@
-import type { PolicyConfig, PolicyLabels } from './union';
+import type { PolicyConfig, PolicyLabels, PolicyOperations } from './union';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
 import { resolveInputTaint } from './input-taint';
 
@@ -72,6 +72,23 @@ function findBestMatch(
   return best;
 }
 
+function expandOperationLabels(
+  targets: readonly string[],
+  mappings?: PolicyOperations
+): string[] {
+  if (!mappings) {
+    return [...targets];
+  }
+  const expanded = new Set(targets);
+  for (const target of targets) {
+    const mapped = mappings[target];
+    if (mapped) {
+      expanded.add(mapped);
+    }
+  }
+  return Array.from(expanded);
+}
+
 export function checkLabelFlow(
   ctx: FlowContext,
   policy?: PolicyConfig
@@ -86,13 +103,15 @@ export function checkLabelFlow(
     return { allowed: true };
   }
 
-  const opTargets = normalizeList([
+  const rawOpTargets = normalizeList([
     ...(ctx.opLabels ?? []),
     ...(ctx.exeLabels ?? [])
   ]);
-  if (opTargets.length === 0) {
+  if (rawOpTargets.length === 0) {
     return { allowed: true };
   }
+
+  const opTargets = expandOperationLabels(rawOpTargets, policy.operations);
 
   const builtInResult = checkBuiltinPolicyRules(
     inputTaint,

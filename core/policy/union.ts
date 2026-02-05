@@ -59,6 +59,8 @@ export type PolicyCapabilitiesConfig = {
   danger?: string[] | string;
 };
 
+export type PolicyOperations = Record<string, string>;
+
 export type PolicyConfig = {
   defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
@@ -69,6 +71,7 @@ export type PolicyConfig = {
   danger?: string[] | string;
   capabilities?: PolicyCapabilitiesConfig;
   labels?: PolicyLabels;
+  operations?: PolicyOperations;
   env?: PolicyEnvironmentConfig;
   limits?: PolicyLimits;
 };
@@ -115,6 +118,7 @@ export function mergePolicyConfigs(
   const mergedDeny = mergeDenyShapes(baseDeny, incomingDeny);
 
   const labels = mergePolicyLabels(normalizedBase.labels, normalizedIncoming.labels);
+  const operations = mergePolicyOperations(normalizedBase.operations, normalizedIncoming.operations);
   const auth = mergePolicyAuth(normalizedBase.auth, normalizedIncoming.auth);
   const keychain = mergePolicyKeychain(normalizedBase.keychain, normalizedIncoming.keychain);
   const defaultStance = mergePolicyDefault(normalizedBase.default, normalizedIncoming.default);
@@ -132,6 +136,7 @@ export function mergePolicyConfigs(
     deny: fromDenyShape(mergedDeny),
     ...(danger && danger.length > 0 ? { danger } : {}),
     ...(labels ? { labels } : {}),
+    ...(operations ? { operations } : {}),
     ...(envConfig ? { env: envConfig } : {}),
     ...(limits ? { limits } : {})
   };
@@ -162,6 +167,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     ? fromDenyShape(denySources.map(toDenyShape).reduce(mergeDenyShapes))
     : undefined;
   const labels = normalizePolicyLabels(config.labels);
+  const operations = normalizePolicyOperations(config.operations);
   const auth = normalizePolicyAuth(config.auth);
   const keychain = normalizePolicyKeychain(config.keychain);
   const defaultStance = normalizePolicyDefault(config.default);
@@ -178,6 +184,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     deny,
     ...(danger ? { danger } : {}),
     ...(labels ? { labels } : {}),
+    ...(operations ? { operations } : {}),
     ...(envConfig ? { env: envConfig } : {}),
     ...(limits ? { limits } : {})
   };
@@ -1059,6 +1066,36 @@ function normalizeLabelList(value: unknown): string[] | undefined {
     return normalized ? [normalized] : [];
   }
   return undefined;
+}
+
+function normalizePolicyOperations(
+  operations?: PolicyConfig['operations']
+): PolicyConfig['operations'] | undefined {
+  if (!operations || typeof operations !== 'object' || Array.isArray(operations)) {
+    return undefined;
+  }
+
+  const result: PolicyOperations = {};
+  for (const [key, value] of Object.entries(operations)) {
+    const normalizedKey = String(key).trim();
+    const normalizedValue = String(value).trim();
+    if (normalizedKey && normalizedValue) {
+      result[normalizedKey] = normalizedValue;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function mergePolicyOperations(
+  base?: PolicyConfig['operations'],
+  incoming?: PolicyConfig['operations']
+): PolicyConfig['operations'] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+
+  return { ...(base ?? {}), ...(incoming ?? {}) };
 }
 
 function mergePolicyLabels(
