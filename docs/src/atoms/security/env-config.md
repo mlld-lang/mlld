@@ -34,7 +34,9 @@ env @sandbox [
 | `net` | `"none"`, `"host"`, `"limited"` | Network restrictions |
 | `limits` | `{ mem, cpu, timeout }` | Resource limits |
 | `auth` | `"credential-name"` | Auth reference from policy |
-| `tools` | `["Read", "Write"]` | Tool restrictions |
+| `tools` | `["Read", "Write"]` | MCP tool routing (does not block commands) |
+
+**Note:** The `tools` field routes MCP tool calls, not command execution. To block commands, use `policy.capabilities.deny`.
 
 **Filesystem mounts:**
 

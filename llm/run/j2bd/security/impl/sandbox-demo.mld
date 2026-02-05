@@ -17,7 +17,7 @@
 >> Tools scoped to Read and Write. Shell access blocked by policy deny:['sh'].
 var @sandbox = {
   provider: "@mlld/env-docker",
-  tools: ["Read", "Write"],
+  tools: ["Read", "Write"],  // MCP tool routing (see policy for command blocking)
   fs: { read: [".:/app"], write: ["/tmp"] },
   net: "none",
   mcps: []
