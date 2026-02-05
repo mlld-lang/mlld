@@ -53,6 +53,9 @@ WithProperty
   / "tools" _ ":" _ tools:Expression {
       return ["tools", tools];
     }
+  / "profile" _ ":" _ profile:Expression {
+      return ["profile", profile];
+    }
   / "asSection" _ ":" _ title:AsSectionRenameString {
       return ["asSection", title];
     }

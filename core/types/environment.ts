@@ -7,6 +7,9 @@ export type EnvironmentConfig = {
   taint?: DataLabel[];
   name?: string;
   from?: string;
+  profile?: string;
+  profiles?: Record<string, unknown>;
+  mcpConfig?: unknown;
   tools?: ToolCollection | string[];
   [key: string]: unknown;
 };
