@@ -16,15 +16,25 @@ let provider: KeychainProvider | null = null;
 
 export function getKeychainProvider(): KeychainProvider {
   if (!provider) {
-    if (process.platform !== 'darwin') {
+    if (process.platform === 'darwin') {
+      // Import MacOS provider lazily
+      const { MacOSKeychainProvider } = require('./keychain-macos');
+      provider = new MacOSKeychainProvider();
+    } else if (process.platform === 'linux') {
+      const { LinuxKeychainProvider, isSecretToolAvailable } = require('./keychain-linux');
+      if (!isSecretToolAvailable()) {
+        throw new MlldInterpreterError(
+          'Keychain on Linux requires secret-tool (libsecret).',
+          { code: 'KEYCHAIN_UNAVAILABLE' }
+        );
+      }
+      provider = new LinuxKeychainProvider();
+    } else {
       throw new MlldInterpreterError(
-        'Keychain requires macOS. Linux support planned for v1.1.',
+        'Keychain is supported on macOS and Linux only.',
         { code: 'KEYCHAIN_UNAVAILABLE' }
       );
     }
-    // Import MacOS provider lazily
-    const { MacOSKeychainProvider } = require('./keychain-macos');
-    provider = new MacOSKeychainProvider();
   }
   return provider;
 }
