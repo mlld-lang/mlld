@@ -28,19 +28,16 @@ show @createIssue("title", @key)
 
 The guard fires before any exe operation that receives secret-labeled data. Since `@key` carries the `secret` label, the MCP tool call is denied.
 
-**Audit MCP tool usage:**
+**Validate MCP tool output:**
 
 ```mlld
-guard @auditMcp after op:exe = when [
-  @mx.taint.includes("src:mcp") => [
-    log `MCP call: @mx.op.name returned @output`
-    allow
-  ]
+guard @validateMcp after op:exe = when [
+  @mx.taint.includes("src:mcp") && @output.error => deny "MCP tool returned error"
   * => allow
 ]
 ```
 
-After-guards run after the tool returns. The output already carries `src:mcp` taint and `mcp:<tool-name>` in its sources array.
+After-guards run after the tool returns. The output already carries `src:mcp` taint and `mcp:<tool-name>` in its sources array. Guards support single actions (allow, deny, retry) per branch—for complex audit logic with multiple statements like logging, use a wrapper exe function instead of a guard.
 
 **Guard context for MCP calls:**
 
