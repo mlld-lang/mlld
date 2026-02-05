@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Policy defaults `autoverify`**: Prepend verify instructions for signed variables passed to llm-labeled executables and set `MLLD_VERIFY_VARS`
 - **Security audit log events**: Records sign/verify, label/bless, and file write taint entries in `.mlld/sec/audit.jsonl`
 - **Security audit log index**: Loads and caches write-taint entries for file read lookups
+- **Audit taint propagation for file reads**: Load content and imports merge prior file write taint from the audit log
 - **Optional load syntax:** `<file.md>?` and `<**/*.md>?` returns null or empty array if file or glob results don't exist
 - **`claude-poll` debug hooks**: `MLLD_DEBUG_CLAUDE_POLL` emits poll diagnostics and `MLLD_CLAUDE_POLL_LOG` captures `claude` output
 - **Executor stdin debug flag**: `MLLD_DEBUG_EXEC_IO` logs stdin write failures with byte counts

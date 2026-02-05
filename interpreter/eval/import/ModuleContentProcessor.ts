@@ -12,6 +12,7 @@ import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
+import { getAuditFileDescriptor } from '@core/security/AuditLogIndex';
 import type { SerializedGuardDefinition } from '../../guards';
 import type { NeedsDeclaration, ProfilesDeclaration } from '@core/policy/needs';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
@@ -84,8 +85,18 @@ export class ModuleContentProcessor {
           sources: [resolvedPath]
         })
       : undefined;
-    const combinedDescriptor = fileDescriptor
-      ? mergeDescriptors(importDescriptor, fileDescriptor)
+    const auditDescriptor = !isURL
+      ? await getAuditFileDescriptor(
+          this.env.getFileSystemService(),
+          this.env.getProjectRoot(),
+          resolvedPath
+        )
+      : undefined;
+    const fileDescriptorWithAudit = auditDescriptor
+      ? mergeDescriptors(fileDescriptor, auditDescriptor)
+      : fileDescriptor;
+    const combinedDescriptor = fileDescriptorWithAudit
+      ? mergeDescriptors(importDescriptor, fileDescriptorWithAudit)
       : importDescriptor;
     if (combinedDescriptor) {
       this.env.recordSecurityDescriptor(combinedDescriptor);
@@ -204,8 +215,19 @@ export class ModuleContentProcessor {
             sources: [ref]
           })
         : undefined;
-    const combinedDescriptor = fileDescriptor
-      ? mergeDescriptors(importDescriptor, fileDescriptor)
+    const auditDescriptor =
+      ref && !this.isUrlLike(ref) && !ref.startsWith('@')
+        ? await getAuditFileDescriptor(
+            this.env.getFileSystemService(),
+            this.env.getProjectRoot(),
+            ref
+          )
+        : undefined;
+    const fileDescriptorWithAudit = auditDescriptor
+      ? mergeDescriptors(fileDescriptor, auditDescriptor)
+      : fileDescriptor;
+    const combinedDescriptor = fileDescriptorWithAudit
+      ? mergeDescriptors(importDescriptor, fileDescriptorWithAudit)
       : importDescriptor;
     if (combinedDescriptor) {
       this.env.recordSecurityDescriptor(combinedDescriptor);

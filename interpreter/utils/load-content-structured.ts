@@ -5,7 +5,7 @@ import {
   type LoadContentResultURL
 } from '@core/types/load-content';
 import { MlldError, ErrorSeverity } from '@core/errors';
-import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import {
   getVariableMetadata,
@@ -88,20 +88,23 @@ function isProbablyURL(input: string): boolean {
 }
 
 function buildLoadSecurityDescriptor(result: LoadContentResult) {
+  const override = (result as { __security?: SecurityDescriptor }).__security;
   if (!result.absolute) {
-    return undefined;
+    return override;
   }
   if (isProbablyURL(result.absolute)) {
-    return makeSecurityDescriptor({
+    const derived = makeSecurityDescriptor({
       taint: ['src:network'],
       sources: [result.absolute]
     });
+    return override ? mergeDescriptors(derived, override) : derived;
   }
   const dirLabels = labelsForPath(result.absolute);
-  return makeSecurityDescriptor({
+  const derived = makeSecurityDescriptor({
     taint: ['src:file', ...dirLabels],
     sources: [result.absolute]
   });
+  return override ? mergeDescriptors(derived, override) : derived;
 }
 
 function buildMetadata(base?: StructuredValueMetadata, extra?: StructuredValueMetadata): StructuredValueMetadata | undefined {

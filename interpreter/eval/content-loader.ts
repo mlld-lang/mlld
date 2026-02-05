@@ -17,6 +17,7 @@ import type { StructuredValue, StructuredValueType, StructuredValueMetadata } fr
 import { InterpolationContext } from '../core/interpolation-context';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
+import { getAuditFileDescriptor } from '@core/security/AuditLogIndex';
 import { extractVariableValue } from '../utils/variable-resolution';
 import { isLoadContentResult } from '@core/types/load-content';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
@@ -444,7 +445,15 @@ export async function processContentLoader(node: any, env: Environment): Promise
       taint: ['src:file', ...labelsForPath(resolvedFilePath)],
       sources: [resolvedFilePath]
     });
-    const fileSecurityDescriptor = policyEnforcer.applyDefaultTrustLabel(fileDescriptor) ?? fileDescriptor;
+    const auditDescriptor = await getAuditFileDescriptor(
+      env.getFileSystemService(),
+      env.getProjectRoot(),
+      resolvedFilePath
+    );
+    const mergedDescriptor = auditDescriptor
+      ? mergeDescriptors(fileDescriptor, auditDescriptor)
+      : fileDescriptor;
+    const fileSecurityDescriptor = policyEnforcer.applyDefaultTrustLabel(mergedDescriptor) ?? mergedDescriptor;
     const securityMetadata = { security: fileSecurityDescriptor };
     const result = await loadSingleFile(
       pathOrUrl,
@@ -718,6 +727,26 @@ async function loadGlobPattern(
   }
 
   const computeRelative = (filePath: string): string => formatRelativePath(env, filePath);
+  const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
+  const buildFileSecurityDescriptor = async (filePath: string): Promise<SecurityDescriptor> => {
+    const fileDescriptor = makeSecurityDescriptor({
+      taint: ['src:file', ...labelsForPath(filePath)],
+      sources: [filePath]
+    });
+    const auditDescriptor = await getAuditFileDescriptor(
+      env.getFileSystemService(),
+      env.getProjectRoot(),
+      filePath
+    );
+    const mergedDescriptor = auditDescriptor
+      ? mergeDescriptors(fileDescriptor, auditDescriptor)
+      : fileDescriptor;
+    return policyEnforcer.applyDefaultTrustLabel(mergedDescriptor) ?? mergedDescriptor;
+  };
+  const attachSecurity = <T extends LoadContentResult>(result: T, descriptor: SecurityDescriptor): T => {
+    (result as { __security?: SecurityDescriptor }).__security = descriptor;
+    return result;
+  };
 
   // Use tinyglobby to find matching files
   let matches: string[];
@@ -742,6 +771,7 @@ async function loadGlobPattern(
   for (const filePath of matches) {
     try {
       const rawContent = await readFileWithPolicy(filePath, env, sourceLocation);
+      const fileSecurityDescriptor = await buildFileSecurityDescriptor(filePath);
       
       // Check if this is an HTML file
       if (filePath.endsWith('.html') || filePath.endsWith('.htm')) {
@@ -790,7 +820,7 @@ async function loadGlobPattern(
                                  doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
 
               // Use HTML result to preserve metadata
-              results.push(new LoadContentResultHTMLImpl({
+              results.push(attachSecurity(new LoadContentResultHTMLImpl({
                 content: sectionContent,
                 rawHtml: rawContent,
                 filename: path.basename(filePath),
@@ -798,7 +828,7 @@ async function loadGlobPattern(
                 absolute: filePath,
                 title: title || undefined,
                 description: description || undefined
-              }));
+              }), fileSecurityDescriptor));
             }
           } catch (error: any) {
             // Skip files without the requested section
@@ -813,7 +843,7 @@ async function loadGlobPattern(
           const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
                              doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
           
-          results.push(new LoadContentResultHTMLImpl({
+          results.push(attachSecurity(new LoadContentResultHTMLImpl({
             content: markdownContent,
             rawHtml: rawContent,
             filename: path.basename(filePath),
@@ -821,7 +851,7 @@ async function loadGlobPattern(
             absolute: filePath,
             title: title || undefined,
             description: description || undefined
-          }));
+          }), fileSecurityDescriptor));
         }
       } else {
         // Non-HTML file handling
@@ -860,13 +890,13 @@ async function loadGlobPattern(
               results.push(sectionContent as any); // Type assertion needed because results is LoadContentResult[]
             } else {
               // Create result with section content, preserving raw content for frontmatter
-              results.push(new LoadContentResultImpl({
+              results.push(attachSecurity(new LoadContentResultImpl({
                 content: sectionContent,
                 filename: path.basename(filePath),
                 relative: computeRelative(filePath),
                 absolute: filePath,
                 _rawContent: rawContent
-              }));
+              }), fileSecurityDescriptor));
             }
           } catch (error: any) {
             // Skip files without the requested section
@@ -874,12 +904,12 @@ async function loadGlobPattern(
           }
         } else {
           // No section extraction, include full content
-          results.push(new LoadContentResultImpl({
+          results.push(attachSecurity(new LoadContentResultImpl({
             content: rawContent,
             filename: path.basename(filePath),
             relative: computeRelative(filePath),
             absolute: filePath
-          }));
+          }), fileSecurityDescriptor));
         }
       }
     } catch (error: any) {
