@@ -73,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **`no-sensitive-exfil`**: Policy rule blocks sensitive data from flowing to `exfil` operations without requiring `untrusted`.
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
 - **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.

@@ -196,10 +196,10 @@ function checkBuiltinPolicyRules(
         matched: 'exfil'
       };
     }
-    if (rule === 'no-sensitive-exfil' && hasSensitive && hasUntrusted && hasExfil) {
+    if (rule === 'no-sensitive-exfil' && hasSensitive && hasExfil) {
       return {
         allowed: false,
-        reason: "Label 'sensitive' cannot flow to 'exfil' when untrusted",
+        reason: "Label 'sensitive' cannot flow to 'exfil'",
         rule: 'policy.defaults.rules.no-sensitive-exfil',
         label: 'sensitive',
         matched: 'exfil'

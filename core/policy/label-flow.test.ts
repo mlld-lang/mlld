@@ -21,24 +21,14 @@ describe('checkLabelFlow defaults', () => {
     expect(result.rule).toBe('policy.defaults.rules.no-secret-exfil');
   });
 
-  it('blocks sensitive exfiltration only when untrusted', () => {
+  it('blocks sensitive exfiltration when enabled', () => {
     const policy: PolicyConfig = {
       defaults: { rules: ['no-sensitive-exfil'] }
     };
 
-    const allowed = checkLabelFlow(
-      {
-        inputTaint: ['sensitive'],
-        opLabels: ['exfil'],
-        exeLabels: []
-      },
-      policy
-    );
-    expect(allowed.allowed).toBe(true);
-
     const denied = checkLabelFlow(
       {
-        inputTaint: ['sensitive', 'untrusted'],
+        inputTaint: ['sensitive'],
         opLabels: ['exfil'],
         exeLabels: []
       },

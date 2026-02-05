@@ -425,16 +425,9 @@ function makeSensitiveExfilGuard(): PolicyGuardSpec {
       if (!hasMatchingLabel(opLabels, 'exfil')) {
         return { decision: 'allow' };
       }
-      const inputLabels = [
-        ...(input?.labels ?? []),
-        ...(input?.taint ?? [])
-      ];
-      if (!hasMatchingLabel(inputLabels, 'untrusted')) {
-        return { decision: 'allow' };
-      }
       return {
         decision: 'deny',
-        reason: "Label 'sensitive' cannot flow to 'exfil' when untrusted"
+        reason: "Label 'sensitive' cannot flow to 'exfil'"
       };
     }
   };
