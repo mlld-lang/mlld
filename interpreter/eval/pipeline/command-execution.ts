@@ -34,7 +34,7 @@ import { resolveWorkingDirectory } from '../../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { collectInputDescriptor, descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
-import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import {
   applyEnvironmentDefaults,
   buildEnvironmentOutputDescriptor,
@@ -1130,6 +1130,21 @@ export async function executeCommandVariable(
     // Always pass pipeline input as stdin when available
     const usingParts = await resolveUsingEnvParts(execEnv, execDef.withClause);
     const envAuthSecrets = await resolveEnvironmentAuthSecrets(execEnv, resolvedEnvConfig);
+    const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
+    const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
+    const envInputTaint = descriptorToInputTaint(envInputDescriptor);
+    if (envInputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint: envInputTaint,
+          opLabels,
+          exeLabels,
+          flowChannel: 'using',
+          command: parsedCommand.command
+        },
+        { env, sourceLocation: policyLocation }
+      );
+    }
     let commandOutput: unknown;
     if (resolvedEnvConfig?.provider) {
       const providerResult = await executeProviderCommand({

@@ -80,10 +80,6 @@ export function checkLabelFlow(
     return { allowed: true };
   }
 
-  if (ctx.flowChannel === 'using') {
-    return { allowed: true };
-  }
-
   const resolvedInput = resolveInputTaint(ctx.inputTaint, policy);
   const inputTaint = resolvedInput.effective;
   if (inputTaint.length === 0) {

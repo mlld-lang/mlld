@@ -61,10 +61,10 @@ import type { WhenExpressionNode } from '@core/types/when';
 import { handleExecGuardDenial } from './guard-denial-handler';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
-import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
-import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import { SignatureStore } from '@core/security/SignatureStore';
 import {
   applyEnvironmentDefaults,
@@ -2907,6 +2907,21 @@ async function evaluateExecInvocationInternal(
     }
     const usingParts = await resolveUsingEnvParts(execEnv, definition.withClause, node.withClause);
     const envAuthSecrets = await resolveEnvironmentAuthSecrets(execEnv, resolvedEnvConfig);
+    const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
+    const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
+    const envInputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(envInputDescriptor));
+    if (envInputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint: envInputTaint,
+          opLabels,
+          exeLabels,
+          flowChannel: 'using',
+          command: parsedCommand.command
+        },
+        { env, sourceLocation: node.location }
+      );
+    }
     const injectedEnv = {
       ...envAuthSecrets,
       ...usingParts.merged

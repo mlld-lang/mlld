@@ -3,7 +3,9 @@ import type { AuthConfig, PolicyConfig } from '@core/policy/union';
 import type { Environment } from '@interpreter/env/Environment';
 import { MlldInterpreterError } from '@core/errors';
 import { getKeychainProvider } from '@core/resolvers/builtin/KeychainResolver';
+import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { coerceValueForStdin } from '@interpreter/utils/shell-value';
+import { extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { enforceKeychainAccess, requireKeychainProjectName } from '@interpreter/policy/keychain-policy';
 
@@ -13,6 +15,7 @@ export type UsingEnvParts = {
   vars: Record<string, string>;
   secrets: Record<string, string>;
   merged: Record<string, string>;
+  descriptor?: SecurityDescriptor;
 };
 
 export async function resolveUsingEnv(
@@ -30,6 +33,14 @@ export async function resolveUsingEnvParts(
   const vars: Record<string, string> = {};
   const secrets: Record<string, string> = {};
   const merged: Record<string, string> = {};
+  let descriptor: SecurityDescriptor | undefined;
+
+  const mergeDescriptor = (next?: SecurityDescriptor): void => {
+    if (!next) {
+      return;
+    }
+    descriptor = descriptor ? mergeDescriptors(descriptor, next) : next;
+  };
 
   for (const withClause of withClauses) {
     if (!withClause) {
@@ -42,6 +53,7 @@ export async function resolveUsingEnvParts(
         secrets[key] = value;
         merged[key] = value;
       }
+      mergeDescriptor(buildAuthDescriptor(withClause.auth));
     }
 
     if ((withClause as { using?: UsingConfig }).using) {
@@ -54,6 +66,7 @@ export async function resolveUsingEnvParts(
           code: 'USING_VARIABLE_NOT_FOUND'
         });
       }
+      mergeDescriptor(extractSecurityDescriptor(variable, { recursive: true, mergeArrayElements: true }));
       const value = await extractVariableValue(variable, env);
       const coerced = coerceValueForStdin(value);
       vars[envName] = coerced;
@@ -61,7 +74,22 @@ export async function resolveUsingEnvParts(
     }
   }
 
-  return { vars, secrets, merged };
+  return { vars, secrets, merged, descriptor };
+}
+
+export function buildAuthDescriptor(auth: unknown): SecurityDescriptor | undefined {
+  if (auth === undefined || auth === null) {
+    return undefined;
+  }
+  const entries = Array.isArray(auth) ? auth : [auth];
+  if (entries.length === 0) {
+    return undefined;
+  }
+  const sources = entries.map(entry => `auth:${normalizeAuthName(entry)}`);
+  return makeSecurityDescriptor({
+    labels: ['secret'],
+    sources
+  });
 }
 
 export async function resolveAuthSecrets(

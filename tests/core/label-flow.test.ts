@@ -52,7 +52,7 @@ describe('label flow', () => {
     expect(result.allowed).toBe(true);
   });
 
-  it('skips label checks for using flows', () => {
+  it('enforces label checks for using flows', () => {
     const policy: PolicyConfig = {
       labels: {
         secret: {
@@ -71,6 +71,6 @@ describe('label flow', () => {
       policy
     );
 
-    expect(result.allowed).toBe(true);
+    expect(result.allowed).toBe(false);
   });
 });

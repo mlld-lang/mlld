@@ -35,8 +35,8 @@ import { coerceValueForStdin } from '../utils/shell-value';
 import { resolveDirectiveExecInvocation } from './directive-replay';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
-import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
-import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
+import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import {
   applyEnvironmentDefaults,
@@ -566,6 +566,21 @@ export async function evaluateRun(
 
     const usingParts = await resolveUsingEnvParts(env, withClause);
     const envAuthSecrets = await resolveEnvironmentAuthSecrets(env, resolvedEnvConfig);
+    const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
+    const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
+    const envInputTaint = descriptorToInputTaint(envInputDescriptor);
+    if (policyChecksEnabled && envInputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint: envInputTaint,
+          opLabels,
+          exeLabels: Array.from(env.getEnclosingExeLabels()),
+          flowChannel: 'using',
+          command: parsedCommand.command
+        },
+        { env, sourceLocation: directive.location }
+      );
+    }
     if (resolvedEnvConfig?.provider) {
       const providerResult = await executeProviderCommand({
         env,
@@ -1049,6 +1064,21 @@ export async function evaluateRun(
       // Pass context for exec command errors too
       const usingParts = await resolveUsingEnvParts(tempEnv, definition.withClause, withClause);
       const envAuthSecrets = await resolveEnvironmentAuthSecrets(tempEnv, resolvedEnvConfig);
+      const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
+      const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
+      const envInputTaint = descriptorToInputTaint(envInputDescriptor);
+      if (policyChecksEnabled && envInputTaint.length > 0) {
+        policyEnforcer.checkLabelFlow(
+          {
+            inputTaint: envInputTaint,
+            opLabels,
+            exeLabels,
+            flowChannel: 'using',
+            command: parsedCommand.command
+          },
+          { env, sourceLocation: directive.location }
+        );
+      }
       if (resolvedEnvConfig?.provider) {
         const providerResult = await executeProviderCommand({
           env: tempEnv,
