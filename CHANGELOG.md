@@ -76,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`no-sensitive-exfil`**: Policy rule blocks sensitive data from flowing to `exfil` operations without requiring `untrusted`.
 - Security docs and fixtures cover defaults.rules enforcement for `exfil`, `destructive`, and `privileged` flows.
 - Policy capability denies enforce interpolated command checks for `/run` and exec invocations, and code execution respects allow/deny for `sh`, `js`, `node`, `py`, and `prose`.
+- Policy capability docs and fixtures cover interpolated command matching, network denies, and run/exec code blocks.
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
 - **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.

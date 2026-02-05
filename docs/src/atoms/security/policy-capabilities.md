@@ -33,6 +33,8 @@ run cmd { git status }
 | `cmd:npm:install:*` | npm install with any args |
 | `sh` | Shell access |
 
+Command allow/deny patterns evaluate against the interpolated command text, including `@var` substitutions.
+
 **Filesystem patterns:**
 
 | Pattern | Access |
