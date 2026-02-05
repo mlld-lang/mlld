@@ -64,17 +64,23 @@ Each atom should be 100-200 words with at least one working code example that pa
 Create working demonstration of the full audit guard pattern:
 
 - [ ] Signed audit template that can be verified
+- [ ] Policy with `autoverify: true` to inject verify instructions
+- [ ] **Enforcement guard** that blocks if auditor doesn't call verify tool (autoverify injects instructions but doesn't enforce)
+- [ ] Policy with `untrusted-llms-get-influenced` rule to auto-label LLM outputs
 - [ ] First agent that processes untrusted data (outputs get `influenced` label)
 - [ ] Auditor agent that verifies its own instructions before trusting them
 - [ ] Guard that blocks action if audit fails or verification fails
 - [ ] End-to-end flow showing: untrusted input → influenced output → audit → action/rejection
 
+**Critical:** `autoverify: true` prepends verification instructions to the prompt, but doesn't guarantee the LLM will follow them. You MUST add an enforcement guard that checks whether the LLM actually called the verify tool.
+
 ### Phase 3: Verification & Remediation
 
 - [ ] Run the target example code end-to-end
-- [ ] Verify `influenced` label is applied to LLM outputs
+- [ ] Verify `influenced` label is applied when `untrusted-llms-get-influenced` rule is enabled
 - [ ] Verify `sign` and `verify` directives work
-- [ ] Verify `autoverify` policy triggers verification automatically
+- [ ] Verify `autoverify` policy injects verification instructions into prompts
+- [ ] **Verify enforcement guard blocks execution if verify tool not called**
 - [ ] Test injection attack is detected (tampered instructions don't verify)
 - [ ] Identify any gaps in mlld that prevent the example from working
 - [ ] Create friction tickets for gaps; fix or escalate as needed
@@ -117,13 +123,21 @@ exe llm @audit(content, criteria) = [
   => run cmd { claude -p "@prompt" }
 ]
 
->> Policy enables auto-verify for llm-labeled exes
+>> Policy enables auto-verify for llm-labeled exes AND influenced label
 policy @config = {
   defaults: {
     autosign: ["templates"],
-    autoverify: true
+    autoverify: true,
+    rules: ["untrusted-llms-get-influenced"]  # Auto-label LLM outputs
   }
 }
+
+>> CRITICAL: Add enforcement guard to ensure verify actually happens
+>> autoverify injects instructions but doesn't enforce - this guard does
+guard @ensureVerified after llm = when [
+  @mx.tools.calls.includes("verify") => allow
+  * => retry "Must verify signed instructions before proceeding"
+]
 
 >> Step 4: Run audit
 var @auditResult = @audit(@processed, @auditCriteria)

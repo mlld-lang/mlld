@@ -10,6 +10,23 @@ I want to run Claude Code (or similar) with restricted capabilities:
 4. Network access limited or disabled
 5. Credentials injected securely (not visible to agent as strings)
 
+## Design Constraints
+
+**Understanding Enforcement Layers:**
+
+1. **Tool restrictions** - The `tools: ["Read", "Write"]` field in environment config is passed to Claude Code as configuration. Whether mlld enforces this or relies on the agent to respect it needs clarification in the spec.
+
+2. **Command capabilities** - Blocking shell access (`sh`, `bash`) is enforced via `policy.capabilities.deny: ["sh"]`, which mlld enforces with runtime guards. This is separate from tool restrictions.
+
+3. **Filesystem/network** - With Docker provider, `fs` and `net` restrictions are enforced by Docker (container mounts, network modes). mlld trusts the provider to enforce these OS-level restrictions.
+
+4. **Credentials** - The `using auth:*` syntax provides a **structural guarantee**: credentials flow from keychain → env var without ever becoming interpolatable variables. This isn't a runtime check - it's impossible to interpolate what doesn't exist as a variable.
+
+**Phase 3 should clarify:**
+- Which restrictions are enforced by mlld (policy capabilities)
+- Which are enforced by provider (filesystem, network)
+- Which are configuration hints passed to agents (tools field)
+
 ## Key Atoms Needed
 
 - env-overview (shared with package-env job)
@@ -68,15 +85,17 @@ Create working sandbox demonstration:
 Red team testing to PROVE restrictions work (not just that they look correct):
 
 - [ ] Artifact runs end-to-end without error (`mlld sandbox-demo.mld` succeeds)
-- [ ] Tool restrictions PROVEN: Create test that attempts Bash inside env block, verify it is BLOCKED
-- [ ] Filesystem limits PROVEN: Create test that attempts write outside allowed paths, verify it is BLOCKED
-- [ ] Network restrictions PROVEN: Create test that attempts network request with `net: "none"`, verify it is BLOCKED
-- [ ] Credential protection PROVEN: Create test that attempts to `show` or interpolate a secret, verify it is BLOCKED
+- [ ] **Shell access BLOCKED** (mlld-enforced): Test `run sh { ... }` inside env with `policy.capabilities.deny: ["sh"]`, verify mlld blocks it
+- [ ] **Command restrictions BLOCKED** (mlld-enforced): Test commands not in `allow` list, verify policy guards block them
+- [ ] **Filesystem limits BLOCKED** (provider-enforced): Test write outside mounted paths with Docker, verify container enforcement works
+- [ ] **Network disabled** (provider-enforced): Test network request with `net: "none"`, verify Docker container has no network
+- [ ] **Credential protection** (structural): Verify credentials flow via `using auth:*` and cannot be accessed as variables (not a runtime block - structural impossibility)
 
 Each test must include:
 - The exact mlld code run
-- The expected behavior (should be blocked)
-- The actual output (proving it was blocked)
+- The expected behavior (should be blocked or unavailable)
+- The actual output (proving enforcement)
+- Which layer enforces it (mlld policy, provider, or structural)
 
 ### Exit Criteria
 
