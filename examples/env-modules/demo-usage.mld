@@ -1,0 +1,4 @@
+/import { @spawn, @shell } from "./claude-dev/index.mld"
+
+/var @result = @spawn("What is 2+2?")
+/show @result
