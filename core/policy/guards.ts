@@ -523,6 +523,15 @@ function isDenied(
   const denyValue = deny[capability];
   if (denyValue === true) return true;
   if (Array.isArray(denyValue) && denyValue.includes('*')) return true;
+  // Handle normalized network structure: { domains: Set(['*']) }
+  if (denyValue && typeof denyValue === 'object' && !Array.isArray(denyValue)) {
+    const obj = denyValue as Record<string, unknown>;
+    if ('domains' in obj) {
+      const domains = obj.domains;
+      if (domains instanceof Set && domains.has('*')) return true;
+      if (Array.isArray(domains) && domains.includes('*')) return true;
+    }
+  }
   return false;
 }
 
