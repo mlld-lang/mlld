@@ -1,4 +1,7 @@
 import { describe, it, beforeEach, afterEach, expect } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import type { ExecInvocation } from '@core/types';
 import { Environment } from '../env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
@@ -12,11 +15,17 @@ import type { VariableSource } from '@core/types/variable';
 
 describe('evaluateExecInvocation (structured)', () => {
   let env: Environment;
+  let tempDir: string;
 
   beforeEach(async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-exec-invocation-'));
+    fs.writeFileSync(
+      path.join(tempDir, 'mlld-config.json'),
+      JSON.stringify({ projectname: 'demo' }, null, 2)
+    );
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
-    env = new Environment(fileSystem, pathService, '/');
+    env = new Environment(fileSystem, pathService, tempDir);
 
     const source = `
 /exe @emitText() = js { return 'hello' }
@@ -26,6 +35,10 @@ describe('evaluateExecInvocation (structured)', () => {
 `;
     const { ast } = await parse(source);
     await evaluate(ast, env);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
   it('wraps plain exec output when structured flag is enabled', async () => {
@@ -255,6 +268,10 @@ describe('evaluateExecInvocation (structured)', () => {
   });
 
   it('labels keychain get output as secret', async () => {
+    env.recordPolicyConfig('policy', {
+      capabilities: { danger: ['@keychain'] },
+      keychain: { allow: ['mlld-env-{projectname}/*'] }
+    });
     const source: VariableSource = {
       directive: 'var',
       syntax: 'expression',
@@ -285,7 +302,7 @@ describe('evaluateExecInvocation (structured)', () => {
         nodeId: 'kc-get-ref',
         identifier: 'kcGet',
         args: [
-          { type: 'Text', content: 'service' } as any,
+          { type: 'Text', content: 'mlld-env-demo' } as any,
           { type: 'Text', content: 'account' } as any
         ]
       }

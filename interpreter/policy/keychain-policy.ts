@@ -14,11 +14,7 @@ export type KeychainAccess = {
   action?: KeychainAction;
 };
 
-export function enforceKeychainAccess(
-  env: Environment,
-  access?: KeychainAccess,
-  sourceLocation?: SourceLocation
-): void {
+export function requireKeychainProjectName(env: Environment): string {
   const projectName = env.getProjectConfig()?.getProjectName();
   if (!projectName || !isValidProjectName(projectName)) {
     throw new MlldInterpreterError(
@@ -26,6 +22,15 @@ export function enforceKeychainAccess(
       { code: 'PROJECT_NAME_REQUIRED' }
     );
   }
+  return projectName;
+}
+
+export function enforceKeychainAccess(
+  env: Environment,
+  access?: KeychainAccess,
+  sourceLocation?: SourceLocation
+): void {
+  const projectName = requireKeychainProjectName(env);
   const policy = env.getPolicySummary();
   if (!policy) {
     return;

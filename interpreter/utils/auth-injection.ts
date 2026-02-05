@@ -5,7 +5,7 @@ import { MlldInterpreterError } from '@core/errors';
 import { getKeychainProvider } from '@core/resolvers/builtin/KeychainResolver';
 import { coerceValueForStdin } from '@interpreter/utils/shell-value';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
-import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
+import { enforceKeychainAccess, requireKeychainProjectName } from '@interpreter/policy/keychain-policy';
 
 type UsingConfig = { var?: unknown; as?: unknown };
 
@@ -115,14 +115,16 @@ function getAuthConfig(policy: PolicyConfig | undefined, name: string): AuthConf
 async function resolveAuthValue(source: string, env: Environment): Promise<string> {
   if (source.startsWith('keychain:')) {
     const path = source.slice('keychain:'.length);
-    const [service, ...rest] = path.split('/');
+    const projectName = requireKeychainProjectName(env);
+    const expandedPath = expandProjectName(path, projectName);
+    const [service, ...rest] = expandedPath.split('/');
     const account = rest.join('/');
     if (!service || !account) {
       throw new MlldInterpreterError(`Invalid keychain path '${source}'`, {
         code: 'KEYCHAIN_PATH_INVALID'
       });
     }
-    enforceKeychainAccess(env);
+    enforceKeychainAccess(env, { service, account, action: 'get' });
     const provider = getKeychainProvider();
     const value = await provider.get(service, account);
     if (value === null || value === undefined) {
@@ -152,6 +154,13 @@ async function resolveAuthValue(source: string, env: Environment): Promise<strin
   throw new MlldInterpreterError(`Unsupported auth source '${source}'`, {
     code: 'AUTH_SOURCE_INVALID'
   });
+}
+
+function expandProjectName(path: string, projectName: string): string {
+  if (!path) {
+    return '';
+  }
+  return path.split('{projectname}').join(projectName);
 }
 
 function normalizeEnvName(value: unknown): string {

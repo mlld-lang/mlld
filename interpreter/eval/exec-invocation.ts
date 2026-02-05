@@ -63,6 +63,7 @@ import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
+import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import { SignatureStore } from '@core/security/SignatureStore';
 import {
@@ -1601,11 +1602,25 @@ async function evaluateExecInvocationInternal(
           evaluatedArgs.push(String(evalArg));
         }
       }
+      const keychainFunction = variable.internal?.keychainFunction;
+      if (keychainFunction) {
+        const service = String(evaluatedArgs[0] ?? '');
+        const account = String(evaluatedArgs[1] ?? '');
+        if (!service || !account) {
+          throw new MlldInterpreterError('Keychain access requires service and account', {
+            code: 'KEYCHAIN_PATH_INVALID'
+          });
+        }
+        enforceKeychainAccess(
+          env,
+          { service, account, action: keychainFunction },
+          node.location ? astLocationToSourceLocation(node.location) : undefined
+        );
+      }
       const result = await variable.internal.transformerImplementation(evaluatedArgs);
       const normalized = normalizeTransformerResult(commandName, result);
       let resolvedValue = normalized.value;
       const wrapOptions = normalized.options;
-      const keychainFunction = variable.internal?.keychainFunction;
 
       if (keychainFunction === 'get' && resolvedValue !== null && resolvedValue !== undefined) {
         const keychainDescriptor = makeSecurityDescriptor({

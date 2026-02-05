@@ -5,7 +5,7 @@ import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
 import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { MlldCommandExecutionError, MlldSecurityError } from '@core/errors';
+import { MlldCommandExecutionError, MlldSecurityError, MlldInterpreterError } from '@core/errors';
 import type { OperationContext } from '../env/ContextManager';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import { makeSecurityDescriptor } from '@core/types/security';
@@ -37,6 +37,7 @@ import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import {
   applyEnvironmentDefaults,
   buildEnvironmentOutputDescriptor,
@@ -1166,9 +1167,20 @@ export async function evaluateRun(
         }
       }
 
+      const keychainFunction = execVar.internal?.keychainFunction;
+      if (keychainFunction) {
+        const service = String(evaluatedArgs[0] ?? '');
+        const account = String(evaluatedArgs[1] ?? '');
+        if (!service || !account) {
+          throw new MlldInterpreterError('Keychain access requires service and account', {
+            code: 'KEYCHAIN_PATH_INVALID'
+          });
+        }
+        enforceKeychainAccess(env, { service, account, action: keychainFunction }, directive.location);
+      }
+
       // Call the transformer implementation directly with all args
       const result = await execVar.internal.transformerImplementation(evaluatedArgs);
-      const keychainFunction = execVar.internal?.keychainFunction;
       if (keychainFunction === 'get' && result !== null && result !== undefined) {
         const keychainDescriptor = makeSecurityDescriptor({
           labels: ['secret'],
