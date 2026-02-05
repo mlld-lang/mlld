@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security fixtures cover secret label flow for `using` env injection.
 - Security fixtures cover defaults.rules secret flow through exfil-labeled show.
 - Security fixtures cover defaults.rules secret flow through exfil-labeled run interpolation.
+- Audit log docs cover event fields and taint usage.
 - Security fixtures cover audit log write events and taint propagation.
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
