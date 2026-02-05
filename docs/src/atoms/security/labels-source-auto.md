@@ -32,11 +32,11 @@ When loading files, directory labels (`dir:/path`) are also applied for each par
 **File load example:**
 
 ```mlld
-var @config = <./config.txt>
+var @config = <@base/config.txt>
 show @config.mx.taint | @json
 ```
 
-Output includes `["src:file", "dir:/path/to/parent", ...]` - the file source plus all parent directories.
+Output includes `["src:file", "dir:/path/to/parent", ...]` - the file source plus all parent directories. Note: `@base` resolves to the mlld-config.json location, ensuring paths work from any working directory.
 
 **Command execution example:**
 
