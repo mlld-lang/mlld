@@ -5,7 +5,7 @@ brief: Inspect, block, and transform MCP tool calls with guards
 category: security
 parent: security
 tags: [mcp, guards, for secret, src:mcp, security]
-related: [mcp-security, mcp-import, guards-basics, before-guards, after-guards]
+related: [mcp-security, mcp-policy, mcp-import, guards-basics, before-guards, after-guards]
 related-code: [interpreter/eval/exec-invocation.ts, interpreter/eval/guard.ts]
 updated: 2026-02-04
 qa_tier: 2
@@ -37,7 +37,7 @@ guard @validateMcp after op:exe = when [
 ]
 ```
 
-After-guards run after the tool returns. The output already carries `src:mcp` taint and `mcp:<tool-name>` in its sources array. Guards support single actions (allow, deny, retry) per branch—for complex audit logic with multiple statements like logging, use a wrapper exe function instead of a guard.
+After-guards run after the tool returns. The output already carries `src:mcp` taint and `mcp:<tool-name>` in its sources array. The `@output.error` check applies to tools returning structured JSON; for string outputs, use a pattern match instead. Guards support single actions (allow, deny, retry) per branch—for complex audit logic with multiple statements like logging, use a wrapper exe function instead of a guard.
 
 **Guard context for MCP calls:**
 

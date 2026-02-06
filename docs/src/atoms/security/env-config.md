@@ -5,7 +5,7 @@ brief: Configure filesystem, network, limits, and credentials for environments
 category: security
 parent: security
 tags: [environments, configuration, isolation, credentials, limits, mcp]
-related: [env-overview, env-directive, policies]
+related: [env-overview, env-directive, policies, mcp-security, mcp-policy, mcp-guards]
 related-code: [interpreter/eval/env.ts, interpreter/env/Environment.ts, interpreter/eval/env-mcp-config.test.ts]
 updated: 2026-02-05
 ---
@@ -41,6 +41,13 @@ env @sandbox [
 Define an `@mcpConfig()` function to provide profile-based MCP server configuration:
 
 ```mlld
+var @cfg = {
+  profiles: {
+    full: { requires: { sh: true } },
+    readonly: { requires: {} }
+  }
+}
+
 exe @mcpConfig() = when [
   @mx.profile == "full" => {
     servers: [{ command: "mcp-server", tools: "*" }]
@@ -56,7 +63,7 @@ env @cfg with { profile: "readonly" } [
 ]
 ```
 
-The function is called when an `env` block spawns, with `@mx.profile` set from the `with { profile }` clause.
+The function is called when an `env` block spawns, with `@mx.profile` set from the `with { profile }` clause. When no profile is specified in the `env` block, the first defined profile is used as the default.
 
 **Compose with `with`:**
 

@@ -5,7 +5,7 @@ brief: All MCP tool outputs automatically carry src:mcp provenance
 category: security
 parent: security
 tags: [mcp, taint, provenance, src:mcp, security]
-related: [mcp-import, labels-source-auto, guards-basics]
+related: [mcp-import, mcp-policy, mcp-guards, labels-source-auto, guards-basics]
 related-code: [interpreter/eval/exec-invocation.ts, core/types/security.ts]
 updated: 2026-02-04
 qa_tier: 2
@@ -14,7 +14,7 @@ qa_tier: 2
 Every MCP tool call automatically taints its output with `src:mcp`. This happens at the interpreter level — no configuration needed.
 
 ```mlld
-import tools { @echo } from mcp "npx @anthropic/echo-server"
+import tools { @echo } from mcp "echo-server"
 var @result = @echo("hello")
 show @result.mx.taint | @json
 ```
@@ -25,7 +25,7 @@ Output includes `["src:mcp"]` plus the tool name in `sources` (e.g., `["mcp:echo
 
 ```mlld
 var @data = @echo("test")
-var @upper = @data | @toUpperCase
+var @upper = @data | @upper
 var @msg = `Result: @upper`
 show @msg.mx.taint | @json
 ```

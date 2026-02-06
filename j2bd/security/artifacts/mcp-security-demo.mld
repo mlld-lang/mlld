@@ -37,9 +37,11 @@ Scenario 1: Automatic src:mcp Taint
 
 var @echoResult = @echo({ text: "hello from mcp" })
 show `MCP echo returned: @echoResult`
+show @echoResult.mx.taint | @json
 
 >> Taint propagates through interpolation
 var @derived = `Derived from MCP: @echoResult`
+show @derived.mx.taint | @json
 log "Taint propagates through string interpolation"
 
 var @pong = @ping({})
@@ -109,9 +111,6 @@ exe safe @formatResult(data) = `formatted: @data`
 var @formatted = @formatResult(@echoResult)
 show `Safe operation with MCP data: @formatted`
 
->> Destructive operation defined but NOT called with MCP data.
->> Calling @destroyData(@echoResult) would trigger:
->>   MlldDenial: Label 'src:mcp' cannot flow to 'destructive'
 exe destructive @destroyData(data) = `destroyed: @data`
 
 >> Safe data works fine with destructive ops
@@ -119,7 +118,7 @@ var @safeData = "not from mcp"
 var @destroyResult = @destroyData(@safeData)
 show `Destructive with safe data: @destroyResult`
 
-show `(MCP data -> destructive ops: BLOCKED by policy)`
+show `(MCP data -> destructive ops: demonstrated at end of script)`
 
 >> ============================================================
 >> SCENARIO 4: Profile-based MCP tool availability
@@ -137,9 +136,9 @@ Scenario 4: Profile-Based Tool Availability
 
 >> Define env config with profiles
 var @cfg = {
-  "profiles": {
-    "full": { "requires": { "sh": true } },
-    "readonly": { "requires": { } }
+  profiles: {
+    full: { requires: { sh: true } },
+    readonly: { requires: {} }
   }
 }
 
@@ -147,25 +146,25 @@ var @cfg = {
 >> Use "as" namespace to avoid collision with top-level MCP imports
 exe @mcpConfig() = when [
   @mx.profile == "full" => {
-    "servers": [
+    servers: [
       {
-        "command": "node tests/support/mcp/fake-server.cjs",
-        "as": "@env",
-        "tools": "*"
+        command: "node tests/support/mcp/fake-server.cjs",
+        as: "@env",
+        tools: "*"
       }
     ]
   }
   @mx.profile == "readonly" => {
-    "servers": [
+    servers: [
       {
-        "command": "node tests/support/mcp/fake-server.cjs",
-        "as": "@env",
-        "tools": ["ping"]
+        command: "node tests/support/mcp/fake-server.cjs",
+        as: "@env",
+        tools: ["ping"]
       }
     ]
   }
   * => {
-    "servers": []
+    servers: []
   }
 ]
 
@@ -214,3 +213,12 @@ Demonstrated four MCP security scenarios:
    - Policy-based profile selection restricts capabilities
 
 ::
+
+>> ============================================================
+>> POLICY DENIAL DEMO (hard error — terminates script)
+>> ============================================================
+>> Policy denials are hard errors that cannot be caught.
+>> This call passes MCP-tainted data to a destructive op,
+>> triggering the policy denial. The error output IS the demo.
+
+show @destroyData(@echoResult)
