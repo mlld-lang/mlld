@@ -1,0 +1,74 @@
+>>
+>> MCP Environment Module
+>>
+>> Demonstrates an environment module with @mcpConfig() that adapts
+>> MCP tool availability based on the active profile. Shows how profiles,
+>> policy, and @mcpConfig() work together.
+>>
+
+>> ============================================================
+>> PROFILES: Define capability tiers
+>> ============================================================
+
+/profiles {
+  full: {
+    requires: { network, sh },
+    description: "Full access with MCP tools"
+  },
+  readonly: {
+    requires: { },
+    description: "Read-only, no external tools"
+  }
+}
+
+>> ============================================================
+>> MCP CONFIGURATION: Adapts to active profile
+>> ============================================================
+
+>> @mcpConfig() is discovered by env blocks automatically.
+>> It returns server configs based on @mx.profile.
+/exe @mcpConfig() = when [
+  @mx.profile == "full" => {
+    "servers": [
+      {
+        "command": "node tests/support/mcp/fake-server.cjs",
+        "tools": "*"
+      }
+    ]
+  }
+  @mx.profile == "readonly" => {
+    "servers": []
+  }
+  * => {
+    "servers": []
+  }
+]
+
+>> ============================================================
+>> POLICY: Label flow rules for secrets and MCP data
+>> ============================================================
+
+/var @policyConfig = {
+  "labels": {
+    "secret": {
+      "deny": ["net:w", "exfil"]
+    },
+    "src:mcp": {
+      "deny": ["destructive", "op:cmd:rm"]
+    }
+  }
+}
+/policy @p = union(@policyConfig)
+
+>> ============================================================
+>> SPAWN AND SHELL: Environment entry points
+>> ============================================================
+
+/exe @spawn(prompt) = run cmd { echo "spawn: @prompt" }
+/exe @shell() = run cmd { echo "shell" }
+
+>> ============================================================
+>> EXPORTS
+>> ============================================================
+
+/export { @spawn, @shell, @mcpConfig }

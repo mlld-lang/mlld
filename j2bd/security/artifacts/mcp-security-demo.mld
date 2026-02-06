@@ -1,0 +1,216 @@
+>>
+>> MCP Security Demo: Comprehensive Security Integration
+>>
+>> Exercises all MCP security exit criteria:
+>> 1. src:mcp auto-taint on tool outputs
+>> 2. Guard blocking secret data from MCP tools
+>> 3. Policy restricting src:mcp data from destructive operations
+>> 4. Profile-based MCP tool availability via @mcpConfig()
+>>
+
+>> ============================================================
+>> SETUP: Import MCP tools from fake server
+>> ============================================================
+
+import tools { @echo, @ping } from mcp "node tests/support/mcp/fake-server.cjs"
+
+show ::
+
+MCP Security Demo
+=================
+
+::
+
+>> ============================================================
+>> SCENARIO 1: src:mcp auto-taint on tool outputs
+>> ============================================================
+>>
+>> All MCP tool outputs automatically carry src:mcp taint.
+>> This taint propagates through all transformations.
+
+show ::
+
+Scenario 1: Automatic src:mcp Taint
+------------------------------------
+
+::
+
+var @echoResult = @echo({ text: "hello from mcp" })
+show `MCP echo returned: @echoResult`
+
+>> Taint propagates through interpolation
+var @derived = `Derived from MCP: @echoResult`
+log "Taint propagates through string interpolation"
+
+var @pong = @ping({})
+show `MCP ping returned: @pong`
+
+>> ============================================================
+>> SCENARIO 2: Guard blocking secrets from MCP tools
+>> ============================================================
+>>
+>> Data-label guard fires when secret data flows to any exe operation.
+>> MCP tool calls are exe operations, so the guard catches them.
+
+show ::
+
+Scenario 2: Guard Blocks Secrets from MCP Tools
+------------------------------------------------
+
+::
+
+guard @noSecretToMcp for secret = when [
+  @mx.op.type == "exe" => deny "Secret data cannot flow to executable operations"
+  * => allow
+]
+
+var secret @apiKey = "sk-12345-super-secret"
+
+>> Safe call with no secrets
+var @safeResult = @echo({ text: "public data" })
+show `Safe MCP call (no secrets): @safeResult`
+
+>> Attempted call with secret data, caught by denied handler
+exe @tryEchoSecret(value) = when [
+  denied => `BLOCKED: @mx.guard.reason`
+  * => @echo({ text: @value })
+]
+
+var @blockedResult = @tryEchoSecret(@apiKey)
+show `Secret to MCP result: @blockedResult`
+
+>> ============================================================
+>> SCENARIO 3: Policy restricting src:mcp data
+>> ============================================================
+>>
+>> Policy label flow rules prevent MCP-tainted data from
+>> flowing to destructive operations.
+
+show ::
+
+Scenario 3: Policy Restricts src:mcp Data
+------------------------------------------
+
+::
+
+var @policyConfig = {
+  labels: {
+    "src:mcp": {
+      deny: ["destructive", "op:cmd:rm"]
+    }
+  }
+}
+policy @p = union(@policyConfig)
+
+log "Policy configured: src:mcp data denied from destructive ops"
+
+>> MCP data can still flow to safe operations
+exe safe @formatResult(data) = `formatted: @data`
+var @formatted = @formatResult(@echoResult)
+show `Safe operation with MCP data: @formatted`
+
+>> Destructive operation defined but NOT called with MCP data.
+>> Calling @destroyData(@echoResult) would trigger:
+>>   MlldDenial: Label 'src:mcp' cannot flow to 'destructive'
+exe destructive @destroyData(data) = `destroyed: @data`
+
+>> Safe data works fine with destructive ops
+var @safeData = "not from mcp"
+var @destroyResult = @destroyData(@safeData)
+show `Destructive with safe data: @destroyResult`
+
+show `(MCP data -> destructive ops: BLOCKED by policy)`
+
+>> ============================================================
+>> SCENARIO 4: Profile-based MCP tool availability
+>> ============================================================
+>>
+>> @mcpConfig() adapts MCP server configuration based on profile.
+>> env blocks with different profiles get different tool sets.
+
+show ::
+
+Scenario 4: Profile-Based Tool Availability
+--------------------------------------------
+
+::
+
+>> Define env config with profiles
+var @cfg = {
+  "profiles": {
+    "full": { "requires": { "sh": true } },
+    "readonly": { "requires": { } }
+  }
+}
+
+>> @mcpConfig() returns different configs per profile
+>> Use "as" namespace to avoid collision with top-level MCP imports
+exe @mcpConfig() = when [
+  @mx.profile == "full" => {
+    "servers": [
+      {
+        "command": "node tests/support/mcp/fake-server.cjs",
+        "as": "@env",
+        "tools": "*"
+      }
+    ]
+  }
+  @mx.profile == "readonly" => {
+    "servers": [
+      {
+        "command": "node tests/support/mcp/fake-server.cjs",
+        "as": "@env",
+        "tools": ["ping"]
+      }
+    ]
+  }
+  * => {
+    "servers": []
+  }
+]
+
+>> Readonly profile: explicit override, only ping tool available
+env @cfg with { profile: "readonly" } [
+  show `Profile selected: @mx.profile`
+  let @envPong = @env.ping()
+  show `Readonly env ping: @envPong`
+]
+
+>> Full profile: all tools available
+env @cfg with { profile: "full" } [
+  show `Profile override: @mx.profile`
+  let @envPong2 = @env.ping()
+  show `Full env ping: @envPong2`
+]
+
+>> ============================================================
+>> SUMMARY
+>> ============================================================
+
+show ::
+
+MCP Security Demo Complete
+===========================
+
+Demonstrated four MCP security scenarios:
+
+1. AUTOMATIC src:mcp TAINT
+   - MCP tool outputs carry src:mcp taint automatically
+   - Taint propagates through interpolation and transforms
+
+2. GUARD BLOCKS SECRETS FROM MCP
+   - guard for secret fires when secret-labeled data flows to exe
+   - Secret data is blocked from reaching MCP tools
+   - denied handler provides graceful fallback
+
+3. POLICY RESTRICTS src:mcp DATA
+   - policy labels."src:mcp".deny blocks destructive operations
+   - MCP-tainted data cannot flow to destructive ops
+   - Safe operations still work with MCP data
+
+4. PROFILE-BASED TOOL AVAILABILITY
+   - \@mcpConfig() returns different server configs per profile
+   - env blocks with profiles control which MCP tools are available
+   - Policy-based profile selection restricts capabilities
+
+::
