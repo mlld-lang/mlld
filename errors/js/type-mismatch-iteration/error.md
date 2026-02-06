@@ -1,4 +1,4 @@
-Type mismatch in /for
+Type mismatch in for
 
 Expected: ${EXPECTED}
 Received: ${RECEIVED}

@@ -520,7 +520,7 @@ export async function evaluateForDirective(
         } catch { return String(sourceValue); }
       })();
       throw new MlldDirectiveError(
-        `Type mismatch: /for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
+        `Type mismatch: for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
         'for',
         { location: directive.location, context: { expected: 'array', receivedType } }
       );
@@ -747,7 +747,7 @@ export async function evaluateForExpression(
       } catch { return String(sourceValue); }
     })();
     throw new MlldDirectiveError(
-      `Type mismatch: /for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
+      `Type mismatch: for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
       'for',
       { location: expr.location, context: { expected: 'array', receivedType } }
     );

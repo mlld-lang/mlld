@@ -875,8 +875,8 @@ export async function interpolateFileReference(
           console.error('Due to grammar ambiguity with nested angle brackets, this pattern is not supported.');
           console.error('');
           console.error('Workaround: Use a variable instead:');
-          console.error('  /var @file = <file.md>.keep');
-          console.error('  /show `<@file.mx.filename>@file</@file.mx.filename>`');
+          console.error('  var @file = <file.md>.keep');
+          console.error('  show `<@file.mx.filename>@file</@file.mx.filename>`');
           console.error('');
           return '';
         }

@@ -37,7 +37,7 @@ export async function evaluateAppend(
 
   if (!directive.meta?.hasSource) {
     throw new MlldDirectiveError(
-      '/append requires source content before the target',
+      'append requires source content before the target',
       'append',
       { location: directive.location }
     );
@@ -55,7 +55,7 @@ export async function evaluateAppend(
   const target = directive.values?.target as OutputTargetFile | undefined;
   if (!target || target.type !== 'file') {
     throw new MlldDirectiveError(
-      '/append supports file targets only',
+      'append supports file targets only',
       'append',
       { location: directive.location }
     );
@@ -203,7 +203,7 @@ function formatAppendPayload(
 
   if (explicitFormat && explicitFormat !== 'jsonl' && explicitFormat !== 'text') {
     throw new MlldDirectiveError(
-      `Unsupported /append format "${explicitFormat}". Allowed formats: jsonl, text.`,
+      `Unsupported append format "${explicitFormat}". Allowed formats: jsonl, text.`,
       directiveKind,
       { location: options.location }
     );

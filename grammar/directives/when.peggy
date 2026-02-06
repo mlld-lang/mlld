@@ -34,8 +34,8 @@ SlashWhen
   / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":"? _ "[" {
       helpers.mlldError(
         "The 'any' modifier has been removed from mlld. Use the || operator instead.\n\n" +
-        "Old syntax: /when any [@cond1 @cond2] => action\n" +
-        "New syntax: /when (@cond1 || @cond2) => action\n\n" +
+        "Old syntax: when any [@cond1 @cond2] => action\n" +
+        "New syntax: when (@cond1 || @cond2) => action\n\n" +
         "The || operator is more familiar and flexible.",
         "||",
         location()
@@ -557,7 +557,7 @@ WhenConditionBlock
       }
       return depth > 0;
     } {
-      helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
+      helpers.mlldError("Unclosed brackets in when directive. Expected ']' to close the condition list.", "]", location());
     }
 
 WhenConditionList
@@ -592,13 +592,13 @@ WhenEntry
 WhenConditionSeparator
   = _ "," _ {
       helpers.mlldError(
-        'Comma separators are not allowed in /when conditions. ' +
+        'Comma separators are not allowed in when conditions. ' +
         'Separate conditions with whitespace or semicolons instead of commas.\n' +
         '💡 Remove the comma and use whitespace or semicolons:\n' +
-        '   /when expr: [value1 => action1, value2 => action2]  ❌\n' +
-        '   /when expr: [value1 => action1; value2 => action2]  ✅\n' +
-        '   /when expr: [value1 => action1  value2 => action2]  ✅\n' +
-        '   /when expr: [\n' +
+        '   when expr: [value1 => action1, value2 => action2]  ❌\n' +
+        '   when expr: [value1 => action1; value2 => action2]  ✅\n' +
+        '   when expr: [value1 => action1  value2 => action2]  ✅\n' +
+        '   when expr: [\n' +
         '     value1 => action1\n' +
         '     value2 => action2\n' +
         '   ]  ✅',
@@ -1238,11 +1238,11 @@ WhenImplicitVarAssignmentError
       helpers.mlldError(
         `Variable assignment \`@${id} = ...\` is not allowed in when actions.\n\n` +
         `Use \`let\` for local variables scoped to the when block:\n` +
-        `  /when [let @${id} = value ...]\n\n` +
+        `  when [let @${id} = value ...]\n\n` +
         `Or use \`var\` in actions to set outer-scope variables:\n` +
         `  "match" => var @${id} = "value"\n\n` +
         `Example:\n` +
-        `  /when @mode [\n` +
+        `  when @mode [\n` +
         `    let @local = "scoped"      # Local to when block\n` +
         `    "match" => var @${id} = @local  # Sets outer-scope variable\n` +
         `  ]`,
@@ -1488,13 +1488,13 @@ WhenImplicitRichContent
 WhenImplicitExecDefinitionError
   = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "=" _ value:VarRHSContent {
       helpers.mlldError(
-        `Implicit executable definitions are not allowed in /when actions.\n\n` +
+        `Implicit executable definitions are not allowed in when actions.\n\n` +
         `Instead of:\n` +
-        `  /when @condition => @${name}() = ...\n\n` +
-        `Use a separate /exe directive:\n` +
-        `  /exe @${name}() = when [@condition => ..., * => default]\n\n` +
+        `  when @condition => @${name}() = ...\n\n` +
+        `Use a separate exe directive:\n` +
+        `  exe @${name}() = when [@condition => ..., * => default]\n\n` +
         `This keeps executable definitions at the top level where they belong.`,
-        "/exe",
+        "exe",
         location()
       );
     }

@@ -43,50 +43,50 @@ SlashImport
       }
       return depth > 0;
     } {
-      helpers.mlldError("Unclosed import list in /import directive. Expected closing brace for import list.", String.fromCharCode(125), location());
+      helpers.mlldError("Unclosed import list in import directive. Expected closing brace for import list.", String.fromCharCode(125), location());
     }
     
   // Error: Missing 'from' keyword
   / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ &{
       return helpers.isMissingFromKeyword(input, peg$currPos);
     } {
-      helpers.mlldError("Missing 'from' keyword in /import directive. Expected: /import { items } from \"path\"", "from", location());
+      helpers.mlldError("Missing 'from' keyword in import directive. Expected: import { items } from \"path\"", "from", location());
     }
     
   // Error: Missing path after 'from'
   / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing path in /import directive. Expected a path after 'from' keyword.", "path", location());
+      helpers.mlldError("Missing path in import directive. Expected a path after 'from' keyword.", "path", location());
     }
     
   // Error: Unclosed quoted path
   / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ "\"" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
-      helpers.mlldError("Unclosed quoted path in /import directive. Expected closing double quote (\").", "\"", location());
+      helpers.mlldError("Unclosed quoted path in import directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed single quoted path
   / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ "'" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, "'");
     } {
-      helpers.mlldError("Unclosed quoted path in /import directive. Expected closing single quote.", "'", location());
+      helpers.mlldError("Unclosed quoted path in import directive. Expected closing single quote.", "'", location());
     }
     
   // Error: Unclosed bracket path
   / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed path bracket in /import directive. Expected closing bracket for path.", "]", location());
+      helpers.mlldError("Unclosed path bracket in import directive. Expected closing bracket for path.", "]", location());
     }
     
   // Error: Invalid wildcard syntax (missing alias)
   / DirectiveContext ImportKeyword _ "{" _ "*" _ "}" {
-      helpers.mlldError("Wildcard imports must have an alias. Use: /import { * as @name } from \"path\"", "as", location());
+      helpers.mlldError("Wildcard imports must have an alias. Use: import { * as @name } from \"path\"", "as", location());
     }
     
   // Error: Missing content after /import
   / DirectiveContext ImportKeyword _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing content in /import directive. Expected import list or path.", String.fromCharCode(123), location());
+      helpers.mlldError("Missing content in import directive. Expected import list or path.", String.fromCharCode(123), location());
     }
     
   // Error: Invalid @ usage in shorthand
@@ -238,7 +238,7 @@ SlashImportMcpTools
     }
   / DirectiveContext ImportKeyword _ "tools" _ "from" _ "mcp" _ path:ImportPath {
       helpers.mlldError(
-        "MCP tool imports require an alias. Use: /import tools from mcp \"server\" as @name",
+        "MCP tool imports require an alias. Use: import tools from mcp \"server\" as @name",
         "as",
         location()
       );
@@ -266,7 +266,7 @@ SlashImportShorthand
       let namespace = aliasSegment?.alias;
       const templateParams = aliasSegment?.params || [];
       if (typeInfo?.type === 'templates' && !namespace) {
-        helpers.mlldError("Templates import requires an alias with parameters. Use: /import templates from \"dir\" as @name(param1, param2)", "@", location());
+        helpers.mlldError("Templates import requires an alias with parameters. Use: import templates from \"dir\" as @name(param1, param2)", "@", location());
       }
       if (!namespace) {
         // Extract namespace from path
@@ -715,7 +715,7 @@ ImportAlligatorAdapter
       
       // Alligators in imports just load the file
       if (content.options && content.options.section) {
-        helpers.mlldError("Section extraction is not supported in import paths. Use: /import { items } from <path>", ">", location());
+        helpers.mlldError("Section extraction is not supported in import paths. Use: import { items } from <path>", ">", location());
       }
       
       // Convert alligator source to import path format
@@ -903,7 +903,7 @@ ImportsList
     }
   / "*" _ &{ return input[peg$currPos] === String.fromCharCode(125); } {
       // Provide helpful error for wildcard imports without alias
-      helpers.mlldError(`Wildcard imports must have an alias. Use '/import { * as @name }' or the shorthand '/import "path/to/file.mld" as @name'`, "as", location());
+      helpers.mlldError(`Wildcard imports must have an alias. Use 'import { * as @name }' or the shorthand 'import "path/to/file.mld" as @name'`, "as", location());
     }
   / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {
       return [first, ...rest];

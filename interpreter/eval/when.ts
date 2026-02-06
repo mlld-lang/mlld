@@ -595,7 +595,7 @@ async function evaluateWhenBlock(
     if (modifier === 'all') {
       throw new MlldConditionError(
         'The \'all\' modifier has been removed. Use the && operator instead.\n' +
-        'Example: /when (@cond1 && @cond2) => action',
+        'Example: when (@cond1 && @cond2) => action',
         'all',
         node.location
       );
@@ -603,7 +603,7 @@ async function evaluateWhenBlock(
     if (modifier === 'any') {
       throw new MlldConditionError(
         'The \'any\' modifier has been removed. Use the || operator instead.\n' +
-        'Example: /when (@cond1 || @cond2) => action',
+        'Example: when (@cond1 || @cond2) => action',
         'any',
         node.location
       );

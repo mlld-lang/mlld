@@ -7,8 +7,14 @@ export interface DirectiveLocation {
   filePath?: string;
 }
 
+/** SourceLocation from AST nodes: { start: { line, column }, end: { line, column } } */
+interface SourceLocation {
+  start: { line: number; column: number };
+  end: { line: number; column: number };
+}
+
 export interface MlldDirectiveErrorOptions {
-  location?: DirectiveLocation;
+  location?: DirectiveLocation | SourceLocation;
   code?: string;
   cause?: Error;
   severity?: ErrorSeverity;
@@ -25,8 +31,14 @@ export class MlldDirectiveError extends MlldError {
     directiveKind: string,
     options: MlldDirectiveErrorOptions = {}
   ) {
-    const locationStr = options.location 
-      ? ` at line ${options.location.line}, column ${options.location.column}${options.location.filePath ? ` in ${options.location.filePath}` : ''}`
+    // Normalize location: SourceLocation { start, end } → DirectiveLocation { line, column }
+    const loc = options.location
+      ? ('start' in options.location
+          ? { line: options.location.start.line, column: options.location.start.column }
+          : options.location as DirectiveLocation)
+      : undefined;
+    const locationStr = loc
+      ? ` at line ${loc.line}, column ${loc.column}${loc.filePath ? ` in ${loc.filePath}` : ''}`
       : '';
     
     super(`Directive error (${directiveKind}): ${message}${locationStr}`, {
@@ -37,19 +49,19 @@ export class MlldDirectiveError extends MlldError {
       details: {
         ...options.context,
         directiveKind,
-        filePath: options.location?.filePath, // Add filePath to details
+        filePath: loc?.filePath, // Add filePath to details
         // Keep location in details as well if needed for context
-        location: options.location 
+        location: loc
       },
       // Pass location as sourceLocation
-      sourceLocation: options.location,
+      sourceLocation: loc,
       // Pass environment for source access
       env: options.env
     });
     
     this.name = 'MlldDirectiveError';
     this.directiveKind = directiveKind;
-    this.location = options.location;
+    this.location = loc;
     
     // Ensure proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, MlldDirectiveError.prototype);

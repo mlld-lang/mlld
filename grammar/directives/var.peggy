@@ -199,7 +199,7 @@ SlashVar "var directive"
   // Error: Augmented assignment inside /var
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "@" augId:BaseIdentifier _ "+=" _ {
       helpers.mlldError(
-        `Augmented assignment is not valid in /var directive. Use let @${augId} += value inside a block.`,
+        `Augmented assignment is not valid in var directive. Use let @${augId} += value inside a block.`,
         "+=",
         location()
       );
@@ -215,7 +215,7 @@ SlashVar "var directive"
       if (reason === 'commentInside') {
         helpers.mlldError("Comments (>>) are not allowed inside array literals. Place comments before the array or on a separate line.", ">>", location());
       } else {
-        helpers.mlldError("Unclosed array in /var directive. Expected ']' to close the array.", "]", location());
+        helpers.mlldError("Unclosed array in var directive. Expected ']' to close the array.", "]", location());
       }
     }
 
@@ -227,7 +227,7 @@ SlashVar "var directive"
       if (reason === 'commentInside') {
         helpers.mlldError("Comments (>>) are not allowed inside object literals. Place comments before the object or on a separate line.", ">>", location());
       } else {
-        helpers.mlldError("Unclosed object in /var directive. Expected closing brace to close the object.", String.fromCharCode(125), location());
+        helpers.mlldError("Unclosed object in var directive. Expected closing brace to close the object.", String.fromCharCode(125), location());
       }
     }
     
@@ -235,21 +235,21 @@ SlashVar "var directive"
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ '"' &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
-      helpers.mlldError("Unclosed string in /var directive. Expected closing double quote (\").", "\"", location());
+      helpers.mlldError("Unclosed string in var directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed string (single quotes)
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "'" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, "'");
     } {
-      helpers.mlldError("Unclosed string in /var directive. Expected closing single quote.", "'", location());
+      helpers.mlldError("Unclosed string in var directive. Expected closing single quote.", "'", location());
     }
     
   // Error: Unclosed template
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "::" &{
       return helpers.isUnclosedTemplate(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed template in /var directive. Expected closing '::' delimiter.", "::", location());
+      helpers.mlldError("Unclosed template in var directive. Expected closing '::' delimiter.", "::", location());
     }
     
   // Error: Missing value after =

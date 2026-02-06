@@ -835,10 +835,10 @@ async function outputToResolver(
   // Heuristic: if resolver name matches a defined variable, user likely meant a variable in the path (needs quotes)
   const looksLikeVariable = !!env.getVariable(target.resolver);
   if (looksLikeVariable) {
-    const hintQuoted = `/output @<source> to "@${target.resolver}/${target.path.map(p => p.content).join('/')}"`;
+    const hintQuoted = `output @<source> to "@${target.resolver}/${target.path.map(p => p.content).join('/')}"`;
     const hintExplain = `The target '@${target.resolver}/...' is interpreted as a resolver name, not a variable. Quote the path to interpolate variables.`;
     throw new MlldOutputError(
-      `Unquoted variable in /output target: '@${target.resolver}' is interpreted as a resolver name` +
+      `Unquoted variable in output target: '@${target.resolver}' is interpreted as a resolver name` +
         `\nHint: ${hintExplain}\nExample: ${hintQuoted}`,
       'unknown',
       { sourceLocation: directive.location, env, context: { resolverPath } }

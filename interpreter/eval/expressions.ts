@@ -237,7 +237,7 @@ export async function evaluateUnifiedExpression(
       case 'Literal':
         // Handle none literal (only valid in when context)
         if (node.valueType === 'none') {
-          throw new Error('The "none" keyword can only be used as a condition in /when directives');
+          throw new Error('The "none" keyword can only be used as a condition in when directives');
         }
         return createEvaluatorResult(node.value);
       case 'VariableReference':

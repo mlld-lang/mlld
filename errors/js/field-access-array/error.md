@@ -7,7 +7,7 @@ Each individual file in the array has this property.
 
 ### Solution
 
-Use a /for loop to access properties of individual items:
+Use a for loop to access properties of individual items:
 
 ```mlld
 ${SUGGESTION}

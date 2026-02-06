@@ -413,14 +413,14 @@ SlashRun
   / DirectiveContext RunKeyword _ "\"" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
-      helpers.mlldError("Unclosed quoted command in /run directive. Expected closing double quote (\").", "\"", location());
+      helpers.mlldError("Unclosed quoted command in run directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed bracket command
   / DirectiveContext RunKeyword _ "{" &{
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed command brackets in /run directive. Expected closing brace for command.", String.fromCharCode(125), location());
+      helpers.mlldError("Unclosed command brackets in run directive. Expected closing brace for command.", String.fromCharCode(125), location());
     }
     
   // Error: Invalid syntax after language identifier - must check for NOT { or (
@@ -429,7 +429,7 @@ SlashRun
       const validLangs = ['js', 'javascript', 'node', 'python', 'py', 'bash', 'sh'];
       return validLangs.includes(lang.toLowerCase());
     } {
-      helpers.mlldError("Invalid code syntax in /run directive. Expected code block or arguments after language identifier: " + lang, String.fromCharCode(123), location());
+      helpers.mlldError("Invalid code syntax in run directive. Expected code block or arguments after language identifier: " + lang, String.fromCharCode(123), location());
     }
     
   // Error: Missing code block after language
@@ -437,7 +437,7 @@ SlashRun
       const validLangs = ['js', 'javascript', 'node', 'python', 'py', 'bash', 'sh'];
       return validLangs.includes(lang.toLowerCase());
     } {
-      helpers.mlldError("Missing code block in /run directive. Expected code block after language: " + lang, String.fromCharCode(123), location());
+      helpers.mlldError("Missing code block in run directive. Expected code block after language: " + lang, String.fromCharCode(123), location());
     }
     
   // Error: Invalid @ usage (not followed by valid identifier)
@@ -445,12 +445,12 @@ SlashRun
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
-      helpers.mlldError("Invalid exec reference in /run directive. Variable names must start with a letter or underscore.", "identifier", location());
+      helpers.mlldError("Invalid exec reference in run directive. Variable names must start with a letter or underscore.", "identifier", location());
     }
     
   // Error: Missing content after /run
   / DirectiveContext RunKeyword _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing content in /run directive. Expected command, code block, or exec reference.", String.fromCharCode(123), location());
+      helpers.mlldError("Missing content in run directive. Expected command, code block, or exec reference.", String.fromCharCode(123), location());
     }
     
   // Error: Unclosed code block
@@ -458,7 +458,7 @@ SlashRun
       // Check if we have an unclosed code block after language (args)
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed code block in /run directive. Expected closing brace for " + lang + " code.", String.fromCharCode(125), location());
+      helpers.mlldError("Unclosed code block in run directive. Expected closing brace for " + lang + " code.", String.fromCharCode(125), location());
     }
     
   // Error: Unclosed code block without args

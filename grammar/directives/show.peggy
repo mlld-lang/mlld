@@ -791,7 +791,7 @@ SlashShow
       }
       return depth > 0;
     } {
-      helpers.mlldError("Unclosed double brackets in /show directive. Expected closing ']]' for path section expression.", "]]", location());
+      helpers.mlldError("Unclosed double brackets in show directive. Expected closing ']]' for path section expression.", "]]", location());
     }
     
   // Error: Unclosed alligator bracket <
@@ -805,7 +805,7 @@ SlashShow
       }
       return true;
     } {
-      helpers.mlldError("Unclosed alligator bracket in /show directive. Expected closing '>' for content loading.", ">", location());
+      helpers.mlldError("Unclosed alligator bracket in show directive. Expected closing '>' for content loading.", ">", location());
     }
     
     
@@ -814,7 +814,7 @@ SlashShow
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
-      helpers.mlldError("Invalid variable reference in /show directive. Variable names must start with a letter or underscore.", "identifier", location());
+      helpers.mlldError("Invalid variable reference in show directive. Variable names must start with a letter or underscore.", "identifier", location());
     }
     
   // Error: Unclosed backtick template
@@ -827,19 +827,19 @@ SlashShow
       }
       return true; // Unclosed at end of input
     } {
-      helpers.mlldError("Unclosed backtick template in /show directive. Expected closing backtick (`).", "`", location());
+      helpers.mlldError("Unclosed backtick template in show directive. Expected closing backtick (`).", "`", location());
     }
     
   // Error: Unclosed double-colon template
   / DirectiveContext ShowKeyword (HWS DataLabelList)? _ "::" &{
       return helpers.isUnclosedTemplate(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed double-colon template in /show directive. Expected closing '::' delimiter.", "::", location());
+      helpers.mlldError("Unclosed double-colon template in show directive. Expected closing '::' delimiter.", "::", location());
     }
     
   // Error: Missing content after /show
   / DirectiveContext ShowKeyword (HWS DataLabelList)? _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing content in /show directive. Expected template, variable, or path to show.", "@", location());
+      helpers.mlldError("Missing content in show directive. Expected template, variable, or path to show.", "@", location());
     }
     
   // Error: Invalid foreach syntax

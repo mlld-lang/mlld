@@ -357,7 +357,7 @@ async function evaluateWhenExpressionInternal(
       if (hasCodeExecution) {
         const conditionText = getConditionText(pair.condition, sourceInfo.source);
         throw new MlldWhenExpressionError(
-          'Code blocks are not supported in when expressions. Define your logic in a separate /exe function and call it instead.',
+          'Code blocks are not supported in when expressions. Define your logic in a separate exe function and call it instead.',
           astLocationToSourceLocation(node.location, sourceInfo.filePath),
           {
             conditionIndex: i,
