@@ -323,7 +323,7 @@ MLLD_TOKEN_COVERAGE=1 npm test
 
 # Example failure output:
 Error: Semantic token coverage issues in when-exe-when-expressions:
-  - UncoveredText at 6:18-6:28 " = when: ["
+  - UncoveredText at 6:18-6:27 " = when ["
   - UncoveredText at 7:1-7:38 "  @name == \"World\" => \"Hello, World!\""
 ```
 

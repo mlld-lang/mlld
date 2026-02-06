@@ -13,7 +13,7 @@ updated: 2026-01-05
 **Local variables in when:**
 
 ```mlld
-when @mode: [
+when @mode [
   let @prefix = "Status:"
   "active" => show "@prefix Active"
   "pending" => show "@prefix Pending"

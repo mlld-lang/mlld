@@ -1,5 +1,5 @@
 var @status = "ok"
-when @status: [
+when @status [
   let @msg = "Completed"
   "ok" => show @msg
 ]

@@ -59,10 +59,10 @@ The /when directive produces two types of AST nodes:
 
    Used in `/var` and `/exe` assignments:
    ```mlld
-   /var @greeting = when: [
+   /var @greeting = when [
      @time < 12 => "Good morning"
      @time < 18 => "Good afternoon"
-     true => "Good evening"
+     * => "Good evening"
    ]
    ```
 
@@ -249,10 +249,10 @@ WhenExpression nodes are evaluated differently from directive /when:
 
 ```typescript
 // Example evaluation
-/var @greeting = when: [
+/var @greeting = when [
   @time < 12 => "Good morning"      // If true, returns "Good morning"
   @time < 18 => "Good afternoon"    // Only evaluated if first is false
-  true => "Good evening"            // Default case
+  * => "Good evening"               // Default case
 ]
 ```
 

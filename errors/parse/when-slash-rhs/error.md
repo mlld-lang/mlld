@@ -2,20 +2,12 @@ No slash needed after => in when directives
 
 Found: when ${CONDITION} => ${ACTION}
 
-In when actions (after =>), directives don't need the slash prefix. The slash is only for starting new mlld lines.
+In when actions (after =>), directives don't need the slash prefix:
+  when ${CONDITION} => ${ACTION}        (wrong)
+  when ${CONDITION} => ${FIXED_ACTION}  (right)
 
-✗ Wrong: when ${CONDITION} => ${ACTION}
-✓ Right: when ${CONDITION} => ${FIXED_ACTION}
-
-Common examples:
-✗ Wrong: when @isValid => show "Valid!" (with slash)
-✓ Right: when @isValid => show "Valid!"
-
-✗ Wrong: when @error => output @message to stderr (with slash)
-✓ Right: when @error => output @message to stderr
-
-✗ Wrong: when @needsProcessing => var @result = @process(@data) (with slash)
-✓ Right: when @needsProcessing => @result = @process(@data)
-
-Note: Variable assignments in when don't even need 'var':
-✓ Right: when @condition => @myVar = "value"
+if vs when:
+  if @cond [block]                 Run block if true
+  when @cond => action             Select first match
+  when [cond => val; * => default] First-match list
+  when @val ["a" => x; * => y]    Match value against patterns

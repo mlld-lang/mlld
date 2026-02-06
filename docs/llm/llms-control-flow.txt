@@ -81,7 +81,7 @@ Conditions evaluate in order and the first match runs.
 **Local variables in when:**
 
 ```mlld
-when @mode: [
+when @mode [
   let @prefix = "Status:"
   "active" => show "@prefix Active"
   "pending" => show "@prefix Pending"
@@ -177,9 +177,17 @@ var @processed = for @item in @data => when [
 
 ```mlld
 var @cfg = {"host": "localhost", "port": 3000}
-for @v in @cfg => show `@v.mx.key: @v`
+for @k, @v in @cfg => show `@k: @v`
 >> Output: host: localhost, port: 3000
 ```
+
+**Value-only form:**
+
+```mlld
+for @v in @cfg => show `@v.mx.key: @v`
+```
+
+When you bind only the value, the key is available at `@v.mx.key` and `@v_key`. The key/value form does not bind `@v_key`.
 
 **Nested for:**
 

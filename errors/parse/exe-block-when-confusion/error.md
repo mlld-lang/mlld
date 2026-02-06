@@ -17,17 +17,18 @@ Right: exe @${FUNC}(${PARAMS}) = when [
     * => default
   ]
 
-Key differences:
-- Shell blocks {...} execute shell commands with restrictions
-- When expressions when [...] return values
-- Shell blocks use when directives inside
-- When expressions use bare conditions without when
-
 Common exe patterns:
-Template: exe @greet(name) = `Hello @name`
-When expression: exe @pick(val) = when [@val > 0 => "pos", * => "neg"]
-Shell command: exe @list() = {ls -la}
-JavaScript: exe @calc(x) = js { return x * 2 }
+  Template:         exe @greet(name) = `Hello @name`
+  When expression:  exe @pick(val) = when [@val > 0 => "pos"; * => "neg"]
+  Exe block:        exe @fn(x) = [let @y = @x; => @y]
+  Shell command:    exe @list() = {ls -la}
+  JavaScript:       exe @calc(x) = js { return x * 2 }
+
+if vs when:
+  if @cond [block]                 Run block if true
+  when @cond => action             Select first match
+  when [cond => val; * => default] First-match list
+  when @val ["a" => x; * => y]    Match value against patterns
 
 Your case should probably be:
 ${SUGGESTION}

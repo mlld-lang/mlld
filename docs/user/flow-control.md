@@ -112,7 +112,7 @@ Use `let` to declare local variables scoped to a when block:
 
 ```mlld
 var @mode = "active"
-when @mode: [
+when @mode [
   let @prefix = "Status:"
   "active" => show "@prefix Active"
   * => show "@prefix Unknown"
@@ -145,7 +145,7 @@ Hello World!
 
 ```mlld
 var @status = "ok"
-when @status: [
+when @status [
   let @msg = "Completed"
   "ok" => show @msg
 ]

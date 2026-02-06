@@ -61,6 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Optional load syntax:** `<file.md>?` and `<**/*.md>?` returns null or empty array if file or glob results don't exist
 - **`claude-poll` debug hooks**: `MLLD_DEBUG_CLAUDE_POLL` emits poll diagnostics and `MLLD_CLAUDE_POLL_LOG` captures `claude` output
 - **Executor stdin debug flag**: `MLLD_DEBUG_EXEC_IO` logs stdin write failures with byte counts
+- **Bare match form**: `when @expr [patterns]` works without the colon — `when @mode ["active" => x; * => y]` is now valid alongside the colon form `when @mode: [...]`
+  - The `=> [block]` form disambiguates imperative blocks, so the colon is no longer needed for parsing
+  - Colon form still works (backward compatible) but is no longer shown in docs
 
 ### Changed
 - **`mlld init` renamed to `mlld module`**: Module creation is now `mlld module` (alias: `mlld mod`)
@@ -103,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
 - **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.
-- **If/when guidance**: Parse errors for `if` and `when` include mental model and valid forms to guide fixes.
+- **If/when guidance**: All when/if parse errors include an educational cheat sheet showing if vs when semantics, return behavior differences inside exe/for, and valid forms. The `when @cond [block]` error now explains the ambiguity and suggests both `when @cond => [block]` and `if @cond [block]` with a note about their different return semantics.
 - Binary and ternary expressions parse inside function arguments and array literals
 - Block expressions inside argument and array contexts surface a targeted parse error
 - **CLI file payload flags**: `mlld <file>` accepts extra `--flag value` pairs and exposes them via `@payload`

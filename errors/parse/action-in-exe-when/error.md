@@ -7,3 +7,9 @@ Valid forms:
   when [ condition => ${ACTION} "text" ]
 
 Fix: return a value from the exe when, or move the action to /when.
+
+if vs when:
+  if @cond [block]                 Run block if true
+  when @cond => action             Select first match
+  when [cond => val; * => default] First-match list
+  when @val ["a" => x; * => y]    Match value against patterns

@@ -7,8 +7,8 @@
 The when directive provides conditional execution based on truthiness.
 It can be used in several forms:
 1. /when <condition> => <action>             - Inline conditional
-2. /when <expression>: [conditions]          - Match form (first match wins)
-3. /when <var>: [conditions] => <action>     - Block conditional
+2. /when <expression> [conditions]           - Match form (first match wins)
+3. /when [conditions]                        - Bare block (boolean conditions)
 
 For AND/OR logic, use && and || operators in conditions instead of any/all modifiers:
 - Use: /when (@cond1 && @cond2) => action  (instead of: /when all [@cond1 @cond2] => action)
@@ -88,12 +88,12 @@ SlashWhen
   / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ !("=>" / "[") {
       helpers.mlldError(
         "Invalid when syntax: expected '=>' or '[' after the condition.\n\n" +
-        "Mental model: 'when' selects the first matching branch.\n\n" +
-        "Valid forms:\n" +
-        "  when @cond => action\n" +
-        "  when [@cond => value; * => default]\n" +
-        "  when @subject: [\"a\" => x; \"b\" => y]\n\n" +
-        "Fix: add '=>' for inline action or '[' to start a block.",
+        "if vs when:\n" +
+        "  if @cond [block]                 Run block if true\n" +
+        "  when @cond => action             Select first match\n" +
+        "  when [cond => val; * => default] First-match list\n" +
+        "  when @val [\"a\" => x; * => y]    Match value against patterns\n\n" +
+        "Fix: add '=>' for inline action or '[' to start conditions.",
         "=> or [",
         location()
       );
@@ -102,10 +102,11 @@ SlashWhen
   / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ !. {
       helpers.mlldError(
         "Missing action after '=>'.\n\n" +
-        "/when runs actions, so the right side must be a directive:\n" +
+        "when runs actions, so the right side must be a directive:\n" +
         "  when @cond => show \"ok\"\n" +
-        "  when @cond => run { ... }\n\n" +
-        "If you want a value-returning expression:\n" +
+        "  when @cond => run { ... }\n" +
+        "  when @cond => [show \"x\"; => @val]\n\n" +
+        "For value-returning expressions:\n" +
         "  var @x = when [@cond => \"ok\"; * => \"no\"]",
         "directive",
         location()
@@ -158,11 +159,12 @@ SlashWhen
   / DirectiveContext WhenKeyword {
       helpers.mlldError(
         "Invalid when syntax.\n\n" +
-        "Mental model: 'when' selects the first matching branch.\n\n" +
-        "Valid forms:\n" +
-        "  when @cond => action\n" +
-        "  when [@cond => value; * => default]\n" +
-        "  when @subject: [\"a\" => x; \"b\" => y]",
+        "if vs when:\n" +
+        "  if @cond [block]                 Run block if true\n" +
+        "  when @cond => action             Select first match\n" +
+        "  when @cond => [block]            First-match with block\n" +
+        "  when [cond => val; * => default] First-match list\n" +
+        "  when @val [\"a\" => x; * => y]    Match value against patterns",
         "@",
         location()
       );
@@ -221,28 +223,57 @@ WhenSimpleBlockForm
       // Extract condition text for error message
       const conditionText = helpers.reconstructRawString(condition);
       helpers.mlldError(
-        `Use 'if' for imperative blocks, not 'when'.\n\n` +
-        `Mental model: 'when' selects a value; 'if' controls flow.\n\n` +
-        `Valid forms:\n` +
-        `  when @cond => action\n` +
-        `  when [@cond => value; * => default]\n` +
-        `  when @subject: ["a" => x; "b" => y]\n` +
-        `  if ${conditionText} [action; action]\n\n` +
-        `Fix:\n` +
-        `  when ${conditionText} [...]  =>  if ${conditionText} [...]`,
-        "if",
+        `when ${conditionText} [...] is ambiguous. Did you mean:\n\n` +
+        `  when ${conditionText} => [block]    Value-returning block (keeps when semantics)\n` +
+        `  if ${conditionText} [block]         Imperative flow (different return behavior!)\n\n` +
+        `Note: Inside exe/for, these have different return semantics.\n` +
+        `  when @cond => [=> @val]   returns @val from the when expression\n` +
+        `  if @cond [=> @val]        returns @val from the enclosing exe\n\n` +
+        `if vs when:\n` +
+        `  if @cond [block]                 Run block if true\n` +
+        `  when @cond => action             Select first match\n` +
+        `  when [cond => val; * => default] First-match list\n` +
+        `  when @val ["a" => x; * => y]    Match value against patterns`,
+        "=> or if",
         location()
       );
     }
 
 // -------------------------------------------------------------
-// MATCH FORM: /when <expression>: [value => action, ...]
+// MATCH FORM: /when <expression> [value => action, ...]
+// Colon is optional: both `when @expr [...]` and `when @expr: [...]` work
 // -------------------------------------------------------------
 
 WhenMatchForm
+  // Colon form: when @expr: [patterns] — full error recovery via WhenConditionBlock
   = DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ ":" _ conditions:WhenConditionBlock {
-      helpers.debug('WhenMatchForm matched', { expression, conditions });
-      
+      helpers.debug('WhenMatchForm matched (colon)', { expression, conditions });
+
+      return helpers.createStructuredDirective(
+        'when',
+        'whenMatch',
+        {
+          expression: expression,
+          conditions: conditions
+        },
+        {
+          expression: helpers.reconstructRawString(expression),
+          conditions: conditions.map(c => ({
+            condition: helpers.reconstructRawString(c.condition),
+            action: c.action ? helpers.reconstructRawString(c.action) : undefined
+          }))
+        },
+        {
+          conditionCount: conditions.length
+        },
+        location()
+      );
+    }
+  // Bare form: when @expr [patterns] — silently fails if block isn't valid conditions
+  // (falls through to WhenSimpleBlockForm for educational error)
+  / DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ "[" _ conditions:WhenConditionList _ "]" {
+      helpers.debug('WhenMatchForm matched (bare)', { expression, conditions });
+
       return helpers.createStructuredDirective(
         'when',
         'whenMatch',
@@ -1211,7 +1242,7 @@ WhenImplicitVarAssignmentError
         `Or use \`var\` in actions to set outer-scope variables:\n` +
         `  "match" => var @${id} = "value"\n\n` +
         `Example:\n` +
-        `  /when @mode: [\n` +
+        `  /when @mode [\n` +
         `    let @local = "scoped"      # Local to when block\n` +
         `    "match" => var @${id} = @local  # Sets outer-scope variable\n` +
         `  ]`,

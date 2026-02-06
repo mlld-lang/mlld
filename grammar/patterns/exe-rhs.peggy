@@ -980,30 +980,25 @@ WhenExpressionAny
   / WhenExpression
   / WhenExpressionInline
 
-// Deprecated block form error recovery: when @condition [block]
-// The old form without arrow is no longer supported
+// Error recovery: when @condition [block] where block starts with statement keywords
+// The match form when @expr [patterns] already handles condition-like blocks above.
+// This catches imperative blocks (show, let, for, etc.) that don't look like match patterns.
 WhenExpressionInlineBlock
   = "when" _ condition:WhenConditionExpression _ &("[" _ ("let" / "show" / "for" / "when" / "log" / "output" / "run" / "var" / "=>" )) "[" {
       const conditionText = helpers.reconstructRawString(condition);
       helpers.mlldError(
-        `Invalid when syntax: missing '=>' before block.\n\n` +
-        `Change:  when ${conditionText} [...]  =>  when ${conditionText} => [...]\n\n` +
-        `The 'when' directive has these forms:\n\n` +
-        `1. Single-line (condition => action):\n` +
-        `   when @ready => show "go!"\n` +
-        `   when @error => [log @error; => null]\n\n` +
-        `2. First-match list:\n` +
-        `   when [\n` +
-        `     @x > 100 => "large"\n` +
-        `     @x > 10 => "medium"\n` +
-        `     * => "small"\n` +
-        `   ]\n\n` +
-        `3. Match form:\n` +
-        `   when @status: [\n` +
-        `     "ok" => "ready"\n` +
-        `     * => "unknown"\n` +
-        `   ]`,
-        "=>",
+        `when ${conditionText} [...] is ambiguous. Did you mean:\n\n` +
+        `  when ${conditionText} => [block]    Value-returning block (keeps when semantics)\n` +
+        `  if ${conditionText} [block]         Imperative flow (different return behavior!)\n\n` +
+        `Note: Inside exe/for, these have different return semantics.\n` +
+        `  when @cond => [=> @val]   returns @val from the when expression\n` +
+        `  if @cond [=> @val]        returns @val from the enclosing exe\n\n` +
+        `if vs when:\n` +
+        `  if @cond [block]                 Run block if true\n` +
+        `  when @cond => action             Select first match\n` +
+        `  when [cond => val; * => default] First-match list\n` +
+        `  when @val ["a" => x; * => y]    Match value against patterns`,
+        "=> or if",
         location()
       );
     }
