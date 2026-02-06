@@ -4,10 +4,10 @@ title: Environment Configuration
 brief: Configure filesystem, network, limits, and credentials for environments
 category: security
 parent: security
-tags: [environments, configuration, isolation, credentials, limits]
+tags: [environments, configuration, isolation, credentials, limits, mcp]
 related: [env-overview, env-directive, policies]
-related-code: [interpreter/eval/env.ts, interpreter/env/Environment.ts]
-updated: 2026-02-03
+related-code: [interpreter/eval/env.ts, interpreter/env/Environment.ts, interpreter/eval/env-mcp-config.test.ts]
+updated: 2026-02-05
 ---
 
 Environment configuration objects control isolation, credentials, and resource limits.
@@ -36,26 +36,27 @@ env @sandbox [
 | `auth` | `"credential-name"` | Auth reference from policy |
 | `tools` | `["Read", "Write"]` | MCP tool routing (does not block commands) |
 
-**Note:** The `tools` field routes MCP tool calls, not command execution. To block commands, use `policy.capabilities.deny`.
+**MCP configuration via `@mcpConfig()`:**
 
-**Filesystem mounts:**
-
-```mlld
-fs: { read: [".:/app"], write: ["/tmp", "./output:/out"] }
-```
-
-Format: `"host:container"` or `"path"` (same in both).
-
-**Without a provider:**
+Define an `@mcpConfig()` function to provide profile-based MCP server configuration:
 
 ```mlld
-var @devEnv = {
-  auth: "claude",
-  tools: ["Read", "Write", "Bash"]
-}
+exe @mcpConfig() = when [
+  @mx.profile == "full" => {
+    servers: [{ command: "mcp-server", tools: "*" }]
+  }
+  @mx.profile == "readonly" => {
+    servers: [{ command: "mcp-server", tools: ["list", "get"] }]
+  }
+  * => { servers: [] }
+]
+
+env @cfg with { profile: "readonly" } [
+  show @list()
+]
 ```
 
-Commands run locally with specified credentials and tool restrictions.
+The function is called when an `env` block spawns, with `@mx.profile` set from the `with { profile }` clause.
 
 **Compose with `with`:**
 
