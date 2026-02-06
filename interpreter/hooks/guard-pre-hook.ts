@@ -275,7 +275,23 @@ function truncatePreview(value: string, limit = 160): string {
   return `${value.slice(0, limit)}…`;
 }
 
+function hasSecretLabel(variable: Variable): boolean {
+  const labels = Array.isArray(variable.mx?.labels) ? variable.mx!.labels : [];
+  return labels.includes('secret') || labels.includes('sensitive');
+}
+
+function hasSecretLabelInArray(labels: readonly DataLabel[]): boolean {
+  return labels.includes('secret') || labels.includes('sensitive');
+}
+
+function redactVariableForErrorOutput(variable: Variable): string {
+  return '[REDACTED]';
+}
+
 function buildVariablePreview(variable: Variable): string | null {
+  if (hasSecretLabel(variable)) {
+    return '[REDACTED]';
+  }
   try {
     const value = (variable as any).value;
     if (typeof value === 'string') {
@@ -302,6 +318,9 @@ function buildInputPreview(
   operationSnapshot?: OperationSnapshot
 ): string | null {
   if (scope === 'perInput' && perInput) {
+    if (hasSecretLabelInArray(perInput.labels)) {
+      return '[REDACTED]';
+    }
     return buildVariablePreview(perInput.variable);
   }
   if (scope === 'perOperation' && operationSnapshot) {
@@ -904,6 +923,7 @@ async function evaluateGuard(options: {
     operationLabels: operation.opLabels ?? []
   });
 
+  const isSecretContext = hasSecretLabelInArray(contextLabels);
   const guardContext: GuardContextSnapshot = {
     name: guard.name,
     attempt: options.attemptNumber,
@@ -915,8 +935,8 @@ async function evaluateGuard(options: {
     labels: contextLabels,
     sources: contextSources,
     taint: contextTaint,
-    inputPreview,
-    outputPreview: buildVariablePreview(guardOutputVariable),
+    inputPreview: isSecretContext ? '[REDACTED]' : inputPreview,
+    outputPreview: isSecretContext ? '[REDACTED]' : buildVariablePreview(guardOutputVariable),
     hintHistory: options.attemptHistory.map(entry => entry.hint ?? null),
     timing: 'before'
   };
@@ -948,7 +968,7 @@ async function evaluateGuard(options: {
         scope,
         inputPreview,
         guardContext: contextSnapshotForMetadata,
-        guardInput: inputVariable!,
+        guardInput: hasSecretLabel(inputVariable!) ? redactVariableForErrorOutput(inputVariable!) : inputVariable!,
         reason: policyResult.reason,
         decision: 'deny'
       };
@@ -981,7 +1001,7 @@ async function evaluateGuard(options: {
         scope,
         inputPreview,
         guardContext: contextSnapshotForMetadata,
-        guardInput: inputVariable!
+        guardInput: hasSecretLabel(inputVariable!) ? redactVariableForErrorOutput(inputVariable!) : inputVariable!
       }
     };
   }
@@ -996,7 +1016,7 @@ async function evaluateGuard(options: {
     scope,
     inputPreview,
     guardContext: contextSnapshotForMetadata,
-    guardInput: inputVariable
+    guardInput: hasSecretLabel(inputVariable) ? redactVariableForErrorOutput(inputVariable) : inputVariable
   };
 
   if (!action || action.decision === 'allow') {
@@ -1322,7 +1342,9 @@ function buildDecisionMetadata(
   }
 
   if (extras?.inputVariable) {
-    metadata.guardInput = extras.inputVariable;
+    metadata.guardInput = hasSecretLabel(extras.inputVariable)
+      ? redactVariableForErrorOutput(extras.inputVariable)
+      : extras.inputVariable;
   }
 
   if (extras?.contextSnapshot) {
@@ -1406,19 +1428,39 @@ function cloneGuardContextSnapshot(context: GuardContextSnapshot): GuardContextS
     hintHistory: context.hintHistory ? [...context.hintHistory] : undefined
   };
   if (context.input !== undefined) {
-    cloned.input = cloneGuardContextInput(context.input);
+    cloned.input = redactOrCloneGuardContextInput(context.input);
   }
   if (context.output !== undefined) {
-    cloned.output = cloneGuardContextInput(context.output as any);
+    cloned.output = redactOrCloneGuardContextInput(context.output as any);
+  }
+  if (cloned.inputPreview !== undefined && typeof cloned.inputPreview === 'string') {
+    const labels = Array.isArray(context.labels) ? context.labels : [];
+    if (hasSecretLabelInArray(labels)) {
+      cloned.inputPreview = '[REDACTED]';
+    }
+  }
+  if (cloned.outputPreview !== undefined && typeof cloned.outputPreview === 'string') {
+    const labels = Array.isArray(context.labels) ? context.labels : [];
+    if (hasSecretLabelInArray(labels)) {
+      cloned.outputPreview = '[REDACTED]';
+    }
   }
   return cloned;
 }
 
-function cloneGuardContextInput(value: unknown): unknown {
+function redactOrCloneGuardContextInput(value: unknown): unknown {
   if (Array.isArray(value)) {
-    return value.map(item => (isVariable(item) ? cloneVariableForGuard(item) : item));
+    return value.map(item => {
+      if (isVariable(item) && hasSecretLabel(item)) {
+        return redactVariableForErrorOutput(item);
+      }
+      return isVariable(item) ? cloneVariableForGuard(item) : item;
+    });
   }
   if (isVariable(value as Variable)) {
+    if (hasSecretLabel(value as Variable)) {
+      return redactVariableForErrorOutput(value as Variable);
+    }
     return cloneVariableForGuard(value as Variable);
   }
   return value;

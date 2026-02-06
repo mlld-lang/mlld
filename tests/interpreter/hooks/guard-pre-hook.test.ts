@@ -842,3 +842,91 @@ it('feeds guard-transformed values into exec invocation parameters', async () =>
   const value = isStructuredValue(result.value) ? result.value.text : result.value;
   expect(String(value)).toContain('scrubbed');
 });
+
+describe('secret redaction in guard error messages', () => {
+  it('redacts secret variable values in inputPreview, guardInput, and guardContext', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard @noSecret for secret = when [ * => deny "blocked" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const secretValue = 'sk-super-secret-key-12345';
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        secretValue,
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'], sources: ['test'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+    let error: unknown;
+    try {
+      await evaluateDirective(directive, env);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(GuardError);
+    const guardError = error as GuardError;
+
+    // Serialize the entire error to check for secret leakage
+    const errorJson = JSON.stringify(guardError.toJSON());
+    expect(errorJson).not.toContain(secretValue);
+    expect(errorJson).toContain('[REDACTED]');
+
+    // Verify specific fields are redacted
+    expect(guardError.details.inputPreview).toBe('[REDACTED]');
+    const guardCtx = guardError.details.guardContext as any;
+    expect(guardCtx.inputPreview).toBe('[REDACTED]');
+    expect(guardCtx.outputPreview).toBe('[REDACTED]');
+  });
+
+  it('redacts sensitive variable values in error messages', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard @noSensitive for sensitive = when [ * => deny "blocked sensitive" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const sensitiveValue = 'user@private-email.com';
+    env.setVariable(
+      'sensitiveVar',
+      createSimpleTextVariable(
+        'sensitiveVar',
+        sensitiveValue,
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['sensitive'], sources: ['test'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @sensitiveVar')[0] as DirectiveNode;
+    let error: unknown;
+    try {
+      await evaluateDirective(directive, env);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(GuardError);
+
+    const errorJson = JSON.stringify((error as GuardError).toJSON());
+    expect(errorJson).not.toContain(sensitiveValue);
+    expect(errorJson).toContain('[REDACTED]');
+  });
+});
