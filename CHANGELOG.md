@@ -79,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **`when` values in exe blocks**: `WhenExpression` statements in exe blocks now correctly early-return when they produce a non-null value — previously the value was silently discarded and execution continued to the next statement. Side-effect actions (`show`/`output`) are correctly excluded from early return.
 - **Directive error line numbers**: `MlldDirectiveError` now correctly extracts line/column from AST `SourceLocation` objects — previously showed `at line undefined, column undefined` for all directive errors
 - **Error messages no longer prefix directives with `/`**: Error messages now say `for expects an array` instead of `/for expects an array` — the `/` is a line-start disambiguator in markdown mode, not part of the directive name. Updated across grammar parse errors, interpreter runtime errors, and error templates.
 - **`no-sensitive-exfil`**: Policy rule blocks sensitive data from flowing to `exfil` operations without requiring `untrusted`.

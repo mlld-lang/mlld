@@ -99,6 +99,26 @@ export async function evaluateExeBlock(
         return { value: returnResult.value, env };
       }
 
+      // WhenExpression: treat non-null, non-side-effect value as early return
+      if (stmt.type === 'WhenExpression') {
+        const { evaluateWhenExpression } = await import('./when-expression');
+        const whenResult = await evaluateWhenExpression(stmt as any, blockEnv);
+        blockEnv = whenResult.env || blockEnv;
+        if (whenResult.value !== null && whenResult.value !== undefined) {
+          if (typeof whenResult.value === 'object' && (whenResult.value as any).__whenEffect) {
+            continue;
+          }
+          // Unwrap ExeReturnControl from block-form actions like `when @cond => [=> value]`
+          const value = isExeReturnControl(whenResult.value) ? whenResult.value.value : whenResult.value;
+          env.mergeChild(blockEnv);
+          if (shouldBubbleReturn) {
+            return { value: createExeReturnControl(value), env };
+          }
+          return { value, env };
+        }
+        continue;
+      }
+
       const result = await evaluate(stmt, blockEnv);
       blockEnv = result.env || blockEnv;
       if (isExeReturnControl(result.value)) {
