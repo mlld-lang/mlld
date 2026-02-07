@@ -37,6 +37,7 @@ import { evaluateWhenExpression } from './when-expression';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 import { isExeReturnControl } from './exe-return';
+import { isControlCandidate } from './loop';
 
 interface ForIterationError {
   index: number;
@@ -454,6 +455,21 @@ function formatIterationError(error: unknown): string {
   }
 }
 
+function extractControlKind(value: unknown): 'done' | 'continue' | null {
+  const v = isStructuredValue(value) ? asData(value) : value;
+  if (v && typeof v === 'object' && '__whileControl' in (v as any)) {
+    return (v as any).__whileControl === 'done' ? 'done' : 'continue';
+  }
+  if (v && typeof v === 'object' && 'valueType' in (v as any)) {
+    const vt = (v as any).valueType;
+    if (vt === 'done') return 'done';
+    if (vt === 'continue') return 'continue';
+  }
+  if (v === 'done') return 'done';
+  if (v === 'continue') return 'continue';
+  return null;
+}
+
 function resetForErrorsContext(env: Environment, errors: ForIterationError[]): void {
   const mxManager = env.getContextManager?.();
   if (!mxManager) return;
@@ -620,11 +636,25 @@ export async function evaluateForDirective(
                   returnControl = actionResult.value;
                   break;
                 }
+                if (isControlCandidate(actionResult.value)) {
+                  const controlKind = extractControlKind(actionResult.value);
+                  if (controlKind === 'done') {
+                    returnControl = { __forDone: true };
+                  }
+                  break;
+                }
               } else {
                 const actionResult = await evaluate(actionNode, blockEnv);
                 blockEnv = actionResult.env || blockEnv;
                 if (isExeReturnControl(actionResult.value)) {
                   returnControl = actionResult.value;
+                  break;
+                }
+                if (isControlCandidate(actionResult.value)) {
+                  const controlKind = extractControlKind(actionResult.value);
+                  if (controlKind === 'done') {
+                    returnControl = { __forDone: true };
+                  }
                   break;
                 }
               }
@@ -645,6 +675,13 @@ export async function evaluateForDirective(
               if (actionResult.env) childEnv = actionResult.env;
               if (isExeReturnControl(actionResult.value)) {
                 returnControl = actionResult.value;
+                break;
+              }
+              if (isControlCandidate(actionResult.value)) {
+                const controlKind = extractControlKind(actionResult.value);
+                if (controlKind === 'done') {
+                  returnControl = { __forDone: true };
+                }
                 break;
               }
             }
@@ -711,6 +748,9 @@ export async function evaluateForDirective(
         if (isExeReturnControl(result)) {
           return { value: result, env };
         }
+        if (result && typeof result === 'object' && (result as any).__forDone) {
+          break;
+        }
       }
     }
     
@@ -766,6 +806,7 @@ export async function evaluateForExpression(
   const iterableArray = Array.from(iterable);
 
   const SKIP = Symbol('skip');
+  const DONE = Symbol('done');
   const runOne = async (entry: [any, any], idx: number) => {
     const [key, value] = entry;
     const iterationRoot = env.createChildEnvironment();
@@ -818,6 +859,8 @@ export async function evaluateForExpression(
       parallel: !!effective?.parallel
     };
     childEnv.pushExecutionContext('for', forCtx);
+    // Push exe context so if/when blocks inside for-expression blocks can use => returns
+    childEnv.pushExecutionContext('exe', { allowReturn: true, scope: 'for-expression' });
 
     try {
       let exprResult: unknown = null;
@@ -876,6 +919,10 @@ export async function evaluateForExpression(
             // Allow side effects (show, output) in for-expressions for progress logging
             lastResult = await evaluate(node as any, currentEnv, { isExpression: true, allowEffects: true });
             currentEnv = lastResult.env || currentEnv;
+
+            // Propagate flow control from if/when blocks (matches loop.ts pattern)
+            if (isExeReturnControl(lastResult.value)) break;
+            if (isControlCandidate(lastResult.value)) break;
           }
 
           return { value: lastResult.value, env: currentEnv };
@@ -885,6 +932,39 @@ export async function evaluateForExpression(
 
         if (result.env) childEnv = result.env;
         let branchValue = result?.value;
+
+        // Unwrap ExeReturnControl — use inner value as iteration result
+        if (isExeReturnControl(branchValue)) {
+          branchValue = (branchValue as any).value;
+        }
+        // Handle continue/done control signals
+        if (branchValue && typeof branchValue === 'object' && '__whileControl' in (branchValue as any)) {
+          const control = (branchValue as any).__whileControl;
+          if (control === 'continue') {
+            childEnv.popExecutionContext('exe');
+            childEnv.popExecutionContext('for');
+            return SKIP as any;
+          }
+          if (control === 'done') {
+            childEnv.popExecutionContext('exe');
+            childEnv.popExecutionContext('for');
+            return DONE as any;
+          }
+        }
+        if (isControlCandidate(branchValue)) {
+          const controlKind = extractControlKind(branchValue);
+          if (controlKind === 'continue') {
+            childEnv.popExecutionContext('exe');
+            childEnv.popExecutionContext('for');
+            return SKIP as any;
+          }
+          if (controlKind === 'done') {
+            childEnv.popExecutionContext('exe');
+            childEnv.popExecutionContext('for');
+            return DONE as any;
+          }
+        }
+
         if (simpleVarRef) {
           const refVar = childEnv.getVariable(simpleVarRef.identifier);
           const refValue = refVar?.value;
@@ -932,11 +1012,17 @@ export async function evaluateForExpression(
           }
         }
       }
+      childEnv.popExecutionContext('exe');
       childEnv.popExecutionContext('for');
       return exprResult as any;
     } catch (error) {
+      childEnv.popExecutionContext('exe');
       childEnv.popExecutionContext('for');
       const message = formatIterationError(error);
+      if (effective?.parallel) {
+        logger.warn(`for parallel iteration ${idx} error: ${message}`);
+        env.emitEffect('stderr', `  \u26a0 for iteration ${idx} error: ${message}\n`, { source: expr.location });
+      }
       const marker: ForIterationError = {
         index: idx,
         key: key ?? null,
@@ -955,10 +1041,11 @@ export async function evaluateForExpression(
   if (effective?.parallel) {
     const cap = Math.min(effective.cap ?? getParallelLimit(), iterableArray.length);
     const orderedResults = await runWithConcurrency(iterableArray, cap, runOne, { ordered: true, paceMs: effective.rateMs });
-    for (const r of orderedResults) if (r !== SKIP) results.push(r);
+    for (const r of orderedResults) if (r !== SKIP && r !== DONE) results.push(r);
   } else {
     for (let i = 0; i < iterableArray.length; i++) {
       const r = await runOne(iterableArray[i], i);
+      if (r === DONE) break;
       if (r !== SKIP) results.push(r);
     }
   }

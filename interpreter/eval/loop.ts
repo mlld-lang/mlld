@@ -59,7 +59,7 @@ async function setLoopInputVariable(env: Environment, value: StructuredValue): P
   env.setVariable('input', inputVar);
 }
 
-function isControlCandidate(result: unknown): boolean {
+export function isControlCandidate(result: unknown): boolean {
   const unwrapped = isStructuredValue(result) ? asData(result) : result;
   if (unwrapped && typeof unwrapped === 'object' && '__whileControl' in (unwrapped as Record<string, unknown>)) {
     return true;

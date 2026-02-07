@@ -129,7 +129,7 @@ export async function evaluateExeBlock(
         return { value: result.value.value, env };
       }
       const hasLoopContext = Boolean(
-        blockEnv.getExecutionContext('loop') || blockEnv.getExecutionContext('while')
+        blockEnv.getExecutionContext('loop') || blockEnv.getExecutionContext('while') || blockEnv.getExecutionContext('for')
       );
       if (hasLoopContext && isLoopControlValue(result.value)) {
         env.mergeChild(blockEnv);
