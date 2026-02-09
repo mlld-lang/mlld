@@ -29,11 +29,20 @@ Multiple policies compose automatically when imported or declared.
 | `limits` | Minimum | Most restrictive wins |
 
 ```mlld
->> Policy A allows echo+jq, Policy B allows echo
->> Effective allow: echo (intersection)
-/import policy @p1 from "./policy-one.mld"
-/import policy @p2 from "./policy-two.mld"
-/show @mx.policy.configs.allow.cmd
+>> Team policy allows echo and git
+/var @team = {
+  capabilities: { allow: ["cmd:echo:*", "cmd:git:*"] }
+}
+/policy @p1 = union(@team)
+
+>> Project policy allows echo and node
+/var @project = {
+  capabilities: { allow: ["cmd:echo:*", "cmd:node:*"] }
+}
+/policy @p2 = union(@project)
+
+>> Effective: only echo (intersection of both policies)
+/run { echo "allowed by both" }
 ```
 
 **Profile selection** considers composed policy. The first profile whose `requires` all pass is selected:
@@ -51,6 +60,6 @@ Multiple policies compose automatically when imported or declared.
 /show @mx.profile
 ```
 
-Auth configs from imported policies merge via union, so imported modules can provide their own credential mappings that compose with local auth configs.
+Label deny rules and auth configs from all layers merge via union — a `deny` on `secret → op:cmd` from ANY layer blocks that flow in the merged policy.
 
-See `security-policies` for basic definition, `policy-capabilities` for capability syntax.
+See `security-policies` for basic definition, `policy-capabilities` for capability syntax, `policy-label-flow` for label rules.
