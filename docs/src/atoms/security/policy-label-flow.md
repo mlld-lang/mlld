@@ -8,6 +8,7 @@ tags: [policy, labels, deny, allow, flow, prefix-matching]
 related: [labels-sensitivity, labels-source-auto, policy-capabilities, security-policies, policy-composition]
 related-code: [interpreter/eval/policy.ts, core/security/taint.ts]
 updated: 2026-02-09
+qa_tier: 2
 ---
 
 The `labels` block in policy defines which data labels can flow to which operations.
@@ -48,5 +49,21 @@ policy @p = union(@policyConfig)
 **Built-in rules vs. explicit deny lists:** For common protection patterns, use `defaults.rules` with built-in rules like `no-secret-exfil` instead of writing explicit deny lists. See `policy-operations` for the two-step classification pattern where semantic labels (e.g., `net:w`) are mapped to risk categories (e.g., `exfil`) via `policy.operations`.
 
 **In composed policies:** Label deny/allow rules from all composed policy layers merge via union. A `deny` on `secret → op:cmd` from ANY layer blocks that flow in the merged policy. See `policy-composition` for merge rules.
+
+**Complete denial example:**
+
+```mlld
+var @policyConfig = {
+  labels: {
+    secret: { deny: ["op:show"] }
+  }
+}
+policy @p = union(@policyConfig)
+
+var secret @key = "sk-12345"
+show @key
+```
+
+Error: `Label 'secret' cannot flow to 'op:show'` -- the policy blocks secret-labeled data from reaching show.
 
 See `labels-sensitivity` for declaring labels, `labels-source-auto` for source label rules.
