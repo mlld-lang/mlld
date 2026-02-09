@@ -2934,10 +2934,10 @@ async function evaluateExecInvocationInternal(
       policyEnforcer.checkLabelFlow(
         {
           inputTaint: envInputTaint,
-          opLabels,
+          opLabels: operationContext.opLabels ?? [],
           exeLabels,
           flowChannel: 'using',
-          command: parsedCommand.command
+          command
         },
         { env, sourceLocation: node.location }
       );
