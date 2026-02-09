@@ -7,7 +7,7 @@ parent: security
 tags: [policy, composition, import, profiles]
 related: [security-policies, policy-capabilities, policy-auth]
 related-code: [interpreter/eval/policy.ts]
-updated: 2026-02-03
+updated: 2026-02-09
 ---
 
 Multiple policies compose automatically when imported or declared.
@@ -16,7 +16,7 @@ Multiple policies compose automatically when imported or declared.
 /import policy @baseline from "./baseline.mld"
 /import policy @company from "./company.mld"
 /var @localConfig = { deny: { sh: true } }
-/policy @local = union(@localConfig)
+/policy @localPolicy = union(@localConfig)
 ```
 
 **Composition rules:**
@@ -50,5 +50,7 @@ Multiple policies compose automatically when imported or declared.
 >> Selects "readonly" because sh is denied
 /show @mx.profile
 ```
+
+Auth configs from imported policies merge via union, so imported modules can provide their own credential mappings that compose with local auth configs.
 
 See `security-policies` for basic definition, `policy-capabilities` for capability syntax.

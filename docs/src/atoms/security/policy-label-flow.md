@@ -5,15 +5,15 @@ brief: Deny/allow rules controlling which data labels can flow to which operatio
 category: security
 parent: security
 tags: [policy, labels, deny, allow, flow, prefix-matching]
-related: [labels-sensitivity, labels-source-auto, policy-capabilities, security-policies]
+related: [labels-sensitivity, labels-source-auto, policy-capabilities, security-policies, policy-composition]
 related-code: [interpreter/eval/policy.ts, core/security/taint.ts]
-updated: 2026-02-04
+updated: 2026-02-09
 ---
 
 The `labels` block in policy defines which data labels can flow to which operations.
 
 ```mlld
-/var @policyConfig = {
+var @policyConfig = {
   labels: {
     secret: {
       deny: ["op:cmd", "op:show", "net:w"]
@@ -24,10 +24,10 @@ The `labels` block in policy defines which data labels can flow to which operati
     }
   }
 }
-/policy @p = union(@policyConfig)
+policy @p = union(@policyConfig)
 ```
 
-**Deny/allow targets** are operation labels — both auto-applied (`op:cmd`, `op:show`) and user-declared (`net:w`, `destructive`, `safe`).
+**Deny/allow targets** are operation labels -- both auto-applied (`op:cmd`, `op:show`) and user-declared (`net:w`, `destructive`, `safe`).
 
 **Prefix matching:** A deny on `op:cmd:git` blocks all git subcommands (`op:cmd:git:push`, `op:cmd:git:reset`, etc.).
 
@@ -36,13 +36,17 @@ The `labels` block in policy defines which data labels can flow to which operati
 **Interaction with `defaults.unlabeled`:** When `unlabeled: untrusted`, unlabeled data cannot flow to operations unless explicitly allowed:
 
 ```mlld
-/var @policyConfig = {
+var @policyConfig = {
   defaults: { unlabeled: "untrusted" },
   labels: {
     influenced: { deny: ["op:show"] }
   }
 }
-/policy @p = union(@policyConfig)
+policy @p = union(@policyConfig)
 ```
+
+**Built-in rules vs. explicit deny lists:** For common protection patterns, use `defaults.rules` with built-in rules like `no-secret-exfil` instead of writing explicit deny lists. See `policy-operations` for the two-step classification pattern where semantic labels (e.g., `net:w`) are mapped to risk categories (e.g., `exfil`) via `policy.operations`.
+
+**In composed policies:** Label deny/allow rules from all composed policy layers merge via union. A `deny` on `secret → op:cmd` from ANY layer blocks that flow in the merged policy. See `policy-composition` for merge rules.
 
 See `labels-sensitivity` for declaring labels, `labels-source-auto` for source label rules.
