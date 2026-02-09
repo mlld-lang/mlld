@@ -99,7 +99,7 @@ show @applyFix(@processed)
 >> without blocking the subsequent dual-audit flow, which uses
 >> plain exe mocks that don't produce llm-labeled output.
 
-guard @ensureVerified for llm = when [
+guard @ensureVerified after llm = when [
   @mx.op.type != "exe" => allow
   @mx.tools.calls.includes("verify") => allow
   * => deny "LLM output must be verified before further processing"

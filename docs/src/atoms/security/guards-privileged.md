@@ -36,9 +36,9 @@ show @send(@key) with { guards: false }
 | Remove label | `=> !label @var` | Remove specific label |
 | Clear labels | `=> clear! @var` | Remove all non-factual labels |
 
-Non-privileged guards attempting these on protected labels (`secret`, `untrusted`, `src:*`) get `PROTECTED_LABEL_REMOVAL` error.
+Non-privileged guards cannot remove ANY labels. Protected labels (`secret`, `untrusted`, `src:*`) get `PROTECTED_LABEL_REMOVAL`; other labels get `LABEL_PRIVILEGE_REQUIRED`. This ensures label removal is always a privilege escalation.
 
-**Contrast — user guard cannot remove protected labels:**
+**Contrast — user guard cannot remove labels:**
 
 ```mlld
 >> User-defined guard — NOT privileged
