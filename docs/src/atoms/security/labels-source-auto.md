@@ -5,8 +5,8 @@ brief: System-applied labels that track data provenance
 category: security
 parent: security
 tags: [labels, taint, provenance, automatic, security]
-related: [labels-overview, labels-propagation, guards-basics, labels-mx-context]
-related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]
+related: [labels-overview, security-label-tracking, guards-basics, labels-sensitivity]
+related-code: [core/security/taint.ts, interpreter/eval/label-modification.ts]
 updated: 2026-01-31
 qa_tier: 2
 ---

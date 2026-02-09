@@ -5,7 +5,7 @@ brief: Event ledger for labels, signatures, and file taint
 category: security
 parent: security
 tags: [audit, security, labels, signing, taint]
-related: [labels-overview, label-modification, signing-overview, policy-label-flow]
+related: [labels-overview, label-modification, signing-overview, policy-label-flow, security-label-tracking]
 related-code: [core/security/AuditLogger.ts, core/security/AuditLogIndex.ts, interpreter/utils/audit-log.ts]
 updated: 2026-02-05
 qa_tier: 2
@@ -39,7 +39,7 @@ mlld writes a JSONL audit ledger at `.mlld/sec/audit.jsonl` in each project. Eac
 
 - File reads and imports consult the audit log to restore taint from prior `write` events.
 - `taint` records the label/taint set applied to the written data.
-- `writer` stores the first available source tag when present.
+- `writer` stores the first available source tag when present. When no source tag is available (e.g., for inline-declared values), `writer` is `null`.
 
 **Inspecting the ledger:**
 
@@ -48,5 +48,17 @@ tail -n 20 .mlld/sec/audit.jsonl
 jq 'select(.event == "write")' .mlld/sec/audit.jsonl
 jq 'select(.event == "label")' .mlld/sec/audit.jsonl
 ```
+
+**Programmatic query:**
+
+```mlld
+var @audit = <@base/.mlld/sec/audit.jsonl>
+exe @findWrites(events) = js {
+  return events.filter(e => e.event === "write");
+}
+show @findWrites(@audit) | @json
+```
+
+**Note:** When working with audit events in mlld, use `@event | @json` or a JS function to access the `taint` field, since `.taint` on a variable accesses the variable's metadata, not the JSON property.
 
 Audit logging is non-blocking. When audit writes fail, mlld logs a warning and continues execution.

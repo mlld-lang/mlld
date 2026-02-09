@@ -6,7 +6,7 @@ category: security
 parent: security
 tags: [policy, labels, deny, allow, flow, prefix-matching]
 related: [labels-sensitivity, labels-source-auto, policy-capabilities, security-policies]
-related-code: [interpreter/eval/policy.ts, core/security/LabelTracker.ts]
+related-code: [interpreter/eval/policy.ts, core/security/taint.ts]
 updated: 2026-02-04
 ---
 

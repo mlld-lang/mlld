@@ -6,7 +6,7 @@ category: security
 parent: security
 tags: [labels, sensitivity, secret, pii, security]
 related: [labels-overview, labels-trust, labels-source-auto, guards-basics]
-related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]
+related-code: [core/security/taint.ts, interpreter/eval/label-modification.ts]
 updated: 2026-01-31
 qa_tier: 2
 ---

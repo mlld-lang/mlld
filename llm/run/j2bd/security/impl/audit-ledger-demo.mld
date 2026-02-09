@@ -21,7 +21,7 @@ var secret @token = "sk-live-123"
 
 >> output writes the value to a file.
 >> The audit ledger records the write event with path, taint, and writer.
-output @token to "audit-ledger-demo.txt"
+output @token to "@base/tmp/audit-ledger-demo.txt"
 
 >> ============================================================
 >> STEP 3: Read it back and confirm labels persist
@@ -29,7 +29,7 @@ output @token to "audit-ledger-demo.txt"
 
 >> File reads inherit taint from the latest write event.
 >> The secret label should survive the file I/O round-trip.
-var @loaded = <audit-ledger-demo.txt>
+var @loaded = <@base/tmp/audit-ledger-demo.txt>
 show @loaded.mx.labels
 
 >> ============================================================
@@ -44,8 +44,12 @@ exe @findWrite(events) = js {
   return events.find(event => event.event === "write" && event.path.endsWith("audit-ledger-demo.txt"));
 }
 
+exe @getTaint(event) = js {
+  return JSON.stringify(event.taint || []);
+}
+
 var @writeEvent = @findWrite(@audit)
 show `Write event: @writeEvent.event`
 show `  Path: @writeEvent.path`
-show `  Taint: @writeEvent.taint`
+show `  Taint: @getTaint(@writeEvent)`
 show `  Writer: @writeEvent.writer`

@@ -7,7 +7,7 @@ parent: labels
 aliases: [label]
 tags: [security, labels, tracking, flow]
 related: [audit-log, security-guards-basics, security-automatic-labels]
-related-code: [core/security/LabelTracker.ts]
+related-code: [core/security/taint.ts]
 updated: 2026-02-05
 qa_tier: 2
 ---
@@ -49,10 +49,12 @@ show @result.mx.labels     // ["secret"]
 
 ```mlld
 var secret @token = "sk-live-123"
-output @token to "demo.txt"
+output @token to "@base/tmp/demo.txt"
 
-var @loaded = <demo.txt>
+var @loaded = <@base/tmp/demo.txt>
 show @loaded.mx.labels     // ["secret"]
 ```
+
+**Note:** If `@loaded.mx.labels` shows `[]`, check that you declared the sensitivity label on the original variable (e.g., `var secret @token`). Labels are not inferred from content—they must be declared explicitly.
 
 The audit log stores a `write` event with the taint set. On subsequent reads, mlld consults the log and applies the recorded labels. See [audit-log](audit-log.md) for the ledger format.
