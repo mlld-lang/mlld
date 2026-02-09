@@ -1,10 +1,11 @@
 import type { GuardBlockNode, GuardRuleNode, GuardActionNode } from '@core/types/guard';
-import type { PolicyConfig } from './union';
+import type { PolicyConfig, PolicyOperations } from './union';
 import type { PolicyConditionFn } from '../../interpreter/guards';
 import { v4 as uuid } from 'uuid';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
 import { getCommandTokens, matchesCommandPatterns, normalizeCommandPatternEntry } from './capability-patterns';
 import { isDangerAllowedForCommand, isDangerousCommand, normalizeDangerEntries } from './danger';
+import { expandOperationLabels } from './label-flow';
 
 export interface PolicyGuardSpec {
   name: string;
@@ -88,18 +89,20 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
         name: '__policy_rule_no_secret_exfil',
         label: 'secret',
         operationLabel: 'exfil',
-        reason: "Label 'secret' cannot flow to 'exfil'"
+        reason: "Label 'secret' cannot flow to 'exfil'",
+        operations: policy.operations
       }));
     }
     if (rule === 'no-sensitive-exfil') {
-      guards.push(makeSensitiveExfilGuard());
+      guards.push(makeSensitiveExfilGuard(policy.operations));
     }
     if (rule === 'no-untrusted-destructive') {
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_untrusted_destructive',
         label: 'untrusted',
         operationLabel: 'destructive',
-        reason: "Label 'untrusted' cannot flow to 'destructive'"
+        reason: "Label 'untrusted' cannot flow to 'destructive'",
+        operations: policy.operations
       }));
     }
     if (rule === 'no-untrusted-privileged') {
@@ -107,7 +110,8 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
         name: '__policy_rule_no_untrusted_privileged',
         label: 'untrusted',
         operationLabel: 'privileged',
-        reason: "Label 'untrusted' cannot flow to 'privileged'"
+        reason: "Label 'untrusted' cannot flow to 'privileged'",
+        operations: policy.operations
       }));
     }
   }
@@ -469,6 +473,7 @@ function makeDataRuleGuard(options: {
   label: string;
   operationLabel: string;
   reason: string;
+  operations?: PolicyOperations;
 }): PolicyGuardSpec {
   return {
     name: options.name,
@@ -479,10 +484,11 @@ function makeDataRuleGuard(options: {
     timing: 'before',
     privileged: true,
     policyCondition: ({ operation }) => {
-      const opLabels = [
+      const rawOpLabels = [
         ...(operation.opLabels ?? []),
         ...(operation.labels ?? [])
       ];
+      const opLabels = expandOperationLabels(rawOpLabels, options.operations);
       if (hasMatchingLabel(opLabels, options.operationLabel)) {
         return { decision: 'deny', reason: options.reason };
       }
@@ -491,7 +497,7 @@ function makeDataRuleGuard(options: {
   };
 }
 
-function makeSensitiveExfilGuard(): PolicyGuardSpec {
+function makeSensitiveExfilGuard(operations?: PolicyOperations): PolicyGuardSpec {
   return {
     name: '__policy_rule_no_sensitive_exfil',
     filterKind: 'data',
@@ -501,10 +507,11 @@ function makeSensitiveExfilGuard(): PolicyGuardSpec {
     timing: 'before',
     privileged: true,
     policyCondition: ({ operation, input }) => {
-      const opLabels = [
+      const rawOpLabels = [
         ...(operation.opLabels ?? []),
         ...(operation.labels ?? [])
       ];
+      const opLabels = expandOperationLabels(rawOpLabels, operations);
       if (!hasMatchingLabel(opLabels, 'exfil')) {
         return { decision: 'allow' };
       }

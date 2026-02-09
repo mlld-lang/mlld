@@ -2513,15 +2513,29 @@ async function evaluateExecInvocationInternal(
       }
       const paramInputTaint = descriptorToInputTaint(resultSecurityDescriptor);
       if (paramInputTaint.length > 0) {
-        policyEnforcer.checkLabelFlow(
-          {
-            inputTaint: paramInputTaint,
-            opLabels: operationContext.opLabels ?? [],
-            exeLabels,
-            flowChannel: 'arg'
-          },
-          { env, sourceLocation: node.location }
-        );
+        try {
+          policyEnforcer.checkLabelFlow(
+            {
+              inputTaint: paramInputTaint,
+              opLabels: operationContext.opLabels ?? [],
+              exeLabels,
+              flowChannel: 'arg'
+            },
+            { env, sourceLocation: node.location }
+          );
+        } catch (policyError) {
+          if (whenExprNode) {
+            const handled = await handleExecGuardDenial(policyError, {
+              execEnv,
+              env,
+              whenExprNode
+            });
+            if (handled) {
+              return finalizeResult(handled);
+            }
+          }
+          throw policyError;
+        }
       }
       const outputDescriptor = policyEnforcer.applyOutputPolicyLabels(
         resultSecurityDescriptor,

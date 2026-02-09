@@ -72,7 +72,7 @@ function findBestMatch(
   return best;
 }
 
-function expandOperationLabels(
+export function expandOperationLabels(
   targets: readonly string[],
   mappings?: PolicyOperations
 ): string[] {
