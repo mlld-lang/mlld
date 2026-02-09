@@ -1,0 +1,15 @@
+var @base = {
+  capabilities: {
+    allow: ["cmd:echo:*", "cmd:curl:*"]
+  }
+}
+policy @p1 = union(@base)
+
+var @restriction = {
+  capabilities: {
+    deny: ["cmd:curl:*"]
+  }
+}
+policy @p2 = union(@restriction)
+
+run cmd { curl --version }

@@ -1,0 +1,17 @@
+var @base = {
+  capabilities: {
+    allow: ["cmd:echo:*"]
+  }
+}
+policy @p1 = union(@base)
+
+var @labelRules = {
+  defaults: { rules: ["no-secret-exfil"] },
+  operations: {
+    "op:cmd": "exfil"
+  }
+}
+policy @p2 = union(@labelRules)
+
+var secret @token = "sk-123"
+run cmd { echo "@token" }
