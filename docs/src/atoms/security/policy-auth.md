@@ -19,7 +19,7 @@ var @policyConfig = {
     github: { from: "env:GH_TOKEN", as: "GH_TOKEN" }
   }
 }
-policy @p = union(@policyConfig)
+policy @p = union(@policyConfig)  >> union() activates a policy — see policy-composition
 
 run cmd { claude -p "hello" } using auth:claude
 ```
@@ -77,3 +77,12 @@ run cmd { tool } using @token as TOOL_KEY
 ```
 
 Direct keychain access is blocked; use `policy.auth` with `using auth:*` instead.
+
+**Note:** The `no-secret-exfil` rule blocks secrets flowing through `exfil`-labeled operations. To also block direct `show`/`log` of secrets, add label flow rules:
+
+```mlld
+var @policyConfig = {
+  labels: { secret: { deny: ["op:show", "op:log"] } }
+}
+policy @p = union(@policyConfig)
+```

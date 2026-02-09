@@ -5,7 +5,7 @@ brief: Scoped execution within an environment configuration
 category: security
 parent: security
 tags: [environments, blocks, isolation, scoping]
-related: [env-overview, env-config, policies]
+related: [env-overview, env-config, security-policies]
 related-code: [interpreter/eval/env.ts, grammar/directives/env.peggy]
 updated: 2026-02-03
 ---

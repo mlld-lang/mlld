@@ -65,6 +65,19 @@ autoverify: template "./custom-verify.att"  >> Custom template
 3. Prepends verification instructions to prompt
 4. Implicitly allows `cmd:mlld:verify` capability
 
+**Autoverify + enforcement guard:**
+
+`autoverify` injects verification instructions but cannot force compliance. Pair with an enforcement guard to require it:
+
+```mlld
+guard @ensureVerified after llm = when [
+  @mx.tools.calls.includes("verify") => allow
+  * => retry "Must verify instructions before proceeding"
+]
+```
+
+Autoverify for the happy path, the guard for enforcement. See `pattern-audit-guard`.
+
 **Why this matters:**
 
 Without automation:
@@ -110,7 +123,7 @@ show @audit()
 Autosign and autoverify prevent instruction tampering. An attacker cannot:
 - Forge signatures (requires key)
 - Modify signed templates (breaks signature)
-- Bypass verification (LLM instructions require it)
+- Bypass verification (pair with an enforcement guard (see above) to require verification)
 
 **Signature storage:** `.mlld/sec/sigs/{varname}.sig` and `.content`
 

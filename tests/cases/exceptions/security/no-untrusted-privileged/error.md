@@ -1,1 +1,1 @@
-Label 'untrusted' cannot flow to 'privileged'
+Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'

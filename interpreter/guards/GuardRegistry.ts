@@ -9,7 +9,7 @@ import type { SourceLocation } from '@core/types';
 
 export type PolicyConditionResult =
   | { decision: 'allow' }
-  | { decision: 'deny'; reason: string };
+  | { decision: 'deny'; reason: string; policyName?: string; rule?: string; suggestions?: string[] };
 
 export type PolicyConditionContext = {
   operation: {

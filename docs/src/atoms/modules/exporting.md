@@ -30,7 +30,7 @@ export { @greet, @farewell }
 export { * }
 ```
 
-**Environment module pattern:** Modules that wrap credentials export executables and let callers import the policy separately:
+**Environment module pattern:** Modules that wrap credentials export executables and let callers import the policy separately for credential configuration:
 
 ```mlld
 var @policyConfig = {

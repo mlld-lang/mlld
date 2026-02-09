@@ -79,7 +79,7 @@ function isMlldVerifyCommand(operation: { command?: string; metadata?: Record<st
   return tokens[0] === 'mlld' && tokens[1] === 'verify';
 }
 
-export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
+export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: string): PolicyGuardSpec[] {
   const guards: PolicyGuardSpec[] = [];
   const enabledRules = normalizeRuleList(policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
 
@@ -89,7 +89,7 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
         name: '__policy_rule_no_secret_exfil',
         label: 'secret',
         operationLabel: 'exfil',
-        reason: "Label 'secret' cannot flow to 'exfil'",
+        reason: "Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'",
         operations: policy.operations
       }));
     }
@@ -101,7 +101,7 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
         name: '__policy_rule_no_untrusted_destructive',
         label: 'untrusted',
         operationLabel: 'destructive',
-        reason: "Label 'untrusted' cannot flow to 'destructive'",
+        reason: "Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'",
         operations: policy.operations
       }));
     }
@@ -110,7 +110,7 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
         name: '__policy_rule_no_untrusted_privileged',
         label: 'untrusted',
         operationLabel: 'privileged',
-        reason: "Label 'untrusted' cannot flow to 'privileged'",
+        reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'",
         operations: policy.operations
       }));
     }
@@ -131,7 +131,12 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
       privileged: true,
       policyCondition: () => ({
         decision: 'deny',
-        reason: 'All operations denied by policy'
+        reason: 'All operations denied by policy',
+        policyName: policyDisplayName,
+        rule: 'deny',
+        suggestions: [
+          'Review active policies with @mx.policy.activePolicies'
+        ]
       })
     });
     return guards;
@@ -152,9 +157,15 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
       if (decision.allowed) {
         return { decision: 'allow' };
       }
+      const reason = decision.reason ?? `Command '${decision.commandName}' denied by policy`;
+      const rule = inferCapabilityRule(policy, decision.commandName);
+      const suggestions = buildCommandDenialSuggestions(decision.commandName, rule);
       return {
         decision: 'deny',
-        reason: decision.reason ?? `Command '${decision.commandName}' denied by policy`
+        reason,
+        policyName: policyDisplayName,
+        rule,
+        suggestions
       };
     }
   });
@@ -169,7 +180,16 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
       timing: 'before',
       privileged: true,
       policyCondition: () => {
-        return { decision: 'deny', reason: 'Shell access denied by policy' };
+        return {
+          decision: 'deny',
+          reason: 'Shell access denied by policy',
+          policyName: policyDisplayName,
+          rule: 'deny.sh',
+          suggestions: [
+            'Remove sh from deny list to allow shell access',
+            'Review active policies with @mx.policy.activePolicies'
+          ]
+        };
       }
     });
   }
@@ -187,7 +207,16 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
         const commandText = getOperationCommandText(operation);
         const tokens = getCommandTokens(commandText);
         if (isNetworkCommand(tokens)) {
-          return { decision: 'deny', reason: 'Network access denied by policy' };
+          return {
+            decision: 'deny',
+            reason: 'Network access denied by policy',
+            policyName: policyDisplayName,
+            rule: 'deny.network',
+            suggestions: [
+              'Remove network from deny list to allow network commands',
+              'Review active policies with @mx.policy.activePolicies'
+            ]
+          };
         }
         return { decision: 'allow' };
       }
@@ -195,6 +224,34 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
   }
 
   return guards;
+}
+
+function inferCapabilityRule(policy: PolicyConfig, commandName: string): string {
+  const deny = policy.deny;
+  const denyMap = deny && deny !== true && typeof deny === 'object' && !Array.isArray(deny) ? deny : undefined;
+  const denyPatterns = extractCommandPatterns(deny) ?? (denyMap?.cmd !== undefined ? normalizeCommandPatternList(denyMap.cmd) : undefined);
+  if (denyPatterns) {
+    const tokens = getCommandTokens(commandName);
+    if (denyPatterns.all || matchesCommandPatterns(tokens, denyPatterns.patterns)) {
+      return 'deny.cmd';
+    }
+  }
+  const allow = policy.allow;
+  if (allow !== undefined && allow !== true) {
+    return 'allow.cmd';
+  }
+  return 'capabilities';
+}
+
+function buildCommandDenialSuggestions(commandName: string, rule: string): string[] {
+  const suggestions: string[] = [];
+  if (rule === 'deny.cmd') {
+    suggestions.push(`Remove 'cmd:${commandName}:*' from deny list`);
+  } else {
+    suggestions.push(`Add 'cmd:${commandName}:*' to capabilities.allow`);
+  }
+  suggestions.push('Review active policies with @mx.policy.activePolicies');
+  return suggestions;
 }
 
 function normalizeList(values?: readonly string[]): string[] {
@@ -517,7 +574,7 @@ function makeSensitiveExfilGuard(operations?: PolicyOperations): PolicyGuardSpec
       }
       return {
         decision: 'deny',
-        reason: "Label 'sensitive' cannot flow to 'exfil'"
+        reason: "Rule 'no-sensitive-exfil': label 'sensitive' cannot flow to 'exfil'"
       };
     }
   };

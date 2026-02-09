@@ -43,6 +43,9 @@ export interface GuardErrorOptions {
   hints?: GuardHint[];
   outputPreview?: string | null;
   timing?: 'before' | 'after';
+  policyName?: string | null;
+  policyRule?: string | null;
+  policySuggestions?: string[];
 }
 
 export class GuardError extends MlldDenialError {
@@ -53,12 +56,19 @@ export class GuardError extends MlldDenialError {
   constructor(options: GuardErrorOptions) {
     const resolvedReason = options.reason ?? defaultReasonForDecision(options.decision);
     const displayName = normalizeGuardDisplayName(options.guardName);
-    const resolvedMessage = options.message ?? formatGuardMessage({
-      ...options,
-      guardName: displayName,
-      reason: resolvedReason
-    });
-    const denialContext = buildGuardDenialContext({ ...options, guardName: displayName }, resolvedReason);
+    const isPolicyDenial = Boolean(options.policyName);
+
+    const denialContext = isPolicyDenial
+      ? buildPolicyDenialContext(options, resolvedReason)
+      : buildGuardDenialContext({ ...options, guardName: displayName }, resolvedReason);
+
+    const resolvedMessage = isPolicyDenial
+      ? undefined
+      : (options.message ?? formatGuardMessage({
+          ...options,
+          guardName: displayName,
+          reason: resolvedReason
+        }));
 
     const details: GuardErrorDetails = {
       guardName: displayName,
@@ -151,6 +161,30 @@ function formatOperationLabel(operation?: OperationContext): string | null {
   const base = operation.type.startsWith('/') ? operation.type : `/${operation.type}`;
   const subtype = operation.subtype ? ` (${operation.subtype})` : '';
   return `${base}${subtype}`;
+}
+
+function buildPolicyDenialContext(options: GuardErrorOptions, reason: string): DenialContext {
+  const operationType = options.operation?.type ?? 'operation';
+  const description =
+    options.operation?.command ??
+    options.operation?.target ??
+    options.operation?.name ??
+    '';
+
+  return {
+    code: 'POLICY_CAPABILITY_DENIED',
+    operation: {
+      type: operationType,
+      description: description
+    },
+    blocker: {
+      type: 'policy',
+      name: options.policyName ?? 'policy',
+      rule: options.policyRule ?? undefined
+    },
+    reason,
+    suggestions: options.policySuggestions
+  };
 }
 
 function buildGuardDenialContext(options: GuardErrorOptions, reason: string): DenialContext {

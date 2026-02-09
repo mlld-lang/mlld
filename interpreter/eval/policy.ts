@@ -52,7 +52,7 @@ export async function evaluatePolicy(
   env.setVariable(policyName, variable);
   env.recordPolicyConfig(policyName, merged);
 
-  const policyGuards = generatePolicyGuards(merged);
+  const policyGuards = generatePolicyGuards(merged, policyName);
   const registry = env.getGuardRegistry();
   for (const guard of policyGuards) {
     registry.registerPolicyGuard(guard);

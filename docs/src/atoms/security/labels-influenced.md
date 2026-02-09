@@ -5,7 +5,7 @@ brief: Track LLM outputs affected by untrusted data
 category: security
 parent: security
 tags: [labels, influenced, llm, untrusted]
-related: [labels-overview, labels-source-auto]
+related: [labels-overview, labels-source-auto, pattern-audit-guard, pattern-dual-audit]
 related-code: [core/policy/builtin-rules.ts]
 updated: 2026-02-01
 ---
@@ -24,7 +24,7 @@ var untrusted @task = "Review this external input"
 exe llm @process(input) = run cmd { claude -p "@input" }
 
 var @result = @process(@task)
-show @result.mx.labels  >> ["influenced"]
+show @result.mx.labels  >> ["llm", "untrusted", "influenced"]
 ```
 
 The rule only auto-applies the label. Enforcement comes from `policy.labels.influenced`.

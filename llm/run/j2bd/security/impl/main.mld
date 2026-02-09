@@ -90,7 +90,7 @@ show @applyFix(@processed)
 >> In production, both auditor LLMs must call 'mlld verify' before
 >> their output is accepted.
 >>
->> The guard fires when llm-labeled data enters an exe operation:
+>> The guard fires after llm-labeled data is produced:
 >>   - In MCP mode, the LLM calls verify, populating @mx.tools.calls
 >>   - In standalone mode (no MCP), @mx.tools.calls is always empty
 >>     so the guard always denies -- proving enforcement works
@@ -135,6 +135,11 @@ show @verifyGatedProcess(@processed)
 >> deterministic output. In production, these would be exe llm
 >> calls that invoke Claude and pass the @ensureVerified guard
 >> via MCP tool calls to mlld verify.
+>>
+>> PRODUCTION CONFIGURATION (requires MCP):
+>> exe llm @extract(input) = run cmd { claude -p "@extractPrompt" }
+>> exe llm @decide(summary, policy) = run cmd { claude -p "@decidePrompt" }
+>> Both require @-references to signed templates for autoverify to fire.
 
 >> --- Extraction mock (call 1) ---
 >> In production: exe llm @extract(input) = run cmd { claude -p "@extractPrompt" }
@@ -257,7 +262,7 @@ INFORMATION BOTTLENECK:
 
 DEFENSE LAYERS:
   1. Signed templates    -- cryptographic integrity for instructions
-  2. Enforcement guard   -- ensures LLMs verified instructions (for llm)
+  2. Enforcement guard   -- ensures LLMs verified instructions (after llm)
   3. Call separation     -- clean-room isolation for security decision
   4. Policy rules        -- no-untrusted-destructive blocks tainted->destructive
   5. Label propagation   -- untrusted/influenced labels persist through transforms
@@ -272,8 +277,8 @@ ADVERSARIAL CASE:
   call 2 never sees it -- only the structured extraction reaches call 2
 
 WHY PRIVILEGED GUARDS MATTER:
-  Only policy-generated guards (not user-defined) can clear protected
-  labels like untrusted/influenced. In production, the audit verdict
+  All label removal requires privilege (only policy-generated guards can
+  remove labels like untrusted). In production, the audit verdict
   would gate a privileged guard that can bless the data. See the
   guards-privileged atom for how this works.
 
@@ -282,7 +287,7 @@ MOCK vs PRODUCTION:
   In production, call 1 and call 2 would be exe llm calls that:
     - Get autoverify instructions injected automatically
     - Call 'mlld verify' via MCP tools
-    - Pass the \@ensureVerified guard
+    - Pass the @ensureVerified guard
     - Produce verified, policy-evaluated verdicts
 
 ::

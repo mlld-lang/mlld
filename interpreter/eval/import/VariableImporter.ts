@@ -870,7 +870,7 @@ export class VariableImporter {
       if (directive.subtype === 'importPolicy') {
         const policyConfig = this.resolveImportedPolicyConfig(namespaceObject, alias);
         targetEnv.recordPolicyConfig(alias, policyConfig);
-        const guards = generatePolicyGuards(policyConfig);
+        const guards = generatePolicyGuards(policyConfig, alias);
         const registry = targetEnv.getGuardRegistry();
         for (const guard of guards) {
           registry.registerPolicyGuard(guard);
@@ -896,7 +896,7 @@ export class VariableImporter {
     if (directive.subtype === 'importPolicy') {
       const policyConfig = this.resolveImportedPolicyConfig(namespaceObject, alias);
       targetEnv.recordPolicyConfig(alias, policyConfig);
-      const guards = generatePolicyGuards(policyConfig);
+      const guards = generatePolicyGuards(policyConfig, alias);
       const registry = targetEnv.getGuardRegistry();
       for (const guard of guards) {
         registry.registerPolicyGuard(guard);

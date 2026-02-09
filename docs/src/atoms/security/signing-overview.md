@@ -5,7 +5,7 @@ brief: Cryptographic integrity for templates
 category: security
 parent: security
 tags: [signing, verification, security, templates]
-related: [sign-verify, autosign-autoverify, labels-overview]
+related: [sign-verify, autosign-autoverify, labels-overview, pattern-audit-guard, pattern-dual-audit]
 related-code: [core/security/SignatureManager.ts]
 updated: 2026-02-01
 ---
@@ -32,6 +32,8 @@ sign @template with sha256
 var @result = `Evaluate @untrustedData for issues.`
 sign @result with sha256
 ```
+
+Signing after interpolation authenticates attacker-controlled content — the signature vouches for tainted data, defeating its purpose.
 
 **Why it matters:**
 - Prompt injection can manipulate LLM reasoning

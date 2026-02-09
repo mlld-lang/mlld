@@ -5,7 +5,7 @@ brief: Configure filesystem, network, limits, and credentials for environments
 category: security
 parent: security
 tags: [environments, configuration, isolation, credentials, limits, mcp]
-related: [env-overview, env-directive, policies, mcp-security, mcp-policy, mcp-guards]
+related: [env-overview, env-directive, security-policies, mcp-security, mcp-policy, mcp-guards]
 related-code: [interpreter/eval/env.ts, interpreter/env/Environment.ts, interpreter/eval/env-mcp-config.test.ts]
 updated: 2026-02-05
 ---
@@ -35,8 +35,11 @@ env @sandbox [
 | `limits` | `{ mem, cpu, timeout }` | Resource limits |
 | `auth` | `"credential-name"` | Auth reference from policy |
 | `tools` | `["Read", "Write"]` | MCP tool routing (does not block commands) |
+| `mcps` | `[]`, `[server-config]` | MCP server availability |
 
-**MCP configuration via `@mcpConfig()`:**
+**Important:** The `tools` field controls MCP tool routing only — it does NOT prevent command execution. To block commands, use `capabilities.deny` in your policy (see `policy-capabilities`). Setting `tools: ["Read"]` does not stop `run cmd { rm -rf / }`.
+
+**Advanced: MCP configuration via `@mcpConfig()`:**
 
 Define an `@mcpConfig()` function to provide profile-based MCP server configuration:
 
@@ -63,7 +66,7 @@ env @cfg with { profile: "readonly" } [
 ]
 ```
 
-The function is called when an `env` block spawns, with `@mx.profile` set from the `with { profile }` clause. When no profile is specified in the `env` block, the first defined profile is used as the default.
+The function is called when an `env` block spawns, with `@mx.profile` set from the `with { profile }` clause. When no profile is specified, the first profile whose requirements are satisfied by the active policy is selected. Explicit `with { profile: "name" }` overrides this automatic selection.
 
 **Compose with `with`:**
 

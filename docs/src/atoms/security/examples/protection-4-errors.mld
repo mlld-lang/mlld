@@ -33,7 +33,7 @@
 /show "- Blocker: Policy p, rule: no-secret-exfil"
 /show "- Input labels: [exfil, secret, src:exec]"
 /show "- Operation labels: [op:cmd, op:cmd:curl, exfil]"
-/show "- Clear reason: Label 'secret' cannot flow to 'exfil'"
+/show "- Clear reason: Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'"
 /show "- Suggestions for resolution"
 /show ""
 /show "Triggering denial now..."

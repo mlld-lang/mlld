@@ -52,7 +52,7 @@ exe @loadAnswers(runDir) = [
   let @questionsFile = `@runDir/questions.md`
   let @fileCheck = @fileExists(@questionsFile)
   when @fileCheck == "no" => null
-  => <@questionsFile>
+  => <@questionsFile>?
 ]
 
 >> Extract a markdown section from content (## Header through next ## or EOF)
@@ -83,16 +83,16 @@ exe @loadSpecSection(specPath, sectionName) = [
 >> Check if an atom file exists
 exe @atomExists(atomsDir, atomName) = [
   let @atomPath = `@atomsDir/@atomName\.md`
-  let @exists = @fileExists(@atomPath)
-  => @exists == "yes"
+  let @atomFound = @fileExists(@atomPath)
+  => @atomFound == "yes"
 ]
 
 >> Load an atom file if it exists
 exe @loadAtom(atomsDir, atomName) = [
   let @atomPath = `@atomsDir/@atomName\.md`
-  let @exists = @fileExists(@atomPath)
-  when @exists == "no" => null
-  => <@atomPath>
+  let @atomFound = @fileExists(@atomPath)
+  when @atomFound == "no" => null
+  => <@atomPath>?
 ]
 
 >> Build reference material from job requirements

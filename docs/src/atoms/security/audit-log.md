@@ -49,7 +49,7 @@ jq 'select(.event == "write")' .mlld/sec/audit.jsonl
 jq 'select(.event == "label")' .mlld/sec/audit.jsonl
 ```
 
-**Programmatic query:**
+**Programmatic querying in mlld:**
 
 ```mlld
 var @audit = <@base/.mlld/sec/audit.jsonl>

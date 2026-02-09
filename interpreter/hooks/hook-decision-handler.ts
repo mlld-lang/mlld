@@ -79,6 +79,12 @@ export async function handleGuardDecision(
     guardInput: metadata.guardInput as Variable | readonly Variable[] | null | undefined
   };
 
+  const policyName = typeof (metadata as any).policyName === 'string' ? (metadata as any).policyName : null;
+  const policyRule = typeof (metadata as any).policyRule === 'string' ? (metadata as any).policyRule : null;
+  const policySuggestions = Array.isArray((metadata as any).policySuggestions)
+    ? ((metadata as any).policySuggestions as string[])
+    : undefined;
+
   if (decision.action === 'abort' || decision.action === 'deny') {
     throw new GuardError({
       decision: 'deny',
@@ -95,7 +101,10 @@ export async function handleGuardDecision(
       guardResults,
       hints,
       sourceLocation: extractNodeLocation(node),
-      env
+      env,
+      policyName,
+      policyRule,
+      policySuggestions
     });
   }
 

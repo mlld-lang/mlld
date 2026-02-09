@@ -53,8 +53,16 @@ var @policyConfig = {
 policy @p = union(@policyConfig)
 ```
 
+Both forms are equivalent. The nested form (`capabilities: { ... }`) is more explicit; the flat form places `allow`/`deny` at the top level as shorthand.
+
 **Danger list:** Operations matching `danger` require explicit opt-in. Without `danger: ["@keychain"]`, keychain access is blocked even if other rules allow it.
 
 Keychain allow/deny patterns live under `policy.keychain` and match `service/account` paths (with `{projectname}` from `mlld-config.json`).
+
+**Common mistakes:**
+
+- `tools` in env config only routes MCP tools — use `capabilities.deny` in policy to block commands
+- Keychain access requires both `danger: ["@keychain"]` in capabilities AND `projectname` in `mlld-config.json`
+- `no-secret-exfil` doesn't block `show`/`log` — add label flow rules for `op:show` and `op:log` (see `policy-auth`)
 
 See `policy-auth` for credential flow, `env-config` for environment restrictions.

@@ -30,13 +30,27 @@ sign @auditPrompt by "security-team" with sha256
 
 This signs `Review @input and reject if unsafe` - the `@input` placeholder remains.
 
-**Verify syntax:**
+**Verify directive:**
 
 ```mlld
 verify @prompt
 ```
 
-Returns verification result:
+In scripts, `verify` checks signature integrity silently — execution continues on success, errors on failure.
+
+**Verification failure:**
+
+If content changes after signing, `verify` errors with the ORIGINAL signed content — enabling detection of what changed.
+
+**CLI verification:**
+
+```bash
+mlld verify auditCriteria
+MLLD_VERIFY_VARS=auditCriteria mlld verify
+mlld verify prompt instructions  # multiple variables
+```
+
+LLMs call `mlld verify` to check authenticity of their instructions. CLI returns:
 
 ```json
 {
@@ -55,20 +69,6 @@ Returns verification result:
 | `hash` | Signature with algorithm prefix |
 | `signedby` | Signer identity (optional) |
 | `signedat` | ISO 8601 timestamp |
-
-**Verification failure:**
-
-If content changes after signing, `verified` is `false` but `template` still shows the ORIGINAL signed content - enabling detection of what changed.
-
-**CLI verification:**
-
-```bash
-mlld verify auditCriteria
-MLLD_VERIFY_VARS=auditCriteria mlld verify
-mlld verify prompt instructions  # multiple variables
-```
-
-LLMs call `mlld verify` to check authenticity of their instructions.
 
 **Audit pattern example:**
 

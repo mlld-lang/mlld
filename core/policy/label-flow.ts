@@ -205,7 +205,7 @@ function checkBuiltinPolicyRules(
     if (rule === 'no-secret-exfil' && hasSecret && hasExfil) {
       return {
         allowed: false,
-        reason: "Label 'secret' cannot flow to 'exfil'",
+        reason: "Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'",
         rule: 'policy.defaults.rules.no-secret-exfil',
         label: 'secret',
         matched: 'exfil'
@@ -214,7 +214,7 @@ function checkBuiltinPolicyRules(
     if (rule === 'no-sensitive-exfil' && hasSensitive && hasExfil) {
       return {
         allowed: false,
-        reason: "Label 'sensitive' cannot flow to 'exfil'",
+        reason: "Rule 'no-sensitive-exfil': label 'sensitive' cannot flow to 'exfil'",
         rule: 'policy.defaults.rules.no-sensitive-exfil',
         label: 'sensitive',
         matched: 'exfil'
@@ -223,7 +223,7 @@ function checkBuiltinPolicyRules(
     if (rule === 'no-untrusted-destructive' && hasUntrusted && hasDestructive) {
       return {
         allowed: false,
-        reason: "Label 'untrusted' cannot flow to 'destructive'",
+        reason: "Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'",
         rule: 'policy.defaults.rules.no-untrusted-destructive',
         label: 'untrusted',
         matched: 'destructive'
@@ -232,7 +232,7 @@ function checkBuiltinPolicyRules(
     if (rule === 'no-untrusted-privileged' && hasUntrusted && hasPrivileged) {
       return {
         allowed: false,
-        reason: "Label 'untrusted' cannot flow to 'privileged'",
+        reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'",
         rule: 'policy.defaults.rules.no-untrusted-privileged',
         label: 'untrusted',
         matched: 'privileged'

@@ -5,7 +5,7 @@ brief: Policy-generated guards that cannot be bypassed
 category: security
 parent: security
 tags: [guards, privileged, policy, labels, trust, security]
-related: [guards-basics, label-modification, pattern-audit-guard, policies]
+related: [security-guards-basics, label-modification, pattern-audit-guard, security-policies]
 related-code: [core/policy/guards.ts, interpreter/hooks/guard-pre-hook.ts, interpreter/hooks/guard-post-hook.ts]
 updated: 2026-02-09
 ---
