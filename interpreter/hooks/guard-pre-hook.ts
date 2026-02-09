@@ -970,7 +970,10 @@ async function evaluateGuard(options: {
         guardContext: contextSnapshotForMetadata,
         guardInput: hasSecretLabel(inputVariable!) ? redactVariableForErrorOutput(inputVariable!) : inputVariable!,
         reason: policyResult.reason,
-        decision: 'deny'
+        decision: 'deny',
+        policyName: policyResult.policyName ?? null,
+        policyRule: policyResult.rule ?? null,
+        policySuggestions: policyResult.suggestions
       };
       logGuardDecisionEvent({
         guard,
@@ -988,7 +991,12 @@ async function evaluateGuard(options: {
         decision: 'deny',
         timing: 'before',
         reason: policyResult.reason,
-        metadata: metadataBase
+        metadata: {
+          ...metadataBase,
+          policyName: policyResult.policyName,
+          policyRule: policyResult.rule,
+          policySuggestions: policyResult.suggestions
+        }
       };
     }
     return {
