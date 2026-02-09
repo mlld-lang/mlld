@@ -144,7 +144,13 @@ function buildLabelFlowSuggestions(label?: string): string[] {
   const suggestions: string[] = [];
   if (label) {
     if (!label.startsWith('src:')) {
-      suggestions.push(`Remove '${label}' label if data is not sensitive`);
+      if (label === 'untrusted') {
+        suggestions.push(`Remove '${label}' label if data has been validated`);
+      } else if (label === 'secret' || label === 'sensitive' || label === 'pii') {
+        suggestions.push(`Remove '${label}' label if data is not sensitive`);
+      } else {
+        suggestions.push(`Remove '${label}' label if this classification no longer applies`);
+      }
     }
     suggestions.push(`Review policy.labels["${label}"] allow/deny rules`);
     if (label === 'secret') {

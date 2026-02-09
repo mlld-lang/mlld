@@ -5,7 +5,7 @@ brief: trusted and untrusted - blocking dangerous flows from unverified data
 category: security
 parent: security
 tags: [labels, trust, untrusted, security, policy]
-related: [labels-overview, labels-sensitivity, labels-source-auto, policy-label-flow]
+related: [labels-overview, labels-sensitivity, labels-source-auto, policy-label-flow, policy-operations]
 related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]
 updated: 2026-02-09
 ---
@@ -53,17 +53,20 @@ policy @p = union(@policyConfig)
 
 var untrusted @payload = "data"
 exe fs:w @wipe(data) = run cmd { echo "@data" }
-@wipe(@payload)
+show @wipe(@payload)
 ```
 
-Error: `Label 'untrusted' cannot flow to 'destructive'`
+Error: `Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'`
 
-The two-step flow: `fs:w` on exe → policy maps to `destructive` → rule blocks untrusted data.
+The two-step flow: `fs:w` on exe → policy maps to `destructive` → `no-untrusted-destructive` rule blocks untrusted data.
 
 **Alternative:** Label exe directly as `exe destructive @wipe(...)` to skip the mapping step. See `policy-operations`.
 
-**Policy default:** Set `defaults.unlabeled` to auto-label all unlabeled data:
+**Policy default:** Set `defaults.unlabeled` to auto-label all unlabeled data as untrusted:
 
 ```mlld
-defaults: { unlabeled: untrusted }
+var @policyConfig = {
+  defaults: { unlabeled: "untrusted" }
+}
+policy @p = union(@policyConfig)
 ```

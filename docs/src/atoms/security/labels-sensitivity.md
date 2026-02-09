@@ -5,7 +5,7 @@ brief: secret, pii, sensitive - protecting confidential data
 category: security
 parent: security
 tags: [labels, sensitivity, secret, pii, security]
-related: [labels-overview, labels-trust, labels-source-auto, guards-basics]
+related: [labels-overview, labels-trust, labels-source-auto, security-guards-basics]
 related-code: [core/security/taint.ts, interpreter/eval/label-modification.ts]
 updated: 2026-02-09
 qa_tier: 2
