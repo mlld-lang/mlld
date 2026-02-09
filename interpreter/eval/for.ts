@@ -1018,11 +1018,12 @@ export async function evaluateForExpression(
     } catch (error) {
       childEnv.popExecutionContext('exe');
       childEnv.popExecutionContext('for');
-      const message = formatIterationError(error);
-      if (effective?.parallel) {
-        logger.warn(`for parallel iteration ${idx} error: ${message}`);
-        env.emitEffect('stderr', `  \u26a0 for iteration ${idx} error: ${message}\n`, { source: expr.location });
+      if (!effective?.parallel) {
+        throw error;
       }
+      const message = formatIterationError(error);
+      logger.warn(`for parallel iteration ${idx} error: ${message}`);
+      env.emitEffect('stderr', `  \u26a0 for iteration ${idx} error: ${message}\n`, { source: expr.location });
       const marker: ForIterationError = {
         index: idx,
         key: key ?? null,
@@ -1031,10 +1032,7 @@ export async function evaluateForExpression(
         value
       };
       errors.push(marker);
-      if (effective?.parallel) {
-        return marker as any;
-      }
-      return null as any;
+      return marker as any;
     }
   };
 

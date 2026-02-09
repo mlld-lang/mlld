@@ -147,6 +147,8 @@ const BUILTIN_VARIABLES = new Set([
   // Builtin transformers
   'json', 'md', 'xml', 'yaml', 'html', 'text', 'csv',
   'keep', 'keepStructured',
+  // Reserved transformers (not overridable)
+  'exists', 'typeof',
   // Pipeline context
   'input', 'ctx',
 ]);
@@ -347,16 +349,25 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
         const line = node.location?.start?.line;
         const column = node.location?.start?.column;
 
-        // Check if this shadows an outer scope variable
-        const outer = findOuterDeclaration(name, depth);
-        if (outer) {
+        // Check if this shadows a builtin variable
+        if (BUILTIN_VARIABLES.has(name)) {
           warnings.push({
             variable: name,
             line,
             column,
-            originalLine: outer.line,
-            originalColumn: outer.column,
           });
+        } else {
+          // Check if this shadows an outer scope variable
+          const outer = findOuterDeclaration(name, depth);
+          if (outer) {
+            warnings.push({
+              variable: name,
+              line,
+              column,
+              originalLine: outer.line,
+              originalColumn: outer.column,
+            });
+          }
         }
 
         // Record this declaration
@@ -371,15 +382,24 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
         const line = node.location?.start?.line;
         const column = node.location?.start?.column;
 
-        const outer = findOuterDeclaration(name, depth);
-        if (outer) {
+        // Check if this shadows a builtin variable
+        if (BUILTIN_VARIABLES.has(name)) {
           warnings.push({
             variable: name,
             line,
             column,
-            originalLine: outer.line,
-            originalColumn: outer.column,
           });
+        } else {
+          const outer = findOuterDeclaration(name, depth);
+          if (outer) {
+            warnings.push({
+              variable: name,
+              line,
+              column,
+              originalLine: outer.line,
+              originalColumn: outer.column,
+            });
+          }
         }
 
         declarations.push({ name, depth, line, column });

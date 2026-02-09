@@ -159,21 +159,16 @@ export class CollectionEvaluator {
       for (const entry of (value as any).entries) {
         if (entry.type === 'pair') {
           // Regular key-value pair
-          try {
-            let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
-            collectDescriptorFromValue(evaluated, descriptors);
-            // For primitive results, extract security from the source AST node
-            if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
-              collectDescriptorFromSource(entry.value, env, descriptors);
-            }
-            if (isStructuredValue(evaluated)) {
-              evaluated = unwrapStructuredPrimitive(evaluated);
-            }
-            evaluatedObj[entry.key] = evaluated;
-          } catch (error) {
-            // Store error information but continue evaluating other properties
-            evaluatedObj[entry.key] = this.createPropertyError(entry.key, error);
+          let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
+          collectDescriptorFromValue(evaluated, descriptors);
+          // For primitive results, extract security from the source AST node
+          if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
+            collectDescriptorFromSource(entry.value, env, descriptors);
           }
+          if (isStructuredValue(evaluated)) {
+            evaluated = unwrapStructuredPrimitive(evaluated);
+          }
+          evaluatedObj[entry.key] = evaluated;
         } else if (entry.type === 'conditionalPair') {
           try {
             let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
@@ -192,7 +187,7 @@ export class CollectionEvaluator {
             if (this.isConditionalOmissionError(error)) {
               continue;
             }
-            evaluatedObj[entry.key] = this.createPropertyError(entry.key, error);
+            throw error;
           }
         } else if (entry.type === 'spread') {
           // Spread entry: evaluate the variable and merge its properties
@@ -246,19 +241,15 @@ export class CollectionEvaluator {
 
     if ((value as any).properties && typeof (value as any).properties === 'object') {
       for (const [key, propValue] of Object.entries((value as any).properties)) {
-        try {
-          let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
-          collectDescriptorFromValue(evaluated, descriptors);
-          if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
-            collectDescriptorFromSource(propValue, env, descriptors);
-          }
-          if (isStructuredValue(evaluated)) {
-            evaluated = unwrapStructuredPrimitive(evaluated);
-          }
-          evaluatedObj[key] = evaluated;
-        } catch (error) {
-          evaluatedObj[key] = this.createPropertyError(key, error);
+        let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
+        collectDescriptorFromValue(evaluated, descriptors);
+        if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
+          collectDescriptorFromSource(propValue, env, descriptors);
         }
+        if (isStructuredValue(evaluated)) {
+          evaluated = unwrapStructuredPrimitive(evaluated);
+        }
+        evaluatedObj[key] = evaluated;
       }
       this.recordCollectedDescriptors(descriptors, env);
       return evaluatedObj;
@@ -340,35 +331,12 @@ export class CollectionEvaluator {
         }
         evaluatedElements.push(evaluatedItem);
       } catch (error) {
-        // Store error information but continue evaluating other elements
-        evaluatedElements.push(this.createElementError(i, error));
+        throw error;
       }
     }
 
     this.recordCollectedDescriptors(descriptors, env);
     return evaluatedElements;
-  }
-
-  /**
-   * Creates error object for a failed property evaluation
-   */
-  private createPropertyError(key: string, error: unknown): object {
-    return {
-      __error: true,
-      __message: error instanceof Error ? error.message : String(error),
-      __property: key
-    };
-  }
-
-  /**
-   * Creates error object for a failed element evaluation
-   */
-  private createElementError(index: number, error: unknown): object {
-    return {
-      __error: true,
-      __message: error instanceof Error ? error.message : String(error),
-      __index: index
-    };
   }
 
   /**
@@ -384,20 +352,15 @@ export class CollectionEvaluator {
         continue;
       }
 
-      try {
-        let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
-        collectDescriptorFromValue(evaluated, descriptors);
-        if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
-          collectDescriptorFromSource(propValue, env, descriptors);
-        }
-        if (isStructuredValue(evaluated)) {
-          evaluated = unwrapStructuredPrimitive(evaluated);
-        }
-        evaluatedObject[key] = evaluated;
-      } catch (error) {
-        // Include the error in the result but don't stop evaluation
-        evaluatedObject[key] = this.createPropertyError(key, error);
+      let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
+      collectDescriptorFromValue(evaluated, descriptors);
+      if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
+        collectDescriptorFromSource(propValue, env, descriptors);
       }
+      if (isStructuredValue(evaluated)) {
+        evaluated = unwrapStructuredPrimitive(evaluated);
+      }
+      evaluatedObject[key] = evaluated;
     }
 
     this.recordCollectedDescriptors(descriptors, env);

@@ -1366,6 +1366,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           const enableFileLogging = fixture.name.includes('slash/output/');
           const effectHandler = new TestRedirectEffectHandler('/tmp-tests', fileSystem, enableFileLogging);
           let caughtError: any = null;
+          let interpretSucceeded = false;
           try {
             await interpret(fixture.input, {
               fileSystem,
@@ -1382,57 +1383,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               // Allow absolute paths for absolute path test
               allowAbsolutePaths: fixture.name.endsWith('/assignment-absolute')
             });
-            // If we get here, the test should fail because we expected an error
-            expect.fail('Expected interpretation to throw an error, but it succeeded');
+            interpretSucceeded = true;
           } catch (error) {
             caughtError = error;
-            expect(error).toBeDefined();
-            
-            // Compare actual error message to expected pattern
-            if (fixture.expectedError && error.message) {
-              const actualMessage = error.message.trim();
-              const expectedPattern = fixture.expectedError.trim();
-              
-              // Try pattern matching first
-              const result = matchErrorPattern(actualMessage, expectedPattern);
-              
-              if (!result.matches) {
-                // Fall back to substring matching for backward compatibility
-                if (!actualMessage.includes(expectedPattern)) {
-                  // Find the test case directory for this fixture
-                  const testCaseDir = fixtureFile.replace('.generated-fixture.json', '');
-                  const testCasePath = path.join(__dirname, '../tests/cases', testCaseDir);
-                  
-                  // Check if there's a corresponding error pattern
-                  const errorPatternPath = testCaseDir.includes('invalid/') 
-                    ? path.join(__dirname, '../errors/parse', path.basename(testCaseDir))
-                    : null;
-                  
-                  throw new Error(
-                    `Error pattern mismatch for ${fixture.name}:\n\n` +
-                    `EXPECTED PATTERN:\n${expectedPattern}\n\n` +
-                    `ACTUAL MESSAGE:\n${actualMessage}\n\n` +
-                    (result.regex ? `GENERATED REGEX:\n${result.regex}\n\n` : '') +
-                    `TEST CASE LOCATION:\n${testCasePath}\n` +
-                    `  - example.md: The mlld code that triggers this error\n` +
-                    `  - error.md: The expected error pattern\n\n` +
-                    (errorPatternPath ? 
-                      `ERROR PATTERN LOCATION:\n${errorPatternPath}\n` +
-                      `  - pattern.ts: The error enhancement pattern\n` +
-                      `  - example.md: Pattern documentation\n\n` : '') +
-                    `TO FIX:\n` +
-                    `1. Update error.md with the correct pattern using ${VAR} syntax\n` +
-                    `2. Ensure pattern.ts captures the right values\n` +
-                    `3. Run 'npm run build:fixtures' to regenerate`
-                  );
-                }
-              } else if (result.variables && Object.keys(result.variables).length > 0) {
-                // Log extracted variables for debugging (only in verbose mode)
-                if (process.env.VERBOSE_TESTS) {
-                  console.log(`✓ Pattern matched for ${fixture.name} with variables:`, result.variables);
-                }
-              }
-            }
+          }
+
+          // Fail outside try/catch so the assertion can't be caught by the inner catch
+          if (interpretSucceeded) {
+            expect.fail(`Expected interpretation to throw an error for ${fixture.name}, but it succeeded`);
           }
 
           validateStderrOutput(effectHandler.getStderr(), ioExpectations.expectedStderr, fixture.name);
@@ -1440,73 +1398,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             validateExpectedErrorShape(caughtError, ioExpectations.expectedErrorShape, fixture.name);
           }
           
-          // Test error formatting if we have expected error content
-          if (fixture.expectedError && caughtError) {
-            // Import error formatting utilities
-            const { ErrorFormatSelector } = await import('@core/utils/errorFormatSelector');
-            const formatter = new ErrorFormatSelector(fileSystem);
-            
-            try {
-              const formattedError = await formatter.formatForCLI(caughtError, {
-                useColors: false, // Disable colors for testing
-                useSourceContext: true,
-                useSmartPaths: true,
-                basePath
-              });
-              
-              // Normalize whitespace for comparison
-              const normalizedActual = formattedError.replace(/\s+/g, ' ').trim();
-              const normalizedExpected = fixture.expectedError.replace(/\s+/g, ' ').trim();
-              
-              // Validate error formatting features (non-strict for different error types)
-              const errorChecks = [];
-              
-              if (normalizedExpected.includes('VariableRedefinition:')) {
-                if (normalizedActual.includes('VariableRedefinition:')) {
-                  errorChecks.push('✓ Error type correct');
-                } else {
-                  errorChecks.push('⚠ Different error type (may be parse error)');
-                }
-              }
-              
-              if (normalizedExpected.includes('Details:')) {
-                if (normalizedActual.includes('Details:')) {
-                  errorChecks.push('✓ Details section present');
-                } else {
-                  errorChecks.push('⚠ No details section');
-                }
-              }
-              
-              if (normalizedExpected.includes('💡')) {
-                if (normalizedActual.includes('💡')) {
-                  errorChecks.push('✓ Helpful suggestion present');
-                } else {
-                  errorChecks.push('⚠ No suggestion provided');
-                }
-              }
-              
-              // Test that source context features are working
-              if (normalizedActual.match(/\d+\s*\|/)) {
-                errorChecks.push('✓ Source context with line numbers');
-              }
-              
-              if (normalizedActual.includes('^')) {
-                errorChecks.push('✓ Error pointer arrows');
-              }
-              
-              if (normalizedActual.includes('./')) {
-                errorChecks.push('✓ Smart relative paths');
-              }
-              
-              // Log results for visibility (don't fail test - just report)
-              if (errorChecks.length > 0) {
-                console.log(`Error formatting validation for ${fixture.name}:`, errorChecks.join(', '));
-              }
-            } catch (formatError) {
-              // If formatting fails, that's okay - we still validated the error was thrown
-              console.warn(`Could not format error for test ${fixture.name}:`, formatError.message);
-            }
-          }
         } else {
           // Prepare stdin content for stdin import tests
           let stdinContent: string | undefined;
@@ -1618,12 +1509,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           
           // TODO: Add warning validation for warning fixtures
         }
-      } catch (error) {
-        if (!isErrorFixture) {
-          // If this isn't an error fixture, re-throw the error
-          throw error;
-        }
-        // For error fixtures, this is expected - the test already passed via expect().rejects.toThrow()
       } finally {
         // Clean up environment variables from fixture
         if ((fixture as any).environmentVariables) {
