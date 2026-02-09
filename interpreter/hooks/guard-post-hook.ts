@@ -19,7 +19,7 @@ import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
 import { VariableImporter } from '../eval/import/VariableImporter';
 import { evaluate } from '../core/interpreter';
 import { combineValues } from '../utils/value-combine';
-import { MlldWhenExpressionError } from '@core/errors';
+import { MlldWhenExpressionError, MlldSecurityError } from '@core/errors';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import type { PostHook } from './HookManager';
@@ -179,9 +179,25 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
       }
     }
     const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
+
+    if (guardOverride.kind === 'disableAll' || guardOverride.kind === 'except' || guardOverride.kind === 'only') {
+      const projectConfig = env.getProjectConfig();
+      if (projectConfig && !projectConfig.getAllowGuardBypass()) {
+        throw new MlldSecurityError(
+          'Guard bypass disabled by security config - guards cannot be skipped in this environment',
+          { code: 'GUARD_BYPASS_BLOCKED' }
+        );
+      }
+    }
+
     if (guardOverride.kind === 'disableAll') {
-      env.emitEffect('stderr', '[Guard Override] All guards disabled for this operation\n');
-      return result;
+      const registry = env.getGuardRegistry();
+      const hasPrivileged = registry.getAllGuards().some(def => def.privileged === true);
+      if (!hasPrivileged) {
+        env.emitEffect('stderr', '[Guard Override] All guards disabled for this operation\n');
+        return result;
+      }
+      env.emitEffect('stderr', '[Guard Override] Non-privileged guards disabled for this operation\n');
     }
     const selectionSources: string[] = ['output'];
 
@@ -1173,11 +1189,14 @@ function normalizeGuardOverride(raw: GuardOverrideValue): NormalizedGuardOverrid
 }
 
 function applyGuardOverrideFilter(guards: GuardDefinition[], override: NormalizedGuardOverride): GuardDefinition[] {
+  if (override.kind === 'disableAll') {
+    return guards.filter(def => def.privileged === true);
+  }
   if (override.kind === 'only') {
-    return guards.filter(def => def.name && override.names?.has(def.name));
+    return guards.filter(def => def.privileged === true || (def.name && override.names?.has(def.name)));
   }
   if (override.kind === 'except') {
-    return guards.filter(def => !def.name || !override.names?.has(def.name));
+    return guards.filter(def => def.privileged === true || !def.name || !override.names?.has(def.name));
   }
   return guards;
 }
