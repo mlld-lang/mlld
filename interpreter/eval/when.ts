@@ -413,6 +413,14 @@ async function evaluateWhenSimple(
   node: WhenSimpleNode,
   env: Environment
 ): Promise<EvalResult> {
+  // Validate none is not used with operators
+  const conditionNodes = Array.isArray(node.values.condition) ? node.values.condition : [node.values.condition];
+  for (const cond of conditionNodes) {
+    if (containsNoneWithOperator(cond)) {
+      throw new Error('The \'none\' keyword cannot be used with operators');
+    }
+  }
+
   const conditionResult = await evaluateCondition(node.values.condition, env);
 
   if (process.env.DEBUG_WHEN) {
@@ -1492,6 +1500,17 @@ function isNoneCondition(condition: any): boolean {
 }
 
 /**
+ * Check if a node contains 'none' wrapped in an operator expression
+ */
+function containsNoneWithOperator(node: any): boolean {
+  if (!node) return false;
+  if (node.type === 'UnaryExpression' && isNoneCondition(node.operand)) return true;
+  if (node.type === 'BinaryExpression' && (isNoneCondition(node.left) || isNoneCondition(node.right))) return true;
+  if (node.type === 'ComparisonExpression' && (isNoneCondition(node.left) || isNoneCondition(node.right))) return true;
+  return false;
+}
+
+/**
  * Validate that 'none' conditions are placed correctly in a when block
  */
 function validateNonePlacement(conditions: any[]): void {
@@ -1499,7 +1518,7 @@ function validateNonePlacement(conditions: any[]): void {
   let foundWildcard = false;
   
   for (let i = 0; i < conditions.length; i++) {
-    const condition = conditions[i].condition || conditions[i];
+    const condition = conditions[i].condition?.[0] || conditions[i];
     
     if (isNoneCondition(condition)) {
       foundNone = true;

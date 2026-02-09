@@ -52,14 +52,16 @@ export class GuardError extends MlldDenialError {
 
   constructor(options: GuardErrorOptions) {
     const resolvedReason = options.reason ?? defaultReasonForDecision(options.decision);
+    const displayName = normalizeGuardDisplayName(options.guardName);
     const resolvedMessage = options.message ?? formatGuardMessage({
       ...options,
+      guardName: displayName,
       reason: resolvedReason
     });
-    const denialContext = buildGuardDenialContext(options, resolvedReason);
+    const denialContext = buildGuardDenialContext({ ...options, guardName: displayName }, resolvedReason);
 
     const details: GuardErrorDetails = {
-      guardName: options.guardName ?? null,
+      guardName: displayName,
       guardFilter: options.guardFilter,
       scope: options.scope,
       operation: options.operation,
@@ -88,6 +90,11 @@ export class GuardError extends MlldDenialError {
     this.retryHint = options.retryHint ?? null;
     this.reason = resolvedReason ?? null;
   }
+}
+
+function normalizeGuardDisplayName(name?: string | null): string | null {
+  if (!name) return null;
+  return name.startsWith('@') ? name : `@${name}`;
 }
 
 function defaultReasonForDecision(decision: 'deny' | 'retry'): string {

@@ -1900,8 +1900,14 @@ async function evaluateExecInvocationInternal(
           const varRef = arg as any;
           const varName = varRef.identifier;
           const variable = env.getVariable(varName);
-          
+
           if (variable) {
+            // Merge security descriptor for label flow tracking
+            if (variable.mx) {
+              const varDescriptor = varMxToSecurityDescriptor(variable.mx as VariableContext);
+              if (varDescriptor) mergeResultDescriptor(varDescriptor);
+            }
+
             // Get the actual value from the variable
             let value = variable.value;
             

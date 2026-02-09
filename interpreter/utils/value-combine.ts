@@ -84,7 +84,7 @@ export function combineValues(
   const typeName = targetValue === null ? 'null' : typeof targetValue;
   throw new MlldDirectiveError(
     'let',
-    `+= requires array, string, or object target. ` +
+    `+= requires array, number, string, or object target. ` +
     `@${targetName} is ${typeName}.`
   );
 }
