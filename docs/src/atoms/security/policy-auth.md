@@ -66,7 +66,7 @@ policy @p = union(@policyConfig)
 
 >> BLOCKED: secret flows to exfil-labeled operation
 exe exfil @send() = run cmd { curl -H "Auth: $API_KEY" ... } using auth:api
-@send()
+show @send()
 ```
 
 **Explicit variable injection:**
