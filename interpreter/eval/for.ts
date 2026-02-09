@@ -28,11 +28,14 @@ import {
   isStructuredValue,
   looksLikeJsonString,
   normalizeWhenShowEffect,
+  extractSecurityDescriptor,
   type StructuredValue
 } from '../utils/structured-value';
 import { materializeDisplayValue } from '../utils/display-materialization';
 import { accessFields } from '../utils/field-access';
-import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { inheritExpressionProvenance, setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluateWhenExpression } from './when-expression';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
@@ -776,6 +779,23 @@ export async function evaluateForExpression(
   // Evaluate source collection
   const sourceResult = await evaluate(expr.source, env, { isExpression: true });
   const sourceValue = sourceResult.value;
+  // Extract security descriptor from the source collection (e.g., array of tainted values)
+  // This taint must flow through to the for-expression results
+  let sourceDescriptor = extractSecurityDescriptor(sourceValue, { recursive: true, mergeArrayElements: true });
+  // If value extraction lost the descriptor, check the source Variable's .mx
+  if (!sourceDescriptor) {
+    const sourceNode = Array.isArray(expr.source) ? (expr.source as any)[0] : expr.source;
+    const sourceVarName = sourceNode?.identifier ?? sourceNode?.name;
+    if (sourceVarName) {
+      const sourceVar = env.getVariable(sourceVarName);
+      if (sourceVar?.mx) {
+        const varDescriptor = varMxToSecurityDescriptor(sourceVar.mx);
+        if (varDescriptor.labels.length > 0 || varDescriptor.taint.length > 0) {
+          sourceDescriptor = varDescriptor;
+        }
+      }
+    }
+  }
   const iterable = toIterable(sourceValue);
 
   if (!iterable) {
@@ -965,6 +985,11 @@ export async function evaluateForExpression(
           }
         }
 
+        // Extract security descriptor from branch value before asData strips it
+        const branchDescriptor = extractSecurityDescriptor(branchValue);
+        // Also extract from the iteration variable (carries source taint)
+        const iterVarDescriptor = extractSecurityDescriptor(value);
+
         if (simpleVarRef) {
           const refVar = childEnv.getVariable(simpleVarRef.identifier);
           const refValue = refVar?.value;
@@ -1009,6 +1034,21 @@ export async function evaluateForExpression(
             exprResult = JSON.parse(exprResult.trim());
           } catch {
             // keep original string if parsing fails
+          }
+        }
+
+        // Propagate security descriptors from source, iteration variable, and branch value
+        // This prevents taint stripping through for-expressions
+        // Note: only attach to object results via WeakMap provenance.
+        // String results are primitives - their taint propagates through the
+        // final ArrayVariable's .mx field set by applyForDescriptor.
+        const elementDescriptors = [branchDescriptor, iterVarDescriptor, sourceDescriptor].filter(Boolean) as SecurityDescriptor[];
+        if (elementDescriptors.length > 0 && exprResult && typeof exprResult === 'object') {
+          const mergedDescriptor = elementDescriptors.length === 1
+            ? elementDescriptors[0]
+            : mergeDescriptors(...elementDescriptors);
+          if (mergedDescriptor.labels.length > 0 || mergedDescriptor.taint.length > 0 || mergedDescriptor.sources.length > 0) {
+            setExpressionProvenance(exprResult, mergedDescriptor);
           }
         }
       }
@@ -1119,8 +1159,25 @@ export async function evaluateForExpression(
     metadata.forErrors = errors;
   }
 
+  // Merge security descriptors from all result elements and the source
+  // to propagate taint to the final for-expression result variable
+  const resultElementDescriptors = (Array.isArray(finalResults) ? finalResults : [finalResults])
+    .map(r => extractSecurityDescriptor(r))
+    .filter(Boolean) as SecurityDescriptor[];
+  if (sourceDescriptor) {
+    resultElementDescriptors.push(sourceDescriptor);
+  }
+  const forResultDescriptor = resultElementDescriptors.length > 0
+    ? (resultElementDescriptors.length === 1 ? resultElementDescriptors[0] : mergeDescriptors(...resultElementDescriptors))
+    : undefined;
+
+  // Also propagate descriptor to the results array object itself
+  if (forResultDescriptor && Array.isArray(finalResults)) {
+    setExpressionProvenance(finalResults, forResultDescriptor);
+  }
+
   if (Array.isArray(finalResults)) {
-    return createArrayVariable(
+    const arrayVar = createArrayVariable(
       'for-result',
       finalResults,
       false,
@@ -1132,15 +1189,27 @@ export async function evaluateForExpression(
         }
       }
     );
+    if (forResultDescriptor && arrayVar.mx) {
+      updateVarMxFromDescriptor(arrayVar.mx, forResultDescriptor);
+    }
+    return arrayVar;
   }
 
+  // Helper to apply forResultDescriptor to a variable's mx
+  const applyForDescriptor = <T extends Variable>(variable: T): T => {
+    if (forResultDescriptor && variable.mx) {
+      updateVarMxFromDescriptor(variable.mx, forResultDescriptor);
+    }
+    return variable;
+  };
+
   if (finalResults === undefined) {
-    return createPrimitiveVariable(
+    return applyForDescriptor(createPrimitiveVariable(
       'for-result',
       null,
       variableSource,
       { mx: metadata }
-    );
+    ));
   }
 
   if (
@@ -1148,37 +1217,37 @@ export async function evaluateForExpression(
     typeof finalResults === 'number' ||
     typeof finalResults === 'boolean'
   ) {
-    return createPrimitiveVariable(
+    return applyForDescriptor(createPrimitiveVariable(
       'for-result',
       finalResults as number | boolean | null,
       variableSource,
       { mx: metadata }
-    );
+    ));
   }
 
   if (typeof finalResults === 'string') {
-    return createSimpleTextVariable(
+    return applyForDescriptor(createSimpleTextVariable(
       'for-result',
       finalResults,
       variableSource,
       { mx: metadata }
-    );
+    ));
   }
 
   if (typeof finalResults === 'object') {
-    return createObjectVariable(
+    return applyForDescriptor(createObjectVariable(
       'for-result',
       finalResults,
       false,
       variableSource,
       { mx: metadata }
-    );
+    ));
   }
 
-  return createSimpleTextVariable(
+  return applyForDescriptor(createSimpleTextVariable(
     'for-result',
     String(finalResults),
     variableSource,
     { mx: metadata }
-  );
+  ));
 }

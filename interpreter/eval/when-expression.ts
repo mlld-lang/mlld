@@ -15,11 +15,31 @@ import { evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { evaluateCondition, conditionTargetsDenied, evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 import { logger } from '@core/utils/logger';
-import { asText, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
+import { asText, isStructuredValue, ensureStructuredValue, extractSecurityDescriptor } from '../utils/structured-value';
 import { VariableImporter } from './import/VariableImporter';
 import { extractVariableValue, isVariable } from '../utils/variable-resolution';
 import { isContinueLiteral, isDoneLiteral, type ContinueLiteralNode, type DoneLiteralNode } from '@core/types/control';
 import { isExeReturnControl } from './exe-return';
+import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+
+/**
+ * Re-attach a security descriptor to a value after normalization has stripped it.
+ * For objects, uses the ExpressionProvenance WeakMap.
+ * For strings (primitives that can't be WeakMap keys), wraps as StructuredValue.
+ */
+function reattachSecurityDescriptor(value: unknown, descriptor: SecurityDescriptor | undefined): unknown {
+  if (!descriptor) return value;
+  if (descriptor.labels.length === 0 && descriptor.taint.length === 0 && descriptor.sources.length === 0) return value;
+  if (value && typeof value === 'object') {
+    setExpressionProvenance(value, descriptor);
+    return value;
+  }
+  if (typeof value === 'string') {
+    return ensureStructuredValue(value, 'text', value, { security: descriptor });
+  }
+  return value;
+}
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
@@ -275,10 +295,21 @@ async function evaluateWhenExpressionInternal(
   const boundIdentifier = (node as any).boundIdentifier || node.meta?.boundIdentifier;
   const hasBoundValue = Boolean((node as any).boundValue && typeof boundIdentifier === 'string' && boundIdentifier.length > 0);
   let boundValue: unknown;
+  let boundValueDescriptor: SecurityDescriptor | undefined;
 
   if (hasBoundValue) {
     const boundResult = await evaluate((node as any).boundValue, env, context);
     boundValue = boundResult.value;
+    // Extract security descriptor from the bound value (e.g., secret @key's labels)
+    // This taint must flow through to the when-expression result
+    boundValueDescriptor = extractSecurityDescriptor(boundValue);
+    if (!boundValueDescriptor && isVariable(boundValue)) {
+      const varMx = (boundValue as any).mx;
+      if (varMx) {
+        const { varMxToSecurityDescriptor } = await import('@core/types/variable/VarMxHelpers');
+        boundValueDescriptor = varMxToSecurityDescriptor(varMx);
+      }
+    }
   }
 
   const setBoundValue = (targetEnv: Environment) => {
@@ -570,8 +601,10 @@ async function evaluateWhenExpressionInternal(
           const executionEnv = actionResult?.env ?? actionEnv;
           if (actionResult && isExeReturnControl(actionResult.value)) {
             accumulatedEnv.mergeChild(executionEnv);
-            return buildResult(actionResult.value, accumulatedEnv);
+            return buildResult(reattachSecurityDescriptor(actionResult.value, boundValueDescriptor), accumulatedEnv);
           }
+          // Extract security descriptor before normalizeActionValue strips it
+          const preNormDescriptor = extractSecurityDescriptor(value) ?? extractSecurityDescriptor(actionResult?.value);
           value = await normalizeActionValue(value, actionEnv);
           if (isDoneLiteral(value as any)) {
             const resolved = await evaluateControlLiteral(value as any, executionEnv);
@@ -631,7 +664,16 @@ async function evaluateWhenExpressionInternal(
           if (node.withClause && node.withClause.pipes) {
             value = await applyTailModifiers(value, node.withClause.pipes, executionEnv);
           }
-          
+
+          // Propagate security descriptors from bound value and action result
+          // This prevents taint stripping through when-expressions
+          const resultDescriptor = preNormDescriptor && boundValueDescriptor
+            ? mergeDescriptors(preNormDescriptor, boundValueDescriptor)
+            : preNormDescriptor ?? boundValueDescriptor;
+          if (resultDescriptor && value !== null && value !== undefined) {
+            value = reattachSecurityDescriptor(value, resultDescriptor);
+          }
+
           // Merge variable assignments from this action back into the
           // accumulated environment so subsequent actions can see them.
           // We use mergeChild to merge variables; since actions are evaluated
@@ -726,17 +768,27 @@ async function evaluateWhenExpressionInternal(
         const actionResult = await evaluateActionNodes(pair.action, actionEnv, context);
         if (isExeReturnControl(actionResult.value)) {
           accumulatedEnv.mergeChild(actionResult.env || actionEnv);
-          return buildResult(actionResult.value, accumulatedEnv);
+          return buildResult(reattachSecurityDescriptor(actionResult.value, boundValueDescriptor), accumulatedEnv);
         }
-        
+
         let value = actionResult.value;
+        // Extract security descriptor before normalizeActionValue strips it
+        const nonePreNormDescriptor = extractSecurityDescriptor(value) ?? extractSecurityDescriptor(actionResult.value);
         value = await normalizeActionValue(value, actionEnv);
-        
+
         // Apply tail modifiers if present
         if (node.withClause && node.withClause.pipes) {
           value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
         }
-        
+
+        // Propagate security descriptors from bound value and action result
+        const noneResultDescriptor = nonePreNormDescriptor && boundValueDescriptor
+          ? mergeDescriptors(nonePreNormDescriptor, boundValueDescriptor)
+          : nonePreNormDescriptor ?? boundValueDescriptor;
+        if (noneResultDescriptor && value !== null && value !== undefined) {
+          value = reattachSecurityDescriptor(value, noneResultDescriptor);
+        }
+
         // Merge variable assignments from this none-action into accumulator
         accumulatedEnv.mergeChild(actionEnv);
 

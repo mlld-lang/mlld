@@ -1167,11 +1167,18 @@ export async function prepareVarAssignment(
     
   } else if (valueNode && valueNode.type === 'ForExpression') {
     // Handle for expressions: for @item in @collection => expression
-    
+
     // Import and evaluate the for expression
     const { evaluateForExpression } = await import('./for');
     const forResult = await evaluateForExpression(valueNode, env);
-    
+
+    // Merge the for-expression result's security descriptor into resolvedSecurityDescriptor
+    // so that finalizeVariable properly preserves taint from iterated values
+    if (forResult.mx) {
+      const forDescriptor = varMxToSecurityDescriptor(forResult.mx);
+      mergeResolvedDescriptor(forDescriptor);
+    }
+
     // The result is already an ArrayVariable
     const finalVar = finalizeVariable(forResult);
     return {
