@@ -13,5 +13,5 @@
 [
   "team",
   "project",
-  "local"
+  "devLocal"
 ]

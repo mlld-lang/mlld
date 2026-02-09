@@ -3,7 +3,7 @@
 
 /import policy @team from "./layer-team-policy.mld"
 /import policy @project from "./layer-project-policy.mld"
-/import policy @local from "./layer-local-override.mld"
+/import policy @devLocal from "./layer-local-override.mld"
 
 /show @mx.policy.configs.allow.cmd
 /show @mx.policy.configs.deny.cmd

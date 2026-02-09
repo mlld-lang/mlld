@@ -5,16 +5,16 @@ brief: Define and import policy objects
 category: security
 parent: guards
 tags: [security, policies, guards]
-related: [security-guards-basics, security-needs-declaration]
+related: [security-guards-basics, security-needs-declaration, policy-operations, policy-composition, policy-capabilities, policy-label-flow]
 related-code: [interpreter/eval/policy.ts]
 updated: 2026-02-09
 qa_tier: 2
 ---
 
-Define policy objects that combine `defaults.rules`, `operations` mapping, and `capabilities`.
+A policy object combines all security configuration into a single declaration.
 
 ```mlld
-policy @production = {
+var @policyConfig = {
   defaults: {
     unlabeled: "untrusted",
     rules: [
@@ -26,21 +26,30 @@ policy @production = {
   },
   operations: {
     "net:w": "exfil",
-    "op:cmd:rm": "destructive"
+    "fs:w": "destructive",
+    "sys:admin": "privileged"
   },
   capabilities: {
     allow: ["cmd:git:*"],
     danger: ["@keychain"]
   }
 }
+policy @p = union(@policyConfig)
 ```
 
-`defaults.rules` enables built-in security rules. `operations` maps semantic exe labels to the risk categories those rules enforce. See `policy-operations` for details.
+**`defaults`** sets baseline behavior. `unlabeled` auto-labels all unlabeled data (here as `untrusted`). `rules` enables built-in security rules that block dangerous label-to-operation flows.
 
-**Export/import:**
+**`operations`** maps semantic exe labels to risk categories. You label functions with what they DO (`net:w`, `fs:w`), and policy classifies those as risk types (`exfil`, `destructive`). This is the two-step pattern -- see `policy-operations`.
+
+**`capabilities`** controls what operations are allowed at all. `allow` whitelists command patterns. `danger` marks capabilities that require explicit opt-in.
+
+**Export/import:** Share policies across scripts:
 
 ```mlld
-export { @production }
+export { @p }
 
-import policy @production from "./policies.mld"
+>> In another file
+import policy @p from "./policies.mld"
 ```
+
+Policies compose with `union()` -- combine multiple config objects into one policy. The most restrictive rules win.

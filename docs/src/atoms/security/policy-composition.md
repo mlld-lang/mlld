@@ -5,7 +5,7 @@ brief: How multiple policies combine their rules
 category: security
 parent: security
 tags: [policy, composition, import, profiles]
-related: [security-policies, policy-capabilities, policy-auth]
+related: [security-policies, policy-capabilities, policy-auth, policy-label-flow]
 related-code: [interpreter/eval/policy.ts]
 updated: 2026-02-09
 ---

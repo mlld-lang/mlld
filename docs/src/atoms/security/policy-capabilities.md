@@ -5,7 +5,7 @@ brief: Restrict tools, filesystem, and network access
 category: security
 parent: security
 tags: [policy, capabilities, allow, deny, danger, filesystem, network]
-related: [security-policies, policy-auth, env-config]
+related: [security-policies, policy-auth, env-config, policy-composition, policy-label-flow]
 related-code: [core/policy/capability-patterns.ts, interpreter/policy/filesystem-policy.ts]
 updated: 2026-02-05
 ---
