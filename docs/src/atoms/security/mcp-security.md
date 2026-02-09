@@ -5,7 +5,7 @@ brief: All MCP tool outputs automatically carry src:mcp provenance
 category: security
 parent: security
 tags: [mcp, taint, provenance, src:mcp, security]
-related: [mcp-import, mcp-policy, mcp-guards, labels-source-auto, guards-basics]
+related: [mcp-import, mcp-policy, mcp-guards, labels-source-auto, security-guards-basics]
 related-code: [interpreter/eval/exec-invocation.ts, core/types/security.ts]
 updated: 2026-02-04
 qa_tier: 2

@@ -5,7 +5,7 @@ brief: Control what MCP-sourced data can do with label flow rules
 category: security
 parent: security
 tags: [mcp, policy, labels, label-flow, security]
-related: [mcp-security, mcp-guards, mcp-import, policies, labels-source-auto]
+related: [mcp-security, mcp-guards, mcp-import, security-policies, labels-source-auto]
 related-code: [interpreter/eval/policy.ts, interpreter/eval/exec-invocation.ts]
 updated: 2026-02-04
 qa_tier: 2
@@ -25,6 +25,8 @@ var @policyConfig = {
 }
 policy @p = union(@policyConfig)
 ```
+
+`union()` activates the policy — see `policy-composition` for combining multiple sources.
 
 This blocks MCP-sourced data from flowing to any operation labeled `destructive` or to `rm` commands.
 
@@ -55,6 +57,6 @@ var untrusted @mcpData = @mcp.github.listIssues()
 
 Now `@mcpData` has both `src:mcp` taint AND the `untrusted` label, so built-in rules like `no-untrusted-destructive` apply.
 
-**Policy denials are hard errors** — the operation fails immediately. Unlike guard denials, they cannot be caught with `denied =>` handlers. Use policy for absolute constraints and guards for cases needing graceful fallback. See `denied-handlers` for guard denial handling.
+**Policy denials are hard errors** — the operation fails immediately. Unlike guard denials, they cannot be caught with `denied =>` handlers. Use policy for absolute constraints and guards for cases needing graceful fallback. See `security-denied-handlers` for guard denial handling.
 
-See `policies` for general policy structure and `labels-source-auto` for source label details.
+See `security-policies` for general policy structure and `labels-source-auto` for source label details.

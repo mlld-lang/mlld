@@ -5,7 +5,7 @@ brief: Inspect, block, and transform MCP tool calls with guards
 category: security
 parent: security
 tags: [mcp, guards, for secret, src:mcp, security]
-related: [mcp-security, mcp-policy, mcp-import, guards-basics, before-guards, after-guards]
+related: [mcp-security, mcp-policy, mcp-import, security-guards-basics, security-before-guards, security-after-guards]
 related-code: [interpreter/eval/exec-invocation.ts, interpreter/eval/guard.ts]
 updated: 2026-02-04
 qa_tier: 2
@@ -37,7 +37,7 @@ guard @validateMcp after op:exe = when [
 ]
 ```
 
-After-guards run after the tool returns. The output already carries `src:mcp` taint and `mcp:<tool-name>` in its sources array. The `@output.error` check applies to tools returning structured JSON; for string outputs, use a pattern match instead. Guards support single actions (allow, deny, retry) per branch—for complex audit logic with multiple statements like logging, use a wrapper exe function instead of a guard.
+After-guards run after the tool returns. In the after-guard context, `@mx.taint` reflects the output's taint—including `src:mcp`—and `@mx.sources` includes `mcp:<tool-name>`. The `@output` variable holds the raw return value; `@output.error` applies to tools returning structured JSON objects with an error field. For string outputs, use a pattern match instead. Guards support single actions (allow, deny, retry) per branch—for complex audit logic with multiple statements like logging, use a wrapper exe function instead of a guard.
 
 **Guard context for MCP calls:**
 
@@ -48,4 +48,4 @@ Inside a guard triggered by an MCP tool call:
 - `@mx.taint` — includes `src:mcp`
 - `@mx.sources` — includes `mcp:<toolName>`
 
-See `guards-basics` for general guard syntax and `mcp-security` for taint details.
+See `security-guards-basics` for general guard syntax and `mcp-security` for taint details.
