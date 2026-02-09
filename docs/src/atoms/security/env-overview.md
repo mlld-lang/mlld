@@ -34,8 +34,8 @@ env @sandbox [
 
 ```mlld
 var @task = "Review code"
-var @base = { auth: "claude", tools: ["Read", "Write"] }
-var @readonly = @base with { tools: ["Read"] }
+var @cfg = { auth: "claude", tools: ["Read", "Write"] }
+var @readonly = @cfg with { tools: ["Read"] }
 
 env @readonly [ run cmd { claude -p @task } ]
 ```
