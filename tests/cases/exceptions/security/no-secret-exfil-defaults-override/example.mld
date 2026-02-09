@@ -6,4 +6,4 @@ policy @p = union(@policyConfig)
 
 var secret @token = "sk-123"
 exe exfil @send(data) = run cmd { echo "@data" }
-@send(@token)
+show @send(@token)

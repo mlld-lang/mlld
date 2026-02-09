@@ -5,4 +5,4 @@ policy @p = union(@policyConfig)
 
 var secret @key = "sk-123"
 exe exfil @leak() = run cmd { echo "@key" }
-@leak()
+show @leak()

@@ -4,5 +4,5 @@ var @policyConfig = {
 policy @p = union(@policyConfig)
 
 var secret @key = "sk-123"
-exe exfil @leak(data) = show @data
-@leak(@key)
+exe exfil @leak(data) = `@data`
+show @leak(@key)
