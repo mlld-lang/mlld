@@ -2,7 +2,7 @@ import type { PathContext } from '@core/services/PathContextService';
 import type { ResolvedURLConfig } from '@core/config/types';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { Variable } from '@core/types/variable';
-import type { DataLabel, SecurityDescriptor } from '@core/types/security';
+import type { SecurityDescriptor } from '@core/types/security';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { SecurityManager } from '@security';
@@ -24,6 +24,7 @@ import type { CacheManager } from '../CacheManager';
 import type { ImportResolverContext, ImportResolverDependencies } from '../ImportResolver';
 import type { ContextManager, PipelineContextSnapshot } from '../ContextManager';
 import type { VariableManagerContext, VariableManagerDependencies } from '../VariableManager';
+import type { SecuritySnapshotLike } from '../runtime/SecurityPolicyRuntime';
 
 interface UrlValidationOptions {
   allowedProtocols: string[];
@@ -31,14 +32,6 @@ interface UrlValidationOptions {
   blockedDomains: string[];
   maxResponseSize: number;
   timeout: number;
-}
-
-export interface SecuritySnapshotLike {
-  labels: readonly DataLabel[];
-  sources: readonly string[];
-  taint: readonly DataLabel[];
-  policy?: Readonly<Record<string, unknown>>;
-  operation?: Readonly<Record<string, unknown>>;
 }
 
 export interface NormalizedEnvironmentPathContext {
