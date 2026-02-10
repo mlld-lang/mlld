@@ -34,7 +34,6 @@ import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
 import { evaluateExeBlock } from './exe';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
-import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
 import {
   asText,
   asData,
@@ -100,6 +99,13 @@ import {
   getVariableSecurityDescriptor,
   setStructuredSecurityDescriptor
 } from './exec/security-descriptor';
+import {
+  dispatchBuiltinMethod,
+  evaluateBuiltinArguments,
+  isBuiltinMethod,
+  normalizeBuiltinTargetValue,
+  resolveBuiltinInvocationObject
+} from './exec/builtins';
 import {
   createExecInvocationChunkEffect,
   finalizeExecInvocationStreaming,
@@ -340,188 +346,6 @@ const resolveVariableIndexValue = async (fieldValue: any, env: Environment): Pro
   return evaluateDataValue(node as any, env);
 };
 
-type StringBuiltinMethod =
-  | 'toLowerCase'
-  | 'toUpperCase'
-  | 'trim'
-  | 'slice'
-  | 'substring'
-  | 'substr'
-  | 'replace'
-  | 'replaceAll'
-  | 'padStart'
-  | 'padEnd'
-  | 'repeat';
-type ArrayBuiltinMethod = 'slice' | 'concat' | 'reverse' | 'sort';
-type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
-type MatchBuiltinMethod = 'match';
-type TypeCheckingMethod = 'isArray' | 'isObject' | 'isString' | 'isNumber' | 'isBoolean' | 'isNull' | 'isDefined';
-
-function ensureStringTarget(method: string, target: unknown): string {
-  if (typeof target === 'string') {
-    return target;
-  }
-  throw new MlldInterpreterError(`Cannot call .${method}() on ${typeof target}`);
-}
-
-function ensureArrayTarget(method: string, target: unknown): unknown[] {
-  if (Array.isArray(target)) {
-    return target;
-  }
-  throw new MlldInterpreterError(`Cannot call .${method}() on ${typeof target}`);
-}
-
-function handleStringBuiltin(method: StringBuiltinMethod, target: unknown, args: unknown[] = []): string {
-  const value = ensureStringTarget(method, target);
-  switch (method) {
-    case 'toLowerCase':
-      return value.toLowerCase();
-    case 'toUpperCase':
-      return value.toUpperCase();
-    case 'trim':
-      return value.trim();
-    case 'slice': {
-      const start = args.length > 0 ? Number(args[0]) : undefined;
-      const end = args.length > 1 ? Number(args[1]) : undefined;
-      return value.slice(start ?? undefined, end ?? undefined);
-    }
-    case 'substring': {
-      const start = args.length > 0 ? Number(args[0]) : 0;
-      const end = args.length > 1 ? Number(args[1]) : undefined;
-      return value.substring(start, end ?? undefined);
-    }
-    case 'substr': {
-      const start = args.length > 0 ? Number(args[0]) : 0;
-      const length = args.length > 1 && args[1] !== undefined ? Number(args[1]) : undefined;
-      return length !== undefined ? value.substr(start, length) : value.substr(start);
-    }
-    case 'replace': {
-      const searchValue = args[0] instanceof RegExp ? args[0] : String(args[0] ?? '');
-      const replaceValue = String(args[1] ?? '');
-      return value.replace(searchValue as any, replaceValue);
-    }
-    case 'replaceAll': {
-      const searchValue = args[0] instanceof RegExp ? args[0] : String(args[0] ?? '');
-      const replaceValue = String(args[1] ?? '');
-      if (searchValue instanceof RegExp && !searchValue.global) {
-        return value.replace(new RegExp(searchValue.source, `${searchValue.flags}g`), replaceValue);
-      }
-      return value.replaceAll(searchValue as any, replaceValue);
-    }
-    case 'padStart': {
-      const targetLength = args.length > 0 ? Number(args[0]) : value.length;
-      const padStringArg = args.length > 1 ? String(args[1]) : ' ';
-      return value.padStart(targetLength, padStringArg);
-    }
-    case 'padEnd': {
-      const targetLength = args.length > 0 ? Number(args[0]) : value.length;
-      const padStringArg = args.length > 1 ? String(args[1]) : ' ';
-      return value.padEnd(targetLength, padStringArg);
-    }
-    case 'repeat': {
-      const count = args.length > 0 ? Number(args[0]) : 0;
-      return value.repeat(count);
-    }
-  }
-  throw new MlldInterpreterError(`Unsupported string builtin: ${method}`);
-}
-
-function handleArrayBuiltin(method: ArrayBuiltinMethod, target: unknown, args: unknown[] = []): unknown[] {
-  const array = ensureArrayTarget(method, target);
-  switch (method) {
-    case 'slice': {
-      const start = args.length > 0 ? Number(args[0]) : undefined;
-      const end = args.length > 1 ? Number(args[1]) : undefined;
-      return array.slice(start ?? undefined, end ?? undefined);
-    }
-    case 'concat':
-      return array.concat(...args);
-    case 'reverse':
-      return [...array].reverse();
-    case 'sort': {
-      const cloned = [...array];
-      const comparator = args[0];
-      if (typeof comparator === 'function') {
-        return cloned.sort(comparator as (a: unknown, b: unknown) => number);
-      }
-      return cloned.sort();
-    }
-  }
-  throw new MlldInterpreterError(`Unsupported array builtin: ${method}`);
-}
-
-function handleLengthBuiltin(target: unknown): number {
-  if (typeof target === 'string' || Array.isArray(target)) {
-    return target.length;
-  }
-  throw new MlldInterpreterError(`Cannot call .length() on ${typeof target}`);
-}
-
-function handleJoinBuiltin(target: unknown, separator: unknown): string {
-  const value = ensureArrayTarget('join', target);
-  const joiner = separator !== undefined ? String(separator) : ',';
-  return value.join(joiner);
-}
-
-function handleSplitBuiltin(target: unknown, separator: unknown): string[] {
-  const value = ensureStringTarget('split', target);
-  const splitOn = separator !== undefined ? String(separator) : '';
-  return value.split(splitOn);
-}
-
-function handleTypeCheckingBuiltin(method: TypeCheckingMethod, target: unknown): boolean {
-  switch (method) {
-    case 'isArray':
-      return Array.isArray(target);
-    case 'isObject':
-      return typeof target === 'object' && target !== null && !Array.isArray(target);
-    case 'isString':
-      return typeof target === 'string';
-    case 'isNumber':
-      return typeof target === 'number';
-    case 'isBoolean':
-      return typeof target === 'boolean';
-    case 'isNull':
-      return target === null;
-    case 'isDefined':
-      return target !== null && target !== undefined;
-  }
-  throw new MlldInterpreterError(`Unsupported type checking builtin: ${method}`);
-}
-
-function handleSearchBuiltin(method: SearchBuiltinMethod, target: unknown, arg: unknown): boolean | number {
-  if (Array.isArray(target)) {
-    if (method === 'includes') {
-      return target.includes(arg);
-    }
-    if (method === 'indexOf') {
-      return target.indexOf(arg);
-    }
-    throw new MlldInterpreterError(`Cannot call .${method}() on array targets`);
-  }
-
-  const value = ensureStringTarget(method, target);
-  const searchValue = String(arg ?? '');
-
-  switch (method) {
-    case 'includes':
-      return value.includes(searchValue);
-    case 'indexOf':
-      return value.indexOf(searchValue);
-    case 'startsWith':
-      return value.startsWith(searchValue);
-    case 'endsWith':
-      return value.endsWith(searchValue);
-  }
-  throw new MlldInterpreterError(`Unsupported search builtin: ${method}`);
-}
-
-function handleMatchBuiltin(target: unknown, arg: unknown): RegExpMatchArray | null {
-  const value = ensureStringTarget('match', target);
-  const pattern = arg instanceof RegExp ? arg : new RegExp(String(arg ?? ''));
-  return value.match(pattern);
-}
-
 /**
  * Evaluate an ExecInvocation node
  * This executes a previously defined exec command with arguments and optional tail modifiers
@@ -544,39 +368,6 @@ async function evaluateExecInvocationInternal(
   env: Environment
 ): Promise<EvalResult> {
   let commandName: string | undefined; // Declare at function scope for finally block
-
-  // Define builtin methods list at function scope for use in circular reference checks
-  const builtinMethods = [
-    'includes',
-    'match',
-    'length',
-    'indexOf',
-    'join',
-    'split',
-    'toLowerCase',
-    'toUpperCase',
-    'trim',
-    'slice',
-    'substring',
-    'substr',
-    'replace',
-    'replaceAll',
-    'padStart',
-    'padEnd',
-    'repeat',
-    'startsWith',
-    'endsWith',
-    'concat',
-    'reverse',
-    'sort',
-    'isArray',
-    'isObject',
-    'isString',
-    'isNumber',
-    'isBoolean',
-    'isNull',
-    'isDefined'
-  ];
 
   const normalizeFields = (fields?: Array<{ type: string; value: any }>) =>
     (fields || []).map(field => {
@@ -673,6 +464,28 @@ async function evaluateExecInvocationInternal(
     }
     return structured;
   };
+
+  const applyInvocationWithClause = async (
+    value: unknown,
+    wrapOptions?: { type?: string; text?: string }
+  ): Promise<EvalResult> => {
+    if (node.withClause) {
+      if (node.withClause.pipeline) {
+        const { processPipeline } = await import('./pipeline/unified-processor');
+        const pipelineInputValue = toPipelineInput(value, wrapOptions);
+        const pipelineResult = await processPipeline({
+          value: pipelineInputValue,
+          env,
+          node,
+          identifier: node.identifier,
+          descriptorHint: resultSecurityDescriptor
+        });
+        return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
+      }
+      return applyWithClause(value, node.withClause, env);
+    }
+    return createEvalResult(value, env, wrapOptions);
+  };
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[evaluateExecInvocation] Entry:', {
       hasCommandRef: !!node.commandRef,
@@ -735,10 +548,10 @@ async function evaluateExecInvocationInternal(
   }
 
   // Check for circular reference before resolving (skip builtin methods and reserved names)
-  const isBuiltinMethod = builtinMethods.includes(commandName);
+  const isBuiltinCommand = isBuiltinMethod(commandName);
   const isReservedName = env.hasVariable(commandName) &&
     (env.getVariable(commandName) as any)?.internal?.isReserved;
-  const shouldTrackResolution = !isBuiltinMethod && !isReservedName;
+  const shouldTrackResolution = !isBuiltinCommand && !isReservedName;
 
   if (shouldTrackResolution && env.isResolving(commandName)) {
     throw new CircularReferenceError(
@@ -760,102 +573,22 @@ async function evaluateExecInvocationInternal(
   let variable;
   const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: ExecInvocation };
   if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
-    // Check if this is a builtin method call (e.g., @list.includes())
-    const typeCheckingMethods: TypeCheckingMethod[] = [
-      'isArray',
-      'isObject',
-      'isString',
-      'isNumber',
-      'isBoolean',
-      'isNull',
-      'isDefined'
-    ];
-    const isTypeCheckingBuiltin = typeCheckingMethods.includes(commandName as TypeCheckingMethod);
-    if (builtinMethods.includes(commandName)) {
-      // Handle builtin methods on objects/arrays/strings
-      let objectValue: any;
-      let objectVar: Variable | undefined;
-      let sourceDescriptor: SecurityDescriptor | undefined;
-
-      if (commandRefWithObject.objectReference) {
-        const objectRef = commandRefWithObject.objectReference;
-        objectVar = env.getVariable(objectRef.identifier);
-
-        if (!objectVar) {
-          if (isTypeCheckingBuiltin) {
-            const typeCheckResult = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, undefined);
-            return createEvalResult(typeCheckResult, env);
-          }
-          throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
-        }
-        // Extract the value from the variable reference
-        const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
-        objectValue = await extractVariableValue(objectVar, env);
-
-        // If the extracted value is itself a Variable (e.g., from a for expression stored via let),
-        // unwrap it to get the raw value for builtin method invocation
-        // WHY: For expressions return ArrayVariables, and when stored via let they may be wrapped
-        // in an ObjectVariable. We need the raw array for .join() etc. to work.
-        if (isVariable(objectValue)) {
-          objectValue = await extractVariableValue(objectValue, env);
-        }
-
-        // Navigate through fields if present
-        if (objectRef.fields && objectRef.fields.length > 0) {
-          const normalizedFields = normalizeFields(objectRef.fields);
-          for (const field of normalizedFields) {
-            let targetValue: any = objectValue;
-            let key = field.value;
-
-            if (field.type === 'variableIndex') {
-              if (isStructuredValue(targetValue)) {
-                targetValue = asData(targetValue);
-              }
-              key = await resolveVariableIndexValue(field.value, env);
-            }
-
-            if (isStructuredValue(targetValue) && typeof key === 'string' && key in (targetValue as any)) {
-              objectValue = (targetValue as any)[key];
-            } else if (typeof targetValue === 'object' && targetValue !== null) {
-              objectValue = (targetValue as any)[key];
-            } else {
-              if (isTypeCheckingBuiltin) {
-                const typeCheckResult = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, undefined);
-                return createEvalResult(typeCheckResult, env);
-              }
-              throw new MlldInterpreterError(`Cannot access field ${String(key)} on non-object`);
-            }
-          }
-        }
-      } else if (commandRefWithObject.objectSource) {
-        // Evaluate the source ExecInvocation to obtain a value, then apply builtin method
-        const srcResult = await evaluateExecInvocation(commandRefWithObject.objectSource, env);
-        if (srcResult && typeof srcResult === 'object') {
-          sourceDescriptor = extractSecurityDescriptor(srcResult.value);
-          if (srcResult.value !== undefined) {
-            const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-            objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Display);
-          } else if (typeof srcResult.stdout === 'string') {
-            objectValue = srcResult.stdout;
-          }
-        }
+    if (isBuiltinMethod(commandName)) {
+      const builtinResolution = await resolveBuiltinInvocationObject({
+        commandName,
+        commandRefWithObject,
+        env,
+        normalizeFields,
+        resolveVariableIndexValue,
+        evaluateExecInvocationNode: evaluateExecInvocation
+      });
+      if (builtinResolution.kind === 'type-check-fallback') {
+        return createEvalResult(builtinResolution.result, env);
       }
 
-      // Fallback if we still don't have an object value
-      if (typeof objectValue === 'undefined') {
-        if (isTypeCheckingBuiltin) {
-          const typeCheckResult = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, objectValue);
-          return createEvalResult(typeCheckResult, env);
-        }
-        if (process.env.DEBUG_EXEC) {
-          logger.debug('Builtin invocation unresolved object value', {
-            commandName,
-            objectIdentifier: commandRefWithObject.objectReference?.identifier,
-            fields: commandRefWithObject.objectReference?.fields
-          });
-        }
-        throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
-      }
+      let objectValue = builtinResolution.value.objectValue;
+      const objectVar = builtinResolution.value.objectVar;
+      const sourceDescriptor = builtinResolution.value.sourceDescriptor;
 
       if (process.env.DEBUG_EXEC) {
         logger.debug('Builtin invocation object value', {
@@ -865,10 +598,10 @@ async function evaluateExecInvocationInternal(
             typeof objectValue === 'string'
               ? objectValue.slice(0, 80)
               : Array.isArray(objectValue)
-              ? `[array length=${objectValue.length}]`
-              : objectValue && typeof objectValue === 'object'
-              ? Object.keys(objectValue)
-              : objectValue
+                ? `[array length=${objectValue.length}]`
+                : objectValue && typeof objectValue === 'object'
+                  ? Object.keys(objectValue)
+                  : objectValue
         });
       }
 
@@ -884,12 +617,7 @@ async function evaluateExecInvocationInternal(
         extractSecurityDescriptor(objectValue);
       mergeResultDescriptor(targetDescriptor);
 
-      // Structured exec returns wrappers – convert them to plain data before method lookup
-      if (isStructuredValue(objectValue)) {
-        objectValue = objectValue.type === 'array' ? objectValue.data : asText(objectValue);
-      } else if (LegacyStructuredValue.isStructuredValue?.(objectValue)) {
-        objectValue = objectValue.text;
-      }
+      objectValue = normalizeBuiltinTargetValue(objectValue);
 
       chainDebug('resolved object value', {
         commandName,
@@ -898,98 +626,34 @@ async function evaluateExecInvocationInternal(
           typeof objectValue === 'string'
             ? objectValue.slice(0, 80)
             : Array.isArray(objectValue)
-            ? `[array length=${objectValue.length}]`
-            : objectValue && typeof objectValue === 'object'
-            ? '[object]'
-            : objectValue
+              ? `[array length=${objectValue.length}]`
+              : objectValue && typeof objectValue === 'object'
+                ? '[object]'
+                : objectValue
       });
-      
-      // Evaluate arguments
-      const evaluatedArgs: any[] = [];
-      for (const arg of args) {
-        const { evaluateDataValue } = await import('./data-value-evaluator');
-        const evaluatedArg = await evaluateDataValue(arg, env);
-        evaluatedArgs.push(evaluatedArg);
-      }
 
+      const evaluatedArgs = await evaluateBuiltinArguments(args, env);
       const quantifierEvaluator = (objectValue as any)?.__mlldQuantifierEvaluator;
       if (quantifierEvaluator && typeof quantifierEvaluator === 'function') {
         const quantifierResult = quantifierEvaluator(commandName, evaluatedArgs);
         return createEvalResult(quantifierResult, env);
       }
-    
-    // Apply the builtin method
-    let result: any;
-    const propagateResult = (output: unknown): void => {
-      inheritExpressionProvenance(output, objectVar ?? objectValue);
-      const sourceDescriptor =
-        (objectVar && varMxToSecurityDescriptor(objectVar.mx)) || extractSecurityDescriptor(objectValue);
-      if (sourceDescriptor) {
-        resultSecurityDescriptor = resultSecurityDescriptor
-          ? env.mergeSecurityDescriptors(resultSecurityDescriptor, sourceDescriptor)
-          : sourceDescriptor;
-      }
-    };
-    switch (commandName) {
-      case 'toLowerCase':
-      case 'toUpperCase':
-      case 'trim':
-      case 'substring':
-      case 'substr':
-      case 'replace':
-      case 'replaceAll':
-      case 'padStart':
-      case 'padEnd':
-      case 'repeat':
-        result = handleStringBuiltin(commandName as StringBuiltinMethod, objectValue, evaluatedArgs);
-        propagateResult(result);
-        break;
-      case 'slice':
-        if (Array.isArray(objectValue)) {
-          result = handleArrayBuiltin('slice', objectValue, evaluatedArgs);
-        } else {
-          result = handleStringBuiltin('slice', objectValue, evaluatedArgs);
+
+      const dispatchResult = dispatchBuiltinMethod({
+        commandName,
+        objectValue,
+        evaluatedArgs
+      });
+      let result = dispatchResult.result;
+      if (dispatchResult.propagateResultDescriptor) {
+        inheritExpressionProvenance(result, objectVar ?? objectValue);
+        const sourceDescriptorForResult =
+          (objectVar && varMxToSecurityDescriptor(objectVar.mx)) || extractSecurityDescriptor(objectValue);
+        if (sourceDescriptorForResult) {
+          resultSecurityDescriptor = resultSecurityDescriptor
+            ? env.mergeSecurityDescriptors(resultSecurityDescriptor, sourceDescriptorForResult)
+            : sourceDescriptorForResult;
         }
-        propagateResult(result);
-        break;
-      case 'concat':
-      case 'reverse':
-      case 'sort':
-        result = handleArrayBuiltin(commandName as ArrayBuiltinMethod, objectValue, evaluatedArgs);
-        propagateResult(result);
-        break;
-      case 'length':
-        result = handleLengthBuiltin(objectValue);
-        break;
-      case 'join':
-        result = handleJoinBuiltin(objectValue, evaluatedArgs[0]);
-        propagateResult(result);
-        break;
-      case 'split':
-        result = handleSplitBuiltin(objectValue, evaluatedArgs[0]);
-        propagateResult(result);
-        break;
-      case 'includes':
-      case 'indexOf':
-      case 'startsWith':
-      case 'endsWith':
-          result = handleSearchBuiltin(commandName as SearchBuiltinMethod, objectValue, evaluatedArgs[0]);
-          break;
-      case 'match':
-        result = handleMatchBuiltin(objectValue, evaluatedArgs[0]);
-        propagateResult(result);
-        break;
-      case 'isArray':
-      case 'isObject':
-      case 'isString':
-      case 'isNumber':
-      case 'isBoolean':
-      case 'isNull':
-      case 'isDefined':
-        result = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, objectValue);
-        break;
-        default:
-          throw new MlldInterpreterError(`Unknown builtin method: ${commandName}`);
       }
       
       // Apply post-invocation fields if present (e.g., @str.split(',')[1])
@@ -1006,31 +670,11 @@ async function evaluateExecInvocationInternal(
       const wrapOptions = normalized.options;
       inheritExpressionProvenance(resolvedValue, objectVar ?? objectValue);
 
-      // If a withClause (e.g., pipeline) is attached to this builtin invocation, apply it
-      if (node.withClause) {
-        if (node.withClause.pipeline) {
-          const { processPipeline } = await import('./pipeline/unified-processor');
-          const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
-          chainDebug('applying builtin pipeline', {
-            commandName,
-            pipelineLength: node.withClause.pipeline.length
-          });
-          const pipelineResult = await processPipeline({
-            value: pipelineInputValue,
-            env,
-            node,
-            identifier: node.identifier,
-            descriptorHint: resultSecurityDescriptor
-          });
-          // Still need to handle other withClause features (trust, needs)
-          return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
-        } else {
-          return applyWithClause(resolvedValue, node.withClause, env);
-        }
-      }
-
-      // Return the result wrapped appropriately when no withClause is present
-      return createEvalResult(resolvedValue, env, wrapOptions);
+      chainDebug('applying builtin pipeline', {
+        commandName,
+        pipelineLength: node.withClause?.pipeline?.length ?? 0
+      });
+      return applyInvocationWithClause(resolvedValue, wrapOptions);
     }
     // If this is a non-builtin method with objectSource, we do not (yet) support it
     if (commandRefWithObject.objectSource && !commandRefWithObject.objectReference) {
@@ -1259,28 +903,7 @@ async function evaluateExecInvocationInternal(
             if (commandName && shouldTrackResolution) {
               env.endResolving(commandName);
             }
-
-            // Apply withClause transformations if present
-            if (node.withClause) {
-              if (node.withClause.pipeline) {
-                // Use unified pipeline processor for pipeline part
-                const { processPipeline } = await import('./pipeline/unified-processor');
-                const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
-                const pipelineResult = await processPipeline({
-                  value: pipelineInputValue,
-                  env,
-                  node,
-                  identifier: node.identifier,
-                  descriptorHint: resultSecurityDescriptor
-                });
-                // Still need to handle other withClause features (trust, needs)
-                return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
-              } else {
-                return applyWithClause(resolvedValue, node.withClause, env);
-              }
-            }
-
-            return createEvalResult(resolvedValue, env, wrapOptions);
+            return applyInvocationWithClause(resolvedValue, wrapOptions);
           }
         }
       }
@@ -1361,24 +984,7 @@ async function evaluateExecInvocationInternal(
         if (commandName && shouldTrackResolution) {
           env.endResolving(commandName);
         }
-
-        if (node.withClause) {
-          if (node.withClause.pipeline) {
-            const { processPipeline } = await import('./pipeline/unified-processor');
-            const pipelineInputValue = toPipelineInput(existsResult);
-            const pipelineResult = await processPipeline({
-              value: pipelineInputValue,
-              env,
-              node,
-              identifier: node.identifier,
-              descriptorHint: resultSecurityDescriptor
-            });
-            return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
-          }
-          return applyWithClause(existsResult, node.withClause, env);
-        }
-
-        return createEvalResult(existsResult, env);
+        return applyInvocationWithClause(existsResult);
       };
 
       if (!arg) {
@@ -1603,27 +1209,7 @@ async function evaluateExecInvocationInternal(
       env.endResolving(commandName);
     }
 
-    // Apply withClause transformations if present
-    if (node.withClause) {
-      if (node.withClause.pipeline) {
-        // Use unified pipeline processor for pipeline part
-        const { processPipeline } = await import('./pipeline/unified-processor');
-        const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
-        const pipelineResult = await processPipeline({
-          value: pipelineInputValue,
-          env,
-          node,
-          identifier: node.identifier,
-          descriptorHint: resultSecurityDescriptor
-        });
-        // Still need to handle other withClause features (trust, needs)
-        return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
-      } else {
-        return applyWithClause(resolvedValue, node.withClause, env);
-      }
-    }
-
-    return createEvalResult(resolvedValue, env, wrapOptions);
+    return applyInvocationWithClause(resolvedValue, wrapOptions);
   }
   
   // Get the full executable definition from metadata
@@ -3737,7 +3323,7 @@ async function evaluateExecInvocationInternal(
   // Clean up resolution tracking after executable body completes, before pipeline/with clause processing
   // This allows pipelines to retry/re-execute the same function without false circular reference detection
   // Skip builtin methods and reserved names as they were never added to the resolution stack
-  const cleanupShouldTrack = !builtinMethods.includes(commandName) &&
+  const cleanupShouldTrack = !isBuiltinMethod(commandName) &&
     !(env.hasVariable(commandName) && (env.getVariable(commandName) as any)?.internal?.isReserved);
   if (commandName && cleanupShouldTrack) {
     env.endResolving(commandName);
@@ -3890,7 +3476,7 @@ async function evaluateExecInvocationInternal(
     // Ensure resolution tracking is always cleaned up, even on error paths
     // Check if we added it to the tracking (skip builtins/reserved)
     if (commandName) {
-      const wasTracked = !builtinMethods.includes(commandName) &&
+      const wasTracked = !isBuiltinMethod(commandName) &&
         !(env.hasVariable(commandName) && (env.getVariable(commandName) as any)?.internal?.isReserved);
       if (wasTracked) {
         env.endResolving(commandName);
