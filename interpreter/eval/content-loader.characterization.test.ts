@@ -240,6 +240,103 @@ describe('processContentLoader characterization', () => {
     expect(metadata?.source).toBe('load-content');
   });
 
+  it('keeps mixed transform and structured-output finalization shape stable', async () => {
+    await fileSystem.mkdir('/project/docs', { recursive: true });
+    await fileSystem.mkdir('/project/data', { recursive: true });
+    await fileSystem.writeFile('/project/docs/mixed.md', '# Mixed\n\nBody');
+    await fileSystem.writeFile('/project/data/mixed.json', '[{"id":1}]');
+
+    const transformedNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'docs/mixed.md' }],
+        raw: 'docs/mixed.md'
+      },
+      options: {
+        transform: {
+          type: 'template',
+          parts: [
+            { type: 'Text', content: 'rendered=' },
+            { type: 'placeholder' }
+          ]
+        }
+      }
+    };
+
+    const structuredNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'data/mixed.json' }],
+        raw: 'data/mixed.json'
+      }
+    };
+
+    const [transformedRaw, structuredRaw] = await Promise.all([
+      processContentLoader(transformedNode as any, env),
+      processContentLoader(structuredNode as any, env)
+    ]);
+
+    expect(isStructuredValue(transformedRaw)).toBe(true);
+    expect(isStructuredValue(structuredRaw)).toBe(true);
+
+    const { data: transformed, metadata: transformedMeta } = unwrapStructuredForTest<string>(transformedRaw);
+    const { data: structured, metadata: structuredMeta } = unwrapStructuredForTest<Array<{ id: number }>>(structuredRaw);
+
+    expect(typeof transformed).toBe('string');
+    expect(transformed).toContain('rendered=# Mixed');
+    expect(transformedMeta?.source).toBe('load-content');
+
+    expect(Array.isArray(structured)).toBe(true);
+    expect(structured).toEqual([{ id: 1 }]);
+    expect(structuredMeta?.source).toBe('load-content');
+  });
+
+  it('keeps glob + AST + template wrapper/type inference behavior stable', async () => {
+    await fileSystem.mkdir('/project/src', { recursive: true });
+    await fileSystem.writeFile(
+      '/project/src/only.ts',
+      [
+        'export function createUser() {',
+        '  return 1;',
+        '}'
+      ].join('\n')
+    );
+
+    const node = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'src/*.ts' }],
+        raw: 'src/*.ts'
+      },
+      ast: [{ type: 'definition', name: 'createUser' }],
+      options: {
+        transform: {
+          type: 'template',
+          parts: [
+            { type: 'Text', content: 'name=' },
+            { type: 'placeholder', fields: [{ value: 'name' }] },
+            { type: 'Text', content: ';kind=' },
+            { type: 'placeholder', fields: [{ value: 'type' }] }
+          ]
+        }
+      }
+    };
+
+    const rawResult = await processContentLoader(node as any, env);
+    expect(isStructuredValue(rawResult)).toBe(true);
+
+    if (isStructuredValue(rawResult)) {
+      expect(rawResult.type).toBe('text');
+      expect(Array.isArray(rawResult.data)).toBe(true);
+      expect(rawResult.data).toEqual(['name=createUser;kind=function']);
+      expect(rawResult.text).toContain('name=createUser;kind=function');
+      expect(rawResult.metadata?.source).toBe('load-content');
+    }
+  });
+
   it('keeps path interpolation behavior stable for variable-based sources', async () => {
     await fileSystem.mkdir('/project/docs', { recursive: true });
     await fileSystem.writeFile('/project/docs/interpolated.md', '# Interpolated\n\nok');
@@ -349,6 +446,82 @@ describe('processContentLoader characterization', () => {
     expect(Array.isArray(result)).toBe(true);
     expect(result).toEqual([]);
     expect(metadata?.source).toBe('load-content');
+  });
+
+  it('keeps downstream pipeline compatibility stable for text, array, and object finalization families', async () => {
+    await fileSystem.mkdir('/project/families', { recursive: true });
+    await fileSystem.writeFile('/project/families/text.md', '  # Heading\n\nText body.  ');
+    await fileSystem.writeFile('/project/families/a.md', '  alpha  ');
+    await fileSystem.writeFile('/project/families/b.md', '  beta  ');
+    await fileSystem.writeFile('/project/families/object.md', '  object payload  ');
+
+    const trimPipe = [
+      {
+        type: 'CondensedPipe',
+        transform: 'trim',
+        hasAt: true,
+        args: [],
+        location: null
+      }
+    ];
+
+    const textNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'families/text.md' }],
+        raw: 'families/text.md'
+      },
+      options: {
+        section: {
+          identifier: { type: 'Text', content: 'Heading' }
+        }
+      },
+      pipes: trimPipe
+    };
+
+    const arrayNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'families/{a,b}.md' }],
+        raw: 'families/{a,b}.md'
+      },
+      pipes: trimPipe
+    };
+
+    const objectNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'families/object.md' }],
+        raw: 'families/object.md'
+      },
+      pipes: trimPipe
+    };
+
+    const [textRaw, arrayRaw, objectRaw] = await Promise.all([
+      processContentLoader(textNode as any, env),
+      processContentLoader(arrayNode as any, env),
+      processContentLoader(objectNode as any, env)
+    ]);
+
+    const { data: textResult, metadata: textMetadata } = unwrapStructuredForTest<string>(textRaw);
+    const { data: arrayResult, metadata: arrayMetadata } = unwrapStructuredForTest<Array<any>>(arrayRaw);
+    const { data: objectResult, metadata: objectMetadata } = unwrapStructuredForTest<string>(objectRaw);
+
+    expect(typeof textResult).toBe('string');
+    expect(textResult).toContain('Heading');
+    expect(textResult).toContain('Text body.');
+    expect(textMetadata?.source).toBe('load-content');
+
+    expect(Array.isArray(arrayResult)).toBe(true);
+    expect(arrayResult.length).toBe(2);
+    expect(arrayMetadata?.source).toBe('load-content');
+
+    expect(typeof objectResult).toBe('string');
+    expect(objectResult).toBe('object payload');
+    expect(objectMetadata?.source).toBe('load-content');
   });
 
   it('keeps security-error passthrough behavior stable for file reads', async () => {

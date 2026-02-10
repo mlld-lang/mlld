@@ -3,15 +3,12 @@ import { MlldError, MlldSecurityError } from '@core/errors';
 import type { SourceLocation } from '@core/types';
 import type { LoadContentResult } from '@core/types/load-content';
 import { LoadContentResultImpl } from './load-content';
-import { wrapLoadContentValue } from '../utils/load-content-structured';
 import * as path from 'path';
 import type { AstResult, AstPattern } from './ast-extractor';
 import { processPipeline } from './pipeline/unified-processor';
-import { wrapStructured, isStructuredValue, ensureStructuredValue, asText } from '../utils/structured-value';
-import type { StructuredValue, StructuredValueType, StructuredValueMetadata } from '../utils/structured-value';
+import { asText } from '../utils/structured-value';
+import type { StructuredValue } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
-import { mergeDescriptors } from '@core/types/security';
-import { isLoadContentResult } from '@core/types/load-content';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { ContentSourceReconstruction } from './content-loader/source-reconstruction';
 import { PolicyAwareReadHelper } from './content-loader/policy-aware-read';
@@ -23,6 +20,8 @@ import { ContentLoaderSecurityMetadataHelper } from './content-loader/security-m
 import { ContentLoaderFileHandler } from './content-loader/single-file-loader';
 import { ContentLoaderGlobHandler } from './content-loader/glob-loader';
 import { ContentLoaderSectionHelper } from './content-loader/section-utils';
+import { ContentLoaderTransformHelper } from './content-loader/transform-utils';
+import { ContentLoaderFinalizationAdapter } from './content-loader/finalization-adapter';
 
 const sourceReconstruction = new ContentSourceReconstruction();
 const policyAwareReadHelper = new PolicyAwareReadHelper();
@@ -49,6 +48,10 @@ async function readFileWithPolicy(
 const sectionHelper = new ContentLoaderSectionHelper({
   interpolateAndRecord: (nodes, env) => interpolateAndRecord(nodes, env)
 });
+const transformHelper = new ContentLoaderTransformHelper({
+  interpolateAndRecord: (nodes, env) => interpolateAndRecord(nodes, env)
+});
+const finalizationAdapter = new ContentLoaderFinalizationAdapter();
 
 /**
  * Check if a path contains glob patterns
@@ -181,10 +184,10 @@ export async function processContentLoader(node: any, env: Environment): Promise
           env,
           node: { pipes }
         });
-        return finalizeLoaderResult(piped, { type: 'array' });
+        return finalizationAdapter.finalizeLoaderResult(piped, { type: 'array' });
       }
 
-      return finalizeLoaderResult(nameResults, { type: 'array' });
+      return finalizationAdapter.finalizeLoaderResult(nameResults, { type: 'array' });
     }
 
     // Handle content patterns (definitions, type filters, wildcards)
@@ -197,8 +200,8 @@ export async function processContentLoader(node: any, env: Environment): Promise
     });
 
     if (hasTransform && options?.transform) {
-      const transformed = await applyTemplateToAstResults(astResults, options.transform, env);
-      return finalizeLoaderResult(isGlob ? transformed : transformed[0] ?? '', { type: 'text' });
+      const transformed = await transformHelper.applyTemplateToAstResults(astResults, options.transform, env);
+      return finalizationAdapter.finalizeLoaderResult(isGlob ? transformed : transformed[0] ?? '', { type: 'text' });
     }
 
     if (hasPipes) {
@@ -207,10 +210,10 @@ export async function processContentLoader(node: any, env: Environment): Promise
         env,
         node: { pipes }
       });
-      return finalizeLoaderResult(piped, Array.isArray(astResults) ? { type: 'array' } : undefined);
+      return finalizationAdapter.finalizeLoaderResult(piped, Array.isArray(astResults) ? { type: 'array' } : undefined);
     }
 
-    return finalizeLoaderResult(astResults, { type: 'array' });
+    return finalizationAdapter.finalizeLoaderResult(astResults, { type: 'array' });
   }
 
   try {
@@ -240,20 +243,20 @@ export async function processContentLoader(node: any, env: Environment): Promise
       });
 
       if (urlLoadResult.kind === 'array') {
-        return finalizeLoaderResult(urlLoadResult.value, {
+        return finalizationAdapter.finalizeLoaderResult(urlLoadResult.value, {
           type: 'array',
           metadata: urlLoadResult.metadata
         });
       }
 
       if (urlLoadResult.kind === 'text') {
-        return finalizeLoaderResult(urlLoadResult.value, {
+        return finalizationAdapter.finalizeLoaderResult(urlLoadResult.value, {
           type: 'text',
           metadata: urlLoadResult.metadata
         });
       }
 
-      return finalizeLoaderResult(urlLoadResult.value, {
+      return finalizationAdapter.finalizeLoaderResult(urlLoadResult.value, {
         type: 'object',
         text: urlLoadResult.text,
         metadata: urlLoadResult.metadata
@@ -271,8 +274,8 @@ export async function processContentLoader(node: any, env: Environment): Promise
       
       // Apply transform if specified
       if (hasTransform && options.transform) {
-        const transformedResults = await applyTransformToResults(results, options.transform, env);
-        return finalizeLoaderResult(transformedResults, { type: 'array' });
+        const transformedResults = await transformHelper.applyTransformToResults(results, options.transform, env);
+        return finalizationAdapter.finalizeLoaderResult(transformedResults, { type: 'array' });
       }
       
       // Apply pipes if present
@@ -297,10 +300,10 @@ export async function processContentLoader(node: any, env: Environment): Promise
             });
           })
         );
-        return finalizeLoaderResult(pipedResults, { type: 'array' });
+        return finalizationAdapter.finalizeLoaderResult(pipedResults, { type: 'array' });
       }
-      
-      return finalizeLoaderResult(results, { type: 'array' });
+
+      return finalizationAdapter.finalizeLoaderResult(results, { type: 'array' });
     }
     
     // Single file loading
@@ -327,15 +330,15 @@ export async function processContentLoader(node: any, env: Environment): Promise
           env,
           node: { pipes }
         });
-        return finalizeLoaderResult(piped, { type: 'array', metadata: securityMetadata });
+        return finalizationAdapter.finalizeLoaderResult(piped, { type: 'array', metadata: securityMetadata });
       }
-      return finalizeLoaderResult(result, { type: 'array', metadata: securityMetadata });
+      return finalizationAdapter.finalizeLoaderResult(result, { type: 'array', metadata: securityMetadata });
     }
 
     // Apply transform if specified (for single file)
     if (hasTransform && options.transform) {
-      const transformed = await applyTransformToResults([result], options.transform, env);
-      return finalizeLoaderResult(transformed[0], {
+      const transformed = await transformHelper.applyTransformToResults([result], options.transform, env);
+      return finalizationAdapter.finalizeLoaderResult(transformed[0], {
         type: typeof transformed[0] === 'string' ? 'text' : 'object',
         metadata: securityMetadata
       });
@@ -350,7 +353,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
           env,
           node: { pipes }
         });
-        return finalizeLoaderResult(pipedString, { type: 'text', metadata: securityMetadata });
+        return finalizationAdapter.finalizeLoaderResult(pipedString, { type: 'text', metadata: securityMetadata });
       } else {
         // For LoadContentResult objects, apply pipes to the content
         const pipedContent = await processPipeline({
@@ -366,7 +369,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
           absolute: result.absolute,
           _rawContent: result._rawContent
         });
-        return finalizeLoaderResult(pipedResult, {
+        return finalizationAdapter.finalizeLoaderResult(pipedResult, {
           type: 'object',
           text: asText(pipedContent),
           metadata: securityMetadata
@@ -376,7 +379,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
     // Always return the full LoadContentResult object
     // The smart object will handle string conversion when needed
-    return finalizeLoaderResult(result, {
+    return finalizationAdapter.finalizeLoaderResult(result, {
       type: typeof result === 'string' ? 'text' : 'object',
       text: typeof result === 'string' ? result : result.content,
       metadata: securityMetadata
@@ -406,7 +409,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
     // If optional loading (<path>?), return null for single files, [] for globs
     if (isOptional) {
       if (isGlob) {
-        return finalizeLoaderResult([], { type: 'array' });
+        return finalizationAdapter.finalizeLoaderResult([], { type: 'array' });
       }
       return null as any;
     }
@@ -425,235 +428,4 @@ export async function processContentLoader(node: any, env: Environment): Promise
       error: error.message
     });
   }
-}
-
-/**
- * Apply transform template to array of LoadContentResults
- */
-async function applyTransformToResults(
-  results: LoadContentResult[],
-  transform: any,
-  env: Environment
-): Promise<string[]> {
-  // Interpolate the processed template for each result
-  const transformed: string[] = [];
-  
-  
-  for (const result of results) {
-    
-    // Create a child environment with the current result bound to <>
-    const childEnv = env.createChild();
-    
-    // Create a special variable for <> placeholder
-    const placeholderVar = {
-      type: 'placeholder',
-      value: result,
-      // Make the LoadContentResult properties available
-      fm: result.fm,
-      content: result.content,
-      filename: result.filename,
-      relative: result.relative,
-      absolute: result.absolute
-    };
-    
-    // Process the template parts
-    const templateParts = transform.parts || [];
-    const processedParts: any[] = [];
-    
-    for (const part of templateParts) {
-      // Check for placeholder: either part.type === 'placeholder' or FileReference with source.type === 'placeholder'
-      const isPlaceholder = part.type === 'placeholder' ||
-        (part.type === 'FileReference' && part.source?.type === 'placeholder');
-
-      if (isPlaceholder) {
-        // Handle <> and <>.field references
-        if (part.fields && part.fields.length > 0) {
-          // Access fields on the result
-          let value: any = result;
-          for (const field of part.fields) {
-            if (value && typeof value === 'object') {
-              const fieldName = field.value;
-              // Handle .mx accessor - use the mx getter on LoadContentResult
-              if (fieldName === 'mx' && typeof value.mx === 'object') {
-                value = value.mx;
-              } else {
-                value = value[fieldName];
-              }
-            } else {
-              value = undefined;
-              break;
-            }
-          }
-          processedParts.push({
-            type: 'Text',
-            content: value !== undefined ? String(value) : ''
-          });
-        } else {
-          // Just <> - use the content
-          processedParts.push({
-            type: 'Text',
-            content: result.content
-          });
-        }
-      } else {
-        // Regular template parts (text, variables)
-        processedParts.push(part);
-      }
-    }
-    
-    // Interpolate the processed template
-    const transformedContent = await interpolateAndRecord(processedParts, childEnv);
-    transformed.push(transformedContent);
-  }
-  
-  return transformed;
-}
-
-async function applyTemplateToAstResults(
-  results: Array<AstResult | null>,
-  transform: any,
-  env: Environment
-): Promise<string[]> {
-  const transformed: string[] = [];
-
-  for (const result of results) {
-    const templateParts = transform.parts || [];
-    const processedParts: any[] = [];
-
-    for (const part of templateParts) {
-      if (part.type === 'placeholder') {
-        if (!result) {
-          processedParts.push({ type: 'Text', content: '' });
-          continue;
-        }
-
-        if (part.fields && part.fields.length > 0) {
-          let value: any = result;
-          for (const field of part.fields) {
-            if (value && typeof value === 'object') {
-              value = value[field.value];
-            } else {
-              value = undefined;
-              break;
-            }
-          }
-          processedParts.push({
-            type: 'Text',
-            content: value !== undefined && value !== null ? String(value) : ''
-          });
-        } else {
-          processedParts.push({
-            type: 'Text',
-            content: result.code ?? ''
-          });
-        }
-      } else {
-        processedParts.push(part);
-      }
-    }
-
-    const childEnv = env.createChild();
-    const transformedContent = await interpolateAndRecord(processedParts, childEnv);
-    transformed.push(transformedContent);
-  }
-
-  return transformed;
-}
-
-function finalizeLoaderResult<T>(
-  value: T,
-  options?: { type?: StructuredValueType; text?: string; metadata?: StructuredValueMetadata }
-): T | StructuredValue {
-  // Single LoadContentResult - wrap with JSON parsing
-  if (isLoadContentResult(value)) {
-    const structured = wrapLoadContentValue(value) as StructuredValue;
-    const metadata = mergeMetadata(structured.metadata, options?.metadata);
-    if (!metadata || metadata === structured.metadata) {
-      return structured as any;
-    }
-    return wrapStructured(structured, structured.type, structured.text, metadata) as any;
-  }
-
-  // Array of LoadContentResult - wrap to ensure JSON parsing for each item
-  if (Array.isArray(value) && value.length > 0 && isLoadContentResult(value[0])) {
-    const structured = wrapLoadContentValue(value) as StructuredValue;
-    const metadata = mergeMetadata(structured.metadata, options?.metadata);
-    if (!metadata || metadata === structured.metadata) {
-      return structured as any;
-    }
-    return wrapStructured(structured, structured.type, structured.text, metadata) as any;
-  }
-
-  if (isStructuredValue(value)) {
-    const metadata = mergeMetadata(value.metadata, options?.metadata);
-    if (!options?.type && !options?.text && (!metadata || metadata === value.metadata)) {
-      return value;
-    }
-    return wrapStructured(value, options?.type, options?.text, metadata);
-  }
-
-  const inferredType = options?.type ?? inferLoaderType(value);
-  const text = options?.text ?? deriveLoaderText(value, inferredType);
-  const metadata = mergeMetadata(undefined, options?.metadata);
-  return ensureStructuredValue(value, inferredType, text, metadata);
-}
-
-function inferLoaderType(value: unknown): StructuredValueType {
-  if (typeof value === 'string') {
-    return 'text';
-  }
-  if (Array.isArray(value)) {
-    return 'array';
-  }
-  return 'object';
-}
-
-function deriveLoaderText(value: unknown, type: StructuredValueType): string {
-  if (type === 'text') {
-    return typeof value === 'string' ? value : String(value ?? '');
-  }
-
-  if (type === 'array') {
-    if (Array.isArray(value)) {
-      // Check if it's an array of LoadContentResult objects
-      if (value.length > 0 && isLoadContentResult(value[0])) {
-        // Concatenate file contents with \n\n separator
-        return value.map(item => item.content ?? '').join('\n\n');
-      }
-      // For other arrays (like string arrays from renamed content)
-      return value.map(item => String(item)).join('\n\n');
-    }
-    return String(value ?? '');
-  }
-
-  if (type === 'object' && value && typeof value === 'object' && 'content' in value && typeof (value as any).content === 'string') {
-    return (value as any).content;
-  }
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value ?? '');
-  }
-}
-
-function mergeMetadata(base: StructuredValueMetadata | undefined, extra: StructuredValueMetadata | undefined): StructuredValueMetadata | undefined {
-  const baseSecurity = base?.security;
-  const extraSecurity = extra?.security;
-  const mergedSecurity =
-    baseSecurity && extraSecurity
-      ? mergeDescriptors(baseSecurity, extraSecurity)
-      : baseSecurity ?? extraSecurity;
-
-  const merged = {
-    source: 'load-content' as const,
-    ...(base || {}),
-    ...(extra || {})
-  } as StructuredValueMetadata;
-
-  if (mergedSecurity) {
-    merged.security = mergedSecurity;
-  }
-
-  return merged;
 }
