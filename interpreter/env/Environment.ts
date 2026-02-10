@@ -57,7 +57,15 @@ import {
   buildImportResolverDependencies
 } from './bootstrap/EnvironmentBootstrap';
 import { ResolverVariableFacade } from './runtime/ResolverVariableFacade';
+import { ContextFacade } from './runtime/ContextFacade';
+import {
+  OutputCoordinator,
+  type OutputCoordinatorContext,
+  type EffectType,
+  type EffectOptions
+} from './runtime/OutputCoordinator';
 import { SecurityPolicyRuntime, type SecuritySnapshotLike } from './runtime/SecurityPolicyRuntime';
+import { SdkEventBridge } from './runtime/SdkEventBridge';
 import { StateWriteRuntime } from './runtime/StateWriteRuntime';
 import { VariableFacade, type ImportBindingInfo } from './runtime/VariableFacade';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
@@ -67,7 +75,7 @@ import { OutputRenderer } from '@interpreter/output/renderer';
 import type { OutputIntent } from '@interpreter/output/intent';
 import { contentIntent, breakIntent, progressIntent, errorIntent } from '@interpreter/output/intent';
 import { defaultStreamingOptions, type StreamingOptions } from '../eval/pipeline/streaming-options';
-import { StreamBus, type StreamEvent } from '../eval/pipeline/stream-bus';
+import { StreamBus } from '../eval/pipeline/stream-bus';
 import { ExportManifest } from '../eval/import/ExportManifest';
 import {
   ContextManager,
@@ -85,7 +93,7 @@ import { taintPostHook } from '../hooks/taint-post-hook';
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
-import type { SDKEffectEvent, SDKEvent, SDKStreamEvent, SDKCommandEvent, StreamingResult } from '@sdk/types';
+import type { SDKEvent, StreamingResult } from '@sdk/types';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 
 
@@ -128,9 +136,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private resolverVariableFacade: ResolverVariableFacade;
   private importResolver: IImportResolver;
   private contextManager: ContextManager;
+  private contextFacade: ContextFacade;
   private hookManager: HookManager;
   private guardRegistry: GuardRegistry;
-  private pipelineGuardHistory?: GuardHistoryEntry[];
+  private pipelineGuardHistoryStore: { entries?: GuardHistoryEntry[] };
   private mcpImportManager?: McpImportManager;
   
   // Shadow environments for language-specific function injection
@@ -207,8 +216,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private effectHandler: EffectHandler;
   // Output renderer for intent-based output with break collapsing
   private outputRenderer: OutputRenderer;
-  private sdkEmitter?: ExecutionEmitter;
-  private streamBridgeUnsub?: () => void;
+  private outputCoordinator: OutputCoordinator;
+  private sdkEventBridge: SdkEventBridge;
   private directiveTimings: number[] = [];
 
   // Import evaluation guard - prevents directive execution during import
@@ -253,14 +262,22 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.pathContext = normalizedPathContext.pathContext;
     this.parent = parent;
     this.securityPolicyRuntime = new SecurityPolicyRuntime(parent?.securityPolicyRuntime);
+    this.sdkEventBridge = parent ? parent.sdkEventBridge : new SdkEventBridge();
+    if (parent) {
+      this.streamingOptions = { ...parent.streamingOptions };
+    } else {
+      this.sdkEventBridge.setStreamingOptions(this.streamingOptions);
+    }
     
     // Initialize effect handler: use provided, inherit from parent, or create default
     this.effectHandler = effectHandler || parent?.effectHandler || new DefaultEffectHandler();
 
     // Initialize output renderer: inherit from parent to share break collapsing state
+    // OutputRenderer accepts a callback entrypoint; this keeps intent->effect routing local.
     this.outputRenderer = parent?.outputRenderer || new OutputRenderer((intent) => {
-      this.intentToEffect(intent);
+      this.outputCoordinator.intentToEffect(intent, this.getOutputCoordinatorContext());
     });
+    this.outputCoordinator = new OutputCoordinator(this.effectHandler, this.outputRenderer);
 
     if (parent) {
       this.contextManager = parent.contextManager;
@@ -272,6 +289,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.guardRegistry = new GuardRegistry();
       this.registerBuiltinHooks();
     }
+    this.pipelineGuardHistoryStore = parent ? parent.pipelineGuardHistoryStore : {};
+    this.contextFacade = new ContextFacade(
+      this.contextManager,
+      this.guardRegistry,
+      this.pipelineGuardHistoryStore
+    );
     
     // Inherit reserved names from parent environment
     if (parent) {
@@ -954,7 +977,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   setVariable(name: string, variable: Variable): void {
     this.variableFacade.setVariable(name, variable);
-    if (this.sdkEmitter) {
+    if (this.sdkEventBridge.hasEmitter()) {
       const provenance = this.getVariableProvenance(variable);
       this.emitSDKEvent({
         type: 'debug:variable:create',
@@ -984,7 +1007,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getVariable(name: string): Variable | undefined {
     const variable = this.variableFacade.getVariable(name);
-    if (this.sdkEmitter) {
+    if (this.sdkEventBridge.hasEmitter()) {
       const provenance = this.getVariableProvenance(variable);
       this.emitSDKEvent({
         type: 'debug:variable:access',
@@ -1092,83 +1115,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * This enables immediate output during for loops and pipelines.
    */
   emitEffect(
-    type: 'doc' | 'stdout' | 'stderr' | 'both' | 'file',
+    type: EffectType,
     content: string,
-    options?: {
-      path?: string;
-      source?: SourceLocation;
-      mode?: 'append' | 'write';
-      metadata?: any;
-    }
+    options?: EffectOptions
   ): void {
-    if (!this.effectHandler) {
-      console.error('[WARNING] No effect handler available!');
-      return;
-    }
-
-    // Suppress doc effects when importing to prevent module content from appearing in stdout
-    if (type === 'doc' && this.isImportingContent) {
-      return;
-    }
-
-    // Flush pending breaks before emitting content
-    // This ensures break collapsing works even when emitEffect is called directly
-    if ((type === 'doc' || type === 'both') && content && !/^\n+$/.test(content)) {
-      this.outputRenderer.render();
-    }
-
-    const snapshot = this.getSecuritySnapshot();
-    let capability: CapabilityContext | undefined;
-    if (snapshot) {
-      const descriptor = makeSecurityDescriptor({
-        labels: snapshot.labels,
-        taint: snapshot.taint,
-        sources: snapshot.sources,
-        policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
-      });
-      capability = createCapabilityContext({
-        kind: 'effect',
-        descriptor,
-        metadata: {
-          effectType: type,
-          path: options?.path
-        },
-        operation: snapshot.operation ?? {
-          kind: 'effect',
-          effectType: type
-        }
-      });
-      this.recordSecurityDescriptor(descriptor);
-    }
-
-    const effect = {
-      type,
-      content,
-      path: options?.path,
-      source: options?.source,
-      mode: options?.mode,
-      metadata: options?.metadata,
-      capability
-    };
-
-    // Always emit effects (handler decides whether to actually output)
-    this.effectHandler.handleEffect(effect);
-
-    if (this.sdkEmitter) {
-      const provenance = this.isProvenanceEnabled()
-        ? capability?.security ?? makeSecurityDescriptor()
-        : undefined;
-      const event: SDKEffectEvent = {
-        type: 'effect',
-        effect: {
-          ...effect,
-          security: capability?.security ?? makeSecurityDescriptor(),
-          ...(provenance && { provenance })
-        },
-        timestamp: Date.now()
-      };
-      this.emitSDKEvent(event);
-    }
+    this.outputCoordinator.emitEffect(type, content, options, this.getOutputCoordinatorContext());
   }
 
   /**
@@ -1178,32 +1129,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * intents through the effect system.
    */
   private intentToEffect(intent: OutputIntent): void {
-    // Map intent type to effect type
-    let effectType: 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
-
-    switch (intent.type) {
-      case 'content':
-        // Content from directives/text → 'doc' (document only)
-        effectType = 'doc';
-        break;
-      case 'break':
-        // Breaks (newlines) → 'doc'
-        effectType = 'doc';
-        break;
-      case 'progress':
-        // Progress messages → 'stdout' (CLI only, not in document)
-        effectType = 'stdout';
-        break;
-      case 'error':
-        // Errors → 'stderr'
-        effectType = 'stderr';
-        break;
-      default:
-        effectType = 'doc';
-    }
-
-    // Emit through existing effect system
-    this.emitEffect(effectType, intent.value);
+    this.outputCoordinator.intentToEffect(intent, this.getOutputCoordinatorContext());
   }
 
   /**
@@ -1217,8 +1143,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * This is the preferred method for new code.
    */
   emitIntent(intent: OutputIntent): void {
-    // Route through output renderer for break collapsing
-    this.outputRenderer.emit(intent);
+    this.outputCoordinator.emitIntent(intent);
   }
 
   /**
@@ -1228,14 +1153,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * all pending intents are flushed.
    */
   renderOutput(): void {
-    this.outputRenderer.render();
+    this.outputCoordinator.renderOutput();
   }
 
   /**
    * Get the current effect handler (mainly for testing).
    */
   getEffectHandler(): EffectHandler {
-    return this.effectHandler;
+    return this.outputCoordinator.getEffectHandler();
   }
   
   /**
@@ -1243,10 +1168,22 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    */
   setEffectHandler(handler: EffectHandler): void {
     this.effectHandler = handler;
+    this.outputCoordinator.setEffectHandler(handler);
+  }
+
+  private getOutputCoordinatorContext(): OutputCoordinatorContext {
+    return {
+      getSecuritySnapshot: () => this.getSecuritySnapshot(),
+      recordSecurityDescriptor: descriptor => this.recordSecurityDescriptor(descriptor),
+      isImportingContent: () => this.isImportingContent,
+      isProvenanceEnabled: () => this.isProvenanceEnabled(),
+      hasSDKEmitter: () => this.sdkEventBridge.hasEmitter(),
+      emitSDKEvent: event => this.emitSDKEvent(event)
+    };
   }
   
   getContextManager(): ContextManager {
-    return this.contextManager;
+    return this.contextFacade.getContextManager();
   }
 
   getHookManager(): HookManager {
@@ -1254,78 +1191,69 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   getGuardRegistry(): GuardRegistry {
-    return this.guardRegistry;
+    return this.contextFacade.getGuardRegistry();
   }
 
   getPipelineGuardHistory(): GuardHistoryEntry[] {
-    const root = this.getRootEnvironment();
-    if (!root.pipelineGuardHistory) {
-      root.pipelineGuardHistory = [];
-    }
-    return root.pipelineGuardHistory;
+    return this.contextFacade.getPipelineGuardHistory();
   }
 
   recordPipelineGuardHistory(entry: GuardHistoryEntry): void {
-    const history = this.getPipelineGuardHistory();
-    history.push(entry);
+    this.contextFacade.recordPipelineGuardHistory(entry);
   }
 
   resetPipelineGuardHistory(): void {
-    const history = this.getPipelineGuardHistory();
-    history.splice(0, history.length);
+    this.contextFacade.resetPipelineGuardHistory();
   }
 
   serializeLocalGuards(): SerializedGuardDefinition[] {
-    return this.guardRegistry.serializeOwn();
+    return this.contextFacade.serializeLocalGuards();
   }
 
   serializeGuardsByNames(names: readonly string[]): SerializedGuardDefinition[] {
-    return this.guardRegistry.serializeByNames(names);
+    return this.contextFacade.serializeGuardsByNames(names);
   }
 
   registerSerializedGuards(definitions: SerializedGuardDefinition[] | undefined | null): void {
-    if (!definitions || definitions.length === 0) {
-      return;
-    }
-    this.guardRegistry.importSerialized(definitions);
+    this.contextFacade.registerSerializedGuards(definitions);
   }
 
   async withOpContext<T>(context: OperationContext, fn: () => Promise<T> | T): Promise<T> {
-    return this.contextManager.withOperation(context, fn);
+    return this.contextFacade.withOpContext(context, fn);
   }
 
   updateOpContext(update: Partial<OperationContext>): void {
-    this.contextManager.updateOperation(update);
+    this.contextFacade.updateOpContext(update);
   }
 
   getEnclosingExeLabels(): readonly string[] {
-    return this.contextManager.getEnclosingExeLabels();
+    return this.contextFacade.getEnclosingExeLabels();
   }
 
   setToolsAvailability(allowed: readonly string[], denied: readonly string[]): void {
-    this.contextManager.setToolAvailability(allowed, denied);
+    this.contextFacade.setToolsAvailability(allowed, denied);
   }
 
   recordToolCall(call: ToolCallRecord): void {
-    this.contextManager.recordToolCall(call);
+    this.contextFacade.recordToolCall(call);
   }
 
   resetToolCalls(): void {
-    this.contextManager.resetToolCalls();
+    this.contextFacade.resetToolCalls();
   }
 
   async withPipeContext<T>(
     context: PipelineContextSnapshot,
     fn: () => Promise<T> | T
   ): Promise<T> {
-    return this.contextManager.withPipelineContext(context, fn);
+    return this.contextFacade.withPipeContext(context, fn);
   }
 
   async withGuardContext<T>(
     context: GuardContextSnapshot,
     fn: () => Promise<T> | T
   ): Promise<T> {
-    return this.contextManager.withGuardContext(context, fn);
+    return this.contextFacade.withGuardContext(context, fn);
   }
 
   async withGuardSuppression<T>(fn: () => Promise<T> | T): Promise<T> {
@@ -1348,19 +1276,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     context: DeniedContextSnapshot,
     fn: () => Promise<T> | T
   ): Promise<T> {
-    return this.contextManager.withDeniedContext(context, fn);
+    return this.contextFacade.withDeniedContext(context, fn);
   }
 
   pushExecutionContext(type: string, context: unknown): void {
-    this.contextManager.pushGenericContext(type, context);
+    this.contextFacade.pushExecutionContext(type, context);
   }
 
   popExecutionContext<T = unknown>(type: string): T | undefined {
-    return this.contextManager.popGenericContext<T>(type);
+    return this.contextFacade.popExecutionContext<T>(type);
   }
 
   getExecutionContext<T = unknown>(type: string): T | undefined {
-    return this.contextManager.peekGenericContext<T>(type);
+    return this.contextFacade.getExecutionContext<T>(type);
   }
 
   async withExecutionContext<T>(
@@ -1368,7 +1296,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     context: unknown,
     fn: () => Promise<T> | T
   ): Promise<T> {
-    return this.contextManager.withGenericContext(type, context, fn);
+    return this.contextFacade.withExecutionContext(type, context, fn);
   }
 
   private registerBuiltinHooks(): void {
@@ -1403,71 +1331,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   enableSDKEvents(emitter: ExecutionEmitter): void {
     const root = this.getRootEnvironment();
-    root.sdkEmitter = emitter;
-
-    if (root.streamBridgeUnsub) {
-      root.streamBridgeUnsub();
-      root.streamBridgeUnsub = undefined;
-    }
-
-    const bus = this.getStreamingBus();
-    const unsubscribe = bus.subscribe(event => {
-      const sdkEvent = this.mapStreamEvent(event);
-      const commandEvent = this.mapCommandEvent(event);
-      if (sdkEvent) root.sdkEmitter?.emit(sdkEvent);
-      if (commandEvent) root.sdkEmitter?.emit(commandEvent);
-    });
-    root.streamBridgeUnsub = unsubscribe;
+    root.sdkEventBridge.setStreamingOptions(this.getStreamingOptions());
+    root.sdkEventBridge.enable(emitter, this.getStreamingBus());
   }
 
   emitSDKEvent(event: SDKEvent): void {
     const root = this.getRootEnvironment();
-    root.sdkEmitter?.emit(event);
-  }
-
-  private mapStreamEvent(event: StreamEvent): SDKStreamEvent | null {
-    const streamingSuppressed = this.streamingOptions.enabled === false;
-    if (streamingSuppressed && event.type === 'CHUNK') {
-      return null;
-    }
-    if (event.type === 'CHUNK') {
-      return { type: 'stream:chunk', event };
-    }
-    return { type: 'stream:progress', event };
-  }
-
-  private mapCommandEvent(event: StreamEvent): SDKCommandEvent | null {
-    switch (event.type) {
-      case 'STAGE_START':
-        return {
-          type: 'command:start',
-          command: (event.command as any)?.rawIdentifier,
-          stageIndex: event.stageIndex,
-          parallelIndex: event.parallelIndex,
-          pipelineId: event.pipelineId,
-          timestamp: event.timestamp
-        };
-      case 'STAGE_SUCCESS':
-        return {
-          type: 'command:complete',
-          stageIndex: event.stageIndex,
-          parallelIndex: event.parallelIndex,
-          pipelineId: event.pipelineId,
-          durationMs: event.durationMs,
-          timestamp: event.timestamp
-        };
-      case 'STAGE_FAILURE':
-        return {
-          type: 'command:complete',
-          stageIndex: event.stageIndex,
-          parallelIndex: event.parallelIndex,
-          pipelineId: event.pipelineId,
-          error: event.error,
-          timestamp: event.timestamp
-        };
-      default:
-        return null;
-    }
+    root.sdkEventBridge.emit(event);
   }
   
   /**
@@ -1948,8 +1818,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this,
       this.effectHandler  // Share the same effect handler
     );
-    child.sdkEmitter = this.sdkEmitter;
-    child.streamBridgeUnsub = this.streamBridgeUnsub;
     child.allowAbsolutePaths = this.allowAbsolutePaths;
     // Track the current node count so we know which nodes are new in the child
     child.initialNodeCount = this.nodes.length;
@@ -2075,9 +1943,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   setStreamingOptions(options: Partial<StreamingOptions> | undefined): void {
     if (!options) {
       this.streamingOptions = { ...defaultStreamingOptions };
-      return;
+    } else {
+      this.streamingOptions = { ...this.streamingOptions, ...options };
     }
-    this.streamingOptions = { ...this.streamingOptions, ...options };
+
+    if (!this.parent) {
+      this.sdkEventBridge.setStreamingOptions(this.streamingOptions);
+    }
   }
 
   getStreamingOptions(): StreamingOptions {
@@ -2459,7 +2331,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const start = Date.now();
     this.directiveTimings.push(start);
 
-    if (this.sdkEmitter) {
+    if (this.sdkEventBridge.hasEmitter()) {
       const provenance = this.isProvenanceEnabled()
         ? this.snapshotToDescriptor(this.getSecuritySnapshot())
         : undefined;
@@ -2490,7 +2362,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   popDirective(): void {
     const start = this.directiveTimings.pop();
     const entry = this.traceEnabled ? this.directiveTrace.pop() : undefined;
-    if (this.sdkEmitter && start && entry) {
+    if (this.sdkEventBridge.hasEmitter() && start && entry) {
       const durationMs = Date.now() - start;
       const provenance = this.isProvenanceEnabled()
         ? this.snapshotToDescriptor(this.getSecuritySnapshot())
@@ -2588,15 +2460,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   cleanup(): void {
     logger.debug('Environment cleanup called');
     
-    if (!this.parent && this.streamBridgeUnsub) {
+    if (!this.parent) {
       try {
-        this.streamBridgeUnsub();
+        this.sdkEventBridge.cleanup();
       } catch (error) {
         if (process.env.MLLD_DEBUG === 'true') {
           console.error('[Environment] Failed to detach stream bridge', error);
         }
       }
-      this.streamBridgeUnsub = undefined;
     }
     if (!this.parent) {
       this.streamingResult = undefined;

@@ -269,7 +269,6 @@ describe('Environment characterization', () => {
 
       const envAny = env as any;
       const childAny = child as any;
-      expect(envAny.streamBridgeUnsub).toBeDefined();
       expect(envAny.childEnvironments.size).toBe(1);
       expect(envAny.shadowEnvs.size).toBeGreaterThan(0);
       expect(envAny.nodeShadowEnv).toBeDefined();
@@ -277,7 +276,6 @@ describe('Environment characterization', () => {
       env.cleanup();
 
       expect(unsubscribe).toHaveBeenCalledTimes(1);
-      expect(envAny.streamBridgeUnsub).toBeUndefined();
       expect(envAny.childEnvironments.size).toBe(0);
       expect(envAny.shadowEnvs.size).toBe(0);
       expect(envAny.nodeShadowEnv).toBeUndefined();
