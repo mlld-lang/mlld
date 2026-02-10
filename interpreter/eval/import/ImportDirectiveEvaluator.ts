@@ -15,11 +15,6 @@ import { MlldImportError } from '@core/errors';
 // createVariableFromValue is now part of VariableImporter
 import { interpolate } from '../../core/interpreter';
 import { InterpolationContext } from '../../core/interpolation-context';
-import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
-import type { NeedsDeclaration, CommandNeeds } from '@core/policy/needs';
-import { spawnSync } from 'child_process';
-import { createRequire } from 'module';
-import * as path from 'path';
 import type { SerializedGuardDefinition } from '../../guards';
 import { createObjectVariable } from '@core/types/variable/VariableFactories';
 import type { VariableSource, Variable } from '@core/types/variable';
@@ -32,6 +27,9 @@ import { ModuleImportHandler } from './ModuleImportHandler';
 import { NodeImportHandler } from './NodeImportHandler';
 import { DirectoryImportHandler } from './DirectoryImportHandler';
 import { FileUrlImportHandler } from './FileUrlImportHandler';
+import { PolicyImportContextManager } from './PolicyImportContextManager';
+import { ModuleNeedsValidator } from './ModuleNeedsValidator';
+import { ImportBindingValidator } from './ImportBindingValidator';
 
 /**
  * Main coordinator for import directive evaluation
@@ -52,6 +50,9 @@ export class ImportDirectiveEvaluator {
   private nodeImportHandler: NodeImportHandler;
   private directoryImportHandler: DirectoryImportHandler;
   private fileUrlImportHandler: FileUrlImportHandler;
+  private policyImportContextManager: PolicyImportContextManager;
+  private moduleNeedsValidator: ModuleNeedsValidator;
+  private importBindingValidator: ImportBindingValidator;
   // TODO: Integrate capability context construction when import types and security descriptors land.
 
   constructor(env: Environment) {
@@ -61,6 +62,9 @@ export class ImportDirectiveEvaluator {
     this.securityValidator = new ImportSecurityValidator(env);
     this.variableImporter = new VariableImporter(this.objectResolver);
     this.mcpImportService = new McpImportService(env);
+    this.policyImportContextManager = new PolicyImportContextManager();
+    this.moduleNeedsValidator = new ModuleNeedsValidator(env);
+    this.importBindingValidator = new ImportBindingValidator();
     this.resolverImportDataAdapter = new ResolverImportDataAdapter(this.variableImporter);
     this.inputImportHandler = new InputImportHandler(this.resolverImportDataAdapter);
     this.resolverImportHandler = new ResolverImportHandler(this.resolverImportDataAdapter);
@@ -73,18 +77,20 @@ export class ImportDirectiveEvaluator {
     this.nodeImportHandler = new NodeImportHandler(
       this.variableImporter,
       (result, directive, source) => this.validateModuleResult(result, directive, source),
-      (directive, policyEnv, source) => this.applyPolicyImportContext(directive, policyEnv, source)
+      (directive, policyEnv, source) =>
+        this.policyImportContextManager.applyPolicyImportContext(directive, policyEnv, source)
     );
     this.directoryImportHandler = new DirectoryImportHandler(
       async (resolution, directive) => this.contentProcessor.processModuleContent(resolution, directive),
-      (needs, source) => this.enforceModuleNeeds(needs, source)
+      (needs, source) => this.moduleNeedsValidator.enforceModuleNeeds(needs, source)
     );
     this.fileUrlImportHandler = new FileUrlImportHandler(
       async (resolution, directive) => this.contentProcessor.processModuleContent(resolution, directive),
       this.variableImporter,
       this.directoryImportHandler,
       (result, directive, source) => this.validateModuleResult(result, directive, source),
-      (directive, policyEnv, source) => this.applyPolicyImportContext(directive, policyEnv, source)
+      (directive, policyEnv, source) =>
+        this.policyImportContextManager.applyPolicyImportContext(directive, policyEnv, source)
     );
   }
 
@@ -144,7 +150,7 @@ export class ImportDirectiveEvaluator {
       const descriptor = mergeDescriptors(baseDescriptor, taintDescriptor);
 
       // 2. Route to appropriate handler based on import type
-      return await this.withPolicyOverride(
+      return await this.policyImportContextManager.withPolicyOverride(
         directive,
         env,
         async () => await this.routeImportRequest(resolution, directive, env)
@@ -389,7 +395,7 @@ export class ImportDirectiveEvaluator {
 
       // Import variables into environment
       await this.variableImporter.importVariables(processingResult, directive, env);
-      this.applyPolicyImportContext(directive, env, processingRef);
+      this.policyImportContextManager.applyPolicyImportContext(directive, env, processingRef);
 
       const dynamicSource = resolverContent.mx?.source;
       if (dynamicSource && typeof dynamicSource === 'string' && dynamicSource.startsWith('dynamic://')) {
@@ -480,248 +486,17 @@ export class ImportDirectiveEvaluator {
     throw error;
   }
 
-  private async withPolicyOverride<T>(
-    directive: DirectiveNode,
-    env: Environment,
-    operation: () => Promise<T>
-  ): Promise<T> {
-    const overrideConfig = (directive.values as any)?.withClause?.policy as PolicyConfig | undefined;
-    if (!overrideConfig) {
-      return await operation();
-    }
-
-    const previousContext = env.getPolicyContext();
-    const mergedConfig = mergePolicyConfigs(
-      previousContext?.configs as PolicyConfig | undefined,
-      normalizePolicyConfig(overrideConfig)
-    );
-    const nextContext = {
-      tier: previousContext?.tier ?? null,
-      configs: mergedConfig ?? {},
-      activePolicies: previousContext?.activePolicies ?? []
-    };
-
-    env.setPolicyContext(nextContext);
-    try {
-      return await operation();
-    } finally {
-      env.setPolicyContext(previousContext ?? null);
-    }
-  }
-
-  private applyPolicyImportContext(
-    directive: DirectiveNode,
-    env: Environment,
-    source?: string
-  ): void {
-    const isPolicyImport =
-      directive.subtype === 'importPolicy' ||
-      (directive.meta as any)?.importType === 'policy' ||
-      (directive.values as any)?.importType === 'policy';
-    if (!isPolicyImport) {
-      return;
-    }
-
-    const existing = (env.getPolicyContext() as any) || {};
-    const activePolicies = Array.isArray(existing.activePolicies)
-      ? [...existing.activePolicies]
-      : [];
-    // Support both VariableReference (identifier) and Text (content) node types
-    const namespaceNode = (directive.values as any)?.namespace?.[0];
-    const alias =
-      namespaceNode?.identifier ||
-      namespaceNode?.content ||
-      (directive.values as any)?.imports?.[0]?.alias ||
-      (directive.values as any)?.imports?.[0]?.identifier ||
-      source ||
-      'policy';
-    if (!activePolicies.includes(alias)) {
-      activePolicies.push(alias);
-    }
-
-    const nextContext = {
-      tier: existing.tier ?? null,
-      configs: existing.configs ?? {},
-      activePolicies
-    };
-    env.setPolicyContext(nextContext);
-  }
-
   private validateModuleResult(
     result: ModuleProcessingResult,
     directive: DirectiveNode,
     source?: string
   ): void {
-    this.enforceModuleNeeds(result.moduleNeeds, source);
-    this.validateExportBindings(result.moduleObject, directive, source, result.guardDefinitions);
-  }
-
-  private enforceModuleNeeds(needs: NeedsDeclaration | undefined, source?: string): void {
-    if (!needs) {
-      return;
-    }
-
-    const unmet = this.findUnmetNeeds(needs);
-    if (unmet.length === 0) {
-      return;
-    }
-
-    const detailLines = unmet.map(entry => {
-      const valueSegment = entry.value ? ` '${entry.value}'` : '';
-      return `- ${entry.capability}${valueSegment}: ${entry.reason}`;
-    });
-    const label = source ?? 'import';
-    const message = `Import needs not satisfied for ${label}:\n${detailLines.join('\n')}`;
-
-    throw new MlldImportError(message, {
-      code: 'NEEDS_UNMET',
-      details: {
-        source: label,
-        unmet,
-        needs
-      }
-    });
-  }
-
-  private findUnmetNeeds(needs: NeedsDeclaration): Array<{ capability: string; value?: string; reason: string }> {
-    const unmet: Array<{ capability: string; value?: string; reason: string }> = [];
-
-    if (needs.sh && !this.isCommandAvailable('sh')) {
-      unmet.push({ capability: 'sh', reason: 'shell executable not available (sh)' });
-    }
-
-    if (needs.cmd) {
-      for (const cmd of this.collectCommandNames(needs.cmd)) {
-        if (!this.isCommandAvailable(cmd)) {
-          unmet.push({ capability: 'cmd', value: cmd, reason: 'command not found in PATH' });
-        }
-      }
-    }
-
-    if (needs.packages) {
-      const basePath = this.env.getBasePath ? this.env.getBasePath() : process.cwd();
-      const moduleDir = this.env.getCurrentFilePath ? path.dirname(this.env.getCurrentFilePath() ?? basePath) : basePath;
-      for (const [ecosystem, packages] of Object.entries(needs.packages)) {
-        if (!Array.isArray(packages)) {
-          continue;
-        }
-        switch (ecosystem) {
-          case 'node':
-            for (const pkg of packages) {
-              if (!this.isNodePackageAvailable(pkg.name, moduleDir)) {
-                unmet.push({ capability: 'node', value: pkg.name, reason: 'package not installed' });
-              }
-            }
-            break;
-          case 'python':
-          case 'py':
-            if (!this.isRuntimeAvailable(['python', 'python3'])) {
-              unmet.push({ capability: 'python', reason: 'python runtime not available' });
-            }
-            break;
-          case 'ruby':
-          case 'rb':
-            if (!this.isRuntimeAvailable(['ruby'])) {
-              unmet.push({ capability: 'ruby', reason: 'ruby runtime not available' });
-            }
-            break;
-          case 'go':
-            if (!this.isRuntimeAvailable(['go'])) {
-              unmet.push({ capability: 'go', reason: 'go runtime not available' });
-            }
-            break;
-          case 'rust':
-            if (!this.isRuntimeAvailable(['cargo', 'rustc'])) {
-              unmet.push({ capability: 'rust', reason: 'rust toolchain not available' });
-            }
-            break;
-          default:
-            break;
-        }
-      }
-    }
-
-    return unmet;
-  }
-
-  private collectCommandNames(cmdNeeds: CommandNeeds): string[] {
-    if (cmdNeeds.type === 'all') {
-      return [];
-    }
-    if (cmdNeeds.type === 'list') {
-      return cmdNeeds.commands;
-    }
-    return Object.keys(cmdNeeds.entries ?? {});
-  }
-
-  private isCommandAvailable(command: string): boolean {
-    if (!command || typeof command !== 'string') {
-      return false;
-    }
-
-    const binary = process.platform === 'win32' ? 'where' : 'which';
-    const result = spawnSync(binary, [command], {
-      stdio: 'ignore'
-    });
-    return result.status === 0;
-  }
-
-  private isRuntimeAvailable(candidates: string[]): boolean {
-    return candidates.some(cmd => this.isCommandAvailable(cmd));
-  }
-
-  private isNodePackageAvailable(name: string, basePath: string): boolean {
-    try {
-      // Use createRequire for ESM compatibility
-      const esmRequire = createRequire(import.meta.url);
-      esmRequire.resolve(name, { paths: [basePath] });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private validateExportBindings(
-    moduleObject: Record<string, any>,
-    directive: DirectiveNode,
-    source?: string,
-    guardDefinitions: readonly SerializedGuardDefinition[] = []
-  ): void {
-    if (!directive.values) {
-      return;
-    }
-
-    const exportKeySet = new Set(
-      Object.keys(moduleObject || {}).filter(key => !key.startsWith('__'))
+    this.moduleNeedsValidator.enforceModuleNeeds(result.moduleNeeds, source);
+    this.importBindingValidator.validateExportBindings(
+      result.moduleObject,
+      directive,
+      source,
+      result.guardDefinitions
     );
-    for (const guardDefinition of guardDefinitions) {
-      if (typeof guardDefinition?.name === 'string' && guardDefinition.name.length > 0) {
-        exportKeySet.add(guardDefinition.name);
-      }
-    }
-
-    if (directive.subtype !== 'importSelected') {
-      return;
-    }
-
-    // @payload and @state are dynamic modules where fields are optional CLI arguments.
-    // Missing fields should default to null rather than throwing an error.
-    if (source === '@payload' || source === '@state') {
-      return;
-    }
-
-    const imports = directive.values?.imports ?? [];
-    for (const importItem of imports) {
-      const name = (importItem as any)?.identifier;
-      if (typeof name !== 'string') {
-        continue;
-      }
-      if (!exportKeySet.has(name)) {
-        throw new MlldImportError(`Import '${name}' not found in module '${source ?? 'import'}'`, {
-          code: 'IMPORT_EXPORT_MISSING',
-          details: { source, missing: name }
-        });
-      }
-    }
   }
 }

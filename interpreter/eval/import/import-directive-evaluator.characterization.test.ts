@@ -8,6 +8,9 @@ import { ImportDirectiveEvaluator } from './ImportDirectiveEvaluator';
 import { McpImportService } from './McpImportService';
 import { ModuleImportHandler } from './ModuleImportHandler';
 import { DirectoryImportHandler } from './DirectoryImportHandler';
+import { ModuleNeedsValidator } from './ModuleNeedsValidator';
+import { PolicyImportContextManager } from './PolicyImportContextManager';
+import { ImportBindingValidator } from './ImportBindingValidator';
 import { validateDeclaredImportType } from './ImportTypePolicy';
 
 const SOURCE = {
@@ -144,16 +147,16 @@ describe('ImportDirectiveEvaluator characterization', () => {
     );
   });
 
-  it('keeps needs/policy enforcement failure behavior stable', () => {
+  it('keeps needs enforcement failure behavior stable', () => {
     const env = createEnv();
-    const evaluator: any = new ImportDirectiveEvaluator(env);
-    vi.spyOn(evaluator, 'findUnmetNeeds').mockReturnValue([
+    const validator: any = new ModuleNeedsValidator(env);
+    vi.spyOn(validator, 'findUnmetNeeds').mockReturnValue([
       { capability: 'cmd', value: '__missing__', reason: 'command not found in PATH' }
     ]);
 
     let thrown: unknown;
     try {
-      evaluator.enforceModuleNeeds({ cmd: { type: 'list', commands: ['__missing__'] } }, '/project/needs.mld');
+      validator.enforceModuleNeeds({ cmd: { type: 'list', commands: ['__missing__'] } }, '/project/needs.mld');
     } catch (error) {
       thrown = error;
     }
@@ -162,6 +165,44 @@ describe('ImportDirectiveEvaluator characterization', () => {
     expect((thrown as any).code).toBe('NEEDS_UNMET');
     expect((thrown as Error).message).toContain('Import needs not satisfied for /project/needs.mld');
     expect((thrown as Error).message).toContain("cmd '__missing__'");
+  });
+
+  it('keeps policy-override + binding-validation error payload behavior stable', async () => {
+    const env = createEnv();
+    const policyImportContextManager = new PolicyImportContextManager();
+    const importBindingValidator = new ImportBindingValidator();
+    env.setPolicyContext({
+      tier: null,
+      configs: { io: { mode: 'strict' } as any },
+      activePolicies: ['baseline']
+    } as any);
+    const baselineContext = env.getPolicyContext();
+    const directive = {
+      subtype: 'importSelected',
+      values: {
+        imports: [{ identifier: 'missing' }],
+        withClause: { policy: {} }
+      },
+      meta: {}
+    } as any;
+
+    await expect(
+      policyImportContextManager.withPolicyOverride(directive, env, async () => {
+        importBindingValidator.validateExportBindings(
+          { present: 'ok' },
+          directive,
+          '/project/policy-module.mld'
+        );
+      })
+    ).rejects.toMatchObject({
+      code: 'IMPORT_EXPORT_MISSING',
+      details: {
+        source: '/project/policy-module.mld',
+        missing: 'missing'
+      }
+    });
+
+    expect(env.getPolicyContext()).toEqual(baselineContext);
   });
 
   it('keeps MCP import binding collision behavior stable for existing variables', () => {

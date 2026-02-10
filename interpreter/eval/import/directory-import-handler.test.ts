@@ -180,6 +180,51 @@ describe('DirectoryImportHandler', () => {
     });
   });
 
+  it('keeps directory-child needs enforcement payloads unchanged when bindings flow through traversal', async () => {
+    const root = '/project/agents';
+    const entries = ['party'];
+    const directories = new Set<string>([root, '/project/agents/party']);
+    const files = new Set<string>(['/project/agents/party/index.mld']);
+    const { env } = createMockEnv({ root, entries, directories, files });
+    const missingNeed = new MlldImportError(
+      "Import needs not satisfied for /project/agents/party/index.mld:\n- cmd '__missing_cmd__': command not found in PATH",
+      {
+        code: 'NEEDS_UNMET',
+        details: {
+          source: '/project/agents/party/index.mld',
+          unmet: [{ capability: 'cmd', value: '__missing_cmd__', reason: 'command not found in PATH' }]
+        }
+      }
+    );
+    const enforceModuleNeeds = vi.fn((_needs: any, source?: string) => {
+      if (source === '/project/agents/party/index.mld') {
+        throw missingNeed;
+      }
+    });
+    const handler = new DirectoryImportHandler(
+      vi.fn(async () => ({
+        moduleObject: { who: 'party' },
+        moduleNeeds: { cmd: { type: 'list', commands: ['__missing_cmd__'] } },
+        frontmatter: null,
+        childEnvironment: {},
+        guardDefinitions: []
+      })) as any,
+      enforceModuleNeeds
+    );
+
+    await expect(
+      handler.maybeProcessDirectoryImport(
+        { type: 'file', resolvedPath: root, importType: 'live' } as any,
+        { subtype: 'importNamespace', values: {}, meta: {} } as any,
+        env as any
+      )
+    ).rejects.toBe(missingNeed);
+    expect(enforceModuleNeeds).toHaveBeenCalledWith(
+      { cmd: { type: 'list', commands: ['__missing_cmd__'] } },
+      '/project/agents/party/index.mld'
+    );
+  });
+
   it('keeps optional directory-skip behavior for templates imports', async () => {
     const root = '/project/templates';
     const entries = ['agents'];
