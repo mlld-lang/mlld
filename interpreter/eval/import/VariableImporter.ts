@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import type { DirectiveNode } from '@core/types';
-import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable, TemplateVariable, VariableMetadata } from '@core/types/variable';
+import type { Variable, VariableSource, VariableTypeDiscriminator, VariableMetadata } from '@core/types/variable';
 import { 
   createImportedVariable, 
   createObjectVariable,
@@ -27,10 +27,12 @@ import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironment
 import { ExportManifest } from './ExportManifest';
 import { astLocationToSourceLocation } from '@core/types';
 import type { SerializedGuardDefinition } from '../../guards';
-import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { generatePolicyGuards } from '@core/policy/guards';
 import { ImportBindingGuards } from './variable-importer/ImportBindingGuards';
 import { MetadataMapParser } from './variable-importer/MetadataMapParser';
+import { ModuleExportManifestValidator } from './variable-importer/ModuleExportManifestValidator';
+import { GuardExportChecker } from './variable-importer/GuardExportChecker';
+import { ModuleExportSerializer } from './variable-importer/ModuleExportSerializer';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -45,10 +47,16 @@ export interface ModuleProcessingResult {
 export class VariableImporter {
   private readonly bindingGuards: ImportBindingGuards;
   private readonly metadataMapParser: MetadataMapParser;
+  private readonly exportManifestValidator: ModuleExportManifestValidator;
+  private readonly guardExportChecker: GuardExportChecker;
+  private readonly moduleExportSerializer: ModuleExportSerializer;
 
   constructor(private objectResolver: ObjectReferenceResolver) {
     this.bindingGuards = new ImportBindingGuards();
     this.metadataMapParser = new MetadataMapParser();
+    this.exportManifestValidator = new ModuleExportManifestValidator();
+    this.guardExportChecker = new GuardExportChecker();
+    this.moduleExportSerializer = new ModuleExportSerializer(this.objectResolver);
   }
   
   /**
@@ -177,215 +185,29 @@ export class VariableImporter {
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null; guards: SerializedGuardDefinition[] } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
-
-    // Always start with auto-export of all top-level variables
-    const moduleObject: Record<string, any> = {};
-    const serializedMetadataMap: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>> = {};
-    const manifestEntries = manifest?.hasEntries() ? manifest.getEntries() : [];
-    const variableEntries = manifestEntries.filter(entry => entry.kind !== 'guard');
-    const guardEntries = manifestEntries.filter(entry => entry.kind === 'guard');
-    const explicitNames = variableEntries.length > 0 ? variableEntries.map(entry => entry.name) : null;
-    const explicitExports = explicitNames ? new Set(explicitNames) : null;
-    if (explicitNames && explicitNames.length > 0) {
-      for (const name of explicitNames) {
-        if (!childVars.has(name)) {
-          const location = manifest?.getLocation(name);
-          throw new MlldImportError(
-            `Exported name '${name}' is not defined in this module`,
-            {
-              code: 'EXPORTED_NAME_NOT_FOUND',
-              context: {
-                exportName: name,
-                location
-              },
-              details: {
-                filePath: location?.filePath,
-                variableName: name
-              }
-            }
-          );
-        }
-      }
-    }
-
-    const guardNames = guardEntries.map(entry => entry.name);
-    if (guardNames.length > 0) {
-      if (!childEnv) {
-        throw new MlldImportError('Guard exports require a child environment', {
-          code: 'GUARD_EXPORT_CONTEXT',
-          details: { guards: guardNames }
-        });
-      }
-      for (const entry of guardEntries) {
-        const definition = childEnv.getGuardRegistry().getByName(entry.name);
-        if (!definition) {
-          const location = manifest?.getLocation(entry.name);
-          throw new MlldImportError(`Exported guard '${entry.name}' is not defined in this module`, {
-            code: 'EXPORTED_GUARD_NOT_FOUND',
-            context: {
-              guardName: entry.name,
-              location
-            },
-            details: {
-              filePath: location?.filePath,
-              variableName: entry.name
-            }
-          });
-        }
-      }
-    }
-
-    const shouldSerializeModuleEnv = !skipModuleEnvSerialization;
-    let moduleEnvSnapshot: Map<string, Variable> | null = null;
-    const getModuleEnvSnapshot = () => {
-      if (!moduleEnvSnapshot) {
-        moduleEnvSnapshot = new Map(childVars);
-      }
-      return moduleEnvSnapshot;
-    };
+    const { explicitExports, guardNames } = this.exportManifestValidator.resolveExportPlan(childVars, manifest);
+    this.guardExportChecker.validateGuardExports(guardNames, childEnv, manifest);
     
     // Export all top-level variables directly (except system variables)
     if (process.env.MLLD_DEBUG === 'true') {
       console.log(`[processModuleExports] childVars size: ${childVars.size}`);
       console.log(`[processModuleExports] childVars keys: ${Array.from(childVars.keys()).join(', ')}`);
     }
-    
-    const envSnapshot = childEnv?.getSecuritySnapshot?.();
-    const envDescriptor = envSnapshot
-      ? makeSecurityDescriptor({
-          labels: envSnapshot.labels,
-          taint: envSnapshot.taint,
-          sources: envSnapshot.sources,
-          policyContext: envSnapshot.policy ? { ...envSnapshot.policy } : undefined
-        })
-      : undefined;
 
-    for (const [name, variable] of childVars) {
-      if (explicitExports && !explicitExports.has(name)) {
-        continue;
-      }
-      // Only export legitimate mlld variables - this automatically excludes
-      // system variables like frontmatter (@fm) that don't have valid mlld types
-      if (!this.isLegitimateVariableForExport(variable)) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log(`[processModuleExports] Skipping non-legitimate variable '${name}' with type: ${variable.type}`);
-        }
-        continue;
-      }
-      // For executable variables, we need to preserve the full structure
-      if (variable.type === 'executable') {
-        const execVar = variable as ExecutableVariable;
-        const isImported = Boolean(execVar.mx?.isImported);
+    const { moduleObject } = this.moduleExportSerializer.serialize({
+      childVars,
+      explicitExports,
+      childEnv,
+      options,
+      skipModuleEnvSerialization,
+      currentSerializationTarget,
+      serializingEnvs: _serializingEnvs,
+      isLegitimateVariableForExport: variable => this.isLegitimateVariableForExport(variable),
+      serializeShadowEnvs: envs => this.serializeShadowEnvs(envs),
+      serializeModuleEnv: (moduleEnv, seen) => this.serializeModuleEnv(moduleEnv, seen)
+    });
 
-        // Serialize internal fields (shadow envs, module envs) since Maps do not JSON-serialize
-        let serializedInternal: Record<string, unknown> = { ...(execVar.internal ?? {}) };
-        if (serializedInternal.capturedShadowEnvs) {
-          serializedInternal = {
-            ...serializedInternal,
-            capturedShadowEnvs: this.serializeShadowEnvs(serializedInternal.capturedShadowEnvs)
-          };
-        }
-        if (shouldSerializeModuleEnv) {
-          const capturedEnv = !isImported
-            ? getModuleEnvSnapshot()
-            : serializedInternal.capturedModuleEnv instanceof Map
-              ? serializedInternal.capturedModuleEnv
-              : getModuleEnvSnapshot();
-          serializedInternal = {
-            ...serializedInternal,
-            capturedModuleEnv: this.serializeModuleEnv(capturedEnv, _serializingEnvs)
-          };
-        } else {
-          // When not adding fresh module env captures (to avoid recursion),
-          // preserve existing capturedModuleEnv from prior imports.
-          //
-          // Key insight: An exe's capturedModuleEnv is circular (and should be deleted)
-          // only if it points to the same env we're currently serializing.
-          // If it's from a different module (e.g., imported exe), preserve it.
-          //
-          // We use both currentSerializationTarget (identity check) and _serializingEnvs
-          // (WeakSet of all Maps currently being serialized) to detect circular references.
-          // The WeakSet catches cases where captureModuleEnvironment() creates new Map
-          // instances that hold the same module's variables but differ by identity.
-          const existingCapture = serializedInternal.capturedModuleEnv;
-          if (!isImported) {
-            // Local executables reattach the full module env on import.
-            delete serializedInternal.capturedModuleEnv;
-          } else if (existingCapture instanceof Map) {
-            // Check if this is a circular reference (identity or tracked in WeakSet)
-            if (
-              (currentSerializationTarget && existingCapture === currentSerializationTarget) ||
-              (_serializingEnvs && _serializingEnvs.has(existingCapture))
-            ) {
-              // Circular - delete to prevent infinite recursion
-              delete serializedInternal.capturedModuleEnv;
-            } else {
-              // Different module's env - serialize and preserve
-              serializedInternal = {
-                ...serializedInternal,
-                capturedModuleEnv: this.serializeModuleEnv(existingCapture, _serializingEnvs)
-              };
-            }
-          }
-          // If already serialized (object), keep it as-is
-          // If undefined, leave it undefined (don't capture new)
-        }
-        
-        // Export executable with all necessary metadata
-        moduleObject[name] = {
-          __executable: true,
-          value: execVar.value,
-          // paramNames removed - they're already in executableDef and shouldn't be exposed as imports
-          executableDef: execVar.internal?.executableDef,
-          internal: serializedInternal
-        };
-      } else if (variable.type === 'template') {
-        const templateVar = variable as TemplateVariable;
-
-        moduleObject[name] = {
-          __template: true,
-          content: templateVar.value,
-          templateSyntax: templateVar.templateSyntax,
-          parameters: templateVar.parameters,
-          templateAst: templateVar.internal?.templateAst || (Array.isArray(templateVar.value) ? templateVar.value : undefined)
-        };
-      } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
-        // For objects, resolve any variable references within the object
-        const resolvedObject = this.objectResolver.resolveObjectReferences(
-          variable.value,
-          childVars,
-          { resolveStrings: options?.resolveStrings }
-        );
-        moduleObject[name] = resolvedObject;
-      } else {
-        // For other variables, export the value directly
-        moduleObject[name] = variable.value;
-      }
-
-      const descriptor = variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined;
-      const mergedDescriptor = descriptor && envDescriptor
-        ? mergeDescriptors(descriptor, envDescriptor)
-        : descriptor ?? envDescriptor;
-      const metadataForSerialization: VariableMetadata = {};
-      if (mergedDescriptor) {
-        metadataForSerialization.security = mergedDescriptor;
-      }
-      if (variable.internal?.capability) {
-        metadataForSerialization.capability = variable.internal.capability;
-      }
-      const serializedMetadata = VariableMetadataUtils.serializeSecurityMetadata(metadataForSerialization);
-      if (serializedMetadata) {
-        serializedMetadataMap[name] = serializedMetadata;
-      }
-    }
-    if (Object.keys(serializedMetadataMap).length > 0) {
-      moduleObject.__metadata__ = serializedMetadataMap;
-    }
-    
-    const guards: SerializedGuardDefinition[] =
-      guardNames.length > 0 && childEnv
-        ? childEnv.serializeGuardsByNames(guardNames)
-        : [];
+    const guards = this.guardExportChecker.serializeGuardsByName(guardNames, childEnv);
 
     return {
       moduleObject,
