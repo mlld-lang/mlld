@@ -7,6 +7,8 @@ import type { NormalizedGuardOverride } from './guard-override-utils';
 import { applyGuardOverrideFilter } from './guard-override-utils';
 import { buildOperationKeys } from './guard-operation-keys';
 
+export type GuardTiming = 'before' | 'after';
+
 export interface PerInputCandidate {
   index: number;
   variable: Variable;
@@ -19,7 +21,8 @@ export interface PerInputCandidate {
 export function buildPerInputCandidates(
   registry: ReturnType<Environment['getGuardRegistry']>,
   inputs: readonly Variable[],
-  override: NormalizedGuardOverride
+  override: NormalizedGuardOverride,
+  timing: GuardTiming = 'before'
 ): PerInputCandidate[] {
   const results: PerInputCandidate[] = [];
 
@@ -33,7 +36,7 @@ export function buildPerInputCandidates(
     const guards: GuardDefinition[] = [];
 
     for (const label of labels) {
-      const defs = registry.getDataGuardsForTiming(label, 'before');
+      const defs = registry.getDataGuardsForTiming(label, timing);
       for (const def of defs) {
         if (!seen.has(def.id)) {
           seen.add(def.id);
@@ -51,21 +54,43 @@ export function buildPerInputCandidates(
   return results;
 }
 
+export interface OperationGuardCollectionOptions {
+  timing?: GuardTiming;
+  variables?: readonly Variable[];
+}
+
 export function collectOperationGuards(
   registry: ReturnType<Environment['getGuardRegistry']>,
   operation: OperationContext,
-  override: NormalizedGuardOverride
+  override: NormalizedGuardOverride,
+  options: OperationGuardCollectionOptions = {}
 ): GuardDefinition[] {
+  const timing = options.timing ?? 'before';
   const keys = buildOperationKeys(operation);
   const seen = new Set<string>();
   const results: GuardDefinition[] = [];
 
   for (const key of keys) {
-    const defs = registry.getOperationGuardsForTiming(key, 'before');
+    const defs = registry.getOperationGuardsForTiming(key, timing);
     for (const def of defs) {
       if (!seen.has(def.id)) {
         seen.add(def.id);
         results.push(def);
+      }
+    }
+  }
+
+  if (options.variables && options.variables.length > 0) {
+    for (const variable of options.variables) {
+      const labels = Array.isArray(variable.mx?.labels) ? variable.mx.labels : [];
+      for (const label of labels) {
+        const defs = registry.getOperationGuardsForTiming(label, timing);
+        for (const def of defs) {
+          if (!seen.has(def.id)) {
+            seen.add(def.id);
+            results.push(def);
+          }
+        }
       }
     }
   }

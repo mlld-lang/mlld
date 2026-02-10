@@ -33,13 +33,20 @@ import {
 import type { OperationContext, GuardContextSnapshot } from '../env/ContextManager';
 import type { EvalResult } from '../core/interpreter';
 import type { GuardDefinition } from '../guards/GuardRegistry';
-import { isDirectiveHookTarget, isEffectHookTarget, isExecHookTarget } from '@core/types/hooks';
+import { isDirectiveHookTarget } from '@core/types/hooks';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import {
   applySecurityDescriptorToStructuredValue,
   ensureStructuredValue,
   extractSecurityDescriptor
 } from '../utils/structured-value';
+import {
+  type PerInputCandidate,
+  buildPerInputCandidates,
+  collectOperationGuards
+} from './guard-candidate-selection';
+import { buildOperationKeys } from './guard-operation-keys';
+import { extractGuardOverride, normalizeGuardOverride } from './guard-override-utils';
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
@@ -70,21 +77,6 @@ const GUARD_HELPER_SOURCE: VariableSource = {
   hasInterpolation: false,
   isMultiLine: false
 };
-
-type GuardOverrideValue = false | { only?: unknown; except?: unknown } | undefined;
-
-interface NormalizedGuardOverride {
-  kind: 'none' | 'disableAll' | 'only' | 'except';
-  names?: Set<string>;
-}
-
-interface PerInputCandidate {
-  index: number;
-  variable: Variable;
-  labels: readonly DataLabel[];
-  sources: readonly string[];
-  guards: GuardDefinition[];
-}
 
 interface OperationSnapshot {
   labels: readonly DataLabel[];
@@ -225,7 +217,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     let activeOutputs = outputVariables.slice();
     let currentDescriptor = extractOutputDescriptor(result, activeOutputs[0]);
 
-    let perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride);
+    let perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride, 'after');
     if (perInputCandidates.length === 0 && inputVariables.length > 0) {
       const mergedDescriptor = mergeDescriptors(
         currentDescriptor,
@@ -237,12 +229,18 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
         currentDescriptor = mergedDescriptor;
       }
       activeOutputs = inputVariables.slice();
-      perInputCandidates = buildPerInputCandidates(registry, activeOutputs, guardOverride);
+      perInputCandidates = buildPerInputCandidates(registry, activeOutputs, guardOverride, 'after');
       selectionSources.push('input-fallback');
     }
-    let operationGuards = collectOperationGuards(registry, operation, guardOverride, outputVariables);
+    let operationGuards = collectOperationGuards(registry, operation, guardOverride, {
+      timing: 'after',
+      variables: outputVariables
+    });
     if (operationGuards.length === 0 && activeOutputs === inputVariables && inputVariables.length > 0) {
-      operationGuards = collectOperationGuards(registry, operation, guardOverride, inputVariables);
+      operationGuards = collectOperationGuards(registry, operation, guardOverride, {
+        timing: 'after',
+        variables: inputVariables
+      });
     }
 
     const streamingActive = Boolean(operation?.metadata && (operation.metadata as any).streaming);
@@ -590,79 +588,6 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     return result;
   });
 };
-
-function buildPerInputCandidates(
-  registry: ReturnType<Environment['getGuardRegistry']>,
-  inputs: readonly Variable[],
-  override: NormalizedGuardOverride
-): PerInputCandidate[] {
-  const results: PerInputCandidate[] = [];
-
-  for (let index = 0; index < inputs.length; index++) {
-    const variable = inputs[index]!;
-    const labels = Array.isArray(variable.mx?.labels) ? variable.mx.labels : [];
-    const sources = Array.isArray(variable.mx?.sources) ? variable.mx.sources : [];
-
-    const seen = new Set<string>();
-    const guards: GuardDefinition[] = [];
-
-    for (const label of labels) {
-      const defs = registry.getDataGuardsForTiming(label, 'after');
-      for (const def of defs) {
-        if (!seen.has(def.id)) {
-          seen.add(def.id);
-          guards.push(def);
-        }
-      }
-    }
-
-    const filteredGuards = applyGuardOverrideFilter(guards, override);
-
-    if (filteredGuards.length > 0) {
-      results.push({ index, variable, labels, sources, guards: filteredGuards });
-    }
-  }
-
-  return results;
-}
-
-function collectOperationGuards(
-  registry: ReturnType<Environment['getGuardRegistry']>,
-  operation: OperationContext,
-  override: NormalizedGuardOverride,
-  variables: readonly Variable[]
-): GuardDefinition[] {
-  const keys = buildOperationKeys(operation);
-  const seen = new Set<string>();
-  const results: GuardDefinition[] = [];
-
-  for (const key of keys) {
-    const defs = registry.getOperationGuardsForTiming(key, 'after');
-    for (const def of defs) {
-      if (!seen.has(def.id)) {
-        seen.add(def.id);
-        results.push(def);
-      }
-    }
-  }
-
-  if (variables.length > 0) {
-    for (const variable of variables) {
-      const labels = Array.isArray(variable.mx?.labels) ? variable.mx.labels : [];
-      for (const label of labels) {
-        const defs = registry.getOperationGuardsForTiming(label, 'after');
-        for (const def of defs) {
-          if (!seen.has(def.id)) {
-            seen.add(def.id);
-            results.push(def);
-          }
-        }
-      }
-    }
-  }
-
-  return applyGuardOverrideFilter(results, override);
-}
 
 async function evaluateGuard(options: {
   node: HookableNode;
@@ -1093,159 +1018,6 @@ function resolveGuardValue(variable: Variable | undefined, fallback: Variable): 
     return buildVariablePreview(fallback) ?? '';
   }
   return candidate;
-}
-
-function extractGuardOverride(node: HookableNode): GuardOverrideValue {
-  const withClause = resolveWithClause(node);
-  if (withClause && typeof withClause === 'object' && 'guards' in withClause) {
-    return (withClause as any).guards as GuardOverrideValue;
-  }
-  return undefined;
-}
-
-function resolveWithClause(node: HookableNode): unknown {
-  if (isExecHookTarget(node)) {
-    return (node as any).withClause;
-  }
-  if (isEffectHookTarget(node)) {
-    return (node as any).meta?.withClause;
-  }
-  if ((node as any).withClause) {
-    return (node as any).withClause;
-  }
-  const values = (node as any).values;
-  if (values?.withClause) {
-    return values.withClause;
-  }
-  if (values?.value?.withClause) {
-    return values.value.withClause;
-  }
-  if (values?.invocation?.withClause) {
-    return values.invocation.withClause;
-  }
-  if (values?.execInvocation?.withClause) {
-    return values.execInvocation.withClause;
-  }
-  if (values?.execRef?.withClause) {
-    return values.execRef.withClause;
-  }
-  const metaWithClause = (node as any).meta?.withClause;
-  if (metaWithClause) {
-    return metaWithClause;
-  }
-  return undefined;
-}
-
-function normalizeGuardNames(names: unknown, field: 'only' | 'except'): Set<string> {
-  if (!Array.isArray(names)) {
-    throw new Error(`Guard override ${field} value must be an array`);
-  }
-  const normalized = new Set<string>();
-  for (const entry of names) {
-    if (typeof entry !== 'string') {
-      throw new Error(`Guard override ${field} entries must be strings starting with @`);
-    }
-    const trimmed = entry.trim();
-    if (!trimmed.startsWith('@')) {
-      throw new Error(`Guard override ${field} entries must start with @`);
-    }
-    const name = trimmed.slice(1);
-    if (!name) {
-      throw new Error(`Guard override ${field} entries must include a name after @`);
-    }
-    normalized.add(name);
-  }
-  return normalized;
-}
-
-function normalizeGuardOverride(raw: GuardOverrideValue): NormalizedGuardOverride {
-  if (raw === undefined) {
-    return { kind: 'none' };
-  }
-  if (raw === false) {
-    return { kind: 'disableAll' };
-  }
-  if (raw && typeof raw === 'object') {
-    const rawOnly = (raw as any).only;
-    const rawExcept = (raw as any).except;
-    const hasOnly = Array.isArray(rawOnly);
-    const hasExcept = Array.isArray(rawExcept);
-    const hasOnlyValue = rawOnly !== undefined;
-    const hasExceptValue = rawExcept !== undefined;
-
-    if (hasOnly && hasExcept) {
-      throw new Error('Guard override cannot specify both only and except');
-    }
-    if (hasOnlyValue && !hasOnly) {
-      throw new Error('Guard override only value must be an array');
-    }
-    if (hasExceptValue && !hasExcept) {
-      throw new Error('Guard override except value must be an array');
-    }
-    if (hasOnly) {
-      return { kind: 'only', names: normalizeGuardNames(rawOnly, 'only') };
-    }
-    if (hasExcept) {
-      return { kind: 'except', names: normalizeGuardNames(rawExcept, 'except') };
-    }
-    return { kind: 'none' };
-  }
-  throw new Error('Guard override must be false or an object');
-}
-
-function applyGuardOverrideFilter(guards: GuardDefinition[], override: NormalizedGuardOverride): GuardDefinition[] {
-  if (override.kind === 'disableAll') {
-    return guards.filter(def => def.privileged === true);
-  }
-  if (override.kind === 'only') {
-    return guards.filter(def => def.privileged === true || (def.name && override.names?.has(def.name)));
-  }
-  if (override.kind === 'except') {
-    return guards.filter(def => def.privileged === true || !def.name || !override.names?.has(def.name));
-  }
-  return guards;
-}
-
-function buildOperationKeys(operation: OperationContext): string[] {
-  const keys = new Set<string>();
-  if (operation.type) {
-    keys.add(operation.type.toLowerCase());
-  }
-  if (operation.subtype) {
-    keys.add(operation.subtype.toLowerCase());
-  }
-  if (operation.type === 'run') {
-    const runSubtype =
-      typeof operation.metadata === 'object' && operation.metadata
-        ? (operation.metadata as Record<string, unknown>).runSubtype
-        : undefined;
-    if (typeof runSubtype === 'string') {
-      keys.add(runSubtype.toLowerCase());
-      if (runSubtype === 'runCommand') {
-        keys.add('cmd');
-      } else if (runSubtype.startsWith('runExec')) {
-        keys.add('exec');
-      } else if (runSubtype === 'runCode') {
-        const language =
-          typeof operation.metadata === 'object' && operation.metadata
-            ? (operation.metadata as Record<string, unknown>).language
-            : undefined;
-        if (typeof language === 'string' && language.length > 0) {
-          keys.add(language.toLowerCase());
-        }
-      }
-    }
-  }
-
-  if (operation.opLabels && operation.opLabels.length > 0) {
-    for (const label of operation.opLabels) {
-      if (typeof label === 'string' && label.length > 0) {
-        keys.add(label.toLowerCase());
-      }
-    }
-  }
-
-  return Array.from(keys);
 }
 
 function buildOperationSnapshot(inputs: readonly Variable[]): OperationSnapshot {

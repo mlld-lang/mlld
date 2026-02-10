@@ -89,6 +89,29 @@ describe('guard candidate selection utilities', () => {
     expect(results[1]?.guards.map(guard => guard.id)).toEqual(['gb', 'gc']);
   });
 
+  it('uses the provided timing when collecting per-input candidates', () => {
+    const beforeGuard = createGuard({ id: 'before-guard', name: 'beforeGuard' });
+    const afterGuard = createGuard({ id: 'after-guard', name: 'afterGuard' });
+    const calls: string[] = [];
+
+    const registry = {
+      getDataGuardsForTiming(label: string, timing: string): GuardDefinition[] {
+        calls.push(`${timing}:${label}`);
+        return timing === 'after' ? [afterGuard] : [beforeGuard];
+      }
+    } as any;
+
+    const results = buildPerInputCandidates(
+      registry,
+      [createInput('only', ['secret'])],
+      { kind: 'none' },
+      'after'
+    );
+
+    expect(calls).toEqual(['after:secret']);
+    expect(results[0]?.guards.map(guard => guard.id)).toEqual(['after-guard']);
+  });
+
   it('preserves operation-key order and dedupe when collecting operation guards', () => {
     const gRun = createGuard({ id: 'g-run', name: 'gRun' });
     const gShell = createGuard({ id: 'g-shell', name: 'gShell' });
@@ -132,6 +155,47 @@ describe('guard candidate selection utilities', () => {
       'g-cmd',
       'g-policy'
     ]);
+  });
+
+  it('collects operation guards with after timing and variable-label fallback', () => {
+    const gExe = createGuard({ id: 'g-exe', name: 'gExe' });
+    const gOpLabel = createGuard({ id: 'g-op-label', name: 'gOpLabel' });
+    const gSecret = createGuard({ id: 'g-secret', name: 'gSecret' });
+
+    const registry = {
+      getOperationGuardsForTiming(key: string, timing: string): GuardDefinition[] {
+        if (timing !== 'after') {
+          return [];
+        }
+        if (key === 'exe') {
+          return [gExe];
+        }
+        if (key === 'op:publish') {
+          return [gOpLabel];
+        }
+        if (key === 'secret') {
+          return [gSecret, gExe];
+        }
+        return [];
+      }
+    } as any;
+
+    const operation: OperationContext = {
+      type: 'exe',
+      opLabels: ['op:publish']
+    };
+
+    const results = collectOperationGuards(
+      registry,
+      operation,
+      { kind: 'none' },
+      {
+        timing: 'after',
+        variables: [createInput('output', ['secret'])]
+      }
+    );
+
+    expect(results.map(guard => guard.id)).toEqual(['g-exe', 'g-op-label', 'g-secret']);
   });
 
   it('preserves privileged inclusion for operation override filtering', () => {
