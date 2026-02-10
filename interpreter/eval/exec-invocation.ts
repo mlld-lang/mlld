@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import type { ExeBlockNode, ExecInvocation } from '@core/types';
+import type { ExecInvocation } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
@@ -20,8 +20,6 @@ import type { Variable, VariableContext, VariableSource } from '@core/types/vari
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError, MlldSecurityError, CircularReferenceError } from '@core/errors';
 import { logger } from '@core/utils/logger';
-import { prepareValueForShadow } from '../env/variable-proxy';
-import { evaluateExeBlock } from './exe';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import {
   asText,
@@ -29,7 +27,6 @@ import {
   wrapStructured,
   collectAndMergeParameterDescriptors,
   extractSecurityDescriptor,
-  normalizeWhenShowEffect,
   applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
@@ -39,7 +36,6 @@ import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/sec
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
-import { handleExecGuardDenial } from './guard-denial-handler';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
@@ -49,7 +45,6 @@ import {
   deserializeShadowEnvs
 } from './exec/context';
 import {
-  getSecurityDescriptorFromCarrier,
   getStructuredSecurityDescriptor,
   getVariableSecurityDescriptor,
   setStructuredSecurityDescriptor
@@ -73,6 +68,7 @@ import {
 } from './exec/args';
 import { executeNonCommandExecutable } from './exec/non-command-handlers';
 import { executeCommandExecutable } from './exec/command-handler';
+import { executeCodeExecutable } from './exec/code-handler';
 import {
   applyExecOutputPolicyLabels,
   createExecOperationContextAndEnforcePolicy,
@@ -1383,353 +1379,31 @@ async function evaluateExecInvocationInternal(
   }
   // Handle code executables
   else if (isCodeExecutable(definition)) {
-    // Special handling for mlld-when expressions
-    if (definition.language === 'mlld-when') {
-      const activeWhenExpr = whenExprNode;
-      if (!activeWhenExpr) {
-        throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
+    const codeResult = await executeCodeExecutable({
+      definition,
+      commandName,
+      node,
+      env,
+      execEnv,
+      variable,
+      params,
+      evaluatedArgs,
+      evaluatedArgStrings,
+      workingDirectory,
+      whenExprNode,
+      services: {
+        interpolateWithResultDescriptor,
+        toPipelineInput,
+        mergeResultDescriptor,
+        getResultSecurityDescriptor: () => resultSecurityDescriptor,
+        finalizeResult
       }
-
-      // Evaluate the when expression with the parameter environment
-      const { evaluateWhenExpression } = await import('./when-expression');
-      let whenResult: EvalResult;
-      try {
-        whenResult = await evaluateWhenExpression(activeWhenExpr, execEnv);
-      } catch (error) {
-        const handled = await handleExecGuardDenial(error, {
-          execEnv,
-          env,
-          whenExprNode: activeWhenExpr
-        });
-        if (handled) {
-          const finalHandled = await finalizeResult(handled);
-          return finalHandled;
-        }
-        throw error;
-      }
-      const normalization = normalizeWhenShowEffect(whenResult.value);
-      result = normalization.normalized;
-      // Update execEnv to the result which contains merged nodes
-      execEnv = whenResult.env;
-    } else if (definition.language === 'mlld-foreach') {
-      // Special handling for mlld-foreach expressions
-      const foreachNode = definition.codeTemplate[0];
-      // Evaluate the foreach expression with the parameter environment
-      const { evaluateForeachCommand } = await import('./foreach');
-      result = await evaluateForeachCommand(foreachNode, execEnv);
-    } else if (definition.language === 'mlld-for') {
-      // Special handling for mlld-for expressions
-      const forExprNode = definition.codeTemplate[0];
-      if (!forExprNode || forExprNode.type !== 'ForExpression') {
-        throw new MlldInterpreterError('mlld-for executable missing ForExpression node');
-      }
-      
-      // Evaluate the for expression with the parameter environment
-      const { evaluateForExpression } = await import('./for');
-      result = await evaluateForExpression(forExprNode, execEnv);
-    } else if (definition.language === 'mlld-loop') {
-      const loopExprNode = definition.codeTemplate[0];
-      if (!loopExprNode || loopExprNode.type !== 'LoopExpression') {
-        throw new MlldInterpreterError('mlld-loop executable missing LoopExpression node');
-      }
-
-      const { evaluateLoopExpression } = await import('./loop');
-      result = await evaluateLoopExpression(loopExprNode, execEnv);
-    } else if (definition.language === 'mlld-exe-block') {
-      const blockNode = Array.isArray(definition.codeTemplate)
-        ? (definition.codeTemplate[0] as ExeBlockNode | undefined)
-        : undefined;
-      if (!blockNode || !blockNode.values) {
-        throw new MlldInterpreterError('mlld-exe-block executable missing block content');
-      }
-
-      const blockResult = await evaluateExeBlock(blockNode, execEnv);
-      result = blockResult.value;
-      execEnv = blockResult.env;
-    } else {
-      // For bash/sh, don't interpolate the code template - bash handles its own variable substitution
-      let code: string;
-      if (definition.language === 'bash' || definition.language === 'sh') {
-        // For bash/sh, just extract the raw code without interpolation
-        if (Array.isArray(definition.codeTemplate)) {
-          // If it's an array of nodes, concatenate their content
-          code = definition.codeTemplate.map(node => {
-            if (typeof node === 'string') return node;
-            if (node && typeof node === 'object' && 'content' in node) return node.content || '';
-            return '';
-          }).join('');
-        } else if (typeof definition.codeTemplate === 'string') {
-          code = definition.codeTemplate;
-        } else {
-          code = '';
-        }
-      } else {
-        // For other languages (JS, Python), interpolate as before
-        code = await interpolateWithResultDescriptor(definition.codeTemplate, execEnv);
-      }
-      
-      // Import ASTEvaluator for normalizing array values
-      const { ASTEvaluator } = await import('../core/ast-evaluator');
-    
-    // Build params object for code execution
-    const codeParams: Record<string, any> = {};
-    const variableMetadata: Record<string, any> = {};
-    
-    for (let i = 0; i < params.length; i++) {
-      const paramName = params[i];
-      
-      // Check if this parameter is a pipeline input variable
-      const paramVar = execEnv.getVariable(paramName);
-      if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('Checking parameter:', {
-          paramName,
-          hasParamVar: !!paramVar,
-          paramVarType: paramVar?.type,
-          isPipelineInput: paramVar?.type === 'pipeline-input'
-        });
-      }
-      if (paramVar && paramVar.type === 'pipeline-input') {
-        // Pass the pipeline input object directly for code execution
-        codeParams[paramName] = paramVar.value;
-      } else if (paramVar) {
-        // Always use enhanced Variable passing
-        if (definition.language === 'bash' || definition.language === 'sh') {
-          const rawValue = paramVar.value;
-          if (typeof rawValue === 'string') {
-            codeParams[paramName] = rawValue;
-          } else if (isStructuredValue(rawValue)) {
-            codeParams[paramName] = asText(rawValue);
-          } else {
-            codeParams[paramName] = prepareValueForShadow(paramVar);
-          }
-        } else {
-          if (env.shouldSuppressGuards() && paramVar.internal?.isSystem && paramVar.internal?.isParameter) {
-            const rawValue = isStructuredValue(paramVar.value)
-              ? paramVar.value.data
-              : paramVar.value;
-            codeParams[paramName] = rawValue;
-          } else {
-            // Other languages (JS, Python, Node, etc.) get deferred conversion to proxies
-            // so that prepareParamsForShadow can record primitive metadata.
-            let variableForShadow: Variable = paramVar;
-
-            // But first, check if it's a complex Variable that needs resolution
-            if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
-              // Complex Variable with AST - extract value - WHY: Shadow environments need evaluated values
-              const { extractVariableValue: extractVal } = await import('../utils/variable-resolution');
-              const resolvedValue = await extractVal(paramVar, execEnv);
-              const resolvedVar = {
-                ...paramVar,
-                value: resolvedValue,
-                isComplex: false
-              };
-              variableForShadow = resolvedVar;
-            } else {
-              // Auto-unwrap LoadContentResult objects for JS/Python
-              const unwrappedValue = AutoUnwrapManager.unwrap(paramVar.value);
-              if (unwrappedValue !== paramVar.value) {
-                // Value was unwrapped, create a new variable with the unwrapped content
-                const unwrappedVar = {
-                  ...paramVar,
-                  value: unwrappedValue,
-                  // Update type based on unwrapped value
-                  type: Array.isArray(unwrappedValue) ? 'array' : 'text'
-                };
-                variableForShadow = unwrappedVar;
-              } else {
-                variableForShadow = paramVar;
-              }
-            }
-
-            codeParams[paramName] = variableForShadow;
-          }
-        }
-        
-        // Store metadata for primitives that can't be proxied (only for non-bash languages)
-        if ((definition.language !== 'bash' && definition.language !== 'sh') && 
-            (paramVar.value === null || typeof paramVar.value !== 'object')) {
-          // Handle PrimitiveVariable which has primitiveType instead of subtype
-          const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
-            ? (paramVar as any).primitiveType 
-            : paramVar.subtype;
-          
-          variableMetadata[paramName] = {
-            type: paramVar.type,
-            subtype: subtype,
-            mx: paramVar.mx,
-            internal: paramVar.internal,
-            isVariable: true
-          };
-        }
-        
-        if (process.env.DEBUG_EXEC || process.env.MLLD_DEBUG === 'true') {
-          const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
-            ? (paramVar as any).primitiveType 
-            : paramVar.subtype;
-            
-          logger.debug(`Variable passing for ${paramName}:`, {
-            variableType: paramVar.type,
-            variableSubtype: subtype,
-            hasInternal: !!paramVar.internal,
-            isPrimitive: paramVar.value === null || typeof paramVar.value !== 'object',
-            language: definition.language
-          });
-        }
-      } else {
-        // Use the evaluated argument value directly - this preserves primitives
-        const argValue = evaluatedArgs[i];
-        // Normalize arrays to ensure plain JavaScript values
-        codeParams[paramName] = await ASTEvaluator.evaluateToRuntime(argValue, execEnv);
-        
-        // Debug primitive values
-        if (process.env.DEBUG_EXEC) {
-          logger.debug(`Code parameter ${paramName}:`, {
-            argValue,
-            type: typeof argValue,
-            isNumber: typeof argValue === 'number',
-            evaluatedArgs_i: evaluatedArgs[i],
-            evaluatedArgStrings_i: evaluatedArgStrings[i]
-          });
-        }
-      }
+    });
+    if (codeResult.kind === 'return') {
+      return codeResult.evalResult;
     }
-
-    // NEW: Pass captured shadow environments for JS/Node execution
-    const capturedModuleEnv =
-      (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
-    if (
-      capturedModuleEnv instanceof Map &&
-      (definition.language === 'js' || definition.language === 'javascript' ||
-        definition.language === 'node' || definition.language === 'nodejs')
-    ) {
-      for (const [capturedName, capturedVar] of capturedModuleEnv) {
-        if (codeParams[capturedName] !== undefined) {
-          continue;
-        }
-
-        if (params.includes(capturedName)) {
-          continue;
-        }
-
-        if (capturedVar.type === 'executable') {
-          continue;
-        }
-
-        codeParams[capturedName] = capturedVar;
-
-        if ((capturedVar.value === null || typeof capturedVar.value !== 'object') && capturedVar.type !== 'executable') {
-          const subtype = capturedVar.type === 'primitive' && 'primitiveType' in capturedVar
-            ? (capturedVar as any).primitiveType
-            : (capturedVar as any).subtype;
-          variableMetadata[capturedName] = {
-            type: capturedVar.type,
-            subtype,
-            mx: capturedVar.mx,
-            isVariable: true
-          };
-        }
-      }
-    }
-
-    // NEW: Pass captured shadow environments for JS/Node execution
-    const capturedEnvs =
-      variable.internal?.capturedShadowEnvs;
-    if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
-                         definition.language === 'node' || definition.language === 'nodejs')) {
-      (codeParams as any).__capturedShadowEnvs = capturedEnvs;
-      
-    }
-    
-    // Execute the code with parameters and metadata
-    const codeResult = await execEnv.executeCode(
-      code,
-      definition.language || 'javascript',
-      codeParams,
-      Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined,
-      workingDirectory ? { workingDirectory } : undefined,
-      workingDirectory
-        ? { directiveType: 'exec', sourceLocation: node.location, workingDirectory }
-        : { directiveType: 'exec', sourceLocation: node.location }
-    );
-    
-    // Process the result
-    let processedResult: any;
-    
-    // If the result looks like JSON (from return statement), parse it
-    if (typeof codeResult === 'string' && 
-        (codeResult.startsWith('"') || codeResult.startsWith('{') || codeResult.startsWith('[') || 
-         codeResult === 'null' || codeResult === 'true' || codeResult === 'false' ||
-         /^-?\d+(\.\d+)?$/.test(codeResult))) {
-      try {
-        const parsed = JSON.parse(codeResult);
-        processedResult = parsed;
-      } catch {
-        // Not valid JSON, use as-is
-        processedResult = codeResult;
-      }
-    } else {
-      processedResult = codeResult;
-    }
-
-    // Attempt to restore metadata from the auto-unwrap shelf
-    result = AutoUnwrapManager.restore(processedResult);
-    if (process.env.MLLD_DEBUG_STRUCTURED === 'true' && result && typeof result === 'object') {
-      try {
-        const debugData = (result as any).data;
-        console.error('[exec-invocation] rehydrate candidate', {
-          hasType: 'type' in (result as Record<string, unknown>),
-          hasText: 'text' in (result as Record<string, unknown>),
-          dataType: typeof debugData,
-          dataKeys: debugData && typeof debugData === 'object' ? Object.keys(debugData) : undefined
-        });
-      } catch {}
-    }
-    if (
-      result &&
-      typeof result === 'object' &&
-      !isStructuredValue(result) &&
-      'type' in result &&
-      'text' in result &&
-      'data' in result
-    ) {
-      const payload = (result as any).data;
-      result = wrapStructured(payload, (result as any).type, (result as any).text, (result as any).metadata);
-    }
-
-    if (definition.withClause) {
-      if (definition.withClause.pipeline && definition.withClause.pipeline.length > 0) {
-        const { processPipeline } = await import('./pipeline/unified-processor');
-        const pipelineInput = toPipelineInput(result);
-        const pipelineResult = await processPipeline({
-          value: pipelineInput,
-          env: execEnv,
-          pipeline: definition.withClause.pipeline,
-          format: definition.withClause.format as string | undefined,
-          isRetryable: false,
-          identifier: commandName,
-          location: node.location,
-          descriptorHint: resultSecurityDescriptor
-        });
-        result = pipelineResult;
-      } else {
-        const withClauseResult = await applyWithClause(result, definition.withClause, execEnv);
-        result = withClauseResult.value ?? withClauseResult;
-      }
-    }
-
-    const inputDescriptors = Object.values(variableMetadata)
-      .map(meta => getSecurityDescriptorFromCarrier(meta))
-      .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
-
-    if (inputDescriptors.length > 0) {
-      const mergedInputDescriptor =
-        inputDescriptors.length === 1
-          ? inputDescriptors[0]
-          : env.mergeSecurityDescriptors(...inputDescriptors);
-      env.recordSecurityDescriptor(mergedInputDescriptor);
-      mergeResultDescriptor(mergedInputDescriptor);
-    }
-    }
+    result = codeResult.result;
+    execEnv = codeResult.execEnv;
   } else {
     throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
   }
