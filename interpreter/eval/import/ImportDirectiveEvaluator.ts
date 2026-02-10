@@ -17,11 +17,9 @@ import { interpolate } from '../../core/interpreter';
 import { InterpolationContext } from '../../core/interpolation-context';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import type { NeedsDeclaration, CommandNeeds } from '@core/policy/needs';
-import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { spawnSync } from 'child_process';
 import { createRequire } from 'module';
 import * as path from 'path';
-import minimatch from 'minimatch';
 import type { SerializedGuardDefinition } from '../../guards';
 import { createObjectVariable } from '@core/types/variable/VariableFactories';
 import type { VariableSource, Variable } from '@core/types/variable';
@@ -32,8 +30,8 @@ import { InputImportHandler } from './InputImportHandler';
 import { ResolverImportHandler } from './ResolverImportHandler';
 import { ModuleImportHandler } from './ModuleImportHandler';
 import { NodeImportHandler } from './NodeImportHandler';
-const DIRECTORY_INDEX_FILENAME = 'index.mld';
-const DEFAULT_DIRECTORY_IMPORT_SKIP_DIRS = ['_*', '.*'] as const;
+import { DirectoryImportHandler } from './DirectoryImportHandler';
+import { FileUrlImportHandler } from './FileUrlImportHandler';
 
 /**
  * Main coordinator for import directive evaluation
@@ -52,6 +50,8 @@ export class ImportDirectiveEvaluator {
   private resolverImportHandler: ResolverImportHandler;
   private moduleImportHandler: ModuleImportHandler;
   private nodeImportHandler: NodeImportHandler;
+  private directoryImportHandler: DirectoryImportHandler;
+  private fileUrlImportHandler: FileUrlImportHandler;
   // TODO: Integrate capability context construction when import types and security descriptors land.
 
   constructor(env: Environment) {
@@ -64,16 +64,27 @@ export class ImportDirectiveEvaluator {
     this.resolverImportDataAdapter = new ResolverImportDataAdapter(this.variableImporter);
     this.inputImportHandler = new InputImportHandler(this.resolverImportDataAdapter);
     this.resolverImportHandler = new ResolverImportHandler(this.resolverImportDataAdapter);
+    this.contentProcessor = new ModuleContentProcessor(
+      env, 
+      this.securityValidator, 
+      this.variableImporter
+    );
     this.moduleImportHandler = new ModuleImportHandler();
     this.nodeImportHandler = new NodeImportHandler(
       this.variableImporter,
       (result, directive, source) => this.validateModuleResult(result, directive, source),
       (directive, policyEnv, source) => this.applyPolicyImportContext(directive, policyEnv, source)
     );
-    this.contentProcessor = new ModuleContentProcessor(
-      env, 
-      this.securityValidator, 
-      this.variableImporter
+    this.directoryImportHandler = new DirectoryImportHandler(
+      async (resolution, directive) => this.contentProcessor.processModuleContent(resolution, directive),
+      (needs, source) => this.enforceModuleNeeds(needs, source)
+    );
+    this.fileUrlImportHandler = new FileUrlImportHandler(
+      async (resolution, directive) => this.contentProcessor.processModuleContent(resolution, directive),
+      this.variableImporter,
+      this.directoryImportHandler,
+      (result, directive, source) => this.validateModuleResult(result, directive, source),
+      (directive, policyEnv, source) => this.applyPolicyImportContext(directive, policyEnv, source)
     );
   }
 
@@ -179,7 +190,7 @@ export class ImportDirectiveEvaluator {
       
       case 'file':
       case 'url':
-        return this.evaluateFileImport(resolution, directive, env);
+        return this.fileUrlImportHandler.evaluateFileImport(resolution, directive, env);
       
       default:
         throw new Error(`Unknown import type: ${(resolution as any).type}`);
@@ -326,234 +337,6 @@ export class ImportDirectiveEvaluator {
       return trimmed.replace(/^['"]|['"]$/g, '');
     }
     return fallback;
-  }
-
-  /**
-   * Handle file and URL imports
-   */
-  private async evaluateFileImport(
-    resolution: ImportResolution,
-    directive: DirectiveNode,
-    env: Environment
-  ): Promise<EvalResult> {
-    const directoryResult = await this.maybeProcessDirectoryImport(resolution, directive, env);
-
-    // Process the file/URL content (handles its own import tracking)
-    const processingResult =
-      directoryResult ?? (await this.contentProcessor.processModuleContent(resolution, directive));
-
-    this.validateModuleResult(processingResult, directive, resolution.resolvedPath);
-
-    // Import variables into environment
-    await this.variableImporter.importVariables(processingResult, directive, env);
-    this.applyPolicyImportContext(directive, env, resolution.resolvedPath);
-
-    return { value: undefined, env };
-  }
-
-  private async maybeProcessDirectoryImport(
-    resolution: ImportResolution,
-    directive: DirectiveNode,
-    env: Environment
-  ): Promise<ModuleProcessingResult | null> {
-    if (resolution.type !== 'file') {
-      return null;
-    }
-
-    if (resolution.importType === 'templates') {
-      return null;
-    }
-
-    const fsService = env.getFileSystemService();
-    if (typeof fsService.isDirectory !== 'function') {
-      return null;
-    }
-
-    const baseDir = resolution.resolvedPath;
-    const isDir = await fsService.isDirectory(baseDir);
-    if (!isDir) {
-      return null;
-    }
-
-    return await this.processDirectoryImport(fsService, baseDir, resolution, directive, env);
-  }
-
-  private async processDirectoryImport(
-    fsService: IFileSystemService,
-    baseDir: string,
-    resolution: ImportResolution,
-    directive: DirectiveNode,
-    env: Environment
-  ): Promise<ModuleProcessingResult> {
-    if (typeof fsService.readdir !== 'function' || typeof fsService.stat !== 'function') {
-      throw new MlldImportError('Directory import requires filesystem access', {
-        code: 'DIRECTORY_IMPORT_FS_UNAVAILABLE',
-        details: { path: baseDir }
-      });
-    }
-
-    const skipDirs = this.getDirectoryImportSkipDirs(directive, baseDir);
-    const moduleObject: Record<string, any> = {};
-    const guardDefinitions: SerializedGuardDefinition[] = [];
-
-    const entries = await fsService.readdir(baseDir);
-    for (const entry of entries) {
-      const fullPath = path.join(baseDir, entry);
-      const stat = await fsService
-        .stat(fullPath)
-        .catch(() => ({ isDirectory: () => false, isFile: () => false }));
-      if (!stat.isDirectory()) {
-        continue;
-      }
-
-      if (this.shouldSkipDirectory(entry, skipDirs)) {
-        continue;
-      }
-
-      const indexPath = path.join(fullPath, DIRECTORY_INDEX_FILENAME);
-      const hasIndex = await fsService.exists(indexPath).catch(() => false);
-      if (!hasIndex) {
-        continue;
-      }
-
-      const indexStat = await fsService
-        .stat(indexPath)
-        .catch(() => ({ isDirectory: () => false, isFile: () => false }));
-      if (!indexStat.isFile()) {
-        continue;
-      }
-
-      const childResolution: ImportResolution = {
-        type: 'file',
-        resolvedPath: indexPath,
-        importType: resolution.importType
-      };
-
-      const childResult = await this.contentProcessor.processModuleContent(childResolution, directive);
-      this.enforceModuleNeeds(childResult.moduleNeeds, indexPath);
-
-      const key = this.sanitizeDirectoryKey(entry);
-      if (key in moduleObject) {
-        throw new MlldImportError(`Duplicate directory import key '${key}' under ${baseDir}`, {
-          code: 'DIRECTORY_IMPORT_DUPLICATE_KEY',
-          details: { path: baseDir, key, entries: [entry] }
-        });
-      }
-
-      moduleObject[key] = childResult.moduleObject;
-      if (childResult.guardDefinitions && childResult.guardDefinitions.length > 0) {
-        guardDefinitions.push(...childResult.guardDefinitions);
-      }
-    }
-
-    if (Object.keys(moduleObject).length === 0) {
-      throw new MlldImportError(`No ${DIRECTORY_INDEX_FILENAME} modules found under ${baseDir}`, {
-        code: 'DIRECTORY_IMPORT_EMPTY',
-        details: { path: baseDir, index: DIRECTORY_INDEX_FILENAME }
-      });
-    }
-
-    const childEnv = env.createChild(baseDir);
-    childEnv.setCurrentFilePath(baseDir);
-
-    return {
-      moduleObject,
-      frontmatter: null,
-      childEnvironment: childEnv,
-      guardDefinitions
-    };
-  }
-
-  private getDirectoryImportSkipDirs(directive: DirectiveNode, baseDir: string): string[] {
-    const withClause = (directive.meta?.withClause || directive.values?.withClause) as any | undefined;
-    if (!withClause || !('skipDirs' in withClause)) {
-      return [...DEFAULT_DIRECTORY_IMPORT_SKIP_DIRS];
-    }
-
-    const value = (withClause as any).skipDirs as unknown;
-    const parsed = this.parseStringArrayOption(value, { option: 'skipDirs', source: baseDir });
-    return parsed;
-  }
-
-  private parseStringArrayOption(
-    value: unknown,
-    context: { option: string; source: string }
-  ): string[] {
-    if (Array.isArray(value)) {
-      const coerced = value.map(item => this.coerceStringLiteral(item)).filter((v): v is string => v !== null);
-      if (coerced.length !== value.length) {
-        throw new MlldImportError(`Import with { ${context.option}: [...] } only supports string values`, {
-          code: 'DIRECTORY_IMPORT_INVALID_OPTION',
-          details: { option: context.option, source: context.source }
-        });
-      }
-      return coerced;
-    }
-
-    if (this.isArrayLiteralAst(value)) {
-      const coerced = value.items.map(item => this.coerceStringLiteral(item)).filter((v): v is string => v !== null);
-      if (coerced.length !== value.items.length) {
-        throw new MlldImportError(`Import with { ${context.option}: [...] } only supports string values`, {
-          code: 'DIRECTORY_IMPORT_INVALID_OPTION',
-          details: { option: context.option, source: context.source }
-        });
-      }
-      return coerced;
-    }
-
-    throw new MlldImportError(`Import with { ${context.option}: [...] } expects an array`, {
-      code: 'DIRECTORY_IMPORT_INVALID_OPTION',
-      details: { option: context.option, source: context.source }
-    });
-  }
-
-  private isArrayLiteralAst(value: unknown): value is { type: 'array'; items: unknown[] } {
-    return Boolean(
-      value &&
-        typeof value === 'object' &&
-        'type' in value &&
-        (value as any).type === 'array' &&
-        'items' in value &&
-        Array.isArray((value as any).items)
-    );
-  }
-
-  private coerceStringLiteral(value: unknown): string | null {
-    if (typeof value === 'string') {
-      return value;
-    }
-
-    if (value && typeof value === 'object') {
-      if ((value as any).type === 'Literal' && (value as any).valueType === 'string') {
-        return String((value as any).value ?? '');
-      }
-
-      if ('content' in value && Array.isArray((value as any).content)) {
-        const parts = (value as any).content as any[];
-        const hasOnlyLiteralOrText = parts.every(
-          node =>
-            node &&
-            typeof node === 'object' &&
-            ((node.type === 'Literal' && 'value' in node) || (node.type === 'Text' && 'content' in node))
-        );
-        if (!hasOnlyLiteralOrText) {
-          return null;
-        }
-        return parts.map(node => (node.type === 'Literal' ? String(node.value ?? '') : String(node.content ?? ''))).join('');
-      }
-    }
-
-    return null;
-  }
-
-  private shouldSkipDirectory(dirName: string, patterns: string[]): boolean {
-    return patterns.some(pattern => minimatch(dirName, pattern, { dot: true }));
-  }
-
-  private sanitizeDirectoryKey(name: string): string {
-    // Preserve hyphens in directory names - they're valid in mlld identifiers
-    const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, '_');
-    return sanitized.length > 0 ? sanitized : 'module';
   }
 
   /**

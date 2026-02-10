@@ -286,6 +286,42 @@ describe('Import type handling', () => {
     expect(lines).toEqual(['party', 'private', 'hidden']);
   });
 
+  it('keeps empty-directory failure behavior for directory imports without index modules', async () => {
+    await fileSystem.writeFile('/project/agents-empty/party/readme.md', 'notes');
+    await fileSystem.writeFile('/project/agents-empty/mllddev/README.txt', 'notes');
+
+    const source = '/import "./agents-empty" as @agents';
+
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow(/No index\.mld modules found under \/project\/agents-empty/);
+  });
+
+  it('keeps mixed file/directory path behavior for similarly named sources', async () => {
+    await fileSystem.writeFile('/project/agents.mld', '/var @kind = "file"');
+    await fileSystem.writeFile('/project/agents/party/index.mld', '/var @who = "party"');
+
+    const source = `/import "./agents.mld" as @fileAgents
+/import "./agents" as @dirAgents
+/show @fileAgents.kind
+/show @dirAgents.party.who`;
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = (output as string).trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    expect(lines).toEqual(['file', 'party']);
+  });
+
   it('rejects template collection imports with undeclared variables', async () => {
     await fileSystem.writeFile(
       '/project/templates/bad.att',

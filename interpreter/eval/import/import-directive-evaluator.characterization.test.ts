@@ -7,6 +7,7 @@ import { MlldImportError } from '@core/errors';
 import { ImportDirectiveEvaluator } from './ImportDirectiveEvaluator';
 import { McpImportService } from './McpImportService';
 import { ModuleImportHandler } from './ModuleImportHandler';
+import { DirectoryImportHandler } from './DirectoryImportHandler';
 import { validateDeclaredImportType } from './ImportTypePolicy';
 
 const SOURCE = {
@@ -73,7 +74,15 @@ describe('ImportDirectiveEvaluator characterization', () => {
 
   it('keeps directory skipDirs option validation behavior stable', () => {
     const env = createEnv();
-    const evaluator: any = new ImportDirectiveEvaluator(env);
+    const directoryImportHandler: any = new DirectoryImportHandler(
+      async () => ({
+        moduleObject: {},
+        frontmatter: null,
+        childEnvironment: env.createChild('/project'),
+        guardDefinitions: []
+      }),
+      () => {}
+    );
     const directive = {
       meta: {
         withClause: {
@@ -83,7 +92,7 @@ describe('ImportDirectiveEvaluator characterization', () => {
       values: {}
     };
 
-    expect(() => evaluator.getDirectoryImportSkipDirs(directive as any, '/project/agents')).toThrow(
+    expect(() => directoryImportHandler.getDirectoryImportSkipDirs(directive as any, '/project/agents')).toThrow(
       /expects an array/
     );
   });
