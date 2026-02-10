@@ -43,17 +43,15 @@ import {
 } from './guard-candidate-selection';
 import { buildOperationKeys } from './guard-operation-keys';
 import {
-  applyDescriptorToVariables,
   extractOutputDescriptor,
-  mergeDescriptorWithFallbackInputs,
-  mergeGuardDescriptor
+  mergeDescriptorWithFallbackInputs
 } from './guard-post-descriptor';
 import {
   buildTransformedGuardResult,
   normalizeFallbackOutputValue,
-  normalizeRawOutput,
-  normalizeReplacementVariables
+  normalizeRawOutput
 } from './guard-post-output-normalization';
+import { runPostGuardDecisionEngine } from './guard-post-decision-engine';
 import { extractGuardOverride, normalizeGuardOverride } from './guard-override-utils';
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
@@ -297,159 +295,53 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
       streamingActive
     });
 
-    const guardTrace: GuardResult[] = [];
-    const reasons: string[] = [];
-    const hints: GuardHint[] = [];
-    let currentDecision: 'allow' | 'deny' | 'retry' = 'allow';
-    let transformsApplied = false;
-
-    for (const candidate of perInputCandidates) {
-      let currentInput = activeOutputs[0] ?? candidate.variable;
-
-      for (const guard of candidate.guards) {
-        const resultEntry = await evaluateGuard({
+    const decisionResult = await runPostGuardDecisionEngine({
+      perInputCandidates,
+      operationGuards,
+      outputVariables,
+      activeOutputs,
+      currentDescriptor,
+      baseOutputValue,
+      retryContext,
+      evaluateGuard: async evaluation =>
+        evaluateGuard({
           node,
           env,
-          guard,
+          guard: evaluation.guard,
           operation,
-          scope: 'perInput',
-          perInput: candidate,
-          inputHelper: buildGuardInputHelper(activeOutputs.length > 0 ? activeOutputs : outputVariables),
-          activeInput: currentInput,
-          labelsOverride: currentDescriptor.labels,
-          sourcesOverride: currentDescriptor.sources,
-          inputPreviewOverride: buildVariablePreview(currentInput),
-          outputRaw: resolveGuardValue(currentInput, currentInput),
+          scope: evaluation.scope,
+          perInput: evaluation.perInput,
+          operationSnapshot: evaluation.operationSnapshot,
+          inputHelper: evaluation.inputHelper,
+          activeInput: evaluation.activeInput,
+          labelsOverride: evaluation.labelsOverride,
+          sourcesOverride: evaluation.sourcesOverride,
+          inputPreviewOverride: evaluation.inputPreviewOverride,
+          outputRaw: evaluation.outputRaw,
           attemptNumber: retryContext.attempt,
           attemptHistory: retryContext.tries,
           maxAttempts: retryContext.max,
           hintHistory: retryContext.hintHistory
-        });
-        guardTrace.push(resultEntry);
-        if (resultEntry.hint) {
-          hints.push(resultEntry.hint);
-        }
-        if (resultEntry.decision === 'allow' && currentDecision === 'allow') {
-          if (resultEntry.replacement) {
-            const replacements = normalizeReplacementVariables(resultEntry.replacement);
-            if (replacements.length > 0) {
-              const mergedDescriptor = mergeGuardDescriptor(
-                currentDescriptor,
-                replacements,
-                guard,
-                resultEntry.labelModifications
-              );
-              await logGuardLabelModifications(env, guard, resultEntry.labelModifications, replacements);
-              applyDescriptorToVariables(mergedDescriptor, replacements);
-              currentDescriptor = mergedDescriptor;
-              activeOutputs = replacements;
-              currentInput = replacements[0];
-              transformsApplied = true;
-            }
-          } else if (resultEntry.labelModifications) {
-            const mergedDescriptor = mergeGuardDescriptor(
-              currentDescriptor,
-              [],
-              guard,
-              resultEntry.labelModifications
-            );
-            currentDescriptor = mergedDescriptor;
-            const targetVars = activeOutputs.length > 0 ? activeOutputs : [currentInput];
-            if (targetVars.length > 0) {
-              await logGuardLabelModifications(env, guard, resultEntry.labelModifications, targetVars);
-              applyDescriptorToVariables(mergedDescriptor, targetVars);
-            }
-            transformsApplied = true;
-          }
-        } else if (resultEntry.decision === 'deny') {
-          currentDecision = 'deny';
-          if (resultEntry.reason) {
-            reasons.push(resultEntry.reason);
-          }
-        } else if (resultEntry.decision === 'retry' && currentDecision !== 'deny') {
-          currentDecision = 'retry';
-          if (resultEntry.reason) {
-            reasons.push(resultEntry.reason);
-          }
-        }
+        }),
+      buildInputHelper: buildGuardInputHelper,
+      buildOperationSnapshot,
+      resolveGuardValue,
+      buildVariablePreview,
+      logLabelModifications: async (guard, labelModifications, targets) => {
+        await logGuardLabelModifications(env, guard, labelModifications, targets);
       }
-    }
-
-    if (operationGuards.length > 0) {
-      if (activeOutputs.length === 0 && outputVariables.length > 0) {
-        activeOutputs = outputVariables.slice();
-      }
-      let opSnapshot = buildOperationSnapshot(activeOutputs.length > 0 ? activeOutputs : outputVariables);
-
-      for (const guard of operationGuards) {
-        const currentOutputValue =
-          activeOutputs[0] ? resolveGuardValue(activeOutputs[0], activeOutputs[0]) : baseOutputValue;
-        const resultEntry = await evaluateGuard({
-          node,
-          env,
-          guard,
-          operation,
-          scope: 'perOperation',
-          operationSnapshot: opSnapshot,
-          inputHelper: buildGuardInputHelper(activeOutputs.length > 0 ? activeOutputs : outputVariables),
-          labelsOverride: opSnapshot.labels,
-          sourcesOverride: opSnapshot.sources,
-          inputPreviewOverride: `Array(len=${opSnapshot.variables.length})`,
-          outputRaw: currentOutputValue,
-          attemptNumber: retryContext.attempt,
-          attemptHistory: retryContext.tries,
-          maxAttempts: retryContext.max,
-          hintHistory: retryContext.hintHistory
-        });
-        guardTrace.push(resultEntry);
-        if (resultEntry.hint) {
-          hints.push(resultEntry.hint);
-        }
-        if (resultEntry.decision === 'allow' && currentDecision === 'allow') {
-          if (resultEntry.replacement) {
-            const replacements = normalizeReplacementVariables(resultEntry.replacement);
-            if (replacements.length > 0) {
-              const mergedDescriptor = mergeGuardDescriptor(
-                currentDescriptor,
-                replacements,
-                guard,
-                resultEntry.labelModifications
-              );
-              await logGuardLabelModifications(env, guard, resultEntry.labelModifications, replacements);
-              applyDescriptorToVariables(mergedDescriptor, replacements);
-              currentDescriptor = mergedDescriptor;
-              activeOutputs = replacements;
-              transformsApplied = true;
-              opSnapshot = buildOperationSnapshot(activeOutputs);
-            }
-          } else if (resultEntry.labelModifications) {
-            const mergedDescriptor = mergeGuardDescriptor(
-              currentDescriptor,
-              [],
-              guard,
-              resultEntry.labelModifications
-            );
-            currentDescriptor = mergedDescriptor;
-            const targetVars = activeOutputs.length > 0 ? activeOutputs : outputVariables;
-            if (targetVars.length > 0) {
-              await logGuardLabelModifications(env, guard, resultEntry.labelModifications, targetVars);
-              applyDescriptorToVariables(mergedDescriptor, targetVars);
-            }
-            transformsApplied = true;
-          }
-        } else if (resultEntry.decision === 'deny') {
-          currentDecision = 'deny';
-          if (resultEntry.reason) {
-            reasons.push(resultEntry.reason);
-          }
-        } else if (resultEntry.decision === 'retry' && currentDecision !== 'deny') {
-          currentDecision = 'retry';
-          if (resultEntry.reason) {
-            reasons.push(resultEntry.reason);
-          }
-        }
-      }
-    }
+    });
+    const {
+      decision: currentDecision,
+      reasons,
+      hints,
+      guardTrace,
+      transformsApplied,
+      activeOutputs: nextActiveOutputs,
+      currentDescriptor: nextDescriptor
+    } = decisionResult;
+    activeOutputs = nextActiveOutputs;
+    currentDescriptor = nextDescriptor;
 
   appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
   const guardName =
