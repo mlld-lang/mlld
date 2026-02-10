@@ -82,8 +82,6 @@ import {
 import { createParameterVariable } from '../utils/parameter-factory';
 import { collectVariableIdentifiersFromNodes } from './directive-inputs';
 import { getSignatureContent } from './sign-verify';
-import { getAdapter } from '../streaming/adapter-registry';
-import { loadStreamAdapter, resolveStreamFormatValue } from '../streaming/stream-format';
 import {
   buildExecOperationPreview,
   deserializeShadowEnvs,
@@ -102,6 +100,12 @@ import {
   getVariableSecurityDescriptor,
   setStructuredSecurityDescriptor
 } from './exec/security-descriptor';
+import {
+  createExecInvocationChunkEffect,
+  finalizeExecInvocationStreaming,
+  mergeExecInvocationStreamingFromDefinition,
+  setupExecInvocationStreaming
+} from './exec/streaming';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -583,67 +587,18 @@ async function evaluateExecInvocationInternal(
       return field;
     });
 
-  let streamingOptions = env.getStreamingOptions();
-  let streamingRequested =
-    node.stream === true ||
-    node.withClause?.stream === true ||
-    node.meta?.withClause?.stream === true;
-  let streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
-  const hasStreamFormat =
-    node.withClause?.streamFormat !== undefined ||
-    node.meta?.withClause?.streamFormat !== undefined;
-  const rawStreamFormat = node.withClause?.streamFormat || node.meta?.withClause?.streamFormat;
-  const streamFormatValue = hasStreamFormat
-    ? await resolveStreamFormatValue(rawStreamFormat, env)
-    : undefined;
-  const pipelineId = `exec-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
-  let lastEmittedChunk: string | undefined;
-  if (hasStreamFormat) {
-    env.setStreamingOptions({
-      ...streamingOptions,
-      streamFormat: streamFormatValue as any,
-      skipDefaultSinks: true,
-      suppressTerminal: true
-    });
-    streamingOptions = env.getStreamingOptions();
-  }
-  const activeStreamingOptions = streamingOptions;
-  const streamingManager = env.getStreamingManager();
-  if (streamingEnabled) {
-    let adapter;
-    if (hasStreamFormat && streamFormatValue) {
-      adapter = await loadStreamAdapter(streamFormatValue);
-    }
-    if (!adapter) {
-      adapter = await getAdapter('ndjson');
-    }
-    streamingManager.configure({
-      env,
-      streamingEnabled: true,
-      streamingOptions: activeStreamingOptions,
-      adapter: adapter as any
-    });
-  }
-  const chunkEffect = (chunk: string, source: 'stdout' | 'stderr') => {
-    if (!streamingEnabled) return;
-
-    const trimmed = chunk.trim();
-    if (trimmed && trimmed === lastEmittedChunk) {
-      return;
-    }
-    lastEmittedChunk = trimmed || chunk;
-    const withSpacing = chunk.endsWith('\n') ? `${chunk}\n` : `${chunk}\n\n`;
-    // Only emit via effects when default sinks are suppressed (avoids double-writing with TerminalSink)
-    if (!streamingOptions.skipDefaultSinks) {
-      return;
-    }
-    // Route stdout chunks to doc to display progressively; stderr stays stderr.
-    if (source === 'stdout') {
-      env.emitEffect('doc', withSpacing);
-    } else {
-      env.emitEffect('stderr', chunk);
-    }
-  };
+  const streamingSetup = await setupExecInvocationStreaming(node, env);
+  let streamingOptions = streamingSetup.streamingOptions;
+  let streamingRequested = streamingSetup.streamingRequested;
+  let streamingEnabled = streamingSetup.streamingEnabled;
+  const hasStreamFormat = streamingSetup.hasStreamFormat;
+  const pipelineId = streamingSetup.pipelineId;
+  const streamingManager = streamingSetup.streamingManager;
+  const chunkEffect = createExecInvocationChunkEffect({
+    env,
+    isStreamingEnabled: () => streamingEnabled,
+    shouldSkipDefaultSinks: () => streamingOptions.skipDefaultSinks
+  });
 
 
   try {
@@ -1685,15 +1640,11 @@ async function evaluateExecInvocationInternal(
     // Debug aid for pipeline identity scenarios
     console.error('[debug-exec] definition for @pipe:', JSON.stringify(definition, null, 2));
   }
-  const definitionHasStreamFormat =
-    definition.withClause?.streamFormat !== undefined ||
-    (definition.meta as any)?.withClause?.streamFormat !== undefined;
-  streamingRequested =
-    streamingRequested ||
-    definition.withClause?.stream === true ||
-    (definition.meta as any)?.withClause?.stream === true ||
-    (definition.meta as any)?.isStream === true;
-  streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
+  ({ streamingRequested, streamingEnabled } = mergeExecInvocationStreamingFromDefinition(
+    streamingRequested,
+    streamingOptions,
+    definition
+  ));
 
   let whenExprNode: WhenExpressionNode | null = null;
   if (definition.language === 'mlld-when') {
@@ -3946,7 +3897,6 @@ async function evaluateExecInvocationInternal(
       }
     }
 
-    const finalizedStreaming = streamingManager.finalizeResults();
-    env.setStreamingResult(finalizedStreaming.streaming);
+    finalizeExecInvocationStreaming(env, streamingManager);
   }
 }
