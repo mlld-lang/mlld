@@ -15,7 +15,6 @@ import type {
   SectionMarkerNode,
   BaseMlldNode
 } from '@core/types';
-import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import type { VarAssignmentResult } from '../eval/var';
@@ -25,8 +24,6 @@ import { EscapingStrategyFactory } from './interpolation-context';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 import type { OperationContext } from '../env/ContextManager';
 import { interpreterLogger as logger } from '@core/utils/logger';
-import { asText, assertStructuredValue } from '@interpreter/utils/structured-value';
-import { classifyShellValue } from '@interpreter/utils/shell-value';
 import {
   createInterpolator,
   extractInterpolationDescriptor,
@@ -58,14 +55,12 @@ import {
 import { evaluateCodeNode } from './interpreter/handlers/code-handler';
 import { evaluateCommandNode } from './interpreter/handlers/command-handler';
 import { createInterpolationSecurityAdapter } from './interpreter/interpolation-security';
+import { cleanNamespaceForDisplay } from './interpreter/namespace-display';
 
-/**
- * Type for variable values
- */
-export type VariableValue = string | number | boolean | null | 
-                           VariableValue[] | { [key: string]: VariableValue };
+export type { VariableValue } from './interpreter/value-resolution';
 
 export { interpolateFileReference, processFileFields };
+export { cleanNamespaceForDisplay };
 
 /**
  * Field access types from the AST
@@ -551,155 +546,4 @@ async function evaluateDocument(doc: DocumentNode, env: Environment): Promise<Ev
 async function evaluateText(node: TextNode, env: Environment): Promise<EvalResult> {
   // Text nodes are simple - their content is their value
   return { value: node.content, env };
-}
-
-/**
- * Resolve variable value with lazy evaluation support for complex data
- */
-async function resolveVariableValue(variable: Variable, env: Environment): Promise<VariableValue> {
-  // Import type guards for the new Variable type system
-  const {
-    isTextLike,
-    isStructured,
-    isPath,
-    isPipelineInput,
-    isExecutable,
-    isExecutableVariable,
-    isImported,
-    isComputed,
-    isObject,
-    isArray,
-    isPrimitive
-  } = await import('@core/types/variable');
-  
-  // Type-specific resolution using new type guards
-  if (isPrimitive(variable)) {
-    // Primitive variables return their raw value (number, boolean, null)
-    return variable.value;
-  } else if (isTextLike(variable)) {
-    // All text-producing types return their string value directly
-    return variable.value;
-  } else if (isStructured(variable)) {
-    // Object and array variables
-    const complexFlag = (variable as any).isComplex;
-    
-    // Debug logging for object resolution
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('resolveVariableValue for structured variable:', {
-        variableName: variable.name,
-        variableType: variable.type,
-        isComplex: complexFlag,
-        valueType: typeof variable.value,
-        hasTypeProperty: variable.value && typeof variable.value === 'object' && 'type' in variable.value
-      });
-    }
-    
-    
-    if (complexFlag) {
-      // Complex data needs evaluation
-      
-      const evaluatedValue = await evaluateDataValue(variable.value, env);
-      
-      // Debug logging
-      
-      return evaluatedValue;
-    }
-    
-    // Don't clean namespace objects here - they need to remain as objects
-    // for field access to work. Cleaning should only happen during display.
-    
-    return variable.value;
-  } else if (isPath(variable)) {
-    // Path variables return the resolved path string
-    return variable.value.resolvedPath;
-  } else if (isPipelineInput(variable)) {
-    // Pipeline inputs return the text representation by default
-    assertStructuredValue(variable.value, 'interpolate:pipeline-input');
-    return asText(variable.value);
-  } else if (isExecutableVariable(variable)) {
-    // Auto-execute executables when interpolated
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('Auto-executing executable during interpolation:', { name: variable.name });
-    }
-    const { evaluateExecInvocation } = await import('../eval/exec-invocation');
-    const invocation = {
-      type: 'ExecInvocation',
-      commandRef: {
-        identifier: variable.name,
-        args: []
-      }
-    };
-    const result = await evaluateExecInvocation(invocation as any, env);
-    return result.value;
-  } else if (isImported(variable)) {
-    return variable.value;
-  } else if (isComputed(variable)) {
-    return variable.value;
-  }
-  
-  // Fallback - should not reach here with proper typing
-  return variable.value;
-}
-
-/**
- * Clean up namespace objects for display
- * Shows only frontmatter and exported variables, not internal structure
- */
-export function cleanNamespaceForDisplay(namespaceObject: any): string {
-  const cleaned: any = {
-    frontmatter: {},
-    exports: {
-      variables: {},
-      executables: {}
-    }
-  };
-  
-  // Add frontmatter if present
-  const fm = namespaceObject.fm || namespaceObject.frontmatter || namespaceObject.__meta__;
-  if (fm && Object.keys(fm).length > 0) {
-    cleaned.frontmatter = fm;
-  }
-  
-  // Separate variables and executables
-  const internalFields = ['fm', 'frontmatter', '__meta__'];
-  let hasExports = false;
-  
-  for (const [key, value] of Object.entries(namespaceObject)) {
-    if (!internalFields.includes(key)) {
-      hasExports = true;
-      // Check if it's an executable
-      if (value && typeof value === 'object' && (value as any).__executable) {
-        const params = (value as any).paramNames || [];
-        cleaned.exports.executables[key] = `<function(${params.join(', ')})>`;
-      } else if (value && typeof value === 'object' && value.type === 'executable') {
-        // Alternative executable format
-        const def = value.value || value.definition;
-        const params = def?.paramNames || [];
-        cleaned.exports.executables[key] = `<function(${params.join(', ')})>`;
-      } else {
-        // Regular variable - extract just the value, not the whole AST
-        if (value && typeof value === 'object' && value.value !== undefined) {
-          // This is a Variable object with a value property
-          cleaned.exports.variables[key] = value.value;
-        } else {
-          // Direct value
-          cleaned.exports.variables[key] = value;
-        }
-      }
-    }
-  }
-  
-  // If namespace is completely empty, return {}
-  const hasFrontmatter = fm && Object.keys(fm).length > 0;
-  if (!hasFrontmatter && !hasExports) {
-    return '{}';
-  }
-  
-  // Remove empty frontmatter if no data
-  if (!hasFrontmatter) {
-    delete cleaned.frontmatter;
-  }
-  
-  // Pretty print the JSON with 2-space indentation
-  return JSON.stringify(cleaned, null, 2);
 }
