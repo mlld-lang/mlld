@@ -159,6 +159,14 @@ Hooks run only for user-defined `/exe` functions. Built-in helpers and guard hel
   - `guard-pre-aggregation.ts` builds aggregate guard metadata and `@mx.guard` snapshots.
   - `guard-pre-logging.ts` owns debug markers and guard decision logging.
   - `guard-candidate-selection.ts`, `guard-materialization.ts`, `guard-retry-state.ts`, `guard-helper-injection.ts`, `guard-action-evaluator.ts`, and `guard-block-evaluator.ts` own focused collaborators consumed by the pre-hook entrypoint.
+- Guard post-hook module ownership:
+  - `guard-post-hook.ts` stays as the hook entrypoint and lifecycle gate.
+  - `guard-post-orchestrator.ts` composes selection, runtime evaluation, decision reduction, retry enforcement, and final signal emission.
+  - `guard-post-runtime-evaluator.ts` owns per-guard runtime context creation and decision shaping for after timing.
+  - `guard-post-runtime-actions.ts` owns guard block evaluation and replacement materialization.
+  - `guard-post-helper-injection.ts` owns after-guard helper creation/injection (`opIs`, `opHas*`, `inputHas`, `prefixWith`, `tagValue`) and guard input helper attachment.
+  - `guard-post-materialization.ts` owns post-guard clone/preview/value helpers used by runtime and error payload shaping.
+  - `guard-candidate-selection.ts`, `guard-post-descriptor.ts`, `guard-post-output-normalization.ts`, `guard-post-decision-engine.ts`, `guard-post-retry.ts`, `guard-post-signals.ts`, and `guard-shared-history.ts` remain shared post-hook collaborators.
 - Guard helpers are reserved in guard contexts: `@prefixWith` and `@tagValue` are injected into guard environments, and guard envs inherit all parent variables/executables so user helpers stay visible.
 - `PipelineExecutor.executeCommandVariable()` always passes `hookOptions.guard`, so every pipeline stage (including the synthetic `__source__`) runs through the guard hook path with an OperationContext seeded from the merged stage descriptor. Descriptor hints supplied to `processPipeline()` and the provenance assembled in `finalizeStageOutput()` flow into `@mx.op.labels`, giving guard rules the same label set that downstream stages receive even when Stage 0 started with a plain string.
 - Because interpolation, iterators, pipelines, heredoc `/run`, and JS/Node returns all attach provenance handles through `ExpressionProvenance`, `materializeGuardInputs()` always materializes real Variables (with descriptors) before guard evaluation. Guard fixtures that sanitize secrets, block heredocs, or retry pipeline stages rely on this hook to surface `.mx.labels` even when the user-facing value is a primitive string produced by chained helpers.
