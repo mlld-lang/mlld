@@ -35,17 +35,25 @@ import type { EvalResult } from '../core/interpreter';
 import type { GuardDefinition } from '../guards/GuardRegistry';
 import { isDirectiveHookTarget } from '@core/types/hooks';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
-import {
-  applySecurityDescriptorToStructuredValue,
-  ensureStructuredValue,
-  extractSecurityDescriptor
-} from '../utils/structured-value';
+import { extractSecurityDescriptor } from '../utils/structured-value';
 import {
   type PerInputCandidate,
   buildPerInputCandidates,
   collectOperationGuards
 } from './guard-candidate-selection';
 import { buildOperationKeys } from './guard-operation-keys';
+import {
+  applyDescriptorToVariables,
+  extractOutputDescriptor,
+  mergeDescriptorWithFallbackInputs,
+  mergeGuardDescriptor
+} from './guard-post-descriptor';
+import {
+  buildTransformedGuardResult,
+  normalizeFallbackOutputValue,
+  normalizeRawOutput,
+  normalizeReplacementVariables
+} from './guard-post-output-normalization';
 import { extractGuardOverride, normalizeGuardOverride } from './guard-override-utils';
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
@@ -137,18 +145,6 @@ function getGuardRetryContext(env: Environment): {
   return { attempt, tries, hintHistory, max };
 }
 
-function normalizeRawOutput(value: unknown): unknown {
-  if (value && typeof value === 'object') {
-    if ((value as any).text !== undefined) {
-      return (value as any).text;
-    }
-    if ((value as any).data !== undefined) {
-      return (value as any).data;
-    }
-  }
-  return value;
-}
-
 export const guardPostHook: PostHook = async (node, result, inputs, env, operation) => {
   if (!operation || (isDirectiveHookTarget(node) && node.kind === 'guard')) {
     return result;
@@ -200,12 +196,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     const outputVariables = materializeGuardInputs([result.value], { nameHint: '__guard_output__' });
     const inputVariables = materializeGuardInputs(inputs ?? [], { nameHint: '__guard_input__' });
     if (outputVariables.length === 0) {
-      const fallbackValue =
-        typeof baseOutputValue === 'string'
-          ? baseOutputValue
-          : baseOutputValue === undefined || baseOutputValue === null
-            ? ''
-            : String(baseOutputValue);
+      const fallbackValue = normalizeFallbackOutputValue(baseOutputValue);
       const fallbackOutput = createSimpleTextVariable(
         '__guard_output__',
         fallbackValue as any,
@@ -219,15 +210,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
 
     let perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride, 'after');
     if (perInputCandidates.length === 0 && inputVariables.length > 0) {
-      const mergedDescriptor = mergeDescriptors(
-        currentDescriptor,
-        ...inputVariables
-          .map(variable => extractSecurityDescriptor(variable, { recursive: true, mergeArrayElements: true }))
-          .filter(Boolean) as SecurityDescriptor[]
-      );
-      if (mergedDescriptor) {
-        currentDescriptor = mergedDescriptor;
-      }
+      currentDescriptor = mergeDescriptorWithFallbackInputs(currentDescriptor, inputVariables);
       activeOutputs = inputVariables.slice();
       perInputCandidates = buildPerInputCandidates(registry, activeOutputs, guardOverride, 'after');
       selectionSources.push('input-fallback');
@@ -572,17 +555,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     if (transformsApplied && activeOutputs[0]) {
       const finalVariable = activeOutputs[0];
       const finalValue = resolveGuardValue(finalVariable, finalVariable);
-      if (typeof finalValue === 'string') {
-        const structured = ensureStructuredValue(finalValue, 'text', finalValue);
-        applySecurityDescriptorToStructuredValue(structured, currentDescriptor);
-        const nextResult = { ...result, value: structured };
-        (nextResult as any).stdout = finalValue;
-        (nextResult as any).__guardTransformed = structured;
-        return nextResult;
-      }
-      const nextResult = { ...result, value: finalVariable };
-      (nextResult as any).__guardTransformed = finalVariable;
-      return nextResult;
+      return buildTransformedGuardResult(result, finalVariable, finalValue, currentDescriptor);
     }
 
     return result;
@@ -1337,62 +1310,4 @@ function buildGuardRetrySignal(options: {
     reason: primaryReason,
     guardContext
   });
-}
-
-function normalizeReplacementVariables(value: unknown): Variable[] {
-  if (isVariable(value as Variable)) {
-    return [value as Variable];
-  }
-  if (Array.isArray(value)) {
-    return (value as unknown[]).filter(item => isVariable(item as Variable)) as Variable[];
-  }
-  return [];
-}
-
-function extractOutputDescriptor(result: EvalResult, output?: Variable): SecurityDescriptor {
-  const valueDescriptor = extractSecurityDescriptor(result.value, {
-    recursive: true,
-    mergeArrayElements: true
-  });
-  const resultDescriptor =
-    result && typeof result === 'object' && 'mx' in result
-      ? extractSecurityDescriptor((result as Record<string, unknown>).mx, { recursive: true })
-      : undefined;
-  const outputDescriptor = output?.mx ? varMxToSecurityDescriptor(output.mx) : undefined;
-  return mergeDescriptors(valueDescriptor, resultDescriptor, outputDescriptor, makeSecurityDescriptor());
-}
-
-function mergeGuardDescriptor(
-  current: SecurityDescriptor,
-  replacements: readonly Variable[],
-  guard: GuardDefinition,
-  labelModifications?: GuardResult['labelModifications']
-): SecurityDescriptor {
-  const guardSource = guard.name ?? guard.filterValue ?? 'guard';
-  const descriptors: SecurityDescriptor[] = [current];
-  for (const variable of replacements) {
-    const descriptor = extractSecurityDescriptor(variable, {
-      recursive: true,
-      mergeArrayElements: true
-    });
-    if (descriptor) {
-      descriptors.push(descriptor);
-    }
-  }
-  descriptors.push(makeSecurityDescriptor({ sources: [`guard:${guardSource}`] }));
-  const merged = mergeDescriptors(...descriptors);
-  return applyGuardLabelModifications(merged, labelModifications, guard);
-}
-
-function applyDescriptorToVariables(
-  descriptor: SecurityDescriptor,
-  variables: readonly Variable[]
-): void {
-  for (const variable of variables) {
-    const mx = (variable.mx ?? (variable.mx = {} as any)) as Record<string, unknown>;
-    updateVarMxFromDescriptor(mx, descriptor);
-    if ('mxCache' in mx) {
-      delete (mx as any).mxCache;
-    }
-  }
 }
