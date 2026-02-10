@@ -37,6 +37,22 @@ function createSecretVariable(name: string, value: string) {
   );
 }
 
+function createLabeledVariable(name: string, value: string, labels: string[]) {
+  return createSimpleTextVariable(
+    name,
+    value,
+    {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    },
+    {
+      security: makeSecurityDescriptor({ labels, sources: ['test'] })
+    }
+  );
+}
+
 describe('guard post-hook integration', () => {
   it('denies after guards and exposes output context', async () => {
     const env = createEnv();
@@ -349,5 +365,176 @@ describe('guard post-hook integration', () => {
         metadata: { streaming: true }
       })
     ).rejects.toBeInstanceOf(GuardError);
+  });
+
+  it('uses input fallback selection when output labels do not match any after-guard', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after for secret = when [ * => deny "blocked via input fallback" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const outputVar = createLabeledVariable('outputVar', 'public-output', ['public']);
+    const inputVar = createSecretVariable('secretInput', 'secret-input');
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    await expect(
+      guardPostHook(node, result, [inputVar], env, { type: 'exe', name: 'emit' })
+    ).rejects.toMatchObject({
+      details: {
+        reasons: expect.arrayContaining(['blocked via input fallback'])
+      }
+    });
+  });
+
+  it('prefers output-label selection over input fallback when output already matches', async () => {
+    const env = createEnv();
+    const outputGuard = parseSync(
+      '/guard after @outputPath for secret = when [ * => deny "blocked via output labels" ]'
+    )[0] as DirectiveNode;
+    const inputGuard = parseSync(
+      '/guard after @inputPath for confidential = when [ * => deny "blocked via input labels" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(outputGuard, env);
+    await evaluateDirective(inputGuard, env);
+
+    const outputVar = createSecretVariable('secretOutput', 'output-secret');
+    const inputVar = createLabeledVariable('confidentialInput', 'input-secret', ['confidential']);
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    await expect(
+      guardPostHook(node, result, [inputVar], env, { type: 'exe', name: 'emit' })
+    ).rejects.toMatchObject({
+      details: {
+        reasons: expect.arrayContaining(['blocked via output labels'])
+      }
+    });
+  });
+
+  it('selects operation-label guards even when output labels do not match', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after @opPublish for op:publish = when [ * => deny "operation label blocked" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const outputVar = createLabeledVariable('publicOutput', 'ok', ['public']);
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    await expect(
+      guardPostHook(node, result, [outputVar], env, {
+        type: 'exe',
+        name: 'emit',
+        opLabels: ['publish']
+      })
+    ).rejects.toMatchObject({
+      details: {
+        reasons: expect.arrayContaining(['operation label blocked'])
+      }
+    });
+  });
+
+  it('keeps deny precedence when retry and deny actions both match', async () => {
+    const env = createEnv();
+    const retryGuard = parseSync(
+      '/guard after @retryFirst for secret = when [ * => retry "retry requested" ]'
+    )[0] as DirectiveNode;
+    const denyGuard = parseSync(
+      '/guard after @denySecond for secret = when [ * => deny "deny wins" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(retryGuard, env);
+    await evaluateDirective(denyGuard, env);
+
+    const outputVar = createSecretVariable('secretVar', 'post-output');
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    await expect(
+      guardPostHook(node, result, [outputVar], env, { type: 'exe', name: 'emit' })
+    ).rejects.toMatchObject({
+      decision: 'deny',
+      details: {
+        reasons: expect.arrayContaining(['retry requested', 'deny wins'])
+      }
+    });
+  });
+
+  it('keeps retry behavior when pipeline source is retryable', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after for secret = when [ * => retry "retry allowed" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const outputVar = createSecretVariable('secretVar', 'pipeline-output');
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+    const pipelineContext: PipelineContextSnapshot = {
+      stage: 1,
+      totalStages: 1,
+      currentCommand: 'emit',
+      input: 'input',
+      previousOutputs: [],
+      attemptCount: 1,
+      attemptHistory: [],
+      hint: null,
+      hintHistory: [],
+      sourceRetryable: true,
+      guards: []
+    };
+    env.setPipelineContext(pipelineContext);
+
+    await expect(
+      guardPostHook(node, result, [outputVar], env, { type: 'exe', name: 'emit' })
+    ).rejects.toMatchObject({
+      decision: 'retry',
+      retryHint: expect.stringMatching(/retry allowed/i)
+    });
+
+    env.clearPipelineContext();
+  });
+
+  it('propagates descriptor and label modifications for transformed outputs', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after @sanitize for secret = when [ * => allow "masked-output" with { addLabels: ["sanitized"] } ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const outputVar = createSecretVariable('secretVar', 'raw-output');
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    const transformed = await guardPostHook(node, result, [outputVar], env, {
+      type: 'exe',
+      name: 'emit'
+    });
+
+    expect(isStructuredValue(transformed.value)).toBe(true);
+    const structured = transformed.value as any;
+    expect(structured.text).toContain('masked-output');
+    expect(structured.mx?.labels).toEqual(expect.arrayContaining(['secret', 'sanitized']));
+    expect(structured.mx?.taint).toEqual(expect.arrayContaining(['sanitized']));
   });
 });
