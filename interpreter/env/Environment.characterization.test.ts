@@ -164,55 +164,67 @@ describe('Environment characterization', () => {
   describe('command/code execution wrappers', () => {
     it('merges output options for command execution and injects stream bus into context', async () => {
       const env = createEnvironment();
+      const factory = (env as any).commandExecutorFactory;
+      const originalExecuteCommand = factory.executeCommand;
+      const originalExecuteCode = factory.executeCode;
       const executeCommand = vi.fn().mockResolvedValue('ok');
       const executeCode = vi.fn().mockResolvedValue('ok');
-      (env as any).commandExecutorFactory = {
-        executeCommand,
-        executeCode
-      };
+      factory.executeCommand = executeCommand;
+      factory.executeCode = executeCode;
       env.setOutputOptions({ timeout: 100, errorBehavior: 'continue' });
 
-      await env.executeCommand(
-        'echo hello',
-        { timeout: 250, maxOutputLines: 10 },
-        { directiveType: 'run' } as any
-      );
+      try {
+        await env.executeCommand(
+          'echo hello',
+          { timeout: 250, maxOutputLines: 10 },
+          { directiveType: 'run' } as any
+        );
 
-      expect(executeCommand).toHaveBeenCalledTimes(1);
-      const [command, options, context] = executeCommand.mock.calls[0];
-      expect(command).toBe('echo hello');
-      expect(options).toMatchObject({
-        timeout: 250,
-        maxOutputLines: 10,
-        errorBehavior: 'continue'
-      });
-      expect(context.directiveType).toBe('run');
-      expect(context.bus).toBeDefined();
+        expect(executeCommand).toHaveBeenCalledTimes(1);
+        const [command, options, context] = executeCommand.mock.calls[0];
+        expect(command).toBe('echo hello');
+        expect(options).toMatchObject({
+          timeout: 250,
+          maxOutputLines: 10,
+          errorBehavior: 'continue'
+        });
+        expect(context.directiveType).toBe('run');
+        expect(context.bus).toBeDefined();
+      } finally {
+        factory.executeCommand = originalExecuteCommand;
+        factory.executeCode = originalExecuteCode;
+      }
     });
 
     it('injects ambient mx into js/node code execution and leaves python untouched', async () => {
       const env = createEnvironment();
+      const factory = (env as any).commandExecutorFactory;
+      const originalExecuteCommand = factory.executeCommand;
+      const originalExecuteCode = factory.executeCode;
       const executeCommand = vi.fn().mockResolvedValue('ok');
       const executeCode = vi.fn().mockResolvedValue('ok');
-      (env as any).commandExecutorFactory = {
-        executeCommand,
-        executeCode
-      };
+      factory.executeCommand = executeCommand;
+      factory.executeCode = executeCode;
 
-      await env.executeCode('return 1;', 'js', {});
-      await env.executeCode('return 2;', 'node', {});
-      await env.executeCode('print("x")', 'python', {});
-      await env.executeCode('return 3;', 'javascript', { mx: { forced: true } });
+      try {
+        await env.executeCode('return 1;', 'js', {});
+        await env.executeCode('return 2;', 'node', {});
+        await env.executeCode('print("x")', 'python', {});
+        await env.executeCode('return 3;', 'javascript', { mx: { forced: true } });
 
-      const jsCall = executeCode.mock.calls[0];
-      const nodeCall = executeCode.mock.calls[1];
-      const pythonCall = executeCode.mock.calls[2];
-      const jsOverrideCall = executeCode.mock.calls[3];
+        const jsCall = executeCode.mock.calls[0];
+        const nodeCall = executeCode.mock.calls[1];
+        const pythonCall = executeCode.mock.calls[2];
+        const jsOverrideCall = executeCode.mock.calls[3];
 
-      expect(jsCall[2].mx).toBeDefined();
-      expect(nodeCall[2].mx).toBeDefined();
-      expect(pythonCall[2].mx).toBeUndefined();
-      expect(jsOverrideCall[2].mx).toEqual({ forced: true });
+        expect(jsCall[2].mx).toBeDefined();
+        expect(nodeCall[2].mx).toBeDefined();
+        expect(pythonCall[2].mx).toBeUndefined();
+        expect(jsOverrideCall[2].mx).toEqual({ forced: true });
+      } finally {
+        factory.executeCommand = originalExecuteCommand;
+        factory.executeCode = originalExecuteCode;
+      }
     });
   });
 
@@ -268,18 +280,16 @@ describe('Environment characterization', () => {
       env.enableSDKEvents({ emit: vi.fn() } as any);
 
       const envAny = env as any;
-      const childAny = child as any;
       expect(envAny.childEnvironments.size).toBe(1);
-      expect(envAny.shadowEnvs.size).toBeGreaterThan(0);
-      expect(envAny.nodeShadowEnv).toBeDefined();
+      expect(env.hasShadowEnvs()).toBe(true);
+      expect(child.hasShadowEnvs()).toBe(true);
 
       env.cleanup();
 
       expect(unsubscribe).toHaveBeenCalledTimes(1);
       expect(envAny.childEnvironments.size).toBe(0);
-      expect(envAny.shadowEnvs.size).toBe(0);
-      expect(envAny.nodeShadowEnv).toBeUndefined();
-      expect(childAny.shadowEnvs.size).toBe(0);
+      expect(env.hasShadowEnvs()).toBe(false);
+      expect(child.hasShadowEnvs()).toBe(false);
     });
   });
 });

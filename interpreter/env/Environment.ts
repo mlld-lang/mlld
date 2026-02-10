@@ -39,13 +39,13 @@ import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import { getExpressionProvenance } from '../utils/expression-provenance';
 import { builtinTransformers, createTransformerVariable } from '../builtin/transformers';
-import { NodeShadowEnvironment } from './NodeShadowEnvironment';
-import { PythonShadowEnvironment } from './PythonShadowEnvironment';
+import type { NodeShadowEnvironment } from './NodeShadowEnvironment';
+import type { PythonShadowEnvironment } from './PythonShadowEnvironment';
 import { CacheManager } from './CacheManager';
 import { CommandUtils } from './CommandUtils';
 import { DebugUtils } from './DebugUtils';
 import { ErrorUtils, type CollectedError, type CommandExecutionContext } from './ErrorUtils';
-import { CommandExecutorFactory, type ExecutorDependencies, type CommandExecutionOptions } from './executors';
+import { type CommandExecutionOptions } from './executors';
 import { VariableManager, type IVariableManager, type VariableManagerContext } from './VariableManager';
 import { ImportResolver, type IImportResolver, type ImportResolverContext, type FetchURLOptions } from './ImportResolver';
 import type { PathContext } from '@core/services/PathContextService';
@@ -68,6 +68,11 @@ import { SecurityPolicyRuntime, type SecuritySnapshotLike } from './runtime/Secu
 import { SdkEventBridge } from './runtime/SdkEventBridge';
 import { StateWriteRuntime } from './runtime/StateWriteRuntime';
 import { VariableFacade, type ImportBindingInfo } from './runtime/VariableFacade';
+import { ShadowEnvironmentRuntime } from './runtime/ShadowEnvironmentRuntime';
+import {
+  ExecutionOrchestrator,
+  type CommandExecutorFactoryPort
+} from './runtime/ExecutionOrchestrator';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { McpImportManager } from '../mcp/McpImportManager';
@@ -130,7 +135,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Utility managers
   private cacheManager: CacheManager;
   private errorUtils: ErrorUtils;
-  private commandExecutorFactory?: CommandExecutorFactory;
+  private commandExecutorFactory?: CommandExecutorFactoryPort;
   private variableManager: IVariableManager;
   private variableFacade: VariableFacade;
   private resolverVariableFacade: ResolverVariableFacade;
@@ -143,9 +148,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private mcpImportManager?: McpImportManager;
   
   // Shadow environments for language-specific function injection
-  private shadowEnvs: Map<string, Map<string, any>> = new Map();
-  private nodeShadowEnv?: NodeShadowEnvironment; // VM-based Node.js shadow environment
-  private pythonShadowEnv?: PythonShadowEnvironment; // Subprocess-based Python shadow environment
+  private shadowEnvironmentRuntime: ShadowEnvironmentRuntime;
+  private executionOrchestrator: ExecutionOrchestrator;
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -356,6 +360,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.stateWriteRuntime = parent
       ? parent.stateWriteRuntime
       : new StateWriteRuntime(this.variableManager);
+    this.shadowEnvironmentRuntime = new ShadowEnvironmentRuntime(this, parent?.shadowEnvironmentRuntime);
+    this.executionOrchestrator = new ExecutionOrchestrator(
+      this,
+      this.errorUtils,
+      this.variableManager,
+      this.shadowEnvironmentRuntime
+    );
     
     // Initialize reserved variables if this is the root environment
     if (!parent) {
@@ -407,7 +418,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // commands, so this avoids creating a CommandExecutorFactory + 7 closure dependencies
     // for each of the potentially tens of thousands of iteration environments.
     if (!parent) {
-      this.commandExecutorFactory = this.getCommandExecutorFactory();
+      this.executionOrchestrator.initialize();
+      this.commandExecutorFactory = this.executionOrchestrator.getFactory();
     }
   }
   
@@ -1367,35 +1379,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @param functions Map of function names to their implementations
    */
   setShadowEnv(language: string, functions: Map<string, any>): void {
-    if (language === 'node' || language === 'nodejs') {
-      // Create or get Node shadow environment
-      if (!this.nodeShadowEnv) {
-        this.nodeShadowEnv = new NodeShadowEnvironment(
-          this.getFileDirectory(),
-          this.currentFilePath
-        );
-      }
-
-      // Add functions to Node shadow environment
-      for (const [name, func] of functions) {
-        this.nodeShadowEnv.addFunction(name, func);
-      }
-    } else if (language === 'python' || language === 'py') {
-      // Create or get Python shadow environment
-      if (!this.pythonShadowEnv) {
-        this.pythonShadowEnv = new PythonShadowEnvironment(
-          this.getFileDirectory(),
-          this.currentFilePath
-        );
-      }
-
-      // Store functions for Python shadow environment
-      // Note: Python functions are wrappers that will call back into mlld
-      this.shadowEnvs.set(language, functions);
-    } else {
-      // Use existing implementation for other languages
-      this.shadowEnvs.set(language, functions);
-    }
+    this.shadowEnvironmentRuntime.setShadowEnv(language, functions);
   }
   
   /**
@@ -1410,23 +1394,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns Map of function names to implementations, or undefined if not set
    */
   getShadowEnv(language: string): Map<string, any> | undefined {
-    if (language === 'node' || language === 'nodejs') {
-      // Return Node shadow env functions as a Map
-      const nodeShadowEnv = this.getNodeShadowEnv();
-      if (nodeShadowEnv) {
-        const functions = nodeShadowEnv.getFunctionNames();
-        const map = new Map<string, any>();
-        const context = nodeShadowEnv.getContext();
-        for (const name of functions) {
-          if (context[name]) {
-            map.set(name, context[name]);
-          }
-        }
-        return map;
-      }
-      return undefined;
-    }
-    return this.shadowEnvs.get(language) || this.parent?.getShadowEnv(language);
+    return this.shadowEnvironmentRuntime.getShadowEnv(language);
   }
   
   /**
@@ -1440,7 +1408,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns NodeShadowEnvironment instance or undefined if not available
    */
   getNodeShadowEnv(): NodeShadowEnvironment | undefined {
-    return this.nodeShadowEnv || this.parent?.getNodeShadowEnv();
+    return this.shadowEnvironmentRuntime.getNodeShadowEnv();
   }
   
   /**
@@ -1448,24 +1416,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns NodeShadowEnvironment instance (always creates one if needed)
    */
   getOrCreateNodeShadowEnv(): NodeShadowEnvironment {
-    // Check if we already have one
-    if (this.nodeShadowEnv) {
-      return this.nodeShadowEnv;
-    }
-    
-    // Check parent environments
-    const parentShadowEnv = this.parent?.getNodeShadowEnv();
-    if (parentShadowEnv) {
-      return parentShadowEnv;
-    }
-    
-    // Create a new one for this environment
-    this.nodeShadowEnv = new NodeShadowEnvironment(
-      this.getFileDirectory(),
-      this.currentFilePath
-    );
-    
-    return this.nodeShadowEnv;
+    return this.shadowEnvironmentRuntime.getOrCreateNodeShadowEnv();
   }
 
   /**
@@ -1473,7 +1424,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns PythonShadowEnvironment instance or undefined if not available
    */
   getPythonShadowEnv(): PythonShadowEnvironment | undefined {
-    return this.pythonShadowEnv || this.parent?.getPythonShadowEnv();
+    return this.shadowEnvironmentRuntime.getPythonShadowEnv();
   }
 
   /**
@@ -1481,24 +1432,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns PythonShadowEnvironment instance (always creates one if needed)
    */
   getOrCreatePythonShadowEnv(): PythonShadowEnvironment {
-    // Check if we already have one
-    if (this.pythonShadowEnv) {
-      return this.pythonShadowEnv;
-    }
-
-    // Check parent environments
-    const parentShadowEnv = this.parent?.getPythonShadowEnv();
-    if (parentShadowEnv) {
-      return parentShadowEnv;
-    }
-
-    // Create a new one for this environment
-    this.pythonShadowEnv = new PythonShadowEnvironment(
-      this.getFileDirectory(),
-      this.currentFilePath
-    );
-
-    return this.pythonShadowEnv;
+    return this.shadowEnvironmentRuntime.getOrCreatePythonShadowEnv();
   }
 
   /**
@@ -1510,47 +1444,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns Object containing all language shadow environments
    */
   captureAllShadowEnvs(): ShadowEnvironmentCapture {
-    const capture: ShadowEnvironmentCapture = {};
-    
-    // Capture JavaScript environments
-    const jsEnv = this.shadowEnvs.get('js');
-    if (jsEnv && jsEnv.size > 0) {
-      capture.js = new Map(jsEnv);
-    }
-    
-    const javascriptEnv = this.shadowEnvs.get('javascript');
-    if (javascriptEnv && javascriptEnv.size > 0) {
-      capture.javascript = new Map(javascriptEnv);
-    }
-    
-    // Capture Node.js shadow functions if available
-    if (this.nodeShadowEnv) {
-      const nodeMap = new Map<string, any>();
-      const context = this.nodeShadowEnv.getContext();
-      for (const name of this.nodeShadowEnv.getFunctionNames()) {
-        if (context[name]) {
-          nodeMap.set(name, context[name]);
-        }
-      }
-      if (nodeMap.size > 0) {
-        capture.node = nodeMap;
-        capture.nodejs = nodeMap; // Both aliases point to same map
-      }
-    }
-
-    // Capture Python shadow functions
-    const pythonEnv = this.shadowEnvs.get('python');
-    if (pythonEnv && pythonEnv.size > 0) {
-      capture.python = new Map(pythonEnv);
-      capture.py = capture.python; // Alias
-    }
-    const pyEnv = this.shadowEnvs.get('py');
-    if (pyEnv && pyEnv.size > 0 && !capture.python) {
-      capture.py = new Map(pyEnv);
-      capture.python = capture.py; // Alias
-    }
-
-    return capture;
+    return this.shadowEnvironmentRuntime.captureAllShadowEnvs();
   }
 
   /**
@@ -1558,14 +1452,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Used to avoid unnecessary capture operations
    */
   hasShadowEnvs(): boolean {
-    // Check regular shadow environments
-    if (this.shadowEnvs.size > 0) {
-      for (const [_, env] of this.shadowEnvs) {
-        if (env.size > 0) return true;
-      }
-    }
-    // Check Node.js or Python shadow environment
-    return this.nodeShadowEnv !== undefined || this.pythonShadowEnv !== undefined;
+    return this.shadowEnvironmentRuntime.hasShadowEnvs();
   }
 
   /**
@@ -1680,43 +1567,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
 
-  private getCommandExecutorFactory(): CommandExecutorFactory {
-    if (!this.commandExecutorFactory) {
-      const executorDependencies: ExecutorDependencies = {
-        errorUtils: this.errorUtils,
-        workingDirectory: this.getExecutionDirectory(),
-        shadowEnvironment: {
-          getShadowEnv: (language: string) => this.getShadowEnv(language)
-        },
-        nodeShadowProvider: {
-          getNodeShadowEnv: () => this.getNodeShadowEnv(),
-          getOrCreateNodeShadowEnv: () => this.getOrCreateNodeShadowEnv(),
-          getCurrentFilePath: () => this.getCurrentFilePath()
-        },
-        pythonShadowProvider: {
-          getPythonShadowEnv: () => this.getPythonShadowEnv(),
-          getOrCreatePythonShadowEnv: () => this.getOrCreatePythonShadowEnv()
-        },
-        variableProvider: {
-          getVariables: () => this.variableManager.getVariables()
-        },
-        getStreamingBus: () => this.getStreamingBus()
-      };
-      this.commandExecutorFactory = new CommandExecutorFactory(executorDependencies);
-    }
-    return this.commandExecutorFactory;
-  }
-
   async executeCommand(
     command: string,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
-    // Merge with instance defaults and delegate to command executor factory
-    const finalOptions = { ...this.outputOptions, ...options };
-    const bus = this.getStreamingBus();
-    const mxWithBus = { ...context, bus };
-    return this.getCommandExecutorFactory().executeCommand(command, finalOptions, mxWithBus);
+    this.commandExecutorFactory = this.executionOrchestrator.getFactory();
+    return this.executionOrchestrator.executeCommand({
+      command,
+      options,
+      context,
+      defaultOptions: this.outputOptions
+    });
   }
   
   async executeCode(
@@ -1727,51 +1589,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
-    // Handle overloaded signatures for backward compatibility
-    if (metadata && !context && !options && 'sourceLocation' in metadata) {
-      // Old signature: executeCode(code, language, params, context)
-      context = metadata as CommandExecutionContext;
-      metadata = undefined;
-    }
-    if (metadata && !context && !options && 'directiveType' in (metadata as any)) {
-      context = metadata as CommandExecutionContext;
-      metadata = undefined;
-    }
-    
-    // Optionally inject ambient mx for JS/Node execution only
-    let finalParams = params || {};
-    const lang = (language || '').toLowerCase();
-    const shouldInjectCtx = (lang === 'js' || lang === 'javascript' || lang === 'node' || lang === 'nodejs');
-    if (shouldInjectCtx) {
-      try {
-        // Prefer explicit @test_mx override for deterministic tests
-        const testCtxVar = this.getVariable('test_mx');
-        const mxValue = testCtxVar
-          ? (testCtxVar.value as any)
-          : this.contextManager.buildAmbientContext({
-              pipelineContext: this.getPipelineContext(),
-              securitySnapshot: this.getSecuritySnapshot()
-            });
-        if (!('mx' in finalParams)) {
-          finalParams = { ...finalParams, mx: Object.freeze(mxValue) };
-        }
-      } catch {
-        // Best-effort; ignore mx injection errors
-      }
-    }
-
-    // Delegate to command executor factory
-    const bus = this.getStreamingBus();
-    const mxWithBus = { ...context, bus };
-    const mergedOptions = { ...this.outputOptions, ...options };
-    return this.getCommandExecutorFactory().executeCode(
+    this.commandExecutorFactory = this.executionOrchestrator.getFactory();
+    return this.executionOrchestrator.executeCode({
       code,
       language,
-      finalParams,
-      metadata as Record<string, any> | undefined,
-      mergedOptions,
-      mxWithBus
-    );
+      params,
+      metadata,
+      options,
+      context,
+      defaultOptions: this.outputOptions
+    });
   }
 
   
@@ -2478,19 +2305,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.mcpImportManager = undefined;
     }
 
-    // Clean up NodeShadowEnvironment if it exists
-    if (this.nodeShadowEnv) {
-      logger.debug('Cleaning up NodeShadowEnvironment');
-      this.nodeShadowEnv.cleanup();
-      this.nodeShadowEnv = undefined;
-    }
-
-    // Clean up PythonShadowEnvironment if it exists
-    if (this.pythonShadowEnv) {
-      logger.debug('Cleaning up PythonShadowEnvironment');
-      this.pythonShadowEnv.cleanup().catch(() => {});
-      this.pythonShadowEnv = undefined;
-    }
+    logger.debug('Cleaning up shadow environments');
+    this.shadowEnvironmentRuntime.cleanup();
     
     // Clean up child environments recursively
     logger.debug(`Cleaning up ${this.childEnvironments.size} child environments`);
@@ -2500,9 +2316,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.childEnvironments.clear();
     
     // Clear any other resources that might keep event loop alive
-    logger.debug('Clearing caches and shadow envs');
+    logger.debug('Clearing caches');
     this.cacheManager.clearAllCaches();
-    this.shadowEnvs.clear();
+    this.commandExecutorFactory = undefined;
     
     // Clear import stack to prevent memory leaks (now handled by ImportResolver)
     // this.importStack.clear(); // Moved to ImportResolver
