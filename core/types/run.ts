@@ -148,18 +148,21 @@ export interface RunCommandDirectiveNode extends RunDirectiveNode {
   subtype: 'runCommand';
   values: {
     command: ContentNodeArray;
+    args?: VariableNodeArray;
     securityLabels?: DataLabel[];
     workingDir?: ContentNodeArray;
     workingDirMeta?: PathMeta;
   };
   raw: {
     command: string;
+    args?: string[];
     securityLabels?: string;
     workingDir?: string;
   };
   meta: {
     isMultiLine: boolean;
     hasVariables: boolean;
+    argumentCount?: number;
     securityLabels?: DataLabel[];
     workingDirMeta?: PathMeta;
     hasWorkingDir?: boolean;

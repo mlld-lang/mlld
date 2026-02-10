@@ -146,7 +146,7 @@ RunLanguageCodeCore
 
 // This pattern is used by run.peggy where arguments can appear after the language
 RunLanguageCodeWithArgs
-  = streamPrefix:StreamKeyword? _ language:RunCodeLanguage workingDir:WorkingDirPath? _ argList:UnifiedArgumentList _ code:UnifiedCodeBrackets {
+  = streamPrefix:StreamKeyword? _ language:RunCodeLanguage _ argList:UnifiedArgumentList workingDir:WorkingDirPath? _ code:UnifiedCodeBrackets {
       helpers.debug('RunLanguageCodeWithArgs matched', { language, argList, code });
       
       // Extract arguments from unified argument list

@@ -383,6 +383,39 @@ export async function evaluateRun(
           : undefined;
     }
 
+    const runCommandArgs = ((directive.values as any)?.args || []) as any[];
+    const argDescriptors: SecurityDescriptor[] = [];
+    const argEnvVars: Record<string, string> =
+      runCommandArgs.length === 0
+        ? {}
+        : await AutoUnwrapManager.executeWithPreservation(async () => {
+            const extracted: Record<string, string> = {};
+            const { extractVariableValue } = await import('../utils/variable-resolution');
+
+            for (let i = 0; i < runCommandArgs.length; i++) {
+              const arg = runCommandArgs[i];
+              if (!arg || typeof arg !== 'object' || arg.type !== 'VariableReference') {
+                continue;
+              }
+
+              const varName = arg.identifier;
+              const variable = env.getVariable(varName);
+              if (!variable) {
+                throw new Error(`Variable not found: ${varName}`);
+              }
+
+              if (variable.mx) {
+                argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
+              }
+
+              const value = await extractVariableValue(variable, env);
+              const unwrappedValue = AutoUnwrapManager.unwrap(value);
+              extracted[varName] = coerceValueForStdin(unwrappedValue);
+            }
+
+            return extracted;
+          });
+
     const parsedCommand = parseCommand(command);
     const opLabels = getOperationLabels({
       type: 'cmd',
@@ -417,7 +450,13 @@ export async function evaluateRun(
       }
     }
 
-    const argTaint = descriptorToInputTaint(commandDescriptor);
+    const runArgDescriptor =
+      argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
+    const commandInputDescriptor =
+      commandDescriptor && runArgDescriptor
+        ? env.mergeSecurityDescriptors(commandDescriptor, runArgDescriptor)
+        : commandDescriptor || runArgDescriptor;
+    const argTaint = descriptorToInputTaint(commandInputDescriptor);
     if (policyChecksEnabled && argTaint.length > 0) {
       policyEnforcer.checkLabelFlow(
         {
@@ -589,7 +628,10 @@ export async function evaluateRun(
         command,
         workingDirectory,
         stdin: stdinInput,
-        vars: usingParts.vars,
+        vars: {
+          ...argEnvVars,
+          ...usingParts.vars
+        },
         secrets: {
           ...envAuthSecrets,
           ...usingParts.secrets
@@ -607,6 +649,7 @@ export async function evaluateRun(
       setOutput(providerResult.stdout ?? '');
     } else {
       const injectedEnv = {
+        ...argEnvVars,
         ...envAuthSecrets,
         ...usingParts.merged
       };

@@ -55,21 +55,21 @@ run @data | { cat | jq '.[]' }       >> stdin via pipe
 Multi-line commands with `run sh`:
 
 ```mlld
-run sh {
+run sh(@project):/tmp {
   npm test && npm run build
-  echo "Build completed"
+  echo "$project"
 }
 ```
 
 ### Working directory (`:path`)
 
 ```mlld
-run cmd:/ {pwd}
+run cmd(@base):/ {echo "$base"}
 ```
 
 Output:
 ```
-/
+<project root path>
 ```
 
 Paths must be absolute (for example `/tmp`, `/var/log`, `/`). Relative paths, `~`, or Windows-style paths fail. Executables accept the same suffix when you need to parameterize it:

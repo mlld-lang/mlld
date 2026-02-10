@@ -1,4 +1,4 @@
-run sh {
+run sh(@project):/tmp {
   npm test && npm run build
-  echo "Build completed"
+  echo "$project"
 }

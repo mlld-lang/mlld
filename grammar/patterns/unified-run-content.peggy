@@ -82,8 +82,23 @@ UnifiedCommandBrackets "Command brackets {...}"
 
 // CMD PREFIXED COMMAND BRACKETS - Explicit command wrapper
 CmdCommandBrackets "cmd command brackets"
-  = "cmd" workingDir:WorkingDirPath? _ content:UnifiedCommandBrackets {
-      if (!workingDir) {
+  = "cmd" _ argList:UnifiedArgumentList? workingDir:WorkingDirPath? _ content:UnifiedCommandBrackets {
+      const args = argList ? (argList.arguments || []) : [];
+      const hasArgs = args.length > 0;
+      const rawArgs = hasArgs
+        ? args.map(arg => {
+            if (arg.type === NodeType.VariableReference) {
+              return '@' + arg.identifier;
+            }
+            if (arg.type === NodeType.Argument && arg.value) {
+              if (arg.value.type === NodeType.Text) return arg.value.content;
+              if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
+            }
+            return arg.identifier || '';
+          })
+        : [];
+
+      if (!workingDir && !hasArgs) {
         return content;
       }
 
@@ -91,16 +106,23 @@ CmdCommandBrackets "cmd command brackets"
         ...content,
         values: {
           ...content.values,
-          workingDir: workingDir.parts
+          ...(hasArgs ? { args } : {}),
+          ...(workingDir ? { workingDir: workingDir.parts } : {})
         },
         raw: {
           ...content.raw,
-          workingDir: workingDir.raw
+          ...(hasArgs ? { args: rawArgs } : {}),
+          ...(workingDir ? { workingDir: workingDir.raw } : {})
         },
         meta: {
           ...content.meta,
-          workingDirMeta: workingDir.meta,
-          hasWorkingDir: true
+          ...(hasArgs ? { argumentCount: args.length } : {}),
+          ...(workingDir
+            ? {
+                workingDirMeta: workingDir.meta,
+                hasWorkingDir: true
+              }
+            : {})
         }
       };
     }
@@ -221,13 +243,13 @@ ShellCommandLineContent
         } else if (!inQuote) {
           // Check for banned operators
           if (char === '&' && next === '&') {
-            helpers.mlldError(`Shell operator AND (&&) is not allowed in simple mlld shell commands {..} but allowed in /run sh {..} which is more permissive`);
+            helpers.mlldError(`Shell operator AND (&&) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { echo "$myVar" && ... }`);
           } else if (char === '|' && next === '|') {
-            helpers.mlldError(`Shell operator OR (||) is not allowed in simple mlld shell commands {..} but allowed in /run sh {..} which is more permissive.`);
+            helpers.mlldError(`Shell operator OR (||) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { cmd1 || cmd2 }`);
           } else if (char === ';') {
-            helpers.mlldError(`Shell operator semicolon (;) is not allowed in simple mlld commands {..} but you might have been trying to write javascript, which requires /run js {..} or /run node {..}`);
+            helpers.mlldError(`Shell operator semicolon (;) is not allowed in cmd { }. For shell scripts use sh { }, for JavaScript use js { } or node { }. Note: these blocks don't interpolate @variables - pass them as parameters: sh(@myVar) { cmd1; cmd2 }`);
           } else if (char === '>' && next === '>') {
-            helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed inside simple mlld commands {..}. If you were trying to write a comment, you'll need to do that outside arguments and brackets. If you wanted to use append in a shell command, you can run this inside /run sh {..} which is more permissive.`);
+            helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks. For append, use sh { } and pass variables as parameters: sh(@myVar) { echo "$myVar" >> file }`);
           } else if (char === '>' || char === '<') {
             helpers.mlldError(`Shell redirection operators are not allowed in simple mlld commands. You may have been trying to do something else though. Check syntax references.`);
           } else if (char === '&' && next !== '&' && next !== '>') {
@@ -390,16 +412,16 @@ UnifiedCommandWordChar
       // Check for banned operators (skip if escaped)
       if (!isEscaped) {
         if (ahead.startsWith('&&')) {
-          helpers.mlldError(`Shell operator AND (&&) is not allowed in simple mlld shell commands {..} but allowed in /run sh {..} which is more permissive`);
+          helpers.mlldError(`Shell operator AND (&&) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { echo "$myVar" && ... }`);
         }
         if (ahead.startsWith('||')) {
-          helpers.mlldError(`Shell operator OR (||) is not allowed in simple mlld shell commands {..} but allowed in /run sh {..} which is more permissive.`);
+          helpers.mlldError(`Shell operator OR (||) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { cmd1 || cmd2 }`);
         }
         if (ahead.startsWith('>>')) {
-          helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed inside simple mlld commands {..}. If you were trying to write a comment, you'll need to do that outside arguments and brackets. If you wanted to use append in a shell command, you can run this inside /run sh {..} which is more permissive.`);
+          helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks. For append, use sh { } and pass variables as parameters: sh(@myVar) { echo "$myVar" >> file }`);
         }
         if (char === ';') {
-          helpers.mlldError(`Shell operator semicolon (;) is not allowed in mlld commands. Use @run sh [(script)] for shell scripts or separate @run commands.`);
+          helpers.mlldError(`Shell operator semicolon (;) is not allowed in cmd { }. For shell scripts use sh { }, for JavaScript use js { } or node { }. Note: these blocks don't interpolate @variables - pass them as parameters: sh(@myVar) { cmd1; cmd2 }`);
         }
         if (char === '>' && input[pos + 1] !== '>') {
           helpers.mlldError(`Shell redirection operators are not allowed in simple mlld commands. You may have been trying to do something else though. Check syntax references.`);

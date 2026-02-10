@@ -187,6 +187,7 @@ const TOKEN_TYPE_MAP = {
 - **Data Structures** - Arrays and objects with mlld constructs properly highlighted
 - **Field Access** - Dot notation (`@user.name`) and array indexing (`@items[0]`)
 - **Pipelines** - Shorthand pipes (`|`) and parallel groups (`||`); with‑clause pipeline arrays `with { pipeline: [...] }` including nested groups `[ ... ]`
+- **Run args + cwd syntax** - Combined forms like `/run cmd(@name):/ { ... }` and `/run sh(@name):/tmp { ... }`, including language/command keywords, argument variables, `:` path suffixes, and code/command block delimiters
 
 #### Context-Aware Highlighting
 
