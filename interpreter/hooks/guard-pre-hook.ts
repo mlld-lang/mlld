@@ -39,10 +39,8 @@ import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } fro
 import { materializeGuardTransform } from '../utils/guard-transform';
 import { appendGuardHistory } from './guard-shared-history';
 import {
-  applyGuardOverrideFilter,
   extractGuardOverride,
-  normalizeGuardOverride,
-  type NormalizedGuardOverride
+  normalizeGuardOverride
 } from './guard-override-utils';
 import {
   buildPerInputCandidates,
@@ -54,22 +52,24 @@ import {
   buildOperationSnapshot,
   type OperationSnapshot
 } from './guard-operation-keys';
+import {
+  applyGuardDecisionResult,
+  createGuardDecisionState,
+  shouldClearAttemptState,
+  toHookAction
+} from './guard-decision-reducer';
+import {
+  buildGuardAttemptKey,
+  clearGuardAttemptStates,
+  getAttemptStore,
+  type GuardAttemptEntry,
+  type GuardAttemptState
+} from './guard-retry-state';
 import { appendFileSync } from 'fs';
 import { getExpressionProvenance } from '../utils/expression-provenance';
 import { isStructuredValue } from '../utils/structured-value';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
-
-interface GuardAttemptEntry {
-  attempt: number;
-  decision: GuardDecisionType;
-  hint?: string | null;
-}
-
-interface GuardAttemptState {
-  nextAttempt: number;
-  history: GuardAttemptEntry[];
-}
 
 const DEFAULT_GUARD_MAX = 3;
 
@@ -87,7 +87,6 @@ const GUARD_HELPER_SOURCE: VariableSource = {
   isMultiLine: false
 };
 
-const guardAttemptStores = new WeakMap<Environment, Map<string, GuardAttemptState>>();
 const GUARD_DEBUG_PREVIEW_LIMIT = 100;
 
 function isGuardDebugEnabled(): boolean {
@@ -217,49 +216,6 @@ function describeHookTarget(node: HookableNode): string {
   return 'exe';
 }
 
-function getRootEnvironment(env: Environment): Environment {
-  let current: Environment | undefined = env;
-  while (current.getParent()) {
-    current = current.getParent();
-  }
-  return current!;
-}
-
-function getAttemptStore(env: Environment): Map<string, GuardAttemptState> {
-  const root = getRootEnvironment(env);
-  let store = guardAttemptStores.get(root);
-  if (!store) {
-    store = new Map();
-    guardAttemptStores.set(root, store);
-  }
-  return store;
-}
-
-function buildVariableIdentity(variable?: Variable): string {
-  if (!variable) {
-    return 'operation';
-  }
-  const definedAt = variable.mx?.definedAt;
-  const location =
-    definedAt && typeof definedAt === 'object'
-      ? `${definedAt.filePath ?? ''}:${definedAt.line ?? ''}:${definedAt.column ?? ''}`
-      : '';
-  return `${variable.name ?? 'input'}::${location}`;
-}
-
-function buildOperationIdentity(operation: OperationContext): string {
-  const trace = (operation.metadata?.trace as string | undefined) ?? '';
-  return `${trace}:${operation.type}:${operation.name ?? ''}`;
-}
-
-function buildGuardAttemptKey(
-  operation: OperationContext,
-  scope: GuardScope,
-  variable?: Variable
-): string {
-  return `${buildOperationIdentity(operation)}::${scope}::${buildVariableIdentity(variable)}`;
-}
-
 function truncatePreview(value: string, limit = 160): string {
   if (value.length <= limit) {
     return value;
@@ -321,10 +277,6 @@ function buildInputPreview(
   return null;
 }
 
-function clearGuardAttemptState(store: Map<string, GuardAttemptState>, key: string): void {
-  store.delete(key);
-}
-
 export const guardPreHook: PreHook = async (
   node,
   inputs,
@@ -376,13 +328,8 @@ export const guardPreHook: PreHook = async (
 
     const attemptStore = getAttemptStore(env);
     const guardTrace: GuardResult[] = [];
-    const reasons: string[] = [];
-    const hints: GuardHint[] = [];
     const usedAttemptKeys = new Set<string>();
-    let currentDecision: 'allow' | 'deny' | 'retry' = 'allow';
-    let primaryMetadata: Record<string, unknown> | undefined;
-    let selectedEnvConfig: unknown | undefined;
-    let selectedEnvGuard: string | null | undefined;
+    const decisionState = createGuardDecisionState();
 
     const transformedInputs: Variable[] = [...variableInputs];
 
@@ -409,35 +356,13 @@ export const guardPreHook: PreHook = async (
           inputHelper: helpers?.guard
         });
         guardTrace.push(result);
-        if (result.hint) {
-          hints.push(result.hint);
-        }
+        applyGuardDecisionResult(decisionState, result, { retryOverridesDeny: false });
         if (result.decision === 'env') {
-          if (selectedEnvConfig === undefined && result.envConfig !== undefined) {
-            selectedEnvConfig = result.envConfig;
-            selectedEnvGuard = result.guardName ?? null;
-          }
           continue;
         }
-        if (result.decision === 'allow' && currentDecision === 'allow') {
+        if (result.decision === 'allow' && decisionState.decision === 'allow') {
           if (result.replacement && isVariable(result.replacement as Variable)) {
             currentInput = result.replacement as Variable;
-          }
-        } else if (result.decision === 'deny') {
-          currentDecision = 'deny';
-          if (result.reason) {
-            reasons.push(result.reason);
-          }
-          if (!primaryMetadata && result.metadata) {
-            primaryMetadata = result.metadata;
-          }
-        } else if (result.decision === 'retry' && currentDecision !== 'deny') {
-          currentDecision = 'retry';
-          if (result.reason) {
-            reasons.push(result.reason);
-          }
-          if (!primaryMetadata && result.metadata) {
-            primaryMetadata = result.metadata;
           }
         }
       }
@@ -468,60 +393,45 @@ export const guardPreHook: PreHook = async (
           inputHelper: helpers?.guard
         });
         guardTrace.push(result);
-        if (result.hint) {
-          hints.push(result.hint);
-        }
+        applyGuardDecisionResult(decisionState, result, { retryOverridesDeny: true });
         if (result.decision === 'env') {
-          if (selectedEnvConfig === undefined && result.envConfig !== undefined) {
-            selectedEnvConfig = result.envConfig;
-            selectedEnvGuard = result.guardName ?? null;
-          }
           continue;
         }
-        if (result.decision === 'allow' && currentDecision === 'allow') {
+        if (result.decision === 'allow' && decisionState.decision === 'allow') {
           const replacements = normalizeGuardReplacements(result.replacement);
           if (replacements.length > 0) {
             transformedInputs.splice(0, transformedInputs.length, ...replacements);
             opSnapshot = buildOperationSnapshot(transformedInputs);
-          }
-        } else if (result.decision === 'deny') {
-          currentDecision = 'deny';
-          if (result.reason) {
-            reasons.push(result.reason);
-          }
-          if (!primaryMetadata && result.metadata) {
-            primaryMetadata = result.metadata;
-          }
-        } else if (result.decision === 'retry') {
-          currentDecision = 'retry';
-          if (result.reason) {
-            reasons.push(result.reason);
-          }
-          if (!primaryMetadata && result.metadata) {
-            primaryMetadata = result.metadata;
           }
         }
       }
     }
 
     const aggregateContext = buildAggregateGuardContext({
-      decision: currentDecision,
+      decision: decisionState.decision,
       guardResults: guardTrace,
-      hints,
-      reasons,
-      primaryMetadata
+      hints: decisionState.hints,
+      reasons: decisionState.reasons,
+      primaryMetadata: decisionState.primaryMetadata
     });
-  const aggregateMetadata = buildAggregateMetadata({
-    guardResults: guardTrace,
-    reasons,
-    hints,
-    transformedInputs,
-    primaryMetadata,
-    guardContext: aggregateContext,
-    envConfig: selectedEnvConfig,
-    envGuard: selectedEnvGuard
-  });
-    appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+    const aggregateMetadata = buildAggregateMetadata({
+      guardResults: guardTrace,
+      reasons: decisionState.reasons,
+      hints: decisionState.hints,
+      transformedInputs,
+      primaryMetadata: decisionState.primaryMetadata,
+      guardContext: aggregateContext,
+      envConfig: decisionState.selectedEnvConfig,
+      envGuard: decisionState.selectedEnvGuard
+    });
+    appendGuardHistory(
+      env,
+      operation,
+      decisionState.decision,
+      guardTrace,
+      decisionState.hints,
+      decisionState.reasons
+    );
     const guardName =
       guardTrace[0]?.guard?.name ??
       guardTrace[0]?.guard?.filterKind ??
@@ -537,10 +447,10 @@ export const guardPreHook: PreHook = async (
       type: 'debug:guard:before',
       guard: guardName,
       labels: contextLabels,
-      decision: currentDecision,
+      decision: decisionState.decision,
       trace: guardTrace,
-      hints,
-      reasons,
+      hints: decisionState.hints,
+      reasons: decisionState.reasons,
       timestamp: Date.now(),
       ...(provenance && { provenance })
     });
@@ -561,7 +471,7 @@ export const guardPreHook: PreHook = async (
               )
           : inputs;
         console.error('[guard-pre-hook] decision', {
-          decision: currentDecision,
+          decision: decisionState.decision,
           operation: {
             type: operation?.type,
             subtype: operation?.subtype,
@@ -570,8 +480,8 @@ export const guardPreHook: PreHook = async (
             metadata: operation?.metadata
           },
           inputs: inputPreview,
-          reasons,
-          hints: hints.map(h => (typeof h === 'string' ? h : h?.hint ?? h)),
+          reasons: decisionState.reasons,
+          hints: decisionState.hints.map(h => (typeof h === 'string' ? h : h?.hint ?? h)),
           guardTrace: guardTrace.map(trace => ({
             guard: trace.guard?.name ?? trace.guard?.filterKind,
             decision: trace.decision,
@@ -584,7 +494,7 @@ export const guardPreHook: PreHook = async (
             '/tmp/mlld_guard_pre.log',
             JSON.stringify(
               {
-                decision: currentDecision,
+                decision: decisionState.decision,
                 operation: {
                   type: operation?.type,
                   subtype: operation?.subtype,
@@ -592,8 +502,8 @@ export const guardPreHook: PreHook = async (
                   labels: operation?.labels,
                   metadata: operation?.metadata
                 },
-                reasons,
-                hints: hints.map(h => (typeof h === 'string' ? h : h?.hint ?? h)),
+                reasons: decisionState.reasons,
+                hints: decisionState.hints.map(h => (typeof h === 'string' ? h : h?.hint ?? h)),
                 guardTrace: guardTrace.map(trace => ({
                   guard: trace.guard?.name ?? trace.guard?.filterKind,
                   decision: trace.decision,
@@ -613,31 +523,13 @@ export const guardPreHook: PreHook = async (
       }
     }
 
-    if (currentDecision === 'allow') {
-      for (const key of usedAttemptKeys) {
-        clearGuardAttemptState(attemptStore, key);
-      }
-      return {
-        action: 'continue',
-        metadata: aggregateMetadata
-      };
-    }
-
-    if (currentDecision === 'retry') {
-      return {
-        action: 'retry',
-        metadata: aggregateMetadata
-      };
+    if (shouldClearAttemptState(decisionState.decision)) {
+      clearGuardAttemptStates(attemptStore, usedAttemptKeys);
     }
 
     return {
-      action: 'abort',
-      metadata: (() => {
-        for (const key of usedAttemptKeys) {
-          clearGuardAttemptState(attemptStore, key);
-        }
-        return aggregateMetadata;
-      })()
+      action: toHookAction(decisionState.decision),
+      metadata: aggregateMetadata
     };
   });
 };
