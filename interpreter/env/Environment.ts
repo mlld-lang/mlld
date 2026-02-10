@@ -73,6 +73,7 @@ import {
   ExecutionOrchestrator,
   type CommandExecutorFactoryPort
 } from './runtime/ExecutionOrchestrator';
+import { ChildEnvironmentLifecycle } from './runtime/ChildEnvironmentLifecycle';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { McpImportManager } from '../mcp/McpImportManager';
@@ -144,6 +145,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private contextFacade: ContextFacade;
   private hookManager: HookManager;
   private guardRegistry: GuardRegistry;
+  private childLifecycle: ChildEnvironmentLifecycle;
   private pipelineGuardHistoryStore: { entries?: GuardHistoryEntry[] };
   private mcpImportManager?: McpImportManager;
   
@@ -299,6 +301,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.guardRegistry,
       this.pipelineGuardHistoryStore
     );
+    this.childLifecycle = parent ? parent.childLifecycle : new ChildEnvironmentLifecycle();
     
     // Inherit reserved names from parent environment
     if (parent) {
@@ -1606,6 +1609,51 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   async resolvePath(inputPath: string): Promise<string> {
     return this.importResolver.resolvePath(inputPath);
   }
+
+  private createLifecycleChild(
+    childContext: PathContext | string,
+    options: {
+      importResolverBasePath?: string;
+      includeInitialNodeCount?: boolean;
+      includeModuleIsolation?: boolean;
+      includeTraceInheritance?: boolean;
+      inheritPolicy?: boolean;
+      trackForCleanup?: boolean;
+    }
+  ): Environment {
+    const child = new Environment(
+      this.fileSystem,
+      this.pathService,
+      childContext,
+      this,
+      this.effectHandler
+    );
+
+    this.childLifecycle.applyChildInheritance(child, this, {
+      includeInitialNodeCount: options.includeInitialNodeCount,
+      includeModuleIsolation: options.includeModuleIsolation,
+      includeTraceInheritance: options.includeTraceInheritance
+    });
+
+    child.importResolver = this.importResolver.createChildResolver(
+      options.importResolverBasePath,
+      () => child.allowAbsolutePaths
+    );
+
+    if (options.inheritPolicy) {
+      child.setPolicyCapabilities(this.getPolicyCapabilities());
+      const policyContext = this.getPolicyContext();
+      if (policyContext) {
+        child.setPolicyContext({ ...policyContext });
+      }
+    }
+
+    if (options.trackForCleanup) {
+      this.childEnvironments.add(child);
+    }
+
+    return child;
+  }
   
   // --- Scope Management ---
   
@@ -1618,77 +1666,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * SECURITY: Child isolation prevents variable leakage between execution contexts.
    */
   createChild(newBasePath?: string): Environment {
-    let childContext: PathContext | string;
-    
-    if (this.pathContext) {
-      // If we have a PathContext, create child context
-      if (newBasePath) {
-        // Create new context with updated file directory
-        childContext = {
-          ...this.pathContext,
-          fileDirectory: newBasePath,
-          executionDirectory: newBasePath
-        };
-      } else {
-        // Use parent context as-is
-        childContext = this.pathContext;
-      }
-    } else {
-      // Legacy mode
-      childContext = newBasePath || this.basePath;
-    }
-    
-    const child = new Environment(
-      this.fileSystem,
-      this.pathService,
-      childContext,
-      this,
-      this.effectHandler  // Share the same effect handler
+    const childContext = this.childLifecycle.resolveChildContext(
+      this.pathContext,
+      this.basePath,
+      newBasePath
     );
-    child.allowAbsolutePaths = this.allowAbsolutePaths;
-    // Track the current node count so we know which nodes are new in the child
-    child.initialNodeCount = this.nodes.length;
-    child.streamingOptions = { ...this.streamingOptions };
-    child.provenanceEnabled = this.provenanceEnabled;
-    // Inherit module isolation flag - children of isolated environments are also isolated
-    child.moduleIsolated = this.moduleIsolated;
-    if (this.allowedTools) {
-      child.setAllowedTools(this.allowedTools);
-    }
-
-    // Create child import resolver
-    child.importResolver = this.importResolver.createChildResolver(newBasePath, () => child.allowAbsolutePaths);
-    child.setPolicyCapabilities(this.getPolicyCapabilities());
-    const policyContext = this.getPolicyContext();
-    if (policyContext) {
-      child.setPolicyContext({ ...policyContext });
-    }
-    
-    // Track child environment for cleanup
-    this.childEnvironments.add(child);
-    
-    return child;
+    return this.createLifecycleChild(childContext, {
+      importResolverBasePath: newBasePath,
+      includeInitialNodeCount: true,
+      includeModuleIsolation: true,
+      inheritPolicy: true,
+      trackForCleanup: true
+    });
   }
   
   mergeChild(child: Environment): void {
-    // Merge child variables into this environment without immutability checks
-    // This is used for internal operations like nested data assignments
-    for (const [name, variable] of child.variableManager.getVariables()) {
-      // Skip block-scoped bindings that should never propagate back to parent:
-      // - 'let' bindings from let @x = ... statements
-      // - 'exe-param' bindings from function parameters
-      const importPath = variable.mx?.importPath;
-      const isBlockScoped = importPath === 'let' || importPath === 'exe-param';
-      if (isBlockScoped) {
-        continue;
-      }
-      // Use direct assignment to bypass immutability checks
-      this.variableManager.setVariable(name, variable);
-    }
-    
-    // Merge all nodes from the child environment
-    // Child environments don't inherit parent nodes, they start with empty arrays
-    this.nodes.push(...child.nodes);
+    this.childLifecycle.mergeChildVariables(
+      this.variableManager,
+      child.variableManager.getVariables()
+    );
+    this.childLifecycle.mergeChildNodes(this.nodes, child.nodes);
   }
   
   // --- Special Variables ---
@@ -2123,26 +2120,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   createChildEnvironment(): Environment {
-    const childContext = this.pathContext || this.basePath;
-    const child = new Environment(
-      this.fileSystem,
-      this.pathService,
-      childContext,
-      this,
-      this.effectHandler  // Share the same effect handler
-    );
-    child.allowAbsolutePaths = this.allowAbsolutePaths;
-    child.streamingOptions = { ...this.streamingOptions };
-    child.provenanceEnabled = this.provenanceEnabled;
-    // Share import stack with parent via ImportResolver
-    child.importResolver = this.importResolver.createChildResolver(undefined, () => child.allowAbsolutePaths);
-    // Inherit trace settings
-    child.traceEnabled = this.traceEnabled;
-    child.directiveTrace = this.directiveTrace; // Share trace with parent
-    if (this.allowedTools) {
-      child.setAllowedTools(this.allowedTools);
-    }
-    return child;
+    const childContext = this.childLifecycle.resolveChildContext(this.pathContext, this.basePath);
+    return this.createLifecycleChild(childContext, {
+      includeTraceInheritance: true
+    });
   }
   
   // --- Directive Trace (for debugging) ---
