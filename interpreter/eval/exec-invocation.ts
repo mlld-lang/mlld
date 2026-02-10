@@ -36,7 +36,6 @@ import { evaluateExeBlock } from './exe';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import {
   asText,
-  asData,
   isStructuredValue,
   wrapStructured,
   parseAndWrapJson,
@@ -78,7 +77,6 @@ import {
   materializeGuardInputsWithMapping,
   type GuardInputMappingEntry
 } from '../utils/guard-inputs';
-import { createParameterVariable } from '../utils/parameter-factory';
 import { collectVariableIdentifiersFromNodes } from './directive-inputs';
 import { getSignatureContent } from './sign-verify';
 import {
@@ -112,6 +110,10 @@ import {
   mergeExecInvocationStreamingFromDefinition,
   setupExecInvocationStreaming
 } from './exec/streaming';
+import {
+  bindExecParameterVariables,
+  evaluateExecInvocationArgs
+} from './exec/args';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -254,29 +256,6 @@ function cloneVariableWithNewValue(
     value: value ?? fallback,
     mx: source.mx ? { ...source.mx } : undefined,
     internal: { ...(source.internal ?? {}) }
-  };
-  if (cloned.mx?.mxCache) {
-    delete cloned.mx.mxCache;
-  }
-  return cloned;
-}
-
-function cloneGuardCandidateForParameter(
-  name: string,
-  candidate: Variable,
-  argValue: unknown,
-  fallback: string | undefined
-): Variable {
-  const cloned: Variable = {
-    ...candidate,
-    name,
-    value: argValue ?? fallback ?? candidate.value,
-    mx: candidate.mx ? { ...candidate.mx } : undefined,
-    internal: {
-      ...(candidate.internal ?? {}),
-      isSystem: true,
-      isParameter: true
-    }
   };
   if (cloned.mx?.mxCache) {
     delete cloned.mx.mxCache;
@@ -1254,254 +1233,15 @@ async function evaluateExecInvocationInternal(
 
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
-  
-  // Evaluate arguments using consistent interpolate() pattern
-  const evaluatedArgStrings: string[] = [];
-  const evaluatedArgs: any[] = []; // Preserve original data types
-  
-  for (const arg of args) {
-    let argValue: string;
-    let argValueAny: any;
-
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[DEBUG ARG] Processing arg:', { isStructured: isStructuredValue(arg), argType: typeof arg, argKeys: arg && typeof arg === 'object' ? Object.keys(arg).slice(0, 5) : null });
+  const { evaluatedArgStrings, evaluatedArgs } = await evaluateExecInvocationArgs({
+    args,
+    env,
+    services: {
+      interpolate: interpolateWithResultDescriptor,
+      evaluateExecInvocation,
+      mergeResultDescriptor
     }
-
-    if (isStructuredValue(arg)) {
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[DEBUG ARG] StructuredValue detected:', { type: arg.type, dataType: typeof arg.data, isArray: Array.isArray(arg.data) });
-      }
-      argValueAny = arg;
-      argValue = asText(arg);
-    } else if (arg && typeof arg === 'object' && (arg as any).type === 'RegexLiteral') {
-      const pattern = (arg as any).pattern || '';
-      const flags = (arg as any).flags || '';
-      const regex = new RegExp(pattern, flags);
-      argValueAny = regex;
-      argValue = regex.toString();
-    } else if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
-      // Primitives: pass through directly
-      argValue = String(arg);
-      argValueAny = arg;
-
-    } else if (arg && typeof arg === 'object' && 'needsInterpolation' in arg && Array.isArray((arg as any).parts)) {
-      // Handle needsInterpolation objects from DataString with @references
-      // These are created by the grammar when parsing strings like "template @var"
-      const interpolated = await interpolateWithResultDescriptor((arg as any).parts, env, InterpolationContext.Default);
-      argValue = interpolated;
-      argValueAny = interpolated;
-
-    } else if (Array.isArray(arg) && arg.length > 0 && arg.some((item: any) => item && typeof item === 'object' && item.type === 'VariableReference')) {
-      // Handle array of template parts that need interpolation
-      // This occurs when parsing strings like "template @var" inside block let statements
-      const interpolated = await interpolateWithResultDescriptor(arg, env, InterpolationContext.Default);
-      argValue = interpolated;
-      argValueAny = interpolated;
-
-    } else if (arg && typeof arg === 'object' && 'wrapperType' in arg && Array.isArray((arg as any).content)) {
-      // Handle backtick template literals: { content: [...], wrapperType: 'backtick' }
-      // These need interpolation to produce the final string value
-      const interpolated = await interpolateWithResultDescriptor((arg as any).content, env, InterpolationContext.Default);
-      argValue = interpolated;
-      argValueAny = interpolated;
-
-    } else if (arg && typeof arg === 'object' && 'type' in arg) {
-      // AST nodes: evaluate based on type
-      switch (arg.type) {
-        case 'BinaryExpression':
-        case 'TernaryExpression':
-        case 'UnaryExpression':
-        case 'ArrayFilterExpression':
-        case 'ArraySliceExpression': {
-          const { evaluateUnifiedExpression } = await import('./expressions');
-          const exprResult = await evaluateUnifiedExpression(arg as any, env, { isExpression: true });
-          argValueAny = exprResult.value;
-          if (argValueAny === undefined) {
-            argValue = 'undefined';
-          } else if (isStructuredValue(argValueAny)) {
-            argValue = asText(argValueAny);
-          } else if (typeof argValueAny === 'object') {
-            try {
-              argValue = JSON.stringify(argValueAny);
-            } catch {
-              argValue = String(argValueAny);
-            }
-          } else {
-            argValue = String(argValueAny);
-          }
-          break;
-        }
-        case 'WhenExpression': {
-          // Evaluate when-expression argument
-          const { evaluateWhenExpression } = await import('./when-expression');
-          const whenRes = await evaluateWhenExpression(arg as any, env);
-          argValueAny = whenRes.value;
-          // Stringify for argValue if object/array
-          if (argValueAny === undefined) {
-            argValue = 'undefined';
-          } else if (typeof argValueAny === 'object') {
-            try { argValue = JSON.stringify(argValueAny); } catch { argValue = String(argValueAny); }
-          } else {
-            argValue = String(argValueAny);
-          }
-          break;
-        }
-        case 'foreach':
-        case 'foreach-command': {
-          const { evaluateForeachCommand } = await import('./foreach');
-          const arr = await evaluateForeachCommand(arg as any, env);
-          argValueAny = arr;
-          argValue = JSON.stringify(arr);
-          break;
-        }
-        case 'object': {
-          // Object literals: recursively evaluate properties (may contain exec invocations, etc.)
-          const { evaluateDataValue } = await import('./data-value-evaluator');
-          argValueAny = await evaluateDataValue(arg, env);
-          argValue = JSON.stringify(argValueAny);
-          // Collect security descriptors from inline object's variable references
-          const { extractDescriptorsFromDataAst: extractObjDesc } = await import('./var');
-          const objDescriptor = extractObjDesc(arg, env);
-          if (objDescriptor) mergeResultDescriptor(objDescriptor);
-          break;
-        }
-        case 'array': {
-          // Array literals: recursively evaluate items (may contain variables, exec calls, etc.)
-          const { evaluateDataValue: evalArray } = await import('./data-value-evaluator');
-          argValueAny = await evalArray(arg, env);
-          argValue = JSON.stringify(argValueAny);
-          // Collect security descriptors from inline array's variable references
-          const { extractDescriptorsFromDataAst: extractArrDesc } = await import('./var');
-          const arrDescriptor = extractArrDesc(arg, env);
-          if (arrDescriptor) mergeResultDescriptor(arrDescriptor);
-          break;
-        }
-          
-        case 'VariableReference':
-          // Special handling for variable references to preserve objects
-          const varRef = arg as any;
-          const varName = varRef.identifier;
-          const variable = env.getVariable(varName);
-
-          if (variable) {
-            // Merge security descriptor for label flow tracking
-            if (variable.mx) {
-              const varDescriptor = varMxToSecurityDescriptor(variable.mx as VariableContext);
-              if (varDescriptor) mergeResultDescriptor(varDescriptor);
-            }
-
-            // Get the actual value from the variable
-            let value = variable.value;
-            
-            // WHY: Template variables store AST arrays for lazy evaluation,
-            //      must interpolate before passing to executables
-            const { isTemplate } = await import('@core/types/variable');
-            if (isTemplate(variable)) {
-              if (Array.isArray(value)) {
-                value = await interpolateWithResultDescriptor(value, env);
-              } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
-                value = await interpolateWithResultDescriptor(variable.internal.templateAst, env);
-              }
-            }
-            
-            // Handle field access (e.g., @user.name)
-            if (varRef.fields && varRef.fields.length > 0) {
-              const { accessFields } = await import('../utils/field-access');
-              const accessed = await accessFields(value, varRef.fields, {
-                env,
-                preserveContext: false,
-                sourceLocation: (varRef as any).location
-              });
-              value = accessed;
-            }
-            
-            if (isStructuredValue(value)) {
-              argValueAny = value;
-              argValue = asText(value);
-            } else {
-              // Preserve the type of the final value
-              argValueAny = value;
-              // For objects and arrays, use JSON.stringify to get proper string representation
-              if (value === undefined) {
-                argValue = 'undefined';
-              } else if (typeof value === 'object' && value !== null) {
-                try {
-                  argValue = JSON.stringify(value);
-                } catch (e) {
-                  argValue = String(value);
-                }
-              } else {
-                argValue = String(value);
-              }
-            }
-          } else {
-            // Variable not found - use interpolation which will throw appropriate error
-            argValue = await interpolateWithResultDescriptor([arg], env, InterpolationContext.Default);
-            argValueAny = argValue;
-          }
-          break;
-
-        case 'load-content': {
-          const { processContentLoader } = await import('./content-loader');
-          const { wrapLoadContentValue } = await import('../utils/load-content-structured');
-          const loadResult = await processContentLoader(arg as any, env);
-          const structured = wrapLoadContentValue(loadResult);
-          argValueAny = structured;
-          argValue = asText(structured);
-          break;
-        }
-        
-        case 'ExecInvocation': {
-          const nestedResult = await evaluateExecInvocation(arg as ExecInvocation, env);
-          if (nestedResult && nestedResult.value !== undefined) {
-            argValueAny = nestedResult.value;
-          } else if (nestedResult && nestedResult.stdout !== undefined) {
-            argValueAny = nestedResult.stdout;
-          } else {
-            argValueAny = undefined;
-          }
-
-          if (argValueAny === undefined) {
-            argValue = 'undefined';
-          } else if (isStructuredValue(argValueAny)) {
-            argValue = asText(argValueAny);
-          } else if (typeof argValueAny === 'object') {
-            try {
-              argValue = JSON.stringify(argValueAny);
-            } catch {
-              argValue = String(argValueAny);
-            }
-          } else {
-            argValue = String(argValueAny);
-          }
-          break;
-        }
-        case 'Text':
-          // Plain text nodes should remain strings; avoid JSON coercion that can
-          // truncate large numeric identifiers (e.g., Discord snowflakes)
-          argValue = await interpolateWithResultDescriptor([arg], env, InterpolationContext.Default);
-          argValueAny = argValue;
-          break;
-        default:
-          // Other nodes: interpolate normally
-          argValue = await interpolateWithResultDescriptor([arg], env, InterpolationContext.Default);
-          // Try to preserve structured data if it's JSON
-          try {
-            argValueAny = JSON.parse(argValue);
-          } catch {
-            argValueAny = argValue;
-          }
-          break;
-      }
-    } else {
-      // Fallback for unexpected types
-      argValue = String(arg);
-      argValueAny = arg;
-    }
-    
-    evaluatedArgStrings.push(argValue);
-    evaluatedArgs.push(argValueAny);
-  }
+  });
 
   if (process.env.MLLD_DEBUG_FIX === 'true') {
     console.error('[evaluateExecInvocation] evaluated args', {
@@ -1944,49 +1684,17 @@ async function evaluateExecInvocationInternal(
           evaluatedArgStrings
         });
       }
-      // Bind evaluated arguments to parameters
-      for (let i = 0; i < params.length; i++) {
-        const paramName = params[i];
-        const argValue = evaluatedArgs[i];
-        const argStringValue = evaluatedArgStrings[i];
-        const originalVar = originalVariables[i];
-        const guardCandidate = guardVariableCandidates[i];
-        const isShellCode =
-          definition.type === 'code' &&
-          typeof definition.language === 'string' &&
-          (definition.language === 'bash' || definition.language === 'sh');
-        const preferGuardReplacement =
-          transformedGuardSet?.has(guardCandidate as Variable) ?? false;
-        const allowOriginalReuse =
-          !preferGuardReplacement && Boolean(originalVar) && !isShellCode && definition.type !== 'command';
-
-        if (guardCandidate && (!originalVar || !allowOriginalReuse || preferGuardReplacement)) {
-          const candidateClone = cloneGuardCandidateForParameter(
-            paramName,
-            guardCandidate,
-            argValue,
-            argStringValue
-          );
-          execEnv.setParameterVariable(paramName, candidateClone);
-          continue;
-        }
-
-        if (argValue !== undefined) {
-          const paramVar = createParameterVariable({
-            name: paramName,
-            value: evaluatedArgs[i], // Use evaluatedArgs (preserves StructuredValue), not argValue (string)
-            stringValue: argStringValue,
-            originalVariable: originalVar,
-            allowOriginalReuse,
-            metadataFactory: createParameterMetadata,
-            origin: 'exec-param'
-          });
-
-          if (paramVar) {
-            execEnv.setParameterVariable(paramName, paramVar);
-          }
-        }
-      }
+      bindExecParameterVariables({
+        params,
+        evaluatedArgs,
+        evaluatedArgStrings,
+        originalVariables,
+        guardVariableCandidates,
+        definition,
+        execEnv,
+        transformedGuardSet,
+        createParameterMetadata
+      });
 
       // Capture descriptors from executable definition and parameters
       const descriptorPieces: SecurityDescriptor[] = [];
