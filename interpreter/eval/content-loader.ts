@@ -3,13 +3,11 @@ import { MlldError, MlldSecurityError } from '@core/errors';
 import type { SourceLocation } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import type { LoadContentResult } from '@core/types/load-content';
-import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLImpl } from './load-content';
+import { LoadContentResultImpl, LoadContentResultHTMLImpl } from './load-content';
 import { wrapLoadContentValue } from '../utils/load-content-structured';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
 import type { AstResult, AstPattern } from './ast-extractor';
-import { Readability } from '@mozilla/readability';
-import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
 import { processPipeline } from './pipeline/unified-processor';
 import { wrapStructured, isStructuredValue, ensureStructuredValue, asText } from '../utils/structured-value';
@@ -25,10 +23,13 @@ import { ContentSourceReconstruction } from './content-loader/source-reconstruct
 import { PolicyAwareReadHelper } from './content-loader/policy-aware-read';
 import { AstPatternResolution } from './content-loader/ast-pattern-resolution';
 import { AstVariantLoader } from './content-loader/ast-variant-loader';
+import { HtmlConversionHelper } from './content-loader/html-conversion-helper';
+import { ContentLoaderUrlHandler } from './content-loader/url-handler';
 
 const sourceReconstruction = new ContentSourceReconstruction();
 const policyAwareReadHelper = new PolicyAwareReadHelper();
 const astPatternResolution = new AstPatternResolution();
+const htmlConversionHelper = new HtmlConversionHelper();
 
 async function interpolateAndRecord(
   nodes: any,
@@ -185,92 +186,47 @@ export async function processContentLoader(node: any, env: Environment): Promise
   try {
     // URLs can't be globs
     if (env.isURL(pathOrUrl)) {
-      const urlDescriptor = makeSecurityDescriptor({
-        taint: ['src:network'],
-        sources: [pathOrUrl]
+      const urlHandler = new ContentLoaderUrlHandler({
+        convertHtmlToMarkdown: (html, url) => htmlConversionHelper.convertToMarkdown(html, url),
+        isSectionListPattern,
+        getSectionListLevel,
+        listSections,
+        extractSectionName,
+        extractSection,
+        runPipeline: async (value, pipelineEnv, pipelinePipes) => processPipeline({
+          value,
+          env: pipelineEnv,
+          node: { pipes: pipelinePipes }
+        })
       });
-      const urlMetadata: StructuredValueMetadata = {
-        url: pathOrUrl,
-        security: policyEnforcer.applyDefaultTrustLabel(urlDescriptor) ?? urlDescriptor
-      };
-      // Fetch URL with metadata
-      const response = await env.fetchURLWithMetadata(pathOrUrl);
-      
-      // Process content based on content type
-      let processedContent = response.content;
-      const contentType = response.headers['content-type'] || response.headers['Content-Type'] || '';
-      
-      // For HTML content, convert to markdown using Readability + Turndown
-      if (contentType.includes('text/html')) {
-        processedContent = await convertHtmlToMarkdown(response.content, pathOrUrl);
-      }
-      
-      // Extract section if specified
-      if (options?.section) {
-        // Handle section-list patterns (??, ##??, etc.)
-        if (isSectionListPattern(options.section)) {
-          const level = getSectionListLevel(options.section);
-          const sections = listSections(processedContent, level);
-
-          if (hasPipes) {
-            const piped = await processPipeline({
-              value: sections,
-              env,
-              node: { pipes }
-            });
-            return finalizeLoaderResult(piped, { type: 'array', metadata: urlMetadata });
-          }
-
-          return finalizeLoaderResult(sections, { type: 'array', metadata: urlMetadata });
-        }
-
-        const sectionName = await extractSectionName(options.section, env);
-        // URLs don't have frontmatter, so no file context for rename interpolation
-        const sectionContent = await extractSection(processedContent, sectionName, options.section.renamed, undefined, env);
-
-        // Apply pipes if present
-        if (hasPipes) {
-          const pipedSection = await processPipeline({
-            value: sectionContent,
-            env,
-            node: { pipes }
-          });
-          return finalizeLoaderResult(pipedSection, { type: 'text', metadata: urlMetadata });
-        }
-
-        // For URLs with sections, return plain string (backward compatibility)
-        return finalizeLoaderResult(sectionContent, { type: 'text', metadata: urlMetadata });
-      }
-      
-      // Create rich URL result with metadata
-      const urlResult = new LoadContentResultURLImpl({
-        content: processedContent,    // Markdown for HTML, raw content for others
-        rawContent: response.content,  // Always the raw response
-        url: pathOrUrl,
-        headers: response.headers,
-        status: response.status
+      const urlLoadResult = await urlHandler.load({
+        pathOrUrl,
+        options,
+        pipes,
+        hasPipes,
+        env,
+        policyEnforcer
       });
-      
-      // Apply pipes if present
-      if (hasPipes) {
-        // For LoadContentResult objects, apply pipes to the content
-        const pipedContent = await processPipeline({
-          value: urlResult.content,
-          env,
-          node: { pipes }
+
+      if (urlLoadResult.kind === 'array') {
+        return finalizeLoaderResult(urlLoadResult.value, {
+          type: 'array',
+          metadata: urlLoadResult.metadata
         });
-        // Return a new result with piped content
-        const pipedResult = new LoadContentResultURLImpl({
-          content: pipedContent,
-          rawContent: response.content,
-          url: pathOrUrl,
-          headers: response.headers,
-          status: response.status
-        });
-        return finalizeLoaderResult(pipedResult, { type: 'object', text: asText(pipedContent), metadata: urlMetadata });
       }
-      
-      return finalizeLoaderResult(urlResult, { type: 'object', text: urlResult.content, metadata: urlMetadata });
+
+      if (urlLoadResult.kind === 'text') {
+        return finalizeLoaderResult(urlLoadResult.value, {
+          type: 'text',
+          metadata: urlLoadResult.metadata
+        });
+      }
+
+      return finalizeLoaderResult(urlLoadResult.value, {
+        type: 'object',
+        text: urlLoadResult.text,
+        metadata: urlLoadResult.metadata
+      });
     }
     
     // Handle glob patterns for file paths
@@ -463,7 +419,7 @@ async function loadSingleFile(
   
   // Check if this is an HTML file and convert to Markdown
   if (resolvedPath.endsWith('.html') || resolvedPath.endsWith('.htm')) {
-    const markdownContent = await convertHtmlToMarkdown(rawContent, `file://${resolvedPath}`);
+    const markdownContent = await htmlConversionHelper.convertToMarkdown(rawContent, `file://${resolvedPath}`);
     
     // Extract section if specified
     if (options?.section) {
@@ -647,7 +603,7 @@ async function loadGlobPattern(
       
       // Check if this is an HTML file
       if (filePath.endsWith('.html') || filePath.endsWith('.htm')) {
-        const markdownContent = await convertHtmlToMarkdown(rawContent, `file://${filePath}`);
+        const markdownContent = await htmlConversionHelper.convertToMarkdown(rawContent, `file://${filePath}`);
         
         // Skip files if section extraction is requested and section doesn't exist
         if (options?.section) {
@@ -1037,63 +993,6 @@ function listSections(content: string, level?: number): string[] {
   }
 
   return headings;
-}
-
-/**
- * Convert HTML to Markdown using Readability + Turndown
- */
-async function convertHtmlToMarkdown(html: string, url: string): Promise<string> {
-  try {
-    // Create DOM from HTML
-    const dom = new JSDOM(html, { url });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
-    
-    if (!article) {
-      // If Readability can't extract an article, fall back to full HTML conversion
-      const turndownService = new TurndownService({
-        headingStyle: 'atx',
-        codeBlockStyle: 'fenced',
-        bulletListMarker: '-',
-        emDelimiter: '*',
-        strongDelimiter: '**'
-      });
-      return turndownService.turndown(html);
-    }
-    
-    // Convert the extracted article content to Markdown
-    const turndownService = new TurndownService({
-      headingStyle: 'atx',
-      codeBlockStyle: 'fenced',
-      bulletListMarker: '-',
-      emDelimiter: '*',
-      strongDelimiter: '**'
-    });
-    
-    // Build markdown with article metadata
-    let markdown = '';
-    if (article.title) {
-      markdown += `# ${article.title}\n\n`;
-    }
-    if (article.byline) {
-      markdown += `*By ${article.byline}*\n\n`;
-    }
-    // Skip excerpt for now - it's being added even when we don't want it
-    // if (article.excerpt) {
-    //   markdown += `> ${article.excerpt}\n\n`;
-    // }
-    
-    // Convert main content
-    markdown += turndownService.turndown(article.content);
-    
-    // Debug logging
-    
-    return markdown;
-  } catch (error) {
-    // If conversion fails, return the original HTML
-    console.warn('Failed to convert HTML to Markdown:', error);
-    return html;
-  }
 }
 
 /**
