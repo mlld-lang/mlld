@@ -3,15 +3,7 @@ import type { CommandExecutionContext } from '../../env/ErrorUtils';
 import type { PipelineCommand } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import type { SecurityDescriptor } from '@core/types/security';
-import {
-  asText,
-  isStructuredValue,
-  looksLikeJsonString,
-  applySecurityDescriptorToStructuredValue,
-  extractSecurityDescriptor,
-  type StructuredValue
-} from '../../utils/structured-value';
-import { wrapExecResult } from '../../utils/structured-exec';
+import type { StructuredValue } from '../../utils/structured-value';
 import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { HookableNode } from '@core/types/hooks';
 import type { HookDecision } from '../../hooks/HookManager';
@@ -20,6 +12,7 @@ import { resolveWorkingDirectory } from '../../utils/working-directory';
 import { bindPipelineParameters } from './command-execution/bind-pipeline-params';
 import { resolvePipelineCommandReference } from './command-execution/resolve-command-reference';
 import { normalizeExecutableDescriptor } from './command-execution/normalize-executable';
+import { createCommandExecutionFinalizer } from './command-execution/finalize-result';
 import {
   buildGuardPreflightContext,
   executeGuardPreflight
@@ -48,9 +41,6 @@ export interface CommandExecutionHookOptions {
 }
 
 /**
- * Resolve a command reference to an executable variable
- */
-/**
  * Resolve a pipeline command reference to an executable or value.
  * WHY: Commands may be object methods, executables, or values with field access.
  * CONTEXT: Used by pipeline execution to resolve identifiers from the stage env.
@@ -62,9 +52,6 @@ export async function resolveCommandReference(
   return resolvePipelineCommandReference(command, env);
 }
 
-/**
- * Execute a command variable with arguments
- */
 /**
  * Execute a resolved command variable with arguments in a stage environment.
  * WHY: Handle built-in transformers, code/command/template execs, and when-expressions.
@@ -79,36 +66,13 @@ export async function executeCommandVariable(
   hookOptions?: CommandExecutionHookOptions
 ): Promise<CommandExecutionResult> {
   let outputPolicyDescriptor: SecurityDescriptor | undefined;
-  const finalizeResult = (
+  const finalizeResult = createCommandExecutionFinalizer({
+    env,
+    getOutputPolicyDescriptor: () => outputPolicyDescriptor
+  }) as (
     value: unknown,
     options?: { type?: string; text?: string }
-  ): CommandExecutionResult => {
-    let wrapped: CommandExecutionResult;
-    if (
-      typeof value === 'string' &&
-      (!options || !options.type || options.type === 'text') &&
-      looksLikeJsonString(value)
-    ) {
-      try {
-        const parsed = JSON.parse(value.trim());
-        const typeHint = Array.isArray(parsed) ? 'array' : 'object';
-        wrapped = wrapExecResult(parsed, { type: typeHint, text: options?.text ?? value });
-      } catch {
-        // Fall through to default wrapping when JSON.parse fails
-      }
-    }
-    if (!wrapped) {
-      wrapped = wrapExecResult(value, options);
-    }
-    if (outputPolicyDescriptor && isStructuredValue(wrapped)) {
-      const existing = extractSecurityDescriptor(wrapped, { recursive: true, mergeArrayElements: true });
-      const merged = existing
-        ? env.mergeSecurityDescriptors(existing, outputPolicyDescriptor)
-        : outputPolicyDescriptor;
-      applySecurityDescriptorToStructuredValue(wrapped, merged);
-    }
-    return wrapped;
-  };
+  ) => CommandExecutionResult;
 
   // Built-in transformer handling
   if (commandVar && commandVar.internal?.isBuiltinTransformer && commandVar.internal?.transformerImplementation) {
