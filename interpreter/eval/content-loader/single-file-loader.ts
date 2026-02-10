@@ -3,8 +3,8 @@ import type { LoadContentResult } from '@core/types/load-content';
 import type { Environment } from '@interpreter/env/Environment';
 import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
 import * as path from 'path';
-import { JSDOM } from 'jsdom';
 import { LoadContentResultImpl, LoadContentResultHTMLImpl } from '../load-content';
+import { extractHtmlMetadata } from './html-metadata';
 
 export interface SingleFileLoaderDependencies {
   convertHtmlToMarkdown: (html: string, sourceUrl: string) => Promise<string>;
@@ -28,11 +28,6 @@ export interface SingleFileLoaderInput {
   env: Environment;
   sourceLocation?: SourceLocation;
   resolvedPathOverride?: string;
-}
-
-interface HtmlMetadata {
-  title?: string;
-  description?: string;
 }
 
 export class ContentLoaderFileHandler {
@@ -73,7 +68,7 @@ export class ContentLoaderFileHandler {
         fileContext,
         env
       );
-      const metadata = this.extractHtmlMetadata(rawContent);
+      const metadata = extractHtmlMetadata(rawContent);
       return new LoadContentResultHTMLImpl({
         content: sectionContent,
         rawHtml: rawContent,
@@ -85,7 +80,7 @@ export class ContentLoaderFileHandler {
       });
     }
 
-    const metadata = this.extractHtmlMetadata(rawContent);
+    const metadata = extractHtmlMetadata(rawContent);
     return new LoadContentResultHTMLImpl({
       content: markdownContent,
       rawHtml: rawContent,
@@ -142,17 +137,5 @@ export class ContentLoaderFileHandler {
       relative: this.dependencies.formatRelativePath(env, resolvedPath),
       absolute: resolvedPath
     });
-  }
-
-  private extractHtmlMetadata(rawContent: string): HtmlMetadata {
-    const dom = new JSDOM(rawContent);
-    const doc = dom.window.document;
-    const title = doc.querySelector('title')?.textContent || '';
-    const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
-      doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-    return {
-      title: title || undefined,
-      description: description || undefined
-    };
   }
 }

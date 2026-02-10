@@ -6,8 +6,8 @@ import type { Environment } from '@interpreter/env/Environment';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
-import { JSDOM } from 'jsdom';
 import { LoadContentResultImpl, LoadContentResultHTMLImpl } from '../load-content';
+import { extractHtmlMetadata } from './html-metadata';
 
 export interface GlobLoaderDependencies {
   readContent: (filePath: string, env: Environment, sourceLocation?: SourceLocation) => Promise<string>;
@@ -38,11 +38,6 @@ export interface GlobLoaderInput {
   options: any;
   env: Environment;
   sourceLocation?: SourceLocation;
-}
-
-interface HtmlMetadata {
-  title?: string;
-  description?: string;
 }
 
 interface ResolvedPattern {
@@ -166,7 +161,7 @@ export class ContentLoaderGlobHandler {
           return;
         }
 
-        const metadata = this.extractHtmlMetadata(args.rawContent);
+        const metadata = extractHtmlMetadata(args.rawContent);
         const result = new LoadContentResultHTMLImpl({
           content: sectionContent,
           rawHtml: args.rawContent,
@@ -183,7 +178,7 @@ export class ContentLoaderGlobHandler {
       return;
     }
 
-    const metadata = this.extractHtmlMetadata(args.rawContent);
+    const metadata = extractHtmlMetadata(args.rawContent);
     const result = new LoadContentResultHTMLImpl({
       content: markdownContent,
       rawHtml: args.rawContent,
@@ -265,17 +260,5 @@ export class ContentLoaderGlobHandler {
       relative: relativePath,
       absolute: absolutePath
     });
-  }
-
-  private extractHtmlMetadata(rawContent: string): HtmlMetadata {
-    const dom = new JSDOM(rawContent);
-    const doc = dom.window.document;
-    const title = doc.querySelector('title')?.textContent || '';
-    const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
-      doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-    return {
-      title: title || undefined,
-      description: description || undefined
-    };
   }
 }

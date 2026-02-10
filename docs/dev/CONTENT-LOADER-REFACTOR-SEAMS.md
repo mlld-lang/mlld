@@ -20,6 +20,28 @@
   - `finalizeLoaderResult`
   - `wrapLoadContentValue`, structured wrapping, metadata merge
 
+## MODULE BOUNDARIES
+- `interpreter/eval/content-loader.ts` composes dependency wiring and delegates runtime execution to `ContentLoaderOrchestrator`.
+- `interpreter/eval/content-loader/orchestrator.ts` routes branch execution for AST, URL, glob, and single-file paths.
+- `interpreter/eval/content-loader/source-reconstruction.ts` owns source normalization and interpolation path reconstruction.
+- `interpreter/eval/content-loader/ast-pattern-resolution.ts` and `interpreter/eval/content-loader/ast-variant-loader.ts` own AST pattern resolution and AST extraction variants.
+- `interpreter/eval/content-loader/url-handler.ts`, `interpreter/eval/content-loader/single-file-loader.ts`, and `interpreter/eval/content-loader/glob-loader.ts` own transport and branch-specific loading behavior.
+- `interpreter/eval/content-loader/section-utils.ts` owns section-name resolution, section-list extraction, and heading fallback extraction.
+- `interpreter/eval/content-loader/transform-utils.ts` owns transform/template application behavior.
+- `interpreter/eval/content-loader/finalization-adapter.ts` owns return-shape normalization, type/text inference, and metadata merge behavior.
+
+## DATA FLOW
+1. Source reconstruction resolves a path or URL candidate from AST source nodes.
+2. Orchestration selects AST extraction, URL loading, glob loading, or single-file loading based on source shape.
+3. Section extraction, transform application, and pipeline execution apply within each branch.
+4. Finalization adapter normalizes the final return shape and merges metadata/security descriptors.
+
+## DEPENDENCY DIRECTION CHECK
+- Entry wiring points inward: `content-loader.ts -> orchestrator.ts -> stage modules`.
+- Stage modules depend on shared utility modules and core interpreter services.
+- Stage modules do not import `content-loader.ts`.
+- Utility modules (`html-metadata`, section helpers, transform/finalization helpers) remain leaf-level within this feature slice.
+
 ## EXTRACTION HAZARDS
 - Optional/null behavior depends on error-path shape (`optional: true` with glob/file branch differences).
 - AST branches switch return shape (`string`, `array`, transformed text) before final wrapping.

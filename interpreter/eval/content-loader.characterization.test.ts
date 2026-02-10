@@ -10,6 +10,7 @@ import path from 'path';
 import minimatch from 'minimatch';
 import { isStructuredValue } from '../utils/structured-value';
 import { createSimpleTextVariable, type VariableSource } from '@core/types/variable';
+import { llmxmlInstance } from '../utils/llmxml-instance';
 
 vi.mock('tinyglobby', () => ({
   glob: vi.fn()
@@ -21,6 +22,29 @@ const VARIABLE_SOURCE: VariableSource = {
   hasInterpolation: false,
   isMultiLine: false
 };
+
+function extractResultText(value: any): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (value && typeof value === 'object') {
+    if (typeof value.text === 'string') {
+      return value.text;
+    }
+    if (value.mx && typeof value.mx.content === 'string') {
+      return value.mx.content;
+    }
+    if (typeof value.content === 'string') {
+      return value.content;
+    }
+    if (value.data && typeof value.data.content === 'string') {
+      return value.data.content;
+    }
+  }
+
+  return String(value ?? '');
+}
 
 describe('processContentLoader characterization', () => {
   let env: Environment;
@@ -240,6 +264,58 @@ describe('processContentLoader characterization', () => {
     expect(metadata?.source).toBe('load-content');
   });
 
+  it('keeps integrated source reconstruction + AST transform + finalization behavior stable', async () => {
+    await fileSystem.mkdir('/project/src', { recursive: true });
+    await fileSystem.writeFile(
+      '/project/src/profile.ts',
+      [
+        'export function createProfile() {',
+        '  return 42;',
+        '}'
+      ].join('\n')
+    );
+
+    env.setVariable(
+      'targetFile',
+      createSimpleTextVariable('targetFile', 'profile.ts', VARIABLE_SOURCE)
+    );
+
+    const node = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [
+          { type: 'Text', content: 'src/' },
+          { type: 'VariableReference', identifier: 'targetFile' }
+        ],
+        raw: 'src/@targetFile'
+      },
+      ast: [{ type: 'definition', name: 'createProfile' }],
+      options: {
+        transform: {
+          type: 'template',
+          parts: [
+            { type: 'Text', content: 'fn=' },
+            { type: 'placeholder', fields: [{ value: 'name' }] },
+            { type: 'Text', content: ';type=' },
+            { type: 'placeholder', fields: [{ value: 'type' }] }
+          ]
+        }
+      }
+    };
+
+    const rawResult = await processContentLoader(node as any, env);
+    expect(isStructuredValue(rawResult)).toBe(true);
+
+    if (isStructuredValue(rawResult)) {
+      expect(rawResult.type).toBe('text');
+      expect(typeof rawResult.data).toBe('string');
+      expect(rawResult.data).toContain('fn=createProfile');
+      expect(rawResult.data).toContain('type=function');
+      expect(rawResult.metadata?.source).toBe('load-content');
+    }
+  });
+
   it('keeps mixed transform and structured-output finalization shape stable', async () => {
     await fileSystem.mkdir('/project/docs', { recursive: true });
     await fileSystem.mkdir('/project/data', { recursive: true });
@@ -398,6 +474,140 @@ describe('processContentLoader characterization', () => {
     expect(metadata?.source).toBe('load-content');
   });
 
+  it('keeps URL/HTML and file/glob parity stable for equivalent section requests', async () => {
+    await fileSystem.mkdir('/project/parity', { recursive: true });
+    const htmlDocument = [
+      '<!DOCTYPE html>',
+      '<html><head><title>Parity</title></head>',
+      '<body>',
+      '<article>',
+      '<h1>Guide</h1>',
+      '<h2>Overview</h2>',
+      '<p>Parity body text.</p>',
+      '</article>',
+      '</body></html>'
+    ].join('');
+    await fileSystem.writeFile('/project/parity/guide.html', htmlDocument);
+
+    env.fetchURLWithMetadata = vi.fn().mockResolvedValue({
+      content: htmlDocument,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+      status: 200
+    } as any);
+
+    const sharedSectionOption = {
+      section: {
+        identifier: { type: 'Text', content: 'Overview' }
+      }
+    };
+
+    const urlNode = {
+      type: 'load-content',
+      source: {
+        type: 'url',
+        raw: 'https://example.com/guide'
+      },
+      options: sharedSectionOption
+    };
+
+    const fileNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'parity/guide.html' }],
+        raw: 'parity/guide.html'
+      },
+      options: sharedSectionOption
+    };
+
+    const globNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'parity/*.html' }],
+        raw: 'parity/*.html'
+      },
+      options: sharedSectionOption
+    };
+
+    const [urlRaw, fileRaw, globRaw] = await Promise.all([
+      processContentLoader(urlNode as any, env),
+      processContentLoader(fileNode as any, env),
+      processContentLoader(globNode as any, env)
+    ]);
+
+    const { data: urlData, metadata: urlMetadata } = unwrapStructuredForTest<string>(urlRaw);
+    const { data: fileData, metadata: fileMetadata } = unwrapStructuredForTest<string>(fileRaw);
+    const { data: globData, metadata: globMetadata } = unwrapStructuredForTest<Array<any>>(globRaw);
+
+    const globText = Array.isArray(globData) && globData.length > 0 ? extractResultText(globData[0]) : '';
+
+    expect(typeof urlData).toBe('string');
+    expect(typeof fileData).toBe('string');
+    expect(Array.isArray(globData)).toBe(true);
+    expect(globData.length).toBe(1);
+
+    expect(urlData).toContain('Overview');
+    expect(urlData).toContain('Parity body text.');
+    expect(fileData).toContain('Overview');
+    expect(fileData).toContain('Parity body text.');
+    expect(globText).toContain('Overview');
+    expect(globText).toContain('Parity body text.');
+
+    expect(urlMetadata?.source).toBe('load-content');
+    expect(fileMetadata?.source).toBe('load-content');
+    expect(globMetadata?.source).toBe('load-content');
+  });
+
+  it('keeps llmxml and regex fallback section matching stable through finalization', async () => {
+    await fileSystem.mkdir('/project/fallback', { recursive: true });
+    await fileSystem.writeFile(
+      '/project/fallback/guide.md',
+      [
+        '# Guide',
+        '',
+        '## Deep Dive',
+        '',
+        'Fallback content body.',
+        '',
+        '### Nested',
+        '',
+        'Nested details.'
+      ].join('\n')
+    );
+
+    const sectionNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'fallback/guide.md' }],
+        raw: 'fallback/guide.md'
+      },
+      options: {
+        section: {
+          identifier: { type: 'Text', content: 'Deep Dive' }
+        }
+      }
+    };
+
+    const llmxmlRaw = await processContentLoader(sectionNode as any, env);
+    const { data: llmxmlData, metadata: llmxmlMetadata } = unwrapStructuredForTest<string>(llmxmlRaw);
+
+    const getSectionSpy = vi.spyOn(llmxmlInstance, 'getSection').mockRejectedValueOnce(new Error('llmxml unavailable'));
+    const fallbackRaw = await processContentLoader(sectionNode as any, env);
+    const { data: fallbackData, metadata: fallbackMetadata } = unwrapStructuredForTest<string>(fallbackRaw);
+    getSectionSpy.mockRestore();
+
+    expect(typeof llmxmlData).toBe('string');
+    expect(typeof fallbackData).toBe('string');
+    expect(llmxmlData).toContain('Deep Dive');
+    expect(fallbackData).toContain('Deep Dive');
+    expect(fallbackData).toContain('Fallback content body.');
+    expect(fallbackData).toBe(llmxmlData);
+    expect(llmxmlMetadata?.source).toBe('load-content');
+    expect(fallbackMetadata?.source).toBe('load-content');
+  });
+
   it('keeps optional-loader behavior stable for missing single-file sources', async () => {
     const node = {
       type: 'load-content',
@@ -446,6 +656,54 @@ describe('processContentLoader characterization', () => {
     expect(Array.isArray(result)).toBe(true);
     expect(result).toEqual([]);
     expect(metadata?.source).toBe('load-content');
+  });
+
+  it('keeps policy-denied and optional-loader variants stable for final return contracts', async () => {
+    const deniedNode = {
+      type: 'load-content',
+      optional: true,
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'blocked.md' }],
+        raw: 'blocked.md'
+      }
+    };
+
+    const securityError = new MlldSecurityError('Access denied: blocked');
+    const resolveSpy = vi.spyOn(env, 'resolvePath').mockResolvedValue('/project/blocked.md');
+    const readSpy = vi.spyOn(env, 'readFile').mockRejectedValue(securityError);
+    await expect(processContentLoader(deniedNode as any, env)).rejects.toBe(securityError);
+    resolveSpy.mockRestore();
+    readSpy.mockRestore();
+
+    const optionalMissingNode = {
+      type: 'load-content',
+      optional: true,
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'missing-optional.md' }],
+        raw: 'missing-optional.md'
+      }
+    };
+    const optionalMissingResult = await processContentLoader(optionalMissingNode as any, env);
+    expect(optionalMissingResult).toBeNull();
+
+    vi.mocked(glob).mockRejectedValueOnce(new Error('glob failure'));
+    const optionalGlobNode = {
+      type: 'load-content',
+      optional: true,
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: '*.md' }],
+        raw: '*.md'
+      }
+    };
+    const optionalGlobRaw = await processContentLoader(optionalGlobNode as any, env);
+    const { data: optionalGlobData, metadata: optionalGlobMetadata } = unwrapStructuredForTest<Array<any>>(optionalGlobRaw);
+
+    expect(Array.isArray(optionalGlobData)).toBe(true);
+    expect(optionalGlobData).toEqual([]);
+    expect(optionalGlobMetadata?.source).toBe('load-content');
   });
 
   it('keeps downstream pipeline compatibility stable for text, array, and object finalization families', async () => {
