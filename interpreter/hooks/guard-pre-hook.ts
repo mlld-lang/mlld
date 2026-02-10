@@ -11,11 +11,8 @@ import type {
 } from '@core/types/guard';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Variable, VariableSource } from '@core/types/variable';
-import { createArrayVariable, createSimpleTextVariable } from '@core/types/variable';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
 import type { ExecutableVariable } from '@core/types/executable';
-import { attachArrayHelpers } from '@core/types/variable/ArrayHelpers';
-import type { GuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import type { DataLabel } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
 import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
@@ -49,21 +46,16 @@ import {
 } from './guard-candidate-selection';
 import {
   buildOperationKeySet,
-  buildOperationSnapshot,
-  type OperationSnapshot
+  buildOperationSnapshot
 } from './guard-operation-keys';
+import { evaluateGuardRuntime, type EvaluateGuardRuntimeOptions } from './guard-runtime-evaluator';
 import {
-  buildInputPreview,
-  buildVariablePreview,
-  cloneVariableForGuard,
   cloneVariableForReplacement,
   hasSecretLabel,
-  hasSecretLabelInArray,
   normalizeGuardReplacements,
   redactVariableForErrorOutput,
   resolveGuardValue
 } from './guard-materialization';
-import { cloneGuardContextSnapshot } from './guard-context-snapshot';
 import {
   applyGuardDecisionResult,
   createGuardDecisionState,
@@ -74,8 +66,7 @@ import {
   buildGuardAttemptKey,
   clearGuardAttemptStates,
   getAttemptStore,
-  type GuardAttemptEntry,
-  type GuardAttemptState
+  type GuardAttemptEntry
 } from './guard-retry-state';
 import { appendFileSync } from 'fs';
 import { getExpressionProvenance } from '../utils/expression-provenance';
@@ -485,309 +476,36 @@ export const guardPreHook: PreHook = async (
   });
 };
 
-async function evaluateGuard(options: {
-  node: HookableNode;
-  env: Environment;
-  guard: GuardDefinition;
-  operation: OperationContext;
-  scope: GuardScope;
-  perInput?: PerInputCandidate;
-  operationSnapshot?: OperationSnapshot;
-  attemptNumber: number;
-  attemptHistory: GuardAttemptEntry[];
-  attemptKey: string;
-  attemptStore: Map<string, GuardAttemptState>;
-  inputHelper?: GuardInputHelper;
-}): Promise<GuardResult> {
-  const { env, guard, operation, scope } = options;
-  const guardEnv = env.createChild();
-  inheritParentVariables(env, guardEnv);
-  if (process.env.MLLD_DEBUG_GUARDS === '1' && (guard.name === 'prep' || guard.name === 'tagOutput')) {
-    try {
-      console.error('[guard-pre-hook] prefixWith availability', {
-        envHas: env.hasVariable('prefixWith'),
-        childHas: guardEnv.hasVariable('prefixWith'),
-        envHasEmit: env.hasVariable('emit'),
-        envHasTag: env.hasVariable('tagValue'),
-        childHasTag: guardEnv.hasVariable('tagValue')
-      });
-    } catch {
-      // ignore debug
-    }
-  }
-  ensurePrefixHelper(env, guardEnv);
-  ensureTagHelper(env, guardEnv);
-
-  let inputVariable: Variable;
-  let contextLabels: readonly DataLabel[];
-  let contextSources: readonly string[];
-  let contextTaint: readonly string[];
-  const inputPreview = buildInputPreview(scope, options.perInput, options.operationSnapshot) ?? null;
-  let outputValue: unknown;
-
-  if (scope === 'perInput' && options.perInput) {
-    inputVariable = cloneVariableForGuard(options.perInput.variable);
-    contextLabels = options.perInput.labels;
-    contextSources = options.perInput.sources;
-    contextTaint = options.perInput.taint;
-    outputValue = resolveGuardValue(options.perInput.variable, inputVariable);
-  } else if (scope === 'perOperation' && options.operationSnapshot) {
-    const arrayValue = options.operationSnapshot.variables.slice();
-    inputVariable = createArrayVariable('input', arrayValue as any[], false, GUARD_INPUT_SOURCE, {
-      isSystem: true,
-      isReserved: true
-    });
-    attachArrayHelpers(inputVariable as any);
-    contextLabels = options.operationSnapshot.aggregate.labels;
-    contextSources = options.operationSnapshot.aggregate.sources;
-    contextTaint = options.operationSnapshot.taint;
-    const primaryOutput = options.operationSnapshot.variables[0];
-    outputValue = resolveGuardValue(primaryOutput, inputVariable);
-  } else {
-    return { guardName: guard.name ?? null, decision: 'allow' };
-  }
-
-  const outputText =
-    typeof outputValue === 'string'
-      ? outputValue
-      : outputValue === undefined || outputValue === null
-        ? ''
-        : String(outputValue);
-  const guardOutputVariable = createSimpleTextVariable(
-    'output',
-    outputText as any,
-    GUARD_INPUT_SOURCE,
-    { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) }
-  );
-
-  guardEnv.setVariable('input', inputVariable);
-  guardEnv.setVariable('output', guardOutputVariable);
-  if (options.inputHelper) {
-    attachGuardHelper(inputVariable, options.inputHelper);
-  }
-
-  injectGuardHelpers(guardEnv, {
-    operation,
-    labels: contextLabels,
-    operationLabels: operation.opLabels ?? []
-  });
-
-  const isSecretContext = hasSecretLabelInArray(contextLabels);
-  const guardContext: GuardContextSnapshot = {
-    name: guard.name,
-    attempt: options.attemptNumber,
-    try: options.attemptNumber,
-    tries: options.attemptHistory.map(entry => ({ ...entry })),
-    max: DEFAULT_GUARD_MAX,
-    input: inputVariable,
-    output: guardOutputVariable,
-    labels: contextLabels,
-    sources: contextSources,
-    taint: contextTaint,
-    inputPreview: isSecretContext ? '[REDACTED]' : inputPreview,
-    outputPreview: isSecretContext ? '[REDACTED]' : buildVariablePreview(guardOutputVariable),
-    hintHistory: options.attemptHistory.map(entry => entry.hint ?? null),
-    timing: 'before'
-  };
-
-  const contextSnapshotForMetadata = cloneGuardContextSnapshot(guardContext);
-
-  logGuardEvaluationStart({
-    guard,
-    node: options.node,
-    operation,
-    scope,
-    attempt: options.attemptNumber,
-    inputPreview
-  });
-
-  if (guard.policyCondition) {
-    const policyInput = options.perInput
-      ? {
-          labels: options.perInput.labels,
-          taint: options.perInput.taint,
-          sources: options.perInput.sources
+async function evaluateGuard(options: EvaluateGuardRuntimeOptions): Promise<GuardResult> {
+  return evaluateGuardRuntime(options, {
+    defaultGuardMax: DEFAULT_GUARD_MAX,
+    guardInputSource: GUARD_INPUT_SOURCE,
+    prepareGuardEnvironment: (sourceEnv, guardEnv, guard) => {
+      inheritParentVariables(sourceEnv, guardEnv);
+      if (process.env.MLLD_DEBUG_GUARDS === '1' && (guard.name === 'prep' || guard.name === 'tagOutput')) {
+        try {
+          console.error('[guard-pre-hook] prefixWith availability', {
+            envHas: sourceEnv.hasVariable('prefixWith'),
+            childHas: guardEnv.hasVariable('prefixWith'),
+            envHasEmit: sourceEnv.hasVariable('emit'),
+            envHasTag: sourceEnv.hasVariable('tagValue'),
+            childHasTag: guardEnv.hasVariable('tagValue')
+          });
+        } catch {
+          // ignore debug
         }
-      : undefined;
-    const policyResult = guard.policyCondition({ operation, input: policyInput });
-    if (policyResult.decision === 'deny') {
-      const metadataBase: Record<string, unknown> = {
-        guardName: guard.name ?? null,
-        guardFilter: `${guard.filterKind}:${guard.filterValue}`,
-        scope,
-        inputPreview,
-        guardContext: contextSnapshotForMetadata,
-        guardInput: hasSecretLabel(inputVariable!) ? redactVariableForErrorOutput(inputVariable!) : inputVariable!,
-        reason: policyResult.reason,
-        decision: 'deny',
-        policyName: policyResult.policyName ?? null,
-        policyRule: policyResult.rule ?? null,
-        policySuggestions: policyResult.suggestions
-      };
-      logGuardDecisionEvent({
-        guard,
-        node: options.node,
-        operation,
-        scope,
-        attempt: options.attemptNumber,
-        decision: 'deny',
-        reason: policyResult.reason,
-        hint: null,
-        inputPreview
-      });
-      return {
-        guardName: guard.name ?? null,
-        decision: 'deny',
-        timing: 'before',
-        reason: policyResult.reason,
-        metadata: {
-          ...metadataBase,
-          policyName: policyResult.policyName,
-          policyRule: policyResult.rule,
-          policySuggestions: policyResult.suggestions
-        }
-      };
-    }
-    return {
-      guardName: guard.name ?? null,
-      decision: 'allow',
-      timing: 'before',
-      metadata: {
-        guardName: guard.name ?? null,
-        guardFilter: `${guard.filterKind}:${guard.filterValue}`,
-        scope,
-        inputPreview,
-        guardContext: contextSnapshotForMetadata,
-        guardInput: hasSecretLabel(inputVariable!) ? redactVariableForErrorOutput(inputVariable!) : inputVariable!
       }
-    };
-  }
-
-  const action = await env.withGuardContext(guardContext, async () => {
-    return await evaluateGuardBlock(guard.block, guardEnv);
+      ensurePrefixHelper(sourceEnv, guardEnv);
+      ensureTagHelper(sourceEnv, guardEnv);
+    },
+    injectGuardHelpers,
+    evaluateGuardBlock,
+    evaluateGuardReplacement,
+    resolveGuardEnvConfig,
+    buildDecisionMetadata,
+    logGuardEvaluationStart,
+    logGuardDecisionEvent
   });
-
-  const metadataBase: Record<string, unknown> = {
-    guardName: guard.name ?? null,
-    guardFilter: `${guard.filterKind}:${guard.filterValue}`,
-    scope,
-    inputPreview,
-    guardContext: contextSnapshotForMetadata,
-    guardInput: hasSecretLabel(inputVariable) ? redactVariableForErrorOutput(inputVariable) : inputVariable
-  };
-
-  if (!action || action.decision === 'allow') {
-    const labelModifications = extractGuardLabelModifications(action);
-    const allowHint =
-      action?.warning
-        ? { guardName: guard.name ?? null, hint: action.warning, severity: 'warn' }
-        : undefined;
-    const replacement = await env.withGuardContext(guardContext, async () =>
-      evaluateGuardReplacement(action, guardEnv, guard, inputVariable)
-    );
-    return {
-      guardName: guard.name ?? null,
-      decision: 'allow',
-      timing: 'before',
-      replacement,
-      hint: allowHint,
-      labelModifications,
-      metadata: metadataBase
-    };
-  }
-
-  if (action.decision === 'env') {
-    const envConfig = await resolveGuardEnvConfig(action, guardEnv);
-    const metadata = {
-      ...metadataBase,
-      decision: 'env',
-      envConfig
-    };
-    logGuardDecisionEvent({
-      guard,
-      node: options.node,
-      operation,
-      scope,
-      attempt: options.attemptNumber,
-      decision: 'env',
-      reason: null,
-      hint: null,
-      inputPreview
-    });
-    return {
-      guardName: guard.name ?? null,
-      decision: 'env',
-      timing: 'before',
-      envConfig,
-      metadata
-    };
-  }
-
-  const metadata = buildDecisionMetadata(action, guard, {
-    inputPreview,
-    attempt: options.attemptNumber,
-    tries: options.attemptHistory,
-    inputVariable,
-    contextSnapshot: contextSnapshotForMetadata
-  });
-
-  logGuardDecisionEvent({
-    guard,
-    node: options.node,
-    operation,
-    scope,
-    attempt: options.attemptNumber,
-    decision: action.decision,
-    reason: action.decision === 'deny' ? action.message ?? null : null,
-    hint: action.decision === 'retry' ? action.message ?? null : null,
-    inputPreview
-  });
-
-  if (action.decision === 'deny') {
-    return {
-      guardName: guard.name ?? null,
-      decision: 'deny',
-       timing: 'before',
-      reason: metadata.reason as string | undefined,
-      metadata
-    };
-  }
-  if (action.decision === 'retry') {
-    const entry: GuardAttemptEntry = {
-      attempt: options.attemptNumber,
-      decision: 'retry',
-      hint: action.message ?? null
-    };
-    const updatedHistory = [...options.attemptHistory, entry];
-    options.attemptStore.set(options.attemptKey, {
-      nextAttempt: options.attemptNumber + 1,
-      history: updatedHistory
-    });
-    const retryMetadata = buildDecisionMetadata(action, guard, {
-      hint: action.message ?? null,
-      inputPreview,
-      attempt: options.attemptNumber,
-      tries: updatedHistory,
-      inputVariable,
-      contextSnapshot: contextSnapshotForMetadata
-    });
-    return {
-      guardName: guard.name ?? null,
-      decision: 'retry',
-       timing: 'before',
-      reason: retryMetadata.reason as string | undefined,
-      hint: action.message
-        ? { guardName: guard.name ?? null, hint: action.message }
-        : undefined,
-      metadata: retryMetadata
-    };
-  }
-  return {
-    guardName: guard.name ?? null,
-    decision: 'allow',
-    timing: 'before',
-    metadata
-  };
 }
 
 async function evaluateGuardBlock(
@@ -1250,21 +968,4 @@ function buildAggregateGuardContext(options: {
     reason: baseContext.reason ?? options.reasons[0] ?? null,
     decision: options.decision
   };
-}
-
-function attachGuardHelper(target: Variable, helper: GuardInputHelper): void {
-  const apply = (key: string, value: unknown) => {
-    Object.defineProperty(target as any, key, {
-      value,
-      enumerable: false,
-      configurable: true,
-      writable: false
-    });
-  };
-
-  apply('any', helper.any);
-  apply('all', helper.all);
-  apply('none', helper.none);
-  apply('totalTokens', helper.totalTokens);
-  apply('maxTokens', helper.maxTokens);
 }
