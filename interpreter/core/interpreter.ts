@@ -19,7 +19,6 @@ import type {
   FieldAccessNode,
   CondensedPipe
 } from '@core/types';
-import { astLocationToSourceLocation } from '@core/types';
 import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
@@ -38,13 +37,13 @@ import {
   extractInterpolationDescriptor,
   interpolateFileReference,
   processFileFields,
-  type InterpolateOptions,
-  type InterpolationNode
+  type InterpolateOptions
 } from '../utils/interpolation';
 import * as shellQuote from 'shell-quote';
 import { parseSync } from '@grammar/parser';
 import { evaluateArrayNodes } from './interpreter/traversal';
 import { createUnknownNodeTypeError, getDispatchTarget } from './interpreter/dispatch';
+import { resolveVariableReference } from './interpreter/resolve-variable-reference';
 
 /**
  * Type for variable values
@@ -395,172 +394,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   }
       
   if (dispatchTarget === 'variableReference' && isVariableReference(node)) {
-    // Variable references are handled by interpolation in context
-    // If we get here, it's likely an error or a grammar bug
-    
-    // TODO: Remove this workaround when issue #50 is fixed
-    // The grammar incorrectly creates top-level VariableReference nodes
-    // for parameters in exec directives. These have location offset 0,0
-    // which is impossible for real variable references.
-    interface LocationWithOffset {
-      start?: { offset?: number };
-      end?: { offset?: number };
-    }
-    
-    function hasValidLocation(loc: unknown): loc is LocationWithOffset {
-      return typeof loc === 'object' && loc !== null && 'start' in loc && 'end' in loc;
-    }
-    
-    const location: unknown = node.location;
-    const hasZeroOffset = hasValidLocation(location) &&
-                         location.start?.offset === 0 && 
-                         location.end?.offset === 0;
-    if (hasZeroOffset &&
-        node.valueType !== 'commandRef' &&
-        node.valueType !== 'varIdentifier' &&
-        // Allow ambient @mx to resolve even if parser produced zero offsets
-        node.identifier !== 'mx') {
-      // Skip orphaned parameter references from grammar bug
-      // Note: varIdentifier is excluded because when conditions create these
-      // See issue #217 - this workaround prevents when conditions from working
-      return { value: '', env };
-    }
-    
-    // Built-in functions removed - use @exec to define custom functions instead
-    
-    let variable = env.getVariable(node.identifier);
-    
-    // Check if this is a resolver variable that needs async resolution
-    if (!variable && env.hasVariable(node.identifier)) {
-      // Try to get it as a resolver variable
-      const resolverVar = await env.getResolverVariable(node.identifier);
-      if (resolverVar) {
-        variable = resolverVar;
-      }
-    }
-    
-    if (!variable) {
-      // In expression context, return undefined for missing variables
-      if (context?.isExpression) {
-        return { value: undefined, env };
-      }
-      throw new Error(`Variable not found: ${node.identifier}`);
-    }
-    
-    // Handle command references (e.g., @is_true() in conditions)
-    if (node.valueType === 'commandRef' && isCommandVariable(variable)) {
-      // Execute the command
-      const args: unknown[] = (node as { args?: unknown[] }).args || [];
-      
-      // Check the structure - new vs old command variable format
-      const definition = (variable as { definition?: unknown }).definition || variable.value;
-      
-      if (!definition) {
-        throw new Error(`Command variable ${node.identifier} has no definition`);
-      }
-      
-      // Type guard for command definition
-      if (typeof definition === 'object' && definition !== null && 'type' in definition) {
-        const typedDef = definition as { type: string; commandTemplate?: MlldNode[]; codeTemplate?: MlldNode[]; language?: string; command?: MlldNode[]; code?: MlldNode[] };
-        
-        if (typedDef.type === 'command') {
-          // Execute command with interpolated template
-          const commandTemplate = typedDef.commandTemplate || typedDef.command;
-          if (!commandTemplate) {
-            throw new Error(`Command ${node.identifier} has no command template`);
-          }
-          
-          // Interpolate the command template
-          const command = await interpolateWithSecurityRecording(commandTemplate as InterpolationNode[], env);
-          
-          if (args.length > 0) {
-            // TODO: Implement proper argument interpolation
-            // For now, just use the command as-is
-          }
-          
-          const stdout = await env.executeCommand(command);
-          return {
-            value: stdout,
-            env,
-            stdout: stdout,
-            stderr: '',
-            exitCode: 0  // executeCommand only returns on success
-          };
-        } else if (typedDef.type === 'code') {
-          // Execute code with interpolated template
-          const codeTemplate = typedDef.codeTemplate || typedDef.code;
-          if (!codeTemplate) {
-            throw new Error(`Code command ${node.identifier} has no code template`);
-          }
-          
-          // Interpolate the code template
-          const code = await interpolateWithSecurityRecording(codeTemplate as InterpolationNode[], env);
-          
-          const result = await env.executeCode(
-            code,
-            typedDef.language || 'javascript'
-          );
-          return {
-            value: result,
-            env,
-            stdout: result,
-            stderr: '',
-            exitCode: 0
-          };
-        }
-      }
-    }
-    
-    /**
-     * Preserve Variable wrapper for field access operations
-     * WHY: Field access needs Variable metadata to properly resolve complex data
-     *      structures and maintain access path information
-     */
-    const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
-    
-    // Check if we're in an expression context that needs raw values
-    const isInExpression = context && context.isExpression;
-    const hasFieldAccess = Array.isArray(node.fields) && node.fields.length > 0;
-    const resolutionContext =
-      hasFieldAccess ? ResolutionContext.FieldAccess
-      : isInExpression ? ResolutionContext.Equality
-      : ResolutionContext.FieldAccess;
-    
-    let resolvedValue = await resolveVariable(variable, env, resolutionContext);
-    
-    // Handle field access if present
-    if (node.fields && node.fields.length > 0) {
-      const { accessField } = await import('../utils/field-access');
-      const fieldAccessLocation = astLocationToSourceLocation(node.location, env.getCurrentFilePath());
-      
-      // accessField handles Variable extraction internally when needed
-      // No need to manually extract here
-      
-      // Apply each field access in sequence
-      for (const field of node.fields) {
-        const fieldResult = await accessField(resolvedValue, field, { 
-          preserveContext: true,
-          returnUndefinedForMissing: context?.isCondition,
-          env,
-          sourceLocation: fieldAccessLocation
-        });
-        resolvedValue = (fieldResult as any).value;
-        if (resolvedValue === undefined || resolvedValue === null) break;
-      }
-    }
-    
-    // Apply condensed pipes if present (same as in interpolate)
-    if (node.pipes && node.pipes.length > 0) {
-      const { processPipeline } = await import('../eval/pipeline/unified-processor');
-      resolvedValue = await processPipeline({
-        value: resolvedValue,
-        env,
-        node,
-        identifier: node.identifier
-      });
-    }
-    
-    return { value: resolvedValue, env };
+    return resolveVariableReference({
+      node,
+      env,
+      context,
+      interpolateWithSecurityRecording
+    });
   }
   
   if (dispatchTarget === 'execInvocation' && isExecInvocation(node)) {
