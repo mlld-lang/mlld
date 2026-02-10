@@ -3,6 +3,7 @@ import { interpret } from '@interpreter/index';
 import { Environment } from '@interpreter/env/Environment';
 import type { ImportDirectiveNode } from '@core/types';
 import { ImportDirectiveEvaluator } from './ImportDirectiveEvaluator';
+import { resolveImportType } from './ImportTypePolicy';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { PathContext } from '@core/services/PathContextService';
@@ -159,10 +160,8 @@ describe('Import type handling', () => {
 
 
   it('infers local import type for @local resolver', async () => {
-    const env = new Environment(fileSystem, pathService, PROJECT_ROOT);
-    const evaluator: any = new ImportDirectiveEvaluator(env);
     const importDirective = { values: {} } as ImportDirectiveNode;
-    const inferred = evaluator.resolveImportType(importDirective, {
+    const inferred = resolveImportType(importDirective, {
       type: 'resolver',
       resolvedPath: '@local/tools',
       resolverName: 'local'
@@ -171,10 +170,8 @@ describe('Import type handling', () => {
   });
 
   it('infers static import type for @base resolver', async () => {
-    const env = new Environment(fileSystem, pathService, PROJECT_ROOT);
-    const evaluator: any = new ImportDirectiveEvaluator(env);
     const importDirective = { values: {} } as ImportDirectiveNode;
-    const inferred = evaluator.resolveImportType(importDirective, {
+    const inferred = resolveImportType(importDirective, {
       type: 'resolver',
       resolvedPath: '@base/templates',
       resolverName: 'base'

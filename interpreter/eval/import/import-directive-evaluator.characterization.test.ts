@@ -5,6 +5,7 @@ import { PathService } from '@services/fs/PathService';
 import { createSimpleTextVariable } from '@core/types/variable';
 import { MlldImportError } from '@core/errors';
 import { ImportDirectiveEvaluator } from './ImportDirectiveEvaluator';
+import { validateDeclaredImportType } from './ImportTypePolicy';
 
 const SOURCE = {
   directive: 'var' as const,
@@ -53,18 +54,15 @@ describe('ImportDirectiveEvaluator characterization', () => {
   });
 
   it('keeps declared import-type mismatch validation behavior stable', () => {
-    const env = createEnv();
-    const evaluator: any = new ImportDirectiveEvaluator(env);
-
     expect(() =>
-      evaluator.validateDeclaredImportType('cached', {
+      validateDeclaredImportType('cached', {
         type: 'file',
         resolvedPath: '/project/local.mld'
       })
     ).toThrow(/Import type 'cached' requires an absolute URL source/);
 
     expect(() =>
-      evaluator.validateDeclaredImportType('module', {
+      validateDeclaredImportType('module', {
         type: 'file',
         resolvedPath: '/project/local.mld'
       })
