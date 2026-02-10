@@ -24,11 +24,10 @@ import { createRequire } from 'module';
 import * as path from 'path';
 import minimatch from 'minimatch';
 import type { SerializedGuardDefinition } from '../../guards';
-import type { NodeFunctionExecutable } from '@core/types/executable';
-import { createExecutableVariable, createObjectVariable } from '@core/types/variable/VariableFactories';
+import { createObjectVariable } from '@core/types/variable/VariableFactories';
 import type { VariableSource, Variable } from '@core/types/variable';
-import type { MCPToolSchema } from '../../mcp/McpImportManager';
-import { mlldNameToMCPName, mcpNameToMlldName } from '@core/mcp/names';
+import { McpImportService } from './McpImportService';
+import { buildMcpToolIndex, resolveMcpServerSpec, resolveMcpTool } from './McpImportResolver';
 
 const MODULE_SOURCE_EXTENSIONS = ['.mld.md', '.mld', '.md', '.mlld.md', '.mlld'] as const;
 const DIRECTORY_INDEX_FILENAME = 'index.mld';
@@ -36,113 +35,6 @@ const DEFAULT_DIRECTORY_IMPORT_SKIP_DIRS = ['_*', '.*'] as const;
 
 function matchesModuleExtension(candidate: string): boolean {
   return MODULE_SOURCE_EXTENSIONS.some(ext => candidate.endsWith(ext));
-}
-
-type McpToolIndex = {
-  tools: MCPToolSchema[];
-  byMcpName: Map<string, MCPToolSchema>;
-  byMlldName: Map<string, MCPToolSchema>;
-  mlldNameByMcp: Map<string, string>;
-};
-
-function buildMcpToolIndex(tools: MCPToolSchema[], source: string): McpToolIndex {
-  const byMcpName = new Map<string, MCPToolSchema>();
-  const byMlldName = new Map<string, MCPToolSchema>();
-  const mlldNameByMcp = new Map<string, string>();
-
-  for (const tool of tools) {
-    if (!tool?.name) {
-      continue;
-    }
-    const mcpName = tool.name;
-    const mlldName = mcpNameToMlldName(mcpName);
-    const existing = byMlldName.get(mlldName);
-    if (existing) {
-      throw new MlldImportError(
-        `MCP tool name collision - '${mcpName}' and '${existing.name}' both map to '@${mlldName}' in '${source}'`,
-        { code: 'IMPORT_NAME_CONFLICT' }
-      );
-    }
-    byMcpName.set(mcpName, tool);
-    byMlldName.set(mlldName, tool);
-    mlldNameByMcp.set(mcpName, mlldName);
-  }
-
-  return {
-    tools,
-    byMcpName,
-    byMlldName,
-    mlldNameByMcp
-  };
-}
-
-function resolveMcpTool(
-  requestedName: string,
-  index: McpToolIndex,
-  source: string
-): { tool: MCPToolSchema; mlldName: string } {
-  const direct = index.byMcpName.get(requestedName);
-  if (direct) {
-    return { tool: direct, mlldName: index.mlldNameByMcp.get(direct.name) ?? direct.name };
-  }
-  const byMlld = index.byMlldName.get(requestedName);
-  if (byMlld) {
-    return { tool: byMlld, mlldName: requestedName };
-  }
-  const mcpName = mlldNameToMCPName(requestedName);
-  const converted = index.byMcpName.get(mcpName);
-  if (converted) {
-    return { tool: converted, mlldName: index.mlldNameByMcp.get(converted.name) ?? requestedName };
-  }
-  throw new MlldImportError(`Import '${requestedName}' not found in MCP server '${source}'`, {
-    code: 'IMPORT_EXPORT_MISSING',
-    details: { source, missing: requestedName }
-  });
-}
-
-function deriveMcpParamInfo(tool: MCPToolSchema): { paramNames: string[]; paramTypes: Record<string, string> } {
-  const properties = tool.inputSchema?.properties ?? {};
-  const required = Array.isArray(tool.inputSchema?.required) ? tool.inputSchema.required : [];
-  const allParams = Object.keys(properties);
-  const optional = allParams.filter(name => !required.includes(name));
-  const paramNames = [...required, ...optional];
-  const paramTypes: Record<string, string> = {};
-  for (const [name, schema] of Object.entries(properties)) {
-    const raw = typeof schema?.type === 'string' ? schema.type.toLowerCase() : 'string';
-    paramTypes[name] = raw;
-  }
-  return { paramNames, paramTypes };
-}
-
-function buildMcpArgs(paramNames: string[], args: unknown[]): Record<string, unknown> {
-  if (args.length === 0) {
-    return {};
-  }
-  if (args.length === 1 && isPlainObject(args[0])) {
-    const keys = Object.keys(args[0] as Record<string, unknown>);
-    const matchesParamNames = paramNames.length === 0 || keys.every(key => paramNames.includes(key));
-    if (matchesParamNames) {
-      return args[0] as Record<string, unknown>;
-    }
-  }
-  const payload: Record<string, unknown> = {};
-  for (let i = 0; i < paramNames.length && i < args.length; i++) {
-    if (args[i] !== undefined) {
-      payload[paramNames[i]] = args[i];
-    }
-  }
-  return payload;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function looksLikePath(value: string): boolean {
-  if (value.startsWith('.') || value.startsWith('/')) {
-    return true;
-  }
-  return /\.(mld|mlld|md|mld\.md|mlld\.md)$/.test(value);
 }
 
 /**
@@ -156,6 +48,7 @@ export class ImportDirectiveEvaluator {
   private contentProcessor: ModuleContentProcessor;
   private variableImporter: VariableImporter;
   private objectResolver: ObjectReferenceResolver;
+  private mcpImportService: McpImportService;
   // TODO: Integrate capability context construction when import types and security descriptors land.
 
   constructor(env: Environment) {
@@ -164,6 +57,7 @@ export class ImportDirectiveEvaluator {
     this.pathResolver = new ImportPathResolver(env);
     this.securityValidator = new ImportSecurityValidator(env);
     this.variableImporter = new VariableImporter(this.objectResolver);
+    this.mcpImportService = new McpImportService(env);
     this.contentProcessor = new ModuleContentProcessor(
       env, 
       this.securityValidator, 
@@ -279,7 +173,7 @@ export class ImportDirectiveEvaluator {
     }
 
     const rawSpec = await interpolate(pathNodes, env, InterpolationContext.FilePath);
-    const resolvedSpec = await this.resolveMcpServerSpec(rawSpec, env);
+    const resolvedSpec = await resolveMcpServerSpec(rawSpec, env);
     const importDisplay = this.getImportDisplayPath(importDirective, resolvedSpec);
 
     const tools = await env.getMcpImportManager().listTools(resolvedSpec);
@@ -302,7 +196,7 @@ export class ImportDirectiveEvaluator {
         ? astLocationToSourceLocation(aliasLocationNode.location, env.getCurrentFilePath())
         : astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
 
-      this.ensureMcpImportBindingAvailable(env, alias, importDisplay, aliasLocation);
+      this.mcpImportService.ensureImportBindingAvailable(alias, importDisplay, aliasLocation);
 
       const namespaceObject: Record<string, Variable> = {};
       const usedNames = new Set<string>();
@@ -315,7 +209,7 @@ export class ImportDirectiveEvaluator {
           );
         }
         usedNames.add(mlldName);
-        namespaceObject[mlldName] = this.createMcpToolVariable(env, {
+        namespaceObject[mlldName] = this.mcpImportService.createMcpToolVariable({
           alias: mlldName,
           tool,
           mcpName: tool.name,
@@ -372,9 +266,9 @@ export class ImportDirectiveEvaluator {
       }
       usedNames.add(alias);
 
-      this.ensureMcpImportBindingAvailable(env, alias, importDisplay, importLocation);
+      this.mcpImportService.ensureImportBindingAvailable(alias, importDisplay, importLocation);
 
-      const variable = this.createMcpToolVariable(env, {
+      const variable = this.mcpImportService.createMcpToolVariable({
         alias,
         tool: resolved.tool,
         mcpName: resolved.tool.name,
@@ -389,123 +283,6 @@ export class ImportDirectiveEvaluator {
     }
 
     return { value: undefined, env };
-  }
-
-  private async resolveMcpServerSpec(spec: string, env: Environment): Promise<string> {
-    const trimmed = spec.trim();
-    if (!trimmed) {
-      throw new MlldImportError('MCP tool import path resolves to an empty string', {
-        code: 'IMPORT_PATH_EMPTY'
-      });
-    }
-    if (/\s/.test(trimmed)) {
-      return trimmed;
-    }
-    if (looksLikePath(trimmed)) {
-      return await env.resolvePath(trimmed);
-    }
-    return trimmed;
-  }
-
-  private createMcpToolVariable(
-    env: Environment,
-    options: {
-      alias: string;
-      tool: MCPToolSchema;
-      mcpName: string;
-      importPath: string;
-      definedAt?: ReturnType<typeof astLocationToSourceLocation>;
-    }
-  ): Variable {
-    const { alias, tool, mcpName, importPath, definedAt } = options;
-    const paramInfo = deriveMcpParamInfo(tool);
-    const manager = env.getMcpImportManager();
-    const execFn = async (...args: unknown[]) => {
-      const payload = buildMcpArgs(paramInfo.paramNames, args);
-      return await manager.callTool(importPath, mcpName, payload);
-    };
-    const execDef: NodeFunctionExecutable = {
-      type: 'nodeFunction',
-      name: alias,
-      fn: execFn,
-      paramNames: paramInfo.paramNames,
-      paramTypes: paramInfo.paramTypes,
-      description: tool.description,
-      sourceDirective: 'exec'
-    };
-    const source: VariableSource = {
-      directive: 'var',
-      syntax: 'reference',
-      hasInterpolation: false,
-      isMultiLine: false
-    };
-    const metadata = {
-      isImported: true,
-      importPath,
-      definedAt
-    };
-    const variable = createExecutableVariable(
-      alias,
-      'code',
-      '',
-      paramInfo.paramNames,
-      'js',
-      source,
-      {
-        metadata,
-        internal: {
-          executableDef: execDef,
-          mcpTool: { name: mcpName }
-        }
-      }
-    ) as Variable;
-    (variable as any).paramTypes = paramInfo.paramTypes;
-    (variable as any).description = tool.description;
-    return variable;
-  }
-
-  private ensureMcpImportBindingAvailable(
-    env: Environment,
-    name: string,
-    importSource: string,
-    location?: ReturnType<typeof astLocationToSourceLocation>
-  ): void {
-    if (!name || name.trim().length === 0) return;
-
-    const existingBinding = env.getImportBinding(name);
-    if (existingBinding) {
-      throw new MlldImportError(
-        `Import collision - '${name}' already imported from ${existingBinding.source}. Alias one of the imports.`,
-        {
-          code: 'IMPORT_NAME_CONFLICT',
-          context: {
-            name,
-            existingSource: existingBinding.source,
-            attemptedSource: importSource,
-            existingLocation: existingBinding.location,
-            newLocation: location,
-            suggestion: "Use 'as' to alias one of the imports"
-          },
-          details: {
-            filePath: location?.filePath || existingBinding.location?.filePath,
-            variableName: name
-          }
-        }
-      );
-    }
-
-    if (env.hasVariable(name)) {
-      throw new MlldImportError(
-        `Import collision - '${name}' already defined. Alias the import.`,
-        {
-          code: 'IMPORT_NAME_CONFLICT',
-          details: {
-            filePath: location?.filePath,
-            variableName: name
-          }
-        }
-      );
-    }
   }
 
   private setVariableWithImportBinding(

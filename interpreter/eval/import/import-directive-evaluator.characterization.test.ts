@@ -5,6 +5,7 @@ import { PathService } from '@services/fs/PathService';
 import { createSimpleTextVariable } from '@core/types/variable';
 import { MlldImportError } from '@core/errors';
 import { ImportDirectiveEvaluator } from './ImportDirectiveEvaluator';
+import { McpImportService } from './McpImportService';
 import { validateDeclaredImportType } from './ImportTypePolicy';
 
 const SOURCE = {
@@ -158,11 +159,11 @@ describe('ImportDirectiveEvaluator characterization', () => {
 
   it('keeps MCP import binding collision behavior stable for existing variables', () => {
     const env = createEnv();
-    const evaluator: any = new ImportDirectiveEvaluator(env);
+    const mcpImportService = new McpImportService(env);
     env.setVariable('tool', createSimpleTextVariable('tool', 'existing', SOURCE));
 
     expect(() =>
-      evaluator.ensureMcpImportBindingAvailable(env, 'tool', 'mcp://server')
+      mcpImportService.ensureImportBindingAvailable('tool', 'mcp://server')
     ).toThrow(/Import collision - 'tool' already defined/);
   });
 });
