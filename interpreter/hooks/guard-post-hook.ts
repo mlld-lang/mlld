@@ -1,46 +1,28 @@
-import type { HookableNode } from '@core/types/hooks';
-import { astLocationToSourceLocation } from '@core/types';
-import type { GuardResult, GuardActionNode, GuardBlockNode, GuardHint } from '@core/types/guard';
+import type { GuardHint } from '@core/types/guard';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { Variable, VariableSource } from '@core/types/variable';
-import { createArrayVariable, createSimpleTextVariable } from '@core/types/variable';
+import { createSimpleTextVariable } from '@core/types/variable';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
 import type { ExecutableVariable } from '@core/types/executable';
-import {
-  attachArrayHelpers,
-  buildArrayAggregate,
-  createGuardInputHelper
-} from '@core/types/variable/ArrayHelpers';
+import { buildArrayAggregate, createGuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import type { GuardInputHelper } from '@core/types/variable/ArrayHelpers';
-import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
-import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
-import { evaluateCondition } from '../eval/when';
-import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
-import { VariableImporter } from '../eval/import/VariableImporter';
-import { evaluate } from '../core/interpreter';
-import { combineValues } from '../utils/value-combine';
-import { MlldWhenExpressionError, MlldSecurityError } from '@core/errors';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import { makeSecurityDescriptor } from '@core/types/security';
+import { MlldSecurityError } from '@core/errors';
 import { materializeGuardInputs } from '../utils/guard-inputs';
-import { materializeGuardTransform } from '../utils/guard-transform';
 import type { PostHook } from './HookManager';
 import type { Environment } from '../env/Environment';
 import {
   guardSnapshotDescriptor,
-  applyGuardLabelModifications,
-  extractGuardLabelModifications,
   logGuardLabelModifications
 } from './guard-utils';
-import type { OperationContext, GuardContextSnapshot } from '../env/ContextManager';
+import type { OperationContext } from '../env/ContextManager';
 import type { EvalResult } from '../core/interpreter';
 import type { GuardDefinition } from '../guards/GuardRegistry';
 import { isDirectiveHookTarget } from '@core/types/hooks';
-import { isVariable, extractVariableValue } from '../utils/variable-resolution';
+import { isVariable } from '../utils/variable-resolution';
 import { extractSecurityDescriptor } from '../utils/structured-value';
-import {
-  type PerInputCandidate,
-  buildPerInputCandidates,
-  collectOperationGuards
-} from './guard-candidate-selection';
+import { buildPerInputCandidates, collectOperationGuards } from './guard-candidate-selection';
 import { buildOperationKeys } from './guard-operation-keys';
 import {
   extractOutputDescriptor,
@@ -51,13 +33,17 @@ import {
   normalizeFallbackOutputValue,
   normalizeRawOutput
 } from './guard-post-output-normalization';
-import { runPostGuardDecisionEngine } from './guard-post-decision-engine';
+import {
+  runPostGuardDecisionEngine,
+  type GuardOperationSnapshot
+} from './guard-post-decision-engine';
 import { evaluateRetryEnforcement, getGuardRetryContext } from './guard-post-retry';
 import {
   buildPostGuardError,
   buildPostRetryDeniedError,
   buildPostGuardRetrySignal
 } from './guard-post-signals';
+import { evaluatePostGuardRuntime } from './guard-post-runtime-evaluator';
 import { extractGuardOverride, normalizeGuardOverride } from './guard-override-utils';
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
@@ -80,12 +66,6 @@ const GUARD_HELPER_SOURCE: VariableSource = {
   hasInterpolation: false,
   isMultiLine: false
 };
-
-interface OperationSnapshot {
-  labels: readonly DataLabel[];
-  sources: readonly string[];
-  variables: readonly Variable[];
-}
 
 function logAfterRetryDebug(label: string, payload: Record<string, unknown>): void {
   if (!afterRetryDebugEnabled) {
@@ -272,25 +252,38 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
       baseOutputValue,
       retryContext,
       evaluateGuard: async evaluation =>
-        evaluateGuard({
-          node,
-          env,
-          guard: evaluation.guard,
-          operation,
-          scope: evaluation.scope,
-          perInput: evaluation.perInput,
-          operationSnapshot: evaluation.operationSnapshot,
-          inputHelper: evaluation.inputHelper,
-          activeInput: evaluation.activeInput,
-          labelsOverride: evaluation.labelsOverride,
-          sourcesOverride: evaluation.sourcesOverride,
-          inputPreviewOverride: evaluation.inputPreviewOverride,
-          outputRaw: evaluation.outputRaw,
-          attemptNumber: retryContext.attempt,
-          attemptHistory: retryContext.tries,
-          maxAttempts: retryContext.max,
-          hintHistory: retryContext.hintHistory
-        }),
+        evaluatePostGuardRuntime(
+          {
+            env,
+            guard: evaluation.guard,
+            operation,
+            scope: evaluation.scope,
+            perInput: evaluation.perInput,
+            operationSnapshot: evaluation.operationSnapshot,
+            inputHelper: evaluation.inputHelper,
+            activeInput: evaluation.activeInput,
+            labelsOverride: evaluation.labelsOverride,
+            sourcesOverride: evaluation.sourcesOverride,
+            inputPreviewOverride: evaluation.inputPreviewOverride,
+            outputRaw: evaluation.outputRaw,
+            attemptNumber: retryContext.attempt,
+            attemptHistory: retryContext.tries,
+            maxAttempts: retryContext.max,
+            hintHistory: retryContext.hintHistory
+          },
+          {
+            guardInputSource: GUARD_INPUT_SOURCE,
+            prepareGuardEnvironment: preparePostGuardEnvironment,
+            injectGuardHelpers,
+            attachGuardInputHelper: attachGuardHelper,
+            cloneVariable,
+            resolveGuardValue,
+            buildVariablePreview,
+            replacementDependencies: {
+              cloneVariableWithDescriptor
+            }
+          }
+        ),
       buildInputHelper: buildGuardInputHelper,
       buildOperationSnapshot,
       resolveGuardValue,
@@ -311,29 +304,29 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     activeOutputs = nextActiveOutputs;
     currentDescriptor = nextDescriptor;
 
-  appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
-  const guardName =
-    guardTrace[0]?.guard?.name ??
-    guardTrace[0]?.guard?.filterKind ??
-    '';
-  const contextLabels = operation.labels ?? [];
-  const provenance =
-    env.isProvenanceEnabled?.() === true
-      ? getExpressionProvenance(activeOutputs[0] ?? outputVariables[0]) ??
-        guardSnapshotDescriptor(env) ??
-        makeSecurityDescriptor()
-      : undefined;
-  env.emitSDKEvent({
-    type: 'debug:guard:after',
-    guard: guardName,
-    labels: contextLabels,
-    decision: currentDecision,
-    trace: guardTrace,
-    hints,
-    reasons,
-    timestamp: Date.now(),
-    ...(provenance && { provenance })
-  });
+    appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+    const guardName =
+      guardTrace[0]?.guard?.name ??
+      guardTrace[0]?.guard?.filterKind ??
+      '';
+    const contextLabels = operation.labels ?? [];
+    const provenance =
+      env.isProvenanceEnabled?.() === true
+        ? getExpressionProvenance(activeOutputs[0] ?? outputVariables[0]) ??
+          guardSnapshotDescriptor(env) ??
+          makeSecurityDescriptor()
+        : undefined;
+    env.emitSDKEvent({
+      type: 'debug:guard:after',
+      guard: guardName,
+      labels: contextLabels,
+      decision: currentDecision,
+      trace: guardTrace,
+      hints,
+      reasons,
+      timestamp: Date.now(),
+      ...(provenance && { provenance })
+    });
 
     if (currentDecision === 'allow' && hints.length > 0) {
       emitGuardWarningHints(env, hints);
@@ -413,396 +406,30 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
   });
 };
 
-async function evaluateGuard(options: {
-  node: HookableNode;
-  env: Environment;
-  guard: GuardDefinition;
-  operation: OperationContext;
-  scope: 'perInput' | 'perOperation';
-  perInput?: PerInputCandidate;
-  operationSnapshot?: OperationSnapshot;
-  inputHelper?: GuardInputHelper;
-  activeInput?: Variable;
-  labelsOverride?: readonly DataLabel[];
-  sourcesOverride?: readonly string[];
-  inputPreviewOverride?: string | null;
-  outputRaw?: unknown;
-  attemptNumber?: number;
-  attemptHistory?: Array<{ attempt?: number; decision?: string; hint?: string | null }>;
-  maxAttempts?: number;
-  hintHistory?: Array<string | null>;
-}): Promise<GuardResult> {
-  const { env, guard, operation, scope } = options;
-  const guardEnv = env.createChild();
-  inheritParentVariables(env, guardEnv);
+function preparePostGuardEnvironment(
+  sourceEnv: Environment,
+  guardEnv: Environment,
+  guard: GuardDefinition
+): void {
+  inheritParentVariables(sourceEnv, guardEnv);
   if (process.env.MLLD_DEBUG_GUARDS === '1' && guard.name === 'wrap') {
     try {
       console.error('[guard-post-hook] prefixWith availability', {
-        envHas: env.hasVariable('prefixWith'),
+        envHas: sourceEnv.hasVariable('prefixWith'),
         childHas: guardEnv.hasVariable('prefixWith')
       });
     } catch {
       // ignore debug
     }
   }
-  ensurePrefixHelper(env, guardEnv);
-  ensureTagHelper(env, guardEnv);
-  if (!guardEnv.hasVariable('prefixWith') && env.hasVariable('prefixWith')) {
-    const existing = env.getVariable('prefixWith');
+  ensurePrefixHelper(sourceEnv, guardEnv);
+  ensureTagHelper(sourceEnv, guardEnv);
+  if (!guardEnv.hasVariable('prefixWith') && sourceEnv.hasVariable('prefixWith')) {
+    const existing = sourceEnv.getVariable('prefixWith');
     if (existing) {
       guardEnv.setVariable('prefixWith', existing);
     }
   }
-
-  let inputVariable: Variable;
-  let outputVariable: Variable | undefined;
-  let outputValue: unknown;
-  let contextLabels: readonly DataLabel[];
-  let contextSources: readonly string[];
-  let inputPreview: string | null = null;
-
-  if (options.activeInput) {
-    inputVariable = cloneVariable(options.activeInput);
-    outputVariable = inputVariable;
-    outputValue = options.outputRaw !== undefined
-      ? options.outputRaw
-      : resolveGuardValue(outputVariable, inputVariable);
-    contextLabels =
-      options.labelsOverride ??
-      (Array.isArray(options.activeInput.mx?.labels) ? options.activeInput.mx.labels : []);
-    contextSources =
-      options.sourcesOverride ??
-      (Array.isArray(options.activeInput.mx?.sources) ? options.activeInput.mx.sources : []);
-    inputPreview = options.inputPreviewOverride ?? buildVariablePreview(inputVariable);
-  } else if (scope === 'perInput' && options.perInput) {
-    inputVariable = cloneVariable(options.perInput.variable);
-    outputVariable = inputVariable;
-    outputValue = options.outputRaw ?? resolveGuardValue(outputVariable, inputVariable);
-    contextLabels = options.labelsOverride ?? options.perInput.labels;
-    contextSources = options.sourcesOverride ?? options.perInput.sources;
-    inputPreview = options.inputPreviewOverride ?? buildVariablePreview(inputVariable);
-  } else if (scope === 'perOperation' && options.operationSnapshot) {
-    const arrayValue = options.operationSnapshot.variables.slice();
-    inputVariable = createArrayVariable('input', arrayValue as any[], false, GUARD_INPUT_SOURCE, {
-      isSystem: true,
-      isReserved: true
-    });
-    attachArrayHelpers(inputVariable as any);
-    contextLabels = options.labelsOverride ?? options.operationSnapshot.labels;
-    contextSources = options.sourcesOverride ?? options.operationSnapshot.sources;
-    outputVariable = options.operationSnapshot.variables[0]
-      ? cloneVariable(options.operationSnapshot.variables[0]!)
-      : undefined;
-    outputValue = options.outputRaw ?? resolveGuardValue(outputVariable, inputVariable);
-    inputPreview =
-      options.inputPreviewOverride ?? `Array(len=${options.operationSnapshot.variables.length})`;
-  } else {
-    return { guardName: guard.name ?? null, decision: 'allow', timing: 'after' };
-  }
-
-  guardEnv.setVariable('input', inputVariable);
-  const outputText =
-    typeof outputValue === 'string' ? outputValue : outputValue === undefined || outputValue === null ? '' : String(outputValue);
-  const guardOutputVariable = createSimpleTextVariable(
-    'output',
-    outputText as any,
-    GUARD_INPUT_SOURCE,
-    { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) }
-  );
-  guardEnv.setVariable('output', guardOutputVariable);
-  if (options.inputHelper) {
-    attachGuardHelper(inputVariable, options.inputHelper);
-  }
-
-  injectGuardHelpers(guardEnv, {
-    operation,
-    labels: contextLabels,
-    operationLabels: operation.opLabels ?? []
-  });
-  const attemptNumber =
-    typeof options.attemptNumber === 'number' && options.attemptNumber > 0
-      ? options.attemptNumber
-      : 1;
-  const attemptHistory = Array.isArray(options.attemptHistory) ? options.attemptHistory : [];
-  const hintHistory = Array.isArray(options.hintHistory)
-    ? options.hintHistory.map(value =>
-        typeof value === 'string' || value === null ? value : String(value ?? '')
-      )
-    : attemptHistory.map(entry =>
-        typeof entry.hint === 'string' || entry.hint === null ? entry.hint : null
-      );
-  const maxAttempts =
-    typeof options.maxAttempts === 'number' && options.maxAttempts > 0
-      ? options.maxAttempts
-      : DEFAULT_GUARD_MAX;
-  const guardContext: GuardContextSnapshot = {
-    name: guard.name,
-    attempt: attemptNumber,
-    try: attemptNumber,
-    tries: attemptHistory.map(entry => ({ ...entry })),
-    max: maxAttempts,
-    input: inputVariable,
-    output: guardOutputVariable,
-    labels: contextLabels,
-    sources: contextSources,
-    inputPreview,
-    outputPreview: buildVariablePreview(guardOutputVariable),
-    hintHistory,
-    timing: 'after'
-  } as GuardContextSnapshot;
-
-  const contextSnapshotForMetadata = { ...guardContext };
-
-  const action = await env.withGuardContext(guardContext, async () => {
-    return await evaluateGuardBlock(guard.block, guardEnv);
-  });
-
-  const metadataBase: Record<string, unknown> = {
-    guardName: guard.name ?? null,
-    guardFilter: `${guard.filterKind}:${guard.filterValue}`,
-    scope,
-    inputPreview,
-    guardContext: contextSnapshotForMetadata,
-    guardInput: inputVariable,
-    timing: 'after'
-  };
-
-  if (!action || action.decision === 'allow') {
-    const labelModifications = extractGuardLabelModifications(action);
-    const allowHint =
-      action?.warning
-        ? { guardName: guard.name ?? null, hint: action.warning, severity: 'warn' }
-        : undefined;
-    const replacement = await env.withGuardContext(guardContext, async () =>
-      evaluateGuardReplacement(action, guardEnv, guard, inputVariable)
-    );
-    return {
-      guardName: guard.name ?? null,
-      decision: 'allow',
-      timing: 'after',
-      replacement,
-      hint: allowHint,
-      labelModifications,
-      metadata: metadataBase
-    };
-  }
-
-  if (action.decision === 'env') {
-    const location = astLocationToSourceLocation(action.location, guardEnv.getCurrentFilePath());
-    throw new MlldWhenExpressionError(
-      'Guard env actions apply only before execution',
-      location,
-      location?.filePath ? { filePath: location.filePath, sourceContent: guardEnv.getSource(location.filePath) } : undefined,
-      { env: guardEnv }
-    );
-  }
-
-  const metadata = buildDecisionMetadata(action, guard, {
-    inputPreview,
-    inputVariable,
-    contextSnapshot: contextSnapshotForMetadata
-  });
-
-  if (action.decision === 'deny') {
-    return {
-      guardName: guard.name ?? null,
-      decision: 'deny',
-      timing: 'after',
-      reason: metadata.reason as string | undefined,
-      metadata
-    };
-  }
-
-  if (action.decision === 'retry') {
-    return {
-      guardName: guard.name ?? null,
-      decision: 'retry',
-      timing: 'after',
-      reason: metadata.reason as string | undefined,
-      hint: action.message ? { guardName: guard.name ?? null, hint: action.message } : undefined,
-      metadata
-    };
-  }
-
-  return { guardName: guard.name ?? null, decision: 'allow', timing: 'after', metadata };
-}
-
-async function evaluateGuardBlock(block: GuardBlockNode, guardEnv: Environment): Promise<GuardActionNode | undefined> {
-  // Create a child environment for let scoping
-  let currentEnv = guardEnv;
-
-  for (const entry of block.rules) {
-    // Handle let assignments
-    if (isLetAssignment(entry)) {
-      let value: unknown;
-      // Check if value is a raw primitive or contains nodes
-      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
-      const isRawPrimitive = firstValue === null ||
-        typeof firstValue === 'number' ||
-        typeof firstValue === 'boolean' ||
-        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
-
-      if (isRawPrimitive) {
-        value = (entry.value as any[]).length === 1 ? firstValue : entry.value;
-      } else {
-        const valueResult = await evaluate(entry.value, currentEnv);
-        value = valueResult.value;
-      }
-
-      const importer = new VariableImporter();
-      const variable = importer.createVariableFromValue(
-        entry.identifier,
-        value,
-        'let',
-        undefined,
-        { env: currentEnv }
-      );
-      currentEnv = currentEnv.createChild();
-      currentEnv.setVariable(entry.identifier, variable);
-      continue;
-    }
-
-    // Handle augmented assignments
-    if (isAugmentedAssignment(entry)) {
-      const existing = currentEnv.getVariable(entry.identifier);
-      if (!existing) {
-        const location = astLocationToSourceLocation(entry.location, currentEnv.getCurrentFilePath());
-        throw new MlldWhenExpressionError(
-          `Cannot use += on undefined variable @${entry.identifier}. ` +
-          `Use "let @${entry.identifier} = ..." first.`,
-          location,
-          location?.filePath ? { filePath: location.filePath, sourceContent: currentEnv.getSource(location.filePath) } : undefined,
-          { env: currentEnv }
-        );
-      }
-
-      let rhsValue: unknown;
-      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
-      const isRawPrimitive = firstValue === null ||
-        typeof firstValue === 'number' ||
-        typeof firstValue === 'boolean' ||
-        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
-
-      if (isRawPrimitive) {
-        rhsValue = (entry.value as any[]).length === 1 ? firstValue : entry.value;
-      } else {
-        const rhsResult = await evaluate(entry.value, currentEnv);
-        rhsValue = rhsResult.value;
-      }
-
-      const existingValue = await extractVariableValue(existing, currentEnv);
-      const combined = combineValues(existingValue, rhsValue, entry.identifier);
-
-      const importer = new VariableImporter();
-      const updatedVar = importer.createVariableFromValue(
-        entry.identifier,
-        combined,
-        'let',
-        undefined,
-        { env: currentEnv }
-      );
-      currentEnv.updateVariable(entry.identifier, updatedVar);
-      continue;
-    }
-
-    // Handle guard rules
-    const rule = entry;
-    let matches = false;
-    if (rule.isWildcard) {
-      matches = true;
-    } else if (rule.condition && rule.condition.length > 0) {
-      matches = await evaluateCondition(rule.condition, currentEnv);
-    }
-
-    if (matches) {
-      return rule.action;
-    }
-  }
-  return undefined;
-}
-
-async function evaluateGuardReplacement(
-  action: GuardActionNode | undefined,
-  guardEnv: Environment,
-  guard: GuardDefinition,
-  inputVariable: Variable
-): Promise<Variable | undefined> {
-  if (!action || action.decision !== 'allow') {
-    return undefined;
-  }
-  const { evaluate } = await import('../core/interpreter');
-  const labelModifications = extractGuardLabelModifications(action);
-  const baseDescriptor = inputVariable.mx
-    ? varMxToSecurityDescriptor(inputVariable.mx)
-    : makeSecurityDescriptor();
-  const modifiedDescriptor = applyGuardLabelModifications(
-    baseDescriptor,
-    labelModifications,
-    guard
-  );
-  const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
-
-  if (action.value && action.value.length > 0) {
-    const result = await evaluate(action.value, guardEnv, {
-      privileged: guard.privileged === true
-    });
-    return materializeGuardTransform(result?.value ?? result, guardLabel, modifiedDescriptor);
-  }
-
-  if (!labelModifications) {
-    return undefined;
-  }
-
-  const guardDescriptor = mergeDescriptors(
-    modifiedDescriptor,
-    makeSecurityDescriptor({ sources: [`guard:${guardLabel}`] })
-  );
-  return cloneVariableWithDescriptor(inputVariable, guardDescriptor);
-}
-
-function buildDecisionMetadata(
-  action: GuardActionNode,
-  guard: GuardDefinition,
-  extras?: {
-    hint?: string | null;
-    inputPreview?: string | null;
-    inputVariable?: Variable;
-    contextSnapshot?: GuardContextSnapshot;
-  }
-): Record<string, unknown> {
-  const guardId = guard.name ?? `${guard.filterKind}:${guard.filterValue}`;
-  const reason =
-    action.message ??
-    (action.decision === 'deny'
-      ? `Guard ${guardId} denied operation`
-      : `Guard ${guardId} requested retry`);
-
-  const metadata: Record<string, unknown> = {
-    reason,
-    guardName: guard.name ?? null,
-    guardFilter: `${guard.filterKind}:${guard.filterValue}`,
-    scope: guard.scope,
-    decision: action.decision,
-    timing: 'after'
-  };
-
-  if (extras?.hint !== undefined) {
-    metadata.hint = extras.hint;
-  }
-
-  if (extras?.inputPreview !== undefined) {
-    metadata.inputPreview = extras.inputPreview;
-  }
-
-  if (extras?.inputVariable) {
-    metadata.guardInput = extras.inputVariable;
-  }
-
-  if (extras?.contextSnapshot) {
-    metadata.guardContext = extras.contextSnapshot;
-  }
-
-  return metadata;
 }
 
 function inheritParentVariables(parent: Environment, child: Environment): void {
@@ -844,7 +471,7 @@ function resolveGuardValue(variable: Variable | undefined, fallback: Variable): 
   return candidate;
 }
 
-function buildOperationSnapshot(inputs: readonly Variable[]): OperationSnapshot {
+function buildOperationSnapshot(inputs: readonly Variable[]): GuardOperationSnapshot {
   const aggregate = buildArrayAggregate(inputs, { nameHint: '__guard_output__' });
   return {
     labels: aggregate.labels,
