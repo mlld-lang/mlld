@@ -153,6 +153,12 @@ Hooks run only for user-defined `/exe` functions. Built-in helpers and guard hel
 **guard-before / guard-after** (`interpreter/hooks/guard-pre-hook.ts`, `interpreter/hooks/guard-post-hook.ts`)
 - Implements `/guard ... before ...` and `/guard ... after ...` syntax; hook files keep pre/post names for lifecycle clarity.
 - Enforces registered guards before and after directive execution; resolves per-input and per-operation guard definitions, injects guard helpers, and can abort or request retries.
+- Guard pre-hook module ownership:
+  - `guard-pre-hook.ts` orchestrates candidate collection, retry state coordination, and hook decision assembly.
+  - `guard-pre-runtime.ts` configures runtime evaluation dependencies and guard child-environment preparation.
+  - `guard-pre-aggregation.ts` builds aggregate guard metadata and `@mx.guard` snapshots.
+  - `guard-pre-logging.ts` owns debug markers and guard decision logging.
+  - `guard-candidate-selection.ts`, `guard-materialization.ts`, `guard-retry-state.ts`, `guard-helper-injection.ts`, `guard-action-evaluator.ts`, and `guard-block-evaluator.ts` own focused collaborators consumed by the pre-hook entrypoint.
 - Guard helpers are reserved in guard contexts: `@prefixWith` and `@tagValue` are injected into guard environments, and guard envs inherit all parent variables/executables so user helpers stay visible.
 - `PipelineExecutor.executeCommandVariable()` always passes `hookOptions.guard`, so every pipeline stage (including the synthetic `__source__`) runs through the guard hook path with an OperationContext seeded from the merged stage descriptor. Descriptor hints supplied to `processPipeline()` and the provenance assembled in `finalizeStageOutput()` flow into `@mx.op.labels`, giving guard rules the same label set that downstream stages receive even when Stage 0 started with a plain string.
 - Because interpolation, iterators, pipelines, heredoc `/run`, and JS/Node returns all attach provenance handles through `ExpressionProvenance`, `materializeGuardInputs()` always materializes real Variables (with descriptors) before guard evaluation. Guard fixtures that sanitize secrets, block heredocs, or retry pipeline stages rely on this hook to surface `.mx.labels` even when the user-facing value is a primitive string produced by chained helpers.
