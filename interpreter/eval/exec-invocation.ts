@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { ExeBlockNode, ExecInvocation, WithClause } from '@core/types';
+import type { ExeBlockNode, ExecInvocation } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
@@ -33,7 +33,6 @@ import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
 import { evaluateExeBlock } from './exe';
-import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
 import {
@@ -48,7 +47,6 @@ import {
   applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
-import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import { isEventEmitter, isLegacyStream, toJsValue, wrapNodeValue } from '../utils/node-interop';
@@ -86,6 +84,24 @@ import { collectVariableIdentifiersFromNodes } from './directive-inputs';
 import { getSignatureContent } from './sign-verify';
 import { getAdapter } from '../streaming/adapter-registry';
 import { loadStreamAdapter, resolveStreamFormatValue } from '../streaming/stream-format';
+import {
+  buildExecOperationPreview,
+  deserializeShadowEnvs,
+  mergeAuthUsingIntoWithClause,
+  resolveOpTypeFromLanguage
+} from './exec/context';
+import {
+  buildTemplateAstFromContent,
+  extractTemplateNodes,
+  normalizeAutoverifyPath,
+  normalizeSignedVariableName
+} from './exec/normalization';
+import {
+  getSecurityDescriptorFromCarrier,
+  getStructuredSecurityDescriptor,
+  getVariableSecurityDescriptor,
+  setStructuredSecurityDescriptor
+} from './exec/security-descriptor';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -137,35 +153,6 @@ const DEFAULT_VERIFY_INSTRUCTIONS = [
   'Only proceed if verification succeeds and the returned content matches what you see.'
 ].join('\n');
 
-function normalizeAutoverifyPath(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const match = trimmed.match(/^template\s+(.+)$/i);
-  const raw = match ? match[1] : trimmed;
-  const unquoted = raw.replace(/^['"]|['"]$/g, '').trim();
-  return unquoted || null;
-}
-
-function buildTemplateAstFromContent(content: string): any[] {
-  const ast: any[] = [];
-  const regex = /@([A-Za-z_][\w\.]*)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      ast.push({ type: 'Text', content: content.slice(lastIndex, match.index) });
-    }
-    ast.push({ type: 'VariableReference', identifier: match[1] });
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < content.length) {
-    ast.push({ type: 'Text', content: content.slice(lastIndex) });
-  }
-  return ast;
-}
-
 async function renderTemplateFromFile(
   filePath: string,
   execEnv: Environment
@@ -187,32 +174,6 @@ async function renderTemplateFromFile(
   return interpolate(templateNodes, execEnv, InterpolationContext.Default);
 }
 
-function extractTemplateNodes(value: unknown): any[] | null {
-  if (Array.isArray(value)) {
-    return value;
-  }
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-  const candidate = value as Record<string, unknown>;
-  const candidateValues = (candidate as any).values;
-  if (candidateValues && Array.isArray(candidateValues.content)) {
-    return candidateValues.content as any[];
-  }
-  if (Array.isArray(candidate.content)) {
-    return candidate.content as any[];
-  }
-  if (Array.isArray(candidate.template)) {
-    return candidate.template as any[];
-  }
-  if (candidate.template && typeof candidate.template === 'object') {
-    const inner = candidate.template as Record<string, unknown>;
-    if (Array.isArray((inner as any).content)) {
-      return (inner as any).content as any[];
-    }
-  }
-  return null;
-}
 
 async function resolveAutoverifyInstructions(
   value: unknown,
@@ -251,10 +212,6 @@ async function resolveAutoverifyInstructions(
     }
   }
   return null;
-}
-
-function normalizeSignedVariableName(name: string): string {
-  return name.startsWith('@') ? name.slice(1) : name;
 }
 
 async function isVariableSigned(
@@ -576,19 +533,6 @@ export async function evaluateExecInvocation(
     sourceRetryable: true,
     execute: () => evaluateExecInvocationInternal(node, env)
   });
-}
-
-function buildExecOperationPreview(node: ExecInvocation): OperationContext | undefined {
-  const identifier = (node.commandRef as any)?.identifier;
-  if (typeof identifier === 'string' && identifier.length > 0) {
-    return {
-      type: 'exe',
-      name: identifier,
-      location: node.location ?? null,
-      metadata: { sourceRetryable: true }
-    };
-  }
-  return undefined;
 }
 
 async function evaluateExecInvocationInternal(
@@ -4005,121 +3949,4 @@ async function evaluateExecInvocationInternal(
     const finalizedStreaming = streamingManager.finalizeResults();
     env.setStreamingResult(finalizedStreaming.streaming);
   }
-}
-
-function resolveOpTypeFromLanguage(
-  language?: string
-): 'sh' | 'node' | 'js' | 'py' | 'prose' | null {
-  if (!language) {
-    return null;
-  }
-  const normalized = language.trim().toLowerCase();
-  if (!normalized) {
-    return null;
-  }
-  if (normalized === 'bash' || normalized === 'sh' || normalized === 'shell') {
-    return 'sh';
-  }
-  if (normalized === 'node' || normalized === 'nodejs') {
-    return 'node';
-  }
-  if (normalized === 'js' || normalized === 'javascript') {
-    return 'js';
-  }
-  if (normalized === 'py' || normalized === 'python') {
-    return 'py';
-  }
-  if (normalized === 'prose') {
-    return 'prose';
-  }
-  return null;
-}
-
-type SecurityCarrier = {
-  mx?: VariableContext | StructuredValueContext;
-};
-
-function getVariableSecurityDescriptor(variable?: Variable): SecurityDescriptor | undefined {
-  if (!variable) {
-    return undefined;
-  }
-  return getSecurityDescriptorFromCarrier({ mx: variable.mx });
-}
-
-function getStructuredSecurityDescriptor(
-  value?: { mx?: StructuredValueContext; metadata?: { security?: SecurityDescriptor } }
-): SecurityDescriptor | undefined {
-  return getSecurityDescriptorFromCarrier(value);
-}
-
-function setStructuredSecurityDescriptor(
-  value: { mx?: StructuredValueContext },
-  descriptor?: SecurityDescriptor
-): void {
-  if (!descriptor || !value || typeof value !== 'object') {
-    return;
-  }
-  applySecurityDescriptorToStructuredValue(value as LegacyStructuredValue, descriptor);
-}
-
-function getSecurityDescriptorFromCarrier(carrier?: SecurityCarrier): SecurityDescriptor | undefined {
-  if (!carrier) {
-    return undefined;
-  }
-  return descriptorFromVarMx(carrier.mx);
-}
-
-function descriptorFromVarMx(
-  mx?: VariableContext | StructuredValueContext
-): SecurityDescriptor | undefined {
-  if (!mx) {
-    return undefined;
-  }
-  const labels = Array.isArray(mx.labels) ? mx.labels : [];
-  const sources = Array.isArray(mx.sources) ? mx.sources : [];
-  const taint = (mx as any).taint ?? 'unknown';
-  if (labels.length === 0 && sources.length === 0 && taint === 'unknown') {
-    return undefined;
-  }
-  return varMxToSecurityDescriptor(mx as VariableContext);
-}
-
-function mergeAuthUsingIntoWithClause(
-  base?: WithClause,
-  override?: WithClause
-): WithClause | undefined {
-  const auth = override?.auth ?? base?.auth;
-  const using = override?.using ?? base?.using;
-  if (!auth && !using) {
-    return base;
-  }
-  const merged: WithClause = base ? { ...base } : {};
-  if (auth) {
-    merged.auth = auth;
-  }
-  if (using) {
-    merged.using = using;
-  }
-  return merged;
-}
-
-/**
- * Deserialize shadow environments after import (objects to Maps)
- * WHY: Shadow environments are expected as Maps internally
- */
-function deserializeShadowEnvs(envs: any): ShadowEnvironmentCapture {
-  const result: ShadowEnvironmentCapture = {};
-  
-  for (const [lang, shadowObj] of Object.entries(envs)) {
-    if (shadowObj && typeof shadowObj === 'object') {
-      // Convert object to Map
-      const map = new Map<string, any>();
-      for (const [name, func] of Object.entries(shadowObj)) {
-        map.set(name, func);
-      }
-      result[lang as keyof ShadowEnvironmentCapture] = map;
-    }
-  }
-  
-  return result;
 }
