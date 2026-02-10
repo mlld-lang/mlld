@@ -2,7 +2,7 @@
 updated: 2026-02-01
 tags: #arch, #interpreter
 related-docs: docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/RESOLVERS.md, docs/dev/SHADOW-ENV.md, docs/dev/IMPORTS.md, docs/dev/ITERATORS.md, docs/dev/ALLIGATOR.md, docs/dev/EXEC-VARS.md, llms.txt
-related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/executors/*.ts, interpreter/eval/pipeline/*, core/types/*
+related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/eval/exec/*.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/executors/*.ts, interpreter/eval/pipeline/*, core/types/*
 related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableReferenceNode, WithClause }, core/types/variable { Variable }
 ---
 
@@ -46,6 +46,14 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
    - Directives: route to eval modules (run/sh/exe, when, for, import, output, etc.).
    - Expressions/Literals: `eval/expression.ts` and literal handlers.
    - Exec Invocation: `eval/exec-invocation.ts` (unified for `@fn(...)`, with tail `with { ... }`).
+     - Orchestration and dispatch: `eval/exec-invocation.ts`
+     - Argument binding: `eval/exec/args.ts`
+     - Guard/policy flow: `eval/exec/guard-policy.ts`
+     - Built-in method dispatch: `eval/exec/builtins.ts`
+     - Command executable handler: `eval/exec/command-handler.ts`
+     - Code executable handler: `eval/exec/code-handler.ts`
+     - Non-command/non-code handlers: `eval/exec/non-command-handlers.ts`
+     - Streaming setup/teardown: `eval/exec/streaming.ts`
    - Data values: `eval/data-value-evaluator.ts` (arrays/objects; lazy for complex nodes).
    - Pipelines: `eval/pipeline/unified-processor.ts` (condensed pipes and `with { pipeline: [...] }`); optional streaming sinks.
 3. Effects → Formatter: `Environment.emitEffect('doc'|'stdout'|'stderr'|'file', ...)` accumulated by effect handler; formatted by `interpreter/output/formatter.ts` + markdown formatter when selected.
@@ -77,7 +85,11 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 ### Exec + Pipelines
 
-- Exec invocation: `eval/exec-invocation.ts` resolves command reference (object method calls supported), binds params in child env, applies `with` options (pipeline, format, etc.), executes via appropriate executor (shell/code/template/section/resolver).
+- Exec invocation:
+  - `eval/exec-invocation.ts` handles resolution tracking, builtin dispatch routing, and post-invocation `with` tails.
+  - `eval/exec/command-handler.ts` executes command executables (autoverify/signature flow, env/provider injection, fallback execution, command-level pipeline).
+  - `eval/exec/code-handler.ts` executes code executables (mlld control-flow languages, shell/code language execution, shadow env capture, structured output normalization).
+  - `eval/exec/non-command-handlers.ts` executes template/data/pipeline/command-ref/section/resolver executable types.
 - Pipelines:
   - Condensed: `@value|@json|@xml|@upper` processed by `eval/pipeline/unified-processor`.
   - With-clause: `run [...] with { pipeline: [...] }` sets `pipelineContext` on env for each stage.
@@ -148,13 +160,16 @@ This keeps `@mx.hint` tightly scoped to the location where it is meaningful, whi
 - /run, /sh: `interpreter/eval/run.ts` — command and shell execution, with-clause plumbing
 - /export: `interpreter/eval/export.ts` — accumulate manifest entries, reset fallback on wildcard
 - /exe: `interpreter/eval/exe.ts` — define executables (command/code/template/section/ref)
-- @fn(...): `interpreter/eval/exec-invocation.ts` — unified invocation with `with { ... }`
+- @fn(...): `interpreter/eval/exec-invocation.ts` — unified orchestration with `with { ... }`
+- Exec command handler: `interpreter/eval/exec/command-handler.ts` — command executable execution path
+- Exec code handler: `interpreter/eval/exec/code-handler.ts` — code executable execution path
+- Exec non-command handlers: `interpreter/eval/exec/non-command-handlers.ts` — template/data/pipeline/ref/section/resolver execution paths
 - /show: `interpreter/eval/show.ts` — display content, header transforms
 - /log: inline effect via pipelines; shorthand for output-to-stdout in actions
 - /when: `interpreter/eval/when.ts`, `interpreter/eval/when-expression.ts` — conditionals
 - /for: `interpreter/eval/for.ts` — iteration over arrays/objects
 - foreach (operator): `interpreter/eval/data-value-evaluator.ts` and `interpreter/eval/foreach.ts` — cartesian execution
-- Executable foreach: code executable with language `mlld-foreach` handled in `interpreter/eval/exec-invocation.ts`
+- Executable foreach: code executable with language `mlld-foreach` handled in `interpreter/eval/exec/code-handler.ts`
 - /import: `interpreter/eval/import/*` — path/module/function resolvers, namespace/selected
 - /output: `interpreter/eval/output.ts` — file and stream outputs
 - Expressions: `interpreter/eval/expression.ts` — binary/unary/ternary

@@ -160,6 +160,7 @@ async function evaluateExecInvocationInternal(
   env: Environment
 ): Promise<EvalResult> {
   let commandName: string | undefined; // Declare at function scope for finally block
+  let endResolutionTrackingIfNeeded: () => void = () => {};
 
   const normalizeFields = (fields?: Array<{ type: string; value: any }>) =>
     (fields || []).map(field => {
@@ -344,6 +345,7 @@ async function evaluateExecInvocationInternal(
   const isReservedName = env.hasVariable(commandName) &&
     (env.getVariable(commandName) as any)?.internal?.isReserved;
   const shouldTrackResolution = !isBuiltinCommand && !isReservedName;
+  let resolutionTrackingActive = false;
 
   if (shouldTrackResolution && env.isResolving(commandName)) {
     throw new CircularReferenceError(
@@ -358,7 +360,15 @@ async function evaluateExecInvocationInternal(
   // Mark this executable as being resolved (skip builtin methods and reserved names)
   if (shouldTrackResolution) {
     env.beginResolving(commandName);
+    resolutionTrackingActive = true;
   }
+  endResolutionTrackingIfNeeded = (): void => {
+    if (!resolutionTrackingActive || !commandName) {
+      return;
+    }
+    env.endResolving(commandName);
+    resolutionTrackingActive = false;
+  };
 
   // Check if this is a field access exec invocation (e.g., @obj.method())
   // or a method call on an exec result (e.g., @func(args).method())
@@ -692,9 +702,7 @@ async function evaluateExecInvocationInternal(
             const wrapOptions = normalized.options;
             
             // Clean up resolution tracking before returning
-            if (commandName && shouldTrackResolution) {
-              env.endResolving(commandName);
-            }
+            endResolutionTrackingIfNeeded();
             return applyInvocationWithClause(resolvedValue, wrapOptions);
           }
         }
@@ -773,9 +781,7 @@ async function evaluateExecInvocationInternal(
       };
 
       const finalizeExistsResult = async (existsResult: boolean): Promise<EvalResult> => {
-        if (commandName && shouldTrackResolution) {
-          env.endResolving(commandName);
-        }
+        endResolutionTrackingIfNeeded();
         return applyInvocationWithClause(existsResult);
       };
 
@@ -947,9 +953,7 @@ async function evaluateExecInvocationInternal(
         }
       }
 
-      if (commandName && shouldTrackResolution) {
-        env.endResolving(commandName);
-      }
+      endResolutionTrackingIfNeeded();
 
       if (node.withClause) {
         if (node.withClause.pipeline) {
@@ -997,9 +1001,7 @@ async function evaluateExecInvocationInternal(
     const wrapOptions = normalized.options;
 
     // Clean up resolution tracking before returning
-    if (commandName && shouldTrackResolution) {
-      env.endResolving(commandName);
-    }
+    endResolutionTrackingIfNeeded();
 
     return applyInvocationWithClause(resolvedValue, wrapOptions);
   }
@@ -1454,11 +1456,7 @@ async function evaluateExecInvocationInternal(
   // Clean up resolution tracking after executable body completes, before pipeline/with clause processing
   // This allows pipelines to retry/re-execute the same function without false circular reference detection
   // Skip builtin methods and reserved names as they were never added to the resolution stack
-  const cleanupShouldTrack = !isBuiltinMethod(commandName) &&
-    !(env.hasVariable(commandName) && (env.getVariable(commandName) as any)?.internal?.isReserved);
-  if (commandName && cleanupShouldTrack) {
-    env.endResolving(commandName);
-  }
+  endResolutionTrackingIfNeeded();
 
   if (process.env.MLLD_DEBUG_FIX === 'true') {
     try {
@@ -1604,15 +1602,8 @@ async function evaluateExecInvocationInternal(
     });
   });
   } finally {
-    // Ensure resolution tracking is always cleaned up, even on error paths
-    // Check if we added it to the tracking (skip builtins/reserved)
-    if (commandName) {
-      const wasTracked = !isBuiltinMethod(commandName) &&
-        !(env.hasVariable(commandName) && (env.getVariable(commandName) as any)?.internal?.isReserved);
-      if (wasTracked) {
-        env.endResolving(commandName);
-      }
-    }
+    // Ensure resolution tracking is always cleaned up, even on error paths.
+    endResolutionTrackingIfNeeded();
 
     finalizeExecInvocationStreaming(env, streamingManager);
   }

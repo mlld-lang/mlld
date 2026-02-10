@@ -1071,7 +1071,13 @@ interpreter/
 │   ├── when-expression.ts               # boolean expressions for conditions
 │   ├── run.ts                           # run/sh execution and with-clause plumbing
 │   ├── exe.ts                           # /exe creation (command/code/template/section)
-│   ├── exec-invocation.ts               # unified @fn(...) invocation with tails
+│   ├── exec-invocation.ts               # unified @fn(...) orchestration with tails
+│   ├── exec/
+│   │   ├── command-handler.ts           # command executable execution path
+│   │   ├── code-handler.ts              # code executable execution path
+│   │   ├── non-command-handlers.ts      # template/data/pipeline/ref/section/resolver paths
+│   │   ├── guard-policy.ts              # guard + policy orchestration helpers
+│   │   └── args.ts                      # invocation arg evaluation/binding helpers
 │   ├── with-clause.ts                   # apply with { pipeline, format, ... }
 │   └── pipeline/
 │       ├── unified-processor.ts         # condensed and structured pipelines
