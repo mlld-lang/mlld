@@ -127,8 +127,9 @@ Import with default namespace (filename-based):
 
 1. **ImportDirectiveEvaluator** (`interpreter/eval/import/ImportDirectiveEvaluator.ts`)
    - Main coordinator for import evaluation
-   - Routes imports based on type (input, resolver, module, file, URL)
-   - Orchestrates the import pipeline
+   - Applies policy override context for the import operation
+   - Delegates path routing and branch execution to specialized handlers
+   - Validates module needs and export bindings through dedicated validators
 
 2. **ImportPathResolver** (`interpreter/eval/import/ImportPathResolver.ts`)
    - Determines import type from path patterns
@@ -151,6 +152,33 @@ Import with default namespace (filename-based):
    - Circular import detection
    - Security validation
    - Import approval system
+
+### Evaluator Composition Boundaries
+
+- **ImportDirectiveEvaluator** (`interpreter/eval/import/ImportDirectiveEvaluator.ts`)
+  - Owns orchestration only: `evaluateImport`, path resolution, and top-level error surface.
+- **ImportRequestRouter** (`interpreter/eval/import/ImportRequestRouter.ts`)
+  - Owns non-MCP branch routing (`input`, `resolver`, `module`, `node`, `file`, `url`).
+- **ResolverContentImportHandler** (`interpreter/eval/import/ResolverContentImportHandler.ts`)
+  - Owns resolved-content processing, variable import, policy-context application, and dynamic import telemetry.
+- **McpImportHandler** (`interpreter/eval/import/McpImportHandler.ts`)
+  - Owns MCP selected/namespace import orchestration and alias/binding handling.
+- **FileUrlImportHandler** (`interpreter/eval/import/FileUrlImportHandler.ts`)
+  - Owns file/URL module import orchestration and directory fallback behavior.
+- **DirectoryImportHandler** (`interpreter/eval/import/DirectoryImportHandler.ts`)
+  - Owns directory traversal, skip parsing, index discovery, key sanitization, and duplicate detection.
+- **PolicyImportContextManager** (`interpreter/eval/import/PolicyImportContextManager.ts`)
+  - Owns policy override scope and policy import context transitions.
+- **ModuleNeedsValidator** (`interpreter/eval/import/ModuleNeedsValidator.ts`)
+  - Owns unmet-needs detection and runtime/package availability checks.
+- **ImportBindingValidator** (`interpreter/eval/import/ImportBindingValidator.ts`)
+  - Owns selected import export validation and binding failure payloads.
+
+Dependency flow:
+- `ImportDirectiveEvaluator` composes handlers and validators.
+- Branch handlers call back into evaluator-provided module validation callbacks.
+- Validators are leaf services with no dependency on branch handlers.
+- Router and handlers depend on explicit constructor contracts, keeping dependency direction acyclic.
 
 ### Resolver System
 
