@@ -1,9 +1,8 @@
 import type { DirectiveNode } from '@core/types';
-import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable } from '@core/types/variable';
+import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable, VariableMetadata } from '@core/types/variable';
 import { 
   createObjectVariable,
-  createArrayVariable,
-  createExecutableVariable
+  createArrayVariable
 } from '@core/types/variable';
 import { VariableMetadataUtils } from '@core/types/variable';
 import type { DataLabel } from '@core/types/security';
@@ -24,6 +23,8 @@ import { GuardExportChecker } from './variable-importer/GuardExportChecker';
 import { ModuleExportSerializer } from './variable-importer/ModuleExportSerializer';
 import { ImportTypeRouter } from './variable-importer/ImportTypeRouter';
 import { ImportVariableFactoryOrchestrator } from './variable-importer/factory/ImportVariableFactoryOrchestrator';
+import { CapturedEnvRehydrator } from './variable-importer/executable/CapturedEnvRehydrator';
+import { ExecutableImportRehydrator } from './variable-importer/executable/ExecutableImportRehydrator';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -43,6 +44,8 @@ export class VariableImporter {
   private readonly moduleExportSerializer: ModuleExportSerializer;
   private readonly importTypeRouter: ImportTypeRouter;
   private readonly variableFactoryOrchestrator: ImportVariableFactoryOrchestrator;
+  private readonly capturedEnvRehydrator: CapturedEnvRehydrator;
+  private readonly executableImportRehydrator: ExecutableImportRehydrator;
 
   constructor(private objectResolver: ObjectReferenceResolver) {
     this.bindingGuards = new ImportBindingGuards();
@@ -51,6 +54,8 @@ export class VariableImporter {
     this.guardExportChecker = new GuardExportChecker();
     this.moduleExportSerializer = new ModuleExportSerializer(this.objectResolver);
     this.importTypeRouter = new ImportTypeRouter();
+    this.capturedEnvRehydrator = new CapturedEnvRehydrator();
+    this.executableImportRehydrator = new ExecutableImportRehydrator(this.capturedEnvRehydrator);
     this.variableFactoryOrchestrator = new ImportVariableFactoryOrchestrator({
       createExecutableFromImport: (name, value, source, metadata, securityLabels) =>
         this.createExecutableFromImport(name, value, source, metadata, securityLabels),
@@ -83,27 +88,6 @@ export class VariableImporter {
   }
   
   /**
-   * Deserialize shadow environments after import (objects to Maps)
-   * WHY: Shadow environments are expected as Maps internally
-   */
-  private deserializeShadowEnvs(envs: any): ShadowEnvironmentCapture {
-    const result: ShadowEnvironmentCapture = {};
-
-    for (const [lang, shadowObj] of Object.entries(envs)) {
-      if (shadowObj && typeof shadowObj === 'object') {
-        // Convert object to Map
-        const map = new Map<string, any>();
-        for (const [name, func] of Object.entries(shadowObj)) {
-          map.set(name, func);
-        }
-        result[lang as keyof ShadowEnvironmentCapture] = map;
-      }
-    }
-
-    return result;
-  }
-
-  /**
    * Serialize module environment for export (Map to object)
    * WHY: Maps don't serialize to JSON, so we need to convert to exportable format
    * IMPORTANT: Use the exact same serialization as processModuleExports to ensure compatibility
@@ -130,20 +114,11 @@ export class VariableImporter {
    * IMPORTANT: Reuse createVariableFromValue to ensure proper Variable reconstruction
    */
   deserializeModuleEnv(moduleEnv: any): Map<string, Variable> {
-    const result = new Map<string, Variable>();
-    if (moduleEnv && typeof moduleEnv === 'object') {
-      for (const [name, varData] of Object.entries(moduleEnv)) {
-        // Reuse the existing variable creation logic
-        const variable = this.createVariableFromValue(
-          name,
-          varData,
-          'module-env', // Use a special import path to indicate this is from module env
-          name
-        );
-        result.set(name, variable);
-      }
-    }
-    return result;
+    return this.capturedEnvRehydrator.deserializeModuleEnv(
+      moduleEnv,
+      (name, varData, importPath, originalName) =>
+        this.createVariableFromValue(name, varData, importPath, originalName)
+    );
   }
 
   /**
@@ -596,96 +571,18 @@ export class VariableImporter {
     name: string,
     value: any,
     source: VariableSource,
-    metadata: any,
+    metadata: VariableMetadata,
     securityLabels?: DataLabel[]
   ): ExecutableVariable {
-    // This is an executable variable - reconstruct it properly
-    const execValue = value.value;
-    const executableDef = value.executableDef;
-    // Get paramNames from executableDef where it's properly stored
-    const paramNames = executableDef?.paramNames || [];
-    
-    // The executable definition contains all the needed information
-    // We just need to create a dummy ExecutableVariable that preserves it
-    // The actual execution will use the executableDef from metadata
-    // OLD CODE that might lose metadata:
-    // return createExecutableVariable(
-    //   name,
-    //   value.value.type,
-    //   value.value.template || '',
-    //   value.value.paramNames || [],
-    //   value.value.language,
-    //   source,
-    //   metadata
-    // );
-    
-    // NEW CODE: Ensure all metadata is preserved
-    let originalInternal = value.internal || value.metadata || {};
-
-    // Deserialize shadow environments if present
-    if (originalInternal.capturedShadowEnvs) {
-      originalInternal = {
-        ...originalInternal,
-        capturedShadowEnvs: this.deserializeShadowEnvs(originalInternal.capturedShadowEnvs)
-      };
-    }
-
-    // Deserialize module environment if present
-    if (originalInternal.capturedModuleEnv) {
-      const deserializedEnv = this.deserializeModuleEnv(originalInternal.capturedModuleEnv);
-
-      // IMPORTANT: Each executable in the module env needs to have access to the full env
-      // This allows command-refs to find their siblings.
-      // BUT: Only set capturedModuleEnv if the exe doesn't already have one from a prior import.
-      // Imported exes preserve their original scope chain.
-      for (const [_, variable] of deserializedEnv) {
-        if (variable.type === 'executable') {
-          const existingEnv = variable.internal?.capturedModuleEnv;
-          if (!existingEnv || !(existingEnv instanceof Map)) {
-            variable.internal = {
-              ...(variable.internal ?? {}),
-              capturedModuleEnv: deserializedEnv
-            };
-          }
-        }
-      }
-
-      originalInternal = {
-        ...originalInternal,
-        capturedModuleEnv: deserializedEnv
-      };
-    }
-    
-    const enhancedMetadata = {
-      ...metadata,
-      isImported: true,
-      importPath: metadata.importPath
-    };
-
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(enhancedMetadata, {
-      labels: securityLabels,
-      existingDescriptor: enhancedMetadata.security
-    });
-
-    const finalInternal = {
-      ...(originalInternal as Record<string, unknown>),
-      executableDef
-    };
-
-    const execVariable = createExecutableVariable(
+    return this.executableImportRehydrator.create({
       name,
-      'command', // Default type - the real type is in executableDef
-      '', // Empty template - the real template is in executableDef
-      paramNames,
-      undefined, // No language here - it's in executableDef
+      value,
       source,
-      {
-        metadata: finalMetadata,
-        internal: finalInternal
-      }
-    );
-    
-    return execVariable;
+      metadata,
+      securityLabels,
+      createVariableFromValue: (variableName, variableValue, importPath, originalName) =>
+        this.createVariableFromValue(variableName, variableValue, importPath, originalName)
+    });
   }
 
   /**
