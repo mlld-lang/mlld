@@ -1,5 +1,5 @@
 import { Environment } from '@interpreter/env/Environment';
-import { MlldError, MlldDirectiveError, MlldSecurityError } from '@core/errors';
+import { MlldError, MlldSecurityError } from '@core/errors';
 import type { SourceLocation } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import type { LoadContentResult } from '@core/types/load-content';
@@ -7,7 +7,7 @@ import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLI
 import { wrapLoadContentValue } from '../utils/load-content-structured';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
-import { extractAst, extractNames, hasNameListPattern, hasContentPattern, type AstResult, type AstPattern } from './ast-extractor';
+import type { AstResult, AstPattern } from './ast-extractor';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
@@ -18,15 +18,17 @@ import { InterpolationContext } from '../core/interpolation-context';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import { getAuditFileDescriptor } from '@core/security/AuditLogIndex';
-import { extractVariableValue } from '../utils/variable-resolution';
 import { isLoadContentResult } from '@core/types/load-content';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
 import { ContentSourceReconstruction } from './content-loader/source-reconstruction';
 import { PolicyAwareReadHelper } from './content-loader/policy-aware-read';
+import { AstPatternResolution } from './content-loader/ast-pattern-resolution';
+import { AstVariantLoader } from './content-loader/ast-variant-loader';
 
 const sourceReconstruction = new ContentSourceReconstruction();
 const policyAwareReadHelper = new PolicyAwareReadHelper();
+const astPatternResolution = new AstPatternResolution();
 
 async function interpolateAndRecord(
   nodes: any,
@@ -124,107 +126,23 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
   // AST extraction takes precedence for local files
   if (ast && actualSource.type === 'path') {
-    let astPatterns = ast as AstPattern[];
-
-    // Resolve variables in patterns (type-filter-var, name-list-var)
-    astPatterns = await Promise.all(astPatterns.map(async pattern => {
-      if (pattern.type === 'type-filter-var') {
-        const variable = env.getVariable(pattern.identifier);
-        if (!variable) {
-          throw new MlldDirectiveError(
-            `Variable @${pattern.identifier} is not defined`,
-            { identifier: pattern.identifier }
-          );
-        }
-        const varValue = await extractVariableValue(variable, env);
-        const filter = varValue ? String(varValue) : undefined;
-        if (!filter) {
-          throw new MlldDirectiveError(
-            `Variable @${pattern.identifier} is empty`,
-            { identifier: pattern.identifier }
-          );
-        }
-        return { type: 'type-filter', filter, usage: pattern.usage };
-      } else if (pattern.type === 'name-list-var') {
-        const variable = env.getVariable(pattern.identifier);
-        if (!variable) {
-          throw new MlldDirectiveError(
-            `Variable @${pattern.identifier} is not defined`,
-            { identifier: pattern.identifier }
-          );
-        }
-        const varValue = await extractVariableValue(variable, env);
-        const filter = varValue ? String(varValue) : undefined;
-        if (!filter) {
-          throw new MlldDirectiveError(
-            `Variable @${pattern.identifier} is empty`,
-            { identifier: pattern.identifier }
-          );
-        }
-        return { type: 'name-list', filter, usage: pattern.usage };
-      }
-      return pattern;
-    })) as AstPattern[];
-
-    // Validate: cannot mix content patterns with name-list patterns
-    const hasNames = hasNameListPattern(astPatterns);
-    const hasContent = hasContentPattern(astPatterns);
-    if (hasNames && hasContent) {
-      throw new MlldDirectiveError(
-        'Cannot mix content selectors with name-list selectors',
-        { patterns: astPatterns.map(p => p.type) }
-      );
-    }
+    const astVariantLoader = new AstVariantLoader({
+      readContent: async (candidatePath, candidateLocation) =>
+        readFileWithPolicy(candidatePath, env, candidateLocation),
+      formatRelativePath: (targetPath) => formatRelativePath(env, targetPath)
+    });
+    const astPatterns = await astPatternResolution.resolveVariables(ast as AstPattern[], env);
+    const patternFamily = astPatternResolution.validateFamilies(astPatterns);
 
     // Handle name-list patterns: ??, fn??, var??, class??, etc.
-    if (hasNames) {
-      const loadNameResults = async (): Promise<string[] | Array<{ names: string[]; file: string; relative: string; absolute: string }>> => {
-        // Get the filter from the first name-list pattern (variables already resolved above)
-        const namePattern = astPatterns.find(p =>
-          p.type === 'name-list' || p.type === 'name-list-all'
-        );
-        const filter = namePattern?.type === 'name-list' ? namePattern.filter : undefined;
-        // name-list-all has no filter (returns all names)
-
-        if (isGlob) {
-          // For glob patterns, return per-file structure with metadata
-          const baseDir = env.getFileDirectory();
-          const matches = await glob(pathOrUrl, {
-            cwd: baseDir,
-            absolute: true,
-            followSymlinks: true,
-            ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
-          });
-          const results: Array<{ names: string[]; file: string; relative: string; absolute: string }> = [];
-          const fileList = Array.isArray(matches) ? matches : [];
-          for (const filePath of fileList) {
-            try {
-              const content = await readFileWithPolicy(filePath, env, sourceLocation);
-              const names = extractNames(content, filePath, filter);
-              if (names.length > 0) {
-                results.push({
-                  names,
-                  file: path.basename(filePath),
-                  relative: formatRelativePath(env, filePath),
-                  absolute: filePath
-                });
-              }
-            } catch (error: any) {
-              if (error instanceof MlldSecurityError) {
-                throw error;
-              }
-              // skip unreadable files
-            }
-          }
-          return results;
-        }
-
-        // Single file - return plain string array
-        const content = await readFileWithPolicy(pathOrUrl, env, sourceLocation);
-        return extractNames(content, pathOrUrl, filter);
-      };
-
-      const nameResults = await loadNameResults();
+    if (patternFamily.hasNameList) {
+      const nameResults = await astVariantLoader.loadNameList({
+        source: pathOrUrl,
+        isGlob,
+        sourceLocation,
+        env,
+        filter: astPatternResolution.getNameListFilter(astPatterns)
+      });
 
       if (hasPipes) {
         const piped = await processPipeline({
@@ -239,43 +157,13 @@ export async function processContentLoader(node: any, env: Environment): Promise
     }
 
     // Handle content patterns (definitions, type filters, wildcards)
-    const loadAstResults = async (): Promise<Array<AstResult | null>> => {
-      if (isGlob) {
-        const baseDir = env.getFileDirectory();
-        const matches = await glob(pathOrUrl, {
-          cwd: baseDir,
-          absolute: true,
-          followSymlinks: true,
-          ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
-        });
-        const aggregated: Array<AstResult | null> = [];
-        const fileList = Array.isArray(matches) ? matches : [];
-        for (const filePath of fileList) {
-          try {
-            const content = await readFileWithPolicy(filePath, env, sourceLocation);
-            const extracted = extractAst(content, filePath, astPatterns);
-            for (const entry of extracted) {
-              if (entry) {
-                aggregated.push({ ...entry, file: filePath });
-              } else {
-                aggregated.push(null);
-              }
-            }
-          } catch (error: any) {
-            if (error instanceof MlldSecurityError) {
-              throw error;
-            }
-            // skip unreadable files
-          }
-        }
-        return aggregated;
-      }
-
-      const content = await readFileWithPolicy(pathOrUrl, env, sourceLocation);
-      return extractAst(content, pathOrUrl, astPatterns);
-    };
-
-    const astResults = await loadAstResults();
+    const astResults = await astVariantLoader.loadContent({
+      source: pathOrUrl,
+      isGlob,
+      sourceLocation,
+      env,
+      patterns: astPatterns
+    });
 
     if (hasTransform && options?.transform) {
       const transformed = await applyTemplateToAstResults(astResults, options.transform, env);
