@@ -49,12 +49,10 @@ import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import { isEventEmitter, isLegacyStream, toJsValue, wrapNodeValue } from '../utils/node-interop';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
-import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
-import { evaluateCapabilityAccess, evaluateCommandAccess } from '@core/policy/guards';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
-import { handleExecGuardDenial, formatGuardWarning } from './guard-denial-handler';
+import { handleExecGuardDenial } from './guard-denial-handler';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
@@ -62,7 +60,6 @@ import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import { SignatureStore } from '@core/security/SignatureStore';
-import { GuardError } from '@core/errors/GuardError';
 import {
   applyEnvironmentDefaults,
   buildEnvironmentOutputDescriptor,
@@ -70,20 +67,13 @@ import {
   resolveEnvironmentConfig,
   resolveEnvironmentAuthSecrets
 } from '@interpreter/env/environment-provider';
-import type { OperationContext } from '../env/ContextManager';
-import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
-import {
-  materializeGuardInputsWithMapping,
-  type GuardInputMappingEntry
-} from '../utils/guard-inputs';
 import { collectVariableIdentifiersFromNodes } from './directive-inputs';
 import { getSignatureContent } from './sign-verify';
 import {
   buildExecOperationPreview,
   deserializeShadowEnvs,
-  mergeAuthUsingIntoWithClause,
-  resolveOpTypeFromLanguage
+  mergeAuthUsingIntoWithClause
 } from './exec/context';
 import {
   buildTemplateAstFromContent,
@@ -114,6 +104,17 @@ import {
   bindExecParameterVariables,
   evaluateExecInvocationArgs
 } from './exec/args';
+import {
+  applyExecOutputPolicyLabels,
+  cloneExecVariableWithNewValue,
+  createExecOperationContextAndEnforcePolicy,
+  enforceExecParamLabelFlow,
+  handleExecPreGuardDecision,
+  prepareExecGuardInputs,
+  runExecPostGuards,
+  runExecPreGuards,
+  stringifyExecGuardArg
+} from './exec/guard-policy';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -244,72 +245,6 @@ async function isVariableSigned(
   );
   cache.set(normalized, result.verified);
   return result.verified;
-}
-
-function cloneVariableWithNewValue(
-  source: Variable,
-  value: unknown,
-  fallback: string
-): Variable {
-  const cloned: Variable = {
-    ...source,
-    value: value ?? fallback,
-    mx: source.mx ? { ...source.mx } : undefined,
-    internal: { ...(source.internal ?? {}) }
-  };
-  if (cloned.mx?.mxCache) {
-    delete cloned.mx.mxCache;
-  }
-  return cloned;
-}
-
-function stringifyGuardArg(value: unknown): string {
-  if (isStructuredValue(value)) {
-    return asText(value);
-  }
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  if (value === undefined) {
-    return 'undefined';
-  }
-  if (value === null) {
-    return 'null';
-  }
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function applyGuardTransformsToExecArgs(options: {
-  guardInputEntries: readonly GuardInputMappingEntry[];
-  transformedInputs: readonly Variable[];
-  guardVariableCandidates: (Variable | undefined)[];
-  evaluatedArgs: any[];
-  evaluatedArgStrings: string[];
-}): void {
-  const { guardInputEntries, transformedInputs, guardVariableCandidates, evaluatedArgs, evaluatedArgStrings } =
-    options;
-  const limit = Math.min(transformedInputs.length, guardInputEntries.length);
-  for (let i = 0; i < limit; i++) {
-    const entry = guardInputEntries[i];
-    const replacement = transformedInputs[i];
-    if (!entry || !replacement) {
-      continue;
-    }
-    const argIndex = entry.index;
-    if (argIndex < 0 || argIndex >= evaluatedArgs.length) {
-      continue;
-    }
-    guardVariableCandidates[argIndex] = replacement;
-    const normalizedValue = isStructuredValue(replacement.value)
-      ? replacement.value.data
-      : replacement.value;
-    evaluatedArgs[argIndex] = normalizedValue;
-    evaluatedArgStrings[argIndex] = stringifyGuardArg(normalizedValue);
-  }
 }
 
 const resolveVariableIndexValue = async (fieldValue: any, env: Environment): Promise<unknown> => {
@@ -1340,7 +1275,7 @@ async function evaluateExecInvocationInternal(
   }
 
   if (boundArgs.length > 0) {
-    const boundArgStrings = boundArgs.map(arg => stringifyGuardArg(arg));
+    const boundArgStrings = boundArgs.map(arg => stringifyExecGuardArg(arg));
     evaluatedArgs.unshift(...boundArgs);
     evaluatedArgStrings.unshift(...boundArgStrings);
     originalVariables.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
@@ -1359,18 +1294,6 @@ async function evaluateExecInvocationInternal(
     return createEvalResult(helperResult, env);
   }
 
-  for (let i = 0; i < guardVariableCandidates.length; i++) {
-    if (!guardVariableCandidates[i] && expressionSourceVariables[i]) {
-      const source = expressionSourceVariables[i]!;
-      const cloned = cloneVariableWithNewValue(
-        source,
-        evaluatedArgs[i],
-        evaluatedArgStrings[i]
-      );
-      guardVariableCandidates[i] = cloned;
-    }
-  }
-
   let mcpSecurityDescriptor = (node as any).meta?.mcpSecurity as SecurityDescriptor | undefined;
   if (!mcpSecurityDescriptor) {
     const mcpTool = (variable.internal as any)?.mcpTool;
@@ -1386,304 +1309,66 @@ async function evaluateExecInvocationInternal(
     ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
     : [];
 
-  const guardInputsWithMapping = materializeGuardInputsWithMapping(
-    Array.from({ length: guardVariableCandidates.length }, (_unused, index) =>
-      guardVariableCandidates[index] ?? evaluatedArgs[index]
-    ),
-    {
-      nameHint: '__guard_input__'
-    }
-  );
-  if (mcpSecurityDescriptor) {
-    if (guardInputsWithMapping.length === 0) {
-      const guardInputSource: VariableSource = {
-        directive: 'var',
-        syntax: 'expression',
-        hasInterpolation: false,
-        isMultiLine: false
-      };
-      const syntheticInput = createSimpleTextVariable('__guard_input__', '', guardInputSource);
-      if (!syntheticInput.mx) {
-        syntheticInput.mx = {};
-      }
-      updateVarMxFromDescriptor(syntheticInput.mx as VariableContext, mcpSecurityDescriptor);
-      if ((syntheticInput.mx as any).mxCache) {
-        delete (syntheticInput.mx as any).mxCache;
-      }
-      guardInputsWithMapping.push({ index: evaluatedArgs.length, variable: syntheticInput });
-    }
-
-    for (const entry of guardInputsWithMapping) {
-      const base = entry.variable;
-      const baseDescriptor = getVariableSecurityDescriptor(base);
-      const mergedDescriptor = baseDescriptor
-        ? env.mergeSecurityDescriptors(baseDescriptor, mcpSecurityDescriptor)
-        : mcpSecurityDescriptor;
-      const cloned = cloneVariableWithNewValue(base, base.value, stringifyGuardArg(base.value));
-      if (!cloned.mx) {
-        cloned.mx = {};
-      }
-      updateVarMxFromDescriptor(cloned.mx as VariableContext, mergedDescriptor);
-      if ((cloned.mx as any).mxCache) {
-        delete (cloned.mx as any).mxCache;
-      }
-      entry.variable = cloned;
-    }
-  }
-  const guardInputs = guardInputsWithMapping.map(entry => entry.variable);
+  const { guardInputsWithMapping, guardInputs } = prepareExecGuardInputs({
+    env,
+    evaluatedArgs,
+    evaluatedArgStrings,
+    guardVariableCandidates,
+    expressionSourceVariables,
+    mcpSecurityDescriptor
+  });
   let postHookInputs: readonly Variable[] = guardInputs;
-  const hookManager = env.getHookManager();
-  const mergeLabelArrays = (base: readonly string[], extra: readonly string[]): string[] => {
-    if (extra.length === 0) {
-      return base.length > 0 ? base.slice() : [];
-    }
-    const merged: string[] = [];
-    const seen = new Set<string>();
-    for (const label of base) {
-      if (typeof label !== 'string' || label.length === 0 || seen.has(label)) {
-        continue;
-      }
-      seen.add(label);
-      merged.push(label);
-    }
-    for (const label of extra) {
-      if (typeof label !== 'string' || label.length === 0 || seen.has(label)) {
-        continue;
-      }
-      seen.add(label);
-      merged.push(label);
-    }
-    return merged;
-  };
-  const mergePolicyInputDescriptor = (
-    descriptor?: SecurityDescriptor
-  ): SecurityDescriptor | undefined => {
-    if (!mcpSecurityDescriptor) {
-      return descriptor;
-    }
-    if (!descriptor) {
-      return mcpSecurityDescriptor;
-    }
-    return env.mergeSecurityDescriptors(descriptor, mcpSecurityDescriptor);
-  };
   const execDescriptor = getVariableSecurityDescriptor(variable);
-  const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
-  const operationLabels = mergeLabelArrays(exeLabels, toolLabels);
-  const operationContext: OperationContext = {
-    type: 'exe',
-    name: variable.name ?? commandName,
-    labels: operationLabels.length > 0 ? operationLabels : undefined,
-    location: node.location ?? null,
-    metadata: {
-      executableType: definition.type,
-      command: commandName,
-      sourceRetryable: true
+  const {
+    operationContext,
+    exeLabels,
+    mergePolicyInputDescriptor
+  } = await createExecOperationContextAndEnforcePolicy({
+    node,
+    definition,
+    commandName,
+    operationName: variable.name ?? commandName,
+    toolLabels,
+    env,
+    execEnv,
+    policyEnforcer,
+    mcpSecurityDescriptor,
+    execDescriptor,
+    services: {
+      interpolateWithResultDescriptor,
+      getResultSecurityDescriptor: () => resultSecurityDescriptor,
+      resolveStdinInput
     }
-  };
-  if (isCommandExecutable(definition)) {
-    const commandPreview = await interpolateWithResultDescriptor(
-      definition.commandTemplate,
+  });
+
+  const finalizeResult = async (result: EvalResult): Promise<EvalResult> =>
+    runExecPostGuards({
+      env,
       execEnv,
-      InterpolationContext.ShellCommand
-    );
-    const parsedCommand = parseCommand(commandPreview);
-    const opLabels = mergeLabelArrays(
-      getOperationLabels({
-        type: 'cmd',
-        command: parsedCommand.command,
-        subcommand: parsedCommand.subcommand
-      }),
-      toolLabels
-    );
-    if (opLabels.length > 0) {
-      operationContext.opLabels = opLabels;
-      operationContext.command = commandPreview;
-    }
-    const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
-    metadata.commandPreview = commandPreview;
-    operationContext.metadata = metadata;
-    const policySummary = env.getPolicySummary();
-    if (policySummary) {
-      const decision = evaluateCommandAccess(policySummary, commandPreview);
-      if (!decision.allowed) {
-        throw new MlldSecurityError(
-          decision.reason ?? `Command '${decision.commandName}' denied by policy`,
-          {
-            code: 'POLICY_CAPABILITY_DENIED',
-            sourceLocation: node.location,
-            env
-          }
-        );
-      }
-    }
-    const flowChannel =
-      definition.withClause?.auth ||
-      definition.withClause?.using ||
-      node.withClause?.auth ||
-      node.withClause?.using
-        ? 'using'
-        : 'arg';
-    const inputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(resultSecurityDescriptor));
-    if (inputTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint,
-          opLabels,
-          exeLabels,
-          flowChannel,
-          command: parsedCommand.command
-        },
-        { env, sourceLocation: node.location }
-      );
-    }
-    if (definition.withClause && 'stdin' in definition.withClause) {
-      const resolvedStdin = await resolveStdinInput(definition.withClause.stdin, execEnv);
-      const stdinTaint = descriptorToInputTaint(resolvedStdin.descriptor);
-      if (stdinTaint.length > 0) {
-        policyEnforcer.checkLabelFlow(
-          {
-            inputTaint: stdinTaint,
-            opLabels,
-            exeLabels,
-            flowChannel: 'stdin',
-            command: parsedCommand.command
-          },
-          { env, sourceLocation: node.location }
-        );
-      }
-    }
-  } else if (isCodeExecutable(definition)) {
-    const opType = resolveOpTypeFromLanguage(definition.language);
-    const opLabels = mergeLabelArrays(
-      opType ? getOperationLabels({ type: opType }) : [],
-      toolLabels
-    );
-    if (opLabels.length > 0) {
-      operationContext.opLabels = opLabels;
-    }
-    if (opType) {
-      const policySummary = env.getPolicySummary();
-      if (policySummary) {
-        const decision = evaluateCapabilityAccess(policySummary, opType);
-        if (!decision.allowed) {
-          throw new MlldSecurityError(
-            decision.reason ?? `Capability '${opType}' denied by policy`,
-            {
-              code: 'POLICY_CAPABILITY_DENIED',
-              sourceLocation: node.location,
-              env
-            }
-          );
-        }
-      }
-    }
-    const inputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(resultSecurityDescriptor));
-    if (opType && inputTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint,
-          opLabels,
-          exeLabels,
-          flowChannel: 'arg'
-        },
-        { env, sourceLocation: node.location }
-      );
-    }
-  } else if (isNodeFunctionExecutable(definition)) {
-    const opLabels = mergeLabelArrays(getOperationLabels({ type: 'node' }), toolLabels);
-    if (opLabels.length > 0) {
-      operationContext.opLabels = opLabels;
-    }
-    const policySummary = env.getPolicySummary();
-    if (policySummary) {
-      const decision = evaluateCapabilityAccess(policySummary, 'node');
-      if (!decision.allowed) {
-        throw new MlldSecurityError(
-          decision.reason ?? "Capability 'node' denied by policy",
-          {
-            code: 'POLICY_CAPABILITY_DENIED',
-            sourceLocation: node.location,
-            env
-          }
-        );
-      }
-    }
-    const inputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(resultSecurityDescriptor));
-    if (inputTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint,
-          opLabels,
-          exeLabels,
-          flowChannel: 'arg'
-        },
-        { env, sourceLocation: node.location }
-      );
-    }
-  } else {
-    const inputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(resultSecurityDescriptor));
-    if (inputTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint,
-          opLabels: [],
-          exeLabels,
-          flowChannel: 'arg'
-        },
-        { env, sourceLocation: node.location }
-      );
-    }
-  }
-  const finalizeResult = async (result: EvalResult): Promise<EvalResult> => {
-    try {
-      return await hookManager.runPost(node, result, postHookInputs, env, operationContext);
-    } catch (error) {
-      if (whenExprNode) {
-        const handled = await handleExecGuardDenial(error, {
-          execEnv,
-          env,
-          whenExprNode
-        });
-        if (handled) {
-          return handled;
-        }
-      }
-      if (
-        !whenExprNode &&
-        error instanceof GuardError &&
-        error.decision === 'deny' &&
-        error.details?.timing === 'after'
-      ) {
-        const guardDetails = error.details as Record<string, unknown> | undefined;
-        const warning = formatGuardWarning(
-          error.reason ?? (guardDetails?.reason as string | undefined),
-          guardDetails?.guardFilter as string | undefined,
-          guardDetails?.guardName as string | null | undefined
-        );
-        env.emitEffect('stderr', `${warning}\n`);
-      }
-      throw error;
-    }
-  };
+      node,
+      operationContext,
+      postHookInputs,
+      result,
+      whenExprNode
+    });
 
   return await env.withOpContext(operationContext, async () => {
     return AutoUnwrapManager.executeWithPreservation(async () => {
-      const preDecision = await hookManager.runPre(node, guardInputs, env, operationContext);
-      const transformedGuardInputs = getGuardTransformedInputs(preDecision, guardInputs);
-      const transformedGuardSet =
-        transformedGuardInputs && transformedGuardInputs.length > 0
-          ? new Set(transformedGuardInputs as readonly Variable[])
-          : null;
-      if (transformedGuardInputs && transformedGuardInputs.length > 0) {
-        postHookInputs = transformedGuardInputs;
-        applyGuardTransformsToExecArgs({
-          guardInputEntries: guardInputsWithMapping,
-          transformedInputs: transformedGuardInputs,
-          guardVariableCandidates,
-          evaluatedArgs,
-          evaluatedArgStrings
-        });
-      }
+      const {
+        preDecision,
+        postHookInputs: nextPostHookInputs,
+        transformedGuardSet
+      } = await runExecPreGuards({
+        env,
+        node,
+        operationContext,
+        guardInputs,
+        guardInputsWithMapping,
+        guardVariableCandidates,
+        evaluatedArgs,
+        evaluatedArgStrings
+      });
+      postHookInputs = nextPostHookInputs;
       bindExecParameterVariables({
         params,
         evaluatedArgs,
@@ -1715,78 +1400,38 @@ async function evaluateExecInvocationInternal(
             ? descriptorPieces[0]
             : env.mergeSecurityDescriptors(...descriptorPieces);
       }
-      const paramInputTaint = descriptorToInputTaint(resultSecurityDescriptor);
-      if (paramInputTaint.length > 0) {
-        try {
-          policyEnforcer.checkLabelFlow(
-            {
-              inputTaint: paramInputTaint,
-              opLabels: operationContext.opLabels ?? [],
-              exeLabels,
-              flowChannel: 'arg'
-            },
-            { env, sourceLocation: node.location }
-          );
-        } catch (policyError) {
-          if (whenExprNode) {
-            const handled = await handleExecGuardDenial(policyError, {
-              execEnv,
-              env,
-              whenExprNode
-            });
-            if (handled) {
-              return finalizeResult(handled);
-            }
-          }
-          throw policyError;
-        }
+      const paramFlowHandled = await enforceExecParamLabelFlow({
+        env,
+        execEnv,
+        node,
+        whenExprNode,
+        policyEnforcer,
+        operationContext,
+        exeLabels,
+        resultSecurityDescriptor
+      });
+      if (paramFlowHandled) {
+        return finalizeResult(paramFlowHandled);
       }
-      const outputDescriptor = policyEnforcer.applyOutputPolicyLabels(
-        resultSecurityDescriptor,
-        {
-          inputTaint: descriptorToInputTaint(resultSecurityDescriptor),
-          exeLabels
-        }
-      );
-      if (outputDescriptor) {
-        resultSecurityDescriptor = outputDescriptor;
-      }
+      resultSecurityDescriptor = applyExecOutputPolicyLabels({
+        policyEnforcer,
+        exeLabels,
+        resultSecurityDescriptor
+      });
       if (resultSecurityDescriptor) {
         env.recordSecurityDescriptor(resultSecurityDescriptor);
       }
 
-      const guardInputVariable =
-        preDecision && preDecision.metadata && (preDecision.metadata as Record<string, unknown>).guardInput;
-      try {
-        await handleGuardDecision(preDecision, node, env, operationContext);
-      } catch (error) {
-        if (guardInputVariable) {
-          const existingInput = execEnv.getVariable('input');
-          if (!existingInput) {
-            const clonedInput: Variable = {
-              ...(guardInputVariable as Variable),
-              name: 'input',
-              mx: { ...(guardInputVariable as Variable).mx },
-              internal: {
-                ...((guardInputVariable as Variable).internal ?? {}),
-                isSystem: true,
-                isParameter: true
-              }
-            };
-            execEnv.setParameterVariable('input', clonedInput);
-          }
-        }
-        if (whenExprNode) {
-          const handled = await handleExecGuardDenial(error, {
-            execEnv,
-            env,
-            whenExprNode
-          });
-          if (handled) {
-            return finalizeResult(handled);
-          }
-        }
-        throw error;
+      const preGuardHandled = await handleExecPreGuardDecision({
+        preDecision,
+        node,
+        env,
+        execEnv,
+        operationContext,
+        whenExprNode
+      });
+      if (preGuardHandled) {
+        return finalizeResult(preGuardHandled);
       }
   
   let result: unknown;
@@ -2043,7 +1688,7 @@ async function evaluateExecInvocationInternal(
               InterpolationContext.Default
             );
             const prefixedValue = `${prefix}${rendered}`;
-            const updated = cloneVariableWithNewValue(targetVar, prefixedValue, prefixedValue);
+            const updated = cloneExecVariableWithNewValue(targetVar, prefixedValue, prefixedValue);
             if (currentVars.has(targetName)) {
               execEnv.updateVariable(targetName, updated);
             } else {
