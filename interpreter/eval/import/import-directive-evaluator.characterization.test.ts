@@ -6,6 +6,7 @@ import { createSimpleTextVariable } from '@core/types/variable';
 import { MlldImportError } from '@core/errors';
 import { ImportDirectiveEvaluator } from './ImportDirectiveEvaluator';
 import { McpImportService } from './McpImportService';
+import { ModuleImportHandler } from './ModuleImportHandler';
 import { validateDeclaredImportType } from './ImportTypePolicy';
 
 const SOURCE = {
@@ -89,7 +90,7 @@ describe('ImportDirectiveEvaluator characterization', () => {
 
   it('keeps module candidate fallback behavior stable', async () => {
     const env = createEnv();
-    const evaluator: any = new ImportDirectiveEvaluator(env);
+    const moduleImportHandler: any = new ModuleImportHandler();
 
     const resolveModuleSpy = vi.spyOn(env, 'resolveModule').mockImplementation(async (candidate: string) => {
       if (candidate.endsWith('.txt')) {
@@ -110,12 +111,8 @@ describe('ImportDirectiveEvaluator characterization', () => {
         mx: {}
       } as any;
     });
-    const validateLockSpy = vi
-      .spyOn(evaluator, 'validateLockFileVersion')
-      .mockResolvedValue(undefined);
-    const importFromResolverSpy = vi
-      .spyOn(evaluator, 'importFromResolverContent')
-      .mockResolvedValue({ value: undefined, env });
+    const validateLockSpy = vi.spyOn(moduleImportHandler, 'validateLockFileVersion').mockResolvedValue(undefined);
+    const importFromResolverSpy = vi.fn().mockResolvedValue({ value: undefined, env });
 
     const resolution = {
       type: 'module',
@@ -123,14 +120,15 @@ describe('ImportDirectiveEvaluator characterization', () => {
       moduleExtension: '.txt',
       importType: 'module'
     };
+    const directive = { values: {}, subtype: 'importSelected' } as any;
 
-    await evaluator.evaluateModuleImport(resolution as any, { values: {}, subtype: 'importSelected' } as any, env);
+    await moduleImportHandler.evaluateModuleImport(resolution as any, directive, env, importFromResolverSpy);
 
     expect(resolveModuleSpy).toHaveBeenNthCalledWith(1, '@scope/pkg.txt', 'import');
     expect(resolveModuleSpy).toHaveBeenNthCalledWith(2, '@scope/pkg', 'import');
-    expect(validateLockSpy).toHaveBeenCalledWith('@scope/pkg', expect.any(Object), env);
+    expect(validateLockSpy).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'module' }), env);
     expect(importFromResolverSpy).toHaveBeenCalledWith(
-      expect.any(Object),
+      directive,
       '@scope/pkg',
       expect.any(Object),
       env
