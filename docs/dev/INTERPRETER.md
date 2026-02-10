@@ -32,8 +32,11 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
   - `interpret(source, options)`: parses with `@grammar/parser`, builds `PathContext`, constructs `Environment`, then calls `evaluate(ast, env)`.
   - Attaches optional streaming sinks (`progress`, `full`) before evaluation; formats final output (Markdown/XML) from effect handler.
 - `interpreter/core/interpreter.ts`:
-  - `evaluate(node|nodes, env, context?)`: recursive AST evaluator; central dispatcher for directives, literals, expressions, exec invocations, when/for, objects/arrays, file/code fences, frontmatter.
-  - `interpolate(nodes, env, mx)`: primary interpolation path for templates/quotes and condensed pipes.
+  - Entry point composition for `evaluate`, `interpolate`, and `cleanNamespaceForDisplay`.
+  - Wires interpolation security recording and delegates node dispatch to `interpreter/core/interpreter/evaluator.ts`.
+- `interpreter/core/interpreter/evaluator.ts`:
+  - Core AST node dispatch pipeline for directives, literals, expressions, exec invocations, when/for, objects/arrays, file/code fences, and frontmatter.
+  - Owns document/text traversal behavior and routes to extracted handler modules under `interpreter/core/interpreter/handlers/`.
 
 ### Phases and Data Flow
 
