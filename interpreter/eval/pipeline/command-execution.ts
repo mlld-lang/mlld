@@ -47,6 +47,7 @@ import {
   wrapJsonLikeString,
   wrapPipelineStructuredValue
 } from './command-execution/structured-input';
+import { resolvePipelineCommandReference } from './command-execution/resolve-command-reference';
 
 export type RetrySignal = { value: 'retry'; hint?: any; from?: number };
 type CommandExecutionPrimitive = string | number | boolean | null | undefined;
@@ -229,84 +230,7 @@ export async function resolveCommandReference(
   command: PipelineCommand,
   env: Environment
 ): Promise<any> {
-  // The command.identifier is already an array of nodes from the parser
-  if (!command.identifier || command.identifier.length === 0) {
-    return null;
-  }
-
-  // Use the first node (should be a VariableReference node)
-  const varRefNode = command.identifier[0];
-
-  // Check if this is a variable reference with field access
-  if (varRefNode.type === 'VariableReference') {
-    const varRef = varRefNode as any;
-
-    let baseVar = env.getVariable(varRef.identifier);
-    let parsedFields: any[] = [];
-
-    // If not found and identifier contains a dot, try splitting for transformer variants
-    // This handles cases where the grammar outputs dotted names like "json.fromlist"
-    if (!baseVar && varRef.identifier.includes('.')) {
-      const parts = varRef.identifier.split('.');
-      const baseName = parts[0];
-      const fieldPath = parts.slice(1);
-
-      baseVar = env.getVariable(baseName);
-      if (baseVar && fieldPath.length > 0) {
-        // Store the parsed fields for processing below
-        parsedFields = fieldPath.map(value => ({ type: 'field', value }));
-      }
-    }
-
-    if (!baseVar) {
-      return null;
-    }
-
-    const variantMap =
-      (baseVar.internal?.transformerVariants as Record<string, unknown> | undefined);
-    let value: any;
-    let remainingFields = parsedFields.length > 0 ? parsedFields : (Array.isArray(varRef.fields) ? [...varRef.fields] : []);
-
-    if (variantMap && remainingFields.length > 0) {
-      const firstField = remainingFields[0];
-      if (firstField.type === 'field' || firstField.type === 'stringIndex' || firstField.type === 'numericField') {
-        const variantName = String(firstField.value);
-        const variant = variantMap[variantName];
-        if (!variant) {
-          throw new Error(`Pipeline function '@${varRef.identifier}.${variantName}' is not defined`);
-        }
-        value = variant;
-        remainingFields = remainingFields.slice(1);
-      }
-    }
-
-    if (typeof value === 'undefined') {
-      if (baseVar.type === 'executable') {
-        return baseVar;
-      }
-      // Extract value for non-executable variables
-      const { extractVariableValue } = await import('../../utils/variable-resolution');
-      value = await extractVariableValue(baseVar, env);
-    }
-    
-    if (remainingFields.length > 0) {
-      for (const field of remainingFields) {
-        if ((field.type === 'field' || field.type === 'stringIndex' || field.type === 'numericField') && typeof value === 'object' && value !== null) {
-          value = (value as Record<string, unknown>)[String(field.value)];
-        } else if (field.type === 'arrayIndex' && Array.isArray(value)) {
-          value = value[Number(field.value)];
-        } else {
-          const fieldName = String(field.value);
-          throw new Error(`Cannot access field '${fieldName}' on ${typeof value}`);
-        }
-      }
-    }
-    
-    // Return the resolved value
-    return value;
-  }
-  
-  return null;
+  return resolvePipelineCommandReference(command, env);
 }
 
 /**
