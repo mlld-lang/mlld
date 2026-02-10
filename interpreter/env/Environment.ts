@@ -1,14 +1,11 @@
 import type { MlldNode, SourceLocation, DirectiveNode } from '@core/types';
 import type { MlldMode } from '@core/types/mode';
-import type { Variable, VariableSource, PipelineInput } from '@core/types/variable';
+import type { Variable, PipelineInput } from '@core/types/variable';
 import { 
-  createSimpleTextVariable, 
-  createObjectVariable, 
   createPathVariable,
   isPipelineInput,
   isTextLike,
 } from '@core/types/variable';
-import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { isDirectiveNode, isVariableReferenceNode, isTextNode } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
@@ -20,7 +17,7 @@ import { execSync } from 'child_process';
 import * as path from 'path';
 // Note: ImportApproval, ImmutableCache, and GistTransformer are now handled by ImportResolver
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
-import { MlldCommandExecutionError, MlldInterpreterError, type CommandExecutionDetails } from '@core/errors';
+import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
 import {
   makeSecurityDescriptor,
@@ -28,8 +25,7 @@ import {
   type SecurityDescriptor,
   type CapabilityContext,
   type CapabilityKind,
-  type ImportType,
-  type DataLabel
+  type ImportType
 } from '@core/types/security';
 import type { StateWrite } from '@core/types/state';
 import { mergeNeedsDeclarations, type NeedsDeclaration, type PolicyCapabilities, type ProfilesDeclaration } from '@core/policy/needs';
@@ -60,8 +56,10 @@ import {
   buildVariableManagerDependencies,
   buildImportResolverDependencies
 } from './bootstrap/EnvironmentBootstrap';
+import { ResolverVariableFacade } from './runtime/ResolverVariableFacade';
 import { SecurityPolicyRuntime, type SecuritySnapshotLike } from './runtime/SecurityPolicyRuntime';
 import { StateWriteRuntime } from './runtime/StateWriteRuntime';
+import { VariableFacade, type ImportBindingInfo } from './runtime/VariableFacade';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { McpImportManager } from '../mcp/McpImportManager';
@@ -89,11 +87,6 @@ import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { SDKEffectEvent, SDKEvent, SDKStreamEvent, SDKCommandEvent, StreamingResult } from '@sdk/types';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
-
-interface ImportBindingInfo {
-  source: string;
-  location?: SourceLocation;
-}
 
 
 /**
@@ -131,6 +124,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private errorUtils: ErrorUtils;
   private commandExecutorFactory?: CommandExecutorFactory;
   private variableManager: IVariableManager;
+  private variableFacade: VariableFacade;
+  private resolverVariableFacade: ResolverVariableFacade;
   private importResolver: IImportResolver;
   private contextManager: ContextManager;
   private hookManager: HookManager;
@@ -333,6 +328,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getContextManager: () => this.contextManager
     });
     this.variableManager = new VariableManager(variableManagerDependencies);
+    this.variableFacade = new VariableFacade(this.variableManager, this.importBindings);
+    this.resolverVariableFacade = new ResolverVariableFacade(this.cacheManager, this.reservedNames);
     this.stateWriteRuntime = parent
       ? parent.stateWriteRuntime
       : new StateWriteRuntime(this.variableManager);
@@ -701,13 +698,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   getImportBinding(name: string): ImportBindingInfo | undefined {
-    // Bindings are per environment, so this only reports collisions for the
-    // current file rather than traversing the parent chain.
-    return this.importBindings.get(name);
+    return this.variableFacade.getImportBinding(name);
   }
 
   setImportBinding(name: string, info: ImportBindingInfo): void {
-    this.importBindings.set(name, info);
+    this.variableFacade.setImportBinding(name, info);
   }
 
   getSecurityManager(): SecurityManager | undefined {
@@ -958,7 +953,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // --- Variable Management ---
   
   setVariable(name: string, variable: Variable): void {
-    this.variableManager.setVariable(name, variable);
+    this.variableFacade.setVariable(name, variable);
     if (this.sdkEmitter) {
       const provenance = this.getVariableProvenance(variable);
       this.emitSDKEvent({
@@ -976,7 +971,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Used for temporary parameter variables in exec functions.
    */
   setParameterVariable(name: string, variable: Variable): void {
-    this.variableManager.setParameterVariable(name, variable);
+    this.variableFacade.setParameterVariable(name, variable);
   }
 
   /**
@@ -984,12 +979,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Used for augmented assignment (+=) on local let bindings.
    */
   updateVariable(name: string, variable: Variable): void {
-    this.variableManager.updateVariable(name, variable);
+    this.variableFacade.updateVariable(name, variable);
   }
 
   getVariable(name: string): Variable | undefined {
-    // Delegate entirely to VariableManager which handles local, captured, and parent lookups
-    const variable = this.variableManager.getVariable(name);
+    const variable = this.variableFacade.getVariable(name);
     if (this.sdkEmitter) {
       const provenance = this.getVariableProvenance(variable);
       this.emitSDKEvent({
@@ -1007,7 +1001,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * This is a convenience method for consumers
    */
   getVariableValue(name: string): any {
-    return this.variableManager.getVariableValue(name);
+    return this.variableFacade.getVariableValue(name);
   }
 
   private getVariableProvenance(variable?: Variable): SecurityDescriptor | undefined {
@@ -1053,154 +1047,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * This handles context-dependent behavior for resolvers
    */
   async getResolverVariable(name: string): Promise<Variable | undefined> {
-    // Check if it's a reserved resolver name
-    if (!this.reservedNames.has(name)) {
-      return undefined;
-    }
-
-    if (name === 'keychain') {
-      throw new MlldInterpreterError(
-        'Direct keychain access is not available. Use policy.auth with using auth:*.',
-        { code: 'KEYCHAIN_DIRECT_ACCESS_DENIED' }
-      );
-    }
-    
-    // Special handling for debug variable - compute dynamically
-    if (name === 'debug') {
-      const debugValue = this.createDebugObject(3); // Use markdown format
-      
-      
-      const debugSource: VariableSource = {
-        directive: 'var',
-        syntax: 'object',
-        hasInterpolation: false,
-        isMultiLine: false
-      };
-      const debugVar = createObjectVariable(
-        'debug',
-        debugValue,
-        false, // Not complex, it's just a string
-        debugSource,
-        {
-          mx: {
-            definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-          },
-          internal: {
-            isReserved: true
-          }
-        }
-      );
-      return debugVar;
-    }
-    
-    // Check cache first
-    const cached = this.cacheManager.getResolverVariable(name);
-    if (cached) {
-      const needsResolution = cached.internal?.needsResolution;
-      if (needsResolution === false) {
-        return cached;
-      }
-    }
-    
-    // Get the resolver manager
-    const resolverManager = this.getResolverManager();
-    if (!resolverManager) {
-      // Fallback to creating a basic resolver variable
-      return this.createResolverVariable(name);
-    }
-    
-    try {
-      // Resolve with 'variable' context to get the appropriate content
-      const resolverContent = await resolverManager.resolve(`@${name}`, { context: 'variable' });
-      
-      // Convert content based on contentType
-      let varType: 'text' | 'data' = 'text';
-      let varValue: any = resolverContent.content.content;
-      
-      if (resolverContent.content.contentType === 'data') {
-        varType = 'data';
-        // Parse JSON data if it's a string
-        if (typeof varValue === 'string') {
-          try {
-            varValue = JSON.parse(varValue);
-          } catch {
-            // Keep as string if not valid JSON
-          }
-        }
-      }
-      
-      // Create the resolved variable
-      const resolverSource: VariableSource = {
-        directive: 'var',
-        syntax: varType === 'data' ? 'object' : 'quoted',
-        hasInterpolation: false,
-        isMultiLine: false
-      };
-      const resolvedVar = varType === 'data'
-        ? createObjectVariable(name, varValue, true, resolverSource, {
-            mx: {
-              definedAt: { line: 0, column: 0, filePath: '<resolver>' }
-            },
-            internal: {
-              isReserved: true,
-              isResolver: true,
-              resolverName: name,
-              needsResolution: false
-            }
-          })
-        : createSimpleTextVariable(name, varValue, resolverSource, {
-            mx: {
-              definedAt: { line: 0, column: 0, filePath: '<resolver>' }
-            },
-            internal: {
-              isReserved: true,
-              isResolver: true,
-              resolverName: name,
-              needsResolution: false
-            }
-          });
-
-      const resolverMx = resolverContent.content.mx ?? resolverContent.content.metadata;
-      const resolverLabels =
-        resolverMx && Array.isArray((resolverMx as any).labels)
-          ? ((resolverMx as any).labels as DataLabel[])
-          : undefined;
-      const resolverTaint =
-        resolverMx && Array.isArray((resolverMx as any).taint)
-          ? ((resolverMx as any).taint as DataLabel[])
-          : undefined;
-      const resolverSources =
-        resolverMx && typeof (resolverMx as any).source === 'string'
-          ? ([(resolverMx as any).source] as string[])
-          : undefined;
-      if (resolverLabels || resolverTaint || resolverSources) {
-        const descriptor = makeSecurityDescriptor({
-          labels: resolverLabels,
-          taint: resolverTaint,
-          sources: resolverSources
-        });
-        if (!resolvedVar.mx) {
-          resolvedVar.mx = {} as any;
-        }
-        updateVarMxFromDescriptor(resolvedVar.mx, descriptor);
-        if ((resolvedVar.mx as any).mxCache) {
-          delete (resolvedVar.mx as any).mxCache;
-        }
-      }
-      
-      // Cache the resolved variable
-      this.cacheManager.setResolverVariable(name, resolvedVar);
-      
-      return resolvedVar;
-    } catch (error) {
-      // If resolution fails, return undefined
-      console.warn(`Failed to resolve variable @${name}: ${(error as Error).message}`);
-      return undefined;
-    }
+    return this.resolverVariableFacade.resolve(name, {
+      resolverManager: this.getResolverManager(),
+      debugValue: name === 'debug' ? this.createDebugObject(3) : ''
+    });
   }
   
   hasVariable(name: string): boolean {
-    return this.variableManager.hasVariable(name);
+    return this.variableFacade.hasVariable(name);
   }
   
   /**
@@ -1208,19 +1062,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * First checks built-in transforms, then variables
    */
   getTransform(name: string): Function | undefined {
-    // Check built-in transforms first
-    const builtins = builtinTransformers;
-    if (builtins[name]) {
-      return builtins[name];
-    }
-    
-    // Check variables that might be functions
-    const variable = this.getVariable(name);
-    if (variable && typeof variable === 'object' && '__executable' in variable) {
-      return variable;
-    }
-    
-    return undefined;
+    return this.variableFacade.getTransform(name, builtinTransformers as Record<string, Function>);
   }
   
   // --- Frontmatter Support ---
@@ -1230,32 +1072,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Creates both @fm and @frontmatter as aliases to the same data
    */
   setFrontmatter(data: Record<string, unknown>): void {
-    const frontmatterSource: VariableSource = {
-      directive: 'var',
-      syntax: 'object',
-      hasInterpolation: false,
-      isMultiLine: false
-    };
-    const frontmatterVariable = createObjectVariable(
-      'frontmatter',
-      data,
-      true, // Frontmatter can be complex
-      frontmatterSource,
-      {
-        mx: {
-          source: 'frontmatter',
-          definedAt: { line: 0, column: 0, filePath: '<frontmatter>' }
-        },
-        internal: {
-          isSystem: true,
-          immutable: true
-        }
-      }
-    );
-    
-    // Create both @fm and @frontmatter as aliases
-    this.variableManager.setVariable('fm', frontmatterVariable);
-    this.variableManager.setVariable('frontmatter', frontmatterVariable);
+    this.variableFacade.setFrontmatter(data);
   }
   
   // --- Node Management ---
