@@ -1,14 +1,7 @@
 import type { DirectiveNode } from '@core/types';
-import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable, VariableMetadata } from '@core/types/variable';
-import { 
-  createObjectVariable,
-  createArrayVariable
-} from '@core/types/variable';
+import type { Variable, VariableSource, ExecutableVariable, VariableMetadata } from '@core/types/variable';
 import { VariableMetadataUtils } from '@core/types/variable';
 import type { DataLabel } from '@core/types/security';
-import { makeSecurityDescriptor } from '@core/types/security';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
-import { isNodeProxy } from '@interpreter/utils/node-interop';
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironmentCapture';
@@ -25,6 +18,7 @@ import { CapturedEnvRehydrator } from './variable-importer/executable/CapturedEn
 import { ExecutableImportRehydrator } from './variable-importer/executable/ExecutableImportRehydrator';
 import { PolicyImportHandler } from './variable-importer/PolicyImportHandler';
 import { NamespaceSelectedImportHandler } from './variable-importer/NamespaceSelectedImportHandler';
+import { VariableImportUtilities } from './variable-importer/VariableImportUtilities';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -46,6 +40,7 @@ export class VariableImporter {
   private readonly variableFactoryOrchestrator: ImportVariableFactoryOrchestrator;
   private readonly capturedEnvRehydrator: CapturedEnvRehydrator;
   private readonly executableImportRehydrator: ExecutableImportRehydrator;
+  private readonly importUtilities: VariableImportUtilities;
   private readonly policyImportHandler: PolicyImportHandler;
   private readonly namespaceSelectedImportHandler: NamespaceSelectedImportHandler;
 
@@ -58,6 +53,10 @@ export class VariableImporter {
     this.importTypeRouter = new ImportTypeRouter();
     this.capturedEnvRehydrator = new CapturedEnvRehydrator();
     this.executableImportRehydrator = new ExecutableImportRehydrator(this.capturedEnvRehydrator);
+    this.importUtilities = new VariableImportUtilities({
+      createExecutableFromImport: (name, value, source, metadata, securityLabels) =>
+        this.createExecutableFromImport(name, value, source, metadata, securityLabels)
+    });
     this.policyImportHandler = new PolicyImportHandler();
     this.namespaceSelectedImportHandler = new NamespaceSelectedImportHandler({
       bindingGuards: this.bindingGuards,
@@ -72,7 +71,7 @@ export class VariableImporter {
         env,
         options
       ) =>
-        this.createNamespaceVariable(
+        this.importUtilities.createNamespaceVariable(
           alias,
           moduleObject,
           importPath,
@@ -81,15 +80,15 @@ export class VariableImporter {
           env,
           options
         ),
-      getImportDisplayPath: (directive, fallback) => this.getImportDisplayPath(directive, fallback),
+      getImportDisplayPath: (directive, fallback) => this.importUtilities.getImportDisplayPath(directive, fallback),
       policyImportHandler: this.policyImportHandler
     });
     this.variableFactoryOrchestrator = new ImportVariableFactoryOrchestrator({
       createExecutableFromImport: (name, value, source, metadata, securityLabels) =>
         this.createExecutableFromImport(name, value, source, metadata, securityLabels),
-      hasComplexContent: value => this.hasComplexContent(value),
-      unwrapArraySnapshots: (value, importPath) => this.unwrapArraySnapshots(value, importPath),
-      inferVariableType: value => this.inferVariableType(value)
+      hasComplexContent: value => this.importUtilities.hasComplexContent(value),
+      unwrapArraySnapshots: (value, importPath) => this.importUtilities.unwrapArraySnapshots(value, importPath),
+      inferVariableType: value => this.importUtilities.inferVariableType(value)
     });
   }
   
@@ -206,7 +205,7 @@ export class VariableImporter {
       skipModuleEnvSerialization,
       currentSerializationTarget,
       serializingEnvs: _serializingEnvs,
-      isLegitimateVariableForExport: variable => this.isLegitimateVariableForExport(variable),
+      isLegitimateVariableForExport: variable => this.importUtilities.isLegitimateVariableForExport(variable),
       serializeShadowEnvs: envs => this.serializeShadowEnvs(envs),
       serializeModuleEnv: (moduleEnv, seen) => this.serializeModuleEnv(moduleEnv, seen)
     });
@@ -243,135 +242,6 @@ export class VariableImporter {
     );
   }
 
-  private unwrapArraySnapshots(value: any, importPath: string, seen = new WeakSet<object>()): any {
-    if (Array.isArray(value)) {
-      return value.map(item => this.unwrapArraySnapshots(item, importPath, seen));
-    }
-
-    if (value && typeof value === 'object') {
-      if (isNodeProxy(value)) {
-        return value;
-      }
-      if (seen.has(value as object)) {
-        return value;
-      }
-      seen.add(value as object);
-      if ((value as any).__arraySnapshot) {
-        const snapshot = value as { value: any[]; metadata?: Record<string, any>; isComplex?: boolean; name?: string };
-        const source: VariableSource = {
-          directive: 'var',
-          syntax: 'array',
-          hasInterpolation: false,
-          isMultiLine: false
-        };
-        const arrayMetadata = {
-          ...(snapshot.metadata || {}),
-          isImported: true,
-          importPath,
-          originalName: snapshot.name
-        };
-        const normalizedElements = Array.isArray(snapshot.value)
-          ? snapshot.value.map(item => this.unwrapArraySnapshots(item, importPath, seen))
-          : [];
-        const arrayName = snapshot.name || 'imported_array';
-        return createArrayVariable(arrayName, normalizedElements, snapshot.isComplex === true, source, arrayMetadata);
-      }
-
-      // Reconstruct __executable markers back to proper ExecutableVariables
-      // This ensures isExecutableVariable() works on object properties
-      if ((value as any).__executable) {
-        const source: VariableSource = {
-          directive: 'exe',
-          syntax: 'braces',
-          hasInterpolation: false,
-          isMultiLine: false
-        };
-        return this.createExecutableFromImport(
-          'property',
-          value,
-          source,
-          { isImported: true, importPath }
-        );
-      }
-
-      // Preserve StructuredValues as-is to keep their Symbol marker
-      // StructuredValues have type, text, data, metadata properties and need the Symbol
-      // for isStructuredValue() detection and proper field access unwrapping
-      if (isStructuredValue(value)) {
-        return value;
-      }
-
-      const result: Record<string, any> = {};
-      for (const [key, entry] of Object.entries(value)) {
-        result[key] = this.unwrapArraySnapshots(entry, importPath, seen);
-      }
-      return result;
-    }
-
-    return value;
-  }
-
-  /**
-   * Create a namespace variable for imports with aliased wildcards (e.g., * as @config)
-   */
-  createNamespaceVariable(
-    alias: string,
-    moduleObject: Record<string, any>,
-    importPath: string,
-    securityLabels?: DataLabel[],
-    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
-    env?: Environment,
-    options?: { strictFieldAccess?: boolean }
-  ): Variable {
-    const source: VariableSource = {
-      directive: 'var',
-      syntax: 'object',
-      hasInterpolation: false,
-      isMultiLine: false
-    };
-
-    // Check if the namespace contains complex content (like executables)
-    const isComplex = this.hasComplexContent(moduleObject);
-    
-    const snapshot = env?.getSecuritySnapshot?.();
-    let snapshotDescriptor = snapshot
-      ? makeSecurityDescriptor({
-          labels: snapshot.labels,
-          taint: snapshot.taint,
-          sources: snapshot.sources,
-          policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
-        })
-      : undefined;
-
-    const metadata = VariableMetadataUtils.applySecurityMetadata(
-      {
-        isImported: true,
-        importPath,
-        definedAt: { line: 0, column: 0, filePath: importPath },
-        namespaceMetadata: metadataMap
-      },
-      {
-        labels: securityLabels,
-        existingDescriptor: snapshotDescriptor
-      }
-    );
-    const namespaceOptions = {
-      metadata,
-      internal: {
-        isNamespace: true,
-        strictFieldAccess: options?.strictFieldAccess === true
-      }
-    };
-
-    return createObjectVariable(
-      alias,
-      moduleObject,
-      isComplex, // Mark as complex if it contains AST nodes or executables
-      source,
-      namespaceOptions
-    );
-  }
-
   /**
    * Merge variables into the target environment based on import type
    */
@@ -405,19 +275,6 @@ export class VariableImporter {
   }
 
   /**
-   * Produces a human-readable source string for error messages, stripping any
-   * quotes that appeared in the original directive.
-   */
-  private getImportDisplayPath(directive: DirectiveNode, fallback: string): string {
-    const raw = (directive as any)?.raw;
-    if (raw && typeof raw.path === 'string' && raw.path.trim().length > 0) {
-      const trimmed = raw.path.trim();
-      return trimmed.replace(/^['"]|['"]$/g, '');
-    }
-    return fallback;
-  }
-
-  /**
    * Create an executable variable from import metadata
    */
   private createExecutableFromImport(
@@ -436,99 +293,5 @@ export class VariableImporter {
       createVariableFromValue: (variableName, variableValue, importPath, originalName) =>
         this.createVariableFromValue(variableName, variableValue, importPath, originalName)
     });
-  }
-
-  /**
-   * Check if a value contains complex AST nodes that need evaluation
-   */
-  private hasComplexContent(value: any, seen = new WeakSet<object>()): boolean {
-    if (value === null || typeof value !== 'object') {
-      return false;
-    }
-
-    // Imported variables already hold evaluated content; do not treat them as complex
-    if (this.isVariableLike(value)) {
-      return false;
-    }
-
-    if (isNodeProxy(value)) {
-      return false;
-    }
-
-    if (seen.has(value as object)) {
-      return false;
-    }
-    seen.add(value as object);
-
-    // Check if this is an AST node with a type
-    if (value.type) {
-      return true;
-    }
-    
-    // Check if it has __executable objects (from resolved executables)
-    if (value.__executable) {
-      return true;
-    }
-    
-    // Recursively check arrays
-    if (Array.isArray(value)) {
-      return value.some(item => this.hasComplexContent(item, seen));
-    }
-    
-    // Recursively check object properties
-    for (const prop of Object.values(value)) {
-      if (this.hasComplexContent(prop, seen)) {
-        return true;
-      }
-    }
-    
-    return false;
-  }
-
-  private isVariableLike(value: any): boolean {
-    return value &&
-      typeof value === 'object' &&
-      typeof value.type === 'string' &&
-      'name' in value &&
-      'value' in value &&
-      'source' in value &&
-      'createdAt' in value &&
-      'modifiedAt' in value;
-  }
-
-  /**
-   * Infer variable type from value
-   */
-  private inferVariableType(value: any): VariableTypeDiscriminator {
-    if (isStructuredValue(value)) {
-      return 'structured';
-    } else if (Array.isArray(value)) {
-      return 'array';
-    } else if (value && typeof value === 'object') {
-      return 'object';
-    } else if (typeof value === 'string') {
-      return 'simple-text';
-    } else {
-      // Numbers, booleans, etc. convert to text
-      return 'simple-text';
-    }
-  }
-
-  /**
-   * Check if a variable is a legitimate mlld variable that can be exported/imported.
-   * System variables (tracked via internal.isSystem) are excluded
-   * to prevent namespace collisions when importing multiple modules with system variables like @fm.
-   */
-  private isLegitimateVariableForExport(variable: Variable): boolean {
-    // System variables (like @fm) should not be exported
-    const isSystem = variable.internal?.isSystem ?? false;
-
-    if (isSystem) {
-      return false;
-    }
-    
-    // All user-created variables are exportable
-    // This includes variables created by /var, /exe, /path directives
-    return true;
   }
 }
