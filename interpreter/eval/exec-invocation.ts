@@ -8,14 +8,6 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import {
   isCommandExecutable,
   isCodeExecutable,
-  isTemplateExecutable,
-  isCommandRefExecutable,
-  isSectionExecutable,
-  isResolverExecutable,
-  isPipelineExecutable,
-  isDataExecutable,
-  isNodeFunctionExecutable,
-  isNodeClassExecutable,
   isPartialExecutable
 } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
@@ -30,7 +22,6 @@ import { applyWithClause } from './with-clause';
 import { MlldInterpreterError, MlldCommandExecutionError, MlldSecurityError, CircularReferenceError } from '@core/errors';
 import { CommandUtils } from '../env/CommandUtils';
 import { logger } from '@core/utils/logger';
-import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
 import { evaluateExeBlock } from './exe';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
@@ -47,7 +38,6 @@ import {
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
-import { isEventEmitter, isLegacyStream, toJsValue, wrapNodeValue } from '../utils/node-interop';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
@@ -56,7 +46,6 @@ import { handleExecGuardDenial } from './guard-denial-handler';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
-import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import { SignatureStore } from '@core/security/SignatureStore';
@@ -72,8 +61,7 @@ import { collectVariableIdentifiersFromNodes } from './directive-inputs';
 import { getSignatureContent } from './sign-verify';
 import {
   buildExecOperationPreview,
-  deserializeShadowEnvs,
-  mergeAuthUsingIntoWithClause
+  deserializeShadowEnvs
 } from './exec/context';
 import {
   buildTemplateAstFromContent,
@@ -104,6 +92,7 @@ import {
   bindExecParameterVariables,
   evaluateExecInvocationArgs
 } from './exec/args';
+import { executeNonCommandExecutable } from './exec/non-command-handlers';
 import {
   applyExecOutputPolicyLabels,
   cloneExecVariableWithNewValue,
@@ -1447,124 +1436,25 @@ async function evaluateExecInvocationInternal(
     );
   }
   
-  // Handle node function executables
-  if (isNodeFunctionExecutable(definition)) {
-    const jsArgs = evaluatedArgs.map(arg => toJsValue(arg));
-    let output = definition.fn.apply(definition.thisArg ?? undefined, jsArgs);
-    if (output && typeof output === 'object' && typeof (output as any).then === 'function') {
-      output = await output;
+  const nonCommandResult = await executeNonCommandExecutable({
+    definition,
+    commandName,
+    node,
+    nodeSourceLocation,
+    env,
+    execEnv,
+    variable,
+    params,
+    evaluatedArgs,
+    resultSecurityDescriptor,
+    services: {
+      interpolateWithResultDescriptor,
+      toPipelineInput,
+      evaluateExecInvocation
     }
-
-    if (isEventEmitter(output) && !(output && typeof (output as any).then === 'function')) {
-      throw new MlldInterpreterError(
-        `Node function '${commandName}' returns an EventEmitter and requires subscriptions`,
-        'exec',
-        nodeSourceLocation
-      );
-    }
-    if (isLegacyStream(output)) {
-      throw new MlldInterpreterError(
-        `Node function '${commandName}' returns a legacy stream without async iterator support`,
-        'exec',
-        nodeSourceLocation
-      );
-    }
-
-    const wrapped = wrapNodeValue(output, { moduleName: definition.moduleName });
-    if (isStructuredValue(wrapped) && resultSecurityDescriptor) {
-      applySecurityDescriptorToStructuredValue(wrapped, resultSecurityDescriptor);
-    }
-    result = wrapped;
-
-  } else if (isNodeClassExecutable(definition)) {
-    throw new MlldInterpreterError(
-      `Node class '${commandName}' requires new`,
-      'exec',
-      nodeSourceLocation
-    );
-
-  // Handle template executables
-  } else if (isTemplateExecutable(definition)) {
-    // Interpolate the template with the bound parameters
-    const templateResult = await interpolateWithResultDescriptor(definition.template, execEnv);
-    if (isStructuredValue(templateResult)) {
-      result = templateResult;
-    } else if (typeof templateResult === 'string') {
-      const parsed = parseAndWrapJson(templateResult, {
-        metadata: resultSecurityDescriptor ? { security: resultSecurityDescriptor } : undefined,
-        preserveText: true
-      });
-      result = parsed ?? templateResult;
-    } else {
-      result = templateResult;
-    }
-
-  if (!isStructuredValue(result) && result && typeof result === 'object') {
-    const templateType = Array.isArray(result) ? 'array' : 'object';
-    const metadata = resultSecurityDescriptor ? { security: resultSecurityDescriptor } : undefined;
-    result = wrapStructured(result as Record<string, unknown>, templateType, undefined, metadata);
-  }
-
-  const templateWithClause = (definition as any).withClause;
-  if (templateWithClause) {
-    if (templateWithClause.pipeline && templateWithClause.pipeline.length > 0) {
-      const { processPipeline } = await import('./pipeline/unified-processor');
-      const pipelineInputValue = toPipelineInput(result);
-      const pipelineResult = await processPipeline({
-        value: pipelineInputValue,
-        env: execEnv,
-        pipeline: templateWithClause.pipeline,
-        format: templateWithClause.format as string | undefined,
-        isRetryable: false,
-        identifier: commandName,
-        location: node.location,
-        descriptorHint: resultSecurityDescriptor
-      });
-      result = pipelineResult;
-    } else {
-      const withClauseResult = await applyWithClause(result, templateWithClause, execEnv);
-      result = withClauseResult.value ?? withClauseResult;
-    }
-  }
-}
-// Handle data executables
-  else if (isDataExecutable(definition)) {
-    const { evaluateDataValue } = await import('./data-value-evaluator');
-    const dataValue = await evaluateDataValue(definition.dataTemplate as any, execEnv);
-    const text = typeof dataValue === 'string' ? dataValue : JSON.stringify(dataValue);
-    const dataDescriptor = extractSecurityDescriptor(dataValue, {
-      recursive: true,
-      mergeArrayElements: true
-    });
-    const mergedDescriptor =
-      dataDescriptor && resultSecurityDescriptor
-        ? execEnv.mergeSecurityDescriptors(dataDescriptor, resultSecurityDescriptor)
-        : dataDescriptor || resultSecurityDescriptor || undefined;
-    result = wrapStructured(
-      dataValue as any,
-      Array.isArray(dataValue) ? 'array' : 'object',
-      text,
-      mergedDescriptor ? { security: mergedDescriptor } : undefined
-    );
-  }
-  // Handle pipeline executables
-  else if (isPipelineExecutable(definition)) {
-    const { processPipeline } = await import('./pipeline/unified-processor');
-    const pipelineInputValue =
-      evaluatedArgs.length > 0
-        ? toPipelineInput(evaluatedArgs[0])
-        : '';
-    const pipelineResult = await processPipeline({
-      value: pipelineInputValue,
-      env: execEnv,
-      pipeline: definition.pipeline,
-      format: definition.format,
-      identifier: commandName,
-      location: node.location,
-      isRetryable: false,
-      descriptorHint: resultSecurityDescriptor
-    });
-    result = typeof pipelineResult === 'string' ? pipelineResult : String(pipelineResult ?? '');
+  });
+  if (nonCommandResult !== undefined) {
+    result = nonCommandResult;
   }
   // Handle command executables
   else if (isCommandExecutable(definition)) {
@@ -2349,282 +2239,6 @@ async function evaluateExecInvocationInternal(
       env.recordSecurityDescriptor(mergedInputDescriptor);
       mergeResultDescriptor(mergedInputDescriptor);
     }
-    }
-  }
-  // Handle command reference executables
-  else if (isCommandRefExecutable(definition)) {
-    const refAst = (definition as any).commandRefAst;
-    if (refAst) {
-      const refWithClause = mergeAuthUsingIntoWithClause(definition.withClause, node.withClause);
-      const refEnv = env.createChild();
-      if (variable?.internal?.capturedModuleEnv instanceof Map) {
-        refEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
-      }
-      const baseInvocation =
-        (refAst as any).type === 'ExecInvocation'
-          ? (refAst as ExecInvocation)
-          : ({
-              type: 'ExecInvocation',
-              commandRef: refAst
-            } as ExecInvocation);
-      const refInvocation = refWithClause ? { ...baseInvocation, withClause: refWithClause } : baseInvocation;
-      const refResult = await evaluateExecInvocation(refInvocation, refEnv);
-      result = refResult.value as string;
-    } else {
-      const refName = definition.commandRef;
-      if (!refName) {
-        throw new MlldInterpreterError(`Command reference ${commandName} has no target command`);
-      }
-
-      const refWithClause = mergeAuthUsingIntoWithClause(definition.withClause, node.withClause);
-      
-      // Look up the referenced command
-      // First check in the captured module environment (for imported executables)
-      let refCommand = null;
-      if (variable?.internal?.capturedModuleEnv) {
-        const capturedEnv =
-          (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
-        if (capturedEnv instanceof Map) {
-          // If it's a Map, we have proper Variables
-          refCommand = capturedEnv.get(refName);
-        } else if (capturedEnv && typeof capturedEnv === 'object') {
-          // This shouldn't happen with proper deserialization, but handle it for safety
-          refCommand = capturedEnv[refName];
-        }
-      }
-
-      // Fall back to current environment if not found in captured environment
-      if (!refCommand) {
-        refCommand = env.getVariable(refName);
-      }
-
-      if (!refCommand) {
-        throw new MlldInterpreterError(`Referenced command not found: ${refName}`);
-      }
-
-      // The commandArgs contains the original AST nodes for how to call the referenced command
-      // We need to evaluate these nodes with the current invocation's parameters bound
-      if (definition.commandArgs && definition.commandArgs.length > 0) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          try {
-            console.error('[EXEC INVOC] commandRef args shape:', (definition.commandArgs as any[]).map((a: any) => Array.isArray(a) ? 'array' : (a && typeof a === 'object' && a.type) || typeof a));
-          } catch {}
-        }
-        // Evaluate each arg; handle interpolated string args that are arrays of parts
-        let refArgs: any[] = [];
-        const { evaluate } = await import('../core/interpreter');
-        
-        for (const argNode of definition.commandArgs) {
-          let value: any;
-          // If this arg is an array of parts (from DataString with interpolation),
-          // interpolate the whole array into a single string argument
-          if (Array.isArray(argNode)) {
-            value = await interpolateWithResultDescriptor(argNode as any[], execEnv, InterpolationContext.Default);
-          } else {
-            // Evaluate the individual argument node
-            const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
-            value = argResult?.value;
-          }
-          // Resolve parameter variables: if value is a string matching a parameter name, use the parameter's actual value
-          if (typeof value === 'string') {
-            const paramVar = execEnv.getVariable(value);
-            if (paramVar?.internal?.isParameter) {
-              value = isStructuredValue(paramVar.value) ? paramVar.value : paramVar.value;
-            }
-          }
-          // Preserve security labels from source parameter variables through commandRef arg passing
-          const argIdentifier = !Array.isArray(argNode) && argNode && typeof argNode === 'object' && (argNode as any).type === 'VariableReference'
-            ? (argNode as any).identifier as string
-            : undefined;
-          if (argIdentifier) {
-            const sourceVar = execEnv.getVariable(argIdentifier);
-            if (sourceVar?.internal?.isParameter) {
-              const secDescriptor = sourceVar.mx ? varMxToSecurityDescriptor(sourceVar.mx as VariableContext) : undefined;
-              if (secDescriptor && ((secDescriptor.labels?.length ?? 0) > 0 || (secDescriptor.taint?.length ?? 0) > 0)) {
-                const structured = isStructuredValue(value) ? value : wrapExecResult(value);
-                applySecurityDescriptorToStructuredValue(structured, secDescriptor);
-                value = structured;
-              }
-            }
-          }
-          if (value !== undefined) {
-            refArgs.push(value);
-          }
-        }
-        
-        // Create a child environment that can access the referenced command
-        const refEnv = env.createChild();
-        // Set the captured module env so getVariable can find the command
-        if (
-          variable?.internal?.capturedModuleEnv instanceof Map
-        ) {
-          const captured =
-            (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
-          if (captured instanceof Map) {
-            refEnv.setCapturedModuleEnv(captured);
-          }
-        }
-
-        // Create a new invocation node for the referenced command with the evaluated args
-        const refInvocation: ExecInvocation = {
-          type: 'ExecInvocation',
-          commandRef: {
-            identifier: refName,
-            args: refArgs  // Pass values directly like foreach does
-          },
-          // Pass along the pipeline if present
-          ...(refWithClause ? { withClause: refWithClause } : {})
-        };
-
-        // Recursively evaluate the referenced command in the environment that has it
-        const refResult = await evaluateExecInvocation(refInvocation, refEnv);
-        result = refResult.value as string;
-      } else {
-        // Create a child environment that can access the referenced command
-        const refEnv = env.createChild();
-        // Set the captured module env so getVariable can find the command
-        if (variable?.internal?.capturedModuleEnv instanceof Map) {
-          refEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
-        }
-
-        // No commandArgs means just pass through the current invocation's args
-        // Preserve security labels from parameter variables onto passed-through args
-        const securedArgs = evaluatedArgs.map((arg: any, i: number) => {
-          const paramName = params[i];
-          if (!paramName) return arg;
-          const paramVar = execEnv.getVariable(paramName);
-          if (!paramVar?.internal?.isParameter) return arg;
-          const secDescriptor = paramVar.mx ? varMxToSecurityDescriptor(paramVar.mx as VariableContext) : undefined;
-          if (!secDescriptor || ((secDescriptor.labels?.length ?? 0) === 0 && (secDescriptor.taint?.length ?? 0) === 0)) return arg;
-          const structured = isStructuredValue(arg) ? arg : wrapExecResult(arg);
-          applySecurityDescriptorToStructuredValue(structured, secDescriptor);
-          return structured;
-        });
-        const refInvocation: ExecInvocation = {
-          type: 'ExecInvocation',
-          commandRef: {
-            identifier: refName,
-            args: securedArgs
-          },
-          // Pass along the pipeline if present
-          ...(refWithClause ? { withClause: refWithClause } : {})
-        };
-
-        // Recursively evaluate the referenced command in the environment that has it
-        const refResult = await evaluateExecInvocation(refInvocation, refEnv);
-        result = refResult.value as string;
-      }
-    }
-  }
-  // Handle section executables
-  else if (isSectionExecutable(definition)) {
-    // Interpolate the path template to get the file path
-    const filePath = await interpolateWithResultDescriptor(definition.pathTemplate, execEnv);
-    
-    // Interpolate the section template to get the section name
-    const sectionName = await interpolateWithResultDescriptor(definition.sectionTemplate, execEnv);
-    
-    // Read the file content
-    const fileContent = await readFileWithPolicy(execEnv, filePath, nodeSourceLocation ?? undefined);
-    
-    // Extract the section using llmxml or fallback to basic extraction
-    const llmxmlInstance = env.getLlmxml();
-    let sectionContent: string;
-    
-    try {
-      // getSection expects just the title without the # prefix
-      const titleWithoutHash = sectionName.replace(/^#+\s*/, '');
-      sectionContent = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
-        includeNested: true
-      });
-    } catch (error) {
-      // Fallback to basic extraction if llmxml fails
-      sectionContent = extractSection(fileContent, sectionName);
-    }
-    
-    // Handle rename if present
-    if (definition.renameTemplate) {
-      const newTitle = await interpolateWithResultDescriptor(definition.renameTemplate, execEnv);
-      const lines = sectionContent.split('\n');
-      if (lines.length > 0 && lines[0].match(/^#+\s/)) {
-        const newTitleTrimmed = newTitle.trim();
-        const newHeadingMatch = newTitleTrimmed.match(/^(#+)(\s+(.*))?$/);
-        
-        if (newHeadingMatch) {
-          if (!newHeadingMatch[3]) {
-            // Just header level
-            const originalText = lines[0].replace(/^#+\s*/, '');
-            lines[0] = `${newHeadingMatch[1]} ${originalText}`;
-          } else {
-            // Full replacement
-            lines[0] = newTitleTrimmed;
-          }
-        } else {
-          // Just text - keep original level
-          const originalLevel = lines[0].match(/^#+/)?.[0] || '#';
-          lines[0] = `${originalLevel} ${newTitleTrimmed}`;
-        }
-        
-        sectionContent = lines.join('\n');
-      }
-    }
-    
-    result = sectionContent;
-  }
-  // Handle resolver executables
-  else if (isResolverExecutable(definition)) {
-    // For resolver executables, we need to construct the full resolver path
-    // with parameter interpolation
-    let resolverPath = definition.resolverPath;
-    
-    // Replace parameter placeholders in the resolver path
-    for (let i = 0; i < params.length; i++) {
-      const paramName = params[i];
-      const argValue = evaluatedArgs[i];
-      if (argValue !== undefined) {
-        // Replace @paramName in the resolver path
-        resolverPath = resolverPath.replace(new RegExp(`@${paramName}\\b`, 'g'), argValue);
-      }
-    }
-    
-    // Prepare payload if present
-    let payload: any = undefined;
-    if (definition.payloadTemplate) {
-      // Interpolate the payload template
-      const payloadStr = await interpolateWithResultDescriptor(definition.payloadTemplate, execEnv);
-      try {
-        // Try to parse as JSON
-        payload = JSON.parse(payloadStr);
-      } catch {
-        // If not valid JSON, use as string
-        payload = payloadStr;
-      }
-    }
-    
-    // Invoke the resolver through the ResolverManager
-    const resolverManager = env.getResolverManager();
-    if (!resolverManager) {
-      throw new MlldInterpreterError('Resolver manager not available');
-    }
-    
-    // Resolve the resolver with the appropriate context
-    const resolverResult = await resolverManager.resolve(resolverPath, {
-      context: 'exec-invocation',
-      basePath: env.getBasePath(),
-      payload
-    });
-    
-    // Extract content from resolver result
-    if (resolverResult && typeof resolverResult === 'object' && 'content' in resolverResult) {
-      // ResolverContent interface
-      result = resolverResult.content;
-    } else if (typeof resolverResult === 'string') {
-      result = resolverResult;
-    } else if (resolverResult && typeof resolverResult === 'object') {
-      // For objects, serialize to JSON
-      result = JSON.stringify(resolverResult, null, 2);
-    } else {
-      result = String(resolverResult);
     }
   } else {
     throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
