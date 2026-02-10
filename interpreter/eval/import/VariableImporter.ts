@@ -1,23 +1,13 @@
-import * as fs from 'fs';
 import type { DirectiveNode } from '@core/types';
-import type { Variable, VariableSource, VariableTypeDiscriminator, VariableMetadata } from '@core/types/variable';
+import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable } from '@core/types/variable';
 import { 
-  createImportedVariable, 
   createObjectVariable,
   createArrayVariable,
-  createSimpleTextVariable,
-  createPathVariable,
-  createExecutableVariable,
-  createTemplateVariable,
-  createStructuredValueVariable,
-  isExecutable,
-  isExecutableVariable,
-  getEffectiveType,
-  VariableTypeGuards
+  createExecutableVariable
 } from '@core/types/variable';
 import { VariableMetadataUtils } from '@core/types/variable';
 import type { DataLabel } from '@core/types/security';
-import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import { makeSecurityDescriptor } from '@core/types/security';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
 import { isNodeProxy } from '@interpreter/utils/node-interop';
 import type { Environment } from '../../env/Environment';
@@ -33,6 +23,7 @@ import { ModuleExportManifestValidator } from './variable-importer/ModuleExportM
 import { GuardExportChecker } from './variable-importer/GuardExportChecker';
 import { ModuleExportSerializer } from './variable-importer/ModuleExportSerializer';
 import { ImportTypeRouter } from './variable-importer/ImportTypeRouter';
+import { ImportVariableFactoryOrchestrator } from './variable-importer/factory/ImportVariableFactoryOrchestrator';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -51,6 +42,7 @@ export class VariableImporter {
   private readonly guardExportChecker: GuardExportChecker;
   private readonly moduleExportSerializer: ModuleExportSerializer;
   private readonly importTypeRouter: ImportTypeRouter;
+  private readonly variableFactoryOrchestrator: ImportVariableFactoryOrchestrator;
 
   constructor(private objectResolver: ObjectReferenceResolver) {
     this.bindingGuards = new ImportBindingGuards();
@@ -59,6 +51,13 @@ export class VariableImporter {
     this.guardExportChecker = new GuardExportChecker();
     this.moduleExportSerializer = new ModuleExportSerializer(this.objectResolver);
     this.importTypeRouter = new ImportTypeRouter();
+    this.variableFactoryOrchestrator = new ImportVariableFactoryOrchestrator({
+      createExecutableFromImport: (name, value, source, metadata, securityLabels) =>
+        this.createExecutableFromImport(name, value, source, metadata, securityLabels),
+      hasComplexContent: value => this.hasComplexContent(value),
+      unwrapArraySnapshots: (value, importPath) => this.unwrapArraySnapshots(value, importPath),
+      inferVariableType: value => this.inferVariableType(value)
+    });
   }
   
   /**
@@ -232,178 +231,12 @@ export class VariableImporter {
       env?: Environment;
     }
   ): Variable {
-    const source: VariableSource = {
-      directive: 'var',
-      syntax: Array.isArray(value) ? 'array' : 
-              (value && typeof value === 'object') ? 'object' : 'quoted',
-      hasInterpolation: false,
-      isMultiLine: false
-    };
-    const deserialized = VariableMetadataUtils.deserializeSecurityMetadata(options?.serializedMetadata);
-    const snapshot = options?.env?.getSecuritySnapshot?.();
-    let snapshotDescriptor = snapshot
-      ? makeSecurityDescriptor({
-          labels: snapshot.labels,
-          taint: snapshot.taint,
-          sources: snapshot.sources,
-          policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
-        })
-      : undefined;
-    let combinedDescriptor = deserialized.security;
-    if (snapshotDescriptor) {
-      combinedDescriptor = combinedDescriptor
-        ? mergeDescriptors(combinedDescriptor, snapshotDescriptor)
-        : snapshotDescriptor;
-    }
-    const baseMetadata = {
-      isImported: true,
-      importPath,
-      originalName: originalName !== name ? originalName : undefined,
-      definedAt: { line: 0, column: 0, filePath: importPath },
-      ...deserialized
-    };
-    const initialMetadata = VariableMetadataUtils.applySecurityMetadata(baseMetadata, {
-      labels: options?.securityLabels,
-      existingDescriptor: combinedDescriptor
-    });
-    const buildMetadata = (extra?: VariableMetadata): VariableMetadata =>
-      VariableMetadataUtils.applySecurityMetadata(
-        {
-          ...initialMetadata,
-          ...(extra || {})
-        },
-        {
-          labels: options?.securityLabels,
-          existingDescriptor: initialMetadata.security
-        }
-      );
-
-    if (isStructuredValue(value)) {
-      return createStructuredValueVariable(
-        name,
-        value,
-        source,
-        buildMetadata({
-          isStructuredValue: true,
-          structuredValueType: value.type
-        })
-      );
-    }
-
-    // Check if this is an executable export
-    if (value && typeof value === 'object' && '__executable' in value && value.__executable) {
-      return this.createExecutableFromImport(name, value, source, buildMetadata(), options?.securityLabels);
-    }
-    
-    // Check if this is a template export
-    if (value && typeof value === 'object' && (value as any).__template) {
-      const templateSource: VariableSource = {
-        directive: 'var',
-        syntax: 'template',
-        hasInterpolation: true,
-        isMultiLine: true
-      };
-      const tmplMetadata = buildMetadata();
-      const templateOptions = {
-        metadata: tmplMetadata,
-        internal: {
-          templateAst: (value as any).templateAst
-        }
-      };
-      return createTemplateVariable(
-        name,
-        (value as any).content,
-        (value as any).parameters,
-        (value as any).templateSyntax === 'tripleColon' ? 'tripleColon' : 'doubleColon',
-        templateSource,
-        templateOptions
-      );
-    }
-
-    // Infer the variable type from the value
-    const originalType = this.inferVariableType(value);
-
-    // Preserve primitive types (no stringification) so math/boolean logic works in eval
-    let processedValue = value;
-    
-    // For array types, create an ArrayVariable to preserve array behaviors
-    if (originalType === 'array' && Array.isArray(processedValue)) {
-      const isComplexArray = this.hasComplexContent(processedValue);
-      if (process.env.MLLD_DEBUG_FIX === 'true') {
-        console.error('[VariableImporter] create array variable', {
-          name,
-          importPath,
-          isComplexArray,
-          sample: processedValue.slice(0, 2)
-        });
-      }
-
-      return createArrayVariable(
-        name,
-        processedValue,
-        isComplexArray,
-        source,
-        buildMetadata({
-          isImported: true,
-          importPath,
-          originalName: originalName !== name ? originalName : undefined
-        })
-      );
-    }
-
-    // For object types, create an ObjectVariable to preserve field access capability
-    if (originalType === 'object') {
-      const normalizedObject = this.unwrapArraySnapshots(processedValue, importPath);
-      // Check if the object contains complex AST nodes that need evaluation
-      const isComplex = this.hasComplexContent(normalizedObject);
-      if (process.env.MLLD_DEBUG_FIX === 'true') {
-        console.error('[VariableImporter] create object variable', {
-          name,
-          importPath,
-          isComplex,
-          keys: Object.keys(normalizedObject || {}).slice(0, 5),
-          agentRosterPreview: normalizedObject && (normalizedObject as any).agent_roster
-        });
-        try {
-          fs.appendFileSync(
-            '/tmp/mlld-debug.log',
-            JSON.stringify({
-              source: 'VariableImporter',
-              name,
-              importPath,
-              isComplex,
-              keys: Object.keys(normalizedObject || {}).slice(0, 5),
-              agentRosterType: normalizedObject && typeof (normalizedObject as any).agent_roster,
-              agentRosterIsVariable: this.isVariableLike((normalizedObject as any).agent_roster),
-              agentRosterIsArray: Array.isArray((normalizedObject as any).agent_roster)
-            }) + '\n'
-          );
-        } catch {}
-      }
-      
-      return createObjectVariable(
-        name,
-        normalizedObject,
-        isComplex, // Mark as complex if it contains AST nodes
-        source,
-        buildMetadata({
-          isImported: true,
-          importPath,
-          originalName: originalName !== name ? originalName : undefined
-        })
-      );
-    }
-    
-    // For non-objects, use createImportedVariable to preserve the original type info
-    return createImportedVariable(
+    return this.variableFactoryOrchestrator.createVariableFromValue(
       name,
-      processedValue,
-      originalType,
+      value,
       importPath,
-      false,
-      originalName || name,
-      source,
-      buildMetadata()
+      originalName,
+      options
     );
   }
 
