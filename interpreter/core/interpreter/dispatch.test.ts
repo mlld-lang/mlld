@@ -3,6 +3,10 @@ import {
   createUnknownNodeTypeError,
   getDispatchTarget
 } from '@interpreter/core/interpreter/dispatch';
+import {
+  DISPATCH_TARGET_TO_HANDLER_FAMILY,
+  getSpecializedHandlerFamily
+} from '@interpreter/core/interpreter/handlers/handler-registry';
 
 function node(type: string, extra: Record<string, unknown> = {}): any {
   return { type, nodeId: `${type}-node`, ...extra };
@@ -57,5 +61,39 @@ describe('interpreter dispatch routing', () => {
     expect(createUnknownNodeTypeError(unknown).message).toBe(
       'Unknown node type: DefinitelyUnknownNode'
     );
+  });
+
+  it('keeps dispatch-to-specialized-handler identities stable', () => {
+    expect(getSpecializedHandlerFamily('execInvocation')).toBe('execInvocation');
+    expect(getSpecializedHandlerFamily('variableReferenceWithTail')).toBe('variableReferenceWithTail');
+    expect(getSpecializedHandlerFamily('newExpression')).toBe('newExpression');
+    expect(getSpecializedHandlerFamily('labelModification')).toBe('labelModification');
+    expect(getSpecializedHandlerFamily('unifiedExpression')).toBe('unifiedExpression');
+    expect(getSpecializedHandlerFamily('whenExpression')).toBe('controlFlow');
+    expect(getSpecializedHandlerFamily('foreach')).toBe('controlFlow');
+    expect(getSpecializedHandlerFamily('forExpression')).toBe('controlFlow');
+    expect(getSpecializedHandlerFamily('loopExpression')).toBe('controlFlow');
+    expect(getSpecializedHandlerFamily('loadContent')).toBe('loadContent');
+    expect(getSpecializedHandlerFamily('fileReference')).toBe('fileReference');
+    expect(getSpecializedHandlerFamily('code')).toBe('code');
+    expect(getSpecializedHandlerFamily('command')).toBe('command');
+    expect(getSpecializedHandlerFamily('directive')).toBeUndefined();
+
+    expect(DISPATCH_TARGET_TO_HANDLER_FAMILY).toMatchObject({
+      execInvocation: 'execInvocation',
+      variableReferenceWithTail: 'variableReferenceWithTail',
+      newExpression: 'newExpression',
+      labelModification: 'labelModification',
+      unifiedExpression: 'unifiedExpression',
+      whenExpression: 'controlFlow',
+      exeBlock: 'controlFlow',
+      foreach: 'controlFlow',
+      forExpression: 'controlFlow',
+      loopExpression: 'controlFlow',
+      loadContent: 'loadContent',
+      fileReference: 'fileReference',
+      code: 'code',
+      command: 'command'
+    });
   });
 });

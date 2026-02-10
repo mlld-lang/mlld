@@ -13,11 +13,7 @@ import type {
   DotSeparatorNode,
   PathSeparatorNode,
   SectionMarkerNode,
-  ExecInvocation,
-  BaseMlldNode,
-  FileReferenceNode,
-  FieldAccessNode,
-  CondensedPipe
+  BaseMlldNode
 } from '@core/types';
 import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
@@ -44,6 +40,24 @@ import { parseSync } from '@grammar/parser';
 import { evaluateArrayNodes } from './interpreter/traversal';
 import { createUnknownNodeTypeError, getDispatchTarget } from './interpreter/dispatch';
 import { resolveVariableReference } from './interpreter/resolve-variable-reference';
+import { evaluateExecInvocationNode } from './interpreter/handlers/exec-invocation-handler';
+import { evaluateVariableReferenceWithTailNode } from './interpreter/handlers/variable-reference-with-tail-handler';
+import { evaluateNewExpressionNode } from './interpreter/handlers/new-expression-handler';
+import { evaluateLabelModificationNode } from './interpreter/handlers/label-modification-handler';
+import { evaluateUnifiedExpressionNode } from './interpreter/handlers/unified-expression-handler';
+import {
+  evaluateExeBlockNode,
+  evaluateForExpressionNode,
+  evaluateForeachNode,
+  evaluateLoopExpressionNode,
+  evaluateWhenExpressionNode
+} from './interpreter/handlers/control-flow-handlers';
+import {
+  evaluateFileReferenceNode,
+  evaluateLoadContentNode
+} from './interpreter/handlers/load-content-file-reference-handler';
+import { evaluateCodeNode } from './interpreter/handlers/code-handler';
+import { evaluateCommandNode } from './interpreter/handlers/command-handler';
 
 /**
  * Type for variable values
@@ -403,35 +417,25 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   }
   
   if (dispatchTarget === 'execInvocation' && isExecInvocation(node)) {
-    // Import the exec invocation evaluator
-    const { evaluateExecInvocation } = await import('../eval/exec-invocation');
-    return evaluateExecInvocation(node, env);
+    return evaluateExecInvocationNode(node, env);
   }
 
   // Handle VariableReferenceWithTail (variable with pipeline from when-expression actions)
   if (dispatchTarget === 'variableReferenceWithTail' && node.type === 'VariableReferenceWithTail') {
-    const { VariableReferenceEvaluator } = await import('../eval/data-values/VariableReferenceEvaluator');
-    const evaluator = new VariableReferenceEvaluator();
-    const result = await evaluator.evaluate(node, env);
-    return { value: result, env };
+    return evaluateVariableReferenceWithTailNode(node as any, env);
   }
 
   if (dispatchTarget === 'newExpression' && node.type === 'NewExpression') {
-    const { evaluateNewExpression } = await import('../eval/new-expression');
-    const value = await evaluateNewExpression(node as any, env);
-    return { value, env };
+    return evaluateNewExpressionNode(node as any, env);
   }
 
   if (dispatchTarget === 'labelModification' && node.type === 'LabelModification') {
-    const { evaluateLabelModification } = await import('../eval/label-modification');
-    return evaluateLabelModification(node as any, env, context);
+    return evaluateLabelModificationNode(node as any, env, context);
   }
 
   // Handle expression nodes
   if (dispatchTarget === 'unifiedExpression' && (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression')) {
-    const { evaluateUnifiedExpression } = await import('../eval/expressions');
-    const result = await evaluateUnifiedExpression(node, env);
-    return { value: result.value, env };
+    return evaluateUnifiedExpressionNode(node as any, env);
   }
   
   // Handle literal nodes
@@ -455,20 +459,16 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   
   // Handle when expressions
   if (dispatchTarget === 'whenExpression' && node.type === 'WhenExpression') {
-    const { evaluateWhenExpression } = await import('../eval/when-expression');
-    return evaluateWhenExpression(node as any, env, context);
+    return evaluateWhenExpressionNode(node as any, env, context);
   }
 
   if (dispatchTarget === 'exeBlock' && node.type === 'ExeBlock') {
-    const { evaluateExeBlock } = await import('../eval/exe');
-    return evaluateExeBlock(node as any, env, {}, { scope: 'block' });
+    return evaluateExeBlockNode(node as any, env);
   }
   
   // Handle foreach expressions as first-class expressions
   if (dispatchTarget === 'foreach' && (node.type === 'foreach' || node.type === 'foreach-command')) {
-    const { evaluateForeachCommand } = await import('../eval/foreach');
-    const result = await evaluateForeachCommand(node as any, env);
-    return { value: result, env };
+    return evaluateForeachNode(node as any, env);
   }
   
   // Note: WhenRHSAction nodes have been replaced with regular Directive nodes
@@ -476,15 +476,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   
   // Handle for expressions
   if (dispatchTarget === 'forExpression' && node.type === 'ForExpression') {
-    const { evaluateForExpression } = await import('../eval/for');
-    const result = await evaluateForExpression(node as any, env);
-    return { value: result, env };
+    return evaluateForExpressionNode(node as any, env);
   }
 
   if (dispatchTarget === 'loopExpression' && node.type === 'LoopExpression') {
-    const { evaluateLoopExpression } = await import('../eval/loop');
-    const result = await evaluateLoopExpression(node as any, env);
-    return { value: result, env };
+    return evaluateLoopExpressionNode(node as any, env);
   }
   
   // Handle data value nodes from the grammar (arrays and objects)
@@ -496,66 +492,22 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
 
   // Handle load-content nodes (alligator syntax: <file>)
   if (dispatchTarget === 'loadContent' && node.type === 'load-content') {
-    const result = await evaluateDataValue(node, env);
-    return { value: result, env };
+    return evaluateLoadContentNode(node as any, env);
   }
 
   // Handle FileReference nodes (<file> with field access or pipes)
   if (dispatchTarget === 'fileReference' && node.type === 'FileReference') {
-    const fileRefNode = node as FileReferenceNode;
-    const { processContentLoader } = await import('../eval/content-loader');
-    const { accessField } = await import('../utils/field-access');
-    const { wrapLoadContentValue } = await import('../utils/load-content-structured');
-    const { isStructuredValue } = await import('../utils/structured-value');
-
-    // Convert FileReference to load-content structure
-    const loadContentNode = {
-      type: 'load-content' as const,
-      source: fileRefNode.source
-    };
-
-    // Load the content
-    const rawLoadResult = await processContentLoader(loadContentNode, env);
-    let loadResult = isStructuredValue(rawLoadResult)
-      ? rawLoadResult
-      : wrapLoadContentValue(rawLoadResult);
-
-    // Process field access if present
-    if (fileRefNode.fields && fileRefNode.fields.length > 0) {
-      let result: any = loadResult;
-      for (const field of fileRefNode.fields) {
-        result = await accessField(result, field, { env });
-      }
-      return { value: result, env };
-    }
-
-    return { value: loadResult, env };
+    return evaluateFileReferenceNode(node as any, env);
   }
 
   // Handle code nodes (from js {...}, sh {...}, python {...}, etc. in expressions)
   if (dispatchTarget === 'code' && node.type === 'code') {
-    const { evaluateCodeExecution } = await import('../eval/code-execution');
-    const result = await evaluateCodeExecution(node, env);
-    return { value: result.value, env };
+    return evaluateCodeNode(node as any, env);
   }
 
   // Handle command nodes (from cmd {...} or run {...} in expressions)
   if (dispatchTarget === 'command' && node.type === 'command') {
-    let commandStr: string;
-    if (typeof node.command === 'string') {
-      commandStr = node.command || '';
-    } else if (Array.isArray(node.command)) {
-      // Interpolate the command array
-      const interpolatedCommand = await interpolateWithSecurityRecording(node.command, env);
-      commandStr = interpolatedCommand || '';
-    } else {
-      commandStr = '';
-    }
-
-    // Always execute commands - hasRunKeyword is not relevant for execution
-    // (it only indicates whether the 'run' keyword was used in syntax)
-    const result = await env.executeCommand(commandStr);
-    return { value: result, env };
+    return evaluateCommandNode(node as any, env, interpolateWithSecurityRecording);
   }
   
   // If we get here, it's an unknown node type
