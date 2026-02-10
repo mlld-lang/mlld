@@ -1,12 +1,8 @@
 import type { GuardHint } from '@core/types/guard';
-import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { Variable, VariableSource } from '@core/types/variable';
 import { createSimpleTextVariable } from '@core/types/variable';
-import { createExecutableVariable } from '@core/types/variable/VariableFactories';
-import type { ExecutableVariable } from '@core/types/executable';
 import { buildArrayAggregate, createGuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import type { GuardInputHelper } from '@core/types/variable/ArrayHelpers';
-import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { MlldSecurityError } from '@core/errors';
 import { materializeGuardInputs } from '../utils/guard-inputs';
@@ -23,7 +19,6 @@ import { isDirectiveHookTarget } from '@core/types/hooks';
 import { isVariable } from '../utils/variable-resolution';
 import { extractSecurityDescriptor } from '../utils/structured-value';
 import { buildPerInputCandidates, collectOperationGuards } from './guard-candidate-selection';
-import { buildOperationKeys } from './guard-operation-keys';
 import {
   extractOutputDescriptor,
   mergeDescriptorWithFallbackInputs
@@ -44,6 +39,18 @@ import {
   buildPostGuardRetrySignal
 } from './guard-post-signals';
 import { evaluatePostGuardRuntime } from './guard-post-runtime-evaluator';
+import {
+  attachPostGuardInputHelper,
+  ensurePostPrefixHelper,
+  ensurePostTagHelper,
+  injectPostGuardHelpers
+} from './guard-post-helper-injection';
+import {
+  buildPostVariablePreview,
+  clonePostGuardVariable,
+  clonePostGuardVariableWithDescriptor,
+  resolvePostGuardValue
+} from './guard-post-materialization';
 import { extractGuardOverride, normalizeGuardOverride } from './guard-override-utils';
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
@@ -56,13 +63,6 @@ const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
 const GUARD_INPUT_SOURCE: VariableSource = {
   directive: 'var',
   syntax: 'object',
-  hasInterpolation: false,
-  isMultiLine: false
-};
-
-const GUARD_HELPER_SOURCE: VariableSource = {
-  directive: 'var',
-  syntax: 'code',
   hasInterpolation: false,
   isMultiLine: false
 };
@@ -274,20 +274,20 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
           {
             guardInputSource: GUARD_INPUT_SOURCE,
             prepareGuardEnvironment: preparePostGuardEnvironment,
-            injectGuardHelpers,
-            attachGuardInputHelper: attachGuardHelper,
-            cloneVariable,
-            resolveGuardValue,
-            buildVariablePreview,
+            injectGuardHelpers: injectPostGuardHelpers,
+            attachGuardInputHelper: attachPostGuardInputHelper,
+            cloneVariable: clonePostGuardVariable,
+            resolveGuardValue: resolvePostGuardValue,
+            buildVariablePreview: buildPostVariablePreview,
             replacementDependencies: {
-              cloneVariableWithDescriptor
+              cloneVariableWithDescriptor: clonePostGuardVariableWithDescriptor
             }
           }
         ),
       buildInputHelper: buildGuardInputHelper,
       buildOperationSnapshot,
-      resolveGuardValue,
-      buildVariablePreview,
+      resolveGuardValue: resolvePostGuardValue,
+      buildVariablePreview: buildPostVariablePreview,
       logLabelModifications: async (guard, labelModifications, targets) => {
         await logGuardLabelModifications(env, guard, labelModifications, targets);
       }
@@ -337,7 +337,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
         guardResults: guardTrace,
         reasons,
         operation,
-        outputPreview: buildVariablePreview(activeOutputs[0] ?? outputVariables[0] ?? null),
+        outputPreview: buildGuardOutputPreview(activeOutputs[0], outputVariables[0]),
         timing: 'after'
       });
       throw error;
@@ -367,7 +367,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
           reasons: retryReasons,
           hints,
           operation,
-          outputPreview: buildVariablePreview(activeOutputs[0] ?? outputVariables[0] ?? null),
+          outputPreview: buildGuardOutputPreview(activeOutputs[0], outputVariables[0]),
           retryHint
         });
       }
@@ -391,14 +391,14 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
         reasons: retryReasons,
         hints,
         operation,
-        outputPreview: buildVariablePreview(activeOutputs[0] ?? outputVariables[0] ?? null),
+        outputPreview: buildGuardOutputPreview(activeOutputs[0], outputVariables[0]),
         retryHint
       });
     }
 
     if (transformsApplied && activeOutputs[0]) {
       const finalVariable = activeOutputs[0];
-      const finalValue = resolveGuardValue(finalVariable, finalVariable);
+      const finalValue = resolvePostGuardValue(finalVariable, finalVariable);
       return buildTransformedGuardResult(result, finalVariable, finalValue, currentDescriptor);
     }
 
@@ -422,8 +422,8 @@ function preparePostGuardEnvironment(
       // ignore debug
     }
   }
-  ensurePrefixHelper(sourceEnv, guardEnv);
-  ensureTagHelper(sourceEnv, guardEnv);
+  ensurePostPrefixHelper(sourceEnv, guardEnv);
+  ensurePostTagHelper(sourceEnv, guardEnv);
   if (!guardEnv.hasVariable('prefixWith') && sourceEnv.hasVariable('prefixWith')) {
     const existing = sourceEnv.getVariable('prefixWith');
     if (existing) {
@@ -455,22 +455,6 @@ function inheritParentVariables(parent: Environment, child: Environment): void {
   }
 }
 
-function resolveGuardValue(variable: Variable | undefined, fallback: Variable): unknown {
-  const candidate = (variable as any)?.value ?? (fallback as any)?.value ?? variable ?? fallback;
-  if (candidate && typeof candidate === 'object') {
-    if (typeof (candidate as any).text === 'string') {
-      return (candidate as any).text;
-    }
-    if (typeof (candidate as any).data === 'string') {
-      return (candidate as any).data;
-    }
-  }
-  if (candidate === undefined || candidate === null) {
-    return buildVariablePreview(fallback) ?? '';
-  }
-  return candidate;
-}
-
 function buildOperationSnapshot(inputs: readonly Variable[]): GuardOperationSnapshot {
   const aggregate = buildArrayAggregate(inputs, { nameHint: '__guard_output__' });
   return {
@@ -480,21 +464,15 @@ function buildOperationSnapshot(inputs: readonly Variable[]): GuardOperationSnap
   };
 }
 
-function attachGuardHelper(target: Variable, helper: GuardInputHelper): void {
-  const apply = (key: string, value: unknown) => {
-    Object.defineProperty(target as any, key, {
-      value,
-      enumerable: false,
-      configurable: true,
-      writable: false
-    });
-  };
-
-  apply('any', helper.any);
-  apply('all', helper.all);
-  apply('none', helper.none);
-  apply('totalTokens', helper.totalTokens);
-  apply('maxTokens', helper.maxTokens);
+function buildGuardOutputPreview(
+  primary: Variable | undefined,
+  fallback: Variable | undefined
+): string | null {
+  const candidate = primary ?? fallback;
+  if (!candidate) {
+    return null;
+  }
+  return buildPostVariablePreview(candidate);
 }
 
 function buildGuardInputHelper(inputs: readonly Variable[]): GuardInputHelper | undefined {
@@ -502,224 +480,6 @@ function buildGuardInputHelper(inputs: readonly Variable[]): GuardInputHelper | 
     return undefined;
   }
   return createGuardInputHelper(inputs);
-}
-
-function injectGuardHelpers(
-  guardEnv: Environment,
-  options: {
-    operation: OperationContext;
-    labels: readonly DataLabel[];
-    operationLabels: readonly string[];
-  }
-): void {
-  const opKeys = new Set(buildOperationKeys(options.operation).map(key => key.toLowerCase()));
-  const opLabels = new Set(options.operationLabels.map(label => label.toLowerCase()));
-  const inputLabels = new Set(options.labels.map(label => label.toLowerCase()));
-
-  const helperVariables: ExecutableVariable[] = [
-    createGuardHelperExecutable('opIs', ([target]) => {
-      if (typeof target !== 'string') return false;
-      return opKeys.has(target.toLowerCase());
-    }),
-    createGuardHelperExecutable('opHas', ([label]) => {
-      if (typeof label !== 'string') return false;
-      return opLabels.has(label.toLowerCase());
-    }),
-    createGuardHelperExecutable('opHasAny', ([value]) => {
-      const labels = Array.isArray(value) ? value : [value];
-      return labels.some(item => typeof item === 'string' && opLabels.has(item.toLowerCase()));
-    }),
-    createGuardHelperExecutable('opHasAll', ([value]) => {
-      const labels = Array.isArray(value) ? value : [value];
-      if (labels.length === 0) {
-        return false;
-      }
-      return labels.every(item => typeof item === 'string' && opLabels.has(item.toLowerCase()));
-    }),
-    createGuardHelperExecutable('inputHas', ([label]) => {
-      if (typeof label !== 'string') return false;
-      return inputLabels.has(label.toLowerCase());
-    })
-  ];
-
-  for (const variable of helperVariables) {
-    guardEnv.setVariable(variable.name, variable);
-  }
-}
-
-function createGuardHelperExecutable(
-  name: string,
-  implementation: (args: readonly unknown[]) => unknown | Promise<unknown>
-): ExecutableVariable {
-  const execVar = createExecutableVariable(
-    name,
-    'code',
-    '',
-    [],
-    'javascript',
-    GUARD_HELPER_SOURCE,
-    {
-      mx: {},
-      internal: { isSystem: true }
-    }
-  );
-  execVar.internal = {
-    ...(execVar.internal ?? {}),
-    executableDef: execVar.value,
-    isGuardHelper: true,
-    guardHelperImplementation: implementation
-  };
-  return execVar;
-}
-
-function ensurePrefixHelper(sourceEnv: Environment, targetEnv: Environment): void {
-  const execVar = createGuardHelperExecutable('prefixWith', ([label, value]) => {
-    const normalize = (candidate: unknown, fallback: Variable | undefined) => {
-      if (isVariable(candidate as Variable)) {
-        return resolveGuardValue(candidate as Variable, (candidate as Variable) ?? fallback ?? (label as Variable));
-      }
-      if (Array.isArray(candidate)) {
-        const [head] = candidate;
-        if (head !== undefined) {
-          return normalize(head, head as Variable);
-        }
-        return '';
-      }
-      if (candidate && typeof candidate === 'object') {
-        const asObj = candidate as any;
-        if (typeof asObj.text === 'string') {
-          return asObj.text;
-        }
-        if (typeof asObj.data === 'string') {
-          return asObj.data;
-        }
-      }
-      return candidate;
-    };
-
-    if (process.env.MLLD_DEBUG_GUARDS === '1') {
-      try {
-        console.error('[guard-prefixWith]', {
-          labelType: typeof label,
-          valueType: typeof value,
-          labelKeys: label && typeof label === 'object' ? Object.keys(label as any) : null,
-          valueKeys: value && typeof value === 'object' ? Object.keys(value as any) : null
-        });
-      } catch {
-        // ignore debug logging errors
-      }
-    }
-
-    const normalized = normalize(value, value as Variable);
-    const normalizedLabel = normalize(label, label as Variable);
-    return `${normalizedLabel}:${normalized}`;
-  });
-  targetEnv.setVariable(execVar.name, execVar);
-}
-
-function ensureTagHelper(sourceEnv: Environment, targetEnv: Environment): void {
-  if (targetEnv.hasVariable('tagValue')) {
-    return;
-  }
-  const existing = sourceEnv.getVariable('tagValue');
-  if (existing) {
-    targetEnv.setVariable('tagValue', existing);
-    return;
-  }
-  const execVar = createGuardHelperExecutable('tagValue', ([timing, value, input]) => {
-    const normalize = (candidate: unknown) => {
-      if (isVariable(candidate as Variable)) {
-        return resolveGuardValue(candidate as Variable, candidate as Variable);
-      }
-      if (Array.isArray(candidate)) {
-        const [head] = candidate;
-        return head !== undefined ? normalize(head) : '';
-      }
-      if (candidate && typeof candidate === 'object') {
-        const asObj = candidate as any;
-        if (typeof asObj.text === 'string') {
-          return asObj.text;
-        }
-        if (typeof asObj.data === 'string') {
-          return asObj.data;
-        }
-      }
-      return candidate;
-    };
-    const base = normalize(value) ?? normalize(input) ?? '';
-    return timing === 'before' ? `before:${base}` : `after:${base}`;
-  });
-  targetEnv.setVariable(execVar.name, execVar);
-}
-
-function cloneVariable(variable: Variable): Variable {
-  const clone: Variable = {
-    ...variable,
-    name: 'input',
-    mx: {
-      ...(variable.mx ?? {})
-    },
-    internal: {
-      ...(variable.internal ?? {}),
-      isReserved: true,
-      isSystem: true
-    }
-  };
-  if (clone.mx?.mxCache) {
-    delete clone.mx.mxCache;
-  }
-  return clone;
-}
-
-function cloneVariableWithDescriptor(
-  variable: Variable,
-  descriptor: SecurityDescriptor
-): Variable {
-  const clone: Variable = {
-    ...variable,
-    mx: {
-      ...(variable.mx ?? {})
-    },
-    internal: {
-      ...(variable.internal ?? {})
-    }
-  };
-  if (!clone.mx) {
-    clone.mx = {} as any;
-  }
-  updateVarMxFromDescriptor(clone.mx, descriptor);
-  if (clone.mx?.mxCache) {
-    delete clone.mx.mxCache;
-  }
-  return clone;
-}
-
-function buildVariablePreview(variable: Variable): string | null {
-  try {
-    const value = (variable as any).value;
-    if (typeof value === 'string') {
-      return truncatePreview(value);
-    }
-    if (value && typeof value === 'object') {
-      if (typeof (value as any).text === 'string') {
-        return truncatePreview((value as any).text);
-      }
-      return truncatePreview(JSON.stringify(value));
-    }
-    if (value === null || value === undefined) {
-      return null;
-    }
-    return truncatePreview(String(value));
-  } catch {
-    return null;
-  }
-}
-
-function truncatePreview(value: string, limit = 160): string {
-  if (value.length <= limit) {
-    return value;
-  }
-  return `${value.slice(0, limit)}…`;
 }
 
 function emitGuardWarningHints(env: Environment, hints: readonly GuardHint[]): void {
