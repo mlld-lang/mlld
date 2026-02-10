@@ -13,9 +13,7 @@ import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironmentCapture';
 import { ExportManifest } from './ExportManifest';
-import { astLocationToSourceLocation } from '@core/types';
 import type { SerializedGuardDefinition } from '../../guards';
-import { generatePolicyGuards } from '@core/policy/guards';
 import { ImportBindingGuards } from './variable-importer/ImportBindingGuards';
 import { MetadataMapParser } from './variable-importer/MetadataMapParser';
 import { ModuleExportManifestValidator } from './variable-importer/ModuleExportManifestValidator';
@@ -25,6 +23,8 @@ import { ImportTypeRouter } from './variable-importer/ImportTypeRouter';
 import { ImportVariableFactoryOrchestrator } from './variable-importer/factory/ImportVariableFactoryOrchestrator';
 import { CapturedEnvRehydrator } from './variable-importer/executable/CapturedEnvRehydrator';
 import { ExecutableImportRehydrator } from './variable-importer/executable/ExecutableImportRehydrator';
+import { PolicyImportHandler } from './variable-importer/PolicyImportHandler';
+import { NamespaceSelectedImportHandler } from './variable-importer/NamespaceSelectedImportHandler';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -46,6 +46,8 @@ export class VariableImporter {
   private readonly variableFactoryOrchestrator: ImportVariableFactoryOrchestrator;
   private readonly capturedEnvRehydrator: CapturedEnvRehydrator;
   private readonly executableImportRehydrator: ExecutableImportRehydrator;
+  private readonly policyImportHandler: PolicyImportHandler;
+  private readonly namespaceSelectedImportHandler: NamespaceSelectedImportHandler;
 
   constructor(private objectResolver: ObjectReferenceResolver) {
     this.bindingGuards = new ImportBindingGuards();
@@ -56,6 +58,32 @@ export class VariableImporter {
     this.importTypeRouter = new ImportTypeRouter();
     this.capturedEnvRehydrator = new CapturedEnvRehydrator();
     this.executableImportRehydrator = new ExecutableImportRehydrator(this.capturedEnvRehydrator);
+    this.policyImportHandler = new PolicyImportHandler();
+    this.namespaceSelectedImportHandler = new NamespaceSelectedImportHandler({
+      bindingGuards: this.bindingGuards,
+      createVariableFromValue: (name, value, importPath, originalName, options) =>
+        this.createVariableFromValue(name, value, importPath, originalName, options),
+      createNamespaceVariable: (
+        alias,
+        moduleObject,
+        importPath,
+        securityLabels,
+        metadataMap,
+        env,
+        options
+      ) =>
+        this.createNamespaceVariable(
+          alias,
+          moduleObject,
+          importPath,
+          securityLabels,
+          metadataMap,
+          env,
+          options
+        ),
+      getImportDisplayPath: (directive, fallback) => this.getImportDisplayPath(directive, fallback),
+      policyImportHandler: this.policyImportHandler
+    });
     this.variableFactoryOrchestrator = new ImportVariableFactoryOrchestrator({
       createExecutableFromImport: (name, value, source, metadata, securityLabels) =>
         this.createExecutableFromImport(name, value, source, metadata, securityLabels),
@@ -356,185 +384,24 @@ export class VariableImporter {
     guardDefinitions?: SerializedGuardDefinition[]
   ): Promise<void> {
     await this.importTypeRouter.route(directive, guardDefinitions, {
-      handleNamespaceImport: () => this.handleNamespaceImport(
+      handleNamespaceImport: () => this.namespaceSelectedImportHandler.handleNamespaceImport({
         directive,
         moduleObject,
         targetEnv,
         childEnv,
         metadataMap,
         guardDefinitions
-      ),
-      handleSelectedImport: () => this.handleSelectedImport(
+      }),
+      handleSelectedImport: () => this.namespaceSelectedImportHandler.handleSelectedImport({
         directive,
         moduleObject,
         targetEnv,
         childEnv,
         metadataMap,
         guardDefinitions
-      ),
+      }),
       registerSerializedGuards: definitions => targetEnv.registerSerializedGuards(definitions)
     });
-  }
-
-  /**
-   * Handle namespace imports
-   */
-  private async handleNamespaceImport(
-    directive: DirectiveNode,
-    moduleObject: Record<string, any>,
-    targetEnv: Environment,
-    childEnv: Environment,
-    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
-    guardDefinitions?: SerializedGuardDefinition[]
-  ): Promise<void> {
-    // For shorthand imports, namespace is stored as an array in values.namespace
-    const namespaceNodes = directive.values?.namespace;
-    const namespaceNode = namespaceNodes && Array.isArray(namespaceNodes) ? namespaceNodes[0] : undefined;
-    // Support both VariableReference (identifier) and Text (content) node types
-    const alias = namespaceNode?.identifier ?? namespaceNode?.content ?? directive.values?.imports?.[0]?.alias;
-
-    if (!alias) {
-      throw new Error('Namespace import missing alias');
-    }
-
-    const importerFilePath = targetEnv.getCurrentFilePath();
-    const aliasLocationNode = namespaceNodes && Array.isArray(namespaceNodes) ? namespaceNodes[0] : undefined;
-    const aliasLocation = aliasLocationNode?.location
-      ? astLocationToSourceLocation(aliasLocationNode.location, importerFilePath)
-      : astLocationToSourceLocation(directive.location, importerFilePath);
-
-    // Namespace imports always create objects with exported properties
-    const namespaceObject = moduleObject;
-    
-    const importPath = childEnv.getCurrentFilePath() || 'unknown';
-    const importDisplay = this.getImportDisplayPath(directive, importPath);
-    const bindingInfo = { source: importDisplay, location: aliasLocation };
-
-    this.bindingGuards.ensureImportBindingAvailable(targetEnv, alias, importDisplay, aliasLocation);
-
-    // If the unwrapped object is a template export, create a template variable instead
-    if (namespaceObject && typeof namespaceObject === 'object' && (namespaceObject as any).__template) {
-      const templateVar = this.createVariableFromValue(alias, namespaceObject, importPath, undefined, {
-        env: targetEnv
-      });
-      this.bindingGuards.setVariableWithImportBinding(targetEnv, alias, templateVar, bindingInfo);
-      if (guardDefinitions && guardDefinitions.length > 0) {
-        targetEnv.registerSerializedGuards(guardDefinitions);
-      }
-      if (directive.subtype === 'importPolicy') {
-        const policyConfig = this.resolveImportedPolicyConfig(namespaceObject, alias);
-        targetEnv.recordPolicyConfig(alias, policyConfig);
-        const guards = generatePolicyGuards(policyConfig, alias);
-        const registry = targetEnv.getGuardRegistry();
-        for (const guard of guards) {
-          registry.registerPolicyGuard(guard);
-        }
-      }
-      return;
-    }
-
-    const allowMissingNamespaceFields = importDisplay === '@payload' || importDisplay === '@state';
-    // Explicit export lists enforce strict namespace field access.
-    const strictNamespaceFieldAccess =
-      !allowMissingNamespaceFields &&
-      Boolean(childEnv.getExportManifest?.()?.hasEntries?.());
-    // Create namespace variable with the (potentially unwrapped) object
-    const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
-    const namespaceVar = this.createNamespaceVariable(
-      alias,
-      namespaceObject,
-      importPath,
-      securityLabels,
-      metadataMap,
-      targetEnv,
-      { strictFieldAccess: strictNamespaceFieldAccess }
-    );
-    this.bindingGuards.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
-    if (guardDefinitions && guardDefinitions.length > 0) {
-      targetEnv.registerSerializedGuards(guardDefinitions);
-    }
-    if (directive.subtype === 'importPolicy') {
-      const policyConfig = this.resolveImportedPolicyConfig(namespaceObject, alias);
-      targetEnv.recordPolicyConfig(alias, policyConfig);
-      const guards = generatePolicyGuards(policyConfig, alias);
-      const registry = targetEnv.getGuardRegistry();
-      for (const guard of guards) {
-        registry.registerPolicyGuard(guard);
-      }
-    }
-  }
-
-  /**
-   * Handle selected imports
-   */
-  private async handleSelectedImport(
-    directive: DirectiveNode,
-    moduleObject: Record<string, any>,
-    targetEnv: Environment,
-    childEnv: Environment,
-    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
-    guardDefinitions?: readonly SerializedGuardDefinition[]
-  ): Promise<void> {
-    const imports = directive.values?.imports || [];
-    const importPath = childEnv.getCurrentFilePath() || 'unknown';
-    const importDisplay = this.getImportDisplayPath(directive, importPath);
-    const importerFilePath = targetEnv.getCurrentFilePath();
-    const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
-    const importedGuards = new Set(
-      (guardDefinitions ?? [])
-        .map(definition => definition?.name)
-        .filter((name): name is string => typeof name === 'string' && name.length > 0)
-    );
-
-    // @payload and @state are dynamic modules where fields are optional CLI arguments.
-    // Missing fields should default to null rather than throwing an error.
-    const allowMissingImports = importDisplay === '@payload' || importDisplay === '@state';
-
-    for (const importItem of imports) {
-      const importName = importItem.identifier;
-      const alias = importItem.alias || importName;
-
-      if (!(importName in moduleObject)) {
-        if (importedGuards.has(importName)) {
-          continue;
-        }
-        if (allowMissingImports) {
-          // Create a null variable for missing imports from @payload/@state
-          const bindingLocation = importItem?.location
-            ? astLocationToSourceLocation(importItem.location, importerFilePath)
-            : astLocationToSourceLocation(directive.location, importerFilePath);
-          const bindingInfo = { source: importDisplay, location: bindingLocation };
-
-          this.bindingGuards.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
-
-          const variable = this.createVariableFromValue(alias, null, importPath, importName, {
-            securityLabels,
-            env: targetEnv
-          });
-
-          this.bindingGuards.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
-          continue;
-        }
-        throw new Error(`Import '${importName}' not found in module`);
-      }
-
-      const bindingLocation = importItem?.location
-        ? astLocationToSourceLocation(importItem.location, importerFilePath)
-        : astLocationToSourceLocation(directive.location, importerFilePath);
-      const bindingInfo = { source: importDisplay, location: bindingLocation };
-
-      this.bindingGuards.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
-
-      const importedValue = moduleObject[importName];
-      const serializedMetadata = metadataMap ? metadataMap[importName] : undefined;
-      const variable = this.createVariableFromValue(alias, importedValue, importPath, importName, {
-        securityLabels,
-        serializedMetadata,
-        env: targetEnv
-      });
-
-      this.bindingGuards.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
-    }
   }
 
   /**
@@ -548,20 +415,6 @@ export class VariableImporter {
       return trimmed.replace(/^['"]|['"]$/g, '');
     }
     return fallback;
-  }
-
-  private resolveImportedPolicyConfig(namespaceObject: unknown, alias: string): unknown {
-    if (!namespaceObject || typeof namespaceObject !== 'object' || Array.isArray(namespaceObject)) {
-      return namespaceObject;
-    }
-    const candidate = namespaceObject as Record<string, unknown>;
-    if (alias && Object.prototype.hasOwnProperty.call(candidate, alias)) {
-      return candidate[alias];
-    }
-    if (candidate.config !== undefined && candidate.config !== null) {
-      return candidate.config;
-    }
-    return namespaceObject;
   }
 
   /**

@@ -30,11 +30,15 @@ function createEnv(): Environment {
   return env;
 }
 
-function createDirective(subtype: 'importSelected' | 'importNamespace' | 'importPolicy', values: any): any {
+function createDirective(
+  subtype: 'importSelected' | 'importNamespace' | 'importPolicy',
+  values: any,
+  rawPath = '"./module.mld"'
+): any {
   return {
     subtype,
     values,
-    raw: { path: '"./module.mld"' },
+    raw: { path: rawPath },
     location: LOCATION,
     meta: {}
   };
@@ -101,6 +105,31 @@ describe('VariableImporter characterization', () => {
     expect(targetEnv.getImportBinding('mod')?.source).toBe('./module.mld');
   });
 
+  it('keeps namespace aliasing behavior stable for content-based namespace nodes', async () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const targetEnv = createEnv();
+    const childEnv = targetEnv.createChild('/project/module.mld');
+    childEnv.setCurrentFilePath('/project/module.mld');
+    const directive = createDirective('importNamespace', {
+      namespace: [{ content: 'config', location: LOCATION }]
+    });
+
+    await importer.importVariables(
+      {
+        moduleObject: { value: 'hello' },
+        frontmatter: null,
+        childEnvironment: childEnv,
+        guardDefinitions: []
+      },
+      directive,
+      targetEnv
+    );
+
+    expect(targetEnv.getVariable('config')?.type).toBe('object');
+    expect((targetEnv.getVariable('config')?.value as any).value).toBe('hello');
+    expect(targetEnv.getImportBinding('config')?.source).toBe('./module.mld');
+  });
+
   it('keeps import binding collision behavior stable for selected imports', async () => {
     const importer = new VariableImporter(new ObjectReferenceResolver());
     const targetEnv = createEnv();
@@ -131,6 +160,41 @@ describe('VariableImporter characterization', () => {
         variableName: 'value'
       }
     });
+  });
+
+  it('keeps @payload/@state missing-field behavior stable for selected imports', async () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const cases = [
+      { rawPath: '@payload', name: 'topic' },
+      { rawPath: '@state', name: 'count' }
+    ];
+
+    for (const testCase of cases) {
+      const targetEnv = createEnv();
+      const childEnv = targetEnv.createChild('/project/dynamic.mld');
+      childEnv.setCurrentFilePath('/project/dynamic.mld');
+      const directive = createDirective(
+        'importSelected',
+        {
+          imports: [{ identifier: testCase.name, location: LOCATION }]
+        },
+        testCase.rawPath
+      );
+
+      await importer.importVariables(
+        {
+          moduleObject: {},
+          frontmatter: null,
+          childEnvironment: childEnv,
+          guardDefinitions: []
+        },
+        directive,
+        targetEnv
+      );
+
+      expect(targetEnv.getVariable(testCase.name)?.value).toBeNull();
+      expect(targetEnv.getImportBinding(testCase.name)?.source).toBe(testCase.rawPath);
+    }
   });
 
   it('keeps executable export serialization and rehydration behavior stable', () => {
@@ -178,6 +242,7 @@ describe('VariableImporter characterization', () => {
     const childEnv = targetEnv.createChild('/project/policy.mld');
     childEnv.setCurrentFilePath('/project/policy.mld');
     const recordPolicyConfigSpy = vi.spyOn(targetEnv, 'recordPolicyConfig');
+    const registerPolicyGuardSpy = vi.spyOn(targetEnv.getGuardRegistry(), 'registerPolicyGuard');
     const directive = createDirective('importPolicy', {
       namespace: [{ identifier: 'security', location: LOCATION }]
     });
@@ -202,5 +267,6 @@ describe('VariableImporter characterization', () => {
 
     expect(targetEnv.getVariable('security')?.type).toBe('object');
     expect(recordPolicyConfigSpy).toHaveBeenCalledWith('security', policyObject.security);
+    expect(registerPolicyGuardSpy).toHaveBeenCalled();
   });
 });
