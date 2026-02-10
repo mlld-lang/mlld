@@ -3,33 +3,32 @@ import { MlldError, MlldSecurityError } from '@core/errors';
 import type { SourceLocation } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import type { LoadContentResult } from '@core/types/load-content';
-import { LoadContentResultImpl, LoadContentResultHTMLImpl } from './load-content';
+import { LoadContentResultImpl } from './load-content';
 import { wrapLoadContentValue } from '../utils/load-content-structured';
-import { glob } from 'tinyglobby';
 import * as path from 'path';
 import type { AstResult, AstPattern } from './ast-extractor';
-import { JSDOM } from 'jsdom';
 import { processPipeline } from './pipeline/unified-processor';
 import { wrapStructured, isStructuredValue, ensureStructuredValue, asText } from '../utils/structured-value';
 import type { StructuredValue, StructuredValueType, StructuredValueMetadata } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
-import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
-import { labelsForPath } from '@core/security/paths';
-import { getAuditFileDescriptor } from '@core/security/AuditLogIndex';
+import { mergeDescriptors } from '@core/types/security';
 import { isLoadContentResult } from '@core/types/load-content';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
-import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
 import { ContentSourceReconstruction } from './content-loader/source-reconstruction';
 import { PolicyAwareReadHelper } from './content-loader/policy-aware-read';
 import { AstPatternResolution } from './content-loader/ast-pattern-resolution';
 import { AstVariantLoader } from './content-loader/ast-variant-loader';
 import { HtmlConversionHelper } from './content-loader/html-conversion-helper';
 import { ContentLoaderUrlHandler } from './content-loader/url-handler';
+import { ContentLoaderSecurityMetadataHelper } from './content-loader/security-metadata';
+import { ContentLoaderFileHandler } from './content-loader/single-file-loader';
+import { ContentLoaderGlobHandler } from './content-loader/glob-loader';
 
 const sourceReconstruction = new ContentSourceReconstruction();
 const policyAwareReadHelper = new PolicyAwareReadHelper();
 const astPatternResolution = new AstPatternResolution();
 const htmlConversionHelper = new HtmlConversionHelper();
+const securityMetadataHelper = new ContentLoaderSecurityMetadataHelper();
 
 async function interpolateAndRecord(
   nodes: any,
@@ -65,6 +64,31 @@ function formatRelativePath(env: Environment, targetPath: string): string {
   const relative = path.relative(basePath, absoluteTarget);
   return relative ? `./${relative}` : './';
 }
+
+const fileHandler = new ContentLoaderFileHandler({
+  convertHtmlToMarkdown: (html, sourceUrl) => htmlConversionHelper.convertToMarkdown(html, sourceUrl),
+  isSectionListPattern,
+  getSectionListLevel,
+  listSections,
+  extractSectionName,
+  extractSection,
+  formatRelativePath
+});
+
+const globHandler = new ContentLoaderGlobHandler({
+  readContent: (filePath, targetEnv, sourceLocation) => readFileWithPolicy(filePath, targetEnv, sourceLocation),
+  convertHtmlToMarkdown: (html, sourceUrl) => htmlConversionHelper.convertToMarkdown(html, sourceUrl),
+  isSectionListPattern,
+  getSectionListLevel,
+  listSections,
+  extractSectionName,
+  extractSection,
+  getRelativeBasePath,
+  formatRelativePath,
+  buildFileSecurityDescriptor: (filePath, targetEnv, policyEnforcer) =>
+    securityMetadataHelper.buildFileSecurityDescriptor(filePath, targetEnv, policyEnforcer),
+  attachSecurity: (result, descriptor) => securityMetadataHelper.attachSecurity(result, descriptor)
+});
 
 /**
  * Process content loading expressions (<file.md> syntax)
@@ -119,7 +143,6 @@ export async function processContentLoader(node: any, env: Environment): Promise
   // The ? suffix means "optional" - if no files match, return empty array rather than error
   // Must strip this before glob processing since ? is also a glob wildcard character
   const nullableSource = sourceReconstruction.stripNullableSuffix(pathOrUrl);
-  let isNullable = nullableSource.isNullable;
   pathOrUrl = nullableSource.pathOrUrl;
 
   // Detect glob pattern from the path (after stripping nullable suffix)
@@ -231,7 +254,12 @@ export async function processContentLoader(node: any, env: Environment): Promise
     
     // Handle glob patterns for file paths
     if (isGlob) {
-      const results = await loadGlobPattern(pathOrUrl, options, env, sourceLocation);
+      const results = await globHandler.load({
+        pattern: pathOrUrl,
+        options,
+        env,
+        sourceLocation
+      });
       
       // Apply transform if specified
       if (hasTransform && options.transform) {
@@ -269,28 +297,19 @@ export async function processContentLoader(node: any, env: Environment): Promise
     
     // Single file loading
     const resolvedFilePath = await env.resolvePath(pathOrUrl);
-    const fileDescriptor = makeSecurityDescriptor({
-      taint: ['src:file', ...labelsForPath(resolvedFilePath)],
-      sources: [resolvedFilePath]
-    });
-    const auditDescriptor = await getAuditFileDescriptor(
-      env.getFileSystemService(),
-      env.getProjectRoot(),
-      resolvedFilePath
+    const fileSecurityDescriptor = await securityMetadataHelper.buildFileSecurityDescriptor(
+      resolvedFilePath,
+      env,
+      policyEnforcer
     );
-    const mergedDescriptor = auditDescriptor
-      ? mergeDescriptors(fileDescriptor, auditDescriptor)
-      : fileDescriptor;
-    const fileSecurityDescriptor = policyEnforcer.applyDefaultTrustLabel(mergedDescriptor) ?? mergedDescriptor;
-    const securityMetadata = { security: fileSecurityDescriptor };
-    const result = await loadSingleFile(
-      pathOrUrl,
+    const securityMetadata = securityMetadataHelper.toFinalizationMetadata(fileSecurityDescriptor);
+    const result = await fileHandler.load({
+      filePath: pathOrUrl,
       options,
       env,
-      pipes,
-      resolvedFilePath,
+      resolvedPathOverride: resolvedFilePath,
       sourceLocation
-    );
+    });
 
     // Handle array results (from section-list patterns)
     if (Array.isArray(result)) {
@@ -400,363 +419,6 @@ export async function processContentLoader(node: any, env: Environment): Promise
   }
 }
 
-/**
- * Load a single file and return LoadContentResult or string (if section extracted)
- */
-async function loadSingleFile(
-  filePath: string,
-  options: any,
-  env: Environment,
-  pipes?: any[],
-  resolvedPathOverride?: string,
-  sourceLocation?: SourceLocation
-): Promise<LoadContentResult | string | string[]> {
-  const hasPipes = pipes && pipes.length > 0;
-  const resolvedPath = resolvedPathOverride ?? (await env.resolvePath(filePath));
-  // Let Environment handle path resolution and fuzzy matching
-  enforceFilesystemAccess(env, 'read', resolvedPath, sourceLocation);
-  const rawContent = await env.readFile(resolvedPath);
-  
-  // Check if this is an HTML file and convert to Markdown
-  if (resolvedPath.endsWith('.html') || resolvedPath.endsWith('.htm')) {
-    const markdownContent = await htmlConversionHelper.convertToMarkdown(rawContent, `file://${resolvedPath}`);
-    
-    // Extract section if specified
-    if (options?.section) {
-      // Handle section-list patterns (??, ##??, etc.)
-      if (isSectionListPattern(options.section)) {
-        const level = getSectionListLevel(options.section);
-        const sections = listSections(markdownContent, level);
-        // Return array directly - pipes will be handled by caller
-        return sections;
-      }
-
-      const sectionName = await extractSectionName(options.section, env);
-      // Create file context for rename interpolation
-      const fileContext = new LoadContentResultImpl({
-        content: rawContent,
-        filename: path.basename(resolvedPath),
-        relative: formatRelativePath(env, resolvedPath),
-        absolute: resolvedPath
-      });
-
-      const sectionContent = await extractSection(markdownContent, sectionName, options.section.renamed, fileContext, env);
-
-      // Extract HTML metadata
-      const dom = new JSDOM(rawContent);
-      const doc = dom.window.document;
-
-      const title = doc.querySelector('title')?.textContent || '';
-      const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
-                         doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-
-      // Always return LoadContentResult to maintain metadata
-      const result = new LoadContentResultHTMLImpl({
-        content: sectionContent,
-        rawHtml: rawContent,
-        filename: path.basename(resolvedPath),
-        relative: formatRelativePath(env, resolvedPath),
-        absolute: resolvedPath,
-        title: title || undefined,
-        description: description || undefined
-      });
-      return result;
-    }
-    
-    // Extract HTML metadata
-    const dom = new JSDOM(rawContent);
-    const doc = dom.window.document;
-    
-    const title = doc.querySelector('title')?.textContent || '';
-    const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
-                       doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-    
-    // Create HTML-specific LoadContentResult with metadata
-    const result = new LoadContentResultHTMLImpl({
-      content: markdownContent,
-      rawHtml: rawContent,
-      filename: path.basename(resolvedPath),
-      relative: formatRelativePath(env, resolvedPath),
-      absolute: resolvedPath,
-      title: title || undefined,
-      description: description || undefined
-    });
-    
-    return result;
-  }
-  
-  // Extract section if specified (for non-HTML files)
-  if (options?.section) {
-    // Handle section-list patterns (??, ##??, etc.)
-    if (isSectionListPattern(options.section)) {
-      const level = getSectionListLevel(options.section);
-      const sections = listSections(rawContent, level);
-      // Return array directly - pipes will be handled by caller
-      return sections;
-    }
-
-    const sectionName = await extractSectionName(options.section, env);
-    // Create file context for rename interpolation
-    const fileContext = new LoadContentResultImpl({
-      content: rawContent,
-      filename: path.basename(resolvedPath),
-      relative: formatRelativePath(env, resolvedPath),
-      absolute: resolvedPath
-    });
-
-    const sectionContent = await extractSection(rawContent, sectionName, options.section.renamed, fileContext, env);
-
-    // Always return LoadContentResult to maintain metadata
-    // The result will have the section content but preserve the full file for frontmatter parsing
-    const result = new LoadContentResultImpl({
-      content: sectionContent,
-      filename: path.basename(resolvedPath),
-      relative: formatRelativePath(env, resolvedPath),
-      absolute: resolvedPath,
-      // Pass the full raw content so frontmatter can be parsed
-      _rawContent: rawContent
-    });
-    return result;
-  }
-  
-  // Create regular LoadContentResult (for non-HTML files)
-  const result = new LoadContentResultImpl({
-    content: rawContent,
-    filename: path.basename(resolvedPath),
-    relative: formatRelativePath(env, resolvedPath),
-    absolute: resolvedPath
-  });
-  
-  return result;
-}
-
-/**
- * Load files matching a glob pattern
- */
-async function loadGlobPattern(
-  pattern: string,
-  options: any,
-  env: Environment,
-  sourceLocation?: SourceLocation
-): Promise<LoadContentResult[] | string[]> {
-  const relativeBase = getRelativeBasePath(env);
-  let globCwd = env.getFileDirectory();
-  let globPattern = pattern;
-
-  if (pattern.startsWith('@base/')) {
-    globCwd = relativeBase;
-    globPattern = pattern.slice('@base/'.length);
-  } else if (pattern.startsWith('@root/')) {
-    globCwd = relativeBase;
-    globPattern = pattern.slice('@root/'.length);
-  } else if (path.isAbsolute(pattern)) {
-    globCwd = path.parse(pattern).root || '/';
-    globPattern = path.relative(globCwd, pattern);
-  }
-
-  const computeRelative = (filePath: string): string => formatRelativePath(env, filePath);
-  const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
-  const buildFileSecurityDescriptor = async (filePath: string): Promise<SecurityDescriptor> => {
-    const fileDescriptor = makeSecurityDescriptor({
-      taint: ['src:file', ...labelsForPath(filePath)],
-      sources: [filePath]
-    });
-    const auditDescriptor = await getAuditFileDescriptor(
-      env.getFileSystemService(),
-      env.getProjectRoot(),
-      filePath
-    );
-    const mergedDescriptor = auditDescriptor
-      ? mergeDescriptors(fileDescriptor, auditDescriptor)
-      : fileDescriptor;
-    return policyEnforcer.applyDefaultTrustLabel(mergedDescriptor) ?? mergedDescriptor;
-  };
-  const attachSecurity = <T extends LoadContentResult>(result: T, descriptor: SecurityDescriptor): T => {
-    (result as { __security?: SecurityDescriptor }).__security = descriptor;
-    return result;
-  };
-
-  // Use tinyglobby to find matching files
-  let matches: string[];
-  try {
-    matches = await glob(globPattern, {
-      cwd: globCwd,
-      absolute: true,
-      followSymlinks: true,
-      // Ignore common non-text files
-      ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
-    });
-  } catch (globError: any) {
-    throw globError;
-  }
-  
-  // Sort by filename for consistent ordering
-  matches.sort();
-  
-  // Load each matching file
-  const results: (LoadContentResult | string)[] = [];
-  
-  for (const filePath of matches) {
-    try {
-      const rawContent = await readFileWithPolicy(filePath, env, sourceLocation);
-      const fileSecurityDescriptor = await buildFileSecurityDescriptor(filePath);
-      
-      // Check if this is an HTML file
-      if (filePath.endsWith('.html') || filePath.endsWith('.htm')) {
-        const markdownContent = await htmlConversionHelper.convertToMarkdown(rawContent, `file://${filePath}`);
-        
-        // Skip files if section extraction is requested and section doesn't exist
-        if (options?.section) {
-          // Handle section-list patterns (??, ##??, etc.)
-          if (isSectionListPattern(options.section)) {
-            const level = getSectionListLevel(options.section);
-            const sections = listSections(markdownContent, level);
-            // For glob patterns with section lists, preserve per-file structure
-            if (sections.length > 0) {
-              results.push({
-                names: sections,
-                file: path.basename(filePath),
-                relative: computeRelative(filePath),
-                absolute: filePath
-              } as any);
-            }
-            continue;
-          }
-
-          const sectionName = await extractSectionName(options.section, env);
-          try {
-            // Create file context for rename interpolation
-            const fileContext = new LoadContentResultImpl({
-              content: rawContent,
-              filename: path.basename(filePath),
-              relative: computeRelative(filePath),
-              absolute: filePath
-            });
-
-            const sectionContent = await extractSection(markdownContent, sectionName, options.section.renamed, fileContext, env);
-
-            // If there's a rename, return the string directly
-            if (options.section.renamed) {
-              results.push(sectionContent);
-            } else {
-              // Extract HTML metadata even for sections
-              const dom = new JSDOM(rawContent);
-              const doc = dom.window.document;
-
-              const title = doc.querySelector('title')?.textContent || '';
-              const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
-                                 doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-
-              // Use HTML result to preserve metadata
-              results.push(attachSecurity(new LoadContentResultHTMLImpl({
-                content: sectionContent,
-                rawHtml: rawContent,
-                filename: path.basename(filePath),
-                relative: computeRelative(filePath),
-                absolute: filePath,
-                title: title || undefined,
-                description: description || undefined
-              }), fileSecurityDescriptor));
-            }
-          } catch (error: any) {
-            // Skip files without the requested section
-            continue;
-          }
-        } else {
-          // No section extraction, create HTML result with metadata
-          const dom = new JSDOM(rawContent);
-          const doc = dom.window.document;
-          
-          const title = doc.querySelector('title')?.textContent || '';
-          const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
-                             doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-          
-          results.push(attachSecurity(new LoadContentResultHTMLImpl({
-            content: markdownContent,
-            rawHtml: rawContent,
-            filename: path.basename(filePath),
-            relative: computeRelative(filePath),
-            absolute: filePath,
-            title: title || undefined,
-            description: description || undefined
-          }), fileSecurityDescriptor));
-        }
-      } else {
-        // Non-HTML file handling
-        if (options?.section) {
-          // Handle section-list patterns (??, ##??, etc.)
-          if (isSectionListPattern(options.section)) {
-            const level = getSectionListLevel(options.section);
-            const sections = listSections(rawContent, level);
-            // For glob patterns with section lists, preserve per-file structure
-            if (sections.length > 0) {
-              results.push({
-                names: sections,
-                file: path.basename(filePath),
-                relative: computeRelative(filePath),
-                absolute: filePath
-              } as any);
-            }
-            continue;
-          }
-
-          const sectionName = await extractSectionName(options.section, env);
-          try {
-            // Create file context for rename interpolation
-            const fileContext = new LoadContentResultImpl({
-              content: rawContent,
-              filename: path.basename(filePath),
-              relative: computeRelative(filePath),
-              absolute: filePath
-            });
-
-            const sectionContent = await extractSection(rawContent, sectionName, options.section.renamed, fileContext, env);
-
-            // If there's a rename, we're returning a transformed string that should be used directly
-            if (options.section.renamed) {
-              // For renamed sections, return the string directly (will be collected as string array)
-              results.push(sectionContent as any); // Type assertion needed because results is LoadContentResult[]
-            } else {
-              // Create result with section content, preserving raw content for frontmatter
-              results.push(attachSecurity(new LoadContentResultImpl({
-                content: sectionContent,
-                filename: path.basename(filePath),
-                relative: computeRelative(filePath),
-                absolute: filePath,
-                _rawContent: rawContent
-              }), fileSecurityDescriptor));
-            }
-          } catch (error: any) {
-            // Skip files without the requested section
-            continue;
-          }
-        } else {
-          // No section extraction, include full content
-          results.push(attachSecurity(new LoadContentResultImpl({
-            content: rawContent,
-            filename: path.basename(filePath),
-            relative: computeRelative(filePath),
-            absolute: filePath
-          }), fileSecurityDescriptor));
-        }
-      }
-    } catch (error: any) {
-      if (error instanceof MlldSecurityError) {
-        throw error;
-      }
-      // Skip files that can't be read
-      continue;
-    }
-  }
-
-  // Return the results array directly
-  // The caller will handle wrapping with wrapStructured if needed
-  return results as LoadContentResult[] | string[];
-}
-
-/**
- * Extract section name from section AST node
- */
 /**
  * Check if section node is a section-list pattern
  */

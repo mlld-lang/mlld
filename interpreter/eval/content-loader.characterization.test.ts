@@ -123,6 +123,82 @@ describe('processContentLoader characterization', () => {
     expect(metadata?.source).toBe('load-content');
   });
 
+  it('keeps glob section extraction ordering and filtering stable', async () => {
+    await fileSystem.mkdir('/project/docs', { recursive: true });
+    await fileSystem.writeFile('/project/docs/z-missing.md', '# Z\n\n## Intro\n\nNo API.');
+    await fileSystem.writeFile('/project/docs/a-api.md', '# A\n\n## API\n\nA api.');
+    await fileSystem.writeFile('/project/docs/m-api.md', '# M\n\n## API\n\nM api.');
+
+    vi.mocked(glob).mockResolvedValueOnce([
+      '/project/docs/z-missing.md',
+      '/project/docs/m-api.md',
+      '/project/docs/a-api.md'
+    ]);
+
+    const node = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'docs/*.md' }],
+        raw: 'docs/*.md'
+      },
+      options: {
+        section: {
+          identifier: { type: 'Text', content: 'API' }
+        }
+      }
+    };
+
+    const rawResult = await processContentLoader(node as any, env);
+    const { data: result, metadata } = unwrapStructuredForTest<Array<any>>(rawResult);
+    const filenames = result.map(item => item.mx?.filename ?? item.filename);
+    const relatives = result.map(item => item.mx?.relative ?? item.relative);
+    const contents = result.map(item => item.text ?? item.mx?.content ?? item.content ?? item.data?.content);
+
+    expect(Array.isArray(result)).toBe(true);
+    expect(filenames).toEqual(['a-api.md', 'm-api.md']);
+    expect(relatives).toEqual(['./docs/a-api.md', './docs/m-api.md']);
+    expect(contents).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('## API'),
+        expect.stringContaining('## API')
+      ])
+    );
+    expect(metadata?.source).toBe('load-content');
+  });
+
+  it('keeps glob section extraction skip behavior stable when every file misses the requested section', async () => {
+    await fileSystem.mkdir('/project/docs', { recursive: true });
+    await fileSystem.writeFile('/project/docs/a.md', '# A\n\n## Intro\n\nOnly intro.');
+    await fileSystem.writeFile('/project/docs/b.md', '# B\n\n## Usage\n\nOnly usage.');
+
+    vi.mocked(glob).mockResolvedValueOnce([
+      '/project/docs/b.md',
+      '/project/docs/a.md'
+    ]);
+
+    const node = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'docs/*.md' }],
+        raw: 'docs/*.md'
+      },
+      options: {
+        section: {
+          identifier: { type: 'Text', content: 'API' }
+        }
+      }
+    };
+
+    const rawResult = await processContentLoader(node as any, env);
+    const { data: result, metadata } = unwrapStructuredForTest<Array<any>>(rawResult);
+
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toEqual([]);
+    expect(metadata?.source).toBe('load-content');
+  });
+
   it('keeps AST + transform branch behavior stable for single-file extraction', async () => {
     await fileSystem.mkdir('/project/src', { recursive: true });
     await fileSystem.writeFile(
