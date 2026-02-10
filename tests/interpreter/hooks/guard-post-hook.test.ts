@@ -313,6 +313,123 @@ describe('guard post-hook integration', () => {
     env.clearPipelineContext();
   });
 
+  it('preserves retry payload shapes for retryable and non-retryable pipeline sources', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after for secret = when [ * => retry "again" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const outputVar = createSecretVariable('secretVar', 'pipeline-output');
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    const runWithRetryable = async (sourceRetryable: boolean): Promise<GuardError> => {
+      const pipelineContext: PipelineContextSnapshot = {
+        stage: 1,
+        totalStages: 1,
+        currentCommand: 'emit',
+        input: 'input',
+        previousOutputs: [],
+        attemptCount: 1,
+        attemptHistory: [],
+        hint: null,
+        hintHistory: [],
+        sourceRetryable,
+        guards: []
+      };
+      env.setPipelineContext(pipelineContext);
+
+      let caught: unknown;
+      try {
+        await guardPostHook(node, result, [outputVar], env, { type: 'exe', name: 'emit' });
+      } catch (error) {
+        caught = error;
+      } finally {
+        env.clearPipelineContext();
+      }
+
+      expect(caught).toBeInstanceOf(GuardError);
+      return caught as GuardError;
+    };
+
+    const retryError = await runWithRetryable(true);
+    expect(retryError.decision).toBe('retry');
+    expect(retryError.details.timing).toBe('after');
+    expect(retryError.details.reasons).toEqual(expect.arrayContaining(['again']));
+    expect(Array.isArray(retryError.details.hints)).toBe(true);
+    expect(Array.isArray(retryError.details.guardResults)).toBe(true);
+
+    const deniedError = await runWithRetryable(false);
+    expect(deniedError.decision).toBe('deny');
+    expect(deniedError.details.reason).toMatch(/Cannot retry/i);
+    expect(deniedError.details.retryHint).toMatch(/again/i);
+    expect(deniedError.details.reasons).toEqual(expect.arrayContaining(['again']));
+    expect(Array.isArray(deniedError.details.hints)).toBe(true);
+    expect(Array.isArray(deniedError.details.guardResults)).toBe(true);
+  });
+
+  it('enforces retryability consistently when retry is requested after output transformation', async () => {
+    const env = createEnv();
+    const guards = parseSync(`
+/guard after @step for secret = when [ * => allow "step1" ]
+/guard after @retry for secret = when [ * => retry "retry after transform" ]
+    `).filter(node => (node as DirectiveNode)?.kind === 'guard') as DirectiveNode[];
+    for (const directive of guards) {
+      await evaluateDirective(directive, env);
+    }
+
+    const outputVar = createSecretVariable('secretVar', 'original');
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    const runWithRetryable = async (sourceRetryable: boolean): Promise<GuardError> => {
+      const pipelineContext: PipelineContextSnapshot = {
+        stage: 1,
+        totalStages: 1,
+        currentCommand: 'emit',
+        input: 'input',
+        previousOutputs: [],
+        attemptCount: 1,
+        attemptHistory: [],
+        hint: null,
+        hintHistory: [],
+        sourceRetryable,
+        guards: []
+      };
+      env.setPipelineContext(pipelineContext);
+
+      let caught: unknown;
+      try {
+        await guardPostHook(node, result, [outputVar], env, { type: 'exe', name: 'emit' });
+      } catch (error) {
+        caught = error;
+      } finally {
+        env.clearPipelineContext();
+      }
+
+      expect(caught).toBeInstanceOf(GuardError);
+      return caught as GuardError;
+    };
+
+    const retrySignal = await runWithRetryable(true);
+    expect(retrySignal.decision).toBe('retry');
+    expect(retrySignal.details.outputPreview ?? '').toContain('step1');
+    expect(retrySignal.details.reasons).toEqual(expect.arrayContaining(['retry after transform']));
+
+    const deniedRetry = await runWithRetryable(false);
+    expect(deniedRetry.decision).toBe('deny');
+    expect(deniedRetry.details.reason).toMatch(/Cannot retry/i);
+    expect(deniedRetry.details.outputPreview ?? '').toContain('step1');
+    expect(deniedRetry.details.reasons).toEqual(expect.arrayContaining(['retry after transform']));
+  });
+
   it('suppresses nested guard evaluation invoked inside guard actions', async () => {
     const env = createEnv();
     const directives = parseSync(`

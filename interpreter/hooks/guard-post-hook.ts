@@ -52,23 +52,20 @@ import {
   normalizeRawOutput
 } from './guard-post-output-normalization';
 import { runPostGuardDecisionEngine } from './guard-post-decision-engine';
+import { evaluateRetryEnforcement, getGuardRetryContext } from './guard-post-retry';
+import {
+  buildPostGuardError,
+  buildPostRetryDeniedError,
+  buildPostGuardRetrySignal
+} from './guard-post-signals';
 import { extractGuardOverride, normalizeGuardOverride } from './guard-override-utils';
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
-import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
 import { appendFileSync } from 'fs';
 import { getExpressionProvenance } from '../utils/expression-provenance';
 import { formatGuardWarning } from '../eval/guard-denial-handler';
 
-const DEFAULT_GUARD_MAX = 3;
 const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
-
-interface GuardRetryRuntimeContext {
-  attempt?: number;
-  tries?: Array<{ attempt?: number; decision?: string; hint?: string | null }>;
-  hintHistory?: Array<string | null>;
-  max?: number;
-}
 
 const GUARD_INPUT_SOURCE: VariableSource = {
   directive: 'var',
@@ -112,35 +109,6 @@ function summarizeOperation(operation: OperationContext | undefined): Record<str
     labels: operation.labels,
     metadata: operation.metadata
   };
-}
-
-function getGuardRetryContext(env: Environment): {
-  attempt: number;
-  tries: Array<{ attempt: number; decision: string; hint?: string | null }>;
-  hintHistory: Array<string | null>;
-  max: number;
-} {
-  const context = env
-    .getContextManager()
-    .peekGenericContext('guardRetry') as GuardRetryRuntimeContext | undefined;
-
-  const attempt = typeof context?.attempt === 'number' && context.attempt > 0 ? context.attempt : 1;
-  const tries = Array.isArray(context?.tries)
-    ? context!.tries!.map(entry => ({
-        attempt: typeof entry.attempt === 'number' ? entry.attempt : attempt,
-        decision: typeof entry.decision === 'string' ? entry.decision : 'retry',
-        hint: typeof entry.hint === 'string' || entry.hint === null ? entry.hint : null
-      }))
-    : [];
-  const hintHistory = Array.isArray(context?.hintHistory)
-    ? context!.hintHistory!.map(value =>
-        typeof value === 'string' || value === null ? value : String(value ?? '')
-      )
-    : tries.map(entry => entry.hint ?? null);
-  const max =
-    typeof context?.max === 'number' && context.max > 0 ? context.max : DEFAULT_GUARD_MAX;
-
-  return { attempt, tries, hintHistory, max };
 }
 
 export const guardPostHook: PostHook = async (node, result, inputs, env, operation) => {
@@ -372,11 +340,11 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     }
 
     if (currentDecision === 'deny') {
-      const error = buildGuardError({
+      const error = buildPostGuardError({
         guardResults: guardTrace,
         reasons,
         operation,
-        output: activeOutputs[0] ?? outputVariables[0],
+        outputPreview: buildVariablePreview(activeOutputs[0] ?? outputVariables[0] ?? null),
         timing: 'after'
       });
       throw error;
@@ -389,11 +357,9 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
           ? hints[0].hint
           : retryReasons[0];
       const pipelineContext = env.getPipelineContext();
-      const sourceRetryable =
-        pipelineContext?.sourceRetryable ??
-        Boolean(operation?.metadata && (operation.metadata as any).sourceRetryable);
+      const { sourceRetryable, denyRetry } = evaluateRetryEnforcement(operation, pipelineContext);
 
-      if (pipelineContext && !sourceRetryable) {
+      if (denyRetry) {
         logAfterRetryDebug('after-guard retry denied (non-retryable source)', {
           operation: summarizeOperation(operation),
           selectionSources,
@@ -403,20 +369,13 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
           pipeline: Boolean(pipelineContext),
           attempt: retryContext.attempt
         });
-        throw new GuardError({
-          decision: 'deny',
-          guardName: guardTrace[0]?.guardName ?? null,
-          guardFilter: guardTrace[0]?.metadata?.guardFilter as string | undefined,
-          scope: guardTrace[0]?.metadata?.scope,
-          operation,
-          inputPreview: guardTrace[0]?.metadata?.inputPreview as string | undefined,
-          outputPreview: buildVariablePreview(activeOutputs[0] ?? outputVariables[0] ?? null),
-          reasons: retryReasons,
+        throw buildPostRetryDeniedError({
           guardResults: guardTrace,
+          reasons: retryReasons,
           hints,
-          retryHint,
-          reason: `Cannot retry: ${retryHint ?? 'guard requested retry'} (source not retryable)`,
-          timing: 'after'
+          operation,
+          outputPreview: buildVariablePreview(activeOutputs[0] ?? outputVariables[0] ?? null),
+          retryHint
         });
       }
 
@@ -434,12 +393,12 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
         }))
       });
 
-      throw buildGuardRetrySignal({
+      throw buildPostGuardRetrySignal({
         guardResults: guardTrace,
         reasons: retryReasons,
         hints,
         operation,
-        output: activeOutputs[0] ?? outputVariables[0],
+        outputPreview: buildVariablePreview(activeOutputs[0] ?? outputVariables[0] ?? null),
         retryHint
       });
     }
@@ -1148,58 +1107,4 @@ function emitGuardWarningHints(env: Environment, hints: readonly GuardHint[]): v
     const warning = formatGuardWarning(warningText, null, entry.guardName ?? null);
     env.emitEffect('stderr', `${warning}\n`);
   }
-}
-
-function buildGuardError(options: {
-  guardResults: GuardResult[];
-  reasons: string[];
-  operation: OperationContext;
-  output?: Variable;
-  timing: 'after';
-  retry?: boolean;
-}): Error {
-  const primaryReason = options.reasons[0] ?? 'Guard blocked operation';
-  const guardContext = options.guardResults[0]?.metadata?.guardContext as GuardContextSnapshot | undefined;
-  return new GuardError({
-    decision: options.retry ? 'retry' : 'deny',
-    guardName: options.guardResults[0]?.guardName ?? null,
-    guardFilter: options.guardResults[0]?.metadata?.guardFilter as string | undefined,
-    scope: options.guardResults[0]?.metadata?.scope,
-    operation: options.operation,
-    inputPreview: options.guardResults[0]?.metadata?.inputPreview as string | undefined,
-    outputPreview: options.output ? buildVariablePreview(options.output) : null,
-    reasons: options.reasons,
-    guardResults: options.guardResults,
-    hints: options.guardResults.flatMap(entry => (entry.hint ? [entry.hint] : [])),
-    timing: 'after',
-    reason: primaryReason,
-    guardContext
-  });
-}
-
-function buildGuardRetrySignal(options: {
-  guardResults: GuardResult[];
-  reasons: string[];
-  hints?: GuardHint[];
-  operation: OperationContext;
-  output?: Variable;
-  retryHint?: string | null;
-}): GuardRetrySignal {
-  const primaryReason = options.reasons[0] ?? 'Guard requested retry';
-  const guardContext = options.guardResults[0]?.metadata?.guardContext as GuardContextSnapshot | undefined;
-  return new GuardRetrySignal({
-    guardName: options.guardResults[0]?.guardName ?? null,
-    guardFilter: options.guardResults[0]?.metadata?.guardFilter as string | undefined,
-    scope: options.guardResults[0]?.metadata?.scope,
-    operation: options.operation,
-    inputPreview: options.guardResults[0]?.metadata?.inputPreview as string | undefined,
-    outputPreview: options.output ? buildVariablePreview(options.output) : null,
-    reasons: options.reasons,
-    guardResults: options.guardResults,
-    hints: options.hints ?? options.guardResults.flatMap(entry => (entry.hint ? [entry.hint] : [])),
-    timing: 'after',
-    retryHint: options.retryHint ?? null,
-    reason: primaryReason,
-    guardContext
-  });
 }
