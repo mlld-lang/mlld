@@ -26,10 +26,11 @@ import { MlldImportError } from '@core/errors';
 import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironmentCapture';
 import { ExportManifest } from './ExportManifest';
 import { astLocationToSourceLocation } from '@core/types';
-import type { SourceLocation } from '@core/types';
 import type { SerializedGuardDefinition } from '../../guards';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { generatePolicyGuards } from '@core/policy/guards';
+import { ImportBindingGuards } from './variable-importer/ImportBindingGuards';
+import { MetadataMapParser } from './variable-importer/MetadataMapParser';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -42,7 +43,13 @@ export interface ModuleProcessingResult {
  * Handles variable creation, type inference, and environment merging for imports
  */
 export class VariableImporter {
-  constructor(private objectResolver: ObjectReferenceResolver) {}
+  private readonly bindingGuards: ImportBindingGuards;
+  private readonly metadataMapParser: MetadataMapParser;
+
+  constructor(private objectResolver: ObjectReferenceResolver) {
+    this.bindingGuards = new ImportBindingGuards();
+    this.metadataMapParser = new MetadataMapParser();
+  }
   
   /**
    * Serialize shadow environments for export (Maps to objects)
@@ -85,64 +92,6 @@ export class VariableImporter {
     }
 
     return result;
-  }
-
-  /**
-   * Checks whether the requested alias has already been claimed during the
-   * current import pass and throws a detailed error when a collision exists.
-   */
-  private ensureImportBindingAvailable(
-    targetEnv: Environment,
-    name: string,
-    importSource: string,
-    location?: SourceLocation
-  ): void {
-    if (!name || name.trim().length === 0) return;
-    const existingBinding = targetEnv.getImportBinding(name);
-    if (!existingBinding) {
-      return;
-    }
-
-    throw new MlldImportError(
-      `Import collision - '${name}' already imported from ${existingBinding.source}. Alias one of the imports.`,
-      {
-        code: 'IMPORT_NAME_CONFLICT',
-        context: {
-          name,
-          existingSource: existingBinding.source,
-          attemptedSource: importSource,
-          existingLocation: existingBinding.location,
-          newLocation: location,
-          suggestion: "Use 'as' to alias one of the imports"
-        },
-        details: {
-          filePath: location?.filePath || existingBinding.location?.filePath,
-          variableName: name
-        }
-      }
-    );
-  }
-
-  /**
-   * Writes the variable and persists the associated binding only after the
-   * assignment succeeds, preventing partially-applied imports from polluting
-   * the collision tracking map.
-   */
-  private setVariableWithImportBinding(
-    targetEnv: Environment,
-    alias: string,
-    variable: Variable,
-    binding: { source: string; location?: SourceLocation }
-  ): void {
-    let shouldPersistBinding = false;
-    try {
-      targetEnv.setVariable(alias, variable);
-      shouldPersistBinding = true;
-    } finally {
-      if (shouldPersistBinding) {
-        targetEnv.setImportBinding(alias, binding);
-      }
-    }
   }
 
   /**
@@ -197,7 +146,7 @@ export class VariableImporter {
     targetEnv: Environment
   ): Promise<void> {
     const { moduleObject } = processingResult;
-    const serializedMetadata = this.extractMetadataMap(moduleObject);
+    const serializedMetadata = this.metadataMapParser.extractMetadataMap(moduleObject);
     const moduleObjectForImport = serializedMetadata
       ? Object.fromEntries(Object.entries(moduleObject).filter(([key]) => key !== '__metadata__'))
       : moduleObject;
@@ -763,21 +712,6 @@ export class VariableImporter {
     );
   }
 
-  private extractMetadataMap(
-    moduleObject: Record<string, any>
-  ): Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined> | undefined {
-    const container = (moduleObject as Record<string, any>).__metadata__;
-    if (!container || typeof container !== 'object') {
-      return undefined;
-    }
-
-    const result: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined> = {};
-    for (const [key, value] of Object.entries(container)) {
-      result[key] = value as ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>;
-    }
-    return result;
-  }
-
   /**
    * Merge variables into the target environment based on import type
    */
@@ -867,14 +801,14 @@ export class VariableImporter {
     const importDisplay = this.getImportDisplayPath(directive, importPath);
     const bindingInfo = { source: importDisplay, location: aliasLocation };
 
-    this.ensureImportBindingAvailable(targetEnv, alias, importDisplay, aliasLocation);
+    this.bindingGuards.ensureImportBindingAvailable(targetEnv, alias, importDisplay, aliasLocation);
 
     // If the unwrapped object is a template export, create a template variable instead
     if (namespaceObject && typeof namespaceObject === 'object' && (namespaceObject as any).__template) {
       const templateVar = this.createVariableFromValue(alias, namespaceObject, importPath, undefined, {
         env: targetEnv
       });
-      this.setVariableWithImportBinding(targetEnv, alias, templateVar, bindingInfo);
+      this.bindingGuards.setVariableWithImportBinding(targetEnv, alias, templateVar, bindingInfo);
       if (guardDefinitions && guardDefinitions.length > 0) {
         targetEnv.registerSerializedGuards(guardDefinitions);
       }
@@ -906,7 +840,7 @@ export class VariableImporter {
       targetEnv,
       { strictFieldAccess: strictNamespaceFieldAccess }
     );
-    this.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
+    this.bindingGuards.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
     if (guardDefinitions && guardDefinitions.length > 0) {
       targetEnv.registerSerializedGuards(guardDefinitions);
     }
@@ -962,14 +896,14 @@ export class VariableImporter {
             : astLocationToSourceLocation(directive.location, importerFilePath);
           const bindingInfo = { source: importDisplay, location: bindingLocation };
 
-          this.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
+          this.bindingGuards.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
 
           const variable = this.createVariableFromValue(alias, null, importPath, importName, {
             securityLabels,
             env: targetEnv
           });
 
-          this.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
+          this.bindingGuards.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
           continue;
         }
         throw new Error(`Import '${importName}' not found in module`);
@@ -980,7 +914,7 @@ export class VariableImporter {
         : astLocationToSourceLocation(directive.location, importerFilePath);
       const bindingInfo = { source: importDisplay, location: bindingLocation };
 
-      this.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
+      this.bindingGuards.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
 
       const importedValue = moduleObject[importName];
       const serializedMetadata = metadataMap ? metadataMap[importName] : undefined;
@@ -990,7 +924,7 @@ export class VariableImporter {
         env: targetEnv
       });
 
-      this.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
+      this.bindingGuards.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
     }
   }
 
