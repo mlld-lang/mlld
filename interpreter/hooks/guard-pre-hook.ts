@@ -34,8 +34,8 @@ import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
 import { isDirectiveHookTarget, isEffectHookTarget } from '@core/types/hooks';
 import { materializeGuardInputs } from '../utils/guard-inputs';
-import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
-import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import { appendGuardHistory } from './guard-shared-history';
 import {
@@ -52,6 +52,18 @@ import {
   buildOperationSnapshot,
   type OperationSnapshot
 } from './guard-operation-keys';
+import {
+  buildInputPreview,
+  buildVariablePreview,
+  cloneVariableForGuard,
+  cloneVariableForReplacement,
+  hasSecretLabel,
+  hasSecretLabelInArray,
+  normalizeGuardReplacements,
+  redactVariableForErrorOutput,
+  resolveGuardValue
+} from './guard-materialization';
+import { cloneGuardContextSnapshot } from './guard-context-snapshot';
 import {
   applyGuardDecisionResult,
   createGuardDecisionState,
@@ -214,67 +226,6 @@ function describeHookTarget(node: HookableNode): string {
     return `effect:${(node as any).rawIdentifier ?? 'unknown'}`;
   }
   return 'exe';
-}
-
-function truncatePreview(value: string, limit = 160): string {
-  if (value.length <= limit) {
-    return value;
-  }
-  return `${value.slice(0, limit)}…`;
-}
-
-function hasSecretLabel(variable: Variable): boolean {
-  const labels = Array.isArray(variable.mx?.labels) ? variable.mx!.labels : [];
-  return labels.includes('secret') || labels.includes('sensitive');
-}
-
-function hasSecretLabelInArray(labels: readonly DataLabel[]): boolean {
-  return labels.includes('secret') || labels.includes('sensitive');
-}
-
-function redactVariableForErrorOutput(variable: Variable): string {
-  return '[REDACTED]';
-}
-
-function buildVariablePreview(variable: Variable): string | null {
-  if (hasSecretLabel(variable)) {
-    return '[REDACTED]';
-  }
-  try {
-    const value = (variable as any).value;
-    if (typeof value === 'string') {
-      return truncatePreview(value);
-    }
-    if (value && typeof value === 'object') {
-      if (typeof (value as any).text === 'string') {
-        return truncatePreview((value as any).text);
-      }
-      return truncatePreview(JSON.stringify(value));
-    }
-    if (value === null || value === undefined) {
-      return null;
-    }
-    return truncatePreview(String(value));
-  } catch {
-    return null;
-  }
-}
-
-function buildInputPreview(
-  scope: GuardScope,
-  perInput?: PerInputCandidate,
-  operationSnapshot?: OperationSnapshot
-): string | null {
-  if (scope === 'perInput' && perInput) {
-    if (hasSecretLabelInArray(perInput.labels)) {
-      return '[REDACTED]';
-    }
-    return buildVariablePreview(perInput.variable);
-  }
-  if (scope === 'perOperation' && operationSnapshot) {
-    return `Array(len=${operationSnapshot.variables.length})`;
-  }
-  return null;
 }
 
 export const guardPreHook: PreHook = async (
@@ -1083,95 +1034,6 @@ function inheritParentVariables(parent: Environment, child: Environment): void {
   }
 }
 
-function cloneVariableForGuard(variable: Variable): Variable {
-  const clone: Variable = {
-    ...variable,
-    name: 'input',
-    mx: {
-      ...(variable.mx ?? {})
-    },
-    internal: {
-      ...(variable.internal ?? {}),
-      isReserved: true,
-      isSystem: true
-    }
-  };
-  if (clone.mx?.mxCache) {
-    delete clone.mx.mxCache;
-  }
-  return clone;
-}
-
-function cloneVariableForReplacement(
-  variable: Variable,
-  descriptor: SecurityDescriptor
-): Variable {
-  const clone: Variable = {
-    ...variable,
-    mx: {
-      ...(variable.mx ?? {})
-    },
-    internal: {
-      ...(variable.internal ?? {})
-    }
-  };
-  if (!clone.mx) {
-    clone.mx = {} as any;
-  }
-  updateVarMxFromDescriptor(clone.mx, descriptor);
-  if (clone.mx?.mxCache) {
-    delete clone.mx.mxCache;
-  }
-  return clone;
-}
-
-function cloneGuardContextSnapshot(context: GuardContextSnapshot): GuardContextSnapshot {
-  const cloned: GuardContextSnapshot = {
-    ...context,
-    tries: context.tries ? context.tries.map(entry => ({ ...entry })) : undefined,
-    labels: context.labels ? [...context.labels] : undefined,
-    sources: context.sources ? [...context.sources] : undefined,
-    hintHistory: context.hintHistory ? [...context.hintHistory] : undefined
-  };
-  if (context.input !== undefined) {
-    cloned.input = redactOrCloneGuardContextInput(context.input);
-  }
-  if (context.output !== undefined) {
-    cloned.output = redactOrCloneGuardContextInput(context.output as any);
-  }
-  if (cloned.inputPreview !== undefined && typeof cloned.inputPreview === 'string') {
-    const labels = Array.isArray(context.labels) ? context.labels : [];
-    if (hasSecretLabelInArray(labels)) {
-      cloned.inputPreview = '[REDACTED]';
-    }
-  }
-  if (cloned.outputPreview !== undefined && typeof cloned.outputPreview === 'string') {
-    const labels = Array.isArray(context.labels) ? context.labels : [];
-    if (hasSecretLabelInArray(labels)) {
-      cloned.outputPreview = '[REDACTED]';
-    }
-  }
-  return cloned;
-}
-
-function redactOrCloneGuardContextInput(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(item => {
-      if (isVariable(item) && hasSecretLabel(item)) {
-        return redactVariableForErrorOutput(item);
-      }
-      return isVariable(item) ? cloneVariableForGuard(item) : item;
-    });
-  }
-  if (isVariable(value as Variable)) {
-    if (hasSecretLabel(value as Variable)) {
-      return redactVariableForErrorOutput(value as Variable);
-    }
-    return cloneVariableForGuard(value as Variable);
-  }
-  return value;
-}
-
 function injectGuardHelpers(
   guardEnv: Environment,
   options: {
@@ -1388,32 +1250,6 @@ function buildAggregateGuardContext(options: {
     reason: baseContext.reason ?? options.reasons[0] ?? null,
     decision: options.decision
   };
-}
-
-function resolveGuardValue(variable: Variable | undefined, fallback: Variable): unknown {
-  const candidate = (variable as any)?.value ?? (fallback as any)?.value ?? variable ?? fallback;
-  if (candidate && typeof candidate === 'object') {
-    if (typeof (candidate as any).text === 'string') {
-      return (candidate as any).text;
-    }
-    if (typeof (candidate as any).data === 'string') {
-      return (candidate as any).data;
-    }
-  }
-  if (candidate === undefined || candidate === null) {
-    return buildVariablePreview(fallback) ?? '';
-  }
-  return candidate;
-}
-
-function normalizeGuardReplacements(value: unknown): Variable[] {
-  if (isVariable(value as Variable)) {
-    return [value as Variable];
-  }
-  if (Array.isArray(value)) {
-    return (value as unknown[]).filter(item => isVariable(item as Variable)) as Variable[];
-  }
-  return [];
 }
 
 function attachGuardHelper(target: Variable, helper: GuardInputHelper): void {
