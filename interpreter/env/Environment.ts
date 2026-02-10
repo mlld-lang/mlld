@@ -31,9 +31,8 @@ import type { StateWrite } from '@core/types/state';
 import { mergeNeedsDeclarations, type NeedsDeclaration, type PolicyCapabilities, type ProfilesDeclaration } from '@core/policy/needs';
 import type { PolicyConfig } from '@core/policy/union';
 import { RegistryManager, ProjectConfig } from '@core/registry';
-import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
-import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver, DynamicModuleResolver, PythonPackageResolver, PythonAliasResolver } from '@core/resolvers';
+import { ResolverManager, DynamicModuleResolver } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
@@ -74,6 +73,8 @@ import {
   type CommandExecutorFactoryPort
 } from './runtime/ExecutionOrchestrator';
 import { ChildEnvironmentLifecycle } from './runtime/ChildEnvironmentLifecycle';
+import { DiagnosticsRuntime } from './runtime/DiagnosticsRuntime';
+import { RuntimeConfigurationRuntime } from './runtime/RuntimeConfigurationRuntime';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { McpImportManager } from '../mcp/McpImportManager';
@@ -146,6 +147,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private hookManager: HookManager;
   private guardRegistry: GuardRegistry;
   private childLifecycle: ChildEnvironmentLifecycle;
+  private diagnosticsRuntime: DiagnosticsRuntime;
+  private runtimeConfiguration: RuntimeConfigurationRuntime;
   private pipelineGuardHistoryStore: { entries?: GuardHistoryEntry[] };
   private mcpImportManager?: McpImportManager;
   
@@ -302,6 +305,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.pipelineGuardHistoryStore
     );
     this.childLifecycle = parent ? parent.childLifecycle : new ChildEnvironmentLifecycle();
+    this.diagnosticsRuntime = parent
+      ? parent.diagnosticsRuntime
+      : new DiagnosticsRuntime();
+    this.runtimeConfiguration = parent
+      ? parent.runtimeConfiguration
+      : new RuntimeConfigurationRuntime();
     
     // Inherit reserved names from parent environment
     if (parent) {
@@ -1725,7 +1734,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Note: getURLCacheTTL is now handled by ImportResolver via CacheManager
   
   setURLOptions(options: Partial<typeof this.defaultUrlOptions>): void {
-    Object.assign(this.defaultUrlOptions, options);
+    this.defaultUrlOptions = this.runtimeConfiguration.mergeUrlOptions(this.defaultUrlOptions, options);
   }
 
   /**
@@ -1743,19 +1752,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   setURLConfig(config: ResolvedURLConfig): void {
-    this.urlConfig = config;
-    this.cacheManager.setURLConfig(config);
+    this.urlConfig = this.runtimeConfiguration.applyUrlConfig(this.cacheManager, config);
   }
 
   /**
    * Configure allowance of absolute paths outside project root
    */
   setAllowAbsolutePaths(allow: boolean): void {
-    this.allowAbsolutePaths = allow;
+    this.allowAbsolutePaths = this.runtimeConfiguration.setAllowAbsolutePaths(allow);
   }
 
   getAllowAbsolutePaths(): boolean {
-    return this.allowAbsolutePaths;
+    return this.runtimeConfiguration.getAllowAbsolutePaths(this.allowAbsolutePaths);
   }
 
   // --- Output Management Methods ---
@@ -1765,19 +1773,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   setStreamingOptions(options: Partial<StreamingOptions> | undefined): void {
-    if (!options) {
-      this.streamingOptions = { ...defaultStreamingOptions };
-    } else {
-      this.streamingOptions = { ...this.streamingOptions, ...options };
-    }
-
-    if (!this.parent) {
-      this.sdkEventBridge.setStreamingOptions(this.streamingOptions);
-    }
+    const sink = this.parent ? undefined : this.sdkEventBridge;
+    this.streamingOptions = this.runtimeConfiguration.setStreamingOptions(
+      this.streamingOptions,
+      options,
+      sink
+    );
   }
 
   getStreamingOptions(): StreamingOptions {
-    return { ...this.streamingOptions };
+    return this.runtimeConfiguration.getStreamingOptions(this.streamingOptions);
   }
 
   setStreamingManager(manager: StreamingManager): void {
@@ -1787,9 +1792,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getStreamingManager(): StreamingManager {
     const root = this.getRootEnvironment();
-    if (!root.streamingManager) {
-      root.streamingManager = new StreamingManager();
-    }
+    root.streamingManager = this.runtimeConfiguration.ensureStreamingManager(root.streamingManager);
     return root.streamingManager;
   }
 
@@ -1799,20 +1802,20 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   setStreamingResult(result: StreamingResult | undefined): void {
     const root = this.getRootEnvironment();
-    root.streamingResult = result;
+    root.streamingResult = this.runtimeConfiguration.setStreamingResult(result);
   }
 
   getStreamingResult(): StreamingResult | undefined {
-    return this.getRootEnvironment().streamingResult;
+    return this.runtimeConfiguration.getStreamingResult(this.getRootEnvironment().streamingResult);
   }
 
   setProvenanceEnabled(enabled: boolean): void {
     const root = this.getRootEnvironment();
-    root.provenanceEnabled = enabled;
+    root.provenanceEnabled = this.runtimeConfiguration.setProvenanceEnabled(enabled);
   }
 
   isProvenanceEnabled(): boolean {
-    return this.getRootEnvironment().provenanceEnabled;
+    return this.runtimeConfiguration.isProvenanceEnabled(this.getRootEnvironment().provenanceEnabled);
   }
   
   /**
@@ -1826,28 +1829,28 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Set dynamic module parsing mode
    */
   setDynamicModuleMode(mode: MlldMode | undefined): void {
-    this.dynamicModuleMode = mode;
+    this.dynamicModuleMode = this.runtimeConfiguration.setDynamicModuleMode(mode);
   }
 
   /**
    * Get dynamic module parsing mode (defaults to 'strict')
    */
   getDynamicModuleMode(): MlldMode {
-    return this.dynamicModuleMode ?? 'strict';
+    return this.runtimeConfiguration.getDynamicModuleMode(this.dynamicModuleMode);
   }
 
   /**
    * Set blank line normalization flag
    */
   setNormalizeBlankLines(normalize: boolean): void {
-    this.normalizeBlankLines = normalize;
+    this.normalizeBlankLines = this.runtimeConfiguration.setNormalizeBlankLines(normalize);
   }
   
   /**
    * Set fuzzy matching configuration for local file imports
    */
   setLocalFileFuzzyMatch(config: FuzzyMatchConfig | boolean): void {
-    this.localFileFuzzyMatch = config;
+    this.localFileFuzzyMatch = this.runtimeConfiguration.setLocalFileFuzzyMatch(config);
   }
   
   /**
@@ -1859,175 +1862,63 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       // Only configure ephemeral mode on root environment
       return;
     }
-    
-    // Mark environment as ephemeral for error context
-    this.isEphemeralMode = ephemeral;
-    
-    // Auto-approve all imports in ephemeral mode
-    this.approveAllImports = true;
-    
-    // Pre-import all required modules to avoid timing issues
-    const [
-      { InMemoryModuleCache },
-      { NoOpLockFile },
-      { ImmutableCache },
-      { ProjectPathResolver },
-      { RegistryResolver },
-      { LocalResolver },
-      { GitHubResolver },
-      { HTTPResolver }
-    ] = await Promise.all([
-      import('@core/registry/InMemoryModuleCache'),
-      import('@core/registry/NoOpLockFile'),
-      import('@core/security/ImmutableCache'),
-      import('@core/resolvers/ProjectPathResolver'),
-      import('@core/resolvers/RegistryResolver'),
-      import('@core/resolvers/LocalResolver'),
-      import('@core/resolvers/GitHubResolver'),
-      import('@core/resolvers/HTTPResolver')
-    ]);
-    
-    // Create ephemeral cache implementations
-    const moduleCache = new InMemoryModuleCache();
-    const lockFile = new NoOpLockFile(path.join(this.getProjectRoot(), 'mlld.lock.json'));
-    
-    // Create ephemeral URL cache
-    const cacheAdapter = {
-      async set(content: string, metadata: { source: string }): Promise<string> {
-        return moduleCache.store(content, metadata.source).then(entry => entry.hash);
-      },
-      async get(hash: string): Promise<string | null> {
-        return moduleCache.retrieve(hash);
-      },
-      async has(hash: string): Promise<boolean> {
-        return moduleCache.exists(hash);
-      }
-    };
-    
-    
-    // Re-initialize registry manager with ephemeral components
-    if (this.registryManager) {
-      // The registry manager will use the ephemeral cache and lock file
-      this.registryManager = new RegistryManager(
-        this.pathContext || this.getProjectRoot()
-      );
+
+    const flags = this.runtimeConfiguration.enableEphemeralMode();
+    this.isEphemeralMode = flags.isEphemeralMode;
+    this.approveAllImports = flags.approveAllImports;
+
+    const reconfigured = await this.runtimeConfiguration.reconfigureForEphemeral({
+      fileSystem: this.fileSystem,
+      pathContext: this.pathContext,
+      projectRoot: this.getProjectRoot(),
+      hasRegistryManager: Boolean(this.registryManager),
+      hasResolverManager: Boolean(this.resolverManager)
+    });
+
+    if (reconfigured.registryManager) {
+      this.registryManager = reconfigured.registryManager;
     }
-    
-    // Re-initialize resolver manager with ephemeral components
-    if (this.resolverManager) {
-      this.resolverManager = new ResolverManager(
-        undefined, // Use default security policy
-        moduleCache,
-        lockFile
-      );
-      
-      // Re-register all resolvers (same as in constructor)
-      // Register path resolvers (priority 1)
-      this.resolverManager.registerResolver(new ProjectPathResolver(this.fileSystem));
 
-      // Register module resolvers (priority 10)
-      this.resolverManager.registerResolver(new RegistryResolver());
-
-      // Register Python package resolvers (priority 50)
-      const pythonResolverOptions = { projectRoot: this.getProjectRoot() };
-      this.resolverManager.registerResolver(new PythonPackageResolver(pythonResolverOptions));
-      this.resolverManager.registerResolver(new PythonAliasResolver(pythonResolverOptions));
-
-      // Register file resolvers (priority 20)
-      this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
-      this.resolverManager.registerResolver(new GitHubResolver());
-      this.resolverManager.registerResolver(new HTTPResolver());
-      
-      // Configure built-in prefixes
-      this.resolverManager.configurePrefixes([
-        {
-          prefix: '@base',
-          resolver: 'base',
-          type: 'io',
-          config: {
-            basePath: this.getProjectRoot(),
-            readonly: false
-          }
-        }
-      ]);
-      
-      // Re-register built-in function resolvers
+    if (reconfigured.resolverManager) {
+      this.resolverManager = reconfigured.resolverManager;
       await this.registerBuiltinResolvers();
     }
-    
-    // Update ImportResolver dependencies to use ephemeral components
-    const immutableCache = new ImmutableCache(this.getProjectRoot(), { inMemory: true });
-    
-    // Create new ImportResolver with ephemeral configuration
-    this.importResolver = new ImportResolver(
-      buildImportResolverDependencies({
-        fileSystem: this.fileSystem,
-        pathService: this.pathService,
-        pathContext: this.pathContext,
-        basePath: this.basePath,
-        cacheManager: this.cacheManager,
-        getSecurityManager: () => this.securityManager,
-        getRegistryManager: () => this.registryManager,
-        getResolverManager: () => this.resolverManager,
-        getParent: () => this.parent,
-        getCurrentFilePath: this.getCurrentFilePath.bind(this),
-        getApproveAllImports: () => this.approveAllImports,
-        getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
-        getURLConfig: () => this.urlConfig,
-        getDefaultUrlOptions: () => this.defaultUrlOptions,
-        getAllowAbsolutePaths: () => this.allowAbsolutePaths
-      })
-    );
-    
-    // Note: SecurityManager uses its own ImmutableCache instance
-    // We can't replace it after initialization, but that's OK since
-    // the ImportResolver will use its own ephemeral cache
+
+    this.importResolver = this.runtimeConfiguration.createImportResolver({
+      fileSystem: this.fileSystem,
+      pathService: this.pathService,
+      pathContext: this.pathContext,
+      basePath: this.basePath,
+      cacheManager: this.cacheManager,
+      getSecurityManager: this.getSecurityManager.bind(this),
+      getRegistryManager: this.getRegistryManager.bind(this),
+      getResolverManager: this.getResolverManager.bind(this),
+      getParent: () => this.parent,
+      getCurrentFilePath: this.getCurrentFilePath.bind(this),
+      getApproveAllImports: () => this.approveAllImports,
+      getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
+      getURLConfig: () => this.urlConfig,
+      getDefaultUrlOptions: () => this.defaultUrlOptions,
+      getAllowAbsolutePaths: () => this.allowAbsolutePaths
+    });
   }
   
   /**
    * Get blank line normalization flag
    */
   getNormalizeBlankLines(): boolean {
-    return this.normalizeBlankLines;
+    return this.runtimeConfiguration.getNormalizeBlankLines(this.normalizeBlankLines);
   }
   
   /**
    * Configure local module support once resolvers are ready
    */
   async configureLocalModules(): Promise<void> {
-    if (!this.resolverManager) return;
-
-    const localPath = this.localModulePath;
-    if (!localPath) return;
-
-    let exists = false;
-    try {
-      exists = await this.fileSystem.exists(localPath);
-    } catch {
-      exists = false;
-    }
-
-    if (!exists) {
-      logger.debug(`Local modules path not found: ${localPath}`);
-      return;
-    }
-
-    let currentUser: string | undefined;
-    try {
-      const user = await GitHubAuthService.getInstance().getGitHubUser();
-      currentUser = user?.login?.toLowerCase();
-    } catch {
-      currentUser = undefined;
-    }
-
-    const prefixes = this.projectConfig?.getResolverPrefixes() ?? [];
-    const allowedAuthors = prefixes
-      .filter(prefixConfig => prefixConfig.prefix && prefixConfig.prefix.startsWith('@') && prefixConfig.resolver !== 'REGISTRY')
-      .map(prefixConfig => prefixConfig.prefix.replace(/^@/, '').replace(/\/$/, '').toLowerCase());
-
-    await this.resolverManager.configureLocalModules(localPath, {
-      currentUser,
-      allowedAuthors
+    await this.runtimeConfiguration.configureLocalModules({
+      resolverManager: this.resolverManager,
+      localModulePath: this.localModulePath,
+      fileSystem: this.fileSystem,
+      projectConfig: this.projectConfig
     });
   }
   
@@ -2037,15 +1928,21 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     duration: number,
     context?: CommandExecutionContext
   ): void {
-    this.errorUtils.collectError(error, command, duration, context);
+    this.diagnosticsRuntime.collectError(
+      this.errorUtils,
+      error,
+      command,
+      duration,
+      context
+    );
   }
   
   getCollectedErrors(): CollectedError[] {
-    return this.errorUtils.getCollectedErrors();
+    return this.diagnosticsRuntime.getCollectedErrors(this.errorUtils);
   }
   
   clearCollectedErrors(): void {
-    this.errorUtils.clearCollectedErrors();
+    this.diagnosticsRuntime.clearCollectedErrors(this.errorUtils);
   }
   
   private processOutput(output: string, maxLines?: number): { 
@@ -2053,56 +1950,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     truncated: boolean; 
     originalLineCount: number 
   } {
-    const result = ErrorUtils.processOutput(output, maxLines);
-    return {
-      processed: result.output.trimEnd(),
-      truncated: result.truncated,
-      originalLineCount: result.originalLength
-    };
+    return this.diagnosticsRuntime.processOutput(output, maxLines);
   }
   
   async displayCollectedErrors(): Promise<void> {
-    const errors = this.getCollectedErrors();
-    if (errors.length === 0) return;
-    
-    console.log(`\n❌ ${errors.length} error${errors.length > 1 ? 's' : ''} occurred:\n`);
-    
-    // Use ErrorFormatSelector for consistent rich formatting
-    const { ErrorFormatSelector } = await import('@core/utils/errorFormatSelector');
-    const formatter = new ErrorFormatSelector(this.fileSystem);
-    
-    for (let i = 0; i < errors.length; i++) {
-      const item = errors[i];
-      console.log(`${i + 1}. Command execution failed:`);
-      
-      try {
-        // Format using the same rich system as other mlld errors
-        const formatted = await formatter.formatForCLI(item.error, {
-          useColors: true,
-          useSourceContext: true,
-          useSmartPaths: true,
-          basePath: this.basePath,
-          workingDirectory: (process as NodeJS.Process).cwd(),
-          contextLines: 2
-        });
-        
-        console.log(formatted);
-      } catch (formatError) {
-        // Fallback to basic display if rich formatting fails
-        console.log(`   ├─ Command: ${item.command}`);
-        console.log(`   ├─ Duration: ${item.duration}ms`);
-        if (formatError instanceof Error) {
-          console.log(`   ├─ ${item.error.message}`);
-        }
-        if (item.error.details?.exitCode !== undefined) {
-          console.log(`   ├─ Exit code: ${item.error.details.exitCode}`);
-        }
-        console.log(`   └─ Use --verbose to see full output\n`);
-      }
-    }
-    
-    console.log(`💡 Use --verbose to see full command output`);
-    console.log(`💡 Use --help error-handling for error handling options\n`);
+    await this.diagnosticsRuntime.displayCollectedErrors(
+      this.errorUtils,
+      this.fileSystem,
+      this.basePath
+    );
   }
   
   // --- Import Tracking (for circular import detection) ---
@@ -2136,90 +1992,97 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     varName?: string,
     location?: SourceLocation
   ): void {
-    const start = Date.now();
-    this.directiveTimings.push(start);
-
-    if (this.sdkEventBridge.hasEmitter()) {
-      const provenance = this.isProvenanceEnabled()
-        ? this.snapshotToDescriptor(this.getSecuritySnapshot())
-        : undefined;
-      this.emitSDKEvent({
-        type: 'debug:directive:start',
-        directive,
-        timestamp: start,
-        ...(provenance && { provenance })
-      });
-    }
-
-    if (!this.traceEnabled) return;
-    
-    const fileName = this.currentFilePath ? path.basename(this.currentFilePath) : 'unknown';
-    const lineNumber = location?.line || 'unknown';
-    
-    this.directiveTrace.push({
+    this.diagnosticsRuntime.pushDirective(
+      {
+        directiveTrace: this.directiveTrace,
+        directiveTimings: this.directiveTimings,
+        traceEnabled: this.traceEnabled,
+        currentFilePath: this.currentFilePath
+      },
       directive,
       varName,
-      location: `${fileName}:${lineNumber}`,
-      depth: this.directiveTrace.length
-    });
+      location,
+      {
+        bridge: this.sdkEventBridge.hasEmitter() ? this : undefined,
+        provenance: this.isProvenanceEnabled()
+          ? this.snapshotToDescriptor(this.getSecuritySnapshot())
+          : undefined
+      }
+    );
   }
   
   /**
    * Pop a directive from the trace stack
    */
   popDirective(): void {
-    const start = this.directiveTimings.pop();
-    const entry = this.traceEnabled ? this.directiveTrace.pop() : undefined;
-    if (this.sdkEventBridge.hasEmitter() && start && entry) {
-      const durationMs = Date.now() - start;
-      const provenance = this.isProvenanceEnabled()
-        ? this.snapshotToDescriptor(this.getSecuritySnapshot())
-        : undefined;
-      this.emitSDKEvent({
-        type: 'debug:directive:complete',
-        directive: entry.directive,
-        durationMs,
-        timestamp: Date.now(),
-        ...(provenance && { provenance })
-      });
-    }
-    if (!this.traceEnabled) return;
+    this.diagnosticsRuntime.popDirective(
+      {
+        directiveTrace: this.directiveTrace,
+        directiveTimings: this.directiveTimings,
+        traceEnabled: this.traceEnabled,
+        currentFilePath: this.currentFilePath
+      },
+      {
+        bridge: this.sdkEventBridge.hasEmitter() ? this : undefined,
+        provenance: this.isProvenanceEnabled()
+          ? this.snapshotToDescriptor(this.getSecuritySnapshot())
+          : undefined
+      }
+    );
   }
   
   /**
    * Get a copy of the current directive trace
    */
   getDirectiveTrace(): DirectiveTrace[] {
-    return [...this.directiveTrace];
+    return this.diagnosticsRuntime.getDirectiveTrace({
+      directiveTrace: this.directiveTrace,
+      directiveTimings: this.directiveTimings,
+      traceEnabled: this.traceEnabled,
+      currentFilePath: this.currentFilePath
+    });
   }
   
   /**
    * Mark the last directive in the trace as failed
    */
   markLastDirectiveFailed(errorMessage: string): void {
-    if (this.directiveTrace.length > 0) {
-      const lastEntry = this.directiveTrace[this.directiveTrace.length - 1];
-      lastEntry.failed = true;
-      lastEntry.errorMessage = errorMessage;
-    }
+    this.diagnosticsRuntime.markLastDirectiveFailed(
+      {
+        directiveTrace: this.directiveTrace,
+        directiveTimings: this.directiveTimings,
+        traceEnabled: this.traceEnabled,
+        currentFilePath: this.currentFilePath
+      },
+      errorMessage
+    );
   }
   
   /**
    * Set whether tracing is enabled
    */
   setTraceEnabled(enabled: boolean): void {
-    this.traceEnabled = enabled;
-    // Clear trace when disabling
-    if (!enabled) {
-      this.directiveTrace = [];
-    }
+    const state = {
+      directiveTrace: this.directiveTrace,
+      directiveTimings: this.directiveTimings,
+      traceEnabled: this.traceEnabled,
+      currentFilePath: this.currentFilePath
+    };
+    this.diagnosticsRuntime.setTraceEnabled(state, enabled);
+    this.traceEnabled = state.traceEnabled;
+    this.directiveTrace = state.directiveTrace;
   }
   
   /**
    * Check if tracing is enabled
    */
   isTraceEnabled(): boolean {
-    return this.traceEnabled;
+    return this.diagnosticsRuntime.isTraceEnabled({
+      directiveTrace: this.directiveTrace,
+      directiveTimings: this.directiveTimings,
+      traceEnabled: this.traceEnabled,
+      currentFilePath: this.currentFilePath
+    });
   }
   
   // --- Source Cache Methods ---
@@ -2230,12 +2093,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @param content The source content
    */
   cacheSource(filePath: string, content: string): void {
-    // Only cache in root environment to avoid duplication
-    if (this.parent) {
-      this.parent.cacheSource(filePath, content);
-    } else {
-      this.sourceCache.set(filePath, content);
-    }
+    this.diagnosticsRuntime.cacheSource(
+      this.sourceCache,
+      this.parent,
+      filePath,
+      content
+    );
   }
   
   /**
@@ -2244,12 +2107,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns The cached source content or undefined
    */
   getSource(filePath: string): string | undefined {
-    // Check this environment first, then parent
-    const source = this.sourceCache.get(filePath);
-    if (source !== undefined) {
-      return source;
-    }
-    return this.parent?.getSource(filePath);
+    return this.diagnosticsRuntime.getSource(
+      this.sourceCache,
+      this.parent,
+      filePath
+    );
   }
   
   // --- ImportResolverContext Implementation ---
