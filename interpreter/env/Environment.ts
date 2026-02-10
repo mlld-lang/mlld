@@ -17,7 +17,6 @@ import { execSync } from 'child_process';
 import * as path from 'path';
 // Note: ImportApproval, ImmutableCache, and GistTransformer are now handled by ImportResolver
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
-import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
 import {
   makeSecurityDescriptor,
@@ -187,7 +186,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // Development mode flag
   private localModulePath?: string;
-  private configuredLocalModules: boolean = false;
   
   // Source cache for error reporting
   private sourceCache: Map<string, string> = new Map();
@@ -1787,7 +1785,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   setStreamingManager(manager: StreamingManager): void {
     const root = this.getRootEnvironment();
-    root.streamingManager = manager;
+    root.streamingManager = this.runtimeConfiguration.setStreamingManager(manager);
   }
 
   getStreamingManager(): StreamingManager {
@@ -1922,35 +1920,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     });
   }
   
-  private collectError(
-    error: MlldCommandExecutionError, 
-    command: string, 
-    duration: number,
-    context?: CommandExecutionContext
-  ): void {
-    this.diagnosticsRuntime.collectError(
-      this.errorUtils,
-      error,
-      command,
-      duration,
-      context
-    );
-  }
-  
   getCollectedErrors(): CollectedError[] {
     return this.diagnosticsRuntime.getCollectedErrors(this.errorUtils);
   }
   
   clearCollectedErrors(): void {
     this.diagnosticsRuntime.clearCollectedErrors(this.errorUtils);
-  }
-  
-  private processOutput(output: string, maxLines?: number): { 
-    processed: string; 
-    truncated: boolean; 
-    originalLineCount: number 
-  } {
-    return this.diagnosticsRuntime.processOutput(output, maxLines);
   }
   
   async displayCollectedErrors(): Promise<void> {
@@ -1981,6 +1956,32 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       includeTraceInheritance: true
     });
   }
+
+  private getDirectiveTraceState(): {
+    directiveTrace: DirectiveTrace[];
+    directiveTimings: number[];
+    traceEnabled: boolean;
+    currentFilePath?: string;
+  } {
+    return {
+      directiveTrace: this.directiveTrace,
+      directiveTimings: this.directiveTimings,
+      traceEnabled: this.traceEnabled,
+      currentFilePath: this.currentFilePath
+    };
+  }
+
+  private getDirectiveTraceEventOptions(): {
+    bridge?: { emitSDKEvent(event: SDKEvent): void };
+    provenance?: SecurityDescriptor;
+  } {
+    return {
+      bridge: this.sdkEventBridge.hasEmitter() ? this : undefined,
+      provenance: this.isProvenanceEnabled()
+        ? this.snapshotToDescriptor(this.getSecuritySnapshot())
+        : undefined
+    };
+  }
   
   // --- Directive Trace (for debugging) ---
   
@@ -1993,21 +1994,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     location?: SourceLocation
   ): void {
     this.diagnosticsRuntime.pushDirective(
-      {
-        directiveTrace: this.directiveTrace,
-        directiveTimings: this.directiveTimings,
-        traceEnabled: this.traceEnabled,
-        currentFilePath: this.currentFilePath
-      },
+      this.getDirectiveTraceState(),
       directive,
       varName,
       location,
-      {
-        bridge: this.sdkEventBridge.hasEmitter() ? this : undefined,
-        provenance: this.isProvenanceEnabled()
-          ? this.snapshotToDescriptor(this.getSecuritySnapshot())
-          : undefined
-      }
+      this.getDirectiveTraceEventOptions()
     );
   }
   
@@ -2016,18 +2007,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    */
   popDirective(): void {
     this.diagnosticsRuntime.popDirective(
-      {
-        directiveTrace: this.directiveTrace,
-        directiveTimings: this.directiveTimings,
-        traceEnabled: this.traceEnabled,
-        currentFilePath: this.currentFilePath
-      },
-      {
-        bridge: this.sdkEventBridge.hasEmitter() ? this : undefined,
-        provenance: this.isProvenanceEnabled()
-          ? this.snapshotToDescriptor(this.getSecuritySnapshot())
-          : undefined
-      }
+      this.getDirectiveTraceState(),
+      this.getDirectiveTraceEventOptions()
     );
   }
   
@@ -2035,39 +2016,21 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Get a copy of the current directive trace
    */
   getDirectiveTrace(): DirectiveTrace[] {
-    return this.diagnosticsRuntime.getDirectiveTrace({
-      directiveTrace: this.directiveTrace,
-      directiveTimings: this.directiveTimings,
-      traceEnabled: this.traceEnabled,
-      currentFilePath: this.currentFilePath
-    });
+    return this.diagnosticsRuntime.getDirectiveTrace(this.getDirectiveTraceState());
   }
   
   /**
    * Mark the last directive in the trace as failed
    */
   markLastDirectiveFailed(errorMessage: string): void {
-    this.diagnosticsRuntime.markLastDirectiveFailed(
-      {
-        directiveTrace: this.directiveTrace,
-        directiveTimings: this.directiveTimings,
-        traceEnabled: this.traceEnabled,
-        currentFilePath: this.currentFilePath
-      },
-      errorMessage
-    );
+    this.diagnosticsRuntime.markLastDirectiveFailed(this.getDirectiveTraceState(), errorMessage);
   }
   
   /**
    * Set whether tracing is enabled
    */
   setTraceEnabled(enabled: boolean): void {
-    const state = {
-      directiveTrace: this.directiveTrace,
-      directiveTimings: this.directiveTimings,
-      traceEnabled: this.traceEnabled,
-      currentFilePath: this.currentFilePath
-    };
+    const state = this.getDirectiveTraceState();
     this.diagnosticsRuntime.setTraceEnabled(state, enabled);
     this.traceEnabled = state.traceEnabled;
     this.directiveTrace = state.directiveTrace;
@@ -2077,12 +2040,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Check if tracing is enabled
    */
   isTraceEnabled(): boolean {
-    return this.diagnosticsRuntime.isTraceEnabled({
-      directiveTrace: this.directiveTrace,
-      directiveTimings: this.directiveTimings,
-      traceEnabled: this.traceEnabled,
-      currentFilePath: this.currentFilePath
-    });
+    return this.diagnosticsRuntime.isTraceEnabled(this.getDirectiveTraceState());
   }
   
   // --- Source Cache Methods ---

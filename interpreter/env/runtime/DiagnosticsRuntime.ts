@@ -2,18 +2,11 @@ import path from 'path';
 import type { SourceLocation } from '@core/types';
 import type { DirectiveTrace } from '@core/types/trace';
 import type { SecurityDescriptor } from '@core/types/security';
-import type { MlldCommandExecutionError } from '@core/errors';
 import type { SDKEvent } from '@sdk/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
-import { ErrorUtils, type CollectedError, type CommandExecutionContext } from '../ErrorUtils';
+import type { CollectedError } from '../ErrorUtils';
 
 interface ErrorCollectorLike {
-  collectError(
-    error: MlldCommandExecutionError,
-    command: string,
-    duration: number,
-    context?: CommandExecutionContext
-  ): void;
   getCollectedErrors(): CollectedError[];
   clearCollectedErrors(): void;
 }
@@ -35,38 +28,12 @@ interface SourceCacheParent {
 }
 
 export class DiagnosticsRuntime {
-  collectError(
-    collector: ErrorCollectorLike,
-    error: MlldCommandExecutionError,
-    command: string,
-    duration: number,
-    context?: CommandExecutionContext
-  ): void {
-    collector.collectError(error, command, duration, context);
-  }
-
   getCollectedErrors(collector: ErrorCollectorLike): CollectedError[] {
     return collector.getCollectedErrors();
   }
 
   clearCollectedErrors(collector: ErrorCollectorLike): void {
     collector.clearCollectedErrors();
-  }
-
-  processOutput(
-    output: string,
-    maxLines?: number
-  ): {
-    processed: string;
-    truncated: boolean;
-    originalLineCount: number;
-  } {
-    const result = ErrorUtils.processOutput(output, maxLines);
-    return {
-      processed: result.output.trimEnd(),
-      truncated: result.truncated,
-      originalLineCount: result.originalLength
-    };
   }
 
   async displayCollectedErrors(

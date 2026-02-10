@@ -67,6 +67,10 @@ describe('RuntimeConfigurationRuntime', () => {
     expect(sink.setStreamingOptions).toHaveBeenCalledWith(merged);
     expect(reset).toEqual(defaultStreamingOptions);
     expect(sink.setStreamingOptions).toHaveBeenCalledWith(defaultStreamingOptions);
+
+    const streamingManager = runtime.ensureStreamingManager(undefined);
+    expect(runtime.setStreamingManager(streamingManager)).toBe(streamingManager);
+    expect(runtime.ensureStreamingManager(streamingManager)).toBe(streamingManager);
   });
 
   it('creates ephemeral registry/resolver managers when requested', async () => {

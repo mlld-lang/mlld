@@ -119,6 +119,10 @@ export class RuntimeConfigurationRuntime {
     return new StreamingManager();
   }
 
+  setStreamingManager(manager: StreamingManager): StreamingManager {
+    return manager;
+  }
+
   setStreamingResult(result: StreamingResult | undefined): StreamingResult | undefined {
     return result;
   }

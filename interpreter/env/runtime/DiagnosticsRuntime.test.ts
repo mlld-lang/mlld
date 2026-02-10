@@ -2,22 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { DiagnosticsRuntime } from './DiagnosticsRuntime';
 
 describe('DiagnosticsRuntime', () => {
-  it('delegates error collection lifecycle to collector', () => {
+  it('delegates error list access and clearing to collector', () => {
     const runtime = new DiagnosticsRuntime();
     const collector = {
-      collectError: vi.fn(),
       getCollectedErrors: vi.fn().mockReturnValue([{ command: 'echo hi' }]),
       clearCollectedErrors: vi.fn()
     };
-    const error = new Error('boom');
-
-    runtime.collectError(collector as any, error as any, 'echo hi', 12, { filePath: 'a.mld' });
     const errors = runtime.getCollectedErrors(collector as any);
     runtime.clearCollectedErrors(collector as any);
 
-    expect(collector.collectError).toHaveBeenCalledWith(error, 'echo hi', 12, {
-      filePath: 'a.mld'
-    });
     expect(errors).toEqual([{ command: 'echo hi' }]);
     expect(collector.clearCollectedErrors).toHaveBeenCalledTimes(1);
   });
@@ -97,14 +90,5 @@ describe('DiagnosticsRuntime', () => {
     expect(runtime.getSource(localCache, undefined, '/repo/a.mld')).toBe('local');
     expect(runtime.getSource(new Map(), parent, '/repo/b.mld')).toBe('from-parent');
     expect(parent.cacheSource).toHaveBeenCalledWith('/repo/b.mld', 'delegated');
-  });
-
-  it('processes output through ErrorUtils metadata contract', () => {
-    const runtime = new DiagnosticsRuntime();
-    const result = runtime.processOutput('line1\nline2\n', 1);
-
-    expect(result.processed).toBe('line1\nline2');
-    expect(result.truncated).toBe(false);
-    expect(result.originalLineCount).toBe('line1\nline2\n'.length);
   });
 });

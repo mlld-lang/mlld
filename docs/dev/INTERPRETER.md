@@ -1,8 +1,8 @@
 ---
-updated: 2026-02-01
+updated: 2026-02-10
 tags: #arch, #interpreter
 related-docs: docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/RESOLVERS.md, docs/dev/SHADOW-ENV.md, docs/dev/IMPORTS.md, docs/dev/ITERATORS.md, docs/dev/ALLIGATOR.md, docs/dev/EXEC-VARS.md, llms.txt
-related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/eval/exec/*.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/executors/*.ts, interpreter/eval/pipeline/*, core/types/*
+related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/eval/exec/*.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/runtime/*.ts, interpreter/env/executors/*.ts, interpreter/eval/pipeline/*, core/types/*
 related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableReferenceNode, WithClause }, core/types/variable { Variable }
 ---
 
@@ -64,11 +64,21 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Variables: `VariableManager` manages typed variables, reserved names, parameter scoping, wrappers for complex data.
 - Imports: `ImportResolver` orchestrates file/module/function resolvers, URL cache, approval bypass, fuzzy local matching.
 - Resolvers: `ResolverManager` with built-ins (`now`, `debug`, `input`) and prefix configs (e.g., `@base/...`).
-- Execution: `CommandExecutorFactory` (shell/JS/Node) with streaming, timeouts, and shadow envs.
-- Shadow envs: language-specific injection (`js`, `node`) and a VM-backed `NodeShadowEnvironment`.
+- Execution: `ExecutionOrchestrator` composes command/code execution and keeps `CommandExecutorFactory` creation behind a single boundary.
+- Shadow envs: `ShadowEnvironmentRuntime` manages language-specific injection (`js`, `node`) and VM-backed `NodeShadowEnvironment` lifecycle.
 - Caching and registry: URL/module cache + lock file via registry manager.
 - Security: `SecurityManager` for URL limits, protocol/domain validation.
-- Effects and output: `EffectHandler` (default or custom), blank-line normalization, markdown formatting.
+- Effects and output: `OutputCoordinator` maps intents/effects and `SdkEventBridge` mirrors runtime events.
+
+### Environment Runtime Collaborators
+
+- `SecurityPolicyRuntime`: policy capability state, descriptor/snapshot merge, and tool-scope enforcement.
+- `StateWriteRuntime`: `@state` write-through updates and dynamic module state snapshots.
+- `ContextFacade`: operation/pipeline/guard context and guard-history coordination.
+- `ResolverVariableFacade` and `VariableFacade`: resolver-variable hydration and import-binding bookkeeping.
+- `ChildEnvironmentLifecycle`: shared child creation context, inheritance, and merge semantics.
+- `RuntimeConfigurationRuntime`: URL/path/streaming/provenance toggles, local module setup, and ephemeral resolver reconfiguration.
+- `DiagnosticsRuntime`: collected-error rendering, directive trace timing/events, and source-cache access.
 
 ### Variable Model and Resolution
 
