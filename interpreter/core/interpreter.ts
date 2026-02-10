@@ -31,7 +31,6 @@ import { parseFrontmatter } from '../utils/frontmatter-parser';
 import type { OperationContext } from '../env/ContextManager';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import { asText, assertStructuredValue } from '@interpreter/utils/structured-value';
-import { materializeDisplayValue } from '../utils/display-materialization';
 import type { SecurityDescriptor } from '@core/types/security';
 import { classifyShellValue } from '@interpreter/utils/shell-value';
 import {
@@ -44,6 +43,7 @@ import {
 } from '../utils/interpolation';
 import * as shellQuote from 'shell-quote';
 import { parseSync } from '@grammar/parser';
+import { evaluateArrayNodes } from './interpreter/traversal';
 
 /**
  * Type for variable values
@@ -291,244 +291,13 @@ export interface EvaluationContext {
 export async function evaluate(node: MlldNode | MlldNode[], env: Environment, context?: EvaluationContext): Promise<EvalResult> {
   // Handle array of nodes (from parser)
   if (Array.isArray(node)) {
-    let lastValue: unknown = undefined;
-    let lastResult: EvalResult | null = null;
-    
-    // First, check if the first node is frontmatter and process it
-    if (node.length > 0 && isFrontmatter(node[0])) {
-      const frontmatterNode = node[0];
-      const frontmatterData: FrontmatterData = parseFrontmatter(frontmatterNode.content);
-      env.setFrontmatter(frontmatterData);
-      
-      // Process remaining nodes
-      for (let i = 1; i < node.length; i++) {
-        const n = node[i];
-
-        const barePipelineStatements = !context?.isExpression && isText(n)
-          ? parseBareBuiltinEffectPipelines(n.content)
-          : null;
-        if (barePipelineStatements) {
-          let inlinePipelineResult: EvalResult | null = null;
-          for (const statement of barePipelineStatements) {
-            inlinePipelineResult = await evaluate(statement, env, context);
-            env.addNode(statement);
-          }
-          if (inlinePipelineResult) {
-            lastValue = inlinePipelineResult.value;
-            lastResult = inlinePipelineResult;
-          }
-          continue;
-        }
-
-        const result = await evaluate(n, env, context);
-        lastValue = result.value;
-        lastResult = result;
-        
-        // Emit effects for non-directive nodes to preserve document structure
-        // Skip effect emission when evaluating expressions (they're not document content)
-        if (!isDirective(n) && !context?.isExpression) {
-          // Skip inline comments (lines starting with >> or <<)
-          if (isText(n) && n.content.trimStart().match(/^(>>|<<)/)) {
-            continue;
-          }
-          // Skip comment nodes
-          if (isComment(n)) {
-            logger.debug('Skipping comment node:', { content: n.content });
-            continue;
-          }
-          // Emit intents for non-directive nodes (preserves document structure with break collapsing)
-          // Skip text/newline emission when evaluating as expression (e.g., module imports)
-          if (isText(n)) {
-            if (!context?.isExpression) {
-              // If Text node contains only newlines, emit as collapsible breaks
-              if (/^\n+$/.test(n.content)) {
-                for (let i = 0; i < n.content.length; i++) {
-                  env.emitIntent({
-                    type: 'break',
-                    value: '\n',
-                    source: 'newline',
-                    visibility: 'always',
-                    collapsible: true
-                  });
-                }
-              } else {
-                const materialized = materializeDisplayValue(n.content, undefined, n.content);
-                env.emitIntent({
-                  type: 'content',
-                  value: materialized.text,
-                  source: 'text',
-                  visibility: 'always',
-                  collapsible: false
-                });
-                if (materialized.descriptor) {
-                  env.recordSecurityDescriptor(materialized.descriptor);
-                }
-              }
-            }
-          } else if (isNewline(n)) {
-            if (!context?.isExpression) {
-              env.emitIntent({
-                type: 'break',
-                value: '\n',
-                source: 'newline',
-                visibility: 'always',
-                collapsible: true
-              });
-            }
-          } else if (isCodeFence(n)) {
-            // Skip CodeFence emission when evaluating as expression (e.g., module imports)
-            if (!context?.isExpression) {
-              const materialized = materializeDisplayValue(n.content, undefined, n.content);
-              env.emitIntent({
-                type: 'content',
-                value: materialized.text,
-                source: 'text',
-                visibility: 'always',
-                collapsible: false
-              });
-              if (materialized.descriptor) {
-                env.recordSecurityDescriptor(materialized.descriptor);
-              }
-            }
-          } else if (isMlldRunBlock(n) && !n.error) {
-            // MlldRunBlock content is evaluated, not emitted directly
-            // The evaluation will emit its own effects
-          } else if ('wrapperType' in n && 'content' in n) {
-            // Template structures are intermediate nodes, not document content
-            // They get evaluated but shouldn't be emitted as effects
-          } else {
-            // For other node types, emit their content as 'doc' effect
-            // Skip other node types - they're AST nodes, not document content
-            // This includes ExecInvocation, VariableReference, Literal, etc.
-            // These are intermediate representations that get evaluated but not emitted
-            logger.debug('Skipping non-document node type:', { type: (n as any).type });
-          }
-        }
-
-        // Add all nodes to environment for document reconstruction
-        // This enables /output directive to recreate the complete document
-        if (!context?.isExpression) {
-          env.addNode(n);
-        }
-      }
-    } else {
-      // No frontmatter, process all nodes normally
-      for (const n of node) {
-        const barePipelineStatements = !context?.isExpression && isText(n)
-          ? parseBareBuiltinEffectPipelines(n.content)
-          : null;
-        if (barePipelineStatements) {
-          let inlinePipelineResult: EvalResult | null = null;
-          for (const statement of barePipelineStatements) {
-            inlinePipelineResult = await evaluate(statement, env, context);
-            env.addNode(statement);
-          }
-          if (inlinePipelineResult) {
-            lastValue = inlinePipelineResult.value;
-            lastResult = inlinePipelineResult;
-          }
-          continue;
-        }
-
-        const result = await evaluate(n, env, context);
-        lastValue = result.value;
-        lastResult = result;
-
-        // Add all nodes to environment for document reconstruction
-        // This enables /output directive to recreate the complete document
-        if (!context?.isExpression) {
-          env.addNode(n);
-        }
-        
-        // Emit effects for non-directive nodes to preserve document structure
-        // Skip effect emission when evaluating expressions (they're not document content)
-        if (!isDirective(n) && !context?.isExpression) {
-          // Skip inline comments (lines starting with >> or <<)
-          if (isText(n) && n.content.trimStart().match(/^(>>|<<)/)) {
-            continue;
-          }
-          // Skip comment nodes
-          if (isComment(n)) {
-            logger.debug('Skipping comment node:', { content: n.content });
-            continue;
-          }
-          // Emit intents for non-directive nodes (preserves document structure with break collapsing)
-          // Skip text/newline emission when evaluating as expression (e.g., module imports)
-          if (isText(n)) {
-            if (!context?.isExpression) {
-              // If Text node contains only newlines, emit as collapsible breaks
-              if (/^\n+$/.test(n.content)) {
-                for (let i = 0; i < n.content.length; i++) {
-                  env.emitIntent({
-                    type: 'break',
-                    value: '\n',
-                    source: 'newline',
-                    visibility: 'always',
-                    collapsible: true
-                  });
-                }
-              } else {
-                const materialized = materializeDisplayValue(n.content, undefined, n.content);
-                env.emitIntent({
-                  type: 'content',
-                  value: materialized.text,
-                  source: 'text',
-                  visibility: 'always',
-                  collapsible: false
-                });
-                if (materialized.descriptor) {
-                  env.recordSecurityDescriptor(materialized.descriptor);
-                }
-              }
-            }
-          } else if (isNewline(n)) {
-            if (!context?.isExpression) {
-              env.emitIntent({
-                type: 'break',
-                value: '\n',
-                source: 'newline',
-                visibility: 'always',
-                collapsible: true
-              });
-            }
-          } else if (isCodeFence(n)) {
-            // Skip CodeFence emission when evaluating as expression (e.g., module imports)
-            if (!context?.isExpression) {
-              const materialized = materializeDisplayValue(n.content, undefined, n.content);
-              env.emitIntent({
-                type: 'content',
-                value: materialized.text,
-                source: 'text',
-                visibility: 'always',
-                collapsible: false
-              });
-              if (materialized.descriptor) {
-                env.recordSecurityDescriptor(materialized.descriptor);
-              }
-            }
-          } else if (isMlldRunBlock(n) && !n.error) {
-            // MlldRunBlock content is evaluated, not emitted directly
-            // The evaluation will emit its own effects
-          } else if ('wrapperType' in n && 'content' in n) {
-            // Template structures are intermediate nodes, not document content
-            // They get evaluated but shouldn't be emitted as effects
-          } else {
-            // For other node types, emit their content as 'doc' effect
-            // Skip other node types - they're AST nodes, not document content
-            // This includes ExecInvocation, VariableReference, Literal, etc.
-            // These are intermediate representations that get evaluated but not emitted
-            logger.debug('Skipping non-document node type:', { type: (n as any).type });
-          }
-        }
-      }
-    }
-
-    // Return the last result with all its properties (including stdout, stderr, exitCode)
-    if (lastResult && (lastResult.stdout !== undefined || lastResult.stderr !== undefined || lastResult.exitCode !== undefined)) {
-      return lastResult;
-    }
-    
-    return { value: lastValue, env };
+    return evaluateArrayNodes({
+      nodes: node,
+      env,
+      context,
+      evaluateNode: evaluate,
+      parseBareBuiltinEffectPipelines
+    });
   }
   
   // Handle single node
