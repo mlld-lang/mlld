@@ -22,7 +22,6 @@ import { isStructuredValue } from '@interpreter/utils/structured-value';
 import { isNodeProxy } from '@interpreter/utils/node-interop';
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
-import { MlldImportError } from '@core/errors';
 import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironmentCapture';
 import { ExportManifest } from './ExportManifest';
 import { astLocationToSourceLocation } from '@core/types';
@@ -33,6 +32,7 @@ import { MetadataMapParser } from './variable-importer/MetadataMapParser';
 import { ModuleExportManifestValidator } from './variable-importer/ModuleExportManifestValidator';
 import { GuardExportChecker } from './variable-importer/GuardExportChecker';
 import { ModuleExportSerializer } from './variable-importer/ModuleExportSerializer';
+import { ImportTypeRouter } from './variable-importer/ImportTypeRouter';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -50,6 +50,7 @@ export class VariableImporter {
   private readonly exportManifestValidator: ModuleExportManifestValidator;
   private readonly guardExportChecker: GuardExportChecker;
   private readonly moduleExportSerializer: ModuleExportSerializer;
+  private readonly importTypeRouter: ImportTypeRouter;
 
   constructor(private objectResolver: ObjectReferenceResolver) {
     this.bindingGuards = new ImportBindingGuards();
@@ -57,6 +58,7 @@ export class VariableImporter {
     this.exportManifestValidator = new ModuleExportManifestValidator();
     this.guardExportChecker = new GuardExportChecker();
     this.moduleExportSerializer = new ModuleExportSerializer(this.objectResolver);
+    this.importTypeRouter = new ImportTypeRouter();
   }
   
   /**
@@ -545,48 +547,25 @@ export class VariableImporter {
     metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
     guardDefinitions?: SerializedGuardDefinition[]
   ): Promise<void> {
-    if (directive.subtype === 'importPolicy') {
-      await this.handleNamespaceImport(
+    await this.importTypeRouter.route(directive, guardDefinitions, {
+      handleNamespaceImport: () => this.handleNamespaceImport(
         directive,
         moduleObject,
         targetEnv,
         childEnv,
         metadataMap,
         guardDefinitions
-      );
-    } else if (directive.subtype === 'importAll') {
-      throw new MlldImportError(
-        'Wildcard imports \'/import { * }\' are no longer supported. ' +
-        'Use namespace imports instead: \'/import "file"\' or \'/import "file" as @name\'',
-        directive.location,
-        {
-          suggestion: 'Change \'/import { * } from "file"\' to \'/import "file"\''
-        }
-      );
-    } else if (directive.subtype === 'importNamespace') {
-      await this.handleNamespaceImport(
+      ),
+      handleSelectedImport: () => this.handleSelectedImport(
         directive,
         moduleObject,
         targetEnv,
         childEnv,
         metadataMap,
         guardDefinitions
-      );
-    } else if (directive.subtype === 'importSelected') {
-      if (guardDefinitions && guardDefinitions.length > 0) {
-        targetEnv.registerSerializedGuards(guardDefinitions);
-      }
-      await this.handleSelectedImport(
-        directive,
-        moduleObject,
-        targetEnv,
-        childEnv,
-        metadataMap,
-        guardDefinitions
-      );
-    } else {
-      throw new Error(`Unknown import subtype: ${directive.subtype}`);
-    }
+      ),
+      registerSerializedGuards: definitions => targetEnv.registerSerializedGuards(definitions)
+    });
   }
 
   /**
