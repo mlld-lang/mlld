@@ -33,5 +33,5 @@ as --> keyword
 , --> operator
 } --> operator
 from --> keyword
-@input --> keyword
+@input --> variable[readonly]
 === END PARTIAL TOKENS ===
