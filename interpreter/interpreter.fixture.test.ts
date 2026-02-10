@@ -5,6 +5,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { glob } from 'tinyglobby';
 import { Environment } from './env/Environment';
 import { inferMlldMode } from '@core/utils/mode';
@@ -31,6 +32,19 @@ interface TokenCoverageIssue {
 describe('Mlld Interpreter - Fixture Tests', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
+  const pythonRuntimeAvailable = (() => {
+    try {
+      execSync('python3 --version', { stdio: 'ignore' });
+      return true;
+    } catch {
+      try {
+        execSync('python --version', { stdio: 'ignore' });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  })();
   
   // Test EffectHandler that redirects file outputs into the in-memory FS under a tmp root
   class TestRedirectEffectHandler implements EffectHandler {
@@ -916,11 +930,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     // Check if SKIP_SLOW is enabled and this is a slow test
     const shouldSkipSlow = process.env.SKIP_SLOW === '1' &&
                            slowFixtures.some(slow => fixture.name.includes(slow));
+    const requiresPythonRuntime = fixture.name.startsWith('exceptions/python/');
+    const shouldSkipMissingPython = requiresPythonRuntime && !pythonRuntimeAvailable;
 
-    const testFn = (skipTests[fixture.name] || shouldSkipDoc || shouldSkipSlow) ? it.skip : it;
+    const testFn = (skipTests[fixture.name] || shouldSkipDoc || shouldSkipSlow || shouldSkipMissingPython) ? it.skip : it;
     const skipReason = skipTests[fixture.name] ? ` (Skipped: ${skipTests[fixture.name]})` :
                        shouldSkipDoc ? ` (Skipped: Intentional partial/educational example)` :
-                       shouldSkipSlow ? ` (Skipped: Slow test in fast mode)` : '';
+                       shouldSkipSlow ? ` (Skipped: Slow test in fast mode)` :
+                       shouldSkipMissingPython ? ` (Skipped: Python runtime not available)` : '';
 
     testFn(`should handle ${fixture.name}${isDocumentationTest ? ' (syntax only)' : isSmokeTest ? ' (smoke test)' : ''}${skipReason}`, async () => {
       // Check if this is a valid fixture that has a parse error
@@ -1369,8 +1386,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           const effectHandler = new TestRedirectEffectHandler('/tmp-tests', fileSystem, enableFileLogging);
           let caughtError: any = null;
           let interpretSucceeded = false;
+          let interpretOutput: string | undefined;
           try {
-            await interpret(fixture.input, {
+            interpretOutput = await interpret(fixture.input, {
               fileSystem,
               pathService,
               format: 'markdown',
@@ -1388,6 +1406,20 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             interpretSucceeded = true;
           } catch (error) {
             caughtError = error;
+          }
+
+          if (requiresPythonRuntime) {
+            if (!interpretSucceeded) {
+              throw caughtError;
+            }
+            if (typeof fixture.expectedError === 'string' && fixture.expectedError.trim().length > 0) {
+              expect(interpretOutput || '').toContain(fixture.expectedError.trim());
+            }
+            validateStderrOutput(effectHandler.getStderr(), ioExpectations.expectedStderr, fixture.name);
+            if (ioExpectations.expectedErrorShape && caughtError) {
+              validateExpectedErrorShape(caughtError, ioExpectations.expectedErrorShape, fixture.name);
+            }
+            return;
           }
 
           // Fail outside try/catch so the assertion can't be caught by the inner catch

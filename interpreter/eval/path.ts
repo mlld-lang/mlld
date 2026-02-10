@@ -6,6 +6,16 @@ import { astLocationToSourceLocation } from '@core/types';
 import { createPathVariable, type VariableSource } from '@core/types/variable';
 import type { SecurityDescriptor } from '@core/types/security';
 
+function isModulePathReference(pathValue: string): boolean {
+  const normalized = pathValue.trim().split(/[?#]/, 1)[0].toLowerCase();
+  return (
+    normalized.endsWith('.mld') ||
+    normalized.endsWith('.mlld') ||
+    normalized.endsWith('.mld.md') ||
+    normalized.endsWith('.mlld.md')
+  );
+}
+
 /**
  * Evaluate @path directives.
  * Resolves paths with special variables like @PROJECTPATH.
@@ -63,6 +73,12 @@ export async function evaluatePath(
   if (merged) {
     env.recordSecurityDescriptor(merged);
   }
+
+  if (isModulePathReference(interpolatedPath)) {
+    throw new Error(
+      `Cannot use module as path: ${interpolatedPath} (modules must be imported, not used as paths)`
+    );
+  }
   
   // Handle special path variables and absolute paths
   let resolvedPath = interpolatedPath;
@@ -111,6 +127,17 @@ export async function evaluatePath(
     }
     // Normalize the path (remove ./ prefix if present)
     resolvedPath = resolvedPath.replace(/^\.\//, '');
+  }
+
+  const resolvedLooksLikePath =
+    resolvedPath.startsWith('/') ||
+    resolvedPath.startsWith('./') ||
+    resolvedPath.startsWith('../') ||
+    env.isURL(resolvedPath);
+  if (resolvedLooksLikePath && isModulePathReference(resolvedPath)) {
+    throw new Error(
+      `Cannot use module as path: ${resolvedPath} (modules must be imported, not used as paths)`
+    );
   }
   
   // Create variable source metadata

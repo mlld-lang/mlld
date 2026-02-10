@@ -1,1 +1,1 @@
-Python SyntaxError
+SyntaxError

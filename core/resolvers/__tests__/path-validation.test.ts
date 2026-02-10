@@ -112,36 +112,36 @@ describe('Path Content Type Validation', () => {
   });
 
   describe('Module Files in Paths', () => {
-    it('should accept module files in path directives as text content', async () => {
+    it('should reject .mld module files in path directives', async () => {
       await fileSystem.writeFile('/module.mld', '/text @greeting = "Hello"');
       
       const code = `/path @mod = "./module.mld"
 /show @mod`;
       
-      const result = await interpret(code, {
-        fileSystem,
-        pathService,
-        basePath: '/',
-        resolverManager
-      });
-      
-      expect(result.trim()).toBe('/text @greeting = "Hello"');
+      await expect(
+        interpret(code, {
+          fileSystem,
+          pathService,
+          basePath: '/',
+          resolverManager
+        })
+      ).rejects.toThrow('Cannot use module as path');
     });
 
-    it('should accept .mlld module files in path directives as text content', async () => {
+    it('should reject .mlld module files in path directives', async () => {
       await fileSystem.writeFile('/module.mlld', '/data @config = { enabled: true }');
       
       const code = `/path @mod = "./module.mlld"
 /show @mod`;
       
-      const result = await interpret(code, {
-        fileSystem,
-        pathService,
-        basePath: '/',
-        resolverManager
-      });
-      
-      expect(result.trim()).toBe('/data @config = { enabled: true }');
+      await expect(
+        interpret(code, {
+          fileSystem,
+          pathService,
+          basePath: '/',
+          resolverManager
+        })
+      ).rejects.toThrow('Cannot use module as path');
     });
 
     it('should reject invalid syntax for registry modules in path directives', async () => {
@@ -286,45 +286,45 @@ describe('Path Content Type Validation', () => {
       expect(result.trim()).toBe('{"url": "data"}');
     });
 
-    it('should accept module URLs in path directives as text content', async () => {
+    it('should reject module URLs in path directives', async () => {
       const code = `/path @mod = "https://example.com/module.mld"
 /show @mod`;
       
-      const result = await interpret(code, {
-        fileSystem,
-        pathService,
-        basePath: '/',
-        resolverManager,
-        urlConfig: {
-          enabled: true,
-          allowedProtocols: ['https'],
-          allowedDomains: [],
-          blockedDomains: []
-        }
-      });
-      
-      expect(result.trim()).toBe('/text @greeting = "URL module"');
+      await expect(
+        interpret(code, {
+          fileSystem,
+          pathService,
+          basePath: '/',
+          resolverManager,
+          urlConfig: {
+            enabled: true,
+            allowedProtocols: ['https'],
+            allowedDomains: [],
+            blockedDomains: []
+          }
+        })
+      ).rejects.toThrow('Cannot use module as path');
     });
   });
 
   describe('Path File Access', () => {
-    it('should successfully read .mld files in path directives', async () => {
+    it('should reject local .mld files in path directives', async () => {
       await fileSystem.writeFile('/lib.mld', '/text @name = "Library"');
       
       const code = `/path @lib = "./lib.mld"
 /show @lib`;
       
-      const result = await interpret(code, {
-        fileSystem,
-        pathService,
-        basePath: '/',
-        resolverManager
-      });
-      
-      expect(result.trim()).toBe('/text @name = "Library"');
+      await expect(
+        interpret(code, {
+          fileSystem,
+          pathService,
+          basePath: '/',
+          resolverManager
+        })
+      ).rejects.toThrow('Cannot use module as path');
     });
 
-    it('should handle mixed file references', async () => {
+    it('should fail mixed file references when one path is a module', async () => {
       await fileSystem.writeFile('/data.txt', 'Text data');
       await fileSystem.writeFile('/module.mld', '/text @mod = "Module"');
       
@@ -335,14 +335,14 @@ describe('Path Content Type Validation', () => {
 /show @mod
 `;
       
-      const result = await interpret(code, {
-        fileSystem,
-        pathService,
-        basePath: '/',
-        resolverManager
-      });
-      
-      expect(result.trim()).toBe('Text data\n\n/text @mod = "Module"');
+      await expect(
+        interpret(code, {
+          fileSystem,
+          pathService,
+          basePath: '/',
+          resolverManager
+        })
+      ).rejects.toThrow('Cannot use module as path');
     });
   });
 });

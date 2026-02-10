@@ -711,7 +711,8 @@ export class VariableImporter {
     importPath: string,
     securityLabels?: DataLabel[],
     metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
-    env?: Environment
+    env?: Environment,
+    options?: { strictFieldAccess?: boolean }
   ): Variable {
     const source: VariableSource = {
       directive: 'var',
@@ -747,7 +748,10 @@ export class VariableImporter {
     );
     const namespaceOptions = {
       metadata,
-      internal: { isNamespace: true }
+      internal: {
+        isNamespace: true,
+        strictFieldAccess: options?.strictFieldAccess === true
+      }
     };
 
     return createObjectVariable(
@@ -886,6 +890,11 @@ export class VariableImporter {
       return;
     }
 
+    const allowMissingNamespaceFields = importDisplay === '@payload' || importDisplay === '@state';
+    // Explicit export lists enforce strict namespace field access.
+    const strictNamespaceFieldAccess =
+      !allowMissingNamespaceFields &&
+      Boolean(childEnv.getExportManifest?.()?.hasEntries?.());
     // Create namespace variable with the (potentially unwrapped) object
     const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
     const namespaceVar = this.createNamespaceVariable(
@@ -894,7 +903,8 @@ export class VariableImporter {
       importPath,
       securityLabels,
       metadataMap,
-      targetEnv
+      targetEnv,
+      { strictFieldAccess: strictNamespaceFieldAccess }
     );
     this.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
     if (guardDefinitions && guardDefinitions.length > 0) {

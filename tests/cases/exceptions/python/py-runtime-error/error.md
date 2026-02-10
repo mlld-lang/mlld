@@ -1,1 +1,1 @@
-Python ZeroDivisionError
+ZeroDivisionError

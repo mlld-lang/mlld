@@ -1,0 +1,1 @@
+/exe @codecat(dir) = run @dir

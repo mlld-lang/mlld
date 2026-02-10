@@ -369,6 +369,31 @@ function formatFieldPath(fields?: FieldAccessNode[]): string | null {
     .join('');
 }
 
+function isFieldAccessResultLike(
+  value: unknown
+): value is { value: unknown; accessPath?: string[] } {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      'value' in (value as Record<string, unknown>)
+  );
+}
+
+function formatFieldNodeForError(field: FieldAccessNode | undefined): string {
+  if (!field) return 'field';
+  if (field.type === 'arrayFilter') return '?';
+  if (field.type === 'arraySlice') {
+    return `${field.start ?? ''}:${field.end ?? ''}`;
+  }
+  if (typeof field.value === 'number') {
+    return String(field.value);
+  }
+  if (typeof field.value === 'string' && field.value.length > 0) {
+    return field.value;
+  }
+  return 'field';
+}
+
 function formatKeyField(fields?: FieldAccessNode[]): string {
   if (!fields || fields.length === 0) return '@field';
   const field = fields[0] as any;
@@ -571,9 +596,27 @@ export async function evaluateForDirective(
           const accessed = await accessFields(value, varFields, {
             env: childEnv,
             preserveContext: true,
+            returnUndefinedForMissing: true,
             sourceLocation: varNode.location
           });
-          derivedValue = (accessed as any)?.value ?? accessed;
+          const accessedValue = isFieldAccessResultLike(accessed) ? accessed.value : accessed;
+          if (typeof accessedValue === 'undefined') {
+            const missingField = formatFieldNodeForError(varFields[varFields.length - 1]);
+            const accessPath = isFieldAccessResultLike(accessed) && Array.isArray(accessed.accessPath)
+              ? accessed.accessPath
+              : [];
+            throw new FieldAccessError(`Field "${missingField}" not found in object`, {
+              baseValue: value,
+              fieldAccessChain: [],
+              failedAtIndex: Math.max(0, varFields.length - 1),
+              failedKey: missingField,
+              accessPath
+            }, {
+              sourceLocation: varNode.location,
+              env: childEnv
+            });
+          }
+          derivedValue = accessedValue;
           inheritExpressionProvenance(derivedValue, value);
         } catch (error) {
           throw enhanceFieldAccessError(error, {
@@ -841,9 +884,27 @@ export async function evaluateForExpression(
         const accessed = await accessFields(value, varFields, {
           env: childEnv,
           preserveContext: true,
+          returnUndefinedForMissing: true,
           sourceLocation: expr.variable.location
         });
-        derivedValue = (accessed as any)?.value ?? accessed;
+        const accessedValue = isFieldAccessResultLike(accessed) ? accessed.value : accessed;
+        if (typeof accessedValue === 'undefined') {
+          const missingField = formatFieldNodeForError(varFields[varFields.length - 1]);
+          const accessPath = isFieldAccessResultLike(accessed) && Array.isArray(accessed.accessPath)
+            ? accessed.accessPath
+            : [];
+          throw new FieldAccessError(`Field "${missingField}" not found in object`, {
+            baseValue: value,
+            fieldAccessChain: [],
+            failedAtIndex: Math.max(0, varFields.length - 1),
+            failedKey: missingField,
+            accessPath
+          }, {
+            sourceLocation: expr.variable.location,
+            env: childEnv
+          });
+        }
+        derivedValue = accessedValue;
         inheritExpressionProvenance(derivedValue, value);
       } catch (error) {
         throw enhanceFieldAccessError(error, {

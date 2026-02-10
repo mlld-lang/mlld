@@ -3,7 +3,7 @@
 Tests that Python syntax errors are properly reported.
 
 /exe @broken() = py {
-  if True
+if True
     print("missing colon")
 }
 

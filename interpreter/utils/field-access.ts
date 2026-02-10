@@ -189,6 +189,11 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
   // Check if the input is a Variable
   const parentVariable = isVariable(value) ? value : (value as any)?.__variable;
+  const strictMissingFieldAccess = Boolean(
+    isVariable(value) &&
+      value.internal &&
+      (value.internal as Record<string, unknown>).strictFieldAccess === true
+  );
 
   // Extract the raw value if we have a Variable (do this BEFORE metadata check)
   let rawValue = isVariable(value) ? value.value : value;
@@ -605,6 +610,20 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         if (isVariable(value) && value.name === 'mx' && name === 'guard') {
           const accessPath = [...(options?.parentPath || []), name];
           throw new FieldAccessError('Variable "mx" has no field "guard"', {
+            baseValue: rawValue,
+            fieldAccessChain: [],
+            failedAtIndex: Math.max(0, accessPath.length - 1),
+            failedKey: name,
+            accessPath,
+            availableKeys: Object.keys(rawValue)
+          }, {
+            sourceLocation: options?.sourceLocation,
+            env: options?.env
+          });
+        }
+        if (strictMissingFieldAccess) {
+          const accessPath = [...(options?.parentPath || []), name];
+          throw new FieldAccessError(`Field "${name}" not found in object`, {
             baseValue: rawValue,
             fieldAccessChain: [],
             failedAtIndex: Math.max(0, accessPath.length - 1),

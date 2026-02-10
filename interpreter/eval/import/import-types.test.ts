@@ -127,6 +127,23 @@ describe('Import type handling', () => {
     expect((output as string).trim()).toBe('inferred static');
   });
 
+  it('rejects namespace access to unexported members when module defines explicit exports', async () => {
+    await fileSystem.writeFile(
+      '/project/import-types-exported-only.mld',
+      '/export { greet }\n/var @greet = "hello"\n/var @_internal = "secret"'
+    );
+
+    const source = `/import "./import-types-exported-only.mld" as @utils\n/show @utils._internal`;
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow('Field "_internal" not found in object');
+  });
+
   it('supports explicit live imports from @input', async () => {
     const source = `/import live { value } from @input\n/show @value`;
     const output = await interpret(source, {
