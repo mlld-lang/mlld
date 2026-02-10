@@ -14,8 +14,8 @@ import type { Variable, VariableSource } from '@core/types/variable';
 import { createArrayVariable, createSimpleTextVariable } from '@core/types/variable';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
 import type { ExecutableVariable } from '@core/types/executable';
-import { attachArrayHelpers, buildArrayAggregate } from '@core/types/variable/ArrayHelpers';
-import type { ArrayAggregateSnapshot, GuardInputHelper } from '@core/types/variable/ArrayHelpers';
+import { attachArrayHelpers } from '@core/types/variable/ArrayHelpers';
+import type { GuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import type { DataLabel } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
 import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
@@ -44,28 +44,21 @@ import {
   normalizeGuardOverride,
   type NormalizedGuardOverride
 } from './guard-override-utils';
+import {
+  buildPerInputCandidates,
+  collectOperationGuards,
+  type PerInputCandidate
+} from './guard-candidate-selection';
+import {
+  buildOperationKeySet,
+  buildOperationSnapshot,
+  type OperationSnapshot
+} from './guard-operation-keys';
 import { appendFileSync } from 'fs';
 import { getExpressionProvenance } from '../utils/expression-provenance';
 import { isStructuredValue } from '../utils/structured-value';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
-
-interface PerInputCandidate {
-  index: number;
-  variable: Variable;
-  labels: readonly DataLabel[];
-  sources: readonly string[];
-  taint: readonly string[];
-  guards: GuardDefinition[];
-}
-
-interface OperationSnapshot {
-  labels: readonly DataLabel[];
-  sources: readonly string[];
-  taint: readonly string[];
-  aggregate: ArrayAggregateSnapshot;
-  variables: readonly Variable[];
-}
 
 interface GuardAttemptEntry {
   attempt: number;
@@ -648,75 +641,6 @@ export const guardPreHook: PreHook = async (
     };
   });
 };
-
-function buildPerInputCandidates(
-  registry: ReturnType<Environment['getGuardRegistry']>,
-  inputs: readonly Variable[],
-  override: NormalizedGuardOverride
-): PerInputCandidate[] {
-  const results: PerInputCandidate[] = [];
-
-  for (let index = 0; index < inputs.length; index++) {
-    const variable = inputs[index]!;
-    const labels = Array.isArray(variable.mx?.labels) ? variable.mx.labels : [];
-    const sources = Array.isArray(variable.mx?.sources) ? variable.mx.sources : [];
-    const taint = Array.isArray(variable.mx?.taint) ? variable.mx.taint : [];
-
-    const seen = new Set<string>();
-    const guards: GuardDefinition[] = [];
-
-    for (const label of labels) {
-      const defs = registry.getDataGuardsForTiming(label, 'before');
-      for (const def of defs) {
-        if (!seen.has(def.id)) {
-          seen.add(def.id);
-          guards.push(def);
-        }
-      }
-    }
-
-    const filteredGuards = applyGuardOverrideFilter(guards, override);
-
-    if (filteredGuards.length > 0) {
-      results.push({ index, variable, labels, sources, taint, guards: filteredGuards });
-    }
-  }
-
-  return results;
-}
-
-function collectOperationGuards(
-  registry: ReturnType<Environment['getGuardRegistry']>,
-  operation: OperationContext,
-  override: NormalizedGuardOverride
-): GuardDefinition[] {
-  const keys = buildOperationKeys(operation);
-  const seen = new Set<string>();
-  const results: GuardDefinition[] = [];
-
-  for (const key of keys) {
-    const defs = registry.getOperationGuardsForTiming(key, 'before');
-    for (const def of defs) {
-      if (!seen.has(def.id)) {
-        seen.add(def.id);
-        results.push(def);
-      }
-    }
-  }
-
-  return applyGuardOverrideFilter(results, override);
-}
-
-function buildOperationSnapshot(inputs: readonly Variable[]): OperationSnapshot {
-  const aggregate = buildArrayAggregate(inputs, { nameHint: '__guard_input__' });
-  return {
-    labels: aggregate.labels,
-    sources: aggregate.sources,
-    taint: aggregate.taint,
-    aggregate,
-    variables: inputs
-  };
-}
 
 async function evaluateGuard(options: {
   node: HookableNode;
@@ -1502,57 +1426,6 @@ function ensureTagHelper(sourceEnv: Environment, targetEnv: Environment): void {
     return timing === 'before' ? `before:${base}` : `after:${base}`;
   });
   targetEnv.setVariable(execVar.name, execVar);
-}
-
-function buildOperationKeys(operation: OperationContext): string[] {
-  const keys = new Set<string>();
-  if (operation.type) {
-    keys.add(operation.type.toLowerCase());
-  }
-  if (operation.subtype) {
-    keys.add(operation.subtype.toLowerCase());
-  }
-  if (operation.type === 'run') {
-    const runSubtype =
-      typeof operation.metadata === 'object' && operation.metadata
-        ? (operation.metadata as Record<string, unknown>).runSubtype
-        : undefined;
-    if (typeof runSubtype === 'string') {
-      keys.add(runSubtype.toLowerCase());
-      if (runSubtype === 'runCommand') {
-        keys.add('cmd');
-      } else if (runSubtype.startsWith('runExec')) {
-        keys.add('exec');
-      } else if (runSubtype === 'runCode') {
-        const language =
-          typeof operation.metadata === 'object' && operation.metadata
-            ? (operation.metadata as Record<string, unknown>).language
-            : undefined;
-        if (typeof language === 'string' && language.length > 0) {
-          keys.add(language.toLowerCase());
-        }
-      }
-    }
-  }
-
-  if (operation.opLabels && operation.opLabels.length > 0) {
-    for (const label of operation.opLabels) {
-      if (typeof label === 'string' && label.length > 0) {
-        keys.add(label.toLowerCase());
-      }
-    }
-  }
-
-  return Array.from(keys);
-}
-
-function buildOperationKeySet(operation: OperationContext): Set<string> {
-  const keys = buildOperationKeys(operation);
-  const normalized = new Set<string>();
-  for (const key of keys) {
-    normalized.add(key.toLowerCase());
-  }
-  return normalized;
 }
 
 function buildAggregateMetadata(options: {
