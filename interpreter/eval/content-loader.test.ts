@@ -10,6 +10,7 @@ import minimatch from 'minimatch';
 import { glob } from 'tinyglobby';
 import { unwrapStructuredForTest } from './test-helpers';
 import { isStructuredValue, type StructuredValueMetadata } from '../utils/structured-value';
+import { llmxmlInstance } from '../utils/llmxml-instance';
 
 function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
   expect(metadata?.source).toBe('load-content');
@@ -195,6 +196,118 @@ describe('Content Loader with Glob Support', () => {
       expect(result as string).toContain('## Part 1: Labels (The Foundation)');
       expect(result as string).toContain('Content for part 1.');
       expect(result as string).not.toContain('Content for part 2.');
+    });
+
+    it('lists headings at the requested level for section-list selectors', async () => {
+      await fileSystem.writeFile(
+        path.join(process.cwd(), 'sections.md'),
+        [
+          '# Root',
+          '',
+          '## Intro',
+          '',
+          '### Deep Intro',
+          '',
+          '## Usage',
+          '',
+          '### Deep Usage'
+        ].join('\n')
+      );
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: 'sections.md' }],
+          raw: 'sections.md'
+        },
+        options: {
+          section: {
+            identifier: { type: 'section-list', level: 2 }
+          }
+        }
+      };
+
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest<string[]>(rawResult);
+
+      expect(result).toEqual(['Intro', 'Usage']);
+    });
+
+    it('applies rename templates when extraction falls back to heading matching', async () => {
+      const getSectionSpy = vi.spyOn(llmxmlInstance, 'getSection').mockResolvedValueOnce(null as any);
+
+      try {
+        await fileSystem.writeFile(
+          path.join(process.cwd(), 'fallback.md'),
+          [
+            '---',
+            'name: fallback-doc',
+            '---',
+            '',
+            '## Overview',
+            '',
+            'Fallback content.'
+          ].join('\n')
+        );
+
+        const node = {
+          type: 'load-content',
+          source: {
+            type: 'path',
+            segments: [{ type: 'Text', content: 'fallback.md' }],
+            raw: 'fallback.md'
+          },
+          options: {
+            section: {
+              identifier: { type: 'Text', content: 'Overview' },
+              renamed: {
+                type: 'rename-template',
+                parts: [
+                  { type: 'Text', content: '### ' },
+                  {
+                    type: 'FileReference',
+                    source: { type: 'placeholder' },
+                    fields: [{ type: 'field', value: 'fm' }, { type: 'field', value: 'name' }]
+                  }
+                ]
+              }
+            }
+          }
+        };
+
+        const rawResult = await processContentLoader(node, env);
+        const { data: result } = unwrapStructuredForTest<string>(rawResult);
+
+        expect(getSectionSpy).toHaveBeenCalled();
+        expect(result).toContain('### fallback-doc');
+        expect(result).toContain('Fallback content.');
+      } finally {
+        getSectionSpy.mockRestore();
+      }
+    });
+
+    it('keeps missing-section diagnostics stable', async () => {
+      await fileSystem.writeFile(
+        path.join(process.cwd(), 'missing.md'),
+        '# Missing\n\n## Present\n\nOnly this section exists.'
+      );
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: 'missing.md' }],
+          raw: 'missing.md'
+        },
+        options: {
+          section: {
+            identifier: { type: 'Text', content: 'NotHere' }
+          }
+        }
+      };
+
+      await expect(processContentLoader(node, env)).rejects.toThrow('Failed to load content: missing.md');
     });
   });
 

@@ -1,7 +1,6 @@
 import { Environment } from '@interpreter/env/Environment';
 import { MlldError, MlldSecurityError } from '@core/errors';
 import type { SourceLocation } from '@core/types';
-import { llmxmlInstance } from '../utils/llmxml-instance';
 import type { LoadContentResult } from '@core/types/load-content';
 import { LoadContentResultImpl } from './load-content';
 import { wrapLoadContentValue } from '../utils/load-content-structured';
@@ -23,6 +22,7 @@ import { ContentLoaderUrlHandler } from './content-loader/url-handler';
 import { ContentLoaderSecurityMetadataHelper } from './content-loader/security-metadata';
 import { ContentLoaderFileHandler } from './content-loader/single-file-loader';
 import { ContentLoaderGlobHandler } from './content-loader/glob-loader';
+import { ContentLoaderSectionHelper } from './content-loader/section-utils';
 
 const sourceReconstruction = new ContentSourceReconstruction();
 const policyAwareReadHelper = new PolicyAwareReadHelper();
@@ -45,6 +45,11 @@ async function readFileWithPolicy(
 ): Promise<string> {
   return policyAwareReadHelper.read(pathOrUrl, env, sourceLocation);
 }
+
+const sectionHelper = new ContentLoaderSectionHelper({
+  interpolateAndRecord: (nodes, env) => interpolateAndRecord(nodes, env)
+});
+
 /**
  * Check if a path contains glob patterns
  */
@@ -67,22 +72,24 @@ function formatRelativePath(env: Environment, targetPath: string): string {
 
 const fileHandler = new ContentLoaderFileHandler({
   convertHtmlToMarkdown: (html, sourceUrl) => htmlConversionHelper.convertToMarkdown(html, sourceUrl),
-  isSectionListPattern,
-  getSectionListLevel,
-  listSections,
-  extractSectionName,
-  extractSection,
+  isSectionListPattern: (sectionNode) => sectionHelper.isSectionListPattern(sectionNode),
+  getSectionListLevel: (sectionNode) => sectionHelper.getSectionListLevel(sectionNode),
+  listSections: (content, level) => sectionHelper.listSections(content, level),
+  extractSectionName: (sectionNode, env) => sectionHelper.extractSectionName(sectionNode, env),
+  extractSection: (content, sectionName, renamedTitle, fileContext, env) =>
+    sectionHelper.extractSection(content, sectionName, renamedTitle, fileContext, env),
   formatRelativePath
 });
 
 const globHandler = new ContentLoaderGlobHandler({
   readContent: (filePath, targetEnv, sourceLocation) => readFileWithPolicy(filePath, targetEnv, sourceLocation),
   convertHtmlToMarkdown: (html, sourceUrl) => htmlConversionHelper.convertToMarkdown(html, sourceUrl),
-  isSectionListPattern,
-  getSectionListLevel,
-  listSections,
-  extractSectionName,
-  extractSection,
+  isSectionListPattern: (sectionNode) => sectionHelper.isSectionListPattern(sectionNode),
+  getSectionListLevel: (sectionNode) => sectionHelper.getSectionListLevel(sectionNode),
+  listSections: (content, level) => sectionHelper.listSections(content, level),
+  extractSectionName: (sectionNode, env) => sectionHelper.extractSectionName(sectionNode, env),
+  extractSection: (content, sectionName, renamedTitle, fileContext, env) =>
+    sectionHelper.extractSection(content, sectionName, renamedTitle, fileContext, env),
   getRelativeBasePath,
   formatRelativePath,
   buildFileSecurityDescriptor: (filePath, targetEnv, policyEnforcer) =>
@@ -211,11 +218,12 @@ export async function processContentLoader(node: any, env: Environment): Promise
     if (env.isURL(pathOrUrl)) {
       const urlHandler = new ContentLoaderUrlHandler({
         convertHtmlToMarkdown: (html, url) => htmlConversionHelper.convertToMarkdown(html, url),
-        isSectionListPattern,
-        getSectionListLevel,
-        listSections,
-        extractSectionName,
-        extractSection,
+        isSectionListPattern: (sectionNode) => sectionHelper.isSectionListPattern(sectionNode),
+        getSectionListLevel: (sectionNode) => sectionHelper.getSectionListLevel(sectionNode),
+        listSections: (content, level) => sectionHelper.listSections(content, level),
+        extractSectionName: (sectionNode, targetEnv) => sectionHelper.extractSectionName(sectionNode, targetEnv),
+        extractSection: (content, sectionName, renamedTitle, fileContext, targetEnv) =>
+          sectionHelper.extractSection(content, sectionName, renamedTitle, fileContext, targetEnv),
         runPipeline: async (value, pipelineEnv, pipelinePipes) => processPipeline({
           value,
           env: pipelineEnv,
@@ -417,244 +425,6 @@ export async function processContentLoader(node: any, env: Environment): Promise
       error: error.message
     });
   }
-}
-
-/**
- * Check if section node is a section-list pattern
- */
-function isSectionListPattern(sectionNode: any): boolean {
-  return sectionNode?.identifier?.type === 'section-list';
-}
-
-/**
- * Get level from section-list pattern
- */
-function getSectionListLevel(sectionNode: any): number {
-  return sectionNode?.identifier?.level ?? 0;
-}
-
-async function extractSectionName(sectionNode: any, env: Environment): Promise<string> {
-  if (!sectionNode || !sectionNode.identifier) {
-    throw new MlldError('Invalid section node', {
-      node: sectionNode
-    });
-  }
-
-  // Section identifier might be Text, VariableReference, array of nodes, or section-list
-  const identifier = sectionNode.identifier;
-
-  if (identifier.type === 'section-list') {
-    throw new MlldError('Section list patterns (??) should be handled separately', {
-      identifierType: identifier.type
-    });
-  }
-
-  if (identifier.type === 'Text') {
-    return identifier.content;
-  } else if (identifier.type === 'VariableReference') {
-    // Import interpolate function
-    return await interpolateAndRecord([identifier], env);
-  } else if (Array.isArray(identifier)) {
-    return await interpolateAndRecord(identifier, env);
-  }
-
-  throw new MlldError('Unable to extract section name', {
-    identifierType: identifier.type
-  });
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function extractSectionByHeading(content: string, sectionName: string): string | null {
-  const lines = content.split('\n');
-  const normalizedName = sectionName.replace(/^#+\s*/, '').trim();
-  const escapedName = escapeRegExp(normalizedName);
-  const sectionRegex = new RegExp(`^#{1,6}\\s+${escapedName}\\s*$`, 'i');
-  let inSection = false;
-  let sectionLevel = 0;
-  const sectionLines: string[] = [];
-
-  for (const line of lines) {
-    const lineForMatch = line.trimEnd();
-    if (!inSection && sectionRegex.test(lineForMatch)) {
-      inSection = true;
-      sectionLevel = lineForMatch.match(/^#+/)?.[0].length || 0;
-      sectionLines.push(lineForMatch);
-      continue;
-    }
-
-    if (inSection) {
-      const headerMatch = lineForMatch.match(/^(#{1,6})\s+/);
-      if (headerMatch && headerMatch[1].length <= sectionLevel) {
-        break;
-      }
-      sectionLines.push(lineForMatch);
-    }
-  }
-
-  if (!inSection) {
-    return null;
-  }
-
-  return sectionLines.join('\n').trim();
-}
-
-/**
- * Extract a section from markdown content
- */
-async function extractSection(content: string, sectionName: string, renamedTitle?: any, fileContext?: LoadContentResult, env?: Environment): Promise<string> {
-  try {
-    let extracted: string | null | undefined;
-    try {
-      extracted = await llmxmlInstance.getSection(content, sectionName, {
-        includeNested: true
-      });
-    } catch (llmxmlError: any) {
-      extracted = null;
-    }
-
-    if (!extracted) {
-      extracted = extractSectionByHeading(content, sectionName);
-    }
-
-    if (!extracted) {
-      throw new MlldError(`Section "${sectionName}" not found in content`, {
-        sectionName: sectionName,
-        availableSections: await getAvailableSections(content)
-      });
-    }
-
-    // If renamed, apply header transformation
-    if (renamedTitle) {
-      
-      let finalTitle: string;
-      
-      // Check if renamedTitle is a template object or a string
-      if (typeof renamedTitle === 'object' && renamedTitle.type === 'rename-template') {
-        // It's a template with parts that need interpolation
-        if (!fileContext) {
-          throw new MlldError('File context required for template interpolation in rename', {
-            sectionName: sectionName
-          });
-        }
-        
-        
-        // Create an environment for interpolation with the file context bound to <>
-        // Process the template parts, replacing placeholders with actual values
-        const processedParts: any[] = [];
-        for (const part of renamedTitle.parts || []) {
-          if (part.type === 'FileReference' && part.source?.type === 'placeholder') {
-            // Handle <> and <>.field references
-            if (part.fields && part.fields.length > 0) {
-              // Access fields on the file context
-              let value: any = fileContext;
-              for (const field of part.fields) {
-                if (value && typeof value === 'object') {
-                  value = value[field.value];
-                } else {
-                  value = undefined;
-                  break;
-                }
-              }
-              processedParts.push({
-                type: 'Text',
-                content: value !== undefined ? String(value) : ''
-              });
-            } else {
-              // Just <> - use the extracted section content without the header
-              // Remove the first line if it's a markdown header
-              const lines = extracted.split('\n');
-              let contentWithoutHeader = extracted;
-              if (lines.length > 0 && lines[0].match(/^#+\s/)) {
-                // Skip the header line
-                contentWithoutHeader = lines.slice(1).join('\n').trim();
-              }
-              processedParts.push({
-                type: 'Text',
-                content: contentWithoutHeader
-              });
-            }
-          } else {
-            // Regular text parts
-            processedParts.push(part);
-          }
-        }
-        
-        // Interpolate the processed template using the passed environment
-        if (!env) {
-          throw new MlldError('Environment required for template interpolation', {
-            sectionName: sectionName
-          });
-        }
-        finalTitle = await interpolateAndRecord(processedParts, env);
-      } else {
-        // It's a plain string (legacy behavior)
-        finalTitle = renamedTitle;
-      }
-      
-      // Import the shared header transform function
-      const { applyHeaderTransform } = await import('./show');
-      return applyHeaderTransform(extracted, finalTitle);
-    }
-
-    return extracted;
-  } catch (error: any) {
-    throw new MlldError(`Failed to extract section: ${error.message}`, {
-      sectionName: sectionName,
-      error: error.message
-    });
-  }
-}
-
-/**
- * Get list of available sections in markdown content (for error messages)
- */
-async function getAvailableSections(content: string): Promise<string[]> {
-  try {
-    const headings = await llmxmlInstance.getHeadings(content);
-    return headings.map(h => h.title);
-  } catch {
-    // Fallback to simple regex if llmxml fails
-    const sections: string[] = [];
-    const lines = content.split('\n');
-
-    for (const line of lines) {
-      const match = line.match(/^#+\s+(.+)$/);
-      if (match) {
-        sections.push(match[1]);
-      }
-    }
-
-    return sections;
-  }
-}
-
-/**
- * List section headings from markdown content
- * @param content - Markdown content to extract headings from
- * @param level - Heading level to filter (0 = all levels, 1 = H1, 2 = H2, etc.)
- * @returns Array of heading titles (strings)
- */
-function listSections(content: string, level?: number): string[] {
-  const lines = content.split('\n');
-  const headings: string[] = [];
-
-  for (const line of lines) {
-    const match = line.match(/^(#{1,6})\s+(.+)$/);
-    if (match) {
-      const headingLevel = match[1].length;
-      const title = match[2].trim();
-
-      // Filter by level if specified (level 0 means all headings)
-      if (level === undefined || level === 0 || headingLevel === level) {
-        headings.push(title);
-      }
-    }
-  }
-
-  return headings;
 }
 
 /**
