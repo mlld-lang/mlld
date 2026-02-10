@@ -610,6 +610,54 @@ describe('Semantic Tokens', () => {
       expect(interpolations.map(t => t.text)).toEqual(['@url', '@header']);
     });
 
+    it('highlights /run cmd with args and working directory', async () => {
+      const code = '/run cmd(@name):/tmp { echo "ok" }';
+      const tokens = await getSemanticTokens(code);
+
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: 'cmd',
+        tokenType: 'label'
+      }));
+
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@name',
+        tokenType: 'variable'
+      }));
+
+      const operators = tokens.filter(t => t.tokenType === 'operator');
+      expect(operators.some(t => t.text === '(')).toBe(true);
+      expect(operators.some(t => t.text === ')')).toBe(true);
+      expect(operators.some(t => t.text === ':')).toBe(true);
+
+      const pathTokens = tokens.filter(t => t.tokenType === 'string');
+      expect(pathTokens.some(t => t.text === '/')).toBe(true);
+      expect(pathTokens.some(t => t.text === 'tmp')).toBe(true);
+    });
+
+    it('highlights /run sh with args and working directory', async () => {
+      const code = '/run sh(@name):/tmp { echo "ok" }';
+      const tokens = await getSemanticTokens(code);
+
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: 'sh',
+        tokenType: 'label'
+      }));
+
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@name',
+        tokenType: 'variable'
+      }));
+
+      const operators = tokens.filter(t => t.tokenType === 'operator');
+      expect(operators.some(t => t.text === '(')).toBe(true);
+      expect(operators.some(t => t.text === ')')).toBe(true);
+      expect(operators.some(t => t.text === ':')).toBe(true);
+
+      const pathTokens = tokens.filter(t => t.tokenType === 'string');
+      expect(pathTokens.some(t => t.text === '/')).toBe(true);
+      expect(pathTokens.some(t => t.text === 'tmp')).toBe(true);
+    });
+
     it('highlights function calls in /run @function(@arg)', async () => {
       const code = '/run @processor(@data)';
       const tokens = await getSemanticTokens(code);

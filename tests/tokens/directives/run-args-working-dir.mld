@@ -1,0 +1,24 @@
+/var @name = "World"
+
+/run cmd(@name):/tmp { echo ok }
+/run sh(@name):/tmp { echo ok }
+
+=== START TOKENS ===
+@name --> variable[declaration]
+= --> operator
+"World" --> string
+( --> operator
+) --> operator
+@name --> variable
+: --> operator
+/ --> string
+tmp --> string
+cmd --> label
+( --> operator
+) --> operator
+@name --> variable
+: --> operator
+/ --> string
+tmp --> string
+sh --> label
+=== END TOKENS ===

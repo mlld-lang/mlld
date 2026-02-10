@@ -932,6 +932,9 @@ export class DirectiveVisitor extends BaseVisitor {
   private visitRunDirective(directive: any, context: VisitorContext): void {
     const values = directive.values;
 
+    this.tokenizeRunArgs(directive, values, context);
+    this.tokenizeRunWorkingDirSeparator(directive, values);
+
     // Handle working directory path if present (for cmd:/path or sh:/path syntax)
     if (values?.workingDir && Array.isArray(values.workingDir)) {
       for (const pathPart of values.workingDir) {
@@ -1053,7 +1056,7 @@ export class DirectiveVisitor extends BaseVisitor {
         const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
 
         // Check for 'cmd' keyword after /run
-        const cmdMatch = directiveText.match(/\/run\s+(cmd)\s*\{/);
+        const cmdMatch = directiveText.match(/\/run\s+(cmd)\b/);
         if (cmdMatch && cmdMatch.index !== undefined) {
           const cmdOffset = directive.location.start.offset + cmdMatch.index + cmdMatch[0].indexOf('cmd');
           this.languageHelper.tokenizeLanguageIdentifier('cmd', cmdOffset);
@@ -1262,6 +1265,96 @@ export class DirectiveVisitor extends BaseVisitor {
 
     // Tokenize security labels if present
     this.tokenizeSecurityLabels(directive);
+  }
+
+  private tokenizeRunArgs(directive: any, values: any, context: VisitorContext): void {
+    if (directive?.subtype === 'runExec') return;
+    if (!directive?.location || !Array.isArray(values?.args)) return;
+
+    const parenOffsets = this.findRunHeaderParenOffsets(directive, values);
+    if (!parenOffsets) return;
+
+    this.operatorHelper.addOperatorToken(parenOffsets.openOffset, 1);
+    this.operatorHelper.addOperatorToken(parenOffsets.closeOffset, 1);
+
+    if (values.args.length === 0) return;
+
+    const newContext = {
+      ...context,
+      inCommand: true,
+      interpolationAllowed: true,
+      variableStyle: '@var' as const,
+      inFunctionArgs: true
+    };
+
+    for (let i = 0; i < values.args.length; i++) {
+      const arg = values.args[i];
+      this.mainVisitor.visitNode(arg, newContext);
+
+      if (i < values.args.length - 1 && arg?.location) {
+        const nextArg = values.args[i + 1];
+        if (nextArg?.location) {
+          this.operatorHelper.tokenizeOperatorBetween(
+            arg.location.end.offset,
+            nextArg.location.start.offset,
+            ','
+          );
+        }
+      }
+    }
+  }
+
+  private tokenizeRunWorkingDirSeparator(directive: any, values: any): void {
+    if (!directive?.location || !Array.isArray(values?.workingDir) || values.workingDir.length === 0) return;
+
+    const firstPathPart = values.workingDir.find((part: any) => part?.location);
+    if (!firstPathPart?.location) return;
+
+    const sourceText = this.document.getText();
+    const directiveStart = directive.location.start.offset;
+    let separatorOffset = firstPathPart.location.start.offset - 1;
+
+    while (separatorOffset >= directiveStart && /\s/.test(sourceText[separatorOffset])) {
+      separatorOffset--;
+    }
+
+    if (separatorOffset >= directiveStart && sourceText[separatorOffset] === ':') {
+      this.operatorHelper.addOperatorToken(separatorOffset, 1);
+    }
+  }
+
+  private findRunHeaderParenOffsets(
+    directive: any,
+    values: any
+  ): { openOffset: number; closeOffset: number } | null {
+    if (!directive?.location) return null;
+
+    const sourceText = this.document.getText();
+    const startOffset = directive.location.start.offset;
+    const firstWorkingDirOffset = Array.isArray(values?.workingDir) && values.workingDir.length > 0
+      ? values.workingDir[0]?.location?.start?.offset
+      : undefined;
+    const braceOffset = sourceText.indexOf('{', startOffset);
+
+    const boundaryCandidates = [
+      firstWorkingDirOffset,
+      braceOffset !== -1 ? braceOffset : undefined,
+      directive.location.end.offset
+    ].filter((offset): offset is number => typeof offset === 'number' && offset > startOffset);
+
+    if (boundaryCandidates.length === 0) return null;
+
+    const searchEnd = Math.min(...boundaryCandidates);
+    const headerText = sourceText.substring(startOffset, searchEnd);
+    const openRel = headerText.indexOf('(');
+    const closeRel = headerText.lastIndexOf(')');
+
+    if (openRel === -1 || closeRel === -1 || closeRel < openRel) return null;
+
+    return {
+      openOffset: startOffset + openRel,
+      closeOffset: startOffset + closeRel
+    };
   }
 
   private visitOutputDirective(directive: any, context: VisitorContext): void {

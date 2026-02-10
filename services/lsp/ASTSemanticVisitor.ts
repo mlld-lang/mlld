@@ -270,6 +270,8 @@ export class ASTSemanticVisitor {
           case 'LabelModification':
             this.visitChildren(node, actualContext);
             break;
+          case 'PathSeparator':
+            break;
           default:
             console.warn(`Unknown node type: ${node.type}`);
             this.visitChildren(node, actualContext);
