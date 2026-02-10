@@ -21,12 +21,11 @@ import { evaluateDirective } from '../eval/directive';
 import type { VarAssignmentResult } from '../eval/var';
 import { isExecInvocation, isLiteralNode } from '@core/types';
 import { evaluateDataValue, isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
-import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
+import { EscapingStrategyFactory } from './interpolation-context';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 import type { OperationContext } from '../env/ContextManager';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import { asText, assertStructuredValue } from '@interpreter/utils/structured-value';
-import type { SecurityDescriptor } from '@core/types/security';
 import { classifyShellValue } from '@interpreter/utils/shell-value';
 import {
   createInterpolator,
@@ -58,6 +57,7 @@ import {
 } from './interpreter/handlers/load-content-file-reference-handler';
 import { evaluateCodeNode } from './interpreter/handlers/code-handler';
 import { evaluateCommandNode } from './interpreter/handlers/command-handler';
+import { createInterpolationSecurityAdapter } from './interpreter/interpolation-security';
 
 /**
  * Type for variable values
@@ -516,29 +516,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
 
 const interpolate = createInterpolator(() => ({ evaluate }));
 export { interpolate };
-
-async function interpolateWithSecurityRecording(
-  nodes: any,
-  env: Environment,
-  context?: InterpolationContext
-): Promise<string> {
-  const descriptors: SecurityDescriptor[] = [];
-  const text = await interpolate(nodes, env, context, {
-    collectSecurityDescriptor: descriptor => {
-      if (descriptor) {
-        descriptors.push(descriptor);
-      }
-    }
-  });
-  if (descriptors.length > 0) {
-    const merged =
-      descriptors.length === 1
-        ? descriptors[0]
-        : env.mergeSecurityDescriptors(...descriptors);
-    env.recordSecurityDescriptor(merged);
-  }
-  return text;
-}
+const { interpolateWithSecurityRecording } = createInterpolationSecurityAdapter(interpolate);
 
 /**
  * Evaluate a document node (contains multiple child nodes)
