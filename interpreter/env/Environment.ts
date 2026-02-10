@@ -36,7 +36,7 @@ import type { StateWrite } from '@core/types/state';
 import { TaintTracker } from '@core/security';
 import { ALLOW_ALL_POLICY, mergeNeedsDeclarations, type NeedsDeclaration, type PolicyCapabilities, type ProfilesDeclaration } from '@core/policy/needs';
 import { mergePolicyConfigs, type PolicyConfig, normalizePolicyConfig } from '@core/policy/union';
-import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
+import { RegistryManager, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
 import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver, DynamicModuleResolver, PythonPackageResolver, PythonAliasResolver } from '@core/resolvers';
@@ -52,10 +52,16 @@ import { CommandUtils } from './CommandUtils';
 import { DebugUtils } from './DebugUtils';
 import { ErrorUtils, type CollectedError, type CommandExecutionContext } from './ErrorUtils';
 import { CommandExecutorFactory, type ExecutorDependencies, type CommandExecutionOptions } from './executors';
-import { VariableManager, type IVariableManager, type VariableManagerDependencies, type VariableManagerContext } from './VariableManager';
-import { ImportResolver, type IImportResolver, type ImportResolverDependencies, type ImportResolverContext, type FetchURLOptions } from './ImportResolver';
+import { VariableManager, type IVariableManager, type VariableManagerContext } from './VariableManager';
+import { ImportResolver, type IImportResolver, type ImportResolverContext, type FetchURLOptions } from './ImportResolver';
 import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
+import {
+  normalizeEnvironmentPathContext,
+  initializeRootBootstrap,
+  buildVariableManagerDependencies,
+  buildImportResolverDependencies
+} from './bootstrap/EnvironmentBootstrap';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { McpImportManager } from '../mcp/McpImportManager';
@@ -277,20 +283,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     parent?: Environment,
     effectHandler?: EffectHandler
   ) {
-    // Handle both legacy basePath and new PathContext
-    if (typeof basePathOrContext === 'string') {
-      // Legacy mode - basePath provided
-      this.basePath = basePathOrContext;
-      logger.debug('Environment created with legacy basePath', { basePath: this.basePath });
-    } else {
-      // New mode - PathContext provided
-      this.pathContext = basePathOrContext;
-      this.basePath = basePathOrContext.projectRoot; // Use project root as basePath for compatibility
-      logger.debug('Environment created with PathContext', { 
-        projectRoot: this.pathContext.projectRoot,
-        fileDirectory: this.pathContext.fileDirectory 
-      });
-    }
+    const normalizedPathContext = normalizeEnvironmentPathContext(basePathOrContext);
+    this.basePath = normalizedPathContext.basePath;
+    this.pathContext = normalizedPathContext.pathContext;
     this.parent = parent;
     
     // Initialize effect handler: use provided, inherit from parent, or create default
@@ -319,112 +314,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.localFileFuzzyMatch = parent.localFileFuzzyMatch;
     }
     
-    // Initialize security components for root environment only
+    // Initialize security/registry/resolver bootstrap for root environments only
     if (!parent) {
-      try {
-        this.securityManager = SecurityManager.getInstance(this.getProjectRoot());
-      } catch (error) {
-        // If security manager fails to initialize, continue with legacy components
-        console.warn('SecurityManager not available, using legacy security components');
-      }
-      
-      // Initialize registry manager
-      try {
-        this.registryManager = new RegistryManager(
-        this.pathContext || this.getProjectRoot()
-      );
-      } catch (error) {
-        console.warn('RegistryManager not available:', error);
-      }
-      
-      // Initialize module cache and project config
-      let moduleCache: ModuleCache | undefined;
-      let projectConfig: ProjectConfig | undefined;
-      let lockFile: LockFile | undefined;
-
-      try {
-        moduleCache = new ModuleCache();
-        // Create project config instance
-        projectConfig = new ProjectConfig(this.getProjectRoot());
-        this.projectConfig = projectConfig;
-        const localModulesRelative = projectConfig.getLocalModulesPath?.() ?? path.join('llm', 'modules');
-        this.localModulePath = path.isAbsolute(localModulesRelative)
-          ? localModulesRelative
-          : path.join(this.getProjectRoot(), localModulesRelative);
-        // We need the actual LockFile for resolver management and immutable caching
-        const lockFilePath = path.join(this.getProjectRoot(), 'mlld-lock.json');
-        lockFile = new LockFile(lockFilePath);
-        this.allowAbsolutePaths = projectConfig.getAllowAbsolutePaths();
-        
-      } catch (error) {
-        console.warn('Failed to initialize cache/lock file:', error);
-      }
-      if (!this.localModulePath) {
-        this.localModulePath = path.join(this.getProjectRoot(), 'llm', 'modules');
-      }
-      
-      // Initialize resolver manager
-      try {
-        this.resolverManager = new ResolverManager(
-          undefined, // Use default security policy
-          moduleCache,
-          lockFile
-        );
-        
-        // NOTE: Built-in function resolvers will be registered separately via registerBuiltinResolvers()
-        // This allows the constructor to remain synchronous
-        
-        // Register path resolvers (priority 1)
-        // ProjectPathResolver should be first to handle @base references
-        this.resolverManager.registerResolver(new ProjectPathResolver(this.fileSystem));
-        
-        // Register module resolvers (priority 10)
-        // RegistryResolver should be next to be the primary resolver for @user/module patterns
-        this.resolverManager.registerResolver(new RegistryResolver());
-
-        // Register Python package resolvers (priority 50)
-        // PythonPackageResolver handles @py/package imports, PythonAliasResolver handles @python/package
-        const pythonResolverOptions = { projectRoot: this.getProjectRoot() };
-        this.resolverManager.registerResolver(new PythonPackageResolver(pythonResolverOptions));
-        this.resolverManager.registerResolver(new PythonAliasResolver(pythonResolverOptions));
-
-        // Register file resolvers (priority 20)
-        this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
-        this.resolverManager.registerResolver(new GitHubResolver());
-        this.resolverManager.registerResolver(new HTTPResolver());
-        
-        // Configure built-in prefixes
-        this.resolverManager.configurePrefixes([
-          {
-            prefix: '@base',
-            resolver: 'base',
-            type: 'io',
-            config: {
-              basePath: this.getProjectRoot(),
-              readonly: false
-            }
-          }
-        ], this.basePath);
-        
-        // Load resolver configs from project config if available
-        if (projectConfig) {
-          const resolverPrefixes = projectConfig.getResolverPrefixes();
-          if (resolverPrefixes.length > 0) {
-            logger.debug(`Configuring ${resolverPrefixes.length} resolver prefixes from config`);
-            this.resolverManager.configurePrefixes(resolverPrefixes, this.basePath);
-            logger.debug(`Total prefixes after configuration: ${this.resolverManager.getPrefixConfigs().length}`);
-          }
-        }
-      } catch (error) {
-        console.warn('ResolverManager initialization failed:', error);
-        if (error instanceof Error) {
-          console.warn('Error stack:', error.stack);
-        }
-        // Still assign a basic resolver manager so we don't crash later
-        this.resolverManager = undefined;
-      }
-      
-      // Note: ImportApproval and ImmutableCache are now handled by ImportResolver
+      const bootstrap = initializeRootBootstrap({
+        fileSystem: this.fileSystem,
+        pathContext: this.pathContext,
+        basePath: this.basePath
+      });
+      this.securityManager = bootstrap.securityManager;
+      this.registryManager = bootstrap.registryManager;
+      this.projectConfig = bootstrap.projectConfig;
+      this.resolverManager = bootstrap.resolverManager;
+      this.localModulePath = bootstrap.localModulePath;
+      this.allowAbsolutePaths = bootstrap.allowAbsolutePaths;
     }
     
     // Initialize utility managers
@@ -437,29 +339,28 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.errorUtils = new ErrorUtils();
     }
     
-    // Initialize variable manager with dependencies
-    const variableManagerDependencies: VariableManagerDependencies = {
+    const variableManagerDependencies = buildVariableManagerDependencies({
       cacheManager: this.cacheManager,
-      getCurrentFilePath: () => this.getCurrentFilePath(),
+      getCurrentFilePath: this.getCurrentFilePath.bind(this),
       getReservedNames: () => this.reservedNames,
       getParent: () => this.parent,
       getCapturedModuleEnv: () => this.capturedModuleEnv,
       isModuleIsolated: () => this.moduleIsolated,
-      getResolverManager: () => this.getResolverManager(),
-      createDebugObject: (format: number) => this.createDebugObject(format),
-      getEnvironmentVariables: () => this.getEnvironmentVariables(),
+      getResolverManager: this.getResolverManager.bind(this),
+      createDebugObject: this.createDebugObject.bind(this),
+      getEnvironmentVariables: this.getEnvironmentVariables.bind(this),
       getStdinContent: () => this.stdinContent,
       getFsService: () => this.fileSystem,
       getPathService: () => this.pathService,
       getSecurityManager: () => this.securityManager,
-      getBasePath: () => this.getProjectRoot(),
-      getFileDirectory: () => this.getFileDirectory(),
-      getExecutionDirectory: () => this.getExecutionDirectory(),
-      getPipelineContext: () => this.getPipelineContext(),
-      getSecuritySnapshot: () => this.getSecuritySnapshot(),
-      recordSecurityDescriptor: descriptor => this.recordSecurityDescriptor(descriptor),
+      getBasePath: this.getProjectRoot.bind(this),
+      getFileDirectory: this.getFileDirectory.bind(this),
+      getExecutionDirectory: this.getExecutionDirectory.bind(this),
+      getPipelineContext: this.getPipelineContext.bind(this),
+      getSecuritySnapshot: this.getSecuritySnapshot.bind(this),
+      recordSecurityDescriptor: this.recordSecurityDescriptor.bind(this),
       getContextManager: () => this.contextManager
-    };
+    });
     this.variableManager = new VariableManager(variableManagerDependencies);
     
     // Initialize reserved variables if this is the root environment
@@ -483,28 +384,25 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     if (parent) {
       this.importResolver = parent.importResolver;
     } else {
-      const importResolverDependencies: ImportResolverDependencies = {
-        fileSystem: this.fileSystem,
-        pathService: this.pathService,
-        pathContext: this.pathContext || {
-          projectRoot: this.basePath,
-          fileDirectory: this.basePath,
-          executionDirectory: this.basePath,
-          invocationDirectory: process.cwd()
-        },
-        cacheManager: this.cacheManager,
-        getSecurityManager: () => this.getSecurityManager(),
-        getRegistryManager: () => this.getRegistryManager(),
-        getResolverManager: () => this.getResolverManager(),
-        getParent: () => this.parent,
-        getCurrentFilePath: () => this.getCurrentFilePath(),
-        getApproveAllImports: () => this.approveAllImports,
-        getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
-        getURLConfig: () => this.urlConfig,
-        getDefaultUrlOptions: () => this.defaultUrlOptions,
-        getAllowAbsolutePaths: () => this.allowAbsolutePaths
-      };
-      this.importResolver = new ImportResolver(importResolverDependencies);
+      this.importResolver = new ImportResolver(
+        buildImportResolverDependencies({
+          fileSystem: this.fileSystem,
+          pathService: this.pathService,
+          pathContext: this.pathContext,
+          basePath: this.basePath,
+          cacheManager: this.cacheManager,
+          getSecurityManager: this.getSecurityManager.bind(this),
+          getRegistryManager: this.getRegistryManager.bind(this),
+          getResolverManager: this.getResolverManager.bind(this),
+          getParent: () => this.parent,
+          getCurrentFilePath: this.getCurrentFilePath.bind(this),
+          getApproveAllImports: () => this.approveAllImports,
+          getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
+          getURLConfig: () => this.urlConfig,
+          getDefaultUrlOptions: () => this.defaultUrlOptions,
+          getAllowAbsolutePaths: () => this.allowAbsolutePaths
+        })
+      );
     }
 
     // Ensure keep/keepStructured helpers are available even from child environments
@@ -2774,31 +2672,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Update ImportResolver dependencies to use ephemeral components
     const immutableCache = new ImmutableCache(this.getProjectRoot(), { inMemory: true });
     
-    // We need to recreate the ImportResolver with ephemeral components
-    const importResolverDependencies: ImportResolverDependencies = {
-      fileSystem: this.fileSystem,
-      pathService: this.pathService,
-      pathContext: this.pathContext || {
-        projectRoot: this.basePath,
-        fileDirectory: this.basePath,
-        executionDirectory: this.basePath,
-        invocationDirectory: process.cwd()
-      },
-      cacheManager: this.cacheManager,
-      getSecurityManager: () => this.securityManager,
-      getRegistryManager: () => this.registryManager,
-      getResolverManager: () => this.resolverManager,
-      getParent: () => this.parent,
-      getCurrentFilePath: () => this.currentFilePath,
-      getApproveAllImports: () => this.approveAllImports,
-      getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
-      getURLConfig: () => this.urlConfig,
-      getDefaultUrlOptions: () => this.defaultUrlOptions,
-      getAllowAbsolutePaths: () => this.allowAbsolutePaths
-    };
-    
     // Create new ImportResolver with ephemeral configuration
-    this.importResolver = new ImportResolver(importResolverDependencies);
+    this.importResolver = new ImportResolver(
+      buildImportResolverDependencies({
+        fileSystem: this.fileSystem,
+        pathService: this.pathService,
+        pathContext: this.pathContext,
+        basePath: this.basePath,
+        cacheManager: this.cacheManager,
+        getSecurityManager: () => this.securityManager,
+        getRegistryManager: () => this.registryManager,
+        getResolverManager: () => this.resolverManager,
+        getParent: () => this.parent,
+        getCurrentFilePath: this.getCurrentFilePath.bind(this),
+        getApproveAllImports: () => this.approveAllImports,
+        getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
+        getURLConfig: () => this.urlConfig,
+        getDefaultUrlOptions: () => this.defaultUrlOptions,
+        getAllowAbsolutePaths: () => this.allowAbsolutePaths
+      })
+    );
     
     // Note: SecurityManager uses its own ImmutableCache instance
     // We can't replace it after initialization, but that's OK since
