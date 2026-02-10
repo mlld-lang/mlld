@@ -384,7 +384,11 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             fields.length > 0 &&
             fields[0]?.type === 'field' &&
             String(fields[0]?.value ?? '') === 'mx';
-          const resolutionContext = hasMxField ? ResolutionContext.FieldAccess : ResolutionContext.StringInterpolation;
+          const isMxVariable = variable.name === 'mx';
+          const resolutionContext =
+            hasMxField || isMxVariable
+              ? ResolutionContext.FieldAccess
+              : ResolutionContext.StringInterpolation;
 
           value = await resolveVariable(variable, env, resolutionContext);
           collectDescriptor(extractInterpolationDescriptor(value));

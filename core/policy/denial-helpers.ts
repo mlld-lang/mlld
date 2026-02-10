@@ -4,7 +4,12 @@ import type { PolicyConfig } from './union';
 import type { CommandAccessDecision, CapabilityAccessDecision } from './guards';
 import type { DenialContext } from '@core/errors/denial';
 import { MlldDenialError } from '@core/errors/denial';
-import { getCommandTokens, matchesCommandPatterns, normalizeCommandPatternEntry } from './capability-patterns';
+import {
+  getCommandTokens,
+  matchesCommandPattern,
+  normalizeCommandPatternEntry,
+  parseCommandPatternTokens
+} from './capability-patterns';
 
 /**
  * Get the display name for the active policy from the environment.
@@ -90,13 +95,32 @@ function extractCommandPatterns(
  * Infer which policy rule caused a command denial.
  * Mirrors the logic in guards.ts inferCapabilityRule.
  */
-function inferCommandDenialRule(policy: PolicyConfig, commandName: string): string {
+function normalizeDenyPattern(pattern: string): string {
+  const trimmed = pattern.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  const tokens = parseCommandPatternTokens(trimmed);
+  if (tokens.length >= 2 && !tokens.includes('*')) {
+    return `${trimmed}:*`;
+  }
+  return trimmed;
+}
+
+function matchesDenyCommandPatterns(commandTokens: string[], patterns: string[]): boolean {
+  if (patterns.length === 0) {
+    return false;
+  }
+  return patterns.some(pattern => matchesCommandPattern(commandTokens, normalizeDenyPattern(pattern)));
+}
+
+function inferCommandDenialRule(policy: PolicyConfig, commandText: string): string {
   const deny = policy.deny;
   const denyMap = deny && deny !== true && typeof deny === 'object' && !Array.isArray(deny) ? deny : undefined;
   const denyPatterns = extractCommandPatterns(deny) ?? (denyMap?.cmd !== undefined ? normalizeCommandPatternList(denyMap.cmd) : undefined);
   if (denyPatterns) {
-    const tokens = getCommandTokens(commandName);
-    if (denyPatterns.all || matchesCommandPatterns(tokens, denyPatterns.patterns)) {
+    const tokens = getCommandTokens(commandText);
+    if (denyPatterns.all || matchesDenyCommandPatterns(tokens, denyPatterns.patterns)) {
       return 'deny.cmd';
     }
   }

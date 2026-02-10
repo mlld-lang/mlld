@@ -816,7 +816,14 @@ export class VariableImporter {
       if (guardDefinitions && guardDefinitions.length > 0) {
         targetEnv.registerSerializedGuards(guardDefinitions);
       }
-      await this.handleSelectedImport(directive, moduleObject, targetEnv, childEnv, metadataMap);
+      await this.handleSelectedImport(
+        directive,
+        moduleObject,
+        targetEnv,
+        childEnv,
+        metadataMap,
+        guardDefinitions
+      );
     } else {
       throw new Error(`Unknown import subtype: ${directive.subtype}`);
     }
@@ -912,13 +919,19 @@ export class VariableImporter {
     moduleObject: Record<string, any>,
     targetEnv: Environment,
     childEnv: Environment,
-    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>
+    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
+    guardDefinitions?: readonly SerializedGuardDefinition[]
   ): Promise<void> {
     const imports = directive.values?.imports || [];
     const importPath = childEnv.getCurrentFilePath() || 'unknown';
     const importDisplay = this.getImportDisplayPath(directive, importPath);
     const importerFilePath = targetEnv.getCurrentFilePath();
     const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
+    const importedGuards = new Set(
+      (guardDefinitions ?? [])
+        .map(definition => definition?.name)
+        .filter((name): name is string => typeof name === 'string' && name.length > 0)
+    );
 
     // @payload and @state are dynamic modules where fields are optional CLI arguments.
     // Missing fields should default to null rather than throwing an error.
@@ -929,6 +942,9 @@ export class VariableImporter {
       const alias = importItem.alias || importName;
 
       if (!(importName in moduleObject)) {
+        if (importedGuards.has(importName)) {
+          continue;
+        }
         if (allowMissingImports) {
           // Create a null variable for missing imports from @payload/@state
           const bindingLocation = importItem?.location

@@ -278,9 +278,31 @@ let executionResult: StructuredValue;
   }
 
   if (pipelineDescriptor && isStructuredValue(executionResult)) {
+    const outputDescriptor = extractSecurityDescriptor(executionResult, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const labelSet = new Set<string>(pipelineDescriptor.labels ?? []);
+    if (outputDescriptor?.labels) {
+      for (const label of outputDescriptor.labels) {
+        labelSet.add(String(label));
+      }
+    }
+    const mergedPolicyContext = {
+      ...(pipelineDescriptor.policyContext ?? {}),
+      ...(outputDescriptor?.policyContext ?? {})
+    };
+    const mergedDescriptor = makeSecurityDescriptor({
+      labels: labelSet,
+      taint: pipelineDescriptor.taint ?? [],
+      sources: pipelineDescriptor.sources ?? [],
+      capability: outputDescriptor?.capability ?? pipelineDescriptor.capability,
+      policyContext:
+        Object.keys(mergedPolicyContext).length > 0 ? mergedPolicyContext : undefined
+    });
     const metadata: StructuredValueMetadata = {
       ...(executionResult.metadata || {}),
-      security: pipelineDescriptor
+      security: mergedDescriptor
     };
     return wrapStructured(executionResult, undefined, undefined, metadata);
   }

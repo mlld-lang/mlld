@@ -602,6 +602,20 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
       // Handle regular objects (including Variables with type: 'object')
       if (!(name in rawValue)) {
+        if (isVariable(value) && value.name === 'mx' && name === 'guard') {
+          const accessPath = [...(options?.parentPath || []), name];
+          throw new FieldAccessError('Variable "mx" has no field "guard"', {
+            baseValue: rawValue,
+            fieldAccessChain: [],
+            failedAtIndex: Math.max(0, accessPath.length - 1),
+            failedKey: name,
+            accessPath,
+            availableKeys: Object.keys(rawValue)
+          }, {
+            sourceLocation: options?.sourceLocation,
+            env: options?.env
+          });
+        }
         if (
           structuredCtx &&
           typeof structuredCtx === 'object' &&

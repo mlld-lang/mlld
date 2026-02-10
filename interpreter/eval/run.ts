@@ -689,7 +689,7 @@ export async function evaluateRun(
     if (opType) {
       opLabels = getOperationLabels({ type: opType });
       const opSources = getOperationSources({ type: opType });
-      const opUpdate: Partial<OperationContext> = { opLabels };
+      const opUpdate: Partial<OperationContext> = { opLabels, subtype: opType };
       if (opSources.length > 0) {
         opUpdate.sources = opSources;
       }

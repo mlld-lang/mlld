@@ -641,14 +641,41 @@ export class ModuleContentProcessor {
     const fsService = this.env.getFileSystemService();
     const hasIsVirtual = typeof fsService?.isVirtual === 'function';
     const isVirtualFS = hasIsVirtual ? fsService.isVirtual() : false;
+    const inferredMode = inferMlldMode(resolvedPath);
     const mode = isDynamicModule
       ? this.env.getDynamicModuleMode()
       : isVirtualFS
         ? 'markdown'
-        : inferMlldMode(resolvedPath);
+        : inferredMode;
 
     // Parse the imported mlld content with the inferred mode
-    const parseResult = await parse(processedContent, { mode });
+    let parseResult = await parse(processedContent, { mode });
+
+    // Virtual fixture files default to markdown parsing. Retry strict parsing for
+    // strict-mode modules when markdown parsing yields only plain text nodes.
+    if (
+      mode === 'markdown' &&
+      inferredMode === 'strict' &&
+      isVirtualFS &&
+      parseResult.success &&
+      Array.isArray(parseResult.ast)
+    ) {
+      const hasStructuredNodes = parseResult.ast.some(node => {
+        const nodeType = typeof node === 'object' && node !== null ? (node as any).type : undefined;
+        return nodeType !== 'Text' && nodeType !== 'Newline' && nodeType !== 'Comment';
+      });
+
+      if (!hasStructuredNodes) {
+        const strictParseResult = await parse(processedContent, { mode: 'strict' });
+        const strictHasDirectives =
+          strictParseResult.success &&
+          Array.isArray(strictParseResult.ast) &&
+          strictParseResult.ast.some(node => (node as any)?.type === 'Directive');
+        if (strictHasDirectives) {
+          parseResult = strictParseResult;
+        }
+      }
+    }
 
     // Check if parsing succeeded
     if (!parseResult.success) {

@@ -43,6 +43,7 @@ import {
   type InterpolationNode
 } from '../utils/interpolation';
 import * as shellQuote from 'shell-quote';
+import { parseSync } from '@grammar/parser';
 
 /**
  * Type for variable values
@@ -186,6 +187,66 @@ function isPathValue(value: unknown): value is PathValue {
          typeof (value as PathValue).resolvedPath === 'string';
 }
 
+interface PipelineStageLike {
+  meta?: {
+    isBuiltinEffect?: boolean;
+  };
+}
+
+interface BarePipelineNodeLike {
+  type: string;
+  withClause?: {
+    pipeline?: PipelineStageLike[];
+  };
+}
+
+function isBuiltinEffectStage(stage: unknown): stage is PipelineStageLike {
+  if (typeof stage !== 'object' || stage === null) {
+    return false;
+  }
+  return (stage as PipelineStageLike).meta?.isBuiltinEffect === true;
+}
+
+function isBareBuiltinEffectPipelineNode(node: unknown): node is BarePipelineNodeLike {
+  if (typeof node !== 'object' || node === null) {
+    return false;
+  }
+  const candidate = node as BarePipelineNodeLike;
+  if (candidate.type !== 'VariableReferenceWithTail') {
+    return false;
+  }
+  const pipeline = candidate.withClause?.pipeline;
+  if (!Array.isArray(pipeline) || pipeline.length === 0) {
+    return false;
+  }
+  return pipeline.every(isBuiltinEffectStage);
+}
+
+function parseBareBuiltinEffectPipelines(content: string): MlldNode[] | null {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (!trimmed.startsWith('@') || !trimmed.includes('|')) {
+    return null;
+  }
+  try {
+    const parsed = parseSync(trimmed, {
+      startRule: 'ForBlockStatementList',
+      mode: 'markdown'
+    });
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return null;
+    }
+    if (!parsed.every(isBareBuiltinEffectPipelineNode)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 
 /**
  * Core evaluation result type
@@ -242,6 +303,23 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
       // Process remaining nodes
       for (let i = 1; i < node.length; i++) {
         const n = node[i];
+
+        const barePipelineStatements = !context?.isExpression && isText(n)
+          ? parseBareBuiltinEffectPipelines(n.content)
+          : null;
+        if (barePipelineStatements) {
+          let inlinePipelineResult: EvalResult | null = null;
+          for (const statement of barePipelineStatements) {
+            inlinePipelineResult = await evaluate(statement, env, context);
+            env.addNode(statement);
+          }
+          if (inlinePipelineResult) {
+            lastValue = inlinePipelineResult.value;
+            lastResult = inlinePipelineResult;
+          }
+          continue;
+        }
+
         const result = await evaluate(n, env, context);
         lastValue = result.value;
         lastResult = result;
@@ -336,6 +414,22 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     } else {
       // No frontmatter, process all nodes normally
       for (const n of node) {
+        const barePipelineStatements = !context?.isExpression && isText(n)
+          ? parseBareBuiltinEffectPipelines(n.content)
+          : null;
+        if (barePipelineStatements) {
+          let inlinePipelineResult: EvalResult | null = null;
+          for (const statement of barePipelineStatements) {
+            inlinePipelineResult = await evaluate(statement, env, context);
+            env.addNode(statement);
+          }
+          if (inlinePipelineResult) {
+            lastValue = inlinePipelineResult.value;
+            lastResult = inlinePipelineResult;
+          }
+          continue;
+        }
+
         const result = await evaluate(n, env, context);
         lastValue = result.value;
         lastResult = result;

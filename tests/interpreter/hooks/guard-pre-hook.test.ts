@@ -429,7 +429,7 @@ describe('guard pre-hook integration', () => {
     });
   });
 
-  it('sets @mx.guard to null when no guards fire', async () => {
+  it('omits @mx.guard when no guards fire', async () => {
     const env = createEnv();
     env.setVariable(
       'plainVar',
@@ -451,7 +451,7 @@ describe('guard pre-hook integration', () => {
     const directive = parseSync('/show @plainVar')[0] as DirectiveNode;
     await evaluateDirective(directive, env);
     const mx = env.getContextManager().buildAmbientContext();
-    expect(mx.guard).toBeNull();
+    expect(mx).not.toHaveProperty('guard');
   });
 
 it('denies /run commands that interpolate expression-derived secrets', async () => {
@@ -693,7 +693,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     const directive = parseSync('/show @renderSecret(@plain)')[0] as DirectiveNode;
     await evaluateDirective(directive, env);
     const mx = env.getContextManager().buildAmbientContext();
-    expect(mx.guard).toBeNull();
+    expect(mx).not.toHaveProperty('guard');
   });
 
   it('sets @mx.denied when guard denial is handled inside exec when-blocks', async () => {

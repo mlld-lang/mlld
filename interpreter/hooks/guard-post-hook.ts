@@ -45,6 +45,7 @@ import { GuardError } from '@core/errors/GuardError';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
 import { appendFileSync } from 'fs';
 import { getExpressionProvenance } from '../utils/expression-provenance';
+import { formatGuardWarning } from '../eval/guard-denial-handler';
 
 const DEFAULT_GUARD_MAX = 3;
 const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
@@ -492,6 +493,10 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     timestamp: Date.now(),
     ...(provenance && { provenance })
   });
+
+    if (currentDecision === 'allow' && hints.length > 0) {
+      emitGuardWarningHints(env, hints);
+    }
 
     if (currentDecision === 'deny') {
       const error = buildGuardError({
@@ -1492,6 +1497,20 @@ function truncatePreview(value: string, limit = 160): string {
     return value;
   }
   return `${value.slice(0, limit)}…`;
+}
+
+function emitGuardWarningHints(env: Environment, hints: readonly GuardHint[]): void {
+  for (const entry of hints) {
+    if (!entry || entry.severity !== 'warn') {
+      continue;
+    }
+    const warningText = typeof entry.hint === 'string' ? entry.hint.trim() : '';
+    if (!warningText) {
+      continue;
+    }
+    const warning = formatGuardWarning(warningText, null, entry.guardName ?? null);
+    env.emitEffect('stderr', `${warning}\n`);
+  }
 }
 
 function buildGuardError(options: {

@@ -330,7 +330,6 @@ export class ContextManager {
       profile: this.profile ?? null,
       operation: currentOperation ?? null,
       op: currentOperation ?? null,
-      guard: guardContext ?? (deniedContext ? {} : null),
       ...(whileContext ? { while: whileContext } : {}),
       ...(loopContext ? { loop: loopContext } : {}),
       ...(forContext ? { for: forContext } : {}),
@@ -351,10 +350,8 @@ export class ContextManager {
       mxValue.output = guardContext.output;
     }
 
-    if (mxValue.guard) {
+    if (guardContext || deniedContext) {
       mxValue.guard = this.normalizeGuardContext(guardContext, deniedContext);
-    } else if (deniedContext) {
-      mxValue.guard = this.normalizeGuardContext(undefined, deniedContext);
     }
 
     if (pipelineFields.pipe) {

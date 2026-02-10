@@ -791,6 +791,12 @@ function applyRunMetadata(context: OperationContext, directive: DirectiveNode): 
   const language = directive.meta?.language;
   if (typeof language === 'string' && language.length > 0) {
     metadata.language = language;
+    if (directive.subtype === 'runCode') {
+      const runCodeSubtype = mapLanguageToOpType(language);
+      if (runCodeSubtype) {
+        context.subtype = runCodeSubtype;
+      }
+    }
   }
 
   if (directive.subtype === 'runCommand') {

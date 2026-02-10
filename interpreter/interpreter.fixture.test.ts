@@ -606,6 +606,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       reason: details.reason ?? (error as any).reason ?? null,
       operation: details.operation?.type ?? null,
       operationSubtype: details.operation?.subtype ?? null,
+      timing: details.timing ?? null,
+      outputPreview: details.outputPreview ?? null,
       decision: (error as any).decision ?? details.decision ?? null,
       retryHint: (error as any).retryHint ?? details.retryHint ?? null
     };

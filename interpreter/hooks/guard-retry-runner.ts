@@ -3,11 +3,12 @@ import { GuardRetrySignal, isGuardRetrySignal } from '@core/errors/GuardRetrySig
 import type { GuardHint, GuardResult } from '@core/types/guard';
 import type { GuardContextSnapshot, OperationContext } from '../env/ContextManager';
 import type { Environment } from '../env/Environment';
-import { BufferedEffectHandler } from '../env/EffectHandler';
+import { BufferedEffectHandler, type EffectHandler } from '../env/EffectHandler';
 import { appendFileSync } from 'fs';
 
 const DEFAULT_GUARD_MAX = 3;
 const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
+const GUARD_WARNING_PREFIX = '[Guard Warning]';
 
 interface GuardRetryAttempt {
   attempt: number;
@@ -85,6 +86,22 @@ function extractGuardRetryDetails(error: unknown): GuardRetryErrorDetails {
   };
 }
 
+function replayBufferedGuardWarnings(
+  bufferHandler: BufferedEffectHandler,
+  originalHandler: EffectHandler
+): void {
+  const bufferedEffects = bufferHandler.getEffects();
+  for (const effect of bufferedEffects) {
+    if (effect.type !== 'stderr') {
+      continue;
+    }
+    if (!effect.content.includes(GUARD_WARNING_PREFIX)) {
+      continue;
+    }
+    originalHandler.handleEffect(effect);
+  }
+}
+
 export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promise<T> {
   const state: GuardRetryState = {
     attempt: 1,
@@ -121,12 +138,15 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
       }
       return result;
     } catch (error) {
-      if (bufferHandler && originalHandler) {
-        options.env.setEffectHandler(originalHandler);
-        bufferHandler.discard();
-      }
       const isRetrySignal =
         (error instanceof GuardError && error.decision === 'retry') || isGuardRetrySignal(error);
+      if (bufferHandler && originalHandler) {
+        options.env.setEffectHandler(originalHandler);
+        if (!isRetrySignal) {
+          replayBufferedGuardWarnings(bufferHandler, originalHandler);
+        }
+        bufferHandler.discard();
+      }
       const debugPayload = {
         attempt: state.attempt,
         isRetrySignal,

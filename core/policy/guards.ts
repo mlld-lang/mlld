@@ -3,7 +3,13 @@ import type { PolicyConfig, PolicyOperations } from './union';
 import type { PolicyConditionFn } from '../../interpreter/guards';
 import { v4 as uuid } from 'uuid';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
-import { getCommandTokens, matchesCommandPatterns, normalizeCommandPatternEntry } from './capability-patterns';
+import {
+  getCommandTokens,
+  matchesCommandPattern,
+  matchesCommandPatterns,
+  normalizeCommandPatternEntry,
+  parseCommandPatternTokens
+} from './capability-patterns';
 import { isDangerAllowedForCommand, isDangerousCommand, normalizeDangerEntries } from './danger';
 import { expandOperationLabels } from './label-flow';
 
@@ -158,7 +164,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         return { decision: 'allow' };
       }
       const reason = decision.reason ?? `Command '${decision.commandName}' denied by policy`;
-      const rule = inferCapabilityRule(policy, decision.commandName);
+      const rule = inferCapabilityRule(policy, commandText);
       const suggestions = buildCommandDenialSuggestions(decision.commandName, rule);
       return {
         decision: 'deny',
@@ -226,13 +232,13 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
   return guards;
 }
 
-function inferCapabilityRule(policy: PolicyConfig, commandName: string): string {
+function inferCapabilityRule(policy: PolicyConfig, commandText: string): string {
   const deny = policy.deny;
   const denyMap = deny && deny !== true && typeof deny === 'object' && !Array.isArray(deny) ? deny : undefined;
   const denyPatterns = extractCommandPatterns(deny) ?? (denyMap?.cmd !== undefined ? normalizeCommandPatternList(denyMap.cmd) : undefined);
   if (denyPatterns) {
-    const tokens = getCommandTokens(commandName);
-    if (denyPatterns.all || matchesCommandPatterns(tokens, denyPatterns.patterns)) {
+    const tokens = getCommandTokens(commandText);
+    if (denyPatterns.all || matchesDenyCommandPatterns(tokens, denyPatterns.patterns)) {
       return 'deny.cmd';
     }
   }
@@ -252,6 +258,25 @@ function buildCommandDenialSuggestions(commandName: string, rule: string): strin
   }
   suggestions.push('Review active policies with @mx.policy.activePolicies');
   return suggestions;
+}
+
+function normalizeDenyPattern(pattern: string): string {
+  const trimmed = pattern.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  const tokens = parseCommandPatternTokens(trimmed);
+  if (tokens.length >= 2 && !tokens.includes('*')) {
+    return `${trimmed}:*`;
+  }
+  return trimmed;
+}
+
+function matchesDenyCommandPatterns(commandTokens: string[], patterns: string[]): boolean {
+  if (patterns.length === 0) {
+    return false;
+  }
+  return patterns.some(pattern => matchesCommandPattern(commandTokens, normalizeDenyPattern(pattern)));
 }
 
 function normalizeList(values?: readonly string[]): string[] {
@@ -420,7 +445,7 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
       ? deny
       : undefined;
   const denyPatterns = extractCommandPatterns(deny) ?? (denyMap?.cmd !== undefined ? normalizeCommandPatternList(denyMap.cmd) : undefined);
-  if (denyPatterns && (denyPatterns.all || matchesCommandPatterns(commandTokens, denyPatterns.patterns))) {
+  if (denyPatterns && (denyPatterns.all || matchesDenyCommandPatterns(commandTokens, denyPatterns.patterns))) {
     return {
       allowed: false,
       commandName,

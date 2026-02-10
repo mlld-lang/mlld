@@ -58,7 +58,7 @@ import { evaluateCapabilityAccess, evaluateCommandAccess } from '@core/policy/gu
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
-import { handleExecGuardDenial } from './guard-denial-handler';
+import { handleExecGuardDenial, formatGuardWarning } from './guard-denial-handler';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
@@ -66,6 +66,7 @@ import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import { SignatureStore } from '@core/security/SignatureStore';
+import { GuardError } from '@core/errors/GuardError';
 import {
   applyEnvironmentDefaults,
   buildEnvironmentOutputDescriptor,
@@ -2425,6 +2426,20 @@ async function evaluateExecInvocationInternal(
         if (handled) {
           return handled;
         }
+      }
+      if (
+        !whenExprNode &&
+        error instanceof GuardError &&
+        error.decision === 'deny' &&
+        error.details?.timing === 'after'
+      ) {
+        const guardDetails = error.details as Record<string, unknown> | undefined;
+        const warning = formatGuardWarning(
+          error.reason ?? (guardDetails?.reason as string | undefined),
+          guardDetails?.guardFilter as string | undefined,
+          guardDetails?.guardName as string | null | undefined
+        );
+        env.emitEffect('stderr', `${warning}\n`);
       }
       throw error;
     }

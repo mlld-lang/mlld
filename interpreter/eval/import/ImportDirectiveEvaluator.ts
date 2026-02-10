@@ -1570,7 +1570,7 @@ export class ImportDirectiveEvaluator {
     source?: string
   ): void {
     this.enforceModuleNeeds(result.moduleNeeds, source);
-    this.validateExportBindings(result.moduleObject, directive, source);
+    this.validateExportBindings(result.moduleObject, directive, source, result.guardDefinitions);
   }
 
   private enforceModuleNeeds(needs: NeedsDeclaration | undefined, source?: string): void {
@@ -1698,12 +1698,24 @@ export class ImportDirectiveEvaluator {
     }
   }
 
-  private validateExportBindings(moduleObject: Record<string, any>, directive: DirectiveNode, source?: string): void {
+  private validateExportBindings(
+    moduleObject: Record<string, any>,
+    directive: DirectiveNode,
+    source?: string,
+    guardDefinitions: readonly SerializedGuardDefinition[] = []
+  ): void {
     if (!directive.values) {
       return;
     }
 
-    const exportKeys = Object.keys(moduleObject || {}).filter(key => !key.startsWith('__'));
+    const exportKeySet = new Set(
+      Object.keys(moduleObject || {}).filter(key => !key.startsWith('__'))
+    );
+    for (const guardDefinition of guardDefinitions) {
+      if (typeof guardDefinition?.name === 'string' && guardDefinition.name.length > 0) {
+        exportKeySet.add(guardDefinition.name);
+      }
+    }
 
     if (directive.subtype !== 'importSelected') {
       return;
@@ -1721,7 +1733,7 @@ export class ImportDirectiveEvaluator {
       if (typeof name !== 'string') {
         continue;
       }
-      if (!exportKeys.includes(name)) {
+      if (!exportKeySet.has(name)) {
         throw new MlldImportError(`Import '${name}' not found in module '${source ?? 'import'}'`, {
           code: 'IMPORT_EXPORT_MISSING',
           details: { source, missing: name }
