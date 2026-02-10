@@ -10,25 +10,17 @@ import {
   normalizeWhenShowEffect,
   applySecurityDescriptorToStructuredValue,
   extractSecurityDescriptor,
-  type StructuredValue,
-  type StructuredValueType
+  type StructuredValue
 } from '../../utils/structured-value';
 import { wrapExecResult } from '../../utils/structured-exec';
 import { normalizeTransformerResult } from '../../utils/transformer-result';
-import type { Variable } from '@core/types/variable/VariableTypes';
-import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
 import { isEventEmitter, isLegacyStream, toJsValue, wrapNodeValue } from '../../utils/node-interop';
 import type { HookableNode } from '@core/types/hooks';
 import type { HookDecision } from '../../hooks/HookManager';
 import type { OperationContext } from '../../env/ContextManager';
-import { materializeGuardInputs } from '../../utils/guard-inputs';
-import { handleGuardDecision } from '../../hooks/hook-decision-handler';
-import { handleExecGuardDenial } from '../guard-denial-handler';
 import { resolveWorkingDirectory } from '../../utils/working-directory';
-import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
-import { collectInputDescriptor, descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
-import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import {
   applyEnvironmentDefaults,
   buildEnvironmentOutputDescriptor,
@@ -46,6 +38,11 @@ import {
 } from './command-execution/bind-pipeline-params';
 import { resolvePipelineCommandReference } from './command-execution/resolve-command-reference';
 import { normalizeExecutableDescriptor } from './command-execution/normalize-executable';
+import {
+  buildGuardPreflightContext,
+  executeGuardPreflight
+} from './command-execution/preflight/guard-preflight';
+import { runPolicyPreflight } from './command-execution/preflight/policy-preflight';
 
 export type RetrySignal = { value: 'retry'; hint?: any; from?: number };
 type CommandExecutionPrimitive = string | number | boolean | null | undefined;
@@ -173,156 +170,36 @@ export async function executeCommandVariable(
   const operationContext = hookOptions?.operationContext;
   let preDecision: HookDecision | undefined;
   const stageInputs = hookOptions?.stageInputs ?? [];
-  const guardInputCandidates: unknown[] = [];
-  const stageInputVar = env.getVariable?.('input');
-  if (stageInputVar) {
-    guardInputCandidates.push(stageInputVar);
-  }
-  if (stageInputs.length > 0) {
-    guardInputCandidates.push(...stageInputs);
-  }
-  if (baseParamNames.length > 0) {
-    for (const paramName of baseParamNames) {
-      const paramVar = execEnv.getVariable(paramName);
-      if (paramVar) {
-        guardInputCandidates.push(paramVar);
-      }
-    }
-  }
-  const guardInputs = materializeGuardInputs(guardInputCandidates, { nameHint: '__pipeline_stage_input__' });
+  const { guardInputs } = buildGuardPreflightContext({
+    env,
+    execEnv,
+    stageInputs,
+    baseParamNames
+  });
 
-  const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
-  const execDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
-  const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
-  const guardDescriptor = collectInputDescriptor(guardInputs);
-  const policyLocation = operationContext?.location ?? hookOptions?.executionContext?.sourceLocation;
+  outputPolicyDescriptor = await runPolicyPreflight({
+    env,
+    execEnv,
+    execDef,
+    commandVar,
+    guardInputs,
+    stdinInput,
+    operationContext,
+    executionContext: hookOptions?.executionContext,
+    opType
+  });
 
-  if (execDef.type === 'command' && execDef.commandTemplate) {
-    const { interpolate } = await import('../../core/interpreter');
-    const { InterpolationContext } = await import('../../core/interpolation-context');
-    const commandDescriptors: SecurityDescriptor[] = [];
-    const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand, {
-      collectSecurityDescriptor: descriptor => {
-        if (descriptor) {
-          commandDescriptors.push(descriptor);
-        }
-      }
-    });
-    const parsedCommand = parseCommand(command);
-    const opLabels = getOperationLabels({
-      type: 'cmd',
-      command: parsedCommand.command,
-      subcommand: parsedCommand.subcommand
-    });
-    if (operationContext) {
-      operationContext.command = command;
-      operationContext.opLabels = opLabels;
-      const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
-      metadata.commandPreview = command;
-      operationContext.metadata = metadata;
-    }
-    env.updateOpContext({ command, opLabels });
-    const commandDescriptor =
-      commandDescriptors.length > 1
-        ? env.mergeSecurityDescriptors(...commandDescriptors)
-        : commandDescriptors[0];
-    const inputDescriptor = mergeInputDescriptors(guardDescriptor, commandDescriptor);
-    const inputTaint = descriptorToInputTaint(inputDescriptor);
-    if (inputTaint.length > 0) {
-      const flowChannel = execDef.withClause?.auth || execDef.withClause?.using
-        ? 'using'
-        : stdinInput !== undefined
-          ? 'stdin'
-          : 'arg';
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint,
-          opLabels,
-          exeLabels,
-          flowChannel,
-          command: parsedCommand.command
-        },
-        { env, sourceLocation: policyLocation }
-      );
-    }
-    outputPolicyDescriptor = policyEnforcer.applyOutputPolicyLabels(
-      undefined,
-      { inputTaint, exeLabels }
-    );
-  } else if (execDef.type === 'code' && execDef.codeTemplate) {
-    const opLabels = opType ? getOperationLabels({ type: opType }) : [];
-    const inputTaint = descriptorToInputTaint(guardDescriptor);
-    if (opType && inputTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint,
-          opLabels,
-          exeLabels,
-          flowChannel: 'arg'
-        },
-        { env, sourceLocation: policyLocation }
-      );
-    }
-    outputPolicyDescriptor = policyEnforcer.applyOutputPolicyLabels(
-      undefined,
-      { inputTaint, exeLabels }
-    );
-  } else if (execDef.type === 'nodeFunction') {
-    const opLabels = getOperationLabels({ type: 'node' });
-    const inputTaint = descriptorToInputTaint(guardDescriptor);
-    if (inputTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint,
-          opLabels,
-          exeLabels,
-          flowChannel: 'arg'
-        },
-        { env, sourceLocation: policyLocation }
-      );
-    }
-    outputPolicyDescriptor = policyEnforcer.applyOutputPolicyLabels(
-      undefined,
-      { inputTaint, exeLabels }
-    );
-  }
-
-  if (hookNode && operationContext) {
-    const hookManager = env.getHookManager();
-    preDecision = await hookManager.runPre(hookNode, guardInputs, env, operationContext);
-    const guardInputVariable =
-      preDecision && preDecision.metadata && (preDecision.metadata as Record<string, unknown>).guardInput;
-    try {
-      await handleGuardDecision(preDecision, hookNode, env, operationContext);
-    } catch (error) {
-      if (guardInputVariable) {
-        const existingInput = execEnv.getVariable('input');
-        if (!existingInput) {
-          const clonedInput: Variable = {
-            ...(guardInputVariable as Variable),
-            name: 'input',
-            mx: { ...(guardInputVariable as Variable).mx },
-            internal: {
-              ...((guardInputVariable as Variable).internal ?? {}),
-              isSystem: true,
-              isParameter: true
-            }
-          };
-          execEnv.setParameterVariable('input', clonedInput);
-        }
-      }
-      if (whenExprNode) {
-        const handled = await handleExecGuardDenial(error, {
-          execEnv,
-          env,
-          whenExprNode
-        });
-        if (handled) {
-          return finalizeResult(handled.value ?? handled.stdout ?? '');
-        }
-      }
-      throw error;
-    }
+  const guardPreflightResult = await executeGuardPreflight({
+    env,
+    execEnv,
+    guardInputs,
+    hookNode,
+    operationContext,
+    whenExprNode
+  });
+  preDecision = guardPreflightResult.preDecision;
+  if (guardPreflightResult.hasFallbackResult) {
+    return finalizeResult(guardPreflightResult.fallbackValue ?? '');
   }
   // Execute based on type
   let workingDirectory: string | undefined;
