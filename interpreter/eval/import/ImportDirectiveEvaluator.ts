@@ -28,6 +28,9 @@ import { createObjectVariable } from '@core/types/variable/VariableFactories';
 import type { VariableSource, Variable } from '@core/types/variable';
 import { McpImportService } from './McpImportService';
 import { buildMcpToolIndex, resolveMcpServerSpec, resolveMcpTool } from './McpImportResolver';
+import { ResolverImportDataAdapter } from './ResolverImportDataAdapter';
+import { InputImportHandler } from './InputImportHandler';
+import { ResolverImportHandler } from './ResolverImportHandler';
 
 const MODULE_SOURCE_EXTENSIONS = ['.mld.md', '.mld', '.md', '.mlld.md', '.mlld'] as const;
 const DIRECTORY_INDEX_FILENAME = 'index.mld';
@@ -49,6 +52,9 @@ export class ImportDirectiveEvaluator {
   private variableImporter: VariableImporter;
   private objectResolver: ObjectReferenceResolver;
   private mcpImportService: McpImportService;
+  private resolverImportDataAdapter: ResolverImportDataAdapter;
+  private inputImportHandler: InputImportHandler;
+  private resolverImportHandler: ResolverImportHandler;
   // TODO: Integrate capability context construction when import types and security descriptors land.
 
   constructor(env: Environment) {
@@ -58,6 +64,9 @@ export class ImportDirectiveEvaluator {
     this.securityValidator = new ImportSecurityValidator(env);
     this.variableImporter = new VariableImporter(this.objectResolver);
     this.mcpImportService = new McpImportService(env);
+    this.resolverImportDataAdapter = new ResolverImportDataAdapter(this.variableImporter);
+    this.inputImportHandler = new InputImportHandler(this.resolverImportDataAdapter);
+    this.resolverImportHandler = new ResolverImportHandler(this.resolverImportDataAdapter);
     this.contentProcessor = new ModuleContentProcessor(
       env, 
       this.securityValidator, 
@@ -142,10 +151,16 @@ export class ImportDirectiveEvaluator {
   ): Promise<EvalResult> {
     switch (resolution.type) {
       case 'input':
-        return this.evaluateInputImport(directive, env);
+        return this.inputImportHandler.evaluateInputImport(directive, env);
       
       case 'resolver':
-        return this.evaluateResolverImport(directive, resolution.resolverName!, env);
+        return this.resolverImportHandler.evaluateResolverImport(
+          directive,
+          resolution.resolverName!,
+          env,
+          async (resolverDirective, ref, resolverContent, handlerEnv) =>
+            this.importFromResolverContent(resolverDirective, ref, resolverContent, handlerEnv)
+        );
       
       case 'module':
         return this.evaluateModuleImport(resolution, directive, env);
@@ -302,145 +317,6 @@ export class ImportDirectiveEvaluator {
       return trimmed.replace(/^['"]|['"]$/g, '');
     }
     return fallback;
-  }
-
-  /**
-   * Handle input imports (@input, @stdin)
-   */
-  private async evaluateInputImport(directive: DirectiveNode, env: Environment): Promise<EvalResult> {
-    // Get input resolver
-    const resolverManager = env.getResolverManager();
-    if (!resolverManager) {
-      throw new Error('Resolver manager not available');
-    }
-
-    const resolver = resolverManager.getResolver('input');
-    if (!resolver) {
-      throw new Error('input resolver not found');
-    }
-
-    // Extract requested imports for the resolver
-    const requestedImports = directive.subtype === 'importSelected' 
-      ? (directive.values?.imports || []).map((imp: any) => imp.identifier)
-      : undefined;
-
-    // Use resolver to get input data with proper import context
-    const result = await resolver.resolve('@input', { 
-      context: 'import',
-      requestedImports
-    });
-
-    const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
-    const baseDescriptor = makeSecurityDescriptor({ labels: securityLabels });
-    const sourceRef = result.mx?.source ?? '@input';
-    const taintSnapshot = deriveImportTaint({
-      importType: 'live',
-      resolverName: 'input',
-      source: sourceRef,
-      resolvedPath: sourceRef,
-      sourceType: 'input',
-      labels: result.mx?.labels
-    });
-    const taintDescriptor = makeSecurityDescriptor({
-      taint: taintSnapshot.taint,
-      labels: taintSnapshot.labels,
-      sources: taintSnapshot.sources
-    });
-    env.recordSecurityDescriptor(mergeDescriptors(baseDescriptor, taintDescriptor));
-    
-    let exportData: Record<string, any> = {};
-    if (result.contentType === 'data' && typeof result.content === 'string') {
-      try {
-        exportData = JSON.parse(result.content);
-      } catch (e) {
-        exportData = { value: result.content };
-      }
-    } else {
-      exportData = { value: result.content };
-    }
-
-    // Import variables based on directive type
-    await this.importResolverVariables(directive, exportData, env, '@input');
-
-    return { value: undefined, env };
-  }
-
-  /**
-   * Handle resolver imports (@now, @debug, etc.)
-   */
-  private async evaluateResolverImport(
-    directive: DirectiveNode,
-    resolverName: string,
-    env: Environment
-  ): Promise<EvalResult> {
-    const resolverManager = env.getResolverManager();
-    if (!resolverManager) {
-      throw new Error('Resolver manager not available');
-    }
-
-    // Try case-sensitive first, then lowercase (standard resolver name case), then uppercase
-    const resolver = resolverManager.getResolver(resolverName) ||
-                    resolverManager.getResolver(resolverName.toLowerCase()) ||
-                    resolverManager.getResolver(resolverName.toUpperCase());
-    if (!resolver) {
-      throw new Error(`Resolver '${resolverName}' not found`);
-    }
-
-    if (resolverName.toLowerCase() === 'keychain') {
-      throw new MlldImportError(
-        'Direct keychain imports are not available. Use policy.auth with using auth:*.',
-        { code: 'KEYCHAIN_DIRECT_ACCESS_DENIED' }
-      );
-    }
-
-    // Check if resolver supports imports
-    if (!resolver.capabilities.contexts.import) {
-      const { ResolverError } = await import('@core/errors');
-      throw ResolverError.unsupportedCapability(resolver.name, 'imports', 'import');
-    }
-
-    const requestedImports = directive.subtype === 'importSelected'
-      ? (directive.values?.imports || []).map((imp: any) => imp.identifier)
-      : undefined;
-
-    const resolverResult = await resolver.resolve(`@${resolverName}`, {
-      context: 'import',
-      requestedImports
-    });
-
-    if (resolverResult.contentType === 'module') {
-      const ref = resolverResult.mx?.source ?? `@${resolverName}`;
-      const taintDescriptor = deriveImportTaint({
-        importType: 'module',
-        resolverName,
-        source: ref,
-        resolvedPath: ref,
-        sourceType: 'resolver',
-        labels: resolverResult.mx?.labels
-      });
-      env.recordSecurityDescriptor(
-        makeSecurityDescriptor({
-          taint: taintDescriptor.taint,
-          labels: taintDescriptor.labels,
-          sources: taintDescriptor.sources
-        })
-      );
-      return this.importFromResolverContent(directive, ref, resolverResult, env);
-    }
-
-    // Get export data from resolver
-    let exportData: Record<string, any> = {};
-    
-    if ('getExportData' in resolver) {
-      exportData = await this.getResolverExportData(resolver as any, directive, resolverName);
-    } else {
-      exportData = await this.fallbackResolverData(resolver, directive, resolverName, resolverResult);
-    }
-
-    // Import variables based on directive type
-    await this.importResolverVariables(directive, exportData, env, `@${resolverName}`);
-
-    return { value: undefined, env };
   }
 
   /**
@@ -864,115 +740,6 @@ export class ImportDirectiveEvaluator {
       return { value: undefined, env };
     } finally {
       // Import tracking handled by ModuleContentProcessor.processResolverContent
-    }
-  }
-
-
-  /**
-   * Get export data from resolver with format support
-   */
-  private async getResolverExportData(
-    resolver: any,
-    directive: DirectiveNode,
-    resolverName: string
-  ): Promise<Record<string, any>> {
-    // Handle selected imports with format support
-    if (directive.subtype === 'importSelected') {
-      const imports = directive.values?.imports || [];
-      
-      // For single format import like: @import { "iso" as date } from @TIME
-      if (imports.length === 1) {
-        const importNode = imports[0];
-        const format = importNode.identifier.replace(/^["']|["']$/g, ''); // Remove quotes
-        
-        // Check if this is a format string (quoted)
-        if (importNode.identifier.startsWith('"') || importNode.identifier.startsWith('\'')) {
-          const exportData = await resolver.getExportData(format);
-          
-          // Return single item for direct import
-          return { [importNode.alias || format]: exportData[format] };
-        }
-      }
-      
-      // Otherwise get all export data for field selection
-      return await resolver.getExportData();
-    } else {
-      // Import all - get all export data
-      return await resolver.getExportData();
-    }
-  }
-
-  /**
-   * Fallback resolver data handling
-   */
-  private async fallbackResolverData(
-    resolver: any,
-    directive: DirectiveNode,
-    resolverName: string,
-    resolvedResult?: { contentType: string; content: any }
-  ): Promise<Record<string, any>> {
-    const requestedImports = directive.subtype === 'importSelected' 
-      ? (directive.values?.imports || []).map((imp: any) => imp.identifier)
-      : undefined;
-    
-    const result =
-      resolvedResult ??
-      (await resolver.resolve(`@${resolverName}`, {
-        context: 'import',
-        requestedImports
-      }));
-    
-    // If content is JSON string (data type), parse it
-    if (result.contentType === 'data' && typeof result.content === 'string') {
-      try {
-        return JSON.parse(result.content);
-      } catch (e) {
-        return { value: result.content };
-      }
-    } else if (result.contentType === 'data' && typeof result.content === 'object' && result.content !== null) {
-      // Content is already an object (e.g., from keychain resolver with executable exports)
-      return result.content;
-    } else {
-      return { value: result.content };
-    }
-  }
-
-  /**
-   * Import variables from resolver data
-   */
-  private async importResolverVariables(
-    directive: DirectiveNode,
-    exportData: Record<string, any>,
-    env: Environment,
-    sourcePath: string
-  ): Promise<void> {
-    const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
-    if (directive.subtype === 'importSelected') {
-      const imports = directive.values?.imports || [];
-      for (const importItem of imports) {
-        let varName = importItem.identifier.replace(/^["']|["']$/g, ''); // Remove quotes
-        const alias = importItem.alias || varName;
-        
-        if (varName in exportData) {
-          const value = exportData[varName];
-        const variable = this.variableImporter.createVariableFromValue(alias, value, sourcePath, varName, {
-          securityLabels,
-          env
-        });
-          env.setVariable(alias, variable);
-        } else {
-          throw new Error(`Export '${varName}' not found in resolver '${sourcePath}'`);
-        }
-      }
-    } else {
-      // Import all exports
-      for (const [name, value] of Object.entries(exportData)) {
-        const variable = this.variableImporter.createVariableFromValue(name, value, sourcePath, undefined, {
-          securityLabels,
-          env
-        });
-        env.setVariable(name, variable);
-      }
     }
   }
 
