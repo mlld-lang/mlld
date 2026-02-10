@@ -9,10 +9,18 @@ import { glob } from 'tinyglobby';
 import path from 'path';
 import minimatch from 'minimatch';
 import { isStructuredValue } from '../utils/structured-value';
+import { createSimpleTextVariable, type VariableSource } from '@core/types/variable';
 
 vi.mock('tinyglobby', () => ({
   glob: vi.fn()
 }));
+
+const VARIABLE_SOURCE: VariableSource = {
+  directive: 'var',
+  syntax: 'quoted',
+  hasInterpolation: false,
+  isMultiLine: false
+};
 
 describe('processContentLoader characterization', () => {
   let env: Environment;
@@ -156,6 +164,32 @@ describe('processContentLoader characterization', () => {
     expect(metadata?.source).toBe('load-content');
   });
 
+  it('keeps path interpolation behavior stable for variable-based sources', async () => {
+    await fileSystem.mkdir('/project/docs', { recursive: true });
+    await fileSystem.writeFile('/project/docs/interpolated.md', '# Interpolated\n\nok');
+    env.setVariable(
+      'targetPath',
+      createSimpleTextVariable('targetPath', 'docs/interpolated.md', VARIABLE_SOURCE)
+    );
+
+    const node = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'VariableReference', identifier: 'targetPath' }],
+        raw: '@targetPath'
+      }
+    };
+
+    const rawResult = await processContentLoader(node as any, env);
+    const { data: result, metadata } = unwrapStructuredForTest<string>(rawResult);
+
+    expect(typeof result).toBe('string');
+    expect(result).toContain('Interpolated');
+    expect(metadata?.filename).toBe('interpolated.md');
+    expect(metadata?.source).toBe('load-content');
+  });
+
   it('keeps URL HTML conversion behavior stable through markdown output finalization', async () => {
     env.fetchURLWithMetadata = vi.fn().mockResolvedValue({
       content: [
@@ -199,6 +233,21 @@ describe('processContentLoader characterization', () => {
         type: 'path',
         segments: [{ type: 'Text', content: 'missing.md' }],
         raw: 'missing.md'
+      }
+    };
+
+    const result = await processContentLoader(node as any, env);
+    expect(result).toBeNull();
+  });
+
+  it('keeps nullable suffix behavior stable by stripping trailing ? before resolution', async () => {
+    const node = {
+      type: 'load-content',
+      optional: true,
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'missing.md?' }],
+        raw: 'missing.md?'
       }
     };
 

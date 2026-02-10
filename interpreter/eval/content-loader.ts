@@ -22,27 +22,18 @@ import { extractVariableValue } from '../utils/variable-resolution';
 import { isLoadContentResult } from '@core/types/load-content';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
+import { ContentSourceReconstruction } from './content-loader/source-reconstruction';
+import { PolicyAwareReadHelper } from './content-loader/policy-aware-read';
+
+const sourceReconstruction = new ContentSourceReconstruction();
+const policyAwareReadHelper = new PolicyAwareReadHelper();
 
 async function interpolateAndRecord(
   nodes: any,
   env: Environment,
   context: InterpolationContext = InterpolationContext.Default
 ): Promise<string> {
-  const { interpolate } = await import('../core/interpreter');
-  const descriptors: SecurityDescriptor[] = [];
-  const text = await interpolate(nodes, env, context, {
-    collectSecurityDescriptor: descriptor => {
-      if (descriptor) {
-        descriptors.push(descriptor);
-      }
-    }
-  });
-  if (descriptors.length > 0) {
-    const merged =
-      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
-    env.recordSecurityDescriptor(merged);
-  }
-  return text;
+  return sourceReconstruction.interpolateAndRecord(nodes, env, context);
 }
 
 async function readFileWithPolicy(
@@ -50,12 +41,7 @@ async function readFileWithPolicy(
   env: Environment,
   sourceLocation?: SourceLocation
 ): Promise<string> {
-  if (env.isURL(pathOrUrl)) {
-    return env.readFile(pathOrUrl);
-  }
-  const resolvedPath = await env.resolvePath(pathOrUrl);
-  enforceFilesystemAccess(env, 'read', resolvedPath, sourceLocation);
-  return env.readFile(resolvedPath);
+  return policyAwareReadHelper.read(pathOrUrl, env, sourceLocation);
 }
 /**
  * Check if a path contains glob patterns
@@ -116,9 +102,9 @@ export async function processContentLoader(node: any, env: Environment): Promise
                        source;
 
   if (actualSource.type === 'path') {
-    pathOrUrl = await reconstructPath(actualSource, env);
+    pathOrUrl = await sourceReconstruction.reconstructPath(actualSource, env);
   } else if (actualSource.type === 'url') {
-    pathOrUrl = reconstructUrl(actualSource);
+    pathOrUrl = sourceReconstruction.reconstructUrl(actualSource);
   } else {
     throw new MlldError(`Unknown content loader source type: ${actualSource.type}`, {
       sourceType: actualSource.type,
@@ -129,11 +115,9 @@ export async function processContentLoader(node: any, env: Environment): Promise
   // Check for nullable suffix (trailing ?) - makes glob return empty array instead of erroring
   // The ? suffix means "optional" - if no files match, return empty array rather than error
   // Must strip this before glob processing since ? is also a glob wildcard character
-  let isNullable = false;
-  if (pathOrUrl.endsWith('?')) {
-    isNullable = true;
-    pathOrUrl = pathOrUrl.slice(0, -1);
-  }
+  const nullableSource = sourceReconstruction.stripNullableSuffix(pathOrUrl);
+  let isNullable = nullableSource.isNullable;
+  pathOrUrl = nullableSource.pathOrUrl;
 
   // Detect glob pattern from the path (after stripping nullable suffix)
   const isGlob = isGlobPattern(pathOrUrl);
@@ -925,50 +909,6 @@ async function loadGlobPattern(
   // The caller will handle wrapping with wrapStructured if needed
   return results as LoadContentResult[] | string[];
 }
-
-/**
- * Reconstruct path string from path AST node
- */
-async function reconstructPath(pathNode: any, env: Environment): Promise<string> {
-  if (!pathNode.segments || !Array.isArray(pathNode.segments)) {
-    return (pathNode.raw || '').trim();
-  }
-
-  // If segments contain variable references, we need to interpolate
-  const hasVariables = pathNode.segments.some((seg: any) => seg.type === 'VariableReference');
-  
-  if (hasVariables) {
-    const interpolated = await interpolateAndRecord(pathNode.segments, env);
-    return interpolated.trim();
-  }
-
-  // No variables, simple reconstruction
-  const reconstructed = pathNode.segments.map((segment: any) => {
-    if (segment.type === 'Text') {
-      return segment.content;
-    } else if (segment.type === 'PathSeparator') {
-      return segment.value;
-    }
-    return '';
-  }).join('');
-  
-  // Trim the final path to handle trailing spaces before section markers
-  return reconstructed.trim();
-}
-
-/**
- * Reconstruct URL string from URL AST node
- */
-function reconstructUrl(urlNode: any): string {
-  if (urlNode.raw) {
-    return urlNode.raw;
-  }
-  
-  // Reconstruct from parts
-  const { protocol, host, path } = urlNode;
-  return `${protocol}://${host}${path || ''}`;
-}
-
 
 /**
  * Extract section name from section AST node
