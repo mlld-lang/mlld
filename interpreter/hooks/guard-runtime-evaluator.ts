@@ -27,6 +27,7 @@ import {
   resolveGuardValue
 } from './guard-materialization';
 import { cloneGuardContextSnapshot } from './guard-context-snapshot';
+import { attachGuardHelper } from './guard-helper-injection';
 
 interface BuildDecisionMetadataExtras {
   hint?: string | null;
@@ -374,21 +375,4 @@ export async function evaluateGuardRuntime(
     timing: 'before',
     metadata
   };
-}
-
-function attachGuardHelper(target: Variable, helper: GuardInputHelper): void {
-  const apply = (key: string, value: unknown) => {
-    Object.defineProperty(target as any, key, {
-      value,
-      enumerable: false,
-      configurable: true,
-      writable: false
-    });
-  };
-
-  apply('any', helper.any);
-  apply('all', helper.all);
-  apply('none', helper.none);
-  apply('totalTokens', helper.totalTokens);
-  apply('maxTokens', helper.maxTokens);
 }
