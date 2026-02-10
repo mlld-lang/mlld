@@ -19,15 +19,6 @@ import type { HookableNode } from '@core/types/hooks';
 import type { HookDecision } from '../../hooks/HookManager';
 import type { OperationContext } from '../../env/ContextManager';
 import { resolveWorkingDirectory } from '../../utils/working-directory';
-import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
-import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
-import {
-  applyEnvironmentDefaults,
-  buildEnvironmentOutputDescriptor,
-  executeProviderCommand,
-  resolveEnvironmentConfig,
-  resolveEnvironmentAuthSecrets
-} from '@interpreter/env/environment-provider';
 import {
   shouldAutoParsePipelineInput,
   wrapJsonLikeString
@@ -43,6 +34,7 @@ import {
   executeGuardPreflight
 } from './command-execution/preflight/guard-preflight';
 import { runPolicyPreflight } from './command-execution/preflight/policy-preflight';
+import { executeCommandHandler } from './command-execution/handlers/execute-command';
 
 export type RetrySignal = { value: 'retry'; hint?: any; from?: number };
 type CommandExecutionPrimitive = string | number | boolean | null | undefined;
@@ -214,116 +206,20 @@ export async function executeCommandVariable(
     : (workingDirectory ? { workingDirectory } : hookOptions?.executionContext);
 
   if (execDef.type === 'command' && execDef.commandTemplate) {
-    // Interpolate command template with parameters
-    const { interpolate } = await import('../../core/interpreter');
-    const { InterpolationContext } = await import('../../core/interpolation-context');
-    const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
-    const scopedEnvConfig = resolveEnvironmentConfig(execEnv, preDecision?.metadata);
-    const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, execEnv.getPolicySummary());
-    const outputDescriptor = buildEnvironmentOutputDescriptor(command, resolvedEnvConfig);
-    const mergedOutputDescriptor = outputPolicyDescriptor
-      ? outputDescriptor
-        ? env.mergeSecurityDescriptors(outputDescriptor, outputPolicyDescriptor)
-        : outputPolicyDescriptor
-      : outputDescriptor;
-
-    const applyOutputDescriptor = (value: CommandExecutionResult): CommandExecutionResult => {
-      if (!mergedOutputDescriptor) {
-        return value;
-      }
-      if (value && typeof value === 'object' && isStructuredValue(value)) {
-        const existing = extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true });
-        const merged = existing ? env.mergeSecurityDescriptors(existing, mergedOutputDescriptor) : mergedOutputDescriptor;
-        applySecurityDescriptorToStructuredValue(value, merged);
-        return value;
-      }
-      const wrapped = wrapExecResult(value);
-      applySecurityDescriptorToStructuredValue(wrapped, mergedOutputDescriptor);
-      return wrapped;
-    };
-
-    // Always pass pipeline input as stdin when available
-    const usingParts = await resolveUsingEnvParts(execEnv, execDef.withClause);
-    const envAuthSecrets = await resolveEnvironmentAuthSecrets(execEnv, resolvedEnvConfig);
-    const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
-    const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
-    const envInputTaint = descriptorToInputTaint(envInputDescriptor);
-    if (envInputTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint: envInputTaint,
-          opLabels,
-          exeLabels,
-          flowChannel: 'using',
-          command: parsedCommand.command
-        },
-        { env, sourceLocation: policyLocation }
-      );
-    }
-    let commandOutput: unknown;
-    if (resolvedEnvConfig?.provider) {
-      const providerResult = await executeProviderCommand({
-        env: execEnv,
-        providerRef: resolvedEnvConfig.provider,
-        config: resolvedEnvConfig,
-        command,
-        workingDirectory,
-        stdin: stdinInput,
-        vars: usingParts.vars,
-        secrets: {
-          ...envAuthSecrets,
-          ...usingParts.secrets
-        },
-        executionContext,
-        sourceLocation: commandVar?.mx?.definedAt ?? null,
-        directiveType: executionContext?.directiveType ?? 'exec'
-      });
-      commandOutput = providerResult.stdout ?? '';
-    } else {
-      const injectedEnv = {
-        ...envAuthSecrets,
-        ...usingParts.merged
-      };
-      const commandOptions =
-        stdinInput !== undefined || workingDirectory || Object.keys(injectedEnv).length > 0
-          ? {
-              ...(stdinInput !== undefined ? { input: stdinInput } : {}),
-              ...(workingDirectory ? { workingDirectory } : {}),
-              ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
-            }
-          : undefined;
-      commandOutput = await env.executeCommand(
-        command,
-        commandOptions as any,
-        executionContext
-      );
-    }
-
-    const withClause = execDef.withClause;
-    if (withClause) {
-      if (withClause.pipeline && withClause.pipeline.length > 0) {
-        const { processPipeline } = await import('./unified-processor');
-        const processed = await processPipeline({
-          value: commandOutput,
-          env,
-          pipeline: withClause.pipeline,
-          format: withClause.format as string | undefined,
-          isRetryable: false,
-          identifier: commandVar?.name,
-          location: commandVar.mx?.definedAt,
-          descriptorHint: mergedOutputDescriptor
-        });
-        if (processed === 'retry') {
-          return 'retry';
-        }
-        if (processed && typeof processed === 'object' && (processed as any).value === 'retry') {
-          return processed as RetrySignal;
-        }
-        commandOutput = processed;
-      }
-    }
-
-    return applyOutputDescriptor(finalizeResult(commandOutput));
+    const commandBranchResult = await executeCommandHandler({
+      env,
+      execEnv,
+      execDef,
+      commandVar,
+      stdinInput,
+      workingDirectory,
+      executionContext,
+      preDecision,
+      outputPolicyDescriptor,
+      policyLocation: operationContext?.location ?? hookOptions?.executionContext?.sourceLocation,
+      finalizeResult
+    });
+    return commandBranchResult.value as CommandExecutionResult;
   } else if (execDef.type === 'code' && execDef.codeTemplate) {
     // Special handling for mlld-when expressions
     if (execDef.language === 'mlld-when') {
