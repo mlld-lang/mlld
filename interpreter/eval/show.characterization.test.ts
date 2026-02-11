@@ -211,6 +211,33 @@ describe('evaluateShow (characterization)', () => {
     expect(asText(addResult.value)).toBe('hi');
   });
 
+  it('keeps showInvocation method-call resolution behavior stable', async () => {
+    const directives = parseDirectives(`
+/var @items = ["a", "b"]
+/show @items.includes("a")
+`);
+    await evaluateSetupDirectives(directives, env);
+    const showInvocation = directives.find(directive => directive.subtype === 'showInvocation');
+    expect(showInvocation).toBeDefined();
+
+    const result = await evaluateShow(toShowDirective(showInvocation), env);
+    expect(asText(result.value)).toBe('true');
+  });
+
+  it('keeps showInvocation non-executable error semantics stable', async () => {
+    const directives = parseDirectives(`
+/var @text = "value"
+/show @text("x")
+`);
+    await evaluateSetupDirectives(directives, env);
+    const showInvocation = directives.find(directive => directive.subtype === 'showInvocation');
+    expect(showInvocation).toBeDefined();
+
+    await expect(evaluateShow(toShowDirective(showInvocation), env)).rejects.toThrow(
+      'Variable text is not executable'
+    );
+  });
+
   it('keeps showExecInvocation and addExecInvocation behavior stable', async () => {
     const directives = parseDirectives(`
 /exe @echo(@value) = js { return value; }

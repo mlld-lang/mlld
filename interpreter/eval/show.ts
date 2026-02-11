@@ -1,20 +1,11 @@
 import * as fs from 'fs';
 import type { DirectiveNode } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
-import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { JSONFormatter } from '../core/json-formatter';
-import { formatForDisplay } from '../utils/display-formatter';
 import type { DataLabel } from '@core/types/security';
-import {
-  isTextLike,
-  isExecutable as isExecutableVar,
-  isObject,
-  isArray,
-  createSimpleTextVariable
-} from '@core/types/variable';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { convertEntriesToProperties } from '../utils/object-compat';
 import { logger } from '@core/utils/logger';
@@ -23,10 +14,14 @@ import {
   isStructuredValue
 } from '@interpreter/utils/structured-value';
 // Template normalization now handled in grammar - no longer needed here
-import { resolveDirectiveExecInvocation } from './directive-replay';
 import { evaluateShowVariable } from './show/show-variable';
 import { evaluateShowPath, evaluateShowPathSection } from './show/show-path-handlers';
 import { evaluateShowLoadContent, evaluateShowTemplate } from './show/show-template-load-handlers';
+import {
+  evaluateLegacyTemplateInvocation,
+  evaluateShowExecInvocation,
+  evaluateShowInvocation
+} from './show/show-invocation-handlers';
 import {
   buildShowResultDescriptor,
   emitShowEffectIfNeeded,
@@ -90,10 +85,6 @@ export async function evaluateShow(
   let resultValue: unknown | undefined;
   let content = '';
   let skipJsonFormatting = false;
-  const hasErrorMetadata = (val: unknown): boolean =>
-    isStructuredValue(val) &&
-    Array.isArray((val as any).metadata?.errors) &&
-    (val as any).metadata?.errors?.length > 0;
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
   let isStreamingShow = false;
   const descriptorCollector = new ShowDescriptorCollector(env);
@@ -139,196 +130,27 @@ export async function evaluateShow(
     });
     
   } else if (directive.subtype === 'addInvocation' || directive.subtype === 'showInvocation') {
-    // Handle unified invocation - could be template or exec
-    const baseInvocation = directive.values?.invocation;
-    if (!baseInvocation) {
-      throw new Error('Show invocation directive missing invocation');
-    }
-    isStreamingShow = Boolean(securityLabels?.includes('stream'));
-    const invocation = isStreamingShow
-      ? {
-          ...baseInvocation,
-          withClause: {
-            ...(baseInvocation.withClause || {}),
-            stream: true
-          }
-        }
-      : baseInvocation;
-    
-    // Check if this is a method call on an object or on an exec result
-    const commandRef = invocation.commandRef as any;
-    if (commandRef && (commandRef.objectReference || commandRef.objectSource)) {
-      // This is a method call like @list.includes() - evaluate directly
-      const result = await resolveDirectiveExecInvocation(directive, env, invocation);
-      
-      resultValue = result.value;
-
-      // Convert result to string appropriately
-      if (isStructuredValue(result.value)) {
-        if (result.value.type === 'array' && Array.isArray(result.value.data)) {
-          const cleaned = result.value.data.map(item => (isStructuredValue(item) ? asText(item) : item));
-          content = JSONFormatter.stringify(cleaned, { pretty: true });
-        } else {
-          content = asText(result.value);
-        }
-      } else if (typeof result.value === 'string') {
-        content = result.value;
-      } else if (result.value === null || result.value === undefined) {
-        content = '';
-      } else if (typeof result.value === 'object') {
-        // For objects and arrays, use JSON.stringify
-        content = JSON.stringify(result.value);
-      } else {
-        content = String(result.value);
-      }
-    } else {
-      // Normal invocation - look up the variable
-      const name = commandRef.name || commandRef.identifier?.[0]?.content;
-      if (!name) {
-        throw new Error('Add invocation missing name');
-      }
-      
-      // Look up what this invocation refers to
-      const extracted = getExtractedVariable(context, name);
-      const variable = extracted ?? env.getVariable(name);
-      if (!variable) {
-        throw new Error(`Variable not found: ${name}`);
-      }
-      
-      // Handle based on variable type
-      if (isExecutableVar(variable)) {
-        // This is an executable invocation - use exec-invocation handler
-        const result = await resolveDirectiveExecInvocation(directive, env, invocation);
-        
-        resultValue = result.value;
-
-        // Convert result to string appropriately
-        if (isStructuredValue(result.value)) {
-          if (result.value.type === 'array' && Array.isArray(result.value.data)) {
-            const cleaned = result.value.data.map(item => (isStructuredValue(item) ? asText(item) : item));
-            content = JSONFormatter.stringify(cleaned, { pretty: true });
-          } else {
-            content = asText(result.value);
-          }
-        } else if (typeof result.value === 'string') {
-          content = result.value;
-        } else if (result.value === null || result.value === undefined) {
-          content = '';
-        } else if (typeof result.value === 'object') {
-          // For objects and arrays, use JSON.stringify
-          content = JSON.stringify(result.value);
-        } else {
-          content = String(result.value);
-        }
-      } else {
-        throw new Error(`Variable ${name} is not executable (type: ${variable.type})`);
-      }
+    const invocationResult = await evaluateShowInvocation({
+      directive,
+      env,
+      context,
+      collectInterpolatedDescriptor,
+      securityLabels
+    });
+    content = invocationResult.content;
+    resultValue = invocationResult.resultValue;
+    if (invocationResult.isStreamingShow) {
+      isStreamingShow = true;
     }
     
   } else if (directive.subtype === 'addTemplateInvocation') {
-    // Handle old-style template invocation (for backward compatibility)
-    const templateNameNodes = directive.values?.templateName;
-    if (!templateNameNodes || templateNameNodes.length === 0) {
-      throw new Error('Add template invocation missing template name');
-    }
-    
-    // Get the template name
-    const templateName = await interpolate(templateNameNodes, env, undefined, {
-      collectSecurityDescriptor: collectInterpolatedDescriptor
+    const templateInvocationResult = await evaluateLegacyTemplateInvocation({
+      directive,
+      env,
+      collectInterpolatedDescriptor
     });
-    
-    // Look up the template
-    const template = env.getVariable(templateName);
-    if (!template || template.type !== 'executable') {
-      throw new Error(`Template not found: ${templateName}`);
-    }
-    
-    const definition = template.value;
-    if (definition.type !== 'template') {
-      throw new Error(`Variable ${templateName} is not a template`);
-    }
-    
-    // Get the arguments
-    const args = directive.values?.arguments || [];
-    
-    // Check parameter count
-    if (args.length !== definition.paramNames.length) {
-      throw new Error(`Template ${templateName} expects ${definition.paramNames.length} parameters, got ${args.length}`);
-    }
-    
-    // Create a child environment with the template parameters
-    const childEnv = env.createChild();
-    
-    // Bind arguments to parameters
-    for (let i = 0; i < definition.paramNames.length; i++) {
-      const paramName = definition.paramNames[i];
-      const argValue = args[i];
-      
-      // Convert argument to string value
-      let value: string;
-      if (typeof argValue === 'object' && argValue.type === 'Text') {
-        // Handle Text nodes from the AST
-        value = argValue.content || '';
-      } else if (typeof argValue === 'object' && argValue.type === 'VariableReference') {
-        // Handle variable references like @userName
-        const varName = argValue.identifier;
-        const variable = env.getVariable(varName);
-        if (!variable) {
-          throw new Error(`Variable not found: ${varName}`);
-        }
-        // Get value based on variable type
-        if (isTextLike(variable)) {
-          value = variable.value;
-        } else if (isObject(variable) || isArray(variable)) {
-          value = JSON.stringify(variable.value);
-        } else {
-          value = String(variable.value);
-        }
-      } else if (typeof argValue === 'object' && argValue.type === 'string') {
-        // Legacy format support
-        value = argValue.value;
-      } else if (typeof argValue === 'object' && argValue.type === 'variable') {
-        // Legacy format - handle variable references
-        const varRef = argValue.value;
-        const varName = varRef.identifier;
-        const variable = env.getVariable(varName);
-        if (!variable) {
-          throw new Error(`Variable not found: ${varName}`);
-        }
-        // Get value based on variable type
-        if (isTextLike(variable)) {
-          value = variable.value;
-        } else if (isObject(variable) || isArray(variable)) {
-          value = JSON.stringify(variable.value);
-        } else {
-          value = String(variable.value);
-        }
-      } else {
-        value = String(argValue);
-      }
-      
-      // Create a text variable for the parameter
-      const source = {
-        directive: 'var' as const,
-        syntax: 'quoted' as const,
-        hasInterpolation: false,
-        isMultiLine: false
-      };
-      const variable = createSimpleTextVariable(paramName, value, source);
-      childEnv.setParameterVariable(paramName, variable);
-    }
-    
-    // Interpolate the template content with the child environment
-    // Use definition.template for modern executables, definition.templateContent for legacy
-    const templateNodes = definition.template || definition.templateContent;
-    if (!templateNodes) {
-      throw new Error(`Template ${templateName} has no template content`);
-    }
-    content = await interpolate(templateNodes, childEnv, undefined, {
-      collectSecurityDescriptor: collectInterpolatedDescriptor
-    });
-    
-    // Template normalization is now handled in the grammar at parse time
+    content = templateInvocationResult.content;
+    resultValue = templateInvocationResult.resultValue;
     
   } else if (directive.subtype === 'addForeach') {
     // Handle foreach expressions for direct output
@@ -349,33 +171,15 @@ export async function evaluateShow(
     content = await evaluateForeachAsText(foreachExpression, env, options);
     
   } else if (directive.subtype === 'addExecInvocation' || directive.subtype === 'showExecInvocation') {
-    // Handle exec invocation nodes (both legacy add and new show subtypes)
-    const execInvocation = directive.values?.execInvocation;
-    if (!execInvocation) {
-      throw new Error('Show exec invocation directive missing exec invocation');
-    }
-    
-    // Evaluate the exec invocation
-    const result = await resolveDirectiveExecInvocation(directive, env, execInvocation);
-    resultValue = result.value;
-
-    // Convert result to string appropriately
-    if (isStructuredValue(result.value)) {
-      if (hasErrorMetadata(result.value)) {
-        content = asText(result.value);
-        skipJsonFormatting = true;
-      } else {
-        content = formatForDisplay(result.value, { pretty: false });
-      }
-    } else if (typeof result.value === 'string') {
-      content = result.value;
-    } else if (result.value === null || result.value === undefined) {
-      content = '';
-    } else if (typeof result.value === 'object') {
-      // For objects and arrays, use JSON.stringify
-      content = JSON.stringify(result.value);
-    } else {
-      content = String(result.value);
+    const execInvocationResult = await evaluateShowExecInvocation({
+      directive,
+      env,
+      collectInterpolatedDescriptor
+    });
+    content = execInvocationResult.content;
+    resultValue = execInvocationResult.resultValue;
+    if (execInvocationResult.skipJsonFormatting) {
+      skipJsonFormatting = true;
     }
     
   } else if (directive.subtype === 'showForeach') {
@@ -623,23 +427,3 @@ export async function evaluateShow(
 }
 
 export { applyHeaderTransform, extractSection };
-
-function getExtractedVariable(
-  context: EvaluationContext | undefined,
-  name: string
-): Variable | undefined {
-  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
-    return undefined;
-  }
-  for (const candidate of context.extractedInputs) {
-    if (
-      candidate &&
-      typeof candidate === 'object' &&
-      'name' in candidate &&
-      (candidate as Variable).name === name
-    ) {
-      return candidate as Variable;
-    }
-  }
-  return undefined;
-}
