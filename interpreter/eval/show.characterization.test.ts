@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DirectiveNode } from '@core/types';
 import { parseSync } from '@grammar/parser';
-import { createSimpleTextVariable } from '@core/types/variable';
+import { createObjectVariable, createSimpleTextVariable } from '@core/types/variable';
 import { Environment } from '../env/Environment';
 import { evaluate } from '../core/interpreter';
 import { evaluateShow } from './show';
@@ -109,6 +109,57 @@ describe('evaluateShow (characterization)', () => {
     const result = await evaluateShow(toShowDirective(showDirective), env);
     expect(isStructuredValue(result.value)).toBe(true);
     expect(asText(result.value)).toBe('ADA');
+  });
+
+  it('keeps template-variable pipeline behavior stable', async () => {
+    const [pipelineSourceDirective] = parseDirectives('/show @msg | @upper');
+    const pipeline = (pipelineSourceDirective as any).values.invocation.withClause.pipeline;
+    const showDirective = createShowDirective('showVariable', {
+      invocation: {
+        type: 'VariableReferenceWithTail',
+        variable: {
+          type: 'TemplateVariable',
+          identifier: '__template__',
+          content: [textNode('mixedCase')]
+        },
+        withClause: { pipeline }
+      }
+    });
+
+    const result = await evaluateShow(showDirective, env);
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(asText(result.value)).toBe('MIXEDCASE');
+  });
+
+  it('keeps namespace display formatting behavior stable', async () => {
+    const namespaceSource = {
+      directive: 'var' as const,
+      syntax: 'object' as const,
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    const namespace = createObjectVariable(
+      'tools',
+      {
+        fm: { title: 'Utilities' },
+        answer: 42,
+        greet: { __executable: true, paramNames: ['name'] }
+      },
+      false,
+      namespaceSource
+    );
+    namespace.internal = { ...(namespace.internal || {}), isNamespace: true };
+    env.setVariable('tools', namespace);
+
+    const [showDirective] = parseDirectives('/show @tools');
+    expect(showDirective?.subtype).toBe('showVariable');
+
+    const result = await evaluateShow(toShowDirective(showDirective), env);
+    const displayed = asText(result.value);
+    expect(displayed).toContain('"frontmatter"');
+    expect(displayed).toContain('"exports"');
+    expect(displayed).toContain('"answer": 42');
+    expect(displayed).toContain('<function(name)>');
   });
 
   it('keeps legacy showPath and showPathSection handling stable', async () => {
