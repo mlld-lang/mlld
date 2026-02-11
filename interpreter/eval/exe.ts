@@ -1,4 +1,4 @@
-import type { BaseMlldNode, DirectiveNode, ExeBlockNode, ExeReturnNode, TextNode } from '@core/types';
+import type { BaseMlldNode, DirectiveNode, ExeBlockNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable, ProseExecutable } from '@core/types/executable';
@@ -20,9 +20,6 @@ import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadow
 import { isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
-import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
-import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
-import { VariableImporter } from './import/VariableImporter';
 import {
   createCapabilityContext,
   makeSecurityDescriptor,
@@ -33,132 +30,15 @@ import { asData, asText, isStructuredValue, extractSecurityDescriptor } from '..
 import { InterpolationContext } from '../core/interpolation-context';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { maybeAutosignVariable } from './auto-sign';
-import { createExeReturnControl, isExeReturnControl, resolveExeReturnValue } from './exe-return';
 import {
   extractParamNames,
   extractParamTypes,
   interpolateAndRecord,
-  isLoopControlValue,
   parseTemplateFileNodes,
   resolveExeDescription
 } from './exe/definition-helpers';
-
-/**
- * Evaluate an exe block sequentially with local scope for let/+= assignments.
- */
-export interface ExeBlockOptions {
-  scope?: 'function' | 'block';
-}
-
-export async function evaluateExeBlock(
-  block: ExeBlockNode,
-  env: Environment,
-  args: Record<string, unknown> = {},
-  options: ExeBlockOptions = {}
-): Promise<EvalResult> {
-  const scope = options.scope ?? 'function';
-  const parentExeContext = env.getExecutionContext('exe') as
-    | { scope?: 'function' | 'block'; hasFunctionBoundary?: boolean }
-    | undefined;
-  const hasFunctionBoundary =
-    scope === 'function'
-      ? true
-      : Boolean(parentExeContext?.hasFunctionBoundary || parentExeContext?.scope === 'function');
-  const shouldBubbleReturn = scope === 'block' && hasFunctionBoundary;
-
-  let blockEnv = env.createChild();
-
-  if (args && Object.keys(args).length > 0) {
-    const importer = new VariableImporter();
-    for (const [param, value] of Object.entries(args)) {
-      const variable = importer.createVariableFromValue(
-        param,
-        value,
-        'exe-param',
-        undefined,
-        { env: blockEnv }
-      );
-      blockEnv.setVariable(param, variable);
-    }
-  }
-
-  blockEnv.pushExecutionContext('exe', { allowReturn: true, scope, hasFunctionBoundary });
-  try {
-    for (const stmt of block.values?.statements ?? []) {
-      if (isLetAssignment(stmt)) {
-        blockEnv = await evaluateLetAssignment(stmt, blockEnv);
-        continue;
-      }
-      if (isAugmentedAssignment(stmt)) {
-        blockEnv = await evaluateAugmentedAssignment(stmt, blockEnv);
-        continue;
-      }
-      if (stmt.type === 'ExeReturn') {
-        const returnResult = await resolveExeReturnValue(stmt as ExeReturnNode, blockEnv);
-        blockEnv = returnResult.env;
-        env.mergeChild(blockEnv);
-        if (shouldBubbleReturn) {
-          return { value: createExeReturnControl(returnResult.value), env };
-        }
-        return { value: returnResult.value, env };
-      }
-
-      // WhenExpression: treat non-null, non-side-effect value as early return
-      if (stmt.type === 'WhenExpression') {
-        const { evaluateWhenExpression } = await import('./when-expression');
-        const whenResult = await evaluateWhenExpression(stmt as any, blockEnv);
-        blockEnv = whenResult.env || blockEnv;
-        if (whenResult.value !== null && whenResult.value !== undefined) {
-          if (typeof whenResult.value === 'object' && (whenResult.value as any).__whenEffect) {
-            continue;
-          }
-          // Unwrap ExeReturnControl from block-form actions like `when @cond => [=> value]`
-          const value = isExeReturnControl(whenResult.value) ? whenResult.value.value : whenResult.value;
-          env.mergeChild(blockEnv);
-          if (shouldBubbleReturn) {
-            return { value: createExeReturnControl(value), env };
-          }
-          return { value, env };
-        }
-        continue;
-      }
-
-      const result = await evaluate(stmt, blockEnv);
-      blockEnv = result.env || blockEnv;
-      if (isExeReturnControl(result.value)) {
-        env.mergeChild(blockEnv);
-        if (shouldBubbleReturn) {
-          return { value: result.value, env };
-        }
-        return { value: result.value.value, env };
-      }
-      const hasLoopContext = Boolean(
-        blockEnv.getExecutionContext('loop') || blockEnv.getExecutionContext('while') || blockEnv.getExecutionContext('for')
-      );
-      if (hasLoopContext && isLoopControlValue(result.value)) {
-        env.mergeChild(blockEnv);
-        return { value: result.value, env };
-      }
-    }
-
-    let returnValue: unknown = undefined;
-    const returnNode = block.values?.return;
-    if (returnNode) {
-      const returnResult = await resolveExeReturnValue(returnNode, blockEnv);
-      returnValue = returnResult.value;
-      blockEnv = returnResult.env;
-      if (shouldBubbleReturn) {
-        env.mergeChild(blockEnv);
-        return { value: createExeReturnControl(returnValue), env };
-      }
-    }
-
-    env.mergeChild(blockEnv);
-    return { value: returnValue, env };
-  } finally {
-    blockEnv.popExecutionContext('exe');
-  }
-}
+export { evaluateExeBlock } from './exe/block-execution';
+export type { ExeBlockOptions } from './exe/block-execution';
 
 // Parameter conflict checking removed - parameters are allowed to shadow outer scope variables
 // This is consistent with standard function parameter behavior and mlld's immutability model
