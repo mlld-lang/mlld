@@ -13,7 +13,6 @@ export interface WhenConditionRuntime {
   isDeniedLiteralNode(node: BaseMlldNode | undefined): boolean;
   compareValues(expressionValue: unknown, conditionValue: unknown, env: Environment): Promise<boolean>;
   isTruthy(value: unknown): boolean;
-  preview(value: unknown, max?: number): string;
 }
 
 export async function evaluateCondition(
@@ -87,7 +86,7 @@ async function evaluateUnifiedExpressionCondition(
           count: 1,
           firstExample: {
             conditionIndex: 0,
-            message: `op=${op}, left=${runtime.preview(lhs)}, right=${runtime.preview(rhs)}`
+            message: `op=${op}, left=${preview(lhs)}, right=${preview(rhs)}`
           }
         }
       ]
@@ -241,4 +240,18 @@ async function evaluateExecResultTruthiness(
 async function resolveTruthinessValue(value: unknown, env: Environment): Promise<unknown> {
   const { resolveValue, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
   return resolveValue(value, env, ResolutionContext.Truthiness);
+}
+
+function preview(value: unknown, max = 60): string {
+  try {
+    if (typeof value === 'string') return value.length > max ? value.slice(0, max) + '…' : value;
+    if (typeof value === 'number' || typeof value === 'boolean' || value === null || value === undefined) return String(value);
+    const serialized = JSON.stringify(value);
+    if (!serialized) {
+      return String(value);
+    }
+    return serialized.length > max ? `${serialized.slice(0, max)}…` : serialized;
+  } catch {
+    return String(value);
+  }
 }

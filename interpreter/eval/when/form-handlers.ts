@@ -16,7 +16,6 @@ export interface WhenFormHandlerRuntime {
   matcherRuntime: WhenMatcherRuntime;
   evaluateLetAssignment(entry: any, env: Environment): Promise<Environment>;
   evaluateAugmentedAssignment(entry: any, env: Environment): Promise<Environment>;
-  containsNoneWithOperator(node: any): boolean;
 }
 
 export async function evaluateWhenSimpleForm(
@@ -26,7 +25,7 @@ export async function evaluateWhenSimpleForm(
 ): Promise<EvalResult> {
   const conditionNodes = Array.isArray(node.values.condition) ? node.values.condition : [node.values.condition];
   for (const cond of conditionNodes) {
-    if (runtime.containsNoneWithOperator(cond)) {
+    if (containsNoneWithOperator(cond)) {
       throw new Error('The \'none\' keyword cannot be used with operators');
     }
   }
@@ -238,4 +237,12 @@ export async function evaluateWhenBlockForm(
   }
 
   return { value: result.value, env };
+}
+
+function containsNoneWithOperator(node: any): boolean {
+  if (!node) return false;
+  if (node.type === 'UnaryExpression' && isNoneCondition(node.operand)) return true;
+  if (node.type === 'BinaryExpression' && (isNoneCondition(node.left) || isNoneCondition(node.right))) return true;
+  if (node.type === 'ComparisonExpression' && (isNoneCondition(node.left) || isNoneCondition(node.right))) return true;
+  return false;
 }

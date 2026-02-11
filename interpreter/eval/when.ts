@@ -14,7 +14,7 @@ import {
   evaluateWhenBlockForm,
   type WhenFormHandlerRuntime
 } from './when/form-handlers';
-import { isNoneCondition, type WhenMatcherRuntime } from './when/match-engines';
+import type { WhenMatcherRuntime } from './when/match-engines';
 import {
   evaluateCondition as evaluateConditionRuntime,
   type WhenConditionRuntime
@@ -23,16 +23,6 @@ import { compareValues, isTruthy, isDeniedLiteralNode } from './when/condition-u
 
 export { evaluateLetAssignment, evaluateAugmentedAssignment } from './when/assignment-support';
 export { conditionTargetsDenied } from './when/condition-utils';
-
-function preview(value: unknown, max = 60): string {
-  try {
-    if (typeof value === 'string') return value.length > max ? value.slice(0, max) + '…' : value;
-    if (typeof value === 'number' || typeof value === 'boolean' || value === null || value === undefined) return String(value);
-    return JSON.stringify(value)?.slice(0, max) + (JSON.stringify(value)?.length! > max ? '…' : '');
-  } catch {
-    return String(value);
-  }
-}
 
 /**
  * Evaluates a @when directive.
@@ -53,8 +43,7 @@ export async function evaluateWhen(
   const runtime: WhenFormHandlerRuntime = {
     matcherRuntime,
     evaluateLetAssignment,
-    evaluateAugmentedAssignment,
-    containsNoneWithOperator
+    evaluateAugmentedAssignment
   };
 
   if (isWhenSimpleNode(node)) {
@@ -84,19 +73,7 @@ export async function evaluateCondition(
     evaluateNode: evaluate,
     isDeniedLiteralNode,
     compareValues,
-    isTruthy,
-    preview
+    isTruthy
   };
   return evaluateConditionRuntime(condition, env, runtime, variableName);
-}
-
-/**
- * Check if a node contains 'none' wrapped in an operator expression
- */
-function containsNoneWithOperator(node: any): boolean {
-  if (!node) return false;
-  if (node.type === 'UnaryExpression' && isNoneCondition(node.operand)) return true;
-  if (node.type === 'BinaryExpression' && (isNoneCondition(node.left) || isNoneCondition(node.right))) return true;
-  if (node.type === 'ComparisonExpression' && (isNoneCondition(node.left) || isNoneCondition(node.right))) return true;
-  return false;
 }
