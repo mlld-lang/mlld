@@ -8,10 +8,9 @@ import {
   VariableSource,
   VariableMetadataUtils,
   createSimpleTextVariable,
-  createStructuredValueVariable,
 } from '@core/types/variable';
 import { createCapabilityContext } from '@core/types/security';
-import { isStructuredValue, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
+import { extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { maybeAutosignVariable } from './auto-sign';
 import { isExeReturnControl } from './exe-return';
@@ -24,6 +23,7 @@ import { createRhsContentEvaluator } from './var/rhs-content';
 import { createReferenceEvaluator } from './var/reference-evaluator';
 import { createExecutionEvaluator } from './var/execution-evaluator';
 import { createRhsDispatcher } from './var/rhs-dispatcher';
+import { createPipelineFinalizer } from './var/pipeline-finalizer';
 import { normalizeToolCollection } from './var/tool-scope';
 import { createVariableBuilder } from './var/variable-builder';
 
@@ -284,69 +284,18 @@ export async function prepareVarAssignment(
     toolCollection
   });
 
-  // Use unified pipeline processor
-  const { processPipeline } = await import('./pipeline/unified-processor');
-  
-  // Skip pipeline processing if:
-  // 1. This is an ExecInvocation with a withClause (already processed by evaluateExecInvocation)
-  // 2. This is a VariableReference with pipes (already processed above around line 406)
-  // 3. This is a load-content node with pipes (already processed by content-loader)
-  let result = variable;
-  const skipPipeline = (valueNode && valueNode.type === 'ExecInvocation' && valueNode.withClause) ||
-                       (valueNode && valueNode.type === 'VariableReference' && valueNode.pipes) ||
-                       (valueNode && valueNode.type === 'load-content' && valueNode.pipes);
-  // If the command was executed via evaluateRun (stdin/pipeline already applied),
-  // do not run pipeline processing again.
-  const handledByRun = (valueNode && valueNode.type === 'command')
-    && !!(directive.values?.withClause || directive.meta?.withClause);
-  
-  if (!skipPipeline && !handledByRun) {
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[var.ts] Calling processPipeline:', {
-        identifier,
-        variableType: variable.type,
-        hasCtx: !!variable.mx,
-        hasInternal: !!variable.internal,
-        isRetryable: variable.internal?.isRetryable || false,
-        hasSourceFunction: !!(variable.internal?.sourceFunction),
-        sourceNodeType: (variable.internal?.sourceFunction as any)?.type
-      });
-    }
-    // Process through unified pipeline (handles detection, validation, execution)
-    result = await processPipeline({
-      value: variable,
-      env,
-      node: valueNode,
-      directive,
-      identifier,
-      location: directive.location,
-      isRetryable: variable.internal?.isRetryable || false
-    });
-  }
-  
-  // If pipeline was executed, result will be a string
-  // Create new variable with the result
-    if (typeof result === 'string' && result !== variable.value) {
-      const existingSecurity = extractSecurityFromValue(variable);
-      const options = applySecurityOptions(
-        {
-          mx: { ...(variable.mx ?? {}), ...baseCtx },
-          internal: { ...(variable.internal ?? {}), ...baseInternal }
-        },
-        existingSecurity
-      );
-    variable = createSimpleTextVariable(identifier, result, source, options);
-  } else if (isStructuredValue(result)) {
-    const existingSecurity = extractSecurityFromValue(variable);
-    const options = applySecurityOptions(
-      {
-        mx: { ...(variable.mx ?? {}), ...baseCtx },
-        internal: { ...(variable.internal ?? {}), ...baseInternal, isPipelineResult: true }
-      },
-      existingSecurity
-    );
-    variable = createStructuredValueVariable(identifier, result, source, options);
-  }
+  const pipelineFinalizer = createPipelineFinalizer({
+    applySecurityOptions,
+    baseCtx,
+    baseInternal,
+    directive,
+    env,
+    extractSecurityFromValue,
+    identifier,
+    source,
+    valueNode
+  });
+  variable = await pipelineFinalizer.process(variable);
   
   const finalVar = finalizeVariable(variable);
   
