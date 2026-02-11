@@ -5,17 +5,14 @@ import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
 import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { MlldCommandExecutionError, MlldSecurityError, MlldInterpreterError } from '@core/errors';
-import type { OperationContext } from '../env/ContextManager';
-import type { DataLabel, SecurityDescriptor } from '@core/types/security';
+import { MlldCommandExecutionError, MlldInterpreterError } from '@core/errors';
+import type { SecurityDescriptor } from '@core/types/security';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { deriveCommandTaint } from '@core/security/taint';
-import { getOperationLabels, getOperationSources, parseCommand } from '@core/policy/operation-labels';
-import { evaluateCapabilityAccess, evaluateCommandAccess } from '@core/policy/guards';
+import { parseCommand } from '@core/policy/operation-labels';
 import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
 import type { SecurityManager } from '@security/SecurityManager';
 import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
-import type { Variable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
 import { logger } from '@core/utils/logger';
 import { FormatAdapterSink } from './pipeline/stream-sinks/format-adapter';
@@ -35,7 +32,7 @@ import { coerceValueForStdin } from '../utils/shell-value';
 import { resolveDirectiveExecInvocation } from './directive-replay';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
-import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
+import { mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import {
@@ -57,6 +54,15 @@ import {
   getPreExtractedRunDescriptor,
   getPreExtractedRunStdin
 } from './run-modules/run-pre-extracted-inputs';
+import {
+  applyRunOperationContext,
+  buildRunCapabilityOperationUpdate,
+  buildRunCommandOperationUpdate,
+  checkRunInputLabelFlow,
+  deriveRunOutputPolicyDescriptor,
+  enforceRunCapabilityPolicy,
+  enforceRunCommandPolicy
+} from './run-modules/run-policy-context';
 
 /**
  * Evaluate a stdin expression and coerce it into text for command execution.
@@ -169,13 +175,6 @@ export async function evaluateRun(
     }
     outputValue = wrapped;
     outputText = asText(wrapped as any);
-  };
-
-  const updateOperationContext = (update: Partial<OperationContext>): void => {
-    if (context?.operationContext) {
-      Object.assign(context.operationContext, update);
-    }
-    env.updateOpContext(update);
   };
 
   const policyChecksEnabled = !context?.policyChecked;
@@ -354,38 +353,19 @@ export async function evaluateRun(
           });
 
     const parsedCommand = parseCommand(command);
-    const opLabels = getOperationLabels({
-      type: 'cmd',
-      command: parsedCommand.command,
-      subcommand: parsedCommand.subcommand
-    });
-    const opSources = getOperationSources({
-      type: 'cmd',
-      command: parsedCommand.command,
-      subcommand: parsedCommand.subcommand
-    });
-    const opMetadata = { ...(context?.operationContext?.metadata ?? {}) } as Record<string, unknown>;
-    opMetadata.commandPreview = command;
-    const opUpdate: Partial<OperationContext> = { opLabels, command, metadata: opMetadata };
-    if (opSources.length > 0) {
-      opUpdate.sources = opSources;
-    }
-    updateOperationContext(opUpdate);
+    const opUpdate = buildRunCommandOperationUpdate(
+      command,
+      (context?.operationContext?.metadata ?? {}) as Record<string, unknown>
+    );
+    applyRunOperationContext(env, context, opUpdate);
+    const opLabels = (opUpdate.opLabels ?? []) as string[];
 
-    const policySummary = env.getPolicySummary();
-    if (policySummary) {
-      const decision = evaluateCommandAccess(policySummary, command);
-      if (!decision.allowed) {
-        throw new MlldSecurityError(
-          decision.reason ?? `Command '${decision.commandName}' denied by policy`,
-          {
-            code: 'POLICY_CAPABILITY_DENIED',
-            sourceLocation: directive.location,
-            env
-          }
-        );
-      }
-    }
+    enforceRunCommandPolicy(
+      env.getPolicySummary(),
+      command,
+      env,
+      directive.location ?? undefined
+    );
 
     const runArgDescriptor =
       argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
@@ -393,19 +373,17 @@ export async function evaluateRun(
       commandDescriptor && runArgDescriptor
         ? env.mergeSecurityDescriptors(commandDescriptor, runArgDescriptor)
         : commandDescriptor || runArgDescriptor;
-    const argTaint = descriptorToInputTaint(commandInputDescriptor);
-    if (policyChecksEnabled && argTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint: argTaint,
-          opLabels,
-          exeLabels: Array.from(env.getEnclosingExeLabels()),
-          flowChannel: 'arg',
-          command: parsedCommand.command
-        },
-        { env, sourceLocation: directive.location }
-      );
-    }
+    const argTaint = checkRunInputLabelFlow({
+      descriptor: commandInputDescriptor,
+      policyEnforcer,
+      policyChecksEnabled,
+      opLabels,
+      exeLabels: Array.from(env.getEnclosingExeLabels()),
+      flowChannel: 'arg',
+      command: parsedCommand.command,
+      env,
+      sourceLocation: directive.location ?? undefined
+    });
 
     const workingDirectory = await resolveWorkingDirectory(
       (directive.values as any)?.workingDir,
@@ -526,37 +504,33 @@ export async function evaluateRun(
       }
     }
 
-    const stdinTaint = descriptorToInputTaint(stdinDescriptor);
-    if (policyChecksEnabled && stdinTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint: stdinTaint,
-          opLabels,
-          exeLabels: Array.from(env.getEnclosingExeLabels()),
-          flowChannel: 'stdin',
-          command: parsedCommand.command
-        },
-        { env, sourceLocation: directive.location }
-      );
-    }
+    const stdinTaint = checkRunInputLabelFlow({
+      descriptor: stdinDescriptor,
+      policyEnforcer,
+      policyChecksEnabled,
+      opLabels,
+      exeLabels: Array.from(env.getEnclosingExeLabels()),
+      flowChannel: 'stdin',
+      command: parsedCommand.command,
+      env,
+      sourceLocation: directive.location ?? undefined
+    });
 
     const usingParts = await resolveUsingEnvParts(env, withClause);
     const envAuthSecrets = await resolveEnvironmentAuthSecrets(env, resolvedEnvConfig);
     const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
     const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
-    const envInputTaint = descriptorToInputTaint(envInputDescriptor);
-    if (policyChecksEnabled && envInputTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint: envInputTaint,
-          opLabels,
-          exeLabels: Array.from(env.getEnclosingExeLabels()),
-          flowChannel: 'using',
-          command: parsedCommand.command
-        },
-        { env, sourceLocation: directive.location }
-      );
-    }
+    const envInputTaint = checkRunInputLabelFlow({
+      descriptor: envInputDescriptor,
+      policyEnforcer,
+      policyChecksEnabled,
+      opLabels,
+      exeLabels: Array.from(env.getEnclosingExeLabels()),
+      flowChannel: 'using',
+      command: parsedCommand.command,
+      env,
+      sourceLocation: directive.location ?? undefined
+    });
     if (resolvedEnvConfig?.provider) {
       const providerResult = await executeProviderCommand({
         env,
@@ -667,44 +641,33 @@ export async function evaluateRun(
     const opType = resolveRunCodeOpType(language);
     let opLabels: string[] = [];
     if (opType) {
-      opLabels = getOperationLabels({ type: opType });
-      const opSources = getOperationSources({ type: opType });
-      const opUpdate: Partial<OperationContext> = { opLabels, subtype: opType };
-      if (opSources.length > 0) {
-        opUpdate.sources = opSources;
-      }
-      updateOperationContext(opUpdate);
+      const opUpdate = buildRunCapabilityOperationUpdate(opType, {
+        includeSubtype: true,
+        includeSources: true
+      });
+      applyRunOperationContext(env, context, opUpdate);
+      opLabels = (opUpdate.opLabels ?? []) as string[];
     }
     if (opType) {
-      const policySummary = env.getPolicySummary();
-      if (policySummary) {
-        const decision = evaluateCapabilityAccess(policySummary, opType);
-        if (!decision.allowed) {
-          throw new MlldSecurityError(
-            decision.reason ?? `Capability '${opType}' denied by policy`,
-            {
-              code: 'POLICY_CAPABILITY_DENIED',
-              sourceLocation: directive.location,
-              env
-            }
-          );
-        }
-      }
+      enforceRunCapabilityPolicy(
+        env.getPolicySummary(),
+        opType,
+        env,
+        directive.location ?? undefined
+      );
     }
     const inputDescriptor =
       argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
-    const inputTaint = descriptorToInputTaint(inputDescriptor);
-    if (policyChecksEnabled && opType && inputTaint.length > 0) {
-      policyEnforcer.checkLabelFlow(
-        {
-          inputTaint,
-          opLabels,
-          exeLabels: Array.from(env.getEnclosingExeLabels()),
-          flowChannel: 'arg'
-        },
-        { env, sourceLocation: directive.location }
-      );
-    }
+    const inputTaint = checkRunInputLabelFlow({
+      descriptor: inputDescriptor,
+      policyEnforcer,
+      policyChecksEnabled: policyChecksEnabled && Boolean(opType),
+      opLabels,
+      exeLabels: Array.from(env.getEnclosingExeLabels()),
+      flowChannel: 'arg',
+      env,
+      sourceLocation: directive.location ?? undefined
+    });
     setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
       return await env.executeCode(
         code,
@@ -956,58 +919,38 @@ export async function evaluateRun(
       );
 
       const parsedCommand = parseCommand(command);
-      const opLabels = getOperationLabels({
-        type: 'cmd',
-        command: parsedCommand.command,
-        subcommand: parsedCommand.subcommand
-      });
-      const opSources = getOperationSources({
-        type: 'cmd',
-        command: parsedCommand.command,
-        subcommand: parsedCommand.subcommand
-      });
-      const opMetadata = { ...(context?.operationContext?.metadata ?? {}) } as Record<string, unknown>;
-      opMetadata.commandPreview = command;
-      const opUpdate: Partial<OperationContext> = { opLabels, command, metadata: opMetadata };
-      if (opSources.length > 0) {
-        opUpdate.sources = opSources;
-      }
-      updateOperationContext(opUpdate);
+      const opUpdate = buildRunCommandOperationUpdate(
+        command,
+        (context?.operationContext?.metadata ?? {}) as Record<string, unknown>
+      );
+      applyRunOperationContext(env, context, opUpdate);
+      const opLabels = (opUpdate.opLabels ?? []) as string[];
 
-      const policySummary = env.getPolicySummary();
-      if (policySummary) {
-        const decision = evaluateCommandAccess(policySummary, command);
-        if (!decision.allowed) {
-          throw new MlldSecurityError(
-            decision.reason ?? `Command '${decision.commandName}' denied by policy`,
-            {
-              code: 'POLICY_CAPABILITY_DENIED',
-              sourceLocation: directive.location,
-              env
-            }
-          );
-        }
-      }
+      enforceRunCommandPolicy(
+        env.getPolicySummary(),
+        command,
+        env,
+        directive.location ?? undefined
+      );
 
       const inputDescriptor =
         argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
-      const inputTaint = descriptorToInputTaint(inputDescriptor);
-      if (policyChecksEnabled && inputTaint.length > 0) {
-        policyEnforcer.checkLabelFlow(
-          {
-            inputTaint,
-            opLabels,
-            exeLabels,
-            flowChannel: 'arg',
-            command: parsedCommand.command
-          },
-          { env, sourceLocation: directive.location }
-        );
-      }
-      const outputPolicyDescriptor = policyEnforcer.applyOutputPolicyLabels(
-        undefined,
-        { inputTaint, exeLabels }
-      );
+      const inputTaint = checkRunInputLabelFlow({
+        descriptor: inputDescriptor,
+        policyEnforcer,
+        policyChecksEnabled,
+        opLabels,
+        exeLabels,
+        flowChannel: 'arg',
+        command: parsedCommand.command,
+        env,
+        sourceLocation: directive.location ?? undefined
+      });
+      const outputPolicyDescriptor = deriveRunOutputPolicyDescriptor({
+        policyEnforcer,
+        inputTaint,
+        exeLabels
+      });
       mergePendingDescriptor(outputPolicyDescriptor);
 
       const commandTaint = deriveCommandTaint({ command });
@@ -1046,19 +989,17 @@ export async function evaluateRun(
       const envAuthSecrets = await resolveEnvironmentAuthSecrets(tempEnv, resolvedEnvConfig);
       const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
       const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
-      const envInputTaint = descriptorToInputTaint(envInputDescriptor);
-      if (policyChecksEnabled && envInputTaint.length > 0) {
-        policyEnforcer.checkLabelFlow(
-          {
-            inputTaint: envInputTaint,
-            opLabels,
-            exeLabels,
-            flowChannel: 'using',
-            command: parsedCommand.command
-          },
-          { env, sourceLocation: directive.location }
-        );
-      }
+      const envInputTaint = checkRunInputLabelFlow({
+        descriptor: envInputDescriptor,
+        policyEnforcer,
+        policyChecksEnabled,
+        opLabels,
+        exeLabels,
+        flowChannel: 'using',
+        command: parsedCommand.command,
+        env,
+        sourceLocation: directive.location ?? undefined
+      });
       if (resolvedEnvConfig?.provider) {
         const providerResult = await executeProviderCommand({
           env: tempEnv,
@@ -1230,44 +1171,37 @@ export async function evaluateRun(
       }
 
       const opType = resolveRunCodeOpType(definition.language ?? '');
-      const opLabels = opType ? getOperationLabels({ type: opType }) : [];
-      if (opType && opLabels.length > 0) {
-        updateOperationContext({ opLabels });
+      let opLabels: string[] = [];
+      if (opType) {
+        const opUpdate = buildRunCapabilityOperationUpdate(opType);
+        applyRunOperationContext(env, context, opUpdate);
+        opLabels = (opUpdate.opLabels ?? []) as string[];
       }
       if (opType) {
-        const policySummary = env.getPolicySummary();
-        if (policySummary) {
-          const decision = evaluateCapabilityAccess(policySummary, opType);
-          if (!decision.allowed) {
-            throw new MlldSecurityError(
-              decision.reason ?? `Capability '${opType}' denied by policy`,
-              {
-                code: 'POLICY_CAPABILITY_DENIED',
-                sourceLocation: directive.location,
-                env
-              }
-            );
-          }
-        }
+        enforceRunCapabilityPolicy(
+          env.getPolicySummary(),
+          opType,
+          env,
+          directive.location ?? undefined
+        );
       }
       const inputDescriptor =
         argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
-      const inputTaint = descriptorToInputTaint(inputDescriptor);
-      if (policyChecksEnabled && opType && inputTaint.length > 0) {
-        policyEnforcer.checkLabelFlow(
-          {
-            inputTaint,
-            opLabels,
-            exeLabels,
-            flowChannel: 'arg'
-          },
-          { env, sourceLocation: directive.location }
-        );
-      }
-      const outputPolicyDescriptor = policyEnforcer.applyOutputPolicyLabels(
-        undefined,
-        { inputTaint, exeLabels }
-      );
+      const inputTaint = checkRunInputLabelFlow({
+        descriptor: inputDescriptor,
+        policyEnforcer,
+        policyChecksEnabled: policyChecksEnabled && Boolean(opType),
+        opLabels,
+        exeLabels,
+        flowChannel: 'arg',
+        env,
+        sourceLocation: directive.location ?? undefined
+      });
+      const outputPolicyDescriptor = deriveRunOutputPolicyDescriptor({
+        policyEnforcer,
+        inputTaint,
+        exeLabels
+      });
       mergePendingDescriptor(outputPolicyDescriptor);
 
       // Special handling for mlld-when expressions
