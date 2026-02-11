@@ -17,6 +17,8 @@ import { extractCppDefinitions } from './ast-extractor/cpp-extractor';
 import { extractSolidityDefinitions } from './ast-extractor/solidity-extractor';
 import { extractJavaDefinitions } from './ast-extractor/java-extractor';
 import { extractCSharpDefinitions } from './ast-extractor/csharp-extractor';
+
+const TOP_LEVEL_EXCLUDED_TYPES = new Set(['method', 'constructor']);
 export type {
   AstPatternDefinition,
   AstPatternTypeFilter,
@@ -54,16 +56,9 @@ export function extractAst(content: string, filePath: string, patterns: AstPatte
 export function extractNames(content: string, filePath: string, filter?: string): string[] {
   const definitions = extractDefinitionsForFile(content, filePath, AST_EXTRACTOR_REGISTRY);
 
-  // Filter by type if specified
-  let filtered: Definition[];
-  if (filter) {
-    filtered = definitions.filter(d => matchesTypeFilter(d.type, filter));
-  } else {
-    // For name-list-all (no filter), exclude nested definitions (methods, constructors)
-    // to only return top-level definitions
-    const nestedTypes = ['method', 'constructor'];
-    filtered = definitions.filter(d => !nestedTypes.includes(d.type));
-  }
+  const filtered: Definition[] = filter
+    ? definitions.filter(definition => matchesTypeFilter(definition.type, filter))
+    : definitions.filter(definition => !TOP_LEVEL_EXCLUDED_TYPES.has(definition.type));
 
   // Extract unique names, sorted alphabetically
   const names = [...new Set(filtered.map(d => d.name))];
