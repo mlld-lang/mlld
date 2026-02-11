@@ -1,11 +1,9 @@
 import * as fs from 'fs';
-import type { DirectiveNode, SourceLocation, VarValue, VariableNodeArray } from '@core/types';
+import type { DirectiveNode, SourceLocation, VarValue } from '@core/types';
 import type { ToolCollection } from '@core/types/tools';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
-import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { astLocationToSourceLocation } from '@core/types';
 import { logger } from '@core/utils/logger';
 import { applyHeaderTransform } from './show';
 import {
@@ -30,206 +28,23 @@ import {
   type VariableInternalMetadata,
   type VariableFactoryInitOptions
 } from '@core/types/variable';
-import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/security';
-import { createCapabilityContext, makeSecurityDescriptor } from '@core/types/security';
+import { createCapabilityContext, type SecurityDescriptor } from '@core/types/security';
 import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
-import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { maybeAutosignVariable } from './auto-sign';
-import { mergeDescriptors } from '@core/types/security';
 import { isExeReturnControl } from './exe-return';
+import { createVarAssignmentContext } from './var/assignment-context';
+import {
+  createDescriptorState,
+  extractDescriptorsFromDataAst,
+  extractDescriptorsFromTemplateAst,
+  interpolateAndCollect,
+  type DescriptorCollector
+} from './var/security-descriptor';
 
-/**
- * Extract security descriptors from template AST nodes without performing interpolation.
- * This allows labels to persist through lazy template evaluation (triple-colon templates).
- *
- * @param nodes - The template AST nodes to analyze
- * @param env - The environment to look up variable security descriptors
- * @returns Merged security descriptor from all referenced variables, or undefined if none found
- */
-function extractDescriptorsFromTemplateAst(
-  nodes: unknown,
-  env: Environment
-): SecurityDescriptor | undefined {
-  if (!nodes || !Array.isArray(nodes)) {
-    return undefined;
-  }
-
-  const descriptors: SecurityDescriptor[] = [];
-
-  const collectFromNode = (node: unknown): void => {
-    if (!node || typeof node !== 'object') {
-      return;
-    }
-
-    const n = node as Record<string, unknown>;
-    const nodeType = n.type as string | undefined;
-
-    // Handle variable references - these are the primary sources of labels
-    if (nodeType === 'InterpolationVar' || nodeType === 'VariableReference' || nodeType === 'TemplateVariable') {
-      const varName = (n.identifier || n.name) as string | undefined;
-      if (varName) {
-        const variable = env.getVariable(varName);
-        if (variable?.mx) {
-          const descriptor = varMxToSecurityDescriptor(variable.mx);
-          if (descriptor && (descriptor.labels.length > 0 || descriptor.taint.length > 0 || descriptor.sources.length > 0)) {
-            descriptors.push(descriptor);
-          }
-        }
-      }
-    }
-
-    // Handle VariableReferenceWithTail - extract from inner variable
-    if (nodeType === 'VariableReferenceWithTail') {
-      const innerVar = n.variable as Record<string, unknown> | undefined;
-      if (innerVar) {
-        collectFromNode(innerVar);
-      }
-    }
-
-    // Handle ConditionalVarOmission and NullCoalescingTight
-    if (nodeType === 'ConditionalVarOmission' || nodeType === 'NullCoalescingTight') {
-      const innerVar = n.variable as Record<string, unknown> | undefined;
-      if (innerVar) {
-        collectFromNode(innerVar);
-      }
-    }
-
-    // Handle conditional template snippets - recurse into content
-    if (nodeType === 'ConditionalTemplateSnippet' || nodeType === 'ConditionalStringFragment') {
-      const content = n.content as unknown[];
-      if (Array.isArray(content)) {
-        for (const child of content) {
-          collectFromNode(child);
-        }
-      }
-    }
-
-    // Handle template for blocks - recurse into body
-    if (nodeType === 'TemplateForBlock') {
-      const body = n.body as unknown[];
-      if (Array.isArray(body)) {
-        for (const child of body) {
-          collectFromNode(child);
-        }
-      }
-      // Also check the source expression
-      if (n.source) {
-        collectFromNode(n.source);
-      }
-    }
-
-    // Handle ExecInvocation - the function might return labeled values
-    // but we can't know without executing it, so we skip for now
-
-    // Handle file references - files can have labels from their content
-    // but we can't know without loading, so we skip for now
-  };
-
-  for (const node of nodes) {
-    collectFromNode(node);
-  }
-
-  if (descriptors.length === 0) {
-    return undefined;
-  }
-
-  if (descriptors.length === 1) {
-    return descriptors[0];
-  }
-
-  return mergeDescriptors(...descriptors);
-}
-
-/**
- * Extract security descriptors from object/array AST nodes without performing evaluation.
- * Walks the AST to find VariableReference nodes and collects their security metadata.
- * Used for complex (lazy) objects/arrays so labels propagate even before evaluation.
- */
-export function extractDescriptorsFromDataAst(
-  valueNode: any,
-  env: Environment
-): SecurityDescriptor | undefined {
-  if (!valueNode || typeof valueNode !== 'object') {
-    return undefined;
-  }
-
-  const descriptors: SecurityDescriptor[] = [];
-
-  const collectFromNode = (node: any): void => {
-    if (!node || typeof node !== 'object') {
-      return;
-    }
-
-    if (node.type === 'VariableReference' && node.identifier) {
-      const variable = env.getVariable(node.identifier);
-      if (variable?.mx) {
-        const descriptor = varMxToSecurityDescriptor(variable.mx);
-        if (descriptor && (descriptor.labels.length > 0 || descriptor.taint.length > 0)) {
-          descriptors.push(descriptor);
-        }
-      }
-      return;
-    }
-
-    if (node.type === 'VariableReferenceWithTail' && node.variable) {
-      collectFromNode(node.variable);
-      return;
-    }
-
-    // Walk object entries
-    if (Array.isArray(node.entries)) {
-      for (const entry of node.entries) {
-        if (entry.type === 'pair' && entry.value) {
-          collectFromNode(entry.value);
-        } else if (entry.type === 'spread' && entry.variable) {
-          collectFromNode(entry.variable);
-        } else if (entry.type === 'conditionalPair' && entry.value) {
-          collectFromNode(entry.value);
-        }
-      }
-    }
-
-    // Walk object properties (legacy format)
-    if (node.properties && typeof node.properties === 'object' && !Array.isArray(node.properties)) {
-      for (const value of Object.values(node.properties)) {
-        collectFromNode(value);
-      }
-    }
-
-    // Walk array items
-    if (Array.isArray(node.items)) {
-      for (const item of node.items) {
-        collectFromNode(item);
-      }
-    }
-
-    // Walk wrapped content (strings with interpolation)
-    if (Array.isArray(node.content)) {
-      for (const child of node.content) {
-        collectFromNode(child);
-      }
-    }
-
-    // Walk interpolation parts
-    if (Array.isArray(node.parts)) {
-      for (const part of node.parts) {
-        collectFromNode(part);
-      }
-    }
-  };
-
-  collectFromNode(valueNode);
-
-  if (descriptors.length === 0) {
-    return undefined;
-  }
-  if (descriptors.length === 1) {
-    return descriptors[0];
-  }
-  return mergeDescriptors(...descriptors);
-}
+export { extractDescriptorsFromDataAst };
 
 export interface VarAssignmentResult {
   identifier: string;
@@ -315,35 +130,6 @@ function createVariableSource(valueNode: VarValue | undefined, directive: Direct
   return baseSource;
 }
 
-type DescriptorCollector = (descriptor?: SecurityDescriptor) => void;
-
-async function interpolateAndCollect(
-  nodes: any,
-  env: Environment,
-  mergeDescriptor?: DescriptorCollector,
-  interpolationContext: InterpolationContext = InterpolationContext.Default
-): Promise<string> {
-  if (!mergeDescriptor) {
-    return interpolate(nodes, env, interpolationContext);
-  }
-  const descriptors: SecurityDescriptor[] = [];
-  const text = await interpolate(nodes, env, interpolationContext, {
-    collectSecurityDescriptor: collected => {
-      if (collected) {
-        descriptors.push(collected);
-      }
-    }
-  });
-  if (descriptors.length > 0) {
-    const merged =
-      descriptors.length === 1
-        ? descriptors[0]
-        : env.mergeSecurityDescriptors(...descriptors);
-    mergeDescriptor(merged);
-  }
-  return text;
-}
-
 /**
  * Evaluate @var directives.
  * This is the unified variable assignment directive that replaces @text and @data.
@@ -354,91 +140,19 @@ export async function prepareVarAssignment(
   env: Environment,
   context?: EvaluationContext
 ): Promise<VarAssignmentResult> {
-  // Extract identifier from array
-  const identifierNodes = directive.values?.identifier as VariableNodeArray | undefined;
-  if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
-    throw new Error('Var directive missing identifier');
-  }
-  
-  const identifierNode = identifierNodes[0];
-  if (!identifierNode || typeof identifierNode !== 'object' || !('identifier' in identifierNode)) {
-    throw new Error('Invalid identifier node structure');
-  }
-  const identifier = identifierNode.identifier;
-  if (!identifier || typeof identifier !== 'string') {
-    throw new Error('Var directive identifier must be a simple variable name');
-  }
-
-  const securityLabels = (directive.meta?.securityLabels ?? directive.values?.securityLabels) as DataLabel[] | undefined;
-  const baseDescriptor = makeSecurityDescriptor({ labels: securityLabels });
-  const capabilityKind = directive.kind as CapabilityKind;
-  const operationMetadata = {
-    kind: 'var',
-    identifier,
-    location: directive.location
-  };
-  const sourceLocation = astLocationToSourceLocation(
-    directive.location,
-    env.getCurrentFilePath()
-  );
-
-  let resolvedSecurityDescriptor: SecurityDescriptor | undefined;
-  const mergeResolvedDescriptor = (descriptor?: SecurityDescriptor): void => {
-    if (!descriptor) {
-      return;
-    }
-    resolvedSecurityDescriptor = resolvedSecurityDescriptor
-      ? env.mergeSecurityDescriptors(resolvedSecurityDescriptor, descriptor)
-      : descriptor;
-  };
-  const mergePipelineDescriptor = (
-    ...descriptors: (SecurityDescriptor | undefined)[]
-  ): SecurityDescriptor | undefined => {
-    const resolved = descriptors.filter(Boolean) as SecurityDescriptor[];
-    if (resolved.length === 0) {
-      return undefined;
-    }
-    if (resolved.length === 1) {
-      return resolved[0];
-    }
-    return env.mergeSecurityDescriptors(...resolved);
-  };
-  const descriptorFromVariable = (variable?: Variable): SecurityDescriptor | undefined => {
-    if (!variable?.mx) {
-      return undefined;
-    }
-    return varMxToSecurityDescriptor(variable.mx);
-  };
-  const interpolateWithSecurity = (
-    nodes: any,
-    interpolationContext: InterpolationContext = InterpolationContext.Default
-  ): Promise<string> => {
-    return interpolateAndCollect(nodes, env, mergeResolvedDescriptor, interpolationContext);
-  };
-
-  /**
-   * Extract security descriptor from a value (Variable, StructuredValue, or plain value)
-   */
-  const extractSecurityFromValue = (value: any): SecurityDescriptor | undefined => {
-    if (!value) return undefined;
-    // Check if it's a Variable with .mx
-    if (typeof value === 'object' && 'mx' in value && value.mx) {
-      const mx = value.mx;
-      const hasLabels = Array.isArray(mx.labels) && mx.labels.length > 0;
-      const hasTaint = Array.isArray(mx.taint) && mx.taint.length > 0;
-      if (hasLabels || hasTaint) {
-        return {
-          labels: mx.labels,
-          taint: mx.taint,
-          sources: mx.sources,
-          policyContext: mx.policy ?? undefined
-        } as SecurityDescriptor;
-      }
-    }
-    return undefined;
-  };
+  const { baseDescriptor, capabilityKind, identifier, operationMetadata, sourceLocation } =
+    createVarAssignmentContext(directive, env);
+  const descriptorState = createDescriptorState(env);
+  const {
+    descriptorFromVariable,
+    extractSecurityFromValue,
+    interpolateWithSecurity,
+    mergePipelineDescriptor,
+    mergeResolvedDescriptor
+  } = descriptorState;
 
   const finalizeVariable = (variable: Variable): Variable => {
+    const resolvedSecurityDescriptor = descriptorState.getResolvedDescriptor();
     const descriptor = resolvedSecurityDescriptor
       ? env.mergeSecurityDescriptors(baseDescriptor, resolvedSecurityDescriptor)
       : baseDescriptor;
@@ -991,7 +705,10 @@ export async function prepareVarAssignment(
         node: valueNode,
         identifier,
         location: directive.location,
-        descriptorHint: mergePipelineDescriptor(descriptorFromVariable(sourceVar), resolvedSecurityDescriptor)
+        descriptorHint: mergePipelineDescriptor(
+          descriptorFromVariable(sourceVar),
+          descriptorState.getResolvedDescriptor()
+        )
       });
       
       resolvedValue = result;
@@ -1153,7 +870,10 @@ export async function prepareVarAssignment(
         node: varWithTail,
         identifier: varWithTail.identifier,
         location: directive.location,
-        descriptorHint: mergePipelineDescriptor(descriptorFromVariable(sourceVar), resolvedSecurityDescriptor)
+        descriptorHint: mergePipelineDescriptor(
+          descriptorFromVariable(sourceVar),
+          descriptorState.getResolvedDescriptor()
+        )
       });
     }
     
@@ -1172,10 +892,10 @@ export async function prepareVarAssignment(
     const { evaluateForExpression } = await import('./for');
     const forResult = await evaluateForExpression(valueNode, env);
 
-    // Merge the for-expression result's security descriptor into resolvedSecurityDescriptor
+    // Merge the for-expression result descriptor so finalizeVariable preserves taint.
     // so that finalizeVariable properly preserves taint from iterated values
     if (forResult.mx) {
-      const forDescriptor = varMxToSecurityDescriptor(forResult.mx);
+      const forDescriptor = descriptorFromVariable(forResult);
       mergeResolvedDescriptor(forDescriptor);
     }
 
@@ -1217,7 +937,7 @@ export async function prepareVarAssignment(
   mergeResolvedDescriptor(resolvedValueDescriptor);
 
   // Create and store the appropriate variable type
-  const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
+  const location = sourceLocation;
   const source = createVariableSource(valueNode, directive);
   const baseCtx: Partial<VariableContext> = { definedAt: location };
   const baseInternal: Partial<VariableInternalMetadata> = {};
@@ -1239,7 +959,7 @@ export async function prepareVarAssignment(
     const options = cloneFactoryOptions(overrides);
     // Apply security metadata (still uses legacy metadata internally)
     const finalMetadata = VariableMetadataUtils.applySecurityMetadata(undefined, {
-      labels: securityLabels,
+      labels: baseDescriptor.labels,
       existingDescriptor: existing ?? resolvedValueDescriptor
     });
     // Update mx from security descriptor
