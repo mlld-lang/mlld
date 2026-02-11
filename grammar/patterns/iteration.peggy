@@ -274,6 +274,55 @@ ForNestedDirective
       return [nestedFor];
     }
 
+LoopNestedDirective
+  = "loop" _ header:LoopHeader? untilClause:LoopUntilClause? _ block:LoopBlockAction {
+      const limit = header ? header.limit : null;
+      const rateMs = header ? header.rateMs : null;
+      const until = untilClause || null;
+      const statements = block.statements || [];
+
+      const hasLimit = header !== null && header !== undefined;
+      const hasRate = header ? header.hasRate : false;
+      const hasUntil = Array.isArray(untilClause) && untilClause.length > 0;
+
+      const values = {
+        ...(hasLimit ? { limit } : {}),
+        ...(rateMs !== null ? { rateMs } : {}),
+        ...(hasUntil ? { until } : {}),
+        block: statements
+      };
+
+      const raw = {
+        ...(hasLimit ? { limit: header.rawLimit } : {}),
+        ...(rateMs !== null ? { rateMs } : {}),
+        ...(hasUntil ? { until: helpers.reconstructRawString(until) } : {})
+      };
+
+      const meta = {
+        hasLimit,
+        hasRate: !!hasRate,
+        hasUntil,
+        isNested: true,
+        ...(block.meta ? { statementCount: block.meta.statementCount } : {})
+      };
+
+      if (!hasLimit || header?.limitKind === 'endless') {
+        meta.isEndless = true;
+      }
+
+      const nestedLoop = helpers.createStructuredDirective(
+        'loop',
+        'loop',
+        values,
+        raw,
+        meta,
+        location(),
+        'loop'
+      );
+
+      return [nestedLoop];
+    }
+
 // Separator for block statements - disallow commas to avoid array confusion
 BlockStatementSeparator
   = _ "," _ {
@@ -318,6 +367,7 @@ ForBlockStatement "for block statement"
   / WhenExpressionAny
   / SlashIf
   / ForNestedDirective
+  / LoopNestedDirective
   / ForSingleAction
 
 LoopBlockStatementList "loop block statement list"
@@ -360,6 +410,7 @@ LoopBlockStatement "loop block statement"
   / WhenExpressionAny
   / SlashIf
   / ForNestedDirective
+  / LoopNestedDirective
   / ForSingleAction
 
 ForBlockReturnStatement "for block return statement"

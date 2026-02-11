@@ -1,0 +1,6 @@
+var @items = ["a", "b"]
+for @item in @items [
+  loop(2) [
+    show `@item`
+  ]
+]

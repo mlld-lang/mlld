@@ -748,6 +748,7 @@ WhenActionBlockStatement "when action block statement"
   / WhenExpressionAny
   / SlashIf
   / ForNestedDirective
+  / LoopNestedDirective
   / WhenBlockAction
 
 WhenActionBlockContent

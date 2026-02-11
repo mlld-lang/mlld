@@ -193,6 +193,7 @@ IfActionBlockStatement "if action block statement"
   / AugmentedAssignment
   / WhenExpressionAny
   / ForNestedDirective
+  / LoopNestedDirective
   / SlashIf
   / IfBlockAction
 

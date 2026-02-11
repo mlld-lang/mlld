@@ -1,0 +1,8 @@
+var @x = 0
+if @x == 1 [
+  show "one"
+] else [
+  loop(2) [
+    show "not one"
+  ]
+]

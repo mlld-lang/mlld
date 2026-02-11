@@ -686,6 +686,7 @@ ExeBlockStatement
   / AugmentedAssignment
   / WhenExpressionAny
   / ForNestedDirective
+  / LoopNestedDirective
   / SlashIf
   / ExeBlockAction
 
