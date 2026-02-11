@@ -1,5 +1,5 @@
 import type { Environment } from '../../env/Environment';
-import type { PipelineCommand, PipelineStage, PipelineStageEntry, InlineCommandStage, InlineValueStage, WhilePipelineStage } from '@core/types';
+import type { PipelineCommand, PipelineStage, PipelineStageEntry, InlineCommandStage, InlineValueStage } from '@core/types';
 import type { ExecInvocation, CommandReference } from '@core/types/primitives';
 import type { OperationContext, PipelineContextSnapshot } from '../../env/ContextManager';
 import type { StructuredValue } from '../../utils/structured-value';
@@ -10,11 +10,9 @@ import { getOperationLabels } from '@core/policy/operation-labels';
 // Import pipeline implementation
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
 import { createStageEnvironment } from './context-builder';
-import { GuardError } from '@core/errors/GuardError';
 import { MlldCommandExecutionError } from '@core/errors';
 import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
-import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
-import { logger } from '@core/utils/logger';
+import { RateLimitRetry } from './rate-limit-retry';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 import {
   isStructuredValue,
@@ -25,7 +23,6 @@ import type { CommandExecutionContext } from '../../env/ErrorUtils';
 import { StreamBus, type StreamEvent } from './stream-bus';
 import type { StreamingOptions } from './streaming-options';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
-import { evaluateWhileStage } from '../while';
 import type { ParallelStageError, PipelineCommandExecutionContextFactory, RetrySignal, StageExecutionResult } from './executor/types';
 import {
   cloneStructuredValue,
@@ -43,6 +40,7 @@ import { PipelineCommandArgumentBinder } from './executor/command-argument-binde
 import { PipelineCommandInvoker } from './executor/command-invoker';
 import { PipelineInlineStageExecutor } from './executor/inline-stage-executor';
 import { PipelineWhileStageAdapter } from './executor/while-stage-adapter';
+import { PipelineSingleStageRunner } from './executor/single-stage-runner';
 
 export interface ExecuteOptions {
   returnStructured?: boolean;
@@ -83,6 +81,7 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
   private readonly commandInvoker: PipelineCommandInvoker;
   private readonly inlineStageExecutor: PipelineInlineStageExecutor;
   private readonly whileStageAdapter: PipelineWhileStageAdapter;
+  private readonly singleStageRunner: PipelineSingleStageRunner;
   private readonly debugStructured = process.env.MLLD_DEBUG_STRUCTURED === 'true';
   private stageHookNodeCounter = 0;
   private streamingOptions: StreamingOptions;
@@ -143,6 +142,7 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
     this.commandInvoker = new PipelineCommandInvoker(env, argumentBinder);
     this.inlineStageExecutor = new PipelineInlineStageExecutor(env, this.outputProcessor);
     this.whileStageAdapter = new PipelineWhileStageAdapter();
+    this.singleStageRunner = new PipelineSingleStageRunner(this as any);
     this.format = format;
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
@@ -371,244 +371,7 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
     input: string,
     context: StageContext
   ): Promise<StageResult> {
-    let stageEnv: Environment | undefined;
-    let mxManager: ReturnType<Environment['getContextManager']> | undefined;
-    let pipelineSnapshot: PipelineContextSnapshot | undefined;
-    let stageDescriptor: SecurityDescriptor | undefined;
-    let parentPipelineContextPushed = false;
-
-    try {
-      const structuredInput = this.stageOutputs.get(stageIndex - 1, input);
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[DEBUG executeSingleStage] stageIndex:', stageIndex, 'command:', command.rawIdentifier);
-        console.error('[DEBUG executeSingleStage] structuredInput from getStageOutput:', JSON.stringify(structuredInput?.data ?? structuredInput?.text ?? structuredInput));
-        console.error('[DEBUG executeSingleStage] structuredOutputs cache:', this.stageOutputs.entries().map(([k, v]) => [k, v?.data ?? v?.text]));
-      }
-      this.logStructuredStage('input', command.rawIdentifier, stageIndex, structuredInput);
-      if (process.env.MLLD_DEBUG === 'true') {
-        try {
-          const prevOut = this.stageOutputs.peek(stageIndex - 1);
-          const currOut = this.stageOutputs.peek(stageIndex);
-          console.error('[PipelineExecutor] Stage input snapshot', {
-            stageIndex,
-            command: command.rawIdentifier,
-            input,
-            structuredInput: this.debugNormalize(structuredInput),
-            previousStageOutput: this.debugNormalize(prevOut),
-            cachedCurrentOutput: this.debugNormalize(currOut)
-          });
-        } catch {}
-      }
-      // Set up execution environment for a single command stage
-      parentPipelineContextPushed = true;
-      stageEnv = await createStageEnvironment(
-        command,
-        input,
-        structuredInput,
-        context,
-        this.env,
-        this.format,
-        this.stateMachine.getEvents(),
-        this.hasSyntheticSource,
-        this.allRetryHistory,
-        {
-          getStageOutput: (stage, fallback) => this.stageOutputs.get(stage, fallback)
-        },
-        {
-          capturePipelineContext: snapshot => {
-            pipelineSnapshot = snapshot;
-          },
-          skipSetPipelineContext: false,
-          sourceRetryable: this.isRetryable
-        }
-      );
-      if (!pipelineSnapshot) {
-        throw new Error('Pipeline context snapshot unavailable for pipeline stage');
-      }
-      stageDescriptor = this.buildStageDescriptor(command, stageIndex, context, structuredInput);
-      mxManager = stageEnv.getContextManager();
-      const stageOpContext = this.createPipelineOperationContext(command, stageIndex, context);
-
-      const stageHookNode = this.createStageHookNode(command);
-
-      // Run pre-effects (leading effects that should run before the stage)
-      await this.runPreEffects(command, structuredInput, stageEnv!);
-
-      const executeStage = async (): Promise<StageResult> => {
-        let stageExecution: StageExecutionResult | undefined;
-        while (true) {
-          try {
-            if ((command as WhilePipelineStage).type === 'whileStage') {
-              const whileStage = command as WhilePipelineStage;
-              const whileResult = await evaluateWhileStage(
-                whileStage,
-                structuredInput,
-                stageEnv!,
-                async (processor, stateValue, iterEnv) => {
-                  const adaptation = this.whileStageAdapter.adaptProcessor(processor, stateValue);
-                  const execution = await this.executeCommand(
-                    adaptation.command,
-                    adaptation.input.text,
-                    adaptation.input.structured,
-                    iterEnv,
-                    stageOpContext,
-                    stageHookNode,
-                    stageIndex,
-                    context
-                  );
-                  return { value: execution.result, env: iterEnv };
-                }
-              );
-              stageExecution = {
-                result: whileResult
-              };
-              this.rateLimiter.reset();
-              break;
-            }
-            if ((command as InlineValueStage).type === 'inlineValue') {
-              stageExecution = await this.inlineStageExecutor.executeInlineValueStage(
-                command as InlineValueStage,
-                structuredInput,
-                stageEnv!
-              );
-            } else if ((command as InlineCommandStage).type === 'inlineCommand') {
-              stageExecution = await this.inlineStageExecutor.executeInlineCommandStage({
-                stage: command as InlineCommandStage,
-                structuredInput,
-                stageEnv: stageEnv!,
-                operationContext: stageOpContext,
-                stageIndex,
-                stageContext: context,
-                contextFactory: this
-              });
-            } else {
-              stageExecution = await this.executeCommand(
-                command as PipelineCommand,
-                input,
-                structuredInput,
-                stageEnv!,
-                stageOpContext,
-                stageHookNode,
-                stageIndex,
-                context
-              );
-            }
-            const output = stageExecution.result;
-            this.rateLimiter.reset();
-            break;
-          } catch (err: any) {
-            if (err instanceof GuardError) {
-              if (err.decision === 'retry') {
-                return {
-                  type: 'retry',
-                  reason: err.message,
-                  hint: err.retryHint
-                };
-              }
-              throw err;
-            }
-            if (isRateLimitError(err)) {
-              if (process.env.MLLD_DEBUG === 'true') {
-                logger.warn('Rate limit detected, retrying with backoff');
-              }
-              const retry = await this.rateLimiter.wait();
-              if (retry) continue;
-            }
-            throw err;
-          }
-        }
-
-        if (!stageExecution) {
-          throw new Error('Pipeline command did not produce a result');
-        }
-        const output = stageExecution.result;
-        if (this.isRetrySignal(output)) {
-          if (process.env.MLLD_DEBUG === 'true') {
-            console.error('[PipelineExecutor] Retry detected at stage', context.stage);
-          }
-          const from = this.parseRetryScope(output);
-          const hint = this.parseRetryHint(output);
-          return { type: 'retry', reason: hint || 'Stage requested retry', from, hint } as StageResult;
-        }
-
-        let normalized = this.outputProcessor.normalizeOutput(output);
-        if (this.debugStructured) {
-          console.error('[PipelineExecutor][pre-output]', {
-            stage: command.rawIdentifier,
-            stageIndex
-          });
-        }
-        this.logStructuredStage('output', command.rawIdentifier, stageIndex, normalized);
-        if (this.debugStructured) {
-          console.error('[PipelineExecutor][post-output]', {
-            stage: command.rawIdentifier,
-            stageIndex
-          });
-        }
-        normalized = this.outputProcessor.finalizeStageOutput(
-          normalized,
-          structuredInput,
-          output,
-          stageDescriptor,
-          stageExecution?.labelDescriptor
-        );
-        if (process.env.MLLD_DEBUG === 'true') {
-          try {
-            console.error('[PipelineExecutor] Stage output snapshot', {
-              stageIndex,
-              command: command.rawIdentifier,
-              normalized: this.debugNormalize(normalized)
-            });
-          } catch {}
-        }
-        if (this.debugStructured) {
-          try {
-            console.error('[PipelineExecutor][finalized-output]', {
-              stage: command.rawIdentifier,
-              stageIndex,
-              labels: normalized?.mx?.labels ?? null,
-              metadataLabels: normalized?.metadata?.security?.labels ?? null
-            });
-          } catch {}
-        }
-        this.stageOutputs.set(stageIndex, normalized);
-
-        const normalizedText = normalized.text ?? '';
-        if (!normalizedText || normalizedText.trim() === '') {
-          await this.runInlineEffects(command, normalized, stageEnv!);
-          return { type: 'success', output: normalizedText, structuredOutput: normalized };
-        }
-
-        try {
-          const pmx = this.env.getPipelineContext?.();
-          if (pmx) {
-            this.env.updatePipelineContext({
-              ...pmx,
-              hint: null
-            });
-          }
-        } catch {}
-
-        await this.runInlineEffects(command, normalized, stageEnv!);
-        return { type: 'success', output: normalizedText, structuredOutput: normalized };
-      };
-
-      const runWithinPipeline = async (): Promise<StageResult> => {
-        if (mxManager) {
-          return await mxManager.withOperation(stageOpContext, executeStage);
-        }
-        return await executeStage();
-      };
-
-      return await this.env.withPipeContext(pipelineSnapshot, runWithinPipeline);
-    } catch (error) {
-      return { type: 'error', error: error as Error };
-    } finally {
-      // Ensure the parent environment does not retain the pipeline context after this stage
-      if (parentPipelineContextPushed && this.env.getPipelineContext()) {
-        this.env.clearPipelineContext();
-      }
-    }
+    return await this.singleStageRunner.execute(stageIndex, command, input, context);
   }
 
   /**
