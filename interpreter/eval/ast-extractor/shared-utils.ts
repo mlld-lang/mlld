@@ -1,3 +1,5 @@
+import type { Definition } from './types';
+
 export interface LinesAndOffsets {
   lines: string[];
   offsets: number[];
@@ -58,4 +60,39 @@ export function findBraceBlockEnd(
   }
 
   return returnSingleLine ? startLine + 1 : lines.length;
+}
+
+export function extractBlockSearch(code: string): string {
+  const bodyStart = code.indexOf('{');
+  const bodyEnd = code.lastIndexOf('}');
+  return bodyStart >= 0 && bodyEnd >= bodyStart ? code.slice(bodyStart + 1, bodyEnd) : code;
+}
+
+export function createBlockDefinition(
+  content: string,
+  offsets: number[],
+  startLine: number,
+  endLine: number,
+  name: string,
+  type: string
+): Definition {
+  const start = offsets[startLine];
+  const end = offsets[endLine] ?? content.length;
+  const code = content.slice(start, end);
+  const search = extractBlockSearch(code);
+  return { name, type, start, end, line: startLine + 1, code, search };
+}
+
+export function createLineDefinition(
+  content: string,
+  lineText: string,
+  offsets: number[],
+  line: number,
+  name: string,
+  type: string
+): Definition {
+  const start = offsets[line];
+  const end = start + lineText.length;
+  const code = content.slice(start, end);
+  return { name, type, start, end, line: line + 1, code, search: code };
 }

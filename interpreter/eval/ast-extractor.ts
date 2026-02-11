@@ -12,6 +12,8 @@ import { findBraceBlockEnd, getLinesAndOffsets } from './ast-extractor/shared-ut
 import { extractTsDefinitions } from './ast-extractor/typescript-extractor';
 import { extractPythonDefinitions } from './ast-extractor/python-extractor';
 import { extractRubyDefinitions } from './ast-extractor/ruby-extractor';
+import { extractGoDefinitions } from './ast-extractor/go-extractor';
+import { extractRustDefinitions } from './ast-extractor/rust-extractor';
 export type {
   AstPatternDefinition,
   AstPatternTypeFilter,
@@ -24,14 +26,6 @@ export type {
   AstPattern,
   AstResult
 } from './ast-extractor/types';
-
-function extractGoForFile(content: string): Definition[] {
-  return extractGoDefinitions(content);
-}
-
-function extractRustForFile(content: string): Definition[] {
-  return extractRustDefinitions(content);
-}
 
 function extractJavaForFile(content: string): Definition[] {
   return extractJavaDefinitions(content);
@@ -53,8 +47,8 @@ const AST_EXTRACTOR_REGISTRY: AstExtractorRegistry = {
   ts: extractTsDefinitions,
   python: extractPythonDefinitions,
   ruby: extractRubyDefinitions,
-  go: extractGoForFile,
-  rust: extractRustForFile,
+  go: extractGoDefinitions,
+  rust: extractRustDefinitions,
   java: extractJavaForFile,
   solidity: extractSolidityForFile,
   cpp: extractCppForFile,
@@ -94,154 +88,6 @@ export function extractNames(content: string, filePath: string, filter?: string)
  * Check if patterns contain any name-list patterns
  */
 export { hasNameListPattern, hasContentPattern, matchesTypeFilter, TYPE_FILTER_MAP };
-
-function extractRustDefinitions(content: string): Definition[] {
-  const { lines, offsets } = getLinesAndOffsets(content);
-
-  const defs: Definition[] = [];
-
-  function blockEnd(startLine: number): number {
-    return findBraceBlockEnd(lines, startLine);
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-    const indent = line.match(/^\s*/)?.[0].length ?? 0;
-
-    const fnMatch = /^(?:pub\s+)?fn\s+(\w+)/.exec(trimmed);
-    const structMatch = /^(?:pub\s+)?struct\s+(\w+)/.exec(trimmed);
-    const enumMatch = /^(?:pub\s+)?enum\s+(\w+)/.exec(trimmed);
-    const traitMatch = /^(?:pub\s+)?trait\s+(\w+)/.exec(trimmed);
-    const constMatch = /^(?:pub\s+)?(?:const|static)\s+(\w+)/.exec(trimmed);
-
-    if (indent === 0 && fnMatch) {
-      const name = fnMatch[1];
-      const start = offsets[i];
-      const endLine = blockEnd(i);
-      const end = offsets[endLine] ?? content.length;
-      const code = content.slice(start, end);
-      const bodyStart = code.indexOf('{');
-      const bodyEnd = code.lastIndexOf('}');
-      const search = bodyStart >= 0 && bodyEnd >= bodyStart ? code.slice(bodyStart + 1, bodyEnd) : code;
-      defs.push({ name, type: 'function', start, end, line: i + 1, code, search });
-      i = endLine - 1;
-    } else if (indent === 0 && structMatch) {
-      const name = structMatch[1];
-      const start = offsets[i];
-      const endLine = blockEnd(i);
-      const end = offsets[endLine] ?? content.length;
-      const code = content.slice(start, end);
-      const bodyStart = code.indexOf('{');
-      const bodyEnd = code.lastIndexOf('}');
-      const search = bodyStart >= 0 && bodyEnd >= bodyStart ? code.slice(bodyStart + 1, bodyEnd) : code;
-      defs.push({ name, type: 'struct', start, end, line: i + 1, code, search });
-      i = endLine - 1;
-    } else if (indent === 0 && enumMatch) {
-      const name = enumMatch[1];
-      const start = offsets[i];
-      const endLine = blockEnd(i);
-      const end = offsets[endLine] ?? content.length;
-      const code = content.slice(start, end);
-      const bodyStart = code.indexOf('{');
-      const bodyEnd = code.lastIndexOf('}');
-      const search = bodyStart >= 0 && bodyEnd >= bodyStart ? code.slice(bodyStart + 1, bodyEnd) : code;
-      defs.push({ name, type: 'enum', start, end, line: i + 1, code, search });
-      i = endLine - 1;
-    } else if (indent === 0 && traitMatch) {
-      const name = traitMatch[1];
-      const start = offsets[i];
-      const endLine = blockEnd(i);
-      const end = offsets[endLine] ?? content.length;
-      const code = content.slice(start, end);
-      const bodyStart = code.indexOf('{');
-      const bodyEnd = code.lastIndexOf('}');
-      const search = bodyStart >= 0 && bodyEnd >= bodyStart ? code.slice(bodyStart + 1, bodyEnd) : code;
-      defs.push({ name, type: 'trait', start, end, line: i + 1, code, search });
-      i = endLine - 1;
-    } else if (indent === 0 && constMatch) {
-      const name = constMatch[1];
-      const start = offsets[i];
-      const end = start + line.length;
-      const code = content.slice(start, end);
-      defs.push({ name, type: 'variable', start, end, line: i + 1, code, search: code });
-    } else if (indent === 0 && /^(?:pub\s+)?impl\b/.test(trimmed)) {
-      const endLine = blockEnd(i);
-      for (let j = i + 1; j < endLine; j++) {
-        const inner = lines[j];
-        const innerTrim = inner.trim();
-        const methodMatch = /^(?:pub\s+)?fn\s+(\w+)/.exec(innerTrim);
-        if (methodMatch) {
-          const name = methodMatch[1];
-          const mStart = offsets[j];
-          const mEndLine = blockEnd(j);
-          const mEnd = offsets[mEndLine] ?? content.length;
-          const code = content.slice(mStart, mEnd);
-          const bodyStart = code.indexOf('{');
-          const bodyEnd = code.lastIndexOf('}');
-          const search = bodyStart >= 0 && bodyEnd >= bodyStart ? code.slice(bodyStart + 1, bodyEnd) : code;
-          defs.push({ name, type: 'method', start: mStart, end: mEnd, line: j + 1, code, search });
-          j = mEndLine - 1;
-        }
-      }
-      i = endLine - 1;
-    }
-  }
-
-  return defs;
-}
-
-function extractGoDefinitions(content: string): Definition[] {
-  const { lines, offsets } = getLinesAndOffsets(content);
-
-  const defs: Definition[] = [];
-
-  function blockEnd(startLine: number): number {
-    return findBraceBlockEnd(lines, startLine);
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-    const funcMatch = /^func\s+(?:\([^)]+\)\s*)?(\w+)/.exec(trimmed);
-    const typeMatch = /^type\s+(\w+)/.exec(trimmed);
-    const varMatch = /^(?:var|const)\s+(\w+)/.exec(trimmed);
-
-    if (funcMatch) {
-      const name = funcMatch[1];
-      const start = offsets[i];
-      const endLine = blockEnd(i);
-      const end = offsets[endLine] ?? content.length;
-        const code = content.slice(start, end);
-        const bodyStart = code.indexOf('{');
-        const bodyEnd = code.lastIndexOf('}');
-        const search = bodyStart >= 0 && bodyEnd >= bodyStart ? code.slice(bodyStart + 1, bodyEnd) : code;
-        const type = trimmed.startsWith('func (') ? 'method' : 'function';
-        defs.push({ name, type, start, end, line: i + 1, code, search });
-      i = endLine - 1;
-    } else if (typeMatch) {
-      const name = typeMatch[1];
-      const start = offsets[i];
-      const endLine = blockEnd(i);
-      const end = offsets[endLine] ?? content.length;
-        const code = content.slice(start, end);
-        const bodyStart = code.indexOf('{');
-        const bodyEnd = code.lastIndexOf('}');
-        const search = bodyStart >= 0 && bodyEnd >= bodyStart ? code.slice(bodyStart + 1, bodyEnd) : code;
-        const kind = /struct/.test(trimmed) ? 'struct' : /interface/.test(trimmed) ? 'interface' : 'type';
-        defs.push({ name, type: kind, start, end, line: i + 1, code, search });
-      i = endLine - 1;
-    } else if (varMatch) {
-      const name = varMatch[1];
-      const start = offsets[i];
-      const end = start + line.length;
-      const code = content.slice(start, end);
-      defs.push({ name, type: 'variable', start, end, line: i + 1, code, search: code });
-    }
-  }
-
-  return defs;
-}
 
 function extractCppDefinitions(content: string): Definition[] {
   const { lines, offsets } = getLinesAndOffsets(content);
