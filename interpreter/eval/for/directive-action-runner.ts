@@ -12,8 +12,7 @@ import { isControlCandidate } from '@interpreter/eval/loop';
 import { RateLimitRetry, isRateLimitError } from '@interpreter/eval/pipeline/rate-limit-retry';
 import { materializeDisplayValue } from '@interpreter/utils/display-materialization';
 import type { ForParallelOptions } from './parallel-options';
-
-type ForControlKindResolver = (value: unknown) => 'done' | 'continue' | null;
+import type { ForControlKindResolver } from './types';
 
 type DirectiveActionControl = {
   shouldBreak: boolean;

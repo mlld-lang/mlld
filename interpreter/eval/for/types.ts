@@ -5,3 +5,5 @@ export interface ForIterationError {
   error: string;
   value?: unknown;
 }
+
+export type ForControlKindResolver = (value: unknown) => 'done' | 'continue' | null;

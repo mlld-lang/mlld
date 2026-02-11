@@ -21,8 +21,7 @@ import {
 import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { shouldKeepStructuredForForExpression } from './binding-utils';
-
-type ForControlKindResolver = (value: unknown) => 'done' | 'continue' | null;
+import type { ForControlKindResolver } from './types';
 
 export type ForExpressionIterationResult =
   | {

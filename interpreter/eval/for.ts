@@ -2,22 +2,14 @@ import type {
   ForDirective,
   ForExpression,
   Environment,
-  ArrayVariable,
-  Variable
+  ArrayVariable
 } from '@core/types';
-import { evaluate, type EvalResult } from '../core/interpreter';
-import { MlldDirectiveError } from '@core/errors';
-import { toIterable } from './for-utils';
+import type { EvalResult } from '../core/interpreter';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
-import { createArrayVariable, createObjectVariable, createPrimitiveVariable, createSimpleTextVariable } from '@core/types/variable';
 import {
   asData,
-  isStructuredValue,
-  extractSecurityDescriptor
+  isStructuredValue
 } from '../utils/structured-value';
-import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
-import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
-import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { isExeReturnControl } from './exe-return';
 import { resolveParallelOptions, type ForParallelOptions } from './for/parallel-options';
 import { executeDirectiveActions } from './for/directive-action-runner';
@@ -29,6 +21,11 @@ import {
   recordParallelExpressionIterationError
 } from './for/error-reporting';
 import {
+  evaluateForDirectiveSource,
+  evaluateForExpressionSource
+} from './for/source-evaluator';
+import { createForExpressionResultVariable } from './for/result-variable';
+import {
   assertKeyVariableHasNoFields,
   formatFieldPath
 } from './for/binding-utils';
@@ -38,9 +35,12 @@ import {
   pushExpressionIterationContext,
   setupIterationContext
 } from './for/iteration-runner';
-import type { ForIterationError } from './for/types';
+import type {
+  ForControlKindResolver,
+  ForIterationError
+} from './for/types';
 
-function extractControlKind(value: unknown): 'done' | 'continue' | null {
+function extractControlKind(value: unknown): ReturnType<ForControlKindResolver> {
   const v = isStructuredValue(value) ? asData(value) : value;
   if (v && typeof v === 'object' && '__whileControl' in (v as any)) {
     return (v as any).__whileControl === 'done' ? 'done' : 'continue';
@@ -71,30 +71,7 @@ export async function evaluateForDirective(
   env.pushDirective('/for', `@${varName} in ...`, directive.location);
 
   try {
-    // Evaluate source collection
-    // The source is an array containing the actual source node
-    const sourceNode = Array.isArray(directive.values.source) 
-      ? directive.values.source[0] 
-      : directive.values.source;
-    
-    const sourceResult = await evaluate(sourceNode, env);
-    const sourceValue = sourceResult.value;
-    const iterable = toIterable(sourceValue);
-
-    if (!iterable) {
-      const receivedType = typeof sourceValue;
-      const preview = (() => {
-        try {
-          if (receivedType === 'object') return JSON.stringify(sourceValue)?.slice(0, 120);
-          return String(sourceValue)?.slice(0, 120);
-        } catch { return String(sourceValue); }
-      })();
-      throw new MlldDirectiveError(
-        `Type mismatch: for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
-        'for',
-        { location: directive.location, context: { expected: 'array', receivedType } }
-      );
-    }
+    const iterable = await evaluateForDirectiveSource(directive, env);
 
     // Determine parallel options (directive-specified or inherited from parent scope)
     const specified = (directive.values as any).forOptions as ForParallelOptions | undefined;
@@ -191,42 +168,7 @@ export async function evaluateForExpression(
   const varFields = expr.variable.fields;
   const fieldPathString = formatFieldPath(varFields);
 
-  // Evaluate source collection
-  const sourceResult = await evaluate(expr.source, env, { isExpression: true });
-  const sourceValue = sourceResult.value;
-  // Extract security descriptor from the source collection (e.g., array of tainted values)
-  // This taint must flow through to the for-expression results
-  let sourceDescriptor = extractSecurityDescriptor(sourceValue, { recursive: true, mergeArrayElements: true });
-  // If value extraction lost the descriptor, check the source Variable's .mx
-  if (!sourceDescriptor) {
-    const sourceNode = Array.isArray(expr.source) ? (expr.source as any)[0] : expr.source;
-    const sourceVarName = sourceNode?.identifier ?? sourceNode?.name;
-    if (sourceVarName) {
-      const sourceVar = env.getVariable(sourceVarName);
-      if (sourceVar?.mx) {
-        const varDescriptor = varMxToSecurityDescriptor(sourceVar.mx);
-        if (varDescriptor.labels.length > 0 || varDescriptor.taint.length > 0) {
-          sourceDescriptor = varDescriptor;
-        }
-      }
-    }
-  }
-  const iterable = toIterable(sourceValue);
-
-  if (!iterable) {
-    const receivedType = typeof sourceValue;
-    const preview = (() => {
-      try {
-        if (receivedType === 'object') return JSON.stringify(sourceValue)?.slice(0, 120);
-        return String(sourceValue)?.slice(0, 120);
-      } catch { return String(sourceValue); }
-    })();
-    throw new MlldDirectiveError(
-      `Type mismatch: for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
-      'for',
-      { location: expr.location, context: { expected: 'array', receivedType } }
-    );
-  }
+  const { iterable, sourceDescriptor } = await evaluateForExpressionSource(expr, env);
 
   const results: unknown[] = [];
   const errors: ForIterationError[] = [];
@@ -313,117 +255,11 @@ export async function evaluateForExpression(
     results,
     errors
   });
-  const finalResults = batchPipelineResult.finalResults;
-
-  const variableSource = {
-    directive: 'for',
-    syntax: 'expression',
-    hasInterpolation: false,
-    isMultiLine: false
-  };
-
-  const metadata: Record<string, unknown> = {
-    sourceExpression: expr.expression,
-    iterationVariable: expr.variable.identifier
-  };
-
-  if (batchPipelineResult.hadBatchPipeline) {
-    metadata.hadBatchPipeline = true;
-  }
-
-  if (errors.length > 0) {
-    metadata.forErrors = errors;
-  }
-
-  // Merge security descriptors from all result elements and the source
-  // to propagate taint to the final for-expression result variable
-  const resultElementDescriptors = (Array.isArray(finalResults) ? finalResults : [finalResults])
-    .map(r => extractSecurityDescriptor(r))
-    .filter(Boolean) as SecurityDescriptor[];
-  if (sourceDescriptor) {
-    resultElementDescriptors.push(sourceDescriptor);
-  }
-  const forResultDescriptor = resultElementDescriptors.length > 0
-    ? (resultElementDescriptors.length === 1 ? resultElementDescriptors[0] : mergeDescriptors(...resultElementDescriptors))
-    : undefined;
-
-  // Also propagate descriptor to the results array object itself
-  if (forResultDescriptor && Array.isArray(finalResults)) {
-    setExpressionProvenance(finalResults, forResultDescriptor);
-  }
-
-  if (Array.isArray(finalResults)) {
-    const arrayVar = createArrayVariable(
-      'for-result',
-      finalResults,
-      false,
-      variableSource,
-      {
-        metadata,
-        internal: {
-          arrayType: 'for-expression-result'
-        }
-      }
-    );
-    if (forResultDescriptor && arrayVar.mx) {
-      updateVarMxFromDescriptor(arrayVar.mx, forResultDescriptor);
-    }
-    return arrayVar;
-  }
-
-  // Helper to apply forResultDescriptor to a variable's mx
-  const applyForDescriptor = <T extends Variable>(variable: T): T => {
-    if (forResultDescriptor && variable.mx) {
-      updateVarMxFromDescriptor(variable.mx, forResultDescriptor);
-    }
-    return variable;
-  };
-
-  if (finalResults === undefined) {
-    return applyForDescriptor(createPrimitiveVariable(
-      'for-result',
-      null,
-      variableSource,
-      { mx: metadata }
-    ));
-  }
-
-  if (
-    finalResults === null ||
-    typeof finalResults === 'number' ||
-    typeof finalResults === 'boolean'
-  ) {
-    return applyForDescriptor(createPrimitiveVariable(
-      'for-result',
-      finalResults as number | boolean | null,
-      variableSource,
-      { mx: metadata }
-    ));
-  }
-
-  if (typeof finalResults === 'string') {
-    return applyForDescriptor(createSimpleTextVariable(
-      'for-result',
-      finalResults,
-      variableSource,
-      { mx: metadata }
-    ));
-  }
-
-  if (typeof finalResults === 'object') {
-    return applyForDescriptor(createObjectVariable(
-      'for-result',
-      finalResults,
-      false,
-      variableSource,
-      { mx: metadata }
-    ));
-  }
-
-  return applyForDescriptor(createSimpleTextVariable(
-    'for-result',
-    String(finalResults),
-    variableSource,
-    { mx: metadata }
-  ));
+  return createForExpressionResultVariable({
+    expr,
+    finalResults: batchPipelineResult.finalResults,
+    errors,
+    sourceDescriptor,
+    hadBatchPipeline: batchPipelineResult.hadBatchPipeline
+  });
 }
