@@ -1,61 +1,28 @@
-import type { DirectiveNode, ExeBlockNode, MlldNode, TextNode, WithClause } from '@core/types';
+import type { DirectiveNode, TextNode, WithClause } from '@core/types';
 import { GuardError } from '@core/errors/GuardError';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { MlldCommandExecutionError, MlldInterpreterError } from '@core/errors';
 import type { SecurityDescriptor } from '@core/types/security';
-import { makeSecurityDescriptor } from '@core/types/security';
-import { deriveCommandTaint } from '@core/security/taint';
-import { parseCommand } from '@core/policy/operation-labels';
-import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
-import type { SecurityManager } from '@security/SecurityManager';
-import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
-import { logger } from '@core/utils/logger';
 import { FormatAdapterSink } from './pipeline/stream-sinks/format-adapter';
 import { getAdapter } from '../streaming/adapter-registry';
 import { loadStreamAdapter, resolveStreamFormatValue } from '../streaming/stream-format';
-import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { wrapExecResult } from '../utils/structured-exec';
 import {
   asText,
-  normalizeWhenShowEffect,
   applySecurityDescriptorToStructuredValue,
   extractSecurityDescriptor
 } from '../utils/structured-value';
 import { materializeDisplayValue } from '../utils/display-materialization';
 import { varMxToSecurityDescriptor, hasSecurityVarMx } from '@core/types/variable/VarMxHelpers';
 import { resolveDirectiveExecInvocation } from './directive-replay';
-import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
-import { mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
-import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
-import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
-import {
-  applyEnvironmentDefaults,
-  buildEnvironmentOutputDescriptor,
-  executeProviderCommand,
-  resolveEnvironmentConfig,
-  resolveEnvironmentAuthSecrets
-} from '@interpreter/env/environment-provider';
-import {
-  mergeAuthUsing,
-  resolveRunCodeOpType
-} from './run-modules/run-pure-helpers';
-import {
-  applyRunOperationContext,
-  buildRunCapabilityOperationUpdate,
-  buildRunCommandOperationUpdate,
-  checkRunInputLabelFlow,
-  deriveRunOutputPolicyDescriptor,
-  enforceRunCapabilityPolicy,
-  enforceRunCommandPolicy
-} from './run-modules/run-policy-context';
 import { executeRunCommand } from './run-modules/run-command-executor';
 import { executeRunCode } from './run-modules/run-code-executor';
 import { resolveRunExecutableReference } from './run-modules/run-exec-resolver';
+import { dispatchRunExecutableDefinition } from './run-modules/run-exec-definition-dispatcher';
 
 /**
  * Evaluate @run directives.
@@ -325,418 +292,32 @@ export async function evaluateRun(
       }
     }
     
-    if (definition.type === 'command' && 'commandTemplate' in definition) {
-      // Create a temporary environment with parameter values
-      const tempEnv = env.createChild();
-      for (const [key, value] of Object.entries(argValues)) {
-        tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
+    const dispatchResult = await dispatchRunExecutableDefinition({
+      directive,
+      env,
+      context,
+      withClause,
+      executionContext,
+      streamingEnabled,
+      pipelineId,
+      policyEnforcer,
+      policyChecksEnabled,
+      definition,
+      execVar,
+      callStack,
+      argValues,
+      argDescriptors,
+      exeLabels,
+      services: {
+        interpolateWithPendingDescriptor,
+        evaluateRunRecursive: evaluateRun
       }
-
-      const workingDirectory = await resolveWorkingDirectory(
-        (definition as any)?.workingDir,
-        tempEnv,
-        { sourceLocation: directive.location, directiveType: 'run' }
-      );
-      const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
-      
-      // TODO: Remove this workaround when issue #51 is fixed
-      // Strip leading '[' from first command segment if present
-      const cleanTemplate = definition.commandTemplate.map((seg: MlldNode, idx: number) => {
-        if (idx === 0 && seg.type === 'Text' && 'content' in seg && seg.content.startsWith('[')) {
-          return { ...seg, content: seg.content.substring(1) };
-        }
-        return seg;
-      });
-      
-      // Interpolate the command template with parameters
-      const command = await interpolateWithPendingDescriptor(
-        cleanTemplate,
-        InterpolationContext.ShellCommand,
-        tempEnv
-      );
-
-      const parsedCommand = parseCommand(command);
-      const opUpdate = buildRunCommandOperationUpdate(
-        command,
-        (context?.operationContext?.metadata ?? {}) as Record<string, unknown>
-      );
-      applyRunOperationContext(env, context, opUpdate);
-      const opLabels = (opUpdate.opLabels ?? []) as string[];
-
-      enforceRunCommandPolicy(
-        env.getPolicySummary(),
-        command,
-        env,
-        directive.location ?? undefined
-      );
-
-      const inputDescriptor =
-        argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
-      const inputTaint = checkRunInputLabelFlow({
-        descriptor: inputDescriptor,
-        policyEnforcer,
-        policyChecksEnabled,
-        opLabels,
-        exeLabels,
-        flowChannel: 'arg',
-        command: parsedCommand.command,
-        env,
-        sourceLocation: directive.location ?? undefined
-      });
-      const outputPolicyDescriptor = deriveRunOutputPolicyDescriptor({
-        policyEnforcer,
-        inputTaint,
-        exeLabels
-      });
-      mergePendingDescriptor(outputPolicyDescriptor);
-
-      const commandTaint = deriveCommandTaint({ command });
-      const scopedEnvConfig = resolveEnvironmentConfig(env, context?.guardMetadata);
-      const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, env.getPolicySummary());
-      mergePendingDescriptor(buildEnvironmentOutputDescriptor(command, resolvedEnvConfig));
-      
-      // NEW: Security check for exec commands
-      const security = env.getSecurityManager();
-      if (security) {
-        const securityManager = security as SecurityManager & { commandAnalyzer?: CommandAnalyzer };
-        const analyzer = securityManager.commandAnalyzer;
-        if (analyzer) {
-          const analysis = await analyzer.analyze(command);
-          if (analysis.blocked) {
-            const reason = analysis.risks?.[0]?.description || 'Security policy violation';
-            throw new MlldCommandExecutionError(
-              `Security: Exec command blocked - ${reason}`,
-              directive.location,
-            {
-              command,
-              exitCode: 1,
-              duration: 0,
-              stderr: `This exec command is blocked by security policy: ${reason}`,
-              workingDirectory: effectiveWorkingDirectory,
-              directiveType: 'run'
-            },
-            env
-          );
-        }
-        }
-      }
-      
-      // Pass context for exec command errors too
-      const usingParts = await resolveUsingEnvParts(tempEnv, definition.withClause, withClause);
-      const envAuthSecrets = await resolveEnvironmentAuthSecrets(tempEnv, resolvedEnvConfig);
-      const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
-      const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
-      const envInputTaint = checkRunInputLabelFlow({
-        descriptor: envInputDescriptor,
-        policyEnforcer,
-        policyChecksEnabled,
-        opLabels,
-        exeLabels,
-        flowChannel: 'using',
-        command: parsedCommand.command,
-        env,
-        sourceLocation: directive.location ?? undefined
-      });
-      if (resolvedEnvConfig?.provider) {
-        const providerResult = await executeProviderCommand({
-          env: tempEnv,
-          providerRef: resolvedEnvConfig.provider,
-          config: resolvedEnvConfig,
-          command,
-          workingDirectory,
-          vars: usingParts.vars,
-          secrets: {
-            ...envAuthSecrets,
-            ...usingParts.secrets
-          },
-          executionContext: {
-            ...executionContext,
-            streamingEnabled,
-            pipelineId,
-            workingDirectory
-          },
-          sourceLocation: directive.location ?? null,
-          directiveType: 'run'
-        });
-        setOutput(providerResult.stdout ?? '');
-      } else {
-        const injectedEnv = {
-          ...envAuthSecrets,
-          ...usingParts.merged
-        };
-        const commandOptions =
-          workingDirectory || Object.keys(injectedEnv).length > 0
-            ? {
-                ...(workingDirectory ? { workingDirectory } : {}),
-                ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
-              }
-            : undefined;
-        setOutput(await env.executeCommand(command, commandOptions, {
-          ...executionContext,
-          streamingEnabled,
-          pipelineId,
-          workingDirectory
-        }));
-      }
-      
-    } else if (definition.type === 'commandRef') {
-      const refAst = (definition as any).commandRefAst;
-      if (refAst) {
-        const { evaluateExecInvocation } = await import('./exec-invocation');
-        const execEnv = env.createChild();
-        for (const [key, value] of Object.entries(argValues)) {
-          execEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
-        }
-        const mergedAuthUsing = mergeAuthUsing(definition.withClause as WithClause | undefined, withClause);
-        const refWithClause = mergedAuthUsing
-          ? { ...(withClause || {}), ...mergedAuthUsing }
-          : withClause;
-        const baseInvocation =
-          (refAst as any).type === 'ExecInvocation'
-            ? refAst
-            : {
-                type: 'ExecInvocation',
-                commandRef: refAst
-              };
-        const refInvocation = refWithClause ? { ...baseInvocation, withClause: refWithClause } : baseInvocation;
-        const result = await evaluateExecInvocation(refInvocation as any, execEnv);
-        setOutput(result.value);
-      } else {
-        // This command references another command
-        const refExecVar = env.getVariable(definition.commandRef);
-        if (!refExecVar || !isExecutableVariable(refExecVar)) {
-          throw new Error(`Referenced executable not found: ${definition.commandRef}`);
-        }
-        
-        // Check for circular references
-        if (callStack.includes(definition.commandRef)) {
-          const cycle = [...callStack, definition.commandRef].join(' -> ');
-          throw new Error(`Circular command reference detected: ${cycle}`);
-        }
-        
-        // Create a new run directive for the referenced command
-        const refDirective = {
-          ...directive,
-          values: {
-            ...directive.values,
-            identifier: [{ type: 'Text', content: definition.commandRef }],
-            args: definition.commandArgs
-          }
-        };
-        const mergedAuthUsing = mergeAuthUsing(definition.withClause as WithClause | undefined, withClause);
-        const refWithClause = mergedAuthUsing
-          ? { ...(withClause || {}), ...mergedAuthUsing }
-          : withClause;
-        if (refWithClause) {
-          (refDirective.values as any).withClause = refWithClause;
-          refDirective.meta = { ...directive.meta, withClause: refWithClause };
-        }
-        
-        // Recursively evaluate the referenced command with updated call stack
-        // Note: We don't add definition.commandRef here because it will be added 
-        // at the beginning of the runExec case when processing refDirective
-        const result = await evaluateRun(refDirective, env, callStack, context);
-        setOutput(result.value);
-      }
-      
-    } else if (execVar.internal?.isBuiltinTransformer && execVar.internal?.transformerImplementation) {
-      // Special handling for built-in transformers (e.g., imported @keychain functions)
-      const args = directive.values?.args || [];
-      const evaluatedArgs: any[] = [];
-
-      for (const arg of args) {
-        if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
-          evaluatedArgs.push(arg);
-        } else if (arg && typeof arg === 'object' && 'type' in arg) {
-          const argValue = await interpolateWithPendingDescriptor([arg], InterpolationContext.Default);
-          evaluatedArgs.push(argValue);
-        } else {
-          evaluatedArgs.push(arg);
-        }
-      }
-
-      const keychainFunction = execVar.internal?.keychainFunction;
-      if (keychainFunction) {
-        const service = String(evaluatedArgs[0] ?? '');
-        const account = String(evaluatedArgs[1] ?? '');
-        if (!service || !account) {
-          throw new MlldInterpreterError('Keychain access requires service and account', {
-            code: 'KEYCHAIN_PATH_INVALID'
-          });
-        }
-        enforceKeychainAccess(env, { service, account, action: keychainFunction }, directive.location);
-      }
-
-      // Call the transformer implementation directly with all args
-      const result = await execVar.internal.transformerImplementation(evaluatedArgs);
-      if (keychainFunction === 'get' && result !== null && result !== undefined) {
-        const keychainDescriptor = makeSecurityDescriptor({
-          labels: ['secret'],
-          taint: ['secret', 'src:keychain'],
-          sources: ['keychain.get']
-        });
-        const existingDescriptor = extractSecurityDescriptor(result, {
-          recursive: true,
-          mergeArrayElements: true
-        });
-        const mergedDescriptor = existingDescriptor
-          ? env.mergeSecurityDescriptors(existingDescriptor, keychainDescriptor)
-          : keychainDescriptor;
-        const wrapped = wrapExecResult(result);
-        applySecurityDescriptorToStructuredValue(wrapped, mergedDescriptor);
-        setOutput(wrapped);
-      } else {
-        setOutput(result);
-      }
-
-    } else if (definition.type === 'code') {
-      const tempEnv = env.createChild();
-      for (const [key, value] of Object.entries(argValues)) {
-        tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
-      }
-      const workingDirectory = await resolveWorkingDirectory(
-        (definition as any)?.workingDir,
-        tempEnv,
-        { sourceLocation: directive.location, directiveType: 'run' }
-      );
-
-      const codeParams = { ...argValues };
-      const capturedEnvs = execVar.internal?.capturedShadowEnvs;
-      if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' ||
-                           definition.language === 'node' || definition.language === 'nodejs')) {
-        (codeParams as any).__capturedShadowEnvs = capturedEnvs;
-      }
-
-      const opType = resolveRunCodeOpType(definition.language ?? '');
-      let opLabels: string[] = [];
-      if (opType) {
-        const opUpdate = buildRunCapabilityOperationUpdate(opType);
-        applyRunOperationContext(env, context, opUpdate);
-        opLabels = (opUpdate.opLabels ?? []) as string[];
-      }
-      if (opType) {
-        enforceRunCapabilityPolicy(
-          env.getPolicySummary(),
-          opType,
-          env,
-          directive.location ?? undefined
-        );
-      }
-      const inputDescriptor =
-        argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
-      const inputTaint = checkRunInputLabelFlow({
-        descriptor: inputDescriptor,
-        policyEnforcer,
-        policyChecksEnabled: policyChecksEnabled && Boolean(opType),
-        opLabels,
-        exeLabels,
-        flowChannel: 'arg',
-        env,
-        sourceLocation: directive.location ?? undefined
-      });
-      const outputPolicyDescriptor = deriveRunOutputPolicyDescriptor({
-        policyEnforcer,
-        inputTaint,
-        exeLabels
-      });
-      mergePendingDescriptor(outputPolicyDescriptor);
-
-      // Special handling for mlld-when expressions
-      if (definition.language === 'mlld-when') {
-        logger.debug('🎯 mlld-when handler in run.ts CALLED');
-        
-        // The codeTemplate contains the WhenExpression node
-        const whenExprNode = definition.codeTemplate[0];
-        if (!whenExprNode || whenExprNode.type !== 'WhenExpression') {
-          throw new Error('mlld-when executable missing WhenExpression node');
-        }
-        
-        // Create parameter environment
-        const execEnv = env.createChild();
-        for (const [key, value] of Object.entries(codeParams)) {
-          execEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
-        }
-        
-        // Evaluate the when expression with the parameter environment
-        const { evaluateWhenExpression } = await import('./when-expression');
-        const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
-        // If the when-expression tagged a side-effect show, unwrap to its text
-        // so /run echoes it as output (tests expect duplicate lines).
-        const normalized = normalizeWhenShowEffect(whenResult.value);
-        setOutput(normalized.normalized);
-        
-        logger.debug('🎯 mlld-when result:', {
-          outputType: typeof outputValue,
-          outputValue: outputText.substring(0, 100)
-        });
-      } else if (definition.language === 'mlld-exe-block') {
-        const blockNode = Array.isArray(definition.codeTemplate)
-          ? (definition.codeTemplate[0] as ExeBlockNode | undefined)
-          : undefined;
-        if (!blockNode || !blockNode.values) {
-          throw new Error('mlld-exe-block executable missing block content');
-        }
-
-        const execEnv = env.createChild();
-        for (const [key, value] of Object.entries(codeParams)) {
-          execEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
-        }
-
-        const { evaluateExeBlock } = await import('./exe');
-        const blockResult = await evaluateExeBlock(blockNode, execEnv);
-        setOutput(blockResult.value);
-      } else {
-        // Interpolate executable code templates with parameters (canonical behavior)
-        const code = await interpolateWithPendingDescriptor(
-          definition.codeTemplate,
-          InterpolationContext.ShellCommand,
-          tempEnv
-        );
-        if (process.env.DEBUG_EXEC) {
-          logger.debug('run.ts code execution debug:', {
-            codeTemplate: definition.codeTemplate,
-            interpolatedCode: code,
-            argValues
-          });
-        }
-
-        setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
-          return await env.executeCode(
-            code,
-            definition.language || 'javascript',
-            codeParams,
-            undefined,
-            workingDirectory ? { workingDirectory } : undefined,
-            {
-              ...executionContext,
-              streamingEnabled,
-              pipelineId,
-              workingDirectory
-            }
-          );
-        }));
-      }
-    } else if (definition.type === 'template') {
-      // Handle template executables
-      const tempEnv = env.createChild();
-      for (const [key, value] of Object.entries(argValues)) {
-        tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
-      }
-
-      const templateOutput = await interpolateWithPendingDescriptor(
-        definition.template,
-        InterpolationContext.Default,
-        tempEnv
-      );
-      setOutput(templateOutput);
-    } else if (definition.type === 'prose') {
-      // Handle prose executables - prose:@config { ... }
-      const { executeProseExecutable } = await import('./prose-execution');
-      const proseResult = await executeProseExecutable(definition, argValues, env);
-      setOutput(proseResult);
-    } else {
-      throw new Error(`Unsupported executable type: ${definition.type}`);
+    });
+    callStack = dispatchResult.callStack;
+    for (const descriptor of dispatchResult.outputDescriptors) {
+      mergePendingDescriptor(descriptor);
     }
+    setOutput(dispatchResult.value);
   } else if (directive.subtype === 'runExecInvocation') {
     // Handle ExecInvocation nodes in run directive
     const execInvocation = directive.values?.execInvocation;
