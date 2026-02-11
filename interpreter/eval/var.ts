@@ -8,26 +8,11 @@ import {
   VariableSource,
   VariableMetadataUtils,
   createSimpleTextVariable,
-  createInterpolatedTextVariable,
-  createTemplateVariable,
-  createExecutableVariable,
-  createArrayVariable,
-  createObjectVariable,
-  createFileContentVariable,
-  createSectionContentVariable,
-  createComputedVariable,
-  createCommandResultVariable,
   createStructuredValueVariable,
-  createPrimitiveVariable,
   isExecutableVariable,
-  type VariableMetadata,
-  type VariableContext,
-  type VariableInternalMetadata,
-  type VariableFactoryInitOptions
 } from '@core/types/variable';
-import { createCapabilityContext, type SecurityDescriptor } from '@core/types/security';
-import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
-import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
+import { createCapabilityContext } from '@core/types/security';
+import { isStructuredValue, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { maybeAutosignVariable } from './auto-sign';
 import { isExeReturnControl } from './exe-return';
@@ -36,14 +21,11 @@ import {
   createDescriptorState,
   extractDescriptorsFromDataAst
 } from './var/security-descriptor';
-import {
-  hasComplexArrayItems,
-  hasComplexValues
-} from './var/collection-evaluator';
 import { createRhsContentEvaluator } from './var/rhs-content';
 import { createReferenceEvaluator } from './var/reference-evaluator';
 import { createExecutionEvaluator } from './var/execution-evaluator';
 import { createRhsDispatcher } from './var/rhs-dispatcher';
+import { createVariableBuilder } from './var/variable-builder';
 
 export { extractDescriptorsFromDataAst };
 
@@ -51,20 +33,6 @@ export interface VarAssignmentResult {
   identifier: string;
   variable: Variable;
   evalResultOverride?: EvalResult;
-}
-
-/**
- * Safely convert a value to string, handling StructuredValue wrappers
- * WHY: Many code paths need to convert values to strings but must check
- *      for StructuredValue wrappers first to avoid producing [object Object]
- */
-function valueToString(value: unknown): string {
-  if (value === null) return ''; // Preserve legacy behaviour: null interpolates to empty
-  if (value === undefined) return 'undefined'; // Preserve 'undefined' string for display
-  if (typeof value === 'string') return value;
-  if (isStructuredValue(value)) return asText(value);
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
 }
 
 /**
@@ -297,449 +265,27 @@ export async function prepareVarAssignment(
   });
   mergeResolvedDescriptor(resolvedValueDescriptor);
 
-  // Create and store the appropriate variable type
   const location = sourceLocation;
   const source = createVariableSource(valueNode, directive);
-  const baseCtx: Partial<VariableContext> = { definedAt: location };
-  const baseInternal: Partial<VariableInternalMetadata> = {};
-  if (typeof directive.meta?.rawTemplate === 'string') {
-    baseInternal.templateRaw = directive.meta.rawTemplate;
-  }
-
-  const cloneFactoryOptions = (
-    overrides?: Partial<VariableFactoryInitOptions>
-  ): VariableFactoryInitOptions => ({
-    mx: { ...baseCtx, ...(overrides?.mx ?? {}) },
-    internal: { ...baseInternal, ...(overrides?.internal ?? {}) }
+  const variableBuilder = createVariableBuilder({
+    directive,
+    extractSecurityFromValue,
+    identifier,
+    interpolateWithSecurity,
+    location,
+    resolvedValueDescriptor,
+    securityLabels,
+    source,
+    valueNode
   });
-
-  const applySecurityOptions = (
-    overrides?: Partial<VariableFactoryInitOptions>,
-    existing?: SecurityDescriptor
-  ): VariableFactoryInitOptions => {
-    const options = cloneFactoryOptions(overrides);
-    // Apply security metadata (still uses legacy metadata internally)
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(undefined, {
-      labels: securityLabels,
-      existingDescriptor: existing ?? resolvedValueDescriptor
-    });
-    // Update mx from security descriptor
-    if (finalMetadata?.security) {
-      updateVarMxFromDescriptor(options.mx ?? (options.mx = {}), finalMetadata.security);
-    }
-    if (finalMetadata) {
-      options.metadata = {
-        ...(options.metadata ?? {}),
-        ...finalMetadata
-      };
-    }
-    return options;
-  };
-  
-  // Mark if value came from a function for pipeline retryability
-  if (valueNode && (
-    valueNode.type === 'ExecInvocation' || 
-    valueNode.type === 'command' || 
-    valueNode.type === 'code'
-  )) {
-    baseInternal.isRetryable = true;
-    baseInternal.sourceFunction = valueNode; // Store the AST node for re-execution
-  }
-
-  let variable: Variable;
-
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.log('Creating variable:', {
-      identifier,
-      valueNodeType: valueNode?.type,
-      resolvedValue,
-      resolvedValueType: typeof resolvedValue
-    });
-  }
-  if (process.env.MLLD_DEBUG_IDS === 'true' && (identifier === 'squared' || identifier === 'ids')) {
-    try {
-      const structuredInfo = isStructuredValue(resolvedValue)
-        ? {
-            type: resolvedValue.type,
-            text: resolvedValue.text,
-            dataType: typeof resolvedValue.data,
-            preview: resolvedValue.data && typeof resolvedValue.data === 'object'
-              ? Array.isArray(resolvedValue.data)
-                ? { length: resolvedValue.data.length, first: resolvedValue.data[0] }
-                : { keys: Object.keys(resolvedValue.data).slice(0, 5) }
-              : resolvedValue.data
-          }
-        : undefined;
-      console.error('[var-debug]', {
-        identifier,
-        resolvedType: typeof resolvedValue,
-        isStructured: isStructuredValue(resolvedValue),
-        structuredInfo,
-        rawValue: resolvedValue
-      });
-    } catch {}
-  }
-
-  // Check if resolvedValue is already a Variable that we should preserve
-  const { isVariable } = await import('../utils/variable-resolution');
-  if (isVariable(resolvedValue)) {
-    // Preserve the existing Variable (e.g., when copying an executable)
-    // Update its name and metadata to reflect the new assignment
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Preserving existing Variable:', {
-        identifier,
-        resolvedValueType: resolvedValue.type,
-        resolvedValueName: resolvedValue.name
-      });
-    }
-    const overrides: Partial<VariableFactoryInitOptions> = {
-      mx: { ...(resolvedValue.mx ?? {}), ...baseCtx },
-      internal: { ...(resolvedValue.internal ?? {}), ...baseInternal }
-    };
-    // Preserve security from existing variable
-    const existingSecurity = extractSecurityFromValue(resolvedValue);
-    const options = applySecurityOptions(overrides, existingSecurity);
-    variable = {
-      ...resolvedValue,
-      name: identifier,
-      definedAt: location,
-      mx: options.mx,
-      internal: options.internal
-    };
-    VariableMetadataUtils.attachContext(variable);
-  } else if (isStructuredValue(resolvedValue)) {
-    const options = applySecurityOptions(
-      {
-        internal: {
-          isStructuredValue: true,
-          structuredValueType: resolvedValue.type
-        }
-      },
-      resolvedValueDescriptor
-    );
-    variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
-
-  } else if (resolvedValue && typeof resolvedValue === 'object' && (resolvedValue as any).__executable) {
-    const execDef = (resolvedValue as any).executableDef ?? (resolvedValue as any).value;
-    const options = applySecurityOptions(
-      {
-        internal: {
-          executableDef: execDef
-        }
-      },
-      resolvedValueDescriptor
-    );
-    variable = createExecutableVariable(
-      identifier,
-      'command',
-      '',
-      execDef?.paramNames || [],
-      undefined,
-      source,
-      options
-    );
-
-  } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
-    // Direct primitive values - we need to preserve their types
-    const options = applySecurityOptions();
-    variable = createPrimitiveVariable(
-      identifier,
-      valueNode, // Use the actual primitive value
-      source,
-      options
-    );
-
-  } else if (valueNode.type === 'array') {
-    const isComplex = hasComplexArrayItems(valueNode.items || valueNode.elements || []);
-    
-    // Debug logging
-    if (process.env.MLLD_DEBUG === 'true') {
-      logger.debug('var.ts: Creating array variable:', {
-        identifier,
-        isComplex,
-        resolvedValueType: typeof resolvedValue,
-        resolvedValueIsArray: Array.isArray(resolvedValue),
-        resolvedValue
-      });
-    }
-    
-    const options = applySecurityOptions();
-    variable = createArrayVariable(identifier, resolvedValue, isComplex, source, options);
-    
-  } else if (valueNode.type === 'object') {
-    const isComplex = toolCollection ? false : hasComplexValues(valueNode.entries || valueNode.properties);
-    const options = applySecurityOptions(
-      toolCollection
-        ? {
-            internal: {
-              toolCollection,
-              isToolsCollection: true
-            }
-          }
-        : undefined
-    );
-    variable = createObjectVariable(identifier, resolvedValue, isComplex, source, options);
-    
-  } else if (valueNode.type === 'command') {
-    const options = applySecurityOptions();
-    variable = createCommandResultVariable(identifier, resolvedValue, valueNode.command, source, 
-      undefined, undefined, options);
-    
-  } else if (valueNode.type === 'code') {
-    // Need to get source code from the value node
-    const sourceCode = valueNode.code || ''; // TODO: Verify how to extract source code
-    const options = applySecurityOptions();
-    variable = createComputedVariable(identifier, resolvedValue, 
-      valueNode.language || 'js', sourceCode, source, options);
-    
-  } else if (valueNode.type === 'path') {
-    const filePath = await interpolateWithSecurity(valueNode.segments);
-    const options = applySecurityOptions();
-    variable = createFileContentVariable(identifier, resolvedValue, filePath, source, options);
-    
-  } else if (valueNode.type === 'section') {
-    const filePath = await interpolateWithSecurity(valueNode.path);
-    const sectionName = await interpolateWithSecurity(valueNode.section);
-    const options = applySecurityOptions();
-    variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
-      sectionName, 'hash', source, options);
-    
-  } else if (valueNode.type === 'VariableReference') {
-    // For VariableReference nodes, create variable based on resolved value type
-    // This handles cases like @user.name where resolvedValue is the field value
-    const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
-    const existingSecurity = extractSecurityFromValue(resolvedValue);
-    if (typeof actualValue === 'string') {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createSimpleTextVariable(identifier, actualValue, source, options);
-    } else if (typeof actualValue === 'number' || typeof actualValue === 'boolean' || actualValue === null) {
-      const options = applySecurityOptions(undefined, existingSecurity);
-      variable = createPrimitiveVariable(identifier, actualValue, source, options);
-    } else if (Array.isArray(actualValue)) {
-      const options = applySecurityOptions(undefined, existingSecurity);
-      variable = createArrayVariable(identifier, actualValue, false, source, options);
-    } else if (typeof actualValue === 'object' && actualValue !== null) {
-      const options = applySecurityOptions(undefined, existingSecurity);
-      variable = createObjectVariable(identifier, actualValue, false, source, options);
-    } else {
-      // Fallback to text
-      const options = applySecurityOptions(undefined, existingSecurity);
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
-    }
-    
-  } else if (valueNode.type === 'load-content') {
-    const structuredValue = wrapLoadContentValue(resolvedValue);
-    const options = applySecurityOptions({
-      internal: {
-        structuredValueMetadata: structuredValue.metadata
-      }
-    });
-    variable = createStructuredValueVariable(identifier, structuredValue, source, options);
-    resolvedValue = structuredValue;
-
-  } else if (valueNode.type === 'foreach' || valueNode.type === 'foreach-command') {
-    // Foreach expressions always return arrays
-    const isComplex = false; // foreach results are typically simple values
-    const options = applySecurityOptions();
-    variable = createArrayVariable(identifier, resolvedValue, isComplex, source, options);
-
-  } else if (valueNode.type === 'LoopExpression') {
-    // Loop expressions can return any type based on done/continue behavior
-    if (isStructuredValue(resolvedValue)) {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
-    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      if (Array.isArray(resolvedValue)) {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createArrayVariable(identifier, resolvedValue, false, source, options);
-      } else {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
-      }
-    } else if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
-    } else {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
-    }
-
-  } else if (valueNode.type === 'WhenExpression') {
-    // When expressions can return any type based on matching arm
-    if (isStructuredValue(resolvedValue)) {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
-    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      if (Array.isArray(resolvedValue)) {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createArrayVariable(identifier, resolvedValue, false, source, options);
-      } else {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
-      }
-    } else if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
-    } else {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
-    }
-
-  } else if (valueNode.type === 'ExecInvocation' || valueNode.type === 'ExeBlock') {
-    // Exec invocations and blocks can return any type
-    if (isStructuredValue(resolvedValue)) {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
-    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      if (Array.isArray(resolvedValue)) {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createArrayVariable(identifier, resolvedValue, false, source, options);
-      } else {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
-      }
-    } else {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
-    }
-
-  } else if (valueNode.type === 'NewExpression') {
-    if (isStructuredValue(resolvedValue)) {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
-    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      if (Array.isArray(resolvedValue)) {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createArrayVariable(identifier, resolvedValue, false, source, options);
-      } else {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
-      }
-    } else if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
-    } else {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
-    }
-
-  } else if (valueNode.type === 'VariableReferenceWithTail') {
-    // Variable with tail modifiers - create based on resolved type
-    const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
-    if (typeof actualValue === 'object' && actualValue !== null) {
-      if (Array.isArray(actualValue)) {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createArrayVariable(identifier, actualValue, false, source, options);
-      } else {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createObjectVariable(identifier, actualValue, false, source, options);
-      }
-    } else {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
-    }
-
-  } else if (valueNode.type === 'Directive' && valueNode.kind === 'env') {
-    // env expression result - create variable based on resolved value type
-    if (isStructuredValue(resolvedValue)) {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
-    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      if (Array.isArray(resolvedValue)) {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createArrayVariable(identifier, resolvedValue, false, source, options);
-      } else {
-        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
-      }
-    } else if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
-    } else {
-      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
-    }
-
-  } else if (directive.meta?.expressionType) {
-    // Expression results - create appropriate variable type based on resolved value
-    if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
-      const options = applySecurityOptions();
-      variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
-    } else if (Array.isArray(resolvedValue)) {
-      const options = applySecurityOptions();
-      variable = createArrayVariable(identifier, resolvedValue, false, source, options);
-    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      const options = applySecurityOptions();
-      variable = createObjectVariable(identifier, resolvedValue, false, source, options);
-    } else {
-      // Expression returned string or other primitive
-      const options = applySecurityOptions();
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
-    }
-    
-  } else if (valueNode.type === 'Literal') {
-    // Literal nodes - DON'T create variable yet, let it fall through to pipeline processing
-    // The variable will be created after checking for pipelines
-
-  } else {
-    // Text variables - need to determine specific type
-    const strValue = valueToString(resolvedValue);
-    
-    if (directive.meta?.wrapperType === 'singleQuote') {
-      const options = applySecurityOptions();
-      variable = createSimpleTextVariable(identifier, strValue, source, options);
-    } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick' || directive.meta?.wrapperType === 'doubleQuote' || directive.meta?.wrapperType === 'doubleColon' || directive.meta?.wrapperType === 'tripleColon') {
-      // Template variable
-      let templateType: 'backtick' | 'doubleColon' | 'tripleColon' = 'backtick';
-      if (directive.meta?.wrapperType === 'doubleColon') {
-        templateType = 'doubleColon';
-      } else if (directive.meta?.wrapperType === 'tripleColon') {
-        templateType = 'tripleColon';
-      }
-      
-      // For triple-colon templates, the value is the AST array, not a string
-      const templateValue = directive.meta?.wrapperType === 'tripleColon' && Array.isArray(resolvedValue) 
-        ? resolvedValue as any // Pass the AST array
-        : strValue; // For other templates, use the string value
-      const options = applySecurityOptions();
-      variable = createTemplateVariable(
-        identifier,
-        templateValue,
-        undefined,
-        templateType as any,
-        source,
-        options
-      );
-    } else if (directive.meta?.wrapperType === 'doubleQuote' || source.hasInterpolation) {
-      // Interpolated text - need to track interpolation points
-      // For now, create without interpolation points - TODO: extract these from AST
-      const options = applySecurityOptions();
-      variable = createInterpolatedTextVariable(identifier, strValue, [], source, options);
-    } else {
-      // Default to simple text
-      const options = applySecurityOptions();
-      variable = createSimpleTextVariable(identifier, strValue, source, options);
-    }
-  }
+  const { applySecurityOptions, baseCtx, baseInternal } = variableBuilder;
+  let variable = await variableBuilder.build({
+    resolvedValue,
+    toolCollection
+  });
 
   // Use unified pipeline processor
   const { processPipeline } = await import('./pipeline/unified-processor');
-  
-  // Create variable if not already created (for Literal nodes)
-  if (!variable) {
-    if (valueNode && valueNode.type === 'Literal') {
-      if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
-        const options = applySecurityOptions();
-        variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
-      } else {
-        const options = applySecurityOptions();
-        variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
-      }
-    } else {
-      const options = applySecurityOptions();
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
-    }
-  }
   
   // Skip pipeline processing if:
   // 1. This is an ExecInvocation with a withClause (already processed by evaluateExecInvocation)
