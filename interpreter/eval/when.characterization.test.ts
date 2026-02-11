@@ -216,6 +216,61 @@ describe('when evaluator characterization', () => {
     expect(textResult).toBe(true);
   });
 
+  it('keeps denied literal condition handling stable', async () => {
+    const deniedLiteral = [{
+      type: 'Literal',
+      nodeId: 'denied-literal',
+      value: 'denied',
+      valueType: 'string'
+    } as any];
+
+    const defaultResult = await evaluateCondition(deniedLiteral, env);
+    expect(defaultResult).toBe(false);
+
+    const deniedResult = await env.withDeniedContext(
+      { denied: true, reason: 'blocked by guard', guardName: 'test-guard' },
+      () => evaluateCondition(deniedLiteral, env)
+    );
+    expect(deniedResult).toBe(true);
+
+    const negatedDenied = await env.withDeniedContext(
+      { denied: true, reason: 'blocked by guard', guardName: 'test-guard' },
+      () =>
+        evaluateCondition(
+          [{
+            type: 'UnaryExpression',
+            nodeId: 'negated-denied',
+            operator: '!',
+            operand: deniedLiteral[0]
+          } as any],
+          env
+        )
+    );
+    expect(negatedDenied).toBe(false);
+  });
+
+  it('keeps condition-expression error wrapping stable', async () => {
+    const condition = [{
+      type: 'BinaryExpression',
+      nodeId: 'bad-expression',
+      operator: '^',
+      left: {
+        type: 'Text',
+        nodeId: 'left-text',
+        content: 'left'
+      },
+      right: {
+        type: 'Text',
+        nodeId: 'right-text',
+        content: 'ok'
+      }
+    } as any];
+
+    await expect(evaluateCondition(condition, env)).rejects.toThrow(
+      'Failed to evaluate condition expression'
+    );
+  });
+
   it('keeps implicit variable forwarding for exec-in-condition stable', async () => {
     const { ast } = await parse('/exe @isOk(value) = js { return value === "ok"; }');
     await evaluate(ast, env);

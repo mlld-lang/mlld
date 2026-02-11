@@ -6,7 +6,6 @@ import type { Variable } from '@core/types/variable';
 import { MlldConditionError } from '@core/errors';
 import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode } from '@core/types/when';
 import { evaluate } from '../core/interpreter';
-import { logger } from '@core/utils/logger';
 import { isExeReturnControl } from './exe-return';
 import {
   isTextLike,
@@ -25,6 +24,10 @@ import {
   type WhenFormHandlerRuntime
 } from './when/form-handlers';
 import { isNoneCondition, type WhenMatcherRuntime } from './when/match-engines';
+import {
+  evaluateCondition as evaluateConditionRuntime,
+  type WhenConditionRuntime
+} from './when/condition-evaluator';
 
 const DENIED_KEYWORD = 'denied';
 export { evaluateLetAssignment, evaluateAugmentedAssignment } from './when/assignment-support';
@@ -141,287 +144,14 @@ export async function evaluateCondition(
   env: Environment,
   variableName?: string
 ): Promise<boolean> {
-  const deniedContext = env.getContextManager().peekDeniedContext();
-  const deniedState = Boolean(deniedContext?.denied);
-
-  // Handle new WhenCondition wrapper nodes from unified expressions
-  if (condition.length === 1 && condition[0].type === 'WhenCondition') {
-    const whenCondition = condition[0] as any;
-    const expression = whenCondition.expression;
-    
-    // Evaluate the wrapped expression
-    const result = await evaluateCondition([expression], env, variableName);
-    
-    // Apply negation if specified in the wrapper
-    return whenCondition.negated ? !result : result;
-  }
-  
-  // Check if this is a negation node (UnaryExpression with operator '!')
-  if (condition.length === 1 && condition[0].type === 'UnaryExpression') {
-    const unaryNode = condition[0] as any;
-    if (unaryNode.operator === '!') {
-      if (isDeniedLiteralNode(unaryNode.operand)) {
-        return !deniedState;
-      }
-      const innerCondition = [unaryNode.operand];
-      
-      // Evaluate the inner condition and negate the result
-      const innerResult = await evaluateCondition(innerCondition, env, variableName);
-      return !innerResult;
-    }
-  }
-
-  if (condition.length === 1 && isDeniedLiteralNode(condition[0])) {
-    return deniedState;
-  }
-  
-  // Check if this is an expression node (BinaryExpression, TernaryExpression, UnaryExpression)
-  if (condition.length === 1) {
-    const node = condition[0];
-    if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
-      const { evaluateUnifiedExpression } = await import('./expressions');
-      let resultValue: unknown;
-      try {
-        const expressionResult = await evaluateUnifiedExpression(node as any, env, { isCondition: true });
-        resultValue = expressionResult.value;
-      } catch (err) {
-        // Add operator and operand previews for helpful diagnostics
-        const op = (node as any).operator || (node as any).test?.type || node.type;
-        const lhs = (node as any).left ?? (node as any).argument ?? (node as any).test;
-        const rhs = (node as any).right ?? (node as any).consequent;
-        const message = `Failed to evaluate condition expression (${op}).`;
-        throw new MlldConditionError(message, undefined, node.location, {
-          originalError: err as Error,
-          errors: [
-            {
-              type: 'expression',
-              count: 1,
-              firstExample: {
-                conditionIndex: 0,
-                message: `op=${op}, left=${preview(lhs)}, right=${preview(rhs)}`
-              }
-            }
-          ]
-        } as any);
-      }
-      const truthy = isTruthy(resultValue);
-      if (process.env.MLLD_DEBUG === 'true') {
-        try {
-          console.error('[evaluateCondition] expression node result:', {
-            nodeType: node.type,
-            result: resultValue,
-            truthy
-          });
-        } catch {}
-      }
-      return truthy;
-    }
-  }
-  
-  // Check if this is an ExecInvocation node
-  if (condition.length === 1 && condition[0].type === 'ExecInvocation') {
-    const execNode = condition[0] as any;
-    
-    // Import the exec invocation evaluator
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    
-    // Create a child environment for execution
-    const childEnv = env.createChild();
-    
-    // If we have a comparison variable, pass it as the first implicit argument
-    if (variableName) {
-      const variable = env.getVariable(variableName);
-      if (variable) {
-        // Modify the ExecInvocation to include the comparison value as the first argument
-        const modifiedExecNode = {
-          ...execNode,
-          commandRef: {
-            ...execNode.commandRef,
-            args: [
-              // Insert the variable's value as the first argument
-              {
-                type: 'VariableReference',
-                identifier: variableName,
-                nodeId: 'implicit-when-arg',
-                valueType: 'variable'
-              },
-              ...(execNode.commandRef.args || [])
-            ]
-          }
-        };
-        
-    // Execute the modified invocation
-    let result: any;
-    try {
-      result = await evaluateExecInvocation(modifiedExecNode, childEnv);
-    } catch (err) {
-      const name = modifiedExecNode?.commandRef?.name || 'exec';
-      throw new MlldConditionError(
-        `Failed to evaluate function in condition: ${name}`,
-        undefined,
-        (modifiedExecNode as any).location,
-        { originalError: err as Error } as any
-      );
-    }
-        
-        // Check the result for truthiness
-        if (result.stdout !== undefined) {
-          // Command execution result
-          if (result.exitCode !== undefined && result.exitCode !== 0) {
-            return false;
-          }
-          if (result.value !== undefined && result.value !== result.stdout) {
-            /**
-             * Extract Variable value for truthiness evaluation
-             * WHY: Truthiness checks need raw values because boolean logic operates on
-             *      primitive types, not Variable metadata
-             */
-            const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-            const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
-            return isTruthy(finalValue);
-          }
-          return isTruthy(result.stdout.trim());
-        }
-        
-        /**
-         * Extract Variable value for truthiness evaluation
-         * WHY: Truthiness checks need raw values because boolean logic operates on
-         *      primitive types, not Variable metadata
-         */
-        const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-        const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
-        return isTruthy(finalValue);
-      }
-    }
-    
-    // No comparison variable - just execute the function and check its result
-    let result: any;
-    try {
-      result = await evaluateExecInvocation(execNode, childEnv);
-    } catch (err) {
-      const name = (execNode as any)?.commandRef?.name || 'exec';
-      throw new MlldConditionError(
-        `Failed to evaluate function in condition: ${name}`,
-        undefined,
-        (execNode as any).location,
-        { originalError: err as Error } as any
-      );
-    }
-    
-    // Check the result for truthiness
-    if (result.stdout !== undefined) {
-      // Command execution result
-      if (result.exitCode !== undefined && result.exitCode !== 0) {
-        return false;
-      }
-      if (result.value !== undefined && result.value !== result.stdout) {
-        const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-        const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
-        return isTruthy(finalValue);
-      }
-      return isTruthy(result.stdout.trim());
-    }
-    
-    const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-    const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
-    return isTruthy(finalValue);
-  }
-  
-  // Create a child environment for condition evaluation
-  const childEnv = env.createChild();
-  
-  // If a variable name is specified, set it to the condition value for evaluation
-  if (variableName) {
-    const variable = env.getVariable(variableName);
-    if (variable) {
-      // Set the _whenValue context for built-in functions
-      childEnv.setVariable('_whenValue', variable);
-    }
-  }
-  
-  if (process.env.DEBUG_WHEN) {
-    logger.debug('Evaluating condition:', { condition });
-  }
-  
-  // Evaluate the condition with condition and expression context
-  let result: any;
-  try {
-    result = await evaluate(condition, childEnv, { isCondition: true, isExpression: true });
-  } catch (err) {
-    throw new MlldConditionError(
-      'Failed to evaluate condition value',
-      undefined,
-      (condition[0] as any)?.location,
-      { originalError: err as Error } as any
-    );
-  }
-  
-  if (process.env.DEBUG_WHEN) {
-    logger.debug('Condition evaluation result:', { result });
-  }
-  
-  // If we have a variable to compare against
-  if (variableName && childEnv.hasVariable('_whenValue')) {
-    const whenValue = childEnv.getVariable('_whenValue');
-    
-    // Check if the condition is an executable (function call)
-    if (result.value && typeof result.value === 'object' && result.value.type === 'executable') {
-      // The executable should have already been evaluated with _whenValue as context
-      // Just check its boolean result
-      const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-      const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
-      return isTruthy(finalValue);
-    }
-    
-    // Get the actual value from the variable
-    let actualValue: any;
-    if (whenValue && typeof whenValue === 'object' && 'value' in whenValue) {
-      actualValue = whenValue.value;
-    } else {
-      actualValue = whenValue;
-    }
-    
-    // Compare the variable value with the condition value
-    return compareValues(actualValue, result.value, childEnv);
-  }
-  
-  // For command execution results, check stdout or exit code
-  if (result.stdout !== undefined) {
-    // This is a command execution result
-    // First check exit code - 0 is true, non-zero is false
-    if (result.exitCode !== undefined && result.exitCode !== 0) {
-      return false;
-    }
-    // If we have a parsed value (from exec functions with return values), use that
-    // This handles the case where JSON stringified empty string '""' should be falsy
-    if (result.value !== undefined && result.value !== result.stdout) {
-      /**
-       * Extract Variable value for truthiness evaluation
-       * WHY: Truthiness checks need raw values because boolean logic operates on
-       *      primitive types, not Variable metadata
-       */
-      const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-      const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
-      return isTruthy(finalValue);
-    }
-    // Otherwise check stdout - trim whitespace
-    const trimmedStdout = result.stdout.trim();
-    if (process.env.DEBUG_WHEN) {
-      logger.debug('Trimmed stdout for truthiness:', { trimmedStdout });
-    }
-    return isTruthy(trimmedStdout);
-  }
-  
-  /**
-   * Extract Variable value for truthiness evaluation
-   * WHY: Truthiness checks need raw values because boolean logic operates on
-   *      primitive types, not Variable metadata
-   */
-  const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-  const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
-  
-  // Convert result to boolean
-  return isTruthy(finalValue);
+  const runtime: WhenConditionRuntime = {
+    evaluateNode: evaluate,
+    isDeniedLiteralNode,
+    compareValues,
+    isTruthy,
+    preview
+  };
+  return evaluateConditionRuntime(condition, env, runtime, variableName);
 }
 
 function isDeniedLiteralNode(node: BaseMlldNode | undefined): boolean {
