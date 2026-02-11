@@ -140,7 +140,7 @@ export async function prepareVarAssignment(
   env: Environment,
   context?: EvaluationContext
 ): Promise<VarAssignmentResult> {
-  const { baseDescriptor, capabilityKind, identifier, operationMetadata, sourceLocation } =
+  const { baseDescriptor, capabilityKind, identifier, operationMetadata, securityLabels, sourceLocation } =
     createVarAssignmentContext(directive, env);
   const descriptorState = createDescriptorState(env);
   const {
@@ -959,7 +959,7 @@ export async function prepareVarAssignment(
     const options = cloneFactoryOptions(overrides);
     // Apply security metadata (still uses legacy metadata internally)
     const finalMetadata = VariableMetadataUtils.applySecurityMetadata(undefined, {
-      labels: baseDescriptor.labels,
+      labels: securityLabels,
       existingDescriptor: existing ?? resolvedValueDescriptor
     });
     // Update mx from security descriptor

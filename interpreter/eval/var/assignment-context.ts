@@ -12,6 +12,7 @@ export interface VarOperationMetadata {
 export interface VarAssignmentContext {
   identifier: string;
   baseDescriptor: SecurityDescriptor;
+  securityLabels: DataLabel[] | undefined;
   capabilityKind: CapabilityKind;
   operationMetadata: VarOperationMetadata;
   sourceLocation: SourceLocation | undefined;
@@ -36,10 +37,13 @@ function extractVarIdentifier(directive: DirectiveNode): string {
   return identifier;
 }
 
-function createBaseDescriptor(directive: DirectiveNode): SecurityDescriptor {
-  const securityLabels = (directive.meta?.securityLabels ?? directive.values?.securityLabels) as
+function resolveSecurityLabels(directive: DirectiveNode): DataLabel[] | undefined {
+  return (directive.meta?.securityLabels ?? directive.values?.securityLabels) as
     | DataLabel[]
     | undefined;
+}
+
+function createBaseDescriptor(securityLabels: DataLabel[] | undefined): SecurityDescriptor {
   return makeSecurityDescriptor({ labels: securityLabels });
 }
 
@@ -49,7 +53,8 @@ export function createVarAssignmentContext(
 ): VarAssignmentContext {
   const identifier = extractVarIdentifier(directive);
   const capabilityKind = directive.kind as CapabilityKind;
-  const baseDescriptor = createBaseDescriptor(directive);
+  const securityLabels = resolveSecurityLabels(directive);
+  const baseDescriptor = createBaseDescriptor(securityLabels);
   const operationMetadata: VarOperationMetadata = {
     kind: 'var',
     identifier,
@@ -60,6 +65,7 @@ export function createVarAssignmentContext(
   return {
     identifier,
     baseDescriptor,
+    securityLabels,
     capabilityKind,
     operationMetadata,
     sourceLocation
