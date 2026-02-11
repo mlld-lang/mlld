@@ -1,7 +1,7 @@
 ---
 updated: 2026-02-10
 tags: #arch, #interpreter
-related-docs: docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/RESOLVERS.md, docs/dev/SHADOW-ENV.md, docs/dev/IMPORTS.md, docs/dev/ITERATORS.md, docs/dev/ALLIGATOR.md, docs/dev/EXEC-VARS.md, llms.txt
+related-docs: docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/RESOLVERS.md, docs/dev/SHADOW-ENV.md, docs/dev/IMPORTS.md, docs/dev/ITERATORS.md, docs/dev/ALLIGATOR.md, docs/dev/EXEC-VARS.md, docs/dev/VAR-EVALUATION.md, llms.txt
 related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/eval/exec/*.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/executors/*.ts, interpreter/eval/pipeline/*, core/types/*
 related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableReferenceNode, WithClause }, core/types/variable { Variable }
 ---
@@ -169,7 +169,7 @@ This keeps `@mx.hint` tightly scoped to the location where it is meaningful, whi
 
 ## Quick Map
 
-- /var: `interpreter/eval/var.ts` — unified variable creation (text/data/primitive/path/section)
+- /var: `interpreter/eval/var.ts` + `interpreter/eval/var/*` — orchestration + specialized RHS/metadata/pipeline modules (see `docs/dev/VAR-EVALUATION.md`)
 - /run, /sh: `interpreter/eval/run.ts` — command and shell execution, with-clause plumbing
 - /export: `interpreter/eval/export.ts` — accumulate manifest entries, reset fallback on wildcard
 - /exe: `interpreter/eval/exe.ts` — define executables (command/code/template/section/ref)

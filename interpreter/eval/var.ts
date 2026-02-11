@@ -215,7 +215,6 @@ export async function prepareVarAssignment(
     throw new Error('Tool collections must be object literals');
   }
 
-  try {
   let resolvedValue: any;
   let toolCollection: ToolCollection | undefined;
   const rhsResult = await rhsDispatcher.evaluate(valueNode);
@@ -311,9 +310,6 @@ export async function prepareVarAssignment(
   }
 
   return { identifier, variable: finalVar };
-  } catch (error) {
-    throw error;
-  }
 }
 
 export async function evaluateVar(
