@@ -2,7 +2,7 @@ import type { BaseMlldNode, DirectiveNode, ExeBlockNode, ExeReturnNode, TextNode
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable, ProseExecutable } from '@core/types/executable';
-import { interpolate, evaluate } from '../core/interpreter';
+import { evaluate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
 import {
   createExecutableVariable,
@@ -21,23 +21,27 @@ import { isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
-import { isContinueLiteral, isDoneLiteral } from '@core/types/control';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 import { VariableImporter } from './import/VariableImporter';
-import * as path from 'path';
 import {
   createCapabilityContext,
   makeSecurityDescriptor,
   type DataLabel,
-  type CapabilityContext,
-  type SecurityDescriptor
+  type CapabilityContext
 } from '@core/types/security';
 import { asData, asText, isStructuredValue, extractSecurityDescriptor } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
-import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { maybeAutosignVariable } from './auto-sign';
 import { createExeReturnControl, isExeReturnControl, resolveExeReturnValue } from './exe-return';
+import {
+  extractParamNames,
+  extractParamTypes,
+  interpolateAndRecord,
+  isLoopControlValue,
+  parseTemplateFileNodes,
+  resolveExeDescription
+} from './exe/definition-helpers';
 
 /**
  * Evaluate an exe block sequentially with local scope for let/+= assignments.
@@ -154,112 +158,6 @@ export async function evaluateExeBlock(
   } finally {
     blockEnv.popExecutionContext('exe');
   }
-}
-
-function isLoopControlValue(value: unknown): boolean {
-  const unwrapped = isStructuredValue(value) ? asData(value) : value;
-
-  if (unwrapped && typeof unwrapped === 'object') {
-    if ('__whileControl' in (unwrapped as Record<string, unknown>)) {
-      return true;
-    }
-    if (isDoneLiteral(unwrapped as any) || isContinueLiteral(unwrapped as any)) {
-      return true;
-    }
-    if ('valueType' in (unwrapped as Record<string, unknown>)) {
-      const valueType = (unwrapped as any).valueType;
-      return valueType === 'retry';
-    }
-  }
-
-  return unwrapped === 'done' || unwrapped === 'continue' || unwrapped === 'retry';
-}
-
-async function interpolateAndRecord(
-  nodes: any,
-  env: Environment,
-  context: InterpolationContext = InterpolationContext.Default
-): Promise<string> {
-  const descriptors: SecurityDescriptor[] = [];
-  const text = await interpolate(nodes, env, context, {
-    collectSecurityDescriptor: descriptor => {
-      if (descriptor) {
-        descriptors.push(descriptor);
-      }
-    }
-  });
-  if (descriptors.length > 0) {
-    const merged =
-      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
-    env.recordSecurityDescriptor(merged);
-  }
-  return text;
-}
-
-async function resolveExeDescription(raw: unknown, env: Environment): Promise<string | undefined> {
-  if (typeof raw === 'string') {
-    return raw;
-  }
-  if (raw && typeof raw === 'object' && 'needsInterpolation' in raw && Array.isArray((raw as any).parts)) {
-    return interpolate((raw as any).parts, env, InterpolationContext.Default);
-  }
-  return undefined;
-}
-
-function buildTemplateAstFromContent(content: string): any[] {
-  const ast: any[] = [];
-  const regex = /@([A-Za-z_][\w\.]*)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      ast.push({ type: 'Text', content: content.slice(lastIndex, match.index) });
-    }
-    ast.push({ type: 'VariableReference', identifier: match[1] });
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < content.length) {
-    ast.push({ type: 'Text', content: content.slice(lastIndex) });
-  }
-  return ast;
-}
-
-/**
- * Extract parameter names from the params array.
- * 
- * TODO: Remove workaround when issue #50 is fixed.
- * The grammar currently returns VariableReference nodes for params,
- * but they should be simple strings or Parameter nodes.
- */
-function extractParamNames(params: any[]): string[] {
-  return params.map(p => {
-    // Once fixed, this should just be: return p; (if params are strings)
-    // or: return p.name; (if params are Parameter nodes)
-    if (typeof p === 'string') {
-      return p;
-    } else if (p.type === 'VariableReference') {
-      // Current workaround for grammar issue #50
-      return p.identifier;
-    } else if (p.type === 'Parameter') {
-      // Future-proofing for when grammar is fixed
-      return p.name;
-    }
-    return '';
-  }).filter(Boolean);
-}
-
-function extractParamTypes(params: any[]): Record<string, string> {
-  const paramTypes: Record<string, string> = {};
-  for (const param of params) {
-    if (param && typeof param === 'object' && param.type === 'Parameter') {
-      const name = param.name;
-      const type = param.paramType;
-      if (typeof name === 'string' && typeof type === 'string' && type.length > 0) {
-        paramTypes[name] = type;
-      }
-    }
-  }
-  return paramTypes;
 }
 
 // Parameter conflict checking removed - parameters are allowed to shadow outer scope variables
@@ -744,40 +642,11 @@ export async function evaluateExe(
   } else if (directive.subtype === 'exeTemplateFile') {
     // Handle template executable loaded from external file by extension
     // Syntax: /exe @name(params) = template "path/to/file.att|.mtt"
-    const pathNodes = directive.values?.path;
-    if (!pathNodes || !Array.isArray(pathNodes) || pathNodes.length === 0) {
-      throw new Error('Exec template-file directive missing path');
-    }
-    // Evaluate path nodes to resolve any variable references
-    const evaluatedPath = await interpolate(pathNodes, env);
-    const filePath = String(evaluatedPath);
-    
-    // Determine template style by extension
-    const ext = path.extname(filePath).toLowerCase();
-    if (ext !== '.att' && ext !== '.mtt') {
-      throw new Error(`Unsupported template file extension for ${filePath}. Use .att (@var) or .mtt ({{var}}).`);
-    }
-    
-    // Read file content relative to current env and parse with template body rules
-    const fileContent = await readFileWithPolicy(env, filePath, sourceLocation ?? undefined);
-    const { parseSync } = await import('@grammar/parser');
-    const startRule = ext === '.mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
-    let templateNodes: any[];
-    try {
-      templateNodes = parseSync(fileContent, { startRule });
-    } catch (err: any) {
-      // Fallback to legacy parsing when start rules are unavailable in the bundled parser
-      try {
-        let normalized = fileContent;
-        if (ext === '.mtt') {
-          // Preserve mustache-style placeholders for YAML and content; normalize simple {{var}} to @var
-          normalized = normalized.replace(/{{\s*([A-Za-z_][\w\.]*)\s*}}/g, '@$1');
-        }
-        templateNodes = buildTemplateAstFromContent(normalized);
-      } catch (fallbackErr: any) {
-        throw new Error(`Failed to parse template file ${filePath}: ${err.message}`);
-      }
-    }
+    const templateNodes = await parseTemplateFileNodes(
+      directive.values?.path,
+      env,
+      sourceLocation ?? undefined
+    );
     
     // Get parameter names if any
     const params = directive.values?.params || [];
