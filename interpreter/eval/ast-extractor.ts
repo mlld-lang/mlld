@@ -1,5 +1,4 @@
 import ts from 'typescript';
-import * as path from 'path';
 import {
   evaluatePatternResults,
   hasContentPattern,
@@ -8,6 +7,9 @@ import {
   TYPE_FILTER_MAP
 } from './ast-extractor/pattern-core';
 import type { AstPattern, AstResult, Definition } from './ast-extractor/types';
+import type { AstExtractorRegistry } from './ast-extractor/language-dispatch';
+import { extractDefinitionsForFile } from './ast-extractor/language-dispatch';
+import { findBraceBlockEnd, getLinesAndOffsets } from './ast-extractor/shared-utils';
 export type {
   AstPatternDefinition,
   AstPatternTypeFilter,
@@ -21,41 +23,56 @@ export type {
   AstResult
 } from './ast-extractor/types';
 
-function getLinesAndOffsets(content: string): { lines: string[]; offsets: number[] } {
-  const lines = content.split(/\r?\n/);
-  const offsets: number[] = [];
-  let pos = 0;
-  for (const line of lines) {
-    offsets.push(pos);
-    pos += line.length + 1;
-  }
-  return { lines, offsets };
+function extractTsForFile(content: string, filePath: string): Definition[] {
+  return extractTsDefinitions(content, filePath);
 }
 
+function extractPythonForFile(content: string): Definition[] {
+  return extractPythonDefinitions(content);
+}
+
+function extractRubyForFile(content: string): Definition[] {
+  return extractRubyDefinitions(content);
+}
+
+function extractGoForFile(content: string): Definition[] {
+  return extractGoDefinitions(content);
+}
+
+function extractRustForFile(content: string): Definition[] {
+  return extractRustDefinitions(content);
+}
+
+function extractJavaForFile(content: string): Definition[] {
+  return extractJavaDefinitions(content);
+}
+
+function extractSolidityForFile(content: string): Definition[] {
+  return extractSolidityDefinitions(content);
+}
+
+function extractCppForFile(content: string): Definition[] {
+  return extractCppDefinitions(content);
+}
+
+function extractCSharpForFile(content: string): Definition[] {
+  return extractCSharpDefinitions(content);
+}
+
+const AST_EXTRACTOR_REGISTRY: AstExtractorRegistry = {
+  ts: extractTsForFile,
+  python: extractPythonForFile,
+  ruby: extractRubyForFile,
+  go: extractGoForFile,
+  rust: extractRustForFile,
+  java: extractJavaForFile,
+  solidity: extractSolidityForFile,
+  cpp: extractCppForFile,
+  csharp: extractCSharpForFile
+};
+
 export function extractAst(content: string, filePath: string, patterns: AstPattern[]): Array<AstResult | null> {
-  const ext = path.extname(filePath).toLowerCase();
-  let definitions: Definition[] = [];
-
-  if (['.py', '.pyi'].includes(ext)) {
-    definitions = extractPythonDefinitions(content);
-  } else if (ext === '.rb') {
-    definitions = extractRubyDefinitions(content);
-  } else if (ext === '.go') {
-    definitions = extractGoDefinitions(content);
-  } else if (ext === '.rs') {
-    definitions = extractRustDefinitions(content);
-  } else if (ext === '.java') {
-    definitions = extractJavaDefinitions(content);
-  } else if (ext === '.sol') {
-    definitions = extractSolidityDefinitions(content);
-  } else if (['.c', '.h', '.cpp', '.hpp', '.cc', '.cxx', '.hh', '.hxx'].includes(ext)) {
-    definitions = extractCppDefinitions(content);
-  } else if (ext === '.cs') {
-    definitions = extractCSharpDefinitions(content);
-  } else {
-    definitions = extractTsDefinitions(content, filePath);
-  }
-
+  const definitions = extractDefinitionsForFile(content, filePath, AST_EXTRACTOR_REGISTRY);
   return evaluatePatternResults(definitions, patterns);
 }
 
@@ -64,28 +81,7 @@ export function extractAst(content: string, filePath: string, patterns: AstPatte
  * Returns an array of definition names as strings
  */
 export function extractNames(content: string, filePath: string, filter?: string): string[] {
-  const ext = path.extname(filePath).toLowerCase();
-  let definitions: Definition[] = [];
-
-  if (['.py', '.pyi'].includes(ext)) {
-    definitions = extractPythonDefinitions(content);
-  } else if (ext === '.rb') {
-    definitions = extractRubyDefinitions(content);
-  } else if (ext === '.go') {
-    definitions = extractGoDefinitions(content);
-  } else if (ext === '.rs') {
-    definitions = extractRustDefinitions(content);
-  } else if (ext === '.java') {
-    definitions = extractJavaDefinitions(content);
-  } else if (ext === '.sol') {
-    definitions = extractSolidityDefinitions(content);
-  } else if (['.c', '.h', '.cpp', '.hpp', '.cc', '.cxx', '.hh', '.hxx'].includes(ext)) {
-    definitions = extractCppDefinitions(content);
-  } else if (ext === '.cs') {
-    definitions = extractCSharpDefinitions(content);
-  } else {
-    definitions = extractTsDefinitions(content, filePath);
-  }
+  const definitions = extractDefinitionsForFile(content, filePath, AST_EXTRACTOR_REGISTRY);
 
   // Filter by type if specified
   let filtered: Definition[];
@@ -336,19 +332,7 @@ function extractRustDefinitions(content: string): Definition[] {
   const defs: Definition[] = [];
 
   function blockEnd(startLine: number): number {
-    let braces = 0;
-    let started = false;
-    let line = startLine;
-    for (; line < lines.length; line++) {
-      const current = lines[line];
-      const opens = (current.match(/\{/g) ?? []).length;
-      const closes = (current.match(/\}/g) ?? []).length;
-      braces += opens;
-      braces -= closes;
-      if (opens > 0) started = true;
-      if (started && braces === 0) break;
-    }
-    return line + 1;
+    return findBraceBlockEnd(lines, startLine);
   }
 
   for (let i = 0; i < lines.length; i++) {
@@ -444,19 +428,7 @@ function extractGoDefinitions(content: string): Definition[] {
   const defs: Definition[] = [];
 
   function blockEnd(startLine: number): number {
-    let braces = 0;
-    let started = false;
-    let line = startLine;
-    for (; line < lines.length; line++) {
-      const current = lines[line];
-      const opens = (current.match(/\{/g) ?? []).length;
-      const closes = (current.match(/\}/g) ?? []).length;
-      braces += opens;
-      braces -= closes;
-      if (opens > 0) started = true;
-      if (started && braces === 0) break;
-    }
-    return line + 1;
+    return findBraceBlockEnd(lines, startLine);
   }
 
   for (let i = 0; i < lines.length; i++) {
@@ -541,23 +513,11 @@ function extractCppDefinitions(content: string): Definition[] {
   }
 
   function blockEnd(startLine: number): number {
-    let braces = 0;
-    let started = false;
-    for (let line = startLine; line < lines.length; line++) {
-      const sanitized = sanitize(strippedLines[line]);
-      const opens = (sanitized.match(/\{/g) ?? []).length;
-      const closes = (sanitized.match(/\}/g) ?? []).length;
-      if (opens > 0) started = true;
-      braces += opens;
-      braces -= closes;
-      if (!started && sanitized.includes(';')) {
-        return line + 1;
-      }
-      if (started && braces <= 0) {
-        return line + 1;
-      }
-    }
-    return lines.length;
+    return findBraceBlockEnd(strippedLines, startLine, {
+      lineSanitizer: sanitize,
+      breakOnSemicolonBeforeBody: true,
+      closeWhenNonPositive: true
+    });
   }
 
   function pushBlockDefinition(name: string, type: string, startLine: number): void {
@@ -695,25 +655,11 @@ function extractSolidityDefinitions(content: string): Definition[] {
   const defs: Definition[] = [];
 
   function blockEnd(startLine: number): number {
-    let braces = 0;
-    let started = false;
-    let line = startLine;
-    for (; line < lines.length; line++) {
-      const current = lines[line];
-      const cleaned = current.replace(/\/\/.*$/, '');
-      const opens = (cleaned.match(/\{/g) ?? []).length;
-      const closes = (cleaned.match(/\}/g) ?? []).length;
-      if (!started && opens > 0) started = true;
-      braces += opens;
-      braces -= closes;
-      if (!started && cleaned.includes(';')) {
-        return line + 1;
-      }
-      if (started && braces <= 0) {
-        return line + 1;
-      }
-    }
-    return lines.length;
+    return findBraceBlockEnd(lines, startLine, {
+      lineSanitizer: line => line.replace(/\/\/.*$/, ''),
+      breakOnSemicolonBeforeBody: true,
+      closeWhenNonPositive: true
+    });
   }
 
   function pushDefinition(name: string, type: string, startLine: number): void {
@@ -826,20 +772,9 @@ function extractJavaDefinitions(content: string): Definition[] {
   const defs: Definition[] = [];
 
   function blockEnd(startLine: number): number {
-    let braces = 0;
-    let started = false;
-    let line = startLine;
-    for (; line < lines.length; line++) {
-      const current = lines[line];
-      const cleaned = current.replace(/".*?"/g, '');
-      const opens = (cleaned.match(/\{/g) ?? []).length;
-      const closes = (cleaned.match(/\}/g) ?? []).length;
-      braces += opens;
-      braces -= closes;
-      if (opens > 0) started = true;
-      if (started && braces === 0) break;
-    }
-    return line + 1;
+    return findBraceBlockEnd(lines, startLine, {
+      lineSanitizer: line => line.replace(/".*?"/g, '')
+    });
   }
 
   for (let i = 0; i < lines.length; i++) {
@@ -927,20 +862,10 @@ function extractCSharpDefinitions(content: string): Definition[] {
   const defs: Definition[] = [];
 
   function blockEnd(startLine: number): number {
-    let braces = 0;
-    let started = false;
-    let line = startLine;
-    for (; line < lines.length; line++) {
-      const current = lines[line];
-      const cleaned = current.replace(/".*?"/g, '').replace(/\/\/.*$/, '');
-      const opens = (cleaned.match(/\{/g) ?? []).length;
-      const closes = (cleaned.match(/\}/g) ?? []).length;
-      braces += opens;
-      braces -= closes;
-      if (opens > 0) started = true;
-      if (started && braces === 0) break;
-    }
-    return started ? line + 1 : startLine + 1;
+    return findBraceBlockEnd(lines, startLine, {
+      lineSanitizer: line => line.replace(/".*?"/g, '').replace(/\/\/.*$/, ''),
+      returnSingleLineWhenNoBody: true
+    });
   }
 
   const modifierSet = new Set([
