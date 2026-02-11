@@ -2,7 +2,6 @@ import type { DirectiveNode, SourceLocation, VarValue } from '@core/types';
 import type { ToolCollection } from '@core/types/tools';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
-import { InterpolationContext } from '../core/interpolation-context';
 import { logger } from '@core/utils/logger';
 import {
   Variable,
@@ -46,6 +45,8 @@ import {
   hasComplexValues
 } from './var/collection-evaluator';
 import { createRhsContentEvaluator } from './var/rhs-content';
+import { createReferenceEvaluator } from './var/reference-evaluator';
+import { createExecutionEvaluator, isExecutionValueNode } from './var/execution-evaluator';
 
 export { extractDescriptorsFromDataAst };
 
@@ -147,16 +148,27 @@ export async function prepareVarAssignment(
     createVarAssignmentContext(directive, env);
   const descriptorState = createDescriptorState(env);
   const {
-    descriptorFromVariable,
     extractSecurityFromValue,
     interpolateWithSecurity,
-    mergePipelineDescriptor,
     mergeResolvedDescriptor
   } = descriptorState;
   const rhsContentEvaluator = createRhsContentEvaluator(env, {
     interpolateWithSecurity,
     sourceLocation,
     withClause: directive.values?.withClause
+  });
+  const referenceEvaluator = createReferenceEvaluator({
+    env,
+    directive,
+    descriptorState
+  });
+  const executionEvaluator = createExecutionEvaluator({
+    context,
+    descriptorState,
+    directive,
+    env,
+    interpolateWithSecurity,
+    sourceLocation
   });
 
   const finalizeVariable = (variable: Variable): Variable => {
@@ -315,68 +327,6 @@ export async function prepareVarAssignment(
   } else if (valueNode.type === 'path') {
     resolvedValue = await rhsContentEvaluator.evaluatePath(valueNode);
     
-  } else if (valueNode.type === 'code') {
-    // Code execution: run js { ... } or js { ... }
-    const { evaluateCodeExecution } = await import('./code-execution');
-    const result = await evaluateCodeExecution(valueNode, env, sourceLocation ?? undefined);
-    resolvedValue = result.value;
-    
-    // Infer variable type from result
-    
-  } else if (valueNode.type === 'command') {
-    // Shell command: run { ... }
-    // If a withClause is present on the /var directive (e.g., stdin/pipeline),
-    // delegate to evaluateRun so that stdin and pipelines are applied correctly.
-    const withClause = (directive.values?.withClause || directive.meta?.withClause) as any | undefined;
-    const hasWithClause = !!withClause;
-    let handledByRunEvaluator = false;
-
-    if (hasWithClause) {
-      const { evaluateRun } = await import('./run');
-      const runDirective: any = {
-        type: 'Directive',
-        nodeId: (directive as any).nodeId ? `${(directive as any).nodeId}-run` : undefined,
-        location: directive.location,
-        kind: 'run',
-        subtype: 'runCommand',
-        source: 'command',
-        values: {
-          command: valueNode.command,
-          withClause
-        },
-        raw: {
-          command: Array.isArray(valueNode.command)
-            ? (valueNode.meta?.raw || '')
-            : String(valueNode.command),
-          withClause
-        },
-        meta: {
-          // Mark as data value so evaluateRun does not emit document output
-          isDataValue: true
-        }
-      };
-      const result = await evaluateRun(runDirective, env);
-      resolvedValue = result.value;
-      handledByRunEvaluator = true;
-    } else {
-      // Regular command without withClause: execute directly
-      if (Array.isArray(valueNode.command)) {
-        // New: command is an array of AST nodes that need interpolation
-        const interpolatedCommand = await interpolateWithSecurity(
-          valueNode.command,
-          InterpolationContext.ShellCommand
-        );
-        resolvedValue = await env.executeCommand(interpolatedCommand);
-      } else {
-        // Legacy: command is a raw string (for backward compatibility)
-        resolvedValue = await env.executeCommand(valueNode.command);
-      }
-
-      // Apply automatic JSON parsing for shell command output
-      const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
-      resolvedValue = processCommandOutput(resolvedValue);
-    }
-    
   } else if (valueNode.type === 'VariableReference') {
     // Variable reference: @otherVar
     if (process.env.MLLD_DEBUG === 'true') {
@@ -387,99 +337,27 @@ export async function prepareVarAssignment(
         fields: valueNode.fields?.map(f => f.value)
       });
     }
-    
-    const sourceVar = env.getVariable(valueNode.identifier);
-    if (!sourceVar) {
-      const { MlldDirectiveError } = await import('@core/errors');
-      throw new MlldDirectiveError(
-        `Variable not found: ${valueNode.identifier}`,
-        'var',
-        { location: directive.location, env }
-      );
-    }
-    
-    // Copy the variable type from source - preserve Variables!
-    const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
-    const { accessField } = await import('../utils/field-access');
-    
-    /**
-     * Preserve Variable wrapper when copying variable references
-     * WHY: Variable copies need to maintain metadata and type information
-     *      for proper Variable flow through the system
-     */
-    const resolvedVar = await resolveVariable(sourceVar, env, ResolutionContext.VariableCopy);
-    
-    // Handle field access if present
-    if (valueNode.fields && valueNode.fields.length > 0) {
-      // resolvedVar is already properly resolved with ResolutionContext.VariableCopy
-      // No need to extract again - field access will handle extraction if needed
-      
-      // Use enhanced field access to preserve context
-      const fieldResult = await accessField(resolvedVar, valueNode.fields[0], { 
-        preserveContext: true,
-        env,
-        sourceLocation: directive.location
-      });
-      let currentResult = fieldResult as any;
-      
-      // Apply remaining fields if any
-      for (let i = 1; i < valueNode.fields.length; i++) {
-        currentResult = await accessField(currentResult.value, valueNode.fields[i], { 
-          preserveContext: true, 
-          parentPath: currentResult.accessPath,
-          env,
-          sourceLocation: directive.location
-        });
-      }
-      
-      resolvedValue = currentResult.value;
-      
-      // Check if the accessed field is an executable variable
-      if (resolvedValue && typeof resolvedValue === 'object' && 
-          resolvedValue.type === 'executable') {
-        // Preserve the executable variable
-        const finalVar = finalizeVariable(resolvedValue);
-        return {
-          identifier,
-          variable: finalVar,
-          evalResultOverride: {
-            value: finalVar,
-            env,
-            stdout: '',
-            stderr: '',
-            exitCode: 0
-          }
-        };
-      }
-      
-      // IMPORTANT: When we have field access, the resolvedValue is the field value
-      // We should NOT fall through to the duplicate VariableReference handling below
-    } else {
-      // No field access - use the resolved Variable directly
-      resolvedValue = resolvedVar;
-    }
-    
-    // Apply condensed pipes if present (e.g., @var|@transform)
-    if (valueNode.pipes && valueNode.pipes.length > 0) {
-      // Use unified pipeline processor for condensed pipes
-      const { processPipeline } = await import('./pipeline/unified-processor');
-      
-      // Process through unified pipeline (handles condensed pipe conversion)
-      const result = await processPipeline({
-        value: resolvedValue,
-        env,
-        node: valueNode,
+
+    const referenceResult = await referenceEvaluator.evaluateVariableReference(
+      valueNode,
+      identifier
+    );
+    if (referenceResult.executableVariable) {
+      const finalVar = finalizeVariable(referenceResult.executableVariable);
+      return {
         identifier,
-        location: directive.location,
-        descriptorHint: mergePipelineDescriptor(
-          descriptorFromVariable(sourceVar),
-          descriptorState.getResolvedDescriptor()
-        )
-      });
-      
-      resolvedValue = result;
+        variable: finalVar,
+        evalResultOverride: {
+          value: finalVar,
+          env,
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        }
+      };
     }
-    
+    resolvedValue = referenceResult.resolvedValue;
+
   } else if (Array.isArray(valueNode)) {
     // For backtick templates, we should extract the text content directly
     // Check if this is a simple text array (backtick template)
@@ -516,172 +394,48 @@ export async function prepareVarAssignment(
     // Simple text content
     resolvedValue = valueNode.content;
     
-  } else if (valueNode && (valueNode.type === 'foreach' || valueNode.type === 'foreach-command')) {
-    // Handle foreach expressions
-    const { evaluateForeachCommand } = await import('./foreach');
-    resolvedValue = await evaluateForeachCommand(valueNode, env);
-    
-  } else if (valueNode && valueNode.type === 'WhenExpression') {
-    // Handle when expressions
-    const { evaluateWhenExpression } = await import('./when-expression');
-    const whenResult = await evaluateWhenExpression(valueNode as any, env, context);
-    resolvedValue = whenResult.value;
-    
-  } else if (valueNode && valueNode.type === 'ExeBlock') {
-    const { evaluateExeBlock } = await import('./exe');
-    const blockEnv = env.createChild();
-    const blockResult = await evaluateExeBlock(valueNode as any, blockEnv, {}, { scope: 'block' });
-    if (isExeReturnControl(blockResult.value)) {
-      return {
-        identifier,
-        variable: createSimpleTextVariable(identifier, '', source),
-        evalResultOverride: { value: blockResult.value, env }
-      };
-    }
-    resolvedValue = blockResult.value;
-
-  } else if (valueNode && valueNode.type === 'ExecInvocation') {
-    // Handle exec function invocations: @getConfig(), @transform(@data)
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[var.ts] Processing ExecInvocation:', {
-        hasWithClause: !!valueNode.withClause,
-        hasPipeline: !!(valueNode.withClause?.pipeline)
-      });
-    }
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(valueNode, env);
-    resolvedValue = result.value;
-    
-    // Infer variable type from result
-
-  } else if (valueNode && valueNode.type === 'NewExpression') {
-    const { evaluateNewExpression } = await import('./new-expression');
-    const baseValue = await evaluateNewExpression(valueNode as any, env);
-    const withClause = (directive.values?.withClause || directive.meta?.withClause) as any | undefined;
-    if (withClause && Object.prototype.hasOwnProperty.call(withClause, 'tools')) {
-      if (!isPlainObject(baseValue)) {
-        throw new Error('new env derivation requires an object base config');
-      }
-      const resolvedTools = await resolveWithClauseToolsValue(withClause.tools, env, context);
-      const baseScope = normalizeToolScopeValue((baseValue as Record<string, unknown>).tools);
-      const childScope = normalizeToolScopeValue(resolvedTools);
-      if (baseScope.hasTools) {
-        if (childScope.isWildcard) {
-          throw new Error('Tool scope cannot widen beyond parent environment');
-        }
-        if (childScope.hasTools) {
-          enforceToolSubset(baseScope.tools, childScope.tools);
-        }
-      }
-      if (resolvedTools === undefined) {
-        resolvedValue = baseValue;
-      } else {
-        resolvedValue = { ...baseValue, tools: resolvedTools };
-      }
-    } else {
-      resolvedValue = baseValue;
-    }
-    
   } else if (valueNode && valueNode.type === 'VariableReferenceWithTail') {
     // Variable with tail modifiers (e.g., @var @result = @data with { pipeline: [@transform] })
     if (process.env.MLLD_DEBUG === 'true') {
       console.log('Processing VariableReferenceWithTail in var.ts');
     }
-    const varWithTail = valueNode;
-    const sourceVar = env.getVariable(varWithTail.variable.identifier);
-    if (!sourceVar) {
-      const { MlldDirectiveError } = await import('@core/errors');
-      throw new MlldDirectiveError(
-        `Variable not found: ${varWithTail.variable.identifier}`,
-        'var',
-        { location: directive.location, env }
-      );
-    }
-    
-    // Get the base value - preserve Variable for field access
-    const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
-    const { accessFields } = await import('../utils/field-access');
-    
-    // Determine appropriate context based on what operations will be performed
-    const needsPipelineExtraction = varWithTail.withClause && varWithTail.withClause.pipeline;
-    const hasFieldAccess = varWithTail.variable.fields && varWithTail.variable.fields.length > 0;
-    
-    // Use appropriate resolution context
-    const resolutionContext = needsPipelineExtraction && !hasFieldAccess 
-      ? ResolutionContext.PipelineInput 
-      : ResolutionContext.FieldAccess;
-    
-    const resolvedVar = await resolveVariable(sourceVar, env, resolutionContext);
-    let result = resolvedVar;
-    
-    // Apply field access if present
-    if (varWithTail.variable.fields && varWithTail.variable.fields.length > 0) {
-      // Use enhanced field access to track context
-      const fieldResult = await accessFields(resolvedVar, varWithTail.variable.fields, { 
-        preserveContext: true,
-        env,
-        sourceLocation: directive.location
-      });
-      result = (fieldResult as any).value;
-    }
-    
-    // Apply pipeline if present
-    if (varWithTail.withClause && varWithTail.withClause.pipeline) {
-      const { processPipeline } = await import('./pipeline/unified-processor');
-      
-      // Process through unified pipeline
-      result = await processPipeline({
-        value: result,
-        env,
-        node: varWithTail,
-        identifier: varWithTail.identifier,
-        location: directive.location,
-        descriptorHint: mergePipelineDescriptor(
-          descriptorFromVariable(sourceVar),
-          descriptorState.getResolvedDescriptor()
-        )
-      });
-    }
-    
-    resolvedValue = result;
+    const referenceResult = await referenceEvaluator.evaluateVariableReferenceWithTail(
+      valueNode,
+      identifier
+    );
+    resolvedValue = referenceResult.resolvedValue;
     
   } else if (valueNode && (valueNode.type === 'BinaryExpression' || valueNode.type === 'TernaryExpression' || valueNode.type === 'UnaryExpression')) {
     // Handle expression nodes
     const { evaluateUnifiedExpression } = await import('./expressions');
     const result = await evaluateUnifiedExpression(valueNode, env);
     resolvedValue = result.value;
-    
-  } else if (valueNode && valueNode.type === 'ForExpression') {
-    // Handle for expressions: for @item in @collection => expression
 
-    // Import and evaluate the for expression
-    const { evaluateForExpression } = await import('./for');
-    const forResult = await evaluateForExpression(valueNode, env);
-
-    // Merge the for-expression result descriptor so finalizeVariable preserves taint.
-    // so that finalizeVariable properly preserves taint from iterated values
-    if (forResult.mx) {
-      const forDescriptor = descriptorFromVariable(forResult);
-      mergeResolvedDescriptor(forDescriptor);
+  } else if (isExecutionValueNode(valueNode)) {
+    const executionResult = await executionEvaluator.evaluateExecutionBranch(
+      valueNode,
+      identifier
+    );
+    if (!executionResult) {
+      throw new Error(`Execution evaluator returned no result for @${identifier}`);
     }
-
-    // The result is already an ArrayVariable
-    const finalVar = finalizeVariable(forResult);
-    return {
-      identifier,
-      variable: finalVar,
-      evalResultOverride: { value: finalVar, env }
-    };
-    
-  } else if (valueNode && valueNode.type === 'LoopExpression') {
-    const { evaluateLoopExpression } = await import('./loop');
-    resolvedValue = await evaluateLoopExpression(valueNode, env);
-
-  } else if (valueNode && valueNode.type === 'Directive' && valueNode.kind === 'env') {
-    // env expression used as var RHS - evaluate and capture return value
-    const { evaluateEnv } = await import('./env');
-    const envResult = await evaluateEnv(valueNode, env, context);
-    resolvedValue = envResult.value;
+    if (executionResult.kind === 'return-control') {
+      const returnSource = createVariableSource(valueNode as any, directive);
+      return {
+        identifier,
+        variable: createSimpleTextVariable(identifier, '', returnSource),
+        evalResultOverride: { value: executionResult.value, env }
+      };
+    }
+    if (executionResult.kind === 'for-expression') {
+      const finalVar = finalizeVariable(executionResult.variable);
+      return {
+        identifier,
+        variable: finalVar,
+        evalResultOverride: { value: finalVar, env }
+      };
+    }
+    resolvedValue = executionResult.value;
 
   } else {
     // Default case - try to interpolate as text
@@ -1256,81 +1010,6 @@ async function evaluateToolCollectionObject(
     sourceLocation,
     true
   );
-}
-
-async function resolveWithClauseToolsValue(
-  toolsValue: unknown,
-  env: Environment,
-  context?: EvaluationContext
-): Promise<unknown> {
-  if (!toolsValue || typeof toolsValue !== 'object' || !('type' in (toolsValue as any))) {
-    return toolsValue;
-  }
-  const { evaluate } = await import('../core/interpreter');
-  const result = await evaluate(toolsValue as any, env, { ...(context ?? {}), isExpression: true });
-  let value = result.value;
-  const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
-  if (isVariable(value)) {
-    value = await extractVariableValue(value, env);
-  }
-  if (isStructuredValue(value)) {
-    value = asData(value);
-  }
-  return value;
-}
-
-type ToolScopeValue = {
-  tools: string[];
-  hasTools: boolean;
-  isWildcard: boolean;
-};
-
-function normalizeToolScopeValue(value: unknown): ToolScopeValue {
-  if (value === undefined) {
-    return { tools: [], hasTools: false, isWildcard: false };
-  }
-  if (value === null) {
-    throw new Error('tools must be an array or object.');
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return { tools: [], hasTools: true, isWildcard: false };
-    }
-    if (trimmed === '*') {
-      return { tools: [], hasTools: false, isWildcard: true };
-    }
-    const tools = trimmed
-      .split(',')
-      .map(part => part.trim())
-      .filter(Boolean);
-    return { tools, hasTools: true, isWildcard: false };
-  }
-  if (Array.isArray(value)) {
-    const tools: string[] = [];
-    for (const entry of value) {
-      if (typeof entry !== 'string') {
-        throw new Error('tools entries must be strings.');
-      }
-      const trimmed = entry.trim();
-      if (trimmed.length > 0) {
-        tools.push(trimmed);
-      }
-    }
-    return { tools, hasTools: true, isWildcard: false };
-  }
-  if (isPlainObject(value)) {
-    return { tools: Object.keys(value), hasTools: true, isWildcard: false };
-  }
-  throw new Error('tools must be an array or object.');
-}
-
-function enforceToolSubset(baseTools: string[], childTools: string[]): void {
-  const baseSet = new Set(baseTools);
-  const invalid = childTools.filter(tool => !baseSet.has(tool));
-  if (invalid.length > 0) {
-    throw new Error(`Tool scope cannot add tools outside parent: ${invalid.join(', ')}`);
-  }
 }
 
 function normalizeToolCollection(raw: unknown, env: Environment): ToolCollection {
