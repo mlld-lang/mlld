@@ -3,7 +3,7 @@ import { GuardError } from '@core/errors/GuardError';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
-import { interpolate, evaluate } from '../core/interpreter';
+import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError, MlldInterpreterError } from '@core/errors';
 import type { SecurityDescriptor } from '@core/types/security';
@@ -28,7 +28,6 @@ import {
 } from '../utils/structured-value';
 import { materializeDisplayValue } from '../utils/display-materialization';
 import { varMxToSecurityDescriptor, hasSecurityVarMx } from '@core/types/variable/VarMxHelpers';
-import { coerceValueForStdin } from '../utils/shell-value';
 import { resolveDirectiveExecInvocation } from './directive-replay';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
@@ -48,12 +47,7 @@ import {
   mergeAuthUsing,
   resolveRunCodeOpType
 } from './run-modules/run-pure-helpers';
-import {
-  getPreExtractedExec,
-  getPreExtractedRunCommand,
-  getPreExtractedRunDescriptor,
-  getPreExtractedRunStdin
-} from './run-modules/run-pre-extracted-inputs';
+import { getPreExtractedExec } from './run-modules/run-pre-extracted-inputs';
 import {
   applyRunOperationContext,
   buildRunCapabilityOperationUpdate,
@@ -63,56 +57,7 @@ import {
   enforceRunCapabilityPolicy,
   enforceRunCommandPolicy
 } from './run-modules/run-policy-context';
-
-/**
- * Evaluate a stdin expression and coerce it into text for command execution.
- * WHY: /run supports expressions in the `with { stdin: ... }` slot that can
- *      reference variables or pipelines; those must resolve before coercion.
- * CONTEXT: Delegates final conversion to the shared shell-value helper once evaluation
- *          finishes in the command execution resolution context.
- */
-type ResolvedStdinInput = {
-  text: string;
-  descriptor?: SecurityDescriptor;
-};
-
-async function resolveStdinInput(
-  stdinSource: unknown,
-  env: Environment
-): Promise<ResolvedStdinInput> {
-  if (stdinSource === null || stdinSource === undefined) {
-    return { text: '' };
-  }
-
-  const result = await evaluate(stdinSource as MlldNode | MlldNode[], env, { isExpression: true });
-  let value = result.value;
-  const descriptor = extractSecurityDescriptor(value, {
-    recursive: true,
-    mergeArrayElements: true
-  });
-
-  if (process.env.MLLD_DEBUG_STDIN === 'true') {
-    try {
-      console.error('[mlld] stdin evaluate result', JSON.stringify(value));
-    } catch {
-      console.error('[mlld] stdin evaluate result', value);
-    }
-  }
-
-  const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-  if (isVariable(value)) {
-    value = await resolveValue(value, env, ResolutionContext.CommandExecution);
-    if (process.env.MLLD_DEBUG_STDIN === 'true') {
-      try {
-        console.error('[mlld] stdin resolved variable', JSON.stringify(value));
-      } catch {
-        console.error('[mlld] stdin resolved variable', value);
-      }
-    }
-  }
-
-  return { text: coerceValueForStdin(value), descriptor };
-}
+import { executeRunCommand } from './run-modules/run-command-executor';
 
 /**
  * Evaluate @run directives.
@@ -291,295 +236,21 @@ export async function evaluateRun(
   
   try {
   if (directive.subtype === 'runCommand') {
-    // Handle command execution
-    const commandNodes = directive.values?.identifier || directive.values?.command;
-    if (!commandNodes) {
-      throw new Error('Run command directive missing command');
-    }
-    
-    const preExtractedCommand = getPreExtractedRunCommand(context);
-    const preExtractedDescriptor = getPreExtractedRunDescriptor(context);
-    let commandDescriptor: SecurityDescriptor | undefined;
-    let command: string;
-    if (preExtractedCommand) {
-      command = preExtractedCommand;
-      commandDescriptor = preExtractedDescriptor;
-    } else {
-      const commandDescriptors: SecurityDescriptor[] = [];
-      command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand, {
-        collectSecurityDescriptor: descriptor => {
-          if (descriptor) {
-            commandDescriptors.push(descriptor);
-          }
-        }
-      });
-      commandDescriptor =
-        commandDescriptors.length > 0
-          ? env.mergeSecurityDescriptors(...commandDescriptors)
-          : undefined;
-    }
-
-    const runCommandArgs = ((directive.values as any)?.args || []) as any[];
-    const argDescriptors: SecurityDescriptor[] = [];
-    const argEnvVars: Record<string, string> =
-      runCommandArgs.length === 0
-        ? {}
-        : await AutoUnwrapManager.executeWithPreservation(async () => {
-            const extracted: Record<string, string> = {};
-            const { extractVariableValue } = await import('../utils/variable-resolution');
-
-            for (let i = 0; i < runCommandArgs.length; i++) {
-              const arg = runCommandArgs[i];
-              if (!arg || typeof arg !== 'object' || arg.type !== 'VariableReference') {
-                continue;
-              }
-
-              const varName = arg.identifier;
-              const variable = env.getVariable(varName);
-              if (!variable) {
-                throw new Error(`Variable not found: ${varName}`);
-              }
-
-              if (variable.mx) {
-                argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
-              }
-
-              const value = await extractVariableValue(variable, env);
-              const unwrappedValue = AutoUnwrapManager.unwrap(value);
-              extracted[varName] = coerceValueForStdin(unwrappedValue);
-            }
-
-            return extracted;
-          });
-
-    const parsedCommand = parseCommand(command);
-    const opUpdate = buildRunCommandOperationUpdate(
-      command,
-      (context?.operationContext?.metadata ?? {}) as Record<string, unknown>
-    );
-    applyRunOperationContext(env, context, opUpdate);
-    const opLabels = (opUpdate.opLabels ?? []) as string[];
-
-    enforceRunCommandPolicy(
-      env.getPolicySummary(),
-      command,
+    const commandResult = await executeRunCommand({
+      directive,
       env,
-      directive.location ?? undefined
-    );
-
-    const runArgDescriptor =
-      argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
-    const commandInputDescriptor =
-      commandDescriptor && runArgDescriptor
-        ? env.mergeSecurityDescriptors(commandDescriptor, runArgDescriptor)
-        : commandDescriptor || runArgDescriptor;
-    const argTaint = checkRunInputLabelFlow({
-      descriptor: commandInputDescriptor,
+      context,
+      withClause,
+      executionContext,
+      streamingEnabled,
+      pipelineId,
+      hasStreamFormat: Boolean(hasStreamFormat),
+      suppressTerminal: activeStreamingOptions.suppressTerminal === true,
       policyEnforcer,
-      policyChecksEnabled,
-      opLabels,
-      exeLabels: Array.from(env.getEnclosingExeLabels()),
-      flowChannel: 'arg',
-      command: parsedCommand.command,
-      env,
-      sourceLocation: directive.location ?? undefined
+      policyChecksEnabled
     });
-
-    const workingDirectory = await resolveWorkingDirectory(
-      (directive.values as any)?.workingDir,
-      env,
-      { sourceLocation: directive.location, directiveType: 'run' }
-    );
-    const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
-    const commandTaint = deriveCommandTaint({ command });
-    const scopedEnvConfig = resolveEnvironmentConfig(env, context?.guardMetadata);
-    const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, env.getPolicySummary());
-    mergePendingDescriptor(buildEnvironmentOutputDescriptor(command, resolvedEnvConfig));
-
-    // Friendly pre-check for oversized simple /run command payloads
-    // Rationale: Some environments may not hit ShellCommandExecutor's guard early enough.
-    // This check ensures users see a clear suggestion before the shell invocation.
-    try {
-      const CMD_MAX = (() => {
-        const v = process.env.MLLD_MAX_SHELL_COMMAND_SIZE;
-        if (!v) return 128 * 1024; // 128KB default
-        const n = Number(v);
-        return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
-      })();
-      const cmdBytes = Buffer.byteLength(command || '', 'utf8');
-      if (process.env.MLLD_DEBUG === 'true') {
-        try { console.error(`[run.ts] /run command size: ${cmdBytes} bytes (max ~${CMD_MAX})`); } catch {}
-      }
-      if (cmdBytes > CMD_MAX) {
-        const message = [
-          'Command payload too large for /run execution (may exceed OS args+env limits).',
-          `Command size: ${cmdBytes} bytes (max ~${CMD_MAX})`,
-          'Suggestions:',
-          '- Use `/run sh (@var) { echo "$var" | tool }` or `/exe ... = sh { ... }` to leverage heredocs',
-          '- Pass file paths or stream via stdin (printf, here-strings)',
-          '- Reduce or split the data',
-          '',
-          'Learn more: https://mlld.ai/docs/large-variables'
-        ].join('\n');
-        throw new MlldCommandExecutionError(
-          message,
-          directive.location,
-          {
-            command,
-            exitCode: 1,
-            duration: 0,
-            stderr: message,
-            workingDirectory: effectiveWorkingDirectory,
-            directiveType: 'run'
-          },
-          env
-        );
-      }
-    } catch (e) {
-      if (e instanceof MlldCommandExecutionError) {
-        throw e;
-      }
-      // Non-fatal sizing errors should not block execution
-    }
-    
-    /**
-     * Security check before command execution
-     * WHY: Commands must be analyzed for potential security risks before execution
-     * to prevent command injection, data exfiltration, and system damage.
-     * SECURITY: Multi-layer defense with taint tracking, command analysis, and
-     * policy enforcement. Blocks dangerous commands and warns about risky ones.
-     * CONTEXT: Security manager is optional but when present, all commands are
-     * analyzed. Analysis considers both command structure and taint level.
-     */
-    const security = env.getSecurityManager();
-    if (security) {
-      // Use command analyzer to check the command
-      const securityManager = security as SecurityManager & { commandAnalyzer?: CommandAnalyzer };
-      const analyzer = securityManager.commandAnalyzer;
-      if (analyzer) {
-        const analysis = await analyzer.analyze(command, commandTaint.taint);
-        
-        // Block immediately dangerous commands
-        if (analysis.blocked) {
-          const reason = analysis.risks[0]?.description || 'Security policy violation';
-        throw new MlldCommandExecutionError(
-          `Security: Command blocked - ${reason}`,
-          directive.location,
-          {
-            command,
-            exitCode: 1,
-            duration: 0,
-            stderr: `This command is blocked by security policy: ${reason}`,
-            workingDirectory: effectiveWorkingDirectory,
-            directiveType: 'run'
-          },
-          env
-        );
-        }
-        // TODO: Add approval prompts for suspicious commands
-        // Temporarily disable security warnings for cleaner output
-        /*
-        if (analysis.risks.length > 0) {
-          console.warn(`⚠️  Security warning for command: ${command}`);
-          for (const risk of analysis.risks) {
-            console.warn(`   - ${risk.type}: ${risk.description}`);
-          }
-        }
-        */
-      }
-    }
-    
-    // Execute the command with context for rich error reporting
-    let stdinInput: string | undefined;
-    let stdinDescriptor: SecurityDescriptor | undefined;
-    if (withClause && 'stdin' in withClause) {
-      const preExtractedStdin = getPreExtractedRunStdin(context);
-      if (preExtractedStdin) {
-        stdinInput = preExtractedStdin.text;
-        stdinDescriptor = preExtractedStdin.descriptor;
-      } else {
-        const resolvedStdin = await resolveStdinInput(withClause.stdin, env);
-        stdinInput = resolvedStdin.text;
-        stdinDescriptor = resolvedStdin.descriptor;
-      }
-    }
-
-    const stdinTaint = checkRunInputLabelFlow({
-      descriptor: stdinDescriptor,
-      policyEnforcer,
-      policyChecksEnabled,
-      opLabels,
-      exeLabels: Array.from(env.getEnclosingExeLabels()),
-      flowChannel: 'stdin',
-      command: parsedCommand.command,
-      env,
-      sourceLocation: directive.location ?? undefined
-    });
-
-    const usingParts = await resolveUsingEnvParts(env, withClause);
-    const envAuthSecrets = await resolveEnvironmentAuthSecrets(env, resolvedEnvConfig);
-    const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
-    const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
-    const envInputTaint = checkRunInputLabelFlow({
-      descriptor: envInputDescriptor,
-      policyEnforcer,
-      policyChecksEnabled,
-      opLabels,
-      exeLabels: Array.from(env.getEnclosingExeLabels()),
-      flowChannel: 'using',
-      command: parsedCommand.command,
-      env,
-      sourceLocation: directive.location ?? undefined
-    });
-    if (resolvedEnvConfig?.provider) {
-      const providerResult = await executeProviderCommand({
-        env,
-        providerRef: resolvedEnvConfig.provider,
-        config: resolvedEnvConfig,
-        command,
-        workingDirectory,
-        stdin: stdinInput,
-        vars: {
-          ...argEnvVars,
-          ...usingParts.vars
-        },
-        secrets: {
-          ...envAuthSecrets,
-          ...usingParts.secrets
-        },
-        executionContext: {
-          ...executionContext,
-          streamingEnabled,
-          pipelineId,
-          suppressTerminal: hasStreamFormat || activeStreamingOptions.suppressTerminal === true,
-          workingDirectory
-        },
-        sourceLocation: directive.location ?? null,
-        directiveType: 'run'
-      });
-      setOutput(providerResult.stdout ?? '');
-    } else {
-      const injectedEnv = {
-        ...argEnvVars,
-        ...envAuthSecrets,
-        ...usingParts.merged
-      };
-      const commandOptions =
-        stdinInput !== undefined || workingDirectory || Object.keys(injectedEnv).length > 0
-          ? {
-              ...(stdinInput !== undefined ? { input: stdinInput } : {}),
-              ...(workingDirectory ? { workingDirectory } : {}),
-              ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
-            }
-          : undefined;
-      setOutput(await env.executeCommand(command, commandOptions, {
-        ...executionContext,
-        streamingEnabled,
-        pipelineId,
-        suppressTerminal: hasStreamFormat || activeStreamingOptions.suppressTerminal === true,
-        workingDirectory
-      }));
-    }
+    mergePendingDescriptor(commandResult.outputDescriptor);
+    setOutput(commandResult.value);
     
   } else if (directive.subtype === 'runCode') {
     // Handle code execution

@@ -11,6 +11,7 @@ import { asText } from '@interpreter/utils/structured-value';
 import { evaluateRun } from './run';
 import * as unifiedProcessor from './pipeline/unified-processor';
 import * as proseExecution from './prose-execution';
+import * as environmentProvider from '@interpreter/env/environment-provider';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -115,6 +116,29 @@ describe('evaluateRun phase-0 characterization', () => {
     expect(opCtx.opLabels).toEqual(expect.arrayContaining(['op:cmd', 'op:cmd:echo', 'op:cmd:echo:interpolated']));
     expect(opCtx.sources).toEqual(expect.arrayContaining(['cmd:echo:interpolated']));
     expect(opCtx.metadata.commandPreview).toBe('echo interpolated');
+  });
+
+  it('keeps provider command execution path wiring stable', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun('/run cmd {echo provider}', env);
+
+    vi.spyOn(environmentProvider, 'resolveEnvironmentConfig').mockReturnValue({ provider: '@mock-provider' } as any);
+    vi.spyOn(environmentProvider, 'applyEnvironmentDefaults').mockImplementation((config: any) => config);
+    const providerSpy = vi
+      .spyOn(environmentProvider, 'executeProviderCommand')
+      .mockResolvedValue({ stdout: 'provider-output' } as any);
+    const localExecuteSpy = vi.spyOn(env, 'executeCommand').mockResolvedValue('local-output');
+
+    const result = await evaluateRun(runDirective, env);
+
+    expect(providerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerRef: '@mock-provider',
+        command: 'echo provider'
+      })
+    );
+    expect(localExecuteSpy).not.toHaveBeenCalled();
+    expect(asText(result.value)).toBe('provider-output');
   });
 
   it('keeps command policy denial behavior stable', async () => {
