@@ -1,148 +1,25 @@
 import ts from 'typescript';
 import * as path from 'path';
-
-// Pattern types from grammar
-export interface AstPatternDefinition {
-  type: 'definition';
-  name: string;
-  usage?: boolean;
-}
-
-export interface AstPatternTypeFilter {
-  type: 'type-filter';
-  filter: string;
-  usage?: boolean;
-}
-
-export interface AstPatternTypeFilterAll {
-  type: 'type-filter-all';
-  usage?: boolean;
-}
-
-export interface AstPatternTypeFilterVar {
-  type: 'type-filter-var';
-  identifier: string;
-  fields?: any[];
-  usage?: boolean;
-}
-
-export interface AstPatternNameList {
-  type: 'name-list';
-  filter: string;
-  usage?: boolean;
-}
-
-export interface AstPatternNameListAll {
-  type: 'name-list-all';
-  usage?: boolean;
-}
-
-export interface AstPatternNameListVar {
-  type: 'name-list-var';
-  identifier: string;
-  fields?: any[];
-  usage?: boolean;
-}
-
-// Legacy pattern type for backwards compatibility
-export interface AstPatternLegacy {
-  type: 'definition' | 'usage';
-  name: string;
-}
-
-export type AstPattern =
-  | AstPatternDefinition
-  | AstPatternTypeFilter
-  | AstPatternTypeFilterAll
-  | AstPatternTypeFilterVar
-  | AstPatternNameList
-  | AstPatternNameListAll
-  | AstPatternNameListVar
-  | AstPatternLegacy;
-
-export interface AstResult {
-  name: string;
-  code: string;
-  type: string;
-  line: number;
-  file?: string;
-}
-
-interface Definition {
-  name: string;
-  type: string;
-  start: number;
-  end: number;
-  line: number;
-  code: string;
-  search: string;
-}
-
-type SequenceEntry = { kind: 'definition'; key: string } | { kind: 'null' };
-
-// Type filter mappings - maps filter keywords to definition types
-const TYPE_FILTER_MAP: Record<string, string[]> = {
-  fn: ['function', 'method'],
-  var: ['variable', 'constant'],
-  class: ['class'],
-  interface: ['interface'],
-  type: ['type-alias'],
-  enum: ['enum'],
-  struct: ['struct'],
-  trait: ['trait'],
-  module: ['module'],
-};
-
-/**
- * Check if a pattern contains wildcard characters
- */
-function isWildcardPattern(name: string): boolean {
-  return name.includes('*') || name.includes('?');
-}
-
-/**
- * Create a matcher function for symbol names
- * Supports glob-style wildcards: * matches any chars, ? matches single char
- */
-function createSymbolMatcher(pattern: string): (name: string) => boolean {
-  if (!isWildcardPattern(pattern)) {
-    return (name: string) => name === pattern;
-  }
-  // Convert glob to regex: escape special chars, then convert * and ?
-  const regexPattern = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars (except * and ?)
-    .replace(/\*/g, '.*')
-    .replace(/\?/g, '.');
-  const regex = new RegExp(`^${regexPattern}$`);
-  return (name: string) => regex.test(name);
-}
-
-/**
- * Check if a definition matches a type filter
- */
-function matchesTypeFilter(defType: string, filter: string): boolean {
-  const allowedTypes = TYPE_FILTER_MAP[filter];
-  return allowedTypes ? allowedTypes.includes(defType) : false;
-}
-
-/**
- * Check if any pattern in the list is a name-list pattern
- */
-function hasNameListPattern(patterns: AstPattern[]): boolean {
-  return patterns.some(p =>
-    p.type === 'name-list' || p.type === 'name-list-all' || p.type === 'name-list-var'
-  );
-}
-
-/**
- * Check if any pattern in the list is a content pattern (definition, type-filter, etc.)
- */
-function hasContentPattern(patterns: AstPattern[]): boolean {
-  return patterns.some(p =>
-    p.type === 'definition' || p.type === 'usage' ||
-    p.type === 'type-filter' || p.type === 'type-filter-all' || p.type === 'type-filter-var'
-  );
-}
+import {
+  evaluatePatternResults,
+  hasContentPattern,
+  hasNameListPattern,
+  matchesTypeFilter,
+  TYPE_FILTER_MAP
+} from './ast-extractor/pattern-core';
+import type { AstPattern, AstResult, Definition } from './ast-extractor/types';
+export type {
+  AstPatternDefinition,
+  AstPatternTypeFilter,
+  AstPatternTypeFilterAll,
+  AstPatternTypeFilterVar,
+  AstPatternNameList,
+  AstPatternNameListAll,
+  AstPatternNameListVar,
+  AstPatternLegacy,
+  AstPattern,
+  AstResult
+} from './ast-extractor/types';
 
 function getLinesAndOffsets(content: string): { lines: string[]; offsets: number[] } {
   const lines = content.split(/\r?\n/);
@@ -179,206 +56,7 @@ export function extractAst(content: string, filePath: string, patterns: AstPatte
     definitions = extractTsDefinitions(content, filePath);
   }
 
-
-  const definitionMap = new Map<string, Definition>();
-  const sequence: SequenceEntry[] = [];
-
-  function toResult(def: Definition): AstResult {
-    return { name: def.name, code: def.code, type: def.type, line: def.line };
-  }
-
-  function keyOf(def: Definition): string {
-    return `${def.start}:${def.end}:${def.name}`;
-  }
-
-  function contains(container: Definition, child: Definition): boolean {
-    return (
-      container.start <= child.start &&
-      container.end >= child.end &&
-      (container.start < child.start || container.end > child.end)
-    );
-  }
-
-  function pushDefinition(def: Definition): void {
-    const key = keyOf(def);
-    if (definitionMap.has(key)) {
-      return;
-    }
-
-    for (const existing of definitionMap.values()) {
-      if (contains(existing, def)) {
-        return;
-      }
-    }
-
-    for (const [existingKey, existing] of definitionMap) {
-      if (contains(def, existing)) {
-        definitionMap.delete(existingKey);
-        const index = sequence.findIndex(entry => entry.kind === 'definition' && entry.key === existingKey);
-        if (index !== -1) {
-          sequence.splice(index, 1);
-        }
-      }
-    }
-
-    definitionMap.set(key, def);
-    sequence.push({ kind: 'definition', key });
-  }
-
-  for (const pattern of patterns) {
-    // Handle type-filter-all: { * } - all definitions
-    if (pattern.type === 'type-filter-all') {
-      if (pattern.usage) {
-        // Usage pattern with all types - find functions that use any definition
-        // For simplicity, return all non-variable definitions
-        const matches = definitions.filter(def => def.type !== 'variable');
-        if (matches.length === 0) {
-          sequence.push({ kind: 'null' });
-        } else {
-          for (const def of matches) {
-            pushDefinition(def);
-          }
-        }
-      } else {
-        // Return all definitions
-        if (definitions.length === 0) {
-          sequence.push({ kind: 'null' });
-        } else {
-          for (const def of definitions) {
-            pushDefinition(def);
-          }
-        }
-      }
-      continue;
-    }
-
-    // Handle type-filter: { *fn }, { *var }, { *class }, etc.
-    if (pattern.type === 'type-filter') {
-      const matches = definitions.filter(def => matchesTypeFilter(def.type, pattern.filter));
-      if (pattern.usage) {
-        // Usage pattern - find functions that use any of the matched definitions
-        const matchedNames = new Set(matches.map(m => m.name));
-        const usageMatches = definitions.filter(def => {
-          if (def.type === 'variable') return false;
-          return matches.some(m => {
-            const regex = new RegExp(`\\b${escapeRegExp(m.name)}\\b`);
-            return regex.test(def.search);
-          });
-        });
-        const filteredUsages = usageMatches.filter(def =>
-          !usageMatches.some(other => other !== def && contains(def, other))
-        );
-        if (filteredUsages.length === 0) {
-          sequence.push({ kind: 'null' });
-        } else {
-          for (const def of filteredUsages) {
-            pushDefinition(def);
-          }
-        }
-      } else {
-        if (matches.length === 0) {
-          sequence.push({ kind: 'null' });
-        } else {
-          for (const def of matches) {
-            pushDefinition(def);
-          }
-        }
-      }
-      continue;
-    }
-
-    // Handle definition patterns (may include wildcards in name)
-    if (pattern.type === 'definition') {
-      const patternName = pattern.name;
-
-      if (isWildcardPattern(patternName)) {
-        // Wildcard pattern: handle*, *Validator, *Request*
-        const matcher = createSymbolMatcher(patternName);
-        const matches = definitions.filter(d => matcher(d.name));
-
-        if (pattern.usage) {
-          // Usage pattern with wildcards - find functions that use any matching definition
-          const usageMatches = definitions.filter(def => {
-            if (def.type === 'variable') return false;
-            return matches.some(m => {
-              const regex = new RegExp(`\\b${escapeRegExp(m.name)}\\b`);
-              return regex.test(def.search);
-            });
-          });
-          const filteredUsages = usageMatches.filter(def =>
-            !usageMatches.some(other => other !== def && contains(def, other))
-          );
-          if (filteredUsages.length === 0) {
-            sequence.push({ kind: 'null' });
-          } else {
-            for (const def of filteredUsages) {
-              pushDefinition(def);
-            }
-          }
-        } else {
-          if (matches.length === 0) {
-            sequence.push({ kind: 'null' });
-          } else {
-            for (const def of matches) {
-              pushDefinition(def);
-            }
-          }
-        }
-      } else if (pattern.usage) {
-        // Exact name with usage flag (parentheses syntax)
-        const regex = new RegExp(`\\b${escapeRegExp(patternName)}\\b`);
-        const matches = definitions.filter(def => def.type !== 'variable' && regex.test(def.search));
-        const filteredMatches = matches.filter(def =>
-          !matches.some(other => other !== def && contains(def, other))
-        );
-        if (filteredMatches.length === 0) {
-          sequence.push({ kind: 'null' });
-        } else {
-          for (const def of filteredMatches) {
-            pushDefinition(def);
-          }
-        }
-      } else {
-        // Exact match (original behavior)
-        const def = definitions.find(d => d.name === patternName);
-        if (def) {
-          pushDefinition(def);
-        } else {
-          sequence.push({ kind: 'null' });
-        }
-      }
-      continue;
-    }
-
-    // Handle legacy usage pattern type (type === 'usage')
-    if (pattern.type === 'usage') {
-      const legacyPattern = pattern as AstPatternLegacy;
-      const regex = new RegExp(`\\b${escapeRegExp(legacyPattern.name)}\\b`);
-      const matches = definitions.filter(def => def.type !== 'variable' && regex.test(def.search));
-      const filteredMatches = matches.filter(def =>
-        !matches.some(other => other !== def && contains(def, other))
-      );
-      if (filteredMatches.length === 0) {
-        sequence.push({ kind: 'null' });
-        continue;
-      }
-      for (const def of filteredMatches) {
-        pushDefinition(def);
-      }
-      continue;
-    }
-
-    // Note: name-list patterns are handled separately in extractNames()
-    // type-filter-var and name-list-var need variable resolution before calling this function
-  }
-
-  return sequence.map(entry => {
-    if (entry.kind === 'null') {
-      return null;
-    }
-    const def = definitionMap.get(entry.key);
-    return def ? toResult(def) : null;
-  });
+  return evaluatePatternResults(definitions, patterns);
 }
 
 /**
@@ -1140,10 +818,6 @@ function extractSolidityDefinitions(content: string): Definition[] {
   }
 
   return defs;
-}
-
-function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function extractJavaDefinitions(content: string): Definition[] {

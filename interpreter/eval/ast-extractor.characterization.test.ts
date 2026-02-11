@@ -42,6 +42,39 @@ describe('ast extractor phase-0 characterization', () => {
     ]);
   });
 
+  it('keeps sequence stability and duplicate suppression behavior stable', () => {
+    const source = [
+      'function alphaHelper() { return 1; }',
+      'function betaHelper() { return 2; }'
+    ].join('\n');
+
+    const patterns: AstPattern[] = [
+      { type: 'definition', name: 'alphaHelper' },
+      { type: 'definition', name: '*Helper' },
+      { type: 'definition', name: 'alphaHelper' }
+    ];
+
+    const results = extractAst(source, 'dupes.ts', patterns);
+    expect(resultNames(results)).toEqual(['alphaHelper', 'betaHelper']);
+  });
+
+  it('keeps containment-pruning behavior stable when container and member are both selected', () => {
+    const source = [
+      'class Service {',
+      '  create() {',
+      '    return 1;',
+      '  }',
+      '}'
+    ].join('\n');
+
+    const results = extractAst(source, 'containment.ts', [
+      { type: 'definition', name: 'create' },
+      { type: 'definition', name: 'Service' }
+    ]);
+
+    expect(resultNames(results)).toEqual(['Service']);
+  });
+
   it('keeps usage-pattern behavior stable for wildcard, legacy usage, and type-filter usage', () => {
     const source = [
       'const seed = 1;',
