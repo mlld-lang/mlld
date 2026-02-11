@@ -3,9 +3,12 @@ import type { MlldMode } from '@core/types/mode';
 import type { Variable, PipelineInput } from '@core/types/variable';
 import { 
   createPathVariable,
+  createSimpleTextVariable,
+  createObjectVariable,
   isPipelineInput,
   isTextLike,
 } from '@core/types/variable';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { isDirectiveNode, isVariableReferenceNode, isTextNode } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
@@ -17,33 +20,53 @@ import { execSync } from 'child_process';
 import * as path from 'path';
 // Note: ImportApproval, ImmutableCache, and GistTransformer are now handled by ImportResolver
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
+import { MlldInterpreterError } from '@core/errors';
 import { SecurityManager } from '@security';
+import { TaintTracker } from '@core/security';
 import {
   makeSecurityDescriptor,
+  mergeDescriptors,
   createCapabilityContext,
   type SecurityDescriptor,
   type CapabilityContext,
   type CapabilityKind,
-  type ImportType
+  type ImportType,
+  type DataLabel
 } from '@core/types/security';
 import type { StateWrite } from '@core/types/state';
-import { mergeNeedsDeclarations, type NeedsDeclaration, type PolicyCapabilities, type ProfilesDeclaration } from '@core/policy/needs';
-import type { PolicyConfig } from '@core/policy/union';
+import { mergeNeedsDeclarations, ALLOW_ALL_POLICY, type NeedsDeclaration, type PolicyCapabilities, type ProfilesDeclaration } from '@core/policy/needs';
+import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import { RegistryManager, ProjectConfig } from '@core/registry';
+import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
-import { ResolverManager, DynamicModuleResolver } from '@core/resolvers';
+import {
+  ResolverManager,
+  DynamicModuleResolver,
+  RegistryResolver,
+  LocalResolver,
+  GitHubResolver,
+  HTTPResolver,
+  ProjectPathResolver,
+  PythonPackageResolver,
+  PythonAliasResolver
+} from '@core/resolvers';
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import { getExpressionProvenance } from '../utils/expression-provenance';
 import { builtinTransformers, createTransformerVariable } from '../builtin/transformers';
-import type { NodeShadowEnvironment } from './NodeShadowEnvironment';
-import type { PythonShadowEnvironment } from './PythonShadowEnvironment';
+import { NodeShadowEnvironment } from './NodeShadowEnvironment';
+import { PythonShadowEnvironment } from './PythonShadowEnvironment';
 import { CacheManager } from './CacheManager';
 import { CommandUtils } from './CommandUtils';
 import { DebugUtils } from './DebugUtils';
 import { ErrorUtils, type CollectedError, type CommandExecutionContext } from './ErrorUtils';
-import { type CommandExecutionOptions } from './executors';
+import {
+  CommandExecutorFactory,
+  type CommandExecutionOptions,
+  type ExecutorDependencies
+} from './executors';
+import type { VariableProvider } from './executors/BashExecutor';
 import { VariableManager, type IVariableManager, type VariableManagerContext } from './VariableManager';
 import { ImportResolver, type IImportResolver, type ImportResolverContext, type FetchURLOptions } from './ImportResolver';
 import type { PathContext } from '@core/services/PathContextService';
@@ -54,26 +77,6 @@ import {
   buildVariableManagerDependencies,
   buildImportResolverDependencies
 } from './bootstrap/EnvironmentBootstrap';
-import { ResolverVariableFacade } from './runtime/ResolverVariableFacade';
-import { ContextFacade } from './runtime/ContextFacade';
-import {
-  OutputCoordinator,
-  type OutputCoordinatorContext,
-  type EffectType,
-  type EffectOptions
-} from './runtime/OutputCoordinator';
-import { SecurityPolicyRuntime, type SecuritySnapshotLike } from './runtime/SecurityPolicyRuntime';
-import { SdkEventBridge } from './runtime/SdkEventBridge';
-import { StateWriteRuntime } from './runtime/StateWriteRuntime';
-import { VariableFacade, type ImportBindingInfo } from './runtime/VariableFacade';
-import { ShadowEnvironmentRuntime } from './runtime/ShadowEnvironmentRuntime';
-import {
-  ExecutionOrchestrator,
-  type CommandExecutorFactoryPort
-} from './runtime/ExecutionOrchestrator';
-import { ChildEnvironmentLifecycle } from './runtime/ChildEnvironmentLifecycle';
-import { DiagnosticsRuntime } from './runtime/DiagnosticsRuntime';
-import { RuntimeConfigurationRuntime } from './runtime/RuntimeConfigurationRuntime';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { McpImportManager } from '../mcp/McpImportManager';
@@ -81,10 +84,11 @@ import { OutputRenderer } from '@interpreter/output/renderer';
 import type { OutputIntent } from '@interpreter/output/intent';
 import { contentIntent, breakIntent, progressIntent, errorIntent } from '@interpreter/output/intent';
 import { defaultStreamingOptions, type StreamingOptions } from '../eval/pipeline/streaming-options';
-import { StreamBus } from '../eval/pipeline/stream-bus';
+import { StreamBus, type StreamEvent } from '../eval/pipeline/stream-bus';
 import { ExportManifest } from '../eval/import/ExportManifest';
 import {
   ContextManager,
+  type SecuritySnapshotLike,
   type PipelineContextSnapshot,
   type GuardContextSnapshot,
   type OperationContext,
@@ -101,6 +105,70 @@ import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { SDKEvent, StreamingResult } from '@sdk/types';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
+import type { ImportApproval } from '@core/security/ImportApproval';
+import type { ImmutableCache } from '@core/security/ImmutableCache';
+
+type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
+
+interface EffectOptions {
+  path?: string;
+  source?: SourceLocation;
+  mode?: 'append' | 'write';
+  metadata?: unknown;
+}
+
+interface ImportBindingInfo {
+  source: string;
+  location?: SourceLocation;
+}
+
+interface SecurityScopeFrame {
+  kind: CapabilityKind;
+  importType?: ImportType;
+  metadata?: Readonly<Record<string, unknown>>;
+  operation?: Readonly<Record<string, unknown>>;
+  previousDescriptor: SecurityDescriptor;
+  previousPolicy?: Readonly<Record<string, unknown>>;
+}
+
+interface SecurityRuntimeState {
+  tracker: TaintTracker;
+  descriptor: SecurityDescriptor;
+  stack: SecurityScopeFrame[];
+  policy?: Readonly<Record<string, unknown>>;
+}
+
+interface SecurityContextInput {
+  descriptor: SecurityDescriptor;
+  kind: CapabilityKind;
+  importType?: ImportType;
+  metadata?: Record<string, unknown>;
+  operation?: Record<string, unknown>;
+  policy?: Record<string, unknown>;
+}
+
+interface CommandExecutorFactoryPort {
+  executeCommand(
+    command: string,
+    options?: CommandExecutionOptions,
+    context?: CommandExecutionContext
+  ): Promise<string>;
+  executeCode(
+    code: string,
+    language: string,
+    params?: Record<string, any>,
+    metadata?: Record<string, any>,
+    options?: CommandExecutionOptions,
+    context?: CommandExecutionContext
+  ): Promise<string>;
+}
+
+interface NormalizedCodeExecutionInput {
+  metadata?: Record<string, any>;
+  context?: CommandExecutionContext;
+}
+
+type ShadowFunctions = Map<string, any>;
 
 
 /**
@@ -115,7 +183,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Note: importApproval and immutableCache are now handled by ImportResolver
   private currentFilePath?: string; // Track current file being processed
   private securityManager?: SecurityManager; // Central security coordinator
-  private securityPolicyRuntime: SecurityPolicyRuntime;
+  private securityRuntime?: SecurityRuntimeState;
+  private policyCapabilities: PolicyCapabilities = ALLOW_ALL_POLICY;
+  private policySummary?: PolicyConfig;
   private allowedTools?: Set<string>;
   private moduleNeeds?: NeedsDeclaration;
   private moduleProfiles?: ProfilesDeclaration;
@@ -138,22 +208,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private errorUtils: ErrorUtils;
   private commandExecutorFactory?: CommandExecutorFactoryPort;
   private variableManager: IVariableManager;
-  private variableFacade: VariableFacade;
-  private resolverVariableFacade: ResolverVariableFacade;
   private importResolver: IImportResolver;
   private contextManager: ContextManager;
-  private contextFacade: ContextFacade;
   private hookManager: HookManager;
   private guardRegistry: GuardRegistry;
-  private childLifecycle: ChildEnvironmentLifecycle;
-  private diagnosticsRuntime: DiagnosticsRuntime;
-  private runtimeConfiguration: RuntimeConfigurationRuntime;
   private pipelineGuardHistoryStore: { entries?: GuardHistoryEntry[] };
   private mcpImportManager?: McpImportManager;
-  
+
   // Shadow environments for language-specific function injection
-  private shadowEnvironmentRuntime: ShadowEnvironmentRuntime;
-  private executionOrchestrator: ExecutionOrchestrator;
+  private readonly shadowEnvs: Map<string, ShadowFunctions> = new Map();
+  private nodeShadowEnv?: NodeShadowEnvironment;
+  private pythonShadowEnv?: PythonShadowEnvironment;
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -167,7 +232,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private streamingManager?: StreamingManager;
   private streamingResult?: StreamingResult;
   private provenanceEnabled = false;
-  private stateWriteRuntime: StateWriteRuntime;
+
+  private stateWrites: StateWrite[] = [];
+  private stateWriteIndex = 0;
+  private stateSnapshot?: Record<string, any>;
+  private stateResolver?: DynamicModuleResolver;
+  private stateLabels: DataLabel[] = [];
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
@@ -223,8 +293,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private effectHandler: EffectHandler;
   // Output renderer for intent-based output with break collapsing
   private outputRenderer: OutputRenderer;
-  private outputCoordinator: OutputCoordinator;
-  private sdkEventBridge: SdkEventBridge;
+  private sdkStreamingOptions: StreamingOptions = { ...defaultStreamingOptions };
+  private sdkEmitter?: ExecutionEmitter;
+  private sdkUnsubscribe?: () => void;
   private directiveTimings: number[] = [];
 
   // Import evaluation guard - prevents directive execution during import
@@ -248,6 +319,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Guard evaluation depth prevents reentrant guard execution
   private guardEvaluationDepth = 0;
 
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE 1: Constructor & Bootstrap
+  // ═══════════════════════════════════════════════════════════════
+
   // Constructor overloads
   constructor(
     fileSystem: IFileSystemService,
@@ -268,12 +343,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.basePath = normalizedPathContext.basePath;
     this.pathContext = normalizedPathContext.pathContext;
     this.parent = parent;
-    this.securityPolicyRuntime = new SecurityPolicyRuntime(parent?.securityPolicyRuntime);
-    this.sdkEventBridge = parent ? parent.sdkEventBridge : new SdkEventBridge();
     if (parent) {
       this.streamingOptions = { ...parent.streamingOptions };
-    } else {
-      this.sdkEventBridge.setStreamingOptions(this.streamingOptions);
     }
     
     // Initialize effect handler: use provided, inherit from parent, or create default
@@ -282,9 +353,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Initialize output renderer: inherit from parent to share break collapsing state
     // OutputRenderer accepts a callback entrypoint; this keeps intent->effect routing local.
     this.outputRenderer = parent?.outputRenderer || new OutputRenderer((intent) => {
-      this.outputCoordinator.intentToEffect(intent, this.getOutputCoordinatorContext());
+      this.intentToEffect(intent);
     });
-    this.outputCoordinator = new OutputCoordinator(this.effectHandler, this.outputRenderer);
 
     if (parent) {
       this.contextManager = parent.contextManager;
@@ -297,18 +367,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.registerBuiltinHooks();
     }
     this.pipelineGuardHistoryStore = parent ? parent.pipelineGuardHistoryStore : {};
-    this.contextFacade = new ContextFacade(
-      this.contextManager,
-      this.guardRegistry,
-      this.pipelineGuardHistoryStore
-    );
-    this.childLifecycle = parent ? parent.childLifecycle : new ChildEnvironmentLifecycle();
-    this.diagnosticsRuntime = parent
-      ? parent.diagnosticsRuntime
-      : new DiagnosticsRuntime();
-    this.runtimeConfiguration = parent
-      ? parent.runtimeConfiguration
-      : new RuntimeConfigurationRuntime();
     
     // Inherit reserved names from parent environment
     if (parent) {
@@ -338,7 +396,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.cacheManager = parent.cacheManager;
       this.errorUtils = parent.errorUtils;
     } else {
-      this.cacheManager = new CacheManager(this.immutableCache, this.urlConfig);
+      this.cacheManager = new CacheManager(undefined, this.urlConfig);
       this.errorUtils = new ErrorUtils();
     }
     
@@ -365,18 +423,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getContextManager: () => this.contextManager
     });
     this.variableManager = new VariableManager(variableManagerDependencies);
-    this.variableFacade = new VariableFacade(this.variableManager, this.importBindings);
-    this.resolverVariableFacade = new ResolverVariableFacade(this.cacheManager, this.reservedNames);
-    this.stateWriteRuntime = parent
-      ? parent.stateWriteRuntime
-      : new StateWriteRuntime(this.variableManager);
-    this.shadowEnvironmentRuntime = new ShadowEnvironmentRuntime(this, parent?.shadowEnvironmentRuntime);
-    this.executionOrchestrator = new ExecutionOrchestrator(
-      this,
-      this.errorUtils,
-      this.variableManager,
-      this.shadowEnvironmentRuntime
-    );
     
     // Initialize reserved variables if this is the root environment
     if (!parent) {
@@ -428,8 +474,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // commands, so this avoids creating a CommandExecutorFactory + 7 closure dependencies
     // for each of the potentially tens of thousands of iteration environments.
     if (!parent) {
-      this.executionOrchestrator.initialize();
-      this.commandExecutorFactory = this.executionOrchestrator.getFactory();
+      this.commandExecutorFactory = this.getCommandExecutorFactory();
     }
   }
   
@@ -481,7 +526,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     if (Object.prototype.hasOwnProperty.call(modules, '@state')) {
       const stateValue = modules['@state'];
       if (stateValue && typeof stateValue === 'object' && !Array.isArray(stateValue)) {
-        this.stateWriteRuntime.registerDynamicStateSnapshot(
+        this.registerDynamicStateSnapshot(
           stateValue as Record<string, any>,
           resolver,
           source
@@ -609,100 +654,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
   }
   
-  /**
-   * Create the debug object with environment information
-   * @param version - 1 = full JSON, 2 = reduced/useful, 3 = markdown format
-   */
-  private createDebugObject(version: number = 2): any {
-    // TODO: Add security toggle from mlld.lock.json when available
-    // For now, assume debug is enabled
-
-    // Use DebugUtils for debug object creation
-    const allVars = this.getAllVariables();
-    return DebugUtils.createDebugObject(allVars, this.reservedNames, version);
-  }
-  
-  
-  // --- Property Accessors ---
-  
-  /**
-   * Get the PathContext for this environment
-   */
-  getPathContext(): PathContext | undefined {
-    return this.pathContext || this.parent?.getPathContext();
-  }
-  
-  /**
-   * Get the project root directory
-   */
-  getProjectRoot(): string {
-    const context = this.getPathContext();
-    if (context) {
-      return context.projectRoot;
-    }
-    // Fallback to basePath for legacy mode
-    return this.basePath;
-  }
-  
-  /**
-   * Check if running in ephemeral mode
-   */
-  isEphemeral(): boolean {
-    return this.isEphemeralMode;
-  }
-  
-  /**
-   * Get the file directory (directory of current .mld file)
-   */
-  getFileDirectory(): string {
-    const context = this.getPathContext();
-    if (context) {
-      return context.fileDirectory;
-    }
-    // In legacy mode, use basePath
-    return this.basePath;
-  }
-  
-  /**
-   * Get the execution directory (where commands run)
-   * If we have an inferred project root and the file is within the project,
-   * use the project root. Otherwise use the script's directory.
-   */
-  getExecutionDirectory(): string {
-    const context = this.getPathContext();
-    if (context) {
-      // Check if file directory is within the project root
-      const isFileInProject = context.fileDirectory.startsWith(context.projectRoot);
-
-      // If we have an inferred project root (different from file directory)
-      // AND the file is within the project, use project root for commands
-      if (isFileInProject &&
-          context.projectRoot &&
-          context.projectRoot !== context.fileDirectory) {
-        return context.projectRoot;
-      }
-      // Otherwise use the file's directory (script location)
-      return context.fileDirectory;
-    }
-    // Fallback in legacy mode
-    return this.basePath;
-  }
-  
-  /**
-   * Legacy method - returns project root for backward compatibility
-   * @deprecated Use getProjectRoot() or getFileDirectory() instead
-   */
-  getBasePath(): string {
-    return this.getProjectRoot();
-  }
-  
-  getCurrentFilePath(): string | undefined {
-    return this.currentFilePath || this.parent?.getCurrentFilePath();
-  }
-  
-  setCurrentFilePath(filePath: string | undefined): void {
-    this.currentFilePath = filePath;
-  }
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE 2: Security, Policy & State Runtime
+  // ═══════════════════════════════════════════════════════════════
 
   // Import evaluation guard methods
   setImporting(value: boolean): void {
@@ -743,11 +697,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   getImportBinding(name: string): ImportBindingInfo | undefined {
-    return this.variableFacade.getImportBinding(name);
+    return this.importBindings.get(name);
   }
 
   setImportBinding(name: string, info: ImportBindingInfo): void {
-    this.variableFacade.setImportBinding(name, info);
+    this.importBindings.set(name, info);
   }
 
   getSecurityManager(): SecurityManager | undefined {
@@ -782,15 +736,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   getPolicyCapabilities(): PolicyCapabilities {
-    return this.securityPolicyRuntime.getPolicyCapabilities();
+    if (this.policyCapabilities) return this.policyCapabilities;
+    if (this.parent) return this.parent.getPolicyCapabilities();
+    return ALLOW_ALL_POLICY;
   }
 
   setPolicyCapabilities(policy: PolicyCapabilities): void {
-    this.securityPolicyRuntime.setPolicyCapabilities(policy);
+    this.policyCapabilities = policy;
   }
 
   getPolicySummary(): PolicyConfig | undefined {
-    return this.securityPolicyRuntime.getPolicySummary();
+    if (this.policySummary) return this.policySummary;
+    return this.parent?.getPolicySummary();
   }
 
   getScopedEnvironmentConfig(): EnvironmentConfig | undefined {
@@ -807,33 +764,79 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   getAllowedTools(): Set<string> | undefined {
-    return this.securityPolicyRuntime.getAllowedTools();
+    if (this.allowedTools) return this.allowedTools;
+    return this.parent?.getAllowedTools();
   }
 
   setAllowedTools(tools?: Iterable<string> | null): void {
-    this.securityPolicyRuntime.setAllowedTools(tools);
-    if (!this.securityPolicyRuntime.hasLocalAllowedTools()) {
+    if (!tools) {
+      if (this.parent?.getAllowedTools()) {
+        throw new Error('Tool scope cannot widen beyond parent environment');
+      }
       this.allowedTools = undefined;
       return;
     }
-    const localTools = this.securityPolicyRuntime.getAllowedTools();
-    this.allowedTools = localTools ? new Set(localTools) : new Set<string>();
+
+    const normalized = new Set<string>();
+    for (const tool of tools) {
+      if (typeof tool !== 'string') {
+        continue;
+      }
+      const trimmed = tool.trim();
+      if (trimmed.length > 0) {
+        normalized.add(trimmed);
+      }
+    }
+
+    const parentAllowed = this.parent?.getAllowedTools();
+    if (parentAllowed) {
+      const invalid = Array.from(normalized).filter(tool => !parentAllowed.has(tool));
+      if (invalid.length > 0) {
+        throw new Error(`Tool scope cannot add tools outside parent: ${invalid.join(', ')}`);
+      }
+    }
+
+    this.allowedTools = normalized;
   }
 
   isToolAllowed(toolName: string, mcpName?: string): boolean {
-    return this.securityPolicyRuntime.isToolAllowed(toolName, mcpName);
+    const allowed = this.getAllowedTools();
+    if (!allowed) {
+      return true;
+    }
+    if (allowed.size === 0) {
+      return false;
+    }
+    if (allowed.has(toolName)) {
+      return true;
+    }
+    if (mcpName && allowed.has(mcpName)) {
+      return true;
+    }
+    return false;
   }
 
   setPolicyContext(policy?: Record<string, unknown> | null): void {
-    this.securityPolicyRuntime.setPolicyContext(policy);
+    const runtime = this.ensureSecurityRuntime();
+    runtime.policy = policy ?? undefined;
   }
 
   setPolicyEnvironment(environment?: string | null): void {
-    this.securityPolicyRuntime.setPolicyEnvironment(environment);
+    const existing = (this.getPolicyContext() as Record<string, unknown> | undefined) ?? {};
+    const nextContext = {
+      tier: (existing as any).tier ?? null,
+      configs: (existing as any).configs ?? {},
+      activePolicies: (existing as any).activePolicies ?? [],
+      environment: environment ?? null
+    };
+    this.setPolicyContext(nextContext);
   }
 
   getPolicyContext(): Record<string, unknown> | undefined {
-    return this.securityPolicyRuntime.getPolicyContext();
+    if (this.securityRuntime?.policy) {
+      return this.securityRuntime.policy as Record<string, unknown>;
+    }
+    return this.parent?.getPolicyContext();
   }
 
   getProjectConfig(): ProjectConfig | undefined {
@@ -844,50 +847,124 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   recordPolicyConfig(alias: string, config: any): void {
-    this.securityPolicyRuntime.recordPolicyConfig(alias, config);
+    const normalizedConfig = normalizePolicyConfig(config);
+    this.policySummary = mergePolicyConfigs(this.policySummary, normalizedConfig);
+
+    const existing = (this.getPolicyContext() as Record<string, unknown> | undefined) ?? {};
+    const existingPolicies = (existing as any).activePolicies;
+    const activePolicies = Array.isArray(existingPolicies) ? [...existingPolicies] : [];
+    if (!activePolicies.includes(alias)) {
+      activePolicies.push(alias);
+    }
+
+    const nextContext = {
+      tier: (existing as any).tier ?? null,
+      configs: this.policySummary ?? {},
+      activePolicies,
+      ...((existing as any).environment ? { environment: (existing as any).environment } : {})
+    };
+    this.setPolicyContext(nextContext);
   }
 
   getSecuritySnapshot(): SecuritySnapshotLike | undefined {
-    return this.securityPolicyRuntime.getSecuritySnapshot();
+    if (this.securityRuntime) {
+      const top = this.securityRuntime.stack[this.securityRuntime.stack.length - 1];
+      return {
+        labels: this.securityRuntime.descriptor.labels,
+        sources: this.securityRuntime.descriptor.sources,
+        taint: this.securityRuntime.descriptor.taint,
+        policy: this.securityRuntime.policy,
+        operation: top?.operation
+      };
+    }
+    return this.parent?.getSecuritySnapshot();
   }
 
   private snapshotToDescriptor(snapshot?: SecuritySnapshotLike): SecurityDescriptor | undefined {
-    return this.securityPolicyRuntime.snapshotToDescriptor(snapshot);
+    if (!snapshot) {
+      return undefined;
+    }
+    return makeSecurityDescriptor({
+      labels: snapshot.labels,
+      taint: snapshot.taint,
+      sources: snapshot.sources,
+      policyContext: snapshot.policy
+    });
   }
 
-  pushSecurityContext(input: {
-    descriptor: SecurityDescriptor;
-    kind: CapabilityKind;
-    importType?: ImportType;
-    metadata?: Record<string, unknown>;
-    operation?: Record<string, unknown>;
-    policy?: Record<string, unknown>;
-  }): void {
-    this.securityPolicyRuntime.pushSecurityContext(input);
+  pushSecurityContext(input: SecurityContextInput): void {
+    const runtime = this.ensureSecurityRuntime();
+    const previousDescriptor = runtime.descriptor;
+    const merged = mergeDescriptors(previousDescriptor, input.descriptor);
+    const policy = input.policy ?? runtime.policy;
+    runtime.stack.push({
+      kind: input.kind,
+      importType: input.importType,
+      metadata: input.metadata ? Object.freeze({ ...input.metadata }) : undefined,
+      operation: input.operation ? Object.freeze({ ...input.operation }) : undefined,
+      previousDescriptor,
+      previousPolicy: runtime.policy
+    });
+    runtime.descriptor = merged;
+    runtime.policy = policy;
   }
 
   popSecurityContext(): CapabilityContext | undefined {
-    return this.securityPolicyRuntime.popSecurityContext();
+    const runtime = this.securityRuntime;
+    if (!runtime) {
+      return undefined;
+    }
+    const frame = runtime.stack.pop();
+    if (!frame) {
+      return undefined;
+    }
+    const descriptor = runtime.descriptor;
+    const context = createCapabilityContext({
+      kind: frame.kind,
+      importType: frame.importType,
+      descriptor,
+      metadata: frame.metadata,
+      policy: runtime.policy,
+      operation: frame.operation
+    });
+    runtime.descriptor = frame.previousDescriptor;
+    runtime.policy = frame.previousPolicy;
+    return context;
   }
 
   mergeSecurityDescriptors(
     ...descriptors: Array<SecurityDescriptor | undefined>
   ): SecurityDescriptor {
-    return this.securityPolicyRuntime.mergeSecurityDescriptors(...descriptors);
+    return mergeDescriptors(...descriptors);
   }
 
   recordSecurityDescriptor(descriptor: SecurityDescriptor | undefined): void {
-    this.securityPolicyRuntime.recordSecurityDescriptor(descriptor);
+    if (!descriptor) {
+      return;
+    }
+    const runtime = this.ensureSecurityRuntime();
+    runtime.descriptor = mergeDescriptors(runtime.descriptor, descriptor);
   }
 
   recordStateWrite(write: Omit<StateWrite, 'index' | 'timestamp'> & { index?: number; timestamp?: string }): void {
-    this.stateWriteRuntime.recordStateWrite(write);
+    const root = this.getRootEnvironment();
+    const entry: StateWrite = {
+      ...write,
+      index: write.index ?? root.stateWriteIndex++,
+      timestamp: write.timestamp ?? new Date().toISOString()
+    };
+    root.stateWrites.push(entry);
+    root.applyStateWriteToSnapshot(entry);
   }
 
   getStateWrites(): StateWrite[] {
-    return this.stateWriteRuntime.getStateWrites();
+    return this.getRootEnvironment().stateWrites;
   }
   
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE 3: Variable & Resolver Management
+  // ═══════════════════════════════════════════════════════════════
+
   getRegistryManager(): RegistryManager | undefined {
     // Get from this environment or parent
     if (this.registryManager) return this.registryManager;
@@ -998,8 +1075,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // --- Variable Management ---
   
   setVariable(name: string, variable: Variable): void {
-    this.variableFacade.setVariable(name, variable);
-    if (this.sdkEventBridge.hasEmitter()) {
+    this.variableManager.setVariable(name, variable);
+    if (this.hasSDKEmitter()) {
       const provenance = this.getVariableProvenance(variable);
       this.emitSDKEvent({
         type: 'debug:variable:create',
@@ -1016,7 +1093,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Used for temporary parameter variables in exec functions.
    */
   setParameterVariable(name: string, variable: Variable): void {
-    this.variableFacade.setParameterVariable(name, variable);
+    this.variableManager.setParameterVariable(name, variable);
   }
 
   /**
@@ -1024,12 +1101,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Used for augmented assignment (+=) on local let bindings.
    */
   updateVariable(name: string, variable: Variable): void {
-    this.variableFacade.updateVariable(name, variable);
+    this.variableManager.updateVariable(name, variable);
   }
 
   getVariable(name: string): Variable | undefined {
-    const variable = this.variableFacade.getVariable(name);
-    if (this.sdkEventBridge.hasEmitter()) {
+    const variable = this.variableManager.getVariable(name);
+    if (this.hasSDKEmitter()) {
       const provenance = this.getVariableProvenance(variable);
       this.emitSDKEvent({
         type: 'debug:variable:access',
@@ -1046,7 +1123,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * This is a convenience method for consumers
    */
   getVariableValue(name: string): any {
-    return this.variableFacade.getVariableValue(name);
+    return this.variableManager.getVariableValue(name);
   }
 
   private getVariableProvenance(variable?: Variable): SecurityDescriptor | undefined {
@@ -1063,43 +1140,49 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   /**
-   * Set pipeline execution context
-   */
-  setPipelineContext(context: PipelineContextSnapshot): void {
-    this.contextManager.pushPipelineContext(context);
-  }
-  
-  /**
-   * Clear pipeline execution context
-   */
-  clearPipelineContext(): void {
-    this.contextManager.popPipelineContext();
-  }
-
-  updatePipelineContext(context: PipelineContextSnapshot): void {
-    this.contextManager.replacePipelineContext(context);
-  }
-  
-  /**
-   * Get current pipeline context
-   */
-  getPipelineContext(): PipelineContextSnapshot | undefined {
-    return this.contextManager.peekPipelineContext();
-  }
-  
-  /**
    * Get a resolver variable with proper async resolution
    * This handles context-dependent behavior for resolvers
    */
   async getResolverVariable(name: string): Promise<Variable | undefined> {
-    return this.resolverVariableFacade.resolve(name, {
-      resolverManager: this.getResolverManager(),
-      debugValue: name === 'debug' ? this.createDebugObject(3) : ''
-    });
+    if (!this.reservedNames.has(name)) {
+      return undefined;
+    }
+
+    if (name === 'keychain') {
+      throw new MlldInterpreterError(
+        'Direct keychain access is not available. Use policy.auth with using auth:*.',
+        { code: 'KEYCHAIN_DIRECT_ACCESS_DENIED' }
+      );
+    }
+
+    if (name === 'debug') {
+      return this.createDebugVariable(this.createDebugObject(3));
+    }
+
+    const cached = this.cacheManager.getResolverVariable(name);
+    if (cached?.internal?.needsResolution === false) {
+      return cached;
+    }
+
+    const resolverManager = this.getResolverManager();
+    if (!resolverManager) {
+      return this.createPendingResolverVariable(name);
+    }
+
+    try {
+      const resolverContent = await resolverManager.resolve(`@${name}`, { context: 'variable' });
+      const resolvedVar = this.convertResolverContent(name, resolverContent);
+      this.projectResolverSecurityMetadata(resolvedVar, resolverContent);
+      this.cacheManager.setResolverVariable(name, resolvedVar);
+      return resolvedVar;
+    } catch (error) {
+      console.warn(`Failed to resolve variable @${name}: ${(error as Error).message}`);
+      return undefined;
+    }
   }
   
   hasVariable(name: string): boolean {
-    return this.variableFacade.hasVariable(name);
+    return this.variableManager.hasVariable(name);
   }
   
   /**
@@ -1107,7 +1190,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * First checks built-in transforms, then variables
    */
   getTransform(name: string): Function | undefined {
-    return this.variableFacade.getTransform(name, builtinTransformers as Record<string, Function>);
+    if ((builtinTransformers as Record<string, Function>)[name]) {
+      return (builtinTransformers as Record<string, Function>)[name];
+    }
+
+    const variable = this.getVariable(name);
+    if (variable && typeof variable === 'object' && '__executable' in variable) {
+      return variable;
+    }
+
+    return undefined;
   }
   
   // --- Frontmatter Support ---
@@ -1117,7 +1209,30 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Creates both @fm and @frontmatter as aliases to the same data
    */
   setFrontmatter(data: Record<string, unknown>): void {
-    this.variableFacade.setFrontmatter(data);
+    const frontmatterVariable = createObjectVariable(
+      'frontmatter',
+      data,
+      true,
+      {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        mx: {
+          source: 'frontmatter',
+          definedAt: { line: 0, column: 0, filePath: '<frontmatter>' }
+        },
+        internal: {
+          isSystem: true,
+          immutable: true
+        }
+      }
+    );
+
+    this.variableManager.setVariable('fm', frontmatterVariable);
+    this.variableManager.setVariable('frontmatter', frontmatterVariable);
   }
   
   // --- Node Management ---
@@ -1129,83 +1244,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   getNodes(): MlldNode[] {
     return this.nodes;
   }
-  
-  // --- Effect Management ---
-  
-  /**
-   * Emit an effect immediately rather than storing as a node.
-   * This enables immediate output during for loops and pipelines.
-   */
-  emitEffect(
-    type: EffectType,
-    content: string,
-    options?: EffectOptions
-  ): void {
-    this.outputCoordinator.emitEffect(type, content, options, this.getOutputCoordinatorContext());
-  }
 
-  /**
-   * Convert an OutputIntent to an Effect and emit it
-   *
-   * Internal method used by OutputRenderer callback to route
-   * intents through the effect system.
-   */
-  private intentToEffect(intent: OutputIntent): void {
-    this.outputCoordinator.intentToEffect(intent, this.getOutputCoordinatorContext());
-  }
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE 4: Operation & Pipeline Context
+  // ═══════════════════════════════════════════════════════════════
 
-  /**
-   * Emit an output intent
-   *
-   * New intent-based output system that supports:
-   * - Collapsible break normalization
-   * - Smart buffering for streaming
-   * - Visibility control
-   *
-   * This is the preferred method for new code.
-   */
-  emitIntent(intent: OutputIntent): void {
-    this.outputCoordinator.emitIntent(intent);
-  }
-
-  /**
-   * Render final output (flushes pending breaks)
-   *
-   * Call this at the end of document execution to ensure
-   * all pending intents are flushed.
-   */
-  renderOutput(): void {
-    this.outputCoordinator.renderOutput();
-  }
-
-  /**
-   * Get the current effect handler (mainly for testing).
-   */
-  getEffectHandler(): EffectHandler {
-    return this.outputCoordinator.getEffectHandler();
-  }
-  
-  /**
-   * Set a custom effect handler (mainly for testing).
-   */
-  setEffectHandler(handler: EffectHandler): void {
-    this.effectHandler = handler;
-    this.outputCoordinator.setEffectHandler(handler);
-  }
-
-  private getOutputCoordinatorContext(): OutputCoordinatorContext {
-    return {
-      getSecuritySnapshot: () => this.getSecuritySnapshot(),
-      recordSecurityDescriptor: descriptor => this.recordSecurityDescriptor(descriptor),
-      isImportingContent: () => this.isImportingContent,
-      isProvenanceEnabled: () => this.isProvenanceEnabled(),
-      hasSDKEmitter: () => this.sdkEventBridge.hasEmitter(),
-      emitSDKEvent: event => this.emitSDKEvent(event)
-    };
-  }
-  
   getContextManager(): ContextManager {
-    return this.contextFacade.getContextManager();
+    return this.contextManager;
   }
 
   getHookManager(): HookManager {
@@ -1213,69 +1258,101 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   getGuardRegistry(): GuardRegistry {
-    return this.contextFacade.getGuardRegistry();
+    return this.guardRegistry;
+  }
+
+  /**
+   * Set pipeline execution context
+   */
+  setPipelineContext(context: PipelineContextSnapshot): void {
+    this.contextManager.pushPipelineContext(context);
+  }
+
+  /**
+   * Clear pipeline execution context
+   */
+  clearPipelineContext(): void {
+    this.contextManager.popPipelineContext();
+  }
+
+  updatePipelineContext(context: PipelineContextSnapshot): void {
+    this.contextManager.replacePipelineContext(context);
+  }
+
+  /**
+   * Get current pipeline context
+   */
+  getPipelineContext(): PipelineContextSnapshot | undefined {
+    return this.contextManager.peekPipelineContext();
   }
 
   getPipelineGuardHistory(): GuardHistoryEntry[] {
-    return this.contextFacade.getPipelineGuardHistory();
+    if (!this.pipelineGuardHistoryStore.entries) {
+      this.pipelineGuardHistoryStore.entries = [];
+    }
+    return this.pipelineGuardHistoryStore.entries;
   }
 
   recordPipelineGuardHistory(entry: GuardHistoryEntry): void {
-    this.contextFacade.recordPipelineGuardHistory(entry);
+    this.getPipelineGuardHistory().push(entry);
   }
 
   resetPipelineGuardHistory(): void {
-    this.contextFacade.resetPipelineGuardHistory();
+    const history = this.getPipelineGuardHistory();
+    history.splice(0, history.length);
   }
 
   serializeLocalGuards(): SerializedGuardDefinition[] {
-    return this.contextFacade.serializeLocalGuards();
+    return this.guardRegistry.serializeOwn();
   }
 
   serializeGuardsByNames(names: readonly string[]): SerializedGuardDefinition[] {
-    return this.contextFacade.serializeGuardsByNames(names);
+    return this.guardRegistry.serializeByNames(names);
   }
 
   registerSerializedGuards(definitions: SerializedGuardDefinition[] | undefined | null): void {
-    this.contextFacade.registerSerializedGuards(definitions);
+    if (!definitions || definitions.length === 0) {
+      return;
+    }
+    this.guardRegistry.importSerialized(definitions);
   }
 
   async withOpContext<T>(context: OperationContext, fn: () => Promise<T> | T): Promise<T> {
-    return this.contextFacade.withOpContext(context, fn);
+    return this.contextManager.withOperation(context, fn);
   }
 
   updateOpContext(update: Partial<OperationContext>): void {
-    this.contextFacade.updateOpContext(update);
+    this.contextManager.updateOperation(update);
   }
 
   getEnclosingExeLabels(): readonly string[] {
-    return this.contextFacade.getEnclosingExeLabels();
+    return this.contextManager.getEnclosingExeLabels();
   }
 
   setToolsAvailability(allowed: readonly string[], denied: readonly string[]): void {
-    this.contextFacade.setToolsAvailability(allowed, denied);
+    this.contextManager.setToolAvailability(allowed, denied);
   }
 
   recordToolCall(call: ToolCallRecord): void {
-    this.contextFacade.recordToolCall(call);
+    this.contextManager.recordToolCall(call);
   }
 
   resetToolCalls(): void {
-    this.contextFacade.resetToolCalls();
+    this.contextManager.resetToolCalls();
   }
 
   async withPipeContext<T>(
     context: PipelineContextSnapshot,
     fn: () => Promise<T> | T
   ): Promise<T> {
-    return this.contextFacade.withPipeContext(context, fn);
+    return this.contextManager.withPipelineContext(context, fn);
   }
 
   async withGuardContext<T>(
     context: GuardContextSnapshot,
     fn: () => Promise<T> | T
   ): Promise<T> {
-    return this.contextFacade.withGuardContext(context, fn);
+    return this.contextManager.withGuardContext(context, fn);
   }
 
   async withGuardSuppression<T>(fn: () => Promise<T> | T): Promise<T> {
@@ -1298,19 +1375,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     context: DeniedContextSnapshot,
     fn: () => Promise<T> | T
   ): Promise<T> {
-    return this.contextFacade.withDeniedContext(context, fn);
+    return this.contextManager.withDeniedContext(context, fn);
   }
 
   pushExecutionContext(type: string, context: unknown): void {
-    this.contextFacade.pushExecutionContext(type, context);
+    this.contextManager.pushGenericContext(type, context);
   }
 
   popExecutionContext<T = unknown>(type: string): T | undefined {
-    return this.contextFacade.popExecutionContext<T>(type);
+    return this.contextManager.popGenericContext<T>(type);
   }
 
   getExecutionContext<T = unknown>(type: string): T | undefined {
-    return this.contextFacade.getExecutionContext<T>(type);
+    return this.contextManager.peekGenericContext<T>(type);
   }
 
   async withExecutionContext<T>(
@@ -1318,9 +1395,154 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     context: unknown,
     fn: () => Promise<T> | T
   ): Promise<T> {
-    return this.contextFacade.withExecutionContext(type, context, fn);
+    return this.contextManager.withGenericContext(type, context, fn);
+  }
+  
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE 5: Output, Effects & SDK Events
+  // ═══════════════════════════════════════════════════════════════
+  
+  /**
+   * Emit an effect immediately rather than storing as a node.
+   * This enables immediate output during for loops and pipelines.
+   */
+  emitEffect(
+    type: EffectType,
+    content: string,
+    options?: EffectOptions
+  ): void {
+    if (!this.effectHandler) {
+      console.error('[WARNING] No effect handler available!');
+      return;
+    }
+
+    if (type === 'doc' && this.isImportingContent) {
+      return;
+    }
+
+    if ((type === 'doc' || type === 'both') && content && !/^\n+$/.test(content)) {
+      this.outputRenderer.render();
+    }
+
+    const snapshot = this.getSecuritySnapshot();
+    let capability: CapabilityContext | undefined;
+    if (snapshot) {
+      const descriptor = makeSecurityDescriptor({
+        labels: snapshot.labels,
+        taint: snapshot.taint,
+        sources: snapshot.sources,
+        policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
+      });
+      capability = createCapabilityContext({
+        kind: 'effect',
+        descriptor,
+        metadata: {
+          effectType: type,
+          path: options?.path
+        },
+        operation: snapshot.operation ?? {
+          kind: 'effect',
+          effectType: type
+        }
+      });
+      this.recordSecurityDescriptor(descriptor);
+    }
+
+    const effect = {
+      type,
+      content,
+      path: options?.path,
+      source: options?.source,
+      mode: options?.mode,
+      metadata: options?.metadata,
+      capability
+    };
+
+    this.effectHandler.handleEffect(effect);
+
+    if (this.hasSDKEmitter()) {
+      const provenance = this.isProvenanceEnabled()
+        ? capability?.security ?? makeSecurityDescriptor()
+        : undefined;
+      this.emitSDKEvent({
+        type: 'effect',
+        effect: {
+          ...effect,
+          security: capability?.security ?? makeSecurityDescriptor(),
+          ...(provenance && { provenance })
+        },
+        timestamp: Date.now()
+      });
+    }
   }
 
+  /**
+   * Convert an OutputIntent to an Effect and emit it
+   *
+   * Internal method used by OutputRenderer callback to route
+   * intents through the effect system.
+   */
+  private intentToEffect(intent: OutputIntent): void {
+    let effectType: EffectType;
+
+    switch (intent.type) {
+      case 'content':
+        effectType = 'doc';
+        break;
+      case 'break':
+        effectType = 'doc';
+        break;
+      case 'progress':
+        effectType = 'stdout';
+        break;
+      case 'error':
+        effectType = 'stderr';
+        break;
+      default:
+        effectType = 'doc';
+    }
+
+    this.emitEffect(effectType, intent.value, undefined);
+  }
+
+  /**
+   * Emit an output intent
+   *
+   * New intent-based output system that supports:
+   * - Collapsible break normalization
+   * - Smart buffering for streaming
+   * - Visibility control
+   *
+   * This is the preferred method for new code.
+   */
+  emitIntent(intent: OutputIntent): void {
+    this.outputRenderer.emit(intent);
+  }
+
+  /**
+   * Render final output (flushes pending breaks)
+   *
+   * Call this at the end of document execution to ensure
+   * all pending intents are flushed.
+   */
+  renderOutput(): void {
+    this.outputRenderer.render();
+  }
+
+  /**
+   * Get the current effect handler (mainly for testing).
+   */
+  getEffectHandler(): EffectHandler {
+    return this.effectHandler;
+  }
+  
+  /**
+   * Set a custom effect handler (mainly for testing).
+   */
+  setEffectHandler(handler: EffectHandler): void {
+    this.effectHandler = handler;
+  }
+  
   private registerBuiltinHooks(): void {
     this.hookManager.registerPre(guardPreHook);
     this.hookManager.registerPost(guardPostHook);
@@ -1353,13 +1575,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   enableSDKEvents(emitter: ExecutionEmitter): void {
     const root = this.getRootEnvironment();
-    root.sdkEventBridge.setStreamingOptions(this.getStreamingOptions());
-    root.sdkEventBridge.enable(emitter, this.getStreamingBus());
+    root.setSdkStreamingOptions(this.getStreamingOptions());
+    root.enableSdkEmitter(emitter, this.getStreamingBus());
   }
 
   emitSDKEvent(event: SDKEvent): void {
     const root = this.getRootEnvironment();
-    root.sdkEventBridge.emit(event);
+    root.sdkEmitter?.emit(event);
   }
   
   /**
@@ -1369,6 +1591,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.parent;
   }
   
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE 6: Command & Code Execution
+  // ═══════════════════════════════════════════════════════════════
+
   // --- Shadow Environment Management ---
   
   /**
@@ -1389,7 +1615,21 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @param functions Map of function names to their implementations
    */
   setShadowEnv(language: string, functions: Map<string, any>): void {
-    this.shadowEnvironmentRuntime.setShadowEnv(language, functions);
+    if (language === 'node' || language === 'nodejs') {
+      const nodeEnv = this.ensureNodeShadowEnv();
+      for (const [name, fn] of functions) {
+        nodeEnv.addFunction(name, fn);
+      }
+      return;
+    }
+
+    if (language === 'python' || language === 'py') {
+      this.ensurePythonShadowEnv();
+      this.shadowEnvs.set(language, functions);
+      return;
+    }
+
+    this.shadowEnvs.set(language, functions);
   }
   
   /**
@@ -1404,7 +1644,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns Map of function names to implementations, or undefined if not set
    */
   getShadowEnv(language: string): Map<string, any> | undefined {
-    return this.shadowEnvironmentRuntime.getShadowEnv(language);
+    if (language === 'node' || language === 'nodejs') {
+      const nodeEnv = this.getNodeShadowEnv();
+      if (!nodeEnv) {
+        return undefined;
+      }
+      return this.toNodeFunctionMap(nodeEnv);
+    }
+
+    return this.shadowEnvs.get(language) ?? this.parent?.getShadowEnv(language);
   }
   
   /**
@@ -1418,7 +1666,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns NodeShadowEnvironment instance or undefined if not available
    */
   getNodeShadowEnv(): NodeShadowEnvironment | undefined {
-    return this.shadowEnvironmentRuntime.getNodeShadowEnv();
+    return this.nodeShadowEnv ?? this.parent?.getNodeShadowEnv();
   }
   
   /**
@@ -1426,7 +1674,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns NodeShadowEnvironment instance (always creates one if needed)
    */
   getOrCreateNodeShadowEnv(): NodeShadowEnvironment {
-    return this.shadowEnvironmentRuntime.getOrCreateNodeShadowEnv();
+    if (this.nodeShadowEnv) {
+      return this.nodeShadowEnv;
+    }
+
+    const parentNodeEnv = this.parent?.getNodeShadowEnv();
+    if (parentNodeEnv) {
+      return parentNodeEnv;
+    }
+
+    this.nodeShadowEnv = this.createNodeShadowEnv();
+    return this.nodeShadowEnv;
   }
 
   /**
@@ -1434,7 +1692,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns PythonShadowEnvironment instance or undefined if not available
    */
   getPythonShadowEnv(): PythonShadowEnvironment | undefined {
-    return this.shadowEnvironmentRuntime.getPythonShadowEnv();
+    return this.pythonShadowEnv ?? this.parent?.getPythonShadowEnv();
   }
 
   /**
@@ -1442,7 +1700,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns PythonShadowEnvironment instance (always creates one if needed)
    */
   getOrCreatePythonShadowEnv(): PythonShadowEnvironment {
-    return this.shadowEnvironmentRuntime.getOrCreatePythonShadowEnv();
+    if (this.pythonShadowEnv) {
+      return this.pythonShadowEnv;
+    }
+
+    const parentPythonEnv = this.parent?.getPythonShadowEnv();
+    if (parentPythonEnv) {
+      return parentPythonEnv;
+    }
+
+    this.pythonShadowEnv = this.createPythonShadowEnv();
+    return this.pythonShadowEnv;
   }
 
   /**
@@ -1454,7 +1722,39 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns Object containing all language shadow environments
    */
   captureAllShadowEnvs(): ShadowEnvironmentCapture {
-    return this.shadowEnvironmentRuntime.captureAllShadowEnvs();
+    const capture: ShadowEnvironmentCapture = {};
+
+    const jsEnv = this.shadowEnvs.get('js');
+    if (jsEnv && jsEnv.size > 0) {
+      capture.js = new Map(jsEnv);
+    }
+
+    const javascriptEnv = this.shadowEnvs.get('javascript');
+    if (javascriptEnv && javascriptEnv.size > 0) {
+      capture.javascript = new Map(javascriptEnv);
+    }
+
+    if (this.nodeShadowEnv) {
+      const nodeMap = this.toNodeFunctionMap(this.nodeShadowEnv);
+      if (nodeMap.size > 0) {
+        capture.node = nodeMap;
+        capture.nodejs = nodeMap;
+      }
+    }
+
+    const pythonEnv = this.shadowEnvs.get('python');
+    if (pythonEnv && pythonEnv.size > 0) {
+      capture.python = new Map(pythonEnv);
+      capture.py = capture.python;
+    }
+
+    const pyEnv = this.shadowEnvs.get('py');
+    if (pyEnv && pyEnv.size > 0 && !capture.python) {
+      capture.py = new Map(pyEnv);
+      capture.python = capture.py;
+    }
+
+    return capture;
   }
 
   /**
@@ -1462,7 +1762,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Used to avoid unnecessary capture operations
    */
   hasShadowEnvs(): boolean {
-    return this.shadowEnvironmentRuntime.hasShadowEnvs();
+    for (const env of this.shadowEnvs.values()) {
+      if (env.size > 0) {
+        return true;
+      }
+    }
+
+    return this.nodeShadowEnv !== undefined || this.pythonShadowEnv !== undefined;
   }
 
   /**
@@ -1582,13 +1888,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
-    this.commandExecutorFactory = this.executionOrchestrator.getFactory();
-    return this.executionOrchestrator.executeCommand({
-      command,
-      options,
-      context,
-      defaultOptions: this.outputOptions
-    });
+    const finalOptions = { ...this.outputOptions, ...options };
+    const bus = this.getStreamingBus();
+    const contextWithBus = { ...context, bus };
+    return this.getCommandExecutorFactory().executeCommand(command, finalOptions, contextWithBus);
   }
   
   async executeCode(
@@ -1599,16 +1902,20 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
-    this.commandExecutorFactory = this.executionOrchestrator.getFactory();
-    return this.executionOrchestrator.executeCode({
+    const normalized = this.normalizeCodeExecutionInput(metadata, options, context);
+    const finalParams = this.injectAmbientMx(language, params);
+    const bus = this.getStreamingBus();
+    const contextWithBus = { ...normalized.context, bus };
+    const mergedOptions = { ...this.outputOptions, ...options };
+
+    return this.getCommandExecutorFactory().executeCode(
       code,
       language,
-      params,
-      metadata,
-      options,
-      context,
-      defaultOptions: this.outputOptions
-    });
+      finalParams,
+      normalized.metadata,
+      mergedOptions,
+      contextWithBus
+    );
   }
 
   
@@ -1616,6 +1923,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   async resolvePath(inputPath: string): Promise<string> {
     return this.importResolver.resolvePath(inputPath);
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE 7: Child Environment & Scope Lifecycle
+  // ═══════════════════════════════════════════════════════════════
 
   private createLifecycleChild(
     childContext: PathContext | string,
@@ -1636,11 +1947,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.effectHandler
     );
 
-    this.childLifecycle.applyChildInheritance(child, this, {
-      includeInitialNodeCount: options.includeInitialNodeCount,
-      includeModuleIsolation: options.includeModuleIsolation,
-      includeTraceInheritance: options.includeTraceInheritance
-    });
+    child.allowAbsolutePaths = this.allowAbsolutePaths;
+    child.streamingOptions = { ...this.streamingOptions };
+    child.provenanceEnabled = this.provenanceEnabled;
+
+    if (options.includeInitialNodeCount) {
+      child.initialNodeCount = this.nodes.length;
+    }
+
+    if (options.includeModuleIsolation) {
+      child.moduleIsolated = this.moduleIsolated;
+    }
+
+    if (options.includeTraceInheritance) {
+      child.traceEnabled = this.traceEnabled;
+      child.directiveTrace = this.directiveTrace;
+    }
+
+    if (this.allowedTools) {
+      child.setAllowedTools(this.allowedTools);
+    }
 
     child.importResolver = this.importResolver.createChildResolver(
       options.importResolverBasePath,
@@ -1673,11 +1999,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * SECURITY: Child isolation prevents variable leakage between execution contexts.
    */
   createChild(newBasePath?: string): Environment {
-    const childContext = this.childLifecycle.resolveChildContext(
-      this.pathContext,
-      this.basePath,
-      newBasePath
-    );
+    const childContext = this.resolveChildContext(newBasePath);
     return this.createLifecycleChild(childContext, {
       importResolverBasePath: newBasePath,
       includeInitialNodeCount: true,
@@ -1688,11 +2010,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   mergeChild(child: Environment): void {
-    this.childLifecycle.mergeChildVariables(
-      this.variableManager,
-      child.variableManager.getVariables()
-    );
-    this.childLifecycle.mergeChildNodes(this.nodes, child.nodes);
+    for (const [name, variable] of child.variableManager.getVariables()) {
+      const importPath = variable.mx?.importPath;
+      if (importPath === 'let' || importPath === 'exe-param') {
+        continue;
+      }
+      this.variableManager.setVariable(name, variable);
+    }
+    this.nodes.push(...child.nodes);
   }
   
   // --- Special Variables ---
@@ -1732,7 +2057,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Note: getURLCacheTTL is now handled by ImportResolver via CacheManager
   
   setURLOptions(options: Partial<typeof this.defaultUrlOptions>): void {
-    this.defaultUrlOptions = this.runtimeConfiguration.mergeUrlOptions(this.defaultUrlOptions, options);
+    this.defaultUrlOptions = { ...this.defaultUrlOptions, ...options };
   }
 
   /**
@@ -1750,19 +2075,24 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   setURLConfig(config: ResolvedURLConfig): void {
-    this.urlConfig = this.runtimeConfiguration.applyUrlConfig(this.cacheManager, config);
+    this.cacheManager.setURLConfig(config);
+    this.urlConfig = config;
   }
 
   /**
    * Configure allowance of absolute paths outside project root
    */
   setAllowAbsolutePaths(allow: boolean): void {
-    this.allowAbsolutePaths = this.runtimeConfiguration.setAllowAbsolutePaths(allow);
+    this.allowAbsolutePaths = allow;
   }
 
   getAllowAbsolutePaths(): boolean {
-    return this.runtimeConfiguration.getAllowAbsolutePaths(this.allowAbsolutePaths);
+    return this.allowAbsolutePaths;
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE 8: Runtime Configuration
+  // ═══════════════════════════════════════════════════════════════
 
   // --- Output Management Methods ---
   
@@ -1771,26 +2101,27 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   setStreamingOptions(options: Partial<StreamingOptions> | undefined): void {
-    const sink = this.parent ? undefined : this.sdkEventBridge;
-    this.streamingOptions = this.runtimeConfiguration.setStreamingOptions(
-      this.streamingOptions,
-      options,
-      sink
-    );
+    const next = options ? { ...this.streamingOptions, ...options } : { ...defaultStreamingOptions };
+    this.streamingOptions = next;
+    if (!this.parent) {
+      this.setSdkStreamingOptions(next);
+    }
   }
 
   getStreamingOptions(): StreamingOptions {
-    return this.runtimeConfiguration.getStreamingOptions(this.streamingOptions);
+    return { ...this.streamingOptions };
   }
 
   setStreamingManager(manager: StreamingManager): void {
     const root = this.getRootEnvironment();
-    root.streamingManager = this.runtimeConfiguration.setStreamingManager(manager);
+    root.streamingManager = manager;
   }
 
   getStreamingManager(): StreamingManager {
     const root = this.getRootEnvironment();
-    root.streamingManager = this.runtimeConfiguration.ensureStreamingManager(root.streamingManager);
+    if (!root.streamingManager) {
+      root.streamingManager = new StreamingManager();
+    }
     return root.streamingManager;
   }
 
@@ -1800,20 +2131,20 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   setStreamingResult(result: StreamingResult | undefined): void {
     const root = this.getRootEnvironment();
-    root.streamingResult = this.runtimeConfiguration.setStreamingResult(result);
+    root.streamingResult = result;
   }
 
   getStreamingResult(): StreamingResult | undefined {
-    return this.runtimeConfiguration.getStreamingResult(this.getRootEnvironment().streamingResult);
+    return this.getRootEnvironment().streamingResult;
   }
 
   setProvenanceEnabled(enabled: boolean): void {
     const root = this.getRootEnvironment();
-    root.provenanceEnabled = this.runtimeConfiguration.setProvenanceEnabled(enabled);
+    root.provenanceEnabled = enabled;
   }
 
   isProvenanceEnabled(): boolean {
-    return this.runtimeConfiguration.isProvenanceEnabled(this.getRootEnvironment().provenanceEnabled);
+    return this.getRootEnvironment().provenanceEnabled;
   }
   
   /**
@@ -1827,28 +2158,28 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Set dynamic module parsing mode
    */
   setDynamicModuleMode(mode: MlldMode | undefined): void {
-    this.dynamicModuleMode = this.runtimeConfiguration.setDynamicModuleMode(mode);
+    this.dynamicModuleMode = mode;
   }
 
   /**
    * Get dynamic module parsing mode (defaults to 'strict')
    */
   getDynamicModuleMode(): MlldMode {
-    return this.runtimeConfiguration.getDynamicModuleMode(this.dynamicModuleMode);
+    return this.dynamicModuleMode ?? 'strict';
   }
 
   /**
    * Set blank line normalization flag
    */
   setNormalizeBlankLines(normalize: boolean): void {
-    this.normalizeBlankLines = this.runtimeConfiguration.setNormalizeBlankLines(normalize);
+    this.normalizeBlankLines = normalize;
   }
   
   /**
    * Set fuzzy matching configuration for local file imports
    */
   setLocalFileFuzzyMatch(config: FuzzyMatchConfig | boolean): void {
-    this.localFileFuzzyMatch = this.runtimeConfiguration.setLocalFileFuzzyMatch(config);
+    this.localFileFuzzyMatch = config;
   }
   
   /**
@@ -1861,11 +2192,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return;
     }
 
-    const flags = this.runtimeConfiguration.enableEphemeralMode();
-    this.isEphemeralMode = flags.isEphemeralMode;
-    this.approveAllImports = flags.approveAllImports;
+    this.isEphemeralMode = true;
+    this.approveAllImports = true;
 
-    const reconfigured = await this.runtimeConfiguration.reconfigureForEphemeral({
+    const reconfigured = await this.reconfigureForEphemeral({
       fileSystem: this.fileSystem,
       pathContext: this.pathContext,
       projectRoot: this.getProjectRoot(),
@@ -1882,7 +2212,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       await this.registerBuiltinResolvers();
     }
 
-    this.importResolver = this.runtimeConfiguration.createImportResolver({
+    this.importResolver = new ImportResolver(
+      buildImportResolverDependencies({
       fileSystem: this.fileSystem,
       pathService: this.pathService,
       pathContext: this.pathContext,
@@ -1898,42 +2229,126 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getURLConfig: () => this.urlConfig,
       getDefaultUrlOptions: () => this.defaultUrlOptions,
       getAllowAbsolutePaths: () => this.allowAbsolutePaths
-    });
+      })
+    );
   }
   
   /**
    * Get blank line normalization flag
    */
   getNormalizeBlankLines(): boolean {
-    return this.runtimeConfiguration.getNormalizeBlankLines(this.normalizeBlankLines);
+    return this.normalizeBlankLines;
   }
   
   /**
    * Configure local module support once resolvers are ready
    */
   async configureLocalModules(): Promise<void> {
-    await this.runtimeConfiguration.configureLocalModules({
-      resolverManager: this.resolverManager,
-      localModulePath: this.localModulePath,
-      fileSystem: this.fileSystem,
-      projectConfig: this.projectConfig
+    if (!this.resolverManager) {
+      return;
+    }
+
+    const localPath = this.localModulePath;
+    if (!localPath) {
+      return;
+    }
+
+    let exists = false;
+    try {
+      exists = await this.fileSystem.exists(localPath);
+    } catch {
+      exists = false;
+    }
+
+    if (!exists) {
+      logger.debug(`Local modules path not found: ${localPath}`);
+      return;
+    }
+
+    let currentUser: string | undefined;
+    try {
+      const user = await GitHubAuthService.getInstance().getGitHubUser();
+      currentUser = user?.login?.toLowerCase();
+    } catch {
+      currentUser = undefined;
+    }
+
+    const prefixes = this.projectConfig?.getResolverPrefixes() ?? [];
+    const allowedAuthors = prefixes
+      .filter(prefixConfig => prefixConfig.prefix && prefixConfig.prefix.startsWith('@') && prefixConfig.resolver !== 'REGISTRY')
+      .map(prefixConfig => prefixConfig.prefix.replace(/^@/, '').replace(/\/$/, '').toLowerCase());
+
+    await this.resolverManager.configureLocalModules(localPath, {
+      currentUser,
+      allowedAuthors
     });
   }
   
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE 9: Diagnostics & Debugging
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Create the debug object with environment information
+   * @param version - 1 = full JSON, 2 = reduced/useful, 3 = markdown format
+   */
+  private createDebugObject(version: number = 2): any {
+    // TODO: Add security toggle from mlld.lock.json when available
+    // For now, assume debug is enabled
+
+    // Use DebugUtils for debug object creation
+    const allVars = this.getAllVariables();
+    return DebugUtils.createDebugObject(allVars, this.reservedNames, version);
+  }
+
   getCollectedErrors(): CollectedError[] {
-    return this.diagnosticsRuntime.getCollectedErrors(this.errorUtils);
+    return this.errorUtils.getCollectedErrors();
   }
   
   clearCollectedErrors(): void {
-    this.diagnosticsRuntime.clearCollectedErrors(this.errorUtils);
+    this.errorUtils.clearCollectedErrors();
   }
   
   async displayCollectedErrors(): Promise<void> {
-    await this.diagnosticsRuntime.displayCollectedErrors(
-      this.errorUtils,
-      this.fileSystem,
-      this.basePath
-    );
+    const errors = this.errorUtils.getCollectedErrors();
+    if (errors.length === 0) {
+      return;
+    }
+
+    console.log(`\n❌ ${errors.length} error${errors.length > 1 ? 's' : ''} occurred:\n`);
+
+    const { ErrorFormatSelector } = await import('@core/utils/errorFormatSelector');
+    const formatter = new ErrorFormatSelector(this.fileSystem);
+
+    for (let i = 0; i < errors.length; i++) {
+      const item = errors[i];
+      console.log(`${i + 1}. Command execution failed:`);
+
+      try {
+        const formatted = await formatter.formatForCLI(item.error, {
+          useColors: true,
+          useSourceContext: true,
+          useSmartPaths: true,
+          basePath: this.basePath,
+          workingDirectory: (process as NodeJS.Process).cwd(),
+          contextLines: 2
+        });
+        console.log(formatted);
+      } catch (formatError) {
+        console.log(`   ├─ Command: ${item.command}`);
+        console.log(`   ├─ Duration: ${item.duration}ms`);
+        if (formatError instanceof Error) {
+          console.log(`   ├─ ${item.error.message}`);
+        }
+        if (item.error.details?.exitCode !== undefined) {
+          console.log(`   ├─ Exit code: ${item.error.details.exitCode}`);
+        }
+        console.log('   └─ Use --verbose to see full output\n');
+      }
+    }
+
+    console.log('💡 Use --verbose to see full command output');
+    console.log('💡 Use --help error-handling for error handling options\n');
   }
   
   // --- Import Tracking (for circular import detection) ---
@@ -1951,36 +2366,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   createChildEnvironment(): Environment {
-    const childContext = this.childLifecycle.resolveChildContext(this.pathContext, this.basePath);
+    const childContext = this.resolveChildContext();
     return this.createLifecycleChild(childContext, {
       includeTraceInheritance: true
     });
-  }
-
-  private getDirectiveTraceState(): {
-    directiveTrace: DirectiveTrace[];
-    directiveTimings: number[];
-    traceEnabled: boolean;
-    currentFilePath?: string;
-  } {
-    return {
-      directiveTrace: this.directiveTrace,
-      directiveTimings: this.directiveTimings,
-      traceEnabled: this.traceEnabled,
-      currentFilePath: this.currentFilePath
-    };
-  }
-
-  private getDirectiveTraceEventOptions(): {
-    bridge?: { emitSDKEvent(event: SDKEvent): void };
-    provenance?: SecurityDescriptor;
-  } {
-    return {
-      bridge: this.sdkEventBridge.hasEmitter() ? this : undefined,
-      provenance: this.isProvenanceEnabled()
-        ? this.snapshotToDescriptor(this.getSecuritySnapshot())
-        : undefined
-    };
   }
   
   // --- Directive Trace (for debugging) ---
@@ -1993,54 +2382,92 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     varName?: string,
     location?: SourceLocation
   ): void {
-    this.diagnosticsRuntime.pushDirective(
-      this.getDirectiveTraceState(),
+    const start = Date.now();
+    this.directiveTimings.push(start);
+
+    const provenance = this.isProvenanceEnabled()
+      ? this.snapshotToDescriptor(this.getSecuritySnapshot())
+      : undefined;
+    if (this.hasSDKEmitter()) {
+      this.emitSDKEvent({
+        type: 'debug:directive:start',
+        directive,
+        timestamp: start,
+        ...(provenance && { provenance })
+      });
+    }
+
+    if (!this.traceEnabled) {
+      return;
+    }
+
+    const fileName = this.currentFilePath ? path.basename(this.currentFilePath) : 'unknown';
+    const lineNumber = location?.line || 'unknown';
+
+    this.directiveTrace.push({
       directive,
       varName,
-      location,
-      this.getDirectiveTraceEventOptions()
-    );
+      location: `${fileName}:${lineNumber}`,
+      depth: this.directiveTrace.length
+    });
   }
   
   /**
    * Pop a directive from the trace stack
    */
   popDirective(): void {
-    this.diagnosticsRuntime.popDirective(
-      this.getDirectiveTraceState(),
-      this.getDirectiveTraceEventOptions()
-    );
+    const start = this.directiveTimings.pop();
+    const entry = this.traceEnabled ? this.directiveTrace.pop() : undefined;
+
+    const provenance = this.isProvenanceEnabled()
+      ? this.snapshotToDescriptor(this.getSecuritySnapshot())
+      : undefined;
+    if (this.hasSDKEmitter() && start && entry) {
+      const durationMs = Date.now() - start;
+      this.emitSDKEvent({
+        type: 'debug:directive:complete',
+        directive: entry.directive,
+        durationMs,
+        timestamp: Date.now(),
+        ...(provenance && { provenance })
+      });
+    }
   }
   
   /**
    * Get a copy of the current directive trace
    */
   getDirectiveTrace(): DirectiveTrace[] {
-    return this.diagnosticsRuntime.getDirectiveTrace(this.getDirectiveTraceState());
+    return [...this.directiveTrace];
   }
   
   /**
    * Mark the last directive in the trace as failed
    */
   markLastDirectiveFailed(errorMessage: string): void {
-    this.diagnosticsRuntime.markLastDirectiveFailed(this.getDirectiveTraceState(), errorMessage);
+    if (this.directiveTrace.length === 0) {
+      return;
+    }
+    const lastEntry = this.directiveTrace[this.directiveTrace.length - 1];
+    lastEntry.failed = true;
+    lastEntry.errorMessage = errorMessage;
   }
   
   /**
    * Set whether tracing is enabled
    */
   setTraceEnabled(enabled: boolean): void {
-    const state = this.getDirectiveTraceState();
-    this.diagnosticsRuntime.setTraceEnabled(state, enabled);
-    this.traceEnabled = state.traceEnabled;
-    this.directiveTrace = state.directiveTrace;
+    this.traceEnabled = enabled;
+    if (!enabled) {
+      this.directiveTrace = [];
+    }
   }
   
   /**
    * Check if tracing is enabled
    */
   isTraceEnabled(): boolean {
-    return this.diagnosticsRuntime.isTraceEnabled(this.getDirectiveTraceState());
+    return this.traceEnabled;
   }
   
   // --- Source Cache Methods ---
@@ -2051,12 +2478,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @param content The source content
    */
   cacheSource(filePath: string, content: string): void {
-    this.diagnosticsRuntime.cacheSource(
-      this.sourceCache,
-      this.parent,
-      filePath,
-      content
-    );
+    if (this.parent) {
+      this.parent.cacheSource(filePath, content);
+      return;
+    }
+    this.sourceCache.set(filePath, content);
   }
   
   /**
@@ -2065,11 +2491,611 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * @returns The cached source content or undefined
    */
   getSource(filePath: string): string | undefined {
-    return this.diagnosticsRuntime.getSource(
-      this.sourceCache,
-      this.parent,
-      filePath
+    const source = this.sourceCache.get(filePath);
+    if (source !== undefined) {
+      return source;
+    }
+    return this.parent?.getSource(filePath);
+  }
+
+  private ensureSecurityRuntime(): SecurityRuntimeState {
+    if (!this.securityRuntime) {
+      this.securityRuntime = {
+        tracker: new TaintTracker(),
+        descriptor: makeSecurityDescriptor(),
+        stack: [],
+        policy: undefined
+      };
+    }
+    return this.securityRuntime;
+  }
+
+  private registerDynamicStateSnapshot(
+    snapshot: Record<string, any>,
+    resolver: DynamicModuleResolver,
+    source?: string
+  ): void {
+    const root = this.getRootEnvironment();
+    root.stateSnapshot = snapshot;
+    root.stateResolver = resolver;
+    const labels: DataLabel[] = ['src:dynamic'];
+    if (source) {
+      labels.push(`src:${source}` as DataLabel);
+    }
+    root.stateLabels = labels;
+    root.refreshStateVariable();
+  }
+
+  private applyStateWriteToSnapshot(write: StateWrite): void {
+    if (!this.stateSnapshot) {
+      return;
+    }
+
+    const pathParts = (write.path || '').split('.').filter(Boolean);
+    if (pathParts.length === 0) {
+      return;
+    }
+
+    let target: any = this.stateSnapshot;
+    for (let i = 0; i < pathParts.length - 1; i += 1) {
+      const key = pathParts[i];
+      if (typeof target[key] !== 'object' || target[key] === null) {
+        target[key] = {};
+      }
+      target = target[key];
+    }
+
+    const lastKey = pathParts[pathParts.length - 1];
+    target[lastKey] = write.value;
+    this.refreshStateVariable();
+  }
+
+  private refreshStateVariable(): void {
+    if (!this.stateSnapshot) {
+      return;
+    }
+
+    const stateVar = createObjectVariable(
+      'state',
+      this.stateSnapshot,
+      true,
+      {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      }
     );
+
+    if (this.stateLabels.length > 0) {
+      stateVar.mx.labels = [...this.stateLabels];
+      stateVar.mx.taint = [...this.stateLabels];
+      stateVar.mx.sources = [...this.stateLabels];
+    }
+
+    stateVar.internal = {
+      ...(stateVar.internal ?? {}),
+      isReserved: true,
+      isSystem: true
+    };
+
+    if (this.variableManager.hasVariable('state')) {
+      this.variableManager.updateVariable('state', stateVar);
+    } else {
+      this.variableManager.setVariable('state', stateVar);
+    }
+
+    if (this.stateResolver) {
+      try {
+        this.stateResolver.updateModule('@state', this.stateSnapshot);
+      } catch (error) {
+        logger.warn('Failed to update dynamic @state module after state write', { error });
+      }
+    }
+  }
+
+  private createDebugVariable(debugValue: string): Variable {
+    return createObjectVariable(
+      'debug',
+      debugValue,
+      false,
+      {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        mx: {
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        },
+        internal: {
+          isReserved: true
+        }
+      }
+    );
+  }
+
+  private createPendingResolverVariable(name: string): Variable {
+    return createSimpleTextVariable(
+      name,
+      `@${name}`,
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        mx: {
+          definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+        },
+        internal: {
+          isReserved: true,
+          isResolver: true,
+          resolverName: name,
+          needsResolution: true
+        }
+      }
+    );
+  }
+
+  private convertResolverContent(name: string, resolverContent: any): Variable {
+    let varType: 'text' | 'data' = 'text';
+    let varValue: any = resolverContent.content.content;
+
+    if (resolverContent.content.contentType === 'data') {
+      varType = 'data';
+      if (typeof varValue === 'string') {
+        try {
+          varValue = JSON.parse(varValue);
+        } catch {
+          // Keep raw value when JSON parsing fails.
+        }
+      }
+    }
+
+    const resolverSource = {
+      directive: 'var',
+      syntax: varType === 'data' ? 'object' : 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    } as const;
+
+    return varType === 'data'
+      ? createObjectVariable(name, varValue, true, resolverSource, {
+          mx: {
+            definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+          },
+          internal: {
+            isReserved: true,
+            isResolver: true,
+            resolverName: name,
+            needsResolution: false
+          }
+        })
+      : createSimpleTextVariable(name, varValue, resolverSource, {
+          mx: {
+            definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+          },
+          internal: {
+            isReserved: true,
+            isResolver: true,
+            resolverName: name,
+            needsResolution: false
+          }
+        });
+  }
+
+  private projectResolverSecurityMetadata(variable: Variable, resolverContent: any): void {
+    const resolverMx = resolverContent.content.mx ?? resolverContent.content.metadata;
+    const resolverLabels =
+      resolverMx && Array.isArray((resolverMx as any).labels)
+        ? ((resolverMx as any).labels as DataLabel[])
+        : undefined;
+    const resolverTaint =
+      resolverMx && Array.isArray((resolverMx as any).taint)
+        ? ((resolverMx as any).taint as DataLabel[])
+        : undefined;
+    const resolverSources =
+      resolverMx && typeof (resolverMx as any).source === 'string'
+        ? ([(resolverMx as any).source] as string[])
+        : undefined;
+
+    if (!resolverLabels && !resolverTaint && !resolverSources) {
+      return;
+    }
+
+    const descriptor = makeSecurityDescriptor({
+      labels: resolverLabels,
+      taint: resolverTaint,
+      sources: resolverSources
+    });
+
+    if (!variable.mx) {
+      variable.mx = {} as any;
+    }
+    updateVarMxFromDescriptor(variable.mx, descriptor);
+    if ((variable.mx as any).mxCache) {
+      delete (variable.mx as any).mxCache;
+    }
+  }
+
+  private resolveChildContext(newBasePath?: string): PathContext | string {
+    if (!this.pathContext) {
+      return newBasePath || this.basePath;
+    }
+
+    if (!newBasePath) {
+      return this.pathContext;
+    }
+
+    return {
+      ...this.pathContext,
+      fileDirectory: newBasePath,
+      executionDirectory: newBasePath
+    };
+  }
+
+  private getCommandExecutorFactory(): CommandExecutorFactoryPort {
+    if (!this.commandExecutorFactory) {
+      const dependencies: ExecutorDependencies = {
+        errorUtils: this.errorUtils,
+        workingDirectory: this.getExecutionDirectory(),
+        shadowEnvironment: this,
+        nodeShadowProvider: this,
+        pythonShadowProvider: this,
+        variableProvider: this.variableManager as VariableProvider,
+        getStreamingBus: () => this.getStreamingBus()
+      };
+      this.commandExecutorFactory = new CommandExecutorFactory(dependencies);
+    }
+    return this.commandExecutorFactory;
+  }
+
+  private injectAmbientMx(
+    language: string,
+    params: Record<string, any> | undefined
+  ): Record<string, any> {
+    let finalParams = params || {};
+    const lang = (language || '').toLowerCase();
+    const shouldInjectContext =
+      lang === 'js' || lang === 'javascript' || lang === 'node' || lang === 'nodejs';
+
+    if (!shouldInjectContext) {
+      return finalParams;
+    }
+
+    try {
+      const testCtxVar = this.getVariable('test_mx');
+      const mxValue = testCtxVar
+        ? (testCtxVar.value as any)
+        : this.getContextManager().buildAmbientContext({
+            pipelineContext: this.getPipelineContext(),
+            securitySnapshot: this.getSecuritySnapshot()
+          });
+      if (!('mx' in finalParams)) {
+        finalParams = { ...finalParams, mx: Object.freeze(mxValue) };
+      }
+    } catch {
+      // Best-effort ambient context injection.
+    }
+
+    return finalParams;
+  }
+
+  private normalizeCodeExecutionInput(
+    metadata: Record<string, any> | CommandExecutionContext | undefined,
+    options: CommandExecutionOptions | undefined,
+    context: CommandExecutionContext | undefined
+  ): NormalizedCodeExecutionInput {
+    if (metadata && !context && !options && 'sourceLocation' in metadata) {
+      return {
+        metadata: undefined,
+        context: metadata as CommandExecutionContext
+      };
+    }
+
+    if (metadata && !context && !options && 'directiveType' in metadata) {
+      return {
+        metadata: undefined,
+        context: metadata as CommandExecutionContext
+      };
+    }
+
+    return {
+      metadata: metadata as Record<string, any> | undefined,
+      context
+    };
+  }
+
+  private hasSDKEmitter(): boolean {
+    return this.getRootEnvironment().sdkEmitter !== undefined;
+  }
+
+  private setSdkStreamingOptions(options: StreamingOptions): void {
+    this.sdkStreamingOptions = { ...options };
+  }
+
+  private enableSdkEmitter(emitter: ExecutionEmitter, bus: StreamBus): void {
+    this.sdkEmitter = emitter;
+    this.cleanupSdkSubscription();
+
+    this.sdkUnsubscribe = bus.subscribe(event => {
+      this.emitMappedSdkEvents(event);
+    });
+  }
+
+  private emitMappedSdkEvents(event: StreamEvent): void {
+    const streamEvent = this.mapSdkStreamEvent(event);
+    if (streamEvent) {
+      this.sdkEmitter?.emit(streamEvent as SDKEvent);
+    }
+
+    const commandEvent = this.mapSdkCommandEvent(event);
+    if (commandEvent) {
+      this.sdkEmitter?.emit(commandEvent as SDKEvent);
+    }
+  }
+
+  private cleanupSdkSubscription(): void {
+    if (!this.sdkUnsubscribe) {
+      return;
+    }
+    try {
+      this.sdkUnsubscribe();
+    } finally {
+      this.sdkUnsubscribe = undefined;
+    }
+  }
+
+  private cleanupSdkEmitter(): void {
+    this.cleanupSdkSubscription();
+    this.sdkEmitter = undefined;
+  }
+
+  private mapSdkStreamEvent(event: StreamEvent): SDKEvent | null {
+    const streamingSuppressed = this.sdkStreamingOptions.enabled === false;
+    if (streamingSuppressed && event.type === 'CHUNK') {
+      return null;
+    }
+    if (event.type === 'CHUNK') {
+      return { type: 'stream:chunk', event } as SDKEvent;
+    }
+    return { type: 'stream:progress', event } as SDKEvent;
+  }
+
+  private mapSdkCommandEvent(event: StreamEvent): SDKEvent | null {
+    switch (event.type) {
+      case 'STAGE_START':
+        return {
+          type: 'command:start',
+          command: (event.command as any)?.rawIdentifier,
+          stageIndex: event.stageIndex,
+          parallelIndex: event.parallelIndex,
+          pipelineId: event.pipelineId,
+          timestamp: event.timestamp
+        } as SDKEvent;
+      case 'STAGE_SUCCESS':
+        return {
+          type: 'command:complete',
+          stageIndex: event.stageIndex,
+          parallelIndex: event.parallelIndex,
+          pipelineId: event.pipelineId,
+          durationMs: event.durationMs,
+          timestamp: event.timestamp
+        } as SDKEvent;
+      case 'STAGE_FAILURE':
+        return {
+          type: 'command:complete',
+          stageIndex: event.stageIndex,
+          parallelIndex: event.parallelIndex,
+          pipelineId: event.pipelineId,
+          error: event.error,
+          timestamp: event.timestamp
+        } as SDKEvent;
+      default:
+        return null;
+    }
+  }
+
+  private ensureNodeShadowEnv(): NodeShadowEnvironment {
+    if (!this.nodeShadowEnv) {
+      this.nodeShadowEnv = this.createNodeShadowEnv();
+    }
+    return this.nodeShadowEnv;
+  }
+
+  private ensurePythonShadowEnv(): PythonShadowEnvironment {
+    if (!this.pythonShadowEnv) {
+      this.pythonShadowEnv = this.createPythonShadowEnv();
+    }
+    return this.pythonShadowEnv;
+  }
+
+  private createNodeShadowEnv(): NodeShadowEnvironment {
+    return new NodeShadowEnvironment(
+      this.getFileDirectory(),
+      this.getCurrentFilePath()
+    );
+  }
+
+  private createPythonShadowEnv(): PythonShadowEnvironment {
+    return new PythonShadowEnvironment(
+      this.getFileDirectory(),
+      this.getCurrentFilePath()
+    );
+  }
+
+  private toNodeFunctionMap(nodeShadowEnv: NodeShadowEnvironment): ShadowFunctions {
+    const context = nodeShadowEnv.getContext();
+    const map: ShadowFunctions = new Map();
+    for (const name of nodeShadowEnv.getFunctionNames()) {
+      if (context[name]) {
+        map.set(name, context[name]);
+      }
+    }
+    return map;
+  }
+
+  private cleanupShadowEnvs(): void {
+    if (this.nodeShadowEnv) {
+      this.nodeShadowEnv.cleanup();
+      this.nodeShadowEnv = undefined;
+    }
+
+    if (this.pythonShadowEnv) {
+      this.pythonShadowEnv.cleanup().catch(() => {});
+      this.pythonShadowEnv = undefined;
+    }
+
+    this.shadowEnvs.clear();
+  }
+
+  private async reconfigureForEphemeral(input: {
+    fileSystem: IFileSystemService;
+    pathContext?: PathContext;
+    projectRoot: string;
+    hasRegistryManager: boolean;
+    hasResolverManager: boolean;
+  }): Promise<{
+    registryManager?: RegistryManager;
+    resolverManager?: ResolverManager;
+  }> {
+    const [{ InMemoryModuleCache }, { NoOpLockFile }] = await Promise.all([
+      import('@core/registry/InMemoryModuleCache'),
+      import('@core/registry/NoOpLockFile')
+    ]);
+
+    const moduleCache = new InMemoryModuleCache();
+    const lockFile = new NoOpLockFile(path.join(input.projectRoot, 'mlld.lock.json'));
+
+    const result: {
+      registryManager?: RegistryManager;
+      resolverManager?: ResolverManager;
+    } = {};
+
+    if (input.hasRegistryManager) {
+      result.registryManager = new RegistryManager(input.pathContext || input.projectRoot);
+    }
+
+    if (input.hasResolverManager) {
+      const resolverManager = new ResolverManager(
+        undefined,
+        moduleCache,
+        lockFile
+      );
+
+      resolverManager.registerResolver(new ProjectPathResolver(input.fileSystem));
+      resolverManager.registerResolver(new RegistryResolver());
+
+      const pythonResolverOptions = { projectRoot: input.projectRoot };
+      resolverManager.registerResolver(new PythonPackageResolver(pythonResolverOptions));
+      resolverManager.registerResolver(new PythonAliasResolver(pythonResolverOptions));
+
+      resolverManager.registerResolver(new LocalResolver(input.fileSystem));
+      resolverManager.registerResolver(new GitHubResolver());
+      resolverManager.registerResolver(new HTTPResolver());
+
+      resolverManager.configurePrefixes([
+        {
+          prefix: '@base',
+          resolver: 'base',
+          type: 'io',
+          config: {
+            basePath: input.projectRoot,
+            readonly: false
+          }
+        }
+      ]);
+
+      result.resolverManager = resolverManager;
+    }
+
+    return result;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE 10: Path Context & Property Accessors
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Get the PathContext for this environment
+   */
+  getPathContext(): PathContext | undefined {
+    return this.pathContext || this.parent?.getPathContext();
+  }
+
+  /**
+   * Get the project root directory
+   */
+  getProjectRoot(): string {
+    const context = this.getPathContext();
+    if (context) {
+      return context.projectRoot;
+    }
+    // Fallback to basePath for legacy mode
+    return this.basePath;
+  }
+
+  /**
+   * Check if running in ephemeral mode
+   */
+  isEphemeral(): boolean {
+    return this.isEphemeralMode;
+  }
+
+  /**
+   * Get the file directory (directory of current .mld file)
+   */
+  getFileDirectory(): string {
+    const context = this.getPathContext();
+    if (context) {
+      return context.fileDirectory;
+    }
+    // In legacy mode, use basePath
+    return this.basePath;
+  }
+
+  /**
+   * Get the execution directory (where commands run)
+   * If we have an inferred project root and the file is within the project,
+   * use the project root. Otherwise use the script's directory.
+   */
+  getExecutionDirectory(): string {
+    const context = this.getPathContext();
+    if (context) {
+      // Check if file directory is within the project root
+      const isFileInProject = context.fileDirectory.startsWith(context.projectRoot);
+
+      // If we have an inferred project root (different from file directory)
+      // AND the file is within the project, use project root for commands
+      if (isFileInProject &&
+          context.projectRoot &&
+          context.projectRoot !== context.fileDirectory) {
+        return context.projectRoot;
+      }
+      // Otherwise use the file's directory (script location)
+      return context.fileDirectory;
+    }
+    // Fallback in legacy mode
+    return this.basePath;
+  }
+
+  /**
+   * Legacy method - returns project root for backward compatibility
+   * @deprecated Use getProjectRoot() or getFileDirectory() instead
+   */
+  getBasePath(): string {
+    return this.getProjectRoot();
+  }
+
+  getCurrentFilePath(): string | undefined {
+    return this.currentFilePath || this.parent?.getCurrentFilePath();
+  }
+
+  setCurrentFilePath(filePath: string | undefined): void {
+    this.currentFilePath = filePath;
   }
   
   // --- ImportResolverContext Implementation ---
@@ -2090,7 +3116,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     
     if (!this.parent) {
       try {
-        this.sdkEventBridge.cleanup();
+        this.cleanupSdkEmitter();
       } catch (error) {
         if (process.env.MLLD_DEBUG === 'true') {
           console.error('[Environment] Failed to detach stream bridge', error);
@@ -2107,7 +3133,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
 
     logger.debug('Cleaning up shadow environments');
-    this.shadowEnvironmentRuntime.cleanup();
+    this.cleanupShadowEnvs();
     
     // Clean up child environments recursively
     logger.debug(`Cleaning up ${this.childEnvironments.size} child environments`);

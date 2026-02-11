@@ -22,9 +22,8 @@ import * as path from 'path';
 
 import type { CacheManager } from '../CacheManager';
 import type { ImportResolverContext, ImportResolverDependencies } from '../ImportResolver';
-import type { ContextManager, PipelineContextSnapshot } from '../ContextManager';
+import type { ContextManager, PipelineContextSnapshot, SecuritySnapshotLike } from '../ContextManager';
 import type { VariableManagerContext, VariableManagerDependencies } from '../VariableManager';
-import type { SecuritySnapshotLike } from '../runtime/SecurityPolicyRuntime';
 
 interface UrlValidationOptions {
   allowedProtocols: string[];

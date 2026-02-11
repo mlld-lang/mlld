@@ -2,7 +2,7 @@
 updated: 2026-02-10
 tags: #arch, #interpreter
 related-docs: docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/RESOLVERS.md, docs/dev/SHADOW-ENV.md, docs/dev/IMPORTS.md, docs/dev/ITERATORS.md, docs/dev/ALLIGATOR.md, docs/dev/EXEC-VARS.md, llms.txt
-related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/eval/exec/*.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/runtime/*.ts, interpreter/env/executors/*.ts, interpreter/eval/pipeline/*, core/types/*
+related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/eval/exec/*.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/executors/*.ts, interpreter/eval/pipeline/*, core/types/*
 related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableReferenceNode, WithClause }, core/types/variable { Variable }
 ---
 
@@ -64,20 +64,24 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Variables: `VariableManager` manages typed variables, reserved names, parameter scoping, wrappers for complex data.
 - Imports: `ImportResolver` orchestrates file/module/function resolvers, URL cache, approval bypass, fuzzy local matching.
 - Resolvers: `ResolverManager` with built-ins (`now`, `debug`, `input`) and prefix configs (e.g., `@base/...`).
-- Execution: `ExecutionOrchestrator` composes command/code execution and keeps `CommandExecutorFactory` creation behind a single boundary.
-- Shadow envs: `ShadowEnvironmentRuntime` manages language-specific injection (`js`, `node`) and VM-backed `NodeShadowEnvironment` lifecycle.
+- Execution: `Environment` composes command/code execution and keeps `CommandExecutorFactory` creation behind a single boundary.
+- Shadow envs: `Environment` manages language-specific injection (`js`, `node`, `python`) and VM-backed shadow-environment lifecycle.
 - Caching and registry: URL/module cache + lock file via registry manager.
 - Security: `SecurityManager` for URL limits, protocol/domain validation.
-- Effects and output: `OutputCoordinator` maps intents/effects and `SdkEventBridge` mirrors runtime events.
+- Effects and output: `Environment` maps intents/effects and mirrors SDK/runtime events.
 
-### Environment Runtime Collaborators
+### Environment Internal Zones
 
-- `SecurityPolicyRuntime`: policy capability state, descriptor/snapshot merge, and tool-scope enforcement.
-- `StateWriteRuntime`: `@state` write-through updates and dynamic module state snapshots.
-- `ContextFacade`: operation/pipeline/guard context and guard-history coordination.
-- `ResolverVariableFacade` and `VariableFacade`: resolver-variable hydration and import-binding bookkeeping.
-- `ChildEnvironmentLifecycle`: shared child creation context, inheritance, and merge semantics.
-- `RuntimeConfigurationRuntime`: URL/path/streaming/provenance toggles, local module setup, and ephemeral resolver reconfiguration.
+- Zone 1: Constructor/bootstrap wiring for root and child environments.
+- Zone 2: Security, policy, tool scope, descriptor stack, and state write-through behavior.
+- Zone 3: Variable and resolver management, import bindings, and reserved-variable hydration.
+- Zone 4: Operation/pipeline/guard/denied context stacks plus guard history.
+- Zone 5: Output intent/effect routing and SDK event bridge behavior.
+- Zone 6: Command/code execution wrappers and shadow-environment lifecycle.
+- Zone 7: Child environment creation, inheritance, merge, and cleanup tracking.
+- Zone 8: Runtime configuration for streaming, URL options, ephemeral mode, and local modules.
+- Zone 9: Diagnostics and tracing (directive trace, collected errors, source cache).
+- Zone 10: Path context and path-related property accessors.
 - `DiagnosticsRuntime`: collected-error rendering, directive trace timing/events, and source-cache access.
 
 ### Variable Model and Resolution
