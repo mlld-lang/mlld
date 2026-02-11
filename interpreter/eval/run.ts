@@ -45,81 +45,18 @@ import {
   resolveEnvironmentConfig,
   resolveEnvironmentAuthSecrets
 } from '@interpreter/env/environment-provider';
-
-/**
- * Extract raw text content from nodes without any interpolation processing
- * This preserves exact formatting and indentation for code blocks
- */
-function extractRawTextContent(nodes: MlldNode[]): string {
-  const parts: string[] = [];
-  for (const node of nodes) {
-    if (node.type === 'Text') {
-      parts.push(node.content || '');
-    } else if (node.type === 'Newline') {
-      parts.push('\n');
-    } else {
-      parts.push(String((node as any).value || (node as any).content || ''));
-    }
-  }
-  const rawContent = parts.join('');
-  return rawContent.replace(/^\n/, '');
-}
-
-/**
- * Remove common leading indentation across all non-empty lines.
- * Preserves relative indentation and trailing whitespace.
- */
-function dedentCommonIndent(src: string): string {
-  const lines = src.replace(/\r\n/g, '\n').split('\n');
-  let minIndent: number | null = null;
-  for (const line of lines) {
-    if (line.trim().length === 0) continue;
-    const match = line.match(/^[ \t]*/);
-    const indent = match ? match[0].length : 0;
-    if (minIndent === null || indent < minIndent) minIndent = indent;
-    if (minIndent === 0) break;
-  }
-  if (!minIndent) return src;
-  return lines.map(l => (l.trim().length === 0 ? '' : l.slice(minIndent!))).join('\n');
-}
-
-function resolveRunCodeOpType(language: string): 'sh' | 'node' | 'js' | 'py' | 'prose' | null {
-  const normalized = language.trim().toLowerCase();
-  if (!normalized) {
-    return null;
-  }
-  if (normalized === 'bash' || normalized === 'sh' || normalized === 'shell') {
-    return 'sh';
-  }
-  if (normalized === 'node' || normalized === 'nodejs') {
-    return 'node';
-  }
-  if (normalized === 'js' || normalized === 'javascript') {
-    return 'js';
-  }
-  if (normalized === 'py' || normalized === 'python') {
-    return 'py';
-  }
-  if (normalized === 'prose') {
-    return 'prose';
-  }
-  return null;
-}
-
-function mergeAuthUsing(
-  base: WithClause | undefined,
-  override: WithClause | undefined
-): Pick<WithClause, 'auth' | 'using'> | undefined {
-  const auth = override?.auth ?? base?.auth;
-  const using = override?.using ?? base?.using;
-  if (!auth && !using) {
-    return undefined;
-  }
-  return {
-    ...(auth ? { auth } : {}),
-    ...(using ? { using } : {})
-  };
-}
+import {
+  dedentCommonIndent,
+  extractRawTextContent,
+  mergeAuthUsing,
+  resolveRunCodeOpType
+} from './run-modules/run-pure-helpers';
+import {
+  getPreExtractedExec,
+  getPreExtractedRunCommand,
+  getPreExtractedRunDescriptor,
+  getPreExtractedRunStdin
+} from './run-modules/run-pre-extracted-inputs';
 
 /**
  * Evaluate a stdin expression and coerce it into text for command execution.
@@ -1566,87 +1503,4 @@ export async function evaluateRun(
   } finally {
     // Streaming cleanup already done above (moved out of finally to use results)
   }
-}
-
-function getPreExtractedRunCommand(context?: EvaluationContext): string | undefined {
-  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
-    return undefined;
-  }
-  for (const input of context.extractedInputs) {
-    if (
-      input &&
-      typeof input === 'object' &&
-      'name' in input &&
-      (input as any).name === '__run_command__' &&
-      typeof (input as any).value === 'string'
-    ) {
-      return (input as any).value as string;
-    }
-  }
-  return undefined;
-}
-
-function getPreExtractedRunDescriptor(
-  context?: EvaluationContext
-): SecurityDescriptor | undefined {
-  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
-    return undefined;
-  }
-  for (const input of context.extractedInputs) {
-    if (
-      input &&
-      typeof input === 'object' &&
-      'name' in input &&
-      (input as any).name === '__run_command__'
-    ) {
-      const mx = (input as any).mx;
-      return mx ? varMxToSecurityDescriptor(mx) : undefined;
-    }
-  }
-  return undefined;
-}
-
-function getPreExtractedRunStdin(
-  context?: EvaluationContext
-): { text: string; descriptor?: SecurityDescriptor } | undefined {
-  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
-    return undefined;
-  }
-  for (const input of context.extractedInputs) {
-    if (
-      input &&
-      typeof input === 'object' &&
-      'name' in input &&
-      (input as any).name === '__run_stdin__' &&
-      typeof (input as any).value === 'string'
-    ) {
-      const mx = (input as any).mx;
-      return {
-        text: (input as any).value as string,
-        descriptor: mx ? varMxToSecurityDescriptor(mx) : undefined
-      };
-    }
-  }
-  return undefined;
-}
-
-function getPreExtractedExec(
-  context: EvaluationContext | undefined,
-  name: string
-): ExecutableVariable | undefined {
-  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
-    return undefined;
-  }
-  for (const input of context.extractedInputs) {
-    if (
-      input &&
-      typeof input === 'object' &&
-      'name' in input &&
-      (input as Variable).name === name &&
-      (input as Variable).type === 'executable'
-    ) {
-      return input as ExecutableVariable;
-    }
-  }
-  return undefined;
 }
