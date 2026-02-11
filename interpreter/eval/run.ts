@@ -1,8 +1,7 @@
-import type { DirectiveNode, ExeBlockNode, MlldNode, TextNode, VariableReference, WithClause } from '@core/types';
+import type { DirectiveNode, ExeBlockNode, MlldNode, TextNode, WithClause } from '@core/types';
 import { GuardError } from '@core/errors/GuardError';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
-import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError, MlldInterpreterError } from '@core/errors';
@@ -45,7 +44,6 @@ import {
   mergeAuthUsing,
   resolveRunCodeOpType
 } from './run-modules/run-pure-helpers';
-import { getPreExtractedExec } from './run-modules/run-pre-extracted-inputs';
 import {
   applyRunOperationContext,
   buildRunCapabilityOperationUpdate,
@@ -57,6 +55,7 @@ import {
 } from './run-modules/run-policy-context';
 import { executeRunCommand } from './run-modules/run-command-executor';
 import { executeRunCode } from './run-modules/run-code-executor';
+import { resolveRunExecutableReference } from './run-modules/run-exec-resolver';
 
 /**
  * Evaluate @run directives.
@@ -265,156 +264,14 @@ export async function evaluateRun(
     setOutput(codeResult.value);
     
   } else if (directive.subtype === 'runExec') {
-    // Handle exec reference with field access support
-    const identifierNodes = directive.values?.identifier;
-    if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
-      throw new Error('Run exec directive missing exec reference');
-    }
-    
-    // Extract command name first for call stack tracking
-    let commandName: string = '';
-    const identifierNode = identifierNodes[0];
-    
-    // With improved type consistency, identifierNodes is always VariableReferenceNode[]
-    if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
-      commandName = identifierNode.identifier;
-    }
-    
-    // Add current command to call stack if not already there
-    if (commandName && !callStack.includes(commandName)) {
-      callStack = [...callStack, commandName];
-    }
-    
-    // Check if this is a field access pattern (e.g., @http.get)
-    let execVar: ExecutableVariable;
-    
-    if (identifierNode.type === 'VariableReference' && (identifierNode as VariableReference).fields && (identifierNode as VariableReference).fields.length > 0) {
-      // Handle field access (e.g., @http.get)
-      const varRef = identifierNode as VariableReference;
-      const baseVar = env.getVariable(varRef.identifier);
-      if (!baseVar) {
-        throw new Error(`Base variable not found: ${varRef.identifier}`);
-      }
-      
-      const variantMap = baseVar.internal?.transformerVariants as Record<string, any> | undefined;
-      let value: any;
-      let remainingFields = Array.isArray(varRef.fields) ? [...varRef.fields] : [];
-
-      if (variantMap && remainingFields.length > 0) {
-        const firstField = remainingFields[0];
-        if (firstField.type === 'field' || firstField.type === 'stringIndex' || firstField.type === 'numericField') {
-          const variantName = String(firstField.value);
-          const variant = variantMap[variantName];
-          if (!variant) {
-            throw new Error(`Pipeline function '@${varRef.identifier}.${variantName}' is not defined`);
-          }
-          value = variant;
-          remainingFields = remainingFields.slice(1);
-        }
-      }
-
-      if (typeof value === 'undefined') {
-        // Extract Variable value for field access - WHY: Need raw object to navigate fields
-        const { extractVariableValue } = await import('../utils/variable-resolution');
-        value = await extractVariableValue(baseVar, env);
-      }
-
-      // Navigate through the remaining field access chain
-      for (const field of remainingFields) {
-        if ((field.type === 'field' || field.type === 'stringIndex' || field.type === 'numericField') && typeof value === 'object' && value !== null) {
-          value = (value as Record<string, unknown>)[String(field.value)];
-        } else if (field.type === 'arrayIndex' && Array.isArray(value)) {
-          value = value[Number(field.value)];
-        } else {
-          const fieldName = String(field.value);
-          throw new Error(`Cannot access field '${fieldName}' on ${typeof value}`);
-        }
-      }
-      
-      
-      // The resolved value could be an executable object directly or a string reference
-      if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'executable') {
-        // Direct executable object
-        execVar = value as ExecutableVariable;
-      } else if (typeof value === 'object' && value !== null && '__executable' in value && value.__executable) {
-        // Serialized executable object from imports/exports
-        // Manually reconstruct the ExecutableVariable with all metadata
-        const fullName = `${varRef.identifier}.${varRef.fields.map(f => f.value).join('.')}`;
-        
-        // Deserialize shadow environments if present (convert objects back to Maps)
-        let capturedShadowEnvs = value.internal?.capturedShadowEnvs;
-        if (capturedShadowEnvs && typeof capturedShadowEnvs === 'object') {
-          const deserialized: any = {};
-          for (const [lang, shadowObj] of Object.entries(capturedShadowEnvs)) {
-            if (shadowObj && typeof shadowObj === 'object') {
-              // Convert object to Map
-              const map = new Map<string, any>();
-              for (const [name, func] of Object.entries(shadowObj)) {
-                map.set(name, func);
-              }
-              deserialized[lang] = map;
-            }
-          }
-          capturedShadowEnvs = deserialized;
-        }
-        
-        execVar = {
-          type: 'executable',
-          name: fullName,
-          value: value.value || { type: 'code', template: '', language: 'js' },
-          paramNames: value.paramNames || [],
-          source: {
-            directive: 'import',
-            syntax: 'code',
-            hasInterpolation: false,
-            isMultiLine: false
-          },
-          createdAt: Date.now(),
-          modifiedAt: Date.now(),
-          mx: {
-            ...(value.mx || {})
-          },
-          internal: {
-            ...(value.internal || {}),
-            executableDef: value.executableDef,
-            // CRITICAL: Preserve captured shadow environments from imports (deserialized)
-            capturedShadowEnvs: capturedShadowEnvs
-          }
-        };
-        
-      } else if (typeof value === 'string') {
-        // String reference to an executable  
-        const variable = env.getVariable(value);
-        if (!variable || !isExecutableVariable(variable)) {
-          throw new Error(`Executable variable not found: ${value}`);
-        }
-        execVar = variable;
-      } else {
-        throw new Error(`Field access did not resolve to an executable: ${typeof value}, got: ${JSON.stringify(value)}`);
-      }
-    } else {
-      // Handle simple command reference (original behavior)
-      // Command name already extracted above
-      if (!commandName) {
-        throw new Error('Run exec directive identifier must be a command reference');
-      }
-      
-      const variable = getPreExtractedExec(context, commandName) ?? env.getVariable(commandName);
-      if (!variable || !isExecutableVariable(variable)) {
-        throw new Error(`Executable variable not found: ${commandName}`);
-      }
-      execVar = variable;
-    }
-    
-    // Get the executable definition from metadata
-    const definition = execVar.internal?.executableDef as ExecutableDefinition | undefined;
-    if (!definition) {
-      // For field access, provide more helpful error message
-      const fullPath = identifierNode.type === 'VariableReference' && (identifierNode as VariableReference).fields && (identifierNode as VariableReference).fields.length > 0
-        ? `${(identifierNode as VariableReference).identifier}.${(identifierNode as VariableReference).fields.map(f => f.value).join('.')}`
-        : commandName;
-      throw new Error(`Executable ${fullPath} has no definition (missing executableDef)`);
-    }
+    const runExecResolution = await resolveRunExecutableReference({
+      directive,
+      env,
+      context,
+      callStack
+    });
+    callStack = runExecResolution.callStack;
+    const { execVar, definition } = runExecResolution;
 
     const execDescriptor = execVar.mx ? varMxToSecurityDescriptor(execVar.mx) : undefined;
     const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
