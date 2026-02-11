@@ -1,29 +1,22 @@
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
-import type { WhenSimpleNode, WhenMatchNode, WhenBlockNode, WhenConditionPair } from '@core/types/when';
+import type { WhenSimpleNode, WhenMatchNode, WhenBlockNode } from '@core/types/when';
 import { isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
 import { logger } from '@core/utils/logger';
 import { MlldConditionError } from '@core/errors';
+import {
+  evaluateFirstMatch,
+  validateNonePlacement,
+  isNoneCondition,
+  type WhenMatcherRuntime
+} from './match-engines';
 
 export interface WhenFormHandlerRuntime {
-  evaluateCondition(condition: BaseMlldNode[], env: Environment, variableName?: string): Promise<boolean>;
-  evaluateActionSequence(actionNodes: BaseMlldNode[], env: Environment): Promise<EvalResult>;
-  evaluateFirstMatch(
-    conditions: WhenConditionPair[],
-    env: Environment,
-    variableName?: string,
-    expressionNodes?: BaseMlldNode[],
-    blockAction?: BaseMlldNode[]
-  ): Promise<EvalResult>;
+  matcherRuntime: WhenMatcherRuntime;
   evaluateLetAssignment(entry: any, env: Environment): Promise<Environment>;
   evaluateAugmentedAssignment(entry: any, env: Environment): Promise<Environment>;
-  compareValues(expressionValue: unknown, conditionValue: unknown, env: Environment): Promise<boolean>;
-  validateNonePlacement(conditions: any[]): void;
   containsNoneWithOperator(node: any): boolean;
-  isNoneCondition(condition: any): boolean;
-  evaluateNode(node: any, env: Environment): Promise<EvalResult>;
-  isExeReturnControl(value: unknown): boolean;
 }
 
 export async function evaluateWhenSimpleForm(
@@ -38,7 +31,7 @@ export async function evaluateWhenSimpleForm(
     }
   }
 
-  const conditionResult = await runtime.evaluateCondition(node.values.condition, env);
+  const conditionResult = await runtime.matcherRuntime.evaluateCondition(node.values.condition, env);
 
   if (process.env.DEBUG_WHEN) {
     logger.debug('When condition result:', { conditionResult });
@@ -53,18 +46,18 @@ export async function evaluateWhenSimpleForm(
 
   if (isBlockForm) {
     let childEnv = env.createChild();
-    const lastResult = await runtime.evaluateActionSequence(actionNodes, childEnv);
+    const lastResult = await runtime.matcherRuntime.evaluateActionSequence(actionNodes, childEnv);
     childEnv = lastResult.env;
     env.mergeChild(childEnv);
 
-    if (runtime.isExeReturnControl(lastResult.value)) {
+    if (runtime.matcherRuntime.isExeReturnControl(lastResult.value)) {
       return { value: lastResult.value, env };
     }
 
     return { value: lastResult.value ?? '', env };
   }
 
-  return runtime.evaluateActionSequence(actionNodes, env);
+  return runtime.matcherRuntime.evaluateActionSequence(actionNodes, env);
 }
 
 export async function evaluateWhenMatchForm(
@@ -72,13 +65,13 @@ export async function evaluateWhenMatchForm(
   env: Environment,
   runtime: WhenFormHandlerRuntime
 ): Promise<EvalResult> {
-  runtime.validateNonePlacement(node.values.conditions);
+  validateNonePlacement(node.values.conditions);
 
   let expressionValue: any;
   if (node.values.expression.length === 1 && node.values.expression[0].type === 'Text') {
     expressionValue = node.values.expression[0].content;
   } else {
-    const expressionResult = await runtime.evaluateNode(node.values.expression, env);
+    const expressionResult = await runtime.matcherRuntime.evaluateNode(node.values.expression, env);
     expressionValue = expressionResult.value;
   }
 
@@ -96,7 +89,7 @@ export async function evaluateWhenMatchForm(
   let anyNonNoneMatched = false;
 
   for (const pair of conditionPairs) {
-    if (pair.condition.length === 1 && runtime.isNoneCondition(pair.condition[0])) {
+    if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
       continue;
     }
 
@@ -114,13 +107,13 @@ export async function evaluateWhenMatchForm(
     if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
       conditionValue = actualCondition[0].content;
     } else if (actualCondition.length === 1 && actualCondition[0].type === 'ExecInvocation') {
-      conditionValue = await runtime.evaluateCondition(actualCondition, childEnv);
+      conditionValue = await runtime.matcherRuntime.evaluateCondition(actualCondition, childEnv);
     } else {
-      const conditionResult = await runtime.evaluateNode(actualCondition, childEnv);
+      const conditionResult = await runtime.matcherRuntime.evaluateNode(actualCondition, childEnv);
       conditionValue = conditionResult.value;
     }
 
-    let matches = await runtime.compareValues(expressionValue, conditionValue, childEnv);
+    let matches = await runtime.matcherRuntime.compareValues(expressionValue, conditionValue, childEnv);
     if (isNegated) {
       matches = !matches;
     }
@@ -135,11 +128,11 @@ export async function evaluateWhenMatchForm(
     }
 
     const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
-    const actionResult = await runtime.evaluateActionSequence(actionNodes, childEnv);
+    const actionResult = await runtime.matcherRuntime.evaluateActionSequence(actionNodes, childEnv);
     childEnv = actionResult.env;
     env.mergeChild(childEnv);
 
-    if (runtime.isExeReturnControl(actionResult.value)) {
+    if (runtime.matcherRuntime.isExeReturnControl(actionResult.value)) {
       return { value: actionResult.value, env };
     }
 
@@ -148,7 +141,7 @@ export async function evaluateWhenMatchForm(
 
   if (!anyNonNoneMatched) {
     for (const pair of conditionPairs) {
-      if (!(pair.condition.length === 1 && runtime.isNoneCondition(pair.condition[0]))) {
+      if (!(pair.condition.length === 1 && isNoneCondition(pair.condition[0]))) {
         continue;
       }
       if (!pair.action) {
@@ -156,11 +149,11 @@ export async function evaluateWhenMatchForm(
       }
 
       const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
-      const actionResult = await runtime.evaluateActionSequence(actionNodes, childEnv);
+      const actionResult = await runtime.matcherRuntime.evaluateActionSequence(actionNodes, childEnv);
       childEnv = actionResult.env;
       env.mergeChild(childEnv);
 
-      if (runtime.isExeReturnControl(actionResult.value)) {
+      if (runtime.matcherRuntime.isExeReturnControl(actionResult.value)) {
         return { value: actionResult.value, env };
       }
 
@@ -217,9 +210,10 @@ export async function evaluateWhenBlockForm(
   }
 
   const conditions = node.values.conditions.filter(isConditionPair);
-  const result = await runtime.evaluateFirstMatch(
+  const result = await evaluateFirstMatch(
     conditions,
     childEnv,
+    runtime.matcherRuntime,
     variableName,
     expressionNodes,
     node.values.action

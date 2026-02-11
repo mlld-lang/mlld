@@ -1,4 +1,4 @@
-import type { WhenNode, WhenConditionPair } from '@core/types/when';
+import type { WhenNode } from '@core/types/when';
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
@@ -13,9 +13,7 @@ import {
   isArray as isArrayVariable,
   isObject as isObjectVariable,
   isCommandResult,
-  isPipelineInput,
-  createSimpleTextVariable,
-  createObjectVariable
+  isPipelineInput
 } from '@core/types/variable';
 import { isStructuredValue, asData, asText, assertStructuredValue } from '../utils/structured-value';
 import { evaluateLetAssignment, evaluateAugmentedAssignment } from './when/assignment-support';
@@ -26,6 +24,7 @@ import {
   evaluateWhenBlockForm,
   type WhenFormHandlerRuntime
 } from './when/form-handlers';
+import { isNoneCondition, type WhenMatcherRuntime } from './when/match-engines';
 
 const DENIED_KEYWORD = 'denied';
 export { evaluateLetAssignment, evaluateAugmentedAssignment } from './when/assignment-support';
@@ -104,18 +103,19 @@ export async function evaluateWhen(
   node: WhenNode,
   env: Environment
 ): Promise<EvalResult> {
-  const runtime: WhenFormHandlerRuntime = {
+  const matcherRuntime: WhenMatcherRuntime = {
     evaluateCondition,
     evaluateActionSequence,
-    evaluateFirstMatch,
-    evaluateLetAssignment,
-    evaluateAugmentedAssignment,
     compareValues,
-    validateNonePlacement,
-    containsNoneWithOperator,
-    isNoneCondition,
     evaluateNode: evaluate,
     isExeReturnControl
+  };
+
+  const runtime: WhenFormHandlerRuntime = {
+    matcherRuntime,
+    evaluateLetAssignment,
+    evaluateAugmentedAssignment,
+    containsNoneWithOperator
   };
 
   if (isWhenSimpleNode(node)) {
@@ -131,320 +131,6 @@ export async function evaluateWhen(
     undefined,
     node.location
   );
-}
-
-/**
- * Evaluates conditions using first-match behavior.
- * WHY: Implements classic switch-case behavior where only the first matching branch
- * executes, providing mutual exclusion between conditions.
- * GOTCHA: Conditions are evaluated in order, so put more specific conditions first.
- * Unlike switch statements, there's no fallthrough - only one action executes.
- * CONTEXT: Useful for state machines, routing logic, and mutually exclusive branches.
- */
-async function evaluateFirstMatch(
-  conditions: WhenConditionPair[],
-  env: Environment,
-  variableName?: string,
-  expressionNodes?: BaseMlldNode[],
-  blockAction?: BaseMlldNode[]
-): Promise<EvalResult> {
-  // Validate none placement
-  validateNonePlacement(conditions);
-
-  if (blockAction && conditions.some(pair => pair.action)) {
-    throw new MlldConditionError(
-      'Invalid @when syntax: block action cannot combine with per-condition actions.',
-      undefined,
-      undefined
-    );
-  }
-  
-  // If we have expression nodes, evaluate them to get the value to compare against
-  let expressionValue: any;
-  if (expressionNodes && expressionNodes.length > 0) {
-    
-    if (expressionNodes.length === 1 && expressionNodes[0].type === 'Text') {
-      expressionValue = (expressionNodes[0] as any).content;
-    } else if (expressionNodes.length === 1 && expressionNodes[0].type === 'VariableReference') {
-      // For variable references, get the actual value, not the output
-      const varRef = expressionNodes[0] as any;
-      const variable = env.getVariable(varRef.identifier);
-      if (variable) {
-        expressionValue = variable.value;
-      }
-      
-    } else {
-      const expressionResult = await evaluate(expressionNodes, env);
-      expressionValue = expressionResult.value;
-      
-    }
-  }
-  
-  // Track if any non-none condition matched
-  let anyNonNoneMatched = false;
-  
-  for (const pair of conditions) {
-    // Check if this is a none condition
-    if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
-      // For first-match behavior, none acts as a default case
-      if (!anyNonNoneMatched) {
-        // Execute the action for 'none'
-        const actionNodes = pair.action ?? blockAction;
-        if (actionNodes) {
-          const actionResult = await evaluateActionSequence(actionNodes, env);
-          return actionResult;
-        }
-        return { value: '', env };
-      }
-      continue;
-    }
-    let matches = false;
-    
-    if (expressionValue !== undefined) {
-      // Compare expression value against condition value (like switch mode)
-      let conditionValue: any;
-      
-      // Check for negation
-      let isNegated = false;
-      let actualCondition = pair.condition;
-      
-      if (actualCondition.length === 1 && actualCondition[0].type === 'UnaryExpression') {
-        const unaryNode = actualCondition[0] as any;
-        if (unaryNode.operator === '!') {
-          isNegated = true;
-          actualCondition = [unaryNode.operand];
-        }
-      }
-      
-      // Evaluate the condition value
-      if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
-        conditionValue = (actualCondition[0] as any).content;
-      } else if (actualCondition.length === 1 && actualCondition[0].type === 'ExecInvocation') {
-        // Handle ExecInvocation as a condition
-        const execResult = await evaluateCondition(actualCondition, env);
-        // For exec invocations, we want the boolean result
-        conditionValue = execResult;
-      } else {
-        const conditionResult = await evaluate(actualCondition, env);
-        conditionValue = conditionResult.value;
-      }
-      
-      // Compare values using shared logic
-      matches = await compareValues(expressionValue, conditionValue, env);
-      
-      
-      // Apply negation if needed
-      if (isNegated) {
-        matches = !matches;
-      }
-    } else {
-      // No expression value, fall back to truthiness evaluation
-      matches = await evaluateCondition(pair.condition, env, variableName);
-    }
-    
-    if (matches) {
-      anyNonNoneMatched = true;
-      const actionNodes = pair.action ?? blockAction;
-      if (actionNodes) {
-        const result = await evaluateActionSequence(actionNodes, env);
-        return result;
-      }
-      return { value: '', env };
-    }
-  }
-  
-  return { value: '', env };
-}
-
-/**
- * Evaluates conditions using 'all' modifier
- * WHY: Supports two distinct use cases - AND logic (with block action) where ALL
- * conditions must be true, or independent evaluation (without block action) where
- * each true condition's action executes.
- * GOTCHA: Behavior changes based on presence of block action:
- *   - With block action: ALL conditions must be true (AND logic)
- *   - Without block action: Each true condition executes independently
- * Cannot mix block action with individual condition actions.
- * CONTEXT: AND logic useful for validation checks, independent evaluation useful
- * for applying multiple transformations or checks.
- */
-async function evaluateAllMatches(
-  conditions: WhenConditionPair[],
-  env: Environment,
-  variableName?: string,
-  blockAction?: BaseMlldNode[]
-): Promise<EvalResult> {
-  // Validate none placement
-  validateNonePlacement(conditions);
-  
-  // If we have a block action, check if ALL conditions are true first
-  if (blockAction) {
-    // Check for invalid syntax: all: with block action cannot have individual actions
-    if (conditions.some(pair => pair.action)) {
-      throw new MlldConditionError(
-        'Invalid @when syntax: \'all:\' modifier cannot have individual actions for conditions when using a block action. Use either individual actions OR a block action after the conditions: @when all: [...] => @add "action"',
-        'all',
-        undefined
-      );
-    }
-    
-    let allMatch = true;
-    
-    for (const pair of conditions) {
-      // Skip none conditions in all: block mode
-      if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
-        continue;
-      }
-      
-      const conditionResult = await evaluateCondition(pair.condition, env, variableName);
-      
-      if (!conditionResult) {
-        allMatch = false;
-        break;
-      }
-    }
-    
-    // Execute block action only if all conditions matched
-    if (allMatch) {
-      if (process.env.DEBUG_WHEN) {
-        logger.debug('Executing block action', { envNodesBefore: env.nodes.length });
-      }
-      const result = await evaluateActionSequence(blockAction, env);
-      if (process.env.DEBUG_WHEN) {
-        logger.debug('Block action completed', {
-          result,
-          envNodesAfter: env.nodes.length
-        });
-      }
-      return result;
-    }
-    
-    return { value: '', env };
-  }
-  
-  // Otherwise, execute individual actions for each true condition
-  const results: string[] = [];
-  let anyNonNoneMatched = false;
-  
-  // First pass: evaluate non-none conditions
-  for (const pair of conditions) {
-    // Skip none conditions in first pass
-    if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
-      continue;
-    }
-    
-    const conditionResult = await evaluateCondition(pair.condition, env, variableName);
-    
-    if (conditionResult) {
-      anyNonNoneMatched = true;
-      if (pair.action) {
-        const actionResult = await evaluateActionSequence(pair.action, env);
-        if (isExeReturnControl(actionResult.value)) {
-          return actionResult;
-        }
-        if (actionResult.value) {
-          results.push(String(actionResult.value));
-        }
-      }
-    }
-  }
-  
-  // Second pass: evaluate none conditions if no non-none matched
-  if (!anyNonNoneMatched) {
-    for (const pair of conditions) {
-      // Only process none conditions in second pass
-      if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
-        if (pair.action) {
-          const actionResult = await evaluateActionSequence(pair.action, env);
-          if (isExeReturnControl(actionResult.value)) {
-            return actionResult;
-          }
-          if (actionResult.value) {
-            results.push(String(actionResult.value));
-          }
-        }
-      }
-    }
-  }
-  
-  // Join results with newlines, but only if we have multiple results
-  // If single result, don't add trailing newline
-  return { value: results.length > 1 ? results.join('\n') : results.join(''), env };
-}
-
-/**
- * Evaluates conditions using 'any' modifier - executes action if any condition matches
- * WHY: Implements OR logic where the block action executes if at least one condition
- * is true, useful for triggering actions based on multiple possible triggers.
- * GOTCHA: Requires a block action - individual condition actions are not allowed.
- * All conditions are evaluated (no short-circuit) to ensure consistent behavior.
- * CONTEXT: Useful for validation warnings, fallback logic, or actions that should
- * trigger on any of several conditions.
- */
-async function evaluateAnyMatch(
-  conditions: WhenConditionPair[],
-  env: Environment,
-  variableName?: string,
-  blockAction?: BaseMlldNode[]
-): Promise<EvalResult> {
-  // Check for invalid syntax: any: cannot have individual actions
-  if (conditions.some(pair => pair.action)) {
-    throw new MlldConditionError(
-      'Invalid @when syntax: \'any:\' modifier cannot have individual actions for conditions. Use a block action after the conditions instead: @when any: [...] => @add "action"',
-      'any',
-      undefined
-    );
-  }
-  
-  // First check if any condition is true
-  let anyMatch = false;
-  
-  for (const pair of conditions) {
-    const conditionResult = await evaluateCondition(pair.condition, env, variableName);
-    
-    if (conditionResult) {
-      anyMatch = true;
-      
-      // Set variable to the matching condition's value if specified
-      if (variableName && pair.condition.length > 0) {
-        const conditionResult = await evaluate(pair.condition, env);
-        const conditionValue = conditionResult.value;
-        
-        // Create a variable from the condition value
-        const variable = typeof conditionValue === 'string' ?
-          createSimpleTextVariable(variableName, conditionValue, {
-            mx: {
-              source: {
-                directive: 'var',
-                syntax: 'quoted',
-                hasInterpolation: false,
-                isMultiLine: false
-              }
-            }
-          }) :
-          createObjectVariable(variableName, conditionValue, {
-            mx: {
-              source: {
-                directive: 'var',
-                syntax: 'object',
-                hasInterpolation: false,
-                isMultiLine: false
-              }
-            }
-          });
-        env.setVariable(variableName, variable);
-      }
-      
-      break;
-    }
-  }
-  
-  // Execute block action if any condition matched
-  if (anyMatch && blockAction) {
-    return await evaluate(blockAction, env);
-  }
-  
-  return { value: '', env };
 }
 
 /**
@@ -922,13 +608,6 @@ function isTruthy(value: any): boolean {
 }
 
 /**
- * Check if a condition is the 'none' literal
- */
-function isNoneCondition(condition: any): boolean {
-  return condition?.type === 'Literal' && condition?.valueType === 'none';
-}
-
-/**
  * Check if a node contains 'none' wrapped in an operator expression
  */
 function containsNoneWithOperator(node: any): boolean {
@@ -937,36 +616,4 @@ function containsNoneWithOperator(node: any): boolean {
   if (node.type === 'BinaryExpression' && (isNoneCondition(node.left) || isNoneCondition(node.right))) return true;
   if (node.type === 'ComparisonExpression' && (isNoneCondition(node.left) || isNoneCondition(node.right))) return true;
   return false;
-}
-
-/**
- * Validate that 'none' conditions are placed correctly in a when block
- */
-function validateNonePlacement(conditions: any[]): void {
-  let foundNone = false;
-  let foundWildcard = false;
-  
-  for (let i = 0; i < conditions.length; i++) {
-    const condition = conditions[i].condition?.[0] || conditions[i];
-    
-    if (isNoneCondition(condition)) {
-      foundNone = true;
-    } else if (condition?.type === 'Literal' && condition?.valueType === 'wildcard') {
-      foundWildcard = true;
-      if (foundNone) {
-        // * after none is technically valid but makes none unreachable
-        continue;
-      }
-    } else if (foundNone) {
-      throw new Error(
-        'The "none" keyword can only appear as the last condition(s) in a when block'
-      );
-    }
-    
-    if (foundWildcard && isNoneCondition(condition)) {
-      throw new Error(
-        'The "none" keyword cannot appear after "*" (wildcard) as it would never be reached'
-      );
-    }
-  }
 }
