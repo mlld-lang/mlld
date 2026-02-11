@@ -1,4 +1,3 @@
-import ts from 'typescript';
 import {
   evaluatePatternResults,
   hasContentPattern,
@@ -10,6 +9,9 @@ import type { AstPattern, AstResult, Definition } from './ast-extractor/types';
 import type { AstExtractorRegistry } from './ast-extractor/language-dispatch';
 import { extractDefinitionsForFile } from './ast-extractor/language-dispatch';
 import { findBraceBlockEnd, getLinesAndOffsets } from './ast-extractor/shared-utils';
+import { extractTsDefinitions } from './ast-extractor/typescript-extractor';
+import { extractPythonDefinitions } from './ast-extractor/python-extractor';
+import { extractRubyDefinitions } from './ast-extractor/ruby-extractor';
 export type {
   AstPatternDefinition,
   AstPatternTypeFilter,
@@ -22,18 +24,6 @@ export type {
   AstPattern,
   AstResult
 } from './ast-extractor/types';
-
-function extractTsForFile(content: string, filePath: string): Definition[] {
-  return extractTsDefinitions(content, filePath);
-}
-
-function extractPythonForFile(content: string): Definition[] {
-  return extractPythonDefinitions(content);
-}
-
-function extractRubyForFile(content: string): Definition[] {
-  return extractRubyDefinitions(content);
-}
 
 function extractGoForFile(content: string): Definition[] {
   return extractGoDefinitions(content);
@@ -60,9 +50,9 @@ function extractCSharpForFile(content: string): Definition[] {
 }
 
 const AST_EXTRACTOR_REGISTRY: AstExtractorRegistry = {
-  ts: extractTsForFile,
-  python: extractPythonForFile,
-  ruby: extractRubyForFile,
+  ts: extractTsDefinitions,
+  python: extractPythonDefinitions,
+  ruby: extractRubyDefinitions,
   go: extractGoForFile,
   rust: extractRustForFile,
   java: extractJavaForFile,
@@ -104,227 +94,6 @@ export function extractNames(content: string, filePath: string, filter?: string)
  * Check if patterns contain any name-list patterns
  */
 export { hasNameListPattern, hasContentPattern, matchesTypeFilter, TYPE_FILTER_MAP };
-
-function extractTsDefinitions(content: string, filePath: string): Definition[] {
-  const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true);
-  const defs: Definition[] = [];
-
-  for (const stmt of sourceFile.statements) {
-    if (ts.isFunctionDeclaration(stmt) && stmt.name) {
-      defs.push(makeTsDefinition(stmt.name.text, 'function', stmt, sourceFile, content));
-    } else if (ts.isClassDeclaration(stmt) && stmt.name) {
-      defs.push(makeTsDefinition(stmt.name.text, 'class', stmt, sourceFile, content));
-      for (const member of stmt.members) {
-        if (ts.isMethodDeclaration(member) && member.name && ts.isIdentifier(member.name)) {
-          defs.push(makeTsDefinition(member.name.text, 'method', member, sourceFile, content));
-        }
-      }
-    } else if (ts.isInterfaceDeclaration(stmt) && stmt.name) {
-      defs.push(makeTsDefinition(stmt.name.text, 'interface', stmt, sourceFile, content));
-    } else if (ts.isEnumDeclaration(stmt) && stmt.name) {
-      defs.push(makeTsDefinition(stmt.name.text, 'enum', stmt, sourceFile, content));
-    } else if (ts.isTypeAliasDeclaration(stmt) && ts.isIdentifier(stmt.name)) {
-      defs.push(makeTsDefinition(stmt.name.text, 'type-alias', stmt, sourceFile, content));
-    } else if (ts.isVariableStatement(stmt)) {
-      for (const decl of stmt.declarationList.declarations) {
-        if (ts.isIdentifier(decl.name)) {
-          defs.push(makeTsDefinition(decl.name.text, 'variable', stmt, sourceFile, content));
-        }
-      }
-    }
-  }
-
-  return defs;
-}
-
-function makeTsDefinition(name: string, type: string, node: ts.Node, sf: ts.SourceFile, text: string): Definition {
-  const start = node.getStart();
-  const end = node.getEnd();
-  const line = sf.getLineAndCharacterOfPosition(start).line + 1;
-  const code = text.slice(start, end);
-  const body = (node as any).body as ts.Node | undefined;
-  const search = body ? body.getText(sf) : code;
-  return { name, type, start, end, line, code, search };
-}
-
-function extractPythonDefinitions(content: string): Definition[] {
-  const { lines, offsets } = getLinesAndOffsets(content);
-
-  const defs: Definition[] = [];
-
-  function blockEnd(startLine: number, indent: number): number {
-    let line = startLine;
-    for (; line < lines.length; line++) {
-      const current = lines[line];
-      if (current.trim() === '') continue;
-      const currentIndent = current.match(/^\s*/)?.[0].length ?? 0;
-      if (currentIndent <= indent) break;
-    }
-    return line;
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const indent = line.match(/^\s*/)?.[0].length ?? 0;
-    const trimmed = line.trim();
-
-    if (indent === 0 && /^def\s+(\w+)/.test(trimmed)) {
-      const name = RegExp.$1;
-      const endLine = blockEnd(i + 1, indent);
-      const start = offsets[i];
-      const end = offsets[endLine] ?? content.length;
-      const code = content.slice(start, end);
-      const search = code.split(/\r?\n/).slice(1).join('\n');
-      defs.push({ name, type: 'function', start, end, line: i + 1, code, search });
-      i = endLine - 1;
-    } else if (indent === 0 && /^class\s+(\w+)/.test(trimmed)) {
-      const name = RegExp.$1;
-      const endLine = blockEnd(i + 1, indent);
-      const start = offsets[i];
-      const end = offsets[endLine] ?? content.length;
-      const code = content.slice(start, end);
-      const search = code.split(/\r?\n/).slice(1).join('\n');
-      defs.push({ name, type: 'class', start, end, line: i + 1, code, search });
-
-      for (let j = i + 1; j < endLine; j++) {
-        const inner = lines[j];
-        const innerIndent = inner.match(/^\s*/)?.[0].length ?? 0;
-        const innerTrim = inner.trim();
-        if (innerIndent > indent && /^def\s+(\w+)/.test(innerTrim)) {
-          const mName = RegExp.$1;
-          const mEnd = blockEnd(j + 1, innerIndent);
-          const mStart = offsets[j];
-          const mEndPos = offsets[mEnd] ?? content.length;
-          const mCode = content.slice(mStart, mEndPos);
-          const mSearch = mCode.split(/\r?\n/).slice(1).join('\n');
-          defs.push({ name: mName, type: 'method', start: mStart, end: mEndPos, line: j + 1, code: mCode, search: mSearch });
-          j = mEnd - 1;
-        }
-      }
-      i = endLine - 1;
-    } else if (indent === 0 && /^(\w+)/.test(trimmed) && trimmed.includes('=')) {
-      const name = RegExp.$1;
-      const start = offsets[i];
-      const end = start + line.length;
-      const code = content.slice(start, end);
-      const search = code;
-      defs.push({ name, type: 'variable', start, end, line: i + 1, code, search });
-    }
-  }
-
-  return defs;
-}
-
-function extractRubyDefinitions(content: string): Definition[] {
-  const { lines, offsets } = getLinesAndOffsets(content);
-
-  const defs: Definition[] = [];
-  const contextStack: Array<{ endLine: number; segments: string[]; kind: 'module' | 'class' }> = [];
-
-  function sanitized(line: string): string {
-    return line.replace(/#.*$/, '');
-  }
-
-  function blockEnd(startLine: number): number {
-    let depth = 0;
-    for (let line = startLine; line < lines.length; line++) {
-      const clean = sanitized(lines[line]);
-      if (!clean.trim()) {
-        continue;
-      }
-
-      if (line === startLine) {
-        depth += 1;
-      } else {
-        const openers = clean.match(/\b(class|module|def|if|unless|case|begin|for|while|until|loop)\b/g);
-        if (openers) {
-          depth += openers.length;
-        }
-        const doMatches = clean.match(/\bdo\b/g);
-        if (doMatches) {
-          depth += doMatches.length;
-        }
-      }
-
-      const endMatches = clean.match(/\bend\b/g);
-      if (endMatches) {
-        depth -= endMatches.length;
-        if (depth <= 0) {
-          return line + 1;
-        }
-      }
-    }
-    return lines.length;
-  }
-
-  function makeDefinition(name: string, type: string, startLine: number, endLine: number, overrideName?: string): void {
-    const finalName = overrideName ?? name;
-    const start = offsets[startLine];
-    const end = offsets[endLine] ?? content.length;
-    const code = content.slice(start, end);
-    const search = code.split(/\r?\n/).slice(1).join('\n');
-    defs.push({ name: finalName, type, start, end, line: startLine + 1, code, search });
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const clean = sanitized(rawLine);
-    const trimmed = clean.trim();
-
-    while (contextStack.length > 0 && i >= contextStack[contextStack.length - 1].endLine) {
-      contextStack.pop();
-    }
-
-    if (!trimmed) {
-      continue;
-    }
-
-    const classMatch = /^class\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)/.exec(trimmed);
-    if (classMatch) {
-      const endLine = blockEnd(i);
-      const parentSegments = contextStack.length > 0 ? contextStack[contextStack.length - 1].segments : [];
-      const classSegments = classMatch[1].split('::');
-      const segments = [...parentSegments, ...classSegments];
-      const qualified = segments.join('::');
-      makeDefinition(classMatch[1], 'class', i, endLine, qualified);
-      contextStack.push({ endLine, segments, kind: 'class' });
-      continue;
-    }
-
-    const moduleMatch = /^module\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)/.exec(trimmed);
-    if (moduleMatch) {
-      const endLine = blockEnd(i);
-      const parentSegments = contextStack.length > 0 ? contextStack[contextStack.length - 1].segments : [];
-      const moduleSegments = moduleMatch[1].split('::');
-      const segments = [...parentSegments, ...moduleSegments];
-      const qualified = segments.join('::');
-      makeDefinition(moduleMatch[1], 'module', i, endLine, qualified);
-      contextStack.push({ endLine, segments, kind: 'module' });
-      continue;
-    }
-
-    const defMatch = /^def\s+([A-Za-z_]\w*[!?=]?|(?:self|[A-Za-z_]\w*)\.[A-Za-z_]\w*[!?=]?)/.exec(trimmed);
-    if (defMatch) {
-      const endLine = blockEnd(i);
-      const name = defMatch[1];
-      const insideClass = contextStack.some(mx => mx.kind === 'class');
-      const type = insideClass ? 'method' : 'function';
-      makeDefinition(name, type, i, endLine);
-      i = endLine - 1;
-      continue;
-    }
-
-    const constMatch = /^([A-Z][A-Za-z0-9_]*)\s*=/.exec(trimmed);
-    if (constMatch) {
-      const start = offsets[i];
-      const end = start + rawLine.length;
-      const code = content.slice(start, end);
-      defs.push({ name: constMatch[1], type: 'constant', start, end, line: i + 1, code, search: code });
-    }
-  }
-
-  return defs;
-}
 
 function extractRustDefinitions(content: string): Definition[] {
   const { lines, offsets } = getLinesAndOffsets(content);
