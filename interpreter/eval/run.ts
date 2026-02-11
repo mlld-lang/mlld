@@ -1,4 +1,4 @@
-import type { DirectiveNode, TextNode, WithClause } from '@core/types';
+import type { DirectiveNode, WithClause } from '@core/types';
 import { GuardError } from '@core/errors/GuardError';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
@@ -12,10 +12,8 @@ import { loadStreamAdapter, resolveStreamFormatValue } from '../streaming/stream
 import { wrapExecResult } from '../utils/structured-exec';
 import {
   asText,
-  applySecurityDescriptorToStructuredValue,
-  extractSecurityDescriptor
+  applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
-import { materializeDisplayValue } from '../utils/display-materialization';
 import { varMxToSecurityDescriptor, hasSecurityVarMx } from '@core/types/variable/VarMxHelpers';
 import { resolveDirectiveExecInvocation } from './directive-replay';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
@@ -23,6 +21,11 @@ import { executeRunCommand } from './run-modules/run-command-executor';
 import { executeRunCode } from './run-modules/run-code-executor';
 import { resolveRunExecutableReference } from './run-modules/run-exec-resolver';
 import { dispatchRunExecutableDefinition } from './run-modules/run-exec-definition-dispatcher';
+import {
+  applyRunWithClausePipeline,
+  finalizeRunOutputLifecycle,
+  finalizeRunStreamingLifecycle
+} from './run-modules/run-output-lifecycle';
 
 /**
  * Evaluate @run directives.
@@ -352,98 +355,37 @@ export async function evaluateRun(
     throw new Error(`Unsupported run subtype: ${directive.subtype}`);
   }
   
-  // Handle with clause if present
-  if (withClause) {
-    if (process.env.MLLD_DEBUG_STDIN === 'true') {
-      try {
-        console.error('[mlld] withClause', JSON.stringify(withClause, null, 2));
-      } catch {
-        console.error('[mlld] withClause', withClause);
-      }
-    }
-    // Apply pipeline transformations if specified
-    if (withClause.pipeline && withClause.pipeline.length > 0) {
-      // Use unified pipeline processor
-      const { processPipeline } = await import('./pipeline/unified-processor');
-      // Stage-0 retry is always enabled when we have a source node
-      const enableStage0 = !!sourceNodeForPipeline;
-      const pipelineInput = outputValue;
-      const valueForPipeline = enableStage0
-        ? { value: pipelineInput, mx: {}, internal: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
-        : pipelineInput;
-      const outputDescriptor = lastOutputDescriptor ?? extractSecurityDescriptor(pipelineInput, {
-        recursive: true,
-        mergeArrayElements: true
-      });
-      const pipelineDescriptorHint = pendingOutputDescriptor
-        ? outputDescriptor
-          ? env.mergeSecurityDescriptors(pendingOutputDescriptor, outputDescriptor)
-          : pendingOutputDescriptor
-        : outputDescriptor;
-      const pipelineResult = await processPipeline({
-        value: valueForPipeline,
-        env,
-        directive,
-        pipeline: withClause.pipeline,
-        format: withClause.format as string | undefined,
-        isRetryable: enableStage0,
-        location: directive.location,
-        descriptorHint: pipelineDescriptorHint
-      });
-      setOutput(pipelineResult);
-    }
+  const pipelineResult = await applyRunWithClausePipeline({
+    withClause,
+    outputValue,
+    pendingOutputDescriptor,
+    lastOutputDescriptor,
+    sourceNodeForPipeline,
+    env,
+    directive
+  });
+  if (typeof pipelineResult !== 'undefined') {
+    setOutput(pipelineResult);
   }
 
-  // Cleanup streaming sinks and capture adapter output
-  const finalizedStreaming = streamingManager.finalizeResults();
-  env.setStreamingResult(finalizedStreaming.streaming);
-
-  // When using format adapter, use the accumulated formatted text from the adapter
-  // instead of the raw command output
-  if (hasStreamFormat && finalizedStreaming.streaming?.text) {
-    outputText = finalizedStreaming.streaming.text;
-    // Update outputValue to match the formatted text
-    setOutput(outputText);
+  const streamingResult = finalizeRunStreamingLifecycle({
+    env,
+    streamingManager,
+    hasStreamFormat: Boolean(hasStreamFormat)
+  });
+  if (streamingResult.formattedText) {
+    setOutput(streamingResult.formattedText);
   }
 
-  // Output directives always end with a newline for display
-  let displayText = outputText;
-  if (!displayText.endsWith('\n')) {
-    displayText += '\n';
-  }
-  outputText = displayText;
-
-  // Only add output nodes for non-embedded directives
-  if (!directive.meta?.isDataValue && !directive.meta?.isEmbedded) {
-    // Create replacement text node with the output
-    const replacementNode: TextNode = {
-      type: 'Text',
-      nodeId: `${directive.nodeId}-output`,
-      content: displayText
-    };
-
-    // Add the replacement node to environment
-    env.addNode(replacementNode);
-  }
-
-  // Emit effect only for top-level run directives (not data/RHS contexts)
-  // Skip emission when using format adapter (adapter already emitted during streaming)
-  // Also skip if the output is empty (only whitespace) to avoid blank lines
-  const shouldEmitFinalOutput = !hasStreamFormat || !streamingEnabled;
-  const hasActualOutput = displayText.trim().length > 0;
-  if (hasActualOutput && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef && shouldEmitFinalOutput) {
-    const materializedEffect = materializeDisplayValue(
-      outputValue,
-      undefined,
-      outputValue,
-      displayText
-    );
-    const effectText = materializedEffect.text;
-    if (materializedEffect.descriptor) {
-      env.recordSecurityDescriptor(materializedEffect.descriptor);
-    }
-    env.emitEffect('both', effectText);
-  }
+  const outputLifecycle = finalizeRunOutputLifecycle({
+    directive,
+    env,
+    outputValue,
+    outputText,
+    hasStreamFormat: Boolean(hasStreamFormat),
+    streamingEnabled
+  });
+  outputText = outputLifecycle.displayText;
 
   // Return the output value
   return {
