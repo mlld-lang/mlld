@@ -31,3 +31,8 @@ export interface PipelineCommandExecutionContextFactory {
     workingDirectory?: string
   ): CommandExecutionContext;
 }
+
+export interface ExecuteOptions {
+  returnStructured?: boolean;
+  stream?: boolean;
+}

@@ -18,10 +18,9 @@ import {
 } from '../../utils/structured-value';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import type { CommandExecutionContext } from '../../env/ErrorUtils';
-import { StreamBus, type StreamEvent } from './stream-bus';
-import type { StreamingOptions } from './streaming-options';
+import type { StreamEvent } from './stream-bus';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
-import type { PipelineCommandExecutionContextFactory, StageExecutionResult } from './executor/types';
+import type { ExecuteOptions, PipelineCommandExecutionContextFactory, StageExecutionResult } from './executor/types';
 import {
   cloneStructuredValue,
   previewValue,
@@ -36,11 +35,10 @@ import { PipelineInlineStageExecutor } from './executor/inline-stage-executor';
 import { PipelineWhileStageAdapter } from './executor/while-stage-adapter';
 import { PipelineSingleStageRunner } from './executor/single-stage-runner';
 import { PipelineParallelStageRunner } from './executor/parallel-stage-runner';
+import { PipelineExecutionLoopRunner } from './executor/execution-loop-runner';
+import { PipelineStreamingLifecycle } from './executor/streaming-lifecycle';
 
-export interface ExecuteOptions {
-  returnStructured?: boolean;
-  stream?: boolean;
-}
+export type { ExecuteOptions } from './executor/types';
 
 let pipelineCounter = 0;
 
@@ -78,13 +76,11 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
   private readonly whileStageAdapter: PipelineWhileStageAdapter;
   private readonly singleStageRunner: PipelineSingleStageRunner;
   private readonly parallelStageRunner: PipelineParallelStageRunner;
+  private readonly executionLoopRunner: PipelineExecutionLoopRunner;
+  private readonly streamingLifecycle: PipelineStreamingLifecycle;
   private readonly debugStructured = process.env.MLLD_DEBUG_STRUCTURED === 'true';
   private stageHookNodeCounter = 0;
-  private streamingOptions: StreamingOptions;
   private pipelineId: string = createPipelineId();
-  private bus: StreamBus;
-  private streamingManager: StreamingManager;
-  private streamingEnabled: boolean;
   createCommandExecutionContext(
     stageIndex: number,
     stageContext: StageContext,
@@ -92,10 +88,9 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
     directiveType?: string,
     workingDirectory?: string
   ): CommandExecutionContext {
-    const stageStreaming = this.isStageStreaming(this.pipeline[stageIndex]);
     return {
       directiveType: directiveType || 'run',
-      streamingEnabled: this.streamingEnabled && stageStreaming,
+      streamingEnabled: this.streamingLifecycle.isStageExecutionStreaming(this.pipeline[stageIndex]),
       pipelineId: this.pipelineId,
       stageIndex,
       parallelIndex,
@@ -140,50 +135,23 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
     this.whileStageAdapter = new PipelineWhileStageAdapter();
     this.singleStageRunner = new PipelineSingleStageRunner(this as any);
     this.parallelStageRunner = new PipelineParallelStageRunner(this as any);
+    this.executionLoopRunner = new PipelineExecutionLoopRunner(this as any);
     this.format = format;
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
     this.hasSyntheticSource = hasSyntheticSource;
     this.parallelCap = parallelCap;
     this.delayMs = delayMs;
-    this.streamingOptions = env.getStreamingOptions();
-    this.streamingEnabled = this.streamingOptions.enabled !== false && this.pipelineHasStreamingStage(pipeline);
-    this.streamingManager = streamingManager ?? env.getStreamingManager();
-    this.bus = this.streamingManager.getBus();
-    if (this.streamingEnabled && !this.streamingOptions.skipDefaultSinks) {
-      this.streamingManager.configure({
-        env: this.env,
-        streamingEnabled: true,
-        streamingOptions: this.streamingOptions
-      });
-    }
-  }
-
-  private emitStream(event: Omit<StreamEvent, 'timestamp' | 'pipelineId'> & { timestamp?: number; pipelineId?: string }): void {
-    if (!this.streamingEnabled) {
-      return;
-    }
-    this.bus.emit({
-      ...event,
-      pipelineId: event.pipelineId || this.pipelineId,
-      timestamp: event.timestamp ?? Date.now()
-    } as StreamEvent);
-  }
-
-  private isStageStreaming(stage: PipelineStageEntry | PipelineStageEntry[]): boolean {
-    if (Array.isArray(stage)) {
-      return stage.some(st => this.isStageStreaming(st));
-    }
-    const candidate = stage as any;
-    return Boolean(
-      candidate?.stream ||
-      candidate?.withClause?.stream ||
-      candidate?.meta?.withClause?.stream
+    this.streamingLifecycle = new PipelineStreamingLifecycle(
+      pipeline,
+      env,
+      this.pipelineId,
+      streamingManager
     );
   }
 
-  private pipelineHasStreamingStage(pipeline: PipelineStage[]): boolean {
-    return pipeline.some(stage => this.isStageStreaming(stage));
+  private emitStream(event: Omit<StreamEvent, 'timestamp' | 'pipelineId'> & { timestamp?: number; pipelineId?: string }): void {
+    this.streamingLifecycle.emit(event);
   }
 
   /**
@@ -196,163 +164,19 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
   async execute(initialInput: string | StructuredValue): Promise<string>;
   async execute(initialInput: string | StructuredValue, options: { returnStructured: true }): Promise<StructuredValue>;
   async execute(initialInput: string | StructuredValue, options?: ExecuteOptions): Promise<string | StructuredValue> {
-    this.env.resetPipelineGuardHistory();
     try {
-      const initialWrapper = isStructuredValue(initialInput)
-        ? cloneStructuredValue(initialInput)
-        : wrapStructured(initialInput, 'text', typeof initialInput === 'string' ? initialInput : safeJSONStringify(initialInput));
-      this.outputProcessor.applySourceDescriptor(initialWrapper, initialInput);
-
-      // Store initial input for synthetic source stage
-      this.initialInputText = initialWrapper.text;
-      this.stageOutputs.initialize(initialWrapper);
-      const initialStructured = this.stageOutputs.getInitialOutput();
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[PipelineExecutor] Pipeline start:', {
-          stages: this.pipeline.map(p => Array.isArray(p) ? '[parallel]' : p.rawIdentifier),
-          hasSyntheticSource: this.hasSyntheticSource,
-          isRetryable: this.isRetryable
-        });
-      }
-      this.emitStream({ type: 'PIPELINE_START', source: 'pipeline' });
-      
-      // Start the pipeline
-      let nextStep = this.stateMachine.transition({
-        type: 'START',
-        input: this.initialInputText,
-        structuredInput: initialStructured ? cloneStructuredValue(initialStructured) : undefined
-      });
-      let iteration = 0;
-
-      // Process steps until complete
-      while (nextStep.type === 'EXECUTE_STAGE') {
-        iteration++;
-        
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error(`[PipelineExecutor] Iteration ${iteration}:`, {
-            stage: nextStep.stage,
-            stageId: this.pipeline[nextStep.stage]?.rawIdentifier,
-            contextAttempt: nextStep.context.contextAttempt
-          });
-        }
-
-        // Clear cached outputs for this stage and downstream when retrying to avoid stale inputs
-        this.stageOutputs.clearFrom(nextStep.stage);
-        
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[PipelineExecutor] Execute stage:', {
-            stage: nextStep.stage,
-            contextId: nextStep.context.contextId,
-            contextAttempt: nextStep.context.contextAttempt,
-            inputLength: nextStep.input?.length,
-            commandId: this.pipeline[nextStep.stage]?.rawIdentifier
-          });
-        }
-        this.emitStream({
-          type: 'STAGE_START',
-          stageIndex: nextStep.stage,
-          command: this.pipeline[nextStep.stage],
-          contextId: nextStep.context.contextId,
-          attempt: nextStep.context.contextAttempt
-        });
-        const stageStartTime = Date.now();
-
-        const stageEntry = this.pipeline[nextStep.stage];
-        const result = Array.isArray(stageEntry)
-          ? await this.executeParallelStage(nextStep.stage, stageEntry, nextStep.input, nextStep.context)
-          : await this.executeSingleStage(nextStep.stage, stageEntry, nextStep.input, nextStep.context);
-        
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[PipelineExecutor] Stage result:', {
-            resultType: result.type,
-            isRetry: result.type === 'retry'
-          });
-        }
-        if (result.type === 'success') {
-          const stageEntry = this.pipeline[nextStep.stage];
-          this.emitStream({
-            type: 'STAGE_SUCCESS',
-            stageIndex: nextStep.stage,
-            durationMs: Date.now() - stageStartTime
-          });
-        } else if (result.type === 'error') {
-          this.emitStream({
-            type: 'STAGE_FAILURE',
-            stageIndex: nextStep.stage,
-            error: result.error
-          });
-        }
-        
-        // Let state machine decide next step
-        nextStep = this.stateMachine.transition({ 
-          type: 'STAGE_RESULT', 
-          result 
-        });
-        
-        // Update retry history
-        this.allRetryHistory = this.stateMachine.getAllRetryHistory();
-        
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[PipelineExecutor] Next step:', {
-            type: nextStep.type,
-            nextStage: nextStep.type === 'EXECUTE_STAGE' ? nextStep.stage : undefined
-          });
-        }
-        
-        // Safety check for infinite loops
-        if (iteration > 100) {
-          throw new Error('Pipeline exceeded 100 iterations');
-        }
-      }
-      
-      // Handle final state
-      switch (nextStep.type) {
-        case 'COMPLETE':
-          this.emitStream({ type: 'PIPELINE_COMPLETE' });
-          if (options?.returnStructured) {
-            return this.stageOutputs.getFinal();
-          }
-          return nextStep.output;
-        
-        case 'ERROR':
-          this.emitStream({ type: 'PIPELINE_ABORT', reason: nextStep.error.message });
-          throw new MlldCommandExecutionError(
-            `Pipeline failed at stage ${nextStep.stage + 1}: ${nextStep.error.message}`,
-            undefined,
-            {
-              command: this.pipeline[nextStep.stage]?.rawIdentifier || 'unknown',
-              exitCode: 1,
-              duration: 0,
-              workingDirectory: this.env.getExecutionDirectory()
-            }
-          );
-        
-        case 'ABORT':
-          this.emitStream({ type: 'PIPELINE_ABORT', reason: nextStep.reason || 'aborted' });
-          throw new MlldCommandExecutionError(
-            `Pipeline aborted: ${nextStep.reason}`,
-            undefined,
-            {
-              command: 'pipeline',
-              exitCode: 1,
-              duration: 0,
-              workingDirectory: this.env.getExecutionDirectory()
-            }
-          );
-        
-        default:
-          throw new Error('Pipeline ended in unexpected state');
-      }
+      return await this.executionLoopRunner.execute(initialInput, options);
     } finally {
-      if (this.streamingEnabled && !this.streamingOptions.skipDefaultSinks) {
-        try {
-          this.streamingManager.teardown();
-        } catch {
-          // ignore teardown errors
-        }
-      }
+      this.streamingLifecycle.teardown();
     }
+  }
+
+  private setInitialInputText(value: string): void {
+    this.initialInputText = value;
+  }
+
+  private setAllRetryHistory(history: Map<string, StructuredValue[]>): void {
+    this.allRetryHistory = history;
   }
 
   /**
@@ -502,7 +326,7 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
       metadata: {
         stageIndex: stageIndex + 1,
         totalStages: stageContext.totalStages,
-        streaming: this.streamingEnabled
+        streaming: this.streamingLifecycle.isEnabled()
       }
     };
   }

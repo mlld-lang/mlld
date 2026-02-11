@@ -311,4 +311,63 @@ describe('pipeline executor phase-0 characterization', () => {
       'PIPELINE_ABORT'
     ]);
   });
+
+  it('emits pipeline abort event ordering when state machine aborts after a retry signal', async () => {
+    const env = createEnv();
+    const stage = createSyntheticStage('__identity__', { stream: true });
+    const executor = new PipelineExecutor([stage], env);
+    const events: Array<{ type: string }> = [];
+    const unsubscribe = env.getStreamingBus().subscribe(event => events.push(event as { type: string }));
+
+    const stateMachine = (executor as any).stateMachine;
+    vi.spyOn(stateMachine, 'transition')
+      .mockReturnValueOnce({
+        type: 'EXECUTE_STAGE',
+        stage: 0,
+        input: 'seed',
+        context: createStageContext({ contextId: 'abort-ctx' })
+      })
+      .mockReturnValueOnce({
+        type: 'ABORT',
+        reason: 'aborted-by-test'
+      });
+    vi.spyOn(executor as any, 'executeSingleStage').mockResolvedValue({
+      type: 'retry',
+      reason: 'retry requested'
+    });
+
+    try {
+      await expect(executor.execute('seed')).rejects.toThrow('Pipeline aborted: aborted-by-test');
+    } finally {
+      unsubscribe();
+    }
+
+    expect(events.map(event => event.type)).toEqual([
+      'PIPELINE_START',
+      'STAGE_START',
+      'PIPELINE_ABORT'
+    ]);
+  });
+
+  it('tears down streaming manager in finally even when execution fails', async () => {
+    const env = createEnv();
+    const stage = createSyntheticStage('__identity__', { stream: true });
+    const teardown = vi.fn(() => {
+      throw new Error('teardown failure should be swallowed');
+    });
+    const streamingManager = {
+      getBus: () => env.getStreamingBus(),
+      configure: vi.fn(),
+      teardown
+    } as any;
+    const executor = new PipelineExecutor([stage], env, undefined, false, undefined, false, undefined, undefined, streamingManager);
+
+    vi.spyOn(executor as any, 'executeSingleStage').mockResolvedValue({
+      type: 'error',
+      error: new Error('boom')
+    });
+
+    await expect(executor.execute('seed')).rejects.toThrow('Pipeline failed at stage 1: boom');
+    expect(teardown).toHaveBeenCalledTimes(1);
+  });
 });
