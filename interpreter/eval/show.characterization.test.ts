@@ -318,6 +318,36 @@ describe('evaluateShow (characterization)', () => {
     expect(asText(addResult.value)).toBe('a | b');
   });
 
+  it('keeps showForeachSection rendering behavior stable', async () => {
+    await fileSystem.writeFile('/project/a.md', '# Intro\n\n## Details\nA body\n');
+    await fileSystem.writeFile('/project/b.md', '# Intro\n\n## Details\nB body\n');
+    const setupDirectives = parseDirectives('/var @docs = [{ path: "a.md" }, { path: "b.md" }]');
+    await evaluateSetupDirectives(setupDirectives, env);
+
+    const showForeachSectionDirective = createShowDirective('showForeachSection', {
+      foreach: {
+        type: 'foreach-section',
+        value: {
+          arrayVariable: 'docs',
+          pathField: 'path',
+          section: [textNode('Details')],
+          template: {
+            values: {
+              content: [textNode('### Entry')]
+            }
+          }
+        }
+      }
+    });
+
+    const result = await evaluateShow(showForeachSectionDirective, env);
+    const rendered = asText(result.value);
+    expect(rendered).toContain('A body');
+    expect(rendered).toContain('B body');
+    expect(rendered.match(/### Entry/g)?.length || 0).toBe(2);
+    expect(rendered).toContain('\n\n');
+  });
+
   it('keeps showLoadContent behavior stable for section rename flow', async () => {
     await fileSystem.writeFile('/project/doc.md', '# Intro\n\n## Details\nbody line\n');
     const [showDirective] = parseDirectives('/show <doc.md # Details> as "### Renamed"');

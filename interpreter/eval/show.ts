@@ -6,8 +6,6 @@ import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { JSONFormatter } from '../core/json-formatter';
 import type { DataLabel } from '@core/types/security';
-import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
-import { convertEntriesToProperties } from '../utils/object-compat';
 import { logger } from '@core/utils/logger';
 import {
   asText,
@@ -23,6 +21,10 @@ import {
   evaluateShowInvocation
 } from './show/show-invocation-handlers';
 import {
+  evaluateShowForeach,
+  evaluateShowForeachSection
+} from './show/show-foreach-handlers';
+import {
   buildShowResultDescriptor,
   emitShowEffectIfNeeded,
   enforceShowPolicyIfNeeded,
@@ -32,36 +34,6 @@ import {
   wrapShowResult
 } from './show/shared-helpers';
 import { applyHeaderTransform, extractSection } from './show/section-utils';
-
-/**
- * Extract withClause from foreach expression AST format.
- * Handles two AST patterns:
- * 1. Direct `with` property from batch pipeline syntax: `foreach @fn(@arr) => | @sort with {separator: ", "}`
- *    In this case, foreachExpression.with already contains {separator: ", "} as direct properties.
- * 2. Nested `execInvocation.withClause` from simple foreach syntax: `foreach @arr with {separator: " | "}`
- *    In this case, withClause is an array of inlineValue objects that need conversion.
- */
-function extractForeachWithClause(foreachExpression: any): Record<string, any> | undefined {
-  // First check for direct 'with' property (batch pipeline syntax)
-  if (foreachExpression?.with && typeof foreachExpression.with === 'object') {
-    return foreachExpression.with;
-  }
-
-  // Then check for execInvocation.withClause (simple foreach syntax)
-  const withClause = foreachExpression?.execInvocation?.withClause;
-  if (!withClause || !Array.isArray(withClause) || withClause.length === 0) {
-    return undefined;
-  }
-
-  // withClause is array of inlineValue objects, each with value.entries
-  const inlineValue = withClause[0];
-  if (inlineValue?.type !== 'inlineValue' || inlineValue?.value?.type !== 'object') {
-    return undefined;
-  }
-
-  // Convert entries [{type:'pair', key:'separator', value:' | '}] to {separator: ' | '}
-  return convertEntriesToProperties(inlineValue.value.entries);
-}
 
 /**
  * Evaluate /show directives.
@@ -153,22 +125,8 @@ export async function evaluateShow(
     resultValue = templateInvocationResult.resultValue;
     
   } else if (directive.subtype === 'addForeach') {
-    // Handle foreach expressions for direct output
-    const foreachExpression = directive.values?.foreach;
-    if (!foreachExpression) {
-      throw new Error('Add foreach directive missing foreach expression');
-    }
-    
-    // Parse options from with clause if present
-    const options = parseForeachOptions(extractForeachWithClause(foreachExpression));
-
-    // For @add, we want each result on its own line without the heavy separator
-    if (!options.separator) {
-      options.separator = '\n';
-    }
-    
-    // Evaluate foreach and format as text
-    content = await evaluateForeachAsText(foreachExpression, env, options);
+    const foreachResult = await evaluateShowForeach(directive, env);
+    content = foreachResult.content;
     
   } else if (directive.subtype === 'addExecInvocation' || directive.subtype === 'showExecInvocation') {
     const execInvocationResult = await evaluateShowExecInvocation({
@@ -183,42 +141,12 @@ export async function evaluateShow(
     }
     
   } else if (directive.subtype === 'showForeach') {
-    // Handle foreach expressions for direct output
-    const foreachExpression = directive.values?.foreach;
-    if (!foreachExpression) {
-      throw new Error('Show foreach directive missing foreach expression');
-    }
-    
-    // Parse options from with clause if present
-    const options = parseForeachOptions(extractForeachWithClause(foreachExpression));
-
-    // For @show, we want each result on its own line without the heavy separator
-    if (!options.separator) {
-      options.separator = '\n';
-    }
-    
-    // Evaluate foreach and format as text
-    content = await evaluateForeachAsText(foreachExpression, env, options);
+    const foreachResult = await evaluateShowForeach(directive, env);
+    content = foreachResult.content;
     
   } else if (directive.subtype === 'showForeachSection') {
-    // Handle foreach section expressions: @add foreach [@array.field # section] as ::template::
-    const foreachExpression = directive.values?.foreach;
-    if (!foreachExpression) {
-      throw new Error('Add foreach section directive missing foreach expression');
-    }
-    
-    // Evaluate foreach section expression
-    const { ForeachSectionEvaluator } = await import('./data-values/ForeachSectionEvaluator');
-    const { evaluateDataValue } = await import('./data-value-evaluator');
-    const foreachSectionEvaluator = new ForeachSectionEvaluator(evaluateDataValue);
-    const result = await foreachSectionEvaluator.evaluate(foreachExpression, env);
-    
-    // Convert result to string content - should be an array of results
-    if (Array.isArray(result)) {
-      content = result.join('\n\n');
-    } else {
-      content = String(result);
-    }
+    const foreachSectionResult = await evaluateShowForeachSection(directive, env);
+    content = foreachSectionResult.content;
     
   } else if (directive.subtype === 'showLoadContent') {
     const loadContentResult = await evaluateShowLoadContent({
