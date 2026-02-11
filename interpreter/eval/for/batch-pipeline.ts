@@ -10,6 +10,7 @@ import {
   isStructuredValue
 } from '@interpreter/utils/structured-value';
 import type { ForIterationError } from './types';
+import { createForIterationError } from './error-reporting';
 
 export type ForBatchPipelineResult = {
   finalResults: unknown;
@@ -72,15 +73,14 @@ export async function applyForExpressionBatchPipeline(params: {
       hadBatchPipeline: true
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.warn(`Batch pipeline failed for for-expression: ${message}`);
-    params.errors.push({
+    const marker = createForIterationError({
       index: -1,
       key: null,
-      message,
-      error: message,
+      error,
       value: params.results
     });
+    logger.warn(`Batch pipeline failed for for-expression: ${marker.message}`);
+    params.errors.push(marker);
     return {
       finalResults: params.results,
       hadBatchPipeline: true

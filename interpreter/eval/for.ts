@@ -10,12 +10,8 @@ import { MlldDirectiveError } from '@core/errors';
 import { toIterable } from './for-utils';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 import { createArrayVariable, createObjectVariable, createPrimitiveVariable, createSimpleTextVariable } from '@core/types/variable';
-import { isVariable, extractVariableValue } from '../utils/variable-resolution';
-import { logger } from '@core/utils/logger';
-import { DebugUtils } from '../env/DebugUtils';
 import {
   asData,
-  asText,
   isStructuredValue,
   extractSecurityDescriptor
 } from '../utils/structured-value';
@@ -28,6 +24,11 @@ import { executeDirectiveActions } from './for/directive-action-runner';
 import { evaluateForExpressionIteration } from './for/expression-runner';
 import { applyForExpressionBatchPipeline } from './for/batch-pipeline';
 import {
+  createForIterationError,
+  publishForErrorsContext,
+  recordParallelExpressionIterationError
+} from './for/error-reporting';
+import {
   assertKeyVariableHasNoFields,
   formatFieldPath
 } from './for/binding-utils';
@@ -38,30 +39,6 @@ import {
   setupIterationContext
 } from './for/iteration-runner';
 import type { ForIterationError } from './for/types';
-
-function formatIterationError(error: unknown): string {
-  if (error instanceof Error) {
-    let message = error.message;
-    // Strip directive wrapper noise for user-facing markers
-    if (message.startsWith('Directive error (')) {
-      const prefixEnd = message.indexOf(': ');
-      if (prefixEnd >= 0) {
-        message = message.slice(prefixEnd + 2);
-      }
-      const lineIndex = message.indexOf(' at line ');
-      if (lineIndex >= 0) {
-        message = message.slice(0, lineIndex);
-      }
-    }
-    return message;
-  }
-  if (typeof error === 'string') return error;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
 
 function extractControlKind(value: unknown): 'done' | 'continue' | null {
   const v = isStructuredValue(value) ? asData(value) : value;
@@ -78,16 +55,6 @@ function extractControlKind(value: unknown): 'done' | 'continue' | null {
   return null;
 }
 
-function resetForErrorsContext(env: Environment, errors: ForIterationError[]): void {
-  const mxManager = env.getContextManager?.();
-  if (!mxManager) return;
-  while (mxManager.popGenericContext('for')) {
-    // clear previous loop context
-  }
-  mxManager.pushGenericContext('for', { errors, timestamp: Date.now() });
-  mxManager.setLatestErrors(errors);
-}
-
 export async function evaluateForDirective(
   directive: ForDirective,
   env: Environment
@@ -99,9 +66,6 @@ export async function evaluateForDirective(
   const keyVarName = keyNode?.identifier;
   const varFields = varNode.fields;
   const fieldPathString = formatFieldPath(varFields);
-  
-  // Debug support
-  const debugEnabled = process.env.DEBUG_FOR === '1' || process.env.DEBUG_FOR === 'true' || process.env.MLLD_DEBUG === 'true';
 
   // Trace support
   env.pushDirective('/for', `@${varName} in ...`, directive.location);
@@ -140,7 +104,7 @@ export async function evaluateForDirective(
     const iterableArray = Array.from(iterable);
     const forErrors = effective?.parallel ? ([] as ForIterationError[]) : null;
     if (forErrors) {
-      resetForErrorsContext(env, forErrors);
+      publishForErrorsContext(env, forErrors);
     }
 
     const runOne = async (entry: [any, any], idx: number) => {
@@ -174,13 +138,12 @@ export async function evaluateForDirective(
       } catch (err: any) {
         popForIterationContext(childEnv);
         if (forErrors) {
-          forErrors.push({
+          forErrors.push(createForIterationError({
             index: idx,
             key: key ?? null,
-            message: formatIterationError(err),
-            error: formatIterationError(err),
+            error: err,
             value
-          });
+          }));
           return;
         }
         throw err;
@@ -272,7 +235,7 @@ export async function evaluateForExpression(
   const inherited = (env as any).__forOptions as ForParallelOptions | undefined;
   const effective = await resolveParallelOptions(specified ?? inherited, env, expr.location);
   if (effective?.parallel) {
-    resetForErrorsContext(env, errors);
+    publishForErrorsContext(env, errors);
   }
 
   const iterableArray = Array.from(iterable);
@@ -319,17 +282,15 @@ export async function evaluateForExpression(
       if (!effective?.parallel) {
         throw error;
       }
-      const message = formatIterationError(error);
-      logger.warn(`for parallel iteration ${idx} error: ${message}`);
-      env.emitEffect('stderr', `  \u26a0 for iteration ${idx} error: ${message}\n`, { source: expr.location });
-      const marker: ForIterationError = {
+      const marker = recordParallelExpressionIterationError({
+        env,
+        errors,
         index: idx,
         key: key ?? null,
-        message,
-        error: message,
-        value
-      };
-      errors.push(marker);
+        error,
+        value,
+        sourceLocation: expr.location
+      });
       return marker as any;
     }
   };
