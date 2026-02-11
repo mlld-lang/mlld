@@ -165,7 +165,7 @@ describe('Parallel Pipeline - Runtime Behavior', () => {
     const input = `
 /exe @left(input) = \`L:@input\`
 /exe @right(input) = \`R:@input\`
-/var @out = "x" | || @right | @left
+/var @out = "x" | || @right || @left
 /show @out`;
 
     await expect(
