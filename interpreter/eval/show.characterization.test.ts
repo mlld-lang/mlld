@@ -181,6 +181,14 @@ describe('evaluateShow (characterization)', () => {
     expect(asText(showPathSectionResult.value)).toContain('### Summary');
     expect(asText(showPathSectionResult.value)).toContain('payload line');
     expect(asText(showPathSectionResult.value)).not.toContain('## Tail');
+
+    const levelOnlyRenameDirective = createShowDirective('showPathSection', {
+      sectionTitle: [textNode('Details')],
+      path: [textNode('readme.md')],
+      newTitle: [textNode('###')]
+    });
+    const levelOnlyRenameResult = await evaluateShow(levelOnlyRenameDirective, env);
+    expect(asText(levelOnlyRenameResult.value)).toContain('### Details');
   });
 
   it('keeps showInvocation and addInvocation execution behavior stable', async () => {
@@ -291,6 +299,18 @@ describe('evaluateShow (characterization)', () => {
     const result = await evaluateShow(toShowDirective(showDirective), env);
     expect(asText(result.value)).toContain('## Details');
     expect(asText(result.value)).toContain('body line');
+  });
+
+  it('keeps showTemplate pipeline behavior stable', async () => {
+    const [pipelineSourceDirective] = parseDirectives('/show @msg | @upper');
+    const pipeline = (pipelineSourceDirective as any).values.invocation.withClause.pipeline;
+    const showTemplateDirective = createShowDirective('showTemplate', {
+      content: [textNode('body line')],
+      pipeline
+    });
+
+    const result = await evaluateShow(showTemplateDirective, env);
+    expect(asText(result.value)).toBe('BODY LINE');
   });
 
   it('keeps showCommand and showCode execution paths stable', async () => {

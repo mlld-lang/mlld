@@ -8,43 +8,25 @@ import { interpolate } from '../core/interpreter';
 import { JSONFormatter } from '../core/json-formatter';
 import { formatForDisplay } from '../utils/display-formatter';
 import type { DataLabel } from '@core/types/security';
-// Remove old type imports - we'll use only the new ones
 import {
   isTextLike,
   isExecutable as isExecutableVar,
-  isSimpleText,
-  isInterpolatedText,
-  isFileContent,
-  isSectionContent,
   isObject,
   isArray,
-  isComputed,
-  isCommandResult,
-  isPipelineInput,
-  isImported,
-  isPath,
-  isExecutable,
-  isTemplate,
-  isStructured,
-  isPrimitive,
-  isStructuredValueVariable,
   createSimpleTextVariable
 } from '@core/types/variable';
-import { llmxmlInstance } from '../utils/llmxml-instance';
-import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { convertEntriesToProperties } from '../utils/object-compat';
 import { logger } from '@core/utils/logger';
-import { MlldSecurityError } from '@core/errors';
 import {
   asText,
-  assertStructuredValue,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
-import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 // Template normalization now handled in grammar - no longer needed here
 import { resolveDirectiveExecInvocation } from './directive-replay';
 import { evaluateShowVariable } from './show/show-variable';
+import { evaluateShowPath, evaluateShowPathSection } from './show/show-path-handlers';
+import { evaluateShowLoadContent, evaluateShowTemplate } from './show/show-template-load-handlers';
 import {
   buildShowResultDescriptor,
   emitShowEffectIfNeeded,
@@ -54,6 +36,7 @@ import {
   ShowDescriptorCollector,
   wrapShowResult
 } from './show/shared-helpers';
+import { applyHeaderTransform, extractSection } from './show/section-utils';
 
 /**
  * Extract withClause from foreach expression AST format.
@@ -133,158 +116,27 @@ export async function evaluateShow(
       skipJsonFormatting = true;
     }
   } else if (directive.subtype === 'showPath') {
-    // Handle path inclusion (whole file)
-    const pathValue = directive.values?.path;
-    if (!pathValue) {
-      throw new Error('Add path directive missing path');
-    }
-    
-    // Handle both string paths (URLs) and node arrays
-    let resolvedPath: string;
-    if (typeof pathValue === 'string') {
-      // Direct string path (typically URLs)
-      resolvedPath = pathValue;
-    } else if (Array.isArray(pathValue)) {
-      // Array of path nodes
-      resolvedPath = await interpolate(pathValue, env, undefined, {
-        collectSecurityDescriptor: collectInterpolatedDescriptor
-      });
-    } else {
-      throw new Error('Invalid path type in add directive');
-    }
-    
-    if (!resolvedPath) {
-      throw new Error('Add path directive resolved to empty path');
-    }
-    
-    // Read the file content or fetch URL when path is remote
-    if (env.isURL(resolvedPath)) {
-      content = await env.fetchURL(resolvedPath);
-    } else {
-      content = await readFileWithPolicy(env, resolvedPath, directiveLocation ?? undefined);
-    }
+    content = await evaluateShowPath({
+      directive,
+      env,
+      directiveLocation,
+      collectInterpolatedDescriptor
+    });
     
   } else if (directive.subtype === 'showPathSection') {
-    // Handle section extraction: @add "Section Title" from [file.md]
-    const sectionTitleNodes = directive.values?.sectionTitle;
-    const pathValue = directive.values?.path;
-    
-    if (!sectionTitleNodes || !pathValue) {
-      throw new Error('Add section directive missing section title or path');
-    }
-    
-    // Get the section title
-    const sectionTitle = await interpolate(sectionTitleNodes, env, undefined, {
-      collectSecurityDescriptor: collectInterpolatedDescriptor
+    content = await evaluateShowPathSection({
+      directive,
+      env,
+      directiveLocation,
+      collectInterpolatedDescriptor
     });
-    
-    // Handle both string paths (URLs) and node arrays
-    let resolvedPath: string;
-    if (typeof pathValue === 'string') {
-      // Direct string path (typically URLs)
-      resolvedPath = pathValue;
-    } else if (Array.isArray(pathValue)) {
-      // Array of path nodes
-      resolvedPath = await interpolate(pathValue, env, undefined, {
-        collectSecurityDescriptor: collectInterpolatedDescriptor
-      });
-    } else {
-      throw new Error('Invalid path type in add section directive');
-    }
-    
-    // Read the file content or fetch URL when path is remote
-    let fileContent: string;
-    if (env.isURL(resolvedPath)) {
-      fileContent = await env.fetchURL(resolvedPath);
-    } else {
-      fileContent = await readFileWithPolicy(env, resolvedPath, directiveLocation ?? undefined);
-    }
-    
-    // Extract the section using llmxml
-    try {
-      // getSection expects just the title without the # prefix
-      const titleWithoutHash = sectionTitle.replace(/^#+\s*/, '');
-      content = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
-        includeNested: true
-      });
-      // Just trim trailing whitespace
-      content = content.trimEnd();
-    } catch (error) {
-      // Fallback to basic extraction if llmxml fails
-      content = extractSection(fileContent, sectionTitle);
-    }
-    
-    // Handle rename if newTitle is specified
-    const newTitleNodes = directive.values?.newTitle;
-    if (newTitleNodes) {
-      const newTitle = await interpolate(newTitleNodes, env, undefined, {
-        collectSecurityDescriptor: collectInterpolatedDescriptor
-      });
-      // Replace the original section title with the new one
-      const lines = content.split('\n');
-      if (lines.length > 0 && lines[0].match(/^#+\s/)) {
-        // Handle three cases:
-        // 1. Just header level: "###" -> change level only
-        // 2. No header level: "Name" -> keep original level, replace text
-        // 3. Full replacement: "### Name" -> replace entire line
-        
-        const newTitleTrimmed = newTitle.trim();
-        const newHeadingMatch = newTitleTrimmed.match(/^(#+)(\s+(.*))?$/);
-        
-        if (newHeadingMatch) {
-          // Case 1: Just header level (e.g., "###")
-          if (!newHeadingMatch[3]) {
-            const originalText = lines[0].replace(/^#+\s*/, '');
-            lines[0] = `${newHeadingMatch[1]} ${originalText}`;
-          } 
-          // Case 3: Full replacement (e.g., "### Name")
-          else {
-            lines[0] = newTitleTrimmed;
-          }
-        } else {
-          // Case 2: No header level (e.g., "Name")
-          const originalLevel = lines[0].match(/^(#+)\s/)?.[1] || '#';
-          lines[0] = `${originalLevel} ${newTitleTrimmed}`;
-        }
-        
-        content = lines.join('\n');
-      } else {
-        // If no heading found, prepend the new title
-        content = newTitle + '\n' + content;
-      }
-    }
     
   } else if (directive.subtype === 'showTemplate') {
-    // Handle template
-    const templateNodes = directive.values?.content;
-    if (!templateNodes) {
-      throw new Error('Add template directive missing content');
-    }
-    
-    
-    // Interpolate the template
-    content = await interpolate(templateNodes, env, undefined, {
-      collectSecurityDescriptor: collectInterpolatedDescriptor
+    content = await evaluateShowTemplate({
+      directive,
+      env,
+      collectInterpolatedDescriptor
     });
-    
-    // Handle pipeline if present
-    if (directive.values?.pipeline) {
-      const { executePipeline } = await import('./pipeline');
-      content = await executePipeline(content, directive.values.pipeline, env);
-    }
-    
-    // Template normalization is now handled in the grammar at parse time
-    
-    // Handle section extraction if specified
-    const sectionNodes = directive.values?.section;
-    if (sectionNodes && Array.isArray(sectionNodes)) {
-      const section = await interpolate(sectionNodes, env, undefined, {
-        collectSecurityDescriptor: collectInterpolatedDescriptor
-      });
-      if (section) {
-        content = extractSection(content, section);
-      }
-    }
     
   } else if (directive.subtype === 'addInvocation' || directive.subtype === 'showInvocation') {
     // Handle unified invocation - could be template or exec
@@ -565,40 +417,13 @@ export async function evaluateShow(
     }
     
   } else if (directive.subtype === 'showLoadContent') {
-    // Handle load content expressions: <file.md> or <file.md # Section>
-    const loadContentNode = directive.values?.loadContent;
-    if (!loadContentNode) {
-      throw new Error('Show load content directive missing content loader');
-    }
-    
-    // Use the content loader to process the node
-    const { processContentLoader } = await import('./content-loader');
-    const loadResult = await processContentLoader(loadContentNode, env);
-
-    // Handle different return types from processContentLoader
-    if (isStructuredValue(loadResult)) {
-      resultValue = loadResult;
-      content = asText(loadResult);
-    } else if (typeof loadResult === 'string') {
-      // Backward compatibility - plain string
-      content = loadResult;
-      resultValue = loadResult;
-    } else {
-      try {
-        content = String(loadResult ?? '');
-      } catch {
-        content = '';
-      }
-    }
-    
-    // Handle rename if newTitle is specified (for section extraction)
-    const newTitleNodes = directive.values?.newTitle;
-    if (newTitleNodes && loadContentNode.options?.section) {
-      const newTitle = await interpolate(newTitleNodes, env, undefined, {
-        collectSecurityDescriptor: collectInterpolatedDescriptor
-      });
-      content = applyHeaderTransform(content, newTitle);
-    }
+    const loadContentResult = await evaluateShowLoadContent({
+      directive,
+      env,
+      collectInterpolatedDescriptor
+    });
+    content = loadContentResult.content;
+    resultValue = loadContentResult.resultValue;
     
   } else if (directive.subtype === 'showCommand') {
     // Handle command execution for display: /show {echo "test"}
@@ -797,86 +622,8 @@ export async function evaluateShow(
   return { value: wrapped, env };
 }
 
-/**
- * Apply header transformation to content
- * Supports three cases:
- * 1. Just header level: "###" -> change level only
- * 2. Just text: "New Title" -> keep original level, replace text
- * 3. Full header: "### New Title" -> replace entire line
- */
-export function applyHeaderTransform(content: string, newHeader: string): string {
-  const lines = content.split('\n');
-  if (lines.length === 0) return newHeader;
-  
-  // Check if first line is a markdown header
-  if (lines[0].match(/^#+\s/)) {
-    const newHeaderTrimmed = newHeader.trim();
-    const headerMatch = newHeaderTrimmed.match(/^(#+)(\s+(.*))?$/);
-    
-    if (headerMatch) {
-      if (!headerMatch[3]) {
-        // Case 1: Just header level
-        const originalText = lines[0].replace(/^#+\s*/, '');
-        lines[0] = `${headerMatch[1]} ${originalText}`;
-      } else {
-        // Case 3: Full replacement
-        lines[0] = newHeaderTrimmed;
-      }
-    } else {
-      // Case 2: Just text, preserve original level
-      const originalLevel = lines[0].match(/^(#+)\s/)?.[1] || '#';
-      lines[0] = `${originalLevel} ${newHeaderTrimmed}`;
-    }
-  } else {
-    // No header found, prepend the new header
-    lines.unshift(newHeader);
-  }
-  
-  return lines.join('\n');
-}
+export { applyHeaderTransform, extractSection };
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Extract a section from markdown content.
- */
-export function extractSection(content: string, sectionName: string): string {
-  const lines = content.split('\\n');
-  const normalizedName = sectionName.replace(/^#+\\s*/, '').trim();
-  const escapedName = escapeRegExp(normalizedName);
-  const sectionRegex = new RegExp(`^#{1,6}\\s+${escapedName}\\s*$`, 'i');
-  
-  let inSection = false;
-  let sectionLevel = 0;
-  const sectionLines: string[] = [];
-  
-  for (const line of lines) {
-    const lineForMatch = line.trimEnd();
-    // Check if this line starts our section
-    if (!inSection && sectionRegex.test(lineForMatch)) {
-      inSection = true;
-      sectionLevel = lineForMatch.match(/^#+/)?.[0].length || 0;
-      sectionLines.push(lineForMatch);
-      continue;
-    }
-    
-    // If we're in the section
-    if (inSection) {
-      // Check if we've hit another header at the same or higher level
-      const headerMatch = lineForMatch.match(/^(#{1,6})\\s+/);
-      if (headerMatch && headerMatch[1].length <= sectionLevel) {
-        // We've left the section
-        break;
-      }
-      
-      sectionLines.push(lineForMatch);
-    }
-  }
-  
-  return sectionLines.join('\\n').trim();
-}
 function getExtractedVariable(
   context: EvaluationContext | undefined,
   name: string
