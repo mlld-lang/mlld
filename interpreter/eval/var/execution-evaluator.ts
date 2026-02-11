@@ -4,8 +4,13 @@ import type { Variable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { Environment } from '@interpreter/env/Environment';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isExeReturnControl } from '../exe-return';
+import {
+  enforceToolSubset,
+  isPlainObject,
+  normalizeToolScopeValue,
+  resolveWithClauseToolsValue
+} from './tool-scope';
 
 export interface ExecutionDescriptorState {
   descriptorFromVariable: (variable?: Variable) => SecurityDescriptor | undefined;
@@ -36,10 +41,6 @@ export interface ExecutionEvaluator {
   ) => Promise<ExecutionEvaluationResult | undefined>;
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
 export function isExecutionValueNode(valueNode: unknown): boolean {
   if (!valueNode || typeof valueNode !== 'object' || !('type' in valueNode)) {
     return false;
@@ -60,84 +61,6 @@ export function isExecutionValueNode(valueNode: unknown): boolean {
     || node.type === 'foreach'
     || node.type === 'foreach-command'
     || node.type === 'NewExpression';
-}
-
-async function resolveWithClauseToolsValue(
-  toolsValue: unknown,
-  env: Environment,
-  context?: EvaluationContext
-): Promise<unknown> {
-  if (!toolsValue || typeof toolsValue !== 'object' || !('type' in (toolsValue as any))) {
-    return toolsValue;
-  }
-
-  const { evaluate } = await import('@interpreter/core/interpreter');
-  const result = await evaluate(toolsValue as any, env, { ...(context ?? {}), isExpression: true });
-  let value = result.value;
-
-  const { extractVariableValue, isVariable } = await import('@interpreter/utils/variable-resolution');
-  if (isVariable(value)) {
-    value = await extractVariableValue(value, env);
-  }
-  if (isStructuredValue(value)) {
-    value = asData(value);
-  }
-
-  return value;
-}
-
-type ToolScopeValue = {
-  tools: string[];
-  hasTools: boolean;
-  isWildcard: boolean;
-};
-
-function normalizeToolScopeValue(value: unknown): ToolScopeValue {
-  if (value === undefined) {
-    return { tools: [], hasTools: false, isWildcard: false };
-  }
-  if (value === null) {
-    throw new Error('tools must be an array or object.');
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return { tools: [], hasTools: true, isWildcard: false };
-    }
-    if (trimmed === '*') {
-      return { tools: [], hasTools: false, isWildcard: true };
-    }
-    const tools = trimmed
-      .split(',')
-      .map(part => part.trim())
-      .filter(Boolean);
-    return { tools, hasTools: true, isWildcard: false };
-  }
-  if (Array.isArray(value)) {
-    const tools: string[] = [];
-    for (const entry of value) {
-      if (typeof entry !== 'string') {
-        throw new Error('tools entries must be strings.');
-      }
-      const trimmed = entry.trim();
-      if (trimmed.length > 0) {
-        tools.push(trimmed);
-      }
-    }
-    return { tools, hasTools: true, isWildcard: false };
-  }
-  if (isPlainObject(value)) {
-    return { tools: Object.keys(value), hasTools: true, isWildcard: false };
-  }
-  throw new Error('tools must be an array or object.');
-}
-
-function enforceToolSubset(baseTools: string[], childTools: string[]): void {
-  const baseSet = new Set(baseTools);
-  const invalid = childTools.filter(tool => !baseSet.has(tool));
-  if (invalid.length > 0) {
-    throw new Error(`Tool scope cannot add tools outside parent: ${invalid.join(', ')}`);
-  }
 }
 
 export function createExecutionEvaluator(
