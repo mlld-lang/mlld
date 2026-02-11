@@ -461,6 +461,44 @@ describe('exe evaluator characterization', () => {
     expect(Number(value)).toBe(6);
   });
 
+  it('keeps async shadow wrapper behavior stable for template executables', async () => {
+    const env = createEnvironment();
+
+    await evaluateExe(
+      createDirective('greet', 'exeTemplate', {
+        template: [createText('Hello '), createVarRef('name')],
+        params: [createVarRef('name')]
+      }),
+      env
+    );
+
+    const envDirective = {
+      type: 'Directive',
+      kind: 'exe',
+      subtype: 'environment',
+      nodeId: 'exe-env-js-template',
+      values: {
+        identifier: [createVarRef('js')],
+        environment: [createVarRef('greet')]
+      },
+      raw: {},
+      meta: {},
+      location: {
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 1, offset: 0 }
+      }
+    } as DirectiveNode;
+
+    await evaluateExe(envDirective, env);
+
+    const shadowEnv = env.getShadowEnv('js');
+    const wrapper = shadowEnv?.get('greet');
+    expect(typeof wrapper).toBe('function');
+
+    const value = await wrapper?.('Ada');
+    expect(value).toBe('Hello Ada');
+  });
+
   it('keeps cross-function capture stable across declarations in a shared JS shadow environment', async () => {
     const env = createEnvironment();
 
