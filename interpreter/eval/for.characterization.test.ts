@@ -80,6 +80,32 @@ describe('for evaluator characterization', () => {
     expect(await requireValue(env, 'sizes')).toEqual([10, 20]);
   });
 
+  it('attaches object-iteration keys to @item.mx.key', async () => {
+    const env = await interpretWithEnv(`
+/var @items = {
+  "first": { "value": 1 },
+  "second": { "value": 2 }
+}
+/var @keys = for @item in @items => @item.mx.key
+`);
+
+    expect(await requireValue(env, 'keys')).toEqual(['first', 'second']);
+  });
+
+  it('preserves file metadata for file-like object values during iteration binding', async () => {
+    const env = await interpretWithEnv(`
+/var @files = [
+  { "content": "alpha", "filename": "a.md", "relative": "docs/a.md", "absolute": "/repo/docs/a.md" },
+  { "content": "beta", "filename": "b.md", "relative": "docs/b.md", "absolute": "/repo/docs/b.md" }
+]
+/var @relativePaths = for @file in @files => @file.mx.relative
+/var @dirNames = for @file in @files => @file.mx.dirname
+`);
+
+    expect(await requireValue(env, 'relativePaths')).toEqual(['docs/a.md', 'docs/b.md']);
+    expect(await requireValue(env, 'dirNames')).toEqual(['docs', 'docs']);
+  });
+
   it('includes iteration key context when dotted field access fails', async () => {
     const { fileSystem, pathService: runtimePathService } = createRuntime();
     const input = `
