@@ -82,7 +82,6 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Zone 8: Runtime configuration for streaming, URL options, ephemeral mode, and local modules.
 - Zone 9: Diagnostics and tracing (directive trace, collected errors, source cache).
 - Zone 10: Path context and path-related property accessors.
-- `DiagnosticsRuntime`: collected-error rendering, directive trace timing/events, and source-cache access.
 
 ### Variable Model and Resolution
 
