@@ -42,8 +42,6 @@ import {
   resolveEnvironmentAuthSecrets
 } from '@interpreter/env/environment-provider';
 import {
-  dedentCommonIndent,
-  extractRawTextContent,
   mergeAuthUsing,
   resolveRunCodeOpType
 } from './run-modules/run-pure-helpers';
@@ -58,6 +56,7 @@ import {
   enforceRunCommandPolicy
 } from './run-modules/run-policy-context';
 import { executeRunCommand } from './run-modules/run-command-executor';
+import { executeRunCode } from './run-modules/run-code-executor';
 
 /**
  * Evaluate @run directives.
@@ -253,107 +252,17 @@ export async function evaluateRun(
     setOutput(commandResult.value);
     
   } else if (directive.subtype === 'runCode') {
-    // Handle code execution
-    const codeNodes = directive.values?.code;
-    if (!codeNodes) {
-      throw new Error('Run code directive missing code');
-    }
-    
-    // Verbatim code (no interpolation) with dedent to avoid top-level indent issues
-    const code = dedentCommonIndent(extractRawTextContent(codeNodes));
-    const workingDirectory = await resolveWorkingDirectory(
-      (directive.values as any)?.workingDir,
+    const codeResult = await executeRunCode({
+      directive,
       env,
-      { sourceLocation: directive.location, directiveType: 'run' }
-    );
-    
-    // Handle arguments passed to code blocks (e.g., /run js (@var1, @var2) {...})
-    const args = directive.values?.args || [];
-    const argDescriptors: SecurityDescriptor[] = [];
-    const argValues: Record<string, any> =
-      args.length === 0
-        ? {}
-        : await AutoUnwrapManager.executeWithPreservation(async () => {
-            const extracted: Record<string, any> = {};
-            for (let i = 0; i < args.length; i++) {
-              const arg = args[i];
-
-              if (arg && typeof arg === 'object' && arg.type === 'VariableReference') {
-                // This is a variable reference like @myVar
-                const varName = arg.identifier;
-                const variable = env.getVariable(varName);
-                if (!variable) {
-                  throw new Error(`Variable not found: ${varName}`);
-                }
-                if (variable.mx) {
-                  argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
-                }
-
-                // Extract the variable value
-                const { extractVariableValue } = await import('../utils/variable-resolution');
-                const value = await extractVariableValue(variable, env);
-
-                // Auto-unwrap LoadContentResult objects
-                const unwrappedValue = AutoUnwrapManager.unwrap(value);
-
-                // The parameter name in the code will be the variable name without @
-                extracted[varName] = unwrappedValue;
-              } else if (typeof arg === 'string') {
-                // Simple string argument - shouldn't happen with current grammar
-                // but handle it just in case
-                extracted[`arg${i}`] = arg;
-              }
-            }
-            return extracted;
-          });
-    
-    // Execute the code (default to JavaScript) with context for errors
-    const language = (directive.meta?.language as string) || 'javascript';
-    const opType = resolveRunCodeOpType(language);
-    let opLabels: string[] = [];
-    if (opType) {
-      const opUpdate = buildRunCapabilityOperationUpdate(opType, {
-        includeSubtype: true,
-        includeSources: true
-      });
-      applyRunOperationContext(env, context, opUpdate);
-      opLabels = (opUpdate.opLabels ?? []) as string[];
-    }
-    if (opType) {
-      enforceRunCapabilityPolicy(
-        env.getPolicySummary(),
-        opType,
-        env,
-        directive.location ?? undefined
-      );
-    }
-    const inputDescriptor =
-      argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
-    const inputTaint = checkRunInputLabelFlow({
-      descriptor: inputDescriptor,
+      context,
+      executionContext,
+      streamingEnabled,
+      pipelineId,
       policyEnforcer,
-      policyChecksEnabled: policyChecksEnabled && Boolean(opType),
-      opLabels,
-      exeLabels: Array.from(env.getEnclosingExeLabels()),
-      flowChannel: 'arg',
-      env,
-      sourceLocation: directive.location ?? undefined
+      policyChecksEnabled
     });
-    setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
-      return await env.executeCode(
-        code,
-        language,
-        argValues,
-        undefined,
-        workingDirectory ? { workingDirectory } : undefined,
-        {
-          ...executionContext,
-          streamingEnabled,
-          pipelineId,
-          workingDirectory
-        }
-      );
-    }));
+    setOutput(codeResult.value);
     
   } else if (directive.subtype === 'runExec') {
     // Handle exec reference with field access support

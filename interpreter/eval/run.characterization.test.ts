@@ -289,6 +289,43 @@ describe('evaluateRun phase-0 characterization', () => {
     expect(asText(result.value)).toBe('ok');
   });
 
+  it('keeps runCode policy denial behavior stable', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/var @policyConfig = {',
+        '  capabilities: {',
+        '    deny: ["js"]',
+        '  }',
+        '}',
+        '/policy @p = union(@policyConfig)',
+        '/run js { return 1 }'
+      ].join('\n'),
+      env
+    );
+
+    const executeCodeSpy = vi.spyOn(env, 'executeCode').mockResolvedValue('should-not-run');
+
+    await expect(evaluateRun(runDirective, env)).rejects.toThrow('JavaScript access denied by policy');
+    expect(executeCodeSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps runCode primitive argument fallback behavior stable', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun('/run js { return arg0; }', env);
+    (runDirective.values as any).args = ['fallback-literal'];
+
+    const executeCodeSpy = vi
+      .spyOn(env, 'executeCode')
+      .mockImplementation(async (_code, _language, params) => String((params as any).arg0 ?? ''));
+
+    const result = await evaluateRun(runDirective, env);
+
+    expect(executeCodeSpy).toHaveBeenCalled();
+    expect(executeCodeSpy.mock.calls[0][2]).toEqual(expect.objectContaining({ arg0: 'fallback-literal' }));
+    expect(asText(result.value)).toBe('fallback-literal');
+  });
+
   it('keeps runExec builtin-transformer invocation behavior stable for field-access variants', async () => {
     const env = createEnv();
     const runDirective = await setupSingleRun('/run @json.strict("{\"count\":2}")', env);
