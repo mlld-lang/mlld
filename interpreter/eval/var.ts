@@ -4,7 +4,6 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { logger } from '@core/utils/logger';
-import { applyHeaderTransform } from './show';
 import {
   Variable,
   VariableSource,
@@ -31,7 +30,6 @@ import { createCapabilityContext, type SecurityDescriptor } from '@core/types/se
 import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
-import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { maybeAutosignVariable } from './auto-sign';
 import { isExeReturnControl } from './exe-return';
 import { createVarAssignmentContext } from './var/assignment-context';
@@ -47,6 +45,7 @@ import {
   hasComplexArrayItems,
   hasComplexValues
 } from './var/collection-evaluator';
+import { createRhsContentEvaluator } from './var/rhs-content';
 
 export { extractDescriptorsFromDataAst };
 
@@ -154,6 +153,11 @@ export async function prepareVarAssignment(
     mergePipelineDescriptor,
     mergeResolvedDescriptor
   } = descriptorState;
+  const rhsContentEvaluator = createRhsContentEvaluator(env, {
+    interpolateWithSecurity,
+    sourceLocation,
+    withClause: directive.values?.withClause
+  });
 
   const finalizeVariable = (variable: Variable): Variable => {
     const resolvedSecurityDescriptor = descriptorState.getResolvedDescriptor();
@@ -228,22 +232,7 @@ export async function prepareVarAssignment(
   const templateAst: any = null; // Store AST for templates that need lazy interpolation
   
   if (valueNode && typeof valueNode === 'object' && valueNode.type === 'FileReference') {
-    const { processContentLoader } = await import('./content-loader');
-    const { accessField } = await import('../utils/field-access');
-    const loadContentNode = {
-      type: 'load-content' as const,
-      source: valueNode.source,
-      options: valueNode.options,
-      pipes: valueNode.pipes
-    };
-    const rawResult = await processContentLoader(loadContentNode as any, env);
-    let structuredResult = isStructuredValue(rawResult) ? rawResult : wrapLoadContentValue(rawResult);
-    if (valueNode.fields && valueNode.fields.length > 0) {
-      for (const field of valueNode.fields) {
-        structuredResult = await accessField(structuredResult, field, { env });
-      }
-    }
-    resolvedValue = structuredResult;
+    resolvedValue = await rhsContentEvaluator.evaluateFileReference(valueNode);
     
   // Check for primitive values first (numbers, booleans, null)
   } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
@@ -318,67 +307,13 @@ export async function prepareVarAssignment(
     }
     
   } else if (valueNode.type === 'section') {
-    // Section extraction: [file.md # Section]
-    const filePath = await interpolateWithSecurity(valueNode.path);
-    const sectionName = await interpolateWithSecurity(valueNode.section);
-    
-    // Read file and extract section
-    const fileContent = await readFileWithPolicy(env, filePath, sourceLocation ?? undefined);
-    const { llmxmlInstance } = await import('../utils/llmxml-instance');
-    
-    try {
-      resolvedValue = await llmxmlInstance.getSection(fileContent, sectionName, {
-        includeNested: true,
-        includeTitle: true
-      });
-    } catch (error) {
-      // Fallback to basic extraction
-      resolvedValue = extractSection(fileContent, sectionName);
-    }
-    
-    // Check if we have an asSection modifier in the withClause
-    if (directive.values?.withClause?.asSection) {
-      const newHeader = await interpolateWithSecurity(directive.values.withClause.asSection);
-      resolvedValue = applyHeaderTransform(resolvedValue, newHeader);
-    }
+    resolvedValue = await rhsContentEvaluator.evaluateSection(valueNode);
     
   } else if (valueNode.type === 'load-content') {
-    // Content loader: <file.md> or <file.md # Section>
-    const { processContentLoader } = await import('./content-loader');
-    
-    // Pass the withClause to the content loader if it has asSection
-    if (directive.values?.withClause?.asSection) {
-      if (!valueNode.options) {
-        valueNode.options = {};
-      }
-
-      // Check if this is a glob pattern - use transform instead of section.renamed
-      const isGlob = valueNode.source?.raw?.includes('*') || valueNode.source?.raw?.includes('?');
-
-      if (isGlob) {
-        // For globs, use options.transform which content-loader expects for array transforms
-        valueNode.options.transform = {
-          type: 'template',
-          parts: directive.values.withClause.asSection
-        };
-      } else {
-        // For single files with sections, use options.section.renamed
-        if (!valueNode.options.section) {
-          valueNode.options.section = {};
-        }
-        valueNode.options.section.renamed = {
-          type: 'rename-template',
-          parts: directive.values.withClause.asSection
-        };
-      }
-    }
-    
-    resolvedValue = await processContentLoader(valueNode, env);
+    resolvedValue = await rhsContentEvaluator.evaluateLoadContent(valueNode);
     
   } else if (valueNode.type === 'path') {
-    // Path dereference: [README.md]
-    const filePath = await interpolateWithSecurity(valueNode.segments);
-    resolvedValue = await readFileWithPolicy(env, filePath, sourceLocation ?? undefined);
+    resolvedValue = await rhsContentEvaluator.evaluatePath(valueNode);
     
   } else if (valueNode.type === 'code') {
     // Code execution: run js { ... } or js { ... }
@@ -1533,35 +1468,4 @@ function normalizeStringArray(
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-/**
- * Basic section extraction fallback
- */
-function extractSection(content: string, sectionName: string): string {
-  const lines = content.split('\n');
-  const sectionRegex = new RegExp(`^#+\\s+${sectionName}\\s*$`, 'i');
-  
-  let inSection = false;
-  let sectionLevel = 0;
-  const sectionLines: string[] = [];
-  
-  for (const line of lines) {
-    if (!inSection && sectionRegex.test(line)) {
-      inSection = true;
-      sectionLevel = line.match(/^#+/)?.[0].length || 0;
-      sectionLines.push(line); // Include the header
-      continue;
-    }
-    
-    if (inSection) {
-      const headerMatch = line.match(/^(#+)\\s+/);
-      if (headerMatch && headerMatch[1].length <= sectionLevel) {
-        break;
-      }
-      sectionLines.push(line);
-    }
-  }
-  
-  return sectionLines.join('\n').trim();
 }
