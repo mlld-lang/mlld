@@ -5,37 +5,28 @@ import type { OperationContext, PipelineContextSnapshot } from '../../env/Contex
 import type { StructuredValue } from '../../utils/structured-value';
 import type { SecurityDescriptor, DataLabel } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
-import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
-import { evaluateCommandAccess } from '@core/policy/guards';
+import { getOperationLabels } from '@core/policy/operation-labels';
 
 // Import pipeline implementation
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
 import { createStageEnvironment } from './context-builder';
 import { GuardError } from '@core/errors/GuardError';
-import { MlldCommandExecutionError, MlldSecurityError } from '@core/errors';
+import { MlldCommandExecutionError } from '@core/errors';
 import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
 import { logger } from '@core/utils/logger';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 import {
-  asData,
   isStructuredValue,
-  wrapStructured,
-  extractSecurityDescriptor,
-  applySecurityDescriptorToStructuredValue
+  wrapStructured
 } from '../../utils/structured-value';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
-import { setExpressionProvenance } from '../../utils/expression-provenance';
 import type { CommandExecutionContext } from '../../env/ErrorUtils';
-import { InterpolationContext } from '../../core/interpolation-context';
 import { StreamBus, type StreamEvent } from './stream-bus';
 import type { StreamingOptions } from './streaming-options';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
-import { resolveWorkingDirectory } from '../../utils/working-directory';
 import { evaluateWhileStage } from '../while';
-import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
-import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
-import type { ParallelStageError, RetrySignal, StageExecutionResult } from './executor/types';
+import type { ParallelStageError, PipelineCommandExecutionContextFactory, RetrySignal, StageExecutionResult } from './executor/types';
 import {
   cloneStructuredValue,
   extractStageValue,
@@ -50,6 +41,8 @@ import { PipelineOutputProcessor } from './executor/output-processor';
 import { StageOutputCache } from './executor/stage-output-cache';
 import { PipelineCommandArgumentBinder } from './executor/command-argument-binder';
 import { PipelineCommandInvoker } from './executor/command-invoker';
+import { PipelineInlineStageExecutor } from './executor/inline-stage-executor';
+import { PipelineWhileStageAdapter } from './executor/while-stage-adapter';
 
 export interface ExecuteOptions {
   returnStructured?: boolean;
@@ -71,7 +64,7 @@ function createPipelineId(): string {
  * WHY: Drive stage execution using the state machine and construct proper stage environments.
  * CONTEXT: Re-runs inline effects per retry; empty output is treated as early termination.
  */
-export class PipelineExecutor {
+export class PipelineExecutor implements PipelineCommandExecutionContextFactory {
   private stateMachine: PipelineStateMachine;
   private env: Environment;
   private format?: string;
@@ -88,6 +81,8 @@ export class PipelineExecutor {
   private stageOutputs = new StageOutputCache();
   private outputProcessor: PipelineOutputProcessor;
   private readonly commandInvoker: PipelineCommandInvoker;
+  private readonly inlineStageExecutor: PipelineInlineStageExecutor;
+  private readonly whileStageAdapter: PipelineWhileStageAdapter;
   private readonly debugStructured = process.env.MLLD_DEBUG_STRUCTURED === 'true';
   private stageHookNodeCounter = 0;
   private streamingOptions: StreamingOptions;
@@ -95,7 +90,7 @@ export class PipelineExecutor {
   private bus: StreamBus;
   private streamingManager: StreamingManager;
   private streamingEnabled: boolean;
-  private buildCommandExecutionContext(
+  createCommandExecutionContext(
     stageIndex: number,
     stageContext: StageContext,
     parallelIndex?: number,
@@ -146,6 +141,8 @@ export class PipelineExecutor {
     this.outputProcessor = new PipelineOutputProcessor(env);
     const argumentBinder = new PipelineCommandArgumentBinder();
     this.commandInvoker = new PipelineCommandInvoker(env, argumentBinder);
+    this.inlineStageExecutor = new PipelineInlineStageExecutor(env, this.outputProcessor);
+    this.whileStageAdapter = new PipelineWhileStageAdapter();
     this.format = format;
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
@@ -448,12 +445,11 @@ export class PipelineExecutor {
                 structuredInput,
                 stageEnv!,
                 async (processor, stateValue, iterEnv) => {
-                  const processorCommand = this.buildWhileProcessorCommand(processor);
-                  const normalizedState = this.normalizeWhileInput(stateValue);
+                  const adaptation = this.whileStageAdapter.adaptProcessor(processor, stateValue);
                   const execution = await this.executeCommand(
-                    processorCommand,
-                    normalizedState.text,
-                    normalizedState.structured,
+                    adaptation.command,
+                    adaptation.input.text,
+                    adaptation.input.structured,
                     iterEnv,
                     stageOpContext,
                     stageHookNode,
@@ -470,21 +466,21 @@ export class PipelineExecutor {
               break;
             }
             if ((command as InlineValueStage).type === 'inlineValue') {
-              stageExecution = await this.executeInlineValueStage(
+              stageExecution = await this.inlineStageExecutor.executeInlineValueStage(
                 command as InlineValueStage,
                 structuredInput,
                 stageEnv!
               );
             } else if ((command as InlineCommandStage).type === 'inlineCommand') {
-              stageExecution = await this.executeInlineCommandStage(
-                command as InlineCommandStage,
+              stageExecution = await this.inlineStageExecutor.executeInlineCommandStage({
+                stage: command as InlineCommandStage,
                 structuredInput,
-                stageEnv!,
-                stageOpContext,
-                stageHookNode,
+                stageEnv: stageEnv!,
+                operationContext: stageOpContext,
                 stageIndex,
-                context
-              );
+                stageContext: context,
+                contextFactory: this
+              });
             } else {
               stageExecution = await this.executeCommand(
                 command as PipelineCommand,
@@ -688,212 +684,10 @@ export class PipelineExecutor {
         operationContext,
         stageInputs: [structuredInput],
         executionContext: stageContext && typeof stageIndex === 'number'
-          ? this.buildCommandExecutionContext(stageIndex, stageContext, parallelIndex, command.rawIdentifier)
+          ? this.createCommandExecutionContext(stageIndex, stageContext, parallelIndex, command.rawIdentifier)
           : undefined
       }
     });
-  }
-
-  private async executeInlineCommandStage(
-    stage: InlineCommandStage,
-    structuredInput: StructuredValue,
-    stageEnv: Environment,
-    operationContext: OperationContext | undefined,
-    hookNode: ExecInvocation | undefined,
-    stageIndex: number,
-    stageContext: StageContext,
-    parallelIndex?: number
-  ): Promise<StageExecutionResult> {
-    const mxManager = stageEnv.getContextManager();
-    const runInline = async (): Promise<StageExecutionResult> => {
-      const { interpolate } = await import('../../core/interpreter');
-      const descriptors: SecurityDescriptor[] = [];
-      const workingDirectory = await resolveWorkingDirectory(stage.workingDir as any, stageEnv, {
-        sourceLocation: stage.location,
-        directiveType: 'run'
-      });
-      const commandText = await interpolate(stage.command, stageEnv, InterpolationContext.ShellCommand, {
-        collectSecurityDescriptor: d => {
-          if (d) descriptors.push(d);
-        }
-      });
-      const parsedCommand = parseCommand(commandText);
-      const opLabels = getOperationLabels({
-        type: 'cmd',
-        command: parsedCommand.command,
-        subcommand: parsedCommand.subcommand
-      });
-      if (operationContext) {
-        operationContext.command = commandText;
-        operationContext.opLabels = opLabels;
-        const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
-        metadata.commandPreview = commandText;
-        operationContext.metadata = metadata;
-      }
-      stageEnv.updateOpContext({ command: commandText, opLabels });
-      const policySummary = stageEnv.getPolicySummary();
-      if (policySummary) {
-        const decision = evaluateCommandAccess(policySummary, commandText);
-        if (!decision.allowed) {
-          throw new MlldSecurityError(
-            decision.reason ?? `Command '${decision.commandName}' denied by policy`,
-            {
-              code: 'POLICY_CAPABILITY_DENIED',
-              sourceLocation: stage.location,
-              env: stageEnv
-            }
-          );
-        }
-      }
-      const commandDescriptor =
-        descriptors.length > 1 ? stageEnv.mergeSecurityDescriptors(...descriptors) : descriptors[0];
-      const stdinDescriptor = extractSecurityDescriptor(structuredInput, {
-        recursive: true,
-        mergeArrayElements: true
-      });
-      const inputDescriptor =
-        commandDescriptor && stdinDescriptor
-          ? stageEnv.mergeSecurityDescriptors(commandDescriptor, stdinDescriptor)
-          : commandDescriptor ?? stdinDescriptor;
-      const inputTaint = descriptorToInputTaint(inputDescriptor);
-      if (inputTaint.length > 0) {
-        const policyEnforcer = new PolicyEnforcer(stageEnv.getPolicySummary());
-        policyEnforcer.checkLabelFlow(
-          {
-            inputTaint,
-            opLabels,
-            exeLabels: Array.from(stageEnv.getEnclosingExeLabels()),
-            flowChannel: 'stdin',
-            command: parsedCommand.command
-          },
-          { env: stageEnv, sourceLocation: stage.location }
-        );
-      }
-      const stdinInput = structuredInput?.text ?? '';
-      const result = await stageEnv.executeCommand(
-        commandText,
-        { input: stdinInput, ...(workingDirectory ? { workingDirectory } : {}) },
-        this.buildCommandExecutionContext(stageIndex, stageContext, parallelIndex, undefined, workingDirectory)
-      );
-      const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
-      const normalizedResult = processCommandOutput(result);
-      const labelDescriptor =
-        descriptors.length > 1 ? stageEnv.mergeSecurityDescriptors(...descriptors) : descriptors[0];
-      return { result: normalizedResult, labelDescriptor };
-    };
-    if (mxManager && operationContext) {
-      return await mxManager.withOperation(operationContext, runInline);
-    }
-    return await runInline();
-  }
-
-  private async executeInlineValueStage(
-    stage: InlineValueStage,
-    stageInput: StructuredValue,
-    stageEnv: Environment
-  ): Promise<StageExecutionResult> {
-    const { evaluateDataValue } = await import('../data-value-evaluator');
-    const value = await evaluateDataValue(stage.value, stageEnv);
-    const text = safeJSONStringify(value);
-    const wrapped = wrapStructured(value, 'object', text);
-    const descriptor = extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true });
-    if (descriptor) {
-      applySecurityDescriptorToStructuredValue(wrapped, descriptor);
-      setExpressionProvenance(wrapped, descriptor);
-    }
-    const mergedDescriptor =
-      descriptor && stageEnv ? stageEnv.mergeSecurityDescriptors(descriptor) : descriptor;
-    return {
-      result: this.outputProcessor.finalizeStageOutput(wrapped, stageInput, value, mergedDescriptor),
-      labelDescriptor: mergedDescriptor
-    };
-  }
-
-  private normalizeWhileInput(value: StructuredValue | unknown): { structured: StructuredValue; text: string } {
-    if (isStructuredValue(value)) {
-      const textValue = value.text ?? safeJSONStringify(asData(value));
-      return { structured: value, text: textValue };
-    }
-
-    const textValue = typeof value === 'string' ? value : safeJSONStringify(value);
-    const kind: StructuredValue['type'] =
-      Array.isArray(value) ? 'array' : typeof value === 'object' && value !== null ? 'object' : 'text';
-    const structured = wrapStructured(value as any, kind, textValue);
-    return { structured, text: textValue };
-  }
-
-  private buildWhileProcessorCommand(processor: any): PipelineCommand {
-    if (processor?.type === 'ExecInvocation') {
-      const ref = processor.commandRef || {};
-      const identifier = Array.isArray(ref.identifier)
-        ? ref.identifier
-        : ref.identifier
-          ? [ref.identifier]
-          : [];
-      const rawIdentifier =
-        ref.name ||
-        (Array.isArray(ref.identifier)
-          ? ref.identifier.map((id: any) => id.identifier || id.content || '').find(Boolean)
-          : ref.identifier) ||
-        'while-processor';
-      const rawArgs = (ref.args || []).map((arg: any) => {
-        if (arg && typeof arg === 'object') {
-          if ('content' in arg && typeof (arg as any).content === 'string') {
-            return (arg as any).content;
-          }
-          if ((arg as any).identifier) {
-            return `@${(arg as any).identifier}`;
-          }
-        }
-        return '';
-      });
-      const command: PipelineCommand & { stream?: boolean } = {
-        identifier,
-        args: ref.args || [],
-        fields: ref.fields || [],
-        rawIdentifier,
-        rawArgs,
-        meta: {}
-      };
-      if (processor.withClause && processor.withClause.stream !== undefined) {
-        command.stream = processor.withClause.stream;
-      }
-      return command;
-    }
-
-    if (processor?.type === 'VariableReferenceWithTail') {
-      const variable = (processor as any).variable || processor;
-      const rawIdentifier = variable?.identifier || 'while-processor';
-      return {
-        identifier: variable ? [variable] : [],
-        args: [],
-        fields: variable?.fields || [],
-        rawIdentifier,
-        rawArgs: []
-      };
-    }
-
-    if (processor?.type === 'VariableReference') {
-      return {
-        identifier: [processor],
-        args: [],
-        fields: processor.fields || [],
-        rawIdentifier: processor.identifier || 'while-processor',
-        rawArgs: []
-      };
-    }
-
-    const fallbackId =
-      (processor && typeof processor === 'object' && 'identifier' in processor && (processor as any).identifier) ||
-      (processor && typeof processor === 'object' && 'rawIdentifier' in processor && (processor as any).rawIdentifier) ||
-      'while-processor';
-    return {
-      identifier: [],
-      args: [],
-      fields: [],
-      rawIdentifier: fallbackId as string,
-      rawArgs: []
-    };
   }
 
   private isRetrySignal(output: any): boolean {
@@ -1006,18 +800,18 @@ export class PipelineExecutor {
             try {
               const stageExecution =
                 (cmd as InlineValueStage).type === 'inlineValue'
-                  ? await this.executeInlineValueStage(cmd as InlineValueStage, branchInput, subEnv)
+                  ? await this.inlineStageExecutor.executeInlineValueStage(cmd as InlineValueStage, branchInput, subEnv)
                   : (cmd as InlineCommandStage).type === 'inlineCommand'
-                    ? await this.executeInlineCommandStage(
-                        cmd as InlineCommandStage,
-                        branchInput,
-                        subEnv,
-                        branchOpContext,
-                        branchHookNode,
+                    ? await this.inlineStageExecutor.executeInlineCommandStage({
+                        stage: cmd as InlineCommandStage,
+                        structuredInput: branchInput,
+                        stageEnv: subEnv,
+                        operationContext: branchOpContext,
                         stageIndex,
-                        context,
+                        stageContext: context,
+                        contextFactory: this,
                         parallelIndex
-                      )
+                      })
                     : await this.executeCommand(
                         cmd as PipelineCommand,
                         input,

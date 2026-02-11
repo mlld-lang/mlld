@@ -1,5 +1,7 @@
 import type { SecurityDescriptor } from '@core/types/security';
 import type { StructuredValue } from '@interpreter/utils/structured-value';
+import type { CommandExecutionContext } from '@interpreter/env/ErrorUtils';
+import type { StageContext } from '@interpreter/eval/pipeline/state-machine';
 
 export interface RetrySignal {
   value: 'retry';
@@ -18,4 +20,14 @@ export interface ParallelStageError {
   message: string;
   error: string;
   value?: unknown;
+}
+
+export interface PipelineCommandExecutionContextFactory {
+  createCommandExecutionContext(
+    stageIndex: number,
+    stageContext: StageContext,
+    parallelIndex?: number,
+    directiveType?: string,
+    workingDirectory?: string
+  ): CommandExecutionContext;
 }
