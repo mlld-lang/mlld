@@ -301,6 +301,105 @@ describe('exe evaluator characterization', () => {
     expect(Number(value)).toBe(6);
   });
 
+  it('keeps cross-function capture stable across declarations in a shared JS shadow environment', async () => {
+    const env = createEnvironment();
+
+    await evaluateExe(
+      createDirective(
+        'double',
+        'exeCode',
+        {
+          code: [createText('x * 2')],
+          params: [createVarRef('x')]
+        },
+        { language: 'js', parameterCount: 1 }
+      ),
+      env
+    );
+
+    await evaluateExe(
+      createDirective(
+        'plusOneAfterDouble',
+        'exeCode',
+        {
+          code: [createText('double(x) + 1')],
+          params: [createVarRef('x')]
+        },
+        { language: 'js', parameterCount: 1 }
+      ),
+      env
+    );
+
+    const envDirective = {
+      type: 'Directive',
+      kind: 'exe',
+      subtype: 'environment',
+      nodeId: 'exe-env-js-shared',
+      values: {
+        identifier: [createVarRef('js')],
+        environment: [createVarRef('double'), createVarRef('plusOneAfterDouble')]
+      },
+      raw: {},
+      meta: {},
+      location: {
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 1, offset: 0 }
+      }
+    } as DirectiveNode;
+
+    await evaluateExe(envDirective, env);
+
+    const shadowEnv = env.getShadowEnv('js');
+    expect(shadowEnv?.has('double')).toBe(true);
+    expect(shadowEnv?.has('plusOneAfterDouble')).toBe(true);
+
+    const composed = shadowEnv?.get('plusOneAfterDouble');
+    const value = await composed?.(3);
+    expect(Number(value)).toBe(7);
+  });
+
+  it('keeps python environment declaration wiring stable for language-specific shadow registration', async () => {
+    const env = createEnvironment();
+
+    await evaluateExe(
+      createDirective(
+        'pyDouble',
+        'exeCode',
+        {
+          code: [createText('return x * 2')],
+          params: [createVarRef('x')]
+        },
+        { language: 'py', parameterCount: 1 }
+      ),
+      env
+    );
+
+    const envDirective = {
+      type: 'Directive',
+      kind: 'exe',
+      subtype: 'environment',
+      nodeId: 'exe-env-py',
+      values: {
+        identifier: [createVarRef('py')],
+        environment: [createVarRef('pyDouble')]
+      },
+      raw: {},
+      meta: {},
+      location: {
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 1, offset: 0 }
+      }
+    } as DirectiveNode;
+
+    await evaluateExe(envDirective, env);
+
+    const shadowEnv = env.getShadowEnv('py');
+    expect(shadowEnv?.has('pyDouble')).toBe(true);
+
+    const pythonShadowEnv = env.getOrCreatePythonShadowEnv();
+    expect(pythonShadowEnv.hasFunction('pyDouble')).toBe(true);
+  });
+
   it('keeps exe block return behavior stable for function and nested block scopes', async () => {
     const env = createEnvironment();
 
