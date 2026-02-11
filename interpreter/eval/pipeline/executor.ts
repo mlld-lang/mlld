@@ -26,7 +26,6 @@ import {
 } from '../../utils/structured-value';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { setExpressionProvenance } from '../../utils/expression-provenance';
-import type { CommandExecutionHookOptions } from './command-execution';
 import type { CommandExecutionContext } from '../../env/ErrorUtils';
 import { InterpolationContext } from '../../core/interpolation-context';
 import { StreamBus, type StreamEvent } from './stream-bus';
@@ -49,6 +48,8 @@ import {
 } from './executor/helpers';
 import { PipelineOutputProcessor } from './executor/output-processor';
 import { StageOutputCache } from './executor/stage-output-cache';
+import { PipelineCommandArgumentBinder } from './executor/command-argument-binder';
+import { PipelineCommandInvoker } from './executor/command-invoker';
 
 export interface ExecuteOptions {
   returnStructured?: boolean;
@@ -86,6 +87,7 @@ export class PipelineExecutor {
   private rateLimiter = new RateLimitRetry();
   private stageOutputs = new StageOutputCache();
   private outputProcessor: PipelineOutputProcessor;
+  private readonly commandInvoker: PipelineCommandInvoker;
   private readonly debugStructured = process.env.MLLD_DEBUG_STRUCTURED === 'true';
   private stageHookNodeCounter = 0;
   private streamingOptions: StreamingOptions;
@@ -142,6 +144,8 @@ export class PipelineExecutor {
     this.pipeline = pipeline;
     this.env = env;
     this.outputProcessor = new PipelineOutputProcessor(env);
+    const argumentBinder = new PipelineCommandArgumentBinder();
+    this.commandInvoker = new PipelineCommandInvoker(env, argumentBinder);
     this.format = format;
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
@@ -674,40 +678,20 @@ export class PipelineExecutor {
       return { result: input };
     }
     
-    // Resolve the command reference
-      const commandVar = await this.resolveCommandReference(command, stageEnv);
-    
-    if (!commandVar) {
-      throw new Error(`Pipeline command ${command.rawIdentifier} not found`);
-    }
-
-    // Get arguments and validate them
-    let args = await this.processArguments(command.args || [], stageEnv);
-
-    // Execute with metadata preservation
-    const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
-
-    // Smart parameter binding for pipeline functions
-    if (args.length === 0) {
-      args = await AutoUnwrapManager.executeWithPreservation(async () => {
-        return await this.bindParametersAutomatically(commandVar, input, structuredInput);
-      });
-    }
-    
-    const result = await AutoUnwrapManager.executeWithPreservation(async () => {
-      return await this.executeCommandVariable(commandVar, args, stageEnv, input, structuredInput, {
+    return await this.commandInvoker.invokeCommand({
+      command,
+      stageEnv,
+      input,
+      structuredInput,
+      hookOptions: {
         hookNode,
         operationContext,
         stageInputs: [structuredInput],
         executionContext: stageContext && typeof stageIndex === 'number'
           ? this.buildCommandExecutionContext(stageIndex, stageContext, parallelIndex, command.rawIdentifier)
           : undefined
-      });
+      }
     });
-
-    const labelDescriptor = this.buildCommandLabelDescriptor(command, commandVar);
-
-    return { result, labelDescriptor };
   }
 
   private async executeInlineCommandStage(
@@ -910,158 +894,6 @@ export class PipelineExecutor {
       rawIdentifier: fallbackId as string,
       rawArgs: []
     };
-  }
-
-  /**
-   * Process and validate command arguments
-   */
-  private async processArguments(args: any[], env: Environment): Promise<any[]> {
-    const evaluatedArgs: any[] = [];
-
-    for (const arg of args) {
-      // Evaluate the argument
-      if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean' || arg === null) {
-        // Preserve primitives as-is for proper parameter typing downstream
-        evaluatedArgs.push(arg);
-      } else if (arg && typeof arg === 'object') {
-        const evaluatedArg = await this.evaluateArgumentNode(arg, env);
-        evaluatedArgs.push(evaluatedArg);
-      }
-    }
-
-    return evaluatedArgs;
-  }
-
-  private buildCommandLabelDescriptor(
-    command: PipelineCommand,
-    commandVar: any
-  ): SecurityDescriptor | undefined {
-    const descriptors: SecurityDescriptor[] = [];
-    const inlineLabels = (command as any)?.securityLabels as DataLabel[] | undefined;
-    if (inlineLabels && inlineLabels.length > 0) {
-      descriptors.push(makeSecurityDescriptor({ labels: inlineLabels }));
-    }
-    const variableLabels = Array.isArray(commandVar?.mx?.labels) ? (commandVar.mx.labels as DataLabel[]) : undefined;
-    if (variableLabels && variableLabels.length > 0) {
-      descriptors.push(makeSecurityDescriptor({ labels: variableLabels }));
-    }
-    if (descriptors.length === 0) {
-      return undefined;
-    }
-    if (descriptors.length === 1) {
-      return descriptors[0];
-    }
-    return this.env.mergeSecurityDescriptors(...descriptors);
-  }
-
-  /**
-   * Evaluate a single argument node
-   */
-  private async evaluateArgumentNode(arg: any, env: Environment): Promise<any> {
-    if (arg.type === 'VariableReference') {
-      const variable = env.getVariable(arg.identifier);
-      if (!variable) {
-        throw new Error(`Variable not found: ${arg.identifier}`);
-      }
-
-      const { resolveVariable, ResolutionContext } = await import('../../utils/variable-resolution');
-      // Resolve variable in pipeline-input context to preserve wrapper types where appropriate
-      let value = await resolveVariable(variable, env, ResolutionContext.PipelineInput);
-
-      // Apply field access if present
-      if (arg.fields && arg.fields.length > 0) {
-        const { accessFields } = await import('../../utils/field-access');
-        const fieldResult = await accessFields(value, arg.fields, { preserveContext: false, sourceLocation: (arg as any)?.location, env });
-        value = fieldResult;
-      }
-
-      // Return raw value so executables receive correctly typed params (objects/arrays/strings)
-      return value;
-    }
-
-    // For other node types, interpolate
-    const { interpolate } = await import('../../core/interpreter');
-    const value = await interpolate([arg], env);
-    // Try to preserve JSON-like structures
-    try {
-      return JSON.parse(value);
-    } catch {
-      return value;
-    }
-  }
-
-  /**
-   * Smart parameter binding for functions without explicit arguments
-   */
-  private async bindParametersAutomatically(commandVar: any, input: string, structuredInput?: StructuredValue): Promise<any[]> {
-    let paramNames: string[] | undefined;
-
-    if (commandVar && commandVar.type === 'executable' && commandVar.value) {
-      paramNames = commandVar.value.paramNames;
-    } else if (commandVar && commandVar.paramNames) {
-      paramNames = commandVar.paramNames;
-    }
-
-    if (!paramNames || paramNames.length === 0) {
-      return [];
-    }
-
-    // Auto-unwrap LoadContentResult objects
-    const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
-    const unwrappedOutput = AutoUnwrapManager.unwrap(input);
-
-    // Single parameter - pass input directly
-    // Preserve StructuredValue wrapper per DATA.md: "Pipeline stages must preserve StructuredValue wrappers"
-    if (paramNames.length === 1) {
-      if (structuredInput && isStructuredValue(structuredInput)) {
-        return [structuredInput];
-      }
-      return [{ type: 'Text', content: unwrappedOutput }];
-    }
-
-    // Multiple parameters - try smart JSON destructuring
-    try {
-      const parsed = JSON.parse(unwrappedOutput);
-      if (typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return paramNames.map(name => ({
-          type: 'Text',
-          content: parsed[name] !== undefined 
-            ? (typeof parsed[name] === 'string' ? parsed[name] : JSON.stringify(parsed[name]))
-            : ''
-        }));
-      }
-    } catch {
-      // Not JSON, fall through
-    }
-
-    // Not an object or not JSON, pass as first parameter
-    return [{ type: 'Text', content: unwrappedOutput }];
-  }
-
-  /**
-   * Execute a command variable with arguments
-   */
-  private async executeCommandVariable(
-    commandVar: any,
-    args: any[],
-    env: Environment,
-    stdinInput?: string,
-    structuredInput?: StructuredValue,
-    hookOptions?: CommandExecutionHookOptions
-  ): Promise<string | { value: 'retry'; hint?: any; from?: number }> {
-    const { executeCommandVariable } = await import('./command-execution');
-    return await executeCommandVariable(commandVar, args, env, stdinInput, structuredInput, hookOptions);
-  }
-
-  /**
-   * Resolve a command reference to an executable variable
-   */
-  private async resolveCommandReference(
-    command: PipelineCommand,
-    env: Environment
-  ): Promise<any> {
-    const { resolveCommandReference } = await import('./command-execution');
-    return await resolveCommandReference(command, env);
   }
 
   private isRetrySignal(output: any): boolean {
