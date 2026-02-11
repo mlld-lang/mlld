@@ -386,11 +386,28 @@ describe('evaluateShow (characterization)', () => {
       .mockResolvedValue('code-output');
     const showCodeDirective = createShowDirective('showCode', {
       lang: [textNode('js')],
-      code: [textNode('return 7;')]
+      code: [textNode('\n    return 7;\n')]
     });
     const codeResult = await evaluateShow(showCodeDirective, env);
     expect(codeSpy).toHaveBeenCalledTimes(1);
+    expect(codeSpy.mock.calls[0]?.[0]).toBe('return 7;\n');
+    expect(codeSpy.mock.calls[0]?.[1]).toBe('js');
     expect(asText(codeResult.value)).toBe('code-output');
+  });
+
+  it('keeps showCommand and showCode error propagation stable', async () => {
+    const [showCommandDirective] = parseDirectives('/show {echo "boom"}');
+    const commandError = new Error('command failed');
+    vi.spyOn(env, 'executeCommand').mockRejectedValue(commandError);
+    await expect(evaluateShow(toShowDirective(showCommandDirective), env)).rejects.toThrow('command failed');
+
+    const codeError = new Error('code failed');
+    vi.spyOn(env, 'executeCode').mockRejectedValue(codeError);
+    const showCodeDirective = createShowDirective('showCode', {
+      lang: [textNode('js')],
+      code: [textNode('throw new Error("x");')]
+    });
+    await expect(evaluateShow(showCodeDirective, env)).rejects.toThrow('code failed');
   });
 
   it('keeps applyTailPipeline effect path stable for inline show content', async () => {

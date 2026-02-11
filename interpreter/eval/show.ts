@@ -25,6 +25,10 @@ import {
   evaluateShowForeachSection
 } from './show/show-foreach-handlers';
 import {
+  evaluateShowCode,
+  evaluateShowCommand
+} from './show/show-runtime-handlers';
+import {
   buildShowResultDescriptor,
   emitShowEffectIfNeeded,
   enforceShowPolicyIfNeeded,
@@ -158,87 +162,24 @@ export async function evaluateShow(
     resultValue = loadContentResult.resultValue;
     
   } else if (directive.subtype === 'showCommand') {
-    // Handle command execution for display: /show {echo "test"}
-    const commandNodes = directive.values?.command;
-    if (!commandNodes) {
-      throw new Error('Show command directive missing command');
-    }
-    
-    // Import necessary dependencies for command execution
-    const { InterpolationContext } = await import('../core/interpolation-context');
-    
-    // Interpolate command (resolve variables) with shell command context
-    const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand, {
-      collectSecurityDescriptor: collectInterpolatedDescriptor
+    const commandResult = await evaluateShowCommand({
+      directive,
+      env,
+      directiveLocation,
+      collectInterpolatedDescriptor
     });
-    
-    // Execute the command and capture output for display
-    const executionContext = {
-      sourceLocation: directiveLocation,
-      directiveNode: directive,
-      filePath: env.getCurrentFilePath(),
-      directiveType: 'show'  // Mark as show for context
-    };
-    
-    // Execute command and get output
-    content = await env.executeCommand(command, undefined, executionContext);
-    resultValue = content;
+    content = commandResult.content;
+    resultValue = commandResult.resultValue;
     
   } else if (directive.subtype === 'showCode') {
-    // Handle code execution for display: /show js {console.log("test")}
-    const codeNodes = directive.values?.code;
-    const langNodes = directive.values?.lang;
-    
-    if (!codeNodes || !langNodes) {
-      throw new Error('Show code directive missing code or language');
-    }
-    
-    // Inline helper functions (same as in run.ts)
-    function extractRawTextContent(nodes: any[]): string {
-      const parts: string[] = [];
-      for (const node of nodes) {
-        if (node.type === 'Text') {
-          parts.push(node.content || '');
-        } else if (node.type === 'Newline') {
-          parts.push('\n');
-        } else {
-          parts.push(String((node as any).value || (node as any).content || ''));
-        }
-      }
-      const rawContent = parts.join('');
-      return rawContent.replace(/^\n/, '');
-    }
-    
-    function dedentCommonIndent(src: string): string {
-      const lines = src.replace(/\r\n/g, '\n').split('\n');
-      let minIndent: number | null = null;
-      for (const line of lines) {
-        if (line.trim().length === 0) continue;
-        const match = line.match(/^[ \t]*/);
-        const indent = match ? match[0].length : 0;
-        if (minIndent === null || indent < minIndent) minIndent = indent;
-        if (minIndent === 0) break;
-      }
-      if (!minIndent) return src;
-      return lines.map(l => (l.trim().length === 0 ? '' : l.slice(minIndent!))).join('\n');
-    }
-    
-    // Get language and code content
-    const lang = extractRawTextContent(langNodes);
-    const code = dedentCommonIndent(extractRawTextContent(codeNodes));
-    
-    // Execute code and capture output for display
-    const executionContext = {
-      sourceLocation: directiveLocation,
-      directiveNode: directive,
-      filePath: env.getCurrentFilePath(),
-      directiveType: 'show'  // Mark as show for context
-    };
-    
-    // Execute code using the unified executeCode method
-    // Note: executeCode handles all language types internally
-    content = await env.executeCode(code, lang, {}, executionContext);
-    resultValue = content;
+    const codeResult = await evaluateShowCode({
+      directive,
+      env,
+      directiveLocation,
+      collectInterpolatedDescriptor
+    });
+    content = codeResult.content;
+    resultValue = codeResult.resultValue;
     
   } else if (directive.subtype === 'show' && directive.values?.content) {
     // Handle simple show directive with content (used in for loops)
