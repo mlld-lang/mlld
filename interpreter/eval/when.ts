@@ -19,39 +19,10 @@ import {
 } from '@core/types/variable';
 import { isStructuredValue, asData, asText, assertStructuredValue } from '../utils/structured-value';
 import { evaluateLetAssignment, evaluateAugmentedAssignment } from './when/assignment-support';
+import { evaluateActionSequence } from './when/action-runner';
 
 const DENIED_KEYWORD = 'denied';
 export { evaluateLetAssignment, evaluateAugmentedAssignment } from './when/assignment-support';
-
-async function evaluateActionSequence(
-  actionNodes: BaseMlldNode[],
-  env: Environment
-): Promise<EvalResult> {
-  let currentEnv = env;
-  let lastResult: EvalResult = { value: '', env: currentEnv };
-
-  for (const actionNode of actionNodes) {
-    if (isLetAssignment(actionNode)) {
-      currentEnv = await evaluateLetAssignment(actionNode, currentEnv);
-      lastResult = { value: undefined, env: currentEnv };
-      continue;
-    }
-    if (isAugmentedAssignment(actionNode)) {
-      currentEnv = await evaluateAugmentedAssignment(actionNode, currentEnv);
-      lastResult = { value: undefined, env: currentEnv };
-      continue;
-    }
-
-    const result = await evaluate(actionNode, currentEnv);
-    if (isExeReturnControl(result.value)) {
-      return { value: result.value, env: result.env || currentEnv };
-    }
-    currentEnv = result.env || currentEnv;
-    lastResult = result;
-  }
-
-  return { value: lastResult.value, env: currentEnv };
-}
 
 /**
  * Compares two values according to mlld's when comparison rules

@@ -291,6 +291,46 @@ describe('when evaluator characterization', () => {
     expect(message).toBe('start');
   });
 
+  it('keeps mixed action-sequence ordering stable for let, +=, and directive actions', async () => {
+    env.setVariable(
+      'log',
+      createSimpleTextVariable('log', 'start', {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      })
+    );
+
+    const node: WhenSimpleNode = {
+      type: 'Directive',
+      kind: 'when',
+      subtype: 'whenSimple',
+      nodeId: 'when-mixed-actions',
+      values: {
+        condition: [{ type: 'Text', nodeId: 'condition', content: 'true' }],
+        action: [
+          {
+            type: 'LetAssignment',
+            nodeId: 'let-temp',
+            identifier: 'temp',
+            value: [{ type: 'Text', nodeId: 'let-rhs', content: 'inner' }]
+          } as any,
+          createAppendAction('log', '-a', 'append-a'),
+          createAppendAction('log', '-b', 'append-b'),
+          { type: 'Text', nodeId: 'tail', content: 'done' } as any
+        ]
+      }
+    };
+
+    const result = await evaluateWhen(node, env);
+    expect(result.value).toBe('done');
+    expect(result.env.hasVariable('temp')).toBe(true);
+
+    const log = await extractVariableValue(env.getVariable('log')!, env);
+    expect(log).toBe('start-a-b');
+  });
+
   it('keeps let redefinition guard behavior stable for non-block-scoped variables', async () => {
     env.setVariable(
       'existing',
