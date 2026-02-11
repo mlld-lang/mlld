@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import type { DirectiveNode, SourceLocation, VarValue } from '@core/types';
 import type { ToolCollection } from '@core/types/tools';
 import type { Environment } from '../env/Environment';
@@ -40,9 +39,14 @@ import {
   createDescriptorState,
   extractDescriptorsFromDataAst,
   extractDescriptorsFromTemplateAst,
-  interpolateAndCollect,
   type DescriptorCollector
 } from './var/security-descriptor';
+import {
+  evaluateArrayItems,
+  evaluateCollectionObject,
+  hasComplexArrayItems,
+  hasComplexValues
+} from './var/collection-evaluator';
 
 export { extractDescriptorsFromDataAst };
 
@@ -271,37 +275,13 @@ export async function prepareVarAssignment(
       }
       resolvedValue = valueNode;
     } else {
-      // Process simple array items immediately
-      const processedItems = [];
-      for (const item of (valueNode.items || [])) {
-        if (item && typeof item === 'object') {
-          if ('content' in item && Array.isArray(item.content)) {
-            // This is wrapped content (like from a string literal)
-            const interpolated = await interpolateWithSecurity(item.content);
-            processedItems.push(interpolated);
-          } else if (item.type === 'Text' && 'content' in item) {
-            // Direct text content
-            processedItems.push(item.content);
-          } else if (typeof item === 'object' && item.type) {
-            // Other node types - evaluate them
-            const evaluated = await evaluateArrayItem(
-              item,
-              env,
-              mergeResolvedDescriptor,
-              context,
-              sourceLocation
-            );
-            processedItems.push(evaluated);
-          } else {
-            // Primitive values
-            processedItems.push(item);
-          }
-        } else {
-          // Direct primitive value
-          processedItems.push(item);
-        }
-      }
-      resolvedValue = processedItems;
+      resolvedValue = await evaluateArrayItems(
+        valueNode.items || valueNode.elements || [],
+        env,
+        mergeResolvedDescriptor,
+        context,
+        sourceLocation
+      );
     }
     
   } else if (valueNode.type === 'object') {
@@ -327,162 +307,13 @@ export async function prepareVarAssignment(
         }
         resolvedValue = valueNode;
       } else {
-        // Process simple object properties immediately
-        const processedObject: Record<string, any> = {};
-
-        // Handle entries format (new)
-        if (valueNode.entries) {
-          for (const entry of valueNode.entries) {
-            if (entry.type === 'pair') {
-              const key = entry.key;
-              const propValue = entry.value;
-            // Each property value might need interpolation
-            if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
-              // Handle wrapped string content (quotes, backticks, etc.)
-              processedObject[key] = await interpolateWithSecurity(propValue.content as any);
-            } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
-              // Handle array values in objects
-              const processedArray = [];
-              
-              // Debug logging for Phase 2
-              if (identifier === 'complex' && key === 'users') {
-                logger.debug('Processing users array items:', {
-                  itemCount: (propValue.items || []).length,
-                  firstItem: propValue.items?.[0]
-                });
-              }
-              
-              for (const item of (propValue.items || [])) {
-                const evaluated = await evaluateArrayItem(
-                  item,
-                  env,
-                  mergeResolvedDescriptor,
-                  context,
-                  sourceLocation
-                );
-                processedArray.push(evaluated);
-              }
-              processedObject[key] = processedArray;
-            } else if (propValue && typeof propValue === 'object' && propValue.type === 'object') {
-              // Handle nested objects recursively
-              const nestedObj: Record<string, any> = {};
-              // Handle entries format
-              if (propValue.entries) {
-                for (const nestedEntry of propValue.entries) {
-                  if (nestedEntry.type === 'pair') {
-                    nestedObj[nestedEntry.key] = await evaluateArrayItem(
-                      nestedEntry.value,
-                      env,
-                      mergeResolvedDescriptor,
-                      context,
-                      sourceLocation
-                    );
-                  }
-                }
-              }
-              // Handle properties format (legacy)
-              else if (propValue.properties) {
-                for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
-                  nestedObj[nestedKey] = await evaluateArrayItem(
-                    nestedValue,
-                    env,
-                    mergeResolvedDescriptor,
-                    context,
-                    sourceLocation
-                  );
-                }
-              }
-              processedObject[key] = nestedObj;
-            } else if (propValue && typeof propValue === 'object' && propValue.type) {
-              // Handle other node types (load-content, VariableReference, etc.)
-              processedObject[key] = await evaluateArrayItem(
-                propValue,
-                env,
-                mergeResolvedDescriptor,
-                context,
-                sourceLocation
-              );
-            } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray(propValue.parts)) {
-              // Handle strings with @references that need interpolation
-              processedObject[key] = await interpolateWithSecurity(propValue.parts);
-            } else {
-              // For primitive types (numbers, booleans, null, strings), use as-is
-              processedObject[key] = propValue;
-            }
-            }
-            // Spread entries shouldn't be here (isComplex would be true)
-          }
-        }
-        // Handle properties format (legacy)
-        else if (valueNode.properties) {
-          for (const [key, propValue] of Object.entries(valueNode.properties)) {
-            // Each property value might need interpolation
-            if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
-              // Handle wrapped string content (quotes, backticks, etc.)
-              processedObject[key] = await interpolateWithSecurity(propValue.content as any);
-            } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
-              // Handle array values in objects
-              const processedArray = [];
-              for (const item of (propValue.items || [])) {
-                const evaluated = await evaluateArrayItem(
-                  item,
-                  env,
-                  mergeResolvedDescriptor,
-                  context,
-                  sourceLocation
-                );
-                processedArray.push(evaluated);
-              }
-              processedObject[key] = processedArray;
-            } else if (propValue && typeof propValue === 'object' && propValue.type === 'object') {
-              // Handle nested objects recursively
-              const nestedObj: Record<string, any> = {};
-              const nestedData = propValue.entries || propValue.properties;
-              if (nestedData) {
-                if (propValue.entries) {
-                  for (const nestedEntry of propValue.entries) {
-                    if (nestedEntry.type === 'pair') {
-                      nestedObj[nestedEntry.key] = await evaluateArrayItem(
-                        nestedEntry.value,
-                        env,
-                        mergeResolvedDescriptor,
-                        context,
-                        sourceLocation
-                      );
-                    }
-                  }
-                } else if (propValue.properties) {
-                  for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
-                    nestedObj[nestedKey] = await evaluateArrayItem(
-                      nestedValue,
-                      env,
-                      mergeResolvedDescriptor,
-                      context,
-                      sourceLocation
-                    );
-                  }
-                }
-              }
-              processedObject[key] = nestedObj;
-            } else if (propValue && typeof propValue === 'object' && propValue.type) {
-              // Handle other node types (load-content, VariableReference, etc.)
-              processedObject[key] = await evaluateArrayItem(
-                propValue,
-                env,
-                mergeResolvedDescriptor,
-                context,
-                sourceLocation
-              );
-            } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray((propValue as any).parts)) {
-              // Handle strings with @references that need interpolation
-              processedObject[key] = await interpolateWithSecurity((propValue as any).parts);
-            } else {
-              // For primitive types (numbers, booleans, null, strings), use as-is
-              processedObject[key] = propValue;
-            }
-          }
-        }
-        resolvedValue = processedObject;
+        resolvedValue = await evaluateCollectionObject(
+          valueNode,
+          env,
+          mergeResolvedDescriptor,
+          context,
+          sourceLocation
+        );
       }
     }
     
@@ -1475,389 +1306,6 @@ export async function evaluateVar(
   return assignment.evalResultOverride ?? { value: '', env };
 }
 
-/**
- * Check if an object has complex values that need lazy evaluation
- */
-function hasComplexValues(objOrProperties: any): boolean {
-  if (!objOrProperties) return false;
-
-  // Handle entries format (new)
-  if (Array.isArray(objOrProperties)) {
-    for (const entry of objOrProperties) {
-      if (entry.type === 'spread') {
-        // Spreads always need lazy evaluation
-        return true;
-      }
-      if (entry.type === 'conditionalPair') {
-        // Conditional pairs need lazy evaluation to check truthiness
-        return true;
-      }
-      if (entry.type === 'pair') {
-        const value = entry.value;
-        if (value && typeof value === 'object') {
-          if ('type' in value && (
-            value.type === 'code' ||
-            value.type === 'command' ||
-            value.type === 'VariableReference' ||
-            value.type === 'path' ||
-            value.type === 'section' ||
-            value.type === 'runExec' ||
-            value.type === 'ExecInvocation' ||
-            value.type === 'load-content'
-          )) {
-            return true;
-          }
-          // Check if it's a nested object with complex values
-          if (value.type === 'object') {
-            const nestedData = value.entries || value.properties;
-            if (nestedData && hasComplexValues(nestedData)) {
-              return true;
-            }
-          }
-          // Check if it's an array with complex items
-          if (value.type === 'array' && hasComplexArrayItems(value.items || value.elements || [])) {
-            return true;
-          }
-          // Check plain objects (without type field) recursively
-          if (!value.type && typeof value === 'object' && !Array.isArray(value)) {
-            if (hasComplexValues(value)) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-    return false;
-  }
-
-  // Handle properties format (legacy) - it's a Record<string, any>
-  for (const value of Object.values(objOrProperties)) {
-    if (value && typeof value === 'object') {
-      if ('type' in value && (
-        value.type === 'code' ||
-        value.type === 'command' ||
-        value.type === 'VariableReference' ||
-        value.type === 'path' ||
-        value.type === 'section' ||
-        value.type === 'runExec' ||
-        value.type === 'ExecInvocation' ||
-        value.type === 'load-content'
-      )) {
-        return true;
-      }
-      // Check if it's a nested object with complex values
-      if (value.type === 'object') {
-        const nestedData = value.entries || value.properties;
-        if (nestedData && hasComplexValues(nestedData)) {
-          return true;
-        }
-      }
-      // Check if it's an array with complex items
-      if (value.type === 'array' && hasComplexArrayItems(value.items || value.elements || [])) {
-        return true;
-      }
-      // Check plain objects (without type field) recursively
-      if (!value.type && typeof value === 'object' && !Array.isArray(value)) {
-        if (hasComplexValues(value)) {
-          return true;
-        }
-      }
-    }
-  }
-
-  return false;
-}
-
-/**
- * Check if array items contain complex values
- */
-function hasComplexArrayItems(items: any[]): boolean {
-  if (!items || !Array.isArray(items) || items.length === 0) return false;
-  
-  for (const item of items) {
-    if (item && typeof item === 'object') {
-      if ('type' in item && (
-        item.type === 'code' || 
-        item.type === 'command' || 
-        item.type === 'VariableReference' ||
-        item.type === 'array' ||
-        item.type === 'object' ||
-        item.type === 'path' ||
-        item.type === 'section' ||
-        item.type === 'load-content' ||
-        item.type === 'ExecInvocation'
-      )) {
-        return true;
-      }
-      // Check nested arrays and objects
-      if (Array.isArray(item) && hasComplexArrayItems(item)) {
-        return true;
-      }
-      if (item.constructor === Object && hasComplexValues(item)) {
-        return true;
-      }
-    }
-  }
-  
-  return false;
-}
-
-/**
- * Evaluate an array item based on its type
- * This function evaluates items that will be stored in arrays, preserving Variables
- * instead of extracting their values immediately.
- */
-async function evaluateArrayItem(
-  item: any,
-  env: Environment,
-  collectDescriptor?: DescriptorCollector,
-  context?: EvaluationContext,
-  sourceLocation?: SourceLocation
-): Promise<any> {
-  if (!item || typeof item !== 'object') {
-    return item;
-  }
-
-  // Debug logging for Phase 2
-  if (process.env.MLLD_DEBUG === 'true' && item.type === 'object') {
-    logger.debug('evaluateArrayItem processing object:', {
-      hasProperties: !!item.properties,
-      propertyKeys: item.properties ? Object.keys(item.properties) : [],
-      sampleProperty: item.properties?.name
-    });
-  }
-
-  // Handle wrapped content first (e.g., quoted strings in arrays)
-  // This includes strings in objects: {"name": "alice"} where "alice" becomes
-  // {content: [{type: 'Text', content: 'alice'}], wrapperType: 'doubleQuote'}
-  if ('content' in item && Array.isArray(item.content) && 'wrapperType' in item) {
-    const hasOnlyLiteralsOrText = item.content.every(
-      (node: any) =>
-        node &&
-        typeof node === 'object' &&
-        ((node.type === 'Literal' && 'value' in node) || (node.type === 'Text' && 'content' in node))
-    );
-    if (hasOnlyLiteralsOrText) {
-      if (process.env.MLLD_DEBUG_FIX === 'true') {
-        console.error('[evaluateArrayItem] literal/text wrapper', {
-          wrapperType: item.wrapperType,
-          items: item.content.map((node: any) => node.type)
-        });
-      }
-      const joined = item.content
-        .map((node: any) => (node.type === 'Literal' ? node.value : node.content))
-        .join('');
-      if (process.env.MLLD_DEBUG_FIX === 'true') {
-        try {
-          fs.appendFileSync(
-            '/tmp/mlld-debug.log',
-            JSON.stringify({
-              source: 'evaluateArrayItem',
-              wrapperType: item.wrapperType,
-              joined
-            }) + '\n'
-          );
-        } catch {}
-      }
-      return joined;
-    }
-    if (process.env.MLLD_DEBUG_FIX === 'true') {
-      console.error('[evaluateArrayItem] interpolating wrapper', {
-        wrapperType: item.wrapperType,
-        itemTypes: item.content.map((node: any) => node?.type)
-      });
-    }
-    return await interpolateAndCollect(item.content, env, collectDescriptor);
-  }
-
-  // Also handle the case where we just have content array without wrapperType
-  if ('content' in item && Array.isArray(item.content)) {
-    return await interpolateAndCollect(item.content, env, collectDescriptor);
-  }
-  
-  // Handle raw Text nodes that may appear in objects
-  if (item.type === 'Text' && 'content' in item) {
-    return item.content;
-  }
-
-  // Handle Literal nodes from grammar (numbers, booleans, null)
-  if (item.type === 'Literal' && 'value' in item) {
-    return item.value;
-  }
-
-  // Handle needsInterpolation marker (from DataString with @references)
-  if ('needsInterpolation' in item && Array.isArray(item.parts)) {
-    return await interpolateAndCollect(item.parts, env, collectDescriptor);
-  }
-
-  // Handle objects without explicit type property (plain objects from parser)
-  if (!item.type && typeof item === 'object' && item.constructor === Object) {
-    const nestedObj: Record<string, any> = {};
-    for (const [key, value] of Object.entries(item)) {
-      // Skip internal properties
-      if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
-        continue;
-      }
-      nestedObj[key] = await evaluateArrayItem(
-        value,
-        env,
-        collectDescriptor,
-        context,
-        sourceLocation
-      );
-    }
-    return nestedObj;
-  }
-
-  switch (item.type) {
-    case 'WhenExpression':
-      // Evaluate when-expression inside arrays/objects
-      {
-        const { evaluateWhenExpression } = await import('./when-expression');
-        const res = await evaluateWhenExpression(item as any, env, context);
-        return res.value as any;
-      }
-    case 'TernaryExpression':
-    case 'BinaryExpression':
-    case 'UnaryExpression':
-      // Evaluate expression nodes inside arrays/objects
-      {
-        const { evaluateUnifiedExpression } = await import('./expressions');
-        const res = await evaluateUnifiedExpression(item as any, env, context);
-        return res.value as any;
-      }
-    case 'array':
-      // Nested array
-      const nestedItems = [];
-      for (const nestedItem of (item.items || [])) {
-        nestedItems.push(
-          await evaluateArrayItem(
-            nestedItem,
-            env,
-            collectDescriptor,
-            context,
-            sourceLocation
-          )
-        );
-      }
-      return nestedItems;
-
-    case 'object':
-      // Object in array
-      const processedObject: Record<string, any> = {};
-      // Handle entries format (new)
-      if (item.entries) {
-        for (const entry of item.entries) {
-          if (entry.type === 'pair') {
-            processedObject[entry.key] = await evaluateArrayItem(
-              entry.value,
-              env,
-              collectDescriptor,
-              context,
-              sourceLocation
-            );
-          }
-          // Spreads shouldn't be in simple objects (isComplex would be true)
-        }
-      }
-      // Handle properties format (legacy)
-      else if (item.properties) {
-        for (const [key, propValue] of Object.entries(item.properties)) {
-          processedObject[key] = await evaluateArrayItem(
-            propValue,
-            env,
-            collectDescriptor,
-            context,
-            sourceLocation
-          );
-        }
-      }
-      return processedObject;
-
-    case 'VariableReference':
-      // Variable reference in array - PRESERVE THE VARIABLE!
-      const variable = env.getVariable(item.identifier);
-      if (!variable) {
-        throw new Error(`Variable not found: ${item.identifier}`);
-      }
-
-      // Collect security descriptor from the variable for label propagation
-      if (collectDescriptor && variable.mx) {
-        const { varMxToSecurityDescriptor } = await import('@core/types/variable/VarMxHelpers');
-        const varDescriptor = varMxToSecurityDescriptor(variable.mx);
-        if (varDescriptor) {
-          collectDescriptor(varDescriptor);
-        }
-      }
-
-      /**
-       * Preserve Variable wrapper when storing in array elements
-       * WHY: Array elements should maintain Variable metadata to enable proper
-       *      Variable flow through data structures
-       */
-      const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
-      return await resolveVariable(variable, env, ResolutionContext.ArrayElement);
-
-    case 'path':
-      // Path node in array - read the file content
-      const filePath = await interpolateAndCollect(item.segments || [item], env, collectDescriptor);
-      const fileContent = await readFileWithPolicy(env, filePath, sourceLocation);
-      return fileContent;
-
-    case 'SectionExtraction':
-      // Section extraction in array
-      const sectionName = await interpolateAndCollect(item.section, env, collectDescriptor);
-      const sectionFilePath = await interpolateAndCollect(
-        item.path.segments || [item.path],
-        env,
-        collectDescriptor
-      );
-      const sectionFileContent = await readFileWithPolicy(env, sectionFilePath, sourceLocation);
-      
-      // Use standard section extraction
-      const { extractSection } = await import('./show');
-      return extractSection(sectionFileContent, sectionName);
-
-    case 'load-content':
-      // Load content node in array - use the content loader
-      const { processContentLoader } = await import('./content-loader');
-      const loadResult = await processContentLoader(item, env);
-
-      // Handle file-loaded values (both StructuredValue and LoadContentResult formats)
-      const { isFileLoadedValue } = await import('@interpreter/utils/load-content-structured');
-      if (isFileLoadedValue(loadResult)) {
-        // Return structured format if already wrapped, otherwise extract content
-        return isStructuredValue(loadResult) ? loadResult : loadResult.content;
-      }
-
-      return loadResult;
-
-    default:
-      // Handle plain objects without type property
-      if (!item.type && typeof item === 'object' && item.constructor === Object) {
-        // This is a plain object with properties that might have wrapped content
-        const plainObj: Record<string, any> = {};
-        for (const [key, value] of Object.entries(item)) {
-          // Skip internal properties
-          if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
-            continue;
-          }
-          plainObj[key] = await evaluateArrayItem(
-            value,
-            env,
-            collectDescriptor,
-            context,
-            sourceLocation
-          );
-        }
-        return plainObj;
-      }
-      
-      // Try to interpolate as a node array
-      return await interpolateAndCollect([item], env, collectDescriptor);
-  }
-}
-
 async function evaluateToolCollectionObject(
   valueNode: any,
   env: Environment,
@@ -1865,40 +1313,14 @@ async function evaluateToolCollectionObject(
   context?: EvaluationContext,
   sourceLocation?: SourceLocation
 ): Promise<Record<string, unknown>> {
-  const entries = valueNode.entries ?? null;
-  const properties = valueNode.properties ?? null;
-  const result: Record<string, unknown> = {};
-
-  if (Array.isArray(entries)) {
-    for (const entry of entries) {
-      if (entry.type !== 'pair') {
-        throw new Error('Tool definitions must be plain object entries');
-      }
-      result[entry.key] = await evaluateArrayItem(
-        entry.value,
-        env,
-        collectDescriptor,
-        context,
-        sourceLocation
-      );
-    }
-    return result;
-  }
-
-  if (properties && typeof properties === 'object') {
-    for (const [key, value] of Object.entries(properties)) {
-      result[key] = await evaluateArrayItem(
-        value,
-        env,
-        collectDescriptor,
-        context,
-        sourceLocation
-      );
-    }
-    return result;
-  }
-
-  return result;
+  return evaluateCollectionObject(
+    valueNode,
+    env,
+    collectDescriptor,
+    context,
+    sourceLocation,
+    true
+  );
 }
 
 async function resolveWithClauseToolsValue(
