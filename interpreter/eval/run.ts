@@ -20,7 +20,10 @@ import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { executeRunCommand } from './run-modules/run-command-executor';
 import { executeRunCode } from './run-modules/run-code-executor';
 import { resolveRunExecutableReference } from './run-modules/run-exec-resolver';
-import { dispatchRunExecutableDefinition } from './run-modules/run-exec-definition-dispatcher';
+import {
+  dispatchRunExecutableDefinition,
+  extractRunExecArguments
+} from './run-modules/run-exec-definition-dispatcher';
 import {
   applyRunWithClausePipeline,
   finalizeRunOutputLifecycle,
@@ -201,8 +204,7 @@ export async function evaluateRun(
     filePath: env.getCurrentFilePath(),
     directiveType: directive.meta?.directiveType as string || 'run'
   };
-  
-  try {
+
   if (directive.subtype === 'runCommand') {
     const commandResult = await executeRunCommand({
       directive,
@@ -246,54 +248,12 @@ export async function evaluateRun(
     const execDescriptor = execVar.mx ? varMxToSecurityDescriptor(execVar.mx) : undefined;
     const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
     
-    // Get arguments from the run directive
-    const args = directive.values?.args || [];
-    const argValues: Record<string, string> = {};
-    const argDescriptors: SecurityDescriptor[] = [];
-    
-    // Map parameter names to argument values
-    const paramNames = definition.paramNames as string[] | undefined;
-    if (paramNames && paramNames.length > 0) {
-      for (let i = 0; i < paramNames.length; i++) {
-        const paramName = paramNames[i];
-        if (!args[i]) {
-          argValues[paramName] = '';
-          continue;
-        }
-        
-        // Handle argument nodes
-        const arg = args[i];
-        
-        // Handle both primitive values and node objects
-        let argValue: string;
-        if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
-          // Primitive value from grammar
-          argValue = String(arg);
-        } else if (arg && typeof arg === 'object' && 'type' in arg) {
-          if (arg.type === 'VariableReference' && typeof (arg as any).identifier === 'string') {
-            const variable = env.getVariable((arg as any).identifier);
-            if (variable?.mx) {
-              argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
-            }
-          } else if (
-            arg.type === 'VariableReferenceWithTail' &&
-            (arg as any).variable &&
-            typeof (arg as any).variable.identifier === 'string'
-          ) {
-            const variable = env.getVariable((arg as any).variable.identifier);
-            if (variable?.mx) {
-              argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
-            }
-          }
-          // Node object - interpolate normally
-          argValue = await interpolateWithPendingDescriptor([arg], InterpolationContext.Default);
-        } else {
-          // Fallback
-          argValue = String(arg);
-        }
-        argValues[paramName] = argValue;
-      }
-    }
+    const { argValues, argDescriptors } = await extractRunExecArguments({
+      directive,
+      definition,
+      env,
+      interpolateWithPendingDescriptor
+    });
     
     const dispatchResult = await dispatchRunExecutableDefinition({
       directive,
@@ -392,9 +352,4 @@ export async function evaluateRun(
     value: outputValue,
     env
   };
-  } catch (error) {
-    throw error;
-  } finally {
-    // Streaming cleanup already done above (moved out of finally to use results)
-  }
 }

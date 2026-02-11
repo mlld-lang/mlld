@@ -170,7 +170,7 @@ This keeps `@mx.hint` tightly scoped to the location where it is meaningful, whi
 ## Quick Map
 
 - /var: `interpreter/eval/var.ts` + `interpreter/eval/var/*` — orchestration + specialized RHS/metadata/pipeline modules (see `docs/dev/VAR-EVALUATION.md`)
-- /run, /sh: `interpreter/eval/run.ts` — command and shell execution, with-clause plumbing
+- /run, /sh: `interpreter/eval/run.ts` + `interpreter/eval/run-modules/*` — orchestration entrypoint with extracted command/code execution, executable resolution+dispatch, policy helpers, and output lifecycle modules
 - /export: `interpreter/eval/export.ts` — accumulate manifest entries, reset fallback on wildcard
 - /exe: `interpreter/eval/exe.ts` — define executables (command/code/template/section/ref)
 - @fn(...): `interpreter/eval/exec-invocation.ts` — unified orchestration with `with { ... }`

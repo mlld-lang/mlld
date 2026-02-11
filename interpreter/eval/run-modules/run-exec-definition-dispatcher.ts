@@ -14,6 +14,7 @@ import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 import { wrapExecResult } from '@interpreter/utils/structured-exec';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import {
   applySecurityDescriptorToStructuredValue,
   extractSecurityDescriptor,
@@ -82,6 +83,64 @@ export type RunExecDefinitionDispatchResult = {
   outputDescriptors: SecurityDescriptor[];
   callStack: string[];
 };
+
+export type RunExecArgumentExtractionResult = {
+  argValues: Record<string, string>;
+  argDescriptors: SecurityDescriptor[];
+};
+
+export async function extractRunExecArguments(params: {
+  directive: DirectiveNode;
+  definition: ExecutableDefinition;
+  env: Environment;
+  interpolateWithPendingDescriptor: RunExecInterpolateWithPendingDescriptor;
+}): Promise<RunExecArgumentExtractionResult> {
+  const { directive, definition, env, interpolateWithPendingDescriptor } = params;
+  const args = directive.values?.args || [];
+  const argValues: Record<string, string> = {};
+  const argDescriptors: SecurityDescriptor[] = [];
+  const paramNames = (definition as any).paramNames as string[] | undefined;
+  if (!paramNames || paramNames.length === 0) {
+    return { argValues, argDescriptors };
+  }
+
+  for (let i = 0; i < paramNames.length; i++) {
+    const paramName = paramNames[i];
+    if (!args[i]) {
+      argValues[paramName] = '';
+      continue;
+    }
+
+    const arg = args[i];
+    let argValue: string;
+    if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
+      argValue = String(arg);
+    } else if (arg && typeof arg === 'object' && 'type' in arg) {
+      if (arg.type === 'VariableReference' && typeof (arg as any).identifier === 'string') {
+        const variable = env.getVariable((arg as any).identifier);
+        if (variable?.mx) {
+          argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
+        }
+      } else if (
+        arg.type === 'VariableReferenceWithTail' &&
+        (arg as any).variable &&
+        typeof (arg as any).variable.identifier === 'string'
+      ) {
+        const variable = env.getVariable((arg as any).variable.identifier);
+        if (variable?.mx) {
+          argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
+        }
+      }
+      argValue = await interpolateWithPendingDescriptor([arg], InterpolationContext.Default);
+    } else {
+      argValue = String(arg);
+    }
+
+    argValues[paramName] = argValue;
+  }
+
+  return { argValues, argDescriptors };
+}
 
 type RunExecDispatchContext = RunExecDefinitionDispatchParams;
 
