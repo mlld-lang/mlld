@@ -10,7 +10,6 @@ import { evaluate, type EvalResult } from '../core/interpreter';
 import { MlldDirectiveError } from '@core/errors';
 import { toIterable } from './for-utils';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
-import { RateLimitRetry, isRateLimitError } from '../eval/pipeline/rate-limit-retry';
 import { createArrayVariable, createObjectVariable, createPrimitiveVariable, createSimpleTextVariable } from '@core/types/variable';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { logger } from '@core/utils/logger';
@@ -23,7 +22,6 @@ import {
   normalizeWhenShowEffect,
   extractSecurityDescriptor
 } from '../utils/structured-value';
-import { materializeDisplayValue } from '../utils/display-materialization';
 import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
@@ -33,6 +31,7 @@ import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 import { isExeReturnControl } from './exe-return';
 import { isControlCandidate } from './loop';
 import { resolveParallelOptions, type ForParallelOptions } from './for/parallel-options';
+import { executeDirectiveActions } from './for/directive-action-runner';
 import {
   assertKeyVariableHasNoFields,
   formatFieldPath,
@@ -100,24 +99,6 @@ function resetForErrorsContext(env: Environment, errors: ForIterationError[]): v
   }
   mxManager.pushGenericContext('for', { errors, timestamp: Date.now() });
   mxManager.setLatestErrors(errors);
-}
-
-function findVariableOwner(env: Environment, name: string): Environment | undefined {
-  let current: Environment | undefined = env;
-  while (current) {
-    if (current.getCurrentVariables().has(name)) return current;
-    current = current.getParent();
-  }
-  return undefined;
-}
-
-function isDescendantEnvironment(env: Environment, ancestor: Environment): boolean {
-  let current: Environment | undefined = env;
-  while (current) {
-    if (current === ancestor) return true;
-    current = current.getParent();
-  }
-  return false;
 }
 
 export async function evaluateForDirective(
@@ -190,131 +171,34 @@ export async function evaluateForDirective(
       });
       const { iterationRoot, key, value } = setup;
       let childEnv = setup.childEnv;
-
-      const actionNodes = directive.values.action;
-      const retry = new RateLimitRetry();
       let returnControl: unknown = null;
-      while (true) {
-        try {
-          if (directive.meta?.actionType === 'block') {
-            let blockEnv = childEnv;
-            for (const actionNode of actionNodes) {
-              if (isLetAssignment(actionNode)) {
-                blockEnv = await evaluateLetAssignment(actionNode, blockEnv);
-              } else if (isAugmentedAssignment(actionNode)) {
-                if (effective?.parallel) {
-                  const owner = findVariableOwner(blockEnv, actionNode.identifier);
-                  if (!owner || !isDescendantEnvironment(owner, iterationRoot)) {
-                    throw new MlldDirectiveError(
-                      `Parallel for block cannot mutate outer variable @${actionNode.identifier}.`,
-                      'for',
-                      { location: actionNode.location }
-                    );
-                  }
-                }
-                blockEnv = await evaluateAugmentedAssignment(actionNode, blockEnv);
-              } else if (actionNode.type === 'WhenExpression') {
-                const actionResult = await evaluateWhenExpression(actionNode as any, blockEnv);
-                blockEnv = actionResult.env || blockEnv;
-                if (isExeReturnControl(actionResult.value)) {
-                  returnControl = actionResult.value;
-                  break;
-                }
-                if (isControlCandidate(actionResult.value)) {
-                  const controlKind = extractControlKind(actionResult.value);
-                  if (controlKind === 'done') {
-                    returnControl = { __forDone: true };
-                  }
-                  break;
-                }
-              } else {
-                const actionResult = await evaluate(actionNode, blockEnv);
-                blockEnv = actionResult.env || blockEnv;
-                if (isExeReturnControl(actionResult.value)) {
-                  returnControl = actionResult.value;
-                  break;
-                }
-                if (isControlCandidate(actionResult.value)) {
-                  const controlKind = extractControlKind(actionResult.value);
-                  if (controlKind === 'done') {
-                    returnControl = { __forDone: true };
-                  }
-                  break;
-                }
-              }
-            }
-            childEnv = blockEnv;
-            if (returnControl) {
-              retry.reset();
-              break;
-            }
-          } else {
-            let actionResult: any = { value: undefined, env: childEnv };
-            for (const actionNode of actionNodes) {
-              if (actionNode.type === 'WhenExpression') {
-                actionResult = await evaluateWhenExpression(actionNode as any, childEnv);
-              } else {
-                actionResult = await evaluate(actionNode, childEnv);
-              }
-              if (actionResult.env) childEnv = actionResult.env;
-              if (isExeReturnControl(actionResult.value)) {
-                returnControl = actionResult.value;
-                break;
-              }
-              if (isControlCandidate(actionResult.value)) {
-                const controlKind = extractControlKind(actionResult.value);
-                if (controlKind === 'done') {
-                  returnControl = { __forDone: true };
-                }
-                break;
-              }
-            }
-            if (returnControl) {
-              retry.reset();
-              break;
-            }
-            // Emit bare exec output as effect (legacy behavior)
-            if (
-              directive.values.action.length === 1 &&
-              directive.values.action[0].type === 'ExecInvocation' &&
-              actionResult.value !== undefined && actionResult.value !== null
-            ) {
-              const materialized = materializeDisplayValue(
-                actionResult.value,
-                undefined,
-                actionResult.value
-              );
-              let outputContent = materialized.text;
-              if (!outputContent.endsWith('\n')) {
-                outputContent += '\n';
-              }
-              if (materialized.descriptor) {
-                env.recordSecurityDescriptor(materialized.descriptor);
-              }
-              env.emitEffect('both', outputContent, { source: directive.values.action[0].location });
-            }
-          }
-          retry.reset();
-          break;
-        } catch (err: any) {
-          if (isRateLimitError(err)) {
-            const again = await retry.wait();
-            if (again) continue;
-          }
-          popForIterationContext(childEnv);
-          if (forErrors) {
-            forErrors.push({
-              index: idx,
-              key: key ?? null,
-              message: formatIterationError(err),
-              error: formatIterationError(err),
-              value
-            });
-            return;
-          }
-          throw err;
+
+      try {
+        const actionResult = await executeDirectiveActions({
+          directive,
+          env,
+          childEnv,
+          iterationRoot,
+          effective,
+          extractControlKind
+        });
+        childEnv = actionResult.childEnv;
+        returnControl = actionResult.returnControl;
+      } catch (err: any) {
+        popForIterationContext(childEnv);
+        if (forErrors) {
+          forErrors.push({
+            index: idx,
+            key: key ?? null,
+            message: formatIterationError(err),
+            error: formatIterationError(err),
+            value
+          });
+          return;
         }
+        throw err;
       }
+
       popForIterationContext(childEnv);
       return returnControl;
     };

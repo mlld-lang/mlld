@@ -16,6 +16,7 @@ const pathContext = {
 
 const ACTIVE_KEY = 'TEST_FOR_EXPR_PAR_ACTIVE';
 const MAX_KEY = 'TEST_FOR_EXPR_PAR_MAX';
+const BLOCK_RETRY_KEY = 'TEST_FOR_BLOCK_RETRY_TRIG';
 
 function createRuntime() {
   const fileSystem = new MemoryFileSystem();
@@ -82,11 +83,13 @@ describe('for evaluator characterization', () => {
   beforeEach(() => {
     delete process.env[ACTIVE_KEY];
     delete process.env[MAX_KEY];
+    delete process.env[BLOCK_RETRY_KEY];
   });
 
   afterEach(() => {
     delete process.env[ACTIVE_KEY];
     delete process.env[MAX_KEY];
+    delete process.env[BLOCK_RETRY_KEY];
   });
 
   it('binds dotted iteration fields and keeps full item access in for expressions', async () => {
@@ -263,6 +266,65 @@ describe('for evaluator characterization', () => {
       '20,1,3,false',
       '30,2,3,false'
     ]);
+  });
+
+  it('emits bare exec invocation output for directive non-block actions', async () => {
+    const { fileSystem, pathService: runtimePathService } = createRuntime();
+    const output = await interpret(`
+/exe @echo(value) = js { return value }
+/for @x in ["a", "b"] => @echo(@x)
+`, {
+      fileSystem,
+      pathService: runtimePathService,
+      format: 'markdown',
+      mlldMode: 'markdown',
+      ephemeral: true,
+      useMarkdownFormatter: false
+    });
+
+    const lines = output
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+    expect(lines).toEqual(['a', 'b']);
+  });
+
+  it('retries rate-limit failures in directive block actions', async () => {
+    const { fileSystem, pathService: runtimePathService } = createRuntime();
+    const source = `
+/exe @maybeRateLimited(value) = js {
+  if (!process.env.${BLOCK_RETRY_KEY}) {
+    process.env.${BLOCK_RETRY_KEY} = '1';
+    const err = new Error('rate limit');
+    // @ts-ignore
+    err.status = 429;
+    throw err;
+  }
+  return value;
+}
+/for @x in ["ok"] [
+  let @value = @maybeRateLimited(@x)
+  show @value
+]
+`;
+
+    const started = Date.now();
+    const output = await interpret(source, {
+      fileSystem,
+      pathService: runtimePathService,
+      format: 'markdown',
+      mlldMode: 'markdown',
+      ephemeral: true,
+      useMarkdownFormatter: false
+    });
+    const elapsed = Date.now() - started;
+    const lines = output
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    expect(elapsed).toBeGreaterThanOrEqual(450);
+    expect(lines).toEqual(['ok']);
   });
 
   it('throws for invalid parallel cap values', async () => {
