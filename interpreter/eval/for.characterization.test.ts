@@ -55,6 +55,29 @@ async function requireValue(env: Environment, identifier: string): Promise<unkno
   return extractVariableValue(variable, env);
 }
 
+async function interpretWithOutputAndEnv(source: string): Promise<{ output: string; env: Environment }> {
+  const fileSystem = new MemoryFileSystem();
+  let environment: Environment | null = null;
+  const output = await interpret(source, {
+    fileSystem,
+    pathService,
+    pathContext,
+    filePath: pathContext.filePath,
+    format: 'markdown',
+    normalizeBlankLines: true,
+    useMarkdownFormatter: false,
+    captureEnvironment: env => {
+      environment = env;
+    }
+  });
+
+  if (!environment) {
+    throw new Error('Failed to capture environment');
+  }
+
+  return { output, env: environment };
+}
+
 describe('for evaluator characterization', () => {
   beforeEach(() => {
     delete process.env[ACTIVE_KEY];
@@ -219,6 +242,27 @@ describe('for evaluator characterization', () => {
     expect(process.env[MAX_KEY]).toBe('2');
     expect(elapsed).toBeGreaterThanOrEqual(25);
     expect(await requireValue(env, 'result')).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('keeps iteration context parity between directive and expression runners', async () => {
+    const { output, env } = await interpretWithOutputAndEnv(`
+/var @exprCtx = for @n in [10, 20, 30] => \`@n,@mx.for.index,@mx.for.total,@mx.for.parallel\`
+/for @n in [10, 20, 30] => show \`@n,@mx.for.index,@mx.for.total,@mx.for.parallel\`
+`);
+
+    const directiveLines = output
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+    const exprValues = await requireValue(env, 'exprCtx');
+
+    expect(Array.isArray(exprValues)).toBe(true);
+    expect(directiveLines).toEqual(exprValues);
+    expect(exprValues).toEqual([
+      '10,0,3,false',
+      '20,1,3,false',
+      '30,2,3,false'
+    ]);
   });
 
   it('throws for invalid parallel cap values', async () => {

@@ -7,7 +7,7 @@ import type {
   VariableReferenceNode
 } from '@core/types';
 import { evaluate, type EvalResult } from '../core/interpreter';
-import { FieldAccessError, MlldDirectiveError } from '@core/errors';
+import { MlldDirectiveError } from '@core/errors';
 import { toIterable } from './for-utils';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 import { RateLimitRetry, isRateLimitError } from '../eval/pipeline/rate-limit-retry';
@@ -24,8 +24,7 @@ import {
   extractSecurityDescriptor
 } from '../utils/structured-value';
 import { materializeDisplayValue } from '../utils/display-materialization';
-import { accessFields } from '../utils/field-access';
-import { inheritExpressionProvenance, setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluateWhenExpression } from './when-expression';
@@ -36,14 +35,15 @@ import { isControlCandidate } from './loop';
 import { resolveParallelOptions, type ForParallelOptions } from './for/parallel-options';
 import {
   assertKeyVariableHasNoFields,
-  ensureVariable,
-  enhanceFieldAccessError,
-  formatFieldNodeForError,
   formatFieldPath,
-  isFieldAccessResultLike,
-  shouldKeepStructuredForForExpression,
-  withIterationMxKey
+  shouldKeepStructuredForForExpression
 } from './for/binding-utils';
+import {
+  popExpressionIterationContexts,
+  popForIterationContext,
+  pushExpressionIterationContext,
+  setupIterationContext
+} from './for/iteration-runner';
 
 interface ForIterationError {
   index: number;
@@ -51,13 +51,6 @@ interface ForIterationError {
   message: string;
   error: string;
   value?: unknown;
-}
-
-interface ForContextSnapshot {
-  index: number;
-  total: number;
-  key: string | number | null;
-  parallel: boolean;
 }
 
 function formatIterationError(error: unknown): string {
@@ -183,76 +176,20 @@ export async function evaluateForDirective(
     }
 
     const runOne = async (entry: [any, any], idx: number) => {
-      const [key, value] = entry;
-      const iterationRoot = env.createChildEnvironment();
-      if (effective?.parallel) {
-        (iterationRoot as any).__parallelIsolationRoot = iterationRoot;
-      }
-      let childEnv = iterationRoot;
-      // Inherit forOptions for nested loops if set
-      if (effective) (childEnv as any).__forOptions = effective;
-      let derivedValue: unknown;
-      if (varFields && varFields.length > 0) {
-        try {
-          const accessed = await accessFields(value, varFields, {
-            env: childEnv,
-            preserveContext: true,
-            returnUndefinedForMissing: true,
-            sourceLocation: varNode.location
-          });
-          const accessedValue = isFieldAccessResultLike(accessed) ? accessed.value : accessed;
-          if (typeof accessedValue === 'undefined') {
-            const missingField = formatFieldNodeForError(varFields[varFields.length - 1]);
-            const accessPath = isFieldAccessResultLike(accessed) && Array.isArray(accessed.accessPath)
-              ? accessed.accessPath
-              : [];
-            throw new FieldAccessError(`Field "${missingField}" not found in object`, {
-              baseValue: value,
-              fieldAccessChain: [],
-              failedAtIndex: Math.max(0, varFields.length - 1),
-              failedKey: missingField,
-              accessPath
-            }, {
-              sourceLocation: varNode.location,
-              env: childEnv
-            });
-          }
-          derivedValue = accessedValue;
-          inheritExpressionProvenance(derivedValue, value);
-        } catch (error) {
-          throw enhanceFieldAccessError(error, {
-            fieldPath: fieldPathString,
-            varName,
-            index: idx,
-            key: key ?? null,
-            sourceLocation: varNode.location
-          }) as Error;
-        }
-      }
-      const iterationVar = ensureVariable(varName, value, env);
-      childEnv.setVariable(varName, withIterationMxKey(iterationVar, key));
-      if (typeof derivedValue !== 'undefined' && fieldPathString) {
-        const derivedVar = ensureVariable(`${varName}.${fieldPathString}`, derivedValue, env);
-        childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
-      }
-      if (key !== null && typeof key === 'string') {
-        if (keyVarName) {
-          const keyVar = ensureVariable(keyVarName, key, env);
-          childEnv.setVariable(keyVarName, keyVar);
-        } else {
-          const keyVar = ensureVariable(`${varName}_key`, key, env);
-          childEnv.setVariable(`${varName}_key`, keyVar);
-        }
-      }
-
-      // Set up for context for @mx.for access
-      const forCtx: ForContextSnapshot = {
+      const setup = await setupIterationContext({
+        rootEnv: env,
+        entry,
         index: idx,
         total: iterableArray.length,
-        key: key ?? null,
-        parallel: !!effective?.parallel
-      };
-      childEnv.pushExecutionContext('for', forCtx);
+        effective,
+        varName,
+        keyVarName,
+        varFields,
+        fieldPathString,
+        sourceLocation: varNode.location
+      });
+      const { iterationRoot, key, value } = setup;
+      let childEnv = setup.childEnv;
 
       const actionNodes = directive.values.action;
       const retry = new RateLimitRetry();
@@ -364,7 +301,7 @@ export async function evaluateForDirective(
             const again = await retry.wait();
             if (again) continue;
           }
-          childEnv.popExecutionContext('for');
+          popForIterationContext(childEnv);
           if (forErrors) {
             forErrors.push({
               index: idx,
@@ -378,7 +315,7 @@ export async function evaluateForDirective(
           throw err;
         }
       }
-      childEnv.popExecutionContext('for');
+      popForIterationContext(childEnv);
       return returnControl;
     };
 
@@ -472,77 +409,22 @@ export async function evaluateForExpression(
   const SKIP = Symbol('skip');
   const DONE = Symbol('done');
   const runOne = async (entry: [any, any], idx: number) => {
-    const [key, value] = entry;
-    const iterationRoot = env.createChildEnvironment();
-    if (effective?.parallel) {
-      (iterationRoot as any).__parallelIsolationRoot = iterationRoot;
-    }
-    let childEnv = iterationRoot;
-    if (effective) (childEnv as any).__forOptions = effective;
-    let derivedValue: unknown;
-    if (varFields && varFields.length > 0) {
-      try {
-        const accessed = await accessFields(value, varFields, {
-          env: childEnv,
-          preserveContext: true,
-          returnUndefinedForMissing: true,
-          sourceLocation: expr.variable.location
-        });
-        const accessedValue = isFieldAccessResultLike(accessed) ? accessed.value : accessed;
-        if (typeof accessedValue === 'undefined') {
-          const missingField = formatFieldNodeForError(varFields[varFields.length - 1]);
-          const accessPath = isFieldAccessResultLike(accessed) && Array.isArray(accessed.accessPath)
-            ? accessed.accessPath
-            : [];
-          throw new FieldAccessError(`Field "${missingField}" not found in object`, {
-            baseValue: value,
-            fieldAccessChain: [],
-            failedAtIndex: Math.max(0, varFields.length - 1),
-            failedKey: missingField,
-            accessPath
-          }, {
-            sourceLocation: expr.variable.location,
-            env: childEnv
-          });
-        }
-        derivedValue = accessedValue;
-        inheritExpressionProvenance(derivedValue, value);
-      } catch (error) {
-        throw enhanceFieldAccessError(error, {
-          fieldPath: fieldPathString,
-          varName,
-          index: idx,
-          key: key ?? null,
-          sourceLocation: expr.variable.location
-        }) as Error;
-      }
-    }
-    const iterationVar = ensureVariable(varName, value, env);
-    childEnv.setVariable(varName, withIterationMxKey(iterationVar, key));
-    if (typeof derivedValue !== 'undefined' && fieldPathString) {
-      const derivedVar = ensureVariable(`${varName}.${fieldPathString}`, derivedValue, env);
-      childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
-    }
-    if (key !== null && typeof key === 'string') {
-      if (keyVarName) {
-        const keyVar = ensureVariable(keyVarName, key, env);
-        childEnv.setVariable(keyVarName, keyVar);
-      } else {
-        const keyVar = ensureVariable(`${varName}_key`, key, env);
-        childEnv.setVariable(`${varName}_key`, keyVar);
-      }
-    }
-
-    // Set up for context for @mx.for access (matching directive path)
-    const forCtx: ForContextSnapshot = {
+    const setup = await setupIterationContext({
+      rootEnv: env,
+      entry,
       index: idx,
       total: iterableArray.length,
-      key: key ?? null,
-      parallel: !!effective?.parallel
-    };
-    childEnv.pushExecutionContext('for', forCtx);
+      effective,
+      varName,
+      keyVarName,
+      varFields,
+      fieldPathString,
+      sourceLocation: expr.variable.location
+    });
+    let childEnv = setup.childEnv;
+    const { key, value } = setup;
     // Push exe context so if/when blocks inside for-expression blocks can use => returns
-    childEnv.pushExecutionContext('exe', { allowReturn: true, scope: 'for-expression' });
+    pushExpressionIterationContext(childEnv);
 
     try {
       let exprResult: unknown = null;
@@ -623,26 +505,22 @@ export async function evaluateForExpression(
         if (branchValue && typeof branchValue === 'object' && '__whileControl' in (branchValue as any)) {
           const control = (branchValue as any).__whileControl;
           if (control === 'continue') {
-            childEnv.popExecutionContext('exe');
-            childEnv.popExecutionContext('for');
+            popExpressionIterationContexts(childEnv);
             return SKIP as any;
           }
           if (control === 'done') {
-            childEnv.popExecutionContext('exe');
-            childEnv.popExecutionContext('for');
+            popExpressionIterationContexts(childEnv);
             return DONE as any;
           }
         }
         if (isControlCandidate(branchValue)) {
           const controlKind = extractControlKind(branchValue);
           if (controlKind === 'continue') {
-            childEnv.popExecutionContext('exe');
-            childEnv.popExecutionContext('for');
+            popExpressionIterationContexts(childEnv);
             return SKIP as any;
           }
           if (controlKind === 'done') {
-            childEnv.popExecutionContext('exe');
-            childEnv.popExecutionContext('for');
+            popExpressionIterationContexts(childEnv);
             return DONE as any;
           }
         }
@@ -714,12 +592,10 @@ export async function evaluateForExpression(
           }
         }
       }
-      childEnv.popExecutionContext('exe');
-      childEnv.popExecutionContext('for');
+      popExpressionIterationContexts(childEnv);
       return exprResult as any;
     } catch (error) {
-      childEnv.popExecutionContext('exe');
-      childEnv.popExecutionContext('for');
+      popExpressionIterationContexts(childEnv);
       if (!effective?.parallel) {
         throw error;
       }
