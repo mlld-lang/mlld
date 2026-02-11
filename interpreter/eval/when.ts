@@ -1,10 +1,10 @@
-import type { WhenNode, WhenSimpleNode, WhenBlockNode, WhenMatchNode, WhenConditionPair, WhenEntry } from '@core/types/when';
+import type { WhenNode, WhenConditionPair } from '@core/types/when';
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { Variable } from '@core/types/variable';
 import { MlldConditionError } from '@core/errors';
-import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode, isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
+import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode } from '@core/types/when';
 import { evaluate } from '../core/interpreter';
 import { logger } from '@core/utils/logger';
 import { isExeReturnControl } from './exe-return';
@@ -20,6 +20,12 @@ import {
 import { isStructuredValue, asData, asText, assertStructuredValue } from '../utils/structured-value';
 import { evaluateLetAssignment, evaluateAugmentedAssignment } from './when/assignment-support';
 import { evaluateActionSequence } from './when/action-runner';
+import {
+  evaluateWhenSimpleForm,
+  evaluateWhenMatchForm,
+  evaluateWhenBlockForm,
+  type WhenFormHandlerRuntime
+} from './when/form-handlers';
 
 const DENIED_KEYWORD = 'denied';
 export { evaluateLetAssignment, evaluateAugmentedAssignment } from './when/assignment-support';
@@ -98,13 +104,26 @@ export async function evaluateWhen(
   node: WhenNode,
   env: Environment
 ): Promise<EvalResult> {
-  
+  const runtime: WhenFormHandlerRuntime = {
+    evaluateCondition,
+    evaluateActionSequence,
+    evaluateFirstMatch,
+    evaluateLetAssignment,
+    evaluateAugmentedAssignment,
+    compareValues,
+    validateNonePlacement,
+    containsNoneWithOperator,
+    isNoneCondition,
+    evaluateNode: evaluate,
+    isExeReturnControl
+  };
+
   if (isWhenSimpleNode(node)) {
-    return evaluateWhenSimple(node, env);
+    return evaluateWhenSimpleForm(node, env, runtime);
   } else if (isWhenMatchNode(node)) {
-    return evaluateWhenMatch(node, env);
+    return evaluateWhenMatchForm(node, env, runtime);
   } else if (isWhenBlockNode(node)) {
-    return evaluateWhenBlock(node, env);
+    return evaluateWhenBlockForm(node, env, runtime);
   }
   
   throw new MlldConditionError(
@@ -112,305 +131,6 @@ export async function evaluateWhen(
     undefined,
     node.location
   );
-}
-
-/**
- * Evaluates a simple when directive: @when <condition> => <action>
- * Also handles block form: @when <condition> [block]
- */
-async function evaluateWhenSimple(
-  node: WhenSimpleNode,
-  env: Environment
-): Promise<EvalResult> {
-  // Validate none is not used with operators
-  const conditionNodes = Array.isArray(node.values.condition) ? node.values.condition : [node.values.condition];
-  for (const cond of conditionNodes) {
-    if (containsNoneWithOperator(cond)) {
-      throw new Error('The \'none\' keyword cannot be used with operators');
-    }
-  }
-
-  const conditionResult = await evaluateCondition(node.values.condition, env);
-
-  if (process.env.DEBUG_WHEN) {
-    logger.debug('When condition result:', { conditionResult });
-  }
-
-  if (conditionResult) {
-    // Check if this is a block form (has isBlockForm in meta)
-    const isBlockForm = node.meta?.isBlockForm === true;
-    const actionNodes = Array.isArray(node.values.action) ? node.values.action : [node.values.action];
-
-    if (isBlockForm) {
-      // Execute block with child environment for proper scoping of let assignments
-      let childEnv = env.createChild();
-      const lastResult = await evaluateActionSequence(actionNodes, childEnv);
-      childEnv = lastResult.env;
-
-      // Merge child environment nodes back to parent
-      env.mergeChild(childEnv);
-
-      if (isExeReturnControl(lastResult.value)) {
-        return { value: lastResult.value, env };
-      }
-
-      // Return the last result value with the parent env
-      return { value: lastResult.value ?? '', env };
-    }
-
-    // Non-block form: execute action normally
-    const result = await evaluateActionSequence(actionNodes, env);
-    return result;
-  }
-
-  // Return empty string if condition is false
-  return { value: '', env };
-}
-
-/**
- * Evaluates a match when directive: @when <expression>: [value => action, ...]
- * Evaluates the expression once and executes the first matching action
- */
-async function evaluateWhenMatch(
-  node: WhenMatchNode,
-  env: Environment
-): Promise<EvalResult> {
-  // Validate none placement
-  validateNonePlacement(node.values.conditions);
-  
-  // Evaluate the expression once without producing output
-  // For simple text nodes, extract the value directly
-  let expressionValue: any;
-  if (node.values.expression.length === 1 && node.values.expression[0].type === 'Text') {
-    expressionValue = node.values.expression[0].content;
-  } else {
-    const expressionResult = await evaluate(node.values.expression, env);
-    expressionValue = expressionResult.value;
-  }
-  
-  // Create a child environment for the switch block
-  let childEnv = env.createChild();
-
-  // Process let and augmented assignments first to build up the environment
-  for (const entry of node.values.conditions) {
-    if (isLetAssignment(entry)) {
-      childEnv = await evaluateLetAssignment(entry, childEnv);
-    } else if (isAugmentedAssignment(entry)) {
-      childEnv = await evaluateAugmentedAssignment(entry, childEnv);
-    }
-  }
-
-  // Filter to only condition pairs for iteration
-  const conditionPairs = node.values.conditions.filter(isConditionPair);
-
-  // Track if any non-none condition matched
-  let anyNonNoneMatched = false;
-
-  try {
-    // First pass: Check each non-none condition value against the expression result
-    for (const pair of conditionPairs) {
-      // Skip none conditions in first pass
-      if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
-        continue;
-      }
-      // Check if this is a negation node
-      let isNegated = false;
-      let actualCondition = pair.condition;
-      
-      if (actualCondition.length === 1 && actualCondition[0].type === 'UnaryExpression') {
-        const unaryNode = actualCondition[0] as any;
-        if (unaryNode.operator === '!') {
-          isNegated = true;
-          actualCondition = [unaryNode.operand];
-        }
-      }
-      
-      // Evaluate the condition value without producing output
-      // For simple text nodes, extract the value directly
-      let conditionValue: any;
-      if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
-        conditionValue = actualCondition[0].content;
-      } else if (actualCondition.length === 1 && actualCondition[0].type === 'ExecInvocation') {
-        // Handle ExecInvocation as a condition
-        const execResult = await evaluateCondition(actualCondition, childEnv);
-        // For exec invocations, we want the boolean result
-        conditionValue = execResult;
-      } else {
-        // For more complex conditions, evaluate them
-        const conditionResult = await evaluate(actualCondition, childEnv);
-        conditionValue = conditionResult.value;
-      }
-      
-      // Compare values using shared logic
-      let matches = await compareValues(expressionValue, conditionValue, childEnv);
-      
-      // Apply negation if needed
-      if (isNegated) {
-        matches = !matches;
-      }
-      
-      if (matches) {
-        anyNonNoneMatched = true;
-        if (pair.action) {
-          // Handle action which might be an array of nodes
-          const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
-          const actionResult = await evaluateActionSequence(actionNodes, childEnv);
-          childEnv = actionResult.env;
-          // Merge child environment nodes back to parent
-          env.mergeChild(childEnv);
-          if (isExeReturnControl(actionResult.value)) {
-            return { value: actionResult.value, env };
-          }
-          // For @when, we don't want to propagate the action's output value to the document
-          // The action should have already done what it needs to do (like @output writing to a file)
-          return { value: '', env };
-        }
-      }
-    }
-    
-    // Second pass: Handle none conditions if no non-none conditions matched
-    if (!anyNonNoneMatched) {
-      for (const pair of conditionPairs) {
-        // Only process none conditions in second pass
-        if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
-          if (pair.action) {
-            // Handle action which might be an array of nodes
-            const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
-            const actionResult = await evaluateActionSequence(actionNodes, childEnv);
-            childEnv = actionResult.env;
-            // Merge child environment nodes back to parent
-            env.mergeChild(childEnv);
-            if (isExeReturnControl(actionResult.value)) {
-              return { value: actionResult.value, env };
-            }
-            return { value: '', env };
-          }
-        }
-      }
-    }
-    
-    // No match found
-    return { value: '', env };
-  } finally {
-    // Child environment goes out of scope
-  }
-}
-
-/**
- * Evaluates a block when directive: @when <var>: [...]
- * WHY: Block forms evaluate conditions in order and stop at the first match.
- * CONTEXT: Child environment ensures variable definitions inside when blocks are
- * scoped locally, preventing pollution of parent scope.
- */
-async function evaluateWhenBlock(
-  node: WhenBlockNode,
-  env: Environment
-): Promise<EvalResult> {
-  const modifier = node.meta?.modifier;
-
-  if (modifier && modifier !== 'default') {
-    if (modifier === 'all') {
-      throw new MlldConditionError(
-        'The \'all\' modifier has been removed. Use the && operator instead.\n' +
-        'Example: when (@cond1 && @cond2) => action',
-        'all',
-        node.location
-      );
-    }
-    if (modifier === 'any') {
-      throw new MlldConditionError(
-        'The \'any\' modifier has been removed. Use the || operator instead.\n' +
-        'Example: when (@cond1 || @cond2) => action',
-        'any',
-        node.location
-      );
-    }
-    throw new MlldConditionError(
-      `Invalid when modifier: ${modifier}`,
-      undefined,
-      node.location
-    );
-  }
-
-  // For comparison-based matching, we need the expression to compare against
-  let expressionNodes: BaseMlldNode[] | undefined;
-
-  // Store variable value if specified
-  let originalValue: any;
-  let variableName: string | undefined;
-
-
-  if (node.values.variable && node.meta.hasVariable) {
-    // The variable nodes contain the expression to evaluate
-    expressionNodes = node.values.variable;
-
-
-    // Extract variable name from the VariableReference node
-    if (expressionNodes.length === 1 && expressionNodes[0].type === 'VariableReference') {
-      const varRef = expressionNodes[0] as any;
-      variableName = varRef.identifier;
-
-
-      if (variableName) {
-        // Store original value to restore later
-        originalValue = env.hasVariable(variableName) ? env.getVariable(variableName) : undefined;
-      }
-    }
-  }
-
-  // Create a child environment for the when block
-  let childEnv = env.createChild();
-
-  // Process let and augmented assignments first to build up the environment
-  for (const entry of node.values.conditions) {
-    if (isLetAssignment(entry)) {
-      childEnv = await evaluateLetAssignment(entry, childEnv);
-    } else if (isAugmentedAssignment(entry)) {
-      childEnv = await evaluateAugmentedAssignment(entry, childEnv);
-    }
-  }
-
-  // Filter to only condition pairs for evaluation
-  const conditions = node.values.conditions.filter(isConditionPair);
-  
-  try {
-    let result: EvalResult;
-    
-    result = await evaluateFirstMatch(
-      conditions,
-      childEnv,
-      variableName,
-      expressionNodes,
-      node.values.action
-    );
-    
-    // Merge child environment nodes back to parent
-    // This ensures output nodes created by actions are preserved
-    if (process.env.DEBUG_WHEN) {
-      logger.debug('Before merge:', {
-        parentNodes: env.nodes.length,
-        childNodes: childEnv.nodes.length,
-        childInitialCount: childEnv.initialNodeCount,
-        resultEnvNodes: result.env.nodes.length
-      });
-    }
-    
-    // The result.env contains the updated environment from the evaluation
-    // We need to merge from result.env, not childEnv
-    env.mergeChild(result.env);
-    
-    if (process.env.DEBUG_WHEN) {
-      logger.debug('After merge:', {
-        parentEnvNodes: env.nodes.length,
-        resultValue: result.value
-      });
-    }
-    
-    // Return the result with the updated parent environment
-    return { value: result.value, env };
-  } finally {
-    // Child environment goes out of scope
-  }
 }
 
 /**
