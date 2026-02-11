@@ -7,9 +7,7 @@ import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { JSONFormatter } from '../core/json-formatter';
 import { formatForDisplay } from '../utils/display-formatter';
-import { materializeDisplayValue } from '../utils/display-materialization';
-import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
-import type { DataLabel, SecurityDescriptor } from '@core/types/security';
+import type { DataLabel } from '@core/types/security';
 // Remove old type imports - we'll use only the new ones
 import {
   isTextLike,
@@ -41,19 +39,20 @@ import { MlldSecurityError } from '@core/errors';
 import {
   asText,
   assertStructuredValue,
-  isStructuredValue,
-  parseAndWrapJson,
-  applySecurityDescriptorToStructuredValue
+  isStructuredValue
 } from '@interpreter/utils/structured-value';
-import { getOperationLabels } from '@core/policy/operation-labels';
-import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
-import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
-
-import { wrapExecResult } from '../utils/structured-exec';
-import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 // Template normalization now handled in grammar - no longer needed here
 import { resolveDirectiveExecInvocation } from './directive-replay';
+import {
+  buildShowResultDescriptor,
+  emitShowEffectIfNeeded,
+  enforceShowPolicyIfNeeded,
+  materializeShowDisplayValue,
+  normalizeShowContent,
+  ShowDescriptorCollector,
+  wrapShowResult
+} from './show/shared-helpers';
 
 /**
  * Extract withClause from foreach expression AST format.
@@ -113,34 +112,8 @@ export async function evaluateShow(
     (val as any).metadata?.errors?.length > 0;
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
   let isStreamingShow = false;
-  let interpolatedDescriptor: SecurityDescriptor | undefined;
-  let sourceDescriptor: SecurityDescriptor | undefined;
-  const collectInterpolatedDescriptor = (descriptor?: SecurityDescriptor): void => {
-    if (!descriptor) {
-      return;
-    }
-    interpolatedDescriptor = interpolatedDescriptor
-      ? env.mergeSecurityDescriptors(interpolatedDescriptor, descriptor)
-      : descriptor;
-  };
-  const mergePipelineDescriptor = (
-    ...values: (SecurityDescriptor | undefined)[]
-  ): SecurityDescriptor | undefined => {
-    const descriptors = values.filter(Boolean) as SecurityDescriptor[];
-    if (descriptors.length === 0) {
-      return undefined;
-    }
-    if (descriptors.length === 1) {
-      return descriptors[0];
-    }
-    return env.mergeSecurityDescriptors(...descriptors);
-  };
-  const descriptorFromVariable = (variable?: Variable): SecurityDescriptor | undefined => {
-    if (!variable?.mx) {
-      return undefined;
-    }
-    return varMxToSecurityDescriptor(variable.mx);
-  };
+  const descriptorCollector = new ShowDescriptorCollector(env);
+  const collectInterpolatedDescriptor = descriptorCollector.collectInterpolatedDescriptor.bind(descriptorCollector);
   
   const directiveLocation = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
 
@@ -258,7 +231,7 @@ export async function evaluateShow(
       if (!variable) {
         throw new Error(`Variable not found: ${varName}`);
       }
-      sourceDescriptor = descriptorFromVariable(variable);
+      descriptorCollector.setSourceFromVariable(variable);
     }
 
     // Handle all variable types using the new type guards (skip if we already have a value from template literal)
@@ -449,7 +422,7 @@ export async function evaluateShow(
           pipeline: variableNode.withClause.pipeline,
           identifier: varName,
           location: directive.location,
-          descriptorHint: mergePipelineDescriptor(descriptorFromVariable(variable), interpolatedDescriptor)
+          descriptorHint: descriptorCollector.mergePipelineDescriptorFromVariable(variable)
         });
         value = processed;
         if (isStructuredValue(processed)) {
@@ -563,7 +536,7 @@ export async function evaluateShow(
           pipeline: variableNode.withClause.pipeline,
           identifier: varName,
           location: directive.location,
-          descriptorHint: mergePipelineDescriptor(descriptorFromVariable(variable), interpolatedDescriptor)
+          descriptorHint: descriptorCollector.mergePipelineDescriptorFromVariable(variable)
         });
       value = processed;
         if (isStructuredValue(processed)) {
@@ -590,7 +563,7 @@ export async function evaluateShow(
           directive,
           identifier: varName || 'show',
           location: directive.location,
-          descriptorHint: mergePipelineDescriptor(descriptorFromVariable(variable), interpolatedDescriptor)
+          descriptorHint: descriptorCollector.mergePipelineDescriptorFromVariable(variable)
         });
       value = processed;
         if (isStructuredValue(processed)) {
@@ -1203,7 +1176,7 @@ export async function evaluateShow(
       pipeline,
       identifier: 'show-tail',
       location: directive.location,
-      descriptorHint: interpolatedDescriptor
+      descriptorHint: descriptorCollector.getInterpolatedDescriptor()
     });
     resultValue = processed;
     if (isStructuredValue(processed)) {
@@ -1215,61 +1188,24 @@ export async function evaluateShow(
     }
   }
   
-  // Output directives always end with a newline
-  // This is the interpreter's responsibility, not the grammar's
-  // Final safety: ensure content is a string and pretty-print JSON when possible
-  if (typeof content !== 'string') {
-    try {
-      if (isStructuredValue(content)) {
-        content = asText(content);
-      } else if (Array.isArray(content)) {
-        content = JSONFormatter.stringify(content, { pretty: true });
-      } else if (content !== null && content !== undefined) {
-        content = JSONFormatter.stringify(content, { pretty: true });
-      } else {
-        content = '';
-      }
-    } catch {
-      content = String(content);
-    }
-  } else if (typeof content === 'string' && !skipJsonFormatting) {
-    const parsed = parseAndWrapJson(content, { preserveText: true });
-    if (parsed && typeof parsed !== 'string' && isStructuredValue(parsed)) {
-      content = JSONFormatter.stringify(parsed.data, { pretty: true });
-    }
-  }
+  content = normalizeShowContent(content, skipJsonFormatting);
 
   if (resultValue === undefined) {
     resultValue = content;
   }
 
-  const displayMaterialized = materializeDisplayValue(content, undefined, resultValue);
+  const displayMaterialized = materializeShowDisplayValue(content, resultValue);
   content = displayMaterialized.text;
   const textForWrapper = content;
 
-  if (!context?.isExpression && !context?.policyChecked) {
-    const inputDescriptor = mergeInputDescriptors(
-      interpolatedDescriptor,
-      displayMaterialized.descriptor,
-      sourceDescriptor
-    );
-    const inputTaint = descriptorToInputTaint(inputDescriptor);
-    if (inputTaint.length > 0) {
-      const opType = directive.kind === 'stream' ? 'stream' : 'show';
-      const opLabels =
-        context?.operationContext?.opLabels ?? getOperationLabels({ type: opType });
-      const enforcer = new PolicyEnforcer(env.getPolicySummary());
-      enforcer.checkLabelFlow(
-        {
-          inputTaint,
-          opLabels,
-          exeLabels: Array.from(env.getEnclosingExeLabels()),
-          flowChannel: 'arg'
-        },
-        { env, sourceLocation: directiveLocation }
-      );
-    }
-  }
+  enforceShowPolicyIfNeeded({
+    context,
+    directive,
+    env,
+    descriptorCollector,
+    displayDescriptor: displayMaterialized.descriptor,
+    directiveLocation
+  });
 
   if (process.env.MLLD_DEBUG_FIX === 'true') {
     try {
@@ -1292,40 +1228,20 @@ export async function evaluateShow(
     content = `${content}\n`;
   }
 
-  const snapshot = env.getSecuritySnapshot();
-  const resultDescriptor = mergeDescriptors(
-    interpolatedDescriptor,
-    displayMaterialized.descriptor,
-    sourceDescriptor,
-    snapshot
-      ? makeSecurityDescriptor({
-          labels: snapshot.labels,
-          taint: snapshot.taint,
-          sources: snapshot.sources,
-          policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
-        })
-      : undefined
+  const resultDescriptor = buildShowResultDescriptor(
+    env,
+    descriptorCollector,
+    displayMaterialized.descriptor
   );
-  
-  // Only emit the effect if we're not in an expression context
-  // In expression contexts (like templates), we only return the value.
-  // For-expression blocks pass allowEffects: true to override this.
-  if (!context?.isExpression || context?.allowEffects) {
-    // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
-    if (!isStreamingShow) {
-      env.emitEffect('both', content, { source: directive.location });
-    }
-  }
 
-  const baseValue = resultValue ?? textForWrapper;
-  const wrapOptions =
-    !isStructuredValue(baseValue) && typeof baseValue !== 'string'
-      ? { text: textForWrapper }
-      : undefined;
-  const wrapped = wrapExecResult(baseValue, wrapOptions);
-  if (resultDescriptor) {
-    applySecurityDescriptorToStructuredValue(wrapped, resultDescriptor);
-  }
+  emitShowEffectIfNeeded(context, env, content, directive.location, isStreamingShow);
+
+  const wrapped = wrapShowResult(
+    resultValue,
+    textForWrapper,
+    resultDescriptor,
+    securityLabels
+  );
   return { value: wrapped, env };
 }
 
