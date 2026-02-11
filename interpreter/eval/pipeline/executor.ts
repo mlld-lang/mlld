@@ -1,19 +1,17 @@
 import type { Environment } from '../../env/Environment';
-import type { PipelineCommand, PipelineStage, PipelineStageEntry, InlineCommandStage, InlineValueStage } from '@core/types';
+import type { PipelineCommand, PipelineStage, PipelineStageEntry } from '@core/types';
 import type { ExecInvocation, CommandReference } from '@core/types/primitives';
-import type { OperationContext, PipelineContextSnapshot } from '../../env/ContextManager';
+import type { OperationContext } from '../../env/ContextManager';
 import type { StructuredValue } from '../../utils/structured-value';
 import type { SecurityDescriptor, DataLabel } from '@core/types/security';
-import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import { makeSecurityDescriptor } from '@core/types/security';
 import { getOperationLabels } from '@core/policy/operation-labels';
 
 // Import pipeline implementation
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
-import { createStageEnvironment } from './context-builder';
 import { MlldCommandExecutionError } from '@core/errors';
 import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { RateLimitRetry } from './rate-limit-retry';
-import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 import {
   isStructuredValue,
   wrapStructured
@@ -23,14 +21,10 @@ import type { CommandExecutionContext } from '../../env/ErrorUtils';
 import { StreamBus, type StreamEvent } from './stream-bus';
 import type { StreamingOptions } from './streaming-options';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
-import type { ParallelStageError, PipelineCommandExecutionContextFactory, RetrySignal, StageExecutionResult } from './executor/types';
+import type { PipelineCommandExecutionContextFactory, StageExecutionResult } from './executor/types';
 import {
   cloneStructuredValue,
-  extractStageValue,
-  formatParallelStageError,
-  getStructuredSecurityDescriptor,
   previewValue,
-  resetParallelErrorsContext,
   safeJSONStringify,
   snippet
 } from './executor/helpers';
@@ -41,6 +35,7 @@ import { PipelineCommandInvoker } from './executor/command-invoker';
 import { PipelineInlineStageExecutor } from './executor/inline-stage-executor';
 import { PipelineWhileStageAdapter } from './executor/while-stage-adapter';
 import { PipelineSingleStageRunner } from './executor/single-stage-runner';
+import { PipelineParallelStageRunner } from './executor/parallel-stage-runner';
 
 export interface ExecuteOptions {
   returnStructured?: boolean;
@@ -82,6 +77,7 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
   private readonly inlineStageExecutor: PipelineInlineStageExecutor;
   private readonly whileStageAdapter: PipelineWhileStageAdapter;
   private readonly singleStageRunner: PipelineSingleStageRunner;
+  private readonly parallelStageRunner: PipelineParallelStageRunner;
   private readonly debugStructured = process.env.MLLD_DEBUG_STRUCTURED === 'true';
   private stageHookNodeCounter = 0;
   private streamingOptions: StreamingOptions;
@@ -143,6 +139,7 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
     this.inlineStageExecutor = new PipelineInlineStageExecutor(env, this.outputProcessor);
     this.whileStageAdapter = new PipelineWhileStageAdapter();
     this.singleStageRunner = new PipelineSingleStageRunner(this as any);
+    this.parallelStageRunner = new PipelineParallelStageRunner(this as any);
     this.format = format;
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
@@ -516,163 +513,7 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
     input: string,
     context: StageContext
   ): Promise<StageResult> {
-    try {
-      const errors: ParallelStageError[] = [];
-      resetParallelErrorsContext(this.env, errors);
-      const sharedStructuredInput = this.stageOutputs.get(stageIndex - 1, input);
-      const results = await runWithConcurrency(
-        commands,
-        Math.min(this.parallelCap ?? getParallelLimit(), commands.length),
-        async (cmd, parallelIndex) => {
-          const branchInput = cloneStructuredValue(sharedStructuredInput);
-          this.logStructuredStage('input', cmd.rawIdentifier, stageIndex, branchInput, true);
-          let pipelineSnapshot: PipelineContextSnapshot | undefined;
-          const subEnv = await createStageEnvironment(
-            cmd,
-            input,
-            branchInput,
-            context,
-            this.env,
-            this.format,
-            this.stateMachine.getEvents(),
-            this.hasSyntheticSource,
-            this.allRetryHistory,
-            {
-              getStageOutput: (stage, fallback) => this.stageOutputs.get(stage, fallback)
-            },
-            {
-              capturePipelineContext: snapshot => {
-                pipelineSnapshot = snapshot;
-              },
-              skipSetPipelineContext: false,
-              sourceRetryable: this.isRetryable
-            }
-          );
-
-          if (!pipelineSnapshot) {
-            throw new Error('Pipeline context snapshot unavailable for parallel branch');
-          }
-
-          const branchCtxManager = subEnv.getContextManager();
-          const stageDescriptor = this.buildStageDescriptor(cmd, stageIndex, context, branchInput);
-
-          const branchOpContext = this.createPipelineOperationContext(cmd, stageIndex, context);
-          const branchHookNode = this.createStageHookNode(cmd);
-
-          const executeBranch = async (): Promise<{ normalized: StructuredValue; labels?: SecurityDescriptor } | { value: 'retry'; hint?: any; from?: number }> => {
-            try {
-              const stageExecution =
-                (cmd as InlineValueStage).type === 'inlineValue'
-                  ? await this.inlineStageExecutor.executeInlineValueStage(cmd as InlineValueStage, branchInput, subEnv)
-                  : (cmd as InlineCommandStage).type === 'inlineCommand'
-                    ? await this.inlineStageExecutor.executeInlineCommandStage({
-                        stage: cmd as InlineCommandStage,
-                        structuredInput: branchInput,
-                        stageEnv: subEnv,
-                        operationContext: branchOpContext,
-                        stageIndex,
-                        stageContext: context,
-                        contextFactory: this,
-                        parallelIndex
-                      })
-                    : await this.executeCommand(
-                        cmd as PipelineCommand,
-                        input,
-                        branchInput,
-                        subEnv,
-                        branchOpContext,
-                        branchHookNode,
-                        stageIndex,
-                        context,
-                        parallelIndex
-                      );
-              if (this.isRetrySignal(stageExecution.result)) {
-                return stageExecution.result as RetrySignal;
-              }
-              let normalized = this.outputProcessor.normalizeOutput(stageExecution.result);
-              this.logStructuredStage('output', cmd.rawIdentifier, stageIndex, normalized, true);
-              normalized = this.outputProcessor.finalizeStageOutput(
-                normalized,
-                branchInput,
-                stageExecution.result,
-                stageDescriptor,
-                stageExecution.labelDescriptor
-              );
-              await this.runInlineEffects(cmd, normalized, subEnv);
-              return { normalized, labels: stageExecution.labelDescriptor };
-            } catch (err) {
-              const message = formatParallelStageError(err);
-              const marker: ParallelStageError = {
-                index: parallelIndex,
-                key: parallelIndex,
-                message,
-                error: message,
-                value: extractStageValue(branchInput)
-              };
-              errors.push(marker);
-              const markerText = safeJSONStringify(marker);
-              const normalized = wrapStructured(marker, 'object', markerText);
-              this.logStructuredStage('output', cmd.rawIdentifier, stageIndex, normalized, true);
-              return { normalized };
-            }
-          };
-
-          return await this.env.withPipeContext(pipelineSnapshot, async () => {
-            if (branchCtxManager) {
-              return await branchCtxManager.withOperation(branchOpContext, executeBranch);
-            }
-            return await executeBranch();
-          });
-        },
-        { ordered: true, paceMs: this.delayMs }
-      );
-
-      const retrySignal = results.find(res => this.isRetrySignal(res as any));
-      if (retrySignal) {
-        return { type: 'error', error: new Error('retry not supported in parallel stage') };
-      }
-
-      const branchPayloads = results as Array<{ normalized: StructuredValue; labels?: SecurityDescriptor }>;
-      if (errors.length === 0) {
-        for (let i = 0; i < branchPayloads.length; i++) {
-          const candidate = extractStageValue(branchPayloads[i].normalized);
-          if (candidate && typeof candidate === 'object' && 'message' in (candidate as any) && 'error' in (candidate as any)) {
-            const marker: ParallelStageError = {
-              index: typeof (candidate as any).index === 'number' ? (candidate as any).index : i,
-              key: (candidate as any).key ?? i,
-              message: String((candidate as any).message ?? (candidate as any).error),
-              error: String((candidate as any).error ?? (candidate as any).message),
-              value: (candidate as any).value
-            };
-            errors.push(marker);
-          }
-        }
-      }
-      resetParallelErrorsContext(this.env, errors);
-
-      const aggregatedData = branchPayloads.map(result => extractStageValue(result.normalized));
-      const aggregatedText = safeJSONStringify(aggregatedData);
-      const aggregatedBase = wrapStructured(aggregatedData, 'array', aggregatedText, {
-        stages: branchPayloads.map(result => result.normalized),
-        errors
-      });
-      const stageDescriptors = branchPayloads
-        .map(result => result.labels ?? getStructuredSecurityDescriptor(result.normalized))
-        .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
-      const aggregatedDescriptor = stageDescriptors.length > 0
-        ? mergeDescriptors(...stageDescriptors)
-        : undefined;
-      const aggregated = this.outputProcessor.finalizeStageOutput(
-        aggregatedBase,
-        sharedStructuredInput,
-        aggregatedData,
-        aggregatedDescriptor
-      );
-      this.stageOutputs.set(stageIndex, aggregated);
-      return { type: 'success', output: aggregated.text, structuredOutput: aggregated };
-    } catch (err) {
-      return { type: 'error', error: err as Error };
-    }
+    return await this.parallelStageRunner.execute(stageIndex, commands, input, context);
   }
 
   private buildStageDescriptor(
