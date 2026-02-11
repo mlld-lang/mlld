@@ -187,6 +187,7 @@ This keeps `@mx.hint` tightly scoped to the location where it is meaningful, whi
 - /output: `interpreter/eval/output.ts` — file and stream outputs
 - Expressions: `interpreter/eval/expression.ts` — binary/unary/ternary
 - Pipelines: `interpreter/eval/pipeline/unified-processor.ts` — condensed + structured
+- Pipeline executor runtime: `interpreter/eval/pipeline/executor.ts` + `interpreter/eval/pipeline/executor/*` — composition root, execution loop, stage runners, and streaming lifecycle
 - Interpolation: `interpreter/core/interpreter.ts#interpolate` — templates, pipes, file refs
 
 ### Working Directory Resolution

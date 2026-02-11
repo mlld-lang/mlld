@@ -73,6 +73,25 @@ All features preserve source location for precise error reporting:
 - Evaluators pass location through to errors
 - Errors show exact position in source file
 
+## Pipeline Executor Module Layout
+
+Pipeline execution uses a composition root plus focused collaborators:
+
+- `interpreter/eval/pipeline/executor.ts`: Composition root that wires collaborators, keeps public execute overloads stable, and owns cross-cutting runtime services.
+- `interpreter/eval/pipeline/executor/execution-loop-runner.ts`: State-machine loop orchestration, stage dispatch (`single` vs `parallel`), event ordering, retry-history refresh, and final-state handling.
+- `interpreter/eval/pipeline/executor/streaming-lifecycle.ts`: Streaming enablement checks, stage streaming predicates, event emission to StreamBus, sink configuration, and teardown.
+- `interpreter/eval/pipeline/executor/single-stage-runner.ts`: Single-stage environment construction, retry handling, while/inline dispatch, descriptor finalization, and inline effect sequencing.
+- `interpreter/eval/pipeline/executor/parallel-stage-runner.ts`: Parallel branch orchestration, ordered branch aggregation, error-marker capture, retry-signal rejection, and descriptor merge for aggregated output.
+- `interpreter/eval/pipeline/executor/inline-stage-executor.ts`: Inline value/command stage execution contracts.
+- `interpreter/eval/pipeline/executor/while-stage-adapter.ts`: While-processor adaptation from expression form to pipeline command invocation shape.
+- `interpreter/eval/pipeline/executor/command-invoker.ts`: Command invocation bridge with argument binding and hook context hand-off.
+- `interpreter/eval/pipeline/executor/output-processor.ts`: Structured output normalization, source descriptor application, descriptor inheritance/finalization, and load-content wrapping.
+- `interpreter/eval/pipeline/executor/stage-output-cache.ts`: Stage output cache for previous/current stage reads, retry clearing, and final output retrieval.
+- `interpreter/eval/pipeline/executor/helpers.ts`: Shared helper logic for structured cloning, safe serialization, error marker formatting, previewing, and parallel error context updates.
+- `interpreter/eval/pipeline/executor/types.ts`: Shared executor contracts (`StageExecutionResult`, `RetrySignal`, `ParallelStageError`, execution options, and context factory types).
+
+The executor-local import graph remains acyclic (`executor.ts` + `executor/*`), and shared contracts stay centralized in `executor/types.ts`.
+
 ## Pipeline Operator Syntax
 
 mlld supports two equivalent syntaxes for pipeline transformations:

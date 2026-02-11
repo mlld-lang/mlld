@@ -21,7 +21,7 @@ Streaming emits chunks during execution instead of buffering. Executors spawn as
 
 ## Details
 
-**Entry points**: `StreamingManager.configure()` attaches sinks for a run/exec, `PipelineExecutor` emits pipeline events, executors stream chunks via the injected bus, `executeParallelExecInvocations()` handles parallel exec stages.
+**Entry points**: `StreamingManager.configure()` attaches sinks for a run/exec, `PipelineStreamingLifecycle` (wired by `PipelineExecutor`) emits pipeline events, executors stream chunks via the injected bus, `executeParallelExecInvocations()` handles parallel exec stages.
 
 **Event Flow**:
 - Executors emit via the StreamingManager-provided `StreamBus`: `PIPELINE_START|COMPLETE|ABORT`, `STAGE_START|SUCCESS|FAILURE`, `CHUNK`
