@@ -3,7 +3,6 @@ import type { DirectiveNode } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
-import { interpolate } from '../core/interpreter';
 import { JSONFormatter } from '../core/json-formatter';
 import type { DataLabel } from '@core/types/security';
 import { logger } from '@core/utils/logger';
@@ -12,22 +11,6 @@ import {
   isStructuredValue
 } from '@interpreter/utils/structured-value';
 // Template normalization now handled in grammar - no longer needed here
-import { evaluateShowVariable } from './show/show-variable';
-import { evaluateShowPath, evaluateShowPathSection } from './show/show-path-handlers';
-import { evaluateShowLoadContent, evaluateShowTemplate } from './show/show-template-load-handlers';
-import {
-  evaluateLegacyTemplateInvocation,
-  evaluateShowExecInvocation,
-  evaluateShowInvocation
-} from './show/show-invocation-handlers';
-import {
-  evaluateShowForeach,
-  evaluateShowForeachSection
-} from './show/show-foreach-handlers';
-import {
-  evaluateShowCode,
-  evaluateShowCommand
-} from './show/show-runtime-handlers';
 import {
   buildShowResultDescriptor,
   emitShowEffectIfNeeded,
@@ -38,6 +21,7 @@ import {
   wrapShowResult
 } from './show/shared-helpers';
 import { applyHeaderTransform, extractSection } from './show/section-utils';
+import { dispatchShowSubtype } from './show/show-dispatcher';
 
 /**
  * Evaluate /show directives.
@@ -68,146 +52,22 @@ export async function evaluateShow(
   
   const directiveLocation = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
 
-  if (directive.subtype === 'showVariable') {
-    const showVariableResult = await evaluateShowVariable({
-      directive,
-      env,
-      context,
-      collectInterpolatedDescriptor,
-      descriptorCollector,
-      directiveLocation
-    });
-    content = showVariableResult.content;
-    resultValue = showVariableResult.resultValue;
-    if (showVariableResult.skipJsonFormatting) {
-      skipJsonFormatting = true;
-    }
-  } else if (directive.subtype === 'showPath') {
-    content = await evaluateShowPath({
-      directive,
-      env,
-      directiveLocation,
-      collectInterpolatedDescriptor
-    });
-    
-  } else if (directive.subtype === 'showPathSection') {
-    content = await evaluateShowPathSection({
-      directive,
-      env,
-      directiveLocation,
-      collectInterpolatedDescriptor
-    });
-    
-  } else if (directive.subtype === 'showTemplate') {
-    content = await evaluateShowTemplate({
-      directive,
-      env,
-      collectInterpolatedDescriptor
-    });
-    
-  } else if (directive.subtype === 'addInvocation' || directive.subtype === 'showInvocation') {
-    const invocationResult = await evaluateShowInvocation({
-      directive,
-      env,
-      context,
-      collectInterpolatedDescriptor,
-      securityLabels
-    });
-    content = invocationResult.content;
-    resultValue = invocationResult.resultValue;
-    if (invocationResult.isStreamingShow) {
-      isStreamingShow = true;
-    }
-    
-  } else if (directive.subtype === 'addTemplateInvocation') {
-    const templateInvocationResult = await evaluateLegacyTemplateInvocation({
-      directive,
-      env,
-      collectInterpolatedDescriptor
-    });
-    content = templateInvocationResult.content;
-    resultValue = templateInvocationResult.resultValue;
-    
-  } else if (directive.subtype === 'addForeach') {
-    const foreachResult = await evaluateShowForeach(directive, env);
-    content = foreachResult.content;
-    
-  } else if (directive.subtype === 'addExecInvocation' || directive.subtype === 'showExecInvocation') {
-    const execInvocationResult = await evaluateShowExecInvocation({
-      directive,
-      env,
-      collectInterpolatedDescriptor
-    });
-    content = execInvocationResult.content;
-    resultValue = execInvocationResult.resultValue;
-    if (execInvocationResult.skipJsonFormatting) {
-      skipJsonFormatting = true;
-    }
-    
-  } else if (directive.subtype === 'showForeach') {
-    const foreachResult = await evaluateShowForeach(directive, env);
-    content = foreachResult.content;
-    
-  } else if (directive.subtype === 'showForeachSection') {
-    const foreachSectionResult = await evaluateShowForeachSection(directive, env);
-    content = foreachSectionResult.content;
-    
-  } else if (directive.subtype === 'showLoadContent') {
-    const loadContentResult = await evaluateShowLoadContent({
-      directive,
-      env,
-      collectInterpolatedDescriptor
-    });
-    content = loadContentResult.content;
-    resultValue = loadContentResult.resultValue;
-    
-  } else if (directive.subtype === 'showCommand') {
-    const commandResult = await evaluateShowCommand({
-      directive,
-      env,
-      directiveLocation,
-      collectInterpolatedDescriptor
-    });
-    content = commandResult.content;
-    resultValue = commandResult.resultValue;
-    
-  } else if (directive.subtype === 'showCode') {
-    const codeResult = await evaluateShowCode({
-      directive,
-      env,
-      directiveLocation,
-      collectInterpolatedDescriptor
-    });
-    content = codeResult.content;
-    resultValue = codeResult.resultValue;
-    
-  } else if (directive.subtype === 'show' && directive.values?.content) {
-    // Handle simple show directive with content (used in for loops)
-    let templateNodes = directive.values.content;
-
-    // Handle wrapped content structure from for loop actions
-    if (Array.isArray(templateNodes) && templateNodes.length === 1 &&
-        templateNodes[0].content && templateNodes[0].wrapperType) {
-      // Unwrap the content
-      templateNodes = templateNodes[0].content;
-    }
-
-    // Process the content using the standard interpolation
-    content = await interpolate(templateNodes, env, undefined, {
-      collectSecurityDescriptor: collectInterpolatedDescriptor
-    });
-
-  } else if (directive.subtype === 'showLiteral' && directive.values?.content) {
-    // Handle literal show directive (from unified effects pattern)
-    const templateNodes = directive.values.content;
-
-    // Process the content using the standard interpolation
-    content = await interpolate(templateNodes, env, undefined, {
-      collectSecurityDescriptor: collectInterpolatedDescriptor
-    });
-
-  } else {
-    throw new Error(`Unsupported show subtype: ${directive.subtype}`);
+  const dispatchResult = await dispatchShowSubtype({
+    directive,
+    env,
+    context,
+    descriptorCollector,
+    collectInterpolatedDescriptor,
+    directiveLocation,
+    securityLabels
+  });
+  content = dispatchResult.content;
+  resultValue = dispatchResult.resultValue;
+  if (dispatchResult.skipJsonFormatting) {
+    skipJsonFormatting = true;
+  }
+  if (dispatchResult.isStreamingShow) {
+    isStreamingShow = true;
   }
 
   if (resultValue === undefined) {
