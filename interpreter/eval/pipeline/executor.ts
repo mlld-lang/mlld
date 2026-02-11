@@ -24,8 +24,6 @@ import {
   extractSecurityDescriptor,
   applySecurityDescriptorToStructuredValue
 } from '../../utils/structured-value';
-import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
-import { isPipelineInput } from '@core/types/variable/TypeGuards';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { setExpressionProvenance } from '../../utils/expression-provenance';
 import type { CommandExecutionHookOptions } from './command-execution';
@@ -49,6 +47,8 @@ import {
   safeJSONStringify,
   snippet
 } from './executor/helpers';
+import { PipelineOutputProcessor } from './executor/output-processor';
+import { StageOutputCache } from './executor/stage-output-cache';
 
 export interface ExecuteOptions {
   returnStructured?: boolean;
@@ -84,10 +84,8 @@ export class PipelineExecutor {
   private initialInputText: string = ''; // Store initial input for synthetic source
   private allRetryHistory: Map<string, StructuredValue[]> = new Map();
   private rateLimiter = new RateLimitRetry();
-  private structuredOutputs: Map<number, StructuredValue> = new Map();
-  private initialOutput?: StructuredValue;
-  private finalOutput?: StructuredValue;
-  private lastStageIndex: number = -1;
+  private stageOutputs = new StageOutputCache();
+  private outputProcessor: PipelineOutputProcessor;
   private readonly debugStructured = process.env.MLLD_DEBUG_STRUCTURED === 'true';
   private stageHookNodeCounter = 0;
   private streamingOptions: StreamingOptions;
@@ -143,6 +141,7 @@ export class PipelineExecutor {
     );
     this.pipeline = pipeline;
     this.env = env;
+    this.outputProcessor = new PipelineOutputProcessor(env);
     this.format = format;
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
@@ -204,14 +203,12 @@ export class PipelineExecutor {
       const initialWrapper = isStructuredValue(initialInput)
         ? cloneStructuredValue(initialInput)
         : wrapStructured(initialInput, 'text', typeof initialInput === 'string' ? initialInput : safeJSONStringify(initialInput));
-      this.applySourceDescriptor(initialWrapper, initialInput);
+      this.outputProcessor.applySourceDescriptor(initialWrapper, initialInput);
 
       // Store initial input for synthetic source stage
       this.initialInputText = initialWrapper.text;
-      this.structuredOutputs.clear();
-      this.initialOutput = initialWrapper;
-      this.finalOutput = this.initialOutput;
-      this.lastStageIndex = -1;
+      this.stageOutputs.initialize(initialWrapper);
+      const initialStructured = this.stageOutputs.getInitialOutput();
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Pipeline start:', {
@@ -226,7 +223,7 @@ export class PipelineExecutor {
       let nextStep = this.stateMachine.transition({
         type: 'START',
         input: this.initialInputText,
-        structuredInput: this.initialOutput ? cloneStructuredValue(this.initialOutput) : undefined
+        structuredInput: initialStructured ? cloneStructuredValue(initialStructured) : undefined
       });
       let iteration = 0;
 
@@ -243,7 +240,7 @@ export class PipelineExecutor {
         }
 
         // Clear cached outputs for this stage and downstream when retrying to avoid stale inputs
-        this.clearStageOutputsFrom(nextStep.stage);
+        this.stageOutputs.clearFrom(nextStep.stage);
         
         if (process.env.MLLD_DEBUG === 'true') {
           console.error('[PipelineExecutor] Execute stage:', {
@@ -316,7 +313,7 @@ export class PipelineExecutor {
         case 'COMPLETE':
           this.emitStream({ type: 'PIPELINE_COMPLETE' });
           if (options?.returnStructured) {
-            return this.getFinalOutput();
+            return this.stageOutputs.getFinal();
           }
           return nextStep.output;
         
@@ -380,17 +377,17 @@ export class PipelineExecutor {
     let parentPipelineContextPushed = false;
 
     try {
-      const structuredInput = this.getStageOutput(stageIndex - 1, input);
+      const structuredInput = this.stageOutputs.get(stageIndex - 1, input);
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[DEBUG executeSingleStage] stageIndex:', stageIndex, 'command:', command.rawIdentifier);
         console.error('[DEBUG executeSingleStage] structuredInput from getStageOutput:', JSON.stringify(structuredInput?.data ?? structuredInput?.text ?? structuredInput));
-        console.error('[DEBUG executeSingleStage] structuredOutputs cache:', Array.from(this.structuredOutputs.entries()).map(([k, v]) => [k, v?.data ?? v?.text]));
+        console.error('[DEBUG executeSingleStage] structuredOutputs cache:', this.stageOutputs.entries().map(([k, v]) => [k, v?.data ?? v?.text]));
       }
       this.logStructuredStage('input', command.rawIdentifier, stageIndex, structuredInput);
       if (process.env.MLLD_DEBUG === 'true') {
         try {
-          const prevOut = this.structuredOutputs.get(stageIndex - 1);
-          const currOut = this.structuredOutputs.get(stageIndex);
+          const prevOut = this.stageOutputs.peek(stageIndex - 1);
+          const currOut = this.stageOutputs.peek(stageIndex);
           console.error('[PipelineExecutor] Stage input snapshot', {
             stageIndex,
             command: command.rawIdentifier,
@@ -414,7 +411,7 @@ export class PipelineExecutor {
         this.hasSyntheticSource,
         this.allRetryHistory,
         {
-          getStageOutput: (stage, fallback) => this.getStageOutput(stage, fallback)
+          getStageOutput: (stage, fallback) => this.stageOutputs.get(stage, fallback)
         },
         {
           capturePipelineContext: snapshot => {
@@ -534,7 +531,7 @@ export class PipelineExecutor {
           return { type: 'retry', reason: hint || 'Stage requested retry', from, hint } as StageResult;
         }
 
-        let normalized = this.normalizeOutput(output);
+        let normalized = this.outputProcessor.normalizeOutput(output);
         if (this.debugStructured) {
           console.error('[PipelineExecutor][pre-output]', {
             stage: command.rawIdentifier,
@@ -548,7 +545,7 @@ export class PipelineExecutor {
             stageIndex
           });
         }
-        normalized = this.finalizeStageOutput(
+        normalized = this.outputProcessor.finalizeStageOutput(
           normalized,
           structuredInput,
           output,
@@ -574,9 +571,7 @@ export class PipelineExecutor {
             });
           } catch {}
         }
-        this.structuredOutputs.set(stageIndex, normalized);
-        this.finalOutput = normalized;
-        this.lastStageIndex = stageIndex;
+        this.stageOutputs.set(stageIndex, normalized);
 
         const normalizedText = normalized.text ?? '';
         if (!normalizedText || normalizedText.trim() === '') {
@@ -648,8 +643,9 @@ export class PipelineExecutor {
       }
       
       if (firstTime) {
-        const sourceOutput = this.initialOutput
-          ? cloneStructuredValue(this.initialOutput)
+        const initialOutput = this.stageOutputs.getInitialOutput();
+        const sourceOutput = initialOutput
+          ? cloneStructuredValue(initialOutput)
           : wrapStructured(this.initialInputText, 'text', this.initialInputText);
         return { result: sourceOutput };
       }
@@ -667,9 +663,8 @@ export class PipelineExecutor {
       const freshWrapper = isStructuredValue(fresh)
         ? cloneStructuredValue(fresh)
         : wrapStructured(fresh, 'text', typeof fresh === 'string' ? fresh : safeJSONStringify(fresh));
-      this.applySourceDescriptor(freshWrapper, fresh);
-      this.initialOutput = freshWrapper;
-      this.finalOutput = freshWrapper;
+      this.outputProcessor.applySourceDescriptor(freshWrapper, fresh);
+      this.stageOutputs.updateInitialOutput(freshWrapper);
       this.initialInputText = freshWrapper.text;
       return { result: freshWrapper };
     }
@@ -825,7 +820,7 @@ export class PipelineExecutor {
     const mergedDescriptor =
       descriptor && stageEnv ? stageEnv.mergeSecurityDescriptors(descriptor) : descriptor;
     return {
-      result: this.finalizeStageOutput(wrapped, stageInput, value, mergedDescriptor),
+      result: this.outputProcessor.finalizeStageOutput(wrapped, stageInput, value, mergedDescriptor),
       labelDescriptor: mergedDescriptor
     };
   }
@@ -1135,7 +1130,7 @@ export class PipelineExecutor {
     try {
       const errors: ParallelStageError[] = [];
       resetParallelErrorsContext(this.env, errors);
-      const sharedStructuredInput = this.getStageOutput(stageIndex - 1, input);
+      const sharedStructuredInput = this.stageOutputs.get(stageIndex - 1, input);
       const results = await runWithConcurrency(
         commands,
         Math.min(this.parallelCap ?? getParallelLimit(), commands.length),
@@ -1154,7 +1149,7 @@ export class PipelineExecutor {
             this.hasSyntheticSource,
             this.allRetryHistory,
             {
-              getStageOutput: (stage, fallback) => this.getStageOutput(stage, fallback)
+              getStageOutput: (stage, fallback) => this.stageOutputs.get(stage, fallback)
             },
             {
               capturePipelineContext: snapshot => {
@@ -1205,9 +1200,9 @@ export class PipelineExecutor {
               if (this.isRetrySignal(stageExecution.result)) {
                 return stageExecution.result as RetrySignal;
               }
-              let normalized = this.normalizeOutput(stageExecution.result);
+              let normalized = this.outputProcessor.normalizeOutput(stageExecution.result);
               this.logStructuredStage('output', cmd.rawIdentifier, stageIndex, normalized, true);
-              normalized = this.finalizeStageOutput(
+              normalized = this.outputProcessor.finalizeStageOutput(
                 normalized,
                 branchInput,
                 stageExecution.result,
@@ -1278,10 +1273,13 @@ export class PipelineExecutor {
       const aggregatedDescriptor = stageDescriptors.length > 0
         ? mergeDescriptors(...stageDescriptors)
         : undefined;
-      const aggregated = this.finalizeStageOutput(aggregatedBase, sharedStructuredInput, aggregatedData, aggregatedDescriptor);
-      this.structuredOutputs.set(stageIndex, aggregated);
-      this.finalOutput = aggregated;
-      this.lastStageIndex = stageIndex;
+      const aggregated = this.outputProcessor.finalizeStageOutput(
+        aggregatedBase,
+        sharedStructuredInput,
+        aggregatedData,
+        aggregatedDescriptor
+      );
+      this.stageOutputs.set(stageIndex, aggregated);
       return { type: 'success', output: aggregated.text, structuredOutput: aggregated };
     } catch (err) {
       return { type: 'error', error: err as Error };
@@ -1299,143 +1297,6 @@ export class PipelineExecutor {
       return makeSecurityDescriptor({ labels });
     }
     return undefined;
-  }
-
-  private normalizeOutput(output: any): StructuredValue {
-    this.logStructuredValue('normalize:raw', output);
-    if (isStructuredValue(output)) {
-      this.logStructuredValue('normalize:structured', output);
-      return output;
-    }
-    if (isPipelineInput(output)) {
-      return output;
-    }
-
-    if (output === null || output === undefined) {
-      const wrapped = wrapStructured('', 'text', '');
-      this.logStructuredValue('normalize:wrapped', wrapped);
-      return wrapped;
-    }
-
-    if (typeof output === 'string') {
-      const wrapped = wrapStructured(output, 'text', output);
-      this.logStructuredValue('normalize:wrapped', wrapped);
-      return wrapped;
-    }
-
-    if (typeof output === 'number' || typeof output === 'boolean' || typeof output === 'bigint') {
-      const text = String(output);
-      const wrapped = wrapStructured(output, 'text', text);
-      this.logStructuredValue('normalize:wrapped', wrapped);
-      return wrapped;
-    }
-
-    if (Array.isArray(output)) {
-      const normalizedArray = output.map(item => extractStageValue(item));
-      const text = safeJSONStringify(normalizedArray);
-      const wrapped = wrapStructured(normalizedArray, 'array', text);
-      this.logStructuredValue('normalize:wrapped', wrapped);
-      return wrapped;
-    }
-
-    if (typeof output === 'object') {
-      const maybeText = typeof (output as any).content === 'string' ? (output as any).content : undefined;
-      const text = maybeText ?? safeJSONStringify(output);
-      const wrapped = wrapStructured(output, 'object', text);
-      this.logStructuredValue('normalize:wrapped', wrapped);
-      return wrapped;
-    }
-
-    const wrapped = wrapStructured(output, 'text', safeJSONStringify(output));
-    this.logStructuredValue('normalize:wrapped', wrapped);
-    return wrapped;
-  }
-
-  private finalizeStageOutput(
-    value: StructuredValue,
-    stageInput: StructuredValue,
-    rawOutput: unknown,
-    ...descriptorHints: (SecurityDescriptor | undefined)[]
-  ): StructuredValue {
-    const descriptor = this.mergeStageDescriptors(value, stageInput, rawOutput, descriptorHints);
-    if (descriptor) {
-      applySecurityDescriptorToStructuredValue(value, descriptor);
-      setExpressionProvenance(value, descriptor);
-    }
-    return value;
-  }
-
-  private mergeStageDescriptors(
-    normalizedValue: StructuredValue,
-    stageInput: StructuredValue,
-    rawOutput: unknown,
-    descriptorHints: (SecurityDescriptor | undefined)[] = []
-  ): SecurityDescriptor | undefined {
-    const descriptors: SecurityDescriptor[] = [];
-    const inputDescriptor = extractSecurityDescriptor(stageInput, {
-      recursive: true,
-      mergeArrayElements: true
-    });
-    if (inputDescriptor) {
-      descriptors.push(inputDescriptor);
-    }
-
-    const rawDescriptor = extractSecurityDescriptor(rawOutput ?? normalizedValue, {
-      recursive: true,
-      mergeArrayElements: true
-    });
-    if (rawDescriptor) {
-      descriptors.push(rawDescriptor);
-    }
-
-    const existingDescriptor = getStructuredSecurityDescriptor(normalizedValue);
-    if (existingDescriptor) {
-      descriptors.push(existingDescriptor);
-    }
-
-    for (const hint of descriptorHints) {
-      if (hint) {
-        descriptors.push(hint);
-      }
-    }
-
-    if (process.env.MLLD_DEBUG === 'true') {
-      try {
-        console.error('[PipelineExecutor][mergeStageDescriptors]', {
-          inputLabels: inputDescriptor?.labels ?? null,
-          rawLabels: rawDescriptor?.labels ?? null,
-          existingLabels: existingDescriptor?.labels ?? null,
-          hintLabels: descriptorHints.map(hint => hint?.labels ?? null),
-          normalizedLabels: normalizedValue?.mx?.labels ?? null,
-          normalizedText: normalizedValue?.text
-        });
-      } catch {}
-    }
-
-    if (descriptors.length === 0) {
-      return undefined;
-    }
-
-    if (descriptors.length === 1) {
-      return descriptors[0];
-    }
-
-    return this.env.mergeSecurityDescriptors(...descriptors);
-  }
-
-  private applySourceDescriptor(
-    wrapper: StructuredValue,
-    source: unknown
-  ): void {
-    const descriptor = extractSecurityDescriptor(source, {
-      recursive: true,
-      mergeArrayElements: true
-    });
-    if (!descriptor) {
-      return;
-    }
-    applySecurityDescriptorToStructuredValue(wrapper, descriptor);
-    setExpressionProvenance(wrapper, descriptor);
   }
 
   /**
@@ -1502,46 +1363,6 @@ export class PipelineExecutor {
           );
         }
         throw err;
-      }
-    }
-  }
-
-  private getStageOutput(stageIndex: number, fallbackText: string = ''): StructuredValue {
-    if (stageIndex < 0) {
-      if (!this.initialOutput) {
-        this.initialOutput = wrapStructured(fallbackText, 'text', fallbackText);
-      }
-      return this.initialOutput;
-    }
-
-    const cached = this.structuredOutputs.get(stageIndex);
-    if (cached) {
-      return cached;
-    }
-
-    const wrapper = buildPipelineStructuredValue(fallbackText, 'text');
-    this.structuredOutputs.set(stageIndex, wrapper);
-    return wrapper;
-  }
-
-  private getFinalOutput(): StructuredValue {
-    if (this.finalOutput) {
-      return this.finalOutput;
-    }
-    if (this.lastStageIndex >= 0) {
-      return this.getStageOutput(this.lastStageIndex, this.initialOutput?.text ?? '');
-    }
-    if (this.initialOutput) {
-      return this.initialOutput;
-    }
-    return wrapStructured('', 'text', '');
-  }
-
-  private clearStageOutputsFrom(startStage: number): void {
-    const keys = Array.from(this.structuredOutputs.keys());
-    for (const key of keys) {
-      if (key >= startStage) {
-        this.structuredOutputs.delete(key);
       }
     }
   }
@@ -1628,33 +1449,6 @@ export class PipelineExecutor {
       return value;
     } catch {
       return '[unserializable]';
-    }
-  }
-
-  private logStructuredValue(label: string, value: unknown): void {
-    if (!this.debugStructured) {
-      return;
-    }
-    try {
-      if (isStructuredValue(value)) {
-        console.error('[PipelineExecutor]', {
-          label,
-          type: value.type,
-          textSnippet: snippet(value.text),
-          dataPreview: previewValue(value.data)
-        });
-      } else {
-        console.error('[PipelineExecutor]', {
-          label,
-          typeofValue: typeof value,
-          preview: previewValue(value)
-        });
-      }
-    } catch (error) {
-      console.error('[PipelineExecutor][logStructuredValue:error]', {
-        label,
-        error: error instanceof Error ? error.message : error
-      });
     }
   }
 }
