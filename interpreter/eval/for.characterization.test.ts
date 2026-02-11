@@ -144,6 +144,57 @@ describe('for evaluator characterization', () => {
     expect(await requireValue(env, 'result')).toEqual(['a', 'b', 'c', 'd']);
   });
 
+  it('supports numeric cap with duration-literal pacing in for expressions', async () => {
+    const input = `
+/exe @slowEcho(input) = js {
+  const active = Number(process.env.${ACTIVE_KEY} || '0') + 1;
+  process.env.${ACTIVE_KEY} = String(active);
+  const currentMax = Number(process.env.${MAX_KEY} || '0');
+  if (active > currentMax) process.env.${MAX_KEY} = String(active);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  process.env.${ACTIVE_KEY} = String(active - 1);
+  return input;
+}
+/var @result = for parallel(2, 0.01s) @x in ["a", "b", "c", "d"] => @slowEcho(@x)
+`;
+
+    const started = Date.now();
+    const env = await interpretWithEnv(input);
+    const elapsed = Date.now() - started;
+
+    expect(process.env[MAX_KEY]).toBe('2');
+    expect(elapsed).toBeGreaterThanOrEqual(25);
+    expect(await requireValue(env, 'result')).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('supports duration-node pacing values sourced from variables', async () => {
+    const input = `
+/var @cap = 2
+/exe @durationNode() = js {
+  return { type: "TimeDuration", value: 0.01, unit: "seconds" };
+}
+/var @pace = @durationNode()
+/exe @slowEcho(input) = js {
+  const active = Number(process.env.${ACTIVE_KEY} || '0') + 1;
+  process.env.${ACTIVE_KEY} = String(active);
+  const currentMax = Number(process.env.${MAX_KEY} || '0');
+  if (active > currentMax) process.env.${MAX_KEY} = String(active);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  process.env.${ACTIVE_KEY} = String(active - 1);
+  return input;
+}
+/var @result = for parallel(@cap, @pace) @x in ["a", "b", "c", "d"] => @slowEcho(@x)
+`;
+
+    const started = Date.now();
+    const env = await interpretWithEnv(input);
+    const elapsed = Date.now() - started;
+
+    expect(process.env[MAX_KEY]).toBe('2');
+    expect(elapsed).toBeGreaterThanOrEqual(25);
+    expect(await requireValue(env, 'result')).toEqual(['a', 'b', 'c', 'd']);
+  });
+
   it('throws for invalid parallel cap values', async () => {
     const { fileSystem, pathService: runtimePathService } = createRuntime();
     const input = `
