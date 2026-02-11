@@ -8,7 +8,7 @@ import type { WhenBlockNode, WhenMatchNode, WhenSimpleNode, AugmentedAssignmentN
 import type { ExeBlockNode, ExeReturnNode, ExecInvocation } from '@core/types';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { evaluate } from '@interpreter/core/interpreter';
-import { evaluateWhen, evaluateCondition } from './when';
+import { evaluateWhen, evaluateCondition, evaluateLetAssignment, evaluateAugmentedAssignment } from './when';
 import { evaluateExeBlock } from './exe';
 import type { IfNode } from '@core/types/if';
 
@@ -289,5 +289,137 @@ describe('when evaluator characterization', () => {
 
     const message = await extractVariableValue(env.getVariable('message')!, env);
     expect(message).toBe('start');
+  });
+
+  it('keeps let redefinition guard behavior stable for non-block-scoped variables', async () => {
+    env.setVariable(
+      'existing',
+      createSimpleTextVariable('existing', 'v1', {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      })
+    );
+
+    const letNode = {
+      type: 'LetAssignment',
+      nodeId: 'let-redef',
+      identifier: 'existing',
+      value: [{ type: 'Text', nodeId: 'rhs', content: 'v2' }]
+    } as any;
+
+    await expect(evaluateLetAssignment(letNode, env)).rejects.toThrow(
+      "Variable 'existing' is already defined and cannot be redefined"
+    );
+  });
+
+  it('keeps let shadowing behavior stable for block-scoped and imported variables', async () => {
+    const blockScoped = createSimpleTextVariable('shadowed', 'outer', {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    });
+    (blockScoped as any).mx = { ...(blockScoped as any).mx, importPath: 'let' };
+    env.setVariable('shadowed', blockScoped);
+
+    const blockScopedLet = {
+      type: 'LetAssignment',
+      nodeId: 'let-shadow-block',
+      identifier: 'shadowed',
+      value: [{ type: 'Text', nodeId: 'rhs', content: 'inner' }]
+    } as any;
+    const blockScopedEnv = await evaluateLetAssignment(blockScopedLet, env);
+    const blockScopedValue = await extractVariableValue(blockScopedEnv.getVariable('shadowed')!, blockScopedEnv);
+    expect(blockScopedValue).toBe('inner');
+
+    const imported = createSimpleTextVariable('imported', 'outer', {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    });
+    (imported as any).mx = { ...(imported as any).mx, isImported: true };
+    env.setVariable('imported', imported);
+
+    const importedLet = {
+      type: 'LetAssignment',
+      nodeId: 'let-shadow-imported',
+      identifier: 'imported',
+      value: [{ type: 'Text', nodeId: 'rhs-imported', content: 'inner' }]
+    } as any;
+    const importedEnv = await evaluateLetAssignment(importedLet, env);
+    const importedValue = await extractVariableValue(importedEnv.getVariable('imported')!, importedEnv);
+    expect(importedValue).toBe('inner');
+  });
+
+  it('keeps when-expression shadowing override behavior stable', async () => {
+    env.setVariable(
+      'ctxVar',
+      createSimpleTextVariable('ctxVar', 'outer', {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      })
+    );
+
+    const letNode = {
+      type: 'LetAssignment',
+      nodeId: 'let-shadow-context',
+      identifier: 'ctxVar',
+      value: [{ type: 'Text', nodeId: 'rhs', content: 'inner' }]
+    } as any;
+
+    const childEnv = await env.withExecutionContext(
+      'when-expression',
+      { allowLetShadowing: true },
+      async () => evaluateLetAssignment(letNode, env)
+    );
+    const value = await extractVariableValue(childEnv.getVariable('ctxVar')!, childEnv);
+    expect(value).toBe('inner');
+  });
+
+  it('keeps parallel isolation-root mutation denial stable for +=', async () => {
+    env.setVariable(
+      'shared',
+      createSimpleTextVariable('shared', 'root', {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      })
+    );
+
+    const isolationRoot = env.createChild();
+    (isolationRoot as any).__parallelIsolationRoot = isolationRoot;
+    const isolatedChild = isolationRoot.createChild();
+
+    const appendNode = createAppendAction('shared', '-inner', 'append-isolated');
+    await expect(evaluateAugmentedAssignment(appendNode, isolatedChild)).rejects.toThrow(
+      'Parallel for block cannot mutate outer variable @shared.'
+    );
+  });
+
+  it('keeps parallel isolation-root local mutation behavior stable for +=', async () => {
+    const isolationRoot = env.createChild();
+    (isolationRoot as any).__parallelIsolationRoot = isolationRoot;
+    isolationRoot.setVariable(
+      'localShared',
+      createSimpleTextVariable('localShared', 'root', {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      })
+    );
+
+    const isolatedChild = isolationRoot.createChild();
+    const appendNode = createAppendAction('localShared', '-inner', 'append-local-isolated');
+    await evaluateAugmentedAssignment(appendNode, isolatedChild);
+
+    const value = await extractVariableValue(isolationRoot.getVariable('localShared')!, isolationRoot);
+    expect(value).toBe('root-inner');
   });
 });
