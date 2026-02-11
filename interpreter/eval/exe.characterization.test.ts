@@ -65,6 +65,7 @@ function getExecutableDef(env: Environment, identifier: string): any {
 describe('exe evaluator characterization', () => {
   it('keeps subtype-to-definition mapping stable across representative exec forms', async () => {
     const env = createEnvironment();
+    await env.getFileSystemService().writeFile('/snippet.att', 'Hello @name');
 
     const cases = [
       {
@@ -75,6 +76,27 @@ describe('exe evaluator characterization', () => {
         assertDef: (def: any) => {
           expect(def.type).toBe('command');
           expect(def.sourceDirective).toBe('exec');
+        }
+      },
+      {
+        identifier: 'cmdRefExec',
+        directive: createDirective('cmdRefExec', 'exeCommand', {
+          commandRef: [createVarRef('sourceCmd')],
+          params: [createVarRef('x')]
+        }),
+        assertDef: (def: any) => {
+          expect(def.type).toBe('commandRef');
+          expect(def.commandRef).toBe('sourceCmd');
+        }
+      },
+      {
+        identifier: 'dataExec',
+        directive: createDirective('dataExec', 'exeData', {
+          data: [createText('{"x": 1}')]
+        }),
+        assertDef: (def: any) => {
+          expect(def.type).toBe('data');
+          expect(def.dataTemplate).toBeDefined();
         }
       },
       {
@@ -99,6 +121,17 @@ describe('exe evaluator characterization', () => {
         }),
         assertDef: (def: any) => {
           expect(def.type).toBe('template');
+        }
+      },
+      {
+        identifier: 'templateFileExec',
+        directive: createDirective('templateFileExec', 'exeTemplateFile', {
+          path: [createText('/snippet.att')]
+        }),
+        assertDef: (def: any) => {
+          expect(def.type).toBe('template');
+          expect(Array.isArray(def.template)).toBe(true);
+          expect(def.template.length).toBeGreaterThan(0);
         }
       },
       {
@@ -133,6 +166,19 @@ describe('exe evaluator characterization', () => {
         assertDef: (def: any) => {
           expect(def.type).toBe('prose');
           expect(def.contentType).toBe('inline');
+        }
+      },
+      {
+        identifier: 'proseFileExec',
+        directive: createDirective('proseFileExec', 'exeProseFile', {
+          configRef: [createVarRef('proseConfig')],
+          contentType: 'file',
+          path: [createText('/prompt.prose')]
+        }),
+        assertDef: (def: any) => {
+          expect(def.type).toBe('prose');
+          expect(def.contentType).toBe('file');
+          expect(def.pathTemplate).toBeDefined();
         }
       },
       {
