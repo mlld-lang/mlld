@@ -1,0 +1,12 @@
+var @x = 1
+if @x == 0 [
+  show "zero"
+] else [
+  show "nonzero"
+
+  var @results = for @item in @x [
+    => @item
+  ]
+
+  show `results: @results`
+]
