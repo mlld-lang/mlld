@@ -301,6 +301,120 @@ describe('exe evaluator characterization', () => {
     expect(variable?.mx?.taint ?? []).toEqual(expect.arrayContaining(['secret', 'src:exec']));
   });
 
+  it('keeps executable source syntax tagging stable across subtype families', async () => {
+    const env = createEnvironment();
+
+    await evaluateExe(
+      createDirective('syntaxCommand', 'exeCommand', {
+        command: [createText('echo ok')]
+      }),
+      env
+    );
+    await evaluateExe(
+      createDirective('syntaxTemplate', 'exeTemplate', {
+        template: [createText('hi')]
+      }),
+      env
+    );
+    await evaluateExe(
+      createDirective('syntaxData', 'exeData', {
+        data: [createText('{"ok":true}')]
+      }),
+      env
+    );
+    await evaluateExe(
+      createDirective('syntaxProse', 'exeProse', {
+        configRef: [createVarRef('proseConfig')],
+        contentType: 'inline',
+        content: [createText('session "x"')]
+      }),
+      env
+    );
+    await evaluateExe(
+      createDirective(
+        'syntaxCode',
+        'exeCode',
+        {
+          code: [createText('return 1;')]
+        },
+        { language: 'js' }
+      ),
+      env
+    );
+
+    expect((env.getVariable('syntaxCommand') as any)?.source?.syntax).toBe('command');
+    expect((env.getVariable('syntaxTemplate') as any)?.source?.syntax).toBe('template');
+    expect((env.getVariable('syntaxData') as any)?.source?.syntax).toBe('object');
+    expect((env.getVariable('syntaxProse') as any)?.source?.syntax).toBe('prose');
+    expect((env.getVariable('syntaxCode') as any)?.source?.syntax).toBe('code');
+  });
+
+  it('keeps executable metadata capture and command taint propagation stable', async () => {
+    const env = createEnvironment();
+
+    await evaluateExe(
+      createDirective(
+        'double',
+        'exeCode',
+        {
+          code: [createText('x * 2')],
+          params: [createVarRef('x')]
+        },
+        { language: 'js', parameterCount: 1 }
+      ),
+      env
+    );
+
+    const envDirective = {
+      type: 'Directive',
+      kind: 'exe',
+      subtype: 'environment',
+      nodeId: 'exe-env-js-meta',
+      values: {
+        identifier: [createVarRef('js')],
+        environment: [createVarRef('double')]
+      },
+      raw: {},
+      meta: {},
+      location: {
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 1, offset: 0 }
+      }
+    } as DirectiveNode;
+
+    await evaluateExe(envDirective, env);
+    env.setImporting(true);
+    try {
+      await evaluateExe(
+        createDirective('metaCommand', 'exeCommand', {
+          command: [createText('echo secure')],
+          securityLabels: ['secret']
+        }),
+        env
+      );
+      await evaluateExe(
+        createDirective('metaTemplate', 'exeTemplate', {
+          template: [createText('safe')],
+          securityLabels: ['public']
+        }),
+        env
+      );
+    } finally {
+      env.setImporting(false);
+    }
+
+    const commandVar = env.getVariable('metaCommand') as any;
+    expect(commandVar?.internal?.executableDef).toBeDefined();
+    expect(commandVar?.internal?.capturedShadowEnvs).toBeDefined();
+    expect(commandVar?.internal?.capturedModuleEnv).toBeDefined();
+    expect(commandVar?.mx?.labels ?? []).toEqual(expect.arrayContaining(['secret']));
+    expect(commandVar?.mx?.taint ?? []).toEqual(expect.arrayContaining(['secret', 'src:exec']));
+
+    const templateVar = env.getVariable('metaTemplate') as any;
+    expect(templateVar?.mx?.labels ?? []).toEqual(expect.arrayContaining(['public']));
+    expect(templateVar?.mx?.taint ?? []).not.toContain('src:exec');
+  });
+
   it('keeps shadow environment wrapper registration behavior stable', async () => {
     const env = createEnvironment();
 
