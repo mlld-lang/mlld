@@ -34,19 +34,16 @@ import { isExeReturnControl } from './exe-return';
 import { createVarAssignmentContext } from './var/assignment-context';
 import {
   createDescriptorState,
-  extractDescriptorsFromDataAst,
-  extractDescriptorsFromTemplateAst,
-  type DescriptorCollector
+  extractDescriptorsFromDataAst
 } from './var/security-descriptor';
 import {
-  evaluateArrayItems,
-  evaluateCollectionObject,
   hasComplexArrayItems,
   hasComplexValues
 } from './var/collection-evaluator';
 import { createRhsContentEvaluator } from './var/rhs-content';
 import { createReferenceEvaluator } from './var/reference-evaluator';
-import { createExecutionEvaluator, isExecutionValueNode } from './var/execution-evaluator';
+import { createExecutionEvaluator } from './var/execution-evaluator';
+import { createRhsDispatcher } from './var/rhs-dispatcher';
 
 export { extractDescriptorsFromDataAst };
 
@@ -222,6 +219,19 @@ export async function prepareVarAssignment(
   // For templates with multiple nodes (e.g., ::text {{var}}::), we need the whole array
   const valueNode = valueNodes.length === 1 ? valueNodes[0] : valueNodes;
   const isToolsCollection = directive.meta?.isToolsCollection === true;
+  const rhsDispatcher = createRhsDispatcher({
+    context,
+    directive,
+    env,
+    executionEvaluator,
+    identifier,
+    interpolateWithSecurity,
+    isToolsCollection,
+    mergeResolvedDescriptor,
+    referenceEvaluator,
+    rhsContentEvaluator,
+    sourceLocation
+  });
 
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[var.ts] Extracted valueNode:', {
@@ -238,212 +248,43 @@ export async function prepareVarAssignment(
   }
 
   try {
-  // Type-based routing based on the AST structure
   let resolvedValue: any;
   let toolCollection: ToolCollection | undefined;
-  const templateAst: any = null; // Store AST for templates that need lazy interpolation
-  
-  if (valueNode && typeof valueNode === 'object' && valueNode.type === 'FileReference') {
-    resolvedValue = await rhsContentEvaluator.evaluateFileReference(valueNode);
-    
-  // Check for primitive values first (numbers, booleans, null)
-  } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
-    // Direct primitive values from the grammar
-    resolvedValue = valueNode;
-    
-  } else if (valueNode.type === 'Literal') {
-    // Handle literal nodes (booleans, numbers, strings)
-    resolvedValue = valueNode.value;
-    
-  } else if (valueNode.type === 'array') {
-    // Array literal: [1, 2, 3] or [,]
-    
-    // Check if this array has complex items that need lazy evaluation
-    const isComplex = hasComplexArrayItems(valueNode.items || valueNode.elements || []);
-    
-    if (isComplex) {
-      // For complex arrays, store the AST node for lazy evaluation
-      if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('var.ts: Storing complex array AST for lazy evaluation:', {
-          identifier,
-          valueNode
-        });
-      }
-      // Pre-scan AST for variable references to propagate security labels
-      const dataDescriptor = extractDescriptorsFromDataAst(valueNode, env);
-      if (dataDescriptor) {
-        mergeResolvedDescriptor(dataDescriptor);
-      }
-      resolvedValue = valueNode;
-    } else {
-      resolvedValue = await evaluateArrayItems(
-        valueNode.items || valueNode.elements || [],
+  const rhsResult = await rhsDispatcher.evaluate(valueNode);
+  if (rhsResult.type === 'executable-variable') {
+    const finalVar = finalizeVariable(rhsResult.variable);
+    return {
+      identifier,
+      variable: finalVar,
+      evalResultOverride: {
+        value: finalVar,
         env,
-        mergeResolvedDescriptor,
-        context,
-        sourceLocation
-      );
-    }
-    
-  } else if (valueNode.type === 'object') {
-    // Object literal: { "key": "value" }
-    if (isToolsCollection) {
-      resolvedValue = await evaluateToolCollectionObject(
-        valueNode,
-        env,
-        mergeResolvedDescriptor,
-        context,
-        sourceLocation
-      );
-    } else {
-      // Check if this object has complex values that need lazy evaluation
-      const isComplex = hasComplexValues(valueNode.entries || valueNode.properties);
-      
-      if (isComplex) {
-        // For complex objects, store the AST node for lazy evaluation
-        // Pre-scan AST for variable references to propagate security labels
-        const dataDescriptor = extractDescriptorsFromDataAst(valueNode, env);
-        if (dataDescriptor) {
-          mergeResolvedDescriptor(dataDescriptor);
-        }
-        resolvedValue = valueNode;
-      } else {
-        resolvedValue = await evaluateCollectionObject(
-          valueNode,
-          env,
-          mergeResolvedDescriptor,
-          context,
-          sourceLocation
-        );
+        stdout: '',
+        stderr: '',
+        exitCode: 0
       }
-    }
-    
-  } else if (valueNode.type === 'section') {
-    resolvedValue = await rhsContentEvaluator.evaluateSection(valueNode);
-    
-  } else if (valueNode.type === 'load-content') {
-    resolvedValue = await rhsContentEvaluator.evaluateLoadContent(valueNode);
-    
-  } else if (valueNode.type === 'path') {
-    resolvedValue = await rhsContentEvaluator.evaluatePath(valueNode);
-    
-  } else if (valueNode.type === 'VariableReference') {
-    // Variable reference: @otherVar
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Processing VariableReference in var.ts:', {
-        identifier,
-        varIdentifier: valueNode.identifier,
-        hasFields: !!(valueNode.fields && valueNode.fields.length > 0),
-        fields: valueNode.fields?.map(f => f.value)
-      });
-    }
-
-    const referenceResult = await referenceEvaluator.evaluateVariableReference(
-      valueNode,
-      identifier
-    );
-    if (referenceResult.executableVariable) {
-      const finalVar = finalizeVariable(referenceResult.executableVariable);
-      return {
-        identifier,
-        variable: finalVar,
-        evalResultOverride: {
-          value: finalVar,
-          env,
-          stdout: '',
-          stderr: '',
-          exitCode: 0
-        }
-      };
-    }
-    resolvedValue = referenceResult.resolvedValue;
-
-  } else if (Array.isArray(valueNode)) {
-    // For backtick templates, we should extract the text content directly
-    // Check if this is a simple text array (backtick template)
-    if (valueNode.length === 1 && valueNode[0].type === 'Text' && directive.meta?.wrapperType === 'backtick') {
-        resolvedValue = valueNode[0].content;
-    } else if (directive.meta?.wrapperType === 'doubleColon' || directive.meta?.wrapperType === 'tripleColon') {
-      // For double/triple colon templates, handle interpolation based on type
-      if (directive.meta?.wrapperType === 'tripleColon') {
-        // Triple colon uses {{var}} interpolation - store AST for lazy evaluation
-        resolvedValue = valueNode; // Store the AST array as the value
-
-        // Extract security descriptors from the template AST so labels persist
-        // even before interpolation happens (fixes label persistence through templates)
-        const astDescriptor = extractDescriptorsFromTemplateAst(valueNode, env);
-        if (astDescriptor) {
-          mergeResolvedDescriptor(astDescriptor);
-        }
-
-        logger.debug('Storing template AST for triple-colon template', {
-          identifier,
-          ast: valueNode,
-          extractedLabels: astDescriptor?.labels
-        });
-      } else {
-        // Double colon uses @var interpolation - interpolate now
-        resolvedValue = await interpolateWithSecurity(valueNode);
-      }
-    } else {
-      // Template or string content - need to interpolate
-        resolvedValue = await interpolateWithSecurity(valueNode);
-    }
-    
-  } else if (valueNode.type === 'Text' && 'content' in valueNode) {
-    // Simple text content
-    resolvedValue = valueNode.content;
-    
-  } else if (valueNode && valueNode.type === 'VariableReferenceWithTail') {
-    // Variable with tail modifiers (e.g., @var @result = @data with { pipeline: [@transform] })
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Processing VariableReferenceWithTail in var.ts');
-    }
-    const referenceResult = await referenceEvaluator.evaluateVariableReferenceWithTail(
-      valueNode,
-      identifier
-    );
-    resolvedValue = referenceResult.resolvedValue;
-    
-  } else if (valueNode && (valueNode.type === 'BinaryExpression' || valueNode.type === 'TernaryExpression' || valueNode.type === 'UnaryExpression')) {
-    // Handle expression nodes
-    const { evaluateUnifiedExpression } = await import('./expressions');
-    const result = await evaluateUnifiedExpression(valueNode, env);
-    resolvedValue = result.value;
-
-  } else if (isExecutionValueNode(valueNode)) {
-    const executionResult = await executionEvaluator.evaluateExecutionBranch(
-      valueNode,
-      identifier
-    );
-    if (!executionResult) {
-      throw new Error(`Execution evaluator returned no result for @${identifier}`);
-    }
-    if (executionResult.kind === 'return-control') {
-      const returnSource = createVariableSource(valueNode as any, directive);
-      return {
-        identifier,
-        variable: createSimpleTextVariable(identifier, '', returnSource),
-        evalResultOverride: { value: executionResult.value, env }
-      };
-    }
-    if (executionResult.kind === 'for-expression') {
-      const finalVar = finalizeVariable(executionResult.variable);
-      return {
-        identifier,
-        variable: finalVar,
-        evalResultOverride: { value: finalVar, env }
-      };
-    }
-    resolvedValue = executionResult.value;
-
-  } else {
-    // Default case - try to interpolate as text
-    if (process.env.MLLD_DEBUG === 'true') {
-      logger.debug('var.ts: Default case for valueNode:', { valueNode });
-    }
-    resolvedValue = await interpolateWithSecurity([valueNode]);
+    };
   }
+
+  if (rhsResult.type === 'return-control') {
+    const returnSource = createVariableSource(valueNode as any, directive);
+    return {
+      identifier,
+      variable: createSimpleTextVariable(identifier, '', returnSource),
+      evalResultOverride: { value: rhsResult.value, env }
+    };
+  }
+
+  if (rhsResult.type === 'for-expression') {
+    const finalVar = finalizeVariable(rhsResult.variable);
+    return {
+      identifier,
+      variable: finalVar,
+      evalResultOverride: { value: finalVar, env }
+    };
+  }
+
+  resolvedValue = rhsResult.value;
 
   if (isToolsCollection) {
     toolCollection = normalizeToolCollection(resolvedValue, env);
@@ -993,23 +834,6 @@ export async function evaluateVar(
   env.setVariable(assignment.identifier, assignment.variable);
   await maybeAutosignVariable(assignment.identifier, assignment.variable, env);
   return assignment.evalResultOverride ?? { value: '', env };
-}
-
-async function evaluateToolCollectionObject(
-  valueNode: any,
-  env: Environment,
-  collectDescriptor?: DescriptorCollector,
-  context?: EvaluationContext,
-  sourceLocation?: SourceLocation
-): Promise<Record<string, unknown>> {
-  return evaluateCollectionObject(
-    valueNode,
-    env,
-    collectDescriptor,
-    context,
-    sourceLocation,
-    true
-  );
 }
 
 function normalizeToolCollection(raw: unknown, env: Environment): ToolCollection {
