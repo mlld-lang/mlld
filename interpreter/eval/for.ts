@@ -3,8 +3,7 @@ import type {
   ForExpression,
   Environment,
   ArrayVariable,
-  Variable,
-  VariableReferenceNode
+  Variable
 } from '@core/types';
 import { evaluate, type EvalResult } from '../core/interpreter';
 import { MlldDirectiveError } from '@core/errors';
@@ -18,24 +17,19 @@ import {
   asData,
   asText,
   isStructuredValue,
-  looksLikeJsonString,
-  normalizeWhenShowEffect,
   extractSecurityDescriptor
 } from '../utils/structured-value';
 import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
-import { evaluateWhenExpression } from './when-expression';
-import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
-import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 import { isExeReturnControl } from './exe-return';
-import { isControlCandidate } from './loop';
 import { resolveParallelOptions, type ForParallelOptions } from './for/parallel-options';
 import { executeDirectiveActions } from './for/directive-action-runner';
+import { evaluateForExpressionIteration } from './for/expression-runner';
+import { applyForExpressionBatchPipeline } from './for/batch-pipeline';
 import {
   assertKeyVariableHasNoFields,
-  formatFieldPath,
-  shouldKeepStructuredForForExpression
+  formatFieldPath
 } from './for/binding-utils';
 import {
   popExpressionIterationContexts,
@@ -43,14 +37,7 @@ import {
   pushExpressionIterationContext,
   setupIterationContext
 } from './for/iteration-runner';
-
-interface ForIterationError {
-  index: number;
-  key?: string | number | null;
-  message: string;
-  error: string;
-  value?: unknown;
-}
+import type { ForIterationError } from './for/types';
 
 function formatIterationError(error: unknown): string {
   if (error instanceof Error) {
@@ -311,173 +298,22 @@ export async function evaluateForExpression(
     pushExpressionIterationContext(childEnv);
 
     try {
-      let exprResult: unknown = null;
-      if (Array.isArray(expr.expression) && expr.expression.length > 0) {
-        let nodesToEvaluate = expr.expression;
-        if (
-          expr.expression.length === 1 &&
-          (expr.expression[0] as any).content &&
-          (expr.expression[0] as any).wrapperType &&
-          !(expr.expression[0] as any).hasInterpolation
-        ) {
-          nodesToEvaluate = (expr.expression[0] as any).content;
-        }
-
-        const simpleVarRef = (() => {
-          if (nodesToEvaluate.length !== 1) return null;
-          const node = nodesToEvaluate[0] as any;
-          if (!node || node.type !== 'VariableReference') return null;
-          const hasFields = Array.isArray(node.fields) && node.fields.length > 0;
-          const hasPipes = Array.isArray(node.pipes) && node.pipes.length > 0;
-          if (hasFields || hasPipes) return null;
-          return node as VariableReferenceNode;
-        })();
-
-        const evaluateSequence = async (nodes: unknown[], startEnv: Environment): Promise<EvalResult> => {
-          let currentEnv = startEnv;
-          let lastResult: EvalResult = { value: undefined, env: currentEnv };
-
-          for (const node of nodes) {
-            if (isLetAssignment(node as any)) {
-              currentEnv = await evaluateLetAssignment(node as any, currentEnv);
-              lastResult = { value: undefined, env: currentEnv };
-              continue;
-            }
-
-            if (isAugmentedAssignment(node as any)) {
-              currentEnv = await evaluateAugmentedAssignment(node as any, currentEnv);
-              lastResult = { value: undefined, env: currentEnv };
-              continue;
-            }
-
-            if ((node as any)?.type === 'WhenExpression') {
-              lastResult = await evaluateWhenExpression(node as any, currentEnv);
-              currentEnv = lastResult.env || currentEnv;
-              // Early return: if when matched and returned a value, exit the sequence
-              // BUT don't break for side-effect tags (show, output) - those aren't real return values
-              if (lastResult.value !== null && lastResult.value !== undefined) {
-                if (typeof lastResult.value === 'object' && (lastResult.value as any).__whenEffect) {
-                  continue;
-                }
-                break;
-              }
-              continue;
-            }
-
-            // Allow side effects (show, output) in for-expressions for progress logging
-            lastResult = await evaluate(node as any, currentEnv, { isExpression: true, allowEffects: true });
-            currentEnv = lastResult.env || currentEnv;
-
-            // Propagate flow control from if/when blocks (matches loop.ts pattern)
-            if (isExeReturnControl(lastResult.value)) break;
-            if (isControlCandidate(lastResult.value)) break;
-          }
-
-          return { value: lastResult.value, env: currentEnv };
-        };
-
-        const result = await evaluateSequence(nodesToEvaluate, childEnv);
-
-        if (result.env) childEnv = result.env;
-        let branchValue = result?.value;
-
-        // Unwrap ExeReturnControl — use inner value as iteration result
-        if (isExeReturnControl(branchValue)) {
-          branchValue = (branchValue as any).value;
-        }
-        // Handle continue/done control signals
-        if (branchValue && typeof branchValue === 'object' && '__whileControl' in (branchValue as any)) {
-          const control = (branchValue as any).__whileControl;
-          if (control === 'continue') {
-            popExpressionIterationContexts(childEnv);
-            return SKIP as any;
-          }
-          if (control === 'done') {
-            popExpressionIterationContexts(childEnv);
-            return DONE as any;
-          }
-        }
-        if (isControlCandidate(branchValue)) {
-          const controlKind = extractControlKind(branchValue);
-          if (controlKind === 'continue') {
-            popExpressionIterationContexts(childEnv);
-            return SKIP as any;
-          }
-          if (controlKind === 'done') {
-            popExpressionIterationContexts(childEnv);
-            return DONE as any;
-          }
-        }
-
-        // Extract security descriptor from branch value before asData strips it
-        const branchDescriptor = extractSecurityDescriptor(branchValue);
-        // Also extract from the iteration variable (carries source taint)
-        const iterVarDescriptor = extractSecurityDescriptor(value);
-
-        if (simpleVarRef) {
-          const refVar = childEnv.getVariable(simpleVarRef.identifier);
-          const refValue = refVar?.value;
-          if (isStructuredValue(refValue) && shouldKeepStructuredForForExpression(refValue)) {
-            branchValue = refValue;
-          }
-        }
-        if (isStructuredValue(branchValue)) {
-          if (shouldKeepStructuredForForExpression(branchValue)) {
-            const derived = (() => {
-              try {
-                return asData(branchValue);
-              } catch {
-                return asText(branchValue);
-              }
-            })();
-            if (derived === 'skip') {
-              return SKIP as any;
-            }
-          } else {
-            try {
-              branchValue = asData(branchValue);
-            } catch {
-              branchValue = asText(branchValue);
-            }
-          }
-        }
-        if (branchValue === 'skip') {
-          return SKIP as any;
-        }
-        if (isVariable(branchValue)) {
-          exprResult = await extractVariableValue(branchValue, childEnv);
-        } else {
-          exprResult = branchValue;
-        }
-
-        // Preserve directive-produced text (e.g., show/run) when they tag side effects
-        exprResult = normalizeWhenShowEffect(exprResult).normalized;
-
-        if (typeof exprResult === 'string' && looksLikeJsonString(exprResult)) {
-          try {
-            exprResult = JSON.parse(exprResult.trim());
-          } catch {
-            // keep original string if parsing fails
-          }
-        }
-
-        // Propagate security descriptors from source, iteration variable, and branch value
-        // This prevents taint stripping through for-expressions
-        // Note: only attach to object results via WeakMap provenance.
-        // String results are primitives - their taint propagates through the
-        // final ArrayVariable's .mx field set by applyForDescriptor.
-        const elementDescriptors = [branchDescriptor, iterVarDescriptor, sourceDescriptor].filter(Boolean) as SecurityDescriptor[];
-        if (elementDescriptors.length > 0 && exprResult && typeof exprResult === 'object') {
-          const mergedDescriptor = elementDescriptors.length === 1
-            ? elementDescriptors[0]
-            : mergeDescriptors(...elementDescriptors);
-          if (mergedDescriptor.labels.length > 0 || mergedDescriptor.taint.length > 0 || mergedDescriptor.sources.length > 0) {
-            setExpressionProvenance(exprResult, mergedDescriptor);
-          }
-        }
-      }
+      const iterationResult = await evaluateForExpressionIteration({
+        expr,
+        childEnv,
+        value,
+        sourceDescriptor,
+        extractControlKind
+      });
+      childEnv = iterationResult.childEnv;
       popExpressionIterationContexts(childEnv);
-      return exprResult as any;
+      if (iterationResult.outcome === 'skip') {
+        return SKIP as any;
+      }
+      if (iterationResult.outcome === 'done') {
+        return DONE as any;
+      }
+      return iterationResult.value as any;
     } catch (error) {
       popExpressionIterationContexts(childEnv);
       if (!effective?.parallel) {
@@ -510,56 +346,13 @@ export async function evaluateForExpression(
     }
   }
 
-  let finalResults: unknown = results;
-  const batchPipelineConfig = expr.meta?.batchPipeline;
-  const batchStages = Array.isArray(batchPipelineConfig)
-    ? batchPipelineConfig
-    : batchPipelineConfig?.pipeline;
-
-  if (batchStages && batchStages.length > 0) {
-    const { processPipeline } = await import('./pipeline/unified-processor');
-    const batchInput = createArrayVariable(
-      'for-batch-input',
-      results,
-      false,
-      {
-        directive: 'for',
-        syntax: 'expression',
-        hasInterpolation: false,
-        isMultiLine: false
-      },
-      { isBatchInput: true }
-    );
-
-    try {
-      const pipelineResult = await processPipeline({
-        value: batchInput,
-        env,
-        pipeline: batchStages,
-        identifier: `for-batch-${expr.variable.identifier}`,
-        location: expr.location,
-        isRetryable: false
-      });
-
-      if (isStructuredValue(pipelineResult)) {
-        finalResults = asData(pipelineResult);
-      } else if (isVariable(pipelineResult)) {
-        finalResults = await extractVariableValue(pipelineResult, env);
-      } else {
-        finalResults = pipelineResult;
-      }
-    } catch (error) {
-      logger.warn(
-        `Batch pipeline failed for for-expression: ${error instanceof Error ? error.message : String(error)}`
-      );
-      errors.push({
-        index: -1,
-        error: error as Error,
-        value: results
-      });
-      finalResults = results;
-    }
-  }
+  const batchPipelineResult = await applyForExpressionBatchPipeline({
+    expr,
+    env,
+    results,
+    errors
+  });
+  const finalResults = batchPipelineResult.finalResults;
 
   const variableSource = {
     directive: 'for',
@@ -573,7 +366,7 @@ export async function evaluateForExpression(
     iterationVariable: expr.variable.identifier
   };
 
-  if (batchStages && batchStages.length > 0) {
+  if (batchPipelineResult.hadBatchPipeline) {
     metadata.hadBatchPipeline = true;
   }
 

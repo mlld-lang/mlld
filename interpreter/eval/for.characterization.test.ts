@@ -327,6 +327,26 @@ describe('for evaluator characterization', () => {
     expect(lines).toEqual(['ok']);
   });
 
+  it('applies batch pipeline post-processing for for-expression results', async () => {
+    const env = await interpretWithEnv(`
+/exe @wrap(x) = js { return [x, x * 2] }
+/exe @flat(values) = js { return values.flat() }
+/var @numbers = [1, 2, 3]
+/var @pairs = for @n in @numbers => @wrap(@n) => | @flat
+`);
+
+    expect(await requireValue(env, 'pairs')).toEqual([1, 2, 2, 4, 3, 6]);
+  });
+
+  it('falls back to collected values when for-expression batch pipeline fails', async () => {
+    const env = await interpretWithEnv(`
+/exe @failBatch(values) = js { throw new Error("batch failed") }
+/var @result = for @n in [1, 2, 3] => @n => | @failBatch
+`);
+
+    expect(await requireValue(env, 'result')).toEqual([1, 2, 3]);
+  });
+
   it('throws for invalid parallel cap values', async () => {
     const { fileSystem, pathService: runtimePathService } = createRuntime();
     const input = `
