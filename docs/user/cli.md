@@ -300,6 +300,7 @@ Scripts are loaded from the directory configured in `mlld-config.json` (default:
 - AST caching: Scripts are cached after first parse (mtime-based invalidation)
 - Timeout support: Automatically aborts long-running scripts
 - Metrics: Debug mode shows parse time, evaluation time, cache hits, effect counts
+- Payload injection: Unknown flags become `@payload` fields (`mlld run my-script --topic foo`), and `@payload` is available in `mlld run` context.
 
 **Example script** (`llm/run/hello.mld`):
 ```mlld

@@ -344,6 +344,14 @@ export class ResolverManager {
     return undefined;
   }
 
+  private getMissingResolverMessage(ref: string): string {
+    const normalized = ref.trim().toLowerCase();
+    if (normalized === '@payload' || normalized === 'payload') {
+      return '@payload is only available when running via \'mlld run <name>\'. To pass arguments, use: mlld run <script-name> --arg value. See: mlld run --help';
+    }
+    return `No resolver found for reference: ${ref}`;
+  }
+
   /**
    * Resolve a module reference
    */
@@ -355,7 +363,7 @@ export class ResolverManager {
 
     if (!resolver) {
       throw new MlldResolutionError(
-        `No resolver found for reference: ${ref}`,
+        this.getMissingResolverMessage(ref),
         { code: 'E_NO_RESOLVER' }
       );
     }

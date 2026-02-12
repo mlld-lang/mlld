@@ -40,3 +40,5 @@ mlld run myscript --topic foo --count 5
 ```
 
 Unknown flags become `@payload` fields automatically. Kebab-case flags are converted to camelCase (e.g., `--dry-run` becomes `@dryRun`).
+
+`@payload` requires run or SDK invocation context. Running `mlld path/to/file.mld` without payload injection does not provide `@payload`.

@@ -158,6 +158,12 @@ describe('ResolverManager', () => {
     it('should throw error for unresolvable references', async () => {
       await expect(manager.resolve('unknown/path')).rejects.toThrow('No resolver found');
     });
+
+    it('shows a run-context hint when @payload is unresolved', async () => {
+      await expect(manager.resolve('@payload')).rejects.toThrow(
+        '@payload is only available when running via \'mlld run <name>\''
+      );
+    });
     
     it('should validate resolver type for operations', async () => {
       // Create a fresh manager for this test (don't use the one with MockResolver)
