@@ -47,5 +47,6 @@ export { @spawn }
 
 **Notes:**
 - Accessing unexported items via namespace import raises a runtime error
+- Exported executables do not expose captured module internals through field access
 - Guards can be exported alongside variables
 - Without an `export` directive, all module-level items are auto-exported

@@ -126,6 +126,23 @@ function createObjectUtilityMxView(
   return view;
 }
 
+function hasCapturedModuleEnv(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  return 'capturedModuleEnv' in (value as Record<string, unknown>);
+}
+
+function isSerializedExecutableWithCapturedEnv(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const raw = value as Record<string, unknown>;
+  return raw.__executable === true && hasCapturedModuleEnv(raw.internal);
+}
+
 const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
 const STRING_TEXT_ACCESSORS = new Set(['text']);
 
@@ -214,6 +231,29 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     const CORE_METADATA = ['isComplex', 'source', 'metadata', 'internal', 'mx', 'raw', 'totalTokens', 'maxTokens'];
 
     if (CORE_METADATA.includes(fieldName)) {
+      if (
+        fieldName === 'internal' &&
+        value.type === 'executable' &&
+        value.mx?.isImported === true &&
+        hasCapturedModuleEnv(value.internal)
+      ) {
+        const accessPath = [...(options?.parentPath || []), fieldName];
+        throw new FieldAccessError(`Field "${fieldName}" not found in object`, {
+          baseValue: {
+            type: value.type,
+            name: value.name
+          },
+          fieldAccessChain: [],
+          failedAtIndex: Math.max(0, accessPath.length - 1),
+          failedKey: fieldName,
+          accessPath,
+          availableKeys: Object.keys(value as unknown as Record<string, unknown>).filter(key => key !== 'internal')
+        }, {
+          sourceLocation: options?.sourceLocation,
+          env: options?.env
+        });
+      }
+
       const metadataValue = (() => {
         if (fieldName !== 'mx') {
           return value[fieldName as keyof typeof value];
@@ -606,6 +646,24 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
 
       // Handle regular objects (including Variables with type: 'object')
+      if (name === 'internal' && isSerializedExecutableWithCapturedEnv(rawValue)) {
+        const baseValue = Object.fromEntries(
+          Object.entries(rawValue as Record<string, unknown>).filter(([key]) => key !== 'internal')
+        );
+        const accessPath = [...(options?.parentPath || []), name];
+        throw new FieldAccessError(`Field "${name}" not found in object`, {
+          baseValue,
+          fieldAccessChain: [],
+          failedAtIndex: Math.max(0, accessPath.length - 1),
+          failedKey: name,
+          accessPath,
+          availableKeys: Object.keys(rawValue as Record<string, unknown>).filter(key => key !== 'internal')
+        }, {
+          sourceLocation: options?.sourceLocation,
+          env: options?.env
+        });
+      }
+
       if (!(name in rawValue)) {
         if (isVariable(value) && value.name === 'mx' && name === 'guard') {
           const accessPath = [...(options?.parentPath || []), name];

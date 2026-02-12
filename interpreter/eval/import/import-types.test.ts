@@ -145,6 +145,40 @@ describe('Import type handling', () => {
     ).rejects.toThrow('Field "_internal" not found in object');
   });
 
+  it('blocks namespace access to captured module internals on exported executables', async () => {
+    await fileSystem.writeFile(
+      '/project/import-types-exported-exec.mld',
+      '/export { greet }\n/var @_internal = "secret"\n/exe @greet(name) = `Hello, @name!`'
+    );
+
+    const source = '/import "./import-types-exported-exec.mld" as @utils\n/show @utils.greet.internal.capturedModuleEnv._internal';
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow('Field "internal" not found in object');
+  });
+
+  it('blocks selected import access to captured module internals on exported executables', async () => {
+    await fileSystem.writeFile(
+      '/project/import-types-exported-exec-selected.mld',
+      '/export { greet }\n/var @_internal = "secret"\n/exe @greet(name) = `Hello, @name!`'
+    );
+
+    const source = '/import { greet } from "./import-types-exported-exec-selected.mld"\n/show @greet.internal.capturedModuleEnv._internal';
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow('Field "internal" not found in object');
+  });
+
   it('supports explicit live imports from @input', async () => {
     const source = `/import live { value } from @input\n/show @value`;
     const output = await interpret(source, {

@@ -93,6 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **`@base` path scope**: `@base` now resolves to the running script directory (not process CWD or project root), and `@root` resolves to project root for file/output/import path handling.
 - **Template file alligator path scope**: Relative `<file>` loads inside `template "file.att"`/`template "file.mtt"` executables now resolve from the template file directory instead of the caller script directory.
+- **Export manifest enforcement for executable internals**: Importers can no longer read unexported module members through `@namespace.exec.internal.capturedModuleEnv.*` (or via selected imported executables).
 - **`mlld validate` built-in name conflicts**: Validation now reports `let`/`var` collisions with built-in names (including transformer names like `@upper`) as explicit built-in conflicts.
 - **Reserved variable docs**: Reserved-variable documentation now lists built-in transformer names that cannot be reused for variable declarations.
 - **Mutable `@state` anti-pattern warnings**: Validation now emits an anti-pattern warning when local `@state` objects are used with `@state.stop` patterns that imply mutable state updates.

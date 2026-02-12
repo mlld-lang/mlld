@@ -327,6 +327,8 @@ export { @publicAPI, @helper }
 exe @_internal(name) = "opaque"  >> Not in export list
 ```
 
+Unexported values are not accessible through namespace imports, including executable internal capture metadata.
+
 **Document exports**:
 ```mlld
 >> Public API for data transformation
