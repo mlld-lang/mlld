@@ -55,6 +55,7 @@ export type {
   SDKCommandEvent,
   SDKStreamEvent,
   SDKExecutionEvent,
+  SDKStateWriteEvent,
   SDKDebugEvent,
   SDKStreamingEvent,
   SDKStreamingThinkingEvent,

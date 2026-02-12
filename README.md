@@ -338,6 +338,14 @@ mlld mcp                           # Serve functions from llm/mcp/
 mlld mcp --config tools.mld        # Use specific module
 ```
 
+## Live RPC
+
+Start the persistent NDJSON RPC transport over stdio:
+
+```bash
+mlld live --stdio
+```
+
 ## CLI Reference
 
 ```bash

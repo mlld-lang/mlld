@@ -172,6 +172,12 @@ export type SDKExecutionEvent = {
   timestamp: number;
 };
 
+export type SDKStateWriteEvent = {
+  type: 'state:write';
+  write: StateWrite;
+  timestamp: number;
+};
+
 export type SDKDebugEvent =
   | {
       type: 'debug:directive:start';
@@ -337,7 +343,14 @@ export interface StreamingResult {
   events?: SDKStreamingEvent[];
 }
 
-export type SDKEvent = SDKEffectEvent | SDKCommandEvent | SDKStreamEvent | SDKExecutionEvent | SDKDebugEvent | SDKStreamingEvent;
+export type SDKEvent =
+  | SDKEffectEvent
+  | SDKCommandEvent
+  | SDKStreamEvent
+  | SDKExecutionEvent
+  | SDKStateWriteEvent
+  | SDKDebugEvent
+  | SDKStreamingEvent;
 
 export type SDKEventHandler<T extends SDKEvent = SDKEvent> = (event: T) => void;
 

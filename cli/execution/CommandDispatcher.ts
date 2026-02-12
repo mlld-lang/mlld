@@ -24,6 +24,7 @@ import { createNvimDoctorCommand } from '../commands/nvim-doctor';
 import { createUpdateCommand } from '../commands/update';
 import { createOutdatedCommand } from '../commands/outdated';
 import { createMcpCommand } from '../commands/mcp';
+import { createLiveCommand } from '../commands/live';
 import { mcpDevCommand } from '../commands/mcp-dev';
 import { createHowtoCommand, createQuickstartCommand } from '../commands/howto';
 import { createValidateCommand } from '../commands/analyze';
@@ -72,6 +73,7 @@ export class CommandDispatcher {
     const mcpCommand = createMcpCommand();
     this.commandMap.set('mcp', mcpCommand);
     this.commandMap.set('serve', mcpCommand); // Alias for backward compatibility
+    this.commandMap.set('live', createLiveCommand());
     this.commandMap.set('mcp-dev', mcpDevCommand);
     this.commandMap.set('nvim-setup', createNvimSetupCommand());
     this.commandMap.set('nvim', createNvimSetupCommand()); // Alias
@@ -209,6 +211,7 @@ export class CommandDispatcher {
       'vars': 'Manage environment variable permissions',
       'env': 'Manage AI agent environments',
       'dev': 'Inspect local module discovery',
+      'live': 'Start persistent live RPC server over stdio',
       'language-server': 'Start language server',
       'test': 'Run mlld tests',
       'run': 'Run mlld scripts',

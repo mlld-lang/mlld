@@ -13,7 +13,7 @@ export class ArgumentParser {
     'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'docs',
     'publish', 'init', 'module', 'mod', 'add-needs', 'needs', 'deps',
     'setup', 'alias', 'keychain', 'vars', 'env', 'dev', 'test', 'run', 'error-test', 'clean',
-    'mcp', 'serve', 'language-server', 'lsp', 'nvim-setup', 'nvim', 'nvim-doctor', 'verify',
+    'mcp', 'serve', 'live', 'language-server', 'lsp', 'nvim-setup', 'nvim', 'nvim-doctor', 'verify',
     'howto', 'ht', 'qs', 'quickstart', 'validate', 'analyze',
     'update', 'outdated'
   ];

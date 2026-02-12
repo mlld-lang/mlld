@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc82]
 
 ### Added
+- **`mlld live --stdio`**: persistent NDJSON RPC transport for long-running SDK calls
+  - Accepts `process`, `execute`, `analyze`, and `cancel` methods over stdio
+  - Streams SDK events as NDJSON while requests execute
+  - Returns structured completion payloads per request id
+  - Aborts active requests on `cancel`, stdin EOF, SIGINT, or SIGTERM
 - **`mlld mcp-dev`**: MCP server for language introspection tools
   - `mlld_validate` - Syntax validation with errors/warnings
   - `mlld_analyze` - Module analysis (exports, executables, imports, guards)

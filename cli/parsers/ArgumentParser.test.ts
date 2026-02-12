@@ -214,3 +214,13 @@ describe('OptionProcessor streaming mapping', () => {
     });
   });
 });
+
+describe('ArgumentParser live command', () => {
+  it('treats live as subcommand-style command and preserves --stdio in remaining args', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['live', '--stdio']);
+
+    expect(options.input).toBe('live');
+    expect(options._).toEqual(['--stdio']);
+  });
+});

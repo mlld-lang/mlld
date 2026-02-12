@@ -82,6 +82,11 @@ export class HelpSystem {
       return;
     }
 
+    if (command === 'live') {
+      this.displayLiveHelp();
+      return;
+    }
+
     if (command === 'mcp-dev') {
       this.displayMcpDevHelp();
       return;
@@ -187,6 +192,30 @@ Behavior:
   - Applies config module filtering and CLI allow-lists
   - Accepts environment overrides (MLLD_* only) before executing tools
   - Streams JSON-RPC responses to stdout for MCP clients
+    `);
+  }
+
+  private displayLiveHelp(): void {
+    console.log(`
+Usage: mlld live --stdio
+
+Start a long-running NDJSON RPC server over stdio.
+
+Protocol:
+  Request:  {"method":"process|execute|analyze|cancel","id":1,"params":{...}}
+  Event:    {"event":{"id":1,"type":"stream:chunk",...}}
+  Result:   {"result":{"id":1,...}}
+
+Methods:
+  process   Execute script text (params.script)
+  execute   Run file (params.filepath + optional payload/state/dynamicModules)
+  analyze   Static analysis only (params.filepath)
+  cancel    Abort active request by id
+
+Notes:
+  - Each request runs with a fresh interpreter environment
+  - Execute-path AST caching persists for process lifetime
+  - Server exits on stdin EOF, SIGINT, or SIGTERM
     `);
   }
 
@@ -561,6 +590,7 @@ Commands:
   setup                   Configure mlld project with interactive wizard
   test                    Run mlld tests
   serve                   Expose mlld functions as MCP tools over stdio
+  live                    Start persistent NDJSON RPC server over stdio
   mcp-dev                 Start MCP server with language introspection tools
   language-server, lsp    Start the mlld language server for editor integration
   nvim-setup, nvim        Set up mlld Language Server for Neovim
@@ -668,6 +698,7 @@ Built-in docs and examples available via 'mlld howto'.
       case 'add-needs':
       case 'env':
       case 'dev':
+      case 'live':
       case 'docs':
       case 'debug-resolution':
       case 'debug-transform':

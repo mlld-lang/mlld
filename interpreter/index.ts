@@ -414,6 +414,7 @@ export async function interpret(
       'stream:chunk',
       'stream:progress',
       'execution:complete',
+      'state:write',
       'debug:directive:start',
       'debug:directive:complete',
       'debug:variable:create',

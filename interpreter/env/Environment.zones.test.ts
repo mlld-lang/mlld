@@ -45,6 +45,9 @@ describe('Environment zones coverage', () => {
       'user-data'
     );
 
+    const emitter = { emit: vi.fn() };
+    env.enableSDKEvents(emitter as any);
+
     env.recordStateWrite({ path: 'value', value: 'new', operation: 'set' } as any);
     env.recordStateWrite({ path: 'nested.count', value: 2, operation: 'set' } as any);
 
@@ -59,6 +62,9 @@ describe('Environment zones coverage', () => {
     expect(writes).toHaveLength(2);
     expect(writes[0].index).toBe(0);
     expect(writes[1].index).toBe(1);
+
+    const sdkTypes = emitter.emit.mock.calls.map(([event]) => event.type);
+    expect(sdkTypes).toContain('state:write');
   });
 
   it('maps stream-bus events into SDK events and suppresses chunks when streaming is disabled', () => {

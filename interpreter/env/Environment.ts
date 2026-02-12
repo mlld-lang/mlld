@@ -955,6 +955,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     };
     root.stateWrites.push(entry);
     root.applyStateWriteToSnapshot(entry);
+
+    if (root.hasSDKEmitter()) {
+      root.emitSDKEvent({
+        type: 'state:write',
+        write: entry,
+        timestamp: Date.now()
+      } as SDKEvent);
+    }
   }
 
   getStateWrites(): StateWrite[] {
