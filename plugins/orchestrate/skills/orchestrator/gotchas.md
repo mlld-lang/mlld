@@ -30,7 +30,7 @@ var @greeting = @greet("world")        >> value — stores "Hello world"
 
 ### Reserved variable names
 
-Names like `@exists`, `@upper`, `@debug`, `@base`, `@now`, `@json` are reserved by the system. You'll get "already defined" errors on first use with no hint it's a built-in. Use descriptive names: `@fileCheck` not `@exists`, `@dumped` not `@debug`.
+Names like `@exists`, `@upper`, `@debug`, `@base`, `@root`, `@now`, `@json`, `@input`, `@keychain`, and all transformer names (`@lower`, `@trim`, `@split`, `@keys`, `@values`, `@length`, etc.) are reserved. `mlld validate` catches collisions before runtime. Use descriptive names: `@fileCheck` not `@exists`, `@dumped` not `@debug`.
 
 ## Output
 
@@ -104,9 +104,11 @@ show `@files.0.mx.relative`     >> "./src/index.ts"
 show `@files.0.mx.tokens`       >> token count
 ```
 
-In for loops: `@item.mx.loop.iteration`, `@item.mx.loop.index`.
+In `for` loops: `@mx.for.index` (0-based), `@mx.for.total`, `@mx.for.key`, `@mx.for.parallel`.
 
-Other keys: `.mx.keys` (object keys), `.mx.dirname`, `.mx.source`.
+In `loop` blocks: `@mx.loop.iteration` (1-based), `@mx.loop.limit`, `@mx.loop.active`.
+
+Other keys: `.mx.keys` (object keys), `.mx.dirname`, `.mx.path`, `.mx.source`.
 
 ## Path resolution
 
@@ -157,9 +159,32 @@ If you pass an object to a template parameter, it gets JSON-stringified. No need
 
 ### JSON from cmd/sh auto-parses
 
-If a `cmd` or `sh` block returns a string that looks like JSON, mlld turns it into an object. If you need the raw string, be aware of this.
+If a `cmd` or `sh` block returns a string that looks like JSON, mlld turns it into a StructuredValue with `.data` (parsed object) and `.text` (raw string). Access `.text` if you need the unparsed output.
 
 ## Known sharp edges
+
+### `show` on bare StructuredValues dumps metadata
+
+`show @val` where `@val` came from `| @json` or a command output can dump internal wrapper fields (type, text, data, metadata) instead of clean data. Wrapping in an object works around it:
+
+```mlld
+>> May dump metadata:
+show @parsed
+
+>> Clean output:
+show { result: @parsed }
+```
+
+### Relative paths in imported functions resolve from the caller
+
+When an imported exe uses a relative path in `output`/`append`, it resolves from the *calling* script's directory, not the module's. Use `@root/`-prefixed paths in library functions to avoid surprises:
+
+```mlld
+>> In lib/save.mld — use @root for predictable paths:
+exe @save(name, data) = [
+  output @data to "@root/data/@name\.json"
+]
+```
 
 ### Runtime errors in for-loops become data
 
