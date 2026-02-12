@@ -98,9 +98,9 @@ if !@verdict.safe [
 **Reading order:** `sign-verify` → `autosign-autoverify` → `labels-influenced` → `guards-privileged` → `pattern-audit-guard` → this atom.
 
 **Notes:**
-- Privileged guards that can `trusted!` bless tainted data are policy-generated only — see `guards-privileged`
+- Privileged guards that can `trusted!` bless tainted data are available to policy guards and user-defined privileged guards — see `guards-privileged`
 - Both calls use autoverify; enforcement guard requires `mlld verify` was called
 - Use `retry` in the enforcement guard for MCP mode (LLM retries with verification); use `deny` for standalone mode (immediate block, as in `main.mld`)
 - See `pattern-audit-guard` for the simpler single-auditor version
 - Autoverify injects verification only when signed variables are @-referenced in the exe command template (e.g., `run cmd { claude -p "@extractPrompt" }`). Passing signed data as parameters alone does not trigger autoverify.
-- The privileged 'bless on verdict' step (clearing taint after safe audit) requires policy-generated guards. User-defined `with { privileged: true }` is planned but not yet available — see `guards-privileged`.
+- The privileged 'bless on verdict' step (clearing taint after safe audit) requires a privileged guard — see `guards-privileged`.

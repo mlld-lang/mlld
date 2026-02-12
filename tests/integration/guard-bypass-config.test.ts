@@ -174,4 +174,36 @@ describe('Guard bypass config', () => {
       })
     ).rejects.toThrow("Command 'echo' denied by policy");
   });
+
+  it('user-defined privileged guards still enforce even when bypass is allowed', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-user-privileged-guards-'));
+    tempDirs.push(root);
+
+    await fs.writeFile(
+      path.join(root, 'mlld-config.json'),
+      JSON.stringify({
+        security: {
+          allowGuardBypass: true
+        }
+      }),
+      'utf8'
+    );
+    await fs.writeFile(
+      path.join(root, 'main.mld'),
+      [
+        '/guard privileged @blocker before op:run = when [ * => deny "Blocked" ]',
+        '/run { echo test } with { guards: false }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await expect(
+      interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+        filePath: path.join(root, 'main.mld'),
+        fileSystem: new NodeFileSystem(),
+        pathService: new PathService(),
+        approveAllImports: true
+      })
+    ).rejects.toThrow('Blocked');
+  });
 });

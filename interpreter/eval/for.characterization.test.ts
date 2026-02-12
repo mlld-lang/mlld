@@ -119,6 +119,28 @@ describe('for evaluator characterization', () => {
     expect(await requireValue(env, 'keys')).toEqual(['first', 'second']);
   });
 
+  it('supports for...when guard syntax with block bodies', async () => {
+    const env = await interpretWithEnv(`
+/exe @loadSlide(num, name) = \`@num:@name\`
+/var @slideNum = 3
+/var @slideMap = [
+  { "num": 1, "name": "intro" },
+  { "num": 2, "name": "body" },
+  { "num": 4, "name": "appendix" }
+]
+/var @results = for @entry in @slideMap when @entry.num < @slideNum [
+  let @data = @loadSlide(@entry.num, @entry.name)
+  when @data => \`<slide>\\n@data\\n</slide>\`
+]
+`);
+
+    const results = await requireValue(env, 'results');
+    expect(Array.isArray(results)).toBe(true);
+    expect(results).toHaveLength(2);
+    expect(results[0]).toContain('1:intro');
+    expect(results[1]).toContain('2:body');
+  });
+
   it('preserves file metadata for file-like object values during iteration binding', async () => {
     const env = await interpretWithEnv(`
 /var @files = [

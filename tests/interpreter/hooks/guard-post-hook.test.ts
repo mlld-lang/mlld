@@ -171,15 +171,13 @@ describe('guard post-hook integration', () => {
   it('allows privileged after guards to remove protected labels', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
-      '/guard after @bless for secret = when [ * => allow with { removeLabels: ["src:mcp"] } ]'
+      '/guard after @bless for secret = when [ * => allow with { removeLabels: ["src:mcp"] } ] with { privileged: true }'
     )[0] as DirectiveNode;
     await evaluateDirective(guardDirective, env);
 
     const guardDef = env.getGuardRegistry().getByName('bless');
     expect(guardDef).toBeTruthy();
-    if (guardDef) {
-      guardDef.privileged = true;
-    }
+    expect(guardDef?.privileged).toBe(true);
 
     const outputVar = createSimpleTextVariable(
       'secretVar',

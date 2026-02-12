@@ -123,7 +123,8 @@ export class GuardRegistry {
       block,
       location: location ?? node.location,
       registrationOrder,
-      timing
+      timing,
+      privileged: node.meta?.privileged === true
     };
 
     this.registerDefinition(definition);

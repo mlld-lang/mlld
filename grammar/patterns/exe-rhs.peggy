@@ -1011,7 +1011,50 @@ WhenExpressionInlineBlock
 // Used by: ExeRHSContent
 // Purpose: Allow for @var in @collection => action where action can be a directive
 ForExpressionExe "for expression with actions"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ whenExpr:WhenExpressionAny batchPipe:ForBatchPipeline? {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "when" _ condition:WhenConditionExpression _ block:ForBlockAction batchPipe:ForBatchPipeline? {
+      const action = Array.isArray(block.statements) ? block.statements : [block.statements];
+      const initialWhen = helpers.createWhenExpression(
+        [{ condition: [condition], action }],
+        null,
+        location(),
+        null
+      );
+
+      const loc = initialWhen.location || location();
+      const noneLiteral = helpers.createNode(NodeType.Literal, {
+        value: 'none',
+        valueType: 'none',
+        location: loc
+      });
+      const skipLiteral = helpers.createNode(NodeType.Literal, {
+        value: 'skip',
+        valueType: 'skip',
+        location: loc
+      });
+      const conditions = [...initialWhen.conditions, { condition: [noneLiteral], action: [skipLiteral] }];
+      const normalizedWhen = helpers.createWhenExpression(
+        conditions,
+        initialWhen.withClause || null,
+        loc,
+        initialWhen.meta?.modifier || null
+      );
+
+      helpers.debug('ForExpressionExe when-guard block matched', {
+        pattern,
+        statementCount: action.length
+      });
+
+      return helpers.createForExpression(
+        pattern.variable,
+        pattern.source,
+        [normalizedWhen],
+        location(),
+        opts || null,
+        batchPipe || null,
+        pattern.key || null
+      );
+    }
+  / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ whenExpr:WhenExpressionAny batchPipe:ForBatchPipeline? {
       const hasNoneCondition = Array.isArray(whenExpr.conditions) && whenExpr.conditions.some((entry) => {
         const condition = entry && entry.condition;
         return Array.isArray(condition) &&

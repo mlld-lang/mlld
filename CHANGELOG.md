@@ -136,6 +136,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`/run` exe-block object spread parameters**: Spreading executable parameters (`{ ...@data }`) uses object data rather than serialized text, so state merge patterns work without manual re-parse.
 - **Shadow JS/Node nested StructuredValue unwrapping**: Parameters passed to shadow environments recursively unwrap nested StructuredValues inside arrays/objects, so helper code reads plain values instead of wrapper objects.
 - **Array `.includes()` with variable references**: `@array.includes(@value)` compares normalized values so membership checks align with equality behavior in common validation patterns.
+- **`for ... when @cond [block]` guard syntax**: For-expression guards now accept block bodies in addition to `=>` forms, so guarded multi-statement collection logic parses and evaluates correctly.
+- **Exe return arithmetic after invocations**: `=> @fn(...) * 1` and similar arithmetic/logical continuations now parse in exe block return lines instead of failing at the first operator.
+- **User-defined privileged guards**: Guard directives support `guard privileged ...` and `with { privileged: true }`, and user-defined privileged guards stay active under guard overrides and support privileged label operations.
 - **If/when guidance**: All when/if parse errors include an educational cheat sheet showing if vs when semantics, return behavior differences inside exe/for, and valid forms. The `when @cond [block]` error now explains the ambiguity and suggests both `when @cond => [block]` and `if @cond [block]` with a note about their different return semantics.
 - Binary and ternary expressions parse inside function arguments and array literals
 - Block expressions inside argument and array contexts surface a targeted parse error

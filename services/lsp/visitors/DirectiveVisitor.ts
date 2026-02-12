@@ -3056,6 +3056,20 @@ export class DirectiveVisitor extends BaseVisitor {
       });
     }
 
+    // Tokenize privileged keyword (prefix sugar or with-clause flag)
+    for (const match of directiveText.matchAll(/\bprivileged\b/g)) {
+      if (match.index === undefined) continue;
+      const privilegedOffset = directive.location.start.offset + match.index;
+      const privilegedPosition = this.document.positionAt(privilegedOffset);
+      this.tokenBuilder.addToken({
+        line: privilegedPosition.line,
+        char: privilegedPosition.character,
+        length: 'privileged'.length,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
     // Tokenize guard filter (op:run, op:exe, or data label)
     if (values.filter && Array.isArray(values.filter) && values.filter[0]) {
       const filterNode = values.filter[0];

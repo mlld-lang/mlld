@@ -194,15 +194,15 @@ Adding `untrusted` replaces any existing `trusted` label. Adding `trusted` to al
 
 **Privileged operations:**
 
-Privileged guards can remove protected labels. Currently, only policy-generated guards are privileged:
+Privileged guards can remove protected labels:
 
 ```mlld
-policy @securityPolicy = {
-  deny: { labels: ["secret"] }
-}
+guard privileged @bless after secret = when [
+  * => allow with { removeLabels: ["secret"] }
+]
 ```
 
-Policy guards are automatically privileged and can enforce label removal that user-defined guards cannot.
+Policy guards are automatically privileged. User-defined guards are privileged when declared with the `privileged` prefix or `with { privileged: true }`.
 
 | Privileged action | Example | Effect |
 |-------------------|---------|--------|

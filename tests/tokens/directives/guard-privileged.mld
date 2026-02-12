@@ -1,0 +1,10 @@
+/guard privileged @blocker before op:run = when [ * => deny "Blocked" ]
+/guard @bless after secret = when [ * => allow ] with { privileged: true }
+
+=== START PARTIAL TOKENS ===
+privileged --> keyword
+@blocker --> variable[declaration]
+before --> keyword
+after --> keyword
+when --> keyword
+=== END PARTIAL TOKENS ===

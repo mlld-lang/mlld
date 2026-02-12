@@ -61,6 +61,7 @@ export interface GuardDirectiveRaw {
   filter: string;
   timing: GuardTiming;
   modifier?: string;
+  privileged?: boolean;
 }
 
 export interface GuardDirectiveMeta {
@@ -71,6 +72,7 @@ export interface GuardDirectiveMeta {
   ruleCount: number;
   hasName: boolean;
   timing: GuardTiming;
+  privileged?: boolean;
   location?: SourceLocation | null;
 }
 

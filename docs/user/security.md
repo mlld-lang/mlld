@@ -164,14 +164,21 @@ guard [@name] TIMING LABEL = when [
   CONDITION => ACTION
   * => allow
 ]
+
+guard privileged [@name] TIMING LABEL = when [
+  CONDITION => ACTION
+  * => allow
+]
 ```
 
 Where:
 - `@name` is optional guard name
 - `TIMING` is required: `before`, `after`, or `always`
 - `LABEL` is a data label (`secret`, `pii`) or operation filter (`op:run`, `op:exe`)
+- `privileged` marks the guard as non-bypassable and enables privileged label operations
 
 **Syntactic sugar:** `guard [@name] for LABEL = when [...]` is equivalent to `before` timing. Using explicit `before` is recommended for clarity.
+Equivalent privileged form: `guard [@name] TIMING LABEL = when [...] with { privileged: true }`.
 
 Actions:
 - `allow` - Operation proceeds

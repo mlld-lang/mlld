@@ -1,7 +1,7 @@
 ---
 id: guards-privileged
 title: Privileged Guards
-brief: Policy-generated guards that cannot be bypassed
+brief: Guards that cannot be bypassed
 category: security
 parent: security
 tags: [guards, privileged, policy, labels, trust, security]
@@ -10,7 +10,19 @@ related-code: [core/policy/guards.ts, interpreter/hooks/guard-pre-hook.ts, inter
 updated: 2026-02-09
 ---
 
-Policy rules generate privileged guards. These guards cannot be bypassed with `{ guards: false }` and can remove protected labels.
+Privileged guards cannot be bypassed with `{ guards: false }` and can remove protected labels.
+
+```mlld
+>> Mark a user-defined guard as privileged (prefix form)
+guard privileged @blocker before op:run = when [
+  * => deny "blocked"
+]
+
+>> Equivalent with-clause form
+guard @blocker before op:run = when [
+  * => deny "blocked"
+] with { privileged: true }
+```
 
 ```mlld
 >> Policy rules create privileged guards automatically
@@ -38,7 +50,7 @@ show @send(@key) with { guards: false }
 
 Non-privileged guards cannot remove ANY labels. Protected labels (`secret`, `untrusted`, `src:*`) get `PROTECTED_LABEL_REMOVAL`; other labels get `LABEL_PRIVILEGE_REQUIRED`. This ensures label removal is always a privilege escalation.
 
-**Contrast — user guard cannot remove labels:**
+**Contrast — non-privileged guard cannot remove labels:**
 
 ```mlld
 >> User-defined guard — NOT privileged
@@ -50,10 +62,9 @@ guard @bless after secret = when [
 
 **How guards become privileged:**
 
-Currently, only policy-generated guards are privileged. User-defined `guard` directives are never privileged. This creates a security bottleneck: only policy-controlled code paths can clear taint.
+Policy-generated guards are privileged. User-defined guards are privileged when declared with the `privileged` prefix or `with { privileged: true }`.
 
 **Notes:**
 - `with { guards: false }` disables user guards but privileged guards still run
 - `with { guards: only(...) }` and `except(...)` also preserve privileged guards
-- User-defined `with { privileged: true }` is planned but not yet available
 - See `label-modification` for privilege syntax details

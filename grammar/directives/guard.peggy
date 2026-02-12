@@ -5,9 +5,10 @@ GuardKeyword
   = "/"? "guard"
 
 SlashGuard
-  = DirectiveContext GuardKeyword _ nameTiming:(name:GuardDirectiveName __ { return { name }; })? timing:GuardTiming __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
+  = DirectiveContext GuardKeyword _ privilegedPrefix:GuardPrivilegedPrefix? _ nameTiming:(name:GuardDirectiveName __ { return { name }; })? timing:GuardTiming __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause privilegedClause:GuardDirectivePrivilegedClause? ending:CommentedDirectiveEnding? {
       helpers.debug('SlashGuard matched (new syntax - timing required)', { name: nameTiming?.name, timing, filter, guardBody });
       const guardTiming = timing;
+      const privileged = Boolean(privilegedPrefix || privilegedClause?.privileged);
 
       const values = {
         filter: [filter.node],
@@ -26,6 +27,9 @@ SlashGuard
         raw.name = `@${nameTiming.name.identifier}`;
       }
       raw.timing = guardTiming;
+      if (privileged) {
+        raw.privileged = true;
+      }
 
       if (guardBody.modifier && guardBody.modifier !== 'default') {
         raw.modifier = guardBody.modifier;
@@ -39,6 +43,7 @@ SlashGuard
         ruleCount: guardBody.node.rules.length,
         hasName: Boolean(nameTiming?.name),
         timing: guardTiming,
+        privileged,
         ...(ending?.comment ? { comment: ending.comment } : {})
       };
 
@@ -52,9 +57,10 @@ SlashGuard
         'guard'
       );
     }
-  / DirectiveContext GuardKeyword _ timing:GuardTiming? _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
+  / DirectiveContext GuardKeyword _ privilegedPrefix:GuardPrivilegedPrefix? _ timing:GuardTiming? _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause privilegedClause:GuardDirectivePrivilegedClause? ending:CommentedDirectiveEnding? {
       helpers.debug('SlashGuard matched (old syntax with for)', { timing, name, filter, guardBody });
       const guardTiming = timing ?? 'before';
+      const privileged = Boolean(privilegedPrefix || privilegedClause?.privileged);
 
       const values = {
         filter: [filter.node],
@@ -73,6 +79,9 @@ SlashGuard
         raw.name = `@${name.identifier}`;
       }
       raw.timing = guardTiming;
+      if (privileged) {
+        raw.privileged = true;
+      }
 
       if (guardBody.modifier && guardBody.modifier !== 'default') {
         raw.modifier = guardBody.modifier;
@@ -86,6 +95,7 @@ SlashGuard
         ruleCount: guardBody.node.rules.length,
         hasName: Boolean(name),
         timing: guardTiming,
+        privileged,
         ...(ending?.comment ? { comment: ending.comment } : {})
       };
 
@@ -112,6 +122,24 @@ GuardTiming
   = "before" ![a-zA-Z0-9_] { return 'before'; }
   / "after" ![a-zA-Z0-9_] { return 'after'; }
   / "always" ![a-zA-Z0-9_] { return 'always'; }
+
+GuardPrivilegedPrefix
+  = "privileged" ![a-zA-Z0-9_] { return true; }
+
+GuardDirectivePrivilegedClause
+  = __ "with" _ "{" _ "privileged" _ ":" _ value:GuardDirectivePrivilegedValue _ "}" {
+      return { privileged: value };
+    }
+
+GuardDirectivePrivilegedValue
+  = "true" ![a-zA-Z0-9_] { return true; }
+  / "false" ![a-zA-Z0-9_] {
+      helpers.mlldError(
+        'Guard privilege clause only supports true. Use: with { privileged: true }',
+        'true',
+        location()
+      );
+    }
 
 GuardFilterClause
   = filter:GuardOperationFilter { return filter; }

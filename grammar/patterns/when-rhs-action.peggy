@@ -189,6 +189,13 @@ WhenRHSVarAssignment
 // Function call - just return the invocation directly (it gets evaluated normally)
 WhenRHSFunctionCall
   = ref:UnifiedReference &{
+      const remaining = input.slice(peg$currPos);
+      const nextToken = remaining.replace(/^[ \t]+/, '');
+      // Let VarRHSContent handle arithmetic/logical continuation after calls,
+      // e.g. @count() * 2, @count() + 1, @count() || @fallback().
+      if (/^(\*|\/|%|\+|-|==|!=|<=|>=|<|>|\?\?|&&|\|\||\?|:)/.test(nextToken)) {
+        return false;
+      }
       // Check if this is actually an executable reference
       return ref.type === 'ExecInvocation' ||
              ref.type === 'FieldAccessExec' ||

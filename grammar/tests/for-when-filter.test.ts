@@ -38,4 +38,19 @@ describe('Grammar - for when filter sugar', () => {
     const onlyCondition = whenExpr.conditions[0];
     expect(onlyCondition.condition[0].valueType).toBe('none');
   });
+
+  it('parses for...when guard with block body and appends none => skip', async () => {
+    const input = '/var @out = for @x in [1, 2, 3] when @x > 1 [ => @x ]';
+    const { ast, warnings } = await parse(input);
+    expect(warnings).toHaveLength(0);
+
+    const forExpr = getForExpression(ast);
+    expect(forExpr).toBeDefined();
+
+    const whenExpr = (forExpr as any).expression[0];
+    expect(whenExpr.conditions).toHaveLength(2);
+    expect(whenExpr.conditions[0].action.length).toBeGreaterThan(0);
+    expect(whenExpr.conditions[1].condition[0].valueType).toBe('none');
+    expect(whenExpr.conditions[1].action[0].valueType).toBe('skip');
+  });
 });
