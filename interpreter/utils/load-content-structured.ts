@@ -139,6 +139,7 @@ function extractLoadContentMetadata(result: LoadContentResult): StructuredValueM
     filename: result.filename,
     relative: result.relative,
     absolute: result.absolute,
+    path: result.path ?? result.absolute,
     dirname,
     relativeDir,
     absoluteDir,

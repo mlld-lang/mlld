@@ -155,6 +155,7 @@ export class LoadContentResultImpl implements LoadContentResult {
       filename: this.filename,
       relative: this.relative,
       absolute: this.absolute,
+      path: this.path,
       dirname: this.dirname,
       relativeDir: this.relativeDir,
       absoluteDir: this.absoluteDir,
@@ -181,6 +182,7 @@ export class LoadContentResultImpl implements LoadContentResult {
       filename: this.filename,
       relative: this.relative,
       absolute: this.absolute,
+      path: this.path,
       ext: this.ext,
       fm: this.fm,
       tokest: this.tokest

@@ -18,6 +18,7 @@ var @file = <README.md>
 show @file.mx.filename      >> "README.md"
 show @file.mx.relative      >> relative path from cwd
 show @file.mx.absolute      >> absolute path
+show @file.mx.path          >> alias for absolute path
 show @file.mx.dirname       >> parent directory name
 show @file.mx.relativeDir   >> relative path to directory
 show @file.mx.absoluteDir   >> absolute path to directory

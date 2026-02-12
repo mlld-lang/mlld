@@ -39,6 +39,7 @@ export interface StructuredValueMetadata {
   filename?: string;
   relative?: string;
   absolute?: string;
+  path?: string;
   dirname?: string;
   relativeDir?: string;
   absoluteDir?: string;
@@ -83,6 +84,7 @@ export interface StructuredValueContext {
   filename?: string;
   relative?: string;
   absolute?: string;
+  path?: string;
   dirname?: string;
   relativeDir?: string;
   absoluteDir?: string;
@@ -509,6 +511,7 @@ function buildVarMxFromMetadata(
   const flattenedFilename = metadata?.filename as string | undefined;
   const flattenedRelative = metadata?.relative as string | undefined;
   const flattenedAbsolute = metadata?.absolute as string | undefined;
+  const flattenedPath = metadata?.path as string | undefined;
   const flattenedDirname = metadata?.dirname as string | undefined;
   const flattenedRelativeDir = metadata?.relativeDir as string | undefined;
   const flattenedAbsoluteDir = metadata?.absoluteDir as string | undefined;
@@ -537,6 +540,7 @@ function buildVarMxFromMetadata(
     filename: flattenedFilename ?? loadResult?.filename,
     relative: flattenedRelative ?? loadResult?.relative,
     absolute: flattenedAbsolute ?? loadResult?.absolute,
+    path: flattenedPath ?? (loadResult?.path as string | undefined) ?? flattenedAbsolute ?? loadResult?.absolute,
     dirname: flattenedDirname,
     relativeDir: flattenedRelativeDir,
     absoluteDir: flattenedAbsoluteDir,

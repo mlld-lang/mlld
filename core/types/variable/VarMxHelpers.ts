@@ -142,6 +142,7 @@ export function flattenLoadResultToVarMx(
   mx.filename = loadResult.filename;
   mx.relative = loadResult.relative;
   mx.absolute = loadResult.absolute;
+  mx.path = loadResult.path ?? loadResult.absolute;
   mx.tokest = loadResult.tokest ?? mx.tokest;
   mx.tokens = loadResult.tokens ?? mx.tokens;
   mx.fm = loadResult.fm ?? mx.fm;
@@ -165,6 +166,7 @@ export function varMxToLoadResult(mx: VariableContext): LoadContentResult | null
     filename: mx.filename,
     relative: mx.relative,
     absolute: mx.absolute,
+    path: mx.path ?? mx.absolute,
     tokest: mx.tokest ?? 0,
     tokens: Array.isArray(mx.tokens)
       ? mx.tokens.reduce((total, value) => total + Number(value || 0), 0)
@@ -196,6 +198,11 @@ function applyFlattenedLoadMetadata(
   }
   if (typeof metadata.absolute === 'string') {
     mx.absolute = metadata.absolute;
+  }
+  if (typeof metadata.path === 'string') {
+    mx.path = metadata.path;
+  } else if (mx.path === undefined && typeof metadata.absolute === 'string') {
+    mx.path = metadata.absolute;
   }
   if (typeof metadata.url === 'string') {
     mx.url = metadata.url;

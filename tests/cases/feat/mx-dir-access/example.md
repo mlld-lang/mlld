@@ -11,5 +11,9 @@
 ## absoluteDir (absolute path to dir)
 /show `absoluteDir: @file.mx.absoluteDir`
 
+## path alias (same as absolute path)
+/var @pathMatchesAbsolute = @file.mx.path == @file.mx.absolute
+/show `pathMatchesAbsolute: @pathMatchesAbsolute`
+
 ## filename should still work
 /show `filename: @file.mx.filename`

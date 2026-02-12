@@ -12,6 +12,7 @@ describe('prepareValueForShadow (structured)', () => {
       relative: './file.md',
       absolute: '/repo/file.md'
     });
+    expect(result.mx.path).toBe('/repo/file.md');
 
     const prepared = prepareValueForShadow(result);
     expect(typeof prepared).toBe('string');

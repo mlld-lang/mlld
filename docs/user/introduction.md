@@ -391,7 +391,7 @@ And once you've got it, you might want to get some metadata, too. If it's json o
 <path/to/file.md>.mx.tokens     << token count
 ```
 
-You can also get `.mx.absolute` path, `.mx.domain` for site domain, `.mx.ext` for file extension.
+You can also get `.mx.absolute` path (or `.mx.path` alias), `.mx.domain` for site domain, `.mx.ext` for file extension.
 
 Oh, and of course alligator globs are a thing:
 

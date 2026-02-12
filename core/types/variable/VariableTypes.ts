@@ -121,6 +121,7 @@ export interface VariableContext {
   filename?: string;
   relative?: string;
   absolute?: string;
+  path?: string;
   url?: string;
   domain?: string;
   title?: string;

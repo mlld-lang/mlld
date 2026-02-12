@@ -34,6 +34,7 @@ show @file.mx.filename  >> "README.md"
 show @file.mx.tokens  >> Token count
 show @file.mx.labels  >> Security labels
 show @file.mx.absolute  >> Full path
+show @file.mx.path  >> Path alias (same as .mx.absolute)
 ```
 
 **Auto-unwrapping**: Display and templates automatically use `.text`:
@@ -276,6 +277,7 @@ var @file = <package.json>
 show @file.mx.filename                 >> "package.json"
 show @file.mx.relative                 >> "./package.json"
 show @file.mx.absolute                 >> Full path
+show @file.mx.path                     >> Path alias (same as .mx.absolute)
 
 >> Directory metadata
 show @file.mx.dirname                  >> Parent directory name
