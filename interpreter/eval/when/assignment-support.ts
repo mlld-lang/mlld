@@ -10,6 +10,22 @@ import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import { isVariable, extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { combineValues } from '@interpreter/utils/value-combine';
 
+function collectCommandParameterEnv(env: Environment): Record<string, string> | undefined {
+  const parameterEnv: Record<string, string> = {};
+  if (typeof (env as any).getAllVariables !== 'function') {
+    return undefined;
+  }
+  const variables = env.getAllVariables();
+
+  for (const [name, variable] of variables.entries()) {
+    if (variable?.internal?.isParameter === true && variable.value !== undefined) {
+      parameterEnv[name] = String(variable.value);
+    }
+  }
+
+  return Object.keys(parameterEnv).length > 0 ? parameterEnv : undefined;
+}
+
 export async function evaluateAssignmentValue(
   entry: LetAssignmentNode | AugmentedAssignmentNode,
   env: Environment
@@ -28,6 +44,8 @@ export async function evaluateAssignmentValue(
 
   if (firstValue && typeof firstValue === 'object' && (firstValue as any).type === 'command') {
     const commandNode: any = firstValue;
+    const parameterEnv = collectCommandParameterEnv(env);
+    const commandOptions = parameterEnv ? { env: parameterEnv } : undefined;
 
     if (tail) {
       const { evaluateRun } = await import('@interpreter/eval/run');
@@ -60,9 +78,9 @@ export async function evaluateAssignmentValue(
           env,
           InterpolationContext.ShellCommand
         );
-        value = await env.executeCommand(interpolatedCommand);
+        value = await env.executeCommand(interpolatedCommand, commandOptions);
       } else {
-        value = await env.executeCommand(commandNode.command);
+        value = await env.executeCommand(commandNode.command, commandOptions);
       }
 
       const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');

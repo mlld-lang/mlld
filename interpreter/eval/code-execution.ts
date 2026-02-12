@@ -15,6 +15,19 @@ interface CodeExecutionNode {
   };
 }
 
+function collectParameterBindings(env: Environment): Record<string, unknown> | undefined {
+  const params: Record<string, unknown> = {};
+  const variables = env.getAllVariables();
+
+  for (const [name, variable] of variables.entries()) {
+    if (variable?.internal?.isParameter === true) {
+      params[name] = variable.value;
+    }
+  }
+
+  return Object.keys(params).length > 0 ? params : undefined;
+}
+
 /**
  * Evaluate code execution nodes (from /var RHS)
  * Delegates to environment's executeCode method which uses proper executors
@@ -35,10 +48,11 @@ export async function evaluateCodeExecution(
 
   // Delegate to environment's executeCode method which uses the proper executor
   // This ensures we use VM for Node.js, AsyncFunction for JS, etc.
+  const params = collectParameterBindings(env);
   const result = await env.executeCode(
     code,
     language,
-    undefined, // params
+    params,
     undefined, // metadata
     workingDirectory ? { workingDirectory } : undefined // options
   );

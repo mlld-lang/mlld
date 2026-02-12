@@ -144,7 +144,7 @@ describe('execution evaluator', () => {
       [{ type: 'Text', content: 'echo {"ok":true}' }],
       InterpolationContext.ShellCommand
     );
-    expect(env.executeCommand).toHaveBeenCalledWith('echo {"ok":true}');
+    expect(env.executeCommand).toHaveBeenCalledWith('echo {"ok":true}', undefined);
     expect(mocks.processCommandOutput).toHaveBeenCalledWith('{"ok":true}');
   });
 

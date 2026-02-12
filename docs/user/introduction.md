@@ -289,6 +289,7 @@ exe @process(data) = js { return data.toUpperCase(); }
 ```
 
 `cmd {echo @var}` interpolates `@var` directly. For `js` and `node`, values come in as parameters.
+Those parameters also stay available inside executable block `let` assignments and nested `for` bodies for `sh`/`cmd`/`js`/`python`/`node` code blocks.
 
 ### Blocks and local variables
 
