@@ -151,7 +151,15 @@ export function findVariableOwner(env: Environment, name: string): Environment |
   let current: Environment | undefined = env;
   while (current) {
     if (current.getCurrentVariables().has(name)) return current;
-    current = current.getParent();
+    const parent = current.getParent();
+    if (!parent) {
+      return undefined;
+    }
+    // Module-isolated execution frames do not inspect caller scopes.
+    if (current.isModuleIsolated() && !parent.isModuleIsolated()) {
+      return undefined;
+    }
+    current = parent;
   }
   return undefined;
 }

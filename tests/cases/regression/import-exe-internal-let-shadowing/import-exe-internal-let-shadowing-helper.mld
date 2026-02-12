@@ -1,0 +1,6 @@
+/exe @buildContext() = [
+  let @descCountNum = 7
+  => `inner:@descCountNum`
+]
+
+/export { @buildContext }

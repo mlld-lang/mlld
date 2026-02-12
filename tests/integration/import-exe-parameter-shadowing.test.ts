@@ -61,4 +61,46 @@ describe('imported executable parameter shadowing', () => {
 
     expect((output as string).trim()).toBe('new:param-run caller:caller-run');
   });
+
+  it('allows imported executable internal let bindings to shadow caller variable names', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-import-let-shadowing-'));
+    tempDirs.push(root);
+
+    const helperPath = path.join(root, 'helper-let.mld');
+    const mainPath = path.join(root, 'main-let.mld');
+
+    await fs.writeFile(
+      helperPath,
+      [
+        '/exe @buildContext() = [',
+        '  let @descCountNum = 7',
+        '  => `inner:@descCountNum`',
+        ']',
+        '/export { @buildContext }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await fs.writeFile(
+      mainPath,
+      [
+        `/import { @buildContext } from "${helperPath}"`,
+        '/var @descCountNum = 42',
+        '/show `outer:@descCountNum`',
+        '/show @buildContext()'
+      ].join('\n'),
+      'utf8'
+    );
+
+    const output = await interpret(await fs.readFile(mainPath, 'utf8'), {
+      filePath: mainPath,
+      fileSystem: new NodeFileSystem(),
+      pathService: new PathService(),
+      approveAllImports: true,
+      useMarkdownFormatter: false,
+      normalizeBlankLines: true
+    });
+
+    expect((output as string).trim()).toBe('outer:42\ninner:7');
+  });
 });
