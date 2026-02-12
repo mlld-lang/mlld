@@ -251,7 +251,7 @@ ShellCommandLineContent
           } else if (char === '>' && next === '>') {
             helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks. For append, use sh { } and pass variables as parameters: sh(@myVar) { echo "$myVar" >> file }`);
           } else if (char === '>' || char === '<') {
-            helpers.mlldError(`Shell redirection operators are not allowed in simple mlld commands. You may have been trying to do something else though. Check syntax references.`);
+            helpers.mlldError(`Shell redirection (${char}) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { cmd "$myVar" ${char === '>' ? '> out.txt' : '< in.txt'} }`);
           } else if (char === '&' && next !== '&' && next !== '>') {
             helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
           } else {
@@ -424,10 +424,10 @@ UnifiedCommandWordChar
           helpers.mlldError(`Shell operator semicolon (;) is not allowed in cmd { }. For shell scripts use sh { }, for JavaScript use js { } or node { }. Note: these blocks don't interpolate @variables - pass them as parameters: sh(@myVar) { cmd1; cmd2 }`);
         }
         if (char === '>' && input[pos + 1] !== '>') {
-          helpers.mlldError(`Shell redirection operators are not allowed in simple mlld commands. You may have been trying to do something else though. Check syntax references.`);
+          helpers.mlldError(`Shell redirection (>) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { cmd "$myVar" > out.txt }`);
         }
         if (char === '<') {
-          helpers.mlldError(`Shell redirection operators are not allowed in simple mlld commands. You may have been trying to do something else though. Check syntax references.`);
+          helpers.mlldError(`Shell redirection (<) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { cmd "$myVar" < in.txt }`);
         }
         if (char === '&' && input[pos + 1] !== '&' && input[pos + 1] !== '>') {
           helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
