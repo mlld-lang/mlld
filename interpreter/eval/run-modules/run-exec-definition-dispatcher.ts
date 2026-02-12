@@ -114,6 +114,7 @@ export async function extractRunExecArguments(params: {
   const evaluated = await evaluateExecInvocationArgs({
     args,
     env,
+    commandName: ((directive.values as any)?.command as string) || 'run',
     services: {
       interpolate: async (nodes: any[], targetEnv: Environment, context?: InterpolationContext) => {
         return interpolateWithPendingDescriptor(

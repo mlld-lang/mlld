@@ -124,9 +124,10 @@ export function bindExecParameterVariables(options: {
 export async function evaluateExecInvocationArgs(options: {
   args: any[];
   env: Environment;
+  commandName: string;
   services: ExecArgEvaluationServices;
 }): Promise<EvaluatedExecArguments> {
-  const { args, env, services } = options;
+  const { args, env, commandName, services } = options;
   const evaluatedArgStrings: string[] = [];
   const evaluatedArgs: unknown[] = [];
 
@@ -296,8 +297,7 @@ export async function evaluateExecInvocationArgs(options: {
               }
             }
           } else {
-            argValue = await services.interpolate([arg], env, InterpolationContext.Default);
-            argValueAny = argValue;
+            throw new Error(`Undefined variable '@${varName}' passed to function @${commandName}`);
           }
           break;
         }

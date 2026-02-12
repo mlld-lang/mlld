@@ -1079,6 +1079,7 @@ async function evaluateExecInvocationInternal(
   const { evaluatedArgStrings, evaluatedArgs } = await evaluateExecInvocationArgs({
     args,
     env,
+    commandName,
     services: {
       interpolate: interpolateWithResultDescriptor,
       evaluateExecInvocation,
