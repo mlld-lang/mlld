@@ -383,6 +383,9 @@ export async function interpret(
     const streamExecution = new StreamExecution(emitter, {
       abort: () => {
         env.cleanup();
+      },
+      updateState: async (path: string, value: unknown) => {
+        env.applyExternalStateUpdate(path, value);
       }
     });
     env.enableSDKEvents(emitter);

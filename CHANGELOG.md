@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`mlld live --stdio`**: persistent NDJSON RPC transport for long-running SDK calls
-  - Accepts `process`, `execute`, `analyze`, and `cancel` methods over stdio
+  - Accepts `process`, `execute`, `analyze`, `cancel`, and `state:update` methods over stdio
   - Streams SDK events as NDJSON while requests execute
   - Returns structured completion payloads per request id
   - Aborts active requests on `cancel`, stdin EOF, SIGINT, or SIGTERM
+- **Ruby SDK wrapper**: `sdk/ruby` adds persistent live transport support with `process`, `execute`, `analyze`, and module-level convenience helpers.
 - **`mlld mcp-dev`**: MCP server for language introspection tools
   - `mlld_validate` - Syntax validation with errors/warnings
   - `mlld_analyze` - Module analysis (exports, executables, imports, guards)
@@ -71,6 +72,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Colon form still works (backward compatible) but is no longer shown in docs
 
 ### Changed
+- Go/Python/Rust/Ruby SDK wrappers use persistent `mlld live --stdio` transport instead of per-call CLI shellouts.
+  - Go, Python, Rust, and Ruby expose async handle APIs for `process` and `execute` with `wait/result`, `cancel`, and `update_state`.
+  - `process` accepts payload/state/dynamic module injection options across wrappers.
+  - `execute` merges `stateWrites` from final results and streamed `state:write` events.
+  - SDK integration tests cover state injection, dynamic module injection, state write capture, persisted state replay, and loop-stop signaling via in-flight `state:update`.
+  - SDK integration tests assert `update_state` after completion fails with `REQUEST_NOT_FOUND` across Go/Python/Rust/Ruby.
 - **`mlld init` renamed to `mlld module`**: Module creation is now `mlld module` (alias: `mlld mod`)
   - Previous `mlld init` behavior (interactive module creation) moved to `mlld module`
   - New `mlld init` provides quick project setup (see Added above)
@@ -84,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- Dynamic module registration supports mixed user-data and external modules in one run without throwing `Resolver 'dynamic' is already registered`.
 - **`when` values in exe blocks**: `WhenExpression` statements in exe blocks now correctly early-return when they produce a non-null value — previously the value was silently discarded and execution continued to the next statement. Side-effect actions (`show`/`output`) are correctly excluded from early return.
 - **Directive error line numbers**: `MlldDirectiveError` now correctly extracts line/column from AST `SourceLocation` objects — previously showed `at line undefined, column undefined` for all directive errors
 - **Error messages no longer prefix directives with `/`**: Error messages now say `for expects an array` instead of `/for expects an array` — the `/` is a line-start disambiguator in markdown mode, not part of the directive name. Updated across grammar parse errors, interpreter runtime errors, and error templates.

@@ -518,9 +518,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       throw new Error('ResolverManager not available');
     }
 
-    const resolver = new DynamicModuleResolver(modules, { source, literalStrings: options?.literalStrings });
-    this.resolverManager.registerResolver(resolver);
-    logger.debug(`Registered dynamic modules: ${Object.keys(modules).length}${source ? ` (source: ${source})` : ''}`);
+    let resolver: DynamicModuleResolver;
+    const existing = this.resolverManager.getResolver('dynamic');
+
+    if (existing instanceof DynamicModuleResolver) {
+      const normalized = new DynamicModuleResolver(modules, {
+        source,
+        literalStrings: options?.literalStrings
+      });
+
+      for (const [path, content] of normalized.getSerializedModules()) {
+        existing.updateModule(path, content);
+      }
+
+      resolver = existing;
+      logger.debug(`Updated dynamic modules: ${Object.keys(modules).length}${source ? ` (source: ${source})` : ''}`);
+    } else {
+      resolver = new DynamicModuleResolver(modules, { source, literalStrings: options?.literalStrings });
+      this.resolverManager.registerResolver(resolver);
+      logger.debug(`Registered dynamic modules: ${Object.keys(modules).length}${source ? ` (source: ${source})` : ''}`);
+    }
 
     // Track @state snapshot for live reads/updates
     if (Object.prototype.hasOwnProperty.call(modules, '@state')) {
@@ -967,6 +984,23 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getStateWrites(): StateWrite[] {
     return this.getRootEnvironment().stateWrites;
+  }
+
+  hasDynamicStateSnapshot(): boolean {
+    return this.getRootEnvironment().stateSnapshot !== undefined;
+  }
+
+  applyExternalStateUpdate(path: string, value: unknown): void {
+    const root = this.getRootEnvironment();
+    if (!root.stateSnapshot) {
+      throw new Error('No dynamic @state snapshot is available for this execution');
+    }
+
+    if (!root.setStateSnapshotValue(path, value)) {
+      throw new Error('State update path is required');
+    }
+
+    root.refreshStateVariable();
   }
   
   // ═══════════════════════════════════════════════════════════════
@@ -2539,9 +2573,21 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return;
     }
 
-    const pathParts = (write.path || '').split('.').filter(Boolean);
-    if (pathParts.length === 0) {
+    if (!this.setStateSnapshotValue(write.path, write.value)) {
       return;
+    }
+
+    this.refreshStateVariable();
+  }
+
+  private setStateSnapshotValue(pathValue: string, value: unknown): boolean {
+    if (!this.stateSnapshot) {
+      return false;
+    }
+
+    const pathParts = (pathValue || '').split('.').filter(Boolean);
+    if (pathParts.length === 0) {
+      return false;
     }
 
     let target: any = this.stateSnapshot;
@@ -2554,8 +2600,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
 
     const lastKey = pathParts[pathParts.length - 1];
-    target[lastKey] = write.value;
-    this.refreshStateVariable();
+    target[lastKey] = value;
+    return true;
   }
 
   private refreshStateVariable(): void {

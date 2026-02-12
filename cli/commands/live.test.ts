@@ -43,4 +43,16 @@ describe('live command', () => {
 
     expect(startLiveStdioServer).toHaveBeenCalledTimes(1);
   });
+
+  it('documents state:update in help output', async () => {
+    const command = createLiveCommand();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await command.execute([], { help: true });
+
+    const rendered = logSpy.mock.calls.map(call => call.join(' ')).join('\n');
+    expect(rendered).toContain('state:update');
+
+    logSpy.mockRestore();
+  });
 });

@@ -10,12 +10,20 @@ class FakeStreamExecution implements StreamExecution {
   private resolveResult!: (value: StructuredResult) => void;
   private rejectResult!: (error: unknown) => void;
   private complete = false;
+  readonly stateUpdates: Array<{ path: string; value: unknown }> = [];
+  readonly updateState?: (path: string, value: unknown) => Promise<void>;
 
-  constructor() {
+  constructor(options: { enableStateUpdates?: boolean } = {}) {
     this.resultPromise = new Promise<StructuredResult>((resolve, reject) => {
       this.resolveResult = resolve;
       this.rejectResult = reject;
     });
+
+    if (options.enableStateUpdates !== false) {
+      this.updateState = async (path: string, value: unknown): Promise<void> => {
+        this.stateUpdates.push({ path, value });
+      };
+    }
 
     // Swallow rejections to keep tests from reporting unhandled done() rejections.
     this.donePromise = this.resultPromise.then(
@@ -81,11 +89,16 @@ class FakeStreamExecution implements StreamExecution {
   }
 }
 
-function createServerHarness(deps: {
+type HarnessDeps = {
   interpret?: any;
   executeFile?: any;
   analyze?: any;
-}) {
+};
+
+function createServerHarness(
+  deps: HarnessDeps = {},
+  options: { useDefaultDeps?: boolean } = {}
+) {
   const input = new PassThrough();
   const output = new PassThrough();
   output.setEncoding('utf8');
@@ -107,34 +120,40 @@ function createServerHarness(deps: {
     }
   });
 
-  const server = new LiveStdioServer(
-    { input, output },
-    {
-      interpret: deps.interpret ?? (async () => {
-        throw new Error('interpret not stubbed');
-      }),
-      executeFile: deps.executeFile ?? (async () => {
-        throw new Error('execute not stubbed');
-      }),
-      analyze: deps.analyze ?? (async () => {
-        throw new Error('analyze not stubbed');
-      }),
-      makeFileSystem: () => ({}) as any,
-      makePathService: () => ({}) as any
-    }
-  );
+  const server = options.useDefaultDeps
+    ? new LiveStdioServer({ input, output })
+    : new LiveStdioServer(
+        { input, output },
+        {
+          interpret: deps.interpret ?? (async () => {
+            throw new Error('interpret not stubbed');
+          }),
+          executeFile: deps.executeFile ?? (async () => {
+            throw new Error('execute not stubbed');
+          }),
+          analyze: deps.analyze ?? (async () => {
+            throw new Error('analyze not stubbed');
+          }),
+          makeFileSystem: () => ({}) as any,
+          makePathService: () => ({}) as any
+        }
+      );
 
   const startPromise = server.start();
 
-  const waitForLineCount = async (count: number, timeoutMs = 1500): Promise<void> => {
+  const waitFor = async (predicate: () => boolean, timeoutMs = 1500): Promise<void> => {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-      if (lines.length >= count) {
+      if (predicate()) {
         return;
       }
       await new Promise(resolve => setTimeout(resolve, 10));
     }
-    throw new Error(`Timed out waiting for ${count} lines, got ${lines.length}`);
+    throw new Error('Timed out waiting for harness condition');
+  };
+
+  const waitForLineCount = async (count: number, timeoutMs = 1500): Promise<void> => {
+    await waitFor(() => lines.length >= count, timeoutMs);
   };
 
   const jsonLines = (): any[] => lines.map(line => JSON.parse(line));
@@ -147,6 +166,7 @@ function createServerHarness(deps: {
   return {
     input,
     lines,
+    waitFor,
     waitForLineCount,
     jsonLines,
     close
@@ -246,6 +266,91 @@ describe('LiveStdioServer', () => {
 
     await harness.close();
   });
+
+  it('applies state:update to active in-flight request', async () => {
+    const handle = new FakeStreamExecution();
+    const harness = createServerHarness({
+      executeFile: async () => handle
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'execute', id: 7, params: { filepath: './run.mld' } })}\n`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    harness.input.write(
+      `${JSON.stringify({
+        method: 'state:update',
+        id: 'u1',
+        params: { requestId: 7, path: 'exit', value: true }
+      })}\n`
+    );
+
+    await harness.waitFor(() => harness.jsonLines().some(line => line.result?.id === 'u1'));
+    const updateResult = harness
+      .jsonLines()
+      .find(line => line.result?.id === 'u1');
+
+    expect(updateResult.result.requestId).toBe(7);
+    expect(updateResult.result.path).toBe('exit');
+    expect(handle.stateUpdates).toEqual([{ path: 'exit', value: true }]);
+
+    handle.resolve({ output: 'ok', effects: [], exports: {}, stateWrites: [] } as any);
+    await harness.close();
+  });
+
+  it('rejects state:update when request has no dynamic @state', async () => {
+    const handle = new FakeStreamExecution({ enableStateUpdates: false });
+    const harness = createServerHarness({
+      executeFile: async () => handle
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'execute', id: 7, params: { filepath: './run.mld' } })}\n`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    harness.input.write(
+      `${JSON.stringify({
+        method: 'state:update',
+        id: 'u2',
+        params: { requestId: 7, path: 'exit', value: true }
+      })}\n`
+    );
+
+    await harness.waitFor(() => harness.jsonLines().some(line => line.result?.id === 'u2'));
+    const updateResult = harness
+      .jsonLines()
+      .find(line => line.result?.id === 'u2');
+
+    expect(updateResult.result.error.code).toBe('STATE_UNAVAILABLE');
+
+    handle.resolve({ output: 'ok', effects: [], exports: {}, stateWrites: [] } as any);
+    await harness.close();
+  });
+
+  it('rejects state:update when target request is not active', async () => {
+    const harness = createServerHarness({});
+
+    harness.input.write(
+      `${JSON.stringify({
+        method: 'state:update',
+        id: 'u3',
+        params: { requestId: 404, path: 'exit', value: true }
+      })}\n`
+    );
+
+    await harness.waitForLineCount(1);
+    const [line] = harness.jsonLines();
+
+    expect(line.result.id).toBe('u3');
+    expect(line.result.error.code).toBe('REQUEST_NOT_FOUND');
+
+    await harness.close();
+  });
+
 });
 
 describe('LiveStdioServer output mode', () => {

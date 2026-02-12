@@ -1,17 +1,16 @@
 # mlld SDKs
 
-Thin wrappers around the mlld CLI for Go, Python, and Rust.
+Thin wrappers around the mlld CLI for Go, Python, Rust, and Ruby.
 
 ## Philosophy
 
 These SDKs wrap the mlld CLI rather than reimplementing it. This gives you:
 
-- **100% feature parity** - Every feature works, including JS/Node/Python code blocks
-- **Zero maintenance burden** - As mlld evolves, you get new features automatically
-- **Battle-tested** - Uses the same implementation as the CLI
-- **Tiny footprint** - Each SDK is ~200-300 lines of code
+- **Feature parity with CLI semantics**
+- **Low maintenance overhead**
+- **Shared transport behavior across languages**
 
-The tradeoff is requiring Node.js at runtime. For most use cases, this is fine.
+The tradeoff is requiring Node.js at runtime.
 
 ## Installation
 
@@ -34,131 +33,41 @@ pip install mlld-sdk
 mlld = "0.1"
 ```
 
-## Quick Start
+### Ruby
 
-### Go
-
-```go
-import mlld "github.com/mlld-lang/mlld/sdk/go"
-
-client := mlld.New()
-
-// Process a script
-output, _ := client.Process(`/var @x = 1
-/show @x`, nil)
-
-// Execute a file with payload
-result, _ := client.Execute("./agent.mld", map[string]any{
-    "text": "hello",
-}, &mlld.ExecuteOptions{
-    State: map[string]any{"count": 0},
-})
-
-// Static analysis
-analysis, _ := client.Analyze("./module.mld")
+```bash
+cd sdk/ruby
+gem build mlld.gemspec
+gem install ./mlld-*.gem
 ```
 
-### Python
+## Core API
 
-```python
-from mlld import Client
+All SDKs provide these blocking operations:
 
-client = Client()
+- `process(script, options)`
+- `execute(filepath, payload, options)`
+- `analyze(filepath)`
 
-# Process a script
-output = client.process('/var @x = 1\n/show @x')
+All SDKs also keep a persistent `mlld live --stdio` subprocess per client.
 
-# Execute a file with payload
-result = client.execute('./agent.mld', {'text': 'hello'}, state={'count': 0})
+## In-Flight Control API
 
-# Static analysis
-analysis = client.analyze('./module.mld')
-```
+Each SDK exposes handle APIs for long-running process/execute calls:
 
-### Rust
+- Start request: `process_async(...)` / `execute_async(...)`
+- Handle operations: `wait`/`result`, `cancel`, `update_state(path, value)`
 
-```rust
-use mlld::Client;
+`update_state` sends live `state:update` requests to mutate in-flight `@state` for that request.
 
-let client = Client::new();
+## State Writes
 
-// Process a script
-let output = client.process("/var @x = 1\n/show @x", None)?;
+`execute` result state writes merge:
 
-// Execute a file with payload
-let result = client.execute(
-    "./agent.mld",
-    Some(serde_json::json!({"text": "hello"})),
-    Some(ExecuteOptions {
-        state: Some(serde_json::json!({"count": 0})),
-        ..Default::default()
-    }),
-)?;
-
-// Static analysis
-let analysis = client.analyze("./module.mld")?;
-```
-
-## API
-
-All three SDKs provide the same core API:
-
-| Method | Description |
-|--------|-------------|
-| `process(script)` | Execute a script string, return output |
-| `execute(filepath, payload, opts)` | Run a file with payload/state |
-| `analyze(filepath)` | Static analysis without execution |
-
-### ProcessOptions
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `file_path` | string | Context for relative imports |
-| `format` | string | Output format ("text" or "json") |
-| `timeout` | duration | Override default timeout |
-
-### ExecuteOptions
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `state` | object | Injected as `@state` |
-| `dynamic_modules` | object | Additional modules to inject |
-| `timeout` | duration | Override default timeout |
-
-### ExecuteResult
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `output` | string | Script output |
-| `state_writes` | array | Writes to `state://` protocol |
-| `exports` | object | Exported variables |
-| `metrics` | object | Timing and counts |
-
-### AnalyzeResult
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `filepath` | string | Analyzed file |
-| `valid` | bool | Parse success |
-| `errors` | array | Parse errors |
-| `executables` | array | Defined functions |
-| `exports` | array | Exported names |
-| `imports` | array | Import statements |
-| `guards` | array | Security guards |
-| `needs` | object | Capability requirements |
+- final `stateWrites` from the completion payload
+- streamed `state:write` events emitted during execution
 
 ## Requirements
 
-- **mlld CLI** must be installed and in PATH (`npm install -g mlld`)
-- **Node.js** runtime (required by mlld)
-
-## When to use native reimplementation instead
-
-Consider a native mlld implementation if you need:
-
-- No Node.js dependency (embedded systems, edge computing)
-- Sub-millisecond startup (millions of executions per second)
-- WebAssembly target for browsers
-- Single binary distribution
-
-For everything else, these wrappers are the pragmatic choice.
+- `mlld` CLI on PATH (or command override)
+- Node.js runtime

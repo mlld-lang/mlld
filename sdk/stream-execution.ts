@@ -12,8 +12,15 @@ export class StreamExecution implements StreamExecutionInterface {
   private readonly resultPromise: Promise<StructuredResult>;
   private aborted = false;
   private abortFn?: () => void;
+  updateState?: (path: string, value: unknown) => Promise<void>;
 
-  constructor(private readonly emitter: ExecutionEmitter, options?: { abort?: () => void }) {
+  constructor(
+    private readonly emitter: ExecutionEmitter,
+    options?: {
+      abort?: () => void;
+      updateState?: (path: string, value: unknown) => Promise<void>;
+    }
+  ) {
     this.donePromise = new Promise<void>((resolve, reject) => {
       this.doneResolve = resolve;
       this.doneReject = reject;
@@ -23,6 +30,15 @@ export class StreamExecution implements StreamExecutionInterface {
       this.resultReject = reject;
     });
     this.abortFn = options?.abort;
+
+    if (options?.updateState) {
+      this.updateState = async (path: string, value: unknown): Promise<void> => {
+        if (this.completed) {
+          throw new Error('StreamExecution already completed');
+        }
+        await options.updateState?.(path, value);
+      };
+    }
   }
 
   on(type: SDKEvent['type'], handler: SDKEventHandler): void {

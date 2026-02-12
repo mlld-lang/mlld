@@ -42,6 +42,7 @@ interface LiveStdioServerIO {
 
 interface ActiveExecution {
   abort: () => void;
+  updateState?: (path: string, value: unknown) => Promise<void>;
 }
 
 interface ProcessRequestParams {
@@ -69,6 +70,12 @@ interface ExecuteRequestParams {
 
 interface AnalyzeRequestParams {
   filepath: string;
+}
+
+interface StateUpdateRequestParams {
+  requestId: RequestId;
+  path: string;
+  value: unknown;
 }
 
 const SDK_EVENT_TYPES: SDKEvent['type'][] = [
@@ -338,6 +345,11 @@ export class LiveStdioServer {
       return;
     }
 
+    if (method === 'state:update') {
+      await this.handleStateUpdate(requestId, request.params);
+      return;
+    }
+
     if (this.active.has(requestId)) {
       await this.writeResult(requestId, {
         error: this.buildError('REQUEST_IN_PROGRESS', `Request ${String(requestId)} is already active`)
@@ -365,6 +377,51 @@ export class LiveStdioServer {
     }
 
     active.abort();
+  }
+
+  private async handleStateUpdate(requestId: RequestId, params: unknown): Promise<void> {
+    let parsed: StateUpdateRequestParams;
+    try {
+      parsed = this.parseStateUpdateParams(params);
+    } catch (error) {
+      await this.writeResult(requestId, {
+        error: this.buildError(
+          'INVALID_REQUEST',
+          error instanceof Error ? error.message : 'state:update params must be an object'
+        )
+      });
+      return;
+    }
+
+    const active = this.active.get(parsed.requestId);
+    if (!active) {
+      await this.writeResult(requestId, {
+        error: this.buildError('REQUEST_NOT_FOUND', `No active request for id ${String(parsed.requestId)}`)
+      });
+      return;
+    }
+
+    if (!active.updateState) {
+      await this.writeResult(requestId, {
+        error: this.buildError(
+          'STATE_UNAVAILABLE',
+          `Request ${String(parsed.requestId)} has no dynamic @state to update`
+        )
+      });
+      return;
+    }
+
+    try {
+      await active.updateState(parsed.path, parsed.value);
+      await this.writeResult(requestId, {
+        requestId: parsed.requestId,
+        path: parsed.path
+      });
+    } catch (error) {
+      await this.writeResult(requestId, {
+        error: this.normalizeError(error)
+      });
+    }
   }
 
   private async runRequest(requestId: RequestId, method: string, params: unknown): Promise<void> {
@@ -465,7 +522,12 @@ export class LiveStdioServer {
     }
 
     this.active.set(requestId, {
-      abort: () => execution.abort?.()
+      abort: () => execution.abort?.(),
+      updateState: execution.updateState
+        ? async (path: string, value: unknown) => {
+            await execution.updateState?.(path, value);
+          }
+        : undefined
     });
 
     try {
@@ -555,6 +617,27 @@ export class LiveStdioServer {
     }
 
     return { filepath: params.filepath };
+  }
+
+  private parseStateUpdateParams(params: unknown): StateUpdateRequestParams {
+    if (!isRecord(params)) {
+      throw new Error('state:update params must be an object');
+    }
+
+    const requestId = this.normalizeId(params.requestId);
+    if (requestId === null) {
+      throw new Error('state:update params.requestId must be a string or number');
+    }
+
+    if (typeof params.path !== 'string' || params.path.trim().length === 0) {
+      throw new Error('state:update params.path must be a non-empty string');
+    }
+
+    return {
+      requestId,
+      path: params.path.trim(),
+      value: params.value
+    };
   }
 
   private parseMode(value: unknown): MlldMode | undefined {

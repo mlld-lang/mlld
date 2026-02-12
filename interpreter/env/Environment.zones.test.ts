@@ -63,10 +63,25 @@ describe('Environment zones coverage', () => {
     expect(writes[0].index).toBe(0);
     expect(writes[1].index).toBe(1);
 
+    env.applyExternalStateUpdate('value', 'external');
+    env.applyExternalStateUpdate('nested.count', 3);
+
+    expect(env.getVariable('state')?.value?.value).toBe('external');
+    expect((env.getVariable('state') as any)?.value?.nested?.count).toBe(3);
+    expect(env.getStateWrites()).toHaveLength(2);
+
     const sdkTypes = emitter.emit.mock.calls.map(([event]) => event.type);
     expect(sdkTypes).toContain('state:write');
   });
 
+
+  it('rejects external state updates when no dynamic @state snapshot exists', () => {
+    const env = createEnvironment();
+
+    expect(() => env.applyExternalStateUpdate('exit', true)).toThrow(
+      /No dynamic @state snapshot/i
+    );
+  });
   it('maps stream-bus events into SDK events and suppresses chunks when streaming is disabled', () => {
     const env = createEnvironment();
     let listener: ((event: any) => void) | undefined;
