@@ -161,71 +161,9 @@ If a `cmd` or `sh` block returns a string that looks like JSON, mlld turns it in
 
 ## Known sharp edges
 
-### Inline object literals as function args
-
-Passing `{ key: value }` directly as a function argument may resolve to empty string. Assign to a variable first.
-
-```mlld
->> WRONG: may fail
-@logEvent(@runDir, "complete", { files: @count })
-
->> RIGHT: assign first
-let @data = { files: @count }
-@logEvent(@runDir, "complete", @data)
-```
-
-### Object spread on function parameters
-
-`...@param` in object literals gets `.text` instead of `.data` when `@param` is a function argument. Parse first:
-
-```mlld
->> WRONG in function body:
-let @event = { ts: @now, ...@data }
-
->> RIGHT: parse through @json first
-let @parsed = @data | @json
-let @event = { ts: @now, ...@parsed }
-```
-
-### `*` on return lines parsed as when wildcard
-
-`=> @fn() * 1` parses `*` as a when wildcard, not multiplication. Assign to a let first:
-
-```mlld
->> WRONG:
-=> @countFiles(@dir) * 1
-
->> RIGHT:
-let @count = @countFiles(@dir)
-=> @count * 1
-```
-
 ### Runtime errors in for-loops become data
 
 Errors inside `for` loop bodies get silently packaged as `{__error: true, __message: '...'}` objects. The loop continues. Always check results for error objects if your loop body can fail.
-
-### Multi-line imports must be single-line
-
-```mlld
->> WRONG: fails silently, error reports much later
-import {
-  @a,
-  @b,
-  @c
-} from "./module.mld"
-
->> RIGHT:
-import { @a, @b, @c } from "./module.mld"
-```
-
-### `Array.includes()` may return false unexpectedly
-
-Value equality via `==` works but `.includes()` may not match due to type wrapping. Use `when` with explicit cases instead:
-
-```mlld
->> Instead of @list.includes(@val), use:
-let @match = when @val ["a" => true; "b" => true; * => false]
-```
 
 ### Bare function calls need `run`
 
