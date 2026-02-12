@@ -188,8 +188,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       inputPath = inputPath.replace('@PROJECTPATH', await this.getProjectPath());
     }
     if (inputPath.startsWith('@base/')) {
-      const projectRoot = await this.getProjectPath();
-      inputPath = path.join(projectRoot, inputPath.substring(6));
+      inputPath = path.join(this.dependencies.pathContext.fileDirectory, inputPath.substring(6));
     }
     if (inputPath.startsWith('@root/')) {
       const projectRoot = await this.getProjectPath();

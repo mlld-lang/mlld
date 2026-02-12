@@ -19,13 +19,14 @@ export interface PathContext {
    * The mlld project root directory.
    * - Contains mlld-config.json and/or mlld-lock.json
    * - Base for module resolution (@user/module)
-   * - Base for @base variable
+   * - Base for @root resolver paths
    * - Used for security boundaries
    */
   projectRoot: string;
   
   /**
    * Directory containing the current .mld file being processed.
+   * - Base for @base variable and resolver paths
    * - Base for relative imports (./file.mld)
    * - Base for relative file references
    * - Default working directory for commands

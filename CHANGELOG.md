@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **`@base` path scope**: `@base` now resolves to the running script directory (not process CWD or project root), and `@root` resolves to project root for file/output/import path handling.
 - **`mlld validate` built-in name conflicts**: Validation now reports `let`/`var` collisions with built-in names (including transformer names like `@upper`) as explicit built-in conflicts.
 - **Reserved variable docs**: Reserved-variable documentation now lists built-in transformer names that cannot be reused for variable declarations.
 - **Mutable `@state` anti-pattern warnings**: Validation now emits an anti-pattern warning when local `@state` objects are used with `@state.stop` patterns that imply mutable state updates.

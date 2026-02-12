@@ -35,10 +35,11 @@ describe('EnvironmentBootstrap helpers', () => {
   });
 
   describe('createResolverManager', () => {
-    it('registers default resolvers and configures @base prefix', () => {
+    it('registers default resolvers and configures @base and @root prefixes', () => {
       const manager = createResolverManager({
         fileSystem: new MemoryFileSystem(),
         projectRoot: '/tmp/project',
+        fileDirectory: '/tmp/project/docs',
         basePath: '/tmp/project'
       });
 
@@ -55,8 +56,14 @@ describe('EnvironmentBootstrap helpers', () => {
       const basePrefix = manager.getPrefixConfigs().find(prefix => prefix.prefix === '@base');
       expect(basePrefix).toBeDefined();
       expect(basePrefix?.resolver).toBe('base');
-      expect((basePrefix?.config as any)?.basePath).toBe('/tmp/project');
+      expect((basePrefix?.config as any)?.basePath).toBe('/tmp/project/docs');
       expect((basePrefix?.config as any)?.readonly).toBe(false);
+
+      const rootPrefix = manager.getPrefixConfigs().find(prefix => prefix.prefix === '@root');
+      expect(rootPrefix).toBeDefined();
+      expect(rootPrefix?.resolver).toBe('base');
+      expect((rootPrefix?.config as any)?.basePath).toBe('/tmp/project');
+      expect((rootPrefix?.config as any)?.readonly).toBe(false);
     });
   });
 

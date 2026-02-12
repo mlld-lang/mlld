@@ -27,13 +27,13 @@ export interface ProjectPathResolverConfig {
 }
 
 /**
- * Base Path Resolver - handles @base/ and @root/ references
- * Maps @base/@root to the project root directory
+ * Base Path Resolver - handles @base/ and @root/ references.
+ * Prefix behavior is controlled by configured basePath values.
  */
 export class ProjectPathResolver implements Resolver {
   name = 'base';
   aliases = ['root'];
-  description = 'Resolves @base and @root references to project root files';
+  description = 'Resolves @base and @root references to files using configured base paths';
   type: ResolverType = 'io';
   
   capabilities: ResolverCapabilities = {
@@ -72,7 +72,7 @@ export class ProjectPathResolver implements Resolver {
       throw new MlldResolutionError(
         'ProjectPathResolver: Unable to determine project root. ' +
         'This usually means the resolver registry was not properly configured. ' +
-        'Check that @base prefix is mapped to base resolver with basePath.',
+        'Check that @base/@root prefixes are mapped to the base resolver with basePath.',
         { code: 'E_NO_PROJECT_ROOT' }
       );
     }
@@ -130,7 +130,7 @@ export class ProjectPathResolver implements Resolver {
         };
       }
 
-      // Resolve full path relative to project root
+      // Resolve full path relative to configured base path
       const fullPath = path.resolve(basePath, relativePath);
 
       // Security check: ensure the resolved path is within the project

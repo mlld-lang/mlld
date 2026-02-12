@@ -170,8 +170,7 @@ async function resolveAppendPath(
   }
 
   if (resolvedPath.startsWith('@base/')) {
-    const projectRoot = env.getProjectRoot();
-    resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
+    resolvedPath = path.join(env.getBasePath(), resolvedPath.substring(6));
   } else if (resolvedPath.startsWith('@root/')) {
     const projectRoot = env.getProjectRoot();
     resolvedPath = path.join(projectRoot, resolvedPath.substring(6));

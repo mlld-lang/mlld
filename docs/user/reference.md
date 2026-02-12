@@ -69,7 +69,7 @@ run cmd(@base):/ {echo "$base"}
 
 Output:
 ```
-<project root path>
+<script directory path>
 ```
 
 Paths must be absolute (for example `/tmp`, `/var/log`, `/`). Relative paths, `~`, or Windows-style paths fail. Executables accept the same suffix when you need to parameterize it:
@@ -557,7 +557,7 @@ Special built-in variables:
 ```mlld
 @now  >> current timestamp
 @input  >> environment variables (must be allowed)
-@base  >> project root path
+@base  >> current script directory path
 @debug  >> debug information
 ```
 

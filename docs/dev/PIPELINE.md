@@ -1114,7 +1114,7 @@ interpreter/
   - `| output [source] to {file|stream|env: ...}` → writes to file/stream/env
 - Effects attach to the preceding functional stage and run after it succeeds.
 - Effects re-run on each retry attempt for the owning stage.
-- File targets resolve `@base/...` prefixes and relative paths from the project root.
+- File targets resolve `@base/...` prefixes and relative paths from the current script directory, and `@root/...` from the project root.
 
 #### Retry + Stage Numbering Summary
 

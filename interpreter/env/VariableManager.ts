@@ -566,7 +566,7 @@ export class VariableManager implements IVariableManager {
     // Direct assignment for reserved variables during initialization
     this.variables.set('debug', debugVar);
     
-    // Initialize @base with project path
+    // Initialize @base with the current script directory path
     const baseSource: VariableSource = {
       directive: 'var',
       syntax: 'quoted',
