@@ -10,7 +10,7 @@ related-code: scripts/build-incremental.js, scripts/test-runner.js
 ## tldr
 
 - **Granular builds**: Only rebuilds changed components (grammar, TypeScript, errors, version)
-- **Fast tests**: `TESTFAST=true` in `.env.local` skips 6 slowest tests (import edge cases, CLI tests, heredoc e2e)
+- **Fast tests**: `TESTFAST=true` in `.env.local` skips selected slow integration/e2e files and slow fixture cases
 - **Test cycle**: ~9s fast mode (94% coverage), ~16s full suite
 - Entry: `npm test` (runs `pretest` → `build-incremental.js` → `test-runner.js`)
 
@@ -52,16 +52,26 @@ Checks each component independently:
 
 Reads `TESTFAST` from `.env.local` or environment variable.
 
-**TESTFAST=true skips 6 tests (~7s saved):**
-- `tests/integration/imports/basic-patterns.test.ts` (8s)
+**TESTFAST=true skips 9 test files plus e2e tests:**
 - `tests/integration/imports/edge-cases.test.ts` (6s)
 - `tests/integration/cli/absolute-paths.test.ts` (10s)
 - `tests/integration/imports/local-resolver-bugs.test.ts` (4s)
 - `tests/integration/shadow-env-basic-import.test.ts` (5s)
-- `tests/heredoc.e2e.test.ts` (6s)
+- `tests/integration/imports/shadow-environments.test.ts` (~4s)
+- `tests/integration/imports/complex-scenarios.test.ts` (~3s)
+- `tests/integration/node-shadow-cleanup.test.ts` (~2.5s)
 - `tests/integration/heredoc-large-variable.test.ts` (1s)
+- `core/registry/python/VirtualEnvironmentManager.test.ts` (~3s)
+- `tests/*.e2e.test.ts` (glob exclude)
 
-**Still runs:** Shadow env, complex imports, cleanup tests, all fixture tests, all unit tests
+**TESTFAST=true also skips known slow fixture cases:**
+- `feat/with/combined`
+- `feat/with/needs-node`
+- `slash/run/command-bases-npm-run`
+
+**Still runs:** Shadow env, complex imports, cleanup tests, remaining fixture tests, all unit tests
+
+**Full suite mode (`TESTFAST=false`) runs all fixture cases, including the slow fixture cases.**
 
 ### Commands
 

@@ -753,6 +753,20 @@ describe('Mlld Interpreter - Fixture Tests', () => {
   const filteredFixtures = includeExamples ? 
     fixtureFiles : 
     fixtureFiles.filter(f => !f.includes('/examples/'));
+
+  const isFastTestMode =
+    process.env.TESTFAST === '1' ||
+    process.env.TESTFAST === 'true' ||
+    process.env.SKIP_SLOW === '1' ||
+    process.env.SKIP_SLOW === 'true';
+
+  // Fixture timings from Vitest JSON profiling keep these as the known outliers.
+  const slowFixtureMatchers = [
+    'feat/with/combined',
+    'feat/with/needs-node',
+    'slash/run/command-bases-npm-run'
+  ];
+  const slowFixtureTimeoutMs = 15000;
   
   // Skip tests already defined at module level
 
@@ -920,16 +934,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
 
     const ioExpectations = loadFixtureExpectations(fixtureFile);
 
-    // List of known slow fixture tests (> 2s)
-    const slowFixtures = [
-      'feat/with/combined',
-      'feat/with/needs-node',
-      'slash/run/command-bases-npm-run'
-    ];
-
-    // Check if SKIP_SLOW is enabled and this is a slow test
-    const shouldSkipSlow = process.env.SKIP_SLOW === '1' &&
-                           slowFixtures.some(slow => fixture.name.includes(slow));
+    const isKnownSlowFixture = slowFixtureMatchers.some(slow => fixture.name.includes(slow));
+    const shouldSkipSlow = isFastTestMode && isKnownSlowFixture;
     const requiresPythonRuntime = fixture.name.startsWith('exceptions/python/');
     const shouldSkipMissingPython = requiresPythonRuntime && !pythonRuntimeAvailable;
 
@@ -948,7 +954,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           `This likely indicates outdated or incorrect syntax in the test case.`
         );
       }
-      
+
       // For documentation tests, we only check syntax (parse errors) and skip execution
       if (isDocumentationTest && !fixture.parseError) {
         // Test passes - syntax is valid
@@ -1574,7 +1580,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // Restore original fetch
         (global as any).fetch = originalFetch;
       }
-    });
+    }, isKnownSlowFixture ? slowFixtureTimeoutMs : undefined);
   });
 
   // Summary report after all tests

@@ -64,19 +64,17 @@ function shouldRunFastTests() {
 
 const testFast = shouldRunFastTests();
 
-// Define test command based on mode
-// Skips slowest integration/e2e tests but keeps moderate ones and slow fixture tests
-// Skipped: imports/basic-patterns (8s), imports/edge-cases (6s), cli/absolute-paths (10s), heredoc e2e (6s)
-// Kept: imports/shadow-environments (4s), imports/complex-scenarios (3.5s), cleanup tests (2.5s)
-// Kept: feat/with/combined (4.5s), feat/with/needs-node (4s), slash/run/command-bases-npm-run (0.6s)
+// Define test command based on mode.
+// Fast mode skips selected integration/e2e files and marks known slow fixtures as skippable.
 const command = testFast
-  ? 'NODE_ENV=test MLLD_NO_STREAMING=true MLLD_STRICT=${MLLD_STRICT:-0} vitest run --reporter=dot --silent --exclude="**/integration/imports/basic-patterns.test.ts" --exclude="**/integration/imports/edge-cases.test.ts" --exclude="**/integration/cli/absolute-paths.test.ts" --exclude="**/integration/imports/local-resolver-bugs.test.ts" --exclude="**/integration/shadow-env-basic-import.test.ts" --exclude="**/integration/heredoc-large-variable.test.ts" --exclude="**/*.e2e.test.ts"'
+  ? 'NODE_ENV=test MLLD_NO_STREAMING=true TESTFAST=1 SKIP_SLOW=1 MLLD_STRICT=${MLLD_STRICT:-0} vitest run --reporter=dot --silent --exclude="**/integration/imports/edge-cases.test.ts" --exclude="**/integration/cli/absolute-paths.test.ts" --exclude="**/integration/imports/local-resolver-bugs.test.ts" --exclude="**/integration/shadow-env-basic-import.test.ts" --exclude="**/integration/imports/shadow-environments.test.ts" --exclude="**/integration/imports/complex-scenarios.test.ts" --exclude="**/integration/node-shadow-cleanup.test.ts" --exclude="**/integration/heredoc-large-variable.test.ts" --exclude="**/core/registry/python/VirtualEnvironmentManager.test.ts" --exclude="**/*.e2e.test.ts"'
   : 'NODE_ENV=test MLLD_NO_STREAMING=true MLLD_STRICT=${MLLD_STRICT:-0} vitest run --reporter=dot --silent';
 
 // Show what we're doing
 if (testFast) {
   console.log('⚡ Fast test mode enabled (TESTFAST=true)');
-  console.log('   Skipping slowest tests: imports/basic-patterns, imports/edge-cases, cli/absolute-paths, heredoc e2e');
+  console.log('   Skipping slowest tests: imports/edge-cases, cli/absolute-paths, import resolver suites, shadow cleanup, python venv manager, heredoc e2e');
+  console.log('   Skipping slow fixture cases: feat/with/combined, feat/with/needs-node, slash/run/command-bases-npm-run');
   console.log('   Run full suite with: TESTFAST=false npm test\n');
 } else {
   console.log('🔍 Running full test suite');
