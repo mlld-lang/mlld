@@ -136,6 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`/run` exe-block object spread parameters**: Spreading executable parameters (`{ ...@data }`) uses object data rather than serialized text, so state merge patterns work without manual re-parse.
 - **Shadow JS/Node nested StructuredValue unwrapping**: Parameters passed to shadow environments recursively unwrap nested StructuredValues inside arrays/objects, so helper code reads plain values instead of wrapper objects.
 - **Array `.includes()` with variable references**: `@array.includes(@value)` compares normalized values so membership checks align with equality behavior in common validation patterns.
+- **Imported executable parameter shadowing**: Caller variables no longer collide with imported executable parameter names (for example `@run` in caller vs `run` parameter), preventing false variable redefinition errors and misleading line reports.
 - **`for ... when @cond [block]` guard syntax**: For-expression guards now accept block bodies in addition to `=>` forms, so guarded multi-statement collection logic parses and evaluates correctly.
 - **Exe return arithmetic after invocations**: `=> @fn(...) * 1` and similar arithmetic/logical continuations now parse in exe block return lines instead of failing at the first operator.
 - **User-defined privileged guards**: Guard directives support `guard privileged ...` and `with { privileged: true }`, and user-defined privileged guards stay active under guard overrides and support privileged label operations.
