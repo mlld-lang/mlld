@@ -15,6 +15,7 @@ export interface ConfigFileData {
   resolvers?: {
     prefixes?: PrefixConfig[];
   };
+  resolverPrefixes?: PrefixConfig[]; // legacy top-level shape
 
   // Security settings
   security?: {
@@ -117,7 +118,13 @@ export class ConfigFile {
   // Resolver configuration
   getResolverPrefixes(): PrefixConfig[] {
     this.ensureLoaded();
-    return this.data!.resolvers?.prefixes || [];
+    if (this.data!.resolvers?.prefixes) {
+      return this.data!.resolvers.prefixes;
+    }
+    if (this.data!.resolverPrefixes) {
+      return this.data!.resolverPrefixes;
+    }
+    return [];
   }
 
   async setResolverPrefixes(prefixes: PrefixConfig[]): Promise<void> {
@@ -126,6 +133,9 @@ export class ConfigFile {
       this.data!.resolvers = {};
     }
     this.data!.resolvers.prefixes = prefixes;
+    if (this.data!.resolverPrefixes) {
+      delete this.data!.resolverPrefixes;
+    }
     this.isDirty = true;
     await this.save();
   }

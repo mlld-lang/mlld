@@ -32,6 +32,15 @@ describe('initCommand', () => {
 
     await initCommand();
 
+    const configWrite = vi.mocked(fs.writeFile).mock.calls.find(
+      ([filePath]) => filePath === '/test/project/mlld-config.json'
+    );
+    expect(configWrite).toBeDefined();
+    const config = JSON.parse(String(configWrite?.[1]));
+
+    expect(config.resolvers?.prefixes?.[0]?.prefix).toBe('@local/');
+    expect(config.resolverPrefixes).toBeUndefined();
+
     expect(fs.writeFile).toHaveBeenCalledWith(
       '/test/project/mlld-config.json',
       expect.stringContaining('"version": 1')

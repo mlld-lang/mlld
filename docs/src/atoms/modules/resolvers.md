@@ -39,6 +39,8 @@ updated: 2026-01-05
 }
 ```
 
+`mlld` reads `resolvers.prefixes` for resolver mappings. It also reads top-level `resolverPrefixes` when present, and CLI writers persist the nested `resolvers.prefixes` shape.
+
 **Quick setup:**
 
 ```bash

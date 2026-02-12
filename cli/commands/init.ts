@@ -18,17 +18,19 @@ export interface InitOptions {
 const DEFAULT_CONFIG = {
   version: 1,
   scriptDir: 'llm/run',
-  resolverPrefixes: [
-    {
-      prefix: '@local/',
-      resolver: 'LOCAL',
-      type: 'input',
-      priority: 20,
-      config: {
-        basePath: './llm/modules'
+  resolvers: {
+    prefixes: [
+      {
+        prefix: '@local/',
+        resolver: 'LOCAL',
+        type: 'input',
+        priority: 20,
+        config: {
+          basePath: './llm/modules'
+        }
       }
-    }
-  ],
+    ]
+  },
   trustedDomains: [
     'raw.githubusercontent.com',
     'gist.githubusercontent.com',
@@ -53,12 +55,19 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   // Build config with any overrides
   const config = {
     ...DEFAULT_CONFIG,
+    resolvers: {
+      ...DEFAULT_CONFIG.resolvers,
+      prefixes: DEFAULT_CONFIG.resolvers.prefixes.map(prefixConfig => ({
+        ...prefixConfig,
+        config: prefixConfig.config ? { ...prefixConfig.config } : undefined
+      }))
+    },
     projectname,
     scriptDir: options.scriptDir || DEFAULT_CONFIG.scriptDir
   };
 
   if (options.localPath) {
-    config.resolverPrefixes[0].config.basePath = options.localPath;
+    config.resolvers.prefixes[0].config.basePath = options.localPath;
   }
 
   // Write config file
@@ -71,7 +80,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
 
   // Create directories if they don't exist
   const scriptDir = path.join(cwd, config.scriptDir);
-  const modulesDir = path.join(cwd, config.resolverPrefixes[0].config.basePath);
+  const modulesDir = path.join(cwd, config.resolvers.prefixes[0].config.basePath);
 
   if (!existsSync(scriptDir)) {
     await fs.mkdir(scriptDir, { recursive: true });
@@ -86,7 +95,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   console.log(chalk.gray(`  mlld-config.json`));
   console.log(chalk.gray(`  mlld-lock.json`));
   console.log(chalk.gray(`  ${config.scriptDir}/`));
-  console.log(chalk.gray(`  ${config.resolverPrefixes[0].config.basePath}/`));
+  console.log(chalk.gray(`  ${config.resolvers.prefixes[0].config.basePath}/`));
   console.log();
   console.log(chalk.gray('Next steps:'));
   console.log(chalk.gray('  mlld setup           Configure GitHub modules, more resolvers'));
