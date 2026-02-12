@@ -10,6 +10,7 @@ import { MlldError, ErrorSeverity } from '@core/errors';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import { DependencyDetector } from '@core/utils/dependency-detector';
 import { parseSync } from '@grammar/parser';
+import { builtinTransformers } from '@interpreter/builtin/transformers';
 import * as yaml from 'js-yaml';
 import type { MlldNode, ImportDirectiveNode, ExportDirectiveNode, GuardDirectiveNode, ExecutableDirectiveNode, RunDirective, ExecDirective } from '@core/types';
 
@@ -62,6 +63,16 @@ export interface VariableRedefinitionWarning {
   column?: number;
   originalLine?: number;
   originalColumn?: number;
+  reason?: 'builtin-conflict' | 'scope-redefinition';
+  suggestion?: string;
+}
+
+export interface AntiPatternWarning {
+  code: 'mutable-state';
+  message: string;
+  line?: number;
+  column?: number;
+  suggestion?: string;
 }
 
 export interface AnalyzeResult {
@@ -70,6 +81,7 @@ export interface AnalyzeResult {
   errors?: AnalysisError[];
   warnings?: UndefinedVariableWarning[];
   redefinitions?: VariableRedefinitionWarning[];
+  antiPatterns?: AntiPatternWarning[];
   executables?: ExecutableInfo[];
   exports?: string[];
   imports?: ImportInfo[];
@@ -140,17 +152,22 @@ function extractText(nodes: MlldNode[] | undefined): string {
 /**
  * Builtin variables that are always available without declaration
  */
+const BUILTIN_TRANSFORMER_NAMES = builtinTransformers.flatMap(transformer => [
+  transformer.name,
+  transformer.uppercase,
+]);
+
 const BUILTIN_VARIABLES = new Set([
   // Reserved system variables
   'now', 'base', 'debug', 'INPUT', 'mx', 'fm',
   'payload', 'state', 'keychain',
-  // Builtin transformers
-  'json', 'md', 'xml', 'yaml', 'html', 'text', 'csv',
+  // Builtin variables and helper functions
+  'yaml', 'html', 'text',
   'keep', 'keepStructured',
-  // Reserved transformers (not overridable)
-  'exists', 'typeof',
   // Pipeline context
   'input', 'ctx',
+  // Builtin transformers
+  ...BUILTIN_TRANSFORMER_NAMES,
 ]);
 
 /**
@@ -355,6 +372,8 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
             variable: name,
             line,
             column,
+            reason: 'builtin-conflict',
+            suggestion: `Cannot redefine built-in @${name}. Use a different variable name.`,
           });
         } else {
           // Check if this shadows an outer scope variable
@@ -366,6 +385,7 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
               column,
               originalLine: outer.line,
               originalColumn: outer.column,
+              reason: 'scope-redefinition',
             });
           }
         }
@@ -388,6 +408,8 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
             variable: name,
             line,
             column,
+            reason: 'builtin-conflict',
+            suggestion: `Cannot redefine built-in @${name}. Use a different variable name.`,
           });
         } else {
           const outer = findOuterDeclaration(name, depth);
@@ -398,6 +420,7 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
               column,
               originalLine: outer.line,
               originalColumn: outer.column,
+              reason: 'scope-redefinition',
             });
           }
         }
@@ -433,6 +456,50 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
 
   walkWithScope(ast, 0);
   return warnings;
+}
+
+/**
+ * Detect mutable-state anti-patterns where local @state objects are used with @state.stop
+ */
+function detectMutableStateAntiPatterns(ast: MlldNode[], sourceText: string): AntiPatternWarning[] {
+  const stateObjectDeclarations: Array<{ line?: number; column?: number }> = [];
+
+  walkAST(ast, (node: any) => {
+    if (node.type === 'Directive' && node.kind === 'var') {
+      const identifier = node.values?.identifier?.[0]?.identifier;
+      const valueNode = node.values?.value?.[0];
+      if (identifier === 'state' && valueNode?.type === 'object') {
+        stateObjectDeclarations.push({
+          line: node.location?.start?.line,
+          column: node.location?.start?.column,
+        });
+      }
+    }
+
+    if (node.type === 'LetAssignment') {
+      const valueNode = node.value?.[0];
+      if (node.identifier === 'state' && valueNode?.type === 'object') {
+        stateObjectDeclarations.push({
+          line: node.location?.start?.line,
+          column: node.location?.start?.column,
+        });
+      }
+    }
+
+  });
+
+  const hasStateStopAccess = /@state\.stop\b/.test(sourceText);
+  if (stateObjectDeclarations.length === 0 || !hasStateStopAccess) {
+    return [];
+  }
+
+  return stateObjectDeclarations.map(declaration => ({
+    code: 'mutable-state',
+    message: 'Local @state object with @state.stop access is a mutable-state anti-pattern. @state is SDK-managed and local variable objects are immutable.',
+    line: declaration.line,
+    column: declaration.column,
+    suggestion: 'Use a different variable name (for example @runState) and model updates by creating new values instead of mutating fields.'
+  }));
 }
 
 /**
@@ -686,6 +753,11 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       if (redefinitions.length > 0) {
         result.redefinitions = redefinitions;
       }
+
+      const antiPatterns = detectMutableStateAntiPatterns(ast, content);
+      if (antiPatterns.length > 0) {
+        result.antiPatterns = antiPatterns;
+      }
     }
 
   } catch (error: any) {
@@ -779,13 +851,32 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
     console.log(chalk.red(`Errors (${result.redefinitions.length}):`));
     for (const redef of result.redefinitions) {
       const loc = redef.line ? ` (line ${redef.line}${redef.column ? `:${redef.column}` : ''})` : '';
-      const origLoc = redef.originalLine ? ` (originally at line ${redef.originalLine})` : '';
-      console.log(chalk.red(`  @${redef.variable}${loc} - cannot redefine variable in nested scope${origLoc}`));
-      console.log(chalk.dim(`    mlld variables (var) are immutable once defined.`));
-      console.log(chalk.dim(`    To accumulate values in a loop, use one of these approaches:`));
-      console.log(chalk.dim(`      1. let @${redef.variable} = ... (ephemeral, block-scoped only)`));
-      console.log(chalk.dim(`      2. var @${redef.variable}New = ... (new variable name)`));
-      console.log(chalk.dim(`      3. @${redef.variable} += value (augmented assignment for accumulation)`));
+      if (redef.reason === 'builtin-conflict') {
+        console.log(chalk.red(`  @${redef.variable}${loc} - conflicts with built-in name`));
+        if (redef.suggestion) {
+          console.log(chalk.dim(`    hint: ${redef.suggestion}`));
+        }
+      } else {
+        const origLoc = redef.originalLine ? ` (originally at line ${redef.originalLine})` : '';
+        console.log(chalk.red(`  @${redef.variable}${loc} - cannot redefine variable in nested scope${origLoc}`));
+        console.log(chalk.dim(`    mlld variables (var) are immutable once defined.`));
+        console.log(chalk.dim(`    To accumulate values in a loop, use one of these approaches:`));
+        console.log(chalk.dim(`      1. let @${redef.variable} = ... (ephemeral, block-scoped only)`));
+        console.log(chalk.dim(`      2. var @${redef.variable}New = ... (new variable name)`));
+        console.log(chalk.dim(`      3. @${redef.variable} += value (augmented assignment for accumulation)`));
+      }
+    }
+  }
+
+  if (result.antiPatterns && result.antiPatterns.length > 0) {
+    console.log();
+    console.log(chalk.yellow(`Anti-pattern warnings (${result.antiPatterns.length}):`));
+    for (const warning of result.antiPatterns) {
+      const loc = warning.line ? ` (line ${warning.line}${warning.column ? `:${warning.column}` : ''})` : '';
+      console.log(chalk.yellow(`  ${warning.message}${loc}`));
+      if (warning.suggestion) {
+        console.log(chalk.dim(`    hint: ${warning.suggestion}`));
+      }
     }
   }
 }
@@ -811,7 +902,8 @@ export async function analyzeCommand(filepath: string, options: AnalyzeOptions =
     }
 
     // Exit with error if warnings found and errorOnWarnings is set
-    if (options.errorOnWarnings && result.warnings && result.warnings.length > 0) {
+    const warningCount = (result.warnings?.length ?? 0) + (result.antiPatterns?.length ?? 0);
+    if (options.errorOnWarnings && warningCount > 0) {
       process.exit(1);
     }
   } catch (error: any) {
@@ -832,7 +924,7 @@ Usage: mlld validate <filepath> [options]
 
 Validate mlld syntax and analyze module structure without executing.
 Returns validation status, exports, imports, guards, executables, and runtime needs.
-Also checks for undefined variable references.
+Also checks for undefined variable references, built-in name conflicts, and mutable-state anti-patterns.
 
 Options:
   --format <format>     Output format: json or text (default: text)
@@ -844,7 +936,7 @@ Options:
 Examples:
   mlld validate module.mld                     # Validate with text output
   mlld validate module.mld --format json       # Validate with JSON output
-  mlld validate module.mld --error-on-warnings # Fail on undefined variables
+  mlld validate module.mld --error-on-warnings # Fail on warnings
         `);
         return;
       }

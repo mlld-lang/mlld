@@ -17,3 +17,9 @@ updated: 2026-01-11
 - `@base` - project root path
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)
+
+Built-in transformer names are also unavailable for `var`/`let` declarations:
+- `@exists`, `@typeof`
+- `@json`, `@xml`, `@csv`, `@md`
+- `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+- `@keep`, `@keepStructured`
