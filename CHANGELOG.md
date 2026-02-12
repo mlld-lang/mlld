@@ -91,6 +91,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **`mlld validate` built-in name conflicts**: Validation now reports `let`/`var` collisions with built-in names (including transformer names like `@upper`) as explicit built-in conflicts.
+- **Reserved variable docs**: Reserved-variable documentation now lists built-in transformer names that cannot be reused for variable declarations.
+- **Mutable `@state` anti-pattern warnings**: Validation now emits an anti-pattern warning when local `@state` objects are used with `@state.stop` patterns that imply mutable state updates.
+- **Multi-line import parsing**: Selected import lists parse correctly when spread across multiple lines inside `{ ... }`.
+- **Import parse error anchoring**: Malformed multi-line import list errors report the import directive location instead of surfacing at downstream directives.
+- **`mlld init` resolver config shape**: `mlld init` now writes resolver prefixes under `resolvers.prefixes` in `mlld-config.json` instead of a top-level `resolverPrefixes` key.
+- **Resolver prefix config compatibility**: Runtime config loading reads top-level `resolverPrefixes` when present, and writes normalized resolver mappings to `resolvers.prefixes`.
 - Dynamic module registration supports mixed user-data and external modules in one run without throwing `Resolver 'dynamic' is already registered`.
 - **`when` values in exe blocks**: `WhenExpression` statements in exe blocks now correctly early-return when they produce a non-null value — previously the value was silently discarded and execution continued to the next statement. Side-effect actions (`show`/`output`) are correctly excluded from early return.
 - **Directive error line numbers**: `MlldDirectiveError` now correctly extracts line/column from AST `SourceLocation` objects — previously showed `at line undefined, column undefined` for all directive errors
