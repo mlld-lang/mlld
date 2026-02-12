@@ -248,7 +248,7 @@ export async function evaluateRun(
     const execDescriptor = execVar.mx ? varMxToSecurityDescriptor(execVar.mx) : undefined;
     const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
     
-    const { argValues, argDescriptors } = await extractRunExecArguments({
+    const { argValues, argRuntimeValues, argDescriptors } = await extractRunExecArguments({
       directive,
       definition,
       env,
@@ -269,6 +269,7 @@ export async function evaluateRun(
       execVar,
       callStack,
       argValues,
+      argRuntimeValues,
       argDescriptors,
       exeLabels,
       services: {

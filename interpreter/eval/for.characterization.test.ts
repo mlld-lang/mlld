@@ -4,6 +4,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 
 const pathService = new PathService();
 const pathContext = {
@@ -421,5 +422,27 @@ describe('for evaluator characterization', () => {
       .map(line => line.trim())
       .filter(Boolean);
     expect(lines).toEqual(['2', '3']);
+  });
+
+  it('unwraps for-parallel when branch results before js consumption', async () => {
+    const env = await interpretWithEnv(`
+/var @seed = { findings: [1] }
+/var @result = for parallel @n in [1, 2] => when [
+  @n == 1 => @seed
+  * => { findings: [@n] }
+]
+/exe @inspect(values) = js {
+  return values.map(value => value.findings[0]).join(",");
+}
+/var @summary = @inspect(@result)
+`);
+
+    expect(await requireValue(env, 'result')).toEqual([
+      { findings: [1] },
+      { findings: [2] }
+    ]);
+    const summary = await requireValue(env, 'summary');
+    const summaryText = isStructuredValue(summary) ? asText(summary) : String(summary);
+    expect(summaryText).toBe('1,2');
   });
 });

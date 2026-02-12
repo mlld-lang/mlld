@@ -42,6 +42,74 @@ export const VARIABLE_PROXY_PROPS = {
   IS_VARIABLE: '__mlld_is_variable'
 } as const;
 
+function unwrapStructuredRecursively(
+  value: any,
+  seen: WeakMap<object, any> = new WeakMap()
+): any {
+  if (isStructuredValue(value)) {
+    return unwrapStructuredRecursively(asData(value), seen);
+  }
+
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  const existing = seen.get(value as object);
+  if (existing) {
+    return existing;
+  }
+
+  const descriptors = Object.getOwnPropertyDescriptors(value as object);
+  const hasAccessor = Object.values(descriptors).some(
+    descriptor => typeof descriptor.get === 'function' || typeof descriptor.set === 'function'
+  );
+  if (hasAccessor) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    let changed = false;
+    const normalized: any[] = new Array(value.length);
+    seen.set(value, normalized);
+    for (let i = 0; i < value.length; i++) {
+      const next = unwrapStructuredRecursively(value[i], seen);
+      normalized[i] = next;
+      if (next !== value[i]) {
+        changed = true;
+      }
+    }
+    if (!changed) {
+      seen.set(value, value);
+      return value;
+    }
+    return normalized;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return value;
+  }
+
+  let changed = false;
+  const record = value as Record<string, any>;
+  const normalized: Record<string, any> = {};
+  seen.set(value, normalized);
+  for (const [key, entry] of Object.entries(record)) {
+    const next = unwrapStructuredRecursively(entry, seen);
+    normalized[key] = next;
+    if (next !== entry) {
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    seen.set(value, value);
+    return value;
+  }
+
+  return normalized;
+}
+
 /**
  * Create a proxy for a Variable that allows transparent value access
  * while exposing type information through special properties
@@ -97,8 +165,8 @@ export function createVariableProxy(variable: Variable): any {
           return Reflect.get(target, prop, receiver);
           
         default:
-          // Normal property access
-          return Reflect.get(target, prop, receiver);
+          // Resolve nested structured wrappers as properties are accessed.
+          return unwrapStructuredRecursively(Reflect.get(target, prop, receiver));
       }
     },
     
@@ -242,7 +310,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     }
 
     // For non-load-content structured values, extract data
-    const data = asData(value);
+    const data = unwrapStructuredRecursively(asData(value));
     if (target && key) {
       recordPrimitiveMetadata(target, key, {
         isVariable: false,
@@ -254,7 +322,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     }
     return data;
   }
-  return value;
+  return unwrapStructuredRecursively(value);
 }
 
 /**

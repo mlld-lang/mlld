@@ -415,6 +415,60 @@ describe('evaluateRun phase-0 characterization', () => {
     expect(asText(proseResult.value)).toBe('prose:result');
   });
 
+  it('passes inline object literals through /run executable parameters', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/exe @test(a, b, data) = [',
+        '  => `a=@a b=@b data=@data`',
+        ']',
+        '/run @test("x", "y", { count: 5 })'
+      ].join('\n'),
+      env
+    );
+
+    const result = await evaluateRun(runDirective, env);
+    expect(asText(result.value)).toContain('a=x b=y data={"count":5}');
+  });
+
+  it('preserves object parameters for spread in /run exe blocks', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/exe @merge(data) = [',
+        '  let @result = { ts: @now, ...@data }',
+        '  => @result',
+        ']',
+        '/var @info = { count: 5 }',
+        '/run @merge(@info)'
+      ].join('\n'),
+      env
+    );
+
+    const result = await evaluateRun(runDirective, env);
+    const output = asText(result.value);
+    expect(output).toContain('"count":5');
+    expect(output).toContain('"ts":"');
+  });
+
+  it('passes structured objects to js run executables', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/exe @inspect(data) = js {',
+        '  return JSON.stringify({ kind: typeof data, count: data?.count ?? null });',
+        '}',
+        '/run @inspect({ count: 5 })'
+      ].join('\n'),
+      env
+    );
+
+    const result = await evaluateRun(runDirective, env);
+    const output = asText(result.value);
+    expect(output).toContain('"kind":"object"');
+    expect(output).toContain('"count":5');
+  });
+
   it('keeps stage-0 retry eligibility behavior between non-retryable and retryable run sources', async () => {
     const nonRetryableEnv = createEnv();
     const nonRetryableRun = await setupSingleRun(

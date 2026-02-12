@@ -132,6 +132,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
 - **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.
+- **`/run @exe(...)` structured arguments**: Inline object/array literals are preserved as runtime data for code executables (`js`, `node`, `mlld-exe-block`, `mlld-when`) instead of degrading to empty strings or text-only fallbacks.
+- **`/run` exe-block object spread parameters**: Spreading executable parameters (`{ ...@data }`) uses object data rather than serialized text, so state merge patterns work without manual re-parse.
+- **Shadow JS/Node nested StructuredValue unwrapping**: Parameters passed to shadow environments recursively unwrap nested StructuredValues inside arrays/objects, so helper code reads plain values instead of wrapper objects.
 - **If/when guidance**: All when/if parse errors include an educational cheat sheet showing if vs when semantics, return behavior differences inside exe/for, and valid forms. The `when @cond [block]` error now explains the ambiguity and suggests both `when @cond => [block]` and `if @cond [block]` with a note about their different return semantics.
 - Binary and ternary expressions parse inside function arguments and array literals
 - Block expressions inside argument and array contexts surface a targeted parse error

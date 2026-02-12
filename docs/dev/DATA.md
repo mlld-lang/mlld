@@ -175,6 +175,7 @@ assertStructuredValue(value, context?)         // Throw when boundary requires S
 - Shadow parameter preparation unwraps wrappers to native values
 - `__mlldPrimitiveMetadata` records wrapper info for AutoUnwrapManager
 - Results from JS code preserve `StructuredValue` when returned
+- `/run @exe(...)` and direct `@exe(...)` argument evaluation both preserve runtime object/array values for code executables (`js`, `node`, `mlld-exe-block`, `mlld-when`), so inline literals and spread patterns use `.data` semantics instead of stringified fallbacks.
 
 ## Implementation Patterns
 

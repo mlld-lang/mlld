@@ -8,11 +8,13 @@ import { PathService } from '@services/fs/PathService';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import {
   dispatchRunExecutableDefinition,
+  extractRunExecArguments,
   type RunExecDefinitionDispatchParams,
   type RunExecDispatcherServices
 } from './run-exec-definition-dispatcher';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { executeProseExecutable } from '@interpreter/eval/prose-execution';
+import { parse } from '@grammar/parser';
 
 vi.mock('@interpreter/eval/exec-invocation', () => ({
   evaluateExecInvocation: vi.fn()
@@ -127,6 +129,7 @@ function buildParams(
     execVar,
     callStack: overrides.callStack ?? [],
     argValues: overrides.argValues ?? {},
+    argRuntimeValues: overrides.argRuntimeValues ?? {},
     argDescriptors: overrides.argDescriptors ?? [],
     exeLabels: overrides.exeLabels ?? [],
     services: overrides.services ?? createServices(env)
@@ -136,6 +139,34 @@ function buildParams(
 describe('run exec definition dispatcher', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('extracts runtime objects for inline literal arguments', async () => {
+    const env = createEnv();
+    const definition = {
+      type: 'code',
+      codeTemplate: [{ type: 'Text', content: 'unused' }],
+      language: 'mlld-exe-block',
+      paramNames: ['a', 'b', 'data'],
+      sourceDirective: 'exec'
+    } as unknown as ExecutableDefinition;
+    const { ast } = await parse('/run @tool("x", "y", { count: 5 })');
+    const directives = (Array.isArray(ast) ? ast : (ast as any).body ?? []) as DirectiveNode[];
+    const directive = directives.find(node => node?.type === 'Directive' && node.kind === 'run') as DirectiveNode;
+
+    const extracted = await extractRunExecArguments({
+      directive,
+      definition,
+      env,
+      interpolateWithPendingDescriptor: createServices(env).interpolateWithPendingDescriptor
+    });
+
+    expect(extracted.argValues).toMatchObject({
+      a: 'x',
+      b: 'y',
+      data: '{"count":5}'
+    });
+    expect(extracted.argRuntimeValues.data).toEqual({ count: 5 });
   });
 
   it('dispatches command definitions through command execution path', async () => {
