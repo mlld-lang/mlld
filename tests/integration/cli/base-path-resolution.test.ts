@@ -33,7 +33,7 @@ describe('@base and @root path resolution', () => {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('resolves @base to script directory and @root to project root', async () => {
+  it('resolves @base and @root to project root (both are aliases)', async () => {
     const script = [
       '/output "base-write" to "@base/base.txt"',
       '/output "root-write" to "@root/root.txt"',
@@ -58,12 +58,35 @@ describe('@base and @root path resolution', () => {
     expect(lines).toContain('base-write');
     expect(lines).toContain('root-write');
 
-    const baseFile = await fs.readFile(path.join(scriptDir, 'base.txt'), 'utf-8');
+    // Both @base and @root write to project root
+    const baseFile = await fs.readFile(path.join(projectDir, 'base.txt'), 'utf-8');
     const rootFile = await fs.readFile(path.join(projectDir, 'root.txt'), 'utf-8');
 
     expect(baseFile.trim()).toBe('base-write');
     expect(rootFile.trim()).toBe('root-write');
+    // Neither file should appear in CWD
     await expect(fs.stat(path.join(outsideCwd, 'base.txt'))).rejects.toThrow();
     await expect(fs.stat(path.join(outsideCwd, 'root.txt'))).rejects.toThrow();
+  });
+
+  it('resolves relative output paths from script file directory', async () => {
+    const script = [
+      '/output "relative-write" to "local-output.txt"'
+    ].join('\n');
+    await fs.writeFile(scriptPath, script, 'utf-8');
+
+    await execAsync(
+      `TSX_TSCONFIG_PATH="${tsconfigPath}" node --import "${tsxImport}" "${mlldCliEntry}" "${scriptPath}"`,
+      {
+      cwd: outsideCwd,
+      timeout: 15000
+      }
+    );
+
+    // Relative path resolves from script directory, not CWD or project root
+    const localFile = await fs.readFile(path.join(scriptDir, 'local-output.txt'), 'utf-8');
+    expect(localFile.trim()).toBe('relative-write');
+    await expect(fs.stat(path.join(outsideCwd, 'local-output.txt'))).rejects.toThrow();
+    await expect(fs.stat(path.join(projectDir, 'local-output.txt'))).rejects.toThrow();
   });
 });

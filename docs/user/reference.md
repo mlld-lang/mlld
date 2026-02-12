@@ -558,7 +558,7 @@ Special built-in variables:
 @now  >> current timestamp
 @input  >> environment variables (must be allowed)
 @root  >> project root path (preferred)
-@base  >> current script directory path (compatibility)
+@base  >> project root path (alias for @root)
 @debug  >> debug information
 ```
 

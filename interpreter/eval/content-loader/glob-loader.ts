@@ -102,17 +102,14 @@ export class ContentLoaderGlobHandler {
   }
 
   private resolvePattern(pattern: string, env: Environment): ResolvedPattern {
-    const baseDirectory = env.getBasePath();
-    const rootDirectory = env.getProjectRoot?.() ?? baseDirectory;
+    const projectRoot = env.getProjectRoot?.() ?? env.getBasePath();
     let globCwd = env.getFileDirectory();
     let globPattern = pattern;
 
-    if (pattern.startsWith('@base/')) {
-      globCwd = baseDirectory;
-      globPattern = pattern.slice('@base/'.length);
-    } else if (pattern.startsWith('@root/')) {
-      globCwd = rootDirectory;
-      globPattern = pattern.slice('@root/'.length);
+    if (pattern.startsWith('@base/') || pattern.startsWith('@root/')) {
+      globCwd = projectRoot;
+      const prefix = pattern.startsWith('@base/') ? '@base/' : '@root/';
+      globPattern = pattern.slice(prefix.length);
     } else if (path.isAbsolute(pattern)) {
       globCwd = path.parse(pattern).root || '/';
       globPattern = path.relative(globCwd, pattern);

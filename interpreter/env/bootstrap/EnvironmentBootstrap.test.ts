@@ -39,7 +39,6 @@ describe('EnvironmentBootstrap helpers', () => {
       const manager = createResolverManager({
         fileSystem: new MemoryFileSystem(),
         projectRoot: '/tmp/project',
-        fileDirectory: '/tmp/project/docs',
         basePath: '/tmp/project'
       });
 
@@ -56,7 +55,7 @@ describe('EnvironmentBootstrap helpers', () => {
       const basePrefix = manager.getPrefixConfigs().find(prefix => prefix.prefix === '@base');
       expect(basePrefix).toBeDefined();
       expect(basePrefix?.resolver).toBe('base');
-      expect((basePrefix?.config as any)?.basePath).toBe('/tmp/project/docs');
+      expect((basePrefix?.config as any)?.basePath).toBe('/tmp/project');
       expect((basePrefix?.config as any)?.readonly).toBe(false);
 
       const rootPrefix = manager.getPrefixConfigs().find(prefix => prefix.prefix === '@root');

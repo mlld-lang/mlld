@@ -97,7 +97,6 @@ export interface ImportResolverDependencyContext {
 interface ResolverManagerFactoryContext {
   fileSystem: IFileSystemService;
   projectRoot: string;
-  fileDirectory: string;
   basePath: string;
   moduleCache?: ModuleCache;
   lockFile?: LockFile;
@@ -168,7 +167,6 @@ export function initializeRootBootstrap(context: RootBootstrapContext): RootBoot
     resolverManager = createResolverManager({
       fileSystem: context.fileSystem,
       projectRoot,
-      fileDirectory: context.pathContext?.fileDirectory ?? context.basePath,
       basePath: context.basePath,
       moduleCache,
       lockFile,
@@ -216,7 +214,7 @@ export function createResolverManager(context: ResolverManagerFactoryContext): R
       resolver: 'base',
       type: 'io',
       config: {
-        basePath: context.fileDirectory,
+        basePath: context.projectRoot,
         readonly: false
       }
     },

@@ -169,15 +169,15 @@ async function resolveAppendPath(
     );
   }
 
-  if (resolvedPath.startsWith('@base/')) {
-    resolvedPath = path.join(env.getBasePath(), resolvedPath.substring(6));
-  } else if (resolvedPath.startsWith('@root/')) {
+  if (resolvedPath.startsWith('@base/') || resolvedPath.startsWith('@root/')) {
     const projectRoot = env.getProjectRoot();
-    resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
+    const prefixLen = resolvedPath.startsWith('@base/') ? 6 : 6;
+    resolvedPath = path.join(projectRoot, resolvedPath.substring(prefixLen));
   }
 
+  // Resolve relative paths from the script file directory
   if (!path.isAbsolute(resolvedPath)) {
-    resolvedPath = path.resolve(env.getBasePath(), resolvedPath);
+    resolvedPath = path.resolve(env.getFileDirectory(), resolvedPath);
   }
 
   return resolvedPath;

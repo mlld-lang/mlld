@@ -415,7 +415,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getFsService: () => this.fileSystem,
       getPathService: () => this.pathService,
       getSecurityManager: () => this.securityManager,
-      getBasePath: this.getBasePath.bind(this),
+      getBasePath: this.getProjectRoot.bind(this),
       getFileDirectory: this.getFileDirectory.bind(this),
       getExecutionDirectory: this.getExecutionDirectory.bind(this),
       getPipelineContext: this.getPipelineContext.bind(this),
@@ -3173,7 +3173,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
           resolver: 'base',
           type: 'io',
           config: {
-            basePath: input.pathContext?.fileDirectory ?? input.projectRoot,
+            basePath: input.projectRoot,
             readonly: false
           }
         },
@@ -3262,10 +3262,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   /**
-   * Get the script base directory for relative path operations.
+   * Get the project root directory for @base/@root path operations.
    */
   getBasePath(): string {
-    return this.getFileDirectory();
+    return this.getProjectRoot();
   }
 
   getCurrentFilePath(): string | undefined {

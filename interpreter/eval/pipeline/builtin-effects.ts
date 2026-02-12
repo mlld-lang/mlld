@@ -394,17 +394,16 @@ async function executeEffect(
             throw new Error('output file target requires a non-empty path');
           }
 
-          if (resolvedPath.startsWith('@base/')) {
-            const baseDirectory = (env as any).getBasePath ? (env as any).getBasePath() : '/';
-            resolvedPath = path.join(baseDirectory, resolvedPath.substring(6));
-          } else if (resolvedPath.startsWith('@root/')) {
+          if (resolvedPath.startsWith('@base/') || resolvedPath.startsWith('@root/')) {
             const projectRoot = (env as any).getProjectRoot ? (env as any).getProjectRoot() : '/';
-            resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
+            const prefixLen = resolvedPath.startsWith('@base/') ? 6 : 6;
+            resolvedPath = path.join(projectRoot, resolvedPath.substring(prefixLen));
           }
 
+          // Resolve relative paths from the script file directory
           if (!path.isAbsolute(resolvedPath)) {
-            const base = (env as any).getBasePath ? (env as any).getBasePath() : '/';
-            resolvedPath = path.resolve(base, resolvedPath);
+            const fileDir = (env as any).getFileDirectory ? (env as any).getFileDirectory() : '/';
+            resolvedPath = path.resolve(fileDir, resolvedPath);
           }
 
           if (process.env.MLLD_DEBUG === 'true') {

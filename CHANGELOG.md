@@ -91,8 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
-- **`@base` path scope**: `@base` now resolves to the running script directory (not process CWD or project root), and `@root` resolves to project root for file/output/import path handling.
-- **`@root` docs/examples standardization**: docs/howto/reference examples use `@root` as the preferred project-root resolver, while `@base` remains documented as script-directory compatibility.
+- **`@root` alias**: `@root` is now available as a preferred alias for `@base` — both resolve to the project root directory for file/output/import path handling.
+- **Relative path scope**: Relative paths in `output`/`append` directives now resolve from the script file directory instead of the project root, so `output @data to "local.txt"` writes next to the script.
 - **Template file alligator path scope**: Relative `<file>` loads inside `template "file.att"`/`template "file.mtt"` executables now resolve from the template file directory instead of the caller script directory.
 - **Export manifest enforcement for executable internals**: Importers can no longer read unexported module members through `@namespace.exec.internal.capturedModuleEnv.*` (or via selected imported executables).
 - **`mlld validate` built-in name conflicts**: Validation now reports `let`/`var` collisions with built-in names (including transformer names like `@upper`) as explicit built-in conflicts.

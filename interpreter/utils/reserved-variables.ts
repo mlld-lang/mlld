@@ -22,9 +22,8 @@ export function getTimeValue(): string {
 }
 
 /**
- * Get the base path value for @base variable.
+ * Get the project path value for @base variable.
  */
 export function getProjectPathValue(basePath: string): string {
-  // Reserved path variables are initialized synchronously from environment context.
   return basePath;
 }

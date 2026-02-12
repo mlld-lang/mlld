@@ -28,12 +28,12 @@ export interface ProjectPathResolverConfig {
 
 /**
  * Base Path Resolver - handles @base/ and @root/ references.
- * Prefix behavior is controlled by configured basePath values.
+ * Maps @base/@root to the project root directory.
  */
 export class ProjectPathResolver implements Resolver {
   name = 'base';
   aliases = ['root'];
-  description = 'Resolves @base and @root references to files using configured base paths';
+  description = 'Resolves @base and @root references to project root files';
   type: ResolverType = 'io';
   
   capabilities: ResolverCapabilities = {

@@ -53,11 +53,9 @@ Resolve module references to specific content sources (registries, private repos
 #### Path Resolvers
 Map @ prefixes to filesystem locations, enabling path-based access with variable interpolation.
 
-- **@root**: Project root directory (default built-in)
-- **@base**: Current script directory (compatibility built-in)
+- **@base**: Project root directory (default built-in)
+- **@root**: Project root directory (alias for @base, preferred in docs)
 - Additional prefixes configured via `mlld.lock.json`
-
-Prefer `@root` in docs and new examples. Keep `@base` where script-directory semantics are required.
 
 ```mlld
 /show <@root/src/components/Button.tsx>
@@ -239,7 +237,7 @@ class ResolverCacheKeyStrategy implements CacheKeyStrategy {
 All import resolution routes through `ResolverManager.resolve` (core/resolvers/ResolverManager.ts:321-520), which coordinates the following registered resolvers:
 
 **Registered Resolvers** (core/registry/ModuleInstaller.ts:98-104):
-- `ProjectPathResolver` - Handles @base and @root prefixes with configured base paths
+- `ProjectPathResolver` - Handles @base/@root prefixes for project-relative paths
 - `RegistryResolver` - Fetches from mlld registry (modules.json)
 - `LocalResolver` - Reads from filesystem (project-relative)
 - `GitHubResolver` - Resolves GitHub URLs/repo paths

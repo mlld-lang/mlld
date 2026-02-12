@@ -312,11 +312,11 @@ describe('Content Loader with Glob Support', () => {
   });
 
   describe('Relative path resolution', () => {
-    it('uses script directory for @base single file metadata', async () => {
+    it('uses project root for @base single file metadata', async () => {
       const projectRoot = '/project';
       const scriptPath = path.join(projectRoot, 'scripts', 'main.mld');
       await fileSystem.writeFile(path.join(projectRoot, 'mlld-config.json'), '{}');
-      await fileSystem.writeFile(path.join(projectRoot, 'scripts', 'todo', 'spec-security.md'), '# Spec');
+      await fileSystem.writeFile(path.join(projectRoot, 'todo', 'spec-security.md'), '# Spec');
       await fileSystem.writeFile(scriptPath, '');
 
       const pathContext = await PathContextBuilder.fromFile(scriptPath, fileSystem);
@@ -334,15 +334,15 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, envWithContext);
       const { metadata } = unwrapStructuredForTest(rawResult);
 
-      expect(metadata?.relative).toBe('./scripts/todo/spec-security.md');
+      expect(metadata?.relative).toBe('./todo/spec-security.md');
     });
 
-    it('uses script directory for @base glob metadata', async () => {
+    it('uses project root for @base glob metadata', async () => {
       const projectRoot = '/project';
       const scriptPath = path.join(projectRoot, 'scripts', 'main.mld');
       await fileSystem.writeFile(path.join(projectRoot, 'mlld-config.json'), '{}');
-      await fileSystem.writeFile(path.join(projectRoot, 'scripts', 'todo', 'spec-a.md'), '# A');
-      await fileSystem.writeFile(path.join(projectRoot, 'scripts', 'todo', 'spec-b.md'), '# B');
+      await fileSystem.writeFile(path.join(projectRoot, 'todo', 'spec-a.md'), '# A');
+      await fileSystem.writeFile(path.join(projectRoot, 'todo', 'spec-b.md'), '# B');
       await fileSystem.writeFile(scriptPath, '');
 
       const pathContext = await PathContextBuilder.fromFile(scriptPath, fileSystem);
@@ -373,8 +373,8 @@ describe('Content Loader with Glob Support', () => {
       // Glob results are now StructuredValues with file metadata in .mx
       expect(isStructuredValue(result[0])).toBe(true);
       expect(result.map(item => item.mx?.relative ?? item.relative).sort()).toEqual([
-        './scripts/todo/spec-a.md',
-        './scripts/todo/spec-b.md'
+        './todo/spec-a.md',
+        './todo/spec-b.md'
       ]);
     });
   });

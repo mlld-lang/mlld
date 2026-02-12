@@ -26,9 +26,8 @@ export interface PathContext {
   
   /**
    * Directory containing the current .mld file being processed.
-   * - Base for @base variable and resolver paths
    * - Base for relative imports (./file.mld)
-   * - Base for relative file references
+   * - Base for relative file references and output paths
    * - Default working directory for commands
    */
   fileDirectory: string;
