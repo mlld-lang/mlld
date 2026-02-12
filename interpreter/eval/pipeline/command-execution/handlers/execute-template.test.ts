@@ -57,4 +57,23 @@ describe('executeTemplateHandler branch extraction', () => {
     expect(result).toBe(structured);
     expect(isStructuredValue(result)).toBe(true);
   });
+
+  it('uses template file directory for interpolation when provided', async () => {
+    interpolateMock.mockResolvedValue('template:file');
+    const env = createEnv();
+    const execEnv = env.createChild('/call-site');
+
+    await executeTemplateHandler({
+      execEnv,
+      execDef: {
+        type: 'template',
+        template: [{ type: 'Text', content: '<shared/context.md>' }],
+        templateFileDirectory: '/template-dir'
+      }
+    });
+
+    expect(interpolateMock).toHaveBeenCalledTimes(1);
+    const interpolationEnv = interpolateMock.mock.calls[0][1] as Environment;
+    expect(interpolationEnv.getFileDirectory()).toBe('/template-dir');
+  });
 });

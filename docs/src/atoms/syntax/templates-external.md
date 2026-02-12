@@ -38,6 +38,7 @@ end
 
 - Parameters from `exe @func(params)` are automatically available as `@param` in the template
 - `.att` supports `<file.md>` references, pipes, and `for`/`when` blocks
+- Relative `<file>` paths inside a template file resolve from that template file's directory
 - Use `@@` or `\@` to output a literal `@` symbol (e.g., `user@@example.com`)
 - Never load `.att` files with angle brackets - use `exe ... = template` instead
 

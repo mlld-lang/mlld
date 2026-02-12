@@ -19,6 +19,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import { mergeAuthUsingIntoWithClause } from '@interpreter/eval/exec/context';
+import { createTemplateInterpolationEnv } from '@interpreter/eval/exec/template-interpolation-env';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import {
   applySecurityDescriptorToStructuredValue,
@@ -180,7 +181,11 @@ async function handleTemplateExecutable(
     resultSecurityDescriptor,
     services
   } = options;
-  const templateResult = await services.interpolateWithResultDescriptor(definition.template, execEnv);
+  const templateInterpolationEnv = createTemplateInterpolationEnv(execEnv, definition);
+  const templateResult = await services.interpolateWithResultDescriptor(
+    definition.template,
+    templateInterpolationEnv
+  );
   let result: unknown;
   if (isStructuredValue(templateResult)) {
     result = templateResult;

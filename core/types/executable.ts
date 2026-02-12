@@ -70,6 +70,8 @@ export interface CodeExecutable extends BaseExecutable {
 export interface TemplateExecutable extends BaseExecutable {
   type: 'template';
   template: MlldNode[];
+  /** Directory of the backing template file when loaded via template "path". */
+  templateFileDirectory?: string;
   sourceDirective: 'text' | 'exec';
 }
 

@@ -860,6 +860,7 @@ show @deploy("prod", "success")
 
 **Rules:**
 - `.att` uses `@var` and supports `<file.md>` references, pipes, and loops inside the template
+- Relative `<file>` paths inside template files resolve from the template file directory
 - These files are not imported as modules. Use the `exe ... = template "path"` form
 
 #### Template Loops

@@ -137,12 +137,14 @@ describe('exe definition helpers', () => {
     });
 
     try {
-      const nodes = await parseTemplateFileNodes([createTextNode('fallback.mtt')], env);
-      expect(nodes).toEqual([
+      const parsed = await parseTemplateFileNodes([createTextNode('fallback.mtt')], env);
+      expect(parsed.templateNodes).toEqual([
         { type: 'Text', content: 'Hello ' },
         { type: 'VariableReference', identifier: 'name' },
         { type: 'Text', content: '!' }
       ]);
+      expect(parsed.templatePath).toBe('fallback.mtt');
+      expect(parsed.templateFileDirectory).toBe('/');
     } finally {
       parseSpy.mockRestore();
     }

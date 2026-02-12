@@ -23,6 +23,7 @@ import { resolveWorkingDirectory } from '@interpreter/utils/working-directory';
 import { mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
+import { createTemplateInterpolationEnv } from '@interpreter/eval/exec/template-interpolation-env';
 import {
   applyEnvironmentDefaults,
   buildEnvironmentOutputDescriptor,
@@ -674,7 +675,7 @@ async function handleTemplateDefinition(
   ctx: RunExecDispatchContext
 ): Promise<RunExecDefinitionDispatchResult> {
   const { env, definition, argValues, callStack, services } = ctx;
-  const tempEnv = env.createChild();
+  const tempEnv = createTemplateInterpolationEnv(env.createChild(), definition);
   for (const [key, value] of Object.entries(argValues)) {
     tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
   }

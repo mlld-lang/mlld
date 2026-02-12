@@ -445,6 +445,7 @@ export class ModuleContentProcessor {
     const execDef: TemplateExecutable = {
       type: 'template',
       template: templateNodes,
+      templateFileDirectory: path.dirname(filePath),
       paramNames,
       sourceDirective: 'exec'
     };

@@ -99,6 +99,12 @@ export function extractParamTypes(params: unknown[]): Record<string, string> {
   return paramTypes;
 }
 
+export interface ParsedTemplateFileResult {
+  templateNodes: any[];
+  templatePath: string;
+  templateFileDirectory: string;
+}
+
 function buildTemplateAstFromContent(content: string): any[] {
   const ast: any[] = [];
   const regex = /@([A-Za-z_][\w\.]*)/g;
@@ -124,7 +130,7 @@ export async function parseTemplateFileNodes(
   pathNodes: unknown,
   env: Environment,
   sourceLocation?: SourceLocation
-): Promise<any[]> {
+): Promise<ParsedTemplateFileResult> {
   if (!Array.isArray(pathNodes) || pathNodes.length === 0) {
     throw new Error('Exec template-file directive missing path');
   }
@@ -137,19 +143,31 @@ export async function parseTemplateFileNodes(
     throw new Error(`Unsupported template file extension for ${filePath}. Use .att (@var) or .mtt ({{var}}).`);
   }
 
+  const resolvedTemplatePath = await env.resolvePath(filePath);
+  const templateFileDirectory = env.isURL(resolvedTemplatePath)
+    ? env.getFileDirectory()
+    : path.dirname(resolvedTemplatePath);
   const fileContent = await readFileWithPolicy(env, filePath, sourceLocation ?? undefined);
   const { parseSync } = await import('@grammar/parser');
   const startRule = ext === '.mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
 
   try {
-    return parseSync(fileContent, { startRule });
+    return {
+      templateNodes: parseSync(fileContent, { startRule }),
+      templatePath: filePath,
+      templateFileDirectory
+    };
   } catch (err: any) {
     try {
       let normalized = fileContent;
       if (ext === '.mtt') {
         normalized = normalized.replace(/{{\s*([A-Za-z_][\w\.]*)\s*}}/g, '@$1');
       }
-      return buildTemplateAstFromContent(normalized);
+      return {
+        templateNodes: buildTemplateAstFromContent(normalized),
+        templatePath: filePath,
+        templateFileDirectory
+      };
     } catch {
       throw new Error(`Failed to parse template file ${filePath}: ${err.message}`);
     }

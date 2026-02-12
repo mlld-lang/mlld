@@ -474,7 +474,7 @@ async function buildTemplateFileExecutableDefinition(
   context: CoreDefinitionBuildContext
 ): Promise<ExecutableDefinition> {
   const { directive, env, sourceLocation } = context;
-  const templateNodes = await parseTemplateFileNodes(
+  const parsedTemplate = await parseTemplateFileNodes(
     directive.values?.path,
     env,
     sourceLocation ?? undefined
@@ -485,7 +485,8 @@ async function buildTemplateFileExecutableDefinition(
 
   return {
     type: 'template',
-    template: templateNodes,
+    template: parsedTemplate.templateNodes,
+    templateFileDirectory: parsedTemplate.templateFileDirectory,
     paramNames,
     sourceDirective: 'exec'
   } satisfies TemplateExecutable;
