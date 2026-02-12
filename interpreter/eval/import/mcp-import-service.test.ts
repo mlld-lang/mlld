@@ -34,7 +34,7 @@ describe('McpImportService', () => {
       importPath: 'mcp://server'
     });
 
-    expect((variable as any).internal?.mcpTool).toEqual({ name: 'echo' });
+    expect((variable as any).internal?.mcpTool).toEqual({ name: 'echo', source: 'mcp://server' });
     expect((variable as any).internal?.executableDef?.paramNames).toEqual(['text', 'limit']);
     expect((variable as any).paramTypes).toEqual({ text: 'string', limit: 'integer' });
     expect((variable as any).description).toBe('Echo text');

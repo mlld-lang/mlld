@@ -105,6 +105,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`no-sensitive-exfil`**: Policy rule blocks sensitive data from flowing to `exfil` operations without requiring `untrusted`.
 - Security docs and fixtures cover defaults.rules enforcement for `exfil`, `destructive`, and `privileged` flows.
 - Policy capability denies enforce interpolated command checks for `/run` and exec invocations, and code execution respects allow/deny for `sh`, `js`, `node`, `py`, and `prose`.
+- **Env tool scope enforcement**: `env` block `tools` now enforces runtime access for shell execution (`Bash`) and MCP tool calls.
+- **Env MCP scope enforcement**: `env` block `mcps` now enforces MCP server allowlists at invocation time (including `mcps: []` blocking all MCP calls).
+- **Command deny pattern runtime enforcement**: `capabilities.deny` command patterns block `git push` and equivalent command-executable invocations at runtime.
 - Policy capability docs and fixtures cover interpolated command matching, network denies, and run/exec code blocks.
 - `untrusted-llms-get-influenced` auto-labeling applies across exec, run-exec, and pipeline execution paths.
 - Influenced label docs clarify auto-labeling and fixtures cover pipeline deny behavior.

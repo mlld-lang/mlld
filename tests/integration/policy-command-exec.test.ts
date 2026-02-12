@@ -135,4 +135,63 @@ describe('Policy command deny for executable commands', () => {
       })
     ).rejects.toThrow("Command 'echo' denied by policy");
   });
+
+  it('denies git push via capabilities deny cmd pattern at runtime', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-policy-git-push-deny-'));
+    tempDirs.push(root);
+
+    await fs.writeFile(
+      path.join(root, 'main.mld'),
+      [
+        '/var @policyConfig = {',
+        '  capabilities: {',
+        '    allow: ["cmd:git:*"],',
+        '    deny: ["cmd:git:push"]',
+        '  }',
+        '}',
+        '/policy @p = union(@policyConfig)',
+        '/run { git push origin main }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await expect(
+      interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+        filePath: path.join(root, 'main.mld'),
+        fileSystem: new NodeFileSystem(),
+        pathService: new PathService(),
+        approveAllImports: true
+      })
+    ).rejects.toThrow("Command 'git' denied by policy");
+  });
+
+  it('denies git push for cmd executable invocation via capabilities deny pattern', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-policy-git-push-exe-deny-'));
+    tempDirs.push(root);
+
+    await fs.writeFile(
+      path.join(root, 'main.mld'),
+      [
+        '/var @policyConfig = {',
+        '  capabilities: {',
+        '    allow: ["cmd:git:*"],',
+        '    deny: ["cmd:git:push"]',
+        '  }',
+        '}',
+        '/policy @p = union(@policyConfig)',
+        '/exe @push() = cmd { git push origin main }',
+        '/var @result = @push()'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await expect(
+      interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+        filePath: path.join(root, 'main.mld'),
+        fileSystem: new NodeFileSystem(),
+        pathService: new PathService(),
+        approveAllImports: true
+      })
+    ).rejects.toThrow("Command 'git' denied by policy");
+  });
 });

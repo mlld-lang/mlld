@@ -20,7 +20,7 @@ import { execSync } from 'child_process';
 import * as path from 'path';
 // Note: ImportApproval, ImmutableCache, and GistTransformer are now handled by ImportResolver
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
-import { MlldInterpreterError } from '@core/errors';
+import { MlldInterpreterError, MlldSecurityError } from '@core/errors';
 import { SecurityManager } from '@security';
 import { TaintTracker } from '@core/security';
 import {
@@ -187,6 +187,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private policyCapabilities: PolicyCapabilities = ALLOW_ALL_POLICY;
   private policySummary?: PolicyConfig;
   private allowedTools?: Set<string>;
+  private allowedMcpServers?: Set<string>;
   private moduleNeeds?: NeedsDeclaration;
   private moduleProfiles?: ProfilesDeclaration;
   private scopedEnvironmentConfig?: EnvironmentConfig;
@@ -785,6 +786,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.parent?.getAllowedTools();
   }
 
+  private normalizeToolScopeName(toolName: string): string {
+    return toolName.trim().toLowerCase();
+  }
+
   setAllowedTools(tools?: Iterable<string> | null): void {
     if (!tools) {
       if (this.parent?.getAllowedTools()) {
@@ -799,7 +804,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       if (typeof tool !== 'string') {
         continue;
       }
-      const trimmed = tool.trim();
+      const trimmed = this.normalizeToolScopeName(tool);
       if (trimmed.length > 0) {
         normalized.add(trimmed);
       }
@@ -824,13 +829,110 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     if (allowed.size === 0) {
       return false;
     }
-    if (allowed.has(toolName)) {
+    if (allowed.has('*')) {
       return true;
     }
-    if (mcpName && allowed.has(mcpName)) {
+    const normalizedToolName = this.normalizeToolScopeName(toolName);
+    if (normalizedToolName && allowed.has(normalizedToolName)) {
+      return true;
+    }
+    const normalizedMcpName = mcpName ? this.normalizeToolScopeName(mcpName) : '';
+    if (normalizedMcpName && allowed.has(normalizedMcpName)) {
       return true;
     }
     return false;
+  }
+
+  getAllowedMcpServers(): Set<string> | undefined {
+    if (this.allowedMcpServers) return this.allowedMcpServers;
+    return this.parent?.getAllowedMcpServers();
+  }
+
+  setAllowedMcpServers(servers?: Iterable<string> | null): void {
+    if (!servers) {
+      if (this.parent?.getAllowedMcpServers()) {
+        throw new Error('MCP scope cannot widen beyond parent environment');
+      }
+      this.allowedMcpServers = undefined;
+      return;
+    }
+
+    const normalized = new Set<string>();
+    for (const server of servers) {
+      if (typeof server !== 'string') {
+        continue;
+      }
+      const trimmed = server.trim();
+      if (trimmed.length > 0) {
+        normalized.add(trimmed);
+      }
+    }
+
+    const parentAllowed = this.parent?.getAllowedMcpServers();
+    if (parentAllowed) {
+      const invalid = Array.from(normalized).filter(server => !parentAllowed.has(server));
+      if (invalid.length > 0) {
+        throw new Error(`MCP scope cannot add servers outside parent: ${invalid.join(', ')}`);
+      }
+    }
+
+    this.allowedMcpServers = normalized;
+  }
+
+  isMcpServerAllowed(serverSpec?: string | null): boolean {
+    const allowed = this.getAllowedMcpServers();
+    if (!allowed) {
+      return true;
+    }
+    if (allowed.size === 0) {
+      return false;
+    }
+    if (allowed.has('*')) {
+      return true;
+    }
+    if (!serverSpec || typeof serverSpec !== 'string') {
+      return false;
+    }
+    const normalized = serverSpec.trim();
+    if (!normalized) {
+      return false;
+    }
+    return allowed.has(normalized);
+  }
+
+  enforceToolAllowed(
+    toolName: string,
+    options?: { sourceLocation?: SourceLocation; mcpName?: string; reason?: string }
+  ): void {
+    if (this.isToolAllowed(toolName, options?.mcpName)) {
+      return;
+    }
+    throw new MlldSecurityError(
+      options?.reason ?? `Tool '${toolName}' denied by env.tools`,
+      {
+        code: 'ENV_TOOL_DENIED',
+        sourceLocation: options?.sourceLocation,
+        env: this
+      }
+    );
+  }
+
+  enforceMcpServerAllowed(
+    serverSpec: string | undefined,
+    options?: { sourceLocation?: SourceLocation }
+  ): void {
+    if (this.isMcpServerAllowed(serverSpec)) {
+      return;
+    }
+    const target = serverSpec && serverSpec.trim().length > 0 ? serverSpec : '<unknown>';
+    throw new MlldSecurityError(
+      `MCP server '${target}' denied by env.mcps`,
+      {
+        code: 'ENV_MCP_DENIED',
+        sourceLocation: options?.sourceLocation,
+        env: this
+      }
+    );
   }
 
   setPolicyContext(policy?: Record<string, unknown> | null): void {
@@ -1930,6 +2032,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
+    this.enforceToolAllowed('bash', {
+      sourceLocation: context?.sourceLocation,
+      reason: "Command execution requires 'Bash' in env.tools"
+    });
     const finalOptions = { ...this.outputOptions, ...options };
     const bus = this.getStreamingBus();
     const contextWithBus = { ...context, bus };
@@ -1945,6 +2051,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     context?: CommandExecutionContext
   ): Promise<string> {
     const normalized = this.normalizeCodeExecutionInput(metadata, options, context);
+    const normalizedLanguage = language.trim().toLowerCase();
+    if (normalizedLanguage === 'sh' || normalizedLanguage === 'bash') {
+      this.enforceToolAllowed('bash', {
+        sourceLocation: normalized.context?.sourceLocation,
+        reason: "Shell execution requires 'Bash' in env.tools"
+      });
+    }
     const finalParams = this.injectAmbientMx(language, params);
     const bus = this.getStreamingBus();
     const contextWithBus = { ...normalized.context, bus };
@@ -2008,6 +2121,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
     if (this.allowedTools) {
       child.setAllowedTools(this.allowedTools);
+    }
+    if (this.allowedMcpServers) {
+      child.setAllowedMcpServers(this.allowedMcpServers);
     }
 
     child.importResolver = this.importResolver.createChildResolver(

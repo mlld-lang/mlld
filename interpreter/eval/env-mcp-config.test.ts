@@ -183,4 +183,63 @@ describe('env MCP config integration', () => {
       environment?.cleanup();
     }
   });
+
+  it('blocks MCP tool calls when env mcps scope is empty', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    const source = [
+      '/var @cfg = { mcps: [] }',
+      `/import tools { @ping } from mcp "${serverSpec}"`,
+      '/env @cfg [',
+      '  show @ping()',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      await expect(
+        interpret(source, {
+          fileSystem,
+          pathService,
+          pathContext,
+          format: 'markdown',
+          captureEnvironment: env => {
+            environment = env;
+          }
+        })
+      ).rejects.toThrow(/denied by env\.mcps/i);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('allows MCP tool calls for servers listed in env mcps scope', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    const source = [
+      '/var @cfg = {',
+      '  mcps: [{ command: "' + process.execPath + '", args: ["' + fakeServerPath + '"] }]',
+      '}',
+      `/import tools { @ping } from mcp "${serverSpec}"`,
+      '/env @cfg [',
+      '  show @ping()',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+      expect(output.trim()).toBe('pong');
+    } finally {
+      environment?.cleanup();
+    }
+  });
 });

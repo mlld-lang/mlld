@@ -395,6 +395,142 @@ function normalizeToolScope(
   });
 }
 
+function looksLikeMcpPath(value: string): boolean {
+  if (value.startsWith('.') || value.startsWith('/')) {
+    return true;
+  }
+  return /\.(mld|mlld|md|mld\.md|mlld\.md)$/.test(value);
+}
+
+function normalizeStringArray(
+  value: unknown,
+  label: string,
+  env: Environment,
+  location?: any
+): string[] {
+  if (!Array.isArray(value)) {
+    throw new MlldDirectiveError(`${label} must be an array of strings.`, 'env', {
+      location,
+      env,
+      context: { value }
+    });
+  }
+  const normalized: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') {
+      throw new MlldDirectiveError(`${label} entries must be strings.`, 'env', {
+        location,
+        env,
+        context: { entry }
+      });
+    }
+    const trimmed = entry.trim();
+    if (trimmed.length > 0) {
+      normalized.push(trimmed);
+    }
+  }
+  return normalized;
+}
+
+function resolveMcpEntrySpec(entry: Record<string, unknown>, env: Environment, location?: any): string {
+  const module = typeof entry.module === 'string' ? entry.module.trim() : '';
+  const command = typeof entry.command === 'string' ? entry.command.trim() : '';
+  const npm = typeof entry.npm === 'string' ? entry.npm.trim() : '';
+  const sourceCount = [module, command, npm].filter(Boolean).length;
+  if (sourceCount === 0) {
+    throw new MlldDirectiveError(
+      'mcps entries must define one of module, command, or npm.',
+      'env',
+      { location, env, context: { entry } }
+    );
+  }
+  if (sourceCount > 1) {
+    throw new MlldDirectiveError(
+      'mcps entries cannot combine module, command, and npm sources.',
+      'env',
+      { location, env, context: { entry } }
+    );
+  }
+  if (command) {
+    const args = entry.args === undefined ? [] : normalizeStringArray(entry.args, 'mcps.args', env, location);
+    return [command, ...args].join(' ');
+  }
+  return module || npm;
+}
+
+async function resolveMcpScopeToken(token: string, env: Environment): Promise<string> {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (/\s/.test(trimmed)) {
+    return trimmed;
+  }
+  if (looksLikeMcpPath(trimmed)) {
+    return await env.resolvePath(trimmed);
+  }
+  return trimmed;
+}
+
+async function normalizeMcpScope(
+  value: unknown,
+  env: Environment,
+  location?: any
+): Promise<{ mcps?: string[]; hasMcps: boolean }> {
+  if (value === undefined) {
+    return { hasMcps: false };
+  }
+  if (value === null) {
+    throw new MlldDirectiveError('mcps must be an array or string.', 'env', { location, env });
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '*') {
+      return { hasMcps: false };
+    }
+    const parts = trimmed.length > 0
+      ? trimmed.split(',').map(part => part.trim()).filter(Boolean)
+      : [];
+    const resolved = new Set<string>();
+    for (const part of parts) {
+      const spec = await resolveMcpScopeToken(part, env);
+      if (spec) {
+        resolved.add(spec);
+      }
+    }
+    return { mcps: Array.from(resolved), hasMcps: true };
+  }
+  if (!Array.isArray(value)) {
+    throw new MlldDirectiveError('mcps must be an array or string.', 'env', {
+      location,
+      env,
+      context: { value }
+    });
+  }
+
+  const resolved = new Set<string>();
+  for (const entry of value) {
+    let spec = '';
+    if (typeof entry === 'string') {
+      spec = entry;
+    } else if (isPlainObject(entry)) {
+      spec = resolveMcpEntrySpec(entry, env, location);
+    } else {
+      throw new MlldDirectiveError('mcps entries must be strings or server objects.', 'env', {
+        location,
+        env,
+        context: { entry }
+      });
+    }
+    const normalizedSpec = await resolveMcpScopeToken(spec, env);
+    if (normalizedSpec) {
+      resolved.add(normalizedSpec);
+    }
+  }
+
+  return { mcps: Array.from(resolved), hasMcps: true };
+}
+
 export async function evaluateEnv(
   directive: EnvDirectiveNode,
   env: Environment,
@@ -427,6 +563,10 @@ export async function evaluateEnv(
   const toolScope = normalizeToolScope(resolvedTools, env, directive.location);
   if (toolScope.hasTools) {
     scopedEnv.setAllowedTools(toolScope.tools);
+  }
+  const mcpScope = await normalizeMcpScope((mergedConfig as any).mcps, scopedEnv, directive.location);
+  if (mcpScope.hasMcps) {
+    scopedEnv.setAllowedMcpServers(mcpScope.mcps);
   }
 
   const block = directive.values?.block;

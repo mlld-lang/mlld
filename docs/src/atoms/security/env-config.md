@@ -34,10 +34,14 @@ env @sandbox [
 | `net` | `"none"`, `"host"`, `"limited"` | Network restrictions |
 | `limits` | `{ mem, cpu, timeout }` | Resource limits |
 | `auth` | `"credential-name"` | Auth reference from policy |
-| `tools` | `["Read", "Write"]` | MCP tool routing (does not block commands) |
-| `mcps` | `[]`, `[server-config]` | MCP server availability |
+| `tools` | `["Read", "Write", "Bash"]` | Runtime tool allowlist for commands and MCP tools |
+| `mcps` | `[]`, `[server-config]` | Runtime MCP server allowlist |
 
-**Important:** The `tools` field controls MCP tool routing only — it does NOT prevent command execution. To block commands, use `capabilities.deny` in your policy (see `policy-capabilities`). Setting `tools: ["Read"]` does not stop `run cmd { rm -rf / }`.
+**Important:** `tools` and `mcps` enforce runtime access inside `env` blocks.
+
+- Include `Bash` in `tools` to allow `run cmd`, `run sh`, and shell-backed command executables.
+- Set `mcps: []` to block all MCP tool calls, or list servers to allow specific MCP sources.
+- Use `capabilities.deny` for command-pattern policy rules (for example `cmd:git:push`).
 
 **Advanced: MCP configuration via `@mcpConfig()`:**
 

@@ -1011,6 +1011,34 @@ async function evaluateExecInvocationInternal(
   if (!definition) {
     throw new MlldInterpreterError(`Executable ${commandName} has no definition in metadata`);
   }
+  const mcpTool = (variable.internal as any)?.mcpTool as
+    | { name?: unknown; source?: unknown }
+    | undefined;
+  if (mcpTool && typeof mcpTool.name === 'string' && mcpTool.name.trim().length > 0) {
+    const mcpName = mcpTool.name.trim();
+    const mcpSource = typeof mcpTool.source === 'string' && mcpTool.source.trim().length > 0
+      ? mcpTool.source.trim()
+      : undefined;
+    env.enforceMcpServerAllowed(mcpSource, {
+      sourceLocation: nodeSourceLocation ?? undefined
+    });
+    const toolCandidates = [
+      commandName,
+      variable.name,
+      mcpName
+    ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    const allowedByToolScope = toolCandidates.some(candidate => env.isToolAllowed(candidate, mcpName));
+    if (!allowedByToolScope) {
+      throw new MlldSecurityError(
+        `MCP tool '${mcpName}' denied by env.tools`,
+        {
+          code: 'ENV_TOOL_DENIED',
+          sourceLocation: nodeSourceLocation ?? undefined,
+          env
+        }
+      );
+    }
+  }
   const isPartial = isPartialExecutable(definition);
   const boundArgs = isPartial && Array.isArray(definition.boundArgs) ? definition.boundArgs : [];
   if (isPartial) {

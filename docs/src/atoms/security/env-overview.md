@@ -66,8 +66,8 @@ var @policyConfig = {
 policy @p = union(@policyConfig)     >> Activate policy
 
 var @sandbox = {
-  tools: ["Read", "Write"],          >> Route only Read/Write MCP tools
-  mcps: []                           >> No MCP servers
+  tools: ["Read", "Write", "Bash"],  >> Allow Read/Write plus command execution
+  mcps: []                           >> Block MCP servers in this block
 }
 
 env @sandbox [

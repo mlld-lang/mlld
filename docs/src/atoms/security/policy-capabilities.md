@@ -61,7 +61,8 @@ Keychain allow/deny patterns live under `policy.keychain` and match `service/acc
 
 **Common mistakes:**
 
-- `tools` in env config only routes MCP tools — use `capabilities.deny` in policy to block commands
+- `tools` in env config enforces runtime tool access (`Bash` for shell commands, tool names for MCP calls)
+- `capabilities.deny` handles command-pattern policy rules (for example `cmd:git:push`)
 - Keychain access requires both `danger: ["@keychain"]` in capabilities AND `projectname` in `mlld-config.json`
 - `no-secret-exfil` doesn't block `show`/`log` — add label flow rules for `op:show` and `op:log` (see `policy-auth`)
 

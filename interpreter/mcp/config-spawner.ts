@@ -381,7 +381,7 @@ function createMcpToolVariable(
     },
     internal: {
       executableDef,
-      mcpTool: { name: mcpName }
+      mcpTool: { name: mcpName, source: importPath }
     }
   });
 

@@ -336,6 +336,12 @@ export async function executeRunCommand(
   const scopedEnvConfig = resolveEnvironmentConfig(env, context?.guardMetadata);
   const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, env.getPolicySummary());
   const outputDescriptor = buildEnvironmentOutputDescriptor(command, resolvedEnvConfig);
+  if (resolvedEnvConfig?.provider) {
+    env.enforceToolAllowed('bash', {
+      sourceLocation: directive.location ?? undefined,
+      reason: "Command execution requires 'Bash' in env.tools"
+    });
+  }
 
   enforceRunCommandSizeLimit({
     command,

@@ -57,7 +57,7 @@ export class McpImportService {
         metadata,
         internal: {
           executableDef: execDef,
-          mcpTool: { name: mcpName }
+          mcpTool: { name: mcpName, source: importPath }
         }
       }
     ) as Variable;
