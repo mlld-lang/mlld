@@ -29,6 +29,10 @@ type StructuredValueLoadResult = Partial<LoadContentResult> & {
 
 export interface StructuredValueMetadata {
   source?: string;
+  command?: string;
+  exitCode?: number;
+  duration?: number;
+  stderr?: string;
   retries?: number;
   security?: SecurityDescriptor;
   loadResult?: StructuredValueLoadResult;
@@ -96,6 +100,10 @@ export interface StructuredValueContext {
   headers?: Record<string, unknown>;
   html?: string;
   source?: string;
+  command?: string;
+  exitCode?: number;
+  duration?: number;
+  stderr?: string;
   retries?: number;
   tokest?: number;
   tokens?: number;
@@ -552,6 +560,10 @@ function buildVarMxFromMetadata(
     headers: flattenedHeaders,
     html: flattenedHtml,
     source: metadata?.source,
+    command: metadata?.command,
+    exitCode: metadata?.exitCode,
+    duration: metadata?.duration,
+    stderr: metadata?.stderr,
     retries: metadata?.retries,
     tokest: flattenedTokest ?? loadResult?.tokest,
     tokens: flattenedTokens,

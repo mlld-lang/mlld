@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Environment } from '@interpreter/env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { wrapStructured } from '@interpreter/utils/structured-value';
+import { isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import type { StageContext } from '@interpreter/eval/pipeline/state-machine';
 import type { PipelineCommandExecutionContextFactory } from './types';
 import { PipelineOutputProcessor } from './output-processor';
@@ -111,7 +111,13 @@ describe('pipeline inline stage executor', () => {
 
     expect(executeSpy).toHaveBeenCalledTimes(1);
     expect(executeSpy.mock.calls[0][0]).toContain('echo allowed');
-    expect(result).toMatchObject({ result: 'ok' });
+    expect(isStructuredValue(result.result)).toBe(true);
+    if (isStructuredValue(result.result)) {
+      expect(result.result.text).toBe('ok');
+      expect(result.result.data).toBe('ok');
+      expect(result.result.mx.source).toBe('cmd');
+      expect(result.result.mx.command).toContain('echo allowed');
+    }
   });
 
   it('propagates descriptors through inline value stage normalization', async () => {

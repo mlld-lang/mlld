@@ -61,7 +61,10 @@ export async function evaluateCodeExecution(
   // (JavaScript/Node/Python executors handle their own return types)
   if (!language || language === 'sh' || language === 'bash' || language === 'shell') {
     const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
-    const processed = processCommandOutput(result);
+    const processed = processCommandOutput(result, undefined, {
+      source: 'sh',
+      command: code
+    });
     return { value: processed, env };
   }
   

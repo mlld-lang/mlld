@@ -123,7 +123,10 @@ export class PipelineInlineStageExecutor {
         )
       );
       const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
-      const normalizedResult = processCommandOutput(result);
+      const normalizedResult = processCommandOutput(result, undefined, {
+        source: 'cmd',
+        command: commandText
+      });
       const labelDescriptor =
         descriptors.length > 1 ? stageEnv.mergeSecurityDescriptors(...descriptors) : descriptors[0];
       return { result: normalizedResult, labelDescriptor };

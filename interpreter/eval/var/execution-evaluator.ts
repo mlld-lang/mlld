@@ -124,18 +124,24 @@ export function createExecutionEvaluator(
     }
 
     let commandOutput: unknown;
+    let executedCommand = '';
     if (Array.isArray(valueNode.command)) {
       const interpolatedCommand = await interpolateWithSecurity(
         valueNode.command,
         InterpolationContext.ShellCommand
       );
+      executedCommand = interpolatedCommand;
       commandOutput = await env.executeCommand(interpolatedCommand, commandOptions);
     } else {
+      executedCommand = String(valueNode.command);
       commandOutput = await env.executeCommand(valueNode.command, commandOptions);
     }
 
     const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
-    return processCommandOutput(commandOutput);
+    return processCommandOutput(commandOutput, undefined, {
+      source: 'cmd',
+      command: executedCommand
+    });
   };
 
   const evaluateExecutionBranch = async (

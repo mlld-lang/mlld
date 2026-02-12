@@ -21,6 +21,7 @@ mlld treats structured data (arrays, objects, JSON) as first-class values via `S
 - Display boundaries (templates, CLI, `/show`) use `.text` automatically
 - Computation boundaries (foreach, JS stages, comparisons) access `.data`
 - Runtime metadata (filenames, retries, loader info, security labels) flows via `.mx`
+- Command and shell execution outputs are StructuredValues: `.text` keeps raw stdout, `.data` auto-parses JSON when possible, and `.mx` includes execution context (`source`, `command`, `exitCode`, `duration`)
 - String coercion is safe and predictable: `toString()` returns `.text`
 - JSON/JSONL auto-parse: `<path>.json` and `<path>.jsonl` load as StructuredValues with parsed `.data` (object/array), raw `.text`, and preserved `.mx`; `.text` is the raw string if callers need it.
 - JS/Node invocations receive `.data` by default (text → string, JSON/JSONL → object/array, primitives → number/boolean). Use `.keep`/`.keepStructured` when metadata needs to cross the boundary.
@@ -48,6 +49,10 @@ interface StructuredValue<T = unknown> {
     title?: string;
     description?: string;
     source?: string;
+    command?: string;
+    exitCode?: number;
+    duration?: number;
+    stderr?: string;
     retries?: number;
     tokens?: number;
     tokest?: number;

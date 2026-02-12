@@ -608,8 +608,9 @@ var @active = @getActive(@response.data)
 
 | Accessor | Returns |
 |----------|---------|
-| `.data` / `.json` | Parse as JSON |
-| `.text` | Keep as string |
+| `.data` / `.json` | Parsed JSON when stdout is valid JSON, otherwise the original string |
+| `.text` | Raw stdout string |
+| `.mx` | Command metadata (`source`, `command`, `exitCode`, `duration`, `stderr`) |
 
 ## Built-in Methods
 

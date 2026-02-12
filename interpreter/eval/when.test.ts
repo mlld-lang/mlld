@@ -5,6 +5,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { WhenSimpleNode, WhenBlockNode, LetAssignmentNode } from '@core/types/when';
 import { extractVariableValue } from '../utils/variable-resolution';
+import { isStructuredValue } from '../utils/structured-value';
 
 describe('evaluateWhen', () => {
   let env: Environment;
@@ -204,7 +205,13 @@ describe('evaluateWhen', () => {
       const variable = childEnv.getVariable('resp');
       expect(variable).toBeTruthy();
       const value = await extractVariableValue(variable!, childEnv);
-      expect(value).toBe('hello');
+      expect(isStructuredValue(value)).toBe(true);
+      if (isStructuredValue(value)) {
+        expect(value.text).toBe('hello');
+        expect(value.data).toBe('hello');
+        expect(value.mx.source).toBe('cmd');
+        expect(value.mx.command).toBe('echo hello');
+      }
     });
 
     it('executes sh code RHS', async () => {
@@ -225,7 +232,13 @@ describe('evaluateWhen', () => {
       const variable = childEnv.getVariable('resp');
       expect(variable).toBeTruthy();
       const value = await extractVariableValue(variable!, childEnv);
-      expect(value).toBe('shell-ok');
+      expect(isStructuredValue(value)).toBe(true);
+      if (isStructuredValue(value)) {
+        expect(value.text).toBe('shell-ok');
+        expect(value.data).toBe('shell-ok');
+        expect(value.mx.source).toBe('sh');
+        expect(value.mx.command).toBe('echo shell-ok');
+      }
     });
 
     it('executes js code RHS', async () => {

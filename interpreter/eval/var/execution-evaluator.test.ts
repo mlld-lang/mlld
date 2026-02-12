@@ -145,7 +145,14 @@ describe('execution evaluator', () => {
       InterpolationContext.ShellCommand
     );
     expect(env.executeCommand).toHaveBeenCalledWith('echo {"ok":true}', undefined);
-    expect(mocks.processCommandOutput).toHaveBeenCalledWith('{"ok":true}');
+    expect(mocks.processCommandOutput).toHaveBeenCalledWith(
+      '{"ok":true}',
+      undefined,
+      {
+        source: 'cmd',
+        command: 'echo {"ok":true}'
+      }
+    );
   });
 
   it('returns explicit control result for ExeBlock return controls', async () => {

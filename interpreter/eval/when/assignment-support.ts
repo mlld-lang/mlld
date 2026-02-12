@@ -72,19 +72,25 @@ export async function evaluateAssignmentValue(
       value = result.value;
       handledByRunEvaluator = true;
     } else {
+      let executedCommand = '';
       if (Array.isArray(commandNode.command)) {
         const interpolatedCommand = await interpolate(
           commandNode.command,
           env,
           InterpolationContext.ShellCommand
         );
+        executedCommand = interpolatedCommand;
         value = await env.executeCommand(interpolatedCommand, commandOptions);
       } else {
+        executedCommand = String(commandNode.command);
         value = await env.executeCommand(commandNode.command, commandOptions);
       }
 
       const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
-      value = processCommandOutput(value);
+      value = processCommandOutput(value, undefined, {
+        source: 'cmd',
+        command: executedCommand
+      });
     }
   }
 
