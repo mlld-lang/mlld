@@ -51,4 +51,17 @@ describe('String .split() + indexing + pipelines', () => {
     const out = await run(src);
     expect(out).toBe('true');
   });
+
+  it('array .includes resolves variable references against normalized values', async () => {
+    const src = [
+      '/var @polishArg = "high"',
+      '/var @validPolish = ["false", "med", "high"]',
+      '/var @isValid = @validPolish.includes(@polishArg)',
+      '/show @isValid',
+      '/var @isHigh = @polishArg == "high"',
+      '/show @isHigh'
+    ].join('\n');
+    const out = await run(src);
+    expect(out.split('\n').filter((line) => line.length > 0)).toEqual(['true', 'true']);
+  });
 });
