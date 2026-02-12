@@ -685,18 +685,8 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         const n: any = node as any;
         switch (n.showKind) {
           case 'command':
-            directive.subtype = 'showCommand';
-            directive.values.command = n.content?.values?.command || n.content?.values || n.content;
-            directive.meta = { ...(directive.meta || {}), ...(n.content?.meta || {}) };
-            if (n.tail) directive.values.withClause = n.tail;
-            break;
           case 'code':
-            directive.subtype = 'showCode';
-            directive.values.lang = n.lang || [];
-            directive.values.code = n.code || [];
-            directive.meta = { ...(directive.meta || {}), ...(n.meta || {}) };
-            if (n.tail) directive.values.withClause = n.tail;
-            break;
+            throw new Error('Inline show does not execute commands or code. Use run instead.');
           case 'template':
             directive.subtype = 'showTemplate';
             directive.values.content = n.template?.values?.content ? [{ content: n.template.values.content }] : (n.template?.values ? [n.template.values] : []);
@@ -719,7 +709,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             }
             break;
           default:
-            break;
+            throw new Error('Inline show only supports templates, references, and load content.');
         }
         const { evaluateShow } = await import('../eval/show');
         const res = await evaluateShow(directive, env, { isExpression: true });

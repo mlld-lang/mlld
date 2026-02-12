@@ -241,27 +241,7 @@ TemplateSlashForBlockDouble "slash for-block (double-colon)"
 
 // Inline /show inside template contexts
 TemplateInlineShow "inline show (template)"
-  = "/show" _ content:UnifiedCommandBrackets tail:TailModifiers? {
-      return {
-        type: 'TemplateInlineShow',
-        showKind: 'command',
-        content,
-        tail: tail || null
-      };
-    }
-  / "/show" _ lang:RunCodeLanguage _ code:UnifiedCodeBrackets tail:TailModifiers? {
-      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
-      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
-      return {
-        type: 'TemplateInlineShow',
-        showKind: 'code',
-        lang: [langNode],
-        code: [codeNode],
-        meta: { isMultiLine: code.isMultiLine, language: lang },
-        tail: tail || null
-      };
-    }
-  / "/show" _ template:TemplateCore tail:TailModifiers? {
+  = "/show" _ template:TemplateCore tail:TailModifiers? {
       return {
         type: 'TemplateInlineShow',
         showKind: 'template',

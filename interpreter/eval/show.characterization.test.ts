@@ -370,44 +370,26 @@ describe('evaluateShow (characterization)', () => {
     expect(asText(result.value)).toBe('BODY LINE');
   });
 
-  it('keeps showCommand and showCode execution paths stable', async () => {
-    const [showCommandDirective] = parseDirectives('/show {echo "test"}');
-    expect(showCommandDirective?.subtype).toBe('showCommand');
-    const commandSpy = vi
-      .spyOn(env, 'executeCommand')
-      .mockResolvedValue('command-output');
-
-    const commandResult = await evaluateShow(toShowDirective(showCommandDirective), env);
-    expect(commandSpy).toHaveBeenCalledTimes(1);
-    expect(asText(commandResult.value)).toBe('command-output');
-
-    const codeSpy = vi
-      .spyOn(env, 'executeCode')
-      .mockResolvedValue('code-output');
-    const showCodeDirective = createShowDirective('showCode', {
-      lang: [textNode('js')],
-      code: [textNode('\n    return 7;\n')]
-    });
-    const codeResult = await evaluateShow(showCodeDirective, env);
-    expect(codeSpy).toHaveBeenCalledTimes(1);
-    expect(codeSpy.mock.calls[0]?.[0]).toBe('return 7;\n');
-    expect(codeSpy.mock.calls[0]?.[1]).toBe('js');
-    expect(asText(codeResult.value)).toBe('code-output');
+  it('rejects show command/code parse forms and points to run', () => {
+    expect(() => parseDirectives('/show {echo "test"}')).toThrow(/use run/i);
+    expect(() => parseDirectives('/show js { return 7 }')).toThrow(/use run/i);
   });
 
-  it('keeps showCommand and showCode error propagation stable', async () => {
-    const [showCommandDirective] = parseDirectives('/show {echo "boom"}');
-    const commandError = new Error('command failed');
-    vi.spyOn(env, 'executeCommand').mockRejectedValue(commandError);
-    await expect(evaluateShow(toShowDirective(showCommandDirective), env)).rejects.toThrow('command failed');
+  it('rejects legacy showCommand/showCode subtypes at runtime', async () => {
+    const showCommandDirective = createShowDirective('showCommand', {
+      command: [textNode('echo "boom"')]
+    });
+    await expect(evaluateShow(showCommandDirective, env)).rejects.toThrow(
+      'show does not execute commands or code. Use run instead.'
+    );
 
-    const codeError = new Error('code failed');
-    vi.spyOn(env, 'executeCode').mockRejectedValue(codeError);
     const showCodeDirective = createShowDirective('showCode', {
       lang: [textNode('js')],
       code: [textNode('throw new Error("x");')]
     });
-    await expect(evaluateShow(showCodeDirective, env)).rejects.toThrow('code failed');
+    await expect(evaluateShow(showCodeDirective, env)).rejects.toThrow(
+      'show does not execute commands or code. Use run instead.'
+    );
   });
 
   it('keeps applyTailPipeline effect path stable for inline show content', async () => {

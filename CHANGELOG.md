@@ -213,6 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `.content` was a non-enumerable getter alias that broke in complex data flows
   - `.text` is now the canonical text representation accessor
   - `LoadContentResult.content` unchanged (still holds raw file content)
+- **`/show` command/code execution forms**: `/show { ... }` and `/show <lang> { ... }` are removed. Use `/run` for command and code execution.
 
 ## [2.0.0-rc81-ab]
 

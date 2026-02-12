@@ -41,13 +41,14 @@ exe @calc(x) = js { return x * 2 }
 </RULE_3_COMMANDS_NEED_BRACES>
 
 <RULE_4_OUTPUT_SOURCES>
-Only `show` and `output` produce output. `run` executes silently (use `show run cmd {...}` to display command output).
+Only `show` and `output` produce output. `run` executes silently; capture its result in a variable if you want to display it.
 
 ```mlld
 var @secret = "hidden"      >> no output
 show `Visible`              >> output
 run cmd {echo "silent"}     >> no output (executes but doesn't display)
-show run cmd {echo "loud"}  >> output
+var @loud = run cmd {echo "loud"}
+show @loud                  >> output
 ```
 </RULE_4_OUTPUT_SOURCES>
 

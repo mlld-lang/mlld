@@ -10,7 +10,6 @@ import {
 } from './show-invocation-handlers';
 import { evaluateShowForeach, evaluateShowForeachSection } from './show-foreach-handlers';
 import { evaluateShowPath, evaluateShowPathSection } from './show-path-handlers';
-import { evaluateShowCode, evaluateShowCommand } from './show-runtime-handlers';
 import { evaluateShowLoadContent, evaluateShowTemplate } from './show-template-load-handlers';
 import { ShowDescriptorCollector } from './shared-helpers';
 import { evaluateShowVariable } from './show-variable';
@@ -177,31 +176,9 @@ export async function dispatchShowSubtype({
       };
     }
 
-    case 'showCommand': {
-      const commandResult = await evaluateShowCommand({
-        directive,
-        env,
-        directiveLocation,
-        collectInterpolatedDescriptor
-      });
-      return {
-        content: commandResult.content,
-        resultValue: commandResult.resultValue
-      };
-    }
-
-    case 'showCode': {
-      const codeResult = await evaluateShowCode({
-        directive,
-        env,
-        directiveLocation,
-        collectInterpolatedDescriptor
-      });
-      return {
-        content: codeResult.content,
-        resultValue: codeResult.resultValue
-      };
-    }
+    case 'showCommand':
+    case 'showCode':
+      throw new Error('show does not execute commands or code. Use run instead.');
 
     case 'show':
     case 'showLiteral':

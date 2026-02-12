@@ -190,11 +190,8 @@ export interface TemplateForBlockNode extends BaseMlldNode {
 // Inline /show node used inside template interpolation contexts
 export interface TemplateInlineShowNode extends BaseMlldNode {
   type: 'TemplateInlineShow';
-  showKind: 'command' | 'code' | 'template' | 'load' | 'reference';
+  showKind: 'template' | 'load' | 'reference';
   // Payloads for different kinds
-  content?: any;           // UnifiedCommandBrackets result for command
-  lang?: BaseMlldNode[];   // Language for code
-  code?: BaseMlldNode[];   // Code nodes for code
   template?: BaseMlldNode; // TemplateCore node for template variant
   loadContent?: BaseMlldNode; // AlligatorExpression node
   reference?: BaseMlldNode;   // UnifiedReferenceWithTail node

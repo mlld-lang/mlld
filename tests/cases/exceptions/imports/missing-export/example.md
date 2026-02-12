@@ -8,4 +8,4 @@ This should fail because the module's manifest references an undefined name.
 
 /import { missingVar } from "missing-export-module.mld"
 
-/show {{missingVar}}
+/show @missingVar
