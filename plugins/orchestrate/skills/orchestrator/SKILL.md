@@ -1,0 +1,380 @@
+---
+name: orchestrator
+description: Designing and building mlld orchestrators for LLM workflows. Use when creating pipelines that coordinate LLM calls, processing data at scale, or building decision-driven automation.
+---
+
+## Core Pattern
+
+Every mlld orchestrator follows one flow:
+
+```
+gather context → execute (LLM call) → invalidate → remediate → re-invalidate
+```
+
+Work is broken until the adversary can't break it. This is the default stance.
+
+## The Dumb Orchestrator
+
+Your mlld code should be boring. It gathers context, asks an LLM "what should I do?", executes the answer mechanically, and repeats. All intelligence lives in prompts. The orchestrator is a switch statement.
+
+**Code does**:
+- Gather context (load files, query state, read events)
+- Call decision agent with full context
+- Switch on the returned action type
+- Execute the action mechanically
+- Log what happened
+- Repeat
+
+**Code does NOT**:
+- Decide what to work on next
+- Determine if something is blocked
+- Handle edge cases with conditionals
+- Maintain state machines
+
+When you need new behavior, add guidance to the decision prompt. Don't add if-else to the orchestrator.
+
+## Adversarial Invalidation
+
+The throughline of every orchestrator. Default is failure. Work is broken until proven otherwise.
+
+**Evidence-based**: Every claim requires command + output + interpretation. "Probably works" is invalid.
+
+**No substitution**: Test the actual mechanism described. If the spec says "env block restricts tools," test an env block — don't test a different mechanism and call it equivalent.
+
+**Remediation requires re-invalidation**: Fixing a finding doesn't close it. The adversary must re-test after the fix.
+
+All three example archetypes include invalidation workers. See:
+- `examples/audit/` — invalidation pass over review findings
+- `examples/research/` — invalidation of synthesis claims
+- `examples/development/` — adversarial verification of implementation
+
+## Three Archetypes
+
+### 1. Audit (parallel fan-out + invalidation)
+
+Glob files → parallel LLM review → collect findings → parallel invalidation → output validated results.
+
+No decision agent. Linear pipeline. Fastest to build.
+
+**Use when**: Processing a batch of similar items independently (file review, data extraction, classification).
+
+**See**: `examples/audit/`
+
+```mlld
+var @files = <src/**/*.ts>
+var @results = for parallel(20) @file in @files [
+  let @review = @claudePoll(@reviewPrompt(@file), "sonnet", "@root", @tools, @outPath)
+  => <@outPath> | @json
+]
+>> Then invalidation pass over findings
+```
+
+### 2. Research (multi-phase pipeline + invalidation)
+
+Decision agent infers phase from filesystem state. Parallel fan-out for batch operations. Builds toward a synthesis that gets invalidated.
+
+**Use when**: Multi-step analysis where phases depend on prior results (document analysis, research synthesis, data pipeline).
+
+**See**: `examples/research/`
+
+```mlld
+loop(endless) [
+  let @context = @buildContext(@runDir)
+  let @decision = @callDecisionAgent(@context)
+  when @decision.action [
+    "discover" => [...]
+    "assess" => [...]   >> for parallel(20)
+    "synthesize" => [...]
+    "invalidate" => [...] >> for parallel(20)
+    "complete" => done
+  ]
+]
+```
+
+### 3. Development (decision loop + full invalidation)
+
+Continuous decision loop with external state (GitHub Issues). Creates issues, dispatches workers, runs adversarial verification. Quality gate before completion.
+
+**Use when**: Open-ended tasks requiring iteration, external coordination, and quality assurance (feature development, project automation).
+
+**See**: `examples/development/`
+
+```mlld
+loop(endless) [
+  let @context = @buildContext(@config, @runDir)
+  let @decision = @callDecisionAgent(@context)
+  when @decision.action [
+    "work" => [...]
+    "create_issue" => [...]
+    "close_issue" => [...]
+    "blocked" => [ @writeQuestions(...); done ]
+    "complete" => done
+  ]
+]
+```
+
+## Canonical File Layout
+
+```
+orchestrator/
+├── index.mld                    # Entry point — main loop
+├── lib/
+│   ├── context.mld              # State management, context gathering
+│   └── [domain].mld             # Domain-specific helpers
+├── prompts/
+│   ├── decision/
+│   │   └── core.att             # Decision agent prompt template
+│   ├── workers/
+│   │   ├── [role].att           # One template per worker type
+│   │   └── invalidate.att       # Adversarial invalidation worker
+│   └── shared/
+│       └── [fragment].md        # Reusable prompt fragments
+└── schemas/
+    ├── decision.json            # Decision output JSON Schema
+    └── worker-result.json       # Worker output JSON Schema
+```
+
+## State Management
+
+Two files track run state:
+
+**`run.json`** — Minimal current state. What matters right now.
+```json
+{
+  "id": "2026-02-09-0",
+  "created": "2026-02-09T10:00:00Z",
+  "lastResult": null,
+  "lastError": null
+}
+```
+
+**`events.jsonl`** — Append-only event log. Full history for debugging.
+```jsonl
+{"ts":"2026-02-09T10:00:01Z","event":"run_start","topic":"security"}
+{"ts":"2026-02-09T10:00:15Z","event":"iteration","decision":"work","ticket":"#42"}
+{"ts":"2026-02-09T10:05:30Z","event":"worker_result","status":"completed"}
+```
+
+Context builder reads recent N events from the log for the decision agent.
+
+```mlld
+exe @logEvent(runDir, eventType, data) = [
+  let @event = { ts: @now, event: @eventType, ...@data }
+  append @event to "@runDir/events.jsonl"
+]
+
+exe @loadRecentEvents(runDir, limit) = [
+  let @lines = @tailFile(`@runDir/events.jsonl`, @limit)
+  => for @line in @lines.split("\n") when @line.trim() => @line | @json
+]
+```
+
+## File-Based Output Protocol
+
+Tell the LLM to write structured output to a specific file path. Don't parse streaming output.
+
+```mlld
+let @outputPath = `@runDir/decision-@iteration.json`
+let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
+
+let @_ = @claudePoll(@fullPrompt, "opus", "@root", @tools, @outputPath)
+let @decision = <@outputPath>?
+```
+
+The orchestrator reads the file after the agent finishes. The file doubles as a debugging artifact.
+
+## Template Composition
+
+Prompts are `.att` template files with `@variable` interpolation. Declared as executables:
+
+```mlld
+exe @decisionPrompt(tickets, events, lastError) = template "./prompts/decision/core.att"
+exe @workerPrompt(task, guidance, context) = template "./prompts/workers/implement.att"
+```
+
+Inside `.att` files, use XML-tagged sections for structured context:
+
+```
+<tickets>
+@tickets
+</tickets>
+
+<recent_events>
+@recentEvents
+</recent_events>
+
+<last_error>
+@lastError
+</last_error>
+```
+
+## Context Conventions
+
+Standard XML-tagged sections in decision prompts:
+
+| Section | Purpose |
+|---------|---------|
+| `<goal>` | What we're trying to accomplish |
+| `<state>` | Current state: open issues, file inventory |
+| `<history>` | Recent events from events.jsonl |
+| `<last_result>` | Output from the previous action |
+| `<last_error>` | Error from last iteration (if any) |
+| `<constraints>` | Hard limits, budgets, rules |
+
+Use selective context loading — only load what the current job needs.
+
+## Structured Actions with JSON Schema
+
+Decision agents return one action type. Use conditional JSON Schema:
+
+```json
+{
+  "required": ["reasoning", "action"],
+  "allOf": [
+    {
+      "if": { "properties": { "action": { "const": "work" } } },
+      "then": { "required": ["task", "guidance"] }
+    },
+    {
+      "if": { "properties": { "action": { "const": "blocked" } } },
+      "then": { "required": ["questions"] }
+    },
+    {
+      "if": { "properties": { "action": { "const": "complete" } } },
+      "then": { "required": ["summary"] }
+    }
+  ]
+}
+```
+
+The orchestrator switches mechanically on `decision.action`. No interpretation.
+
+## Tool Permissions Per Role
+
+Different agents get different tool sets:
+
+```mlld
+var @decisionTools = "Read,Write,Glob,Grep"
+var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*)"
+```
+
+Decision agents: read + write (for output file). Workers: full access scoped to needs.
+
+## Parallel Processing
+
+Use `for parallel(N)` for batch operations. All examples emphasize parallelism.
+
+```mlld
+>> Aggressive: 20 concurrent with 1s delay (safe for most APIs)
+var @results = for parallel(20) @item in @items [
+  let @outPath = `@runDir/results/@item.id.json`
+
+  >> Idempotency: skip if already done
+  let @fileCheck = @fileExists(@outPath)
+  if @fileCheck == "yes" => "skipped"
+
+  >> Do work...
+  => @result
+]
+```
+
+**When to parallelize**: Independent items (file reviews, assessments, invalidation checks).
+**When to sequence**: Data dependencies (synthesis depends on assessments, decisions depend on prior state).
+
+## Idempotency
+
+Check if output exists before doing work. Makes reruns safe and enables resume.
+
+```mlld
+let @fileCheck = @fileExists(@outPath)
+if @fileCheck == "yes" [
+  show `  Skipped (exists): @outPath`
+  => "skipped"
+]
+```
+
+## Human Handoff
+
+When blocked, write structured questions and exit cleanly:
+
+```mlld
+"blocked" => [
+  @writeQuestionsFile(@runDir, @decision.questions)
+  @logEvent(@runDir, "run_paused", { reason: "needs_human" })
+  show `Resume with: mlld run myorch --run @runId`
+  done
+]
+```
+
+Human answers at their leisure. Human resumes. Decision agent reads answers from context and continues.
+
+## Model Selection
+
+- **Sonnet**: Routing decisions, classification, assessment, review. Fast and cheap.
+- **Opus**: Judgment calls, synthesis, adversarial verification, complex implementation. Slower but more capable.
+
+Audit archetype: sonnet for everything (simple, parallel).
+Research archetype: sonnet for assessment, opus for synthesis and invalidation.
+Development archetype: opus for decisions and workers (high-stakes).
+
+## Debugging
+
+- **Event logs**: `events.jsonl` shows every decision, action, and result.
+- **Prompt archival**: Save worker prompts to `@runDir/worker-*.prompt.md` for replay.
+- **File-based output**: Decision/worker JSON files persist in the run directory.
+- **`MLLD_DEBUG_CLAUDE_POLL=1`**: Diagnostics for `@claudePoll` polling behavior.
+
+```mlld
+>> Save prompt for debugging
+output @workerPrompt to "@runDir/worker-@task-@iteration.prompt.md"
+```
+
+## Phase Inference
+
+The decision agent infers the current phase from what exists rather than tracking phase in code:
+
+```
+Infer phase from filesystem state:
+1. No assessments/ → discovery phase
+2. assessments/ incomplete → assessment phase
+3. All assessed, no synthesis.json → synthesis phase
+4. synthesis.json exists → invalidation phase
+```
+
+Put this logic in the decision prompt. The orchestrator never checks what phase it's in.
+
+## LLM-First Principles (Summary)
+
+1. Dumb orchestrator — code gathers context, model decides
+2. Fresh decision calls — full context each iteration, no chat history
+3. Structured actions — JSON with action type, orchestrator switches mechanically
+4. Prompts over predicates — rules in prompts, not if-else in code
+5. Multi-phase via prompt — phase logic in decision prompt, not state machine
+6. Edge cases in prompts — add guidance text, not conditionals
+7. Worker guidance — decision agent provides per-action instructions
+8. File-based output — write JSON to path, don't parse streams
+9. Logs over state machines — event log shows everything
+10. External state — separate state management from orchestration
+
+See `anti-patterns.md` for traps to avoid.
+See `syntax-reference.md` for mlld syntax cheat sheet.
+See `gotchas.md` for mlld language gotchas and sharp edges.
+
+## Prerequisites
+
+```bash
+mlld init                          # Initialize project (enables mlld run)
+mlld install @mlld/claude-poll     # Install the Claude polling module
+```
+
+`mlld init` creates a `mlld-config.json` config so scripts in `llm/run/` can be run with `mlld run <name>`. `@mlld/claude-poll` provides the `@claudePoll` function used by all orchestrator archetypes.
+
+## Getting Started
+
+Use `mlld quickstart` and `mlld howto` for language fundamentals. This skill covers orchestrator-specific patterns only.
+
+To scaffold a new orchestrator: use the `/orchestrate:scaffold` command.
+
+To learn by example: read the three archetypes in `examples/`.

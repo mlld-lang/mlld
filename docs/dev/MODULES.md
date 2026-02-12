@@ -196,7 +196,7 @@ interface IResolver {
 - `LocalResolver`: Reads from filesystem (project-relative)
 - `HttpResolver`: Fetches via HTTP/HTTPS with caching
 - `GitHubResolver`: Resolves GitHub URLs/repo paths
-- `ProjectPathResolver`: Handles @root/@base prefixes for project and script-relative paths
+- `ProjectPathResolver`: Handles @root/@base prefixes for project-relative paths
 
 **Orchestration** (`ResolverManager.ts:321-520`)
 - Prefix matching determines resolver (@author/ → Registry, @root/ → ProjectPath, custom → LocalResolver)
