@@ -9,24 +9,8 @@ import type { VarAssignmentResult } from '@interpreter/eval/var';
 import { parseFrontmatter } from '@interpreter/utils/frontmatter-parser';
 import type { InterpolationNode } from '@interpreter/utils/interpolation';
 import { createUnknownNodeTypeError, getDispatchTarget } from './dispatch';
-import { evaluateCodeNode } from './handlers/code-handler';
 import { evaluateCommandNode } from './handlers/command-handler';
-import {
-  evaluateExeBlockNode,
-  evaluateForExpressionNode,
-  evaluateForeachNode,
-  evaluateLoopExpressionNode,
-  evaluateWhenExpressionNode
-} from './handlers/control-flow-handlers';
-import { evaluateExecInvocationNode } from './handlers/exec-invocation-handler';
-import { evaluateLabelModificationNode } from './handlers/label-modification-handler';
-import {
-  evaluateFileReferenceNode,
-  evaluateLoadContentNode
-} from './handlers/load-content-file-reference-handler';
-import { evaluateNewExpressionNode } from './handlers/new-expression-handler';
-import { evaluateUnifiedExpressionNode } from './handlers/unified-expression-handler';
-import { evaluateVariableReferenceWithTailNode } from './handlers/variable-reference-with-tail-handler';
+import { evaluateFileReferenceNode } from './handlers/load-content-file-reference-handler';
 import {
   extractInterpolationNodesFromTemplateLikeNode,
   isCodeFence,
@@ -277,19 +261,26 @@ export async function evaluateCore({
   }
 
   if (dispatchTarget === 'execInvocation' && isExecInvocation(node)) {
-    return evaluateExecInvocationNode(node, env);
+    const { evaluateExecInvocation } = await import('@interpreter/eval/exec-invocation');
+    return evaluateExecInvocation(node, env);
   }
 
   if (dispatchTarget === 'variableReferenceWithTail' && node.type === 'VariableReferenceWithTail') {
-    return evaluateVariableReferenceWithTailNode(node as any, env);
+    const { VariableReferenceEvaluator } = await import('@interpreter/eval/data-values/VariableReferenceEvaluator');
+    const evaluator = new VariableReferenceEvaluator();
+    const result = await evaluator.evaluate(node as any, env);
+    return { value: result, env };
   }
 
   if (dispatchTarget === 'newExpression' && node.type === 'NewExpression') {
-    return evaluateNewExpressionNode(node as any, env);
+    const { evaluateNewExpression } = await import('@interpreter/eval/new-expression');
+    const value = await evaluateNewExpression(node as any, env);
+    return { value, env };
   }
 
   if (dispatchTarget === 'labelModification' && node.type === 'LabelModification') {
-    return evaluateLabelModificationNode(node as any, env, context);
+    const { evaluateLabelModification } = await import('@interpreter/eval/label-modification');
+    return evaluateLabelModification(node as any, env, context);
   }
 
   if (
@@ -298,7 +289,9 @@ export async function evaluateCore({
       node.type === 'TernaryExpression' ||
       node.type === 'UnaryExpression')
   ) {
-    return evaluateUnifiedExpressionNode(node as any, env);
+    const { evaluateUnifiedExpression } = await import('@interpreter/eval/expressions');
+    const result = await evaluateUnifiedExpression(node as any, env);
+    return { value: result.value, env };
   }
 
   if (dispatchTarget === 'literal' && isLiteralNode(node)) {
@@ -318,23 +311,31 @@ export async function evaluateCore({
   }
 
   if (dispatchTarget === 'whenExpression' && node.type === 'WhenExpression') {
-    return evaluateWhenExpressionNode(node as any, env, context);
+    const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
+    return evaluateWhenExpression(node as any, env, context);
   }
 
   if (dispatchTarget === 'exeBlock' && node.type === 'ExeBlock') {
-    return evaluateExeBlockNode(node as any, env);
+    const { evaluateExeBlock } = await import('@interpreter/eval/exe');
+    return evaluateExeBlock(node as any, env, {}, { scope: 'block' });
   }
 
   if (dispatchTarget === 'foreach' && (node.type === 'foreach' || node.type === 'foreach-command')) {
-    return evaluateForeachNode(node as any, env);
+    const { evaluateForeachCommand } = await import('@interpreter/eval/foreach');
+    const result = await evaluateForeachCommand(node as any, env);
+    return { value: result, env };
   }
 
   if (dispatchTarget === 'forExpression' && node.type === 'ForExpression') {
-    return evaluateForExpressionNode(node as any, env);
+    const { evaluateForExpression } = await import('@interpreter/eval/for');
+    const result = await evaluateForExpression(node as any, env);
+    return { value: result, env };
   }
 
   if (dispatchTarget === 'loopExpression' && node.type === 'LoopExpression') {
-    return evaluateLoopExpressionNode(node as any, env);
+    const { evaluateLoopExpression } = await import('@interpreter/eval/loop');
+    const result = await evaluateLoopExpression(node as any, env);
+    return { value: result, env };
   }
 
   if (dispatchTarget === 'dataValue' && (node.type === 'array' || node.type === 'object')) {
@@ -343,7 +344,8 @@ export async function evaluateCore({
   }
 
   if (dispatchTarget === 'loadContent' && node.type === 'load-content') {
-    return evaluateLoadContentNode(node as any, env);
+    const result = await evaluateDataValue(node as any, env);
+    return { value: result, env };
   }
 
   if (dispatchTarget === 'fileReference' && node.type === 'FileReference') {
@@ -351,7 +353,9 @@ export async function evaluateCore({
   }
 
   if (dispatchTarget === 'code' && node.type === 'code') {
-    return evaluateCodeNode(node as any, env);
+    const { evaluateCodeExecution } = await import('@interpreter/eval/code-execution');
+    const result = await evaluateCodeExecution(node as any, env);
+    return { value: result.value, env };
   }
 
   if (dispatchTarget === 'command' && node.type === 'command') {
