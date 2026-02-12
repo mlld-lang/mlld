@@ -42,6 +42,10 @@ function convertToString(value: any): string {
     return '';
   }
 
+  if (isPathLikeValue(value)) {
+    return value.resolvedPath;
+  }
+
   if (isStructuredValue(value)) {
     return asText(value);
   }
@@ -69,6 +73,20 @@ function convertToString(value: any): string {
   }
   
   return String(value);
+}
+
+function isPathLikeValue(value: unknown): value is { resolvedPath: string } {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.resolvedPath === 'string' &&
+    typeof candidate.originalPath === 'string' &&
+    typeof candidate.isURL === 'boolean' &&
+    typeof candidate.isAbsolute === 'boolean'
+  );
 }
 
 /**
