@@ -65,7 +65,7 @@ function toInvocationDisplayValue(value: unknown): string {
     return '';
   }
   if (typeof value === 'object') {
-    return JSON.stringify(value);
+    return JSONFormatter.stringify(value, { pretty: false });
   }
   return String(value);
 }
@@ -83,7 +83,7 @@ function variableToString(variable: any): string {
     return variable.value;
   }
   if (isObject(variable) || isArray(variable)) {
-    return JSON.stringify(variable.value);
+    return JSONFormatter.stringify(variable.value, { pretty: false });
   }
   return String(variable.value);
 }
@@ -250,7 +250,7 @@ export async function evaluateShowExecInvocation({
     return { content: '', resultValue: value };
   }
   if (typeof value === 'object') {
-    return { content: JSON.stringify(value), resultValue: value };
+    return { content: JSONFormatter.stringify(value, { pretty: false }), resultValue: value };
   }
   return { content: String(value), resultValue: value };
 }

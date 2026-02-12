@@ -157,6 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Block expressions inside argument and array contexts surface a targeted parse error
 - **CLI file payload flags**: `mlld <file>` accepts extra `--flag value` pairs and exposes them via `@payload`
 - **Structured output JSON**: `/output` now writes clean JSON for structured arrays instead of emitting StructuredValue wrapper fields
+- **Show/JSON StructuredValue unwrapping**: `JSONFormatter` and `/show` invocation object serialization unwrap StructuredValues to `.data`, so bare and nested values no longer emit wrapper fields (`type`, `text`, `data`, `metadata`, `mx`)
 - **For-expression file metadata**: Mapping or filtering file-loaded values preserves `.mx` metadata on results
 - Return statements inside when-expression blocks bubble to the enclosing exe function
 - **Function parameter scoping**: Function parameters no longer leak back to the caller's scope. Previously, when calling `@helper(data)` with a value, the `data` parameter would overwrite any `@data` variable in the caller's scope after the function returned. Parameters are now properly block-scoped like `let` bindings.

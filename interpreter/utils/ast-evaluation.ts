@@ -5,6 +5,7 @@
 import type { MlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { SecurityDescriptor } from '@core/types/security';
+import { isStructuredValue } from './structured-value';
 
 /**
  * Creates a JSON replacer function that properly handles AST nodes
@@ -12,6 +13,10 @@ import type { SecurityDescriptor } from '@core/types/security';
  */
 export function createASTAwareJSONReplacer() {
   const replacer = (key: string, val: unknown): unknown => {
+    if (isStructuredValue(val)) {
+      return val.data;
+    }
+
     // Handle LoadContentResult - return content for string representation
     if (val && typeof val === 'object' && 'content' in val && 'filename' in val && 'tokest' in val) {
       // This looks like a LoadContentResult - check if it has the getters
