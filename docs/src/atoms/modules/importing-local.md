@@ -18,4 +18,9 @@ qa_tier: 2
 import { @helper } from "./utils.mld"
 import { @config } from <@base/config.mld>
 import { @prompt } from "../prompts/main.mld"
+
+import {
+  @renderHeader,
+  @renderBody
+} from "./templates.mld"
 ```

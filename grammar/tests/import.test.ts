@@ -116,6 +116,43 @@ describe('Import Directive Syntax Tests', () => {
       expect(isImportSelectedDirective(result)).toBe(true);
     });
 
+    it('should parse selected imports across multiple lines', async () => {
+      const input = `/import {
+  @first,
+  second as @secondAlias,
+  third
+} from "./file.mld"`;
+      const result = await parse(input);
+      expect(result.success).toBe(true);
+
+      const directive = result.ast[0];
+      expect(directive.type).toBe('Directive');
+      expect(directive.kind).toBe('import');
+      expect(directive.subtype).toBe('importSelected');
+      expect(directive.values.imports).toHaveLength(3);
+      expect(directive.values.imports[0].identifier).toBe('first');
+      expect(directive.values.imports[1].identifier).toBe('second');
+      expect(directive.values.imports[1].alias).toBe('secondAlias');
+      expect(directive.values.imports[2].identifier).toBe('third');
+    });
+
+    it('should report malformed multi-line import errors at the import line', async () => {
+      const input = `/import {
+  @first
+  @second
+} from "./file.mld"
+/for @x in [1,2] => @x`;
+      const result = await parse(input);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('Unclosed import list in import directive');
+
+      const parseError = result.error as Error & {
+        mlldErrorLocation?: { start: { line: number; column: number } };
+      };
+      expect(parseError.mlldErrorLocation?.start.line).toBe(1);
+      expect(parseError.mlldErrorLocation?.start.column).toBe(1);
+    });
+
     it('should parse a node import source', async () => {
       const input = '/import { join } from node @path';
       const result = (await parse(input)).ast[0];
