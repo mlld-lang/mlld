@@ -113,6 +113,53 @@ Tool definitions support:
 - `expose`: limit visible parameters
 - `description`: override tool metadata
 
+### Serving Tool Collections
+
+Use `--tools-collection` to serve reshaped tools instead of raw exports:
+
+```mlld
+/exe @searchIssues(org: string, repo: string, query: string) = cmd {
+  gh issue list -R @org/@repo --search "@query" --json number,title
+} with { description: "Search GitHub issues" }
+
+/guard @noSecrets before op:exe = when [
+  @input.any.mx.labels.includes("secret") => deny "Secret data cannot flow to tools"
+  * => allow
+]
+
+/var tools @agentTools = {
+  searchIssues: {
+    mlld: @searchIssues,
+    bind: { org: "mlld-lang", repo: "mlld" },
+    expose: ["query"],
+    description: "Search mlld issues by keyword"
+  }
+}
+
+/export { @searchIssues, @agentTools }
+```
+
+```bash
+mlld mcp tools.mld --tools-collection @agentTools
+```
+
+The MCP client sees one tool with one parameter (`query`). The bound `org` and `repo` are invisible. The guard blocks any call carrying `secret`-labeled data.
+
+For Claude Code, point at the server in your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "my-tools": {
+      "command": "npx",
+      "args": ["mlld", "mcp", "tools.mld", "--tools-collection", "@agentTools"]
+    }
+  }
+}
+```
+
+See `mlld howto pattern-guarded-tool-export` for more examples including operation labels for policy.
+
 ## Advanced Usage
 
 - **Config modules**  

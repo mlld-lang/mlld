@@ -5,7 +5,7 @@ brief: Control what MCP-sourced data can do with label flow rules
 category: security
 parent: security
 tags: [mcp, policy, labels, label-flow, security]
-related: [mcp-security, mcp-guards, mcp-import, security-policies, labels-source-auto]
+related: [mcp, mcp-security, mcp-guards, mcp-import, security-policies]
 related-code: [interpreter/eval/policy.ts, interpreter/eval/exec-invocation.ts]
 updated: 2026-02-04
 qa_tier: 2

@@ -4,15 +4,13 @@ title: Tool Call Tracking
 brief: Track tool usage with @mx.tools namespace
 category: security
 tags: [tools, guards, mx, tracking]
-related: [guards-basics, mcp-tool-gateway, env-directive]
+related: [mcp, mcp-tool-gateway, security-guards-basics, env-directive]
 related-code: [interpreter/env/ContextManager.ts, cli/mcp/FunctionRouter.ts]
-updated: 2026-01-24
+updated: 2026-02-11
 qa_tier: 2
 ---
 
-> **Requires MCP server context.** Run `mlld mcp <module>` to serve tools. See `mlld howto mcp`.
-
-The `@mx.tools` namespace tracks tool call history and availability during execution.
+The `@mx.tools` namespace tracks tool call history and availability during MCP execution. See `mcp` for setup.
 
 **@mx.tools.calls - Call history:**
 

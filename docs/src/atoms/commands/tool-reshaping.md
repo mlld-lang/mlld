@@ -4,15 +4,13 @@ title: Tool Reshaping
 brief: Bind and expose parameters to customize tool interfaces
 category: commands
 tags: [tools, mcp, bind, expose, parameters]
-related: [mcp-tool-gateway, exe-metadata, exe-simple]
+related: [mcp-tool-gateway, mcp-export, exe-metadata, exe-simple]
 related-code: [cli/mcp/FunctionRouter.ts, cli/mcp/SchemaGenerator.ts]
-updated: 2026-01-24
+updated: 2026-02-11
 qa_tier: 2
 ---
 
-> **Requires MCP server context.** Run `mlld mcp <module>` to serve tools. See `mlld howto mcp`.
-
-Reshape tool interfaces using `bind` and `expose` to control what parameters agents see.
+Reshape tool interfaces using `bind` and `expose` to control what parameters agents see. Used in `var tools` collections (see `mcp-tool-gateway`).
 
 **bind - Pre-fill parameters:**
 

@@ -5,7 +5,7 @@ brief: Inspect, block, and transform MCP tool calls with guards
 category: security
 parent: security
 tags: [mcp, guards, for secret, src:mcp, security]
-related: [mcp-security, mcp-policy, mcp-import, security-guards-basics, security-before-guards, security-after-guards]
+related: [mcp, mcp-security, mcp-policy, mcp-import, security-guards-basics]
 related-code: [interpreter/eval/exec-invocation.ts, interpreter/eval/guard.ts]
 updated: 2026-02-04
 qa_tier: 2

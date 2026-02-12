@@ -5,7 +5,7 @@ brief: Add descriptions and typed parameters to executables
 category: commands
 parent: exe
 tags: [functions, metadata, types, mcp, tools]
-related: [exe-simple, exe-blocks, mcp-tool-gateway]
+related: [exe-simple, exe-blocks, mcp-export, mcp-tool-gateway]
 related-code: [interpreter/eval/exe.ts, cli/mcp/SchemaGenerator.ts, grammar/directives/exe.peggy]
 updated: 2026-01-24
 qa_tier: 2
@@ -41,20 +41,8 @@ exe @searchIssues(repo: string, query: string, limit: number) = cmd {
 
 **MCP integration:**
 
-When exported as tools, metadata generates proper JSON schemas:
-
-```mlld
-exe @listFiles(dir: string) = cmd { ls @dir } with { description: "List files in directory" }
-export { @listFiles }
-```
-
-This produces an MCP tool with:
-- Input schema with `dir` as required string parameter
-- Description in tool listing
+When exported as tools, type annotations and descriptions generate JSON Schema for the MCP tool listing. See `mcp-export` for serving and `mcp-tool-gateway` for tool collections.
 
 **Parameter types vs runtime:**
 
-Type annotations are metadata for tooling. At runtime, parameters arrive as their actual types from the caller. Use type annotations to:
-- Generate accurate MCP tool schemas
-- Document expected parameter types
-- Enable IDE/editor support
+Type annotations are metadata for tooling. At runtime, parameters arrive as their actual types from the caller.
