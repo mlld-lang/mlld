@@ -13,6 +13,10 @@ import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import { getAuditFileDescriptor } from '@core/security/AuditLogIndex';
+import {
+  maskPlainMlldTemplateFences,
+  restorePlainMlldTemplateFences
+} from '../template-fence-literals';
 import type { SerializedGuardDefinition } from '../../guards';
 import type { NeedsDeclaration, ProfilesDeclaration } from '@core/policy/needs';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
@@ -427,18 +431,20 @@ export class ModuleContentProcessor {
   ): Promise<Record<string, unknown>> {
     const ext = path.extname(filePath).toLowerCase();
     const fileContent = await this.env.readFile(filePath);
+    const { maskedContent, literalBlocks } = maskPlainMlldTemplateFences(fileContent);
     const { parseSync } = await import('@grammar/parser');
     const startRule = ext === '.mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
     let templateNodes: any[];
     try {
-      templateNodes = parseSync(fileContent, { startRule });
+      templateNodes = parseSync(maskedContent, { startRule });
     } catch (err: any) {
-      let normalized = fileContent;
+      let normalized = maskedContent;
       if (ext === '.mtt') {
         normalized = normalized.replace(/{{\s*([A-Za-z_][\w\.]*)\s*}}/g, '@$1');
       }
       templateNodes = this.buildTemplateAst(normalized);
     }
+    templateNodes = restorePlainMlldTemplateFences(templateNodes, literalBlocks);
 
     this.validateTemplateParameters(templateNodes, paramNames, displayPath);
 

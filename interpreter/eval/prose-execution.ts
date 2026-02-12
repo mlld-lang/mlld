@@ -23,6 +23,11 @@ import { MlldSecurityError } from '@core/errors';
 import { evaluateExecInvocation } from './exec-invocation';
 import type { ExecInvocation, CommandReference } from '@core/types';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
+import {
+  maskPlainMlldTemplateFences,
+  restorePlainMlldTemplateFenceText,
+  restorePlainMlldTemplateFences
+} from '@interpreter/eval/template-fence-literals';
 
 /**
  * Build the skill injection prompt for a given skill name
@@ -342,12 +347,13 @@ async function parseAndInterpolateTemplate(
   style: 'att' | 'mtt',
   env: Environment
 ): Promise<string> {
+  const { maskedContent, literalBlocks } = maskPlainMlldTemplateFences(templateContent);
   const { parseSync } = await import('@grammar/parser');
   const startRule = style === 'mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
 
   let templateNodes: any[];
   try {
-    templateNodes = parseSync(templateContent, { startRule });
+    templateNodes = parseSync(maskedContent, { startRule });
   } catch (parseErr: any) {
     // Fallback to simple interpolation if parser fails
     if (process.env.DEBUG_EXEC) {
@@ -356,13 +362,16 @@ async function parseAndInterpolateTemplate(
 
     if (style === 'mtt') {
       // Normalize {{var}} to @var for fallback interpolation
-      const normalized = templateContent.replace(/{{\s*([A-Za-z_][\w.]*)\s*}}/g, '@$1');
-      return interpolateProseTemplate(normalized, env);
+      const normalized = maskedContent.replace(/{{\s*([A-Za-z_][\w.]*)\s*}}/g, '@$1');
+      const interpolated = await interpolateProseTemplate(normalized, env);
+      return restorePlainMlldTemplateFenceText(interpolated, literalBlocks);
     }
-    return interpolateProseTemplate(templateContent, env);
+    const interpolated = await interpolateProseTemplate(maskedContent, env);
+    return restorePlainMlldTemplateFenceText(interpolated, literalBlocks);
   }
 
   // Interpolate the parsed template nodes
+  templateNodes = restorePlainMlldTemplateFences(templateNodes, literalBlocks);
   return interpolate(templateNodes, env, InterpolationContext.Default);
 }
 

@@ -4,6 +4,10 @@ import type { SecurityDescriptor } from '@core/types/security';
 import { interpolate } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { Environment } from '@interpreter/env/Environment';
+import {
+  maskPlainMlldTemplateFences,
+  restorePlainMlldTemplateFences
+} from '@interpreter/eval/template-fence-literals';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import * as path from 'path';
@@ -148,23 +152,24 @@ export async function parseTemplateFileNodes(
     ? env.getFileDirectory()
     : path.dirname(resolvedTemplatePath);
   const fileContent = await readFileWithPolicy(env, filePath, sourceLocation ?? undefined);
+  const { maskedContent, literalBlocks } = maskPlainMlldTemplateFences(fileContent);
   const { parseSync } = await import('@grammar/parser');
   const startRule = ext === '.mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
 
   try {
     return {
-      templateNodes: parseSync(fileContent, { startRule }),
+      templateNodes: restorePlainMlldTemplateFences(parseSync(maskedContent, { startRule }), literalBlocks),
       templatePath: filePath,
       templateFileDirectory
     };
   } catch (err: any) {
     try {
-      let normalized = fileContent;
+      let normalized = maskedContent;
       if (ext === '.mtt') {
         normalized = normalized.replace(/{{\s*([A-Za-z_][\w\.]*)\s*}}/g, '@$1');
       }
       return {
-        templateNodes: buildTemplateAstFromContent(normalized),
+        templateNodes: restorePlainMlldTemplateFences(buildTemplateAstFromContent(normalized), literalBlocks),
         templatePath: filePath,
         templateFileDirectory
       };

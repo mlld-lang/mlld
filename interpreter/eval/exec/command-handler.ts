@@ -30,6 +30,10 @@ import {
   normalizeAutoverifyPath,
   normalizeSignedVariableName
 } from '@interpreter/eval/exec/normalization';
+import {
+  maskPlainMlldTemplateFences,
+  restorePlainMlldTemplateFences
+} from '@interpreter/eval/template-fence-literals';
 import { getSignatureContent } from '@interpreter/eval/sign-verify';
 import { cloneExecVariableWithNewValue } from '@interpreter/eval/exec/guard-policy';
 
@@ -719,19 +723,21 @@ async function renderTemplateFromFile(
   execEnv: Environment
 ): Promise<string> {
   const fileContent = await execEnv.readFile(filePath);
+  const { maskedContent, literalBlocks } = maskPlainMlldTemplateFences(fileContent);
   const extension = path.extname(filePath).toLowerCase();
   const startRule = extension === '.mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
   const { parseSync } = await import('@grammar/parser');
   let templateNodes: any[];
   try {
-    templateNodes = parseSync(fileContent, { startRule });
+    templateNodes = parseSync(maskedContent, { startRule });
   } catch {
-    let normalized = fileContent;
+    let normalized = maskedContent;
     if (extension === '.mtt') {
       normalized = normalized.replace(/{{\s*([A-Za-z_][\w\.]*)\s*}}/g, '@$1');
     }
     templateNodes = buildTemplateAstFromContent(normalized);
   }
+  templateNodes = restorePlainMlldTemplateFences(templateNodes, literalBlocks);
   return interpolate(templateNodes, execEnv, InterpolationContext.Default);
 }
 
