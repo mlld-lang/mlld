@@ -49,9 +49,9 @@ show @result.mx.labels     // ["secret"]
 
 ```mlld
 var secret @token = "sk-live-123"
-output @token to "@base/tmp/demo.txt"
+output @token to "@root/tmp/demo.txt"
 
-var @loaded = <@base/tmp/demo.txt>
+var @loaded = <@root/tmp/demo.txt>
 show @loaded.mx.labels     // ["secret"]
 ```
 

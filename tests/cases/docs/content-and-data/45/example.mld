@@ -9,12 +9,12 @@ Line 2: @other
 var @doc = ::Use `npm test` before @env::
 var @report = ::
 Status: @status
-Config: <@base/config.json>
+Config: <@root/config.json>
 Data: @data|@json
 ::
 
 >> Double quotes (single-line only)
-var @path = "@base/files/@filename"
+var @path = "@root/files/@filename"
 run cmd {echo "Processing @file"}
 
 >> Single quotes (literal)

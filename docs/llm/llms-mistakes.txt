@@ -87,7 +87,7 @@ var @path = "README.md"        >> literal string
 >> These are file references
 <README.md>
 <src/*.ts>
-<@base/config.json>
+<@root/config.json>
 ```
 </MISTAKE_XML_VS_FILE_TAGS>
 

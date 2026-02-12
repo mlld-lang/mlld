@@ -73,8 +73,8 @@ run @process(@file.keep)               >> .keep preserves metadata for JS
 Combine objects with left-to-right overrides using spread entries inside object literals:
 
 ```mlld
-var @base = { "name": "Ada", "role": "user" }
-var @admin = { ...@base, "role": "admin", "active": true }
+var @baseUser = { "name": "Ada", "role": "user" }
+var @admin = { ...@baseUser, "role": "admin", "active": true }
 
 show @admin.role  >> admin
 show @admin.active  >> true
@@ -830,12 +830,12 @@ Line 2: @other
 var @doc = ::Use `npm test` before @env::
 var @report = ::
 Status: @status
-Config: <@base/config.json>
+Config: <@root/config.json>
 Data: @data|@json
 ::
 
 >> Double quotes (single-line only)
-var @path = "@base/files/@filename"
+var @path = "@root/files/@filename"
 run cmd {echo "Processing @file"}
 
 >> Single quotes (literal)
@@ -850,7 +850,7 @@ Keep reusable templates in standalone files and execute them as functions.
 ```
 Deployment: @env
 Status: @status
-Config: <@base/config/@env.json>
+Config: <@root/config/@env.json>
 ```
 
 **Usage:**
@@ -894,7 +894,7 @@ import templates from "./templates" as @tpl(x, y)
 Load entire directories of templates that share a parameter signature. Currently supports local directories only (not registry modules).
 
 ```mlld
-import templates from "@base/agents" as @agents(message, context)
+import templates from "@root/agents" as @agents(message, context)
 
 >> All templates accept (message, context)
 show @agents["alice"](@msg, @mx)
@@ -957,8 +957,8 @@ Templates don't have to use all parameters, but can't reference any undeclared o
 **Different parameter needs = different collections:**
 
 ```mlld
-import templates from "@base/agents" as @agents(message, context)
-import templates from "@base/formatters" as @fmt(data)
+import templates from "@root/agents" as @agents(message, context)
+import templates from "@root/formatters" as @fmt(data)
 
 show @agents["alice"](@msg, @mx)    >> (message, context)
 show @fmt["json"](@result)           >> (data)

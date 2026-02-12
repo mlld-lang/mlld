@@ -19,7 +19,7 @@ var @doc = ::Use `mlld` to orchestrate::
 >> Multi-line
 var @report = `
 Status: @status
-Config: <@base/config.json>
+Config: <@root/config.json>
 Data: @data|@json
 `
 ```

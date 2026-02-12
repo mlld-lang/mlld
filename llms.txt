@@ -113,7 +113,7 @@ exe @systemPrompt(context) = template "./prompts/system.att"
 exe @welcome(name, role) = template "./prompts/welcome.att"
 
 >> Template collections for directories
-import templates from "@base/agents" as @agents(message, context)
+import templates from "@root/agents" as @agents(message, context)
 show @agents["alice"](@msg, @ctx)
 ```
 

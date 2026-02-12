@@ -182,17 +182,17 @@ exe @grepAtoms(atoms, pattern) = js {
 }
 
 >> Load intro atom (standalone at top level)
-var @introAtom = <@base/docs/src/atoms/intro.md>
+var @introAtom = <@root/docs/src/atoms/intro.md>
 
 >> Load atoms from all categories
-var @syntaxAtoms = <@base/docs/src/atoms/syntax/*.md>
-var @commandsAtoms = <@base/docs/src/atoms/commands/*.md>
-var @controlFlowAtoms = <@base/docs/src/atoms/control-flow/*.md>
-var @modulesAtoms = <@base/docs/src/atoms/modules/*.md>
-var @patternsAtoms = <@base/docs/src/atoms/patterns/*.md>
-var @configurationAtoms = <@base/docs/src/atoms/configuration/*.md>
-var @securityAtoms = <@base/docs/src/atoms/security/*.md>
-var @mistakesAtoms = <@base/docs/src/atoms/mistakes/*.md>
+var @syntaxAtoms = <@root/docs/src/atoms/syntax/*.md>
+var @commandsAtoms = <@root/docs/src/atoms/commands/*.md>
+var @controlFlowAtoms = <@root/docs/src/atoms/control-flow/*.md>
+var @modulesAtoms = <@root/docs/src/atoms/modules/*.md>
+var @patternsAtoms = <@root/docs/src/atoms/patterns/*.md>
+var @configurationAtoms = <@root/docs/src/atoms/configuration/*.md>
+var @securityAtoms = <@root/docs/src/atoms/security/*.md>
+var @mistakesAtoms = <@root/docs/src/atoms/mistakes/*.md>
 
 >> Bundle all atoms into object for tree display
 exe @bundleAtoms(syntax, commands, controlFlow, modules, patterns, configuration, security, mistakes) = js {

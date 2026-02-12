@@ -105,7 +105,7 @@ The entrypoint script at `llm/run/howto.mld`:
 
 ```mlld
 >> Load all atoms
-var @atoms = <@base/docs/src/atoms/**/*.md>
+var @atoms = <@root/docs/src/atoms/**/*.md>
 
 >> Get topic/subtopic from payload (injected by CLI)
 import { @topic, @subtopic } from @payload
@@ -206,8 +206,8 @@ Create build scripts that assemble atoms into llm docs:
 >> docs/build/llm/control-flow.mld
 
 var @whenAtoms = [
-  <@base/docs/src/atoms/control-flow/when-inline.md>,
-  <@base/docs/src/atoms/control-flow/when.md>
+  <@root/docs/src/atoms/control-flow/when-inline.md>,
+  <@root/docs/src/atoms/control-flow/when.md>
 ]
 
 var @content = for @a in @whenAtoms => @strip(@a)

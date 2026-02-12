@@ -140,15 +140,15 @@ exe @score(input) = [
   let @length = @input.length()
   let @hasQuestion = @input.includes("?")
 
-  let @base = when [
+  let @scoreBase = when [
     @length > 100 => 0.5
     @length > 50 => 0.3
     * => 0.1
   ]
 
   => when [
-    @hasQuestion => @base + 0.3
-    * => @base
+    @hasQuestion => @scoreBase + 0.3
+    * => @scoreBase
   ]
 ]
 

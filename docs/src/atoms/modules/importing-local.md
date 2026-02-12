@@ -16,7 +16,7 @@ qa_tier: 2
 
 ```mlld
 import { @helper } from "./utils.mld"
-import { @config } from <@base/config.mld>
+import { @config } from <@root/config.mld>
 import { @prompt } from "../prompts/main.mld"
 
 import {

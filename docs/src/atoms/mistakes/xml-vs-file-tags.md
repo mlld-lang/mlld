@@ -21,5 +21,5 @@ updated: 2026-01-05
 >> These are file references
 <README.md>
 <src/*.ts>
-<@base/config.json>
+<@root/config.json>
 ```

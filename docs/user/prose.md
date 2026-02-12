@@ -47,7 +47,7 @@ The config object specifies how prose is executed:
 import { @claude } from @mlld/claude
 
 >> Create a model executor
-exe @opusModel(prompt) = @claude(@prompt, "opus", @base)
+exe @opusModel(prompt) = @claude(@prompt, "opus", @root)
 
 var @config = {
   model: @opusModel,
@@ -82,7 +82,7 @@ You can use any interpreter by specifying different skills:
 import { @claude } from @mlld/claude
 
 >> Create a model executor
-exe @myModel(prompt) = @claude(@prompt, "opus", @base)
+exe @myModel(prompt) = @claude(@prompt, "opus", @root)
 
 var @myInterpreter = {
   model: @myModel,

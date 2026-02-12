@@ -14,7 +14,8 @@ updated: 2026-01-11
 - `@input` - stdin/env (must be allowed in config)
 - `@payload` - data passed via SDK or CLI (see payload atom)
 - `@state` - mutable state for SDK integrations
-- `@base` - current script directory path
+- `@root` - project root path (preferred for docs/examples)
+- `@base` - current script directory path (compatibility)
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)
 

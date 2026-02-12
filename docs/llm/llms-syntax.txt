@@ -69,7 +69,7 @@ var @doc = ::Use `mlld` to orchestrate::
 >> Multi-line
 var @report = `
 Status: @status
-Config: <@base/config.json>
+Config: <@root/config.json>
 Data: @data|@json
 `
 ```
@@ -342,7 +342,8 @@ show @x       >> also works here
 - `@input` - stdin/env (must be allowed in config)
 - `@payload` - data passed via SDK or CLI (see payload atom)
 - `@state` - mutable state for SDK integrations
-- `@base` - project root path
+- `@root` - project root path
+- `@base` - current script directory path (compatibility)
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)
 </RESERVED_VARIABLES>

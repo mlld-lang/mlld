@@ -64,12 +64,12 @@ run sh(@project):/tmp {
 ### Working directory (`:path`)
 
 ```mlld
-run cmd(@base):/ {echo "$base"}
+run cmd(@root):/ {echo "$root"}
 ```
 
 Output:
 ```
-<script directory path>
+<project root path>
 ```
 
 Paths must be absolute (for example `/tmp`, `/var/log`, `/`). Relative paths, `~`, or Windows-style paths fail. Executables accept the same suffix when you need to parameterize it:
@@ -330,7 +330,7 @@ Import from files:
 
 ```mlld
 import { @helper } from "./utils.mld"
-import { @config } from "@base/config.mld"
+import { @config } from "@root/config.mld"
 ```
 
 Import types help declare how a source is resolved. You can prefix the directive with a keyword, or rely on inference:
@@ -344,7 +344,7 @@ import local { @helper } from @local/dev-tools
 import templates from "./templates" as @tpl(message, context)
 ```
 
-When omitted, mlld infers the safest option: registry references behave as `module`, files as `static`, URLs as `cached`, `@input` as `live`, `@base`/`@project` as `static`, and `@local` as `local`. The identifier after `as` uses an `@` prefix in source code; mlld strips the prefix internally when referring to the namespace. If the keyword and source disagree (for example, `cached` on a relative path), the interpreter raises an error before evaluation.
+When omitted, mlld infers the safest option: registry references behave as `module`, files as `static`, URLs as `cached`, `@input` as `live`, `@root`/`@project` as `static` (`@base` is also supported), and `@local` as `local`. The identifier after `as` uses an `@` prefix in source code; mlld strips the prefix internally when referring to the namespace. If the keyword and source disagree (for example, `cached` on a relative path), the interpreter raises an error before evaluation.
 
 Directory imports load each immediate subdirectory `index.mld` and return an object keyed by sanitized directory names. Directories matching `_*` or `.*` are skipped by default.
 
@@ -557,7 +557,8 @@ Special built-in variables:
 ```mlld
 @now  >> current timestamp
 @input  >> environment variables (must be allowed)
-@base  >> current script directory path
+@root  >> project root path (preferred)
+@base  >> current script directory path (compatibility)
 @debug  >> debug information
 ```
 

@@ -52,7 +52,7 @@ jq 'select(.event == "label")' .mlld/sec/audit.jsonl
 **Programmatic querying in mlld:**
 
 ```mlld
-var @audit = <@base/.mlld/sec/audit.jsonl>
+var @audit = <@root/.mlld/sec/audit.jsonl>
 exe @findWrites(events) = js {
   return events.filter(e => e.event === "write");
 }

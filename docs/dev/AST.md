@@ -378,7 +378,7 @@ if (Array.isArray(value)) {
 
 **In File Reference**:
 ```javascript
-// <@base/config/file.txt>
+// <@root/config/file.txt>
 {
   type: 'VariableReference',
   valueType: 'varIdentifier',

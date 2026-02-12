@@ -62,7 +62,7 @@ import { @helper } from @alice/utils@^1.0.0   >> semver range
 
 ```mlld
 import { @helper } from "./utils.mld"
-import { @config } from <@base/config.mld>
+import { @config } from <@root/config.mld>
 import { @prompt } from "../prompts/main.mld"
 ```
 
@@ -122,7 +122,7 @@ import local { @dev } from @alice/experimental
 **Template collections** import an entire directory of `.att` files as a callable namespace:
 
 ```mlld
-import templates from "@base/agents" as @agents(message, context)
+import templates from "@root/agents" as @agents(message, context)
 
 >> Access templates by name (bracket or dot notation)
 show @agents["alice"](@msg, @ctx)           >> agents/alice.att
@@ -236,7 +236,7 @@ Prefixes map `@` references to content sources.
 
 **Built-in:**
 - `@author/module` → Registry
-- `@base/file` → Project root
+- `@root/file` → Project root
 - `./file.mld` → Local (with fuzzy extension matching)
 
 **Custom prefixes** (mlld-config.json):

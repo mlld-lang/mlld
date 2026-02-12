@@ -160,7 +160,7 @@ Located in `tests/cases/` (at root level, organized in subdirectories like `slas
 - Should execute without runtime errors
 - Compare actual output against expected output
 - Fail if output doesn't match exactly
-- When a test exercises file effects (e.g., `/append`), read the generated files back via `<@base/...>` in the fixture so assertions cover both the output document and the filesystem side effects.
+- When a test exercises file effects (e.g., `/append`), read the generated files back via `<@root/...>` in the fixture so assertions cover both the output document and the filesystem side effects.
 
 #### 2. Documentation Tests
 Located in `tests/cases/docs/`. Automatically extracted from `docs/user/*.md`:

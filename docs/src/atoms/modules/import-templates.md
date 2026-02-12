@@ -13,7 +13,7 @@ updated: 2026-01-12
 **Template collections** import an entire directory of `.att` files as a callable namespace:
 
 ```mlld
-import templates from "@base/agents" as @agents(message, context)
+import templates from "@root/agents" as @agents(message, context)
 
 >> Access templates by name (bracket or dot notation)
 show @agents["alice"](@msg, @ctx)           >> agents/alice.att

@@ -133,7 +133,7 @@ Import with default namespace (filename-based):
 
 2. **ImportPathResolver** (`interpreter/eval/import/ImportPathResolver.ts`)
    - Determines import type from path patterns
-   - Handles special imports (@input, @env, @base)
+   - Handles special imports (@input, @env, @root/@base)
    - Validates import paths
 
 3. **ModuleContentProcessor** (`interpreter/eval/import/ModuleContentProcessor.ts`)
@@ -193,7 +193,7 @@ The resolver system handles different import sources:
    - **RegistryResolver**: Handles @user/module patterns
    - **LocalResolver**: Local file imports
    - **HTTPResolver**: URL imports
-   - **ProjectPathResolver**: @base and project paths
+   - **ProjectPathResolver**: @root/@base and project paths
 
 ## Import Flow
 
@@ -219,7 +219,7 @@ Import Directive → Path Resolution → Content Fetching → Module Evaluation 
    ```
 
    Notes:
-   - Resolver-prefixed paths (e.g., `@base/...`) must be wrapped in angle brackets when loading contents: `<@base/file.mld>`.
+   - Resolver-prefixed paths (e.g., `@root/...`) must be wrapped in angle brackets when loading contents: `<@root/file.mld>`.
    - Module imports never use angle brackets: `@import { x } from @user/module`.
 
 3. **Content Resolution**
@@ -721,9 +721,9 @@ The five supported keywords map to distinct resolver behaviours. When a directiv
 | Keyword | Behaviour | Typical Sources | Notes |
 |---------|-----------|-----------------|-------|
 | `module` | Load through registry manager | `@user/module` | Fails if path is not a registry module |
-| `static` | Embed content once | Relative files, `@base/...` | Works with `<path>` and quoted strings |
+| `static` | Embed content once | Relative files, `@root/...` | Works with `<path>` and quoted strings |
 | `live` | Fetch on every evaluation | `@input`, `@resolver` | Skips caching/autocache |
 | `cached(ttl)` | Cache-first with TTL | Absolute URLs | TTL uses `Xs`, `Xm`, `Xh`, `Xd`, `Xw` (seconds/minutes/hours/days/weeks) |
 | `local` | Read from dev modules | `@local/...` | Bypasses registry locking |
 
-Inference defaults: registry modules → `module`, files → `static`, URLs → `cached`, `@input` → `live`, `@local` → `local`, `@base/@project` → `static`. Any mismatch raises an `IMPORT_TYPE_MISMATCH` error before evaluation.
+Inference defaults: registry modules → `module`, files → `static`, URLs → `cached`, `@input` → `live`, `@local` → `local`, `@root/@project` → `static` (`@base` is also supported). Any mismatch raises an `IMPORT_TYPE_MISMATCH` error before evaluation.

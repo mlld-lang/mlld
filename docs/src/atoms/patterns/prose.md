@@ -91,7 +91,7 @@ Use any LLM-interpreted DSL by configuring different skills:
 import { @claude } from @mlld/claude
 
 >> Create a custom model executor
-exe @myModel(prompt) = @claude(@prompt, "opus", @base)
+exe @myModel(prompt) = @claude(@prompt, "opus", @root)
 
 >> Configure with custom skills
 var @myDSL = {

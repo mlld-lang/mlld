@@ -1,1 +1,1 @@
-run cmd(@base):/ {echo "$base"}
+run cmd(@root):/ {echo "$root"}

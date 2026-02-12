@@ -113,7 +113,7 @@ Hello from the autoverify demo.
 </text>
 ::
 
-exe llm @audit() = @claude(@auditPrompt, "haiku", @base)
+exe llm @audit() = @claude(@auditPrompt, "haiku", @root)
 show @audit()
 ```
 

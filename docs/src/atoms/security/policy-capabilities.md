@@ -15,7 +15,7 @@ The `capabilities` object controls what operations can run.
 ```mlld
 var @policyConfig = {
   capabilities: {
-    allow: ["cmd:git:*", "cmd:npm:*", "fs:r:**", "fs:w:@base/tmp/**"],
+    allow: ["cmd:git:*", "cmd:npm:*", "fs:r:**", "fs:w:@root/tmp/**"],
     danger: ["@keychain", "fs:r:~/.ssh/*"],
     deny: ["sh"]
   }
@@ -40,7 +40,7 @@ Command allow/deny patterns evaluate against the interpolated command text, incl
 | Pattern | Access |
 |---------|--------|
 | `fs:r:**` | Read any path |
-| `fs:w:@base/tmp/**` | Write under tmp (implies read) |
+| `fs:w:@root/tmp/**` | Write under tmp (implies read) |
 | `fs:r:~/.config/*` | Read home config files |
 
 **Flat syntax (shorthand):**

@@ -35,7 +35,7 @@ Entry point: `interpreter/eval/directives/import/ImportDirectiveEvaluator.ts:48`
    - Runtime registers: `ProjectPathResolver`, `RegistryResolver`, `LocalResolver`, `GitHubResolver`, `HTTPResolver`
    - All resolution routes through `ResolverManager.resolve`
    - Import types control caching behavior, not resolver selection
-   - Prefix matching (@author/, @base/, custom prefixes) determines resolver priority
+   - Prefix matching (@author/, @root/, custom prefixes) determines resolver priority
 
 3. **Lock File Validation** (`ImportDirectiveEvaluator.ts:245-276`)
    - Registry imports check `mlld-lock.json` for version/hash
@@ -83,7 +83,7 @@ Entry point: `interpreter/eval/directives/export.ts:21`
 - If manifest exists: filter childVars to exported names only
 - Missing exported name throws `EXPORTED_NAME_NOT_FOUND` with location
 - No manifest: auto-export all variables (legacy fallback)
-- System variables (@base, @now, etc.) always filtered
+- System variables (@root, @base, @now, etc.) always filtered
 
 **Serialization** (`VariableImporter.ts:321-489`)
 - Primitives: direct value copy
@@ -196,10 +196,10 @@ interface IResolver {
 - `LocalResolver`: Reads from filesystem (project-relative)
 - `HttpResolver`: Fetches via HTTP/HTTPS with caching
 - `GitHubResolver`: Resolves GitHub URLs/repo paths
-- `ProjectPathResolver`: Handles @base prefix for project-relative paths
+- `ProjectPathResolver`: Handles @root/@base prefixes for project and script-relative paths
 
 **Orchestration** (`ResolverManager.ts:321-520`)
-- Prefix matching determines resolver (@author/ → Registry, @base/ → ProjectPath, custom → LocalResolver)
+- Prefix matching determines resolver (@author/ → Registry, @root/ → ProjectPath, custom → LocalResolver)
 - Priority ordering for ambiguous cases
 - All resolution routed through `ResolverManager.resolve`
 - Import types control caching/timing, not which resolver is selected
@@ -344,7 +344,7 @@ mlld install @author/mod --global  # Install globally
 - Module scope serialization is deep (recursive) - watch for circular references
 - Lock validation only applies to registry imports (file/URL use different mechanisms)
 - Collision detection is per-file, not global (same name from different sources in different files is fine)
-- Auto-export includes all variables except system variables (@base, @now, etc.)
+- Auto-export includes all variables except system variables (@root, @base, @now, etc.)
 - CLI commands (`info`, `docs`) must use ResolverManager, not hardcoded registry URL, to support private registries
 - `cli/commands/info.ts` has mock data in `fetchModuleInfo()` - needs to use real registry data
 

@@ -63,7 +63,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - File/path context: `PathContext` for project/file/execution directories.
 - Variables: `VariableManager` manages typed variables, reserved names, parameter scoping, wrappers for complex data.
 - Imports: `ImportResolver` orchestrates file/module/function resolvers, URL cache, approval bypass, fuzzy local matching.
-- Resolvers: `ResolverManager` with built-ins (`now`, `debug`, `input`) and prefix configs (e.g., `@base/...`).
+- Resolvers: `ResolverManager` with built-ins (`now`, `debug`, `input`) and prefix configs (e.g., `@root/...`).
 - Execution: `Environment` composes command/code execution and keeps `CommandExecutorFactory` creation behind a single boundary.
 - Shadow envs: `Environment` manages language-specific injection (`js`, `node`, `python`) and VM-backed shadow-environment lifecycle.
 - Caching and registry: URL/module cache + lock file via registry manager.
@@ -123,7 +123,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 - Imports: `eval/import/*` delegates to `Environment.importResolver`:
   - Module imports: `@user/module` via registry/HTTP/GitHub resolvers.
-  - Path imports: quoted/local paths and resolver-prefixed angle brackets (e.g., `<@base/file.mld>`); angle brackets denote "load contents" semantics.
+  - Path imports: quoted/local paths and resolver-prefixed angle brackets (e.g., `<@root/file.mld>`); angle brackets denote "load contents" semantics.
 - Import directive guard: module child environments set `isImporting` so `/run`, `/output`, and `/show` skip execution while the import evaluates, preventing module-level side effects.
 - Export manifests: `eval/export.ts` records `/export` declarations on the child environment; `VariableImporter.processModuleExports` enforces the manifest and surfaces `EXPORTED_NAME_NOT_FOUND` while `/export { * }` defers to the temporary auto-export fallback.
 - Import collisions: `Environment.setImportBinding` stores successful bindings per directive and `ensureImportBindingAvailable` throws `IMPORT_NAME_CONFLICT` before a duplicate alias reaches `setVariable`.
@@ -144,7 +144,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 ## Gotchas
 
-- Use angle brackets for file contents `<path>`; quoted strings are literals; `<@base/...>` required for resolver paths.
+- Use angle brackets for file contents `<path>`; quoted strings are literals; `<@root/...>` required for resolver paths.
 - `run` vs `sh`: `run` supports single-line with pipes only; use `sh` for `&&`, `||`, or multi-line scripts.
 - Executables: `@fn` is a value; `@fn()` executes. In templates, executables may auto-exec or stringify depending on context.
 - Conditions: missing fields resolve to `undefined` (not errors) to support truthiness checks.

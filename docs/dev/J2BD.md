@@ -107,8 +107,8 @@ mkdir -p j2bd/newtopic/jobs
 cat > j2bd/newtopic/config.mld << 'EOF'
 var @config = {
   name: "newtopic",
-  spec: `@base/path/to/spec.md`,
-  docs_dir: `@base/docs/src/atoms/newtopic/`,
+  spec: `@root/path/to/spec.md`,
+  docs_dir: `@root/docs/src/atoms/newtopic/`,
   test_command: "npm test",
   worktree_prefix: "j2bd-newtopic"
 }

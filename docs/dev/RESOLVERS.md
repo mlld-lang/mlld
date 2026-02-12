@@ -10,9 +10,9 @@ All @ references in mlld (imports, paths, etc.) are resolved through the same re
 
 ```mlld
 @import { "YYYY-MM-DD" as date } from @now      # Function resolver
-/show <@base/README.md>                         # Path resolver (angle brackets load contents)
+/show <@root/README.md>                         # Path resolver (angle brackets load contents)
 @import { utils } from @company/toolkit         # Module resolver
-/var @docsRoot = "<@base/docs>"                 # Path string via resolver prefix
+/var @docsRoot = "<@root/docs>"                 # Path string via resolver prefix
 ```
 
 The resolver system determines whether `@identifier` refers to a resolver or a variable, then routes accordingly.
@@ -54,12 +54,14 @@ Resolve module references to specific content sources (registries, private repos
 Map @ prefixes to filesystem locations, enabling path-based access with variable interpolation.
 
 - **@root**: Project root directory (default built-in)
-- **@base**: Current script directory (default built-in)
+- **@base**: Current script directory (compatibility built-in)
 - Additional prefixes configured via `mlld.lock.json`
 
+Prefer `@root` in docs and new examples. Keep `@base` where script-directory semantics are required.
+
 ```mlld
-/show <@base/src/components/Button.tsx>
-/var @readme = <@base/docs/getting-started.md>
+/show <@root/src/components/Button.tsx>
+/var @readme = <@root/docs/getting-started.md>
 ```
 
 ### Resolver Capabilities
@@ -113,7 +115,7 @@ interface ResolverCapabilities {
     io: { read: true, write: false, list: true },
     contexts: { import: true, path: true, output: false },
     supportedContentTypes: ['text'],  // Path string or file contents
-    defaultContentType: 'text',  // Returns project path as text
+    defaultContentType: 'text',  // Returns script-directory path as text
     priority: 1
   }
   ```
@@ -247,9 +249,9 @@ All import resolution routes through `ResolverManager.resolve` (core/resolvers/R
 
 1. **Prefix-Based Lookup** - Primary routing mechanism
    - Checks mlld-config.json prefix configurations
-   - Maps prefixes like `@author/`, `@base/`, `@company/` to resolver implementations
+   - Maps prefixes like `@author/`, `@root/`, `@company/` to resolver implementations
    - Each prefix has its own configuration (basePath, authentication, etc.)
-   - Example: `@alice/utils` → RegistryResolver, `@base/file` → ProjectPathResolver
+   - Example: `@alice/utils` → RegistryResolver, `@root/file` → ProjectPathResolver
 
 2. **Built-in Resolver Lookup** - For built-in function resolvers
    - Direct resolver matching (now, debug, input)

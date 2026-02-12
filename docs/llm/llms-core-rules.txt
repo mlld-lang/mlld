@@ -71,7 +71,7 @@ var @msg = `Hello @name!`
 var @doc = ::Use `npm test` before @env::
 
 >> Double quotes (single-line)
-var @path = "@base/files/@filename"
+var @path = "@root/files/@filename"
 
 >> Single quotes (literal - no interpolation)
 var @literal = '@name stays literal'
@@ -164,7 +164,7 @@ import @corp/utils as @corp
 
 >> Local files
 import { @helper } from "./utils.mld"
-import { @config } from <@base/config.mld>
+import { @config } from <@root/config.mld>
 
 >> Import types
 import module { @api } from @corp/tools       >> cached

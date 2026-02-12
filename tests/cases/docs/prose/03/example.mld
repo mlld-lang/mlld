@@ -1,7 +1,7 @@
 import { @claude } from @mlld/claude
 
 >> Create a model executor
-exe @opusModel(prompt) = @claude(@prompt, "opus", @base)
+exe @opusModel(prompt) = @claude(@prompt, "opus", @root)
 
 var @config = {
   model: @opusModel,

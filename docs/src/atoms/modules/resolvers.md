@@ -12,9 +12,11 @@ updated: 2026-01-05
 
 **Built-in:**
 - `@author/module` → Registry
-- `@base/file` → Current script directory
 - `@root/file` → Project root
+- `@base/file` → Current script directory (compatibility)
 - `./file.mld` → Local (with fuzzy extension matching)
+
+Use `@root` in new examples. `@base` remains available for compatibility.
 
 **Custom prefixes** (mlld-config.json):
 
