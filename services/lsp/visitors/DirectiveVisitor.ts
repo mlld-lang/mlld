@@ -420,7 +420,7 @@ export class DirectiveVisitor extends BaseVisitor {
         if (atIndex !== -1) {
           const atPosition = this.document.positionAt(startOffset + atIndex);
 
-          // Use 'function' for exe declarations, 'variable' for var/path
+          // Use 'function' for exe declarations and 'variable' for variable directives.
           const tokenType = node.kind === 'exe' ? 'function' : 'variable';
 
           this.tokenBuilder.addToken({
@@ -668,7 +668,7 @@ export class DirectiveVisitor extends BaseVisitor {
     // Tokenize pipeline operators (| and ||) for inline pipelines
     this.tokenizePipelineOperators(directive);
 
-    // Tokenize security labels if present (for /var, /exe, /path, etc.)
+    // Tokenize security labels if present (for /var, /exe, and similar directives).
     this.tokenizeSecurityLabels(directive);
   }
   

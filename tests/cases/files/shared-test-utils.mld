@@ -1,7 +1,7 @@
 /var @greeting = "Hello, world!"
 /var @count = 42
 /var @version = "1.0.0"
-/path @docs = "./docs"
+/var @docs = "./docs"
 /var @utils = {
   "name": "Utility Module",
   "description": "Common utilities"

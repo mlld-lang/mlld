@@ -239,9 +239,9 @@ describe('Fuzzy Local File Imports', () => {
     });
   });
 
-  describe('Integration with @path directive', () => {
-    it('should fuzzy match files in @path assignments', async () => {
-      const source = '/path @doc = "./my-important-file"\n/show <@doc>';
+  describe('Integration with path variables', () => {
+    it('should fuzzy match files in path-like assignments', async () => {
+      const source = '/var @doc = "./my-important-file"\n/show <@doc>';
       
       const result = await interpret(source, {
         fileSystem,
@@ -252,11 +252,11 @@ describe('Fuzzy Local File Imports', () => {
       expect(result.trim()).toBe('# Important Content');
     });
     
-    it('should fuzzy match directories in @path assignments', async () => {
+    it('should fuzzy match directories in path-like assignments', async () => {
       // TODO: This test is failing with a parse error. The fuzzy matching
       // for paths used in variable interpolation within brackets may not be
       // working correctly. Needs investigation.
-      const source = '/path @folder = "./my_projects"\n/show <@folder/README.md>';
+      const source = '/var @folder = "./my_projects"\n/show <@folder/README.md>';
       
       const result = await interpret(source, {
         fileSystem,

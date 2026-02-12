@@ -149,7 +149,7 @@ These should continue to produce errors:
 /var @bad1 = [                               ✅ Correctly errors - unclosed
 /var @bad2 = [1, 2                           ✅ Correctly errors - unclosed
 /var @bad3 = []]]                            ✅ Correctly errors - extra close
-/path @p = [file.md]                         ✅ Correctly errors - no brackets in /path
+/path @p = [file.md]                         ✅ Correctly errors - /path is not a valid directive
 ```
 
 ## 8. With 'as' Modifier (Future)

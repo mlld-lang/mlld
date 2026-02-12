@@ -56,7 +56,6 @@ The server provides context-aware completions for:
 After typing `/`, suggests available directives:
 - `/var` - Define variables (replaces /text, /data)
 - `/show` - Display content (replaces /add)
-- `/path` - Define file paths
 - `/run` - Execute commands
 - `/exe` - Define reusable commands (replaces /exec)
 - `/import` - Import from files/modules

@@ -5,7 +5,7 @@ This tests the @base reserved variable.
 Project root: 
 /show @base
 
-/path @configPath = "@base/config"
+/var @configPath = "@base/config"
 /show :::Config location: {{configPath}}:::
 
 /var @readme = :::Project README is at {{base}}/README.md:::

@@ -26,7 +26,6 @@ export * from './import';
 export * from './export';
 export * from './show';
 export * from './exe';
-export * from './path';
 export * from './run';
 export * from './output';
 export * from './when';

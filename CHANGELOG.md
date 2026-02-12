@@ -214,6 +214,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `.text` is now the canonical text representation accessor
   - `LoadContentResult.content` unchanged (still holds raw file content)
 - **`/show` command/code execution forms**: `/show { ... }` and `/show <lang> { ... }` are removed. Use `/run` for command and code execution.
+- **`/path` directive**: Removed from grammar and directive evaluation. Use `/var` assignments (and alligator `<...>` for content loading).
 
 ## [2.0.0-rc81-ab]
 

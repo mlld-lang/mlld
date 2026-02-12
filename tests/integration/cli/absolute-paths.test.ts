@@ -67,7 +67,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
     // Access restrictions removed - now delegated to /policy directive
     it.skip('should deny path variable with absolute path by default', async () => {
       const scriptPath = path.join(projectDir, 'test.mld');
-      await fs.writeFile(scriptPath, `/path @f = "${externalFile}"
+      await fs.writeFile(scriptPath, `/var @f = "${externalFile}"
 /var @text = <@f>
 /show @text`, 'utf-8');
 
@@ -81,7 +81,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
     
     it('should allow path variable with absolute path with --allow-absolute flag', async () => {
       const scriptPath = path.join(projectDir, 'test.mld');
-      await fs.writeFile(scriptPath, `/path @f = "${externalFile}"
+      await fs.writeFile(scriptPath, `/var @f = "${externalFile}"
 /var @text = <@f>
 /show @text`, 'utf-8');
       
@@ -181,7 +181,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
       await fs.writeFile(parentFile, 'PARENT_CONTENT', 'utf-8');
       
       // Use absolute path instead of relative ..
-      await fs.writeFile(scriptPath, `/path @f = "${parentFile}"
+      await fs.writeFile(scriptPath, `/var @f = "${parentFile}"
 /var @text = <@f>
 /show @text`, 'utf-8');
       
@@ -204,7 +204,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
       
       const scriptPath = path.join(projectDir, 'test.mld');
       await fs.writeFile(scriptPath, `/var @internal = <./internal.txt>
-/path @externalPath = "${externalFile}"
+/var @externalPath = "${externalFile}"
 /var @externalContent = <@externalPath>
 /show @internal
 /show @externalContent`, 'utf-8');
@@ -245,7 +245,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
     it.skip('should not persist --allow-absolute setting across runs', async () => {
       const scriptPath = path.join(projectDir, 'test.mld');
       // Use path variable to avoid hanging
-      await fs.writeFile(scriptPath, `/path @f = "${externalFile}"
+      await fs.writeFile(scriptPath, `/var @f = "${externalFile}"
 /var @text = <@f>
 /show @text`, 'utf-8');
 

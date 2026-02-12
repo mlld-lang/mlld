@@ -99,7 +99,7 @@ describe('Output Format Tests', () => {
       const source = `
     /var @message = "Hello"
     /var @config = {"version": "1.0"}
-    /path @filePath = "./test.md"
+    /var @filePath = "./test.md"
     /exe @cmd = {echo "test"}
     /show @message
     /show @config

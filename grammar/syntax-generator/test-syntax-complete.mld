@@ -11,7 +11,7 @@ This file tests all syntax highlighting features including the new operators and
 /show @name
 /run {echo "Hello"}
 /exe @greet(name) = `Hello @name!`
-/path @docs = [~/Documents]
+/var @docs = "~/Documents"
 /import { helper } from [./utils.mld]
 /when @condition => /show "Success"
 /output @result to "file.txt"

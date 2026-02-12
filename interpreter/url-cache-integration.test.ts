@@ -17,7 +17,7 @@ describe('URL Cache Integration', () => {
   });
 
   // Skip: Issue #99 - TTL/trust security features not implemented
-  it.skip('should cache URL content based on TTL from @path directive', async () => {
+  it.skip('should cache URL content based on TTL from /show URL options', async () => {
     // Mock fetch response
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
@@ -25,13 +25,11 @@ describe('URL Cache Integration', () => {
     } as Response);
 
     const mlldContent = `
-    /path @(30m) trust always template = "https://example.com/template.md"
-
 First use:
-    /show @template
+    /show (30m) trust always "https://example.com/template.md"
 
 Second use:
-    /show @template
+    /show (30m) trust always "https://example.com/template.md"
 `;
 
     const urlConfig = {
@@ -92,9 +90,7 @@ Second use:
   // Skip: Issue #99 - TTL/trust security features not implemented
   it.skip('should respect trust level restrictions', async () => {
     const mlldContent = `
-    /path @(5m) trust verify template = "http://insecure.example.com/template.md"
-
-    /show @template
+    /show (5m) trust verify "http://insecure.example.com/template.md"
 `;
 
     const urlConfig = {
@@ -136,10 +132,8 @@ Second use:
     });
 
     const mlldContent = `
-    /path @(live) trust always template = "https://example.com/live.md"
-
-    /show @template
-    /show @template
+    /show (live) trust always "https://example.com/live.md"
+    /show (live) trust always "https://example.com/live.md"
 `;
 
     const urlConfig = {
@@ -179,9 +173,7 @@ Second use:
     } as Response);
 
     const mlldContent = `
-    /path @(static) trust always template = "https://example.com/static.md"
-
-    /show @template
+    /show (static) trust always "https://example.com/static.md"
 `;
 
     const urlConfig = {

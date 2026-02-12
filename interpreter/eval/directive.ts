@@ -12,7 +12,6 @@ import { createSimpleTextVariable, isExecutableVariable } from '@core/types/vari
 import { isVariable } from '../utils/variable-resolution';
 
 // Import specific evaluators
-import { evaluatePath } from './path';
 import { evaluateRun } from './run';
 import { evaluateImport } from './import';
 import { evaluateWhen } from './when';
@@ -56,11 +55,10 @@ function extractTraceInfo(directive: DirectiveNode): {
   
   // Extract variable/exec names based on directive type
   switch (directive.kind) {
-    case 'path':
     case 'var':
     case 'sign':
     case 'verify':
-      // /path @varName = ... or /var @varName = ...
+      // /var @varName = ...
       const identifierNodes = directive.values?.identifier;
       if (identifierNodes && Array.isArray(identifierNodes) && identifierNodes.length > 0) {
         const identifier = identifierNodes[0];
@@ -718,9 +716,6 @@ async function dispatchDirective(
   evaluationContext?: EvaluationContext
 ): Promise<EvalResult> {
   switch (directive.kind) {
-    case 'path':
-      return await evaluatePath(directive, env);
-
     case 'run':
       return await evaluateRun(directive, env, [], evaluationContext);
 

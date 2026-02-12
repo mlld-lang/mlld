@@ -95,10 +95,9 @@ describe('Mlld API', () => {
       expect(result.trim()).toBe('Helper Text');
     });
 
-    it('should handle path directive correctly', async () => {
-      // When a file doesn't exist, path directive should return the path as a string
+    it('should keep path-like values as text via var assignment', async () => {
       const content = `
-/path @testPath = "/nonexistent.md"
+/var @testPath = "/nonexistent.md"
 /show @testPath
       `.trim();
       const result = await processMlld(content, {

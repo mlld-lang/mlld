@@ -1057,7 +1057,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // Set up import test files for other import tests (import-all, import-selected, etc.)
         else {
           await fileSystem.writeFile('/config.mld', '/var @greeting = "Hello, world!"\n/var @count = "42"\n/var @author = "Mlld Test Suite"');
-          await fileSystem.writeFile('/utils.mld', '/var @greeting = "Hello, world!"\n/var @count = "42"\n/var @version = "1.0.0"\n/path @docs = "./docs"');
+          await fileSystem.writeFile('/utils.mld', '/var @greeting = "Hello, world!"\n/var @count = "42"\n/var @version = "1.0.0"\n/var @docs = "./docs"');
         }
       } else if (fixture.name.endsWith('/var-data-directive')) {
         // This fixture seems to be missing context - create the expected variable
