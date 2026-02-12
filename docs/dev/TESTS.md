@@ -182,6 +182,7 @@ Located in `tests/cases/exceptions/`. These tests:
 - May parse successfully
 - Should fail during execution with specific error messages
 - Include `error.md` file describing expected error
+- Python exception fixtures under `tests/cases/exceptions/python/` require `python3`; the fixture runner skips them when `python3` is unavailable.
 
 #### 4. Warning Tests
 Located in `tests/cases/warnings/`. These tests:

@@ -5,10 +5,10 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
 import { glob } from 'tinyglobby';
 import { Environment } from './env/Environment';
 import { inferMlldMode } from '@core/utils/mode';
+import { isPython3RuntimeAvailable } from '@tests/utils/runtime-availability';
 
 // Mock tinyglobby for fixture tests
 vi.mock('tinyglobby', () => ({
@@ -32,19 +32,7 @@ interface TokenCoverageIssue {
 describe('Mlld Interpreter - Fixture Tests', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
-  const pythonRuntimeAvailable = (() => {
-    try {
-      execSync('python3 --version', { stdio: 'ignore' });
-      return true;
-    } catch {
-      try {
-        execSync('python --version', { stdio: 'ignore' });
-        return true;
-      } catch {
-        return false;
-      }
-    }
-  })();
+  const pythonRuntimeAvailable = isPython3RuntimeAvailable();
   
   // Test EffectHandler that redirects file outputs into the in-memory FS under a tmp root
   class TestRedirectEffectHandler implements EffectHandler {
