@@ -4,7 +4,6 @@ import { VariableMetadataUtils } from '@core/types/variable';
 import type { DataLabel } from '@core/types/security';
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
-import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironmentCapture';
 import { ExportManifest } from './ExportManifest';
 import type { SerializedGuardDefinition } from '../../guards';
 import { ImportBindingGuards } from './variable-importer/ImportBindingGuards';
@@ -19,6 +18,7 @@ import { ExecutableImportRehydrator } from './variable-importer/executable/Execu
 import { PolicyImportHandler } from './variable-importer/PolicyImportHandler';
 import { NamespaceSelectedImportHandler } from './variable-importer/NamespaceSelectedImportHandler';
 import { VariableImportUtilities } from './variable-importer/VariableImportUtilities';
+import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -90,28 +90,6 @@ export class VariableImporter {
       unwrapArraySnapshots: (value, importPath) => this.importUtilities.unwrapArraySnapshots(value, importPath),
       inferVariableType: value => this.importUtilities.inferVariableType(value)
     });
-  }
-  
-  /**
-   * Serialize shadow environments for export (Maps to objects)
-   * WHY: Maps don't serialize to JSON, so we convert them to plain objects
-   * GOTCHA: Function references are preserved directly
-   */
-  private serializeShadowEnvs(envs: ShadowEnvironmentCapture): any {
-    const result: any = {};
-    
-    for (const [lang, shadowMap] of Object.entries(envs)) {
-      if (shadowMap instanceof Map && shadowMap.size > 0) {
-        // Convert Map to object
-        const obj: Record<string, any> = {};
-        for (const [name, func] of shadowMap) {
-          obj[name] = func;
-        }
-        result[lang] = obj;
-      }
-    }
-    
-    return result;
   }
   
   /**
@@ -206,7 +184,7 @@ export class VariableImporter {
       currentSerializationTarget,
       serializingEnvs: _serializingEnvs,
       isLegitimateVariableForExport: variable => this.importUtilities.isLegitimateVariableForExport(variable),
-      serializeShadowEnvs: envs => this.serializeShadowEnvs(envs),
+      serializeShadowEnvs: envs => serializeShadowEnvironmentMaps(envs),
       serializeModuleEnv: (moduleEnv, seen) => this.serializeModuleEnv(moduleEnv, seen)
     });
 

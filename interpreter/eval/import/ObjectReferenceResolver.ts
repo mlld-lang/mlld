@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import type { Variable, ExecutableVariable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
+import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
 
 /**
  * Handles complex object variable reference resolution for imported modules
@@ -138,7 +139,7 @@ export class ObjectReferenceResolver {
       if (execVar.internal?.capturedShadowEnvs) {
         serializedInternal = {
           ...serializedInternal,
-          capturedShadowEnvs: this.serializeShadowEnvs(execVar.internal.capturedShadowEnvs)
+          capturedShadowEnvs: serializeShadowEnvironmentMaps(execVar.internal.capturedShadowEnvs)
         };
       }
       // Serialize module environment if present
@@ -166,27 +167,6 @@ export class ObjectReferenceResolver {
   }
   
   /**
-   * Serialize shadow environments for export (Maps to objects)
-   * WHY: Maps don't serialize to JSON, so we convert them to plain objects
-   */
-  private serializeShadowEnvs(envs: any): any {
-    const result: any = {};
-    
-    for (const [lang, shadowMap] of Object.entries(envs)) {
-      if (shadowMap instanceof Map && shadowMap.size > 0) {
-        // Convert Map to object
-        const obj: Record<string, any> = {};
-        for (const [name, func] of shadowMap) {
-          obj[name] = func;
-        }
-        result[lang] = obj;
-      }
-    }
-    
-    return result;
-  }
-
-  /**
    * Serialize module environment for export (Map to object)
    * WHY: Maps don't serialize to JSON, so we need to convert to exportable format
    * IMPORTANT: Delegate to VariableImporter to ensure consistent serialization
@@ -203,7 +183,7 @@ export class ObjectReferenceResolver {
         if (serializedInternal.capturedShadowEnvs) {
           serializedInternal = {
             ...serializedInternal,
-            capturedShadowEnvs: this.serializeShadowEnvs(serializedInternal.capturedShadowEnvs)
+            capturedShadowEnvs: serializeShadowEnvironmentMaps(serializedInternal.capturedShadowEnvs)
           };
         }
         // Skip capturedModuleEnv only for items IN the module env to avoid recursion
