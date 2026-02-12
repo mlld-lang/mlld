@@ -57,7 +57,10 @@ async function getInterpolateFn(): Promise<InterpolateFn> {
 }
 
 function getWhenExpressionSource(env: Environment): { filePath: string; source?: string } {
-  const filePath = env.getCurrentFilePath() ?? '<stdin>';
+  const filePath =
+    env.getCurrentFilePath() ??
+    env.getPathContext?.()?.filePath ??
+    '<stdin>';
   const source = env.getSource(filePath) ?? (filePath !== '<stdin>' ? env.getSource('<stdin>') : undefined);
   return { filePath, source };
 }
@@ -78,6 +81,48 @@ function normalizeConditionText(text?: string, maxLength = 160): string | undefi
   return normalized.length > maxLength ? normalized.slice(0, maxLength) + '...' : normalized;
 }
 
+function getNodeOffsetRange(node: unknown): { start?: number; end?: number } {
+  if (!node || typeof node !== 'object') {
+    return {};
+  }
+
+  let start: number | undefined;
+  let end: number | undefined;
+  const stack: unknown[] = [node];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== 'object') {
+      continue;
+    }
+
+    const location = (current as any).location;
+    const locStart = location?.start?.offset;
+    const locEnd = location?.end?.offset ?? location?.start?.offset;
+    if (typeof locStart === 'number') {
+      start = typeof start === 'number' ? Math.min(start, locStart) : locStart;
+    }
+    if (typeof locEnd === 'number') {
+      end = typeof end === 'number' ? Math.max(end, locEnd) : locEnd;
+    }
+
+    for (const value of Object.values(current as Record<string, unknown>)) {
+      if (!value || typeof value !== 'object') {
+        continue;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          stack.push(item);
+        }
+      } else {
+        stack.push(value);
+      }
+    }
+  }
+
+  return { start, end };
+}
+
 function getConditionText(condition: BaseMlldNode[], source?: string): string | undefined {
   if (!source || condition.length === 0) return undefined;
   const first = condition[0] as any;
@@ -85,6 +130,30 @@ function getConditionText(condition: BaseMlldNode[], source?: string): string | 
   const start = first?.location?.start?.offset;
   const end = last?.location?.end?.offset ?? last?.location?.start?.offset;
   if (typeof start !== 'number' || typeof end !== 'number' || end <= start) return undefined;
+  return normalizeConditionText(source.slice(start, end));
+}
+
+function getConditionPairText(pair: WhenConditionPair, source?: string): string | undefined {
+  if (!source || !Array.isArray(pair.condition) || pair.condition.length === 0) {
+    return undefined;
+  }
+
+  const firstCondition = pair.condition[0];
+  const lastCondition = pair.condition[pair.condition.length - 1];
+  const lastAction =
+    Array.isArray(pair.action) && pair.action.length > 0
+      ? pair.action[pair.action.length - 1]
+      : undefined;
+  const startRange = getNodeOffsetRange(firstCondition);
+  const actionRange = getNodeOffsetRange(lastAction);
+  const conditionRange = getNodeOffsetRange(lastCondition);
+
+  const start = startRange.start;
+  const end = actionRange.end ?? conditionRange.end;
+  if (typeof start !== 'number' || typeof end !== 'number' || end <= start) {
+    return undefined;
+  }
+
   return normalizeConditionText(source.slice(start, end));
 }
 
@@ -687,7 +756,8 @@ async function evaluateWhenExpressionInternal(
           // Return immediately after the first match
           return buildResult(value, accumulatedEnv);
         } catch (actionError) {
-          const conditionText = getConditionText(pair.condition, sourceInfo.source);
+          const conditionText = getConditionPairText(pair, sourceInfo.source)
+            ?? getConditionText(pair.condition, sourceInfo.source);
           const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
           const actionMessage = getErrorMessage(actionError);
           throw new MlldWhenExpressionError(
@@ -707,6 +777,11 @@ async function evaluateWhenExpressionInternal(
         }
       }
     } catch (conditionError) {
+      if (conditionError instanceof MlldWhenExpressionError && conditionError.details?.phase === 'action') {
+        errors.push(conditionError);
+        continue;
+      }
+
       // Let the error propagate - it's expected in retry scenarios
       
       // Collect condition errors but continue evaluating

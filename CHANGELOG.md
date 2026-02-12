@@ -138,6 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Draft j2bd security jobs cover audit ledger, policy composition, and defaults.rules demos.
 - **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
 - **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
+- **When expression action-error diagnostics**: Failing `when` actions now report the full condition/action pair text (for example `* => @line | @json`) and preserve caller file paths from path context instead of defaulting to `<stdin>`.
 - **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.
 - **`/run @exe(...)` structured arguments**: Inline object/array literals are preserved as runtime data for code executables (`js`, `node`, `mlld-exe-block`, `mlld-when`) instead of degrading to empty strings or text-only fallbacks.
 - **`/run` exe-block object spread parameters**: Spreading executable parameters (`{ ...@data }`) uses object data rather than serialized text, so state merge patterns work without manual re-parse.
