@@ -825,6 +825,18 @@ exe @validate(input) = [
 ]
 ```
 
+`when` statements inside `exe` blocks also return from the enclosing exe when a matched action yields a value.
+Use block-form return to make that behavior explicit:
+
+```mlld
+exe @guard(input) = [
+  when !@input => [
+    => "missing"
+  ]
+  => "ok"
+]
+```
+
 Use `when` or flags for simple conditional actions:
 
 ```mlld

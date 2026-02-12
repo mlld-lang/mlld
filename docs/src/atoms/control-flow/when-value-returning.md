@@ -23,3 +23,16 @@ var @grade = @classify(85)  >> "B"
 ```
 
 `when` returns the first matching branch. Use `if` for imperative flow.
+
+Inside `exe` block statements, `when` values also return from the enclosing `exe` on match:
+
+```mlld
+exe @guard(x) = [
+  when !@x => [
+    => "missing"
+  ]
+  => "ok"
+]
+```
+
+Block form keeps return intent explicit. Bare value actions such as `when !@x => "missing"` are valid and return early, but `mlld validate` warns so intent stays clear.

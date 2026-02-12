@@ -68,7 +68,7 @@ export interface VariableRedefinitionWarning {
 }
 
 export interface AntiPatternWarning {
-  code: 'mutable-state';
+  code: 'mutable-state' | 'when-exe-implicit-return';
   message: string;
   line?: number;
   column?: number;
@@ -502,6 +502,83 @@ function detectMutableStateAntiPatterns(ast: MlldNode[], sourceText: string): An
   }));
 }
 
+function getNodeStart(node: any): { line?: number; column?: number } {
+  const line = node?.location?.start?.line
+    ?? node?.content?.[0]?.location?.start?.line;
+  const column = node?.location?.start?.column
+    ?? node?.content?.[0]?.location?.start?.column;
+  return { line, column };
+}
+
+function isImplicitWhenExeReturnAction(action: any[]): boolean {
+  if (!Array.isArray(action) || action.length === 0) {
+    return false;
+  }
+
+  if (action.length !== 1) {
+    return true;
+  }
+
+  const first = action[0];
+  if (!first || typeof first !== 'object') {
+    return true;
+  }
+
+  // Explicit return block form is clear and intentional.
+  if (first.type === 'ExeBlock') {
+    return false;
+  }
+
+  // Directive actions represent imperative effects/statements.
+  if (first.type === 'Directive') {
+    return false;
+  }
+
+  return true;
+}
+
+function detectWhenExeImplicitReturnAntiPatterns(ast: MlldNode[]): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+
+  walkAST(ast, (node: any) => {
+    if (node.type !== 'Directive' || node.kind !== 'exe' || node.subtype !== 'exeBlock') {
+      return;
+    }
+
+    const statements = node.values?.statements;
+    if (!Array.isArray(statements)) {
+      return;
+    }
+
+    for (const statement of statements) {
+      if (!statement || statement.type !== 'WhenExpression' || !Array.isArray(statement.conditions)) {
+        continue;
+      }
+
+      for (const rawEntry of statement.conditions) {
+        const entry = Array.isArray(rawEntry) && rawEntry.length === 1 ? rawEntry[0] : rawEntry;
+        const action = entry?.action;
+
+        if (!Array.isArray(action) || action.length === 0 || !isImplicitWhenExeReturnAction(action)) {
+          continue;
+        }
+
+        const actionStart = getNodeStart(action[0]);
+        const statementStart = getNodeStart(statement);
+        warnings.push({
+          code: 'when-exe-implicit-return',
+          message: 'when action in an exe block returns from the exe when matched. Use block-form return to make return intent explicit.',
+          line: actionStart.line ?? statementStart.line,
+          column: actionStart.column ?? statementStart.column,
+          suggestion: 'Use `when @cond => [ => @value ]` for explicit returns, or use a directive action for side effects.'
+        });
+      }
+    }
+  });
+
+  return warnings;
+}
+
 /**
  * Extract executables from AST
  */
@@ -754,7 +831,10 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         result.redefinitions = redefinitions;
       }
 
-      const antiPatterns = detectMutableStateAntiPatterns(ast, content);
+      const antiPatterns = [
+        ...detectMutableStateAntiPatterns(ast, content),
+        ...detectWhenExeImplicitReturnAntiPatterns(ast),
+      ];
       if (antiPatterns.length > 0) {
         result.antiPatterns = antiPatterns;
       }

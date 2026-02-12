@@ -25,3 +25,17 @@ var @result = when [
 ```
 
 Conditions evaluate in order and the first match runs.
+
+Inside `exe` blocks, a matched `when` action that evaluates to a value returns from the enclosing `exe`.
+Use block-form return for explicit intent:
+
+```mlld
+exe @guard(x) = [
+  when !@x => [
+    => "missing"
+  ]
+  => "ok"
+]
+```
+
+`when !@x => "missing"` also returns from the `exe`. `mlld validate` warns on this implicit form and suggests block-form return for clarity.

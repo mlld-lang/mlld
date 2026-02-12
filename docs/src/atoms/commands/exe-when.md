@@ -21,3 +21,15 @@ exe @classify(score) = when [
 ```
 
 Use `if` for imperative flow where multiple branches can run.
+
+When `when` appears as a statement inside an `exe` block, matched value actions return from the enclosing `exe`.
+Use block-form return to make that intent explicit:
+
+```mlld
+exe @guard(x) = [
+  when !@x => [
+    => "missing"
+  ]
+  => "ok"
+]
+```

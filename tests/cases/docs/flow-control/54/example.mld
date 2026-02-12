@@ -1,6 +1,5 @@
-exe @isProduction() = sh {test "$NODE_ENV" = "production" && echo "true"}
+var @result = @data | @validate | @process
 when [
-  @isProduction() && @testsPass => run {npm run deploy:prod}
-  @testsPass => run {npm run deploy:staging}
-  * => show "Cannot deploy: tests failing"
+  @result.success => output @result.data to "output.json"
+  !@result.success => show `Processing failed: @result.error`
 ]

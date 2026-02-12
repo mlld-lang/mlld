@@ -58,4 +58,49 @@ describe('analyze/validate warnings', () => {
     expect(result.antiPatterns?.[0]?.code).toBe('mutable-state');
     expect(result.antiPatterns?.[0]?.message).toContain('@state');
   });
+
+  it('warns when a bare when action inside an exe block implies an early return', async () => {
+    const modulePath = await writeModule('when-exe-implicit-return.mld', `/exe @guard(x) = [
+  when !@x => "missing"
+  => "ok"
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const whenWarnings = (result.antiPatterns ?? []).filter(entry => entry.code === 'when-exe-implicit-return');
+    expect(whenWarnings).toHaveLength(1);
+    expect(whenWarnings[0]?.message).toContain('returns from the exe');
+  });
+
+  it('does not warn for explicit block-form when returns in exe blocks', async () => {
+    const modulePath = await writeModule('when-exe-explicit-return.mld', `/exe @guard(x) = [
+  when !@x => [
+    => "missing"
+  ]
+  => "ok"
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const whenWarnings = (result.antiPatterns ?? []).filter(entry => entry.code === 'when-exe-implicit-return');
+    expect(whenWarnings).toHaveLength(0);
+  });
+
+  it('does not warn for directive actions in when branches inside exe blocks', async () => {
+    const modulePath = await writeModule('when-exe-directive-action.mld', `/exe @guard(x) = [
+  when !@x => show "missing"
+  => "ok"
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const whenWarnings = (result.antiPatterns ?? []).filter(entry => entry.code === 'when-exe-implicit-return');
+    expect(whenWarnings).toHaveLength(0);
+  });
 });
