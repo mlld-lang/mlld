@@ -1,17 +1,4 @@
-import type {
-  BaseMlldNode,
-  CodeFenceNode,
-  CommentNode,
-  DirectiveNode,
-  ErrorNode,
-  FrontmatterNode,
-  LiteralNode,
-  MlldDocument,
-  MlldNode,
-  NewlineNode,
-  TextNode,
-  VariableReferenceNode
-} from '@core/types';
+import type { MlldNode, TextNode } from '@core/types';
 import { isExecInvocation, isLiteralNode } from '@core/types';
 import { parseSync } from '@grammar/parser';
 import type { OperationContext } from '@interpreter/env/ContextManager';
@@ -40,6 +27,19 @@ import {
 import { evaluateNewExpressionNode } from './handlers/new-expression-handler';
 import { evaluateUnifiedExpressionNode } from './handlers/unified-expression-handler';
 import { evaluateVariableReferenceWithTailNode } from './handlers/variable-reference-with-tail-handler';
+import {
+  extractInterpolationNodesFromTemplateLikeNode,
+  isCodeFence,
+  isComment,
+  isDirective,
+  isDocument,
+  isFrontmatter,
+  isMlldRunBlock,
+  isNewline,
+  isText,
+  isVariableReference,
+  type DocumentNode
+} from './node-guards';
 import { resolveVariableReference } from './resolve-variable-reference';
 import { evaluateArrayNodes } from './traversal';
 
@@ -72,20 +72,6 @@ export interface EvaluationContext {
 
 type FrontmatterData = Record<string, unknown> | null;
 
-interface DocumentNode extends BaseMlldNode {
-  type: 'Document';
-  nodes: MlldNode[];
-}
-
-interface MlldRunBlockNode extends BaseMlldNode {
-  type: 'MlldRunBlock';
-  content: MlldNode[];
-  raw: string;
-  error?: string;
-}
-
-type MlldDocumentType = MlldDocument extends never ? DocumentNode : MlldDocument;
-
 interface PipelineStageLike {
   meta?: {
     isBuiltinEffect?: boolean;
@@ -114,46 +100,6 @@ export interface EvaluateCoreOptions {
     context?: EvaluationContext
   ) => Promise<EvalResult>;
   interpolateWithSecurityRecording: InterpolateWithSecurityRecording;
-}
-
-function isDocument(node: MlldNode): node is DocumentNode {
-  return node.type === 'Document';
-}
-
-function isDirective(node: MlldNode): node is DirectiveNode {
-  return node.type === 'Directive';
-}
-
-function isText(node: MlldNode): node is TextNode {
-  return node.type === 'Text';
-}
-
-function isNewline(node: MlldNode): node is NewlineNode {
-  return node.type === 'Newline';
-}
-
-function isComment(node: MlldNode): node is CommentNode {
-  return node.type === 'Comment';
-}
-
-function isFrontmatter(node: MlldNode): node is FrontmatterNode {
-  return node.type === 'Frontmatter';
-}
-
-function isCodeFence(node: MlldNode): node is CodeFenceNode {
-  return node.type === 'CodeFence';
-}
-
-function isMlldRunBlock(node: MlldNode): node is MlldRunBlockNode {
-  return node.type === 'MlldRunBlock';
-}
-
-function isVariableReference(node: MlldNode): node is VariableReferenceNode {
-  return node.type === 'VariableReference';
-}
-
-function isError(node: MlldNode): node is ErrorNode {
-  return node.type === 'Error';
 }
 
 function isBuiltinEffectStage(stage: unknown): stage is PipelineStageLike {
@@ -258,21 +204,7 @@ export async function evaluateCore({
   }
 
   if (!Array.isArray(node) && node && typeof node === 'object') {
-    let contentToInterpolate: InterpolationNode[] | null = null;
-    const candidate = node as any;
-
-    if ('content' in candidate && Array.isArray(candidate.content) && 'wrapperType' in candidate && !candidate.type) {
-      contentToInterpolate = candidate.content;
-    } else if (
-      candidate.type === 'template' &&
-      candidate.values?.content &&
-      Array.isArray(candidate.values.content)
-    ) {
-      contentToInterpolate = candidate.values.content;
-    } else if (candidate.type === 'template' && candidate.content && Array.isArray(candidate.content)) {
-      contentToInterpolate = candidate.content;
-    }
-
+    const contentToInterpolate = extractInterpolationNodesFromTemplateLikeNode(node);
     if (contentToInterpolate) {
       const interpolated = await interpolateWithSecurityRecording(contentToInterpolate, env);
       return { value: interpolated, env };

@@ -3,8 +3,8 @@ import type { DataValue } from '@core/types/var';
 import { isDirectiveValue, isPrimitiveValue } from '@core/types/var';
 import { evaluate } from '../../core/interpreter';
 import { EvaluationStateManager } from './EvaluationStateManager';
-import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
+import { interpolateAndRecordSecurity } from '../../core/interpreter/interpolation-security';
 
 const EXPRESSION_NODE_TYPES = new Set([
   'BinaryExpression',
@@ -29,20 +29,12 @@ async function interpolateAndRecord(
   context: InterpolationContext = InterpolationContext.Default
 ): Promise<string> {
   const { interpolate } = await import('../../core/interpreter');
-  const descriptors: SecurityDescriptor[] = [];
-  const text = await interpolate(nodes, env, context, {
-    collectSecurityDescriptor: descriptor => {
-      if (descriptor) {
-        descriptors.push(descriptor);
-      }
-    }
+  return interpolateAndRecordSecurity({
+    interpolate,
+    nodes,
+    env,
+    context
   });
-  if (descriptors.length > 0) {
-    const merged =
-      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
-    env.recordSecurityDescriptor(merged);
-  }
-  return text;
 }
 
 /**

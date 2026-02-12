@@ -18,6 +18,31 @@ export interface InterpolationSecurityAdapter {
   ) => Promise<string>;
 }
 
+export async function interpolateAndRecordSecurity(options: {
+  interpolate: InterpolateFn;
+  nodes: any;
+  env: Environment;
+  context?: InterpolationContext;
+}): Promise<string> {
+  const { interpolate, nodes, env, context } = options;
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1
+        ? descriptors[0]
+        : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
+
 export function createInterpolationSecurityAdapter(
   interpolate: InterpolateFn
 ): InterpolationSecurityAdapter {
@@ -26,22 +51,12 @@ export function createInterpolationSecurityAdapter(
     env: Environment,
     context?: InterpolationContext
   ): Promise<string> {
-    const descriptors: SecurityDescriptor[] = [];
-    const text = await interpolate(nodes, env, context, {
-      collectSecurityDescriptor: descriptor => {
-        if (descriptor) {
-          descriptors.push(descriptor);
-        }
-      }
+    return interpolateAndRecordSecurity({
+      interpolate,
+      nodes,
+      env,
+      context
     });
-    if (descriptors.length > 0) {
-      const merged =
-        descriptors.length === 1
-          ? descriptors[0]
-          : env.mergeSecurityDescriptors(...descriptors);
-      env.recordSecurityDescriptor(merged);
-    }
-    return text;
   }
 
   return { interpolateWithSecurityRecording };

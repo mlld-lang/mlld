@@ -1,6 +1,7 @@
 import type { VariableReferenceWithTailNode } from '@core/types';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
+import { wrapEvalValue } from './shared-utils';
 
 export async function evaluateVariableReferenceWithTailNode(
   node: VariableReferenceWithTailNode,
@@ -9,5 +10,5 @@ export async function evaluateVariableReferenceWithTailNode(
   const { VariableReferenceEvaluator } = await import('@interpreter/eval/data-values/VariableReferenceEvaluator');
   const evaluator = new VariableReferenceEvaluator();
   const result = await evaluator.evaluate(node, env);
-  return { value: result, env };
+  return wrapEvalValue(result, env);
 }

@@ -1,5 +1,6 @@
 import type { EvalResult, EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
+import { wrapEvalValue } from './shared-utils';
 
 export async function evaluateWhenExpressionNode(
   node: any,
@@ -24,7 +25,7 @@ export async function evaluateForeachNode(
 ): Promise<EvalResult> {
   const { evaluateForeachCommand } = await import('@interpreter/eval/foreach');
   const result = await evaluateForeachCommand(node, env);
-  return { value: result, env };
+  return wrapEvalValue(result, env);
 }
 
 export async function evaluateForExpressionNode(
@@ -33,7 +34,7 @@ export async function evaluateForExpressionNode(
 ): Promise<EvalResult> {
   const { evaluateForExpression } = await import('@interpreter/eval/for');
   const result = await evaluateForExpression(node, env);
-  return { value: result, env };
+  return wrapEvalValue(result, env);
 }
 
 export async function evaluateLoopExpressionNode(
@@ -42,5 +43,5 @@ export async function evaluateLoopExpressionNode(
 ): Promise<EvalResult> {
   const { evaluateLoopExpression } = await import('@interpreter/eval/loop');
   const result = await evaluateLoopExpression(node, env);
-  return { value: result, env };
+  return wrapEvalValue(result, env);
 }

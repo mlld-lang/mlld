@@ -5,6 +5,7 @@ import type {
 } from '@core/types';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
+import { wrapEvalValue } from './shared-utils';
 
 type UnifiedExpressionNode = BinaryExpression | TernaryExpression | UnaryExpression;
 
@@ -14,5 +15,5 @@ export async function evaluateUnifiedExpressionNode(
 ): Promise<EvalResult> {
   const { evaluateUnifiedExpression } = await import('@interpreter/eval/expressions');
   const result = await evaluateUnifiedExpression(node, env);
-  return { value: result.value, env };
+  return wrapEvalValue(result.value, env);
 }

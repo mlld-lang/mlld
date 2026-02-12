@@ -1,6 +1,7 @@
 import type { FileReferenceNode } from '@core/types';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
+import { wrapEvalValue } from './shared-utils';
 
 interface LoadContentNodeLike {
   type: 'load-content';
@@ -13,7 +14,7 @@ export async function evaluateLoadContentNode(
 ): Promise<EvalResult> {
   const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
   const result = await evaluateDataValue(node as any, env);
-  return { value: result, env };
+  return wrapEvalValue(result, env);
 }
 
 export async function evaluateFileReferenceNode(
@@ -40,8 +41,8 @@ export async function evaluateFileReferenceNode(
     for (const field of fileRefNode.fields) {
       result = await accessField(result, field, { env });
     }
-    return { value: result, env };
+    return wrapEvalValue(result, env);
   }
 
-  return { value: loadResult, env };
+  return wrapEvalValue(loadResult, env);
 }
