@@ -648,11 +648,12 @@ For direct `interpret()` calls, additional options:
 
 ## Other Languages
 
-Experimental SDK wrappers are available for Go, Python, and Rust. These are thin wrappers around the mlld CLI that provide idiomatic APIs for each language.
+Experimental SDK wrappers are available for Go, Python, Rust, and Ruby. These are thin wrappers around the mlld CLI that provide idiomatic APIs for each language.
 
 - [Go SDK](https://github.com/mlld-lang/mlld/tree/main/sdk/go)
 - [Python SDK](https://github.com/mlld-lang/mlld/tree/main/sdk/python)
 - [Rust SDK](https://github.com/mlld-lang/mlld/tree/main/sdk/rust)
+- [Ruby SDK](https://github.com/mlld-lang/mlld/tree/main/sdk/ruby)
 
 These wrappers require the mlld CLI to be installed (`npm install -g mlld`).
 
