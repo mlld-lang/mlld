@@ -53,4 +53,15 @@ describe('/for key/value binding', () => {
       interpret(input, { fileSystem, pathService })
     ).rejects.toThrow('Field "path" not found in object in for binding @file.path (key 0)');
   });
+
+  it('includes object key context when dotted bindings reference missing fields', async () => {
+    const input = `
+/var @files = { "alpha": { "name": "alpha" } }
+/for @file.path in @files => show @file.path
+`;
+
+    await expect(
+      interpret(input, { fileSystem, pathService })
+    ).rejects.toThrow('Field "path" not found in object in for binding @file.path (key alpha)');
+  });
 });
