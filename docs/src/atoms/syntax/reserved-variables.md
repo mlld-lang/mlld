@@ -21,9 +21,8 @@ updated: 2026-01-11
 
 Built-in transformer/helper names are available for `var`/`let` declarations and are shadowable per scope:
 - `@exists`, `@typeof`
-- `@json`, `@xml`, `@csv`, `@md`
+- `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`
 - `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
 - `@keep`, `@keepStructured`
 
 `mlld validate` reports builtin shadowing as informational output.
-- `@keep`, `@keepStructured`

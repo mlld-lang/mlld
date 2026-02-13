@@ -1,6 +1,6 @@
 >> Format JSON with indentation
 var @data = <file.csv>
-var @tojson = @data | @json
+var @tojson = @data | @parse
 show @tojson
 
 >> Convert to XML (SCREAMING_SNAKE_CASE)

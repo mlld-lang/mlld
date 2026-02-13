@@ -61,10 +61,11 @@ Where interpolation applies:
 
 | Transform | Purpose |
 |-----------|---------|
-| `@json` | Parse JSON (loose mode) |
-| `@json.strict` | Parse strict JSON |
-| `@json.loose` | Parse JSON5 |
-| `@json.llm` | Extract JSON from LLM response |
+| `@parse` | Parse JSON (loose mode) |
+| `@parse.strict` | Parse strict JSON |
+| `@parse.loose` | Parse JSON5 |
+| `@parse.llm` | Extract JSON from LLM response |
+| `@json` | Deprecated alias for `@parse` |
 | `@xml` | Format as XML |
 | `@csv` | Format as CSV |
 | `@md` | Format as Markdown |

@@ -230,8 +230,8 @@ var @reviews = for parallel(5) @f in @files => [
   => { file: @f.mx.relative, review: @review }
 ]
 
-var @json = @reviews | @json
-output @json to "reviews.json"
+var @reviewsJson = @reviews | @parse
+output @reviewsJson to "reviews.json"
 ```
 
 **Key patterns:**
@@ -319,7 +319,7 @@ exe @classifyTask(plan) = [
   let @prompt = `Identify the SINGLE most important next task:
 @plan
 Return JSON: { "task": "...", "type": "implement|fix|test" }`
-  => @haiku(@prompt) | @json.llm
+  => @haiku(@prompt) | @parse.llm
 ]
 
 >> Build context (collect all specs)
@@ -355,7 +355,7 @@ loop(endless) until @state.stop [
 **Key patterns:**
 - `loop(endless) until @state.stop` - Infinite loop with external stop signal
 - `var @plan = <fix_plan.md>` - Reload fresh context each iteration
-- `@haiku(@prompt) | @json.llm` - Cheap model for classification
+- `@haiku(@prompt) | @parse.llm` - Cheap model for classification
 - `@claude(..., "sonnet", ".", "Read,Edit,...")` - Full agent with tools
 - `@state.stop` - SDK can inject state to signal graceful shutdown
 

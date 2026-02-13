@@ -353,7 +353,7 @@ loop until @done [
 
   >> 2. Decision call
   var @decision = run cmd {
-    claude -m opus -p "@decisionPrompt" --input "@context | @json"
+    claude -m opus -p "@decisionPrompt" --input "@context | @parse"
   } | @parseJSON | @validate(@actionSchema)
 
   >> 3. Execute action

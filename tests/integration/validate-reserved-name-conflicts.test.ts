@@ -45,6 +45,18 @@ describe('validate classifies reserved conflicts and builtin shadowing', () => {
     expect(result.redefinitions?.some(r => r.variable === 'json' && r.reason === 'builtin-conflict')).toBe(true);
   });
 
+  it('detects let @parse shadowing a builtin transformer in exe blocks', async () => {
+    const result = await writeAndAnalyze('test-parse.mld', [
+      'exe @process() = [',
+      '  let @parse = "not-a-transformer"',
+      '  => @parse',
+      ']',
+    ].join('\n'));
+
+    expect(result.valid).toBe(true);
+    expect(result.redefinitions?.some(r => r.variable === 'parse' && r.reason === 'builtin-conflict')).toBe(true);
+  });
+
   it('detects var @now as a reserved-name conflict at top level', async () => {
     const result = await writeAndAnalyze('test-now.mld', [
       'var @now = "not-the-time"',

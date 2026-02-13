@@ -5,7 +5,7 @@ exe @classifyTask(plan) = [
   let @prompt = `Identify the SINGLE most important next task:
 @plan
 Return JSON: { "task": "...", "type": "implement|fix|test" }`
-  => @haiku(@prompt) | @json.llm
+  => @haiku(@prompt) | @parse.llm
 ]
 
 >> Build context (collect all specs)

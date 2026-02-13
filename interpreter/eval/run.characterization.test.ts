@@ -328,16 +328,16 @@ describe('evaluateRun phase-0 characterization', () => {
 
   it('keeps runExec builtin-transformer invocation behavior stable for field-access variants', async () => {
     const env = createEnv();
-    const runDirective = await setupSingleRun('/run @json.strict("{\"count\":2}")', env);
+    const runDirective = await setupSingleRun('/run @parse.strict("{\"count\":2}")', env);
 
     await expect(evaluateRun(runDirective, env)).rejects.toThrow('input.trim is not a function');
   });
 
   it('keeps runExec field-access errors stable for missing variants', async () => {
     const env = createEnv();
-    const runDirective = await setupSingleRun('/run @json.missing("{}")', env);
+    const runDirective = await setupSingleRun('/run @parse.missing("{}")', env);
 
-    await expect(evaluateRun(runDirective, env)).rejects.toThrow("Pipeline function '@json.missing' is not defined");
+    await expect(evaluateRun(runDirective, env)).rejects.toThrow("Pipeline function '@parse.missing' is not defined");
   });
 
   it('keeps runExec commandRef recursion behavior and circular-call detection', async () => {

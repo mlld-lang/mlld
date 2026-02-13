@@ -16,7 +16,7 @@ Every MCP tool call automatically taints its output with `src:mcp`. This happens
 ```mlld
 import tools { @echo } from mcp "echo-server"
 var @result = @echo("hello")
-show @result.mx.taint | @json
+show @result.mx.taint | @parse
 ```
 
 Output includes `["src:mcp"]` plus the tool name in `sources` (e.g., `["mcp:echo"]`).
@@ -27,7 +27,7 @@ Output includes `["src:mcp"]` plus the tool name in `sources` (e.g., `["mcp:echo
 var @data = @echo("test")
 var @upper = @data | @upper
 var @msg = `Result: @upper`
-show @msg.mx.taint | @json
+show @msg.mx.taint | @parse
 ```
 
 Every derived value still carries `src:mcp`. The taint cannot be removed — `src:mcp` is a protected label.

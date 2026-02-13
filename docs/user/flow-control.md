@@ -559,7 +559,7 @@ Notes:
 Chain operations with `|`:
 
 ```mlld
-var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @json
+var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @parse
 show @data.users[0].name
 ```
 

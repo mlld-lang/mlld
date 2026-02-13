@@ -66,7 +66,7 @@ exe @buildMethodSection(content) = js {
 }
 var @methodSection = @buildMethodSection(@methods)
 exe @buildPipelineSection(items) = js {
-  const intro = "Chain stages with `|`. Built-ins: `@json`, `@xml`, `@csv`, `@md`.";
+  const intro = "Chain stages with `|`. Built-ins: `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`.";
   const body = intro + "\n\n" + items.join("\n\n");
   return `<PIPELINES>\n${body}\n</PIPELINES>`;
 }

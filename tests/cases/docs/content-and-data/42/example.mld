@@ -1,5 +1,5 @@
 >> Load and transform files
-var @config = <config.json> | @json
+var @config = <config.json> | @parse
 var @uppercase = <readme.txt> | @upper
 
 >> Chain transformations

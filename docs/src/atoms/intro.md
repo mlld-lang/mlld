@@ -62,7 +62,7 @@ Think Docker Compose or GitHub Actions: declare what happens, don't program how.
 
 **File loading** - Angle brackets load content: `<README.md>`, `<src/*.ts>`
 
-**Pipelines** - Chain transformations: `@data | @json | @validate`
+**Pipelines** - Chain transformations: `@data | @parse | @validate`
 
 **Executables** - Reusable functions: `exe @greet(name) = `Hello @name!``
 

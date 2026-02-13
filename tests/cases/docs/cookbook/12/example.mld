@@ -6,5 +6,5 @@ var @reviews = for parallel(5) @f in @files => [
   => { file: @f.mx.relative, review: @review }
 ]
 
-var @json = @reviews | @json
-output @json to "reviews.json"
+var @reviewsJson = @reviews | @parse
+output @reviewsJson to "reviews.json"

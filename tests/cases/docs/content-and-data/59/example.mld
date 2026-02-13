@@ -1,6 +1,6 @@
 >> Process API data
 var @users = run {curl -s api.example.com/users}
-var @parsed = @users | @json
+var @parsed = @users | @parse
 
 >> Define filter function for active users
 exe @filterActive(users) = js {

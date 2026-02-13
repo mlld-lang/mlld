@@ -30,7 +30,7 @@ show `Processed @report.count users`
 
 ```mlld
 var @data = cmd {curl -s https://api.example.com/data}
-var @processed = @data | @json | @validate | @transform | @csv
+var @processed = @data | @parse | @validate | @transform | @csv
 output @processed to "report.csv"
 ```
 </DATA_PIPELINES>
@@ -137,9 +137,9 @@ exe @classify(text) = [
 ]
 
 exe @analyze(data) = [
-  let @prompt = `Analyze this data and return JSON: @data|@json`
+  let @prompt = `Analyze this data and return JSON: @data|@parse`
   let @response = @sonnet(@prompt)
-  => @response | @json.llm
+  => @response | @parse.llm
 ]
 ```
 </LLM_INTEGRATION>
@@ -298,7 +298,7 @@ exe @classifyTask(plan) = [
   let @prompt = `Given this plan, identify the SINGLE most important next task:
 @plan
 Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }`
-  => @haiku(@prompt) | @json.llm
+  => @haiku(@prompt) | @parse.llm
 ]
 
 >> Build context for the task (load only what's relevant)

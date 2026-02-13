@@ -68,7 +68,7 @@ export interface VariableRedefinitionWarning {
 }
 
 export interface AntiPatternWarning {
-  code: 'mutable-state' | 'when-exe-implicit-return';
+  code: 'mutable-state' | 'when-exe-implicit-return' | 'deprecated-json-transform';
   message: string;
   line?: number;
   column?: number;
@@ -174,6 +174,8 @@ const BUILTIN_VARIABLES = new Set([
   // Builtin helpers
   'yaml', 'html', 'text'
 ]);
+
+const DEPRECATED_JSON_BASE_NAMES = new Set(['json', 'JSON']);
 
 /**
  * Common mistakes: variable.field patterns that are wrong
@@ -614,6 +616,174 @@ function detectWhenExeImplicitReturnAntiPatterns(ast: MlldNode[]): AntiPatternWa
   return warnings;
 }
 
+function collectDeclaredNames(ast: MlldNode[]): Set<string> {
+  const declared = new Set<string>();
+
+  walkAST(ast, (node: any) => {
+    if (node.type === 'Directive' && node.kind === 'var') {
+      const identNode = node.values?.identifier?.[0];
+      if (identNode?.identifier) {
+        declared.add(identNode.identifier);
+      }
+    }
+
+    if (node.type === 'LetAssignment' && node.identifier) {
+      declared.add(node.identifier);
+    }
+
+    if (node.type === 'Directive' && node.kind === 'exe') {
+      const identNode = node.values?.identifier?.[0];
+      if (identNode?.identifier) {
+        declared.add(identNode.identifier);
+      }
+
+      if (Array.isArray(node.values?.params)) {
+        for (const param of node.values.params) {
+          if (param?.name) {
+            declared.add(param.name);
+          }
+        }
+      }
+    }
+
+    if (node.type === 'Directive' && node.kind === 'import') {
+      if (Array.isArray(node.values?.imports)) {
+        for (const imp of node.values.imports) {
+          if (imp?.identifier) declared.add(imp.identifier);
+          if (imp?.alias) declared.add(imp.alias);
+        }
+      }
+      if (Array.isArray(node.values?.names)) {
+        for (const name of node.values.names) {
+          if (name?.identifier) declared.add(name.identifier);
+          if (name?.alias) declared.add(name.alias);
+        }
+      }
+      if (node.values?.alias?.identifier) {
+        declared.add(node.values.alias.identifier);
+      }
+      if (node.values?.namespace) {
+        if (Array.isArray(node.values.namespace)) {
+          for (const ns of node.values.namespace) {
+            if (ns?.identifier) declared.add(ns.identifier);
+            if (ns?.content) declared.add(ns.content);
+          }
+        } else if (node.values.namespace.identifier) {
+          declared.add(node.values.namespace.identifier);
+        }
+      }
+    }
+  });
+
+  return declared;
+}
+
+function getParseReplacementForJsonAlias(identifier: string): string | null {
+  if (identifier === 'json' || identifier === 'JSON') {
+    return 'parse';
+  }
+
+  if (identifier.startsWith('json.')) {
+    return `parse.${identifier.slice('json.'.length)}`;
+  }
+  if (identifier.startsWith('JSON.')) {
+    return `parse.${identifier.slice('JSON.'.length).toLowerCase()}`;
+  }
+  if (identifier.startsWith('json_')) {
+    return `parse.${identifier.slice('json_'.length).toLowerCase()}`;
+  }
+  if (identifier.startsWith('JSON_')) {
+    return `parse.${identifier.slice('JSON_'.length).toLowerCase()}`;
+  }
+
+  return null;
+}
+
+function detectDeprecatedJsonTransformAntiPatterns(ast: MlldNode[]): AntiPatternWarning[] {
+  const declaredNames = collectDeclaredNames(ast);
+  if (declaredNames.has('json') || declaredNames.has('JSON')) {
+    return [];
+  }
+
+  const warnings: AntiPatternWarning[] = [];
+  const seen = new Set<string>();
+  const pushWarning = (identifier: string, location?: { start?: { line?: number; column?: number } }): void => {
+    const replacement = getParseReplacementForJsonAlias(identifier);
+    if (!replacement) {
+      return;
+    }
+
+    const baseName = identifier.split(/[._]/)[0];
+    if (DEPRECATED_JSON_BASE_NAMES.has(baseName) && declaredNames.has(baseName)) {
+      return;
+    }
+
+    const line = location?.start?.line;
+    const column = location?.start?.column;
+    const dedupeKey = `${identifier}:${line ?? 0}:${column ?? 0}`;
+    if (seen.has(dedupeKey)) {
+      return;
+    }
+    seen.add(dedupeKey);
+
+    warnings.push({
+      code: 'deprecated-json-transform',
+      message: `@${identifier} is a deprecated alias for @${replacement}.`,
+      line,
+      column,
+      suggestion: `Use @${replacement} instead.`
+    });
+  };
+
+  const walkNode = (node: unknown): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        walkNode(child);
+      }
+      return;
+    }
+
+    const maybeRef = node as any;
+    if (maybeRef.type === 'VariableReference') {
+      if (maybeRef.valueType !== 'identifier') {
+        const identifier = typeof maybeRef.identifier === 'string' ? maybeRef.identifier : '';
+        if (identifier) {
+          pushWarning(identifier, maybeRef.location);
+        }
+      }
+
+      if (Array.isArray(maybeRef.pipes)) {
+        for (const pipe of maybeRef.pipes) {
+          if (!pipe || typeof pipe !== 'object') {
+            continue;
+          }
+          const transform = typeof pipe.transform === 'string' ? pipe.transform : '';
+          if (!transform) {
+            continue;
+          }
+          pushWarning(transform, pipe.location);
+        }
+      }
+    }
+
+    if (typeof maybeRef.rawIdentifier === 'string' && maybeRef.rawIdentifier.length > 0) {
+      pushWarning(maybeRef.rawIdentifier, maybeRef.location);
+    }
+
+    for (const value of Object.values(node as Record<string, unknown>)) {
+      walkNode(value);
+    }
+  };
+
+  walkNode(ast);
+
+  return warnings;
+}
+
 /**
  * Extract executables from AST
  */
@@ -869,6 +1039,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       const antiPatterns = [
         ...detectMutableStateAntiPatterns(ast, content),
         ...detectWhenExeImplicitReturnAntiPatterns(ast),
+        ...detectDeprecatedJsonTransformAntiPatterns(ast),
       ];
       if (antiPatterns.length > 0) {
         result.antiPatterns = antiPatterns;

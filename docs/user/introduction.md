@@ -299,7 +299,7 @@ For complex logic, use block syntax with `let` for local variables:
 ```mlld
 exe @analyze(data) = [
   let @cleaned = @data.trim()
-  let @parsed = @cleaned | @json
+  let @parsed = @cleaned | @parse
   => @parsed.result
 ]
 ```
@@ -413,7 +413,7 @@ var @summary = <docs/*.md> | @extractTitles | @claude("summarize these")
 var @clean = @raw | @validate | @normalize | @format
 ```
 
-Built-in transformers: `@json`, `@xml`, `@csv`, `@md`.
+Built-in transformers: `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`.
 
 You can create custom ones with `exe`.
 

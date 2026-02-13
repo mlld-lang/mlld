@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`mlld validate` undefined variable detection**: Warns about undefined variable references before runtime
   - Detects common mistakes like `@mx.now` with hint suggesting `@now`
   - Tracks declarations from `var`, `let`, imports, for loops, and exe blocks
-  - Recognizes builtins: `@now`, `@base`, `@json`, `@local`, `@cache`, `@env`, `@p`, `@mx`
+  - Recognizes builtins: `@now`, `@base`, `@parse`, `@json` (deprecated alias), `@local`, `@cache`, `@env`, `@p`, `@mx`
   - `--error-on-warnings` flag exits with code 1 when warnings are found
 - **`mlld validate` variable redefinition detection**: Catches attempts to redefine outer-scope variables
   - Detects `var @x = ...` inside when/for blocks when `@x` is already defined
@@ -75,6 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - StructuredValue field access now exposes wrapper accessors at `.mx.text` and `.mx.data`, and plain dotted access resolves through wrapper data consistently (`@value.field` aligns with `@value.mx.data.field`).
 - Built-in transformer/helper names are shadowable by user variables in scope (`@exists`, `@json`, `@upper`, `@keep`, etc.), and pipeline validation resolves scoped variables before builtin fallback.
 - `mlld validate` reports builtin-name shadowing as informational output while reserved-name collisions remain validation errors.
+- JSON parsing transformers are canonicalized under `@parse` (`@parse`, `@parse.strict`, `@parse.loose`, `@parse.llm`, `@parse.fromlist`), while `@json*` names continue as deprecated aliases.
+- `mlld validate` reports informational deprecation warnings for `@json*` alias usage and suggests `@parse*`, unless a user-defined `@json` shadows the builtin.
 - StructuredValue field access no longer exposes system metadata at the top level (`.text`, `.data`, `.type`, loader/execution metadata aliases); wrapper/system access is `.mx.*` only, and top-level dotted access resolves through user data.
 - Go/Python/Rust/Ruby SDK wrappers use persistent `mlld live --stdio` transport instead of per-call CLI shellouts.
   - Go, Python, Rust, and Ruby expose async handle APIs for `process` and `execute` with `wait/result`, `cancel`, and `update_state`.

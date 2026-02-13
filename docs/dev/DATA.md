@@ -166,8 +166,8 @@ assertStructuredValue(value, context?)         // Throw when boundary requires S
 **Content Loaders**
 - `/load-content` returns wrappers with parsed `.data` and original text
 - Loader metadata (filenames, URLs) lands directly in `.mx` (flattened from `LoadContentResult`)
-- Transformers (`@json`, `@yaml`) forward native arrays/objects in `.data`
-  - `@json` uses JSON5 for relaxed parsing (single quotes, trailing commas, comments) and exposes `@json.loose`/`@json.strict` variants for explicit control.
+- Transformers (`@parse`, `@yaml`) forward native arrays/objects in `.data`
+  - `@parse` uses JSON5 for relaxed parsing (single quotes, trailing commas, comments) and exposes `@parse.loose`/`@parse.strict` variants for explicit control. `@json` remains a deprecated alias.
 
 **Display**
 - Templates interpolate using `asText()` automatically

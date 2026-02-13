@@ -220,7 +220,7 @@ if (commandVar?.internal?.isBuiltinTransformer) {
 ### Available Transformers
 
 1. **@XML / @xml** - Uses llmxml for SCREAMING_SNAKE_CASE conversion
-2. **@JSON / @json** - Returns parsed JSON data (objects/arrays/primitives) while `.text` is pretty-printed with 2-space indentation
+2. **@PARSE / @parse** - Returns parsed JSON data (objects/arrays/primitives) while `.text` is pretty-printed with 2-space indentation (`@json` is a deprecated alias)
 3. **@CSV / @csv** - Converts JSON arrays to CSV format
 4. **@MD / @md** - Formats markdown using prettier
 

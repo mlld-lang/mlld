@@ -3,11 +3,11 @@ var @payload = run {./mkjson.sh}
 exe @filterHigh(entries) = js {
   return entries.filter(e => e.finding.startsWith("High"));
 }
-var @result = @filterHigh(@payload | @json)
+var @result = @filterHigh(@payload | @parse)
 
 >> Process API response
 var @response = run {curl -s api.example.com/data}
 exe @getActive(data) = js {
   return data.users.filter(u => u.active);
 }
-var @active = @getActive(@response | @json)
+var @active = @getActive(@response | @parse)

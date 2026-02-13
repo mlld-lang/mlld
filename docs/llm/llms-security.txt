@@ -62,18 +62,48 @@ guard @blockDestructive before op:exe = when [
 <POLICIES>
 Define and import policy objects.
 
+A policy object combines all security configuration into a single declaration.
+
 ```mlld
-policy @production = {
-  defaults: { unlabeled: "untrusted" },
+var @policyConfig = {
+  defaults: {
+    unlabeled: "untrusted",
+    rules: [
+      "no-secret-exfil",
+      "no-sensitive-exfil",
+      "no-untrusted-destructive",
+      "no-untrusted-privileged"
+    ]
+  },
+  operations: {
+    "net:w": "exfil",
+    "fs:w": "destructive",
+    "sys:admin": "privileged"
+  },
   capabilities: {
     allow: ["cmd:git:*"],
     danger: ["@keychain"]
   }
 }
-export { @production }
-
-import policy @production from "./policies.mld"
+policy @p = union(@policyConfig)
 ```
+
+**`defaults`** sets baseline behavior. `unlabeled` auto-labels all unlabeled data (here as `untrusted`). `rules` enables built-in security rules that block dangerous label-to-operation flows.
+
+**`operations`** maps semantic exe labels to risk categories. You label functions with what they DO (`net:w`, `fs:w`), and policy classifies those as risk types (`exfil`, `destructive`). This is the two-step pattern -- see `policy-operations`.
+
+**`capabilities`** controls what operations are allowed at all. `allow` whitelists command patterns. `danger` marks capabilities that require explicit opt-in.
+
+**Export/import:** Share policies across scripts:
+
+```mlld
+export { @p }
+
+>> In another file
+import policy @p from "./policies.mld"
+```
+
+Policies compose with `union()` -- combine multiple config objects into one policy. The most restrictive rules win.
 </POLICIES>
 
 <BEFORE_GUARDS>
@@ -109,17 +139,43 @@ guard @redact before secret = when [
 </TRANSFORM_WITH_ALLOW>
 
 <DENIED_HANDLERS>
-Handle denied operations gracefully. Note: `deny` is a guard action that blocks; `denied` is a when-condition that tests if we're in a denied context.
+Handle denied operations gracefully.
+
+The `denied` keyword is a when-condition that tests if we're in a denied context. Use it to handle guard denials gracefully.
+
+**`deny` vs `denied`:**
+
+- `deny "reason"` - Guard action that blocks an operation
+- `denied` - When condition that matches inside a denied handler
 
 ```mlld
 guard before secret = when [
-  @mx.op.type == "run" => deny "No secrets in shell"
+  @mx.op.type == "run" => deny "Secrets blocked from shell"
   * => allow
 ]
 
 exe @safe(value) = when [
   denied => `[blocked] @mx.guard.reason`
   * => @value
+]
+```
+
+**Accessing guard context:**
+
+```mlld
+exe @handler(value) = when [
+  denied => show "Blocked: @mx.guard.reason"
+  denied => show "Guard: @mx.guard.name"
+  denied => show "Labels: @mx.labels.join(', ')"
+  * => show @value
+]
+```
+
+**Negating denied:**
+
+```mlld
+exe @successOnly(value) = when [
+  !denied => @value
 ]
 ```
 </DENIED_HANDLERS>
@@ -149,11 +205,52 @@ guard before op:run = when [
 <LABEL_TRACKING>
 Labels flow through operations:
 
-- Method calls: `@secret.trim()` preserves labels
-- Templates: interpolated values carry labels
-- Field access: `@user.email` inherits from `@user`
-- Iterators: each item inherits collection labels
-- Pipelines: labels flow through stages
+Labels propagate through all transformations automatically.
+
+```mlld
+>> Method calls preserve labels
+var secret @key = "sk-123"
+var @trimmed = @key.trim()
+show @trimmed.mx.labels    // ["secret"]
+```
+
+**Templates:** Interpolated values carry labels to the result.
+
+```mlld
+var secret @token = "abc"
+var @msg = `Token: @token`
+show @msg.mx.labels        // ["secret"]
+```
+
+**Collections:** Items retain labels; collection has union.
+
+```mlld
+var secret @key = "sk-123"
+var @arr = [@key, "public"]
+show @arr.mx.labels        // ["secret"]
+```
+
+**Pipelines:** Labels accumulate through stages.
+
+```mlld
+var secret @seed = "data"
+var @result = @seed | @transform | @process
+show @result.mx.labels     // ["secret"]
+```
+
+**File I/O:** When labeled data is written to disk, the audit log records the taint. Reading the file restores it.
+
+```mlld
+var secret @token = "sk-live-123"
+output @token to "@root/tmp/demo.txt"
+
+var @loaded = <@root/tmp/demo.txt>
+show @loaded.mx.labels     // ["secret"]
+```
+
+The audit log stores a `write` event with the taint set. On subsequent reads, mlld consults the log and applies the recorded labels. See [audit-log](audit-log.md) for the ledger format.
+
+**Note:** If `@loaded.mx.labels` shows `[]`, check that you declared the sensitivity label on the original variable (e.g., `var secret @token`). Labels are not inferred from content—they must be declared explicitly.
 </LABEL_TRACKING>
 
 <LABEL_MODIFICATION>
@@ -244,7 +341,7 @@ guard @validateMcp after src:mcp = when [
 ]
 ```
 
-The guard uses `after` timing to process output. Note: blessing (`trusted!`) and label removal (`!label`) require privileged guards (policy-generated).
+The guard uses `after` timing to process output. Blessing (`trusted!`) and label removal (`!label`) require privileged guards.
 
 **Trust conflict behavior:**
 
@@ -257,7 +354,7 @@ Controlled by `policy.defaults.trustconflict`:
 <TOOL_CALL_TRACKING>
 Track tool usage with {"calls":[],"allowed":[],"denied":[]}:
 
-The `@mx.tools` namespace tracks tool call history and availability during execution.
+The `@mx.tools` namespace tracks tool call history and availability during MCP execution. See `mcp` for setup.
 
 **@mx.tools.calls - Call history:**
 

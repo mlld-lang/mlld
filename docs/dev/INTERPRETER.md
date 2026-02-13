@@ -104,7 +104,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
   - `eval/exec/code-handler.ts` executes code executables (mlld control-flow languages, shell/code language execution, shadow env capture, structured output normalization).
   - `eval/exec/non-command-handlers.ts` executes template/data/pipeline/command-ref/section/resolver executable types.
 - Pipelines:
-  - Condensed: `@value|@json|@xml|@upper` processed by `eval/pipeline/unified-processor`.
+  - Condensed: `@value|@parse|@xml|@upper` processed by `eval/pipeline/unified-processor`.
   - With-clause: `run [...] with { pipeline: [...] }` sets `pipelineContext` on env for each stage.
   - Inline effects: built-ins `| log`, `| output`, `| show` attach to the preceding stage, run after it succeeds, and re-run on each retry attempt.
   - Streaming: optional sinks in `eval/pipeline/stream-sinks/*` (progress-only, terminal); ambient `@mx` exposes attempt/hint history for retry semantics.

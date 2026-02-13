@@ -56,9 +56,9 @@ var @audit = <@root/.mlld/sec/audit.jsonl>
 exe @findWrites(events) = js {
   return events.filter(e => e.event === "write");
 }
-show @findWrites(@audit) | @json
+show @findWrites(@audit) | @parse
 ```
 
-**Note:** When working with audit events in mlld, use `@event | @json` or a JS function to access the `taint` field, since `.taint` on a variable accesses the variable's metadata, not the JSON property.
+**Note:** When working with audit events in mlld, use `@event | @parse` or a JS function to access the `taint` field, since `.taint` on a variable accesses the variable's metadata, not the JSON property.
 
 Audit logging is non-blocking. When audit writes fail, mlld logs a warning and continues execution.

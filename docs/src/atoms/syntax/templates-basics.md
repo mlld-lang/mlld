@@ -20,6 +20,6 @@ var @doc = ::Use `mlld` to orchestrate::
 var @report = `
 Status: @status
 Config: <@root/config.json>
-Data: @data|@json
+Data: @data|@parse
 `
 ```

@@ -984,11 +984,11 @@ export async function startLanguageServer(): Promise<void> {
       completions.push(...getWithClauseCompletions());
     } else if (line.match(/\|\s*@?$/)) {
       // After a pipe - suggest common transformers
-      const transforms = ['@json', '@JSON', '@csv', '@CSV', '@xml', '@XML', '@md', '@MD'];
+      const transforms = ['@parse', '@PARSE', '@json', '@JSON', '@csv', '@CSV', '@xml', '@XML', '@md', '@MD'];
       transforms.forEach(t => completions.push({ label: t, kind: CompletionItemKind.Function, detail: 'Pipeline transformer', insertText: t }));
     } else if (line.match(/with\s*\{[^}]*pipeline\s*:\s*\[[^\]]*$/)) {
       // Inside with { pipeline: [ ... } - suggest transformers
-      const transforms = ['@json', '@JSON', '@csv', '@CSV', '@xml', '@XML', '@md', '@MD'];
+      const transforms = ['@parse', '@PARSE', '@json', '@JSON', '@csv', '@CSV', '@xml', '@XML', '@md', '@MD'];
       transforms.forEach(t => completions.push({ label: t, kind: CompletionItemKind.Function, detail: 'Pipeline transformer', insertText: t }));
     } else if (line.match(/foreach\s+@\w*$/)) {
       // After 'foreach @' - suggest parameterized exec/text commands

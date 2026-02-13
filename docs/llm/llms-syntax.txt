@@ -70,7 +70,7 @@ var @doc = ::Use `mlld` to orchestrate::
 var @report = `
 Status: @status
 Config: <@root/config.json>
-Data: @data|@json
+Data: @data|@parse
 `
 ```
 
@@ -247,16 +247,16 @@ for @file in @files => show @file.mx.data.status
 ```mlld
 >> When you have a JSON string and need to parse it
 var @jsonStr = '[{"name":"Alice"},{"name":"Bob"}]'
-var @parsed = @jsonStr | @json
+var @parsed = @jsonStr | @parse
 show @parsed.0.name                  >> "Alice"
 
 >> When you have an object and need the JSON string
 var @obj = {"name": "Alice"}
-var @str = @obj | @json
+var @str = @obj | @parse
 show @str                            >> '{"name":"Alice"}'
 
 >> Common in pipelines with LLM responses
-var @response = @llm("return JSON") | @json.llm
+var @response = @llm("return JSON") | @parse.llm
 var @items = @response
 ```
 </FILE_LOADING>
@@ -294,19 +294,19 @@ show @message.trim().toLowerCase().startsWith("hello")  >> true
 </BUILTIN_METHODS>
 
 <PIPELINES>
-Chain stages with `|`. Built-ins: `@json`, `@xml`, `@csv`, `@md`.
+Chain stages with `|`. Built-ins: `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`.
 
 ```mlld
-var @users = cmd {cat users.json} | @json | @csv
+var @users = cmd {cat users.json} | @parse | @csv
 
 >> Custom functions in pipelines
 exe @double(n) = js { return n * 2 }
 var @x = cmd {echo "5"} | @double
 
 >> JSON parsing modes
-var @relaxed = @input | @json.loose   >> single quotes, trailing commas
-var @strict = @input | @json.strict   >> strict JSON only
-var @extracted = @llmResponse | @json.llm  >> extract from LLM response
+var @relaxed = @input | @parse.loose   >> single quotes, trailing commas
+var @strict = @input | @parse.strict   >> strict JSON only
+var @extracted = @llmResponse | @parse.llm  >> extract from LLM response
 ```
 
 **Pipeline context:**
@@ -358,12 +358,11 @@ show @x       >> also works here
 
 Built-in transformer/helper names are available for `var`/`let` declarations and are shadowable per scope:
 - `@exists`, `@typeof`
-- `@json`, `@xml`, `@csv`, `@md`
+- `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`
 - `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
 - `@keep`, `@keepStructured`
 
 `mlld validate` reports builtin shadowing as informational output.
-- `@keep`, `@keepStructured`
 </RESERVED_VARIABLES>
 
 </MLLD_SYNTAX>

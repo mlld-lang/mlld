@@ -449,7 +449,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
           const chain = [...(options?.parentPath || []), name];
           throw new FieldAccessError(
-            `Cannot access field "${name}" on JSON string. Parse with \`| @json\` first, or use \`.mx.text\` / \`.mx.data\` wrapper accessors.`,
+            `Cannot access field "${name}" on JSON string. Parse with \`| @parse\` first, or use \`.mx.text\` / \`.mx.data\` wrapper accessors.`,
             {
               baseValue: rawValue,
               fieldAccessChain: [],

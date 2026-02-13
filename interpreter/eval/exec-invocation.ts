@@ -622,7 +622,7 @@ async function evaluateExecInvocationInternal(
       }
     }
 
-    // Check if this is a transformer variant access (e.g., @json.fromlist)
+    // Check if this is a transformer variant access (e.g., @parse.fromlist)
     if (isExecutableVariable(variable) && node.commandRef) {
       const varRef = (node.commandRef as any).identifier?.[0] || node.commandRef;
       if (varRef && varRef.type === 'VariableReference' && varRef.fields && varRef.fields.length > 0) {

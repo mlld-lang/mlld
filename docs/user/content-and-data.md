@@ -557,7 +557,7 @@ run @filter1(@users)
 exe @filter2(users) = js {
   return users.filter(u => u.age > 25);
 }
-run @filter2(@users | @json)
+run @filter2(@users | @parse)
 ```
 
 ### String Preservation
@@ -581,14 +581,14 @@ var @payload = run {./mkjson.sh}
 exe @filterHigh(entries) = js {
   return entries.filter(e => e.finding.startsWith("High"));
 }
-var @result = @filterHigh(@payload | @json)
+var @result = @filterHigh(@payload | @parse)
 
 >> Process API response
 var @response = run {curl -s api.example.com/data}
 exe @getActive(data) = js {
   return data.users.filter(u => u.active);
 }
-var @active = @getActive(@response | @json)
+var @active = @getActive(@response | @parse)
 ```
 
 ### Accessor Reference
@@ -605,14 +605,14 @@ var @active = @getActive(@response | @json)
 
 | Accessor | Returns |
 |----------|---------|
-| `| @json` | Parsed JSON object/array |
+| `| @parse` | Parsed JSON object/array |
 | (bare) | Original string (default) |
 
 **Command output** (e.g., `var @result = cmd {curl api.com/data}`):
 
 | Accessor | Returns |
 |----------|---------|
-| `| @json` | Parsed JSON when stdout is valid JSON |
+| `| @parse` | Parsed JSON when stdout is valid JSON |
 | `.mx.text` | Raw stdout string |
 | `.mx` | Command metadata (`source`, `command`, `exitCode`, `duration`, `stderr`) |
 
@@ -737,7 +737,7 @@ Transform data using the pipeline operator `|`:
 
 ```mlld
 >> Load and transform files
-var @config = <config.json> | @json
+var @config = <config.json> | @parse
 var @uppercase = <readme.txt> | @upper
 
 >> Chain transformations
@@ -754,7 +754,7 @@ mlld provides built-in transformers (both uppercase and lowercase work):
 ```mlld
 >> Format JSON with indentation
 var @data = <file.csv>
-var @tojson = @data | @json
+var @tojson = @data | @parse
 show @tojson
 
 >> Convert to XML (SCREAMING_SNAKE_CASE)
@@ -767,15 +767,17 @@ var @tocsv = @users | @CSV
 show @tocsv
 ```
 
-`@json` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@json.loose` when you want to be explicit, or `@json.strict` to require standard JSON and surface a clear error if the input is relaxed:
+`@parse` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@parse.loose` when you want to be explicit, or `@parse.strict` to require standard JSON and surface a clear error if the input is relaxed:
+
+`@json` remains available as a deprecated alias for `@parse`.
 
 ```mlld
 /var @loose = "{'name': 'Ada', /* comment */ age: 32,}"
-/var @parsedLoose = @loose | @json              >> Uses relaxed parsing
-/var @parsedStrict = @loose | @json.strict      >> Fails with hint to use @json.loose
+/var @parsedLoose = @loose | @parse              >> Uses relaxed parsing
+/var @parsedStrict = @loose | @parse.strict      >> Fails with hint to use @parse.loose
 ```
 
-For extracting JSON from LLM responses that may contain markdown code fences or surrounding prose, use `@json.llm`:
+For extracting JSON from LLM responses that may contain markdown code fences or surrounding prose, use `@parse.llm`:
 
 
 ````mlld
@@ -786,17 +788,17 @@ For extracting JSON from LLM responses that may contain markdown code fences or 
 ```
 ::
 
-/var @data = @llmResponse | @json.llm
+/var @data = @llmResponse | @parse.llm
 /show @data.name                                >> Alice
 
 >> Extract from inline prose
 /var @inline = `The result is {"count": 42} for this query.`
-/var @extracted = @inline | @json.llm
+/var @extracted = @inline | @parse.llm
 /show @extracted.count                          >> 42
 
 >> Returns false when no JSON found
 /var @text = `Just plain text, no JSON here.`
-/var @result = @text | @json.llm
+/var @result = @text | @parse.llm
 /show @result                                   >> false
 ````
 ```
@@ -835,7 +837,7 @@ var @doc = ::Use `npm test` before @env::
 var @report = ::
 Status: @status
 Config: <@root/config.json>
-Data: @data|@json
+Data: @data|@parse
 ::
 
 >> Double quotes (single-line only)
@@ -1113,7 +1115,7 @@ show `Total estimated tokens: @totalTokens`
 ```mlld
 >> Process API data
 var @users = run {curl -s api.example.com/users}
-var @parsed = @users | @json
+var @parsed = @users | @parse
 
 >> Define filter function for active users
 exe @filterActive(users) = js {

@@ -115,7 +115,7 @@ describe('run exec resolver', () => {
 
   it('resolves field-access references via transformer variants', async () => {
     const env = createEnv();
-    const strictExec = createExecutable('json.strict');
+    const strictExec = createExecutable('parse.strict');
     env.setVariable(
       'parserExec',
       {
@@ -208,7 +208,7 @@ describe('run exec resolver', () => {
 
   it('keeps missing-variant and missing-definition errors stable', async () => {
     const env = createEnv();
-    const strictExec = createExecutable('json.strict');
+    const strictExec = createExecutable('parse.strict');
     env.setVariable(
       'parserExec',
       {

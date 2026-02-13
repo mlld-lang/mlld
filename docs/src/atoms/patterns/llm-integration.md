@@ -20,8 +20,8 @@ exe @classify(text) = [
 ]
 
 exe @analyze(data) = [
-  let @prompt = `Analyze this data and return JSON: @data|@json`
+  let @prompt = `Analyze this data and return JSON: @data|@parse`
   let @response = @sonnet(@prompt)
-  => @response | @json.llm
+  => @response | @parse.llm
 ]
 ```

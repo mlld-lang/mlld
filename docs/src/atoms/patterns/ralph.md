@@ -25,7 +25,7 @@ exe @classifyTask(plan) = [
   let @prompt = `Given this plan, identify the SINGLE most important next task:
 @plan
 Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }`
-  => @haiku(@prompt) | @json.llm
+  => @haiku(@prompt) | @parse.llm
 ]
 
 >> Build context for the task (load only what's relevant)

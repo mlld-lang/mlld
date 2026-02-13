@@ -33,7 +33,7 @@ When loading files, directory labels (`dir:/path`) are also applied for each par
 
 ```mlld
 var @config = <@root/config.txt>
-show @config.mx.taint | @json
+show @config.mx.taint | @parse
 ```
 
 Output includes `["src:file", "dir:/path/to/parent", ...]` - the file source plus all parent directories. Note: `@root` resolves from the project root location, ensuring paths work from any working directory.
@@ -43,7 +43,7 @@ Output includes `["src:file", "dir:/path/to/parent", ...]` - the file source plu
 ```mlld
 exe @runCmd() = run { echo "hello" }
 var @result = @runCmd()
-show @result.mx.taint | @json
+show @result.mx.taint | @parse
 ```
 
 Output: `["src:exec"]`

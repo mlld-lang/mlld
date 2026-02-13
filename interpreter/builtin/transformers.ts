@@ -45,9 +45,9 @@ function makeJsonTransformer(mode: 'loose' | 'strict' | 'llm') {
         // Check if input looks like markdown-fenced JSON
         const trimmed = input.trim();
         if (trimmed.startsWith('```json') || trimmed.startsWith('```\n{') || trimmed.startsWith('```\n[')) {
-          throw new Error(`Strict JSON parsing failed - input appears to be wrapped in markdown code fences. Use @json.llm to extract JSON from LLM responses.\n\n${details}`);
+          throw new Error(`Strict JSON parsing failed - input appears to be wrapped in markdown code fences. Use @parse.llm to extract JSON from LLM responses.\n\n${details}`);
         }
-        throw new Error(`Strict JSON parsing failed (use @json.loose for relaxed syntax)\n\n${details}`);
+        throw new Error(`Strict JSON parsing failed (use @parse.loose for relaxed syntax)\n\n${details}`);
       }
     }
 
@@ -59,9 +59,9 @@ function makeJsonTransformer(mode: 'loose' | 'strict' | 'llm') {
         // Check if input looks like markdown-fenced JSON
         const trimmed = input.trim();
         if (trimmed.startsWith('```json') || trimmed.startsWith('```\n{') || trimmed.startsWith('```\n[')) {
-          throw new Error(`JSON parsing failed - input appears to be wrapped in markdown code fences. Use @json.llm to extract JSON from LLM responses.\n\n${details}`);
+          throw new Error(`JSON parsing failed - input appears to be wrapped in markdown code fences. Use @parse.llm to extract JSON from LLM responses.\n\n${details}`);
         }
-        throw new Error(`JSON parsing failed (use @json.llm for LLM responses with code fences)\n\n${details}`);
+        throw new Error(`JSON parsing failed (use @parse.llm for LLM responses with code fences)\n\n${details}`);
       }
     }
 
@@ -179,8 +179,8 @@ export const builtinTransformers: TransformerDefinition[] = [
     }
   },
   {
-    name: 'json',
-    uppercase: 'JSON',
+    name: 'parse',
+    uppercase: 'PARSE',
     description: 'Parse JSON (supports loose JSON5 syntax)',
     implementation: makeJsonTransformer('loose'),
     variants: [
@@ -202,6 +202,39 @@ export const builtinTransformers: TransformerDefinition[] = [
       {
         field: 'fromlist',
         description: 'Convert plain text list (one item per line) to JSON array',
+        implementation: (input: string) => {
+          return input
+            .split('\n')
+            .map(line => line.trimEnd())
+            .filter(line => line.length > 0);
+        }
+      }
+    ]
+  },
+  {
+    name: 'json',
+    uppercase: 'JSON',
+    description: 'Deprecated alias for @parse (JSON parser with loose JSON5 syntax)',
+    implementation: makeJsonTransformer('loose'),
+    variants: [
+      {
+        field: 'loose',
+        description: 'Deprecated alias for @parse.loose (parse relaxed JSON syntax)',
+        implementation: makeJsonTransformer('loose')
+      },
+      {
+        field: 'strict',
+        description: 'Deprecated alias for @parse.strict (parse strict JSON syntax)',
+        implementation: makeJsonTransformer('strict')
+      },
+      {
+        field: 'llm',
+        description: 'Deprecated alias for @parse.llm (extract JSON from LLM responses)',
+        implementation: makeJsonTransformer('llm')
+      },
+      {
+        field: 'fromlist',
+        description: 'Deprecated alias for @parse.fromlist (convert plain text list to JSON array)',
         implementation: (input: string) => {
           return input
             .split('\n')

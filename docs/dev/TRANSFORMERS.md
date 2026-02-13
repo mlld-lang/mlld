@@ -10,12 +10,12 @@ related-types: core/types { TransformerDefinition, TransformerVariant }
 
 ## tldr
 
-Built-in transformers (@json, @xml, @csv, @md) convert data between formats in pipelines. Defined in `interpreter/builtin/transformers.ts`, registered as system variables with special `isBuiltinTransformer` metadata.
+Built-in transformers (@parse, @xml, @csv, @md) convert data between formats in pipelines. Defined in `interpreter/builtin/transformers.ts`, registered as system variables with special `isBuiltinTransformer` metadata. `@json` remains as a deprecated alias of `@parse`.
 
 ## Principles
 
 - Return transformed data or throw descriptive errors
-- Support variants via `.field` syntax (@json.loose, @json.strict, @json.llm)
+- Support variants via `.field` syntax (@parse.loose, @parse.strict, @parse.llm)
 - False return values signal extraction failure (composable with guards)
 - Transformers are pure functions (no side effects)
 
@@ -28,8 +28,8 @@ Built-in transformers live in `interpreter/builtin/transformers.ts`:
 ```typescript
 export const builtinTransformers: TransformerDefinition[] = [
   {
-    name: 'json',
-    uppercase: 'JSON',
+    name: 'parse',
+    uppercase: 'PARSE',
     description: '...',
     implementation: makeJsonTransformer('loose'),
     variants: [
@@ -53,12 +53,12 @@ Transformers execute at `exec-invocation.ts:534`:
 
 ### LLM Extraction Transformer
 
-`@json.llm` extracts JSON from LLM responses:
+`@parse.llm` extracts JSON from LLM responses:
 - Returns parsed data on success
 - Returns `false` on extraction failure (not an error)
 - Enables conditional logic and guard composition
 
-**Design rationale**: False signals enable composability with validation/retry logic without exceptions. Guards (future) will check `@json.llm(@input) != false`.
+**Design rationale**: False signals enable composability with validation/retry logic without exceptions. Guard conditions can check `@parse.llm(@input) != false`.
 
 **Extraction strategies**:
 1. JSON in ```json code fences

@@ -201,7 +201,7 @@ llm/run/
 - `when` returns a value; use `if` blocks with `=>` for early exe returns
 - Ternary `x ? y : z` not supported in let assignments (use `when` or `if`)
 - `sh {}` blocks use shell `$var` syntax - pass via exe params
-- `@json` is reserved - don't use as variable name
+- Builtins like `@parse` and `@json` are shadowable; `mlld validate` reports this as informational output
 
 ## Debugging
 

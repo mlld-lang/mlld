@@ -42,6 +42,38 @@ describe('analyze/validate warnings', () => {
     expect((result.redefinitions ?? []).filter(entry => entry.reason === 'scope-redefinition')).toHaveLength(0);
   });
 
+  it('warns on deprecated @json transformer aliases', async () => {
+    const modulePath = await writeModule('deprecated-json-alias.mld', `/var @payload = '{"count":2}'
+/var @parsed = @payload | @json.strict
+/show @parsed
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const deprecations = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'deprecated-json-transform'
+    );
+    expect(deprecations).toHaveLength(1);
+    expect(deprecations[0]?.message).toContain('@json.strict');
+    expect(deprecations[0]?.suggestion).toContain('@parse.strict');
+  });
+
+  it('does not warn on @json alias usage when user-defined @json shadows the builtin', async () => {
+    const modulePath = await writeModule('deprecated-json-shadowed.mld', `/exe @json(input) = @input | @upper
+/var @out = "ok" | @json
+/show @out
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const deprecations = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'deprecated-json-transform'
+    );
+    expect(deprecations).toHaveLength(0);
+  });
+
   it('keeps reserved names as hard conflicts', async () => {
     const modulePath = await writeModule('reserved-conflict.mld', `/exe @test() = [
   let @base = "shadow"
