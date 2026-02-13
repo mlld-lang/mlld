@@ -3,16 +3,7 @@ import { analyze } from '../../cli/commands/analyze';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
-/**
- * Regression tests for m-50a8: mlld validate should catch reserved/builtin
- * variable name conflicts at validation time, not just at runtime.
- *
- * Currently, `let @exists = ...` inside an exe block passes validate clean
- * but fails at runtime with "Variable 'exists' is already defined".
- *
- * See: tk show m-50a8
- */
-describe('validate catches reserved variable name conflicts (m-50a8)', () => {
+describe('validate classifies reserved conflicts and builtin shadowing', () => {
   let testDir: string;
 
   async function writeAndAnalyze(filename: string, content: string) {
@@ -29,7 +20,7 @@ describe('validate catches reserved variable name conflicts (m-50a8)', () => {
     }
   });
 
-  it('should detect let @exists shadowing builtin transformer in exe block', async () => {
+  it('detects let @exists shadowing a builtin transformer in exe blocks', async () => {
     const result = await writeAndAnalyze('test.mld', [
       'exe @test() = [',
       '  let @exists = "hello"',
@@ -38,17 +29,11 @@ describe('validate catches reserved variable name conflicts (m-50a8)', () => {
       'var @r = @test()',
     ].join('\n'));
 
-    // Currently passes as valid — once fixed, should report a redefinition
-    // warning or error for 'exists' shadowing the builtin @exists transformer.
-    const hasConflict =
-      (result.redefinitions && result.redefinitions.some(r => r.variable === 'exists')) ||
-      (result.warnings && result.warnings.some(w => w.variable === 'exists')) ||
-      (result.errors && result.errors.some(e => e.message.includes('exists')));
-
-    expect(hasConflict).toBe(true);
+    expect(result.valid).toBe(true);
+    expect(result.redefinitions?.some(r => r.variable === 'exists' && r.reason === 'builtin-conflict')).toBe(true);
   });
 
-  it('should detect let @json shadowing builtin transformer in exe block', async () => {
+  it('detects let @json shadowing a builtin transformer in exe blocks', async () => {
     const result = await writeAndAnalyze('test-json.mld', [
       'exe @process() = [',
       '  let @json = "not-a-transformer"',
@@ -56,24 +41,16 @@ describe('validate catches reserved variable name conflicts (m-50a8)', () => {
       ']',
     ].join('\n'));
 
-    const hasConflict =
-      (result.redefinitions && result.redefinitions.some(r => r.variable === 'json')) ||
-      (result.warnings && result.warnings.some(w => w.variable === 'json')) ||
-      (result.errors && result.errors.some(e => e.message.includes('json')));
-
-    expect(hasConflict).toBe(true);
+    expect(result.valid).toBe(true);
+    expect(result.redefinitions?.some(r => r.variable === 'json' && r.reason === 'builtin-conflict')).toBe(true);
   });
 
-  it('should detect var @now shadowing reserved variable at top level', async () => {
+  it('detects var @now as a reserved-name conflict at top level', async () => {
     const result = await writeAndAnalyze('test-now.mld', [
       'var @now = "not-the-time"',
     ].join('\n'));
 
-    const hasConflict =
-      (result.redefinitions && result.redefinitions.some(r => r.variable === 'now')) ||
-      (result.warnings && result.warnings.some(w => w.variable === 'now')) ||
-      (result.errors && result.errors.some(e => e.message.includes('now')));
-
-    expect(hasConflict).toBe(true);
+    expect(result.valid).toBe(true);
+    expect(result.redefinitions?.some(r => r.variable === 'now' && r.reason === 'reserved-conflict')).toBe(true);
   });
 });

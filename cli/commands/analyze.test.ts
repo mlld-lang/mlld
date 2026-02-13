@@ -21,7 +21,7 @@ describe('analyze/validate warnings', () => {
     return filePath;
   }
 
-  it('detects built-in name conflicts for let assignments', async () => {
+  it('reports built-in transform shadowing for let assignments', async () => {
     const modulePath = await writeModule('builtin-conflicts.mld', `/exe @test() = [
   let @exists = "yes"
   let @upper = "HELLO"
@@ -33,12 +33,31 @@ describe('analyze/validate warnings', () => {
     const result = await analyze(modulePath, { checkVariables: true });
 
     expect(result.valid).toBe(true);
-    const builtinConflicts = (result.redefinitions ?? [])
+    const builtinShadowing = (result.redefinitions ?? [])
       .filter(entry => entry.reason === 'builtin-conflict')
       .map(entry => entry.variable)
       .sort();
 
-    expect(builtinConflicts).toEqual(['exists', 'upper']);
+    expect(builtinShadowing).toEqual(['exists', 'upper']);
+    expect((result.redefinitions ?? []).filter(entry => entry.reason === 'scope-redefinition')).toHaveLength(0);
+  });
+
+  it('keeps reserved names as hard conflicts', async () => {
+    const modulePath = await writeModule('reserved-conflict.mld', `/exe @test() = [
+  let @base = "shadow"
+  => @base
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const reservedConflicts = (result.redefinitions ?? [])
+      .filter(entry => entry.reason === 'reserved-conflict')
+      .map(entry => entry.variable)
+      .sort();
+
+    expect(reservedConflicts).toEqual(['base']);
   });
 
   it('warns for local mutable-state anti-patterns', async () => {

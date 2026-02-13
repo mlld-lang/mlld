@@ -14,8 +14,6 @@ export interface TransformerDefinition {
   description: string;
   implementation: (input: any) => Promise<any> | any;
   variants?: TransformerVariant[];
-  /** If true, the name is reserved and cannot be overridden by user code */
-  isReserved?: boolean;
 }
 
 export interface TransformerVariant {
@@ -137,7 +135,6 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'typeof',
     uppercase: 'TYPEOF',
     description: 'Get type information for a variable',
-    isReserved: true,
     implementation: async (input: string) => {
       // The input will be a special marker when we have a Variable object
       // Otherwise it's just the string value
@@ -153,7 +150,6 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'exists',
     uppercase: 'EXISTS',
     description: 'Return true when an expression evaluates without error',
-    isReserved: true,
     implementation: async (input: string) => {
       return input.trim().length > 0;
     }
@@ -162,7 +158,6 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'xml',
     uppercase: 'XML',
     description: 'Convert content to SCREAMING_SNAKE_CASE XML',
-    isReserved: true,
     implementation: async (input: string) => {
       try {
         // Try to parse as JSON first
@@ -187,7 +182,6 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'json',
     uppercase: 'JSON',
     description: 'Parse JSON (supports loose JSON5 syntax)',
-    isReserved: true,
     implementation: makeJsonTransformer('loose'),
     variants: [
       {
@@ -221,7 +215,6 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'csv',
     uppercase: 'CSV',
     description: 'Convert to CSV format',
-    isReserved: true,
     implementation: (input: string) => {
       return convertToCSV(input);
     }
@@ -230,7 +223,6 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'md',
     uppercase: 'MD',
     description: 'Normalize markdown output',
-    isReserved: true,
     implementation: async (input: string) => {
       return normalizeOutput(input);
     }

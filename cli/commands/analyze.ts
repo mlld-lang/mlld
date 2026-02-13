@@ -63,7 +63,7 @@ export interface VariableRedefinitionWarning {
   column?: number;
   originalLine?: number;
   originalColumn?: number;
-  reason?: 'builtin-conflict' | 'scope-redefinition';
+  reason?: 'builtin-conflict' | 'reserved-conflict' | 'scope-redefinition';
   suggestion?: string;
 }
 
@@ -157,17 +157,22 @@ const BUILTIN_TRANSFORMER_NAMES = builtinTransformers.flatMap(transformer => [
   transformer.uppercase,
 ]);
 
-const BUILTIN_VARIABLES = new Set([
-  // Reserved system variables
+const RESERVED_VARIABLE_NAMES = new Set([
   'now', 'base', 'root', 'debug', 'INPUT', 'mx', 'fm',
-  'payload', 'state', 'keychain',
-  // Builtin variables and helper functions
-  'yaml', 'html', 'text',
-  'keep', 'keepStructured',
-  // Pipeline context
-  'input', 'ctx',
-  // Builtin transformers
+  'payload', 'state', 'keychain', 'input', 'ctx', 'pipeline'
+]);
+
+const SHADOWABLE_BUILTIN_NAMES = new Set([
   ...BUILTIN_TRANSFORMER_NAMES,
+  'keep',
+  'keepStructured'
+]);
+
+const BUILTIN_VARIABLES = new Set([
+  ...RESERVED_VARIABLE_NAMES,
+  ...SHADOWABLE_BUILTIN_NAMES,
+  // Builtin helpers
+  'yaml', 'html', 'text'
 ]);
 
 /**
@@ -382,14 +387,21 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
         const line = node.location?.start?.line;
         const column = node.location?.start?.column;
 
-        // Check if this shadows a builtin variable
-        if (BUILTIN_VARIABLES.has(name)) {
+        if (RESERVED_VARIABLE_NAMES.has(name)) {
+          warnings.push({
+            variable: name,
+            line,
+            column,
+            reason: 'reserved-conflict',
+            suggestion: `Cannot redefine reserved @${name}.`,
+          });
+        } else if (SHADOWABLE_BUILTIN_NAMES.has(name)) {
           warnings.push({
             variable: name,
             line,
             column,
             reason: 'builtin-conflict',
-            suggestion: `Cannot redefine built-in @${name}. Use a different variable name.`,
+            suggestion: `@${name} shadows a built-in transform in this scope.`,
           });
         } else {
           // Check if this shadows an outer scope variable
@@ -418,14 +430,21 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
         const line = node.location?.start?.line;
         const column = node.location?.start?.column;
 
-        // Check if this shadows a builtin variable
-        if (BUILTIN_VARIABLES.has(name)) {
+        if (RESERVED_VARIABLE_NAMES.has(name)) {
+          warnings.push({
+            variable: name,
+            line,
+            column,
+            reason: 'reserved-conflict',
+            suggestion: `Cannot redefine reserved @${name}.`,
+          });
+        } else if (SHADOWABLE_BUILTIN_NAMES.has(name)) {
           warnings.push({
             variable: name,
             line,
             column,
             reason: 'builtin-conflict',
-            suggestion: `Cannot redefine built-in @${name}. Use a different variable name.`,
+            suggestion: `@${name} shadows a built-in transform in this scope.`,
           });
         } else {
           const outer = findOuterDeclaration(name, depth);
@@ -941,14 +960,30 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
     }
   }
 
-  // Display errors for variable redefinitions
+  // Display informational notices and errors for variable redefinitions
   if (result.redefinitions && result.redefinitions.length > 0) {
-    console.log();
-    console.log(chalk.red(`Errors (${result.redefinitions.length}):`));
-    for (const redef of result.redefinitions) {
+    const builtinShadowWarnings = result.redefinitions.filter(redef => redef.reason === 'builtin-conflict');
+    const hardErrors = result.redefinitions.filter(redef => redef.reason !== 'builtin-conflict');
+
+    if (builtinShadowWarnings.length > 0) {
+      console.log();
+      console.log(chalk.yellow(`Info (${builtinShadowWarnings.length}):`));
+      for (const redef of builtinShadowWarnings) {
+        const loc = redef.line ? ` (line ${redef.line}${redef.column ? `:${redef.column}` : ''})` : '';
+        console.log(chalk.yellow(`  @${redef.variable}${loc} - shadows a built-in transform in this scope`));
+        if (redef.suggestion) {
+          console.log(chalk.dim(`    hint: ${redef.suggestion}`));
+        }
+      }
+    }
+
+    if (hardErrors.length > 0) {
+      console.log();
+      console.log(chalk.red(`Errors (${hardErrors.length}):`));
+      for (const redef of hardErrors) {
       const loc = redef.line ? ` (line ${redef.line}${redef.column ? `:${redef.column}` : ''})` : '';
-      if (redef.reason === 'builtin-conflict') {
-        console.log(chalk.red(`  @${redef.variable}${loc} - conflicts with built-in name`));
+      if (redef.reason === 'reserved-conflict') {
+        console.log(chalk.red(`  @${redef.variable}${loc} - conflicts with reserved name`));
         if (redef.suggestion) {
           console.log(chalk.dim(`    hint: ${redef.suggestion}`));
         }
@@ -961,6 +996,7 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
         console.log(chalk.dim(`      2. var @${redef.variable}New = ... (new variable name)`));
         console.log(chalk.dim(`      3. @${redef.variable} += value (augmented assignment for accumulation)`));
       }
+    }
     }
   }
 
@@ -992,13 +1028,19 @@ export async function analyzeCommand(filepath: string, options: AnalyzeOptions =
       process.exit(1);
     }
 
-    // Redefinitions are always errors (they cause runtime failures)
-    if (result.redefinitions && result.redefinitions.length > 0) {
+    // Redefinitions that are not builtin-shadow warnings are errors.
+    const hardRedefinitions = (result.redefinitions ?? []).filter(
+      redef => redef.reason !== 'builtin-conflict'
+    );
+    if (hardRedefinitions.length > 0) {
       process.exit(1);
     }
 
     // Exit with error if warnings found and errorOnWarnings is set
-    const warningCount = (result.warnings?.length ?? 0) + (result.antiPatterns?.length ?? 0);
+    const warningCount =
+      (result.warnings?.length ?? 0) +
+      (result.antiPatterns?.length ?? 0) +
+      (result.redefinitions?.filter(redef => redef.reason === 'builtin-conflict').length ?? 0);
     if (options.errorOnWarnings && warningCount > 0) {
       process.exit(1);
     }
@@ -1020,7 +1062,7 @@ Usage: mlld validate <filepath> [options]
 
 Validate mlld syntax and analyze module structure without executing.
 Returns validation status, exports, imports, guards, executables, and runtime needs.
-Also checks for undefined variable references, built-in name conflicts, and mutable-state anti-patterns.
+Also checks for undefined variable references, reserved-name conflicts, builtin shadowing info, and mutable-state anti-patterns.
 
 Options:
   --format <format>     Output format: json or text (default: text)

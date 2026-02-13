@@ -19,8 +19,11 @@ updated: 2026-01-11
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)
 
-Built-in transformer names are also unavailable for `var`/`let` declarations:
+Built-in transformer/helper names are available for `var`/`let` declarations and are shadowable per scope:
 - `@exists`, `@typeof`
 - `@json`, `@xml`, `@csv`, `@md`
 - `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+- `@keep`, `@keepStructured`
+
+`mlld validate` reports builtin shadowing as informational output.
 - `@keep`, `@keepStructured`

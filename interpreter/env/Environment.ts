@@ -632,13 +632,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       );
       this.variableManager.setVariable(transformer.name, lowerVar);
       
-      // Only reserve names for core transformers (isReserved: true)
-      // Convenience transformers (upper, lower, trim, etc.) can be overridden
-      if (transformer.isReserved === true) {
-        this.reservedNames.add(transformer.uppercase);
-        this.reservedNames.add(transformer.name);
-      }
-
       if (transformer.variants && transformer.variants.length > 0) {
         const lowerInternal = (lowerVar.internal ??= {});
         const upperInternal = (upperVar.internal ??= {});
@@ -1331,16 +1324,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Get a transform function by name
-   * First checks built-in transforms, then variables
+   * First checks variables, then built-in transform implementations
    */
   getTransform(name: string): Function | undefined {
-    if ((builtinTransformers as Record<string, Function>)[name]) {
-      return (builtinTransformers as Record<string, Function>)[name];
-    }
-
     const variable = this.getVariable(name);
     if (variable && typeof variable === 'object' && '__executable' in variable) {
       return variable;
+    }
+
+    const builtin = builtinTransformers.find(
+      transformer => transformer.name === name || transformer.uppercase === name
+    );
+    if (builtin) {
+      return builtin.implementation;
     }
 
     return undefined;
@@ -1702,8 +1698,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       const keepStructuredExec = createKeepStructuredExecutable();
       this.variableManager.setVariable('keep', keepExec as any);
       this.variableManager.setVariable('keepStructured', keepStructuredExec as any);
-      this.reservedNames.add('keep');
-      this.reservedNames.add('keepStructured');
     } catch (error) {
       logger.warn('Failed to register keep builtins', error);
     }

@@ -351,28 +351,27 @@ async function validatePipeline(
     }
     const funcName = stage.rawIdentifier;
     
-    // Check if it's a built-in transformer
+    // Resolve scoped variables first so user declarations shadow builtins.
+    const variable = env.getVariable(funcName);
+    if (variable) {
+      if (variable.type !== 'executable' && variable.type !== 'computed') {
+        throw new MlldDirectiveError(
+          `'@${funcName}' is not a function, it's a ${variable.type} variable${identifier ? ` (in @${identifier})` : ''}`,
+          'pipeline'
+        );
+      }
+      continue;
+    }
+
     if (isBuiltinTransformer(funcName)) {
       continue;
     }
-    
-    // Check if it's a defined executable
-    const variable = env.getVariable(funcName);
-    if (!variable) {
-      throw new MlldDirectiveError(
-        `Pipeline function '@${funcName}' is not defined${identifier ? ` (in @${identifier})` : ''}. ` +
-        `Available functions: ${getAvailableFunctions(env).join(', ')}`,
-        'pipeline'
-      );
-    }
-    
-    // Check if it's actually executable
-    if (variable.type !== 'executable' && variable.type !== 'computed') {
-      throw new MlldDirectiveError(
-        `'@${funcName}' is not a function, it's a ${variable.type} variable${identifier ? ` (in @${identifier})` : ''}`,
-        'pipeline'
-      );
-    }
+
+    throw new MlldDirectiveError(
+      `Pipeline function '@${funcName}' is not defined${identifier ? ` (in @${identifier})` : ''}. ` +
+      `Available functions: ${getAvailableFunctions(env).join(', ')}`,
+      'pipeline'
+    );
   }
 }
 

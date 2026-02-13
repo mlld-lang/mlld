@@ -186,9 +186,10 @@ export async function evaluateLetAssignment(
     const existingImportPath = existingVariable?.mx?.importPath;
     const existingIsBlockScoped = existingImportPath === 'let' || existingImportPath === 'exe-param';
     const existingIsImported = existingVariable?.mx?.isImported === true;
+    const existingIsShadowableBuiltin = existingVariable?.internal?.isBuiltinTransformer === true;
     const whenExpressionContext = env.getExecutionContext<{ allowLetShadowing?: boolean }>('when-expression');
     const allowShadowing = whenExpressionContext?.allowLetShadowing === true;
-    if (!existingIsBlockScoped && !existingIsImported && !allowShadowing) {
+    if (!existingIsBlockScoped && !existingIsImported && !existingIsShadowableBuiltin && !allowShadowing) {
       const existingLocation = existingVariable?.mx?.definedAt ?? existingVariable?.definedAt;
       const newLocation = astLocationToSourceLocation(entry.location, env.getCurrentFilePath());
       if (existingLocation && newLocation) {
