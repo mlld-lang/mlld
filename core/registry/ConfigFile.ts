@@ -27,6 +27,11 @@ export interface ConfigFileData {
     allowGuardBypass?: boolean;
   };
 
+  // Validate command settings
+  validate?: {
+    suppressWarnings?: string[];
+  };
+
   // Project settings
   projectname?: string;
   scriptDir?: string;

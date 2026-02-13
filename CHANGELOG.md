@@ -59,6 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Detects `var @x = ...` inside when/for blocks when `@x` is already defined
   - Educational error explains mlld's immutability model
   - Suggests alternatives: `let` for block-scoped values, new names, or augmented assignment
+- **`mlld validate` exe parameter shadowing warning**: Warns when executable parameters use generic names that commonly collide with caller variables (for example `result`)
+  - Suggests more specific names (for example `status`)
+  - Supports intentional suppression with `validate.suppressWarnings` in `mlld-config.json`
 - **`mlld init`**: Quick non-interactive project initialization
   - Creates `mlld-config.json` and `mlld-lock.json` with sensible defaults
   - Creates `llm/run/` (scripts) and `llm/modules/` (local modules) directories

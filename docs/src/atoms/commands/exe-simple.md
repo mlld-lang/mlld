@@ -14,6 +14,8 @@ qa_tier: 2
 
 **exe vs var:** `exe` defines functions (takes parameters). `var` creates values (no parameters). Use `exe` when you need to pass arguments; use `var` for computed values.
 
+`mlld validate` warns when exe parameters use generic names such as `result`, `output`, or `data` because they can shadow caller variables. Prefer specific names such as `status`, `finalOutput`, or `inputData`.
+
 **Simple forms:**
 
 ```mlld

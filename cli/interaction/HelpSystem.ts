@@ -153,6 +153,8 @@ Usage: mlld validate <filepath> [options]
 
 Validate mlld syntax and analyze module structure without executing.
 Returns validation status, exports, imports, guards, executables, and runtime needs.
+Includes anti-pattern warnings such as generic exe parameter shadowing.
+Intentional anti-pattern warnings can be suppressed in mlld-config.json via validate.suppressWarnings.
 
 Options:
   --format <format>  Output format: json or text (default: text)

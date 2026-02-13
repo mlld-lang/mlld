@@ -110,6 +110,51 @@ describe('analyze/validate warnings', () => {
     expect(result.antiPatterns?.[0]?.message).toContain('@state');
   });
 
+  it('warns when exe parameters use generic names that can shadow caller variables', async () => {
+    const modulePath = await writeModule('exe-param-shadowing.mld', `/var @result = "queued"
+/exe @logItemDone(result) = [
+  => @result
+]
+/show @logItemDone("done")
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const paramWarnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'exe-parameter-shadowing'
+    );
+    expect(paramWarnings).toHaveLength(1);
+    expect(paramWarnings[0]?.message).toContain('Parameter @result');
+    expect(paramWarnings[0]?.suggestion).toContain('@status');
+  });
+
+  it('supports suppressing exe parameter shadowing warnings in mlld-config.json', async () => {
+    await fs.writeFile(
+      path.join(tempDir, 'mlld-config.json'),
+      JSON.stringify({
+        validate: {
+          suppressWarnings: ['exe-parameter-shadowing']
+        }
+      }, null, 2),
+      'utf8'
+    );
+
+    const modulePath = await writeModule('exe-param-shadowing-suppressed.mld', `/exe @logItemDone(result) = [
+  => @result
+]
+/show @logItemDone("done")
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const paramWarnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'exe-parameter-shadowing'
+    );
+    expect(paramWarnings).toHaveLength(0);
+  });
+
   it('warns when a bare when action inside an exe block implies an early return', async () => {
     const modulePath = await writeModule('when-exe-implicit-return.mld', `/exe @guard(x) = [
   when !@x => "missing"

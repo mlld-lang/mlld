@@ -67,8 +67,14 @@ export interface VariableRedefinitionWarning {
   suggestion?: string;
 }
 
+export type AntiPatternWarningCode =
+  | 'mutable-state'
+  | 'when-exe-implicit-return'
+  | 'deprecated-json-transform'
+  | 'exe-parameter-shadowing';
+
 export interface AntiPatternWarning {
-  code: 'mutable-state' | 'when-exe-implicit-return' | 'deprecated-json-transform';
+  code: AntiPatternWarningCode;
   message: string;
   line?: number;
   column?: number;
@@ -176,6 +182,23 @@ const BUILTIN_VARIABLES = new Set([
 ]);
 
 const DEPRECATED_JSON_BASE_NAMES = new Set(['json', 'JSON']);
+const VALIDATE_CONFIG_FILENAMES = ['mlld-config.json', 'mlld.config.json'];
+const WARNING_CODE_ALIASES: Record<string, AntiPatternWarningCode> = {
+  'parameter-shadowing': 'exe-parameter-shadowing'
+};
+const SUPPRESSIBLE_WARNING_CODES = new Set<AntiPatternWarningCode>([
+  'mutable-state',
+  'when-exe-implicit-return',
+  'deprecated-json-transform',
+  'exe-parameter-shadowing'
+]);
+const GENERIC_EXE_PARAMETER_SUGGESTIONS = new Map<string, string>([
+  ['result', 'status'],
+  ['output', 'finalOutput'],
+  ['response', 'modelResponse'],
+  ['data', 'inputData'],
+  ['value', 'inputValue']
+]);
 
 /**
  * Common mistakes: variable.field patterns that are wrong
@@ -186,6 +209,83 @@ const SUSPICIOUS_FIELD_ACCESS: Record<string, string> = {
   'mx.base': '@base is a reserved variable, not @mx.base',
   'ctx.now': '@now is a reserved variable, not @ctx.now',
 };
+
+function normalizeSuppressedWarningCode(code: string): AntiPatternWarningCode | null {
+  const normalized = code.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const aliased = WARNING_CODE_ALIASES[normalized];
+  if (aliased) {
+    return aliased;
+  }
+
+  if (SUPPRESSIBLE_WARNING_CODES.has(normalized as AntiPatternWarningCode)) {
+    return normalized as AntiPatternWarningCode;
+  }
+
+  return null;
+}
+
+async function findNearestValidateConfigPath(moduleFilepath: string): Promise<string | null> {
+  let currentDir = path.dirname(path.resolve(moduleFilepath));
+  const rootDir = path.parse(currentDir).root;
+
+  while (true) {
+    for (const configFilename of VALIDATE_CONFIG_FILENAMES) {
+      const configPath = path.join(currentDir, configFilename);
+      try {
+        await fs.access(configPath);
+        return configPath;
+      } catch {
+        // Try the next config name or parent directory.
+      }
+    }
+
+    if (currentDir === rootDir) {
+      break;
+    }
+    currentDir = path.dirname(currentDir);
+  }
+
+  return null;
+}
+
+async function loadSuppressedWarningCodes(moduleFilepath: string): Promise<Set<AntiPatternWarningCode>> {
+  const configPath = await findNearestValidateConfigPath(moduleFilepath);
+  if (!configPath) {
+    return new Set();
+  }
+
+  try {
+    const configRaw = await fs.readFile(configPath, 'utf8');
+    const parsed = JSON.parse(configRaw) as {
+      validate?: {
+        suppressWarnings?: unknown;
+      };
+    };
+
+    if (!Array.isArray(parsed.validate?.suppressWarnings)) {
+      return new Set();
+    }
+
+    const suppressedCodes = new Set<AntiPatternWarningCode>();
+    for (const value of parsed.validate.suppressWarnings) {
+      if (typeof value !== 'string') {
+        continue;
+      }
+      const normalizedCode = normalizeSuppressedWarningCode(value);
+      if (normalizedCode) {
+        suppressedCodes.add(normalizedCode);
+      }
+    }
+    return suppressedCodes;
+  } catch {
+    // Analyze stays resilient when config parsing fails.
+    return new Set();
+  }
+}
 
 /**
  * Detect undefined variable references in AST
@@ -784,6 +884,57 @@ function detectDeprecatedJsonTransformAntiPatterns(ast: MlldNode[]): AntiPattern
   return warnings;
 }
 
+function detectExeParameterShadowingWarnings(ast: MlldNode[]): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+  const seen = new Set<string>();
+
+  walkAST(ast, (node: any) => {
+    if (node.type !== 'Directive' || node.kind !== 'exe') {
+      return;
+    }
+
+    const exeName = node.values?.identifier?.[0]?.identifier ?? 'anonymous';
+    const params = node.values?.params;
+    if (!Array.isArray(params)) {
+      return;
+    }
+
+    for (const param of params) {
+      if (!param || typeof param !== 'object') {
+        continue;
+      }
+
+      const paramName = typeof param.name === 'string' ? param.name : '';
+      if (!paramName) {
+        continue;
+      }
+
+      const suggestedName = GENERIC_EXE_PARAMETER_SUGGESTIONS.get(paramName.toLowerCase());
+      if (!suggestedName) {
+        continue;
+      }
+
+      const line = param.location?.start?.line ?? node.location?.start?.line;
+      const column = param.location?.start?.column ?? node.location?.start?.column;
+      const dedupeKey = `${exeName}:${paramName}:${line ?? 0}:${column ?? 0}`;
+      if (seen.has(dedupeKey)) {
+        continue;
+      }
+      seen.add(dedupeKey);
+
+      warnings.push({
+        code: 'exe-parameter-shadowing',
+        message: `Parameter @${paramName} in @${exeName}() can shadow caller variables and cause accidental value collisions.`,
+        line,
+        column,
+        suggestion: `Use a more specific name such as @${suggestedName}. If intentional, add "validate.suppressWarnings": ["exe-parameter-shadowing"] to mlld-config.json.`
+      });
+    }
+  });
+
+  return warnings;
+}
+
 /**
  * Extract executables from AST
  */
@@ -1025,6 +1176,8 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
 
     // Check for undefined variables (enabled by default)
     if (options.checkVariables !== false) {
+      const suppressedWarningCodes = await loadSuppressedWarningCodes(filepath);
+
       const warnings = detectUndefinedVariables(ast);
       if (warnings.length > 0) {
         result.warnings = warnings;
@@ -1040,7 +1193,8 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         ...detectMutableStateAntiPatterns(ast, content),
         ...detectWhenExeImplicitReturnAntiPatterns(ast),
         ...detectDeprecatedJsonTransformAntiPatterns(ast),
-      ];
+        ...detectExeParameterShadowingWarnings(ast),
+      ].filter(warning => !suppressedWarningCodes.has(warning.code));
       if (antiPatterns.length > 0) {
         result.antiPatterns = antiPatterns;
       }
@@ -1233,7 +1387,8 @@ Usage: mlld validate <filepath> [options]
 
 Validate mlld syntax and analyze module structure without executing.
 Returns validation status, exports, imports, guards, executables, and runtime needs.
-Also checks for undefined variable references, reserved-name conflicts, builtin shadowing info, and mutable-state anti-patterns.
+Also checks for undefined variable references, reserved-name conflicts, builtin shadowing info, and anti-pattern warnings (including generic exe parameter shadowing).
+Intentional anti-pattern warnings can be suppressed in mlld-config.json via validate.suppressWarnings.
 
 Options:
   --format <format>     Output format: json or text (default: text)
