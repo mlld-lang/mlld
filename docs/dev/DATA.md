@@ -213,6 +213,12 @@ array.data.map(item => (isStructuredValue(item) ? asText(item) : item));
 - `StructuredValue.internal` holds mlld-specific details (custom serialization hooks, transformer information, lazy loaders). Treat it as implementation detail; surface only what the interpreter needs.
 - `Variable.mx` comes from `VariableMetadataUtils.attachContext()` (`core/types/variable/VariableMetadata.ts`). The snapshot includes `name`, `type`, `definedAt`, security labels, taint, token metrics, array size, export status, sources, and policy context. Use `.mx` instead of manually reading `variable.metadata` to avoid cache invalidation bugs.
 
+### `.mx` Field Access Collision Rule
+
+`.mx` on a StructuredValue always means system metadata — it never auto-resolves into user data. If the user's parsed data happens to contain an `"mx"` key, they access it via `@val.mx.data.mx`, not `@val.mx`.
+
+This is the same principle as `.mx` being reserved on Variables. The `.mx` namespace is system-owned at every level of the value hierarchy. User field names like `.stance`, `.mode`, `.count` auto-resolve through `.mx.data`, but `.mx` itself is the escape hatch into system metadata and is never shadowed by user data.
+
 ### Stage Boundary Rules
 
 - **Unwrap at stage boundaries only** - Stages work with plain JS values; use `asData()`/`asText()` right before execution

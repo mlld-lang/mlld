@@ -1,0 +1,42 @@
+You are a source assessment worker. Evaluate the relevance and content of a source document.
+
+## Source
+
+<source name="@source">
+@sourceContent
+</source>
+
+## Task
+
+Assess this source document:
+
+1. **Relevance**: How relevant is this document to the research goals? (high/medium/low/irrelevant)
+2. **Key Points**: Extract the main claims, findings, or arguments
+3. **Quality**: Assess source reliability (methodology, citations, recency)
+4. **Connections**: Note potential connections to other sources or themes
+
+@evidenceRules
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "source": "@source",
+  "relevance": "high|medium|low|irrelevant",
+  "summary": "2-3 sentence summary",
+  "key_points": [
+    {
+      "claim": "The specific claim or finding",
+      "evidence": "Supporting evidence from the source",
+      "confidence": "high|medium|low"
+    }
+  ],
+  "quality": {
+    "reliability": "high|medium|low",
+    "reasoning": "Why this reliability rating"
+  },
+  "connections": ["Potential connections to other themes or sources"]
+}
+```

@@ -1,0 +1,40 @@
+>> Human handoff — write structured questions file
+
+exe @writeQuestionsFile(runDir, questions, runId) = [
+  let @questionsFile = `@runDir/questions.md`
+  let @timestamp = @now.slice(0, 19).replace("T", " ")
+
+  let @header = `# Questions - Run @runId
+
+Generated: @timestamp
+Status: Awaiting human input
+
+## Questions
+`
+
+  let @safeQuestions = @questions ?? []
+  let @questionBlocks = for @q in @safeQuestions => `
+### Question
+
+**Context**: @q.context
+
+**Question**: @q.question
+
+**Answer**:
+<!-- Write your answer below -->
+
+---
+`
+
+  let @footer = `
+## To Resume
+
+After answering questions above, re-run the orchestrator with --run @runId
+`
+
+  let @content = `@header@questionBlocks.join("")@footer`
+  output @content to "@questionsFile"
+  => @questionsFile
+]
+
+export { @writeQuestionsFile }

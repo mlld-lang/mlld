@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Audit Review Result",
+  "type": "object",
+  "required": ["file", "summary", "findings"],
+  "properties": {
+    "file": { "type": "string" },
+    "summary": { "type": "string" },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "line", "severity", "category", "issue"],
+        "properties": {
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "severity": { "type": "string", "enum": ["high", "medium", "low"] },
+          "category": { "type": "string", "enum": ["bug", "security", "performance", "error-handling", "quality"] },
+          "issue": { "type": "string" },
+          "evidence": { "type": "string" },
+          "suggestion": { "type": "string" }
+        }
+      }
+    }
+  }
+}

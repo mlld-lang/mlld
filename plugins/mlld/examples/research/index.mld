@@ -1,0 +1,250 @@
+>> Research Orchestrator
+>> Usage: mlld plugins/mlld/examples/research/index.mld --sources sources/ [--output report.json] [--run <id>] [--max 50]
+>>
+>> Multi-phase document analysis pipeline with adversarial invalidation.
+>> Decision agent infers phase from filesystem state:
+>>   discover → assess → classify → synthesize → invalidate → complete
+>>
+>> Sources: directory of files to analyze (any format the LLM can read)
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logEvent, @loadRecentEvents, @loadRunState, @saveRunState, @countIterations, @buildContext } from "./lib/context.mld"
+import "@payload" as @p
+
+>> Parse arguments
+var @sourcesDir = @p.sources ?? "sources"
+var @outputPath = @p.output ?? "report.json"
+var @runId = @p.run ?? null
+var @maxIterations = @p.max ? @p.max * 1 : 50
+
+>> Tool permissions
+var @decisionTools = "Read,Write,Glob,Grep"
+var @workerTools = "Read,Write,Glob,Grep"
+
+>> Shell helpers
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+exe @countFiles(dir) = sh { ls -1 "$dir" 2>/dev/null | wc -l | tr -d ' ' }
+
+>> Prompt templates
+exe @decisionPrompt(sources, state, recentEvents, lastError) = template "./prompts/decision/core.att"
+exe @assessPrompt(source, sourceContent, evidenceRules) = template "./prompts/workers/assess.att"
+exe @synthesizePrompt(assessments, sources, evidenceRules) = template "./prompts/workers/synthesize.att"
+exe @invalidatePrompt(claim, assessments, evidenceRules) = template "./prompts/workers/invalidate.att"
+
+>> Resolve run directory
+var @today = @now.slice(0, 10)
+var @resolvedRunId = @runId ?? @today
+var @runDir = `@root/runs/@resolvedRunId`
+run @mkdirp(@runDir)
+run @mkdirp(`@runDir/assessments`)
+run @mkdirp(`@runDir/invalidations`)
+
+>> Load or initialize run state
+var @runState = @loadRunState(@runDir)
+if !@runState.id [
+  let @newState = { id: @resolvedRunId, created: @now, sourcesDir: @sourcesDir }
+  @saveRunState(@runDir, @newState)
+  @logEvent(@runDir, "run_start", { sources: @sourcesDir })
+]
+
+>> Load evidence rules (shared across workers)
+var @evidenceRules = <./prompts/shared/evidence-rules.md>
+
+show `═══════════════════════════════════════════════════════════════════`
+show `Research: @sourcesDir`
+show `═══════════════════════════════════════════════════════════════════`
+show `Run: @resolvedRunId`
+show `Output: @outputPath`
+show `Max iterations: @maxIterations`
+show `───────────────────────────────────────────────────────────────────`
+
+>> Main decision loop
+loop(endless) [
+  >> Check iteration guard
+  let @iterationCount = @countIterations(@runDir)
+  if @iterationCount >= @maxIterations [
+    show `Max iterations (@maxIterations) reached.`
+    @logEvent(@runDir, "run_stopped", { reason: "max_iterations" })
+    done
+  ]
+
+  >> Gather context
+  let @sources = <@sourcesDir/**/*>
+  let @sourceList = for @s in @sources => @s.mx.filename
+  let @context = @buildContext(@runDir, @sourceList)
+
+  >> Call decision agent
+  let @decisionOutputPath = `@runDir/decision-@iterationCount\.json`
+  let @prompt = @decisionPrompt(@sourceList, @context.state, @context.recentEvents, @context.lastError)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool. Write ONLY valid JSON.`
+
+  @logEvent(@runDir, "decision_call", { iteration: @iterationCount })
+  let @_ = @claudePoll(@fullPrompt, "sonnet", "@root", @decisionTools, @decisionOutputPath)
+  let @decision = <@decisionOutputPath>?
+
+  if !@decision [
+    show `Decision agent failed: no output`
+    @logEvent(@runDir, "error", { type: "decision_agent", error: "no output" })
+    continue
+  ]
+
+  show `Decision: @decision.action - @decision.reasoning`
+  @logEvent(@runDir, "iteration", { decision: @decision.action, reasoning: @decision.reasoning })
+
+  >> Execute action
+  when @decision.action [
+    "discover" => [
+      >> List source files and record inventory
+      let @inventory = for @s in @sources => {
+        filename: @s.mx.filename,
+        size: @s.length
+      }
+      output @inventory to "@runDir/inventory.json"
+      show `  Discovered @inventory.length sources`
+      @logEvent(@runDir, "discover_complete", { count: @inventory.length })
+    ]
+
+    "assess" => [
+      >> Parallel assessment of sources
+      let @targets = @decision.targets ?? @sourceList
+      show `  Assessing @targets.length sources`
+
+      let @results = for parallel(20) @filename in @targets [
+        let @outPath = `@runDir/assessments/@filename\.json`
+
+        >> Idempotency
+        let @fileCheck = @fileExists(@outPath)
+        if @fileCheck == "yes" [
+          show `    @filename: skipped`
+          => "skipped"
+        ]
+
+        let @source = <@sourcesDir/@filename>?
+        if !@source [
+          show `    @filename: not found`
+          => "missing"
+        ]
+
+        let @prompt = @assessPrompt(@filename, @source, @evidenceRules)
+        let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool.`
+
+        let @_ = @claudePoll(@fullPrompt, "sonnet", "@root", @workerTools, @outPath)
+        let @result = <@outPath>?
+        show `    @filename: @result.relevance`
+        @logEvent(@runDir, "assess_complete", { source: @filename, relevance: @result.relevance })
+        => @result.relevance
+      ]
+
+      let @assessState = { ...@runState, lastAction: "assess" }
+      @saveRunState(@runDir, @assessState)
+    ]
+
+    "synthesize" => [
+      >> Load all assessments and source content for synthesis
+      let @assessmentFiles = <@runDir/assessments/*.json>
+      let @assessmentData = for @f in @assessmentFiles => @f | @json
+
+      let @prompt = @synthesizePrompt(@assessmentData, @sources, @evidenceRules)
+      let @outPath = `@runDir/synthesis.json`
+      let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool.`
+
+      show `  Synthesizing from @assessmentData.length assessments`
+      let @_ = @claudePoll(@fullPrompt, "opus", "@root", @workerTools, @outPath)
+      let @synthesis = <@outPath>?
+
+      if @synthesis [
+        show `  Synthesis: @synthesis.claims.length claims`
+        @logEvent(@runDir, "synthesize_complete", { claim_count: @synthesis.claims.length })
+      ]
+
+      let @synthState = { ...@runState, lastAction: "synthesize" }
+      @saveRunState(@runDir, @synthState)
+    ]
+
+    "invalidate" => [
+      >> Load synthesis and invalidate each claim
+      let @synthesis = <@runDir/synthesis.json> | @json
+      let @claims = @synthesis.claims ?? []
+      show `  Invalidating @claims.length claims`
+
+      let @results = for parallel(20) @claim in @claims [
+        let @claimId = @claim.id ?? @claim.summary.slice(0, 30).replace(" ", "-")
+        let @outPath = `@runDir/invalidations/@claimId\.json`
+
+        >> Idempotency
+        let @fileCheck = @fileExists(@outPath)
+        if @fileCheck == "yes" [
+          show `    @claimId: skipped`
+          => <@outPath> | @json
+        ]
+
+        let @assessmentFiles = <@runDir/assessments/*.json>
+        let @assessments = for @f in @assessmentFiles => @f | @json
+
+        let @prompt = @invalidatePrompt(@claim, @assessments, @evidenceRules)
+        let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool.`
+
+        let @_ = @claudePoll(@fullPrompt, "opus", "@root", @workerTools, @outPath)
+        let @result = <@outPath>?
+
+        let @status = when @result.verdict [ "supported" => "OK"; * => "FLAGGED" ]
+        show `    @claimId: @status`
+        @logEvent(@runDir, "invalidation_complete", { claim: @claimId, verdict: @result.verdict })
+        => @result
+      ]
+
+      let @invState = { ...@runState, lastAction: "invalidate" }
+      @saveRunState(@runDir, @invState)
+    ]
+
+    "complete" => [
+      >> Build final report from synthesis + invalidation results
+      let @synthesis = <@runDir/synthesis.json>? | @json
+      let @invalidationFiles = <@runDir/invalidations/*.json>
+      let @invalidations = for @f in @invalidationFiles => @f | @json
+
+      let @supported = for @inv in @invalidations when @inv.verdict == "supported" => @inv
+      let @unsupported = for @inv in @invalidations when @inv.verdict != "supported" => @inv
+
+      let @report = {
+        summary: @decision.summary,
+        synthesis: @synthesis,
+        validation: {
+          total_claims: @invalidations.length,
+          supported: @supported.length,
+          unsupported: @unsupported.length,
+          details: @invalidations
+        }
+      }
+
+      output @report to "@outputPath"
+      show `\nReport written to @outputPath`
+      show `  Claims: @invalidations.length total, @supported.length supported, @unsupported.length unsupported`
+      @logEvent(@runDir, "research_complete", { summary: @decision.summary })
+      done
+    ]
+
+    "blocked" => [
+      show `Blocked: @decision.reasoning`
+      @logEvent(@runDir, "run_paused", { reason: @decision.reasoning })
+      show `Resume with: mlld <this-script> --sources @sourcesDir --run @resolvedRunId`
+      done
+    ]
+
+    * => [
+      show `Unknown action: @decision.action`
+      @logEvent(@runDir, "error", { type: "unknown_action", action: @decision.action })
+    ]
+  ]
+
+  cmd { sleep 1 }
+]

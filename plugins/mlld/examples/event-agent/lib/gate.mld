@@ -1,0 +1,23 @@
+>> Gate — checks output quality before finalizing
+
+import { @claudePoll } from @mlld/claude-poll
+
+exe @checkPrompt(task, output) = template "./prompts/gate/check.att"
+
+>> Evaluate whether agent output meets quality standards
+exe @checkOutput(task, output) = [
+  let @outPath = `@root/tmp/gate-@task.id\.json`
+  let @prompt = @checkPrompt(@task, @output)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool.`
+
+  let @_ = @claudePoll(@fullPrompt, "haiku", "@root", "Read,Write", @outPath)
+  let @result = <@outPath>? | @json
+
+  >> Default to pass if gate itself fails
+  when !@result => [ => { pass: true, feedback: null } ]
+  => @result
+]
+
+export { @checkOutput }

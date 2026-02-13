@@ -1,0 +1,44 @@
+>> Router — scores agents and selects the best handler for a task
+
+import { @claudePoll } from @mlld/claude-poll
+
+exe @scorePrompt(task, agents) = template "./prompts/router/score.att"
+
+>> Score agents and pick the best match
+exe @routeTask(task, agents) = [
+  >> Build agent summary for the scoring prompt
+  let @agentSummary = for @a in @agents => `@a.id: @a.capabilities`
+  let @agentList = @agentSummary.join("\n")
+
+  >> Fast classification with haiku
+  let @outPath = `@root/tmp/router-@task.id\.json`
+  let @prompt = @scorePrompt(@task, @agentList)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool.`
+
+  let @_ = @claudePoll(@fullPrompt, "haiku", "@root", "Read,Write", @outPath)
+  let @result = <@outPath>? | @json
+
+  when !@result => [ => { agent: @agents.0.id, confidence: "low", reasoning: "router failed, defaulting" } ]
+
+  >> If confidence is low, refine with a stronger model
+  if @result.confidence == "low" [
+    let @refinePath = `@root/tmp/router-refine-@task.id\.json`
+    let @refinePrompt = `@prompt
+
+A fast classifier scored this as low-confidence. Re-evaluate carefully.
+
+IMPORTANT: Write your JSON response to @refinePath using the Write tool.`
+
+    let @_ = @claudePoll(@refinePrompt, "sonnet", "@root", "Read,Write", @refinePath)
+    let @refined = <@refinePath>? | @json
+    if @refined [
+      => @refined
+    ]
+  ]
+
+  => @result
+]
+
+export { @routeTask }

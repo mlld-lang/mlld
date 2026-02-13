@@ -1,0 +1,42 @@
+Does this output adequately address the task? Be strict.
+
+## Task
+
+<task>
+Type: @task.type
+Description: @task.description
+</task>
+
+## Agent Output
+
+<output>
+@output
+</output>
+
+## Evaluation Criteria
+
+1. **Addresses the task**: Does the output actually respond to what was asked?
+2. **Substantive**: Does it contain real content, not just acknowledgment or filler?
+3. **Complete**: Are all parts of the task addressed, or is it partial?
+
+If the output is empty, generic, or doesn't address the specific task, fail it.
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "pass": true,
+  "feedback": null
+}
+```
+
+Or if rejecting:
+
+```json
+{
+  "pass": false,
+  "feedback": "Specific reason for rejection and what needs to improve"
+}
+```

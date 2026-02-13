@@ -1,0 +1,30 @@
+Which agent should handle this task? Score each agent's fit.
+
+## Task
+
+<task>
+Type: @task.type
+Description: @task.description
+</task>
+
+## Available Agents
+
+@agents
+
+## Instructions
+
+For each agent, score how well it matches the task (high/medium/low/none). Pick the best match.
+
+If the task clearly matches one agent's capabilities, set confidence to "high". If multiple agents could handle it, set confidence to "low" — a second-pass classifier will refine the decision.
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "agent": "agent-id",
+  "confidence": "high|medium|low",
+  "reasoning": "Why this agent is the best fit"
+}
+```

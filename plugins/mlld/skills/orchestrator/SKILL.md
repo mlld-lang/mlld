@@ -113,10 +113,32 @@ loop(endless) [
 ]
 ```
 
-## Canonical File Layout
+## Project Layout: the `llm/` Convention
+
+The `llm/` directory is the standard home for LLM workflows in any mlld project — the equivalent of `src/` for application code.
 
 ```
-orchestrator/
+project/
+├── llm/
+│   ├── run/                     # Scripts for `mlld run <name>`
+│   │   └── my-pipeline/         # Each pipeline gets a subdirectory
+│   │       └── index.mld        # Entry point
+│   ├── mcp/                     # MCP tool modules (`mlld mcp` auto-serves this dir)
+│   ├── agents/                  # Agent definitions
+│   ├── prompts/                 # Shared prompt templates
+│   └── lib/                     # Shared utilities
+├── mlld-config.json             # Created by `mlld init`
+└── ...
+```
+
+`mlld run <name>` looks in `llm/run/<name>/` for an `index.mld`. `mlld mcp` with no arguments serves every module in `llm/mcp/`.
+
+### Orchestrator File Layout
+
+Orchestrators live in `llm/run/` and follow this internal structure:
+
+```
+llm/run/my-orchestrator/
 ├── index.mld                    # Entry point — main loop
 ├── lib/
 │   ├── context.mld              # State management, context gathering
@@ -375,6 +397,6 @@ mlld install @mlld/claude-poll     # Install the Claude polling module
 
 Use `mlld quickstart` and `mlld howto` for language fundamentals. This skill covers orchestrator-specific patterns only.
 
-To scaffold a new orchestrator: use the `/orchestrate:scaffold` command.
+To scaffold a new orchestrator: use the `/mlld:scaffold` command.
 
 To learn by example: read the three archetypes in `examples/`.

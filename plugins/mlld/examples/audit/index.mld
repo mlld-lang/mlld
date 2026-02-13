@@ -1,0 +1,167 @@
+>> Audit Orchestrator
+>> Usage: mlld plugins/mlld/examples/audit/index.mld --glob "src/**/*.ts" [--parallel 20] [--output findings.json]
+>>
+>> Parallel fan-out codebase review with adversarial invalidation.
+>> 1. Glob source files
+>> 2. Fan out: each file reviewed by LLM in parallel
+>> 3. Collect findings
+>> 4. Invalidation pass: adversary attempts to disprove each finding
+>> 5. Output only validated findings (those that survived invalidation)
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logEvent } from "./lib/context.mld"
+import "@payload" as @p
+
+>> Parse arguments
+var @glob = @p.glob ?? "src/**/*.ts"
+var @parallelism = @p.parallel ? @p.parallel * 1 : 20
+var @outputPath = @p.output ?? "findings.json"
+
+>> Tool permissions
+var @reviewTools = "Read,Write,Glob,Grep"
+
+>> Prompt templates
+exe @reviewPrompt(file, fileContent) = template "./prompts/review.att"
+exe @invalidatePrompt(finding, fileContent) = template "./prompts/invalidate.att"
+
+>> Shell helpers
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+
+>> Array helpers
+exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => (a.data || a).findings || []) }
+exe @filterValid(results) = js { return results.filter(r => { r = r.data || r; return r && (r.verdict === 'valid' || !r.verdict); }).map(r => { r = r.data || r; return r.finding || r; }) }
+
+>> Set up run directory
+var @today = @now.slice(0, 10)
+var @runDir = `@root/runs/@today`
+run @mkdirp(@runDir)
+run @mkdirp(`@runDir/reviews`)
+run @mkdirp(`@runDir/invalidations`)
+
+show `═══════════════════════════════════════════════════════════════════`
+show `Audit: @glob`
+show `═══════════════════════════════════════════════════════════════════`
+show `Parallelism: @parallelism`
+show `Output: @outputPath`
+show `Run dir: @runDir`
+show `───────────────────────────────────────────────────────────────────`
+
+>> 1. Glob source files
+var @files = <@glob>
+
+if @files.length == 0 [
+  show `No files matched: @glob`
+  let @empty = []
+  output @empty to "@outputPath"
+] else [
+  show `Found @files.length files to review`
+
+  >> 2. Fan out: parallel review of each file
+  show `\nPhase 1: Review (@files.length files, parallel @parallelism)`
+  show `───────────────────────────────────────────────────────────────────`
+
+  let @reviewResults = for parallel(@parallelism) @file in @files [
+    let @filename = @file.mx.filename
+    let @outPath = `@runDir/reviews/@filename\.json`
+
+    >> Idempotency: skip if already reviewed
+    let @fileCheck = @fileExists(@outPath)
+    if @fileCheck == "yes" [
+      show `  @filename: skipped (exists)`
+      => <@outPath> | @json
+    ]
+
+    >> Build review prompt
+    let @prompt = @reviewPrompt(@file, @file)
+    let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema in the prompt.`
+
+    >> Call reviewer
+    let @_ = @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
+    let @result = <@outPath>?
+
+    if !@result [
+      show `  @filename: review failed (no output)`
+      let @evtData = { file: @filename }
+      @logEvent(@runDir, "review_failed", @evtData)
+      => null
+    ]
+
+    show `  @filename: @result.findings.length findings`
+    let @evtData = { file: @filename, finding_count: @result.findings.length }
+    @logEvent(@runDir, "review_complete", @evtData)
+    => @result | @json
+  ]
+
+  >> Collect all findings from review results
+  let @allFindings = @flatMap(@reviewResults)
+
+  show `\nTotal findings: @allFindings.length`
+
+  if @allFindings.length == 0 [
+    let @empty = []
+    output @empty to "@outputPath"
+    show `No findings. Written empty result to @outputPath`
+  ] else [
+    >> 3. Invalidation pass: adversary attempts to disprove each finding
+    show `\nPhase 2: Invalidation (@allFindings.length findings, parallel @parallelism)`
+    show `───────────────────────────────────────────────────────────────────`
+
+    let @invalidationResults = for parallel(@parallelism) @finding in @allFindings [
+      let @findingId = `@finding.file-@finding.line`
+      let @outPath = `@runDir/invalidations/@findingId\.json`
+
+      >> Idempotency
+      let @fileCheck = @fileExists(@outPath)
+      if @fileCheck == "yes" [
+        show `  @findingId: skipped (exists)`
+        => <@outPath> | @json
+      ]
+
+      >> Load the source file for the adversary
+      let @sourceFile = <@finding.file>?
+      let @prompt = @invalidatePrompt(@finding, @sourceFile)
+      let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+      let @_ = @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
+      let @result = <@outPath>?
+
+      if !@result [
+        show `  @findingId: invalidation failed (no output) - keeping finding`
+        => { finding: @finding, survived: true, reason: "invalidation failed" }
+      ]
+
+      let @status = when @result.verdict [
+        "valid" => "KEPT"
+        "invalid" => "REMOVED"
+        * => "KEPT"
+      ]
+      show `  @findingId [@finding.severity]: @status - @result.reasoning`
+      let @invEvt = { finding: @findingId, verdict: @result.verdict }
+      @logEvent(@runDir, "invalidation_complete", @invEvt)
+      => @result
+    ]
+
+    >> 4. Filter to only validated findings (those the adversary couldn't disprove)
+    let @validatedFindings = @filterValid(@invalidationResults)
+
+    >> 5. Output results
+    show `\n═══════════════════════════════════════════════════════════════════`
+    show `Results: @validatedFindings.length validated findings (from @allFindings.length total)`
+    show `═══════════════════════════════════════════════════════════════════`
+
+    output @validatedFindings to "@outputPath"
+    let @finalEvt = {
+      files_reviewed: @files.length,
+      total_findings: @allFindings.length,
+      validated_findings: @validatedFindings.length
+    }
+    run @logEvent(@runDir, "audit_complete", @finalEvt)
+
+    show `Written to @outputPath`
+  ]
+]

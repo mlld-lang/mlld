@@ -1,0 +1,66 @@
+>> Decision Job — Two-call deliberation pattern
+>> Usage: mlld plugins/mlld/examples/workflow-agent/jobs/decide.mld --input context.json --output decision.json
+>>
+>> Stateless: reads input, makes two LLM calls (generate then evaluate), writes output, exits.
+>> Call 1: Generate options with reasoning (no personality, no bias)
+>> Call 2: Evaluate options against criteria and pick the best one
+
+import { @claudePoll } from @mlld/claude-poll
+import "@payload" as @p
+
+var @inputPath = @p.input
+var @outputPath = @p.output ?? "decision.json"
+var @tools = "Read,Write"
+
+>> Load context
+var @context = <@inputPath> | @json
+
+>> Prompt templates
+exe @generatePrompt(context) = template "./prompts/decide/generate.att"
+exe @evaluatePrompt(context, options) = template "./prompts/decide/evaluate.att"
+
+>> Shared output conventions
+var @outputFormat = <./prompts/shared/output-format.md>
+
+>> --- Call 1: Generate options ---
+>> Pure analysis. No anchoring. Explores the full option space.
+
+var @optionsPath = `@outputPath\.options.json`
+var @genPrompt = @generatePrompt(@context)
+var @genFull = `@genPrompt
+
+@outputFormat
+
+IMPORTANT: Write your JSON response to @optionsPath using the Write tool.`
+
+show `Generating options...`
+var @_ = @claudePoll(@genFull, "sonnet", "@root", @tools, @optionsPath)
+var @options = <@optionsPath>?
+
+if !@options [
+  show `Generation failed: no output`
+  let @err = { status: "failed", reason: "generation produced no output" }
+  output @err to "@outputPath"
+] else [
+  show `Generated @options.options.length options`
+
+  >> --- Call 2: Evaluate and choose ---
+  >> Critical judgment. Weighs options against criteria. Picks one.
+
+  let @evalPrompt = @evaluatePrompt(@context, @options)
+  let @evalFull = `@evalPrompt
+
+@outputFormat
+
+IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
+
+  show `Evaluating options...`
+  let @_ = @claudePoll(@evalFull, "opus", "@root", @tools, @outputPath)
+  let @decision = <@outputPath>?
+
+  if @decision [
+    show `Decision: @decision.chosen — @decision.reasoning`
+  ] else [
+    show `Evaluation failed: no output`
+  ]
+]

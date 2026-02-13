@@ -1,0 +1,9 @@
+{
+  "mlld": {
+    "command": "mlld",
+    "args": ["language-server"],
+    "extensionToLanguage": {
+      ".mld": "mlld"
+    }
+  }
+}

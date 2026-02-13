@@ -1,0 +1,82 @@
+>> Project Toolkit — MCP tool module
+>> Serve with: mlld mcp plugins/mlld/examples/tool-agent/llm/mcp/toolkit.mld
+
+import { @projectRoot } from @input
+
+>> --- Tool implementations ---
+
+exe @projectStatus(root: string) = [
+  let @config = <@root/mlld-config.json>?
+  let @scripts = <@root/llm/run/*/index.mld>
+  let @mcpModules = <@root/llm/mcp/*.mld>
+  => {
+    project: @config.name ?? "unknown",
+    scripts: @scripts.length,
+    mcpModules: @mcpModules.length
+  }
+] with { description: "Project summary: scripts, MCP modules, config" }
+
+exe @searchFiles(root: string, query: string, glob: string) = sh {
+  grep -rl "$query" "$root"/$glob 2>/dev/null || echo "[]"
+} with { description: "Search project files by content" }
+
+exe @addNote(root: string, title: string, body: string) = [
+  let @id = @now.replace(/[^0-9]/g, "").slice(0, 14)
+  let @note = { id: @id, title: @title, body: @body, created: @now }
+  let @path = `@root/notes/@id\.json`
+  output @note to "@path"
+  => @note
+] with { description: "Create a project note" }
+
+exe @listNotes(root: string) = [
+  let @files = <@root/notes/*.json>?
+  when !@files => [ => [] ]
+  => for @f in @files => @f | @json
+] with { description: "List all project notes" }
+
+exe @deleteNote(root: string, id: string) = sh {
+  rm "$root/notes/$id.json" && echo "deleted"
+} with { description: "Delete a project note by ID" }
+
+>> --- Tool collection with bind/expose ---
+
+var tools @toolkit = {
+  projectStatus: {
+    mlld: @projectStatus,
+    bind: { root: @projectRoot },
+    description: "Project summary: scripts, MCP modules, config"
+  },
+  searchFiles: {
+    mlld: @searchFiles,
+    bind: { root: @projectRoot },
+    expose: ["query", "glob"],
+    description: "Search project files by content"
+  },
+  addNote: {
+    mlld: @addNote,
+    bind: { root: @projectRoot },
+    expose: ["title", "body"],
+    description: "Create a project note"
+  },
+  listNotes: {
+    mlld: @listNotes,
+    bind: { root: @projectRoot },
+    description: "List all project notes"
+  },
+  deleteNote: {
+    mlld: @deleteNote,
+    bind: { root: @projectRoot },
+    expose: ["id"],
+    labels: ["destructive"],
+    description: "Delete a project note by ID"
+  }
+}
+
+>> --- Guard: block destructive tools from MCP callers ---
+
+guard @blockDestructiveMcp before op:exe = when [
+  @mx.op.labels.includes("destructive") => deny "Destructive operations blocked"
+  * => allow
+]
+
+export { @projectStatus, @searchFiles, @addNote, @listNotes, @deleteNote, @toolkit, @blockDestructiveMcp }

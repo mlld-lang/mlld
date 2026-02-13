@@ -1,0 +1,61 @@
+>> Development context management
+
+exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+exe @tailFile(path, limit) = sh { tail -n "$limit" "$path" 2>/dev/null }
+
+>> Log event to events.jsonl
+exe @logEvent(runDir, eventType, data) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  let @parsed = @data | @json
+  let @event = { ts: @now, event: @eventType, ...@parsed }
+  append @event to "@eventsFile"
+]
+
+>> Load recent events
+exe @loadRecentEvents(runDir, limit) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  let @check = @fileExists(@eventsFile)
+  when @check == "no" => []
+  let @lines = @tailFile(@eventsFile, @limit)
+  => for @line in @lines.split("\n") when @line.trim() => @line | @json
+]
+
+>> Count iterations
+exe @countIterations(runDir) = [
+  let @events = @loadRecentEvents(@runDir, 1000)
+  let @iterations = for @e in @events when @e.event == "iteration" => @e
+  => @iterations.length
+]
+
+>> Load run state
+exe @loadRunState(runDir) = [
+  let @stateFile = `@runDir/run.json`
+  let @content = <@stateFile>?
+  when !@content => { lastWorkerResult: null, lastError: null }
+  => @content | @json
+]
+
+>> Save run state
+exe @saveRunState(runDir, run) = [
+  output @run to "@runDir/run.json"
+]
+
+>> Build context for decision agent
+exe @buildContext(runDir) = [
+  let @run = @loadRunState(@runDir)
+  let @events = @loadRecentEvents(@runDir, 30)
+  => {
+    recentEvents: @events,
+    lastWorkerResult: @run.lastWorkerResult,
+    lastError: @run.lastError
+  }
+]
+
+export {
+  @logEvent,
+  @loadRecentEvents,
+  @countIterations,
+  @loadRunState,
+  @saveRunState,
+  @buildContext
+}

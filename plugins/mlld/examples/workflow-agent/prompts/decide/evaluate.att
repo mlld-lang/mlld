@@ -1,0 +1,51 @@
+You are evaluating options to make a decision. Be critical. The generation step explored possibilities — your job is judgment.
+
+## Context
+
+<context>
+@context
+</context>
+
+## Generated Options
+
+<options>
+@options
+</options>
+
+## Task
+
+Evaluate each option against the context:
+
+1. **Test assumptions** — Are the assumptions realistic given the context?
+2. **Weigh tradeoffs** — Which cons are dealbreakers vs. acceptable costs?
+3. **Compare** — How do options perform on the criteria that matter most?
+4. **Choose one** — Pick the best option. Explain why it wins and why the others lose.
+
+Do not invent new options. Choose from the set provided.
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "status": "completed",
+  "evaluations": [
+    {
+      "id": "option-1",
+      "assumptions_valid": true,
+      "strengths": "What makes this viable",
+      "weaknesses": "What makes this risky",
+      "score": "strong|viable|weak"
+    }
+  ],
+  "chosen": "option-1",
+  "reasoning": "Why this option wins, with specific references to context",
+  "rejected": [
+    {
+      "id": "option-2",
+      "reason": "Why it lost"
+    }
+  ]
+}
+```

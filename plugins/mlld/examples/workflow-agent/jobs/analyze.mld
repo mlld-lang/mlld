@@ -1,0 +1,39 @@
+>> Analysis Job — Extract insights from a document
+>> Usage: mlld plugins/mlld/examples/workflow-agent/jobs/analyze.mld --input doc.md --output analysis.json
+>>
+>> Stateless: reads input, calls LLM, writes output, exits.
+>> Invoke from any external system that can pass CLI arguments.
+
+import { @claudePoll } from @mlld/claude-poll
+import "@payload" as @p
+
+var @inputPath = @p.input
+var @outputPath = @p.output ?? "analysis.json"
+
+>> Load input
+var @doc = <@inputPath>
+var @filename = @doc.mx.filename
+
+>> Prompt template
+exe @extractPrompt(filename, content) = template "./prompts/analyze/extract.att"
+
+>> Shared output conventions
+var @outputFormat = <./prompts/shared/output-format.md>
+
+>> Build prompt with file-based output protocol
+var @prompt = @extractPrompt(@filename, @doc)
+var @fullPrompt = `@prompt
+
+@outputFormat
+
+IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
+
+>> Single LLM call — analysis is read-only
+var @_ = @claudePoll(@fullPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @outputPath)
+var @result = <@outputPath>?
+
+if @result [
+  show `Analysis complete: @result.findings.length findings from @filename`
+] else [
+  show `Analysis failed: no output produced`
+]

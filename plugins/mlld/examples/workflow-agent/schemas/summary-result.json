@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Summary Result",
+  "type": "object",
+  "required": ["status", "themes", "conclusions"],
+  "properties": {
+    "status": { "type": "string", "enum": ["completed", "partial", "failed"] },
+    "themes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "sources": { "type": "array", "items": { "type": "string" } },
+          "strength": { "type": "string", "enum": ["strong", "moderate", "weak"] }
+        }
+      }
+    },
+    "conclusions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim", "confidence"],
+        "properties": {
+          "claim": { "type": "string" },
+          "evidence": { "type": "string" },
+          "confidence": { "type": "string", "enum": ["high", "medium", "low"] }
+        }
+      }
+    },
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "position_a": { "type": "string" },
+          "position_b": { "type": "string" },
+          "sources": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

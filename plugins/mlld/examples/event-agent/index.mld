@@ -1,0 +1,88 @@
+>> Event-Driven Task Handler
+>> Usage: mlld plugins/mlld/examples/event-agent/index.mld --task tasks/pending/task-001.json --output tasks/done/task-001.json
+>>
+>> Called by the TypeScript event loop for each incoming task.
+>> Routes the task to the right agent, dispatches, and gates output quality.
+
+import { @claudePoll } from @mlld/claude-poll
+import { @routeTask } from "./lib/router.mld"
+import { @checkOutput } from "./lib/gate.mld"
+import { @meta as @classifierMeta } from "./agents/classifier.mld"
+import { @meta as @writerMeta } from "./agents/writer.mld"
+import { @meta as @reviewerMeta } from "./agents/reviewer.mld"
+import "@payload" as @p
+
+var @taskPath = @p.task
+var @outputPath = @p.output
+
+>> Load task
+var @task = <@taskPath> | @json
+
+>> Agent registry
+exe @buildRegistry(c, w, r) = js {
+  return [c, w, r];
+}
+var @agents = @buildRegistry(@classifierMeta, @writerMeta, @reviewerMeta)
+
+>> Prompt templates — one per agent
+exe @classifyPrompt(task) = template "./prompts/agents/classify.att"
+exe @writePrompt(task) = template "./prompts/agents/write.att"
+exe @reviewPrompt(task) = template "./prompts/agents/review.att"
+
+show `Task: @task.type — @task.description`
+
+>> Step 1: Route — which agent handles this task?
+var @routing = @routeTask(@task, @agents)
+show `Router: @routing.agent (@routing.confidence) — @routing.reasoning`
+
+>> Step 2: Dispatch — call the selected agent
+var @prompt = when @routing.agent [
+  "classifier" => @classifyPrompt(@task)
+  "writer" => @writePrompt(@task)
+  "reviewer" => @reviewPrompt(@task)
+  * => @classifyPrompt(@task)
+]
+var @agentOutputPath = `@outputPath\.agent.json`
+var @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @agentOutputPath using the Write tool.`
+
+var @_ = @claudePoll(@fullPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @agentOutputPath)
+var @agentResult = <@agentOutputPath>?
+
+if !@agentResult [
+  show `Agent @routing.agent failed: no output`
+  let @err = { status: "failed", agent: @routing.agent, task: @task.id }
+  output @err to "@outputPath"
+] else [
+  >> Step 3: Gate — does the output meet quality standards?
+  let @gateResult = @checkOutput(@task, @agentResult)
+
+  if @gateResult.pass [
+    show `Gate: passed`
+    output @agentResult to "@outputPath"
+  ] else [
+    show `Gate: failed — @gateResult.feedback`
+
+    >> Retry once with gate feedback
+    let @retryPrompt = `@prompt
+
+Previous attempt was rejected: @gateResult.feedback
+
+Address the feedback and try again.
+
+IMPORTANT: Write your JSON response to @agentOutputPath using the Write tool.`
+
+    let @_ = @claudePoll(@retryPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @agentOutputPath)
+    let @retryResult = <@agentOutputPath>?
+
+    if @retryResult [
+      output @retryResult to "@outputPath"
+      show `Retry accepted`
+    ] else [
+      let @err = { status: "failed", agent: @routing.agent, reason: "gate_retry_failed" }
+      output @err to "@outputPath"
+      show `Retry failed`
+    ]
+  ]
+]
