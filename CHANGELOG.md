@@ -100,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **`@root` alias**: `@root` is now available as a preferred alias for `@base` — both resolve to the project root directory for file/output/import path handling.
 - **`var` inside block statements**: `if`, `for`, and `when ... => [ ... ]` action blocks now raise a targeted parse error with guidance to use `let` for block-scoped bindings.
+- **Path resolution guidance for missing files**: Missing local file paths now include did-you-mean suggestions across imports, template files, and content loaders, plus guidance that relative paths resolve from the current mlld file and `@base/...` resolves from project root.
 - **Relative path scope**: Relative paths in `output`/`append` directives now resolve from the script file directory instead of the project root, so `output @data to "local.txt"` writes next to the script.
 - **Template file alligator path scope**: Relative `<file>` loads inside `template "file.att"`/`template "file.mtt"` executables now resolve from the template file directory instead of the caller script directory.
 - **Export manifest enforcement for executable internals**: Importers can no longer read unexported module members through `@namespace.exec.internal.capturedModuleEnv.*` (or via selected imported executables).

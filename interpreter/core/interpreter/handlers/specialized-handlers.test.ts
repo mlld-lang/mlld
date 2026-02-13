@@ -372,7 +372,7 @@ describe('interpreter specialized handlers parity', () => {
     const missingLoadNode = parseVarValueNode('/var @missing = <missing.txt>');
     await expect(
       evaluate(missingLoadNode, env, { isExpression: true })
-    ).rejects.toThrow(/Failed to load content/i);
+    ).rejects.toThrow(/File not found: missing\.txt/i);
   });
 
   it('fileReference handler keeps positive and negative behavior stable', async () => {
@@ -404,7 +404,7 @@ describe('interpreter specialized handlers parity', () => {
     };
     await expect(
       evaluate(missingFileRefNode as any, env, { isExpression: true })
-    ).rejects.toThrow(/Failed to load content/i);
+    ).rejects.toThrow(/File not found: missing\.json/i);
   });
 
   it('code handler keeps positive and negative behavior stable', async () => {

@@ -143,25 +143,39 @@ describe('Fuzzy Local File Imports', () => {
       
       // Both files match with case-insensitive matching
       const source = '/import { a } from "./TEST-FILE"';
-      
+
       await expect(interpret(source, {
         fileSystem,
         pathService,
         basePath: '/'
-      })).rejects.toThrow(/Did you mean.*Test-File\.mld.*test-file\.mld/s);
+      })).rejects.toThrow(/Ambiguous file match/);
+      await expect(interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      })).rejects.toThrow(/Test-File\.mld/);
+      await expect(interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      })).rejects.toThrow(/test-file\.mld/);
     });
   });
 
   describe('Configuration', () => {
     it('should respect disabled fuzzy matching', async () => {
       const source = '/import { greeting } from "./my-utils"';
-      
-      await expect(interpret(source, {
+
+      const promise = interpret(source, {
         fileSystem,
         pathService,
         basePath: '/',
         localFileFuzzyMatch: false
-      })).rejects.toThrow(/Failed to read imported file/);
+      });
+
+      await expect(promise).rejects.toThrow(/File not found: \.\/my-utils/);
+      await expect(promise).rejects.toThrow(/Did you mean:[\s\S]*@base\/my-utils/);
+      await expect(promise).rejects.toThrow(/Paths resolve relative to the current mlld file directory/);
     });
 
     it('should respect case-sensitive configuration', async () => {

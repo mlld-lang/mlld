@@ -178,6 +178,13 @@ export class ContentLoaderOrchestrator {
         return null as any;
       }
 
+      if (typeof error?.message === 'string' && error.message.startsWith('File not found:')) {
+        throw new MlldError(error.message, {
+          path: pathOrUrl,
+          error: error.message
+        });
+      }
+
       let errorMessage = `Failed to load content: ${pathOrUrl}`;
       const hasAngleBracket = pathOrUrl.includes('<') || pathOrUrl.includes('>');
       if (!hasAngleBracket && !pathOrUrl.startsWith('/') && !pathOrUrl.startsWith('@') && !env.isURL(pathOrUrl)) {
