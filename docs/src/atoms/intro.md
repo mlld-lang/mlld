@@ -26,7 +26,8 @@ mlld is an LLM scripting language for surgical context assembly, parallelization
 - Text lines are errors (catches accidental output)
 
 **.md files (markdown mode)** - For literate scripts
-- Slash prefix required: `/var @x = 1`
+- Slash prefix required for directives: `/var @x = 1`
+- Bare `=>` at line start returns from the script
 - Text lines become content output
 
 ```mlld

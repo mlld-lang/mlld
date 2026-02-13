@@ -171,7 +171,7 @@ Output:
 Hello World!
 ```
 
-Exe blocks require an explicit return with `=>` as the last statement:
+Exe blocks return values with an explicit `=>`:
 
 ```mlld
 exe @combine(a, b) = [
@@ -186,6 +186,23 @@ Output:
 ```
 hello-world
 ```
+
+### Script Return
+
+Use `=>` at top level to return a final script value and stop execution:
+
+```mlld
+show "Processing..."
+=> { status: "ok" }
+show "unreachable"
+```
+
+With script returns, final output is explicit:
+
+- `show` writes side-effect output
+- `log` writes side-effect diagnostics to stderr
+- `=> @value` returns final script output and terminates execution
+- No `=>` means no implicit final return output
 
 Use `let @var += value` for accumulation within blocks:
 

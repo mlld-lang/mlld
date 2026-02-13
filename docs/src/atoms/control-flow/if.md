@@ -31,4 +31,4 @@ exe @validate(input) = [
 ]
 ```
 
-Use `=>` only inside `exe` blocks.
+Use `=>` inside `exe` blocks and at script top level.

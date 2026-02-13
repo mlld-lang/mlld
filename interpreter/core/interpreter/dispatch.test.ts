@@ -29,6 +29,7 @@ describe('interpreter dispatch routing', () => {
     expect(getDispatchTarget(node('BinaryExpression'))).toBe('unifiedExpression');
     expect(getDispatchTarget(node('WhenExpression'))).toBe('whenExpression');
     expect(getDispatchTarget(node('ExeBlock'))).toBe('exeBlock');
+    expect(getDispatchTarget(node('ExeReturn', { values: [] }))).toBe('exeReturn');
     expect(getDispatchTarget(node('foreach'))).toBe('foreach');
     expect(getDispatchTarget(node('foreach-command'))).toBe('foreach');
     expect(getDispatchTarget(node('ForExpression'))).toBe('forExpression');

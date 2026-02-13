@@ -10,6 +10,7 @@ import type {
 } from '@core/types';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import type { Environment } from '@interpreter/env/Environment';
+import { isExeReturnControl } from '@interpreter/eval/exe-return';
 import { materializeDisplayValue } from '@interpreter/utils/display-materialization';
 import { parseFrontmatter } from '@interpreter/utils/frontmatter-parser';
 
@@ -208,6 +209,10 @@ export async function evaluateArrayNodes({
       if (inlinePipelineResult) {
         lastValue = inlinePipelineResult.value;
         lastResult = inlinePipelineResult;
+        const scriptExeContext = env.getExecutionContext<{ scope?: string }>('exe');
+        if (scriptExeContext?.scope === 'script' && isExeReturnControl(inlinePipelineResult.value)) {
+          return { value: inlinePipelineResult.value, env };
+        }
       }
       continue;
     }
@@ -215,6 +220,11 @@ export async function evaluateArrayNodes({
     const result = await evaluateNode(currentNode, env, context);
     lastValue = result.value;
     lastResult = result;
+
+    const scriptExeContext = env.getExecutionContext<{ scope?: string }>('exe');
+    if (scriptExeContext?.scope === 'script' && isExeReturnControl(result.value)) {
+      return { value: result.value, env };
+    }
 
     if (hasLeadingFrontmatter) {
       emitNonDirectiveIntents(currentNode, env, context);

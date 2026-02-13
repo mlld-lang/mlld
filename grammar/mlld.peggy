@@ -102,8 +102,9 @@ InterDirectiveNewline
       /* success only if the next real char starts a directive line */
       const isStrictMode = options?.mode === 'strict';
       const isDirectiveLine = i < input.length && helpers.isDirectiveContext(input, i);
+      const isReturnLine = i < input.length && helpers.isReturnDirectiveContext(input, i);
       const hasSlash = i < input.length && input[i] === '/';
-      return isDirectiveLine && (isStrictMode || hasSlash);
+      return isDirectiveLine && (isStrictMode || hasSlash || isReturnLine);
     } {
       return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
@@ -190,8 +191,9 @@ TextPart
       // Check for directive start
       if (isAtLineStart && helpers.isDirectiveContext(input, pos)) {
         const hasSlash = input[pos] === '/';
+        const isReturnLine = helpers.isReturnDirectiveContext(input, pos);
         const isStrictMode = options?.mode === 'strict';
-        if (isStrictMode || hasSlash) {
+        if (isStrictMode || hasSlash || isReturnLine) {
           return true; // Stop parsing text - directive ahead
         }
       }
@@ -223,12 +225,14 @@ Directive
       if (!helpers.isLogicalLineStart(input, pos)) return false;
       if (!helpers.isDirectiveContext(input, pos)) return false;
       const hasSlash = input[pos] === '/';
+      const isReturnLine = helpers.isReturnDirectiveContext(input, pos);
       const isStrictMode = options?.mode === 'strict';
-      return isStrictMode || hasSlash;
+      return isStrictMode || hasSlash || isReturnLine;
     }
     [ \t]*                        // allow leading tabs/spaces
     dir:(
-      SlashVar      // NEW: Var directives (unified variable assignment)
+      SlashExeReturn
+    / SlashVar      // NEW: Var directives (unified variable assignment)
     / SlashShow     // NEW: Show directives (content display) - replaces AtAdd
     / SlashLog      // NEW: Log directives (syntactic sugar for /output to stdout)
     / SlashExe      // NEW: Exe directives (define commands/code) - replaces AtExec
@@ -254,6 +258,9 @@ Directive
     / SlashStream   // Stream directives
     // NO AtText, AtData, AtAdd, AtExec - deleted!
     ) { return dir; }
+
+SlashExeReturn
+  = "/"? ret:ExeReturnStatement { return ret; }
 
 // -------------------------------------------------------------------------
 // STRICT MODE LINE HANDLING

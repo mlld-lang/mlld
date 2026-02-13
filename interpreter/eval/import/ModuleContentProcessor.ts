@@ -21,6 +21,7 @@ import type { SerializedGuardDefinition } from '../../guards';
 import type { NeedsDeclaration, ProfilesDeclaration } from '@core/policy/needs';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { inferMlldMode } from '@core/utils/mode';
+import { isExeReturnControl } from '../exe-return';
 
 // Use a truly global import stack via globalThis to survive module reloading
 // This is necessary because child environments may have different import resolvers
@@ -659,7 +660,7 @@ export class ModuleContentProcessor {
     let parseResult = await parse(processedContent, { mode });
 
     // Virtual fixture files default to markdown parsing. Retry strict parsing for
-    // strict-mode modules when markdown parsing yields only plain text nodes.
+    // strict-mode modules when markdown parsing does not produce directives.
     if (
       mode === 'markdown' &&
       inferredMode === 'strict' &&
@@ -667,18 +668,21 @@ export class ModuleContentProcessor {
       parseResult.success &&
       Array.isArray(parseResult.ast)
     ) {
-      const hasStructuredNodes = parseResult.ast.some(node => {
+      const markdownHasDirectives = parseResult.ast.some(node => {
         const nodeType = typeof node === 'object' && node !== null ? (node as any).type : undefined;
-        return nodeType !== 'Text' && nodeType !== 'Newline' && nodeType !== 'Comment';
+        return nodeType === 'Directive';
       });
 
-      if (!hasStructuredNodes) {
+      if (!markdownHasDirectives) {
         const strictParseResult = await parse(processedContent, { mode: 'strict' });
-        const strictHasDirectives =
+        const strictHasStructuredNodes =
           strictParseResult.success &&
           Array.isArray(strictParseResult.ast) &&
-          strictParseResult.ast.some(node => (node as any)?.type === 'Directive');
-        if (strictHasDirectives) {
+          strictParseResult.ast.some(node => {
+            const nodeType = typeof node === 'object' && node !== null ? (node as any).type : undefined;
+            return nodeType !== 'Text' && nodeType !== 'Newline' && nodeType !== 'Comment';
+          });
+        if (strictHasStructuredNodes) {
           parseResult = strictParseResult;
         }
       }
@@ -819,6 +823,7 @@ export class ModuleContentProcessor {
 
     // Evaluate AST in child environment
     const evalResult = await this.evaluateInChildEnvironment(ast, childEnv, resolvedPath);
+    const scriptReturnValue = isExeReturnControl(evalResult?.value) ? evalResult.value.value : undefined;
 
     // Process module exports
     const childVars = childEnv.getCurrentVariables();
@@ -838,6 +843,13 @@ export class ModuleContentProcessor {
       exportManifest,
       childEnv
     );
+
+    if (
+      isExeReturnControl(evalResult?.value) &&
+      !Object.prototype.hasOwnProperty.call(moduleObject, 'default')
+    ) {
+      moduleObject.default = scriptReturnValue;
+    }
 
     // Add __meta__ property with frontmatter if available
     if (frontmatter) {
@@ -1037,7 +1049,11 @@ export class ModuleContentProcessor {
     try {
       // Pass isExpression: true to prevent markdown content from being emitted as effects
       // Imports should only process directives and create variables, not emit document content
-      return await evaluate(ast, childEnv, { isExpression: true });
+      return await childEnv.withExecutionContext(
+        'exe',
+        { allowReturn: true, scope: 'script', hasFunctionBoundary: false },
+        async () => evaluate(ast, childEnv, { isExpression: true })
+      );
     } catch (error) {
       throw new Error(
         `Error evaluating imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`

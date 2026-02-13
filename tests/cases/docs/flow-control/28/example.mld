@@ -1,9 +1,7 @@
-exe @duplicate(item) = js { return [item, item.toUpperCase()]; }
-exe @flat(values) = js {
+exe @sum(values) = js {
   if (!Array.isArray(values)) throw new Error('expected array input');
-  return values.flat();
+  return values.reduce((total, value) => total + Number(value), 0);
 }
 
-var @names = ["one", "two"]
-var @result = foreach @duplicate(@names) => | @flat
-show @result
+var @total = for @n in [1, 2, 3, 4] => @n => | @sum
+show @total

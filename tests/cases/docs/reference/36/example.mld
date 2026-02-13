@@ -1,1 +1,1 @@
-stream @claude("Write a haiku")
+stream @claude("Write a story")

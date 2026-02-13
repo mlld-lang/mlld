@@ -1,4 +1,1 @@
-exe @left() = sh { echo "L" }
-exe @right() = sh { echo "R" }
-var @results = stream @left() || stream @right()
-show @results  >> => ["L","R"]
+stream @claude("Write a haiku")

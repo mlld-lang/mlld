@@ -1,5 +1,7 @@
-exe @process(state) = when [
-  @mx.while.iteration > 5 => done @state
-  @mx.while.iteration == @mx.while.limit => done "hit cap"
-  * => continue @state
+exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
 ]
+
+var @result = 5 | while(10) @countdown
+show @result

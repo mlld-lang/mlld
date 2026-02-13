@@ -385,6 +385,20 @@ append "raw text entry" to "events.log"
 
 Syntactic sugar for `output ... to stderr`
 
+### Script return (`=>`)
+
+Return a final script value and terminate execution:
+
+```mlld
+=> @result
+```
+
+Strict-mode final output is explicit:
+- `show` emits side-effect output
+- `log` emits side-effect diagnostics to stderr
+- `=> @value` emits final script output and stops execution
+- No `=>` means no implicit final return output
+
 ### `stream` - Stream Output
 
 **Purpose**: Display output with live chunks as they arrive (instead of buffering until completion)

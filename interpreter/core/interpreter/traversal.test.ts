@@ -108,4 +108,27 @@ describe('interpreter traversal behavior', () => {
       documentEffects(withoutFrontmatter.effects)
     );
   });
+
+  it('stops traversal immediately when a return control is produced', async () => {
+    const { env, effects } = createEnv();
+    env.pushExecutionContext('exe', { allowReturn: true, scope: 'script' });
+    try {
+      const result = await evaluate([
+        {
+          type: 'ExeReturn',
+          nodeId: 'return-node',
+          values: [{ type: 'Literal', nodeId: 'return-value', value: 'done', valueType: 'string' }],
+          raw: '=> "done"',
+          meta: { hasValue: true }
+        } as any,
+        textNode('unreachable')
+      ], env);
+
+      expect(result.value).toMatchObject({ __exeReturn: true, value: 'done' });
+      expect(env.getNodes()).toEqual([]);
+      expect(documentEffects(effects)).toEqual([]);
+    } finally {
+      env.popExecutionContext('exe');
+    }
+  });
 });

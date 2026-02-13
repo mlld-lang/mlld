@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Works in expressions, `when` filters, templates, directive bodies, and nested loops.
   - Preserves original array position in `for parallel(...)` iterations.
   - Object iteration keeps `@item.mx.key` and does not set `@item.mx.index`.
+- **Top-level script returns (`=>`)**: strict and markdown scripts accept bare `=>` at line start as an explicit script return.
+  - `=> @value` terminates script execution immediately.
+  - Top-level `if` and `when` branches can return through the script context.
+  - Imported `.mld` modules expose script return values through `default`.
+  - Scripts without `=>` do not emit implicit final return output.
 - **Key/value for loops**: `for @key, @value in @obj` binds the key variable and skips the implicit `@value_key` binding
 - **`for parallel` variables**: Cap and pacing parameters accept variables
 - **`when @condition => [block]`**: Conditional blocks with full statement support

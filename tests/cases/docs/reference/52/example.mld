@@ -1,2 +1,9 @@
-exe @formatDate(date) = run {date -d "@date" "+%Y-%m-%d"}
-exe @validate(data) = js { return data.valid === true }
+>> Python shadow environment
+exe @greet(name) = py { print(f"Hello, {name}!") }
+exe @shout(text) = py { print(text.upper()) }
+exe py = { greet, shout }
+
+run py {
+greet("World")
+shout("mlld rocks")
+}

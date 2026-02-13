@@ -1,9 +1,9 @@
->> Python shadow environment
-exe @greet(name) = py { print(f"Hello, {name}!") }
-exe @shout(text) = py { print(text.upper()) }
-exe py = { greet, shout }
+>> Define helpers
+exe @double(n) = js { return n * 2 }
+exe @triple(n) = js { return n * 3 }
 
-run py {
-greet("World")
-shout("mlld rocks")
-}
+>> Expose to all js blocks
+exe js = { double, triple }
+
+>> Now all js blocks can use them
+var @result = js { double(5) + triple(3) }  >> 19

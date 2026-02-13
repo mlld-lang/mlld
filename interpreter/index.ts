@@ -23,6 +23,8 @@ import { ExecutionEmitter } from '@sdk/execution-emitter';
 import { StreamExecution } from '@sdk/stream-execution';
 import { evaluateDirective } from './eval/directive';
 import type { DirectiveNode } from '@core/types';
+import { isExeReturnControl } from './eval/exe-return';
+import { materializeDisplayValue } from './utils/display-materialization';
 
 /**
  * Main entry point for the Mlld interpreter.
@@ -326,7 +328,23 @@ export async function interpret(
   
   // Evaluate the AST
   const runExecution = async (): Promise<string> => {
-    await evaluate(ast, env);
+    const evaluationResult = await env.withExecutionContext(
+      'exe',
+      { allowReturn: true, scope: 'script', hasFunctionBoundary: false },
+      async () => evaluate(ast, env)
+    );
+
+    // Script-level return is explicit final output. Non-return final values are ignored.
+    if (isExeReturnControl(evaluationResult.value)) {
+      const materialized = materializeDisplayValue(
+        evaluationResult.value.value,
+        undefined,
+        evaluationResult.value.value
+      );
+      if (materialized.text.length > 0) {
+        env.emitEffect('both', materialized.text);
+      }
+    }
 
     // Flush any pending breaks before getting final output
     env.renderOutput();

@@ -1,10 +1,12 @@
-import type { MlldNode, TextNode } from '@core/types';
+import type { ExeReturnNode, MlldNode, TextNode } from '@core/types';
+import { MlldDirectiveError } from '@core/errors';
 import { isExecInvocation, isLiteralNode } from '@core/types';
 import { parseSync } from '@grammar/parser';
 import type { OperationContext } from '@interpreter/env/ContextManager';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
 import { evaluateDataValue } from '@interpreter/eval/data-value-evaluator';
+import { createExeReturnControl, resolveExeReturnValue } from '@interpreter/eval/exe-return';
 import type { VarAssignmentResult } from '@interpreter/eval/var';
 import { parseFrontmatter } from '@interpreter/utils/frontmatter-parser';
 import type { InterpolationNode } from '@interpreter/utils/interpolation';
@@ -318,6 +320,22 @@ export async function evaluateCore({
   if (dispatchTarget === 'exeBlock' && node.type === 'ExeBlock') {
     const { evaluateExeBlock } = await import('@interpreter/eval/exe');
     return evaluateExeBlock(node as any, env, {}, { scope: 'block' });
+  }
+
+  if (dispatchTarget === 'exeReturn' && node.type === 'ExeReturn') {
+    const exeContext = env.getExecutionContext<{ allowReturn?: boolean }>('exe');
+    if (!exeContext?.allowReturn) {
+      throw new MlldDirectiveError(
+        'Return statements are only allowed inside exe blocks.',
+        'return',
+        { location: node.location }
+      );
+    }
+    const returnResult = await resolveExeReturnValue(node as ExeReturnNode, env);
+    return {
+      value: createExeReturnControl(returnResult.value),
+      env: returnResult.env || env
+    };
   }
 
   if (dispatchTarget === 'foreach' && (node.type === 'foreach' || node.type === 'foreach-command')) {

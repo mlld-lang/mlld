@@ -19,6 +19,7 @@ export type DispatchTarget =
   | 'literal'
   | 'whenExpression'
   | 'exeBlock'
+  | 'exeReturn'
   | 'foreach'
   | 'forExpression'
   | 'loopExpression'
@@ -63,6 +64,8 @@ export function getDispatchTarget(node: MlldNode): DispatchTarget {
       return 'whenExpression';
     case 'ExeBlock':
       return 'exeBlock';
+    case 'ExeReturn':
+      return 'exeReturn';
     case 'foreach':
     case 'foreach-command':
       return 'foreach';

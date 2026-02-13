@@ -1,2 +1,5 @@
-var @access = @score > 80 && @verified ? "granted" : "denied"
-var @status = @isAdmin || (@isMod && @active) ? "privileged" : "standard"
+exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
+]
+var @result = 5 | while(10) @countdown
