@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { accessField, accessFields } from './field-access';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
-import { createObjectVariable } from '@core/types/variable/VariableFactories';
+import { createObjectVariable, createStructuredValueVariable } from '@core/types/variable/VariableFactories';
+import { wrapStructured } from './structured-value';
 
 const source = {
   directive: 'var' as const,
@@ -88,5 +89,65 @@ describe('missing field access', () => {
   it('returns null for out-of-bounds array indices', async () => {
     const result = await accessField([1, 2], { type: 'arrayIndex', value: 5 });
     expect(result).toBeNull();
+  });
+});
+
+describe('structured value mx accessors', () => {
+  it('maps .mx.text and .mx.data to wrapper-level views', async () => {
+    const payload = { stance: 'approved', mx: 'user-mx' };
+    const structured = wrapStructured(payload, 'object', 'RAW-PAYLOAD');
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const mxText = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'text' } as const
+    ], { preserveContext: false });
+    expect(mxText).toBe('RAW-PAYLOAD');
+
+    const mxData = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'data' } as const
+    ], { preserveContext: false });
+    expect(mxData).toEqual(payload);
+
+    const userMxThroughData = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'data' } as const,
+      { type: 'field', value: 'mx' } as const
+    ], { preserveContext: false });
+    expect(userMxThroughData).toBe('user-mx');
+  });
+
+  it('keeps plain dotted access aligned with .mx.data', async () => {
+    const payload = { stance: 'approved', score: 9 };
+    const structured = wrapStructured(payload, 'object', '{"stance":"approved","score":9}');
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const direct = await accessField(variable, { type: 'field', value: 'stance' }, { preserveContext: false });
+    const viaMx = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'data' } as const,
+      { type: 'field', value: 'stance' } as const
+    ], { preserveContext: false });
+
+    expect(direct).toBe('approved');
+    expect(viaMx).toBe('approved');
+  });
+
+  it('exposes .mx.text and .mx.data on text wrappers', async () => {
+    const structured = wrapStructured('hello', 'text', 'hello');
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const mxText = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'text' } as const
+    ], { preserveContext: false });
+    const mxData = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'data' } as const
+    ], { preserveContext: false });
+
+    expect(mxText).toBe('hello');
+    expect(mxData).toBe('hello');
   });
 });

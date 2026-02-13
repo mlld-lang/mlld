@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Colon form still works (backward compatible) but is no longer shown in docs
 
 ### Changed
+- StructuredValue field access now exposes wrapper accessors at `.mx.text` and `.mx.data`, and plain dotted access resolves through wrapper data consistently (`@value.field` aligns with `@value.mx.data.field`).
 - Go/Python/Rust/Ruby SDK wrappers use persistent `mlld live --stdio` transport instead of per-call CLI shellouts.
   - Go, Python, Rust, and Ruby expose async handle APIs for `process` and `execute` with `wait/result`, `cancel`, and `update_state`.
   - `process` accepts payload/state/dynamic module injection options across wrappers.

@@ -11,7 +11,14 @@ import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
-import { asData, asText, isStructuredValue, extractSecurityDescriptor, applySecurityDescriptorToStructuredValue } from './structured-value';
+import {
+  asData,
+  asText,
+  isStructuredValue,
+  extractSecurityDescriptor,
+  applySecurityDescriptorToStructuredValue,
+  type StructuredValue
+} from './structured-value';
 import { wrapExecResult } from './structured-exec';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import type { DataObjectValue } from '@core/types/var';
@@ -96,33 +103,52 @@ function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
 
 function createObjectUtilityMxView(
   mx: unknown,
-  data: unknown
+  data: unknown,
+  structured?: StructuredValue
 ): unknown {
-  if (!mx || typeof mx !== 'object') {
-    return mx;
-  }
-  if (!isPlainObjectValue(data)) {
+  const hasMxObject = Boolean(mx && typeof mx === 'object');
+  const hasObjectUtilityData = isPlainObjectValue(data);
+  if (!structured && !hasObjectUtilityData) {
     return mx;
   }
 
-  const obj = data as Record<string, unknown>;
-  const keys = Object.keys(obj);
-  const view = Object.create(mx as object) as Record<string, unknown>;
-  Object.defineProperty(view, 'keys', {
-    value: keys,
-    enumerable: true,
-    configurable: true
-  });
-  Object.defineProperty(view, 'values', {
-    value: keys.map(key => obj[key]),
-    enumerable: true,
-    configurable: true
-  });
-  Object.defineProperty(view, 'entries', {
-    value: keys.map(key => [key, obj[key]]),
-    enumerable: true,
-    configurable: true
-  });
+  const view = (hasMxObject
+    ? Object.create(mx as object)
+    : Object.create(null)) as Record<string, unknown>;
+
+  if (structured) {
+    Object.defineProperty(view, 'text', {
+      value: structured.text,
+      enumerable: true,
+      configurable: true
+    });
+    Object.defineProperty(view, 'data', {
+      value: structured.data,
+      enumerable: true,
+      configurable: true
+    });
+  }
+
+  if (hasObjectUtilityData) {
+    const obj = data as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    Object.defineProperty(view, 'keys', {
+      value: keys,
+      enumerable: true,
+      configurable: true
+    });
+    Object.defineProperty(view, 'values', {
+      value: keys.map(key => obj[key]),
+      enumerable: true,
+      configurable: true
+    });
+    Object.defineProperty(view, 'entries', {
+      value: keys.map(key => [key, obj[key]]),
+      enumerable: true,
+      configurable: true
+    });
+  }
+
   return view;
 }
 
@@ -264,7 +290,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           (isLoadContentResult(rawValue) ? (rawValue as any).mx : undefined) ??
           (value as any).mx;
 
-        return createObjectUtilityMxView(baseMx, rawValue);
+        return createObjectUtilityMxView(baseMx, rawValue, structuredWrapper);
       })();
 
       if (options?.preserveContext) {
@@ -437,7 +463,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         if (name === 'mx') {
-          accessedValue = createObjectUtilityMxView(structuredWrapper.mx, rawValue);
+          accessedValue = createObjectUtilityMxView(structuredWrapper.mx, rawValue, structuredWrapper);
           break;
         }
         if (

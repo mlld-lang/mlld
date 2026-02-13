@@ -37,6 +37,8 @@ interface StructuredValue<T = unknown> {
   text: string;           // canonical string representation
   data: T;                // structured view (parsed)
   mx: {                  // user-facing runtime context (mirrors Variable.mx)
+    text: string;        // wrapper text view accessor
+    data: T;             // wrapper data view accessor
     labels: DataLabel[];
     taint: DataLabel[];
     sources: string[];
@@ -218,6 +220,8 @@ array.data.map(item => (isStructuredValue(item) ? asText(item) : item));
 `.mx` on a StructuredValue always means system metadata — it never auto-resolves into user data. If the user's parsed data happens to contain an `"mx"` key, they access it via `@val.mx.data.mx`, not `@val.mx`.
 
 This is the same principle as `.mx` being reserved on Variables. The `.mx` namespace is system-owned at every level of the value hierarchy. User field names like `.stance`, `.mode`, `.count` auto-resolve through `.mx.data`, but `.mx` itself is the escape hatch into system metadata and is never shadowed by user data.
+
+`@val.mx.text` and `@val.mx.data` are explicit wrapper accessors. They map to the StructuredValue's top-level `.text` and `.data` properties and do not resolve through user data fields named `text` or `data`.
 
 ### Stage Boundary Rules
 

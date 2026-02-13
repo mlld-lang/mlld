@@ -498,7 +498,7 @@ Pipeline context variables:
 - `@p[1]` … `@p[n]`: outputs from completed stages (as `StructuredValue` wrappers)
 - `@p[-1]`: previous stage output; `@p[-2]` two stages back
 - `@p.retries.all`: history of retry attempts across contexts
-- Pipeline outputs have `.text` (string) and `.data` (structured) properties. Display uses `.text` automatically.
+- Pipeline outputs have `.text`/`.mx.text` (string) and `.data`/`.mx.data` (structured) accessors. Display uses `.text` automatically.
 
 Retry with hints:
 

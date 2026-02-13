@@ -23,6 +23,8 @@ var @file = <package.json>
 show @file.text  >> String content
 show @file.data  >> Parsed payload (JSON object)
 show @file.mx  >> Metadata (filename, tokens, labels, etc.)
+show @file.mx.text  >> Wrapper text accessor (same as @file.text)
+show @file.mx.data  >> Wrapper data accessor (same as @file.data)
 ```
 
 The `.mx` namespace is where all metadata lives:
@@ -36,6 +38,9 @@ show @file.mx.labels  >> Security labels
 show @file.mx.absolute  >> Full path
 show @file.mx.path  >> Path alias (same as .mx.absolute)
 ```
+
+Plain dotted field access resolves through parsed data, so `@file.version` matches `@file.mx.data.version`.
+If user data includes an `mx` field, access it through `@file.mx.data.mx`.
 
 **Auto-unwrapping**: Display and templates automatically use `.text`:
 
@@ -297,6 +302,8 @@ show @file                              >> Same as above (implicit)
 - `.text` - String content (used by display/templates)
 - `.data` - Parsed payload (JSON objects, arrays, etc.)
 - `.mx` - Metadata namespace (filename, tokens, labels, frontmatter, etc.)
+- `.mx.text` - Explicit wrapper text accessor (same as `.text`)
+- `.mx.data` - Explicit wrapper data accessor (same as `.data`)
 
 Always use `.mx` for metadata access - it's the canonical namespace.
 

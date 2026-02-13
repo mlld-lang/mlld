@@ -233,7 +233,7 @@ for @file in @files => show @file.mx.filename
 for @file in @files => show @file.json.status
 ```
 
-**JSON string accessors** (`.data` and `.text`):
+**JSON string accessors** (`.data`/`.mx.data` and `.text`/`.mx.text`):
 
 ```mlld
 >> When you have a JSON string and need to parse it
@@ -249,6 +249,8 @@ show @str                            >> '{"name":"Alice"}'
 >> Common in pipelines with LLM responses
 var @response = @llm("return JSON") | @json.llm
 var @items = @response.data          >> if response is JSON string
+show @response.mx.data               >> explicit structured accessor
+show @response.mx.text               >> explicit text accessor
 ```
 </FILE_LOADING>
 
