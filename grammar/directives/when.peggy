@@ -743,12 +743,22 @@ WhenActionBlockStatementList "when action block statement list"
 
 // Single statement inside a when action block
 WhenActionBlockStatement "when action block statement"
-  = LetAssignment
+  = WhenVarInActionBlockError
+  / LetAssignment
   / AugmentedAssignment
   / WhenExpressionAny
   / SlashIf
   / ForNestedDirective
   / WhenBlockAction
+
+WhenVarInActionBlockError
+  = "var" _ {
+      helpers.mlldError(
+        '`var` cannot be used inside blocks — use `let` for block-scoped bindings',
+        'let',
+        location()
+      );
+    }
 
 WhenActionBlockContent
   = body:WhenActionBlockBody {

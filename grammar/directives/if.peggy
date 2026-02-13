@@ -189,13 +189,23 @@ IfActionBlockStatementList "if action block statement list"
   / BlockComments+ { return []; }
 
 IfActionBlockStatement "if action block statement"
-  = LetAssignment
+  = IfVarInBlockError
+  / LetAssignment
   / AugmentedAssignment
   / WhenExpressionAny
   / ForNestedDirective
   / SlashLoop
   / SlashIf
   / IfBlockAction
+
+IfVarInBlockError
+  = "var" _ {
+      helpers.mlldError(
+        '`var` cannot be used inside blocks — use `let` for block-scoped bindings',
+        'let',
+        location()
+      );
+    }
 
 IfBlockAction
   = RunBlockAction

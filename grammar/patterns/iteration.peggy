@@ -313,12 +313,22 @@ ForBlockStatementList "for block statement list"
 
 // Single statement inside a for block
 ForBlockStatement "for block statement"
-  = LetAssignment
+  = ForVarInBlockError
+  / LetAssignment
   / AugmentedAssignment
   / WhenExpressionAny
   / SlashIf
   / ForNestedDirective
   / ForSingleAction
+
+ForVarInBlockError
+  = "var" _ {
+      helpers.mlldError(
+        '`var` cannot be used inside blocks — use `let` for block-scoped bindings',
+        'let',
+        location()
+      );
+    }
 
 LoopBlockStatementList "loop block statement list"
   = leadingComments:LeadingBlockComment* _ first:LoopBlockStatement rest:(BlockStatementSeparator stmt:LoopBlockStatement { return stmt; })* trailing:BlockComments* {
