@@ -123,6 +123,18 @@ export class DirectiveVisitor extends BaseVisitor {
       return;
     }
 
+    if (node.kind === 'env') {
+      this.visitEnvDirective(node, context);
+      this.handleDirectiveComment(node);
+      return;
+    }
+
+    if (node.kind === 'policy') {
+      this.visitPolicyDirective(node, context);
+      this.handleDirectiveComment(node);
+      return;
+    }
+
     // /append is like /output - writes to a target
     if (node.kind === 'append') {
       this.visitOutputDirective(node, context);
@@ -2282,11 +2294,41 @@ export class DirectiveVisitor extends BaseVisitor {
     
     const sourceText = this.document.getText();
     const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
-    
+
+    // Tokenize MCP import keywords: 'tools' and 'mcp'
+    const isMcpImport = directive.subtype === 'importMcpSelected' || directive.subtype === 'importMcpNamespace';
+    if (isMcpImport) {
+      const toolsMatch = directiveText.match(/\btools\b/);
+      if (toolsMatch && toolsMatch.index !== undefined) {
+        const toolsOffset = directive.location.start.offset + toolsMatch.index;
+        const toolsPos = this.document.positionAt(toolsOffset);
+        this.tokenBuilder.addToken({
+          line: toolsPos.line,
+          char: toolsPos.character,
+          length: 5,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+      }
+
+      const mcpMatch = directiveText.match(/\bmcp\b/);
+      if (mcpMatch && mcpMatch.index !== undefined) {
+        const mcpOffset = directive.location.start.offset + mcpMatch.index;
+        const mcpPos = this.document.positionAt(mcpOffset);
+        this.tokenBuilder.addToken({
+          line: mcpPos.line,
+          char: mcpPos.character,
+          length: 3,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+      }
+    }
+
     // Handle import items (selected imports)
     if (values.imports && Array.isArray(values.imports)) {
       // Find and tokenize opening brace
-      const openBraceMatch = directiveText.match(/^\s*\/import\s*(\{)/);
+      const openBraceMatch = directiveText.match(/^\s*\/?import\s+(?:tools\s+)?(\{)/);
       if (openBraceMatch && openBraceMatch.index !== undefined) {
         const braceOffset = directive.location.start.offset + openBraceMatch[0].indexOf('{');
         const bracePosition = this.document.positionAt(braceOffset);
@@ -3020,6 +3062,131 @@ export class DirectiveVisitor extends BaseVisitor {
       ...(values.return ? [values.return] : [])
     ];
     this.tokenizeBlockComments(openOffset, closeOffset, blockNodes);
+  }
+
+  private visitEnvDirective(directive: any, context: VisitorContext): void {
+    const values = directive.values;
+    if (!values || !directive.location) return;
+
+    // Tokenize config variable reference
+    if (values.config && Array.isArray(values.config)) {
+      for (const configNode of values.config) {
+        this.mainVisitor.visitNode(configNode, context);
+      }
+    }
+
+    // Tokenize block brackets and statements
+    if (values.block && values.block.location) {
+      const sourceText = this.document.getText();
+      const blockText = sourceText.substring(values.block.location.start.offset, values.block.location.end.offset);
+
+      // Opening bracket
+      const openIndex = blockText.indexOf('[');
+      if (openIndex !== -1) {
+        this.operatorHelper.addOperatorToken(values.block.location.start.offset + openIndex, 1);
+      }
+
+      // Visit block statements
+      if (values.block.values?.statements) {
+        for (const stmt of values.block.values.statements) {
+          this.mainVisitor.visitNode(stmt, context);
+        }
+      }
+
+      // Visit return statement
+      if (values.block.values?.return) {
+        this.mainVisitor.visitNode(values.block.values.return, context);
+      }
+
+      // Closing bracket
+      const closeIndex = blockText.lastIndexOf(']');
+      if (closeIndex !== -1) {
+        this.operatorHelper.addOperatorToken(values.block.location.start.offset + closeIndex, 1);
+      }
+    }
+
+    // Handle with clause
+    if (values.withClause) {
+      this.visitWithClause(values.withClause, directive, context);
+    }
+  }
+
+  private visitPolicyDirective(directive: any, context: VisitorContext): void {
+    const values = directive.values;
+    if (!values || !directive.location) return;
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+
+    // Tokenize policy name (@name) - the AST stores it as a Text node without @
+    if (values.name && Array.isArray(values.name) && values.name[0]) {
+      const nameMatch = directiveText.match(/policy\s+@(\w+)/);
+      if (nameMatch && nameMatch.index !== undefined) {
+        const atOffset = directive.location.start.offset + directiveText.indexOf('@' + nameMatch[1]);
+        const atPos = this.document.positionAt(atOffset);
+        this.tokenBuilder.addToken({
+          line: atPos.line,
+          char: atPos.character,
+          length: nameMatch[1].length + 1,
+          tokenType: 'variable',
+          modifiers: ['declaration']
+        });
+      }
+    }
+
+    // Tokenize '=' operator
+    const equalMatch = directiveText.match(/\s+=\s+/);
+    if (equalMatch && equalMatch.index !== undefined) {
+      const equalOffset = directive.location.start.offset + equalMatch.index + equalMatch[0].indexOf('=');
+      this.operatorHelper.addOperatorToken(equalOffset, 1);
+    }
+
+    // Tokenize expression (union call or object literal)
+    if (values.expr) {
+      if (values.expr.type === 'union' && values.expr.args) {
+        // Tokenize 'union' keyword
+        const unionMatch = directiveText.match(/\bunion\b/);
+        if (unionMatch && unionMatch.index !== undefined) {
+          const unionOffset = directive.location.start.offset + unionMatch.index;
+          const unionPos = this.document.positionAt(unionOffset);
+          this.tokenBuilder.addToken({
+            line: unionPos.line,
+            char: unionPos.character,
+            length: 5,
+            tokenType: 'keyword',
+            modifiers: []
+          });
+        }
+
+        // Tokenize parentheses and args
+        const openParen = directiveText.indexOf('(', unionMatch?.index ?? 0);
+        if (openParen !== -1) {
+          this.operatorHelper.addOperatorToken(directive.location.start.offset + openParen, 1);
+        }
+
+        for (const arg of values.expr.args) {
+          if (arg.name && arg.location) {
+            const argOffset = arg.location.start.offset;
+            const argPos = this.document.positionAt(argOffset);
+            this.tokenBuilder.addToken({
+              line: argPos.line,
+              char: argPos.character,
+              length: arg.name.length + 1,
+              tokenType: 'variable',
+              modifiers: []
+            });
+          }
+        }
+
+        const closeParen = directiveText.lastIndexOf(')');
+        if (closeParen !== -1) {
+          this.operatorHelper.addOperatorToken(directive.location.start.offset + closeParen, 1);
+        }
+      } else {
+        // Object literal - delegate to structure visitor
+        this.mainVisitor.visitNode(values.expr, context);
+      }
+    }
   }
 
   private visitGuardDirective(directive: any, context: VisitorContext): void {

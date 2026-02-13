@@ -464,18 +464,107 @@ describe('Semantic Tokens - Unit Tests', () => {
   "prod" => show "Production"
   "dev" => show "Development"
 ]`;
-      
+
       const tokens = await getSemanticTokens(code);
-      
+
       // Should have /when directive
       expectToken(tokens, {
         text: '/when',
         tokenType: 'directive'
       });
-      
+
       // Should have strings
       const strings = tokens.filter(t => t.tokenType === 'string');
       expect(strings.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('MCP Import Directives', () => {
+    it('tokenizes tools and mcp keywords in selected MCP import', async () => {
+      const code = '/import tools { @readFile } from mcp "filesystem"';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '/import',
+        tokenType: 'directive'
+      });
+
+      expectToken(tokens, {
+        text: 'tools',
+        tokenType: 'keyword'
+      });
+
+      expectToken(tokens, {
+        text: 'mcp',
+        tokenType: 'keyword'
+      });
+
+      expectToken(tokens, {
+        text: 'from',
+        tokenType: 'keyword'
+      });
+    });
+
+    it('tokenizes tools and mcp keywords in namespace MCP import', async () => {
+      const code = '/import tools from mcp "filesystem" as @fs';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'tools',
+        tokenType: 'keyword'
+      });
+
+      expectToken(tokens, {
+        text: 'mcp',
+        tokenType: 'keyword'
+      });
+    });
+  });
+
+  describe('Env Directives', () => {
+    it('tokenizes env directive with config and block', async () => {
+      const code = '/env @config [show "hello"]';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '/env',
+        tokenType: 'directive'
+      });
+
+      // Config variable reference
+      expectToken(tokens, {
+        text: '@config',
+        tokenType: 'variableRef'
+      });
+
+      // Block brackets
+      const brackets = tokens.filter(t => t.tokenType === 'operator' && (t.text === '[' || t.text === ']'));
+      expect(brackets.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Policy Directives', () => {
+    it('tokenizes policy directive with object expression', async () => {
+      const code = '/policy @myPolicy = { rules: [] }';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '/policy',
+        tokenType: 'directiveDefinition'
+      });
+
+      // Policy name as variable declaration
+      expectToken(tokens, {
+        text: '@myPolicy',
+        tokenType: 'variable',
+        modifiers: ['declaration']
+      });
+
+      // = operator
+      expectToken(tokens, {
+        text: '=',
+        tokenType: 'operator'
+      });
     });
   });
 });

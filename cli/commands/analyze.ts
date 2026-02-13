@@ -159,7 +159,7 @@ const BUILTIN_TRANSFORMER_NAMES = builtinTransformers.flatMap(transformer => [
 
 const BUILTIN_VARIABLES = new Set([
   // Reserved system variables
-  'now', 'base', 'debug', 'INPUT', 'mx', 'fm',
+  'now', 'base', 'root', 'debug', 'INPUT', 'mx', 'fm',
   'payload', 'state', 'keychain',
   // Builtin variables and helper functions
   'yaml', 'html', 'text',
@@ -194,6 +194,14 @@ function detectUndefinedVariables(ast: MlldNode[]): UndefinedVariableWarning[] {
       const identNode = node.values?.identifier?.[0];
       if (identNode?.identifier) {
         declared.add(identNode.identifier);
+      }
+    }
+
+    // guard @name before/after ... = when [...]
+    if (node.type === 'Directive' && node.kind === 'guard') {
+      const nameNode = node.values?.name?.[0];
+      if (nameNode?.identifier) {
+        declared.add(nameNode.identifier);
       }
     }
 
@@ -250,12 +258,20 @@ function detectUndefinedVariables(ast: MlldNode[]): UndefinedVariableWarning[] {
       if (varNode?.identifier) {
         declared.add(varNode.identifier);
       }
+      // Key variable in key-value iteration: for @key, @value in @obj
+      const keyNode = node.values?.key?.[0];
+      if (keyNode?.identifier) {
+        declared.add(keyNode.identifier);
+      }
     }
 
     // for @item in ... (expression form, e.g., in var assignments)
     if (node.type === 'ForExpression') {
       if (node.variable?.identifier) {
         declared.add(node.variable.identifier);
+      }
+      if (node.key?.identifier) {
+        declared.add(node.key.identifier);
       }
     }
 

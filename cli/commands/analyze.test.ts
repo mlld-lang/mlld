@@ -103,4 +103,41 @@ describe('analyze/validate warnings', () => {
     const whenWarnings = (result.antiPatterns ?? []).filter(entry => entry.code === 'when-exe-implicit-return');
     expect(whenWarnings).toHaveLength(0);
   });
+
+  it('does not flag @root as undefined', async () => {
+    const modulePath = await writeModule('root-builtin.mld', `var @dir = @root
+show @dir
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.undefinedVariables ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('root');
+  });
+
+  it('does not flag guard names as undefined', async () => {
+    const modulePath = await writeModule('guard-name-decl.mld', `guard @blockDestructive before op:run = when [* => allow]
+show @blockDestructive
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.undefinedVariables ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('blockDestructive');
+  });
+
+  it('does not flag for-loop key variables as undefined', async () => {
+    const modulePath = await writeModule('for-key-decl.mld', `var @items = { a: 1, b: 2 }
+for @k, @v in @items => show @k
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.undefinedVariables ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('k');
+    expect(undefs).not.toContain('v');
+  });
 });
