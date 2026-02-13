@@ -534,7 +534,21 @@ LoopBlockAction "loop block action"
 
 // Action variant for /for directives: single action or block
 ForActionVariant "for action variant"
-  = "=>" _ action:ForSingleAction {
+  = "when" _ condition:WhenConditionExpression _ block:ForBlockAction {
+      const action = Array.isArray(block.statements) ? block.statements : [block.statements];
+      const whenExpr = helpers.createWhenExpression(
+        [{ condition: [condition], action }],
+        null,
+        location(),
+        null
+      );
+      return {
+        action: [whenExpr],
+        actionType: 'single',
+        raw: helpers.reconstructRawString([whenExpr])
+      };
+    }
+  / "=>" _ action:ForSingleAction {
       const normalized = Array.isArray(action) ? action : [action];
       return {
         action: normalized,

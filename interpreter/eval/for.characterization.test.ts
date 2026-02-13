@@ -141,6 +141,25 @@ describe('for evaluator characterization', () => {
     expect(results[1]).toContain('2:body');
   });
 
+  it('supports for directives with when guards and block actions', async () => {
+    const { output } = await interpretWithOutputAndEnv(`
+/var @results = [
+  { "file": "alpha.md", "notes": "alpha", "gaps": ["one", "two"] },
+  { "file": "beta.md", "notes": "beta", "gaps": [] }
+]
+/for @r in @results when @r.gaps.length > 0 [
+  let @gapList = for @g in @r.gaps => \`  - @g\`
+  show \`### @r.file\\n@r.notes\\n@gapList\\n\`
+]
+`);
+
+    expect(output).toContain('### alpha.md');
+    expect(output).toContain('alpha');
+    expect(output).toContain('  - one');
+    expect(output).toContain('  - two');
+    expect(output).not.toContain('### beta.md');
+  });
+
   it('preserves file metadata for file-like object values during iteration binding', async () => {
     const env = await interpretWithEnv(`
 /var @files = [
