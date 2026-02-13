@@ -182,6 +182,8 @@ export class InstallCommand {
     options: InstallOptions,
     specs: ModuleSpecifier[]
   ): Promise<void> {
+    this.reportDirectInstallGuidance(results, options);
+
     const installed = results.filter(r => r.status === 'installed').length;
     const cached = results.filter(r => r.status === 'cached').length;
     const failed = results.filter(r => r.status === 'failed').length;
@@ -229,6 +231,55 @@ export class InstallCommand {
     }
 
     await this.maybeRunNodePackageManager(results, options);
+  }
+
+  private reportDirectInstallGuidance(results: ModuleInstallResult[], options: InstallOptions): void {
+    if (options.dryRun) {
+      return;
+    }
+
+    const directInstalled = results.filter(
+      result =>
+        result.isDirect &&
+        (result.status === 'installed' || result.status === 'cached')
+    );
+    const seen = new Set<string>();
+
+    for (const result of directInstalled) {
+      if (seen.has(result.module)) {
+        continue;
+      }
+      seen.add(result.module);
+
+      const versionSuffix = result.version ? `@${result.version}` : '';
+      const cacheSuffix = result.status === 'cached' ? ' (cached)' : '';
+      console.log(chalk.green(`${result.module}${versionSuffix} installed${cacheSuffix}`));
+      console.log(chalk.gray(`  import "${result.module}" as @${this.suggestImportAlias(result.module)}`));
+    }
+  }
+
+  private suggestImportAlias(moduleName: string): string {
+    const localName = moduleName.replace(/^@[^/]+\//, '');
+    const parts = localName.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+
+    if (parts.length === 0) {
+      return 'module';
+    }
+
+    const normalizedParts = parts.map(part => part.toLowerCase());
+    let alias = normalizedParts.length > 1
+      ? normalizedParts.map(part => part[0]).join('')
+      : normalizedParts[0];
+
+    if (!alias || alias.length === 0) {
+      alias = 'module';
+    }
+
+    if (/^\d/.test(alias)) {
+      alias = `m${alias}`;
+    }
+
+    return alias;
   }
 }
 

@@ -105,6 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Template extension field-access hint**: When template interpolation parses `@name.json` (and similar common extensions) as field access, runtime errors now explain the ambiguity and suggest escaping the dot (for example `@name\.json`).
 - **VFS module export regression coverage**: Fixture cases for `executable-in-object-property` and `module-isolation-nested-import` are re-enabled in the VFS harness and validate exported binding resolution through nested imports.
 - **For dotted binding key-context coverage**: Regression tests assert missing-field errors for dotted `/for` bindings across array and object iteration keys.
+- **Install confirmation guidance**: `mlld install` now prints direct-module confirmation lines as `module@version installed` (or `installed (cached)`) and includes a ready-to-copy import statement.
 - **Relative path scope**: Relative paths in `output`/`append` directives now resolve from the script file directory instead of the project root, so `output @data to "local.txt"` writes next to the script.
 - **Template file alligator path scope**: Relative `<file>` loads inside `template "file.att"`/`template "file.mtt"` executables now resolve from the template file directory instead of the caller script directory.
 - **Export manifest enforcement for executable internals**: Importers can no longer read unexported module members through `@namespace.exec.internal.capturedModuleEnv.*` (or via selected imported executables).
