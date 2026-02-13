@@ -1,0 +1,19 @@
+{
+  "name": "mlld",
+  "owner": {
+    "name": "mlld-lang"
+  },
+  "metadata": {
+    "description": "mlld language plugin for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "mlld",
+      "source": "./plugins/mlld",
+      "description": "mlld patterns for LLM agents and orchestrators",
+      "version": "1.0.0",
+      "repository": "https://github.com/mlld-lang/mlld",
+      "license": "MIT"
+    }
+  ]
+}

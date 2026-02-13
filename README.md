@@ -346,6 +346,22 @@ Start the persistent NDJSON RPC transport over stdio:
 mlld live --stdio
 ```
 
+## Claude Code Plugin
+
+Install the mlld plugin for Claude Code to get orchestrator authoring skills, starter scaffolding, and language server integration.
+
+```bash
+mlld plugin install
+```
+
+Includes:
+
+- **Orchestrator skill** — patterns for audit, research, and development pipelines
+- **Agent skill** — tool agents, event-driven agents, workflow agents
+- **`/mlld:scaffold` command** — generate starter orchestrator projects from templates
+- **Language server** — `.mld` syntax highlighting and diagnostics
+- **MCP dev tools** — development-time tooling via `mlld mcp-dev`
+
 ## CLI Reference
 
 ```bash
