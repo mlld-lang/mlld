@@ -1,7 +1,12 @@
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { isVariable } from '../utils/variable-resolution';
 import { asData, isStructuredValue } from '../utils/structured-value';
-import { isLoadContentResult } from '@core/types/load-content';
+import type { Variable } from '@core/types';
+
+export type ForSourceKind = 'array' | 'object';
+export type ForSourceIterable = Iterable<[string | null, unknown]> & {
+  __mlldForSourceKind?: ForSourceKind;
+};
 
 function attachProvenance(target: unknown, source: unknown): void {
   if (!target || typeof target !== 'object') {
@@ -51,15 +56,19 @@ export function normalizeIterableValue(value: unknown): unknown {
   return value;
 }
 
-export function toIterable(value: unknown): Iterable<[string | null, unknown]> | null {
+export function toIterable(value: unknown): ForSourceIterable | null {
   const normalized = normalizeIterableValue(value);
 
   if (Array.isArray(normalized)) {
-    return normalized.map((item, index) => [String(index), item]);
+    const entries = normalized.map((item, index) => [String(index), item]) as ForSourceIterable;
+    entries.__mlldForSourceKind = 'array';
+    return entries;
   }
 
   if (normalized && typeof normalized === 'object') {
-    return Object.entries(normalized as Record<string, unknown>);
+    const entries = Object.entries(normalized as Record<string, unknown>) as ForSourceIterable;
+    entries.__mlldForSourceKind = 'object';
+    return entries;
   }
 
   return null;

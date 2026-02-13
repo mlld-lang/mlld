@@ -119,6 +119,67 @@ describe('for evaluator characterization', () => {
     expect(await requireValue(env, 'keys')).toEqual(['first', 'second']);
   });
 
+  it('attaches array-iteration indices to @item.mx.index', async () => {
+    const env = await interpretWithEnv(`
+/var @items = ["a", "b", "c"]
+/var @indexes = for @item in @items => @item.mx.index
+/var @templated = for @item in @items => \`@item.mx.index:@item\`
+/var @filtered = for @item in @items when @item.mx.index > 0 => \`@item.mx.index:@item\`
+`);
+
+    expect(await requireValue(env, 'indexes')).toEqual([0, 1, 2]);
+    expect(await requireValue(env, 'templated')).toEqual(['0:a', '1:b', '2:c']);
+    expect(await requireValue(env, 'filtered')).toEqual(['1:b', '2:c']);
+  });
+
+  it('keeps mx.index independent for nested loop bindings', async () => {
+    const env = await interpretWithEnv(`
+/var @rows = [["a", "b"], ["c"]]
+/var @pairs = for @row in @rows => for @cell in @row => \`@row.mx.index:@cell.mx.index:@cell\`
+`);
+
+    expect(await requireValue(env, 'pairs')).toEqual([
+      ['0:0:a', '0:1:b'],
+      ['1:0:c']
+    ]);
+  });
+
+  it('preserves original array indices in for parallel iteration metadata', async () => {
+    const env = await interpretWithEnv(`
+/exe @slow(value) = js {
+  const delay = value === "a" ? 30 : value === "b" ? 20 : 10;
+  await new Promise(resolve => setTimeout(resolve, delay));
+  return value;
+}
+/var @pairs = for parallel(3) @item in ["a", "b", "c"] [
+  let @ignored = @slow(@item)
+  => \`@item.mx.index:@item\`
+]
+`);
+
+    expect(await requireValue(env, 'pairs')).toEqual(['0:a', '1:b', '2:c']);
+  });
+
+  it('does not set mx.index during object iteration', async () => {
+    const env = await interpretWithEnv(`
+/var @items = { "first": "a", "second": "b" }
+/var @indexDefined = for @item in @items => @item.mx.index.isDefined()
+/var @keys = for @item in @items => @item.mx.key
+`);
+
+    expect(await requireValue(env, 'indexDefined')).toEqual([false, false]);
+    expect(await requireValue(env, 'keys')).toEqual(['first', 'second']);
+  });
+
+  it('exposes mx.index in for directive templates', async () => {
+    const { output } = await interpretWithOutputAndEnv(`
+/for @item in ["x", "y"] => show \`@item.mx.index:@item\`
+`);
+    const lines = output.trim().split('\n').filter(Boolean);
+    expect(lines).toContain('0:x');
+    expect(lines).toContain('1:y');
+  });
+
   it('supports for...when guard syntax with block bodies', async () => {
     const env = await interpretWithEnv(`
 /exe @loadSlide(num, name) = \`@num:@name\`

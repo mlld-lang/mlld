@@ -14,6 +14,7 @@ import {
   isFieldAccessResultLike,
   withIterationMxKey
 } from './binding-utils';
+import type { ForSourceKind } from '../for-utils';
 
 export type ForContextSnapshot = {
   index: number;
@@ -28,6 +29,7 @@ export type IterationSetupParams = {
   index: number;
   total: number;
   effective: ForParallelOptions | undefined;
+  sourceKind?: ForSourceKind;
   varName: string;
   keyVarName?: string;
   varFields?: FieldAccessNode[];
@@ -95,7 +97,14 @@ export async function setupIterationContext(
   }
 
   const iterationVar = ensureVariable(params.varName, value, params.rootEnv);
-  childEnv.setVariable(params.varName, withIterationMxKey(iterationVar, key));
+  childEnv.setVariable(
+    params.varName,
+    withIterationMxKey(iterationVar, {
+      key,
+      index: params.index,
+      sourceKind: params.sourceKind
+    })
+  );
   if (typeof derivedValue !== 'undefined' && params.fieldPathString) {
     const derivedVar = ensureVariable(`${params.varName}.${params.fieldPathString}`, derivedValue, params.rootEnv);
     childEnv.setVariable(`${params.varName}.${params.fieldPathString}`, derivedVar);

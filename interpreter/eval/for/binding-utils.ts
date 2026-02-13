@@ -12,6 +12,7 @@ import { isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { isStructuredValue, type StructuredValue } from '@interpreter/utils/structured-value';
+import type { ForSourceKind } from '../for-utils';
 
 function looksLikeFileData(value: unknown): value is Record<string, unknown> & { content: string; filename?: string; relative?: string; absolute?: string } {
   if (!value || typeof value !== 'object') return false;
@@ -257,15 +258,37 @@ export function enhanceFieldAccessError(
   });
 }
 
-export function withIterationMxKey(variable: Variable, key: unknown): Variable {
-  if (key === null || typeof key === 'undefined') {
+export function withIterationMxKey(
+  variable: Variable,
+  options: {
+    key: unknown;
+    index: number;
+    sourceKind?: ForSourceKind;
+  }
+): Variable {
+  const mx = { ...(variable.mx ?? {}) };
+  let changed = false;
+
+  if (
+    options.key !== null &&
+    typeof options.key !== 'undefined' &&
+    (typeof options.key === 'string' || typeof options.key === 'number')
+  ) {
+    mx.key = options.key;
+    changed = true;
+  }
+
+  if (options.sourceKind === 'array') {
+    mx.index = options.index;
+    changed = true;
+  }
+
+  if (!changed) {
     return variable;
   }
-  if (typeof key !== 'string' && typeof key !== 'number') {
-    return variable;
-  }
+
   return {
     ...variable,
-    mx: { ...(variable.mx ?? {}), key }
+    mx
   };
 }

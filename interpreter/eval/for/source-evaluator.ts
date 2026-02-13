@@ -8,10 +8,8 @@ import { MlldDirectiveError } from '@core/errors';
 import type { SecurityDescriptor } from '@core/types/security';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluate } from '@interpreter/core/interpreter';
-import { toIterable } from '@interpreter/eval/for-utils';
+import { toIterable, type ForSourceIterable } from '@interpreter/eval/for-utils';
 import { extractSecurityDescriptor } from '@interpreter/utils/structured-value';
-
-type ForSourceIterable = Iterable<[string | null, unknown]>;
 
 function formatForSourcePreview(value: unknown): string {
   const receivedType = typeof value;

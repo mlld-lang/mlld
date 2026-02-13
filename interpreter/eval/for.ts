@@ -73,6 +73,7 @@ export async function evaluateForDirective(
 
   try {
     const iterable = await evaluateForDirectiveSource(directive, env);
+    const sourceKind = iterable.__mlldForSourceKind;
 
     // Determine parallel options (directive-specified or inherited from parent scope)
     const specified = (directive.values as any).forOptions as ForParallelOptions | undefined;
@@ -92,6 +93,7 @@ export async function evaluateForDirective(
         index: idx,
         total: iterableArray.length,
         effective,
+        sourceKind,
         varName,
         keyVarName,
         varFields,
@@ -173,6 +175,7 @@ export async function evaluateForExpression(
   const fieldPathString = formatFieldPath(varFields);
 
   const { iterable, sourceDescriptor } = await evaluateForExpressionSource(expr, env);
+  const sourceKind = iterable.__mlldForSourceKind;
 
   const results: unknown[] = [];
   const errors: ForIterationError[] = [];
@@ -195,6 +198,7 @@ export async function evaluateForExpression(
       index: idx,
       total: iterableArray.length,
       effective,
+      sourceKind,
       varName,
       keyVarName,
       varFields,
