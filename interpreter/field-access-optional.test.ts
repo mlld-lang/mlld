@@ -33,4 +33,26 @@ describe('optional field access syntax', () => {
     const out = await run(src);
     expect(out).toBe('');
   });
+
+  it('shows an extension hint when template path interpolation parses as field access', async () => {
+    const src = [
+      '/var @runDir = "tmp"',
+      '/var @filename = "report"',
+      '/show `@runDir/reviews/@filename.json`'
+    ].join('\n');
+
+    await expect(run(src)).rejects.toThrow('\'@filename.json\' looks like field access');
+    await expect(run(src)).rejects.toThrow('escape the dot: \'@filename\\.json\'');
+  });
+
+  it('supports escaped dots for interpolated filename extensions', async () => {
+    const src = [
+      '/var @runDir = "tmp"',
+      '/var @filename = "report"',
+      '/show `@runDir/reviews/@filename\\.json`'
+    ].join('\n');
+
+    const out = await run(src);
+    expect(out).toBe('tmp/reviews/report.json');
+  });
 });

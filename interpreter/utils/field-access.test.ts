@@ -90,6 +90,28 @@ describe('missing field access', () => {
     const result = await accessField([1, 2], { type: 'arrayIndex', value: 5 });
     expect(result).toBeNull();
   });
+
+  it('adds an extension hint for common file suffix fields', async () => {
+    await expect(
+      accessField('report', { type: 'field', value: 'json' }, { baseIdentifier: 'filename' })
+    ).rejects.toThrow('Cannot access field "json" on non-object value (string)');
+    await expect(
+      accessField('report', { type: 'field', value: 'json' }, { baseIdentifier: 'filename' })
+    ).rejects.toThrow('\'@filename.json\' looks like field access');
+    await expect(
+      accessField('report', { type: 'field', value: 'json' }, { baseIdentifier: 'filename' })
+    ).rejects.toThrow('escape the dot: \'@filename\\.json\'');
+  });
+
+  it('does not add extension hint text for non-extension fields', async () => {
+    try {
+      await accessField('report', { type: 'field', value: 'custom' }, { baseIdentifier: 'filename' });
+      throw new Error('Expected field access to throw');
+    } catch (error) {
+      expect((error as Error).message).toContain('Cannot access field "custom" on non-object value (string)');
+      expect((error as Error).message).not.toContain('looks like field access');
+    }
+  });
 });
 
 describe('structured value mx accessors', () => {

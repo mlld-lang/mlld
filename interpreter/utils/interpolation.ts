@@ -406,7 +406,10 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           let fieldsToProcess = (baseNode as any).fields || [];
           if (fieldsToProcess.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
             const { accessField } = await import('../utils/field-access');
+            let fieldPath: string[] = [];
             for (const field of fieldsToProcess) {
+              let fieldToAccess = field;
+
               // Handle variableIndex type - need to resolve the variable first
               if (field.type === 'variableIndex') {
                 const { evaluateDataValue } = await import('../eval/data-value-evaluator');
@@ -419,20 +422,17 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
                         identifier: String(field.value)
                       };
                 const indexValue = await evaluateDataValue(indexNode as any, env);
-                // Create a new field with the resolved value
-                const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-                const fieldResult = await accessField(value, resolvedField, {
-                  preserveContext: true,
-                  env
-                });
-                value = (fieldResult as any).value;
-              } else {
-                const fieldResult = await accessField(value, field, {
-                  preserveContext: true,
-                  env
-                });
-                value = (fieldResult as any).value;
+                fieldToAccess = { type: 'bracketAccess' as const, value: indexValue };
               }
+
+              const fieldResult = await accessField(value, fieldToAccess, {
+                preserveContext: true,
+                env,
+                parentPath: fieldPath,
+                baseIdentifier: varName
+              });
+              value = (fieldResult as any).value;
+              fieldPath = (fieldResult as any).accessPath || fieldPath;
 
               // Handle null nodes from the grammar
               if (value && typeof value === 'object' && 'type' in value) {

@@ -22,6 +22,53 @@ import { wrapExecResult } from './structured-exec';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import type { DataObjectValue } from '@core/types/var';
 
+const COMMON_FILE_EXTENSION_FIELDS = new Set([
+  'json',
+  'jsonl',
+  'md',
+  'txt',
+  'mld',
+  'csv',
+  'yaml',
+  'yml',
+  'html',
+  'css',
+  'js',
+  'ts',
+  'py',
+  'sh',
+  'att',
+  'mtt',
+  'xml',
+  'toml',
+  'env',
+  'log',
+  'pdf'
+]);
+
+function buildFieldAccessReference(fieldName: string, options?: FieldAccessOptions): {
+  parsed: string;
+  escaped: string;
+} {
+  const base = options?.baseIdentifier ? `@${options.baseIdentifier}` : '@value';
+  const parent = options?.parentPath?.length ? `.${options.parentPath.join('.')}` : '';
+  const parsed = `${base}${parent}.${fieldName}`;
+  const escaped = `${base}${parent}\\.${fieldName}`;
+  return { parsed, escaped };
+}
+
+function getCommonExtensionFieldAccessHint(
+  fieldName: string,
+  options?: FieldAccessOptions
+): string | null {
+  if (!COMMON_FILE_EXTENSION_FIELDS.has(fieldName.toLowerCase())) {
+    return null;
+  }
+
+  const { parsed, escaped } = buildFieldAccessReference(fieldName, options);
+  return `'${parsed}' looks like field access. If you meant a file extension, escape the dot: '${escaped}'.`;
+}
+
 /**
  * Helper to get a field from an object AST node.
  * Handles both new entries format and old properties format.
@@ -190,6 +237,8 @@ export interface FieldAccessOptions {
   preserveContext?: boolean;
   /** Parent path for building access path */
   parentPath?: string[];
+  /** Base identifier for source-aware diagnostics */
+  baseIdentifier?: string;
   /** Whether to return undefined for missing fields instead of null */
   returnUndefinedForMissing?: boolean;
   /** Environment for async operations like filters */
@@ -468,7 +517,10 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         const chain = [...(options?.parentPath || []), name];
-        const msg = `Cannot access field "${name}" on non-object value (${typeof rawValue})`;
+        const extensionHint = getCommonExtensionFieldAccessHint(name, options);
+        const msg = extensionHint
+          ? `Cannot access field "${name}" on non-object value (${typeof rawValue}). ${extensionHint}`
+          : `Cannot access field "${name}" on non-object value (${typeof rawValue})`;
         throw new FieldAccessError(msg, {
           baseValue: rawValue,
           fieldAccessChain: [],
@@ -603,7 +655,11 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         }
         if (strictMissingFieldAccess) {
           const accessPath = [...(options?.parentPath || []), name];
-          throw new FieldAccessError(`Field "${name}" not found in object`, {
+          const extensionHint = getCommonExtensionFieldAccessHint(name, options);
+          const message = extensionHint
+            ? `Field "${name}" not found in object. ${extensionHint}`
+            : `Field "${name}" not found in object`;
+          throw new FieldAccessError(message, {
             baseValue: rawValue,
             fieldAccessChain: [],
             failedAtIndex: Math.max(0, accessPath.length - 1),
