@@ -150,4 +150,59 @@ describe('structured value mx accessors', () => {
     expect(mxText).toBe('hello');
     expect(mxData).toBe('hello');
   });
+
+  it('does not expose wrapper metadata as top-level fields', async () => {
+    const structured = wrapStructured(
+      { status: 'user-status' },
+      'object',
+      '{"status":"user-status"}',
+      { filename: 'meta.json', source: 'load-content' }
+    );
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const topLevelFilename = await accessField(
+      variable,
+      { type: 'field', value: 'filename' },
+      { preserveContext: false }
+    );
+    expect(topLevelFilename).toBeNull();
+
+    const mxFilename = await accessFields(
+      variable,
+      [
+        { type: 'field', value: 'mx' } as const,
+        { type: 'field', value: 'filename' } as const
+      ],
+      { preserveContext: false }
+    );
+    expect(mxFilename).toBe('meta.json');
+  });
+
+  it('keeps user data fields first for collisions like type/text/data', async () => {
+    const payload = {
+      type: 'user-type',
+      text: 'user-text',
+      data: 'user-data'
+    };
+    const structured = wrapStructured(payload, 'object', 'RAW');
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const topType = await accessField(variable, { type: 'field', value: 'type' }, { preserveContext: false });
+    const topText = await accessField(variable, { type: 'field', value: 'text' }, { preserveContext: false });
+    const topData = await accessField(variable, { type: 'field', value: 'data' }, { preserveContext: false });
+
+    expect(topType).toBe('user-type');
+    expect(topText).toBe('user-text');
+    expect(topData).toBe('user-data');
+
+    const mxType = await accessFields(
+      variable,
+      [
+        { type: 'field', value: 'mx' } as const,
+        { type: 'field', value: 'type' } as const
+      ],
+      { preserveContext: false }
+    );
+    expect(mxType).toBe('object');
+  });
 });

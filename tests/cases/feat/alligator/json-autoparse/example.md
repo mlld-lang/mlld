@@ -4,10 +4,10 @@
 /output @jsonContent to data.json
 
 /var @jsonVal = <data.json>
-/show `json name: @jsonVal.data.name, first: @jsonVal.data.list[0]`
+/show `json name: @jsonVal.name, first: @jsonVal.list[0]`
 
 /var @jsonlContent = `{"x":1}\n{"x":2}\n`
 /output @jsonlContent to data.jsonl
 
 /var @jsonlVal = <data.jsonl>
-/show `jsonl length: @jsonlVal.data.length, second: @jsonlVal.data[1].x`
+/show `jsonl length: @jsonlVal.length, second: @jsonlVal[1].x`

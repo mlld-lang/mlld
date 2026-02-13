@@ -14,5 +14,5 @@ description: Output works inside parallel for-expression blocks
 
 /var @file1 = <for-output-parallel-one-data.json>
 /var @file2 = <for-output-parallel-two-data.json>
-/show `File 1: @file1.data.name`
-/show `File 2: @file2.data.name`
+/show `File 1: @file1.name`
+/show `File 2: @file2.name`

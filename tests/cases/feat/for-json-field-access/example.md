@@ -4,12 +4,12 @@
 
 ## Direct access should work
 /var @first = @files[0]
-/show `Direct access: @first.json.status`
+/show `Direct access: @first.status`
 
-## For-loop access to .json fields should work
-/var @statuses = for @f in @files => @f.json.status
+## For-loop access to JSON fields should work
+/var @statuses = for @f in @files => @f.status
 /show `For-loop statuses: @statuses`
 
 ## Filter by JSON field should work
-/var @failed = for @f in @files when @f.json.status == "fail" => @f.json.count
+/var @failed = for @f in @files when @f.status == "fail" => @f.count
 /show `Failed counts: @failed`

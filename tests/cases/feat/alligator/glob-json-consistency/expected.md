@@ -2,10 +2,10 @@
 
 ## Single file JSON parsing
 
-Single .data.name: Alice
+Single .name: Alice
 ## Glob JSON parsing (should work the same)
 
-Glob[0] .data.name: Alice
+Glob[0] .name: Alice
 ## Glob items have .mx metadata via index
 
 Glob[0] .mx.filename: glob-json-a.json

@@ -13,7 +13,6 @@ import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
 import {
   asData,
-  asText,
   isStructuredValue,
   extractSecurityDescriptor,
   applySecurityDescriptorToStructuredValue,
@@ -169,9 +168,6 @@ function isSerializedExecutableWithCapturedEnv(value: unknown): boolean {
   return raw.__executable === true && hasCapturedModuleEnv(raw.internal);
 }
 
-const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
-const STRING_TEXT_ACCESSORS = new Set(['text']);
-
 /**
  * Result of field access that preserves context
  */
@@ -213,23 +209,6 @@ export interface FieldAccessOptions {
  * Phase 6: Added array operations (slice and filter)
  */
 export async function accessField(value: any, field: FieldAccessNode, options?: FieldAccessOptions): Promise<any | FieldAccessResult> {
-  // CRITICAL: Variable metadata properties whitelist
-  // Only these properties access the Variable itself, not its value
-  const VARIABLE_METADATA_PROPS = [
-    'type',
-    'isComplex',
-    'source',
-    'metadata',
-    'internal',
-    'mx',
-    'any',
-    'all',
-    'none',
-    'raw',
-    'totalTokens',
-    'maxTokens'
-  ];
-
   // Check if the input is a Variable
   const parentVariable = isVariable(value) ? value : (value as any)?.__variable;
   const strictMissingFieldAccess = Boolean(
@@ -252,9 +231,18 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   // but allow data precedence for guard quantifiers (.all, .any, .none)
   if (isVariable(value) && field.type === 'field') {
     const fieldName = String(field.value);
+    const isStructuredVariable = Boolean(structuredWrapper);
 
     // Core metadata properties always come from Variable, never from data
-    const CORE_METADATA = ['isComplex', 'source', 'metadata', 'internal', 'mx', 'raw', 'totalTokens', 'maxTokens'];
+    const CORE_METADATA = [
+      'isComplex',
+      'internal',
+      'mx',
+      'raw',
+      'totalTokens',
+      'maxTokens',
+      ...(!isStructuredVariable ? ['source', 'metadata'] : [])
+    ];
 
     if (CORE_METADATA.includes(fieldName)) {
       if (
@@ -312,7 +300,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
     // For 'type' on non-user-data containers, ALWAYS return Variable.type
     // (executables, strings, etc. have internal 'type' fields that shouldn't be exposed)
-    if (fieldName === 'type' && !isUserDataContainer) {
+    if (fieldName === 'type' && !isUserDataContainer && !isStructuredVariable) {
       const metadataValue = value.type;
       if (options?.preserveContext) {
         return {
@@ -326,26 +314,31 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     }
 
     // For guard quantifiers and 'type' on user data containers, check data first
-    const shouldCheckDataFirst = GUARD_QUANTIFIERS.includes(fieldName) ||
-      (fieldName === 'type' && isUserDataContainer);
+    const shouldCheckDataFirst = GUARD_QUANTIFIERS.includes(fieldName) || fieldName === 'type';
 
     if (shouldCheckDataFirst) {
       // Check if this field exists in the actual data first
       const fieldExistsInData = rawValue && typeof rawValue === 'object' && fieldName in rawValue;
 
       if (!fieldExistsInData) {
+        if (fieldName === 'type' && isStructuredVariable) {
+          // Structured values expose wrapper type via .mx.type.
+          // Top-level .type resolves through user data only.
+          // Fall through to regular field access behavior.
+        } else {
         // Field doesn't exist in data, so return metadata property
-        const metadataValue = value[fieldName as keyof typeof value];
+          const metadataValue = value[fieldName as keyof typeof value];
 
-        if (options?.preserveContext) {
-          return {
-            value: metadataValue,
-            parentVariable: value,
-            accessPath: [...(options.parentPath || []), fieldName],
-            isVariable: false
-          };
+          if (options?.preserveContext) {
+            return {
+              value: metadataValue,
+              parentVariable: value,
+              accessPath: [...(options.parentPath || []), fieldName],
+              isVariable: false
+            };
+          }
+          return metadataValue;
         }
-        return metadataValue;
       }
     }
   }
@@ -407,35 +400,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         } catch {}
       }
       if (structuredWrapper) {
-        // Handle .length on arrays - return element count, not content string length
-        if (name === 'length' && (structuredWrapper.type === 'array' || Array.isArray(rawValue))) {
-          const arrData = Array.isArray(rawValue) ? rawValue : (structuredWrapper.data as any[]);
-          if (Array.isArray(arrData)) {
-            accessedValue = arrData.length;
-            break;
-          }
-        }
-        if (name === 'text') {
-          if (
-            rawValue &&
-            typeof rawValue === 'object' &&
-            name in (rawValue as any) &&
-            structuredWrapper.mx?.source !== 'load-content'
-          ) {
-            accessedValue = (rawValue as any)[name];
-          } else {
-            accessedValue = asText(structuredWrapper);
-          }
-          break;
-        }
-        if (name === 'data') {
-          if (rawValue && typeof rawValue === 'object' && name in (rawValue as any)) {
-            accessedValue = (rawValue as any)[name];
-          } else {
-            accessedValue = asData(structuredWrapper);
-          }
-          break;
-        }
         if (name === 'keepStructured') {
           if (structuredWrapper.internal) {
             (structuredWrapper.internal as Record<string, unknown>).keepStructured = true;
@@ -454,25 +418,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = structuredWrapper;
           break;
         }
-        if (name === 'type') {
-          accessedValue = structuredWrapper.type;
-          break;
-        }
-        if (name === 'metadata') {
-          accessedValue = structuredWrapper.metadata;
-          break;
-        }
         if (name === 'mx') {
           accessedValue = createObjectUtilityMxView(structuredWrapper.mx, rawValue, structuredWrapper);
-          break;
-        }
-        if (
-          structuredCtx &&
-          typeof structuredCtx === 'object' &&
-          name in structuredCtx &&
-          structuredCtx[name] !== undefined
-        ) {
-          accessedValue = structuredCtx[name];
           break;
         }
       }
@@ -490,27 +437,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         });
       }
       if (typeof rawValue === 'string') {
-        if (STRING_JSON_ACCESSORS.has(name)) {
-          const trimmed = rawValue.trim();
-          try {
-            accessedValue = JSON.parse(trimmed);
-            break;
-          } catch {
-            const chain = [...(options?.parentPath || []), name];
-            throw new FieldAccessError(`String value cannot be parsed as JSON for accessor "${name}"`, {
-              baseValue: rawValue,
-              fieldAccessChain: [],
-              failedAtIndex: Math.max(0, chain.length - 1),
-              failedKey: name
-            }, { sourceLocation: options?.sourceLocation, env: options?.env });
-          }
-        }
-
-        if (STRING_TEXT_ACCESSORS.has(name)) {
-          accessedValue = rawValue;
-          break;
-        }
-
         // Support .length on strings (like JavaScript)
         if (name === 'length') {
           accessedValue = rawValue.length;
@@ -523,7 +449,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
           const chain = [...(options?.parentPath || []), name];
           throw new FieldAccessError(
-            `Cannot access field "${name}" on JSON string. Use \`.data.${name}\` or pipe through \`| @json\` first.`,
+            `Cannot access field "${name}" on JSON string. Parse with \`| @json\` first, or use \`.mx.text\` / \`.mx.data\` wrapper accessors.`,
             {
               baseValue: rawValue,
               fieldAccessChain: [],
@@ -537,15 +463,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
 
       if (typeof rawValue !== 'object' || rawValue === null) {
-        if (
-          structuredCtx &&
-          typeof structuredCtx === 'object' &&
-          name in structuredCtx &&
-          structuredCtx[name] !== undefined
-        ) {
-          accessedValue = structuredCtx[name];
-          break;
-        }
         if (rawValue === null || rawValue === undefined) {
           accessedValue = missingValue;
           break;
@@ -591,27 +508,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
         accessedValue = missingValue;
         break;
-      }
-      
-      // Handle StructuredValue arrays - special case for .text and .length
-      if (structuredWrapper && structuredWrapper.type === 'array') {
-        // For .text, return the pre-joined text
-        if (name === 'text') {
-          accessedValue = structuredWrapper.text;
-          break;
-        }
-        // For .length, use the array data
-        if (name === 'length') {
-          accessedValue = (structuredWrapper.data as any[]).length;
-          break;
-        }
-        // For other properties, try to access on the array itself
-        const result = (rawValue as any)[name];
-        if (result !== undefined) {
-          accessedValue = result;
-          break;
-        }
-        // If property not found, fall through to error handling below
       }
       
       // Handle Variable objects with type 'object' and value field
@@ -718,15 +614,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             sourceLocation: options?.sourceLocation,
             env: options?.env
           });
-        }
-        if (
-          structuredCtx &&
-          typeof structuredCtx === 'object' &&
-          name in structuredCtx &&
-          structuredCtx[name] !== undefined
-        ) {
-          accessedValue = structuredCtx[name];
-          break;
         }
         accessedValue = missingValue;
         break;

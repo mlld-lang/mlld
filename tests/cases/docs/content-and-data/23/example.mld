@@ -7,5 +7,5 @@ show @page.mx.status                   >> HTTP status code
 show @page.mx.title                    >> Page title (if HTML)
 
 >> HTML is converted to markdown
-show @page.text                         >> Markdown version
+show @page.mx.text                      >> Markdown version
 show @page.mx.html                     >> Original HTML

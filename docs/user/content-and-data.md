@@ -20,11 +20,10 @@ Loaded files and data are objects with three key parts:
 ```mlld
 var @file = <package.json>
 
-show @file.text  >> String content
-show @file.data  >> Parsed payload (JSON object)
+show @file.name  >> Parsed payload field (data-first access)
 show @file.mx  >> Metadata (filename, tokens, labels, etc.)
-show @file.mx.text  >> Wrapper text accessor (same as @file.text)
-show @file.mx.data  >> Wrapper data accessor (same as @file.data)
+show @file.mx.text  >> Wrapper text accessor
+show @file.mx.data  >> Wrapper data accessor (parsed payload)
 ```
 
 The `.mx` namespace is where all metadata lives:
@@ -45,8 +44,8 @@ If user data includes an `mx` field, access it through `@file.mx.data.mx`.
 **Auto-unwrapping**: Display and templates automatically use `.text`:
 
 ```mlld
-show @file  >> Same as @file.text
-var @msg = `Content: @file`  >> Uses @file.text
+show @file  >> Same as @file.mx.text
+var @msg = `Content: @file`  >> Uses @file.mx.text
 ```
 
 **Explicit access** when you need metadata:
@@ -64,7 +63,7 @@ Loaded files are StructuredValues with full metadata access. The `.keep` modifie
 >> Metadata works directly - no .keep needed
 var @file = <config.json>
 show @file.mx.relative                 >> Works
-show @file.json.apiKey                 >> Works
+show @file.apiKey                      >> Works
 
 >> Use .keep when passing to JS and you need .mx inside JS
 exe @process(file) = js {
@@ -122,7 +121,7 @@ var @docs = <docs/**/*.md>              >> All markdown in docs tree
 var @source = <src/**/*.ts>             >> All TypeScript in src
 
 >> Access individual files
-show @docs[0].text                       >> First file's content
+show @docs[0].mx.text                    >> First file's content
 show @docs[0].mx.filename               >> First file's name
 ```
 
@@ -294,16 +293,15 @@ show @file.mx.tokest                   >> Estimated tokens (fast)
 show @file.mx.tokens                   >> Exact tokens
 
 >> Content access
-show @file.text                         >> File contents (explicit)
+show @file.mx.text                      >> File contents (explicit)
 show @file                              >> Same as above (implicit)
 ```
 
 **Properties:**
-- `.text` - String content (used by display/templates)
-- `.data` - Parsed payload (JSON objects, arrays, etc.)
+- Direct dotted fields (for example `@file.name`) resolve through parsed payload
 - `.mx` - Metadata namespace (filename, tokens, labels, frontmatter, etc.)
-- `.mx.text` - Explicit wrapper text accessor (same as `.text`)
-- `.mx.data` - Explicit wrapper data accessor (same as `.data`)
+- `.mx.text` - Explicit wrapper text accessor
+- `.mx.data` - Explicit wrapper data accessor
 
 Always use `.mx` for metadata access - it's the canonical namespace.
 
@@ -317,11 +315,11 @@ JSON files are automatically parsed:
 var @config = <settings.json>
 
 >> Direct field access on parsed JSON
-show @config.json.apiUrl
-show @config.json.users[0].email
+show @config.apiUrl
+show @config.users[0].email
 
 >> Raw content still available
-show @config.text                       >> Raw JSON string
+show @config.mx.text                    >> Raw JSON string
 ```
 
 Glob-loaded JSON files are also auto-parsed - each item behaves like a single file load:
@@ -330,9 +328,9 @@ Glob-loaded JSON files are also auto-parsed - each item behaves like a single fi
 var @configs = <configs/*.json>
 var @first = @configs[0]
 
->> Access parsed JSON via .data
-show @first.data.apiUrl
-show @first.data.users[0].email
+>> Access parsed JSON directly
+show @first.apiUrl
+show @first.users[0].email
 
 >> File metadata still available via .mx
 show @first.mx.filename
@@ -351,7 +349,7 @@ show @post.mx.fm.author                >> Author name
 show @post.mx.fm.tags                  >> Array of tags
 
 >> Conditional processing
-when @post.mx.fm.published => show @post.text
+when @post.mx.fm.published => show @post.mx.text
 ```
 
 ## URL Loading
@@ -368,7 +366,7 @@ show @page.mx.status                   >> HTTP status code
 show @page.mx.title                    >> Page title (if HTML)
 
 >> HTML is converted to markdown
-show @page.text                         >> Markdown version
+show @page.mx.text                      >> Markdown version
 show @page.mx.html                     >> Original HTML
 ```
 
@@ -541,7 +539,7 @@ show @items[1:-1]                       >> ["second", "third", "fourth"]
 
 ## Working with JSON in JavaScript Functions
 
-Use `.data` or `.json` to parse JSON strings before passing to functions. Use `.text` to preserve strings.
+Parse JSON strings with a pipeline transform before passing them to JS functions. Use the bare variable for raw strings.
 
 ### JSON Parsing
 
@@ -559,8 +557,7 @@ run @filter1(@users)
 exe @filter2(users) = js {
   return users.filter(u => u.age > 25);
 }
-run @filter2(@users.data)   >> .data parses JSON
-run @filter2(@users.json)   >> .json is alias
+run @filter2(@users | @json)
 ```
 
 ### String Preservation
@@ -573,25 +570,25 @@ exe @length(str) = js {
 }
 
 run @length(@jsonStr)          >> Default: string
-run @length(@jsonStr.text)     >> Explicit string
+run @length(@jsonStr)          >> Raw JSON string
 ```
 
 ### Common Use Cases
 
 ```mlld
 >> Filter JSON array from command
-var @json = run {./mkjson.sh}
+var @payload = run {./mkjson.sh}
 exe @filterHigh(entries) = js {
   return entries.filter(e => e.finding.startsWith("High"));
 }
-var @result = @filterHigh(@json.data)
+var @result = @filterHigh(@payload | @json)
 
 >> Process API response
 var @response = run {curl -s api.example.com/data}
 exe @getActive(data) = js {
   return data.users.filter(u => u.active);
 }
-var @active = @getActive(@response.data)
+var @active = @getActive(@response | @json)
 ```
 
 ### Accessor Reference
@@ -600,23 +597,23 @@ var @active = @getActive(@response.data)
 
 | Accessor | Returns |
 |----------|---------|
-| `.json` / `.data` | Parsed JSON object |
-| `.text` | Raw string |
+| Direct fields (for example `.apiUrl`) | Parsed JSON fields |
+| `.mx.data` | Parsed payload object/array |
+| `.mx.text` | Raw string |
 
 **Variables** (e.g., `var @str = '{"status": "ok"}'`):
 
 | Accessor | Returns |
 |----------|---------|
-| `.data` / `.json` | Parsed JSON object |
-| `.text` | Original string |
+| `| @json` | Parsed JSON object/array |
 | (bare) | Original string (default) |
 
 **Command output** (e.g., `var @result = cmd {curl api.com/data}`):
 
 | Accessor | Returns |
 |----------|---------|
-| `.data` / `.json` | Parsed JSON when stdout is valid JSON, otherwise the original string |
-| `.text` | Raw stdout string |
+| `| @json` | Parsed JSON when stdout is valid JSON |
+| `.mx.text` | Raw stdout string |
 | `.mx` | Command metadata (`source`, `command`, `exitCode`, `duration`, `stderr`) |
 
 ## Built-in Methods
@@ -1153,8 +1150,8 @@ var @envConfig = <config/@env.json>
 var @config = js {
   return Object.assign(
     {},
-    @baseConfig.json,
-    @envConfig.json,
+    @baseConfig,
+    @envConfig,
     {
       environment: @env,
       timestamp: @now
@@ -1202,8 +1199,8 @@ Note: In mlld templates and directives, metadata works directly without `.keep`:
 ```mlld
 var @files = <docs/*.md>
 for @file in @files => show @file.mx.filename        >> Works
-for @file in @files => show @file.json.status        >> Works
-for @file in @files => show @file.fm.title           >> Works
+for @file in @files => show @file.mx.data.status     >> Works
+for @file in @files => show @file.mx.fm.title        >> Works
 ```
 
 ## Best Practices

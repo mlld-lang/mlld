@@ -12,21 +12,21 @@ returned null when used inside for expressions. The fix added handlers for both
 
 ## Test 2: Property access - frontmatter titles
 
-/var @titles = for @f in @files => <@f>.fm.title
+/var @titles = for @f in @files => <@f>.mx.fm.title
 /show `Titles: @titles`
 
 ## Test 3: Property access - frontmatter authors
 
-/var @authors = for @f in @files => <@f>.fm.author
+/var @authors = for @f in @files => <@f>.mx.fm.author
 /show `Authors: @authors`
 
 ## Test 4: Property access - filenames
 
-/var @names = for @f in @files => <@f>.filename
+/var @names = for @f in @files => <@f>.mx.filename
 /show `Filenames: @names`
 
 ## Test 5: Direct interpolation with variable
 
 /var @file = "alligator-for-test-1.md"
 /var @single = <@file>
-/show `Single file title: @single.fm.title`
+/show `Single file title: @single.mx.fm.title`

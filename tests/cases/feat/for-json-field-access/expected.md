@@ -3,7 +3,7 @@
 ## Direct access should work
 
 Direct access: pass
-## For-loop access to .json fields should work
+## For-loop access to JSON fields should work
 
 For-loop statuses: ["pass","fail"]
 ## Filter by JSON field should work

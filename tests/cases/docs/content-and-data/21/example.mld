@@ -1,9 +1,9 @@
 var @configs = <configs/*.json>
 var @first = @configs[0]
 
->> Access parsed JSON via .data
-show @first.data.apiUrl
-show @first.data.users[0].email
+>> Access parsed JSON directly
+show @first.apiUrl
+show @first.users[0].email
 
 >> File metadata still available via .mx
 show @first.mx.filename

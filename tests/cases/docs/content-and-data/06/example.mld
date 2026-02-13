@@ -1,7 +1,7 @@
 >> Metadata works directly - no .keep needed
 var @file = <config.json>
 show @file.mx.relative                 >> Works
-show @file.json.apiKey                 >> Works
+show @file.apiKey                      >> Works
 
 >> Use .keep when passing to JS and you need .mx inside JS
 exe @process(file) = js {

@@ -31,5 +31,5 @@ show @file.mx.fm.title      >> frontmatter field
 ```mlld
 var @files = <docs/*.md>
 for @file in @files => show @file.mx.filename
-for @file in @files => show @file.json.status
+for @file in @files => show @file.mx.data.status
 ```

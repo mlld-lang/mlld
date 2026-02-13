@@ -5,4 +5,4 @@ show @post.mx.fm.author                >> Author name
 show @post.mx.fm.tags                  >> Array of tags
 
 >> Conditional processing
-when @post.mx.fm.published => show @post.text
+when @post.mx.fm.published => show @post.mx.text

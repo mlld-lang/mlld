@@ -7,5 +7,5 @@ This test verifies that HTML content is properly converted to Markdown using Rea
 /show @article
 
 ## Access metadata
-/show `Title: @article.title`
-/show `Description: @article.description`
+/show `Title: @article.mx.title`
+/show `Description: @article.mx.description`

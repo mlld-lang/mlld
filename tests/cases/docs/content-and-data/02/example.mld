@@ -1,7 +1,6 @@
 var @file = <package.json>
 
-show @file.text  >> String content
-show @file.data  >> Parsed payload (JSON object)
+show @file.name  >> Parsed payload field (data-first access)
 show @file.mx  >> Metadata (filename, tokens, labels, etc.)
-show @file.mx.text  >> Wrapper text accessor (same as @file.text)
-show @file.mx.data  >> Wrapper data accessor (same as @file.data)
+show @file.mx.text  >> Wrapper text accessor
+show @file.mx.data  >> Wrapper data accessor (parsed payload)

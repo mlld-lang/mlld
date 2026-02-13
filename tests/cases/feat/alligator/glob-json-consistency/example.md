@@ -3,13 +3,13 @@
 ## Single file JSON parsing
 
 /var @single = <glob-json-a.json>
-/show `Single .data.name: @single.data.name`
+/show `Single .name: @single.name`
 
 ## Glob JSON parsing (should work the same)
 
 /var @glob = <glob-json-*.json>
 /var @first = @glob[0]
-/show `Glob[0] .data.name: @first.data.name`
+/show `Glob[0] .name: @first.name`
 
 ## Glob items have .mx metadata via index
 
@@ -17,4 +17,4 @@
 
 ## For loop preserves .mx metadata
 
-/for @item in @glob => show `Loop: @item.mx.filename has name @item.data.name`
+/for @item in @glob => show `Loop: @item.mx.filename has name @item.name`

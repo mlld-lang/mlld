@@ -23,7 +23,7 @@ Content of first file.
 # File 2
 
 Content of second file.
-All files concatenated via .text
+All files concatenated via .mx.text
 ## Field Access on Glob
 
 ---

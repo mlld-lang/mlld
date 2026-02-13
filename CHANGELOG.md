@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - StructuredValue field access now exposes wrapper accessors at `.mx.text` and `.mx.data`, and plain dotted access resolves through wrapper data consistently (`@value.field` aligns with `@value.mx.data.field`).
 - Built-in transformer/helper names are shadowable by user variables in scope (`@exists`, `@json`, `@upper`, `@keep`, etc.), and pipeline validation resolves scoped variables before builtin fallback.
 - `mlld validate` reports builtin-name shadowing as informational output while reserved-name collisions remain validation errors.
+- StructuredValue field access no longer exposes system metadata at the top level (`.text`, `.data`, `.type`, loader/execution metadata aliases); wrapper/system access is `.mx.*` only, and top-level dotted access resolves through user data.
 - Go/Python/Rust/Ruby SDK wrappers use persistent `mlld live --stdio` transport instead of per-call CLI shellouts.
   - Go, Python, Rust, and Ruby expose async handle APIs for `process` and `execute` with `wait/result`, `cancel`, and `update_state`.
   - `process` accepts payload/state/dynamic module injection options across wrappers.

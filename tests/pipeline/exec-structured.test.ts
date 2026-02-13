@@ -13,7 +13,7 @@ describe('Exec pipeline structured flow', () => {
 /exe @emit() = js { return '{"count": 5}' }
 /exe @parseJson(val) = js { return JSON.parse(val) }
 /var @result = @emit() with { pipeline: [@parseJson] }
-/show @result.text
+/show @result.mx.text
 /show @result
 `;
 

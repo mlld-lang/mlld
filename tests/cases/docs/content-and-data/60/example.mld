@@ -10,8 +10,8 @@ var @envConfig = <config/@env.json>
 var @config = js {
   return Object.assign(
     {},
-    @baseConfig.json,
-    @envConfig.json,
+    @baseConfig,
+    @envConfig,
     {
       environment: @env,
       timestamp: @now

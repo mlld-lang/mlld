@@ -1,6 +1,6 @@
 /var @payload = '{"stance":"approved","mx":"user-mx","nested":{"score":9}}' | @json
-/var @mxTextEqText = @payload.mx.text == @payload.text
-/show `mx_text_eq_text=@mxTextEqText`
+/var @textTopLevelMissing = @payload.text == null
+/show `text_top_level_missing=@textTopLevelMissing`
 /show `mx.data.stance=@payload.mx.data.stance`
 /show `mx.data.mx=@payload.mx.data.mx`
 /show `direct=@payload.stance`

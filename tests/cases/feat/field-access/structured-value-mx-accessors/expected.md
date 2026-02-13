@@ -1,4 +1,4 @@
-mx_text_eq_text=true
+text_top_level_missing=true
 mx.data.stance=approved
 mx.data.mx=user-mx
 direct=approved

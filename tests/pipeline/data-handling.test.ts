@@ -12,26 +12,27 @@ describe('Data handling accessors', () => {
     pathService = new PathService();
   });
 
-  it('parses JSON strings with .data before JavaScript execution', async () => {
+  it('parses JSON strings before JavaScript execution', async () => {
     const input = `
 /var @payload = '[{"num":1},{"num":2},{"num":3}]'
 /exe @sum(items) = js {
   return items.reduce((total, item) => total + item.num, 0)
 }
-/var @result = @sum(@payload.data)
+/var @parsed = @payload | @json
+/var @result = @sum(@parsed)
 /show @result`;
 
     const output = await interpret(input, { fileSystem, pathService });
     expect(output.trim()).toBe('6');
   });
 
-  it('preserves raw strings with .text', async () => {
+  it('preserves raw strings without wrapper accessors', async () => {
     const input = `
 /var @payload = '{"key":123}'
 /exe @length(str) = js {
   return str.length
 }
-/var @result = @length(@payload.text)
+/var @result = @length(@payload)
 /show @result`;
 
     const output = await interpret(input, { fileSystem, pathService });
@@ -215,8 +216,8 @@ describe('Data handling accessors', () => {
 
     const input = `
 /var @doc = <doc.md>
-/var @name = @doc.filename
-/var @body = @doc.text
+/var @name = @doc.mx.filename
+/var @body = @doc.mx.text
 /show @name
 /show @body`;
 

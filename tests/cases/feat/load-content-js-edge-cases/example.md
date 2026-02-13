@@ -46,7 +46,7 @@
   return `Content length: ${content.length}, filename param: ${filename}`;
 }
 
-/run @checkMetadata(@file, @file.filename)
+/run @checkMetadata(@file, @file.mx.filename)
 
 ## Test 4: Multiple parameters
 /exe @combine(@a, @b) = js {

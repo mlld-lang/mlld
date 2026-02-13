@@ -308,7 +308,7 @@ var @tokens = <large-file.md>.mx.tokens
 var @frontmatter = <doc.md>.mx.fm.title
 ```
 
-Aliases like `<doc.md>.filename` still resolve to `.mx.filename`, but `.mx` is the preferred namespace.
+Use `.mx` for metadata paths. Top-level metadata aliases like `<doc.md>.filename` are not available.
 
 Glob patterns:
 
@@ -498,7 +498,7 @@ Pipeline context variables:
 - `@p[1]` … `@p[n]`: outputs from completed stages (as `StructuredValue` wrappers)
 - `@p[-1]`: previous stage output; `@p[-2]` two stages back
 - `@p.retries.all`: history of retry attempts across contexts
-- Pipeline outputs have `.text`/`.mx.text` (string) and `.data`/`.mx.data` (structured) accessors. Display uses `.text` automatically.
+- Pipeline outputs expose wrapper access through `.mx.text` (string) and `.mx.data` (structured). Plain dotted access resolves through parsed data.
 
 Retry with hints:
 

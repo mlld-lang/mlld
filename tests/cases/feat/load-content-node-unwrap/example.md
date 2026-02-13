@@ -65,7 +65,7 @@ Data rows: ${dataRows.length}`;
 }
 
 /var @doc = <test.md>
-/run @getMeta(@doc, @doc.filename)
+/run @getMeta(@doc, @doc.mx.filename)
 
 ## Cleanup
 /run "rm -f test.md data.csv"

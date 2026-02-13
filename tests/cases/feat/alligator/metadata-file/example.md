@@ -8,9 +8,9 @@ This test verifies that files loaded with alligator syntax include rich metadata
 
 ## Access file metadata
 
-/show `Filename: @readme.filename`
-/show `Relative path: @readme.relative`
-/show `Absolute path: @readme.absolute`
+/show `Filename: @readme.mx.filename`
+/show `Relative path: @readme.mx.relative`
+/show `Absolute path: @readme.mx.absolute`
 
 ## Default content behavior
 

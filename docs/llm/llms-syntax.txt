@@ -101,6 +101,8 @@ end
 
 - Parameters from `exe @func(params)` are automatically available as `@param` in the template
 - `.att` supports `<file.md>` references, pipes, and `for`/`when` blocks
+- Relative `<file>` paths inside a template file resolve from that template file's directory
+- Use `@@` or `\@` to output a literal `@` symbol (e.g., `user@@example.com`)
 - Never load `.att` files with angle brackets - use `exe ... = template` instead
 
 **When to use external templates:**
@@ -134,8 +136,6 @@ The `@src/utils.ts` stays literal - mlld won't try to interpolate it.
 | `.att` | `@var` | `<file.md>` | Default, mlld-style |
 | `.mtt` | `{{var}}` | None | Content has `@path` or `<tag>` meant for LLMs |
 
-
-
 **Template-embedded vs top-level:** Control flow inside templates uses `/for` and `/end` with slash prefix. Top-level directives are separate statements.
 
 ```mlld
@@ -150,6 +150,14 @@ var @toc = ::
 /end
 ::
 show @toc
+```
+
+**Key/value form in templates:**
+
+```mlld
+/for @k, @v in @items
+- @k: @v
+/end
 ```
 
 **Key differences:**
@@ -182,7 +190,7 @@ for @doc in @docs => show @doc.mx.filename
 >> JSON globs - each item is auto-parsed
 var @configs = <configs/*.json>
 var @first = @configs[0]
-show @first.data.name                >> access parsed JSON
+show @first.name                     >> access parsed JSON
 show @first.mx.filename              >> file metadata still available
 
 >> With "as" template
@@ -218,6 +226,7 @@ var @file = <README.md>
 show @file.mx.filename      >> "README.md"
 show @file.mx.relative      >> relative path from cwd
 show @file.mx.absolute      >> absolute path
+show @file.mx.path          >> alias for absolute path
 show @file.mx.dirname       >> parent directory name
 show @file.mx.relativeDir   >> relative path to directory
 show @file.mx.absoluteDir   >> absolute path to directory
@@ -230,27 +239,25 @@ show @file.mx.fm.title      >> frontmatter field
 ```mlld
 var @files = <docs/*.md>
 for @file in @files => show @file.mx.filename
-for @file in @files => show @file.json.status
+for @file in @files => show @file.mx.data.status
 ```
 
-**JSON string accessors** (`.data`/`.mx.data` and `.text`/`.mx.text`):
+**Parse JSON explicitly with transforms:**
 
 ```mlld
 >> When you have a JSON string and need to parse it
 var @jsonStr = '[{"name":"Alice"},{"name":"Bob"}]'
-var @parsed = @jsonStr.data          >> parses JSON string to array/object
+var @parsed = @jsonStr | @json
 show @parsed.0.name                  >> "Alice"
 
 >> When you have an object and need the JSON string
 var @obj = {"name": "Alice"}
-var @str = @obj.text                 >> stringified JSON
+var @str = @obj | @json
 show @str                            >> '{"name":"Alice"}'
 
 >> Common in pipelines with LLM responses
 var @response = @llm("return JSON") | @json.llm
-var @items = @response.data          >> if response is JSON string
-show @response.mx.data               >> explicit structured accessor
-show @response.mx.text               >> explicit text accessor
+var @items = @response
 ```
 </FILE_LOADING>
 
@@ -348,6 +355,15 @@ show @x       >> also works here
 - `@base` - project root path (alias for @root)
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)
+
+Built-in transformer/helper names are available for `var`/`let` declarations and are shadowable per scope:
+- `@exists`, `@typeof`
+- `@json`, `@xml`, `@csv`, `@md`
+- `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+- `@keep`, `@keepStructured`
+
+`mlld validate` reports builtin shadowing as informational output.
+- `@keep`, `@keepStructured`
 </RESERVED_VARIABLES>
 
 </MLLD_SYNTAX>

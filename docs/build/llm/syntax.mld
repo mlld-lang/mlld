@@ -17,7 +17,6 @@ var @varAtoms = [
 var @templateAtoms = [
   <@base/docs/src/atoms/syntax/templates-basics.md>,
   <@base/docs/src/atoms/syntax/templates-external.md>,
-  <@base/docs/src/atoms/syntax/templates-when-expr.md>,
   <@base/docs/src/atoms/syntax/templates-loops.md>
 ]
 
