@@ -41,6 +41,7 @@ import { InterpolationContext } from '../core/interpolation-context';
 import type { ExecutableDefinition } from '@core/types/executable';
 import type { WithClause } from '@core/types';
 import { evaluateSign, evaluateVerify } from './sign-verify';
+import { evaluateBail } from './bail';
 
 /**
  * Extract trace information from a directive
@@ -774,6 +775,9 @@ async function dispatchDirective(
 
     case 'verify':
       return await evaluateVerify(directive, env);
+
+    case 'bail':
+      return await evaluateBail(directive, env);
 
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);

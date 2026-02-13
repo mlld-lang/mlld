@@ -31,6 +31,7 @@ export { GuardRetrySignal } from './GuardRetrySignal';
 export { MlldSecurityError } from './MlldSecurityError';
 export { CircularReferenceError } from './CircularReferenceError';
 export type { CircularReferenceErrorContext } from './CircularReferenceError';
+export { MlldBailError, BAIL_EXIT_CODE, isBailError } from './MlldBailError';
 
 // Export error message collections
 export * from './messages/index'; 

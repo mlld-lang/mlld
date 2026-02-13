@@ -748,6 +748,7 @@ WhenActionBlockStatement "when action block statement"
   / AugmentedAssignment
   / WhenExpressionAny
   / SlashIf
+  / SlashBail
   / ForNestedDirective
   / WhenBlockAction
 
@@ -1186,6 +1187,7 @@ WhenOutputTarget
 // Implicit action patterns - these match the same syntax as explicit directives but without "/"
 WhenImplicitAction
   = WhenImplicitRetryAction
+  / WhenImplicitBailAction
   / WhenImplicitExplicitVarAssignment // var @x = value (outer-scope variable)
   / WhenImplicitVarAssignmentError    // Error: @x = value - use let or var instead
   / WhenImplicitFunctionCall
@@ -1520,4 +1522,9 @@ WhenImplicitRetryAction
         return [retryNode, hint];
       }
       return [retryNode];
+    }
+
+WhenImplicitBailAction
+  = action:BailAction {
+      return action;
     }

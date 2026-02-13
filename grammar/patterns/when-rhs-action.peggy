@@ -17,6 +17,7 @@ WhenRHSActionBase "when RHS action base"
   / WhenRHSVarAssignment
   / WhenRHSCommandAction
   / WhenRHSFunctionCall
+  / BailAction
   / DoneLiteral
   / ContinueLiteral
   / WhenRHSSkipAction

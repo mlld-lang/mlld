@@ -39,6 +39,7 @@ import type {
   ForControlKindResolver,
   ForIterationError
 } from './for/types';
+import { isBailError } from '@core/errors';
 
 function extractControlKind(value: unknown): ReturnType<ForControlKindResolver> {
   const v = isStructuredValue(value) ? asData(value) : value;
@@ -114,6 +115,9 @@ export async function evaluateForDirective(
         returnControl = actionResult.returnControl;
       } catch (err: any) {
         popForIterationContext(childEnv);
+        if (isBailError(err)) {
+          throw err;
+        }
         if (forErrors) {
           forErrors.push(createForIterationError({
             index: idx,
@@ -221,6 +225,9 @@ export async function evaluateForExpression(
       return iterationResult.value as any;
     } catch (error) {
       popExpressionIterationContexts(childEnv);
+      if (isBailError(error)) {
+        throw error;
+      }
       if (!effective?.parallel) {
         throw error;
       }

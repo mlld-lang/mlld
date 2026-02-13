@@ -196,6 +196,7 @@ IfActionBlockStatement "if action block statement"
   / ForNestedDirective
   / SlashLoop
   / SlashIf
+  / SlashBail
   / IfBlockAction
 
 IfVarInBlockError
@@ -218,5 +219,6 @@ IfBlockAction
   / WhenRHSVariableReference
   / DoneLiteral
   / ContinueLiteral
+  / BailAction
   / ExeForeachPattern
   / ExeDataPattern

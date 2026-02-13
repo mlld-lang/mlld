@@ -261,6 +261,7 @@ export type DirectiveKind =
   | 'while'
   | 'for'
   | 'loop'
+  | 'bail'
   | 'sign'
   | 'verify';
 
@@ -296,6 +297,8 @@ export type DirectiveSubtype =
   | 'while'
   // Loop subtype
   | 'loop'
+  // Bail subtype
+  | 'bail'
   // Needs/Wants subtypes
   | 'needs'
   | 'profiles'

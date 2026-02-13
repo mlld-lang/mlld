@@ -215,6 +215,7 @@ ForSingleAction "for action"
     }
   / RunBlockAction
   // Other when-style actions (including directives) directly in for loop bodies
+  / BailAction
   / whenAction:WhenRHSAction {
       return Array.isArray(whenAction) ? whenAction : [whenAction];
     }
@@ -318,6 +319,7 @@ ForBlockStatement "for block statement"
   / AugmentedAssignment
   / WhenExpressionAny
   / SlashIf
+  / SlashBail
   / ForNestedDirective
   / ForSingleAction
 
@@ -369,6 +371,7 @@ LoopBlockStatement "loop block statement"
   / ContinueLiteral
   / WhenExpressionAny
   / SlashIf
+  / SlashBail
   / ForNestedDirective
   / ForSingleAction
 

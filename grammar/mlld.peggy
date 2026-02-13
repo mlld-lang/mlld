@@ -236,6 +236,7 @@ Directive
     / SlashFor      // For directives (iteration)
     / SlashWhile    // While directives (bounded iteration)
     / SlashLoop     // Loop directives (block iteration)
+    / SlashBail     // Bail directives (terminate execution)
     / SlashRun      // Run directives (commands, code)
     / SlashBareRunInvocation // Bare exec invocation sugar (@fn() / /@fn())
     / SlashImport   // Import directives (from other files)

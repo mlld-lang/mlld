@@ -10,7 +10,7 @@ import { isLetAssignment, isAugmentedAssignment, isConditionPair, isDirectAction
 import { astLocationToSourceLocation, type BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
-import { MlldWhenExpressionError } from '@core/errors';
+import { isBailError, MlldWhenExpressionError } from '@core/errors';
 import { evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { evaluateCondition, conditionTargetsDenied, evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
@@ -756,6 +756,9 @@ async function evaluateWhenExpressionInternal(
           // Return immediately after the first match
           return buildResult(value, accumulatedEnv);
         } catch (actionError) {
+          if (isBailError(actionError)) {
+            throw actionError;
+          }
           const conditionText = getConditionPairText(pair, sourceInfo.source)
             ?? getConditionText(pair.condition, sourceInfo.source);
           const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
@@ -777,6 +780,9 @@ async function evaluateWhenExpressionInternal(
         }
       }
     } catch (conditionError) {
+      if (isBailError(conditionError)) {
+        throw conditionError;
+      }
       if (conditionError instanceof MlldWhenExpressionError && conditionError.details?.phase === 'action') {
         errors.push(conditionError);
         continue;
@@ -870,6 +876,9 @@ async function evaluateWhenExpressionInternal(
         // Return immediately after the first none match
         return buildResult(value, accumulatedEnv);
       } catch (actionError) {
+        if (isBailError(actionError)) {
+          throw actionError;
+        }
         const conditionText = getConditionText(pair.condition, sourceInfo.source);
         const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
         const actionMessage = getErrorMessage(actionError);

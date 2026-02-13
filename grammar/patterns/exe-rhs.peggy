@@ -687,6 +687,7 @@ ExeBlockStatement
   / WhenExpressionAny
   / ForNestedDirective
   / SlashIf
+  / SlashBail
   / ExeBlockAction
 
 ExeBlockAction
@@ -700,6 +701,7 @@ ExeBlockAction
   / WhenRHSVariableReference
   / DoneLiteral
   / ContinueLiteral
+  / BailAction
   / ExeForeachPattern
   / ExeDataPattern
 

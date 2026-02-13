@@ -47,6 +47,7 @@ export const DirectiveKind = {
     policy: 'policy',
     while: 'while',
     loop: 'loop',
+    bail: 'bail',
     sign: 'sign',
     verify: 'verify'
 };

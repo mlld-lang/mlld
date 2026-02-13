@@ -50,7 +50,7 @@ class MlldSyntaxGenerator {
       // Enhanced operators list
       operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new)\\b',
       // Block keywords (inside [...] blocks)
-      blockKeywords: '\\b(let|done|continue|skip)\\b',
+      blockKeywords: '\\b(let|done|continue|skip|bail)\\b',
       // Wildcard in when blocks
       wildcard: '(?:^|\\s)\\*(?=\\s|$|=>)',
       // Object keys in literals: key:
@@ -247,7 +247,7 @@ Prism.languages.mlld = {
     pattern: /${this.patterns.singleQuoteString}/,
     greedy: true
   },
-  // Block keywords (let, done, continue, skip)
+  // Block keywords (let, done, continue, skip, bail)
   'block-keyword': {
     pattern: /${this.patterns.blockKeywords}/,
     alias: 'keyword'
