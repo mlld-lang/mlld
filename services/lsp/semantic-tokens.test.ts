@@ -697,6 +697,23 @@ describe('Semantic Tokens', () => {
       const operators = tokens.filter(t => t.tokenType === 'operator');
       expect(operators.some(t => t.text === ',')).toBe(true);
     });
+
+    it('does not add a synthetic run keyword token for /@function(...) bare invocation sugar', async () => {
+      const code = '/@processor(@data)';
+      const tokens = await getSemanticTokens(code);
+
+      const keywordTokens = tokens.filter(t => t.tokenType === 'keyword');
+      expect(keywordTokens).toHaveLength(0);
+
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@processor',
+        tokenType: 'variable'
+      }));
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@data',
+        tokenType: 'variable'
+      }));
+    });
   });
 
   describe('Structured Data', () => {

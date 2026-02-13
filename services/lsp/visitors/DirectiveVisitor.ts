@@ -33,8 +33,10 @@ export class DirectiveVisitor extends BaseVisitor {
     if (!node.location) return;
 
 
-    // Add directive token for both explicit (with /) and implicit directives (without /)
-    if (node.kind) {
+    // Add directive token for both explicit (with /) and implicit directives (without /).
+    // Bare invocation sugar (`@fn()` / `/@fn()`) maps to synthetic run directives and
+    // should not render a `/run` token that is not present in source text.
+    if (node.kind && !node.meta?.isBareInvocation) {
       const sourceText = this.document.getText();
       const startOffset = node.location.start.offset;
       const hasSlash = sourceText[startOffset] === '/';

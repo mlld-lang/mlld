@@ -237,6 +237,7 @@ Directive
     / SlashWhile    // While directives (bounded iteration)
     / SlashLoop     // Loop directives (block iteration)
     / SlashRun      // Run directives (commands, code)
+    / SlashBareRunInvocation // Bare exec invocation sugar (@fn() / /@fn())
     / SlashImport   // Import directives (from other files)
     / SlashExport   // Export directives (explicit exports)
     / SlashOutput   // Output directives (output routing)

@@ -18,6 +18,11 @@ qa_tier: 1
 - JavaScript code → `js { ... }` (in-process) or `node { ... }` (VM-isolated)
 - Python code → `py { ... }` or `python { ... }` (subprocess)
 
+**Executable call statement sugar:**
+- Strict mode (`.mld`): `@task()` executes with the same behavior as `run @task()`
+- Markdown mode (`.md`): `/@task()` executes with the same behavior as `/run @task()`
+- `show @task()` still displays output explicitly
+
 ```mlld
 >> cmd (pipes only, safe)
 run cmd {echo Hello | tr '[:lower:]' '[:upper:]'}

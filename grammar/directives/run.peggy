@@ -406,6 +406,78 @@ SlashRun
         'exec'
       );
     }
+
+// Bare exec invocation statement sugar.
+// - strict mode: @fn()
+// - markdown mode: /@fn()
+SlashBareRunInvocation
+  = DirectiveContext slash:"/"? &"@" invocation:UnifiedReferenceWithTail
+    &{
+      const isStrictMode = options?.mode === 'strict';
+      const hasSlash = slash === '/';
+      return invocation?.type === 'ExecInvocation' && (isStrictMode || hasSlash);
+    }
+    comment:InlineComment? {
+      const commandRef = invocation;
+      const isExecResultMethod = Boolean(commandRef.commandRef && commandRef.commandRef.objectSource);
+
+      let values;
+      if (isExecResultMethod) {
+        values = {
+          execInvocation: commandRef
+        };
+      } else {
+        values = {
+          identifier: commandRef.commandRef.identifier,
+          args: commandRef.commandRef.args || []
+        };
+      }
+
+      let rawIdentifier = commandRef.commandRef.name;
+      if (commandRef.commandRef.identifier && commandRef.commandRef.identifier.length > 0) {
+        const varRef = commandRef.commandRef.identifier[0];
+        if (varRef.type === NodeType.VariableReference) {
+          rawIdentifier = varRef.identifier;
+          if (varRef.fields && varRef.fields.length > 0) {
+            rawIdentifier += varRef.fields.map(f => '.' + f.value).join('');
+          }
+        }
+      }
+
+      const raw = {
+        identifier: rawIdentifier,
+        args: commandRef.commandRef.args
+          ? commandRef.commandRef.args.map(arg =>
+            arg.type === NodeType.Text ? arg.content :
+            arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
+          )
+          : []
+      };
+
+      const meta = {
+        argumentCount: commandRef.commandRef.args ? commandRef.commandRef.args.length : 0,
+        isBareInvocation: true,
+        ...(comment ? { comment } : {})
+      };
+
+      if (commandRef.withClause) {
+        values.withClause = commandRef.withClause;
+        raw.withClause = commandRef.withClause;
+        meta.withClause = commandRef.withClause;
+      }
+
+      const subtype = isExecResultMethod ? 'runExecInvocation' : 'runExec';
+
+      return helpers.createStructuredDirective(
+        'run',
+        subtype,
+        values,
+        raw,
+        meta,
+        location(),
+        'exec'
+      );
+    }
 // Error Recovery Rules for /run directive
   // ----------------------------------------
   

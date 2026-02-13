@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bare match form**: `when @expr [patterns]` works without the colon — `when @mode ["active" => x; * => y]` is now valid alongside the colon form `when @mode: [...]`
   - The `=> [block]` form disambiguates imperative blocks, so the colon is no longer needed for parsing
   - Colon form still works (backward compatible) but is no longer shown in docs
+- **Bare exec invocation statements**: `@func()` in strict mode and `/@func()` in markdown mode execute with the same semantics as `run @func()`
 
 ### Changed
 - StructuredValue field access now exposes wrapper accessors at `.mx.text` and `.mx.data`, and plain dotted access resolves through wrapper data consistently (`@value.field` aligns with `@value.mx.data.field`).

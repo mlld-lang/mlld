@@ -186,6 +186,16 @@ export const helpers = {
       if (!/[a-zA-Z0-9_]/.test(nextChar)) return true;
     }
 
+    // Bare exec invocation statements (strict mode: @fn(), markdown mode: /@fn()).
+    // This only recognizes statement starts with explicit invocation syntax so
+    // plain @var references are never treated as directives.
+    if (input[cursor] === '@') {
+      const remainder = input.substring(cursor);
+      if (/^@[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\s*\(/.test(remainder)) {
+        return true;
+      }
+    }
+
     return false;
   },
 
