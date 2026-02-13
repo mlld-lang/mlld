@@ -36,9 +36,9 @@ describe('top-level return behavior', () => {
     expect((result as string).trimEnd().endsWith('done')).toBe(true);
   });
 
-  it('parses and executes bare top-level return in markdown mode', async () => {
+  it('parses and executes slash top-level return in markdown mode', async () => {
     const fileSystem = new MemoryFileSystem();
-    const source = '=> "markdown-done"\n/show "after"';
+    const source = '/=> "markdown-done"\n/show "after"';
 
     const result = await interpret(source, {
       fileSystem,
@@ -50,6 +50,23 @@ describe('top-level return behavior', () => {
     });
 
     expect(result.trim()).toBe('markdown-done');
+  });
+
+  it('treats bare top-level return as text in markdown mode', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = '=> "markdown-text"\n/show "after"';
+
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      mlldMode: 'markdown',
+      filePath: '/project/doc.mld.md',
+      pathContext: contextFor('/project/doc.mld.md'),
+      streaming: { enabled: false }
+    });
+
+    expect(result).toContain('=> "markdown-text"');
+    expect(result).toContain('after');
   });
 
   it('captures imported script return value as default export', async () => {

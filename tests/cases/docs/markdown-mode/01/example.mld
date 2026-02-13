@@ -1,2 +1,3 @@
 /var @name = "Alice"
 /show `Hello @name!`
+/=> "final output"

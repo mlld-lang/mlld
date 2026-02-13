@@ -7,7 +7,7 @@ Markdown mode allows embedding mlld directives in markdown files. This is useful
 | Extension | Mode | Behavior |
 |-----------|------|----------|
 | `.mld` | strict | Every line is a directive or blank. Text lines error. |
-| `.mld.md` | markdown | `/` required for directives, except bare `=>` script returns. Text becomes content. |
+| `.mld.md` | markdown | `/` required for directives. Text becomes content. |
 | `.md` | markdown | Same as `.mld.md` |
 
 ## Syntax
@@ -17,12 +17,7 @@ In markdown mode, directives require a leading slash:
 ```mlld
 /var @name = "Alice"
 /show `Hello @name!`
-```
-
-Bare `=>` at line start returns from the script without `/`:
-
-```mlld
-=> "final output"
+/=> "final output"
 ```
 
 Plain text passes through as content:
@@ -104,7 +99,7 @@ See [registry.md](registry.md) for full publishing documentation.
 
 | Feature | Strict (`.mld`) | Markdown (`.mld.md`) |
 |---------|-----------------|----------------------|
-| Directive prefix | None required | `/` required (bare `=>` return allowed) |
+| Directive prefix | None required | `/` required |
 | Plain text | Error | Becomes content |
 | Comments | `>> comment` | `>> comment` (same) |
 | GitHub rendering | Code only | Full markdown |

@@ -1,2 +1,2 @@
-=> "markdown-return"
+/=> "markdown-return"
 /show "unreachable"

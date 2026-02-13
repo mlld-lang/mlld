@@ -140,7 +140,7 @@ export const helpers = {
         let cursor = pos;
         if (input[cursor] === '/')
             cursor++;
-        // Return directives are recognized at line start in both strict and markdown modes.
+        // Return directives are recognized at line start.
         if (input[cursor] === '=' && input[cursor + 1] === '>') {
             return true;
         }
@@ -170,14 +170,6 @@ export const helpers = {
             }
         }
         return false;
-    },
-    isReturnDirectiveContext(input, pos) {
-        if (!this.isLogicalLineStart(input, pos))
-            return false;
-        let cursor = pos;
-        if (input[cursor] === '/')
-            cursor++;
-        return input[cursor] === '=' && input[cursor + 1] === '>';
     },
     /**
      * Legacy helper retained for compatibility.
