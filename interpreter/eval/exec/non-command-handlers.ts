@@ -281,7 +281,8 @@ async function handleCommandRefExecutable(
   const refAst = (definition as any).commandRefAst;
   if (refAst) {
     const refWithClause = mergeAuthUsingIntoWithClause((definition as any).withClause, node.withClause);
-    const refEnv = env.createChild();
+    // Evaluate command-ref AST within invocation scope so executable parameters resolve.
+    const refEnv = execEnv.createChild();
     if (variable?.internal?.capturedModuleEnv instanceof Map) {
       refEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
     }

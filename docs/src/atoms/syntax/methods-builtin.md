@@ -24,6 +24,7 @@ updated: 2026-01-05
 - `@str.trim()` - remove whitespace
 - `@str.startsWith(prefix)` / `endsWith(suffix)`
 - `@str.split(separator)` - split to array
+- Method chains can continue across lines when continuation lines start with `.`
 
 ```mlld
 var @fruits = ["apple", "banana", "cherry"]
@@ -36,4 +37,10 @@ show @message.split(" ")           >> ["Hello", "World"]
 
 >> Method chaining
 show @message.trim().toLowerCase().startsWith("hello")  >> true
+
+>> Multiline method chaining
+exe @normalize(text) = @text
+  .trim()
+  .toLowerCase()
+  .replace("hello", "hi")
 ```

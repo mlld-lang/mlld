@@ -7,16 +7,28 @@
 
 // DOT NOTATION FIELD ACCESS
 // Example: obj.property, var.field
+FieldDotSeparator "field dot separator"
+  = dot:DotSeparator {
+      return dot;
+    }
+  / [ \t]* LineTerminator [ \t]* dotStart:("" { return peg$currPos; }) "." {
+      const dotLocation = peg$computeLocation(dotStart, dotStart + 1);
+      return helpers.createNode(NodeType.DotSeparator, {
+        value: '.',
+        location: dotLocation
+      });
+    }
+
 FieldAccess
-  = DotSeparator fieldStart:("" { return peg$currPos; }) field:BaseIdentifier {
+  = dot:FieldDotSeparator fieldStart:("" { return peg$currPos; }) field:BaseIdentifier {
       return { 
         type: 'field', 
         value: field,
         location: {
           start: {
             offset: fieldStart,
-            line: location().start.line,
-            column: location().start.column + 1
+            line: dot.location.start.line,
+            column: dot.location.start.column + 1
           },
           end: location().end
         }
@@ -29,7 +41,7 @@ OptionalFieldAccessSuffix
 
 // DOT NOTATION FIELD ACCESS WITH OPTIONAL SUFFIX
 FieldAccessOptional
-  = DotSeparator fieldStart:("" { return peg$currPos; }) field:BaseIdentifier opt:OptionalFieldAccessSuffix? {
+  = dot:FieldDotSeparator fieldStart:("" { return peg$currPos; }) field:BaseIdentifier opt:OptionalFieldAccessSuffix? {
       return { 
         type: 'field', 
         value: field,
@@ -37,8 +49,8 @@ FieldAccessOptional
         location: {
           start: {
             offset: fieldStart,
-            line: location().start.line,
-            column: location().start.column + 1
+            line: dot.location.start.line,
+            column: dot.location.start.column + 1
           },
           end: location().end
         }
@@ -49,15 +61,15 @@ FieldAccessOptional
 // Example: obj.123, var.456 
 // Allows direct property access with numeric indices
 NumericFieldAccess
-  = DotSeparator fieldStart:("" { return peg$currPos; }) index:NumberLiteral {
+  = dot:FieldDotSeparator fieldStart:("" { return peg$currPos; }) index:NumberLiteral {
       return { 
         type: 'numericField', 
         value: index,
         location: {
           start: {
             offset: fieldStart,
-            line: location().start.line,
-            column: location().start.column + 1
+            line: dot.location.start.line,
+            column: dot.location.start.column + 1
           },
           end: location().end
         }
@@ -66,7 +78,7 @@ NumericFieldAccess
 
 // NUMERIC FIELD ACCESS WITH OPTIONAL SUFFIX
 NumericFieldAccessOptional
-  = DotSeparator fieldStart:("" { return peg$currPos; }) index:NumberLiteral opt:OptionalFieldAccessSuffix? {
+  = dot:FieldDotSeparator fieldStart:("" { return peg$currPos; }) index:NumberLiteral opt:OptionalFieldAccessSuffix? {
       return { 
         type: 'numericField', 
         value: index,
@@ -74,8 +86,8 @@ NumericFieldAccessOptional
         location: {
           start: {
             offset: fieldStart,
-            line: location().start.line,
-            column: location().start.column + 1
+            line: dot.location.start.line,
+            column: dot.location.start.column + 1
           },
           end: location().end
         }
@@ -230,7 +242,7 @@ AnyFieldAccessOptional
 
 // Extended field access for trailing method calls (e.g., .slice(0, 4))
 MethodCallAccess
-  = DotSeparator methodStart:("" { return peg$currPos; }) method:BaseIdentifier "(" args:CommandArgumentList? _ ")" {
+  = dot:FieldDotSeparator methodStart:("" { return peg$currPos; }) method:BaseIdentifier "(" args:CommandArgumentList? _ ")" {
       return {
         type: 'methodCall',
         name: method,
@@ -238,8 +250,8 @@ MethodCallAccess
         location: {
           start: {
             offset: methodStart,
-            line: location().start.line,
-            column: location().start.column + 1
+            line: dot.location.start.line,
+            column: dot.location.start.column + 1
           },
           end: location().end
         }

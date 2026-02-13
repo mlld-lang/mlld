@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `mlld_ast` - Raw AST output
   - Separate from `mlld mcp` which serves user-defined tools
 - **Template interpolation shortcuts**: `@var?` omits falsy values and `@var??"default"` (or single-quoted) provides nullish fallback in templates
+- **Multiline method chaining**: Method chains can continue across lines in expressions when each continuation line starts with `.` (for example `@text` newline `.trim()` newline `.replace(...)`).
 - **`@mx.for` iteration context**: Access loop state inside `for` blocks
   - `@mx.for.index` - Current 0-based index
   - `@mx.for.total` - Total items in collection
