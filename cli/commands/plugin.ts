@@ -4,7 +4,7 @@ import { execFileSync } from 'child_process';
 const MARKETPLACE_SOURCE = 'mlld-lang/mlld';
 const PLUGIN_REF = 'mlld@mlld';
 
-function findClaude(): string | null {
+export function findClaude(): string | null {
   try {
     const result = execFileSync('which', ['claude'], { encoding: 'utf8' }).trim();
     return result || null;
@@ -34,13 +34,13 @@ function runClaude(args: string[], verbose?: boolean): { success: boolean; outpu
   }
 }
 
-async function pluginInstall(scope: string, verbose?: boolean): Promise<void> {
+export async function pluginInstall(scope: string, verbose?: boolean): Promise<void> {
   console.log(chalk.blue('Adding mlld marketplace...'));
   const addResult = runClaude(['plugin', 'marketplace', 'add', MARKETPLACE_SOURCE], verbose);
   if (!addResult.success && !addResult.output.includes('already')) {
     console.error(chalk.red('Failed to add marketplace:'));
     console.error(chalk.gray(addResult.output));
-    process.exit(1);
+    throw new Error('Failed to add marketplace');
   }
 
   console.log(chalk.blue(`Installing mlld plugin (scope: ${scope})...`));
@@ -48,31 +48,31 @@ async function pluginInstall(scope: string, verbose?: boolean): Promise<void> {
   if (!installResult.success && !installResult.output.includes('already installed')) {
     console.error(chalk.red('Failed to install plugin:'));
     console.error(chalk.gray(installResult.output));
-    process.exit(1);
+    throw new Error('Failed to install plugin');
   }
 
   console.log(chalk.green('\nmlld plugin installed for Claude Code.'));
   console.log(chalk.gray('Restart Claude Code to activate.'));
 }
 
-async function pluginUninstall(verbose?: boolean): Promise<void> {
+export async function pluginUninstall(verbose?: boolean): Promise<void> {
   console.log(chalk.blue('Uninstalling mlld plugin...'));
   const result = runClaude(['plugin', 'uninstall', PLUGIN_REF], verbose);
   if (!result.success) {
     console.error(chalk.red('Failed to uninstall plugin:'));
     console.error(chalk.gray(result.output));
-    process.exit(1);
+    throw new Error('Failed to uninstall plugin');
   }
 
   console.log(chalk.green('mlld plugin uninstalled.'));
 }
 
-async function pluginStatus(verbose?: boolean): Promise<void> {
+export async function pluginStatus(verbose?: boolean): Promise<void> {
   const result = runClaude(['plugin', 'list'], verbose);
   if (!result.success) {
     console.error(chalk.red('Failed to check plugin status:'));
     console.error(chalk.gray(result.output));
-    process.exit(1);
+    throw new Error('Failed to check plugin status');
   }
 
   if (result.output.includes('mlld')) {

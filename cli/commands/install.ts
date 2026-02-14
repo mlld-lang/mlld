@@ -296,6 +296,19 @@ export function createInstallCommand() {
     description: 'Install mlld modules',
 
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
+      const redirects: Record<string, string> = {
+        'plugin': 'mlld plugin install',
+        'skill': 'mlld skill install',
+        'skills': 'mlld skill install',
+      };
+      for (const arg of args) {
+        const redirect = redirects[arg.toLowerCase()];
+        if (redirect) {
+          console.log(chalk.yellow(`"${arg}" is not a module. Did you mean \`${redirect}\`?`));
+          return;
+        }
+      }
+
       const options: InstallOptions = {
         verbose: flags.verbose || flags.v,
         noCache: flags['no-cache'],

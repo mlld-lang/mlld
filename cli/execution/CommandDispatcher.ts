@@ -30,6 +30,7 @@ import { createHowtoCommand, createQuickstartCommand } from '../commands/howto';
 import { createValidateCommand } from '../commands/analyze';
 import { createVerifyCommand } from '../commands/verify';
 import { createPluginCommand } from '../commands/plugin';
+import { createSkillCommand } from '../commands/skill';
 import type { CLIOptions } from '../index';
 
 export class CommandDispatcher {
@@ -87,6 +88,7 @@ export class CommandDispatcher {
     this.commandMap.set('analyze', createValidateCommand()); // Alias
     this.commandMap.set('verify', createVerifyCommand());
     this.commandMap.set('plugin', createPluginCommand());
+    this.commandMap.set('skill', createSkillCommand());
   }
 
   async executeCommand(
@@ -228,7 +230,8 @@ export class CommandDispatcher {
       'ht': 'Get help on mlld topics',
       'qs': 'Quick start guide',
       'quickstart': 'Quick start guide',
-      'plugin': 'Manage Claude Code plugin'
+      'plugin': 'Manage Claude Code plugin',
+      'skill': 'Manage coding tool skills'
     };
 
     return descriptions[command] || 'No description available';
