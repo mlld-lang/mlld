@@ -6,7 +6,7 @@ category: security
 parent: security
 tags: [signing, verification, cryptography]
 related: [signing-overview, autosign-autoverify]
-related-code: [core/security/SignatureStore.ts, interpreter/eval/sign-verify.ts, cli/commands/verify.ts]
+related-code: [core/security/sig-adapter.ts, interpreter/eval/sign-verify.ts, cli/commands/verify.ts]
 updated: 2026-02-01
 ---
 
@@ -40,7 +40,7 @@ In scripts, `verify` checks signature integrity silently — execution continues
 
 **Verification failure:**
 
-If content changes after signing, `verify` errors with the ORIGINAL signed content — enabling detection of what changed.
+If content changes after signing, `verify` returns `verified: false` with an `error` message.
 
 **CLI verification:**
 
@@ -57,8 +57,8 @@ LLMs call `mlld verify` to check authenticity of their instructions. CLI returns
   "verified": true,
   "template": "Review @input and reject if unsafe",
   "hash": "sha256:abc123...",
-  "signedby": "security-team",
-  "signedat": "2026-02-01T10:30:00Z"
+  "signedBy": "security-team",
+  "signedAt": "2026-02-01T10:30:00Z"
 }
 ```
 
@@ -67,8 +67,8 @@ LLMs call `mlld verify` to check authenticity of their instructions. CLI returns
 | `verified` | True if signature matches content |
 | `template` | Original signed content |
 | `hash` | Signature with algorithm prefix |
-| `signedby` | Signer identity (optional) |
-| `signedat` | ISO 8601 timestamp |
+| `signedBy` | Signer identity (optional) |
+| `signedAt` | ISO 8601 timestamp |
 
 **Audit pattern example:**
 
@@ -87,8 +87,8 @@ Pass to an LLM with instructions to verify via `mlld verify auditCriteria`. The 
 
 **Signature storage:**
 
-Signatures stored in `.mlld/sec/sigs/`:
-- `{varname}.sig` - Metadata (hash, method, signer, timestamp)
-- `{varname}.content` - Signed content
+Signatures stored in `.sig/content/`:
+- `{varname}.sig.json` - Metadata (hash, algorithm, signer, timestamp)
+- `{varname}.sig.content` - Signed content
 
 See `autosign-autoverify` for policy automation, `signing-overview` for threat model.

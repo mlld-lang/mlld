@@ -33,9 +33,9 @@ describe('auto-sign defaults', () => {
       approveAllImports: true
     });
 
-    expect(await fileSystem.exists('/project/.mlld/sec/sigs/prompt.sig')).toBe(true);
-    expect(await fileSystem.exists('/project/.mlld/sec/sigs/plain.sig')).toBe(false);
-    const content = await fileSystem.readFile('/project/.mlld/sec/sigs/prompt.content');
+    expect(await fileSystem.exists('/project/.sig/content/prompt.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/plain.sig.json')).toBe(false);
+    const content = await fileSystem.readFile('/project/.sig/content/prompt.sig.content');
     expect(content).toBe('Evaluate @input');
   });
 
@@ -62,8 +62,8 @@ describe('auto-sign defaults', () => {
       approveAllImports: true
     });
 
-    expect(await fileSystem.exists('/project/.mlld/sec/sigs/auditPrompt.sig')).toBe(true);
-    expect(await fileSystem.exists('/project/.mlld/sec/sigs/auditInstructions.sig')).toBe(false);
+    expect(await fileSystem.exists('/project/.sig/content/auditPrompt.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/auditInstructions.sig.json')).toBe(false);
   });
 
   it('signs .att content when autosign templates is enabled', async () => {
@@ -83,8 +83,8 @@ describe('auto-sign defaults', () => {
       approveAllImports: true
     });
 
-    expect(await fileSystem.exists('/project/.mlld/sec/sigs/promptFile.sig')).toBe(true);
-    const content = await fileSystem.readFile('/project/.mlld/sec/sigs/promptFile.content');
+    expect(await fileSystem.exists('/project/.sig/content/promptFile.sig.json')).toBe(true);
+    const content = await fileSystem.readFile('/project/.sig/content/promptFile.sig.content');
     expect(content).toBe('Review @input');
   });
 
@@ -105,8 +105,8 @@ describe('auto-sign defaults', () => {
       approveAllImports: true
     });
 
-    expect(await fileSystem.exists('/project/.mlld/sec/sigs/auditPrompt.sig')).toBe(true);
-    const content = await fileSystem.readFile('/project/.mlld/sec/sigs/auditPrompt.content');
+    expect(await fileSystem.exists('/project/.sig/content/auditPrompt.sig.json')).toBe(true);
+    const content = await fileSystem.readFile('/project/.sig/content/auditPrompt.sig.content');
     expect(content).toBe('Review @input');
   });
 });

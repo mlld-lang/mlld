@@ -57,6 +57,14 @@ pids
 *.seed
 *.pid.lock
 
+# sig runtime artifacts
+.sig/content/
+.sig/audit.jsonl
+# sig committable artifacts
+!.sig/sigs/
+!.sig/chains/
+!.sig/config.json
+
 # IDE
 .idea/
 .vscode/

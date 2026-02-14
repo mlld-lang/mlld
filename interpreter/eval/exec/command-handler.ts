@@ -3,7 +3,8 @@ import type { ExecInvocation } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { CommandExecutable } from '@core/types/executable';
 import { MlldCommandExecutionError } from '@core/errors';
-import { SignatureStore } from '@core/security/SignatureStore';
+import { PersistentContentStore } from '@disreguard/sig';
+import { createSigContextForEnv, normalizeContentVerifyResult } from '@core/security/sig-adapter';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
@@ -344,7 +345,7 @@ async function applyAutoverifyIfNeeded(options: {
     paramIndexByName.set(params[i], i);
   }
 
-  const store = new SignatureStore(execEnv.fileSystem, execEnv.getProjectRoot());
+  const store = new PersistentContentStore(createSigContextForEnv(execEnv));
   const signedCache = new Map<string, boolean>();
   const signedPromptTargets: string[] = [];
   const signedVarNames = new Set<string>();
@@ -781,7 +782,7 @@ async function resolveAutoverifyInstructions(
 }
 
 async function isVariableSigned(
-  store: SignatureStore,
+  store: PersistentContentStore,
   name: string,
   variable: Variable,
   cache: Map<string, boolean>,
@@ -791,11 +792,14 @@ async function isVariableSigned(
   if (cache.has(normalizedName)) {
     return cache.get(normalizedName) ?? false;
   }
-  const verification = await store.verify(
+  const rawVerification = await store.verify(
     normalizedName,
-    getSignatureContent(variable),
-    caller ? { caller } : undefined
+    {
+      content: getSignatureContent(variable),
+      detail: caller ? `autoverify:${caller}` : 'autoverify',
+    }
   );
+  const verification = normalizeContentVerifyResult(rawVerification);
   cache.set(normalizedName, verification.verified);
   return verification.verified;
 }

@@ -6,7 +6,7 @@ category: security
 parent: security
 tags: [signing, verification, policy, automation]
 related: [signing-overview, sign-verify]
-related-code: [interpreter/eval/auto-sign.ts, interpreter/eval/exec-invocation.ts]
+related-code: [core/security/sig-adapter.ts, interpreter/eval/auto-sign.ts, interpreter/eval/exec-invocation.ts]
 updated: 2026-02-01
 ---
 
@@ -125,7 +125,7 @@ Autosign and autoverify prevent instruction tampering. An attacker cannot:
 - Modify signed templates (breaks signature)
 - Bypass verification (pair with an enforcement guard (see above) to require verification)
 
-**Signature storage:** `.mlld/sec/sigs/{varname}.sig` and `.content`
+**Signature storage:** `.sig/content/{varname}.sig.json` and `.sig/content/{varname}.sig.content`
 
 | Use Case | Configuration |
 |----------|---------------|

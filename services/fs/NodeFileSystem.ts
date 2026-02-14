@@ -31,6 +31,10 @@ export class NodeFileSystem implements IFileSystemService {
       return false;
     }
   }
+
+  async access(filePath: string): Promise<void> {
+    await fs.access(filePath);
+  }
   
   async mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void> {
     await fs.mkdir(dirPath, options);
@@ -38,6 +42,14 @@ export class NodeFileSystem implements IFileSystemService {
   
   async readdir(dirPath: string): Promise<string[]> {
     return await fs.readdir(dirPath);
+  }
+
+  async unlink(filePath: string): Promise<void> {
+    await fs.unlink(filePath);
+  }
+
+  async rm(filePath: string, options?: { recursive?: boolean; force?: boolean }): Promise<void> {
+    await fs.rm(filePath, options);
   }
   
   async isDirectory(filePath: string): Promise<boolean> {

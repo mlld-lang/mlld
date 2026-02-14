@@ -1,17 +1,22 @@
 ---
 id: audit-log
 title: Audit Log
-brief: Event ledger for labels, signatures, and file taint
+brief: Event ledgers for labels, taint, and signatures
 category: security
 parent: security
 tags: [audit, security, labels, signing, taint]
 related: [labels-overview, label-modification, signing-overview, policy-label-flow, security-label-tracking]
-related-code: [core/security/AuditLogger.ts, core/security/AuditLogIndex.ts, interpreter/utils/audit-log.ts]
+related-code: [core/security/AuditLogger.ts, core/security/AuditLogIndex.ts, core/security/sig-adapter.ts, interpreter/utils/audit-log.ts]
 updated: 2026-02-05
 qa_tier: 2
 ---
 
-mlld writes a JSONL audit ledger at `.mlld/sec/audit.jsonl` in each project. Each line is a JSON object with a timestamp and an event type.
+mlld records security events in two JSONL audit ledgers:
+
+- `.mlld/sec/audit.jsonl` for label and taint events managed by mlld
+- `.sig/audit.jsonl` for signing and verification events managed by `@disreguard/sig`
+
+Each line is a JSON object with a timestamp and an event type.
 
 ```json
 {"ts":"2026-02-05T08:42:21.123Z","event":"write","path":"/project/output.txt","taint":["secret","src:network"],"writer":"src:network"}
@@ -24,16 +29,24 @@ mlld writes a JSONL audit ledger at `.mlld/sec/audit.jsonl` in each project. Eac
 | `ts` | ISO timestamp of the event |
 | `event` | Event type |
 
-**Event types and fields:**
+**mlld audit log (`.mlld/sec/audit.jsonl`):**
 
 | Event | Fields | Notes |
 | --- | --- | --- |
 | `label` | `var`, `add`, `by` | Label additions from `/label` or guards |
 | `bless` | `var`, `add`, `remove`, `by` | Privileged label changes that remove labels |
 | `conflict` | `var`, `labels`, `resolved` | Trusted/untrusted conflict resolution |
-| `sign` | `var`, `hash`, `by` | Template signing |
-| `verify` | `var`, `result`, `caller` | Signature verification outcome |
 | `write` | `path`, `taint`, `writer` | File writes with taint provenance |
+
+**sig audit log (`.sig/audit.jsonl`):**
+
+| Event | Fields | Notes |
+| --- | --- | --- |
+| `sign` | `file`, `hash`, `identity` | File/content signing |
+| `verify` | `file`, `hash`, `detail` | Successful verification |
+| `verify-fail` | `file`, `hash`, `detail` | Verification failure reason |
+| `update` | `file`, `hash`, `identity`, `provenance` | Authorized mutable file update |
+| `update_denied` | `file`, `identity`, `detail`, `provenance` | Rejected mutable file update |
 
 **How taint is used:**
 
@@ -47,6 +60,7 @@ mlld writes a JSONL audit ledger at `.mlld/sec/audit.jsonl` in each project. Eac
 tail -n 20 .mlld/sec/audit.jsonl
 jq 'select(.event == "write")' .mlld/sec/audit.jsonl
 jq 'select(.event == "label")' .mlld/sec/audit.jsonl
+jq 'select(.event == "verify" or .event == "verify-fail")' .sig/audit.jsonl
 ```
 
 **Programmatic querying in mlld:**

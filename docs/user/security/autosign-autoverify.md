@@ -6,7 +6,7 @@ category: security
 parent: security
 tags: [signing, verification, policy, templates, security, automation]
 related: [signing-overview, sign-verify, security-policies, labels-overview]
-related-code: [interpreter/eval/auto-sign.ts, interpreter/eval/exec-invocation.ts, core/policy/union.ts]
+related-code: [core/security/sig-adapter.ts, interpreter/eval/auto-sign.ts, interpreter/eval/exec-invocation.ts, core/policy/union.ts]
 updated: 2026-02-01
 qa_tier: 2
 ---
@@ -195,10 +195,10 @@ Even if prompt injection manipulates LLM reasoning, the verification step ensure
 
 **Signature storage:**
 
-Auto-signed variables create signatures in `.mlld/sec/sigs/`:
+Auto-signed variables create signatures in `.sig/content/`:
 
-- `{varname}.sig` - Signature metadata
-- `{varname}.content` - Signed content
+- `{varname}.sig.json` - Signature metadata
+- `{varname}.sig.content` - Signed content
 
 Signatures are cached and re-signed automatically if content changes.
 

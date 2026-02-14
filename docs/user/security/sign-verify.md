@@ -6,7 +6,7 @@ category: security
 parent: security
 tags: [signing, verification, security, cryptography, templates]
 related: [signing-overview, labels-overview, guards-basics]
-related-code: [core/security/SignatureStore.ts, interpreter/eval/sign-verify.ts, cli/commands/verify.ts]
+related-code: [core/security/sig-adapter.ts, interpreter/eval/sign-verify.ts, cli/commands/verify.ts]
 updated: 2026-02-01
 qa_tier: 2
 ---
@@ -50,8 +50,8 @@ The verify directive outputs a verification result object to stdout:
   "verified": true,
   "template": "Review @input and reject if unsafe",
   "hash": "sha256:abc123...",
-  "signedby": "security-team",
-  "signedat": "2026-02-01T10:30:00Z"
+  "signedBy": "security-team",
+  "signedAt": "2026-02-01T10:30:00Z"
 }
 ```
 
@@ -62,21 +62,21 @@ The verify directive outputs a verification result object to stdout:
 | `verified` | boolean | True if signature matches content |
 | `template` | string | Original signed content |
 | `hash` | string | Signature hash with algorithm prefix |
-| `signedby` | string | Optional signer identity |
-| `signedat` | string | ISO 8601 timestamp |
+| `signedBy` | string | Optional signer identity |
+| `signedAt` | string | ISO 8601 timestamp |
 
 **Signature storage:**
 
-Signatures are stored in `.mlld/sec/sigs/`:
+Signatures are stored in `.sig/content/`:
 
-- `{varname}.sig` - Signature metadata (hash, method, signer, timestamp)
-- `{varname}.content` - Signed content
+- `{varname}.sig.json` - Signature metadata (hash, algorithm, signer, timestamp)
+- `{varname}.sig.content` - Signed content
 
 These files are created automatically when you sign a variable.
 
 **Verification failure:**
 
-When content changes after signing, `verified` is `false`. The `template` field still contains the ORIGINAL signed content, so you can detect what changed.
+When content changes after signing, `verified` is `false` and `error` describes the mismatch.
 
 ```mlld
 var @prompt = ::Review @input::

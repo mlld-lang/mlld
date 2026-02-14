@@ -6,7 +6,7 @@ category: security
 parent: security
 tags: [signing, verification, security, templates]
 related: [sign-verify, autosign-autoverify, labels-overview, pattern-audit-guard, pattern-dual-audit]
-related-code: [core/security/SignatureManager.ts]
+related-code: [core/security/sig-adapter.ts, interpreter/eval/sign-verify.ts, interpreter/eval/auto-sign.ts]
 updated: 2026-02-01
 ---
 
@@ -41,6 +41,7 @@ Signing after interpolation authenticates attacker-controlled content — the si
 - Auditor LLMs call `verify` to compare instructions against originals
 
 **Notes:**
-- Signatures stored in `.mlld/sec/sigs/`
+- mlld delegates variable signing and verification to `@disreguard/sig`
+- Signatures stored in `.sig/content/`
 - See `sign-verify` for directive syntax
 - See `autosign-autoverify` for policy automation

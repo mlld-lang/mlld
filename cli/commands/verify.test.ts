@@ -5,14 +5,22 @@ import { mockProcessExit } from '@tests/utils/cli/mockProcessExit';
 
 const mockVerify = vi.fn();
 
-vi.mock('@core/security/SignatureStore', () => ({
-  SignatureStore: vi.fn().mockImplementation(() => ({
+vi.mock('@disreguard/sig', () => ({
+  createSigContext: vi.fn().mockReturnValue({}),
+  PersistentContentStore: vi.fn().mockImplementation(() => ({
     verify: mockVerify
   }))
 }));
 
-vi.mock('@services/fs/NodeFileSystem', () => ({
-  NodeFileSystem: vi.fn().mockImplementation(() => ({}))
+vi.mock('@core/security/sig-adapter', () => ({
+  normalizeContentVerifyResult: vi.fn((result: any) => ({
+    verified: Boolean(result?.verified),
+    ...(typeof result?.content === 'string' ? { template: result.content } : {}),
+    ...(result?.signature?.hash ? { hash: result.signature.hash } : {}),
+    ...(result?.signature?.signedBy ? { signedBy: result.signature.signedBy } : {}),
+    ...(result?.signature?.signedAt ? { signedAt: result.signature.signedAt } : {}),
+    ...(result?.error ? { error: result.error } : {})
+  }))
 }));
 
 vi.mock('../utils/command-context', () => ({
@@ -52,12 +60,17 @@ describe('verifyCommand', () => {
 
   it('prints a single verification result', async () => {
     mockVerify.mockResolvedValue({
-      hash: 'sha256:abc',
-      method: 'sha256',
-      signedat: '2024-01-01T00:00:00Z',
-      signedby: 'alice',
-      template: 'Evaluate @input',
-      verified: true
+      id: 'prompt',
+      verified: true,
+      content: 'Evaluate @input',
+      signature: {
+        id: 'prompt',
+        hash: 'sha256:abc',
+        algorithm: 'sha256',
+        signedBy: 'alice',
+        signedAt: '2024-01-01T00:00:00Z',
+        contentLength: 15
+      }
     });
 
     const { mocks, restore } = mockConsole();
@@ -65,17 +78,16 @@ describe('verifyCommand', () => {
     try {
       await verifyCommand({ vars: ['prompt'] });
 
-      expect(mockVerify).toHaveBeenCalledWith('prompt');
+      expect(mockVerify).toHaveBeenCalledWith('prompt', { detail: 'cli:verify' });
       expect(mocks.log).toHaveBeenCalledTimes(1);
       expect(mocks.log).toHaveBeenCalledWith(
         JSON.stringify(
           {
-            hash: 'sha256:abc',
-            method: 'sha256',
-            signedat: '2024-01-01T00:00:00Z',
-            signedby: 'alice',
+            verified: true,
             template: 'Evaluate @input',
-            verified: true
+            hash: 'sha256:abc',
+            signedBy: 'alice',
+            signedAt: '2024-01-01T00:00:00Z'
           },
           null,
           2
@@ -89,19 +101,24 @@ describe('verifyCommand', () => {
 
   it('normalizes @ prefixes for cli args', async () => {
     mockVerify.mockResolvedValue({
-      hash: 'sha256:abc',
-      method: 'sha256',
-      signedat: '2024-01-01T00:00:00Z',
-      signedby: 'alice',
-      template: 'Evaluate @input',
-      verified: true
+      id: 'prompt',
+      verified: true,
+      content: 'Evaluate @input',
+      signature: {
+        id: 'prompt',
+        hash: 'sha256:abc',
+        algorithm: 'sha256',
+        signedBy: 'alice',
+        signedAt: '2024-01-01T00:00:00Z',
+        contentLength: 15
+      }
     });
 
     const { restore } = mockConsole();
 
     try {
       await verifyCommand({ vars: ['@prompt'] });
-      expect(mockVerify).toHaveBeenCalledWith('prompt');
+      expect(mockVerify).toHaveBeenCalledWith('prompt', { detail: 'cli:verify' });
     } finally {
       restore();
     }
@@ -110,20 +127,22 @@ describe('verifyCommand', () => {
   it('prints multiple results and sets exitCode for failures', async () => {
     mockVerify
       .mockResolvedValueOnce({
-        hash: 'sha256:first',
-        method: 'sha256',
-        signedat: '2024-01-01T00:00:00Z',
-        signedby: 'alice',
-        template: 'First',
-        verified: true
+        id: 'first',
+        verified: true,
+        content: 'First',
+        signature: {
+          id: 'first',
+          hash: 'sha256:first',
+          algorithm: 'sha256',
+          signedBy: 'alice',
+          signedAt: '2024-01-01T00:00:00Z',
+          contentLength: 5
+        }
       })
       .mockResolvedValueOnce({
-        hash: 'sha256:second',
-        method: 'sha256',
-        signedat: '2024-01-01T00:00:00Z',
-        signedby: 'alice',
-        template: 'Second',
-        verified: false
+        id: 'second',
+        verified: false,
+        error: 'No signature found for id'
       });
 
     const { mocks, restore } = mockConsole();
@@ -132,26 +151,21 @@ describe('verifyCommand', () => {
       process.env.MLLD_VERIFY_VARS = '@first, @second';
       await verifyCommand({});
 
-      expect(mockVerify).toHaveBeenCalledWith('first');
-      expect(mockVerify).toHaveBeenCalledWith('second');
+      expect(mockVerify).toHaveBeenCalledWith('first', { detail: 'cli:verify' });
+      expect(mockVerify).toHaveBeenCalledWith('second', { detail: 'cli:verify' });
       expect(mocks.log).toHaveBeenCalledTimes(1);
       const logged = JSON.parse(mocks.log.mock.calls[0][0]);
       expect(logged).toEqual({
         first: {
-          hash: 'sha256:first',
-          method: 'sha256',
-          signedat: '2024-01-01T00:00:00Z',
-          signedby: 'alice',
+          verified: true,
           template: 'First',
-          verified: true
+          hash: 'sha256:first',
+          signedBy: 'alice',
+          signedAt: '2024-01-01T00:00:00Z'
         },
         second: {
-          hash: 'sha256:second',
-          method: 'sha256',
-          signedat: '2024-01-01T00:00:00Z',
-          signedby: 'alice',
-          template: 'Second',
-          verified: false
+          verified: false,
+          error: 'No signature found for id'
         }
       });
       expect(process.exitCode).toBe(1);

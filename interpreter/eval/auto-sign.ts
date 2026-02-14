@@ -1,6 +1,7 @@
 import type { Environment } from '../env/Environment';
 import type { Variable } from '@core/types/variable';
-import { SignatureStore } from '@core/security/SignatureStore';
+import { PersistentContentStore } from '@disreguard/sig';
+import { createSigContextForEnv } from '@core/security/sig-adapter';
 import { matchesAnyVariablePattern } from '@core/security/variable-glob';
 import { getSignatureContent } from './sign-verify';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
@@ -124,7 +125,7 @@ export async function maybeAutosignVariable(
   if (!matchesTemplate && !matchesVariables) {
     return;
   }
-  const store = new SignatureStore(env.fileSystem, env.getProjectRoot());
+  const store = new PersistentContentStore(createSigContextForEnv(env));
   const content = getSignatureContent(variable);
-  await store.signIfChanged(identifier, content);
+  await store.signIfChanged(content, { id: identifier });
 }

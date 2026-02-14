@@ -31,14 +31,14 @@ describe('/sign evaluation', () => {
       approveAllImports: true
     });
 
-    const sigPath = '/project/.mlld/sec/sigs/prompt.sig';
-    const contentPath = '/project/.mlld/sec/sigs/prompt.content';
+    const sigPath = '/project/.sig/content/prompt.sig.json';
+    const contentPath = '/project/.sig/content/prompt.sig.content';
     const signature = JSON.parse(await fileSystem.readFile(sigPath));
     const content = await fileSystem.readFile(contentPath);
 
     expect(content).toBe('Evaluate @input');
-    expect(signature.method).toBe('sha256');
-    expect(signature.signedby).toBe('alice');
+    expect(signature.algorithm).toBe('sha256');
+    expect(signature.signedBy).toBe('alice');
     expect(signature.hash.startsWith('sha256:')).toBe(true);
   });
 });
@@ -92,6 +92,8 @@ describe('/verify evaluation', () => {
 
     expect(result.value.verified).toBe(true);
     expect(result.value.template).toBe('Evaluate @input');
+    expect(result.value.hash?.startsWith('sha256:')).toBe(true);
+    expect(result.value.error).toBeUndefined();
   });
 
   it('returns false when content changes', async () => {
@@ -112,6 +114,7 @@ describe('/verify evaluation', () => {
     const result = await evaluateVerify(makeDirective('verify', 'prompt'), env);
 
     expect(result.value.verified).toBe(false);
-    expect(result.value.template).toBe('Evaluate @input');
+    expect(result.value.template).toBeUndefined();
+    expect(typeof result.value.error).toBe('string');
   });
 });

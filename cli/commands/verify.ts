@@ -1,5 +1,5 @@
-import { SignatureStore } from '@core/security/SignatureStore';
-import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { PersistentContentStore, createSigContext } from '@disreguard/sig';
+import { normalizeContentVerifyResult } from '@core/security/sig-adapter';
 import { getCommandContext } from '../utils/command-context';
 
 export interface VerifyOptions {
@@ -31,11 +31,13 @@ export async function verifyCommand(options: VerifyOptions = {}): Promise<void> 
   }
 
   const context = await getCommandContext({ startPath: options.basePath });
-  const fileSystem = new NodeFileSystem();
-  const store = new SignatureStore(fileSystem, context.projectRoot);
+  const store = new PersistentContentStore(createSigContext(context.projectRoot));
 
   const results = await Promise.all(
-    names.map(async name => ({ name, result: await store.verify(name) }))
+    names.map(async name => ({
+      name,
+      result: normalizeContentVerifyResult(await store.verify(name, { detail: 'cli:verify' })),
+    }))
   );
 
   if (results.length === 1) {

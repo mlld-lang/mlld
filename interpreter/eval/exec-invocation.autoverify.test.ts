@@ -4,7 +4,8 @@ import type { ExecInvocation } from '@core/types';
 import { evaluateExecInvocation } from './exec-invocation';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { SignatureStore } from '@core/security/SignatureStore';
+import { PersistentContentStore } from '@disreguard/sig';
+import { createSigContextForEnv } from '@core/security/sig-adapter';
 import { createExecutableVariable, createSimpleTextVariable } from '@core/types/variable/VariableFactories';
 
 const baseSource = {
@@ -25,8 +26,8 @@ async function setupEnvironment(autoverify: unknown) {
 async function defineSignedPrompt(env: Environment, content: string) {
   const promptVar = createSimpleTextVariable('auditPrompt', content, baseSource);
   env.setVariable('auditPrompt', promptVar);
-  const store = new SignatureStore(env.fileSystem, env.getProjectRoot());
-  await store.sign('auditPrompt', content);
+  const store = new PersistentContentStore(createSigContextForEnv(env));
+  await store.sign(content, { id: 'auditPrompt', identity: 'alice' });
 }
 
 async function defineLlmExec(env: Environment, templateNodes: any[]) {

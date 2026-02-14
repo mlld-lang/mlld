@@ -6,7 +6,7 @@ category: security
 parent: security
 tags: [signing, verification, security, prompt-injection, templates]
 related: [labels-overview, guards-basics, labels-sensitivity]
-related-code: [core/security/SignatureManager.ts, interpreter/eval/sign.ts]
+related-code: [core/security/sig-adapter.ts, interpreter/eval/sign-verify.ts, interpreter/eval/auto-sign.ts]
 updated: 2026-02-01
 qa_tier: 2
 ---
@@ -127,5 +127,12 @@ The auditor LLM:
 3. Compares the verified template against what it was given
 4. Detects if injection modified the instructions
 5. Proceeds only if verification succeeds
+
+**Implementation layout:**
+
+mlld uses `@disreguard/sig` for variable signing and verification.
+
+- Signed variable metadata: `.sig/content/{varname}.sig.json`
+- Signed variable content: `.sig/content/{varname}.sig.content`
 
 This is defense in depth: even if the LLM is influenced by tainted data, cryptographic verification ensures it's following YOUR instructions, not an attacker's.

@@ -2,7 +2,8 @@ import type { DirectiveNode, FieldAccessNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { Variable } from '@core/types/variable';
-import { SignatureStore, type SignatureMethod } from '@core/security/SignatureStore';
+import { PersistentContentStore } from '@disreguard/sig';
+import { createSigContextForEnv, normalizeContentVerifyResult } from '@core/security/sig-adapter';
 import { isStructuredValue, asText } from '@interpreter/utils/structured-value';
 
 function coerceToString(value: unknown): string {
@@ -276,30 +277,24 @@ export function getSignatureContent(variable: Variable): string {
   return coerceToString(variable.value);
 }
 
-function normalizeMethod(rawMethod?: string): SignatureMethod {
-  if (!rawMethod) return 'sha256';
-  const method = rawMethod.toLowerCase();
-  if (method !== 'sha256') {
-    throw new Error(`Unsupported signing method: ${rawMethod}`);
-  }
-  return method as SignatureMethod;
-}
-
 export async function evaluateSign(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
   const varName = resolveIdentifier(directive);
-  const method = normalizeMethod(resolveTextValue(directive.values?.method));
-  const signedby = resolveTextValue(directive.values?.signedBy);
+  const method = resolveTextValue(directive.values?.method);
+  if (method && method.toLowerCase() !== 'sha256') {
+    throw new Error(`Unsupported signing method: ${method}`);
+  }
+  const signedBy = resolveTextValue(directive.values?.signedBy);
   const variable = env.getVariable(varName);
   if (!variable) {
     throw new Error(`Variable not found for signing: @${varName}`);
   }
 
   const content = getSignatureContent(variable);
-  const store = new SignatureStore(env.fileSystem, env.getProjectRoot());
-  const record = await store.sign(varName, content, { method, signedby });
+  const store = new PersistentContentStore(createSigContextForEnv(env));
+  const record = await store.sign(content, { id: varName, identity: signedBy });
   return { value: record, env };
 }
 
@@ -313,7 +308,7 @@ export async function evaluateVerify(
     throw new Error(`Variable not found for verification: @${varName}`);
   }
   const content = getSignatureContent(variable);
-  const store = new SignatureStore(env.fileSystem, env.getProjectRoot());
-  const result = await store.verify(varName, content, { caller: 'directive:verify' });
-  return { value: result, env };
+  const store = new PersistentContentStore(createSigContextForEnv(env));
+  const result = await store.verify(varName, { content, detail: 'directive:verify' });
+  return { value: normalizeContentVerifyResult(result), env };
 }
