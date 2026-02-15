@@ -442,6 +442,40 @@ describe('guard pre-hook integration', () => {
     expect(effects.getOutput().trim()).toBe('wrapped:before:value');
   });
 
+  it('keeps before op:show guard transforms as plain text output', async () => {
+    const env = createEnv();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    const guardDirective = parseSync(
+      '/guard before @rewrite for op:show = when [ * => allow @prefixWith("show", @input) ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'value',
+      createSimpleTextVariable(
+        'value',
+        'base',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor()
+        }
+      )
+    );
+
+    const directive = parseSync('/show @value')[0] as DirectiveNode;
+    await evaluateDirective(directive, env);
+    const output = effects.getOutput().trim();
+
+    expect(output).toBe('show:base');
+    expect(output).not.toContain('"type":"');
+    expect(output).not.toContain('"name":"guard_');
+  });
+
   it('rejects guard retry outside pipeline context', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
