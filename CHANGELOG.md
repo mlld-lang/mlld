@@ -222,6 +222,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`@p[-1]` previous-stage regression coverage**: Added pipeline tests for `when`-branch access to `@p[-1]` and clarified docs that it equals the current stage input value (the previous stage output).
 - **log/output falsy values**: Boolean `false` and `0` now output correctly instead of empty string when used with `/log` or `/output`
 - **`escaping-at` guidance**: Docs now recommend `\@` as the primary escape and document `@@` as template-context-only shorthand.
+- **`@mx.tools` docs clarity**: Tool-call-tracking docs now show `@mx.tools` as guard-context metadata with explicit guard examples for `calls`, `allowed`, and `denied`.
 - **Field access on 'type' property**: When accessing `.type` on objects that have a 'type' property in their data, mlld now correctly returns the data value instead of the internal Variable type discriminator
 - **JSON/JSONL parse errors**: Invalid JSON now shows proper error messages instead of "Failed to load content"
   - `parseJsonWithContext` and `parseJsonLines` now include required `code` and `severity` in error options
