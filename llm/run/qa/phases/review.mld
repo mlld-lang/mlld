@@ -39,7 +39,7 @@ exe @runReview(runDir, topics) = [
     => []
   ]
 
-  let @results = for parallel(10) @s in @needsReview [
+  let @results = for parallel(20) @s in @needsReview [
     let @topicDir = `@runDir/topics/@s.topic`
     let @_ = @logItemStart(@runDir, @s.topic, "review")
 

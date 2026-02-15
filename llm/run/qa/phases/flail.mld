@@ -19,7 +19,7 @@ exe @runFlail(runDir, topics) = [
 
   show `Testing @topics.length topics with limited access...`
 
-  let @results = for parallel(20) @t in @topics [
+  let @results = for parallel(30) @t in @topics [
     let @topicDir = `@runDir/topics/@t`
     run cmd {mkdir -p @topicDir}
 
