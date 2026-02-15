@@ -22,10 +22,9 @@ Read `@outputDir/phase3-input.json` first. It contains:
 
 ### Per-topic detail (READ AS NEEDED)
 
-For evidence and context, read files in `@outputDir/<topic>/`:
+For evidence and context, read files in `@outputDir/topics/<topic>/`:
 - `blocked.md` - Why testing was blocked
 - `complete.md` - Coverage assessment
-- `SELF_REVIEW_SUMMARY.md` - Narrative of self-review findings
 - `<NN>-<level>-<name>/results.json` - Individual experiment findings
 - `<NN>-<level>-<name>/self_review.json` - Self-review reclassifications
 

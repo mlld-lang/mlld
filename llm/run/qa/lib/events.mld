@@ -1,0 +1,44 @@
+>> Events Library
+>> JSONL event logging for parallel-safe progress tracking
+
+exe @logEvent(runDir, event) = [
+  let @eventLog = `@runDir/events.jsonl`
+  let @eventWithTs = { ts: @now, ...@event }
+  let @_ = @eventWithTs | append "@eventLog"
+  => @eventWithTs
+]
+
+exe @logPhaseStart(runDir, phase) = [
+  => @logEvent(@runDir, { event: "phase_start", phase: @phase })
+]
+
+exe @logPhaseComplete(runDir, phase, extra) = [
+  let @baseEvent = { event: "phase_complete", phase: @phase }
+  let @fullEvent = @extra ? { ...@baseEvent, ...@extra } : @baseEvent
+  => @logEvent(@runDir, @fullEvent)
+]
+
+exe @logItemStart(runDir, id, itemType) = [
+  => @logEvent(@runDir, { event: "item_start", id: @id, type: @itemType })
+]
+
+exe @logItemDone(runDir, id, status, extra) = [
+  let @baseEvent = { event: "item_done", id: @id, result: @status }
+  let @fullEvent = @extra ? { ...@baseEvent, ...@extra } : @baseEvent
+  => @logEvent(@runDir, @fullEvent)
+]
+
+exe @loadEvents(runDir) = [
+  let @eventLog = `@runDir/events.jsonl`
+  let @content = <@eventLog>?
+  => @content ? @content : []
+]
+
+/export {
+  @logEvent,
+  @logPhaseStart,
+  @logPhaseComplete,
+  @logItemStart,
+  @logItemDone,
+  @loadEvents
+}

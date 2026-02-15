@@ -1,0 +1,78 @@
+>> Phase 1: Flail
+>> Parallel black-box testing with limited access (sessions)
+
+/needs { sh }
+
+import { @claudeSession } from "../lib/claude.mld"
+import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone } from "../lib/events.mld"
+import { @updatePhaseStatus } from "../lib/state.mld"
+
+exe @generateUuid() = cmd {uuidgen | tr '[:upper:]' '[:lower:]'}
+
+exe @flailPrompt(topic, outputDir) = template "../prompts/phase1-flail.att"
+
+var @qaTools = "Read,Write,Glob,Grep,Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(find:*),Bash(grep:*),Bash(uuidgen),Bash(tr:*),Bash(mlld:*)"
+
+exe @runFlail(runDir, topics) = [
+  let @_ = @logPhaseStart(@runDir, "flail")
+  let @_ = @updatePhaseStatus(@runDir, "flail", "in-progress")
+
+  show `Testing @topics.length topics with limited access...`
+
+  let @results = for parallel(20) @t in @topics [
+    let @topicDir = `@runDir/topics/@t`
+    run cmd {mkdir -p @topicDir}
+
+    >> Check for existing session (idempotent resume)
+    let @sessionFiles = <@topicDir/session.json>?
+    let @existingSession = @sessionFiles ? @sessionFiles : null
+
+    >> Skip if phase 1 already complete
+    if @existingSession && @existingSession.phase1_complete [
+      show `Skipping (already complete): @t`
+      => @t
+    ]
+
+    let @sessionId = @existingSession && @existingSession.session_id ? @existingSession.session_id : @generateUuid()
+
+    >> Store session info before starting
+    let @sessionInfo = { topic: @t, session_id: @sessionId, phase1_started: @existingSession && @existingSession.phase1_started ? @existingSession.phase1_started : @now, phase1_complete: false }
+    output @sessionInfo to "@topicDir/session.json"
+
+    let @_ = @logItemStart(@runDir, @t, "flail")
+
+    >> Build prompt and run with session ID
+    let @prompt = @flailPrompt(@t, @runDir)
+    let @markerFile = `@topicDir/phase1-done.marker`
+    let @fullPrompt = `@prompt\n\nIMPORTANT: When you have completed ALL your work, as your very last action, write the text "done" to @markerFile using the Write tool.`
+    let @idx = @mx.for.index + 1
+    show `Starting flail: @idx of @mx.for.total - @t (session: @sessionId)`
+    let @response = @claudeSession(@fullPrompt, "sonnet", @qaTools, @markerFile, @sessionId) | log
+    show `Phase 1 complete: @t`
+
+    >> Check if agent reported being blocked by permissions
+    let @blockedFile = <@topicDir/blocked.json>?
+    if @blockedFile && @blockedFile.blocked [
+      show `BLOCKED: @t - @blockedFile.blocked`
+      let @blockedSession = { topic: @t, session_id: @sessionId, phase1_started: @sessionInfo.phase1_started, phase1_complete: false, phase1_blocked: true, phase1_blocked_reason: @blockedFile.blocked, phase1_finished: @now }
+      output @blockedSession to "@topicDir/session.json"
+      let @_ = @logItemDone(@runDir, @t, "blocked", null)
+      => @t
+    ]
+
+    >> Mark phase 1 complete
+    let @updatedSession = { topic: @t, session_id: @sessionId, phase1_started: @sessionInfo.phase1_started, phase1_complete: true, phase1_finished: @now }
+    output @updatedSession to "@topicDir/session.json"
+    let @_ = @logItemDone(@runDir, @t, "complete", null)
+
+    => @t
+  ]
+
+  show `Phase 1 complete. Tested @results.length topics.`
+  let @_ = @logPhaseComplete(@runDir, "flail", { tested: @results.length })
+  let @_ = @updatePhaseStatus(@runDir, "flail", "complete")
+
+  => @results
+]
+
+/export { @runFlail }

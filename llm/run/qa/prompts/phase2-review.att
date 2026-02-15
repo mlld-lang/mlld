@@ -35,7 +35,7 @@ Fall back to bash equivalents (`find`, `grep`, `head`) only if the built-in tool
 
 ## For Each Experiment with Issues
 
-Review each experiment in `@outputDir/@topic/` that has `status: "fail"` or `status: "partial"`:
+Review each experiment in `@outputDir/topics/@topic/` that has `status: "fail"` or `status: "partial"`:
 
 1. **Re-examine your assumption**: What did you think should happen?
 
@@ -48,7 +48,7 @@ Review each experiment in `@outputDir/@topic/` that has `status: "fail"` or `sta
 
 4. **Apply Chesterton's Fence** (before classifying as a bug):
 
-<@prompts/chestertons-fence.md>
+<@base/llm/prompts/chestertons-fence.md>
 
    If unsure, flag as `needs-human-design` rather than `genuine-bug`.
 
@@ -118,7 +118,6 @@ If you attempt a tool and it is denied (permission error, not in allowedTools), 
 
 1. **Write a `blocked.json` file** in the topic directory:
    ```json
-   // Write to: @outputDir/@topic/blocked.json
    {
      "blocked": "Brief description of what you cannot do",
      "attempted_tools": ["Bash(example command)"],
@@ -128,10 +127,8 @@ If you attempt a tool and it is denied (permission error, not in allowedTools), 
 
 2. **Continue with any remaining work you CAN do**, then exit normally.
 
-This lets the orchestrator detect the block and continue with other topics.
-
 ## Begin
 
-1. List all experiment directories in `@outputDir/@topic/`
+1. List all experiment directories in `@outputDir/topics/@topic/`
 2. For each with `status != "pass"`, perform the self-review
 3. Write `self_review.json` in each reviewed experiment directory

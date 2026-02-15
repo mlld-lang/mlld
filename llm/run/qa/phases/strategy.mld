@@ -1,0 +1,43 @@
+>> Phase 4: Strategy
+>> Strategy question generation from trend report
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
+import { @updatePhaseStatus } from "../lib/state.mld"
+
+exe @strategyPrompt(outputDir) = template "../prompts/phase4-strategy.att"
+
+exe @runStrategy(runDir) = [
+  let @_ = @logPhaseStart(@runDir, "strategy")
+  let @_ = @updatePhaseStatus(@runDir, "strategy", "in-progress")
+
+  >> Guard: trend-report.json must exist
+  let @trendReport = <@runDir/trend-report.json>?
+  if !@trendReport [
+    show `Error: No trend-report.json found. Run phase 3 first.`
+    let @_ = @updatePhaseStatus(@runDir, "strategy", "failed")
+    => null
+  ]
+
+  show `Generating strategy questions from trend report...`
+
+  let @prompt = @strategyPrompt(@runDir)
+  let @tools = "Read,Write,Glob,Grep"
+  let @markerFile = `@runDir/phase4-done.marker`
+  let @fullPrompt = `@prompt\n\nIMPORTANT: When you have completed ALL your work, as your very last action, write the text "done" to @markerFile using the Write tool.`
+
+  show `Starting strategy question generation agent...`
+  let @response = @claudePoll(@fullPrompt, "opus", @base, @tools, @markerFile) | log
+
+  show `Phase 4 complete.`
+  show `  Strategy questions: @runDir/strategy-questions.md`
+  show ``
+  show `Next step: Review and answer questions in strategy-questions.md, then run 'mlld run polish'.`
+
+  let @_ = @logPhaseComplete(@runDir, "strategy", null)
+  let @_ = @updatePhaseStatus(@runDir, "strategy", "complete")
+
+  => { strategy_questions: `@runDir/strategy-questions.md` }
+]
+
+/export { @runStrategy }

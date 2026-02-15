@@ -163,7 +163,6 @@ __pycache__/
 .fray
 
 # QA testing output
-qa/
 core/version.ts
 
 

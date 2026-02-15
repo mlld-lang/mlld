@@ -111,4 +111,3 @@ These items will be handled automatically by the polish pipeline.
 2. For each `actionable_item`, classify or generate a question
 3. Cross-reference `feature_health` for additional context on affected topics
 4. Write `@outputDir/strategy-questions.md`
-5. Write "done" to `@outputDir/phase4-done.marker`
