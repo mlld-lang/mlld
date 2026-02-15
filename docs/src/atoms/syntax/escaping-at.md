@@ -16,11 +16,11 @@ qa_tier: 1
 **Solutions:**
 
 ```mlld
->> 1. Use @@ escape sequence (recommended)
-var @email = `user@@example.com`  >> "user@example.com"
-
->> 2. Use \@ escape sequence
+>> 1. Use \@ escape sequence (recommended)
 var @email = `user\@example.com`  >> "user@example.com"
+
+>> 2. Use @@ in template interpolation contexts
+var @email = `user@@example.com`  >> "user@example.com"
 
 >> 3. String concatenation via variables
 var @at = "@"
@@ -28,7 +28,7 @@ var @name = "username"
 var @handle = `@at@name`          >> "@username"
 ```
 
-Both `@@` and `\@` work in all template contexts: backtick strings, double-colon strings, and `.att` files.
+Use `\@` as the default approach. `@@` works only in template interpolation contexts (`\`...\``, `::...::`, and `.att` files).
 
 **In .att template files:**
 
