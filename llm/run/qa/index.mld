@@ -1,5 +1,5 @@
 >> QA Testing Orchestrator v2 (Five-Phase)
->> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>] [--phase 0|1|2|3|4|both|all] [--run <id>] [--new]
+>> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>] [--phase 0|1|2|3|4|both|all] [--run <id>]
 >>
 >> Phase 0 (Triage): Decision agent picks topics intelligently
 >> Phase 1 (Flail): Agents test with limited access (mlld howto only)
@@ -8,15 +8,19 @@
 >> Phase 4 (Strategy): Generates strategy-questions.md from trend report for human review
 >>
 >> Each run is stored in: qa/runs/YYYY-MM-DD-N/
->> By default, resumes the last incomplete run. Use --new to start fresh.
+>> Use --run to resume a specific run, or omit to auto-detect
 >>
 >> Examples:
->>   mlld run qa                                    # Resume last run or create new (phases 1+2)
->>   mlld run qa --new --tier 1                     # Force new run with tier 1 topics
->>   mlld run qa --phase 3                          # Continue to phase 3 (trends)
->>   mlld run qa --topic variables                  # Test variables-* topics only
->>   mlld run qa --topics when-inline,for-arrow     # Test specific comma-separated list
->>   mlld run qa --run 2026-01-25-0                 # Resume a specific prior run
+>>   mlld run qa --tier 1                           # Phases 1+2, new dated run
+>>   mlld run qa --tier 1 --phase 0                 # Triage only
+>>   mlld run qa --tier 1 --phase 1                 # Flail phase only, new dated run
+>>   mlld run qa --tier 1 --phase 2                 # Self-review only (resumes latest run)
+>>   mlld run qa --tier 1 --phase 3                 # Trend analysis only (resumes latest run)
+>>   mlld run qa --tier 1 --phase 4                 # Strategy questions only (resumes latest run)
+>>   mlld run qa --tier 1 --phase all               # All five phases, new dated run
+>>   mlld run qa --topic variables                  # Test variables-* topics
+>>   mlld run qa --topics when-inline,for-arrow     # Test specific list
+>>   mlld run qa --tier 2 --run 2026-01-25-0        # Resume a specific prior run
 
 /needs { sh }
 
@@ -37,13 +41,10 @@ var @topics = @p.topics ? @p.topics : ""
 var @tier = @p.tier ? @p.tier : ""
 var @phase = @p.phase ? @p.phase : "both"
 var @runId = @p.run ? @p.run : ""
-var @forceNew = @p.new ? true : false
 
 >> Determine which phases to run
 var @runPhase1 = @shouldRunPhase("flail", @phase)
-
->> Auto-resume logic: create new run only with --new flag
-var @needsNewRun = @forceNew
+var @needsNewRun = @runPhase1 || @phase == "all" || @phase == "0"
 
 >> Resolve or create run directory
 var @runDir = @resolveRunDir(@runId, @needsNewRun)

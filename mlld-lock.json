@@ -18,10 +18,17 @@
       "fetchedAt": "2026-01-30T12:31:48.412Z",
       "registryVersion": "1.1.0",
       "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/ab27254c0888169ddcce64b9ad2f26a20fe4c9af/llm/modules/claude-poll.mld.md"
+    },
+    "@mlld/claude": {
+      "version": "latest",
+      "resolved": "d7799fef01e57fbef8fe36c7a4a3d3c51c79c2454522699cd53fc9be1acc4a40",
+      "source": "registry://@mlld/claude@2.0.0",
+      "integrity": "sha256:d7799fef01e57fbef8fe36c7a4a3d3c51c79c2454522699cd53fc9be1acc4a40",
+      "fetchedAt": "2026-02-15T07:39:30.108Z"
     }
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-01-30T12:31:48.412Z"
+    "updatedAt": "2026-02-15T07:39:30.108Z"
   }
 }
