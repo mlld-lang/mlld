@@ -1,0 +1,7 @@
+{
+  "name": "GuardError",
+  "guardName": "@blockCmd",
+  "filter": "operation:cmd",
+  "reason": "Commands blocked",
+  "operation": "exe"
+}

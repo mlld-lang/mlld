@@ -246,6 +246,30 @@ describe('guard operation key utilities', () => {
     expect(codeKeys).toEqual(['run', 'runcode', 'typescript']);
   });
 
+  it('extracts bare command keys from exe op labels', () => {
+    const keys = buildOperationKeys({
+      type: 'exe',
+      opLabels: ['op:cmd', 'op:sh', 'op:js', 'op:node', 'op:py', 'op:prose', 'op:publish']
+    } as OperationContext);
+
+    expect(keys).toEqual([
+      'exe',
+      'op:cmd',
+      'cmd',
+      'op:sh',
+      'sh',
+      'op:js',
+      'js',
+      'op:node',
+      'node',
+      'op:py',
+      'py',
+      'op:prose',
+      'prose',
+      'op:publish'
+    ]);
+  });
+
   it('normalizes case when building the operation key set', () => {
     const keySet = buildOperationKeySet({
       type: 'Show',

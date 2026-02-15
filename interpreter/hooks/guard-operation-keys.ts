@@ -25,6 +25,7 @@ export function buildOperationSnapshot(inputs: readonly Variable[]): OperationSn
 
 export function buildOperationKeys(operation: OperationContext): string[] {
   const keys = new Set<string>();
+  const commandOpTypes = new Set(['cmd', 'sh', 'js', 'node', 'py', 'prose']);
   if (operation.type) {
     keys.add(operation.type.toLowerCase());
   }
@@ -57,7 +58,14 @@ export function buildOperationKeys(operation: OperationContext): string[] {
   if (operation.opLabels && operation.opLabels.length > 0) {
     for (const label of operation.opLabels) {
       if (typeof label === 'string' && label.length > 0) {
-        keys.add(label.toLowerCase());
+        const normalizedLabel = label.toLowerCase();
+        keys.add(normalizedLabel);
+        if (operation.type === 'exe' && normalizedLabel.startsWith('op:')) {
+          const [prefix, opType] = normalizedLabel.split(':');
+          if (prefix === 'op' && opType && commandOpTypes.has(opType)) {
+            keys.add(opType);
+          }
+        }
       }
     }
   }
