@@ -39,12 +39,25 @@ guard @validateMcp after op:exe = when [
 
 After-guards run after the tool returns. In the after-guard context, `@mx.taint` reflects the output's taint—including `src:mcp`—and `@mx.sources` includes `mcp:<tool-name>`. The `@output` variable holds the raw return value; `@output.error` applies to tools returning structured JSON objects with an error field. For string outputs, use a pattern match instead. Guards support single actions (allow, deny, retry) per branch—for complex audit logic with multiple statements like logging, use a wrapper exe function instead of a guard.
 
+**Retry transient MCP failures:**
+
+```mlld
+guard @retryTransientMcp after op:exe = when [
+  @mx.taint.includes("src:mcp") && @output.error && @mx.guard.try < 3 => retry "Transient MCP failure"
+  @mx.taint.includes("src:mcp") && @output.error => deny "MCP tool failed after retries"
+  * => allow
+]
+```
+
+Use `@mx.guard.try` for guard retries. It is 1-based, so the first guard evaluation has `@mx.guard.try == 1`. `@mx.try` is the pipeline retry counter and stays `1` for non-pipeline MCP guard checks.
+
 **Guard context for MCP calls:**
 
 Inside a guard triggered by an MCP tool call:
 - `@mx.op.type` — `"exe"`
 - `@mx.op.name` — the tool function name (e.g., `@createIssue`)
 - `@mx.op.labels` — any labels from the tool definition (e.g., `destructive`)
+- `@mx.guard.try` — current guard retry attempt (1-based)
 - `@mx.taint` — includes `src:mcp`
 - `@mx.sources` — includes `mcp:<toolName>`
 

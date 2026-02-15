@@ -97,7 +97,7 @@ Tool collections define what an agent sees and how tools behave.
   }
 }
 
-/guard @blockDestructive before op:cmd = when [
+/guard @blockDestructive before op:exe = when [
   @mx.op.labels.includes("destructive") => deny "Blocked"
   * => allow
 ]
@@ -212,6 +212,16 @@ Guards can inspect these:
 **Name mapping**: MCP clients use snake_case names (`create_issue`), while `@mx.op.name` shows the mlld camelCase name (`createIssue`).
 
 **Tool outputs**: Results from MCP tool calls carry both `src:mcp` (MCP origin) plus any other taint from the underlying operation (e.g., `src:exec` for command executables).
+
+**Guard retry attempts**: Use `@mx.guard.try` inside guard conditions. It is 1-based (`1`, `2`, `3`, ...). `@mx.try` tracks pipeline attempts and remains `1` for non-pipeline MCP guard checks.
+
+```mlld
+/guard @retryTransientMcp after op:exe = when [
+  @mx.taint.includes("src:mcp") && @output.error && @mx.guard.try < 3 => retry "Transient MCP failure"
+  @mx.taint.includes("src:mcp") && @output.error => deny "MCP tool failed after retries"
+  * => allow
+]
+```
 
 ## Troubleshooting
 
