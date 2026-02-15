@@ -72,6 +72,10 @@ export function createExecutionEvaluator(
 
   const evaluateCommand = async (valueNode: any): Promise<unknown> => {
     const withClause = (directive.values?.withClause || directive.meta?.withClause) as any | undefined;
+    const runWithClause =
+      valueNode.using || withClause
+        ? { ...(valueNode.using || {}), ...(withClause || {}) }
+        : undefined;
     const { evaluateRun } = await import('../run');
     const runDirective: any = {
       type: 'Directive',
@@ -83,13 +87,13 @@ export function createExecutionEvaluator(
       values: {
         command: valueNode.command,
         ...(valueNode.workingDir ? { workingDir: valueNode.workingDir } : {}),
-        ...(withClause ? { withClause } : {})
+        ...(runWithClause ? { withClause: runWithClause } : {})
       },
       raw: {
         command: Array.isArray(valueNode.command)
           ? (valueNode.meta?.raw || '')
           : String(valueNode.command),
-        ...(withClause ? { withClause } : {})
+        ...(runWithClause ? { withClause: runWithClause } : {})
       },
       meta: {
         isDataValue: true

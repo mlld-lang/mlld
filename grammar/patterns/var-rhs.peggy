@@ -362,10 +362,10 @@ RunCommandValue
         }
       };
     }
-  / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
+  / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? {
       // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
       // In standalone contexts: bare {...} requires explicit cmd prefix
-      return {
+      const result = {
         type: 'command',
         command: content.values.command,  // Parsed command nodes
         commandBases: content.values.commandBases,
@@ -374,6 +374,10 @@ RunCommandValue
         hasRunKeyword: true,
         meta: content.meta
       };
+      if (using) {
+        result.using = using;
+      }
+      return result;
     }
   / "run" _ "@" invocation:UnifiedReferenceWithTail {
       // Handle run @command() syntax with unified patterns
@@ -450,9 +454,9 @@ CodeExecution "code execution"
       }
       return result;
     }
-  / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
+  / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? {
       // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
-      return {
+      const result = {
         type: 'command',
         command: content.values.command,  // Parsed command nodes
         commandBases: content.values.commandBases,
@@ -461,6 +465,10 @@ CodeExecution "code execution"
         hasRunKeyword: true,
         meta: content.meta
       };
+      if (using) {
+        result.using = using;
+      }
+      return result;
     }
   / lang:VarCodeLanguage workingDir:WorkingDirPath? _ "{" _ code:CodeBlockContent _ "}" {
       // Shorthand: language + code without 'run' keyword, with optional working directory

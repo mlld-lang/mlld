@@ -119,8 +119,20 @@ SlashVar "var directive"
           type: 'command',
           command: value.command
         };
+        if (value.commandBases) {
+          commandNode.commandBases = value.commandBases;
+        }
         if (value.workingDir) {
           commandNode.workingDir = value.workingDir;
+        }
+        if (value.workingDirMeta) {
+          commandNode.workingDirMeta = value.workingDirMeta;
+        }
+        if (value.using) {
+          commandNode.using = value.using;
+        }
+        if (value.meta) {
+          commandNode.meta = value.meta;
         }
         processedValue = [commandNode];
         metaInfo.inferredType = 'computed';
