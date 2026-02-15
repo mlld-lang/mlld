@@ -12,6 +12,8 @@ updated: 2026-02-05
 
 The `policy.auth` section defines credential mappings. The `using auth:*` syntax injects them as environment variables.
 
+**Why sealed paths matter:** Credentials injected via `using auth:*` bypass string interpolation entirely — they flow directly to environment variables at the OS level, never entering the command template string. This prevents prompt injection from extracting secrets by manipulating the command construction. An attacker who controls `@userInput` cannot trick the LLM into leaking `$API_KEY` because the secret never appears in the interpolatable string.
+
 ```mlld
 var @policyConfig = {
   auth: {

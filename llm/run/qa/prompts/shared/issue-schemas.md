@@ -11,8 +11,8 @@
 
 | Severity | Description |
 |----------|-------------|
-| `major` | Significant workaround required, or no workaround found after 3+ attempts |
-| `minor` | Slight friction, easy workaround |
+| `major` | Feature doesn't work as documented AND no workaround found after 3+ approaches. Must point to specific doc statement that's contradicted. |
+| `minor` | Feature works but docs could be clearer, or workaround was non-obvious but found. |
 | `enhancement` | Not a bug, improvement idea |
 
 **Note:** There is no `blocker` severity in Phase 1. Use `major` for the most severe issues. Phase 2 (self-review) may upgrade confirmed issues to `blocker` after verifying them against test cases and source code. In Phase 1, you don't have enough information to confidently distinguish "genuinely impossible" from "I haven't found the right approach yet."
