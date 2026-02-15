@@ -1131,6 +1131,56 @@ it('feeds guard-transformed values into exec invocation parameters', async () =>
   expect(String(value)).toContain('scrubbed');
 });
 
+it('keeps combined before guards on op:exe resolved to plain values', async () => {
+  const env = createEnv();
+  const labelGuard = parseSync(
+    '/guard before @labelFirst for secret = when [ * => allow @prefixWith("label", @input) ]'
+  )[0] as DirectiveNode;
+  const opGuard = parseSync(
+    '/guard before @opSecond for op:exe = when [ * => allow @prefixWith("op", @input) ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(labelGuard, env);
+  await evaluateDirective(opGuard, env);
+
+  const helperDirective = parseSync(
+    '/exe @prefixWith(tag, value) = js { return `${tag}:${value}`; }'
+  )[0] as DirectiveNode;
+  const exeDirective = parseSync('/exe @emit(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(helperDirective, env);
+  await evaluateDirective(exeDirective, env);
+
+  env.setVariable(
+    'secretVar',
+    createSimpleTextVariable(
+      'secretVar',
+      'raw-secret',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'secretVar' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  expect(String(value)).toBe('op:label:raw-secret');
+  expect(String(value)).not.toContain('guard_');
+  expect(String(value)).not.toContain('"type":"');
+});
+
 describe('secret redaction in guard error messages', () => {
   it('redacts secret variable values in inputPreview, guardInput, and guardContext', async () => {
     const env = createEnv();

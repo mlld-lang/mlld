@@ -47,6 +47,38 @@ function asVariableText(value: unknown): string {
 }
 
 describe('guard block/action evaluator integration slices', () => {
+  it('unwraps variable replacements to raw values for guard transforms', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard @echoInput for secret = when [ * => allow @input ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const guard = env.getGuardRegistry().getByName('echoInput');
+    expect(guard).toBeDefined();
+    if (!guard) {
+      return;
+    }
+
+    const action = guard.block.rules[0]?.action;
+    expect(action).toBeDefined();
+    if (!action) {
+      return;
+    }
+
+    const guardEnv = env.createChild();
+    guardEnv.setVariable('input', createSecretInput('input', 'raw-secret'));
+    const replacement = await evaluateGuardReplacement(
+      action,
+      guardEnv,
+      guard,
+      createSecretInput('secretVar', 'raw-secret')
+    );
+
+    expect(replacement).toBeDefined();
+    expect((replacement as Variable).value).toBe('raw-secret');
+  });
+
   it('supports replacement + env config in the same pre-hook evaluation path', async () => {
     const env = createEnv();
     const directives = parseSync(`
