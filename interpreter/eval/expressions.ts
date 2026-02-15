@@ -270,6 +270,9 @@ export async function evaluateUnifiedExpression(
         return createEvaluatorResult(result.value);
     }
   } catch (error) {
+    if (error instanceof MlldDirectiveError) {
+      throw error;
+    }
     throw new MlldDirectiveError(
       `Expression evaluation failed: ${error instanceof Error ? error.message : String(error)}`,
       'expression',
@@ -374,8 +377,37 @@ async function evaluateBinaryExpression(
       return createEvaluatorResult(toNumber(leftValue) <= toNumber(rightValue), mergedDescriptor);
     case '>=':
       return createEvaluatorResult(toNumber(leftValue) >= toNumber(rightValue), mergedDescriptor);
-    case '+':
-      return createEvaluatorResult(toNumber(leftValue) + toNumber(rightValue), mergedDescriptor);
+    case '+': {
+      const leftNum = toNumber(leftValue);
+      const rightNum = toNumber(rightValue);
+      const leftRaw = extractValue(leftValue);
+      const rightRaw = extractValue(rightValue);
+      const hint = 'Use template interpolation such as `@first @second` instead of @first + @second.';
+
+      if (
+        Number.isNaN(leftNum) &&
+        Number.isNaN(rightNum) &&
+        typeof leftRaw === 'string' &&
+        typeof rightRaw === 'string'
+      ) {
+        throw new MlldDirectiveError(
+          `String concatenation with + is not supported. Use template strings instead. Hint: ${hint}`,
+          'expression',
+          {
+            code: 'STRING_CONCAT_WITH_PLUS',
+            location: node?.location,
+            context: {
+              hint,
+              leftValuePreview: leftRaw.slice(0, 50),
+              rightValuePreview: rightRaw.slice(0, 50)
+            },
+            env
+          }
+        );
+      }
+
+      return createEvaluatorResult(leftNum + rightNum, mergedDescriptor);
+    }
     case '-':
       return createEvaluatorResult(toNumber(leftValue) - toNumber(rightValue), mergedDescriptor);
     case '*':

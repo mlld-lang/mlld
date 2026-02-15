@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pipeline null values**: JSON `null` values now pass through pipeline stages correctly (previously conflated with parse failure)
 - **Guard transform unwrapping**: Fixed double-wrapping that caused Variable-inside-Variable nesting in guard transforms
 - **`before op:cmd` guard matching for exe operations**: `exe @fn() = cmd { ... }` invocations now match operation guards filtered by `op:cmd`, with regression coverage for `cmd`, `sh`, `js`, `node`, and `py` op-label key expansion.
+- **String concatenation with `+` diagnostics**: Expressions now raise a targeted error when `+` is used with non-numeric strings and include a template-interpolation hint; numeric addition and mixed string-number `NaN` behavior remain unchanged.
 - **Dead code removal**: Removed unused `interpolateWithSecurity` interface member and `matchesCommandPatterns` export
 - **Specificity consistency**: `inferCapabilityRule` now uses same specificity logic as `evaluateCommandAccess` for deny/allow resolution
 
