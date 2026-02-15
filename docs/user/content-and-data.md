@@ -866,13 +866,14 @@ show @deploy("prod", "success")
 ```
 
 **Rules:**
-- `.att` uses `@var` and supports `<file.md>` references, pipes, and loops inside the template
+- `.att` uses `@var` and supports `<file.md>` references plus `/for ... /end` loops inside the template
+- In template content, use condensed pipes (`@value|@pipe`) to avoid ambiguity
 - Relative `<file>` paths inside template files resolve from the template file directory
 - These files are not imported as modules. Use the `exe ... = template "path"` form
 
 #### Template Loops
 
-Loops with `for` and `end` are supported in backticks, `::...::`, and `.att` files:
+Loops with `/for` and `/end` are supported in backticks, `::...::`, and `.att` files:
 
 ```mlld
 var @list = ::
@@ -1219,7 +1220,7 @@ for @file in @files => show @file.mx.fm.title        >> Works
 
 **Templates:**
 - Default to backticks or `::...::` for inline, `.att` files for external (5+ lines)
-- Loops (`for`...`end`) work in backticks, `::...::`, and `.att` only
+- Loops (`/for`...`/end`) work in backticks, `::...::`, and `.att` only
 - Never import template files; use `exe @name(...) = template "path.att"` form
 - For Discord/social content with many `@` symbols, see [alternatives.md](alternatives.md)
 

@@ -29,15 +29,16 @@ Hello @name!
 
 Your role: @role
 
-for @perm in @role.permissions
+/for @perm in @role.permissions
 - @perm
-end
+/end
 ```
 
 **Key points:**
 
 - Parameters from `exe @func(params)` are automatically available as `@param` in the template
-- `.att` supports `<file.md>` references, pipes, and `for`/`when` blocks
+- `.att` supports `<file.md>` references and `/for ... /end` template loops
+- In template content, use condensed pipe syntax (`@value|@pipe`) to avoid ambiguity
 - Relative `<file>` paths inside a template file resolve from that template file's directory
 - Use `@@` or `\@` to output a literal `@` symbol (e.g., `user@@example.com`)
 - Never load `.att` files with angle brackets - use `exe ... = template` instead
@@ -72,3 +73,8 @@ The `@src/utils.ts` stays literal - mlld won't try to interpolate it.
 |-----------|----------------|-----------|----------|
 | `.att` | `@var` | `<file.md>` | Default, mlld-style |
 | `.mtt` | `{{var}}` | None | Content has `@path` or `<tag>` meant for LLMs |
+
+| Feature | `.att` | `.mtt` |
+|---------|--------|--------|
+| Pipes in template body | Condensed only (`@var|@pipe`) | Not supported |
+| Loops | `/for ... /end` | Not supported |

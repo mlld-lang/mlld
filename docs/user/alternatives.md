@@ -63,8 +63,8 @@ show @alert("123", "456", "high")
 | Variable interpolation | `@var` | `{{var}}` |
 | File loading | `<file.md>` | Not supported |
 | Function calls | `@exe()` | Not supported |
-| Pipes | Supported | Not supported |
-| Loops (`for`/`end`) | Supported | Not supported |
+| Pipes | Supported (condensed `@var|@pipe`) | Not supported |
+| Loops (`/for`/`/end`) | Supported | Not supported |
 
 ## Common Migration Patterns
 
