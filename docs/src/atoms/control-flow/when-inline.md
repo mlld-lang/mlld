@@ -1,19 +1,38 @@
 ---
 id: when-inline
 title: When Inline
-brief: Single condition with inline action
+brief: Single-expression shorthand for when
 category: control-flow
 parent: when
 tags: [conditionals, branching]
-related: [when, if]
+related: [when, when-blocks, if]
 related-code: [interpreter/eval/when.ts, grammar/directives/when.peggy]
 updated: 2026-01-31
 qa_tier: 1
 ---
 
-**Inline form:**
+Use inline `when` for a single action expression, such as
+`when @score > 90 => show "Excellent!"`.
+
+This matches the same condition semantics as block form:
 
 ```mlld
-when @isProd => show "Production mode"
-when @score > 90 => show "Excellent!"
+var @score = 95
+when [
+  @score > 90 => show "Excellent!"
+  * => show "No match"
+]
+```
+
+Use block form when you need multiple branches or a multi-statement action:
+
+```mlld
+when [
+  @role == "admin" => show "Admin access"
+  @role == "editor" => [
+    let @message = "Editor access"
+    show @message
+  ]
+  * => show "No access"
+]
 ```

@@ -38,6 +38,10 @@ var @score = 85
 when @score > 80 => show "Excellent work!"
 ```
 
+Inline `when` is single-expression shorthand (`when @condition => action`).
+It uses the same first-match semantics as `when [ ... ]` entries.
+Use `when [ ... ]` when you need multiple branches or multi-statement actions.
+
 ### When Lists (First-Match)
 
 Use `when` to stop at the first matching condition:
