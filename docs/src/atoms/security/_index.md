@@ -1,12 +1,12 @@
 ---
 id: security
 title: Security
-brief: Guards, labels, and capability declarations
+brief: Guards, labels, policies, and execution environments
 category: security
 updated: 2026-01-05
 ---
 
-Guards protect sensitive data. Labels track data provenance. Needs declarations control capabilities. Environments provide isolation and credential management for sandboxing agents.
+Guards protect sensitive data. Labels track data provenance. Policies control capabilities. Needs declarations describe module requirements. Environments provide isolation and credential management for sandboxing agents.
 
 **Reading order:** Start with `labels-overview` (foundations), then `security-policies` (declarative controls), `security-guards-basics` (expressive controls), and `env-overview` (execution contexts).
 
