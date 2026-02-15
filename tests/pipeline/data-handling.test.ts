@@ -84,6 +84,24 @@ describe('Data handling accessors', () => {
     expect(output.trim()).toBe('true');
   });
 
+  it('passes numeric stage outputs between pipeline stages without string coercion', async () => {
+    const input = `
+/exe @double(n) = js {
+  return n * 2
+}
+
+/exe @addTen(n) = js {
+  return n + 10
+}
+
+/var @seed = 5
+/var @result = @seed | @double | @addTen
+/show @result`;
+
+    const output = await interpret(input, { fileSystem, pathService });
+    expect(output.trim()).toBe('20');
+  });
+
   it('lets foreach consume StructuredValue arrays produced by pipelines', async () => {
     const input = `
 /exe @echoUser(user) = js {

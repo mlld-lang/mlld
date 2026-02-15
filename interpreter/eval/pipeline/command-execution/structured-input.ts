@@ -24,12 +24,21 @@ export function parseStructuredJson(text: string): any | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
   const firstChar = trimmed[0];
-  if (firstChar !== '{' && firstChar !== '[') {
+  const scalarJsonPattern = /^(?:null|true|false|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)$/;
+  const shouldAttemptScalarParse = scalarJsonPattern.test(trimmed);
+  if (firstChar !== '{' && firstChar !== '[' && !shouldAttemptScalarParse) {
     return null;
   }
   try {
     const parsed = JSON.parse(trimmed);
     if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+    if (
+      parsed === null ||
+      typeof parsed === 'number' ||
+      typeof parsed === 'boolean'
+    ) {
       return parsed;
     }
   } catch {
@@ -38,6 +47,13 @@ export function parseStructuredJson(text: string): any | null {
       try {
         const reparsed = JSON.parse(sanitized);
         if (reparsed && typeof reparsed === 'object') {
+          return reparsed;
+        }
+        if (
+          reparsed === null ||
+          typeof reparsed === 'number' ||
+          typeof reparsed === 'boolean'
+        ) {
           return reparsed;
         }
       } catch {

@@ -5,6 +5,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 import { bindPipelineParameters } from './bind-pipeline-params';
+import { wrapStructured } from '@interpreter/utils/structured-value';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -118,5 +119,28 @@ describe('bindPipelineParameters extraction parity', () => {
     expect(inputVar.rawText).toBe('{"count":3}');
     expect(inputVar.value.type).toBe('json');
     expect(inputVar.value.data).toEqual({ count: 3 });
+  });
+
+  it('keeps primitive structured pipeline inputs as native primitive parameter values', async () => {
+    const env = createEnv();
+    setPipelineContext(env);
+    const execEnv = env.createChild();
+
+    await bindWithPreservation({
+      env,
+      execEnv,
+      paramNames: ['n'],
+      baseParamNames: ['n'],
+      boundArgs: [],
+      args: [],
+      stdinInput: '10',
+      structuredInput: wrapStructured(10, 'number', '10'),
+      stageLanguage: 'js'
+    });
+
+    const inputVar = execEnv.getVariable('n');
+    expect(inputVar).toBeTruthy();
+    expect(inputVar?.value).toBe(10);
+    expect(typeof inputVar?.value).toBe('number');
   });
 });

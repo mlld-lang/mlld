@@ -6,6 +6,7 @@ import {
   createArrayVariable,
   createObjectVariable,
   createPipelineInputVariable,
+  createPrimitiveVariable,
   createSimpleTextVariable
 } from '@core/types/variable';
 import { createPipelineParameterVariable } from '../../../utils/parameter-factory';
@@ -47,6 +48,25 @@ function createTypedPipelineVariable(
     internal.pipelineType = 'object';
     internal.customToString = () => originalText;
     return createObjectVariable(paramName, bridged as Record<string, any>, false, pipelineSource, { internal });
+  }
+
+  if (
+    parsedValue === null ||
+    typeof parsedValue === 'number' ||
+    typeof parsedValue === 'boolean'
+  ) {
+    internal.pipelineType = parsedValue === null ? 'null' : typeof parsedValue;
+    return createPrimitiveVariable(
+      paramName,
+      parsedValue as number | boolean | null,
+      {
+        directive: 'var',
+        syntax: 'literal',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      { internal }
+    );
   }
 
   const textSource: VariableSource = {

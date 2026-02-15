@@ -16,6 +16,15 @@ describe('command-execution structured input helpers', () => {
     expect(parseStructuredJson('{"line":')).toBeNull();
   });
 
+  it('parses JSON scalar inputs used by pipeline stage bindings', () => {
+    expect(parseStructuredJson('10')).toBe(10);
+    expect(parseStructuredJson('-2.5')).toBe(-2.5);
+    expect(parseStructuredJson('true')).toBe(true);
+    expect(parseStructuredJson('false')).toBe(false);
+    expect(parseStructuredJson('null')).toBeNull();
+    expect(parseStructuredJson('001')).toBeNull();
+  });
+
   it('keeps JSON-like wrapping behavior for object and array payloads', () => {
     const wrappedObject = wrapJsonLikeString('{"count":2}');
     expect(isStructuredValue(wrappedObject)).toBe(true);
