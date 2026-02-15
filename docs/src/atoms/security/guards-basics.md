@@ -39,6 +39,15 @@ guard [@name] TIMING LABEL = when [...]
 - `TIMING`: `before`, `after`, or `always`
 - Shorthand: `for` equals `before`
 
+**`before` timing comparison:**
+
+| Form | Trigger moment | Frequency | `denied` handler support |
+|---|---|---|---|
+| `before LABEL` / `for LABEL` | Labeled value creation | Once per labeled value | No |
+| `before op:TYPE` | Operation execution | Every operation attempt | Yes |
+
+`before LABEL` denials happen before an operation exists, so `denied => ...` handlers do not run for that case.
+
 **Security context in guards:**
 
 Guards have access to three complementary dimensions:

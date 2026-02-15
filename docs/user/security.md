@@ -187,6 +187,15 @@ Actions:
 - `allow @value` - Transform and allow
 - `env @config` - Selects an execution environment
 
+### Timing Comparison: `before LABEL` vs `before op:TYPE`
+
+| Guard form | Trigger moment | Frequency | `denied` handler support |
+|---|---|---|---|
+| `before LABEL` (or `for LABEL`) | Labeled value creation | Once per labeled value | No |
+| `before op:TYPE` | Operation execution | Every operation attempt | Yes |
+
+Use `before LABEL` for entry-time label policy and `before op:TYPE` for per-operation policy.
+
 ### Guard on Data Labels
 
 Block secrets from shell commands:
@@ -228,6 +237,9 @@ show @sendData("test")  >> Blocked
 ## Denied Handlers
 
 Handle guard denials gracefully with `denied =>` branches. Note: `deny` is a guard action that blocks an operation; `denied` is a when-condition that tests if we're in a denied context:
+
+- `denied` handlers catch operation-time denials (`before op:*` and `after op:*`).
+- `denied` handlers do not catch `before LABEL` denials because label-entry denials occur before operation context exists.
 
 ```mlld
 guard @secretBlock before secret = when [

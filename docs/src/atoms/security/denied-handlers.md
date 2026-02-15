@@ -13,6 +13,10 @@ qa_tier: 2
 
 The `denied` keyword is a when-condition that tests if we're in a denied context. Use it to handle guard denials gracefully.
 
+Scope note:
+- `denied` handlers catch denials that happen at operation time (for example `before op:run`, `before op:exe`, `after op:exe`).
+- `denied` handlers do not catch `before LABEL` denials because the value is blocked at label-entry time, before operation context exists.
+
 **`deny` vs `denied`:**
 
 - `deny "reason"` - Guard action that blocks an operation
