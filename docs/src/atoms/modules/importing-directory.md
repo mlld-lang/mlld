@@ -22,3 +22,12 @@ import "./agents" as @agents with { skipDirs: [] }
 ```
 
 Directories auto-load `*/index.mld`. Default `skipDirs: ["_*", ".*"]`.
+
+Use directory imports when you want a namespace object.
+If you want selected exports, import the entry file directly:
+
+```mlld
+import { @helper } from "./agents/index.mld"
+```
+
+Relative directory paths resolve from the importing file's directory, not the shell cwd.

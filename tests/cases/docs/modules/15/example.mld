@@ -1,1 +1,1 @@
-export { @publicAPI, @helper }
+import local { @tool } from @alice/my-tool

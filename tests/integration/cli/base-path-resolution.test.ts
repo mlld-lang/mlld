@@ -89,4 +89,50 @@ describe('@base and @root path resolution', () => {
     await expect(fs.stat(path.join(outsideCwd, 'local-output.txt'))).rejects.toThrow();
     await expect(fs.stat(path.join(projectDir, 'local-output.txt'))).rejects.toThrow();
   });
+
+  it('resolves relative import paths from script file directory', async () => {
+    const scriptLibDir = path.join(scriptDir, 'lib');
+    const cwdLibDir = path.join(outsideCwd, 'lib');
+    await fs.mkdir(scriptLibDir, { recursive: true });
+    await fs.mkdir(cwdLibDir, { recursive: true });
+
+    await fs.writeFile(
+      path.join(scriptLibDir, 'local-helper.mld'),
+      [
+        '/var @source = "script-dir-helper"',
+        '/export { @source }'
+      ].join('\n'),
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(cwdLibDir, 'local-helper.mld'),
+      [
+        '/var @source = "cwd-helper"',
+        '/export { @source }'
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const script = [
+      '/import { @source } from "./lib/local-helper.mld"',
+      '/show @source'
+    ].join('\n');
+    await fs.writeFile(scriptPath, script, 'utf-8');
+
+    const { stdout } = await execAsync(
+      `TSX_TSCONFIG_PATH="${tsconfigPath}" node --import "${tsxImport}" "${mlldCliEntry}" "${scriptPath}"`,
+      {
+        cwd: outsideCwd,
+        timeout: 15000
+      }
+    );
+
+    const lines = stdout
+      .split(/\r?\n/g)
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    expect(lines).toContain('script-dir-helper');
+    expect(lines).not.toContain('cwd-helper');
+  });
 });

@@ -78,6 +78,18 @@ license: CC0
 entry: index.mld        # Optional, defaults to index.mld
 ```
 
+### Frontmatter vs module.yml
+
+Directory modules use two metadata layers:
+
+| Source | Lives in | Used for |
+|--------|----------|----------|
+| Frontmatter (`--- ... ---`) | Entry `.mld` file | Runtime metadata (`@fm`, imported namespace `.__meta__`) |
+| `module.yml` | Module directory root | Packaging metadata (type, publish/install metadata, directory entry selection) |
+
+If fields differ, runtime metadata comes from entry-file frontmatter, while packaging metadata comes from `module.yml`.
+Keep shared identity fields (`name`, `author`, `version`, `about`) aligned in both files.
+
 **Module types and their install locations:**
 
 | Type | Local | Global |
@@ -118,8 +130,29 @@ mlld install @alice/utils
 ### Local Files
 
 ```mlld
-import { @config } from <./config.mld>
+import { @config } from "./config.mld"
+import "./helpers.mld" as @helpers
+import "./agents" as @agents
 show @config.apiKey
+show @helpers.format("ok")
+show @agents.support.reply("hello")
+```
+
+Relative `./` and `../` paths resolve from the importing file's directory, not your shell cwd.
+
+If you run:
+
+```bash
+cd /tmp
+mlld /home/user/project/scripts/main.mld
+```
+
+Then `import "./config.mld"` resolves to `/home/user/project/scripts/config.mld`.
+
+Use `@root` for project-root imports:
+
+```mlld
+import { @shared } from <@root/lib/shared.mld>
 ```
 
 ### URL Imports
@@ -151,6 +184,19 @@ import local { @helper } from @alice/dev-module
 ```
 
 ### Import Patterns
+
+| Goal | Syntax |
+|------|--------|
+| Selected exports from one module file | `import { @helper } from "./utils.mld"` |
+| Namespace import from one module file | `import "./utils.mld" as @utils` |
+| Namespace import from a directory | `import "./agents" as @agents` |
+| Namespace import from registry module | `import @alice/utils as @utils` |
+
+Directory imports are namespace-only. To import selected exports from a directory module, target its entry file:
+
+```mlld
+import { @helper } from "./agents/index.mld"
+```
 
 **Selected imports**:
 ```mlld

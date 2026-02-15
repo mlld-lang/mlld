@@ -1,4 +1,2 @@
->> In utils.mld
-var @prefix = "Result: "
-exe @format(x) = `@prefix @x`
-export { @format }
+import @alice/utils as @utils
+show @utils.helper("data")

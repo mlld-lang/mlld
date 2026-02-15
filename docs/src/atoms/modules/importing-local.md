@@ -12,7 +12,7 @@ updated: 2026-01-05
 qa_tier: 2
 ---
 
-**Local files:**
+**Local files (selected exports):**
 
 ```mlld
 import { @helper } from "./utils.mld"
@@ -24,3 +24,14 @@ import {
   @renderBody
 } from "./templates.mld"
 ```
+
+**Local files (namespace import):**
+
+```mlld
+import "./utils.mld" as @utils
+show @utils.helper("report")
+```
+
+**Path resolution:**
+- `./` and `../` paths resolve from the importing file's directory, not the shell cwd.
+- `<@root/...>` resolves from the project root.

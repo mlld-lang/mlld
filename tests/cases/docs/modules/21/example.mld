@@ -1,8 +1,8 @@
 ---
-name: prompts
-about: Reusable prompts
+name: config
+about: App configuration
 ---
 
-exe @systemPrompt(role) = `You are a @role assistant.`
-exe @userPrompt(task) = `Please help me with: @task`
-export { @systemPrompt, @userPrompt }
+var @apiUrl = "https://api.example.com"
+var @timeout = 30000
+export { @apiUrl, @timeout }

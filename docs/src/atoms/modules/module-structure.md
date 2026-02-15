@@ -32,6 +32,17 @@ entry: index.mld        # Optional, defaults to index.mld
 ```
 </manifest>
 
+<metadata_sources>
+Directory modules use two metadata sources:
+
+| Source | Lives In | Used For |
+|--------|----------|----------|
+| Frontmatter | Entry `.mld` file (`--- ... ---`) | Runtime metadata (`@fm`, imported namespace `.__meta__`) |
+| `module.yml` | Module directory root | Packaging metadata (`type`, publish/install metadata, entry selection for directory modules) |
+
+Keep shared identity fields (`name`, `author`, `version`, `about`) aligned between frontmatter and `module.yml`.
+</metadata_sources>
+
 <module_types>
 | Type | Purpose | Local Path | Global Path |
 |------|---------|------------|-------------|
