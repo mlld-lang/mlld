@@ -1,7 +1,7 @@
 ---
 id: variables-conditional
 title: Conditional Inclusion
-brief: Omit content or provide template fallbacks with @var? and @var??
+brief: Omit content with @var? and use nullish fallbacks in templates and expressions
 category: syntax
 parent: variables
 tags: [variables, conditionals, optional]
@@ -12,7 +12,8 @@ qa_tier: 1
 ---
 
 **Conditional inclusion** (`@var?`): omit content when a variable is falsy.
-**Nullish fallback in templates** (`@var??"default"`): use the fallback when the value is null or undefined.
+**Nullish fallback in templates** (`@var??"default"`): use tight `??` binding in template interpolation.
+**Nullish fallback in expressions** (`@a ?? @b`): use spaced `??` in `var`/`let` expressions and chains.
 
 ```mlld
 var @tools = "json"
@@ -29,6 +30,11 @@ var @msg = `DEBUG:@title?`
 >> In templates: tight null coalescing
 var @missing = null
 var @hello = `Hello,@missing??"friend"`
+
+>> In expressions: spaced null coalescing (chaining works)
+var @primary = null
+var @secondary = "backup"
+var @chosen = @primary ?? @secondary ?? "fallback"
 
 >> In arrays
 var @list = [@a, @b?, @c]   >> @b omitted if falsy

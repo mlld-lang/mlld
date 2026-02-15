@@ -1,8 +1,10 @@
 var @title = ""
-var @nickname = null
+var @primary = null
+var @secondary = "pal"
+var @fallback = @primary ?? @secondary ?? "fallback"
 
 show `Hello,@title??"friend"`
-show `Hello,@nickname??'pal'`
+show @fallback
 show `Hello,@missing??"friend"`
 >> "Hello,"
 >> "Hello,pal"

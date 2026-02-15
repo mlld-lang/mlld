@@ -462,16 +462,20 @@ show @greeting
 >> With @nickname="Ace": "Hello Ada (Ace)"
 ```
 
-#### Null Coalescing in Templates
+#### Null Coalescing
 
-Use `@var??"default"` (or single-quoted) to provide a fallback when the value is nullish. The `??` binding is tight in templates (no spaces).
+Use `@var??"default"` (or single-quoted) for tight template interpolation fallback.
+In expression contexts (`var`, `let`, and conditions), use spaced nullish coalescing: `@a ?? @b`.
+Chaining works in expressions: `@a ?? @b ?? "fallback"`.
 
 ```mlld
 var @title = ""
-var @nickname = null
+var @primary = null
+var @secondary = "pal"
+var @fallback = @primary ?? @secondary ?? "fallback"
 
 show `Hello,@title??"friend"`
-show `Hello,@nickname??'pal'`
+show @fallback
 show `Hello,@missing??"friend"`
 >> "Hello,"
 >> "Hello,pal"
