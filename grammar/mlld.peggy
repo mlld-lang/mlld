@@ -71,7 +71,6 @@
 Start
   = frontmatter:Frontmatter? nodes:(
       LineStartComment           /* <— Comments get highest priority! */
-    / Comment                    /* <— Any other comments */
     / MlldRunFence               /* <— Special mlld-run blocks that are interpreted */
     / CodeFence                  /* <— Regular code blocks that are NOT interpreted */
     / Directive                  /* <— Directives come after comments */
@@ -155,7 +154,12 @@ CommentContent
 
 // Inline comment pattern - for use after directive content
 InlineComment
-  = _ marker:CommentMarker HWS content:CommentContent {
+  = [ \t\r\u200B\u200C\u200D]* &{
+      const pos = offset();
+      if (pos <= 0) return false;
+      const prev = input[pos - 1];
+      return prev === ' ' || prev === '\t' || prev === '\r' || prev === '\u200B' || prev === '\u200C' || prev === '\u200D';
+    } marker:CommentMarker HWS content:CommentContent {
     return {
       type: 'Comment',
       marker: marker,

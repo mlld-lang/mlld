@@ -166,8 +166,8 @@ FilterComparisonOp
   / "!=" { return '!='; }
   / "<=" { return '<='; }
   / ">=" { return '>='; }
-  / "<" !"=" { return '<'; }
-  / ">" !"=" { return '>'; }
+  / "<" !("=" / "<") { return '<'; }
+  / ">" !("=" / ">") { return '>'; }
 
 // Filter values can be literals, durations, or variable references
 FilterValue

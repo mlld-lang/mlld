@@ -89,7 +89,7 @@ UnifiedComparison
     }
 
 UnifiedComparisonOp
-  = "==" / "!=" / "~=" / "<=" / ">=" / "<" !"=" / ">" !"="
+  = "==" / "!=" / "~=" / "<=" / ">=" / "<" !("=" / "<") / ">" !("=" / ">")
 
 // Arithmetic operators
 UnifiedAdditive

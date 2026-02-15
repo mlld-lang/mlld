@@ -8,6 +8,7 @@ User age: 30
 Company city: Boston
 
 Numeric field: numeric key
+
 Alice
 
 30
@@ -15,4 +16,5 @@ Alice
 Boston
 
 numeric key
+
 All property access tests completed!
