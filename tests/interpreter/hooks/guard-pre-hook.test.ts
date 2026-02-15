@@ -412,6 +412,36 @@ describe('guard pre-hook integration', () => {
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/secret output blocked/);
   });
 
+  it('treats missing @mx.op.labels.includes checks as false', async () => {
+    const env = createEnv();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    const guardDirective = parseSync(
+      '/guard for op:show = when [ @mx.op.labels.includes("destructive") => deny "Blocked" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'value',
+      createSimpleTextVariable(
+        'value',
+        'safe-output',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor()
+        }
+      )
+    );
+
+    const directive = parseSync('/show @value')[0] as DirectiveNode;
+    await evaluateDirective(directive, env);
+    expect(effects.getOutput().trim()).toBe('safe-output');
+  });
+
   it('supports opHas/opHasAny/opHasAll with prefixWith and tagValue helpers', async () => {
     const env = createEnv();
     const effects = env.getEffectHandler() as TestEffectHandler;

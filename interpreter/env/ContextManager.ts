@@ -287,6 +287,10 @@ export class ContextManager {
     const pipeline = options.pipelineContext ?? this.peekPipelineContext();
     const security = options.securitySnapshot;
     const currentOperation = this.peekOperation() ?? security?.operation;
+    const normalizedOperation =
+      currentOperation && typeof currentOperation === 'object'
+        ? this.normalizeOperationContext(currentOperation as Readonly<Record<string, unknown>>)
+        : null;
     const pipelineFields = this.buildPipelineFields(pipeline);
     const guardContext = this.peekGuardContext();
     const deniedContext = this.peekDeniedContext();
@@ -328,8 +332,8 @@ export class ContextManager {
           : [],
       policy: security?.policy ?? null,
       profile: this.profile ?? null,
-      operation: currentOperation ?? null,
-      op: currentOperation ?? null,
+      operation: normalizedOperation,
+      op: normalizedOperation,
       ...(whileContext ? { while: whileContext } : {}),
       ...(loopContext ? { loop: loopContext } : {}),
       ...(forContext ? { for: forContext } : {}),
@@ -379,6 +383,19 @@ export class ContextManager {
       normalized.push(trimmed);
     }
     return normalized;
+  }
+
+  private normalizeOperationContext(
+    operation: Readonly<Record<string, unknown>>
+  ): Record<string, unknown> {
+    const labels = this.normalizeToolList(operation.labels as readonly string[] | undefined);
+    const opLabels = this.normalizeToolList(operation.opLabels as readonly string[] | undefined);
+    const mergedLabels = this.normalizeToolList([...labels, ...opLabels]);
+    return {
+      ...operation,
+      labels: mergedLabels,
+      opLabels
+    };
   }
 
   pushGenericContext(type: string, context: unknown): void {
