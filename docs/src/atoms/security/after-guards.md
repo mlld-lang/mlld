@@ -17,3 +17,5 @@ guard @validateJson after op:exe = when [
   * => deny "Invalid JSON"
 ]
 ```
+
+After-guard transforms apply sequentially in declaration order. Each matching guard receives the output from the previous guard.

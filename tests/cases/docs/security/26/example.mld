@@ -1,13 +1,13 @@
 guard @first before secret = when [
-  * => allow @input.trim()
+  * => allow "first"
 ]
 
 guard @second before secret = when [
-  * => allow `safe:@input`
+  * => allow "second"
 ]
 
-var secret @data = "  hello  "
+var secret @data = "original"
 exe @deliver(v) = `Result: @v`
 
->> Result: safe:hello
+>> Result: second
 show @deliver(@data)

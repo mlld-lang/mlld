@@ -338,7 +338,7 @@ guard @checkBoth always op:exe = when [
 ]
 ```
 
-Use `@mx.guard.timing` to differentiate:
+`always` timing runs in both phases. In each phase, guards execute top-to-bottom in declaration order. Use `@mx.guard.timing` to differentiate:
 
 ```mlld
 exe @tagValue(timing, out, inp) = js {
@@ -347,30 +347,35 @@ exe @tagValue(timing, out, inp) = js {
 }
 
 exe @emit(v) = js { return v; }
-show @emit("test")
+show @emit("test")  >> after:before:test
 ```
 
 ## Guard Composition
 
-Multiple guards execute in order (top-to-bottom in file):
+Composition rules:
+
+- Guards execute top-to-bottom in declaration order.
+- Decision precedence: `deny` > `retry` > `allow @value` > `allow`.
+- Before transforms use the last matching replacement as operation input.
+- After transforms apply sequentially; each guard sees the previous guard's output.
+
+Before transforms: last replacement wins for operation input.
 
 ```mlld
 guard @first before secret = when [
-  * => allow @input.trim()
+  * => allow "first"
 ]
 
 guard @second before secret = when [
-  * => allow `safe:@input`
+  * => allow "second"
 ]
 
-var secret @data = "  hello  "
+var secret @data = "original"
 exe @deliver(v) = `Result: @v`
 
->> Result: safe:hello
+>> Result: second
 show @deliver(@data)
 ```
-
-Decision precedence: deny > retry > allow @value > allow
 
 ```mlld
 guard @retryGuard before secret = when [
@@ -400,19 +405,19 @@ var secret @key = "sk-12345"
 show @key  >> Output: *********
 ```
 
-Transforms chain across multiple guards:
+After transforms chain sequentially:
 
 ```mlld
-guard @trim before secret = when [
-  * => allow @input.trim()
+guard @stepOne after op:exe = when [
+  * => allow `one:@output`
 ]
 
-guard @wrap before secret = when [
-  * => allow `[REDACTED: @input]`
+guard @stepTwo after op:exe = when [
+  * => allow `two:@output`
 ]
 
-var secret @key = "  sk-12345  "
-show @key  >> Output: [REDACTED: sk-12345]
+exe @emit(v) = js { return v; }
+show @emit("base")  >> two:one:base
 ```
 
 ## Guard Context

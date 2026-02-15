@@ -1,10 +1,10 @@
-guard @trim before secret = when [
-  * => allow @input.trim()
+guard @stepOne after op:exe = when [
+  * => allow `one:@output`
 ]
 
-guard @wrap before secret = when [
-  * => allow `[REDACTED: @input]`
+guard @stepTwo after op:exe = when [
+  * => allow `two:@output`
 ]
 
-var secret @key = "  sk-12345  "
-show @key  >> Output: [REDACTED: sk-12345]
+exe @emit(v) = js { return v; }
+show @emit("base")  >> two:one:base

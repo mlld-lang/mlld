@@ -4,4 +4,4 @@ exe @tagValue(timing, out, inp) = js {
 }
 
 exe @emit(v) = js { return v; }
-show @emit("test")
+show @emit("test")  >> after:before:test

@@ -16,3 +16,5 @@ guard @sanitize before untrusted = when [
   * => allow @input.trim().slice(0, 100)
 ]
 ```
+
+When multiple `before` guards return `allow @value`, the operation receives the replacement from the last matching guard in declaration order.

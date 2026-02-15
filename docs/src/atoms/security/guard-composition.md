@@ -11,10 +11,10 @@ updated: 2026-01-05
 qa_tier: 2
 ---
 
-1. All applicable guards run (file top-to-bottom)
-2. `deny` takes precedence over all
-3. `retry` next
-4. `allow @value` (transformed)
-5. `allow` (unchanged)
+1. Guards run top-to-bottom in declaration order.
+2. `always` timing participates in both phases (`before` and `after`).
+3. Decision precedence is `deny` > `retry` > `allow @value` > `allow`.
+4. Before-phase transforms use the last matching replacement as operation input.
+5. After-phase transforms chain sequentially; each guard receives the previous guard's output.
 
 Guards are non-reentrant (won't trigger on their own operations).
