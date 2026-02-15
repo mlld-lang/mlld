@@ -25,15 +25,13 @@ exe @runReview(runDir, topics) = [
 
   >> Find all topics with sessions that completed phase 1
   let @sessionFiles = <@runDir/topics/**/session.json>
-  let @sessionsForReview = for @s in @sessionFiles when @s.phase1_complete && @topics.includes(@s.topic) => @s
+  let @needsReview = for @s in @sessionFiles when @s.phase1_complete && @topics.includes(@s.topic) => @s
 
-  >> Filter to those with failing experiments
-  let @needsReview = for @s in @sessionsForReview when @hasFailingExperiments(`@runDir/topics/@s.topic`) => @s
-
-  show `Found @needsReview.length topics with failing experiments to review`
+  let @withFailures = for @s in @needsReview when @hasFailingExperiments(`@runDir/topics/@s.topic`) => @s.topic
+  show `Found @needsReview.length topics to review (@withFailures.length with failures)`
 
   if @needsReview.length == 0 [
-    show `No topics need self-review (all passing or no sessions found).`
+    show `No topics completed phase 1 yet.`
     let @_ = @logPhaseComplete(@runDir, "review", { reviewed: 0 })
     let @_ = @updatePhaseStatus(@runDir, "review", "complete")
     => []

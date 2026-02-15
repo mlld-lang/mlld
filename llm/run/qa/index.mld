@@ -27,7 +27,7 @@
 import { @loadTopics, @filterTopics } from "./lib/topics.mld"
 import { @resolveRunDir, @loadRun, @createRun, @shouldRunPhase, @updateRunStatus, @qaRoot, @latestRunId } from "./lib/state.mld"
 import { @logEvent } from "./lib/events.mld"
-import { @buildRunSummary, @buildDocClarityReport } from "./lib/aggregate.mld"
+import { @loadAllResults, @loadAllReviews, @buildRunSummary, @buildDocClarityReport } from "./lib/aggregate.mld"
 import { @runTriage } from "./phases/triage.mld"
 import { @runFlail } from "./phases/flail.mld"
 import { @runReview } from "./phases/review.mld"
@@ -114,11 +114,9 @@ when @shouldRunPhase("review", @phase) => [
 >> ========== SUMMARY ==========
 show `=== QA SUMMARY ===`
 
->> Aggregate results for display (? globs: agent-written JSON may be malformed)
-var @allResults = <@runDir/topics/**/results.json>?
-var @allResultsList = @allResults ? @allResults : []
-var @allSelfReviews = <@runDir/topics/**/self_review.json>?
-var @allReviewsList = @allSelfReviews ? @allSelfReviews : []
+>> Aggregate results for display (per-file loading repairs malformed agent JSON)
+var @allResultsList = @loadAllResults(@runDir)
+var @allReviewsList = @loadAllReviews(@runDir)
 var @allSessions = <@runDir/topics/**/session.json>?
 var @allSessionsList = @allSessions ? @allSessions : []
 var @passing = for @r in @allResultsList when @r.status == "pass" => @r
