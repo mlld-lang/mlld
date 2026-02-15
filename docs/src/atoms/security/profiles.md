@@ -99,7 +99,7 @@ env @cfg with { profile: "full" } [
 
 Output: `full` — the explicit override bypasses automatic selection, even though policy denies `sh`. This is useful when an outer orchestrator knows it will provide the required capabilities.
 
-Specifying an unknown profile name throws an error listing the available profiles.
+Specifying an unknown profile name throws an error with available profiles in the error details.
 
 **Profiles in environment configs:**
 
