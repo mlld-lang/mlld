@@ -1,5 +1,1 @@
-loop(endless, 10ms) until @input >= 3 [
-  let @next = (@input ?? 0) + 1
-  show "poll"
-  continue @next
-]
+var @result = @initial | while(100, 1s) @processor

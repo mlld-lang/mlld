@@ -1,12 +1,10 @@
-exe @source() = when [
-  @mx.try == 1 => "draft"
-  * => "final"
-]
+var @items = ["  beta  ", " alpha "]
 
-exe @validator() = when [
-  @mx.input == "draft" => retry "missing title"
-  * => `Used hint: @mx.hint`
-]
+>> One stage receives the whole array value
+var @whole = @items | @trim
 
-var @result = @source() | @validator
-show @result
+>> Per-item transform requires explicit iteration
+var @each = for @item in @items => @item | @trim | @upper
+
+show @whole
+show @each

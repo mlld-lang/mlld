@@ -1,1 +1,12 @@
-var @result = @initial | while(100, 1s) @processor
+exe @source() = when [
+  @mx.try == 1 => "draft"
+  * => "final"
+]
+
+exe @validator() = when [
+  @mx.input == "draft" => retry "missing title"
+  * => `Used hint: @mx.hint`
+]
+
+var @result = @source() | @validator
+show @result

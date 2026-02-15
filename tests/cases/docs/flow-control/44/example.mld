@@ -1,6 +1,7 @@
-var @result = loop(10) [
-  let @count = (@input ?? 0) + 1
-  when @count >= 3 => done @count
-  continue @count
+exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
 ]
+
+var @result = 5 | while(10) @countdown
 show @result

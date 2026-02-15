@@ -589,6 +589,53 @@ Output:
 Alice
 ```
 
+Built-in transformers you can use directly in pipelines:
+- `@trim`
+- `@upper`
+- `@lower`
+- `@pretty`
+- `@sort`
+
+```mlld
+var @msg = "  hello pipeline  "
+var @shout = @msg | @trim | @upper
+show @shout
+
+var @record = `{"z":2,"a":1}`
+var @normalized = @record | @sort | @pretty
+show @normalized
+```
+
+Stages receive whole values. They do not auto-map over arrays:
+
+```mlld
+var @items = ["  beta  ", " alpha "]
+
+>> One stage receives the whole array value
+var @whole = @items | @trim
+
+>> Per-item transform requires explicit iteration
+var @each = for @item in @items => @item | @trim | @upper
+
+show @whole
+show @each
+```
+
+For error handling, let a stage validate input and choose retry or fallback:
+
+```mlld
+exe @source() = "not-json"
+
+exe @parseOrFallback(input) = when [
+  @input.startsWith("{") => @input | @parse
+  @mx.try < 2 => retry "expected JSON object"
+  * => { ok: false, error: "invalid-json", raw: @input }
+]
+
+var @result = @source() | @parseOrFallback
+show @result
+```
+
 ### Pipeline Context
 
 Access pipeline context with `@mx` and pipeline history with `@p` (alias for `@pipeline`):

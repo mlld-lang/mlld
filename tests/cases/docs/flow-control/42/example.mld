@@ -1,5 +1,8 @@
-exe @process(state) = when [
-  @mx.while.iteration > 5 => done @state
-  @mx.while.iteration == @mx.while.limit => done "hit cap"
-  * => continue @state
+exe @validator(input) = when [
+  @input.valid => @input.value
+  @mx.try < 3 => retry "validation failed"
+  none => "fallback value"
 ]
+
+var @result = "invalid" | @validator
+show @result

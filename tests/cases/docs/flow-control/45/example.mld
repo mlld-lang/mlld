@@ -1,5 +1,5 @@
-loop until @input >= 3 [
-  let @next = (@input ?? 0) + 1
-  show `@next`
-  continue @next
+exe @process(state) = when [
+  @mx.while.iteration > 5 => done @state
+  @mx.while.iteration == @mx.while.limit => done "hit cap"
+  * => continue @state
 ]
