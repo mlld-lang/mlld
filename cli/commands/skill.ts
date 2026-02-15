@@ -2,8 +2,7 @@ import chalk from 'chalk';
 import { existsSync, mkdirSync, cpSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { execFileSync } from 'child_process';
-import { fileURLToPath } from 'url';
-import { findClaude, pluginInstall, pluginUninstall, pluginStatus } from './plugin';
+import { findClaude, pluginInstall, pluginUninstall, pluginStatus, getPackageRoot } from './plugin';
 import { version } from '@core/version';
 
 interface HarnessInfo {
@@ -30,17 +29,7 @@ function homeDir(): string {
 }
 
 function getPluginSourceDir(): string {
-  const thisFile = fileURLToPath(import.meta.url);
-  // In built output: dist/cli.cjs or similar — go up to package root
-  // Walk up until we find package.json
-  let dir = join(thisFile, '..');
-  for (let i = 0; i < 10; i++) {
-    if (existsSync(join(dir, 'package.json'))) {
-      return join(dir, 'plugins', 'mlld');
-    }
-    dir = join(dir, '..');
-  }
-  throw new Error('Could not find mlld package root');
+  return join(getPackageRoot(), 'plugins', 'mlld');
 }
 
 function detectHarness(name: HarnessName): HarnessInfo {
@@ -107,7 +96,7 @@ function removeSkills(targetDir: string): void {
   }
 }
 
-async function installHarness(harness: HarnessInfo, sourceDir: string, scope: string, verbose?: boolean): Promise<boolean> {
+async function installHarness(harness: HarnessInfo, sourceDir: string, scope: string, verbose?: boolean, local?: boolean): Promise<boolean> {
   switch (harness.name) {
     case 'Claude Code': {
       const claude = findClaude();
@@ -115,7 +104,7 @@ async function installHarness(harness: HarnessInfo, sourceDir: string, scope: st
         console.log(chalk.yellow('  Claude Code CLI not found, skipping'));
         return false;
       }
-      await pluginInstall(scope, verbose);
+      await pluginInstall({ scope, verbose, local });
       return true;
     }
     case 'Codex': {
@@ -192,7 +181,7 @@ async function uninstallHarness(harness: HarnessInfo, verbose?: boolean): Promis
   }
 }
 
-async function skillInstall(target: string | undefined, scope: string, verbose?: boolean): Promise<void> {
+async function skillInstall(target: string | undefined, scope: string, verbose?: boolean, local?: boolean): Promise<void> {
   const sourceDir = getPluginSourceDir();
   if (!existsSync(sourceDir)) {
     console.error(chalk.red(`Plugin source not found: ${sourceDir}`));
@@ -216,7 +205,7 @@ async function skillInstall(target: string | undefined, scope: string, verbose?:
   let installed = 0;
   for (const harness of detected) {
     console.log(chalk.bold(harness.name));
-    const ok = await installHarness(harness, sourceDir, scope, verbose);
+    const ok = await installHarness(harness, sourceDir, scope, verbose, local);
     if (ok) installed++;
     console.log();
   }
@@ -291,11 +280,13 @@ ${chalk.bold('Usage:')}
 ${chalk.bold('Options:')}
   --target <harness>  Target a specific tool: claude, codex, pi, opencode
   --scope <scope>     Claude Code scope: user or project (default: user)
+  --local             Use local mlld directory as plugin source (for development)
   --verbose, -v       Show detailed output
   -h, --help          Show this help message
 
 ${chalk.bold('Examples:')}
   mlld skill install                      Install to all detected tools
+  mlld skill install --local              Install from local directory
   mlld skill install --target codex       Install to Codex only
   mlld skill status                       Check what's installed
   mlld skill uninstall                    Remove from all tools
@@ -317,11 +308,12 @@ export function createSkillCommand() {
       const verbose = flags.verbose || flags.v;
       const scope = flags.scope || 'user';
       const target = flags.target;
+      const local = flags.local || false;
 
       switch (subcommand) {
         case 'install':
         case 'i':
-          await skillInstall(target, scope, verbose);
+          await skillInstall(target, scope, verbose, local);
           break;
         case 'uninstall':
         case 'remove':

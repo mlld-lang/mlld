@@ -1,5 +1,8 @@
 import chalk from 'chalk';
 import { execFileSync } from 'child_process';
+import { existsSync } from 'fs';
+import { join } from 'path';
+import { fileURLToPath } from 'url';
 
 const MARKETPLACE_SOURCE = 'mlld-lang/mlld';
 const PLUGIN_REF = 'mlld@mlld';
@@ -11,6 +14,27 @@ export function findClaude(): string | null {
   } catch {
     return null;
   }
+}
+
+export function getPackageRoot(): string {
+  // Handle both CJS (__dirname) and ESM (import.meta.url)
+  let startDir: string;
+  if (typeof __dirname !== 'undefined') {
+    startDir = __dirname;
+  } else if (typeof import.meta?.url === 'string') {
+    startDir = join(fileURLToPath(import.meta.url), '..');
+  } else {
+    startDir = process.cwd();
+  }
+
+  let dir = startDir;
+  for (let i = 0; i < 10; i++) {
+    if (existsSync(join(dir, 'package.json'))) {
+      return dir;
+    }
+    dir = join(dir, '..');
+  }
+  throw new Error('Could not find mlld package root');
 }
 
 function runClaude(args: string[], verbose?: boolean): { success: boolean; output: string } {
@@ -34,12 +58,25 @@ function runClaude(args: string[], verbose?: boolean): { success: boolean; outpu
   }
 }
 
-export async function pluginInstall(scope: string, verbose?: boolean): Promise<void> {
-  console.log(chalk.blue('Adding mlld marketplace...'));
-  const addResult = runClaude(['plugin', 'marketplace', 'add', MARKETPLACE_SOURCE], verbose);
+export interface PluginInstallOptions {
+  scope?: string;
+  verbose?: boolean;
+  local?: boolean;
+}
+
+export async function pluginInstall(opts: PluginInstallOptions = {}): Promise<void> {
+  const { scope = 'user', verbose, local } = opts;
+  const marketplaceSource = local ? getPackageRoot() : MARKETPLACE_SOURCE;
+  const sourceLabel = local ? 'local' : 'registry';
+
+  console.log(chalk.blue(`Adding mlld marketplace (${sourceLabel})...`));
+  const addResult = runClaude(['plugin', 'marketplace', 'add', marketplaceSource], verbose);
   if (!addResult.success && !addResult.output.includes('already')) {
     console.error(chalk.red('Failed to add marketplace:'));
     console.error(chalk.gray(addResult.output));
+    if (!local) {
+      console.log(chalk.yellow('\nTip: Use --local to install from your local mlld directory instead.'));
+    }
     throw new Error('Failed to add marketplace');
   }
 
@@ -95,11 +132,13 @@ ${chalk.bold('Usage:')}
 
 ${chalk.bold('Options:')}
   --scope <scope>   Installation scope: user or project (default: user)
+  --local           Install from local mlld directory (for development)
   --verbose, -v     Show detailed output
   -h, --help        Show this help message
 
 ${chalk.bold('Examples:')}
   mlld plugin install                  Install for current user
+  mlld plugin install --local          Install from local directory
   mlld plugin install --scope project  Install for current project only
   mlld plugin status                   Check if plugin is installed
   mlld plugin uninstall                Remove the plugin
@@ -120,11 +159,12 @@ export function createPluginCommand() {
       const subcommand = args[0];
       const verbose = flags.verbose || flags.v;
       const scope = flags.scope || 'user';
+      const local = flags.local || false;
 
       switch (subcommand) {
         case 'install':
         case 'i':
-          await pluginInstall(scope, verbose);
+          await pluginInstall({ scope, verbose, local });
           break;
         case 'uninstall':
         case 'remove':
