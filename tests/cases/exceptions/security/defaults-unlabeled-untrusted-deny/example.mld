@@ -1,0 +1,11 @@
+var @policyConfig = {
+  defaults: {
+    unlabeled: "untrusted",
+    rules: ["no-untrusted-destructive"]
+  }
+}
+policy @p = union(@policyConfig)
+
+var @data = <./defaults-unlabeled-deny-data.txt>
+exe destructive @wipe(input) = run cmd { echo "@input" }
+show @wipe(@data)

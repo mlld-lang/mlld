@@ -223,9 +223,9 @@ export async function bindPipelineParameters(
           const shouldParse = shouldAutoParsePipelineInput(stageLanguage);
           if (shouldParse) {
             const candidate = typeof unwrappedStdin === 'string' ? unwrappedStdin : textValue;
-            const parsed = parseStructuredJson(candidate);
-            if (parsed !== null) {
-              const typedVar = createTypedPipelineVariable(paramName, parsed, candidate);
+            const result = parseStructuredJson(candidate);
+            if (result !== null) {
+              const typedVar = createTypedPipelineVariable(paramName, result.value, candidate);
               assignPipelineParameter(execEnv, {
                 name: paramName,
                 value: typedVar.value,

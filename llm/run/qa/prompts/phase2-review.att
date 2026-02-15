@@ -83,14 +83,22 @@ For each experiment directory with issues, create or update `self_review.json`:
         "design_question": null
       },
 
+      "empirical_verification": {
+        "attempted": true,
+        "what_i_corrected": "Description of syntax/approach changes tried",
+        "corrected_file": "experiment-corrected.mld | null if no correction possible",
+        "result": "works | still-fails | not-applicable",
+        "output": "Actual output or error from corrected run (or explanation why not applicable)"
+      },
+
       "doc_clarity": {
-        "issue": "qa-insufficient-exploration | docs-could-be-clearer | docs-genuinely-misleading | needs-human-design | genuine-bug",
+        "issue": "qa-syntax-error | qa-insufficient-exploration | docs-could-be-clearer | docs-genuinely-misleading | needs-human-design | genuine-bug",
         "explanation": "Why I chose this classification",
         "suggestion": "What would have helped (if docs issue)",
         "affected_doc": "Which doc file/topic needs improvement"
       },
 
-      "revised_verdict": "not-a-bug | doc-improvement-needed | needs-human-design | genuine-bug",
+      "revised_verdict": "qa-syntax-error | not-a-bug | doc-improvement-needed | needs-human-design | genuine-bug",
       "revised_severity": "none | minor | major | blocker"
     }
   ],
@@ -100,6 +108,29 @@ For each experiment directory with issues, create or update `self_review.json`:
 }
 ```
 
+## CRITICAL: Empirical Verification Required
+
+**Before classifying anything as "genuine-bug" or "docs-genuinely-misleading", you MUST empirically verify with corrected syntax:**
+
+1. **Find the correct syntax** from test cases or cookbook
+2. **Create a corrected experiment** - Write to `experiment-corrected.mld` in the same directory
+3. **Run the corrected version**: `mlld <path>/experiment-corrected.mld`
+4. **Document what you tried**:
+   ```json
+   "empirical_verification": {
+     "attempted": true,
+     "what_i_corrected": "Changed allow trusted! to => trusted!",
+     "corrected_file": "experiment-corrected.mld",
+     "result": "works | still-fails",
+     "output": "Actual output or error from corrected run"
+   }
+   ```
+5. **Reclassify based on results**:
+   - If corrected version works: `"qa-syntax-error"` (you had wrong syntax)
+   - If still fails: `"genuine-bug"` (feature is actually broken)
+
+**This step is MANDATORY for any "fail" or "major" classification.** Do not skip it. Intellectual review is not sufficient.
+
 ## Guidelines
 
 **Be honest about your mistakes**: The goal is to improve the system, not to defend your original assessment. If you misunderstood, say so.
@@ -107,10 +138,11 @@ For each experiment directory with issues, create or update `self_review.json`:
 **Be specific about doc improvements**: "Docs should be clearer" is not helpful. "The `for-block` doc should show that `let` only works inside blocks, not at top-level" is actionable.
 
 **Distinguish carefully**:
+- `qa-syntax-error`: Your test code had wrong syntax (empirical verification caught this)
 - `qa-insufficient-exploration`: The answer WAS in the docs, you just didn't find it
 - `docs-could-be-clearer`: A reasonable person following the docs could make this mistake
 - `docs-genuinely-misleading`: The docs say X but the behavior is Y
-- `genuine-bug`: Test cases confirm the behavior is wrong
+- `genuine-bug`: Test cases confirm the behavior is wrong AND empirical verification still fails
 
 ## If You Get Blocked by Permissions
 

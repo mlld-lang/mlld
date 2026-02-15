@@ -19,7 +19,12 @@ export function shouldAutoParsePipelineInput(language?: string | null): boolean 
   return STRUCTURED_PIPELINE_LANGUAGES.has(language.toLowerCase());
 }
 
-export function parseStructuredJson(text: string): any | null {
+export interface ParsedJsonResult {
+  parsed: true;
+  value: any;
+}
+
+export function parseStructuredJson(text: string): ParsedJsonResult | null {
   if (!text) return null;
   const trimmed = text.trim();
   if (!trimmed) return null;
@@ -32,14 +37,14 @@ export function parseStructuredJson(text: string): any | null {
   try {
     const parsed = JSON.parse(trimmed);
     if (parsed && typeof parsed === 'object') {
-      return parsed;
+      return { parsed: true, value: parsed };
     }
     if (
       parsed === null ||
       typeof parsed === 'number' ||
       typeof parsed === 'boolean'
     ) {
-      return parsed;
+      return { parsed: true, value: parsed };
     }
   } catch {
     const sanitized = sanitizeJsonStringControlChars(trimmed);
@@ -47,14 +52,14 @@ export function parseStructuredJson(text: string): any | null {
       try {
         const reparsed = JSON.parse(sanitized);
         if (reparsed && typeof reparsed === 'object') {
-          return reparsed;
+          return { parsed: true, value: reparsed };
         }
         if (
           reparsed === null ||
           typeof reparsed === 'number' ||
           typeof reparsed === 'boolean'
         ) {
-          return reparsed;
+          return { parsed: true, value: reparsed };
         }
       } catch {
         return null;

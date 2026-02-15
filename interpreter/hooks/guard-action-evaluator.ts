@@ -59,7 +59,11 @@ export async function evaluateGuardReplacement(
     const result = await evaluate(action.value, guardEnv, {
       privileged: guard.privileged === true
     });
-    return materializeGuardTransform(result?.value ?? result, guardLabel, modifiedDescriptor);
+    let value = result?.value ?? result;
+    if (isVariable(value as Variable)) {
+      value = (value as Variable).value;
+    }
+    return materializeGuardTransform(value, guardLabel, modifiedDescriptor);
   }
 
   if (!labelModifications) {

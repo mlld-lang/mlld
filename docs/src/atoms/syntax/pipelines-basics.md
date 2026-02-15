@@ -15,17 +15,16 @@ qa_tier: 1
 Chain stages with `|`. Each stage receives the previous stage output as a single value.
 
 Built-in transformers available in pipelines include:
+- `@parse`
 - `@trim`
-- `@upper`
-- `@lower`
 - `@pretty`
 - `@sort`
 
 ```mlld
-var @users = cmd {cat users.json} | @parse | @csv
+var @users = cmd {cat users.json} | @parse
 
 >> Built-ins and custom stages can be mixed
-var @msg = "  hello pipeline  " | @trim | @upper
+var @msg = "  hello pipeline  " | @trim
 exe @double(n) = js { return Number(n) * 2 }
 var @x = cmd {echo "5"} | @double
 
@@ -37,7 +36,7 @@ var @extracted = @llmResponse | @parse.llm  >> extract from LLM response
 >> Stages receive whole values (no implicit array auto-map)
 var @items = ["  beta  ", " alpha "]
 var @whole = @items | @trim
-var @each = for @item in @items => @item | @trim | @upper
+var @each = for @item in @items => @item | @trim
 
 >> Handle failures with retry + fallback in a stage
 exe @source() = "not-json"

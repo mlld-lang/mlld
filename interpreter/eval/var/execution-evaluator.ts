@@ -22,10 +22,6 @@ export interface ExecutionEvaluatorDependencies {
   descriptorState: ExecutionDescriptorState;
   directive: DirectiveNode;
   env: Environment;
-  interpolateWithSecurity: (
-    nodes: unknown,
-    interpolationContext?: InterpolationContext
-  ) => Promise<string>;
   sourceLocation?: SourceLocation;
 }
 

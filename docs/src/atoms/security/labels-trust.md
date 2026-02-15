@@ -62,4 +62,23 @@ The two-step flow: `fs:w` on exe → policy maps to `destructive` → `no-untrus
 
 **Alternative:** Label exe directly as `exe destructive @wipe(...)` to skip the mapping step. See `policy-operations`.
 
-Use explicit `untrusted` labels on external or unverified inputs.
+**Opt-in auto-labeling:** Instead of labeling every variable manually, `defaults.unlabeled` in policy config automatically labels all data that has no user-assigned labels:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    unlabeled: "untrusted",
+    rules: ["no-untrusted-destructive"]
+  },
+  operations: { "fs:w": "destructive" }
+}
+policy @p = union(@policyConfig)
+
+var @data = <./input.txt>
+exe fs:w @wipe(data) = run cmd { echo "@data" }
+show @wipe(@data)
+```
+
+Error: `Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'` -- file-loaded data has no user labels, so `defaults.unlabeled: "untrusted"` applies the `untrusted` label automatically.
+
+This is opt-in via policy config, not default behavior. Data with explicit labels (e.g., `var trusted @clean = ...`) is unaffected.

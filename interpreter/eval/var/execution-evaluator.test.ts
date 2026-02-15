@@ -79,8 +79,7 @@ describe('execution evaluator', () => {
     const evaluator = createExecutionEvaluator({
       descriptorState,
       directive: createDirectiveStub({ pipeline: [{ rawIdentifier: 'trim' }] }),
-      env,
-      interpolateWithSecurity: vi.fn()
+      env
     });
 
     const result = await evaluator.evaluateExecutionBranch(
@@ -113,14 +112,12 @@ describe('execution evaluator', () => {
   it('delegates command nodes without withClause to evaluateRun and preserves workingDir', async () => {
     const env = createEnvStub();
     const descriptorState = createDescriptorStateStub();
-    const interpolateWithSecurity = vi.fn();
     mocks.evaluateRun.mockResolvedValue({ value: 'from-run-no-with' });
 
     const evaluator = createExecutionEvaluator({
       descriptorState,
       directive: createDirectiveStub(),
-      env,
-      interpolateWithSecurity
+      env
     });
 
     const result = await evaluator.evaluateExecutionBranch(
@@ -147,7 +144,6 @@ describe('execution evaluator', () => {
       }),
       env
     );
-    expect(interpolateWithSecurity).not.toHaveBeenCalled();
     expect(env.executeCommand).not.toHaveBeenCalled();
   });
 
@@ -159,8 +155,7 @@ describe('execution evaluator', () => {
     const evaluator = createExecutionEvaluator({
       descriptorState: createDescriptorStateStub(),
       directive: createDirectiveStub(),
-      env,
-      interpolateWithSecurity: vi.fn()
+      env
     });
 
     const result = await evaluator.evaluateExecutionBranch(
@@ -195,8 +190,7 @@ describe('execution evaluator', () => {
     const evaluator = createExecutionEvaluator({
       descriptorState,
       directive: createDirectiveStub(),
-      env,
-      interpolateWithSecurity: vi.fn()
+      env
     });
 
     const result = await evaluator.evaluateExecutionBranch(
@@ -224,8 +218,7 @@ describe('execution evaluator', () => {
     const evaluator = createExecutionEvaluator({
       descriptorState: createDescriptorStateStub(),
       directive: createDirectiveStub({ tools: ['read', 'write'] }),
-      env,
-      interpolateWithSecurity: vi.fn()
+      env
     });
 
     await expect(

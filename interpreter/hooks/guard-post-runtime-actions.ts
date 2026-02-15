@@ -12,7 +12,7 @@ import type { GuardDefinition } from '../guards/GuardRegistry';
 import { evaluate } from '../core/interpreter';
 import { VariableImporter } from '../eval/import/VariableImporter';
 import { evaluateCondition } from '../eval/when';
-import { extractVariableValue } from '../utils/variable-resolution';
+import { extractVariableValue, isVariable } from '../utils/variable-resolution';
 import { combineValues } from '../utils/value-combine';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import {
@@ -163,7 +163,11 @@ export async function evaluatePostGuardReplacement(
     const result = await evaluate(action.value, guardEnv, {
       privileged: guard.privileged === true
     });
-    return materializeGuardTransform(result?.value ?? result, guardLabel, modifiedDescriptor);
+    let value = result?.value ?? result;
+    if (isVariable(value as Variable)) {
+      value = (value as Variable).value;
+    }
+    return materializeGuardTransform(value, guardLabel, modifiedDescriptor);
   }
 
   if (!labelModifications) {

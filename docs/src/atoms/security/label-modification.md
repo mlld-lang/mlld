@@ -62,7 +62,30 @@ Policy guards are automatically privileged. User-defined guards are privileged w
 | Multi-label removal | `=> !pii,!internal @var` | Remove multiple labels |
 | Clear labels | `=> clear! @var` | Remove all non-factual labels |
 
-Current workaround: use `allow with { addLabels, removeLabels }` in guard actions until shorthand syntax is implemented.
+The shorthand syntax (`trusted!`, `!label`, `clear!`) ONLY works inside privileged guards. It does not work in exe blocks, when blocks, or non-privileged guards. Attempting to use it outside a privileged guard context throws a privilege error.
+
+```mlld
+>> Privileged guard — shorthand works here
+guard privileged @sanitize after secret = when [
+  @output.verified => trusted! @output
+  @output.public   => !secret @output
+  *                 => deny "Unverified secret data"
+]
+
+>> Non-privileged guard — shorthand does NOT work
+guard @attempt after secret = when [
+  * => trusted! @output
+]
+>> Error: LABEL_PRIVILEGE_REQUIRED — trusted! requires privileged guard context
+
+>> Exe block — shorthand does NOT work
+exe @tryBless(data) = [
+  => trusted! @data
+]
+>> Error: LABEL_PRIVILEGE_REQUIRED — trusted! requires privileged guard context
+```
+
+Guards also support `allow with { ... }` action syntax for privileged label modifications:
 
 | Guard action | Privilege? | Effect |
 |--------------|------------|--------|
@@ -105,7 +128,7 @@ guard @validateMcp after src:mcp = when [
 ]
 ```
 
-The guard uses `after` timing to process output. Blessing (`trusted!`) and label removal (`!label`) require privileged guards.
+The guard uses `after` timing to process output. Blessing and label removal require privileged guards using `allow with { addLabels, removeLabels }` syntax.
 
 **Trust conflict behavior:**
 

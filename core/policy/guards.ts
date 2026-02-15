@@ -233,6 +233,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
 
 function inferCapabilityRule(policy: PolicyConfig, commandText: string): string {
   const deny = policy.deny;
+  const allow = policy.allow;
   const denyMap = deny && deny !== true && typeof deny === 'object' && !Array.isArray(deny) ? deny : undefined;
   const denyPatterns = extractCommandPatterns(deny) ?? (denyMap?.cmd !== undefined ? normalizeCommandPatternList(denyMap.cmd) : undefined);
   if (denyPatterns) {
@@ -241,10 +242,21 @@ function inferCapabilityRule(policy: PolicyConfig, commandText: string): string 
       findBestCommandPatternMatch(tokens, denyPatterns.patterns, { denySemantics: true }) ??
       (denyPatterns.all ? { pattern: '*', specificity: 0 } : null);
     if (denyMatch) {
+      const allowListActive = allow !== undefined && allow !== true;
+      if (allowListActive) {
+        const allowMap = allow && typeof allow === 'object' && !Array.isArray(allow) ? allow : undefined;
+        const allowPatterns = extractCommandPatterns(allow) ?? (allowMap?.cmd !== undefined ? normalizeCommandPatternList(allowMap.cmd) : undefined);
+        const allowMatch = allowPatterns
+          ? findBestCommandPatternMatch(tokens, allowPatterns.patterns) ??
+            (allowPatterns.all ? { pattern: '*', specificity: 0 } : null)
+          : null;
+        if (allowMatch && allowMatch.specificity > denyMatch.specificity) {
+          return 'allow.cmd';
+        }
+      }
       return 'deny.cmd';
     }
   }
-  const allow = policy.allow;
   if (allow !== undefined && allow !== true) {
     return 'allow.cmd';
   }

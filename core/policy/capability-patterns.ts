@@ -164,13 +164,6 @@ export function matchesCommandPattern(commandTokens: string[], pattern: string):
   return matchesTokenSequence(commandTokens, patternTokens);
 }
 
-export function matchesCommandPatterns(commandTokens: string[], patterns: string[]): boolean {
-  if (patterns.length === 0) {
-    return false;
-  }
-  return patterns.some(pattern => matchesCommandPattern(commandTokens, pattern));
-}
-
 function normalizeFsMode(raw: string): FilesystemAccessMode | null {
   const trimmed = raw.trim().toLowerCase();
   if (trimmed === 'r' || trimmed === 'read') {

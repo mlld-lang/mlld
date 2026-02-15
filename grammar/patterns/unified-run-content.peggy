@@ -298,9 +298,22 @@ UnifiedCommandParts
 UnifiedCommandToken
   = ConditionalTemplateSnippet   // @var?`...`
   / UnifiedVariableNoTail               // Variables first (unified pattern)
+  / UnifiedCommandEscapeSequence // @@ or \@ -> literal @ (before quoted strings and words)
   / UnifiedCommandQuotedString   // Complete quoted strings
   / UnifiedCommandWord           // Unquoted words with spaces
   / UnifiedCommandSpace          // Explicit spaces between tokens
+
+// Escape sequences in command context - only @@ and \@ produce literal @
+// Other backslash sequences (\$, \\, etc.) are preserved for the shell
+UnifiedCommandEscapeSequence
+  = seq:CmdAtEscape {
+      return helpers.createNode(NodeType.Text, { content: seq, location: location() });
+    }
+
+// Cmd-specific @ escape - only handles @@ and \@ (not \$, \\, etc.)
+CmdAtEscape "@ escape in command"
+  = "@@" { return '@'; }
+  / "\\@" { return '@'; }
 
 
 // (Removed UnifiedCommandText - now using token-based approach)
@@ -347,7 +360,7 @@ UnifiedCommandQuotedString
       return helpers.createNode(NodeType.Text, { content: text, location: location() });
     }
 
-// Content inside double quotes - allows variables and file references but no operator checks  
+// Content inside double quotes - allows variables and file references but no operator checks
 UnifiedDoubleQuotedContent
   = varRef:UnifiedVariableNoTail {
       // Variable interpolation inside double quotes - return the unified pattern result
@@ -357,7 +370,8 @@ UnifiedDoubleQuotedContent
       // File reference interpolation inside double quotes
       return fileRef;
     }
-  / chars:$((!'"' !'@' !'<' .)+) { return chars; }
+  / CmdAtEscape                              // @@ or \@ -> literal @
+  / chars:$((!'"' !'@' !'<' !"\\@" .)+) { return chars; }
   / "@" { return '@'; }  // Lone @ without identifier
   / "<" { return '<'; }  // Lone < without file reference
 

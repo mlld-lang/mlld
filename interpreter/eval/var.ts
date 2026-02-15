@@ -132,7 +132,6 @@ export async function prepareVarAssignment(
     descriptorState,
     directive,
     env,
-    interpolateWithSecurity,
     sourceLocation
   });
 

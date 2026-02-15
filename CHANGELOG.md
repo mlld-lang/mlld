@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc82]
 
+### Fixed
+- **cmd {} block @ escaping**: `@@` and `\@` now produce literal `@` in cmd blocks (previously passed verbatim to shell)
+- **Pipeline null values**: JSON `null` values now pass through pipeline stages correctly (previously conflated with parse failure)
+- **Guard transform unwrapping**: Fixed double-wrapping that caused Variable-inside-Variable nesting in guard transforms
+- **Dead code removal**: Removed unused `interpolateWithSecurity` interface member and `matchesCommandPatterns` export
+- **Specificity consistency**: `inferCapabilityRule` now uses same specificity logic as `evaluateCommandAccess` for deny/allow resolution
+
+### Changed
+- **QA self-review phase**: Added mandatory empirical verification step requiring agents to re-run experiments with corrected syntax before classifying as "genuine-bug"
+
+### Documentation
+- **Restored `defaults.unlabeled` docs**: Feature is implemented and spec-defined; docs now correctly document this opt-in policy option
+- **Clarified privileged label syntax**: `trusted!`/`!label`/`clear!` syntax only works in privileged guards (not exe/when blocks); both shorthand and `allow with { addLabels, removeLabels }` forms documented
+- **Guard transform chaining**: Corrected docs to reflect before-phase uses last-wins (not chaining), after-phase chains sequentially
+- **@ escaping universality**: Clarified both `@@` and `\@` work in all string contexts (not just templates)
+- **Removed deprecated transformers**: `@xml`, `@csv`, `@md`, `@upper`, `@lower` no longer documented (moving to userland modules)
+
 ### Added
 - **`mlld live --stdio`**: persistent NDJSON RPC transport for long-running SDK calls
   - Accepts `process`, `execute`, `analyze`, `cancel`, and `state:update` methods over stdio
@@ -237,7 +254,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **log/output falsy values**: Boolean `false` and `0` now output correctly instead of empty string when used with `/log` or `/output`
 - **`escaping-at` guidance**: Docs now recommend `\@` as the primary escape and document `@@` as template-context-only shorthand.
 - **`@mx.tools` docs clarity**: Tool-call-tracking docs now show `@mx.tools` as guard-context metadata with explicit guard examples for `calls`, `allowed`, and `denied`.
-- **`defaults.unlabeled` docs cleanup**: Security docs no longer claim `defaults.unlabeled` auto-labels unlabeled variables; examples now use explicit labels and `defaults.rules` guidance.
+- **`defaults.unlabeled` docs restored**: `defaults.unlabeled` works correctly (auto-labels unlabeled data as `trusted` or `untrusted`). Docs clarify it is opt-in via policy config, not default behavior.
 - **Guard composition docs clarity**: Security docs now explicitly describe before-transform last-wins behavior, `always` timing across both phases, and sequential after-guard transform chaining.
 - **Field access on 'type' property**: When accessing `.type` on objects that have a 'type' property in their data, mlld now correctly returns the data value instead of the internal Variable type discriminator
 - **JSON/JSONL parse errors**: Invalid JSON now shows proper error messages instead of "Failed to load content"

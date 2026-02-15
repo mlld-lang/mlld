@@ -12,17 +12,29 @@ describe('command-execution structured input helpers', () => {
   it('sanitizes control characters inside JSON strings and preserves parse behavior', () => {
     const malformed = '{"line":"a\nb"}';
     expect(sanitizeJsonStringControlChars(malformed)).toBe('{"line":"a\\nb"}');
-    expect(parseStructuredJson(malformed)).toEqual({ line: 'a\nb' });
+    expect(parseStructuredJson(malformed)).toEqual({ parsed: true, value: { line: 'a\nb' } });
     expect(parseStructuredJson('{"line":')).toBeNull();
   });
 
   it('parses JSON scalar inputs used by pipeline stage bindings', () => {
-    expect(parseStructuredJson('10')).toBe(10);
-    expect(parseStructuredJson('-2.5')).toBe(-2.5);
-    expect(parseStructuredJson('true')).toBe(true);
-    expect(parseStructuredJson('false')).toBe(false);
-    expect(parseStructuredJson('null')).toBeNull();
+    expect(parseStructuredJson('10')).toEqual({ parsed: true, value: 10 });
+    expect(parseStructuredJson('-2.5')).toEqual({ parsed: true, value: -2.5 });
+    expect(parseStructuredJson('true')).toEqual({ parsed: true, value: true });
+    expect(parseStructuredJson('false')).toEqual({ parsed: true, value: false });
+    expect(parseStructuredJson('null')).toEqual({ parsed: true, value: null });
     expect(parseStructuredJson('001')).toBeNull();
+  });
+
+  it('distinguishes parsed null from parse failure', () => {
+    const nullResult = parseStructuredJson('null');
+    expect(nullResult).not.toBeNull();
+    expect(nullResult).toEqual({ parsed: true, value: null });
+
+    const failResult = parseStructuredJson('not-json');
+    expect(failResult).toBeNull();
+
+    const emptyResult = parseStructuredJson('');
+    expect(emptyResult).toBeNull();
   });
 
   it('keeps JSON-like wrapping behavior for object and array payloads', () => {
