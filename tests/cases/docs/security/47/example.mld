@@ -1,4 +1,2 @@
-var @policyConfig = { defaults: { autoverify: true } }
+var @policyConfig = { defaults: { autosign: { variables: ["@*Prompt", "@*Instructions"] } } }
 policy @p = union(@policyConfig)
-
-exe llm @audit() = run cmd { claude -p "@auditPrompt" }

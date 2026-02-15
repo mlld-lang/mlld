@@ -370,6 +370,7 @@ Composition rules:
 - Decision precedence: `deny` > `retry` > `allow @value` > `allow`.
 - Before transforms use the last matching replacement as operation input.
 - After transforms apply sequentially; each guard sees the previous guard's output.
+- `retry` applies only to retryable operation contexts (for example pipeline stages). In non-retryable contexts, `retry` resolves as a deny.
 
 Before transforms: last replacement wins for operation input.
 
@@ -417,6 +418,16 @@ var secret @key = "sk-12345"
 show @key  >> Output: *********
 ```
 
+For `before op:exe`, transform from `@input` (not `@output`) because executable output does not exist yet in the `before` phase.
+
+```mlld
+exe @normalize(value) = js { return String(@value).trim().toLowerCase(); }
+
+guard @normalizeExeInput before op:exe = when [
+  * => allow @normalize(@input)
+]
+```
+
 After transforms chain sequentially:
 
 ```mlld
@@ -440,11 +451,13 @@ Access guard evaluation context with `@mx.guard.*`:
 
 ```mlld
 guard @retryOnce before op:exe = when [
-  @mx.guard.try == 1 => retry "first attempt failed"
-  @mx.guard.try == 2 => retry "second attempt failed"
+  @mx.op.type == "pipeline-stage" && @mx.guard.try == 1 => retry "first attempt failed"
+  @mx.op.type == "pipeline-stage" && @mx.guard.try == 2 => retry "second attempt failed"
   * => allow
 ]
 ```
+
+`retry` is pipeline-scope in practice. A non-pipeline operation that returns `retry` is denied with a retry-scope error.
 
 ### In Denied Handlers
 

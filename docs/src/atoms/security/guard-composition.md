@@ -16,5 +16,7 @@ qa_tier: 2
 3. Decision precedence is `deny` > `retry` > `allow @value` > `allow`.
 4. Before-phase transforms use the last matching replacement as operation input.
 5. After-phase transforms chain sequentially; each guard receives the previous guard's output.
+6. `retry` actions apply only in retryable operation contexts (for example pipeline stages). In non-retryable contexts, retry resolves as a deny.
+7. `before op:exe` transforms run before executable evaluation, so guard logic reads `@input` in this phase. `@output` is available in `after` phase only.
 
 Guards are non-reentrant (won't trigger on their own operations).

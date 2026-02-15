@@ -17,3 +17,11 @@ guard @redact before secret = when [
   * => allow
 ]
 ```
+
+`allow @value` replaces the guarded value:
+- In `before` phase, replacements read from `@input`.
+- In `after` phase, replacements read from `@output`.
+
+For `before op:exe`, write transforms against `@input` (for example method calls or helper executables) so input conversion stays explicit.
+
+When multiple `before` transforms match, the last replacement becomes operation input. `after` transforms chain in declaration order.
