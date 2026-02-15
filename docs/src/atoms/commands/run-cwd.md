@@ -15,6 +15,11 @@ qa_tier: 2
 
 ```mlld
 run cmd:/ {pwd}                    >> runs in /
+var @myPath = "/tmp"
+run cmd:@myPath {pwd}              >> runs in /tmp
+run cmd:~ {pwd}                    >> runs in home directory
 run sh:/tmp {pwd}                  >> runs in /tmp
 run js:/tmp {console.log(process.cwd())}
 ```
+
+`run` cwd supports absolute paths, `@var` references, and `~` home expansion.

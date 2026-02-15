@@ -125,6 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Install confirmation guidance**: `mlld install` now prints direct-module confirmation lines as `module@version installed` (or `installed (cached)`) and includes a ready-to-copy import statement.
 - **For directive `when` guard blocks**: `/for` and nested `for` directives now parse `for @item in @items when @cond [ ... ]`, including multiline block return syntax.
 - **Relative path scope**: Relative paths in `output`/`append` directives now resolve from the script file directory instead of the project root, so `output @data to "local.txt"` writes next to the script.
+- **`run` cwd `~` expansion**: Working-directory overrides now accept `~` in `/run` (and related exec forms), alongside absolute paths and `@var` path references.
 - **Template file alligator path scope**: Relative `<file>` loads inside `template "file.att"`/`template "file.mtt"` executables now resolve from the template file directory instead of the caller script directory.
 - **Export manifest enforcement for executable internals**: Importers can no longer read unexported module members through `@namespace.exec.internal.capturedModuleEnv.*` (or via selected imported executables).
 - **`mlld validate` built-in name conflicts**: Validation now reports `let`/`var` collisions with built-in names (including transformer names like `@upper`) as explicit built-in conflicts.

@@ -119,6 +119,62 @@ describe('evaluateRun (structured)', () => {
     }
   });
 
+  it('runs /run cmd with :@var working directory', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-wd-cmd-var-'));
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const localEnv = new Environment(fileSystem, pathService, '/');
+
+    try {
+      const source = `/var @myPath = "${tmpDir}"\n/run cmd:@myPath {pwd}`;
+      const { ast } = await parse(source);
+      const directives = Array.isArray(ast) ? ast : [];
+      const varDirective = directives.find((node: any) => node.type === 'Directive' && node.kind === 'var');
+      const runDirective = directives.find((node: any) => node.type === 'Directive' && node.kind === 'run');
+
+      expect(varDirective).toBeDefined();
+      expect(runDirective).toBeDefined();
+
+      await evaluate(varDirective, localEnv);
+
+      const runNode: any = {
+        ...runDirective,
+        location: runDirective.location || { line: 1, column: 1 },
+        meta: runDirective.meta || {}
+      };
+
+      const result = await evaluateRun(runNode, localEnv);
+      const output = isStructuredValue(result.value) ? asText(result.value) : String(result.value);
+      const normalizedOutput = fs.realpathSync(output.trim());
+      const normalizedExpected = fs.realpathSync(tmpDir);
+      expect(normalizedOutput).toBe(normalizedExpected);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('runs /run cmd with :~ working directory', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const localEnv = new Environment(fileSystem, pathService, '/');
+    const homeDir = os.homedir();
+
+    const source = '/run cmd:~ {pwd}';
+    const { ast } = await parse(source);
+    const [runDirective] = getDirectiveNodes(ast, 'run');
+    const runNode: any = {
+      ...runDirective,
+      location: runDirective.location || { line: 1, column: 1 },
+      meta: runDirective.meta || {}
+    };
+
+    const result = await evaluateRun(runNode, localEnv);
+    const output = isStructuredValue(result.value) ? asText(result.value) : String(result.value);
+    const normalizedOutput = fs.realpathSync(output.trim());
+    const normalizedExpected = fs.realpathSync(homeDir);
+    expect(normalizedOutput).toBe(normalizedExpected);
+  });
+
   it('runs var-assigned run cmd with :path working directory', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-wd-var-cmd-'));
     const fileSystem = new NodeFileSystem();

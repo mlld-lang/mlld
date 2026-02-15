@@ -1,4 +1,5 @@
 import path from 'path';
+import os from 'os';
 import type { ContentNodeArray, SourceLocation } from '@core/types';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
@@ -50,19 +51,19 @@ export async function resolveWorkingDirectory(
     return undefined;
   }
 
-  if (candidate.startsWith('~')) {
-    throw createWorkingDirError('Working directory cannot use "~" expansion.', candidate, env, options);
+  const expandedCandidate = candidate === '~' || candidate.startsWith('~/')
+    ? path.join(os.homedir(), candidate === '~' ? '' : candidate.slice(2))
+    : candidate;
+
+  if (/^[a-zA-Z]:[\\/]/.test(expandedCandidate) || expandedCandidate.startsWith('\\\\')) {
+    throw createWorkingDirError('Working directory must use absolute Unix-style paths.', expandedCandidate, env, options);
   }
 
-  if (/^[a-zA-Z]:[\\/]/.test(candidate) || candidate.startsWith('\\\\')) {
-    throw createWorkingDirError('Working directory must use absolute Unix-style paths.', candidate, env, options);
+  if (!path.posix.isAbsolute(expandedCandidate)) {
+    throw createWorkingDirError('Working directory must start with "/".', expandedCandidate, env, options);
   }
 
-  if (!path.posix.isAbsolute(candidate)) {
-    throw createWorkingDirError('Working directory must start with "/".', candidate, env, options);
-  }
-
-  const normalized = path.posix.normalize(candidate);
+  const normalized = path.posix.normalize(expandedCandidate);
   const fs = env.getFileSystemService();
 
   if (!(await fs.exists(normalized))) {
