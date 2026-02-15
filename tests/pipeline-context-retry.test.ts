@@ -34,6 +34,13 @@ describe('Pipeline @mx/@p and retry behavior', () => {
     expect(output.trim()).toBe('prev=B:A:x prev2=A:x');
   });
 
+  it('keeps @p[-1] aligned with previous-stage output in when branches', async () => {
+    const input = `/exe @addPrefix(input) = \`Prefix: @input\`\n/exe @showPrevious(input) = when [\n  @p[-1] => \`current=@mx.input prev=@p[-1]\`\n  * => \"missing\"\n]\n\n/var @result = cmd {echo \"test\"} | @addPrefix | @showPrevious\n/show @result`;
+
+    const { output } = await testWithEffects(input);
+    expect(output.trim()).toBe('current=Prefix: test prev=Prefix: test');
+  });
+
   it('aggregates all retry contexts via @p.retries.all', async () => {
     const input = `/exe @seed() = \"base\"\n\n/exe @gen(input, pipeline) = \`v-@pipeline.try: @input\`\n\n/exe @retry2(input, pipeline) = when [\n  @pipeline.try < 3 => retry\n  * => @input\n]\n\n/exe @id(input) = \`@input\`\n\n/exe @retry3(input, pipeline) = when [\n  @pipeline.try < 2 => retry\n  * => @input\n]\n\n/exe @emitAll(input, pipeline) = js {\n  return JSON.stringify(pipeline.retries.all);\n}\n\n/var @result = @seed() with { pipeline: [@gen(@p), @retry2(@p), @id, @retry3(@p), @emitAll(@p)] }\n/show @result`;
 

@@ -511,7 +511,7 @@ Pipeline context variables:
 - `@mx.errors`: array of errors from parallel operations (for loops or pipeline groups); error markers: `{ index, key?, message, error, value }`
 - `@p[0]`: pipeline input (original/base value)
 - `@p[1]` … `@p[n]`: outputs from completed stages (as `StructuredValue` wrappers)
-- `@p[-1]`: previous stage output; `@p[-2]` two stages back
+- `@p[-1]`: previous stage output (same value as current stage input); `@p[-2]` two stages back
 - `@p.retries.all`: history of retry attempts across contexts
 - Pipeline outputs expose wrapper access through `.mx.text` (string) and `.mx.data` (structured). Plain dotted access resolves through parsed data.
 

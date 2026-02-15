@@ -612,7 +612,7 @@ Context object (`@mx`) contains:
 Pipeline array (`@p`) contains:
 - `@p[0]` - original/base input to the pipeline
 - `@p[1]` … `@p[n]` - outputs of completed visible stages
-- `@p[-1]` - previous stage output; `@p[-2]` two stages back, etc.
+- `@p[-1]` - previous stage output (same value as current stage input); `@p[-2]` two stages back, etc.
 - `@p.retries.all` - all attempt outputs from all retry contexts (for best-of-N patterns)
 - Pipeline stage outputs are `StructuredValue` wrappers with `.text` (string view) and `.data` (structured payload) properties. Templates and display automatically use `.text`; use `.data` when you need structured information.
 

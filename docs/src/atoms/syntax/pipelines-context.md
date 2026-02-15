@@ -14,4 +14,4 @@ qa_tier: 2
 **Pipeline context:**
 - `@mx.try` - current attempt number
 - `@mx.stage` - current stage name
-- `@p[-1]` - previous stage output
+- `@p[-1]` - previous stage output (same value as current stage input)
