@@ -102,6 +102,25 @@ describe('Data handling accessors', () => {
     expect(output.trim()).toBe('20');
   });
 
+  it('keeps multiline js pipeline transformer return values when console.log is present', async () => {
+    const input = `
+/exe @double(n) = js {
+  console.log("debug:" + n)
+  n * 2
+}
+
+/exe @addOne(n) = js {
+  return n + 1
+}
+
+/var @seed = 5
+/var @result = @seed | @double | @addOne
+/show @result`;
+
+    const output = await interpret(input, { fileSystem, pathService });
+    expect(output.trim()).toBe('11');
+  });
+
   it('lets foreach consume StructuredValue arrays produced by pipelines', async () => {
     const input = `
 /exe @echoUser(user) = js {

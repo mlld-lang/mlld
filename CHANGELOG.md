@@ -213,6 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bash env heredoc threshold**: large shell parameters now switch to heredoc at 64KB by default
 - **Bash heredoc assignment**: large parameter injection uses `read` to avoid command substitution limits
 - **Pipeline scalar stage binding**: Stage inputs auto-parse JSON scalars (`number`, `boolean`, `null`) for code-language stages, and primitive structured inputs bind as primitive parameters instead of text.
+- **Pipeline JS transformer logging**: Multiline `js`/`node` transformer blocks keep trailing expression return values even when earlier statements write to `console.log`.
 - **Pipeline context references**: @p[-1] and similar negative index references now correctly return evaluated string outputs when pipelines start with exe calls
 - **log/output falsy values**: Boolean `false` and `0` now output correctly instead of empty string when used with `/log` or `/output`
 - **Field access on 'type' property**: When accessing `.type` on objects that have a 'type' property in their data, mlld now correctly returns the data value instead of the internal Variable type discriminator
