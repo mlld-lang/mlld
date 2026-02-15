@@ -101,6 +101,16 @@ export function normalizeBuiltinTargetValue(value: unknown): unknown {
   return value;
 }
 
+function normalizeBuiltinArgumentValue(value: unknown): unknown {
+  if (isStructuredValue(value)) {
+    return asData(value);
+  }
+  if (LegacyStructuredValue.isStructuredValue?.(value)) {
+    return (value as any).data;
+  }
+  return value;
+}
+
 function ensureStringTarget(method: string, target: unknown): string {
   if (typeof target === 'string') {
     return target;
@@ -350,7 +360,7 @@ export async function evaluateBuiltinArguments(args: unknown[], env: Environment
   for (const arg of args) {
     const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
     const evaluatedArg = await evaluateDataValue(arg as any, env);
-    evaluatedArgs.push(evaluatedArg);
+    evaluatedArgs.push(normalizeBuiltinArgumentValue(evaluatedArg));
   }
   return evaluatedArgs;
 }
@@ -422,15 +432,26 @@ export async function resolveBuiltinInvocationObject(options: {
         let key = field.value;
 
         if (field.type === 'variableIndex') {
-          if (isStructuredValue(targetValue)) {
-            targetValue = asData(targetValue);
-          }
           key = await resolveVariableIndexValue(field.value, env);
         }
 
-        if (isStructuredValue(targetValue) && typeof key === 'string' && key in (targetValue as any)) {
-          objectValue = (targetValue as any)[key];
-        } else if (typeof targetValue === 'object' && targetValue !== null) {
+        if (isStructuredValue(targetValue)) {
+          if (typeof key === 'string' && key in (targetValue as any)) {
+            objectValue = (targetValue as any)[key];
+            continue;
+          }
+          targetValue = asData(targetValue);
+        }
+
+        if (LegacyStructuredValue.isStructuredValue?.(targetValue)) {
+          if (typeof key === 'string' && key in (targetValue as any)) {
+            objectValue = (targetValue as any)[key];
+            continue;
+          }
+          targetValue = (targetValue as any).data;
+        }
+
+        if (typeof targetValue === 'object' && targetValue !== null) {
           objectValue = (targetValue as any)[key];
         } else {
           if (isTypeCheckingBuiltin) {
