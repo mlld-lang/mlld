@@ -10,16 +10,9 @@ updated: 2026-02-11
 qa_tier: 2
 ---
 
-`@mx.tools` is guard-context metadata for tool-call policy checks.
+The `@mx.tools` namespace tracks tool call history and availability. Guards and exes can access tool call information.
 
-Use it inside guard `when` expressions that run during tool operations. It is not a global log of all outbound MCP calls.
-
-**Fields:**
-- `@mx.tools.calls`: Tool names already called in the current guard/tool-call context
-- `@mx.tools.allowed`: Tool names currently permitted
-- `@mx.tools.denied`: Tool names currently denied
-
-**Basic guard example:**
+**@mx.tools.calls - Call history:**
 
 ```mlld
 guard @limitCalls before op:exe = when [
@@ -28,32 +21,78 @@ guard @limitCalls before op:exe = when [
 ]
 ```
 
-**Check duplicate calls:**
+Array of tool names that have been called this session.
+
+**Check if specific tool was called:**
 
 ```mlld
 guard @preventDuplicate before op:exe = when [
-  @mx.tools.calls.includes(@mx.op.name) => deny "Tool already called"
+  @mx.tools.calls.includes("deleteData") => deny "Delete already executed"
   * => allow
 ]
 ```
 
-**Check allow/deny lists:**
+**@mx.tools.allowed - Available tools:**
 
 ```mlld
 guard @checkAccess before op:exe = when [
-  @mx.tools.denied.includes(@mx.op.name) => deny "Tool is blocked"
   @mx.tools.allowed.includes(@mx.op.name) => allow
   * => deny "Tool not in allowed list"
 ]
 ```
 
-**Scope note:**
+Array of tool names the current context is permitted to use.
 
-Tool tracking stays within the active execution context. `env` blocks can isolate context:
+**@mx.tools.denied - Blocked tools:**
+
+```mlld
+guard @logDenied before op:exe = when [
+  @mx.tools.denied.includes(@mx.op.name) => [
+    log `Attempted blocked tool: @mx.op.name`
+    deny "Tool is blocked"
+  ]
+  * => allow
+]
+```
+
+Array of tool names explicitly denied in current context.
+
+**Rate limiting example:**
+
+```mlld
+guard @rateLimitExpensive before op:exe = when [
+  @mx.op.labels.includes("expensive") && @mx.tools.calls.length >= 5 => [
+    deny "Rate limit exceeded for expensive operations"
+  ]
+  * => allow
+]
+```
+
+**Ensure verification happened:**
+
+```mlld
+guard @ensureVerified after llm = when [
+  @mx.tools.calls.includes("verify") => allow
+  * => retry "Must verify instructions before proceeding"
+]
+```
+
+**Conditional behavior based on history:**
+
+```mlld
+exe @smartFetch(url) = when [
+  @mx.tools.calls.includes("cache_check") => @fetchCached(@url)
+  * => @fetchFresh(@url)
+]
+```
+
+**Tool call tracking scope:**
+
+Tool calls are tracked within the current execution context. When using `env` blocks, each block can have its own tracking scope based on the environment configuration.
 
 ```mlld
 env @agent with { tools: @agentTools } [
-  >> Guard checks in this block read the block-local @mx.tools state
+  >> @mx.tools.calls tracks calls within this env block
   run cmd { claude -p @task }
 ]
 ```

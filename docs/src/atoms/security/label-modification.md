@@ -45,7 +45,7 @@ Adding `untrusted` replaces any existing `trusted` label. Adding `trusted` to al
 
 **Privileged operations:**
 
-Privileged label removal uses guard actions with `with { addLabels, removeLabels }`:
+Privileged guards can remove protected labels:
 
 ```mlld
 guard privileged @bless after secret = when [
@@ -54,6 +54,15 @@ guard privileged @bless after secret = when [
 ```
 
 Policy guards are automatically privileged. User-defined guards are privileged when declared with the `privileged` prefix or `with { privileged: true }`. Privilege applies to guard declarations; exe functions do not have a privileged mode.
+
+| Privileged action | Syntax | Effect |
+|-------------------|--------|--------|
+| Blessing | `=> trusted! @var` | Remove untrusted, add trusted |
+| Label removal | `=> !pii @var` | Remove specific label |
+| Multi-label removal | `=> !pii,!internal @var` | Remove multiple labels |
+| Clear labels | `=> clear! @var` | Remove all non-factual labels |
+
+Current workaround: use `allow with { addLabels, removeLabels }` in guard actions until shorthand syntax is implemented.
 
 | Guard action | Privilege? | Effect |
 |--------------|------------|--------|
@@ -68,8 +77,9 @@ Policy guards are automatically privileged. User-defined guards are privileged w
 |--------|------------|--------|
 | `=> untrusted @var` | No | Replaces trusted (taint flows down) |
 | `=> trusted @var` | No | Adds trusted; warning if conflict |
-| `allow with { removeLabels: ["untrusted"] }` | Yes | Removes untrusted |
-| `allow with { removeLabels: ["label"] }` | Yes | Removes specific label in guard action |
+| `=> trusted! @var` | Yes | Blessing: removes untrusted |
+| `=> !label @var` | Yes | Removes specific label |
+| `=> clear! @var` | Yes | Removes all non-factual labels |
 
 **Protected labels:**
 
@@ -82,7 +92,7 @@ Attempting to remove protected labels without privilege throws `PROTECTED_LABEL_
 
 **Factual labels:**
 
-Labels starting with `src:` are factual provenance labels. They are part of `.mx.taint` and may not appear in `.mx.labels`. Use `.mx.taint` for source checks such as `src:mcp` and `src:exec`.
+Labels starting with `src:` are factual provenance labels. They are part of `.mx.taint` and may not appear in `.mx.labels`. Use `.mx.taint` for source checks such as `src:mcp` and `src:exec`. `clear!` does not remove factual labels.
 
 **Guard context:**
 
@@ -95,7 +105,7 @@ guard @validateMcp after src:mcp = when [
 ]
 ```
 
-The guard uses `after` timing to process output. Label removals in guard actions require privileged guards.
+The guard uses `after` timing to process output. Blessing (`trusted!`) and label removal (`!label`) require privileged guards.
 
 **Trust conflict behavior:**
 
