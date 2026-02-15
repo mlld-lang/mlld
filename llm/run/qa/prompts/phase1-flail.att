@@ -138,4 +138,8 @@ If you attempt a tool and it is denied (permission error, not in allowedTools), 
 
 1. Check if `@outputDir/topics/@topic/` exists
 2. If exists: review prior results, decide whether to add more or exit
-3. If not: run `mlld howto @topic` and `mlld howto intro`, then create initial experiments
+3. If not: read the docs first, then create initial experiments
+   - Run `mlld howto @topic` to understand the feature
+   - Run `mlld howto intro` for fundamentals
+   - Run `mlld howto gotchas` for common traps
+4. Before running any experiment: `mlld validate <path>` to catch syntax errors
