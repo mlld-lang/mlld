@@ -163,6 +163,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security fixtures cover secret label flow for `using` env injection.
 - Security fixtures cover defaults.rules secret flow through exfil-labeled show.
 - Security fixtures cover defaults.rules secret flow through exfil-labeled run interpolation.
+- **Label modification docs syntax and semantics**: Security docs now show guard-action label changes with `allow with { addLabels, removeLabels }`, clarify that privileged scope applies to guard declarations, and clarify that factual `src:*` provenance labels belong to `.mx.taint`; regression coverage includes `security/guard-label-modification-with-clause`.
 - Audit log docs cover event fields and taint usage.
 - Security fixtures cover audit log write events and taint propagation.
 - Claude sign/verify demo script covers autoverify with @mlld/claude.

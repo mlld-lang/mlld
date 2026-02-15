@@ -45,21 +45,22 @@ Adding `untrusted` replaces any existing `trusted` label. Adding `trusted` to al
 
 **Privileged operations:**
 
-Privileged guards can remove protected labels:
+Privileged label removal uses guard actions with `with { addLabels, removeLabels }`:
 
 ```mlld
 guard privileged @bless after secret = when [
-  * => allow with { removeLabels: ["secret"] }
+  * => allow with { addLabels: ["trusted"], removeLabels: ["untrusted", "secret"] }
 ]
 ```
 
-Policy guards are automatically privileged. User-defined guards are privileged when declared with the `privileged` prefix or `with { privileged: true }`.
+Policy guards are automatically privileged. User-defined guards are privileged when declared with the `privileged` prefix or `with { privileged: true }`. Privilege applies to guard declarations; exe functions do not have a privileged mode.
 
-| Privileged action | Example | Effect |
-|-------------------|---------|--------|
-| Blessing | `=> trusted! @var` | Remove untrusted, add trusted |
-| Label removal | `=> !pii @var` | Remove specific label |
-| Clear labels | `=> clear! @var` | Remove all non-factual labels |
+| Guard action | Privilege? | Effect |
+|--------------|------------|--------|
+| `allow with { addLabels: ["trusted"] }` | No | Adds `trusted` (trust conflict policy still applies) |
+| `allow with { removeLabels: ["untrusted"] }` | Yes | Removes `untrusted` |
+| `allow with { addLabels: ["trusted"], removeLabels: ["untrusted"] }` | Yes | Blessing: removes `untrusted`, adds `trusted` |
+| `allow with { removeLabels: ["secret"] }` | Yes | Removes protected label |
 
 **Trust label asymmetry:**
 
@@ -67,9 +68,8 @@ Policy guards are automatically privileged. User-defined guards are privileged w
 |--------|------------|--------|
 | `=> untrusted @var` | No | Replaces trusted (taint flows down) |
 | `=> trusted @var` | No | Adds trusted; warning if conflict |
-| `=> trusted! @var` | Yes | Blessing: removes untrusted |
-| `=> !label @var` | Yes | Removes specific label |
-| `=> clear! @var` | Yes | Removes all non-factual labels |
+| `allow with { removeLabels: ["untrusted"] }` | Yes | Removes untrusted |
+| `allow with { removeLabels: ["label"] }` | Yes | Removes specific label in guard action |
 
 **Protected labels:**
 
@@ -82,7 +82,7 @@ Attempting to remove protected labels without privilege throws `PROTECTED_LABEL_
 
 **Factual labels:**
 
-Labels starting with `src:` are factual - they record provenance facts. `clear!` does not remove factual labels.
+Labels starting with `src:` are factual provenance labels. They are part of `.mx.taint` and may not appear in `.mx.labels`. Use `.mx.taint` for source checks such as `src:mcp` and `src:exec`.
 
 **Guard context:**
 
@@ -95,7 +95,7 @@ guard @validateMcp after src:mcp = when [
 ]
 ```
 
-The guard uses `after` timing to process output. Blessing (`trusted!`) and label removal (`!label`) require privileged guards.
+The guard uses `after` timing to process output. Label removals in guard actions require privileged guards.
 
 **Trust conflict behavior:**
 
