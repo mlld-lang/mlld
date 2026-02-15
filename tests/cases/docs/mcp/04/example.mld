@@ -10,7 +10,7 @@
   }
 }
 
-/guard @blockDestructive before op:exe = when [
+/guard @blockDestructive before op:cmd = when [
   @mx.op.labels.includes("destructive") => deny "Blocked"
   * => allow
 ]

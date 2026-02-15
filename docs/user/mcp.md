@@ -97,7 +97,7 @@ Tool collections define what an agent sees and how tools behave.
   }
 }
 
-/guard @blockDestructive before op:exe = when [
+/guard @blockDestructive before op:cmd = when [
   @mx.op.labels.includes("destructive") => deny "Blocked"
   * => allow
 ]
@@ -122,7 +122,7 @@ Use `--tools-collection` to serve reshaped tools instead of raw exports:
   gh issue list -R @org/@repo --search "@query" --json number,title
 } with { description: "Search GitHub issues" }
 
-/guard @noSecrets before op:exe = when [
+/guard @noSecrets before op:cmd = when [
   @input.any.mx.labels.includes("secret") => deny "Secret data cannot flow to tools"
   * => allow
 ]

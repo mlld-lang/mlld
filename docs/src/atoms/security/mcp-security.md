@@ -12,6 +12,7 @@ qa_tier: 2
 ---
 
 Every MCP tool call automatically taints its output with `src:mcp`. This happens at the interpreter level — no configuration needed.
+This provenance marker does not add a trust label like `untrusted`.
 
 ```mlld
 import tools { @echo } from mcp "echo-server"
@@ -34,11 +35,11 @@ Every derived value still carries `src:mcp`. The taint cannot be removed — `sr
 
 **Why this matters:**
 
-Guards and policy can target MCP-sourced data specifically. A guard checking `@mx.taint.includes("src:mcp")` fires on any value that originated from an MCP tool, even after multiple transformations.
+Guards and policy can target MCP-sourced data directly with `src:mcp`. A guard checking `@mx.taint.includes("src:mcp")` fires on any value that originated from an MCP tool, even after multiple transformations.
 
 ```mlld
-guard before op:exe = when [
-  @input.any.mx.taint.includes("src:mcp") => deny "MCP data cannot trigger exe"
+guard before op:cmd = when [
+  @input.any.mx.taint.includes("src:mcp") => deny "MCP data cannot trigger commands"
   * => allow
 ]
 ```

@@ -2,7 +2,7 @@
   gh issue list -R @org/@repo --search "@query" --json number,title
 } with { description: "Search GitHub issues" }
 
-/guard @noSecrets before op:exe = when [
+/guard @noSecrets before op:cmd = when [
   @input.any.mx.labels.includes("secret") => deny "Secret data cannot flow to tools"
   * => allow
 ]
