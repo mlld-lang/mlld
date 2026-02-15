@@ -72,7 +72,7 @@ export async function evaluateForDirective(
   env.pushDirective('/for', `@${varName} in ...`, directive.location);
 
   try {
-    const iterable = await evaluateForDirectiveSource(directive, env);
+    const { iterable, sourceDescriptor } = await evaluateForDirectiveSource(directive, env);
     const sourceKind = iterable.__mlldForSourceKind;
 
     // Determine parallel options (directive-specified or inherited from parent scope)
@@ -98,7 +98,8 @@ export async function evaluateForDirective(
         keyVarName,
         varFields,
         fieldPathString,
-        sourceLocation: varNode.location
+        sourceLocation: varNode.location,
+        sourceDescriptor
       });
       const { iterationRoot, key, value } = setup;
       let childEnv = setup.childEnv;
@@ -203,7 +204,8 @@ export async function evaluateForExpression(
       keyVarName,
       varFields,
       fieldPathString,
-      sourceLocation: expr.variable.location
+      sourceLocation: expr.variable.location,
+      sourceDescriptor
     });
     let childEnv = setup.childEnv;
     const { key, value } = setup;

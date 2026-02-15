@@ -46,8 +46,8 @@ function resolveForExpressionSourceName(expr: ForExpression): string | undefined
   return sourceNode?.identifier ?? sourceNode?.name;
 }
 
-function resolveForExpressionSourceDescriptor(
-  expr: ForExpression,
+function resolveSourceDescriptor(
+  sourceVarName: string | undefined,
   env: Environment,
   sourceValue: unknown
 ): SecurityDescriptor | undefined {
@@ -59,7 +59,6 @@ function resolveForExpressionSourceDescriptor(
     return sourceDescriptor;
   }
 
-  const sourceVarName = resolveForExpressionSourceName(expr);
   if (!sourceVarName) {
     return undefined;
   }
@@ -79,12 +78,16 @@ function resolveForExpressionSourceDescriptor(
 export async function evaluateForDirectiveSource(
   directive: ForDirective,
   env: Environment
-): Promise<ForSourceIterable> {
+): Promise<{ iterable: ForSourceIterable; sourceDescriptor?: SecurityDescriptor }> {
   const sourceNode = Array.isArray(directive.values.source)
     ? directive.values.source[0]
     : directive.values.source;
   const sourceResult = await evaluate(sourceNode, env);
-  return toIterableOrThrow(sourceResult.value, directive.location);
+  const sourceVarName = (sourceNode as any)?.identifier ?? (sourceNode as any)?.name;
+  return {
+    iterable: toIterableOrThrow(sourceResult.value, directive.location),
+    sourceDescriptor: resolveSourceDescriptor(sourceVarName, env, sourceResult.value)
+  };
 }
 
 export async function evaluateForExpressionSource(
@@ -93,8 +96,9 @@ export async function evaluateForExpressionSource(
 ): Promise<{ iterable: ForSourceIterable; sourceDescriptor?: SecurityDescriptor }> {
   const sourceResult = await evaluate(expr.source, env, { isExpression: true });
   const sourceValue = sourceResult.value;
+  const sourceVarName = resolveForExpressionSourceName(expr);
   return {
     iterable: toIterableOrThrow(sourceValue, expr.location),
-    sourceDescriptor: resolveForExpressionSourceDescriptor(expr, env, sourceValue)
+    sourceDescriptor: resolveSourceDescriptor(sourceVarName, env, sourceValue)
   };
 }

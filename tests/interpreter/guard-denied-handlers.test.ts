@@ -8,6 +8,7 @@ import { PathService } from '@services/fs/PathService';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { GuardError } from '@core/errors/GuardError';
 import { handleExecGuardDenial, formatGuardWarning } from '@interpreter/eval/guard-denial-handler';
+import { evaluateDirective } from '@interpreter/eval/directive';
 import { createSimpleTextVariable } from '@core/types/variable';
 import type { VariableSource } from '@core/types/variable';
 import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
@@ -218,5 +219,37 @@ describe('handleExecGuardDenial', () => {
       '[Guard Warning] Guard for op:show prevented operation due to policy violation'
     );
     expect(formatGuardWarning('Blocked', undefined, undefined)).toBe('[Guard Warning] Blocked');
+  });
+
+  it('keeps denied handler fallback values consistent inside for directives', async () => {
+    const { env, effects } = createEnv();
+    const directives = parseSync(`
+/guard @blockDelete before untrusted = when [
+  @mx.op.name == "deleteItem" => deny "blocked by guard"
+  * => allow
+]
+/exe @deleteItem(value) = when [
+  denied => "blocked"
+  * => "deleted"
+]
+/var untrusted @secret = "token"
+/var @secrets = [@secret]
+/show @deleteItem(@secret)
+/for @item in @secrets => @deleteItem(@item)
+    `).filter(node => (node as DirectiveNode)?.type === 'Directive') as DirectiveNode[];
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    const outputs = effects
+      .getAll()
+      .filter(effect => effect.type === 'both')
+      .map(effect => effect.content.trim())
+      .filter(content => content.length > 0);
+
+    expect(outputs).toContain('blocked');
+    expect(outputs.filter(content => content === 'blocked').length).toBeGreaterThanOrEqual(2);
+    expect(outputs).not.toContain('deleted');
   });
 });

@@ -4,8 +4,10 @@ import type {
   SourceLocation
 } from '@core/types';
 import { FieldAccessError } from '@core/errors';
+import type { SecurityDescriptor } from '@core/types/security';
 import { accessFields } from '@interpreter/utils/field-access';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { ForParallelOptions } from './parallel-options';
 import {
   ensureVariable,
@@ -35,6 +37,7 @@ export type IterationSetupParams = {
   varFields?: FieldAccessNode[];
   fieldPathString: string | null;
   sourceLocation?: SourceLocation;
+  sourceDescriptor?: SecurityDescriptor;
 };
 
 export type IterationSetupResult = {
@@ -97,6 +100,19 @@ export async function setupIterationContext(
   }
 
   const iterationVar = ensureVariable(params.varName, value, params.rootEnv);
+  const hasIterationDescriptor =
+    Array.isArray(iterationVar.mx?.labels) && iterationVar.mx.labels.length > 0 ||
+    Array.isArray(iterationVar.mx?.taint) && iterationVar.mx.taint.length > 0 ||
+    Array.isArray(iterationVar.mx?.sources) && iterationVar.mx.sources.length > 0;
+  if (!hasIterationDescriptor && params.sourceDescriptor) {
+    if (!iterationVar.mx) {
+      iterationVar.mx = {};
+    }
+    updateVarMxFromDescriptor(iterationVar.mx as Record<string, unknown>, params.sourceDescriptor);
+    if ('mxCache' in (iterationVar.mx as Record<string, unknown>)) {
+      delete (iterationVar.mx as Record<string, unknown>).mxCache;
+    }
+  }
   childEnv.setVariable(
     params.varName,
     withIterationMxKey(iterationVar, {
