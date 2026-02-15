@@ -47,6 +47,31 @@ describe('evaluateCommandAccess', () => {
     expect(denied.allowed).toBe(false);
   });
 
+  it('supports hierarchical op:cmd deny patterns', () => {
+    const policy: PolicyConfig = {
+      deny: ['op:cmd:git:add']
+    };
+
+    const denied = evaluateCommandAccess(policy, 'git add file.txt');
+    const allowed = evaluateCommandAccess(policy, 'git status');
+
+    expect(denied.allowed).toBe(false);
+    expect(allowed.allowed).toBe(true);
+  });
+
+  it('uses most-specific command pattern match between deny and allow', () => {
+    const policy: PolicyConfig = {
+      allow: ['op:cmd:git:status'],
+      deny: ['op:cmd:git']
+    };
+
+    const allowed = evaluateCommandAccess(policy, 'git status');
+    const denied = evaluateCommandAccess(policy, 'git add file.txt');
+
+    expect(allowed.allowed).toBe(true);
+    expect(denied.allowed).toBe(false);
+  });
+
   it('denies dangerous commands without allow.danger', () => {
     const policy: PolicyConfig = {
       allow: ['cmd:git:*']

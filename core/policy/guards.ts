@@ -6,7 +6,6 @@ import { isBuiltinPolicyRuleName } from './builtin-rules';
 import {
   getCommandTokens,
   matchesCommandPattern,
-  matchesCommandPatterns,
   normalizeCommandPatternEntry,
   parseCommandPatternTokens
 } from './capability-patterns';
@@ -238,7 +237,10 @@ function inferCapabilityRule(policy: PolicyConfig, commandText: string): string 
   const denyPatterns = extractCommandPatterns(deny) ?? (denyMap?.cmd !== undefined ? normalizeCommandPatternList(denyMap.cmd) : undefined);
   if (denyPatterns) {
     const tokens = getCommandTokens(commandText);
-    if (denyPatterns.all || matchesDenyCommandPatterns(tokens, denyPatterns.patterns)) {
+    const denyMatch =
+      findBestCommandPatternMatch(tokens, denyPatterns.patterns, { denySemantics: true }) ??
+      (denyPatterns.all ? { pattern: '*', specificity: 0 } : null);
+    if (denyMatch) {
       return 'deny.cmd';
     }
   }
@@ -272,11 +274,36 @@ function normalizeDenyPattern(pattern: string): string {
   return trimmed;
 }
 
-function matchesDenyCommandPatterns(commandTokens: string[], patterns: string[]): boolean {
-  if (patterns.length === 0) {
-    return false;
+type CommandPatternMatch = {
+  pattern: string;
+  specificity: number;
+};
+
+function commandPatternSpecificity(pattern: string): number {
+  const tokens = parseCommandPatternTokens(pattern);
+  if (tokens.length === 0) {
+    return 0;
   }
-  return patterns.some(pattern => matchesCommandPattern(commandTokens, normalizeDenyPattern(pattern)));
+  return tokens.filter(token => token !== '*').length;
+}
+
+function findBestCommandPatternMatch(
+  commandTokens: string[],
+  patterns: string[],
+  options?: { denySemantics?: boolean }
+): CommandPatternMatch | null {
+  let best: CommandPatternMatch | null = null;
+  for (const rawPattern of patterns) {
+    const candidate = options?.denySemantics ? normalizeDenyPattern(rawPattern) : rawPattern;
+    if (!matchesCommandPattern(commandTokens, candidate)) {
+      continue;
+    }
+    const specificity = commandPatternSpecificity(candidate);
+    if (!best || specificity > best.specificity) {
+      best = { pattern: rawPattern, specificity };
+    }
+  }
+  return best;
 }
 
 function normalizeList(values?: readonly string[]): string[] {
@@ -445,7 +472,18 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
       ? deny
       : undefined;
   const denyPatterns = extractCommandPatterns(deny) ?? (denyMap?.cmd !== undefined ? normalizeCommandPatternList(denyMap.cmd) : undefined);
-  if (denyPatterns && (denyPatterns.all || matchesDenyCommandPatterns(commandTokens, denyPatterns.patterns))) {
+  const allowPatterns = allowListActive
+    ? extractCommandPatterns(allow) ?? (allowMap?.cmd !== undefined ? normalizeCommandPatternList(allowMap.cmd) : undefined)
+    : undefined;
+  const denyMatch = denyPatterns
+    ? findBestCommandPatternMatch(commandTokens, denyPatterns.patterns, { denySemantics: true }) ??
+      (denyPatterns.all ? { pattern: '*', specificity: 0 } : null)
+    : null;
+  const allowMatch = allowPatterns
+    ? findBestCommandPatternMatch(commandTokens, allowPatterns.patterns) ??
+      (allowPatterns.all ? { pattern: '*', specificity: 0 } : null)
+    : null;
+  if (denyMatch && (!allowMatch || denyMatch.specificity >= allowMatch.specificity)) {
     return {
       allowed: false,
       commandName,
@@ -471,15 +509,7 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
     }
   }
   if (allowListActive) {
-    const allowPatterns = extractCommandPatterns(allow) ?? (allowMap?.cmd !== undefined ? normalizeCommandPatternList(allowMap.cmd) : undefined);
-    if (!allowPatterns) {
-      return {
-        allowed: false,
-        commandName,
-        reason: `Command '${commandName}' denied by policy`
-      };
-    }
-    if (!allowPatterns.all && !matchesCommandPatterns(commandTokens, allowPatterns.patterns)) {
+    if (!allowPatterns || !allowMatch) {
       return {
         allowed: false,
         commandName,

@@ -62,8 +62,12 @@ export function normalizeCommandPatternEntry(entry: string): string | null {
     return null;
   }
   const lower = trimmed.toLowerCase();
-  if (lower === 'cmd') {
+  if (lower === 'cmd' || lower === 'op:cmd') {
     return '*';
+  }
+  if (lower.startsWith('op:cmd:')) {
+    const pattern = trimmed.slice(7).trim();
+    return pattern || '*';
   }
   if (lower.startsWith('cmd:')) {
     const pattern = trimmed.slice(4).trim();
@@ -77,7 +81,14 @@ function stripCommandPrefix(pattern: string): string {
   if (!trimmed) {
     return '';
   }
-  if (trimmed.toLowerCase().startsWith('cmd:')) {
+  const lower = trimmed.toLowerCase();
+  if (lower === 'op:cmd') {
+    return '*';
+  }
+  if (lower.startsWith('op:cmd:')) {
+    return trimmed.slice(7).trim();
+  }
+  if (lower.startsWith('cmd:')) {
     return trimmed.slice(4).trim();
   }
   return trimmed;

@@ -148,6 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Env tool scope enforcement**: `env` block `tools` now enforces runtime access for shell execution (`Bash`) and MCP tool calls.
 - **Env MCP scope enforcement**: `env` block `mcps` now enforces MCP server allowlists at invocation time (including `mcps: []` blocking all MCP calls).
 - **Command deny pattern runtime enforcement**: `capabilities.deny` command patterns block `git push` and equivalent command-executable invocations at runtime.
+- **Hierarchical `op:cmd` policy pattern matching**: Command allow/deny policy entries now accept `op:cmd:*` forms (for example `op:cmd:git:add`) and apply most-specific precedence between allow and deny matches.
 - Policy capability docs and fixtures cover interpolated command matching, network denies, and run/exec code blocks.
 - `untrusted-llms-get-influenced` auto-labeling applies across exec, run-exec, and pipeline execution paths.
 - Influenced label docs clarify auto-labeling and fixtures cover pipeline deny behavior.

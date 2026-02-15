@@ -163,6 +163,49 @@ describe('evaluateRun phase-0 characterization', () => {
     expect(executeSpy).not.toHaveBeenCalled();
   });
 
+  it('enforces hierarchical op:cmd policy patterns with most-specific precedence', async () => {
+    const deniedEnv = createEnv();
+    const deniedRun = await setupSingleRun(
+      [
+        '/var @policyConfig = {',
+        '  capabilities: {',
+        '    allow: ["op:cmd:git:status"],',
+        '    deny: ["op:cmd:git"]',
+        '  }',
+        '}',
+        '/policy @p = union(@policyConfig)',
+        '/run cmd {git add file.txt}'
+      ].join('\n'),
+      deniedEnv
+    );
+
+    const deniedSpy = vi.spyOn(deniedEnv, 'executeCommand').mockResolvedValue('should-not-run');
+
+    await expect(evaluateRun(deniedRun, deniedEnv)).rejects.toThrow("Command 'git' denied by policy");
+    expect(deniedSpy).not.toHaveBeenCalled();
+
+    const allowedEnv = createEnv();
+    const allowedRun = await setupSingleRun(
+      [
+        '/var @policyConfig = {',
+        '  capabilities: {',
+        '    allow: ["op:cmd:git:status"],',
+        '    deny: ["op:cmd:git"]',
+        '  }',
+        '}',
+        '/policy @p = union(@policyConfig)',
+        '/run cmd {git status}'
+      ].join('\n'),
+      allowedEnv
+    );
+
+    const allowedSpy = vi.spyOn(allowedEnv, 'executeCommand').mockResolvedValue('allowed-status');
+
+    const allowedResult = await evaluateRun(allowedRun, allowedEnv);
+    expect(asText(allowedResult.value)).toBe('allowed-status');
+    expect(allowedSpy).toHaveBeenCalled();
+  });
+
   it('blocks command execution when analyzer reports blocked risk', async () => {
     const env = createEnv();
     const runDirective = await setupSingleRun('/run cmd {echo safe}', env);
