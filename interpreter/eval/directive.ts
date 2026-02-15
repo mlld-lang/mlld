@@ -897,6 +897,12 @@ function applyOperationLabels(context: OperationContext, directive: DirectiveNod
       return;
     }
 
+    if (runSubtype === 'runExec') {
+      context.opLabels = ['op:exe'];
+      context.sources = ['exe'];
+      return;
+    }
+
     return;
   }
 

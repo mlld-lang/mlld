@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect } from 'vitest';
+import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 import { Environment } from '../env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
@@ -119,6 +119,35 @@ describe('evaluateRun (structured)', () => {
     }
   });
 
+  it('runs var-assigned run cmd with :path working directory', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-wd-var-cmd-'));
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const localEnv = new Environment(fileSystem, pathService, '/');
+
+    try {
+      const source = `/var @wd = run cmd:${tmpDir} {pwd}`;
+      const { ast } = await parse(source);
+      const directives = Array.isArray(ast)
+        ? ast
+        : Array.isArray((ast as any)?.body)
+          ? (ast as any).body
+          : [];
+      for (const directive of directives) {
+        await evaluate(directive, localEnv);
+      }
+      const wdVar = localEnv.getVariable('wd');
+
+      expect(wdVar).toBeDefined();
+      const output = isStructuredValue(wdVar?.value) ? asText(wdVar?.value) : String(wdVar?.value ?? '');
+      const normalizedOutput = fs.realpathSync(output.trim());
+      const normalizedExpected = fs.realpathSync(tmpDir);
+      expect(normalizedOutput).toBe(normalizedExpected);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it('runs /run cmd with args and :path working directory', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-wd-cmd-args-'));
     const fileSystem = new NodeFileSystem();
@@ -156,6 +185,39 @@ describe('evaluateRun (structured)', () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  it('enforces command policy for var-assigned run cmd before execution', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const localEnv = new Environment(fileSystem, pathService, '/');
+    const executeSpy = vi.spyOn(localEnv, 'executeCommand').mockResolvedValue('should-not-run');
+
+    const source = [
+      '/var @policyConfig = {',
+      '  capabilities: {',
+      '    allow: ["cmd:echo:*"],',
+      '    deny: ["cmd:echo:blocked"]',
+      '  }',
+      '}',
+      '/policy @p = union(@policyConfig)',
+      '/var @out = run cmd {echo blocked}'
+    ].join('\n');
+
+    const executeAll = async () => {
+      const { ast } = await parse(source);
+      const directives = Array.isArray(ast)
+        ? ast
+        : Array.isArray((ast as any)?.body)
+          ? (ast as any).body
+          : [];
+      for (const directive of directives) {
+        await evaluate(directive, localEnv);
+      }
+    };
+
+    await expect(executeAll()).rejects.toThrow("Command 'echo' denied by policy");
+    expect(executeSpy).not.toHaveBeenCalled();
   });
 
   it('runs /run js with :path working directory', async () => {

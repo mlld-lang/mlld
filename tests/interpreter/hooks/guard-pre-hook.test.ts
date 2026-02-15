@@ -1245,6 +1245,40 @@ it('keeps combined before guards on op:exe resolved to plain values', async () =
   expect(String(value)).not.toContain('"type":"');
 });
 
+it('applies op:exe guards to bare run-exec statements and var-assigned exec calls', async () => {
+  const env = createEnv();
+  const guardDirective = parseSync(
+    '/guard @blockExec for secret = when [ * => deny "blocked exec" ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(guardDirective, env);
+
+  const exeDirective = parseSync('/exe @handler(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(exeDirective, env);
+
+  env.setVariable(
+    'key',
+    createSimpleTextVariable(
+      'key',
+      'secret-value',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const bareInvocation = parseSync('/@handler(@key)')[0] as DirectiveNode;
+  await expect(evaluateDirective(bareInvocation, env)).rejects.toThrow(/blocked exec/);
+
+  const assignedInvocation = parseSync('/var @result = @handler(@key)')[0] as DirectiveNode;
+  await expect(evaluateDirective(assignedInvocation, env)).rejects.toThrow(/blocked exec/);
+});
+
 describe('secret redaction in guard error messages', () => {
   it('redacts secret variable values in inputPreview, guardInput, and guardContext', async () => {
     const env = createEnv();

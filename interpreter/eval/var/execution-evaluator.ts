@@ -2,8 +2,8 @@ import type { DirectiveNode, SourceLocation } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
-import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { Environment } from '@interpreter/env/Environment';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isExeReturnControl } from '../exe-return';
 import {
   enforceToolSubset,
@@ -41,22 +41,6 @@ export interface ExecutionEvaluator {
   ) => Promise<ExecutionEvaluationResult | undefined>;
 }
 
-function collectCommandParameterEnv(env: Environment): Record<string, string> | undefined {
-  const parameterEnv: Record<string, string> = {};
-  if (typeof (env as any).getAllVariables !== 'function') {
-    return undefined;
-  }
-  const variables = env.getAllVariables();
-
-  for (const [name, variable] of variables.entries()) {
-    if (variable?.internal?.isParameter === true && variable.value !== undefined) {
-      parameterEnv[name] = String(variable.value);
-    }
-  }
-
-  return Object.keys(parameterEnv).length > 0 ? parameterEnv : undefined;
-}
-
 export function isExecutionValueNode(valueNode: unknown): boolean {
   if (!valueNode || typeof valueNode !== 'object' || !('type' in valueNode)) {
     return false;
@@ -87,60 +71,47 @@ export function createExecutionEvaluator(
     descriptorState,
     directive,
     env,
-    interpolateWithSecurity,
     sourceLocation
   } = dependencies;
 
   const evaluateCommand = async (valueNode: any): Promise<unknown> => {
     const withClause = (directive.values?.withClause || directive.meta?.withClause) as any | undefined;
-    const parameterEnv = collectCommandParameterEnv(env);
-    const commandOptions = parameterEnv ? { env: parameterEnv } : undefined;
-
-    if (withClause) {
-      const { evaluateRun } = await import('../run');
-      const runDirective: any = {
-        type: 'Directive',
-        nodeId: (directive as any).nodeId ? `${(directive as any).nodeId}-run` : undefined,
-        location: directive.location,
-        kind: 'run',
-        subtype: 'runCommand',
-        source: 'command',
-        values: {
-          command: valueNode.command,
-          withClause
-        },
-        raw: {
-          command: Array.isArray(valueNode.command)
-            ? (valueNode.meta?.raw || '')
-            : String(valueNode.command),
-          withClause
-        },
-        meta: {
-          isDataValue: true
-        }
-      };
-      const result = await evaluateRun(runDirective, env);
-      return result.value;
-    }
-
-    let commandOutput: unknown;
-    let executedCommand = '';
-    if (Array.isArray(valueNode.command)) {
-      const interpolatedCommand = await interpolateWithSecurity(
-        valueNode.command,
-        InterpolationContext.ShellCommand
-      );
-      executedCommand = interpolatedCommand;
-      commandOutput = await env.executeCommand(interpolatedCommand, commandOptions);
-    } else {
-      executedCommand = String(valueNode.command);
-      commandOutput = await env.executeCommand(valueNode.command, commandOptions);
-    }
-
+    const { evaluateRun } = await import('../run');
+    const runDirective: any = {
+      type: 'Directive',
+      nodeId: (directive as any).nodeId ? `${(directive as any).nodeId}-run` : undefined,
+      location: directive.location,
+      kind: 'run',
+      subtype: 'runCommand',
+      source: 'command',
+      values: {
+        command: valueNode.command,
+        ...(valueNode.workingDir ? { workingDir: valueNode.workingDir } : {}),
+        ...(withClause ? { withClause } : {})
+      },
+      raw: {
+        command: Array.isArray(valueNode.command)
+          ? (valueNode.meta?.raw || '')
+          : String(valueNode.command),
+        ...(withClause ? { withClause } : {})
+      },
+      meta: {
+        isDataValue: true
+      }
+    };
+    const result = await evaluateRun(runDirective, env);
+    const textOutput = isStructuredValue(result.value)
+      ? asText(result.value)
+      : typeof result.value === 'string'
+        ? result.value
+        : String(result.value ?? '');
+    const commandPreview = Array.isArray(valueNode.command)
+      ? (valueNode.meta?.raw || textOutput)
+      : String(valueNode.command ?? '');
     const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
-    return processCommandOutput(commandOutput, undefined, {
+    return processCommandOutput(textOutput, undefined, {
       source: 'cmd',
-      command: executedCommand
+      command: commandPreview
     });
   };
 

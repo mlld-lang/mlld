@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DirectiveNode } from '@core/types';
-import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { Environment } from '@interpreter/env/Environment';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { createExecutionEvaluator } from './execution-evaluator';
 
 const mocks = vi.hoisted(() => ({
@@ -10,8 +10,7 @@ const mocks = vi.hoisted(() => ({
   evaluateNewExpression: vi.fn(),
   evaluateRun: vi.fn(),
   extractVariableValue: vi.fn(),
-  isVariable: vi.fn(),
-  processCommandOutput: vi.fn()
+  isVariable: vi.fn()
 }));
 
 vi.mock('../run', () => ({
@@ -28,10 +27,6 @@ vi.mock('../for', () => ({
 
 vi.mock('../new-expression', () => ({
   evaluateNewExpression: mocks.evaluateNewExpression
-}));
-
-vi.mock('@interpreter/utils/json-auto-parser', () => ({
-  processCommandOutput: mocks.processCommandOutput
 }));
 
 vi.mock('@interpreter/utils/variable-resolution', () => ({
@@ -73,7 +68,6 @@ describe('execution evaluator', () => {
     mocks.evaluateRun.mockReset();
     mocks.extractVariableValue.mockReset();
     mocks.isVariable.mockReset();
-    mocks.processCommandOutput.mockReset();
   });
 
   it('delegates command nodes with withClause to evaluateRun', async () => {
@@ -98,7 +92,9 @@ describe('execution evaluator', () => {
       'output'
     );
 
-    expect(result).toEqual({ kind: 'resolved', value: 'from-run' });
+    expect(result?.kind).toBe('resolved');
+    expect(isStructuredValue((result as any)?.value)).toBe(true);
+    expect(asText((result as any)?.value)).toBe('from-run');
     expect(mocks.evaluateRun).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: 'run',
@@ -114,14 +110,11 @@ describe('execution evaluator', () => {
     expect(env.executeCommand).not.toHaveBeenCalled();
   });
 
-  it('executes command arrays directly when no withClause is present', async () => {
-    const env = createEnvStub({
-      executeCommand: vi.fn().mockResolvedValue('{"ok":true}')
-    });
+  it('delegates command nodes without withClause to evaluateRun and preserves workingDir', async () => {
+    const env = createEnvStub();
     const descriptorState = createDescriptorStateStub();
-    const interpolateWithSecurity = vi.fn().mockResolvedValue('echo {"ok":true}');
-
-    mocks.processCommandOutput.mockReturnValue({ ok: true });
+    const interpolateWithSecurity = vi.fn();
+    mocks.evaluateRun.mockResolvedValue({ value: 'from-run-no-with' });
 
     const evaluator = createExecutionEvaluator({
       descriptorState,
@@ -134,25 +127,28 @@ describe('execution evaluator', () => {
       {
         type: 'command',
         command: [{ type: 'Text', content: 'echo {"ok":true}' }],
-        meta: { raw: 'echo {"ok":true}' }
+        meta: { raw: 'echo {"ok":true}' },
+        workingDir: [{ type: 'Text', content: '/tmp' }]
       },
       'jsonOutput'
     );
 
-    expect(result).toEqual({ kind: 'resolved', value: { ok: true } });
-    expect(interpolateWithSecurity).toHaveBeenCalledWith(
-      [{ type: 'Text', content: 'echo {"ok":true}' }],
-      InterpolationContext.ShellCommand
+    expect(result?.kind).toBe('resolved');
+    expect(isStructuredValue((result as any)?.value)).toBe(true);
+    expect(asText((result as any)?.value)).toBe('from-run-no-with');
+    expect(mocks.evaluateRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'run',
+        subtype: 'runCommand',
+        values: expect.objectContaining({
+          command: [{ type: 'Text', content: 'echo {"ok":true}' }],
+          workingDir: [{ type: 'Text', content: '/tmp' }]
+        })
+      }),
+      env
     );
-    expect(env.executeCommand).toHaveBeenCalledWith('echo {"ok":true}', undefined);
-    expect(mocks.processCommandOutput).toHaveBeenCalledWith(
-      '{"ok":true}',
-      undefined,
-      {
-        source: 'cmd',
-        command: 'echo {"ok":true}'
-      }
-    );
+    expect(interpolateWithSecurity).not.toHaveBeenCalled();
+    expect(env.executeCommand).not.toHaveBeenCalled();
   });
 
   it('returns explicit control result for ExeBlock return controls', async () => {
