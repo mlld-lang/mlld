@@ -23,9 +23,6 @@
 >> Run: npx mlld docs/src/atoms/security/examples/protection-2-mcp.mld
 
 /var @policyConfig = {
-  defaults: {
-    unlabeled: "trusted"
-  },
   capabilities: {
     allow: ["cmd:ls:*", "cmd:echo:*"],
     danger: []

@@ -34,17 +34,7 @@ policy @p = union(@policyConfig)
 
 **Most-specific-wins:** When deny covers a prefix but allow covers a more specific path, the specific rule wins. Given `deny: ["op:cmd:git"]` and `allow: ["op:cmd:git:status"]`, `git status` is allowed but `git push` is blocked.
 
-**Interaction with `defaults.unlabeled`:** When `unlabeled: untrusted`, unlabeled data cannot flow to operations unless explicitly allowed:
-
-```mlld
-var @policyConfig = {
-  defaults: { unlabeled: "untrusted" },
-  labels: {
-    influenced: { deny: ["op:show"] }
-  }
-}
-policy @p = union(@policyConfig)
-```
+Label-flow policy evaluates declared labels and taint labels (`src:*`, `dir:*`) attached to values.
 
 **Built-in rules vs. explicit deny lists:** For common protection patterns, use `defaults.rules` with built-in rules like `no-secret-exfil` instead of writing explicit deny lists. See `policy-operations` for the two-step classification pattern where semantic labels (e.g., `net:w`) are mapped to risk categories (e.g., `exfil`) via `policy.operations`.
 

@@ -34,7 +34,6 @@ This blocks MCP-sourced data from flowing to any operation labeled `destructive`
 
 ```mlld
 var @strictPolicy = {
-  defaults: { unlabeled: "untrusted" },
   labels: {
     "src:mcp": {
       allow: ["op:cmd:git:status", "op:cmd:git:log"],
@@ -45,7 +44,7 @@ var @strictPolicy = {
 policy @p = union(@strictPolicy)
 ```
 
-With `unlabeled: untrusted`, MCP data can only flow to explicitly allowed operations. The most-specific rule wins: `allow: [op:cmd:git:status]` overrides a broader `deny: [op:cmd:git]`.
+With explicit `src:mcp` allow/deny rules, MCP data can only flow to explicitly allowed operations. The most-specific rule wins: `allow: [op:cmd:git:status]` overrides a broader `deny: [op:cmd:git]`.
 
 **Manual trust labeling:**
 

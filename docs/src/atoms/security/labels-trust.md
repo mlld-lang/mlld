@@ -62,11 +62,4 @@ The two-step flow: `fs:w` on exe → policy maps to `destructive` → `no-untrus
 
 **Alternative:** Label exe directly as `exe destructive @wipe(...)` to skip the mapping step. See `policy-operations`.
 
-**Policy default:** Set `defaults.unlabeled` to auto-label all unlabeled data as untrusted:
-
-```mlld
-var @policyConfig = {
-  defaults: { unlabeled: "untrusted" }
-}
-policy @p = union(@policyConfig)
-```
+Use explicit `untrusted` labels on external or unverified inputs.

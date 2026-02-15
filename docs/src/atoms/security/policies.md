@@ -16,7 +16,6 @@ A policy object combines all security configuration into a single declaration.
 ```mlld
 var @policyConfig = {
   defaults: {
-    unlabeled: "untrusted",
     rules: [
       "no-secret-exfil",
       "no-sensitive-exfil",
@@ -37,7 +36,7 @@ var @policyConfig = {
 policy @p = union(@policyConfig)
 ```
 
-**`defaults`** sets baseline behavior. `unlabeled` auto-labels all unlabeled data (here as `untrusted`). `rules` enables built-in security rules that block dangerous label-to-operation flows.
+**`defaults`** sets baseline behavior. `rules` enables built-in security rules that block dangerous label-to-operation flows.
 
 **`operations`** maps semantic exe labels to risk categories. You label functions with what they DO (`net:w`, `fs:w`), and policy classifies those as risk types (`exfil`, `destructive`). This is the two-step pattern -- see `policy-operations`.
 

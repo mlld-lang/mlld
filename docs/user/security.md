@@ -86,7 +86,7 @@ Define a policy object and export it:
 
 ```mlld
 /policy @production = {
-  defaults: { unlabeled: "untrusted" },
+  defaults: { rules: ["no-secret-exfil", "no-sensitive-exfil"] },
   capabilities: {
     allow: ["cmd:git:*"],
     danger: ["@keychain"]
