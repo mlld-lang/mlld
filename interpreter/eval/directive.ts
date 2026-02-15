@@ -814,6 +814,10 @@ function applyRunMetadata(context: OperationContext, directive: DirectiveNode): 
     }
   }
 
+  if (directive.subtype === 'runExec') {
+    metadata.sourceRetryable = true;
+  }
+
   context.metadata = metadata;
 }
 

@@ -198,6 +198,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`let` pipelines with backtick templates**: `let @x = \`template\` | log` now correctly executes the pipeline. Previously, pipelines were stripped from backtick-wrapped templates in `let` and `var` assignments.
 - **`run stream @exec()` parsing**: Run directives accept stream modifiers and tail options on exec invocations
 - **After-guard retry output**: Retryable after-guard flows emit output once after a successful retry
+- **Run-exec after-guard retry eligibility**: `run @exe(...)` directive contexts mark run-exec sources as retryable, so non-pipeline `guard after ... => retry` decisions re-execute the guarded run operation.
 - **Ternary expressions with arrays/objects**: Ternary expressions returning arrays or objects (e.g., `@tier ? @tier.split(",") : []`) now preserve the actual value instead of stringifying to JSON. Previously, `[].length` would return 2 (string length of `"[]"`) instead of 0.
 - **Ternary condition field access**: Accessing missing fields in ternary conditions now returns undefined instead of throwing, enabling patterns like `@p.tier ? @p.tier : ""` for optional payload fields
 - **Ternary values in complex objects**: Ternary expressions stored inside lazily-evaluated object values now resolve to their evaluated result instead of emitting raw AST nodes
