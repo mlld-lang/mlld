@@ -48,7 +48,7 @@ Review each experiment in `@outputDir/topics/@topic/` that has `status: "fail"` 
 
 4. **Apply Chesterton's Fence** (before classifying as a bug):
 
-<@base/llm/prompts/chestertons-fence.md>
+<@prompts/chestertons-fence.md>
 
    If unsure, flag as `needs-human-design` rather than `genuine-bug`.
 

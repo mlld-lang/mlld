@@ -13,7 +13,8 @@ var @qaTools = "Read,Write,Glob,Grep,Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(fi
 
 >> Check if a topic has failing experiments
 exe @hasFailingExperiments(topicDir) = [
-  let @results = <@topicDir/**/results.json>
+  let @results = <@topicDir/**/results.json>?
+  when !@results => false
   let @failing = for @r in @results when @r.status == "fail" || @r.status == "partial" => @r
   => @failing.length > 0
 ]

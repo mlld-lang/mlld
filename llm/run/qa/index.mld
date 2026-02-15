@@ -1,5 +1,5 @@
 >> QA Testing Orchestrator v2 (Five-Phase)
->> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>] [--phase 0|1|2|3|4|both|all] [--run <id>]
+>> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>] [--phase 0|1|2|3|4|both|all] [--run <id>] [--new]
 >>
 >> Phase 0 (Triage): Decision agent picks topics intelligently
 >> Phase 1 (Flail): Agents test with limited access (mlld howto only)
@@ -8,19 +8,15 @@
 >> Phase 4 (Strategy): Generates strategy-questions.md from trend report for human review
 >>
 >> Each run is stored in: qa/runs/YYYY-MM-DD-N/
->> Use --run to resume a specific run, or omit to auto-detect
+>> By default, resumes the last incomplete run. Use --new to start fresh.
 >>
 >> Examples:
->>   mlld run qa --tier 1                           # Phases 1+2, new dated run
->>   mlld run qa --tier 1 --phase 0                 # Triage only
->>   mlld run qa --tier 1 --phase 1                 # Flail phase only, new dated run
->>   mlld run qa --tier 1 --phase 2                 # Self-review only (resumes latest run)
->>   mlld run qa --tier 1 --phase 3                 # Trend analysis only (resumes latest run)
->>   mlld run qa --tier 1 --phase 4                 # Strategy questions only (resumes latest run)
->>   mlld run qa --tier 1 --phase all               # All five phases, new dated run
->>   mlld run qa --topic variables                  # Test variables-* topics
->>   mlld run qa --topics when-inline,for-arrow     # Test specific list
->>   mlld run qa --tier 2 --run 2026-01-25-0        # Resume a specific prior run
+>>   mlld run qa                                    # Resume last run or create new (phases 1+2)
+>>   mlld run qa --new --tier 1                     # Force new run with tier 1 topics
+>>   mlld run qa --phase 3                          # Continue to phase 3 (trends)
+>>   mlld run qa --topic variables                  # Test variables-* topics only
+>>   mlld run qa --topics when-inline,for-arrow     # Test specific comma-separated list
+>>   mlld run qa --run 2026-01-25-0                 # Resume a specific prior run
 
 /needs { sh }
 
@@ -41,10 +37,13 @@ var @topics = @p.topics ? @p.topics : ""
 var @tier = @p.tier ? @p.tier : ""
 var @phase = @p.phase ? @p.phase : "both"
 var @runId = @p.run ? @p.run : ""
+var @forceNew = @p.new ? true : false
 
 >> Determine which phases to run
 var @runPhase1 = @shouldRunPhase("flail", @phase)
-var @needsNewRun = @runPhase1 || @phase == "all" || @phase == "0"
+
+>> Auto-resume logic: create new run only with --new flag
+var @needsNewRun = @forceNew
 
 >> Resolve or create run directory
 var @runDir = @resolveRunDir(@runId, @needsNewRun)
@@ -114,21 +113,24 @@ when @shouldRunPhase("review", @phase) => [
 >> ========== SUMMARY ==========
 show `=== QA SUMMARY ===`
 
->> Aggregate results for display
-var @allResults = <@runDir/topics/**/results.json>
-var @allSelfReviews = <@runDir/topics/**/self_review.json>
-var @allSessions = <@runDir/topics/**/session.json>
-var @passing = for @r in @allResults when @r.status == "pass" => @r
-var @failing = for @r in @allResults when @r.status == "fail" => @r
-var @partial = for @r in @allResults when @r.status == "partial" => @r
-var @blockedPhase1 = for @s in @allSessions when @s.phase1_blocked => @s
-var @blockedPhase2 = for @s in @allSessions when @s.phase2_blocked => @s
+>> Aggregate results for display (? globs: agent-written JSON may be malformed)
+var @allResults = <@runDir/topics/**/results.json>?
+var @allResultsList = @allResults ? @allResults : []
+var @allSelfReviews = <@runDir/topics/**/self_review.json>?
+var @allReviewsList = @allSelfReviews ? @allSelfReviews : []
+var @allSessions = <@runDir/topics/**/session.json>?
+var @allSessionsList = @allSessions ? @allSessions : []
+var @passing = for @r in @allResultsList when @r.status == "pass" => @r
+var @failing = for @r in @allResultsList when @r.status == "fail" => @r
+var @partial = for @r in @allResultsList when @r.status == "partial" => @r
+var @blockedPhase1 = for @s in @allSessionsList when @s.phase1_blocked => @s
+var @blockedPhase2 = for @s in @allSessionsList when @s.phase2_blocked => @s
 
-show `Experiments: @allResults.length total`
+show `Experiments: @allResultsList.length total`
 show `  Passing: @passing.length`
 show `  Failing: @failing.length`
 show `  Partial: @partial.length`
-show `Self-reviews: @allSelfReviews.length`
+show `Self-reviews: @allReviewsList.length`
 when @blockedPhase1.length > 0 => [
   show `  Blocked (phase 1): @blockedPhase1.length`
   for @b in @blockedPhase1 => show `    - @b.topic: @b.phase1_blocked_reason`
@@ -156,9 +158,10 @@ when @docClarity.summary.docs_could_be_clearer > 0 || @docClarity.summary.docs_g
 var @runPhase3Explicit = @shouldRunPhase("trends", @phase)
 
 >> Check auto-trigger: all active topics finished phases 1+2
-var @freshSessions = <@runDir/topics/**/session.json>
-var @phase2Done = for @s in @freshSessions when @activeTopics.includes(@s.topic) && @s.phase2_complete => @s.topic
-var @phase1OnlyAllPassing = for @s in @freshSessions when @activeTopics.includes(@s.topic) && @s.phase1_complete && !@s.phase2_complete => @s.topic
+var @freshSessions = <@runDir/topics/**/session.json>?
+var @freshSessionsList = @freshSessions ? @freshSessions : []
+var @phase2Done = for @s in @freshSessionsList when @activeTopics.includes(@s.topic) && @s.phase2_complete => @s.topic
+var @phase1OnlyAllPassing = for @s in @freshSessionsList when @activeTopics.includes(@s.topic) && @s.phase1_complete && !@s.phase2_complete => @s.topic
 var @totalDone = @phase2Done.length + @phase1OnlyAllPassing.length
 var @autoPhase3 = @phase == "both" && @totalDone >= @activeTopics.length && @activeTopics.length > 0
 var @doPhase3 = @runPhase3Explicit || @autoPhase3
@@ -189,7 +192,7 @@ var @runSummary = {
   date: @now,
   tier: @tier,
   topic_count: @activeTopics.length,
-  experiment_count: @allResults.length,
+  experiment_count: @allResultsList.length,
   passing: @passing.length,
   failing: @failing.length,
   partial: @partial.length,
@@ -200,14 +203,15 @@ output @runSummary to "@runDir/run-summary.json"
 show `Run summary: @runDir/run-summary.json`
 
 >> Cross-run progress tracking
-var @allRunSummaries = <@qaRoot/*/run-summary.json>
+var @allRunSummaries = <@qaRoot/*/run-summary.json>?
+var @allRunSummariesList = @allRunSummaries ? @allRunSummaries : []
 var @progress = {
   generated_at: @now,
-  total_runs: @allRunSummaries.length,
-  runs: @allRunSummaries
+  total_runs: @allRunSummariesList.length,
+  runs: @allRunSummariesList
 }
 output @progress to "@qaRoot/progress.json"
-show `Progress tracker: @qaRoot/progress.json (@allRunSummaries.length runs)`
+show `Progress tracker: @qaRoot/progress.json (@allRunSummariesList.length runs)`
 
 >> Log completion
-var @_2 = @logEvent(@runDir, { event: "run_complete", topics: @activeTopics.length, experiments: @allResults.length })
+var @_2 = @logEvent(@runDir, { event: "run_complete", topics: @activeTopics.length, experiments: @allResultsList.length })

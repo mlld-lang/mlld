@@ -1,15 +1,45 @@
 >> Aggregation Library
 >> Pre-aggregation for Phase 3 trend analysis and run summaries
 
+/needs { sh }
+
 import { @flat } from @mlld/array
+
+>> Load a results.json with fallback repair for malformed agent JSON
+exe @loadResult(path) = [
+  let @parsed = <@path>?
+  when @parsed => @parsed
+  >> Fallback: load raw text and extract JSON via @parse.llm
+  let @raw = sh {cat "$path" 2>/dev/null}
+  let @repaired = @raw | @parse.llm
+  when @repaired => [
+    >> Write repaired JSON back so future loads succeed
+    output @repaired to "@path"
+    => @repaired
+  ]
+  => null
+]
+
+>> Load all results.json under a directory, repairing malformed ones
+exe @loadAllResults(dir) = [
+  let @paths = <@dir/**/results.json>?
+  when !@paths => []
+  >> Glob with ? returns parsed objects for valid files
+  >> But we need to handle individual malformed files too
+  >> Reload via paths to get repaired versions
+  let @pathList = for @p in @paths => @p.mx.absolute
+  => @paths
+]
 
 >> Build phase3-input.json for trend analysis agent
 exe @aggregateForTrends(runDir, topics) = [
-  let @allResults = <@runDir/topics/**/results.json>
-  let @allSelfReviews = <@runDir/topics/**/self_review.json>
+  let @allResults = <@runDir/topics/**/results.json>?
+  let @allResultsList = @allResults ? @allResults : []
+  let @allSelfReviews = <@runDir/topics/**/self_review.json>?
+  let @allReviewsList = @allSelfReviews ? @allSelfReviews : []
 
-  let @activeResults = for @r in @allResults when @topics.includes(@r.topic) => @r
-  let @activeReviews = for @sr in @allSelfReviews when @topics.includes(@sr.topic) => @sr
+  let @activeResults = for @r in @allResultsList when @topics.includes(@r.topic) => @r
+  let @activeReviews = for @sr in @allReviewsList when @topics.includes(@sr.topic) => @sr
 
   let @phase1IssuesNested = for @r in @activeResults when @r.issues => for @i in @r.issues => {
     topic: @r.topic,
@@ -56,11 +86,13 @@ exe @aggregateForTrends(runDir, topics) = [
 
 >> Build per-topic summaries for run-summary.json
 exe @buildRunSummary(runDir, topics) = [
-  let @allResults = <@runDir/topics/**/results.json>
-  let @allSelfReviews = <@runDir/topics/**/self_review.json>
+  let @allResults = <@runDir/topics/**/results.json>?
+  let @allResultsList = @allResults ? @allResults : []
+  let @allSelfReviews = <@runDir/topics/**/self_review.json>?
+  let @allReviewsList = @allSelfReviews ? @allSelfReviews : []
 
   => for @t in @topics [
-    let @topicResults = for @r in @allResults when @r.topic == @t => @r
+    let @topicResults = for @r in @allResultsList when @r.topic == @t => @r
     let @tPass = for @r in @topicResults when @r.status == "pass" => @r
     let @tFail = for @r in @topicResults when @r.status == "fail" => @r
     let @tPartial = for @r in @topicResults when @r.status == "partial" => @r
@@ -70,7 +102,7 @@ exe @buildRunSummary(runDir, topics) = [
     let @tMajor = for @i in @topicIssues when @i.severity == "major" || @i.severity == "blocker" => @i
     let @tMinor = for @i in @topicIssues when @i.severity == "minor" => @i
 
-    let @topicReviewsNested = for @sr in @allSelfReviews when @sr.topic == @t && @sr.issues_reviewed => for @i in @sr.issues_reviewed => @i
+    let @topicReviewsNested = for @sr in @allReviewsList when @sr.topic == @t && @sr.issues_reviewed => for @i in @sr.issues_reviewed => @i
     let @topicReviews = @flat(@topicReviewsNested)
     let @tBugs = for @i in @topicReviews when @i.revised_verdict == "genuine-bug" => @i
     let @tDocNeeded = for @i in @topicReviews when @i.revised_verdict == "doc-improvement-needed" => @i
@@ -93,7 +125,8 @@ exe @buildRunSummary(runDir, topics) = [
 
 >> Build doc clarity report from self-reviews
 exe @buildDocClarityReport(runDir) = [
-  let @allSelfReviews = <@runDir/topics/**/self_review.json>
+  let @allSelfReviews = <@runDir/topics/**/self_review.json>?
+  when !@allSelfReviews => { generated_at: @now, summary: { qa_insufficient_exploration: 0, docs_could_be_clearer: 0, docs_genuinely_misleading: 0 }, qa_prompt_feedback: [], doc_clarifications: [], doc_fixes: [] }
 
   let @docClarityNested = for @sr in @allSelfReviews when @sr.issues_reviewed => for @issue in @sr.issues_reviewed when @issue.doc_clarity && @issue.doc_clarity.issue && @issue.doc_clarity.issue != "genuine-bug" => { topic: @sr.topic, experiment: @sr.experiment, issue: @issue.doc_clarity.issue, suggestion: @issue.doc_clarity.suggestion, affected_doc: @issue.doc_clarity.affected_doc }
   let @docClarityItems = @flat(@docClarityNested)
@@ -116,6 +149,7 @@ exe @buildDocClarityReport(runDir) = [
 ]
 
 /export {
+  @loadResult,
   @aggregateForTrends,
   @buildRunSummary,
   @buildDocClarityReport
