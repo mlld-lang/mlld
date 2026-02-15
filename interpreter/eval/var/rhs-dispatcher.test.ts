@@ -203,7 +203,11 @@ describe('rhs dispatcher', () => {
   });
 
   it('routes expression nodes to evaluateUnifiedExpression', async () => {
-    mocks.evaluateUnifiedExpression.mockResolvedValue({ value: 123 });
+    const expressionDescriptor = { labels: ['secret'], taint: ['secret'], sources: [] };
+    mocks.evaluateUnifiedExpression.mockResolvedValue({
+      value: 123,
+      descriptor: expressionDescriptor
+    });
     const dispatcher = createRhsDispatcher(createDependencies());
 
     const result = await dispatcher.evaluate({
@@ -216,7 +220,8 @@ describe('rhs dispatcher', () => {
     expect(result).toEqual({
       type: 'resolved',
       handler: 'expression',
-      value: 123
+      value: 123,
+      descriptor: expressionDescriptor
     });
     expect(mocks.evaluateUnifiedExpression).toHaveBeenCalled();
   });

@@ -1,4 +1,5 @@
 import type { DirectiveNode, SourceLocation } from '@core/types';
+import type { SecurityDescriptor } from '@core/types/security';
 import { logger } from '@core/utils/logger';
 import type { Variable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
@@ -44,6 +45,7 @@ export type RhsEvaluationResult =
       type: 'resolved';
       handler: RhsHandlerKey;
       value: unknown;
+      descriptor?: SecurityDescriptor;
     }
   | {
       type: 'executable-variable';
@@ -414,7 +416,8 @@ export function createRhsDispatcher(dependencies: RhsDispatcherDependencies): Rh
         return {
           type: 'resolved',
           handler: handlerKey,
-          value: expressionResult.value
+          value: expressionResult.value,
+          ...(expressionResult.descriptor ? { descriptor: expressionResult.descriptor } : {})
         };
       }
 

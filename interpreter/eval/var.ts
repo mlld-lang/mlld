@@ -251,6 +251,9 @@ export async function prepareVarAssignment(
   }
 
   resolvedValue = rhsResult.value;
+  if (rhsResult.type === 'resolved' && rhsResult.descriptor) {
+    mergeResolvedDescriptor(rhsResult.descriptor);
+  }
 
   if (isToolsCollection) {
     toolCollection = normalizeToolCollection(resolvedValue, env);

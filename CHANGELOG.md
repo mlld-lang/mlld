@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`before op:cmd` guard matching for exe operations**: `exe @fn() = cmd { ... }` invocations now match operation guards filtered by `op:cmd`, with regression coverage for `cmd`, `sh`, `js`, `node`, and `py` op-label key expansion.
 - **String concatenation with `+` diagnostics**: Expressions now raise a targeted error when `+` is used with non-numeric strings and include a template-interpolation hint; numeric addition and mixed string-number `NaN` behavior remain unchanged.
 - **Var `run ... using auth:name` parity**: `var @value = run cmd { ... } using auth:name` now preserves `using` metadata in var command nodes and applies auth injection during var-run execution.
+- **Var expression descriptor propagation**: Descriptor metadata from expression evaluation now carries through var RHS dispatch and var assignment resolution, so taint/label metadata remains attached for ternary and other expression-based assignments.
 - **Dead code removal**: Removed unused `interpolateWithSecurity` interface member and `matchesCommandPatterns` export
 - **Specificity consistency**: `inferCapabilityRule` now uses same specificity logic as `evaluateCommandAccess` for deny/allow resolution
 

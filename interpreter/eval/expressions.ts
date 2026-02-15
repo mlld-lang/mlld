@@ -15,7 +15,12 @@ import {
   isCommandResult,
   isPipelineInput
 } from '@core/types/variable';
-import { asText, assertStructuredValue, isStructuredValue } from '../utils/structured-value';
+import {
+  asText,
+  assertStructuredValue,
+  extractSecurityDescriptor,
+  isStructuredValue
+} from '../utils/structured-value';
 
 /**
  * Determines if a value is truthy according to mlld rules
@@ -244,6 +249,25 @@ export async function evaluateUnifiedExpression(
         // Delegate variable references to the standard evaluator
         try {
           const varResult = await evaluate(node, env, expressionContext);
+          const valueDescriptor = extractSecurityDescriptor(varResult.value, {
+            recursive: true,
+            mergeArrayElements: true
+          });
+          if (valueDescriptor) {
+            return createEvaluatorResult(varResult.value, valueDescriptor);
+          }
+
+          if (typeof node.identifier === 'string') {
+            const sourceVariable = env.getVariable(node.identifier);
+            const sourceDescriptor = extractSecurityDescriptor(sourceVariable, {
+              recursive: true,
+              mergeArrayElements: true
+            });
+            if (sourceDescriptor) {
+              return createEvaluatorResult(varResult.value, sourceDescriptor);
+            }
+          }
+
           return createEvaluatorResult(varResult.value);
         } catch (error) {
           // Handle undefined variables gracefully for backward compatibility
