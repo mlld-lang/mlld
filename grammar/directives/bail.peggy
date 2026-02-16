@@ -5,7 +5,7 @@ BailKeyword
   = "/"? "bail" ![a-zA-Z0-9_]
 
 BailMessage
-  = __ value:VarRHSContent {
+  = HWS !LineTerminator value:VarRHSContent {
       return Array.isArray(value) ? value : [value];
     }
 
@@ -54,4 +54,3 @@ BailAction
         'directive'
       )];
     }
-

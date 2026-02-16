@@ -37,6 +37,10 @@ describe('bail directive evaluation', () => {
     await expect(run('bail')).rejects.toThrow(/bail directive/i);
   });
 
+  it('does not consume the next directive as a bare bail message', async () => {
+    await expect(run('bail\nshow "this should not become bail message"')).rejects.toThrow(/bail directive/i);
+  });
+
   it('works in markdown mode with /bail syntax', async () => {
     await expect(run('/bail "markdown stop"', '/project/main.mld.md', 'markdown')).rejects.toThrow('markdown stop');
   });
@@ -58,4 +62,3 @@ describe('bail directive evaluation', () => {
     await expect(run(source)).rejects.toThrow('module stop');
   });
 });
-

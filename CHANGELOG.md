@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc82]
 
 ### Fixed
+- **Bare `bail` statement boundary**: `bail` without an inline message no longer consumes the next directive line as its message expression.
 - **cmd {} block @ escaping**: `@@` and `\@` now produce literal `@` in cmd blocks (previously passed verbatim to shell)
 - **Position-independent `@` escapes**: `@@` and `\@` now resolve to literal `@` at string start and after interpolated variables in backtick/prose templates; streaming templates also treat `\@` as escaped and skip `@evt.*` substitution when escaped.
 - **Pipeline null values**: JSON `null` values now pass through pipeline stages correctly (previously conflated with parse failure)
