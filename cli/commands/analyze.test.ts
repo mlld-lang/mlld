@@ -252,4 +252,17 @@ for @k, @v in @items => show @k
     expect(undefs).not.toContain('k');
     expect(undefs).not.toContain('v');
   });
+
+  it('warns for undefined variables in executable invocation arguments', async () => {
+    const modulePath = await writeModule('exe-invocation-undefined-arg.mld', `/exe @greet(name) = \`Hello @name\`
+/var @result = @greet(@typo)
+/show @result
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).toContain('typo');
+  });
 });

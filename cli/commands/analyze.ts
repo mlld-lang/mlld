@@ -138,6 +138,8 @@ function walkAST(nodes: MlldNode[], callback: (node: MlldNode) => void): void {
     if (node.alternate) walkNode(node.alternate);
     if (node.expression) walkNode(node.expression);
     if (node.args) walkNode(node.args);
+    if (node.commandRef) walkNode(node.commandRef);
+    if (node.arguments) walkNode(node.arguments);
     if (node.elements) walkNode(node.elements);
   }
 
