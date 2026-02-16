@@ -46,8 +46,12 @@ function createGuard(id: string): GuardDefinition {
   };
 }
 
-function createCandidate(variableName: string, guards: GuardDefinition[]): PerInputCandidate {
-  const variable = createVariable(variableName, `${variableName}-value`, ['seed']);
+function createCandidate(
+  variableName: string,
+  guards: GuardDefinition[],
+  variableOverride?: ReturnType<typeof createVariable>
+): PerInputCandidate {
+  const variable = variableOverride ?? createVariable(variableName, `${variableName}-value`, ['seed']);
   return {
     index: 0,
     variable,
@@ -172,7 +176,7 @@ describe('guard post decision engine', () => {
     const outputValues: unknown[] = [];
 
     const result = await runPostGuardDecisionEngine({
-      perInputCandidates: [createCandidate('input', [createGuard('allow-transform')])],
+      perInputCandidates: [createCandidate('output', [createGuard('allow-transform')], output)],
       operationGuards: [createGuard('op-check')],
       outputVariables: [output],
       activeOutputs: [output],
@@ -205,6 +209,40 @@ describe('guard post decision engine', () => {
     expect(outputValues).toEqual(['seed-value', 'masked-value']);
     expect(result.decision).toBe('deny');
     expect(result.reasons).toEqual(['operation-saw-transformed']);
+  });
+
+  it('passes original operation inputs separately from output snapshots for per-operation guards', async () => {
+    const output = createVariable('output', 'result-value', ['result']);
+    const operationInput = createVariable('input', 'request-value', ['request']);
+
+    const result = await runPostGuardDecisionEngine({
+      perInputCandidates: [],
+      operationGuards: [createGuard('op-check')],
+      outputVariables: [output],
+      inputVariables: [operationInput],
+      activeOutputs: [output],
+      currentDescriptor: makeSecurityDescriptor({
+        labels: ['base'],
+        sources: ['source:base']
+      }),
+      baseOutputValue: 'result-value',
+      retryContext: { attempt: 1, tries: [], hintHistory: [], max: 3 },
+      evaluateGuard: async ({ scope, operationSnapshot, operationInputSnapshot, outputRaw }) => {
+        if (scope === 'perOperation') {
+          expect(operationSnapshot?.variables[0]?.value).toBe('result-value');
+          expect(operationInputSnapshot?.variables[0]?.value).toBe('request-value');
+          expect(outputRaw).toBe('result-value');
+        }
+        return { guardName: 'op-check', decision: 'allow' };
+      },
+      buildInputHelper: () => undefined,
+      buildOperationSnapshot,
+      resolveGuardValue: variable => variable?.value,
+      buildVariablePreview: variable => String(variable.value),
+      logLabelModifications: async () => {}
+    });
+
+    expect(result.decision).toBe('allow');
   });
 
   it('preserves reason and hint aggregation order across per-input and per-operation loops', async () => {

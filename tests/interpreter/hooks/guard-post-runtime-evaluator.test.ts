@@ -208,4 +208,39 @@ describe('guard post runtime evaluator', () => {
       'Guard env actions apply only before execution'
     );
   });
+
+  it('separates per-operation input context from output value when snapshots differ', async () => {
+    const operationInput = createInput('arg', 'request-value', ['secret']);
+    const operationOutput = createInput('result', 'response-value', ['secret']);
+    const options = createOptions({
+      scope: 'perOperation',
+      perInput: undefined,
+      operationSnapshot: {
+        labels: ['secret'],
+        sources: ['source:result'],
+        variables: [operationOutput]
+      },
+      operationInputSnapshot: {
+        labels: ['secret'],
+        sources: ['source:arg'],
+        variables: [operationInput]
+      },
+      activeOutput: operationOutput,
+      outputRaw: 'response-value',
+      inputPreviewOverride: null
+    });
+    const deps = createDeps({
+      evaluateGuardBlock: async (_block, guardEnv) => {
+        const inputValue = (guardEnv.getVariable('input') as any)?.value;
+        const outputValue = (guardEnv.getVariable('output') as any)?.value;
+        expect(Array.isArray(inputValue)).toBe(true);
+        expect(inputValue[0]?.value).toBe('request-value');
+        expect(outputValue).toBe('response-value');
+        return createAction('allow');
+      }
+    });
+
+    const result = await evaluatePostGuardRuntime(options, deps);
+    expect(result.decision).toBe('allow');
+  });
 });

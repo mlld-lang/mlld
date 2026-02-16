@@ -30,8 +30,10 @@ export interface EvaluatePostGuardRuntimeOptions {
   scope: 'perInput' | 'perOperation';
   perInput?: PerInputCandidate;
   operationSnapshot?: GuardOperationSnapshot;
+  operationInputSnapshot?: GuardOperationSnapshot;
   inputHelper?: GuardInputHelper;
   activeInput?: Variable;
+  activeOutput?: Variable;
   labelsOverride?: readonly DataLabel[];
   sourcesOverride?: readonly string[];
   inputPreviewOverride?: string | null;
@@ -91,7 +93,9 @@ export async function evaluatePostGuardRuntime(
 
   if (options.activeInput) {
     inputVariable = dependencies.cloneVariable(options.activeInput);
-    outputVariable = inputVariable;
+    outputVariable = options.activeOutput
+      ? dependencies.cloneVariable(options.activeOutput)
+      : inputVariable;
     outputValue =
       options.outputRaw !== undefined
         ? options.outputRaw
@@ -105,14 +109,17 @@ export async function evaluatePostGuardRuntime(
     inputPreview = options.inputPreviewOverride ?? dependencies.buildVariablePreview(inputVariable);
   } else if (scope === 'perInput' && options.perInput) {
     inputVariable = dependencies.cloneVariable(options.perInput.variable);
-    outputVariable = inputVariable;
+    outputVariable = options.activeOutput
+      ? dependencies.cloneVariable(options.activeOutput)
+      : inputVariable;
     outputValue =
       options.outputRaw ?? dependencies.resolveGuardValue(outputVariable, inputVariable);
     contextLabels = options.labelsOverride ?? options.perInput.labels;
     contextSources = options.sourcesOverride ?? options.perInput.sources;
     inputPreview = options.inputPreviewOverride ?? dependencies.buildVariablePreview(inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
-    const arrayValue = options.operationSnapshot.variables.slice();
+    const inputSnapshot = options.operationInputSnapshot ?? options.operationSnapshot;
+    const arrayValue = inputSnapshot.variables.slice();
     inputVariable = createArrayVariable('input', arrayValue as any[], false, dependencies.guardInputSource, {
       isSystem: true,
       isReserved: true
@@ -120,13 +127,15 @@ export async function evaluatePostGuardRuntime(
     attachArrayHelpers(inputVariable as any);
     contextLabels = options.labelsOverride ?? options.operationSnapshot.labels;
     contextSources = options.sourcesOverride ?? options.operationSnapshot.sources;
-    outputVariable = options.operationSnapshot.variables[0]
-      ? dependencies.cloneVariable(options.operationSnapshot.variables[0]!)
+    outputVariable = options.activeOutput
+      ? dependencies.cloneVariable(options.activeOutput)
+      : options.operationSnapshot.variables[0]
+        ? dependencies.cloneVariable(options.operationSnapshot.variables[0]!)
       : undefined;
     outputValue =
       options.outputRaw ?? dependencies.resolveGuardValue(outputVariable, inputVariable);
     inputPreview =
-      options.inputPreviewOverride ?? `Array(len=${options.operationSnapshot.variables.length})`;
+      options.inputPreviewOverride ?? `Array(len=${inputSnapshot.variables.length})`;
   } else {
     return { guardName: guard.name ?? null, decision: 'allow', timing: 'after' };
   }

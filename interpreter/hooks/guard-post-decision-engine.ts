@@ -25,7 +25,9 @@ interface GuardEvaluationInput {
   scope: 'perInput' | 'perOperation';
   perInput?: PerInputCandidate;
   operationSnapshot?: GuardOperationSnapshot;
+  operationInputSnapshot?: GuardOperationSnapshot;
   activeInput?: Variable;
+  activeOutput?: Variable;
   labelsOverride?: readonly DataLabel[];
   sourcesOverride?: readonly string[];
   inputPreviewOverride?: string | null;
@@ -38,6 +40,7 @@ export interface PostGuardDecisionEngineOptions {
   operationGuards: readonly GuardDefinition[];
   outputVariables: readonly Variable[];
   activeOutputs: readonly Variable[];
+  inputVariables?: readonly Variable[];
   currentDescriptor: SecurityDescriptor;
   baseOutputValue: unknown;
   retryContext: RetryContextSnapshot;
@@ -75,7 +78,11 @@ export async function runPostGuardDecisionEngine(
   let currentDescriptor = options.currentDescriptor;
 
   for (const candidate of options.perInputCandidates) {
-    let currentInput = activeOutputs[0] ?? candidate.variable;
+    const candidateIsOutput = options.outputVariables.includes(candidate.variable);
+    let currentInput =
+      candidateIsOutput
+        ? (activeOutputs[0] ?? candidate.variable)
+        : candidate.variable;
 
     for (const guard of candidate.guards) {
       const resultEntry = await options.evaluateGuard({
@@ -84,6 +91,7 @@ export async function runPostGuardDecisionEngine(
         perInput: candidate,
         inputHelper: options.buildInputHelper(activeOutputs.length > 0 ? activeOutputs : options.outputVariables),
         activeInput: currentInput,
+        activeOutput: currentInput,
         labelsOverride: currentDescriptor.labels,
         sourcesOverride: currentDescriptor.sources,
         inputPreviewOverride: options.buildVariablePreview(currentInput),
@@ -145,6 +153,12 @@ export async function runPostGuardDecisionEngine(
     if (activeOutputs.length === 0 && options.outputVariables.length > 0) {
       activeOutputs = options.outputVariables.slice();
     }
+    const operationInputVariables =
+      options.inputVariables && options.inputVariables.length > 0
+        ? options.inputVariables
+        : (activeOutputs.length > 0 ? activeOutputs : options.outputVariables);
+    const operationInputSnapshot = options.buildOperationSnapshot(operationInputVariables);
+    const operationInputHelper = options.buildInputHelper(operationInputVariables);
     let opSnapshot = options.buildOperationSnapshot(
       activeOutputs.length > 0 ? activeOutputs : options.outputVariables
     );
@@ -157,10 +171,12 @@ export async function runPostGuardDecisionEngine(
         guard,
         scope: 'perOperation',
         operationSnapshot: opSnapshot,
-        inputHelper: options.buildInputHelper(activeOutputs.length > 0 ? activeOutputs : options.outputVariables),
+        operationInputSnapshot,
+        inputHelper: operationInputHelper,
+        activeOutput: activeOutputs[0] ?? options.outputVariables[0],
         labelsOverride: opSnapshot.labels,
         sourcesOverride: opSnapshot.sources,
-        inputPreviewOverride: `Array(len=${opSnapshot.variables.length})`,
+        inputPreviewOverride: `Array(len=${operationInputSnapshot.variables.length})`,
         outputRaw: currentOutputValue
       });
 

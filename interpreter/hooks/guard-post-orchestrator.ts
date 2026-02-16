@@ -152,19 +152,20 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
   }
   let activeOutputs = outputVariables.slice();
   let currentDescriptor = extractOutputDescriptor(result, activeOutputs[0]);
+  let usedInputFallback = false;
 
   let perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride, 'after');
   if (perInputCandidates.length === 0 && inputVariables.length > 0) {
     currentDescriptor = mergeDescriptorWithFallbackInputs(currentDescriptor, inputVariables);
-    activeOutputs = inputVariables.slice();
-    perInputCandidates = buildPerInputCandidates(registry, activeOutputs, guardOverride, 'after');
+    perInputCandidates = buildPerInputCandidates(registry, inputVariables, guardOverride, 'after');
+    usedInputFallback = perInputCandidates.length > 0;
     selectionSources.push('input-fallback');
   }
   let operationGuards = collectOperationGuards(registry, operation, guardOverride, {
     timing: 'after',
     variables: outputVariables
   });
-  if (operationGuards.length === 0 && activeOutputs === inputVariables && inputVariables.length > 0) {
+  if (operationGuards.length === 0 && usedInputFallback && inputVariables.length > 0) {
     operationGuards = collectOperationGuards(registry, operation, guardOverride, {
       timing: 'after',
       variables: inputVariables
@@ -246,6 +247,7 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
     perInputCandidates,
     operationGuards,
     outputVariables,
+    inputVariables,
     activeOutputs,
     currentDescriptor,
     baseOutputValue,
@@ -259,8 +261,10 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
           scope: evaluation.scope,
           perInput: evaluation.perInput,
           operationSnapshot: evaluation.operationSnapshot,
+          operationInputSnapshot: evaluation.operationInputSnapshot,
           inputHelper: evaluation.inputHelper,
           activeInput: evaluation.activeInput,
+          activeOutput: evaluation.activeOutput,
           labelsOverride: evaluation.labelsOverride,
           sourcesOverride: evaluation.sourcesOverride,
           inputPreviewOverride: evaluation.inputPreviewOverride,
