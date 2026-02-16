@@ -274,8 +274,8 @@ Before guards check inputs before operations execute:
 
 ```mlld
 guard @validateInput before op:exe = when [
-  @input.length > 1000 => deny "Input too large"
-  @input.includes("<script") => deny "Potentially malicious input"
+  @input[0].length > 1000 => deny "Input too large"
+  @input[0].includes("<script") => deny "Potentially malicious input"
   * => allow
 ]
 
