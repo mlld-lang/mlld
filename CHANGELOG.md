@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Content loader parse diagnostics**: JSON and JSONL parse failures now retain their specific parse error details instead of only showing a generic load failure.
 - **`mlld validate` guard timing extraction**: Guard analysis now reads timing from guard timing fields instead of `subtype`, so `before`/`after`/`always` guards are reported correctly.
 - **`mlld validate` exe invocation argument checks**: Undefined variable detection now traverses executable invocation argument lists, so missing variables in calls like `@fn(@missing)` are reported.
+- **`mlld validate --format json` guards/needs coverage**: Validation output now includes guard declarations and `/needs` runtime declarations for modules that define them.
 - **cmd {} block @ escaping**: `@@` and `\@` now produce literal `@` in cmd blocks (previously passed verbatim to shell)
 - **Position-independent `@` escapes**: `@@` and `\@` now resolve to literal `@` at string start and after interpolated variables in backtick/prose templates; streaming templates also treat `\@` as escaped and skip `@evt.*` substitution when escaped.
 - **Pipeline null values**: JSON `null` values now pass through pipeline stages correctly (previously conflated with parse failure)

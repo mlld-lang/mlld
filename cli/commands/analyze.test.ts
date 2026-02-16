@@ -240,6 +240,22 @@ guard @alwaysGuard always op:run = when [* => allow]
     ]));
   });
 
+  it('includes guards and needs from directives in analyze output', async () => {
+    const modulePath = await writeModule('analyze-json-guards-needs.mld', `/needs { sh }
+guard @g before op:run = when [* => allow]
+/exe @hello() = \`hi\`
+/export { @hello }
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.guards).toEqual(expect.arrayContaining([
+      { name: 'g', timing: 'before' }
+    ]));
+    expect(result.needs?.cmd).toBeDefined();
+  });
+
   it('does not flag for-loop key variables as undefined', async () => {
     const modulePath = await writeModule('for-key-decl.mld', `var @items = { a: 1, b: 2 }
 for @k, @v in @items => show @k

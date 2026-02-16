@@ -1092,6 +1092,18 @@ function extractGuards(ast: MlldNode[]): GuardInfo[] {
  */
 function extractNeeds(content: string, ast: MlldNode[]): NeedsInfo | undefined {
   const needs: NeedsInfo = {};
+  const addNeed = (need: string): void => {
+    const normalized = need.toLowerCase();
+    if (normalized === 'sh' || normalized === 'cmd' || normalized === 'bash' || normalized === 'shell') {
+      needs.cmd = needs.cmd || [];
+    }
+    if (normalized === 'node' || normalized === 'js' || normalized === 'javascript') {
+      needs.node = needs.node || [];
+    }
+    if (normalized === 'py' || normalized === 'python') {
+      needs.py = needs.py || [];
+    }
+  };
 
   // Check frontmatter first
   const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
@@ -1101,14 +1113,8 @@ function extractNeeds(content: string, ast: MlldNode[]): NeedsInfo | undefined {
       if (metadata?.needs) {
         const needsArray = Array.isArray(metadata.needs) ? metadata.needs : [metadata.needs];
         for (const need of needsArray) {
-          if (need === 'sh' || need === 'cmd') {
-            needs.cmd = needs.cmd || [];
-          }
-          if (need === 'node' || need === 'js') {
-            needs.node = needs.node || [];
-          }
-          if (need === 'py' || need === 'python') {
-            needs.py = needs.py || [];
+          if (typeof need === 'string') {
+            addNeed(need);
           }
         }
       }
@@ -1117,20 +1123,39 @@ function extractNeeds(content: string, ast: MlldNode[]): NeedsInfo | undefined {
     }
   }
 
+  // Collect explicit /needs directive declarations.
+  walkAST(ast, (node: any) => {
+    if (node.type !== 'Directive' || node.kind !== 'needs') {
+      return;
+    }
+
+    const declaredNeeds = node.values?.needs;
+    if (!declaredNeeds || typeof declaredNeeds !== 'object') {
+      return;
+    }
+
+    const needsRecord = declaredNeeds as Record<string, unknown>;
+
+    if (needsRecord.cmd !== undefined
+      || needsRecord.sh === true
+      || needsRecord.bash === true
+      || (Array.isArray(needsRecord.__commands) && needsRecord.__commands.length > 0)) {
+      needs.cmd = needs.cmd || [];
+    }
+    if (needsRecord.node !== undefined || needsRecord.js !== undefined) {
+      needs.node = needs.node || [];
+    }
+    if (needsRecord.py !== undefined || needsRecord.python !== undefined) {
+      needs.py = needs.py || [];
+    }
+  });
+
   // Also detect from AST
   const detector = new DependencyDetector();
   const runtimeNeeds = detector.detectRuntimeNeeds(ast);
 
   for (const need of runtimeNeeds) {
-    if (need === 'sh') {
-      needs.cmd = needs.cmd || [];
-    }
-    if (need === 'js' || need === 'node') {
-      needs.node = needs.node || [];
-    }
-    if (need === 'py') {
-      needs.py = needs.py || [];
-    }
+    addNeed(need);
   }
 
   // Return undefined if no needs detected
