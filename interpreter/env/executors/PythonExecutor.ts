@@ -89,6 +89,7 @@ export class PythonExecutor extends BaseCommandExecutor {
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
     const streamingEnabled = Boolean(context?.streamingEnabled);
+    const normalizedCode = this.normalizePythonUserCode(code);
 
     // Check if we have a shadow environment with functions defined
     const pythonShadowEnv = this.pythonShadowProvider?.getPythonShadowEnv();
@@ -99,7 +100,7 @@ export class PythonExecutor extends BaseCommandExecutor {
     // Use streaming path if enabled
     if (streamingEnabled) {
       return this.executePythonSubprocessStreaming(
-        code,
+        normalizedCode,
         params,
         metadata,
         startTime,
@@ -111,10 +112,10 @@ export class PythonExecutor extends BaseCommandExecutor {
 
     // Non-streaming path
     if (shadowFunctionDefs) {
-      return this.executePythonWithShadowEnv(code, params, metadata, options, context, pythonShadowEnv!);
+      return this.executePythonWithShadowEnv(normalizedCode, params, metadata, options, context, pythonShadowEnv!);
     }
 
-    return this.executePythonSubprocess(code, params, metadata, options, context);
+    return this.executePythonSubprocess(normalizedCode, params, metadata, options, context);
   }
 
   /**
@@ -457,5 +458,31 @@ export class PythonExecutor extends BaseCommandExecutor {
 
     // If we can't parse it, return a generic message with the last line
     return `Python execution failed: ${lastLine}`;
+  }
+
+  private normalizePythonUserCode(code: string): string {
+    const normalized = code.replace(/\r\n/g, '\n');
+    const lines = normalized.split('\n');
+    let minIndent: number | null = null;
+
+    for (const line of lines) {
+      if (line.trim().length === 0) {
+        continue;
+      }
+      const match = line.match(/^[ \t]*/);
+      const indent = match ? match[0].length : 0;
+      minIndent = minIndent === null ? indent : Math.min(minIndent, indent);
+      if (minIndent === 0) {
+        break;
+      }
+    }
+
+    if (!minIndent || minIndent <= 0) {
+      return normalized;
+    }
+
+    return lines
+      .map(line => (line.trim().length === 0 ? '' : line.slice(minIndent)))
+      .join('\n');
   }
 }
