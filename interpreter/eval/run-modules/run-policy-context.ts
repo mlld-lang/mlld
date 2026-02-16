@@ -33,6 +33,9 @@ export function buildRunCommandOperationUpdate(
     command: parsedCommand.command,
     subcommand: parsedCommand.subcommand
   });
+  if (!opLabels.includes('op:run')) {
+    opLabels.push('op:run');
+  }
   const opSources = getOperationSources({
     type: 'cmd',
     command: parsedCommand.command,

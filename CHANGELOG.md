@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pipeline null values**: JSON `null` values now pass through pipeline stages correctly (previously conflated with parse failure)
 - **Guard transform unwrapping**: Fixed double-wrapping that caused Variable-inside-Variable nesting in guard transforms
 - **`before op:cmd` guard matching for exe operations**: `exe @fn() = cmd { ... }` invocations now match operation guards filtered by `op:cmd`, with regression coverage for `cmd`, `sh`, `js`, `node`, and `py` op-label key expansion.
+- **Guard `op:run`/`op:exe` alias dispatch**: Command-capable `run` and `exe` operations share guard dispatch keys, `run cmd` operation labels include `op:run`, and regression coverage verifies `cmd`, `sh`, `js`, `node`, and `py` alias matching plus direct `run cmd` `src:exec` taint.
 - **String concatenation with `+` diagnostics**: Expressions now raise a targeted error when `+` is used with non-numeric strings and include a template-interpolation hint; numeric addition and mixed string-number `NaN` behavior remain unchanged.
 - **Var `run ... using auth:name` parity**: `var @value = run cmd { ... } using auth:name` now preserves `using` metadata in var command nodes and applies auth injection during var-run execution.
 - **Var expression descriptor propagation**: Descriptor metadata from expression evaluation now carries through var RHS dispatch and var assignment resolution, so taint/label metadata remains attached for ternary and other expression-based assignments.

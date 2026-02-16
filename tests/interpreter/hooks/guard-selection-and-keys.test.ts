@@ -17,13 +17,16 @@ function createGuard(options: {
   id: string;
   name?: string;
   privileged?: boolean;
+  filterKind?: 'data' | 'operation';
+  filterValue?: string;
 }): GuardDefinition {
+  const filterKind = options.filterKind ?? 'data';
   return {
     id: options.id,
     name: options.name,
-    filterKind: 'data',
-    filterValue: 'secret',
-    scope: 'perInput',
+    filterKind,
+    filterValue: options.filterValue ?? 'secret',
+    scope: filterKind === 'operation' ? 'perOperation' : 'perInput',
     modifier: 'default',
     block: {
       type: 'GuardBlock',
@@ -226,24 +229,136 @@ describe('guard candidate selection utilities', () => {
 });
 
 describe('guard operation key utilities', () => {
+  it('aliases command-capable exe operations to run keys during guard dispatch', () => {
+    const runGuard = createGuard({
+      id: 'run-guard',
+      name: 'runGuard',
+      filterKind: 'operation',
+      filterValue: 'run'
+    });
+    const exeGuard = createGuard({
+      id: 'exe-guard',
+      name: 'exeGuard',
+      filterKind: 'operation',
+      filterValue: 'exe'
+    });
+    const cmdGuard = createGuard({
+      id: 'cmd-guard',
+      name: 'cmdGuard',
+      filterKind: 'operation',
+      filterValue: 'cmd'
+    });
+    const shGuard = createGuard({
+      id: 'sh-guard',
+      name: 'shGuard',
+      filterKind: 'operation',
+      filterValue: 'sh'
+    });
+    const jsGuard = createGuard({
+      id: 'js-guard',
+      name: 'jsGuard',
+      filterKind: 'operation',
+      filterValue: 'js'
+    });
+    const nodeGuard = createGuard({
+      id: 'node-guard',
+      name: 'nodeGuard',
+      filterKind: 'operation',
+      filterValue: 'node'
+    });
+    const pyGuard = createGuard({
+      id: 'py-guard',
+      name: 'pyGuard',
+      filterKind: 'operation',
+      filterValue: 'py'
+    });
+
+    const guardMap = new Map<string, GuardDefinition[]>([
+      ['run', [runGuard]],
+      ['exe', [exeGuard]],
+      ['cmd', [cmdGuard]],
+      ['sh', [shGuard]],
+      ['js', [jsGuard]],
+      ['node', [nodeGuard]],
+      ['py', [pyGuard]]
+    ]);
+
+    const registry = {
+      getOperationGuardsForTiming(key: string): GuardDefinition[] {
+        return guardMap.get(key) ?? [];
+      }
+    } as any;
+
+    const cases: Array<{ operation: OperationContext; expectedSubtypeGuard: string }> = [
+      {
+        operation: { type: 'run', metadata: { runSubtype: 'runCommand' } } as OperationContext,
+        expectedSubtypeGuard: 'cmd-guard'
+      },
+      {
+        operation: { type: 'run', metadata: { runSubtype: 'runCode', language: 'sh' } } as OperationContext,
+        expectedSubtypeGuard: 'sh-guard'
+      },
+      {
+        operation: { type: 'run', metadata: { runSubtype: 'runCode', language: 'js' } } as OperationContext,
+        expectedSubtypeGuard: 'js-guard'
+      },
+      {
+        operation: { type: 'run', metadata: { runSubtype: 'runCode', language: 'node' } } as OperationContext,
+        expectedSubtypeGuard: 'node-guard'
+      },
+      {
+        operation: { type: 'run', metadata: { runSubtype: 'runCode', language: 'py' } } as OperationContext,
+        expectedSubtypeGuard: 'py-guard'
+      },
+      {
+        operation: { type: 'exe', opLabels: ['op:cmd'] } as OperationContext,
+        expectedSubtypeGuard: 'cmd-guard'
+      },
+      {
+        operation: { type: 'exe', opLabels: ['op:sh'] } as OperationContext,
+        expectedSubtypeGuard: 'sh-guard'
+      },
+      {
+        operation: { type: 'exe', opLabels: ['op:js'] } as OperationContext,
+        expectedSubtypeGuard: 'js-guard'
+      },
+      {
+        operation: { type: 'exe', opLabels: ['op:node'] } as OperationContext,
+        expectedSubtypeGuard: 'node-guard'
+      },
+      {
+        operation: { type: 'exe', opLabels: ['op:py'] } as OperationContext,
+        expectedSubtypeGuard: 'py-guard'
+      }
+    ];
+
+    for (const testCase of cases) {
+      const guards = collectOperationGuards(registry, testCase.operation, { kind: 'none' });
+      const ids = guards.map(guard => guard.id);
+      expect(ids).toEqual(
+        expect.arrayContaining(['run-guard', 'exe-guard', testCase.expectedSubtypeGuard])
+      );
+    }
+  });
+
   it('expands run subtypes for command, exec, and language keys', () => {
     const commandKeys = buildOperationKeys({
       type: 'run',
       metadata: { runSubtype: 'runCommand' }
     } as OperationContext);
-    expect(commandKeys).toEqual(['run', 'runcommand', 'cmd']);
+    expect(commandKeys).toEqual(['run', 'exe', 'runcommand', 'cmd']);
 
     const execKeys = buildOperationKeys({
       type: 'run',
       metadata: { runSubtype: 'runExecBash' }
     } as OperationContext);
-    expect(execKeys).toEqual(['run', 'runexecbash', 'exec']);
+    expect(execKeys).toEqual(['run', 'exe', 'runexecbash', 'exec']);
 
     const codeKeys = buildOperationKeys({
       type: 'run',
       metadata: { runSubtype: 'runCode', language: 'TypeScript' }
     } as OperationContext);
-    expect(codeKeys).toEqual(['run', 'runcode', 'typescript']);
+    expect(codeKeys).toEqual(['run', 'exe', 'runcode', 'typescript']);
   });
 
   it('extracts bare command keys from exe op labels', () => {
@@ -266,8 +381,18 @@ describe('guard operation key utilities', () => {
       'py',
       'op:prose',
       'prose',
-      'op:publish'
+      'op:publish',
+      'run'
     ]);
+  });
+
+  it('does not alias non-command exe operation labels to run', () => {
+    const keys = buildOperationKeys({
+      type: 'exe',
+      opLabels: ['op:publish']
+    } as OperationContext);
+
+    expect(keys).toEqual(['exe', 'op:publish']);
   });
 
   it('normalizes case when building the operation key set', () => {

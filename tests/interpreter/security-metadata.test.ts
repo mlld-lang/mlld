@@ -341,6 +341,15 @@ describe('Security metadata propagation', () => {
     expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
   });
 
+  it('applies src:exec taint to direct run cmd syntax', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const runDirective = parseSync('/run cmd { printf "hi" }')[0] as DirectiveNode;
+    const result = await evaluateDirective(runDirective, env);
+
+    const structuredResult = result.value as any;
+    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+  });
+
   it('tags @input resolver variables with src:user taint', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
     await env.registerBuiltinResolvers();

@@ -26,30 +26,46 @@ export function buildOperationSnapshot(inputs: readonly Variable[]): OperationSn
 export function buildOperationKeys(operation: OperationContext): string[] {
   const keys = new Set<string>();
   const commandOpTypes = new Set(['cmd', 'sh', 'js', 'node', 'py', 'prose']);
-  if (operation.type) {
-    keys.add(operation.type.toLowerCase());
+  const operationType =
+    typeof operation.type === 'string' && operation.type.length > 0
+      ? operation.type.toLowerCase()
+      : undefined;
+  let hasCommandSubtype = false;
+
+  if (operationType) {
+    keys.add(operationType);
+    if (operationType === 'run') {
+      keys.add('exe');
+    }
   }
+
   if (operation.subtype) {
     keys.add(operation.subtype.toLowerCase());
   }
-  if (operation.type === 'run') {
+  if (operationType === 'run') {
     const runSubtype =
       typeof operation.metadata === 'object' && operation.metadata
         ? (operation.metadata as Record<string, unknown>).runSubtype
         : undefined;
     if (typeof runSubtype === 'string') {
-      keys.add(runSubtype.toLowerCase());
-      if (runSubtype === 'runCommand') {
+      const normalizedRunSubtype = runSubtype.toLowerCase();
+      keys.add(normalizedRunSubtype);
+      if (normalizedRunSubtype === 'runcommand') {
         keys.add('cmd');
-      } else if (runSubtype.startsWith('runExec')) {
+        hasCommandSubtype = true;
+      } else if (normalizedRunSubtype.startsWith('runexec')) {
         keys.add('exec');
-      } else if (runSubtype === 'runCode') {
+      } else if (normalizedRunSubtype === 'runcode') {
         const language =
           typeof operation.metadata === 'object' && operation.metadata
             ? (operation.metadata as Record<string, unknown>).language
             : undefined;
         if (typeof language === 'string' && language.length > 0) {
-          keys.add(language.toLowerCase());
+          const normalizedLanguage = language.toLowerCase();
+          keys.add(normalizedLanguage);
+          if (commandOpTypes.has(normalizedLanguage)) {
+            hasCommandSubtype = true;
+          }
         }
       }
     }
@@ -60,14 +76,19 @@ export function buildOperationKeys(operation: OperationContext): string[] {
       if (typeof label === 'string' && label.length > 0) {
         const normalizedLabel = label.toLowerCase();
         keys.add(normalizedLabel);
-        if (operation.type === 'exe' && normalizedLabel.startsWith('op:')) {
+        if (normalizedLabel.startsWith('op:')) {
           const [prefix, opType] = normalizedLabel.split(':');
           if (prefix === 'op' && opType && commandOpTypes.has(opType)) {
             keys.add(opType);
+            hasCommandSubtype = true;
           }
         }
       }
     }
+  }
+
+  if (operationType === 'exe' && hasCommandSubtype) {
+    keys.add('run');
   }
 
   return Array.from(keys);

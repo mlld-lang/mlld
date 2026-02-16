@@ -23,7 +23,9 @@ describe('run policy/context helpers', () => {
     const update = buildRunCommandOperationUpdate('echo hello', { existing: true });
 
     expect(update.command).toBe('echo hello');
-    expect(update.opLabels).toEqual(expect.arrayContaining(['op:cmd', 'op:cmd:echo', 'op:cmd:echo:hello']));
+    expect(update.opLabels).toEqual(
+      expect.arrayContaining(['op:cmd', 'op:cmd:echo', 'op:cmd:echo:hello', 'op:run'])
+    );
     expect(update.sources).toEqual(expect.arrayContaining(['cmd:echo:hello']));
     expect(update.metadata).toEqual(expect.objectContaining({ existing: true, commandPreview: 'echo hello' }));
   });
