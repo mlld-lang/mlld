@@ -453,7 +453,7 @@ async function evaluateExecInvocationInternal(
         extractSecurityDescriptor(objectValue);
       mergeResultDescriptor(targetDescriptor);
 
-      objectValue = normalizeBuiltinTargetValue(objectValue);
+      objectValue = normalizeBuiltinTargetValue(objectValue, commandName);
 
       chainDebug('resolved object value', {
         commandName,

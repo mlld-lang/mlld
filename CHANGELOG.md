@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Var expression descriptor propagation**: Descriptor metadata from expression evaluation now carries through var RHS dispatch and var assignment resolution, so taint/label metadata remains attached for ternary and other expression-based assignments.
 - **Dead code removal**: Removed unused `interpolateWithSecurity` interface member and `matchesCommandPatterns` export
 - **Specificity consistency**: `inferCapabilityRule` now uses same specificity logic as `evaluateCommandAccess` for deny/allow resolution
+- **StructuredValue `.trim()` parity for JSONL arrays**: Builtin target normalization treats structured array values as text for string-view methods (including `.trim()`), so `<file.jsonl>.trim()` and `<file.json>.trim()` both succeed instead of arrays throwing `Cannot call .trim() on object`.
 
 ### Changed
 - **QA self-review phase**: Added mandatory empirical verification step requiring agents to re-run experiments with corrected syntax before classifying as "genuine-bug"

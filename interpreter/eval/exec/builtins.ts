@@ -91,11 +91,42 @@ export function isTypeCheckingBuiltinMethod(name: string): boolean {
   return (TYPE_CHECKING_BUILTINS as readonly string[]).includes(name);
 }
 
-export function normalizeBuiltinTargetValue(value: unknown): unknown {
+const STRUCTURED_ARRAY_STRING_VIEW_METHODS = new Set<string>([
+  'toLowerCase',
+  'toUpperCase',
+  'trim',
+  'substring',
+  'substr',
+  'replace',
+  'replaceAll',
+  'padStart',
+  'padEnd',
+  'repeat',
+  'split',
+  'match',
+  'startsWith',
+  'endsWith'
+]);
+
+function shouldUseStringViewForStructuredArray(methodName?: string): boolean {
+  if (!methodName) {
+    return false;
+  }
+  return STRUCTURED_ARRAY_STRING_VIEW_METHODS.has(methodName);
+}
+
+export function normalizeBuiltinTargetValue(value: unknown, methodName?: string): unknown {
   if (isStructuredValue(value)) {
-    return value.type === 'array' ? value.data : asText(value);
+    if (value.type === 'array') {
+      return shouldUseStringViewForStructuredArray(methodName) ? asText(value) : value.data;
+    }
+    return asText(value);
   }
   if (LegacyStructuredValue.isStructuredValue?.(value)) {
+    const legacyData = (value as any).data;
+    if (Array.isArray(legacyData) && !shouldUseStringViewForStructuredArray(methodName)) {
+      return legacyData;
+    }
     return (value as any).text;
   }
   return value;
