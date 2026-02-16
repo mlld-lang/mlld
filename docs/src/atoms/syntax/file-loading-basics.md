@@ -16,7 +16,9 @@ qa_tier: 1
 >> Basic loading
 var @content = <README.md>
 var @config = <config.json>          >> auto-parsed as object
+var @events = <events.jsonl>         >> auto-parsed as array of JSON objects
 var @author = <package.json>.author  >> field access
+show @events[0].event                >> first JSONL record
 
 >> Globs (returns array)
 var @docs = <docs/**/*.md>
