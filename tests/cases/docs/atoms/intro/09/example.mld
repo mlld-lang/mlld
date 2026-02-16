@@ -1,0 +1,5 @@
+if @ready [ run @deploy() ]              >> correct (side effect)
+var @msg = when [ @ok => "pass"; * => "fail" ]   >> correct (value)
+
+when @ready => run @deploy()             >> WRONG: when returns, doesn't execute
+exe @fn() = when [ @x => show "hi" ]     >> WRONG: show is side effect, not value

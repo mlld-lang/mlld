@@ -1,0 +1,27 @@
+>> Command
+exe @list(dir) = cmd {ls -la @dir | head -5}
+
+>> JavaScript (in-process)
+exe @add(a, b) = js { return a + b }
+
+>> Node.js (VM-isolated)
+exe @hash(text) = node {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+>> Python
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @calculate(x, y) = py {
+result = x ** 2 + y ** 2
+print(result)
+}
+
+>> Template
+exe @greet(name) = `Hello @name!`
+
+>> External template file
+exe @welcome(name, role) = template "./prompts/welcome.att"
+
+>> Prose (requires config)
+exe @analyze(data) = prose:@config { session "Analyze @data" }

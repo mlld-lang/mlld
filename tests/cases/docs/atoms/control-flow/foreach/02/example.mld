@@ -1,0 +1,2 @@
+exe @wrapAll(items) = foreach @wrap(@items)
+show @wrapAll(["a", "b"])  >> ["[a]", "[b]"]

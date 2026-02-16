@@ -1,0 +1,2 @@
+for @item in @items => show `Processing @item`
+for @n in [1,2,3] => log @n

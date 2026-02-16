@@ -1,0 +1,5 @@
+var @config = "global"
+if true [
+  let @temp = "local"    >> correct
+  var @temp = "local"    >> WRONG: var not allowed in blocks
+]

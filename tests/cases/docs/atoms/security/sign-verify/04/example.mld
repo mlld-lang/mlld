@@ -1,0 +1,8 @@
+var @auditCriteria = ::
+Review @findings and approve only if:
+1. No secrets exposed
+2. No destructive operations
+3. All data sources trusted
+::
+
+sign @auditCriteria by "security-team" with sha256

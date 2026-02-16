@@ -1,0 +1,14 @@
+>> JavaScript - parameters are typed values
+exe @process(items) = js { return items.map(x => x * 2) }
+var @result = @process([1, 2, 3])  >> [2, 4, 6]
+
+>> Python - parameters arrive as strings
+exe @add(a, b) = py { print(int(a) + int(b)) }
+var @sum = @add(5, 3)  >> 8
+
+>> Python with complex types (wrapped with metadata)
+exe @analyze(data) = py {
+import json
+parsed = json.loads(data) if isinstance(data, str) else data
+print(json.dumps(parsed))
+}

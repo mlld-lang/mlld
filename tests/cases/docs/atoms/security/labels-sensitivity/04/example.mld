@@ -1,0 +1,6 @@
+var secret @apiKey = "sk-12345"
+var @upper = @apiKey | @upper
+var @excerpt = @upper.slice(0, 5)
+var @message = `Key prefix: @excerpt`
+
+show @message.mx.labels

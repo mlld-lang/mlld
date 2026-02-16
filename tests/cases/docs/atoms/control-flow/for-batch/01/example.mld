@@ -1,0 +1,2 @@
+var @total = for @n in [1,2,3,4] => @n => | @sum
+var @sorted = for @item in @items => @process(@item) => | @sortBy("priority")

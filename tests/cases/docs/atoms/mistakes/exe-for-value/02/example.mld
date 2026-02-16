@@ -1,0 +1,7 @@
+>> RIGHT: var for computed values
+var @date = cmd {date}
+show @date
+
+>> RIGHT: exe when you need parameters
+exe @format(dt, fmt) = cmd {date -d @dt +"@fmt"}
+var @nice = @format(@date, "%Y-%m-%d")

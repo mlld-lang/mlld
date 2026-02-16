@@ -1,0 +1,2 @@
+import tools from mcp "@github/issues" as @github
+show @github.createIssue("title", "body")

@@ -1,0 +1,2 @@
+exe @list(dir) = cmd { ls -la "@dir" | head -5 }
+exe @count(dir) = sh { ls "$dir" 2>/dev/null | wc -l }

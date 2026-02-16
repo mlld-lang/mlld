@@ -1,0 +1,2 @@
+var @greeting = `Hello @name!`
+var @alt = ::Hello @name!::

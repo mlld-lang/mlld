@@ -1,0 +1,10 @@
+import { @opus } from @mlld/prose
+
+exe @research(topic) = prose:@opus {
+  session "Research @topic"
+  agent researcher { model: sonnet, skills: [web-search] }
+  researcher: find current information about @topic
+  output findings
+}
+
+run @research("quantum computing trends")

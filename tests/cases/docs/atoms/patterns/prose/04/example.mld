@@ -1,0 +1,2 @@
+exe @workflow(ctx) = prose:@opus "./workflow.prose"
+exe @workflow(ctx) = prose:@opus "./workflow.prose.att"  >> ATT interpolation

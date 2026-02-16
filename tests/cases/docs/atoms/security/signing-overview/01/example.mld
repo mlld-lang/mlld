@@ -1,0 +1,6 @@
+>> Sign a template
+var @prompt = `Review @input for safety.`
+sign @prompt with sha256
+
+>> Verify checks signature and logs the result
+verify @prompt

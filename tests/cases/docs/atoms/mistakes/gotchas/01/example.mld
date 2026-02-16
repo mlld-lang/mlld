@@ -1,0 +1,5 @@
+var @config = "global"
+if true [
+  let @temp = "local"
+  let @temp = "reassigned"     >> ok — let is mutable
+]

@@ -1,0 +1,5 @@
+var @score = 95
+when [
+  @score > 90 => show "Excellent!"
+  * => show "No match"
+]

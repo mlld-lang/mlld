@@ -1,0 +1,9 @@
+var @sandbox = {
+  provider: "@mlld/env-docker",     >> Docker container for process isolation
+  fs: { read: [".:/app"], write: ["/tmp"] },  >> Mount host . as /app, allow writes to /tmp
+  net: "none"                        >> No network access
+}
+
+env @sandbox [
+  run cmd { npm test }
+]

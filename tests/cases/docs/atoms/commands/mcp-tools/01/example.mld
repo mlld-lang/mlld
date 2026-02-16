@@ -1,0 +1,11 @@
+exe @readData() = js { return "ok"; }
+exe @deleteData() = js { return "deleted"; }
+
+var tools @agentTools = {
+  safeRead: { mlld: @readData },
+  dangerousDelete: {
+    mlld: @deleteData,
+    labels: ["destructive"],
+    description: "Deletes records"
+  }
+}

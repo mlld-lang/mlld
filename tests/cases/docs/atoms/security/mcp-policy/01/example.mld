@@ -1,0 +1,8 @@
+var @policyConfig = {
+  labels: {
+    "src:mcp": {
+      deny: ["destructive", "op:cmd:rm"]
+    }
+  }
+}
+policy @p = union(@policyConfig)

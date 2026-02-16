@@ -1,0 +1,14 @@
+>> Wrong
+exe @calc(x) = [
+  let @result = @x * 2
+  return @result
+]
+
+>> Correct
+exe @calc(x) = [
+  let @result = @x * 2
+  => @result
+]
+
+>> Script return
+=> "final output"

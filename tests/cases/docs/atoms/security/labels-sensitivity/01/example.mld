@@ -1,0 +1,3 @@
+var secret @apiKey = keychain.get(...)
+var pii @userEmail = "user@example.com"
+var sensitive @internalConfig = <./company-config.json>

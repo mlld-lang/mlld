@@ -1,0 +1,2 @@
+var secret @token = "computed-value"
+run cmd { tool } using @token as TOOL_KEY

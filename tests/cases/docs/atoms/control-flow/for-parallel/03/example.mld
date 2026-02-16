@@ -1,0 +1,7 @@
+exe @process(tasks) = [
+  let @results = for parallel @t in @tasks => @run(@t)
+  => when [
+    @mx.errors.length == 0 => @results
+    * => @repair(@results, @mx.errors)
+  ]
+]

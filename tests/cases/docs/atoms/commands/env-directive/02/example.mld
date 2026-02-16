@@ -1,0 +1,12 @@
+exe @readData() = js { return "ok"; }
+exe @writeData(x) = js { return x; }
+
+var tools @allTools = {
+  read: { mlld: @readData },
+  write: { mlld: @writeData }
+}
+
+env @allTools with { tools: ["read"] } [
+  >> Only 'read' tool is available here
+  run cmd { claude -p @task }
+]

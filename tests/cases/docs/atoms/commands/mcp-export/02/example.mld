@@ -1,0 +1,4 @@
+exe @search(query: string, limit: number) = cmd {
+  gh issue list --search "@query" -L @limit --json number,title
+} with { description: "Search issues" }
+export { @search }

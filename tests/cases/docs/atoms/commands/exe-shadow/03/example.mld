@@ -1,0 +1,10 @@
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @multiply(x, y) = py { print(int(x) * int(y)) }
+exe py = { add, multiply }
+
+exe @calculate(n) = py {
+sum_result = add(n, 10)   >> calls shadow function
+product = multiply(n, 2)  >> calls shadow function
+print(f"Sum: {sum_result}, Product: {product}")
+}
+exe py = { add, multiply, calculate }  >> update to include calculate

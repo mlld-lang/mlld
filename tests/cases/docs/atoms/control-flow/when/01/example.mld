@@ -1,0 +1,5 @@
+when [
+  @score > 90 => show "Excellent!"
+  @hasBonus => show "Bonus earned!"
+  none => show "No matches"        >> runs only if nothing matched
+]

@@ -1,0 +1,8 @@
+exe @gate(response, config) = [
+  let @check = @validate(@response)
+  => when [
+    !@config.required => { pass: true }
+    @check.valid => { pass: true }
+    * => { pass: false, reason: @check.error }
+  ]
+]

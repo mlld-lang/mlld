@@ -1,0 +1,20 @@
+var @policyConfig = {
+  defaults: {
+    rules: [
+      "no-secret-exfil",
+      "no-sensitive-exfil",
+      "no-untrusted-destructive",
+      "no-untrusted-privileged"
+    ]
+  },
+  operations: {
+    "net:w": "exfil",
+    "fs:w": "destructive",
+    "sys:admin": "privileged"
+  },
+  capabilities: {
+    allow: ["cmd:git:*"],
+    danger: ["@keychain"]
+  }
+}
+policy @p = union(@policyConfig)

@@ -1,0 +1,5 @@
+exe @welcome(name, role) = template "./prompts/welcome.att"
+exe @systemPrompt(context) = template "./prompts/system.att"
+
+>> Call like any other function
+show @welcome("Alice", "admin")

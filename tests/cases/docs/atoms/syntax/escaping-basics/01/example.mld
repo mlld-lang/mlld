@@ -1,0 +1,5 @@
+>> Triple-colon disables @ detection in file-like patterns
+var @xml = :::<USER id="@id">@name</USER>:::
+
+>> Useful for XML/HTML with @ attributes
+var @elem = :::<input type="email" placeholder="user@example.com">:::

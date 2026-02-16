@@ -1,0 +1,11 @@
+var @filtered = for @x in @items => when [
+  @x.valid => @x
+  none => skip      >> omit this item from results
+]
+
+>> Equivalent to inline filter, but allows complex logic
+var @processed = for @item in @data => when [
+  @item.type == "a" => @transformA(@item)
+  @item.type == "b" => @transformB(@item)
+  * => skip         >> unknown types dropped
+]

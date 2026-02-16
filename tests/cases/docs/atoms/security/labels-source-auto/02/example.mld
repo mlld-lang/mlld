@@ -1,0 +1,3 @@
+exe @runCmd() = run { echo "hello" }
+var @result = @runCmd()
+show @result.mx.taint | @parse

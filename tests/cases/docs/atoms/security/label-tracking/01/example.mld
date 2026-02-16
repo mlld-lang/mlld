@@ -1,0 +1,4 @@
+>> Method calls preserve labels
+var secret @key = "sk-123"
+var @trimmed = @key.trim()
+show @trimmed.mx.labels    // ["secret"]

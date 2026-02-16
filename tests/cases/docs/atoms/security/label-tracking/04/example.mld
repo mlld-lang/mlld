@@ -1,0 +1,3 @@
+var secret @seed = "data"
+var @result = @seed | @transform | @process
+show @result.mx.labels     // ["secret"]

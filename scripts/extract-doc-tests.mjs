@@ -180,42 +180,87 @@ async function processDocFile(docPath, outputDir) {
 }
 
 /**
+ * Recursively collect all .md files from a directory
+ */
+async function collectMdFiles(dir) {
+  const results = [];
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...await collectMdFiles(fullPath));
+    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
+
+/**
  * Extract documentation tests
  */
 export async function extractDocumentationTests() {
-  const DOCS_DIR = path.join(PROJECT_ROOT, 'docs', 'user');
+  const USER_DOCS_DIR = path.join(PROJECT_ROOT, 'docs', 'user');
+  const ATOMS_DIR = path.join(PROJECT_ROOT, 'docs', 'src', 'atoms');
   const OUTPUT_DIR = path.join(PROJECT_ROOT, 'tests', 'cases', 'docs');
-  
+
   console.log('📖 Extracting documentation code blocks...');
-  
+
   // Clean existing doc tests (but preserve expected.md files)
   await cleanDirectory(OUTPUT_DIR);
-  
+
   // Create output directory
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
-  
-  // Process each documentation file
-  const docFiles = await fs.readdir(DOCS_DIR);
-  const mdFiles = docFiles.filter(f => f.endsWith('.md') && !f.includes('-review'));
-  
+
   let totalBlocks = 0;
   const results = [];
-  
+
+  // Process user docs (flat directory)
+  const docFiles = await fs.readdir(USER_DOCS_DIR);
+  const mdFiles = docFiles.filter(f => f.endsWith('.md') && !f.includes('-review'));
+
   for (const file of mdFiles) {
-    const filePath = path.join(DOCS_DIR, file);
+    const filePath = path.join(USER_DOCS_DIR, file);
     const result = await processDocFile(filePath, OUTPUT_DIR);
     totalBlocks += result.count;
     results.push(result);
   }
-  
-  // Log summary
-  console.log(`  ✓ Extracted ${totalBlocks} mlld blocks from ${mdFiles.length} docs`);
+
+  console.log(`  ✓ Extracted ${totalBlocks} mlld blocks from ${mdFiles.length} user docs`);
   for (const result of results) {
     if (result.count > 0) {
       console.log(`    • ${result.fileName}: ${result.count} blocks`);
     }
   }
-  
+
+  // Process atoms (nested category/atom.md structure)
+  const atomsOutputDir = path.join(OUTPUT_DIR, 'atoms');
+  await fs.mkdir(atomsOutputDir, { recursive: true });
+
+  const atomFiles = await collectMdFiles(ATOMS_DIR);
+  let atomBlocks = 0;
+  const atomResults = [];
+
+  for (const atomPath of atomFiles) {
+    const relPath = path.relative(ATOMS_DIR, atomPath);
+    const category = path.dirname(relPath);
+    const atomName = path.basename(relPath, '.md');
+    const atomOutputDir = path.join(atomsOutputDir, category);
+    await fs.mkdir(atomOutputDir, { recursive: true });
+    const result = await processDocFile(atomPath, atomOutputDir);
+    atomBlocks += result.count;
+    atomResults.push({ ...result, category });
+  }
+
+  totalBlocks += atomBlocks;
+
+  console.log(`  ✓ Extracted ${atomBlocks} mlld blocks from ${atomFiles.length} atoms`);
+  for (const result of atomResults) {
+    if (result.count > 0) {
+      console.log(`    • atoms/${result.category}/${result.fileName}: ${result.count} blocks`);
+    }
+  }
+
   return totalBlocks;
 }
 

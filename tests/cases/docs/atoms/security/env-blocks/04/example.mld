@@ -1,0 +1,6 @@
+var @sandbox = { tools: ["Read", "Write", "Bash"] }
+var @readOnly = new @sandbox with { tools: ["Read"] }
+
+env @readOnly [
+  run cmd { cat README.md }
+]

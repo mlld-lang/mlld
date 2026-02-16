@@ -1,0 +1,6 @@
+exe @collect() = when [
+  let @items = []
+  @items += "a"
+  @items += "b"
+  * => @items  >> ["a", "b"]
+]

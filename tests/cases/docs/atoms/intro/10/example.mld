@@ -1,0 +1,3 @@
+exe @safe() = cmd { ls -la }                   >> correct
+exe @piped() = sh { ls | wc -l }               >> correct
+exe @broken() = cmd { ls | wc -l }             >> WRONG: cmd rejects pipes

@@ -1,0 +1,20 @@
+>> Wrong (too much logic inline)
+var @result = for @item in @items => when [
+  @item.type == "a" && @item.status == "active" => [
+    let @x = @item.value * 2
+    let @y = @transform(@x)
+    let @z = @validate(@y)
+    => when [ @z.ok => @z.value * => null ]
+  ]
+  * => null
+]
+
+>> Correct (extract to helper)
+exe @processItem(item) = [
+  let @x = @item.value * 2
+  let @y = @transform(@x)
+  let @z = @validate(@y)
+  => when [ @z.ok => @z.value * => null ]
+]
+
+var @result = for @item in @items when @item.type == "a" => @processItem(@item)

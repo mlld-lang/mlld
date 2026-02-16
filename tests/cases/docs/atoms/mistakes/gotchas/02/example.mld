@@ -1,0 +1,2 @@
+>> This is a comment
+var @x = 1    >> inline comment

@@ -1,0 +1,7 @@
+exe @gather(topics) = prose:@opus {
+  session "Research multiple topics"
+  parallel for each topic in @topics {
+    research topic
+  }
+  combine results
+}

@@ -1,0 +1,10 @@
+var @cfg = {
+  profiles: {
+    full: { requires: { sh: true } },
+    readonly: { requires: { } }
+  }
+}
+
+env @cfg [
+  show @mx.profile
+]

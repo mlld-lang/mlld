@@ -1,0 +1,16 @@
+var @policyConfig = {
+  capabilities: {
+    allow: ["cmd:claude:*"],         >> Only allow claude commands
+    deny: ["sh"]                     >> Block shell access
+  }
+}
+policy @p = union(@policyConfig)     >> Activate policy
+
+var @sandbox = {
+  tools: ["Read", "Write", "Bash"],  >> Allow Read/Write plus command execution
+  mcps: []                           >> Block MCP servers in this block
+}
+
+env @sandbox [
+  run cmd { claude -p "Analyze code" }
+]

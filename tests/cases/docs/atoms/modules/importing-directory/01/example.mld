@@ -1,0 +1,6 @@
+import "@agents" as @agentRegistry
+show @agentRegistry.alice.tldr
+show @agentRegistry.support.helper.name
+
+>> With options
+import "./agents" as @agents with { skipDirs: [] }

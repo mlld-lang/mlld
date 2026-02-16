@@ -1,0 +1,13 @@
+>> Policy rules create privileged guards automatically
+var @policyConfig = {
+  defaults: { rules: ["no-secret-exfil"] },
+  operations: { "net:w": "exfil" }
+}
+policy @p = union(@policyConfig)
+
+var secret @key = "sk-12345"
+exe net:w @send(data) = run cmd { printf "%s" "@data" }
+
+>> Privileged guard still blocks — { guards: false } only disables user guards
+show @send(@key) with { guards: false }
+>> Error: Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'

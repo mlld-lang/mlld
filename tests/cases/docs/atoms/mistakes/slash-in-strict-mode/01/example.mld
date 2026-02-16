@@ -1,0 +1,7 @@
+>> Wrong (in .mld file)
+/var @x = 1
+/show @x
+
+>> Correct (in .mld file)
+var @x = 1
+show @x

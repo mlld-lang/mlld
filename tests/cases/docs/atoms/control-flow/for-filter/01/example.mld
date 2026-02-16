@@ -1,0 +1,2 @@
+var @valid = for @x in @items when @x != null => @x
+var @admins = for @u in @users when @u.role == "admin" => @u.name

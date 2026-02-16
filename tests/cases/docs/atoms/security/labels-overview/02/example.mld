@@ -1,0 +1,3 @@
+var secret @apiKey = "sk-12345"
+var @upper = @apiKey | @upper
+show @upper.mx.labels

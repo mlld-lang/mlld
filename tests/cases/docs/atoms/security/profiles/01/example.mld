@@ -1,0 +1,16 @@
+profiles {
+  full: {
+    requires: { sh, network },
+    description: "Full development access"
+  },
+  network: {
+    requires: { network },
+    description: "Network operations without shell"
+  },
+  readonly: {
+    requires: { },
+    description: "Read-only local operations"
+  }
+}
+
+show @mx.profile

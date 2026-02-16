@@ -1,0 +1,9 @@
+var @policyConfig = {
+  defaults: { rules: ["no-secret-exfil"], unlabeled: "untrusted" },
+  labels: { secret: { deny: ["op:show", "exfil"] } }
+}
+policy @p = union(@policyConfig)
+
+var secret @apiKey = <@keychain/prod/api-key>
+>> LLM can be tricked into trying to exfil @apiKey
+>> But label flow rules block it before execution

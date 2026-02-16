@@ -1,0 +1,5 @@
+var @config = { tools: @agentTools }
+
+env @config [
+  run cmd { claude -p @task }
+]

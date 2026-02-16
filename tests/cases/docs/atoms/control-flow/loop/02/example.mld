@@ -1,0 +1,5 @@
+loop until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show `@next`
+  continue @next
+]

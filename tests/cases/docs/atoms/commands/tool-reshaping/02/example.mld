@@ -1,0 +1,7 @@
+var tools @agentTools = {
+  createIssue: {
+    mlld: @createIssue,
+    bind: { owner: "mlld", repo: "infra" },
+    expose: ["title", "body"]
+  }
+}

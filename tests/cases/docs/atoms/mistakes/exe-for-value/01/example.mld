@@ -1,0 +1,3 @@
+>> WRONG: exe without parameters for a computed value
+exe @date() = cmd {date}
+var @now = @date()

@@ -1,0 +1,13 @@
+var @policyConfig = {
+  auth: {
+    claude: { from: "keychain:mlld-env-{projectname}/claude", as: "ANTHROPIC_API_KEY" }
+  },
+  keychain: {
+    allow: ["mlld-env-{projectname}/*"],
+    deny: ["system/*"]
+  },
+  capabilities: { danger: ["@keychain"] }
+}
+policy @p = union(@policyConfig)
+
+run cmd { claude -p "hello" } using auth:claude

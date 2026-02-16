@@ -1,0 +1,6 @@
+import { @sortBy, @unique } from @mlld/array
+import @corp/utils as @corp
+
+>> With version
+import { @helper } from @alice/utils@1.0.0
+import { @helper } from @alice/utils@^1.0.0   >> semver range

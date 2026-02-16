@@ -1,0 +1,3 @@
+var secret @token = "abc"
+var @msg = `Token: @token`
+show @msg.mx.labels        // ["secret"]

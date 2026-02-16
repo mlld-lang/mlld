@@ -1,0 +1,7 @@
+>> Wrong - loads raw text, no interpolation
+var @tpl = <prompts/welcome.att>
+var @result = @tpl.replace("@name", @userName)  >> manual, error-prone
+
+>> Correct - automatic interpolation with exe params
+exe @welcome(name) = template "./prompts/welcome.att"
+show @welcome(@userName)

@@ -1,0 +1,40 @@
+var @policyConfig = {
+  defaults: {
+    rules: [
+      "no-secret-exfil",
+      "no-untrusted-destructive",
+      "untrusted-llms-get-influenced"
+    ],
+    unlabeled: "untrusted"
+  },
+  operations: {
+    "net:w": "exfil",
+    "fs:w": "destructive"
+  },
+  capabilities: {
+    allow: ["cmd:claude:*", "cmd:git:*"],
+    deny: ["sh"],
+    danger: ["@keychain"]
+  },
+  auth: {
+    claude: { from: "keychain:anthropic/{projectname}", as: "ANTHROPIC_API_KEY" }
+  }
+}
+policy @p = union(@policyConfig)
+
+guard @blockInfluencedWrites before op:cmd = when [
+  @mx.labels.includes("influenced") => deny "Influenced data blocked from commands"
+  * => allow
+]
+
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  fs: { read: [".:/app"], write: ["/tmp"] },
+  net: "none",
+  tools: ["Read", "Bash"],
+  mcps: []
+}
+
+env @sandbox [
+  run cmd { claude -p "Analyze the codebase" } using auth:claude
+]

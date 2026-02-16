@@ -1,0 +1,7 @@
+var @dir = "./docs"
+var @userFile = "data/@username/profile.json"
+var @template = 'templates/@var.html'  >> literal '@'
+
+>> URLs as sources
+show <https://raw.githubusercontent.com/org/repo/main/README.md>
+var @remote = <https://example.com/README.md>

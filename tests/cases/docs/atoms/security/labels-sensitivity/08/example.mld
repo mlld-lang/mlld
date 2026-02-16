@@ -1,0 +1,7 @@
+guard before op:show = when [
+  @input.any.mx.labels.includes("secret") => deny "Cannot display secrets"
+  * => allow
+]
+
+var secret @key = "abc123"
+show @key

@@ -1,0 +1,13 @@
+import { @haiku, @sonnet } from "@lib/claude.mld"
+
+exe @classify(text) = [
+  let @prompt = `Classify this text as positive/negative/neutral: @text`
+  let @response = @haiku(@prompt)
+  => @response.trim().toLowerCase()
+]
+
+exe @analyze(data) = [
+  let @prompt = `Analyze this data and return JSON: @data|@parse`
+  let @response = @sonnet(@prompt)
+  => @response | @parse.llm
+]

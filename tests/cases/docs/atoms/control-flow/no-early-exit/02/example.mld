@@ -1,0 +1,6 @@
+exe @guard(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
+]

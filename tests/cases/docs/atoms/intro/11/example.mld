@@ -1,0 +1,1 @@
+var @html = `<div>Hello</div>`     >> WRONG: tries to load file "div"

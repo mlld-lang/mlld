@@ -1,0 +1,5 @@
+var @audit = <@root/.mlld/sec/audit.jsonl>
+exe @findWrites(events) = js {
+  return events.filter(e => e.event === "write");
+}
+show @findWrites(@audit) | @parse

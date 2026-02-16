@@ -1,0 +1,6 @@
+exe @greet(name) = `Hello, @name!`
+exe @farewell(name) = `Goodbye, @name!`
+var @_helper = "internal"
+
+>> Only @greet and @farewell are visible to importers
+export { @greet, @farewell }

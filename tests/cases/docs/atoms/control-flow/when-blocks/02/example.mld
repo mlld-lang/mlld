@@ -1,0 +1,6 @@
+exe @guard(x) = [
+  when !@x => [
+    => "missing"
+  ]
+  => "ok"
+]

@@ -1,0 +1,12 @@
+var @policyConfig = {
+  defaults: {
+    unlabeled: "untrusted",
+    rules: ["no-untrusted-destructive"]
+  },
+  operations: { "fs:w": "destructive" }
+}
+policy @p = union(@policyConfig)
+
+var @data = <./input.txt>
+exe fs:w @wipe(data) = run cmd { echo "@data" }
+show @wipe(@data)

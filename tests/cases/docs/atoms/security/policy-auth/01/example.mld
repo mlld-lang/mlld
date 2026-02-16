@@ -1,0 +1,9 @@
+var @policyConfig = {
+  auth: {
+    claude: { from: "keychain:mlld-env-myproject/claude", as: "ANTHROPIC_API_KEY" },
+    github: { from: "env:GH_TOKEN", as: "GH_TOKEN" }
+  }
+}
+policy @p = union(@policyConfig)  >> union() activates a policy — see policy-composition
+
+run cmd { claude -p "hello" } using auth:claude

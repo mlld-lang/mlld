@@ -1,0 +1,5 @@
+var @name = "Alice"            >> value - no params
+exe @greet(who) = `Hi @who!`   >> function - takes params
+
+>> Use var for computed values, exe for reusable functions
+var @result = @greet(@name)    >> "Hi Alice!"

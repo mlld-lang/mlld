@@ -1,0 +1,12 @@
+import { @getPR, @commentOnPR } from @company/github
+
+var @pr = @getPR(@MLLD_PR_NUMBER)
+var @status = when [
+  @pr.mergeable => "ready"
+  * => "blocked"
+]
+
+when [
+  @status == "ready" => @commentOnPR(@MLLD_PR_NUMBER, "Ready to merge")
+  @status == "blocked" => show "Needs attention"
+]

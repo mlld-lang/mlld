@@ -1,0 +1,4 @@
+var @result = env @config [
+  let @data = run cmd { fetch-data }
+  => @data
+]

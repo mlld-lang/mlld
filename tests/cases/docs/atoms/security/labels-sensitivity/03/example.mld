@@ -1,0 +1,1 @@
+var untrusted secret @leakedKey = <./found-on-internet.txt>

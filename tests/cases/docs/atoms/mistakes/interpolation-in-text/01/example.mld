@@ -1,0 +1,5 @@
+>> Wrong (strict mode)
+Hello @name!
+
+>> Correct
+show `Hello @name!`

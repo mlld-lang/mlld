@@ -1,0 +1,4 @@
+exe @smartFetch(url) = when [
+  @mx.tools.calls.includes("cache_check") => @fetchCached(@url)
+  * => @fetchFresh(@url)
+]

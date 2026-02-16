@@ -1,0 +1,4 @@
+var @policyConfig = {
+  labels: { secret: { deny: ["op:show", "op:log"] } }
+}
+policy @p = union(@policyConfig)

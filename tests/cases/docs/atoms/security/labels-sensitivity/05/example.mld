@@ -1,0 +1,9 @@
+var @policyConfig = {
+  defaults: {
+    rules: [
+      "no-secret-exfil",
+      "no-sensitive-exfil"
+    ]
+  }
+}
+policy @p = union(@policyConfig)

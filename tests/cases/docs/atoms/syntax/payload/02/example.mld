@@ -1,0 +1,3 @@
+import "@payload" as @payload
+var @topic = @payload.topic ? @payload.topic : "default"
+var @count = @payload.count ? @payload.count : 0

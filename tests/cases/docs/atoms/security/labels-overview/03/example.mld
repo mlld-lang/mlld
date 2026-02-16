@@ -1,0 +1,10 @@
+var secret @apiKey = "sk-12345"
+
+guard @noSecretToNetwork before secret = when [
+  @mx.op.labels.includes("network") => deny "Secrets cannot flow to network"
+  * => allow
+]
+
+exe network @sendData(data) = `sending: @data`
+
+show @sendData(@apiKey)

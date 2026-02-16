@@ -1,0 +1,19 @@
+---
+id: my-agent
+name: My Agent
+---
+
+var @meta = {
+  id: @fm.id,
+  name: @fm.name,
+  workDir: "/path/to/work"
+}
+
+exe @systemPrompt(context) = template "./prompts/system.att"
+exe @primaryPrompt(msg, ctx) = template "./prompts/primary.att"
+
+var @prompts = {
+  primary: @primaryPrompt
+}
+
+export { @meta, @prompts, @systemPrompt }

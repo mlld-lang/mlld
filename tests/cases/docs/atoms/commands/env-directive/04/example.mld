@@ -1,0 +1,9 @@
+var @agentConfig = {
+  provider: "@local",
+  tools: @agentTools,
+  auth: "claude"
+}
+
+env @agentConfig [
+  run cmd { claude -p @task }
+]

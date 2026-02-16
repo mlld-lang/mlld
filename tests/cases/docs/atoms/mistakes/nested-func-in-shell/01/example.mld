@@ -1,0 +1,9 @@
+>> Wrong
+run cmd {
+  RESULT=$(@helper("x"))
+  echo $RESULT
+}
+
+>> Correct
+var @r = @helper("x")
+run @r | { cat }

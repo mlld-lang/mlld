@@ -1,0 +1,13 @@
+>> Step 1: Semantic labels describe the operation
+exe net:w @postToSlack(msg) = run cmd { slack-cli "@msg" }
+exe fs:w @deleteFile(path) = run cmd { rm -rf "@path" }
+
+>> Step 2: Policy maps semantic labels to risk categories
+var @policyConfig = {
+  defaults: { rules: ["no-secret-exfil", "no-untrusted-destructive"] },
+  operations: {
+    "net:w": "exfil",
+    "fs:w": "destructive"
+  }
+}
+policy @p = union(@policyConfig)

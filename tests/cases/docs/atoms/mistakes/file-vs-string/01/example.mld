@@ -1,0 +1,2 @@
+var @content = <README.md>     >> loads file contents
+var @path = "README.md"        >> literal string

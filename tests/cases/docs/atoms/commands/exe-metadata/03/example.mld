@@ -1,0 +1,3 @@
+exe @searchIssues(repo: string, query: string, limit: number) = cmd {
+  gh issue list -R @repo --search "@query" -L @limit --json number,title
+} with { description: "Search GitHub issues by query" }

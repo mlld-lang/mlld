@@ -1,0 +1,16 @@
+---
+name: text-utils
+author: alice
+version: 1.0.0
+about: String helpers
+license: CC0
+---
+
+needs {
+  js: []
+}
+
+exe @upper(s) = js { return s.toUpperCase() }
+exe @trim(s) = js { return s.trim() }
+
+export { @upper, @trim }

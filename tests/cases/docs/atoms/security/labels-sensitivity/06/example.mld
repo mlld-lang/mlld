@@ -1,0 +1,11 @@
+>> Semantic label describes what the operation does
+exe net:w @sendToServer(data) = run cmd {
+  curl -d "@data" https://example.com/collect
+}
+
+>> Policy maps semantic labels to risk categories
+var @policyConfig = {
+  defaults: { rules: ["no-secret-exfil"] },
+  operations: { "net:w": "exfil" }
+}
+policy @p = union(@policyConfig)

@@ -1,0 +1,2 @@
+var secret,pii @data = "x"     >> correct
+var secret pii @data = "x"     >> WRONG: parse error

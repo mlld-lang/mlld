@@ -1,0 +1,10 @@
+var tools @agentTools = {
+  read: { mlld: @readData },
+  write: { mlld: @writeData },
+  delete: { mlld: @deleteData, labels: ["destructive"] }
+}
+
+env @agentTools with { tools: ["read", "write"] } [
+  >> Agent cannot access 'delete' tool
+  run cmd { claude -p @task }
+]

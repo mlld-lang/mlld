@@ -1,0 +1,9 @@
+guard before secret = when [
+  @mx.op.type == "run" => deny "Secrets blocked from shell"
+  * => allow
+]
+
+exe @safe(value) = when [
+  denied => `[blocked] @mx.guard.reason`
+  * => @value
+]

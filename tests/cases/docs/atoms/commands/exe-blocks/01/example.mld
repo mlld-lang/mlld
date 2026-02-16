@@ -1,0 +1,14 @@
+exe @process(data) = [
+  let @validated = @validate(@data)
+  let @transformed = @transform(@validated)
+  => @transformed
+]
+
+>> With accumulation
+exe @countItems(items) = [
+  let @count = 0
+  for @item in @items [
+    let @count += 1
+  ]
+  => @count
+]

@@ -1,0 +1,5 @@
+var @task = "Review code"
+var @cfg = { auth: "claude", tools: ["Read", "Write"] }
+var @readonly = @cfg with { tools: ["Read"] }
+
+env @readonly [ run cmd { claude -p @task } ]

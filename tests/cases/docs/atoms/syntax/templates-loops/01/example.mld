@@ -1,0 +1,11 @@
+>> TOP-LEVEL: for as a directive (produces output directly)
+for @item in @items => show `- @item.name`
+
+>> TEMPLATE-EMBEDDED: /for inside template body
+var @items = ["alpha", "beta", "gamma"]
+var @toc = ::
+/for @item in @items
+- @item
+/end
+::
+show @toc

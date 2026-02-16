@@ -1,0 +1,7 @@
+>> Wrong
+import { @tpl } from "./file.att"           >> single file
+import templates from "./agents" as @agents  >> missing params
+
+>> Correct
+exe @tpl(x) = template "./file.att"          >> single file
+import templates from "./agents" as @agents(message, context)

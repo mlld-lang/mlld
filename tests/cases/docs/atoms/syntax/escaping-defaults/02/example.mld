@@ -1,0 +1,12 @@
+>> Optional chaining equivalent
+exe @get(obj, path, fallback) = js {
+  const keys = path.split('.');
+  let val = obj;
+  for (const k of keys) {
+    if (val == null) return fallback;
+    val = val[k];
+  }
+  return val ?? fallback;
+}
+
+var @city = @get(@user, "address.city", "Unknown")

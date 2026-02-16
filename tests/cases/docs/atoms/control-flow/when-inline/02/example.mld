@@ -1,0 +1,8 @@
+when [
+  @role == "admin" => show "Admin access"
+  @role == "editor" => [
+    let @message = "Editor access"
+    show @message
+  ]
+  * => show "No access"
+]

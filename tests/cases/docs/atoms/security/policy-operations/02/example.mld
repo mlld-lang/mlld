@@ -1,0 +1,5 @@
+exe net:w, fs:w @exportAndDelete(data) = run cmd { backup_and_delete "@data" }
+
+var @policyConfig = {
+  operations: { "net:w": "exfil", "fs:w": "destructive" }
+}

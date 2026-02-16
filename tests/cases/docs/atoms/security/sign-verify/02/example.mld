@@ -1,0 +1,2 @@
+var @auditPrompt = ::Review @input and reject if unsafe::
+sign @auditPrompt by "security-team" with sha256

@@ -1,0 +1,6 @@
+var tools @agentTools = {
+  configure: {
+    mlld: @configure,
+    bind: { config: { timeout: 30, retries: 3 } }
+  }
+}

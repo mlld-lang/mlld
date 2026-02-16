@@ -1,0 +1,9 @@
+var @policyConfig = {
+  defaults: { rules: ["no-untrusted-destructive"] },
+  operations: { "fs:w": "destructive" }
+}
+policy @p = union(@policyConfig)
+
+var untrusted @payload = "data"
+exe fs:w @wipe(data) = run cmd { echo "@data" }
+show @wipe(@payload)

@@ -1,0 +1,7 @@
+>> Strict mode (.mld)
+var @name = "Alice"
+show `Hello @name!`
+
+>> Markdown mode (.md) - same with slashes
+/var @name = "Alice"
+/show `Hello @name!`

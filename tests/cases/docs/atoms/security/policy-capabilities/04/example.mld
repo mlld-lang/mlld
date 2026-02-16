@@ -1,0 +1,6 @@
+var @policyConfig = {
+  allow: ["cmd:git:*", "fs:r:**"],
+  danger: ["cmd:git:push:*:--force"],
+  deny: ["sh"]
+}
+policy @p = union(@policyConfig)

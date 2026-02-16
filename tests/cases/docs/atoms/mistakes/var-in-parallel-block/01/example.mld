@@ -1,0 +1,11 @@
+>> Wrong
+var @total = 0
+for parallel @x in @items [
+  var @total += 1   >> outer scope write blocked
+]
+
+>> Correct
+exe @countItems(items) = [
+  let @results = for parallel @x in @items => 1
+  => @results.length
+]

@@ -1,0 +1,23 @@
+var @policyConfig = {
+  defaults: {
+    rules: [
+      "no-secret-exfil",
+      "no-sensitive-exfil",
+      "no-untrusted-destructive",
+      "no-untrusted-privileged"
+    ],
+    unlabeled: "untrusted"
+  },
+  operations: {
+    "net:w": "exfil",
+    "fs:w": "destructive",
+    "sys:admin": "privileged"
+  },
+  capabilities: {
+    allow: ["cmd:git:*", "cmd:npm:*"],
+    deny: ["sh"]
+  }
+}
+policy @p = union(@policyConfig)
+
+exe net:w @postToSlack(channel, msg) = run cmd { curl -X POST @channel -d @msg }

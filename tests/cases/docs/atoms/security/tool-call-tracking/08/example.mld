@@ -1,0 +1,4 @@
+env @agent with { tools: @agentTools } [
+  >> @mx.tools.calls tracks calls within this env block
+  run cmd { claude -p @task }
+]

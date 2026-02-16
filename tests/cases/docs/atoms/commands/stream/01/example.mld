@@ -1,0 +1,5 @@
+stream @claude("prompt")           >> keyword form
+stream @generateReport()           >> directive form
+
+>> Parallel streams
+stream @a() || stream @b()         >> concurrent, buffered results

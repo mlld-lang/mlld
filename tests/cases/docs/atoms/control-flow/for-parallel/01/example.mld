@@ -1,0 +1,13 @@
+>> Default concurrency (MLLD_PARALLEL_LIMIT, default 4)
+for parallel @x in @items => show @x
+
+>> Custom concurrency cap
+for parallel(3) @task in @tasks => @runTask(@task)
+
+>> With pacing (delay between starts)
+for parallel(2, 1s) @x in @items => @process(@x)
+
+>> Variable cap and pacing
+var @cap = 2
+var @pace = "1s"
+for parallel(@cap, @pace) @x in @items => @process(@x)

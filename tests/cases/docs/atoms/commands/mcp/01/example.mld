@@ -1,0 +1,2 @@
+exe @greet(name: string) = js { return "Hello " + name; }
+export { @greet }
