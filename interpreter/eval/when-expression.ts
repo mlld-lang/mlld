@@ -759,6 +759,25 @@ async function evaluateWhenExpressionInternal(
           if (isBailError(actionError)) {
             throw actionError;
           }
+
+          if (!denyMode) {
+            const { handleExecGuardDenial } = await import('./guard-denial-handler');
+            const handled = await handleExecGuardDenial(actionError, {
+              execEnv: accumulatedEnv,
+              env,
+              whenExprNode: node
+            });
+            if (handled) {
+              return {
+                ...handled,
+                env: handled.env ?? accumulatedEnv,
+                internal: {
+                  ...(handled.internal ?? {}),
+                  deniedHandlerRan: true
+                }
+              };
+            }
+          }
           const conditionText = getConditionPairText(pair, sourceInfo.source)
             ?? getConditionText(pair.condition, sourceInfo.source);
           const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);

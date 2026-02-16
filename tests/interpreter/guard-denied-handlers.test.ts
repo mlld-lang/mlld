@@ -252,4 +252,35 @@ describe('handleExecGuardDenial', () => {
     expect(outputs.filter(content => content === 'blocked').length).toBeGreaterThanOrEqual(2);
     expect(outputs).not.toContain('deleted');
   });
+
+  it('handles compound @mx guard conditions with denied handlers', async () => {
+    const { env, effects } = createEnv();
+    const directives = parseSync(`
+/guard @compoundGuard before op:exe = when [
+  @mx.op.name == "deleteData" && @mx.tools.calls.includes("deleteData") => deny "Already deleted"
+  * => allow
+]
+/exe @deleteData() = "deleted"
+/exe @safeDelete() = when [
+  denied => "blocked"
+  * => @deleteData()
+]
+/var @first = @safeDelete()
+/var @second = @safeDelete()
+/show @second
+    `).filter(node => (node as DirectiveNode)?.type === 'Directive') as DirectiveNode[];
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    const outputs = effects
+      .getAll()
+      .filter(effect => effect.type === 'both')
+      .map(effect => effect.content.trim())
+      .filter(content => content.length > 0);
+
+    expect(outputs).toContain('blocked');
+    expect(effects.getErrors()).toContain('[Guard Warning] Already deleted');
+  });
 });
