@@ -14,7 +14,8 @@ import {
 } from './guard-override-utils';
 import {
   buildPerInputCandidates,
-  collectOperationGuards
+  collectOperationGuards,
+  type PerInputCandidate
 } from './guard-candidate-selection';
 import { buildOperationSnapshot } from './guard-operation-keys';
 import { normalizeGuardReplacements } from './guard-materialization';
@@ -39,6 +40,23 @@ import {
 } from './guard-pre-logging';
 import { evaluatePreHookGuard } from './guard-pre-runtime';
 import { getExpressionProvenance } from '../utils/expression-provenance';
+
+function applyCurrentInputToCandidate(
+  candidate: PerInputCandidate,
+  currentInput: Variable
+): PerInputCandidate {
+  if (candidate.variable === currentInput) {
+    return candidate;
+  }
+
+  return {
+    ...candidate,
+    variable: currentInput,
+    labels: Array.isArray(currentInput.mx?.labels) ? currentInput.mx.labels : [],
+    sources: Array.isArray(currentInput.mx?.sources) ? currentInput.mx.sources : [],
+    taint: Array.isArray(currentInput.mx?.taint) ? currentInput.mx.taint : []
+  };
+}
 
 export const guardPreHook: PreHook = async (
   node,
@@ -95,13 +113,14 @@ export const guardPreHook: PreHook = async (
       let currentInput = candidate.variable;
 
       for (const guard of candidate.guards) {
+        const candidateWithCurrentInput = applyCurrentInputToCandidate(candidate, currentInput);
         const result = await evaluatePreHookGuard({
           node,
           env,
           guard,
           operation,
           scope: 'perInput',
-          perInput: candidate,
+          perInput: candidateWithCurrentInput,
           attemptNumber,
           attemptHistory,
           attemptKey,

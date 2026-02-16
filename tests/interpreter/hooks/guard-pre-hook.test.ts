@@ -1245,6 +1245,76 @@ it('keeps combined before guards on op:exe resolved to plain values', async () =
   expect(String(value)).not.toContain('"type":"');
 });
 
+it('composes multiple before label transforms in guard registration order', async () => {
+  const env = createEnv();
+  const firstGuard = parseSync(
+    '/guard before @first for secret = when [ * => allow `A-@input` ]'
+  )[0] as DirectiveNode;
+  const secondGuard = parseSync(
+    '/guard before @second for secret = when [ * => allow `B-@input` ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(firstGuard, env);
+  await evaluateDirective(secondGuard, env);
+
+  env.setVariable(
+    'secretVar',
+    createSimpleTextVariable(
+      'secretVar',
+      'test',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+  await evaluateDirective(directive, env);
+
+  const effects = env.getEffectHandler() as TestEffectHandler;
+  expect(effects.getOutput().trim()).toBe('B-A-test');
+});
+
+it('applies conditional before label transforms using the latest transformed input', async () => {
+  const env = createEnv();
+  const firstGuard = parseSync(
+    '/guard before @first for secret = when [ * => allow `A-@input` ]'
+  )[0] as DirectiveNode;
+  const conditionalGuard = parseSync(
+    '/guard before @second for secret = when [ !@input.startsWith("A-") => allow `B-@input` \n * => allow ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(firstGuard, env);
+  await evaluateDirective(conditionalGuard, env);
+
+  env.setVariable(
+    'secretVar',
+    createSimpleTextVariable(
+      'secretVar',
+      'test',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+  await evaluateDirective(directive, env);
+
+  const effects = env.getEffectHandler() as TestEffectHandler;
+  expect(effects.getOutput().trim()).toBe('A-test');
+});
+
 it('applies op:exe guards to bare run-exec statements and var-assigned exec calls', async () => {
   const env = createEnv();
   const guardDirective = parseSync(
