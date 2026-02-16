@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **@ escaping universality**: Clarified both `@@` and `\@` work in all string contexts (not just templates)
 - **Removed deprecated transformers**: `@xml`, `@csv`, `@md`, `@upper`, `@lower` no longer documented (moving to userland modules)
 - **Guard `@input` examples**: Security docs replace `@input.includes(...)` guard snippets with operation-input access via `@input[0].includes(...)`, and guard basics include a context reference for `@input`, `@output`, and `@mx`.
+- **`show { ... }` object-literal docs cleanup**: Docs and plugin guidance remove inline object-literal forms after `show` and use `var`-then-`show` examples instead.
 
 ### Added
 - **`mlld live --stdio`**: persistent NDJSON RPC transport for long-running SDK calls
