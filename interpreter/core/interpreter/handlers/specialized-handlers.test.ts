@@ -449,6 +449,11 @@ describe('interpreter specialized handlers parity', () => {
         "valueKind": "string",
       }
     `);
+
+    const cwdCommandNode = parseVarValueNode('/var @x = cmd:/ { echo hi }');
+    await evaluate(cwdCommandNode, env, { isExpression: true });
+    expect(executeSpy).toHaveBeenCalledTimes(2);
+    expect(executeSpy.mock.calls[1][1]).toEqual({ workingDirectory: '/' });
     executeSpy.mockRestore();
 
     const failingCommandNode = parseVarValueNode('/var @x = cmd { echo hi }');
