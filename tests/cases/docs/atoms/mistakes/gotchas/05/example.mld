@@ -1,2 +1,2 @@
 var @readme = <README.md>
-var @html = `<div>Hello</div>`         >> tries to load "div"!
+var @files = <src/**/*.ts>

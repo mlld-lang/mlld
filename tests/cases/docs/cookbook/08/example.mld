@@ -2,7 +2,7 @@ var @THRESHOLD = 0.7
 
 exe @score(input) = [
   let @length = @input.length()
-  let @hasQuestion = @input.includes("?")
+  let @hasQuestion = @input.text.includes("?")
 
   let @scoreBase = when [
     @length > 100 => 0.5

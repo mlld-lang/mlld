@@ -1,9 +1,6 @@
-var @agentConfig = {
-  provider: "@local",
-  tools: @agentTools,
-  auth: "claude"
-}
+env @config with { tools: ["read", "write"] } [...]
+env @config with { tools: "read, write" } [...]
+env @config with { tools: "*" } [...]
 
-env @agentConfig [
-  run cmd { claude -p @task }
-]
+var @subset = { read: @readTool, write: @writeTool }
+env @config with { tools: @subset } [...]

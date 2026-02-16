@@ -1,7 +1,6 @@
 var @input = "test"
 
 env @config [
-  >> Can read @input from parent
   let @processed = @input | @transform
   => @processed
 ]

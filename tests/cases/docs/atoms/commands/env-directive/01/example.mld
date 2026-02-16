@@ -1,5 +1,11 @@
-var @config = { tools: @agentTools }
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  fs: { read: [".:/app"], write: ["/tmp"] },
+  net: "none",
+  tools: ["Read", "Bash"],
+  mcps: []
+}
 
-env @config [
-  run cmd { claude -p @task }
+env @sandbox [
+  run cmd { claude -p "Analyze the codebase" } using auth:claude
 ]

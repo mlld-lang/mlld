@@ -56,10 +56,10 @@ var secret pii @data = "sensitive"     >> parse error
 
 ```mlld
 var @readme = <README.md>
-var @html = `<div>Hello</div>`         >> tries to load "div"!
+var @files = <src/**/*.ts>
 ```
 
-Use `.att` template files for HTML content.
+In backtick templates, `<word>` with dots or slashes is treated as a file path. Simple HTML-like tags (`<div>`, `<span>`) are passed through as literal text.
 
 ## Path dot escaping
 
@@ -74,22 +74,13 @@ let @out = `@dir/@name.json`           >> accesses .json field
 
 `\@` produces a literal `@`: `user\@example.com` outputs `user@example.com`.
 
-## Error handling in loops
+## Error handling in parallel loops
 
-Errors in `for` loops become data objects with `.error` and `.message` fields. The loop continues.
+Errors in `for parallel` loops become data objects with `.error` and `.message` fields. The loop continues. Regular (non-parallel) `for` loops throw on error.
 
 ```mlld
-var @results = for @item in @list [ => @process(@item) ]
+var @results = for parallel(4) @item in @list [ => @process(@item) ]
 var @failures = for @r in @results when @r.error => @r
 ```
 
-## `show` and StructuredValues
-
-`show @val` on a StructuredValue can dump internal metadata. Assign to a variable first.
-
-```mlld
-var @parsed = '{"a":1}' | @parse
-var @clean = { result: @parsed }
-show @clean
-```
 

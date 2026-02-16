@@ -1,3 +1,0 @@
-var @parsed = '{"a":1}' | @parse
-var @clean = { result: @parsed }
-show @clean

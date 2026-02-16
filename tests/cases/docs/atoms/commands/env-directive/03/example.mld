@@ -1,12 +1,9 @@
->> Array of tool names
-env @config with { tools: ["read", "write"] } [...]
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  tools: ["Read", "Write", "Bash"]
+}
 
->> Comma-separated string
-env @config with { tools: "read, write" } [...]
-
->> Wildcard for all tools
-env @config with { tools: "*" } [...]
-
->> Object keys as tool names
-var @subset = { read: @readTool, write: @writeTool }
-env @config with { tools: @subset } [...]
+env @sandbox with { tools: ["Read"] } [
+  >> Only Read is available here
+  run cmd { claude -p @task }
+]
