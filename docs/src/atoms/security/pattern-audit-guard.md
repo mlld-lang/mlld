@@ -5,7 +5,7 @@ brief: Multi-agent audit with signed templates for prompt injection defense
 category: security
 parent: security
 tags: [pattern, audit, guard, signing, verification, influenced, security, prompt-injection]
-related: [signing-overview, sign-verify, autosign-autoverify, labels-influenced, guards-basics, denied-handlers, tool-call-tracking, pattern-dual-audit]
+related: [signing-overview, sign-verify, autosign-autoverify, labels-influenced, security-guards-basics, security-denied-handlers, tool-call-tracking, pattern-dual-audit]
 related-code: [llm/run/j2bd/security/impl/main.mld]
 updated: 2026-02-04
 qa_tier: 2

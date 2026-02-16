@@ -5,7 +5,7 @@ brief: What labels are and why they matter
 category: security
 parent: security
 tags: [labels, taint, security, tracking]
-related: [labels-source-auto, labels-sensitivity, labels-propagation, labels-mx-context]
+related: [labels-source-auto, labels-sensitivity, security-label-tracking]
 related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]
 updated: 2026-01-31
 qa_tier: 2

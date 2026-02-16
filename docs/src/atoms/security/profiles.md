@@ -5,7 +5,7 @@ brief: Tiered capability bundles for graceful degradation
 category: security
 parent: security
 tags: [profiles, capabilities, degradation, policy, needs, environments]
-related: [policy-composition, env-config, env-blocks, policy-capabilities, needs-declaration]
+related: [policy-composition, env-config, env-blocks, policy-capabilities, security-needs-declaration]
 related-code: [interpreter/eval/profiles.ts, core/policy/needs.ts, interpreter/eval/env.ts]
 updated: 2026-02-15
 qa_tier: 2

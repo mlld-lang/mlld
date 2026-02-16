@@ -5,7 +5,7 @@ brief: Autonomous agent loop with dynamic context assembly
 category: patterns
 parent: patterns
 tags: [patterns, agents, loops, orchestration, autonomous]
-related: [loop, pattern-gate, pattern-llm-integration, sdk-execute-function]
+related: [loop, pattern-gate, pattern-llm-integration, config-sdk-execute]
 related-code: [interpreter/eval/loop.ts]
 updated: 2026-01-11
 ---

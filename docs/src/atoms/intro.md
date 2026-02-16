@@ -4,7 +4,7 @@ title: Introduction to mlld
 brief: What mlld is, mental model, and key concepts
 category: intro
 tags: [overview, quickstart, mental-model, gotchas]
-related: [gotchas, labels-overview, policies, guards-basics]
+related: [gotchas, labels-overview, security-policies, security-guards-basics]
 updated: 2026-02-15
 ---
 
@@ -140,7 +140,7 @@ var secret,pii @data = "x"     >> correct
 var secret pii @data = "x"     >> WRONG: parse error
 ```
 
-**`var` is module-level, `let` is block-scoped**
+**`var` is module-level and immutable, `let` is block-scoped and mutable**
 ```mlld
 var @config = "global"
 if true [
@@ -160,17 +160,22 @@ exe @fn() = when [ @x => show "hi" ]     >> WRONG: show is side effect, not valu
 
 **`cmd` rejects shell operators — use `sh`**
 ```mlld
-exe @safe() = cmd { ls -la }                   >> correct
-exe @piped() = sh { ls | wc -l }               >> correct
-exe @broken() = cmd { ls | wc -l }             >> WRONG: cmd rejects pipes
+exe @safe() = cmd { ls -la }                   >> correct: simple command
+exe @piped() = cmd { ls -la | head -5 }        >> correct: pipes work in cmd
+exe @redirect() = cmd { ls > out.txt }         >> WRONG: cmd rejects >, &&, ;
+exe @shell() = sh { ls > out.txt 2>/dev/null } >> correct: sh allows all shell syntax
 ```
 
-**Angle brackets `<>` trigger file loading**
+**Angle brackets `<>` in templates and expressions**
 ```mlld
-var @html = `<div>Hello</div>`     >> WRONG: tries to load file "div"
+var @html = `<div>Hello</div>`                 >> properly interprets as text bc no slashes/dots/vars
+var @template = `File contents: <file.md>`     >> interpolates full content of file.md in template value
+var @readme = <README.md>                      >> loads file
+var @files = <src/**/*.ts>                     >> glob pattern
+var @files = <@pathvar/file.ts>                >> variable usage
 ```
 
-Use `.att` template files for HTML/XML content where `<tag>` doesn't trigger loading.
+See `mlld howto file-loading-basics` for advanced usage.
 
 **See `mlld howto gotchas` for the full list.**
 

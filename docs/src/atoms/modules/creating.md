@@ -5,7 +5,7 @@ brief: Module structure with frontmatter and exports
 category: modules
 parent: modules
 tags: [modules, frontmatter, exports, creation]
-related: [modules-exporting, modules-importing]
+related: [modules-exporting, modules-importing-local]
 related-code: [interpreter/eval/import.ts, core/module/Module.ts]
 updated: 2026-01-05
 ---

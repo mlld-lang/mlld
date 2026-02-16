@@ -23,7 +23,7 @@ qa_tier: 1
 **Escape hatch templates:**
 
 ```mlld
->> Triple-colon disables @ detection in file-like patterns
+>> Triple-colon disables all @ interpolation — treats @ as literal text
 var @xml = :::<USER id="@id">@name</USER>:::
 
 >> Useful for XML/HTML with @ attributes

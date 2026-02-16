@@ -6,7 +6,7 @@ category: security
 parent: guards
 aliases: [guard]
 tags: [security, guards, labels, policies]
-related: [security-before-guards, security-after-guards, security-labels]
+related: [security-before-guards, security-after-guards, labels-overview]
 related-code: [interpreter/eval/guard.ts, core/security/Guard.ts]
 updated: 2026-01-05
 qa_tier: 2
@@ -71,7 +71,7 @@ Operation guard inputs expose helper metadata for aggregate checks:
 - `@input.all.mx.taint.includes("src:file")`
 - `@input.none.mx.labels.includes("pii")`
 - `@input.mx.labels`, `@input.mx.taint`, `@input.mx.sources`
-- `@input[0]` for first input value checks (for example `@input[0].includes("sk-")`)
+- `@input.any.text.includes("sk-")` for content-level text inspection
 
 Use labels to classify data types, taint to track untrusted origins, and sources for audit trails:
 
