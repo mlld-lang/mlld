@@ -150,6 +150,36 @@ describe('env MCP config integration', () => {
     }
   });
 
+  it('sets @mx.tools.allowed and @mx.tools.denied for env mcpConfig tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    const source = [
+      '/var @cfg = { tools: ["ping"] }',
+      '/exe @mcpConfig() = {"servers": [{"command": "' + serverSpec + '", "tools": ["ping", "echo"]}]}',
+      '/env @cfg [',
+      '  show @mx.tools.allowed | @json',
+      '  show @mx.tools.denied | @json',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('["ping"]\n\n["echo"]');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves src:mcp taint and policy checks for tools from mcpConfig', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;

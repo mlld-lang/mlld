@@ -191,6 +191,7 @@ export class FunctionRouter {
       commandRef,
       meta: {
         mcpSecurity: mcpSecurityDescriptor,
+        toolCallTracking: 'router',
         ...(toolLabels && toolLabels.length > 0 ? { mcpToolLabels: toolLabels } : {})
       }
     } as ExecInvocation;

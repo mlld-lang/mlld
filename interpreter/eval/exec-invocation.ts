@@ -138,6 +138,39 @@ const resolveVariableIndexValue = async (fieldValue: any, env: Environment): Pro
   return evaluateDataValue(node as any, env);
 };
 
+function buildToolCallArguments(
+  paramNames: readonly string[],
+  evaluatedArgs: readonly unknown[]
+): Record<string, unknown> | undefined {
+  if (evaluatedArgs.length === 0) {
+    return undefined;
+  }
+
+  if (
+    paramNames.length === 0 &&
+    evaluatedArgs.length === 1 &&
+    evaluatedArgs[0] &&
+    typeof evaluatedArgs[0] === 'object' &&
+    !Array.isArray(evaluatedArgs[0])
+  ) {
+    return { ...(evaluatedArgs[0] as Record<string, unknown>) };
+  }
+
+  const argsRecord: Record<string, unknown> = {};
+  for (let index = 0; index < evaluatedArgs.length; index += 1) {
+    const paramName = paramNames[index];
+    const key = typeof paramName === 'string' && paramName.trim().length > 0
+      ? paramName
+      : `arg${index}`;
+    argsRecord[key] = evaluatedArgs[index];
+  }
+  return argsRecord;
+}
+
+function normalizeToolCallError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * Evaluate an ExecInvocation node
  * This executes a previously defined exec command with arguments and optional tail modifiers
@@ -161,6 +194,7 @@ async function evaluateExecInvocationInternal(
 ): Promise<EvalResult> {
   let commandName: string | undefined; // Declare at function scope for finally block
   let endResolutionTrackingIfNeeded: () => void = () => {};
+  const skipInternalToolCallTracking = (node as any)?.meta?.toolCallTracking === 'router';
 
   const normalizeFields = (fields?: Array<{ type: string; value: any }>) =>
     (fields || []).map(field => {
@@ -1217,52 +1251,80 @@ async function evaluateExecInvocationInternal(
   const toolLabels = Array.isArray(mcpToolLabels)
     ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
     : [];
-
-  const { guardInputsWithMapping, guardInputs } = prepareExecGuardInputs({
-    env,
-    evaluatedArgs,
-    evaluatedArgStrings,
-    guardVariableCandidates,
-    expressionSourceVariables,
-    mcpSecurityDescriptor
-  });
-  let postHookInputs: readonly Variable[] = guardInputs;
-  const execDescriptor = getVariableSecurityDescriptor(variable);
-  const {
-    operationContext,
-    exeLabels,
-    mergePolicyInputDescriptor
-  } = await createExecOperationContextAndEnforcePolicy({
-    node,
-    definition,
-    commandName,
-    operationName: variable.name ?? commandName,
-    toolLabels,
-    env,
-    execEnv,
-    policyEnforcer,
-    mcpSecurityDescriptor,
-    execDescriptor,
-    services: {
-      interpolateWithResultDescriptor,
-      getResultSecurityDescriptor: () => resultSecurityDescriptor,
-      resolveStdinInput
+  const trackedMcpName =
+    typeof (mcpTool as any)?.name === 'string' && (mcpTool as any).name.trim().length > 0
+      ? (mcpTool as any).name.trim()
+      : '';
+  const trackedToolName = trackedMcpName || (variable.name ?? commandName ?? '');
+  const toolCallRecordBase =
+    !skipInternalToolCallTracking && trackedToolName.length > 0
+      ? {
+          name: trackedToolName,
+          arguments: buildToolCallArguments(params, evaluatedArgs),
+          timestamp: Date.now()
+        }
+      : null;
+  const recordToolCall = (ok: boolean, error?: unknown): void => {
+    if (!toolCallRecordBase) {
+      return;
     }
-  });
+    if (ok) {
+      env.recordToolCall({ ...toolCallRecordBase, ok: true });
+      return;
+    }
+    env.recordToolCall({
+      ...toolCallRecordBase,
+      ok: false,
+      error: normalizeToolCallError(error)
+    });
+  };
 
-  const finalizeResult = async (result: EvalResult): Promise<EvalResult> =>
-    runExecPostGuards({
+  try {
+    const { guardInputsWithMapping, guardInputs } = prepareExecGuardInputs({
+      env,
+      evaluatedArgs,
+      evaluatedArgStrings,
+      guardVariableCandidates,
+      expressionSourceVariables,
+      mcpSecurityDescriptor
+    });
+    let postHookInputs: readonly Variable[] = guardInputs;
+    const execDescriptor = getVariableSecurityDescriptor(variable);
+    const {
+      operationContext,
+      exeLabels,
+      mergePolicyInputDescriptor
+    } = await createExecOperationContextAndEnforcePolicy({
+      node,
+      definition,
+      commandName,
+      operationName: variable.name ?? commandName,
+      toolLabels,
       env,
       execEnv,
-      node,
-      operationContext,
-      postHookInputs,
-      result,
-      whenExprNode
+      policyEnforcer,
+      mcpSecurityDescriptor,
+      execDescriptor,
+      services: {
+        interpolateWithResultDescriptor,
+        getResultSecurityDescriptor: () => resultSecurityDescriptor,
+        resolveStdinInput
+      }
     });
 
-  return await env.withOpContext(operationContext, async () => {
-    return AutoUnwrapManager.executeWithPreservation(async () => {
+    const finalizeResult = async (result: EvalResult): Promise<EvalResult> =>
+      runExecPostGuards({
+        env,
+        execEnv,
+        node,
+        operationContext,
+        postHookInputs,
+        result,
+        whenExprNode
+      });
+
+    const invocationResult = await env.withOpContext(operationContext, async () => {
+      return AutoUnwrapManager.executeWithPreservation(async () => {
       const {
         preDecision,
         postHookInputs: nextPostHookInputs,
@@ -1628,8 +1690,14 @@ async function evaluateExecInvocationInternal(
   }
   const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
   return finalEvalResult;
+      });
     });
-  });
+    recordToolCall(true);
+    return invocationResult;
+  } catch (error) {
+    recordToolCall(false, error);
+    throw error;
+  }
   } finally {
     // Ensure resolution tracking is always cleaned up, even on error paths.
     endResolutionTrackingIfNeeded();

@@ -303,7 +303,17 @@ async function applyMcpConfigForEnv(
   }
 
   try {
-    await registerMcpToolsFromConfig(scopedEnv, normalized);
+    const configuredTools = await registerMcpToolsFromConfig(scopedEnv, normalized);
+    const allowed: string[] = [];
+    const denied: string[] = [];
+    for (const toolName of configuredTools) {
+      if (scopedEnv.isToolAllowed(toolName)) {
+        allowed.push(toolName);
+      } else {
+        denied.push(toolName);
+      }
+    }
+    scopedEnv.setToolsAvailability(allowed, denied);
   } catch (error) {
     throw new MlldDirectiveError(
       error instanceof Error ? error.message : 'Failed to configure MCP tools for env',
