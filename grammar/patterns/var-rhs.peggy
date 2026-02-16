@@ -534,7 +534,7 @@ EnvExpression "env expression"
 
 // Language keywords for var code execution
 VarCodeLanguage "code language"
-  = "js" / "javascript" / "node" / "python" / "bash" / "sh"
+  = "js" / "javascript" / "node" / "python" / "py" / "bash" / "sh"
 
 // Code block content - preserve everything literally
 CodeBlockContent "code block content"
