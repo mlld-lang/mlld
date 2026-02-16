@@ -1,2 +1,0 @@
-var secret,pii @data = "sensitive"     >> correct
-var secret pii @data = "sensitive"     >> parse error

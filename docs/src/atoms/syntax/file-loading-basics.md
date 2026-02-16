@@ -5,10 +5,10 @@ brief: Load file contents with angle brackets and globs
 category: syntax
 parent: file-loading
 aliases: [file, files, load]
-tags: [files, loading, angle-brackets, globs]
+tags: [files, loading, angle-brackets, globs, optional]
 related: [file-loading-ast, file-loading-metadata, variables-basics]
-related-code: [interpreter/eval/file-loading.ts, grammar/patterns/file-loading.peggy]
-updated: 2026-01-05
+related-code: [interpreter/eval/content-loader.ts, grammar/patterns/alligator.peggy]
+updated: 2026-02-16
 qa_tier: 1
 ---
 
@@ -33,4 +33,20 @@ show @first.mx.filename              >> file metadata still available
 
 >> With "as" template
 var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
+```
+
+**Optional load** - returns null for missing files, empty array for empty globs:
+
+```mlld
+>> Missing file returns null
+var @optional = <config.json>?
+when @optional => show "Config loaded"
+
+>> Empty glob returns []
+var @matches = <*.nonexistent>?
+show @matches.length                 >> 0
+
+>> Existing file works normally
+var @readme = <README.md>?
+show @readme                         >> file content
 ```

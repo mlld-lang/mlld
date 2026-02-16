@@ -1,38 +1,47 @@
 ---
 id: when-inline
-title: When Inline
-brief: Single-expression shorthand for when
+title: When Match Form
+brief: Pattern matching with optional colon syntax
 category: control-flow
 parent: when
-tags: [conditionals, branching]
-related: [when, when-blocks, if]
+tags: [conditionals, pattern-matching]
+related: [when, when-blocks, when-value-returning]
 related-code: [interpreter/eval/when.ts, grammar/directives/when.peggy]
-updated: 2026-01-31
+updated: 2026-02-16
 qa_tier: 1
 ---
 
-Use inline `when` for a single action expression, such as
-`when @score > 90 => show "Excellent!"`.
+Match a value against patterns using `when @expr [patterns]`.
 
-This matches the same condition semantics as block form:
+**Value matching** (literal patterns):
 
 ```mlld
-var @score = 95
-when [
-  @score > 90 => show "Excellent!"
-  * => show "No match"
+var @status = "active"
+when @status [
+  "active" => show "Running"
+  "pending" => show "Waiting"
+  * => show "Unknown"
 ]
 ```
 
-Use block form when you need multiple branches or a multi-statement action:
+The colon form `when @expr: [patterns]` also works but the colon is optional.
+
+**Condition matching** (boolean expressions):
 
 ```mlld
-when [
-  @role == "admin" => show "Admin access"
-  @role == "editor" => [
-    let @message = "Editor access"
-    show @message
-  ]
-  * => show "No access"
+when @score [
+  @score > 90 => show "A"
+  @score > 80 => show "B"
+  * => show "F"
 ]
 ```
+
+Patterns evaluate in order. First match wins.
+
+**Simple inline** (single action):
+
+```mlld
+when @cond => show "Match"
+```
+
+Use block form `when [@cond => action; * => default]` when you need multiple branches or a fallback.

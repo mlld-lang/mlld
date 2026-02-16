@@ -12,12 +12,12 @@ mlld's security model prevents the consequences of prompt injection from manifes
 
 **"I want to..."**
 
-- **Restrict what a module or agent can do** → [Policies](#policies): declarative capability rules, label flow restrictions, built-in rules
-- **Inspect, transform, or block data at operation time** → [Guards](#guards): imperative per-operation logic with before/after hooks
-- **Track where data came from and what it contains** → [Labels](#labels): automatic provenance, explicit sensitivity and trust classification
-- **Prove LLM instructions are untampered** → [Signing](#signing): cryptographic integrity for templates
-- **Isolate execution with credentials and resource limits** → [Environments](#environments): scoped contexts with filesystem, network, and tool restrictions
-- **Record security events for forensics** → [Audit Log](#audit-logging): JSONL ledgers for label changes, file writes, and signing events
+- **Restrict what a module or agent can do** → [policies](#policies): declarative capability rules, label flow restrictions, built-in rules
+- **Inspect, transform, or block data at operation time** → [guards](#guards): imperative per-operation logic with before/after hooks
+- **Track where data came from and what it contains** → [labels](#labels): automatic provenance, explicit sensitivity and trust classification
+- **Create trust boundaries for LLM instructions** → [signing](#signing): integrity for templates and instructions
+- **Isolate execution with credentials and resource limits** → [environments](#environments): scoped contexts with filesystem, network, and tool restrictions
+- **Logs for observability and forensics** → [audit-logging](#audit-logging): JSONL ledgers for label changes, file writes, and signing events
 
 ## Labels
 

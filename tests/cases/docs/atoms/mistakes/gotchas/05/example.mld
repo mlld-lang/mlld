@@ -1,2 +1,2 @@
-var @readme = <README.md>
-var @files = <src/**/*.ts>
+var @results = for parallel(4) @item in @list [ => @process(@item) ]
+var @failures = for @r in @results when @r.error => @r

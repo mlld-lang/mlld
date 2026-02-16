@@ -1,6 +1,10 @@
->> Instead of early return, use conditional flow
-var @check = @validate(@input)
-when [
-  @check.valid => @process(@input)
-  !@check.valid => show `Error: @check.message`
+>> Filter with conditional accumulation
+exe @filter(items) = [
+  let @results = []
+  for @item in @items [
+    when @item.valid => [
+      let @results += [@item]
+    ]
+  ]
+  => @results
 ]

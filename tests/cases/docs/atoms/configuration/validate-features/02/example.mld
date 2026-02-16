@@ -1,0 +1,5 @@
+var @count = 0
+when @condition [
+  var @count = 1
+  >> Error: cannot redefine @count in nested scope
+]

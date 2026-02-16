@@ -1,0 +1,5 @@
+var @cfg = {"host": "localhost", "port": 3000}
+for @v in @cfg => show `Key: @v.mx.key, Value: @v`
+>> Output:
+>> Key: host, Value: localhost
+>> Key: port, Value: 3000

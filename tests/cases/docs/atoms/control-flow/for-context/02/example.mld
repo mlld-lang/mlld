@@ -1,0 +1,6 @@
+var @items = [10, 20, 30]
+for @item in @items => show `Item @item.mx.index: @item`
+>> Output:
+>> Item 0: 10
+>> Item 1: 20
+>> Item 2: 30

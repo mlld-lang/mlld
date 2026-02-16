@@ -13,7 +13,6 @@ updated: 2026-02-15
 ```
 mlld howto                 Browse all documentation topics
 mlld howto grep <pattern>  Search docs for keywords
-mlld howto gotchas         Common traps and pitfalls
 mlld validate <file>       Check syntax before running
 ```
 
@@ -60,12 +59,12 @@ var @policyConfig = {
 }
 policy @p = union(@policyConfig)
 
-var secret @apiKey = <@keychain/prod/api-key>
->> LLM can be tricked into trying to exfil @apiKey
+var secret @data = <@private/customer-list.txt>
+>> LLM can be tricked into trying to exfil @data
 >> But label flow rules block it before execution
 ```
 
-The LLM can be manipulated. mlld prevents the consequences from manifesting.
+See `mlld howto security` for comprehensive prompt injection defense strategies.
 
 ## Two Syntax Modes
 
@@ -87,19 +86,6 @@ show `Hello @name!`
 /var @name = "Alice"
 /show `Hello @name!`
 ```
-
-## Mental Model
-
-What mlld IS:
-- A workflow orchestrator (like Make + npm for the AI era)
-- Executable documentation (reads like a guide, runs like a script)
-- A logical router (route data and actions based on conditions)
-
-What mlld ISN'T:
-- A template engine (not Jinja/Handlebars — it orchestrates LLMs that use templates)
-- A shell script replacement (it calls shells; doesn't replace them)
-
-Think Docker Compose or GitHub Actions: declare what happens, don't program how.
 
 ## Key Concepts
 
@@ -124,23 +110,15 @@ var @alt = ::Hello @name!::
 
 **Security** - Labels + policies + guards = prompt injection defense
 
-## Common Gotchas
+## Gotchas
 
-These traps catch newcomers. Most stem from mlld intentionally differing from JavaScript/Python.
+mlld is not JavaScript/Python.
 
 **Use `>>` for comments, not `//`**
-```mlld
->> This is a comment
-// WRONG: parse error
-```
 
-**Labels are comma-separated**
-```mlld
-var secret,pii @data = "x"     >> correct
-var secret pii @data = "x"     >> WRONG: parse error
-```
+Labels are comma-separated: `var secret,pii @data = "x"`
 
-**`var` is module-level and immutable, `let` is block-scoped and mutable**
+`var` is module-level and immutable, `let` is block-scoped and mutable
 ```mlld
 var @config = "global"
 if true [
@@ -149,16 +127,15 @@ if true [
 ]
 ```
 
-**`if` runs blocks, `when` returns values**
-```mlld
-if @ready [ run @deploy() ]              >> correct (side effect)
-var @msg = when [ @ok => "pass"; * => "fail" ]   >> correct (value)
-
-when @ready => run @deploy()             >> WRONG: when returns, doesn't execute
-exe @fn() = when [ @x => show "hi" ]     >> WRONG: show is side effect, not value
+`if` vs `when`
+```
+if @cond [block] else [block]                  >> Run block if true
+when @cond => value                            >> Select first match
+when [cond => val; * => default]               >> First-match list
+when @val ["a" => x; * => y]                   >> Match value against patterns
 ```
 
-**`cmd` rejects shell operators — use `sh`**
+`cmd` interpolates `@variables`. Pipes work, but `>`, `&&`, `;`, `2>/dev/null` are rejected. Use `sh` for full shell syntax.
 ```mlld
 exe @safe() = cmd { ls -la }                   >> correct: simple command
 exe @piped() = cmd { ls -la | head -5 }        >> correct: pipes work in cmd
@@ -166,7 +143,9 @@ exe @redirect() = cmd { ls > out.txt }         >> WRONG: cmd rejects >, &&, ;
 exe @shell() = sh { ls > out.txt 2>/dev/null } >> correct: sh allows all shell syntax
 ```
 
-**Angle brackets `<>` in templates and expressions**
+Use native variable syntax in `js`, `node`, `sh`, `py` blocks — pass mlld values as parameters.
+
+Angle brackets `<>` in templates and expressions
 ```mlld
 var @html = `<div>Hello</div>`                 >> properly interprets as text bc no slashes/dots/vars
 var @template = `File contents: <file.md>`     >> interpolates full content of file.md in template value
@@ -174,10 +153,23 @@ var @readme = <README.md>                      >> loads file
 var @files = <src/**/*.ts>                     >> glob pattern
 var @files = <@pathvar/file.ts>                >> variable usage
 ```
-
 See `mlld howto file-loading-basics` for advanced usage.
 
-**See `mlld howto gotchas` for the full list.**
+`@var.json` is field access. Escape the dot for file extensions: `@name\.json`.
+
+```mlld
+let @out = `@dir/@name\.json`          >> correct
+let @out = `@dir/@name.json`           >> accesses .json field
+```
+
+`\@` produces a literal `@`: `user\@example.com` outputs `user@example.com`.
+
+Errors in `for parallel` loops become data objects with `.error` and `.message` fields. The loop continues. Regular (non-parallel) `for` loops throw on error.
+
+```mlld
+var @results = for parallel(4) @item in @list [ => @process(@item) ]
+var @failures = for @r in @results when @r.error => @r
+```
 
 ## Next Steps
 

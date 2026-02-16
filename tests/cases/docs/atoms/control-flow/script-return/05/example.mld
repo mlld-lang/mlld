@@ -1,0 +1,4 @@
+>> main.mld
+import { default as @result, status as @s } from "./module.mld"
+show @result.code     >> 200
+show @s               >> "active"

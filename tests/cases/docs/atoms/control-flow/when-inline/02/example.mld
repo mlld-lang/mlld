@@ -1,8 +1,5 @@
-when [
-  @role == "admin" => show "Admin access"
-  @role == "editor" => [
-    let @message = "Editor access"
-    show @message
-  ]
-  * => show "No access"
+when @score [
+  @score > 90 => show "A"
+  @score > 80 => show "B"
+  * => show "F"
 ]

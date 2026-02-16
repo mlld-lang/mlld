@@ -1,5 +1,5 @@
-var @config = "global"
-if true [
-  let @temp = "local"    >> correct
-  var @temp = "local"    >> WRONG: var not allowed in blocks
-]
+var @html = `<div>Hello</div>`                 >> properly interprets as text bc no slashes/dots/vars
+var @template = `File contents: <file.md>`     >> interpolates full content of file.md in template value
+var @readme = <README.md>                      >> loads file
+var @files = <src/**/*.ts>                     >> glob pattern
+var @files = <@pathvar/file.ts>                >> variable usage

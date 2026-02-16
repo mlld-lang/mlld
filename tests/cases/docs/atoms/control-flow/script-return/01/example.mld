@@ -1,0 +1,3 @@
+>> Strict mode
+=> "final result"
+show "unreachable"

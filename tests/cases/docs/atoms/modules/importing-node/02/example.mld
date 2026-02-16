@@ -1,0 +1,3 @@
+import { posix } from node @path
+var @dir = @posix.dirname("/tmp/file.txt")
+show @dir

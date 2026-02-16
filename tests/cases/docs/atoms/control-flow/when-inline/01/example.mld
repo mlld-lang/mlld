@@ -1,5 +1,6 @@
-var @score = 95
-when [
-  @score > 90 => show "Excellent!"
-  * => show "No match"
+var @status = "active"
+when @status [
+  "active" => show "Running"
+  "pending" => show "Waiting"
+  * => show "Unknown"
 ]

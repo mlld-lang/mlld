@@ -1,0 +1,9 @@
+>> Explicit message
+bail "config file missing"
+
+>> With variable interpolation
+var @missing = "database"
+bail `Missing: @missing`
+
+>> Bare bail (uses default message)
+bail

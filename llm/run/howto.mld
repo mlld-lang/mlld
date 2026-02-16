@@ -3,12 +3,17 @@
 >>
 >> This script is called by the CLI with topic/subtopic passed via payload
 
->> Strip frontmatter from content
+>> Convert anchor links [Text](#anchor) to **Text** for terminal display
+exe @terminalLinks(text) = js {
+  return text.replace(/\[([^\]]+)\]\(#[^)]+\)/g, '**$1**');
+}
+
+>> Strip frontmatter from content and convert links for terminal
 exe @stripFrontmatter(text) = js {
   if (typeof text !== 'string') {
     text = text && text.text ? text.text : String(text);
   }
-  return text.replace(/^---[\s\S]*?---\n*/, '').trim();
+  return text.replace(/^---[\s\S]*?---\n*/, '').replace(/\[([^\]]+)\]\(#[^)]+\)/g, '**$1**').trim();
 }
 
 >> Build tree display from all categories
@@ -50,8 +55,9 @@ exe @buildTree(allAtoms, introAtom) = js {
         const briefMatch = match[1].match(/^brief:\s*(.+)$/m);
         if (idMatch) {
           const id = idMatch[1].trim();
-          // Skip _index files
+          // Skip _index files (id starts with _ or id matches category name)
           if (id.startsWith('_')) continue;
+          if (id === cat.name) continue;
           const brief = briefMatch ? briefMatch[1].trim() : '';
           lines.push('  ' + id.padEnd(COL_WIDTH) + brief);
         }
@@ -138,7 +144,7 @@ exe @getContent(atom) = js {
 exe @joinStripped(atoms) = js {
   return atoms.map(a => {
     const text = typeof a === 'string' ? a : (a.text || '');
-    return text.replace(/^---[\s\S]*?---\n*/, '').trim();
+    return text.replace(/^---[\s\S]*?---\n*/, '').replace(/\[([^\]]+)\]\(#[^)]+\)/g, '**$1**').trim();
   }).join('\n\n');
 }
 
@@ -280,9 +286,34 @@ exe @notFoundMsg(topic, tree) = js {
 }
 
 >> Build section index (list of topics in a section)
+>> If a _index atom exists (id matches sectionName), show its content first
 exe @buildSectionIndex(atoms, sectionName) = js {
   const COL_WIDTH = 36;
-  const lines = [sectionName.toUpperCase(), ''];
+  const lines = [];
+
+  // Find _index atom (id === sectionName) and show its content
+  let indexContent = null;
+  for (const atom of atoms) {
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
+    const match = text.match(/^---\n([\s\S]*?)\n---/);
+    if (match) {
+      const idMatch = match[1].match(/^id:\s*(.+)$/m);
+      if (idMatch && idMatch[1].trim() === sectionName) {
+        indexContent = text.replace(/^---[\s\S]*?---\n*/, '').replace(/\[([^\]]+)\]\(#[^)]+\)/g, '**$1**').trim();
+        break;
+      }
+    }
+  }
+
+  if (indexContent) {
+    lines.push(indexContent);
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  }
+
+  lines.push(sectionName.toUpperCase() + ' TOPICS');
+  lines.push('');
 
   for (const atom of atoms) {
     const text = typeof atom === 'string' ? atom : (atom.text || '');
@@ -293,6 +324,8 @@ exe @buildSectionIndex(atoms, sectionName) = js {
       if (idMatch) {
         const id = idMatch[1].trim();
         if (id.startsWith('_')) continue;
+        // Skip the _index atom itself from the listing
+        if (id === sectionName) continue;
         const brief = briefMatch ? briefMatch[1].trim() : '';
         lines.push('  ' + id.padEnd(COL_WIDTH) + brief);
       }

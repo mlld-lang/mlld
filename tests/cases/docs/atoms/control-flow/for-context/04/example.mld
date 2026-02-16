@@ -1,0 +1,2 @@
+var @tasks = ["a", "b", "c"]
+for parallel(2) @t in @tasks => show `Task @mx.for.index (@mx.for.parallel): @t`

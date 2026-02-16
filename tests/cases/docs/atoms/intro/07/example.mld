@@ -1,2 +1,4 @@
-var secret,pii @data = "x"     >> correct
-var secret pii @data = "x"     >> WRONG: parse error
+exe @safe() = cmd { ls -la }                   >> correct: simple command
+exe @piped() = cmd { ls -la | head -5 }        >> correct: pipes work in cmd
+exe @redirect() = cmd { ls > out.txt }         >> WRONG: cmd rejects >, &&, ;
+exe @shell() = sh { ls > out.txt 2>/dev/null } >> correct: sh allows all shell syntax
