@@ -207,6 +207,7 @@ async function handleCommandDefinition(
     policyChecksEnabled,
     definition,
     argValues,
+    argRuntimeValues,
     argDescriptors,
     exeLabels,
     callStack,
@@ -215,8 +216,8 @@ async function handleCommandDefinition(
 
   const outputDescriptors: SecurityDescriptor[] = [];
   const tempEnv = env.createChild();
-  for (const [key, value] of Object.entries(argValues)) {
-    tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
+  for (const [key, stringValue] of Object.entries(argValues)) {
+    bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
   }
 
   const workingDirectory = await resolveWorkingDirectory(
@@ -675,10 +676,10 @@ async function handleCodeDefinition(
 async function handleTemplateDefinition(
   ctx: RunExecDispatchContext
 ): Promise<RunExecDefinitionDispatchResult> {
-  const { env, definition, argValues, callStack, services } = ctx;
+  const { env, definition, argValues, argRuntimeValues, callStack, services } = ctx;
   const tempEnv = createTemplateInterpolationEnv(env.createChild(), definition);
-  for (const [key, value] of Object.entries(argValues)) {
-    tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
+  for (const [key, stringValue] of Object.entries(argValues)) {
+    bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
   }
 
   const templateOutput = await services.interpolateWithPendingDescriptor(

@@ -201,6 +201,63 @@ describe('run exec definition dispatcher', () => {
     expect(result.outputDescriptors.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('preserves null runtime params for command interpolation and keeps literal "null" truthy', async () => {
+    const env = createEnv();
+    const definition = {
+      type: 'command',
+      commandTemplate: [{ type: 'Text', content: '@title?`@title `@name' }],
+      paramNames: ['name', 'title'],
+      sourceDirective: 'exec'
+    } as unknown as ExecutableDefinition;
+    const executeCommandSpy = vi.spyOn(env, 'executeCommand').mockResolvedValue('command-output');
+    const services = createServices(env, {
+      interpolateWithPendingDescriptor: vi.fn(async (_nodes, _context, targetEnv) => {
+        const title = targetEnv?.getVariable('title')?.value;
+        const name = targetEnv?.getVariable('name')?.value;
+        return `${title ? `${title} ` : ''}${name ?? ''}`;
+      })
+    });
+
+    await dispatchRunExecutableDefinition(
+      buildParams({
+        env,
+        definition,
+        execVar: createExecutable('tool', definition),
+        argValues: { name: 'Ada', title: 'null' },
+        argRuntimeValues: { name: 'Ada', title: null },
+        services
+      })
+    );
+
+    await dispatchRunExecutableDefinition(
+      buildParams({
+        env,
+        definition,
+        execVar: createExecutable('tool', definition),
+        argValues: { name: 'Ada', title: 'null' },
+        argRuntimeValues: { name: 'Ada', title: 'null' },
+        services
+      })
+    );
+
+    expect(executeCommandSpy).toHaveBeenNthCalledWith(
+      1,
+      'Ada',
+      undefined,
+      expect.objectContaining({
+        pipelineId: 'run-exec-dispatch'
+      })
+    );
+    expect(executeCommandSpy).toHaveBeenNthCalledWith(
+      2,
+      'null Ada',
+      undefined,
+      expect.objectContaining({
+        pipelineId: 'run-exec-dispatch'
+      })
+    );
+  });
+
   it('preserves command security block failures', async () => {
     const env = createEnv();
     const definition = {
@@ -437,6 +494,48 @@ describe('run exec definition dispatcher', () => {
     );
     expect(mockedExecuteProseExecutable).toHaveBeenCalled();
     expect(proseResult.value).toBe('prose-output');
+  });
+
+  it('preserves null runtime params for template interpolation and keeps literal "null" truthy', async () => {
+    const env = createEnv();
+    const templateDefinition = {
+      type: 'template',
+      template: [{ type: 'Text', content: '@title?`@title `@name' }],
+      paramNames: ['name', 'title'],
+      sourceDirective: 'exec'
+    } as unknown as ExecutableDefinition;
+    const templateServices = createServices(env, {
+      interpolateWithPendingDescriptor: vi.fn(async (_nodes, _context, targetEnv) => {
+        const title = targetEnv?.getVariable('title')?.value;
+        const name = targetEnv?.getVariable('name')?.value;
+        return `${title ? `${title} ` : ''}${name ?? ''}`;
+      })
+    });
+
+    const nullResult = await dispatchRunExecutableDefinition(
+      buildParams({
+        env,
+        definition: templateDefinition,
+        execVar: createExecutable('templateExec', templateDefinition),
+        argValues: { name: 'Ada', title: 'null' },
+        argRuntimeValues: { name: 'Ada', title: null },
+        services: templateServices
+      })
+    );
+
+    const stringNullResult = await dispatchRunExecutableDefinition(
+      buildParams({
+        env,
+        definition: templateDefinition,
+        execVar: createExecutable('templateExec', templateDefinition),
+        argValues: { name: 'Ada', title: 'null' },
+        argRuntimeValues: { name: 'Ada', title: 'null' },
+        services: templateServices
+      })
+    );
+
+    expect(nullResult.value).toBe('Ada');
+    expect(stringNullResult.value).toBe('null Ada');
   });
 
   it('preserves unsupported definition errors', async () => {
