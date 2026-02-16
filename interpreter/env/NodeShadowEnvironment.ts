@@ -122,7 +122,11 @@ export class NodeShadowEnvironment {
   /**
    * Execute code in the shadow environment with optional parameters
    */
-  async execute(code: string, params?: Record<string, any>): Promise<any> {
+  async execute(
+    code: string,
+    params?: Record<string, any>,
+    options?: { passthroughConsole?: boolean }
+  ): Promise<any> {
     // Check if cleanup has been called
     if (this.isCleaningUp) {
       throw new Error('Node shadow environment error: Cannot execute after cleanup');
@@ -131,13 +135,13 @@ export class NodeShadowEnvironment {
     // Track console.log output (same approach as JavaScriptExecutor)
     let consoleOutput = '';
     const originalLog = this.context.console.log;
+    const passthroughConsole = options?.passthroughConsole ?? true;
     
-    // Override console.log to always output to stdout and capture for potential return
+    // Override console.log to capture output for potential return values.
     this.context.console.log = (...args: any[]) => {
-      // Always call original console.log for visibility
-      originalLog.apply(this.context.console, args);
-      
-      // Also capture the output
+      if (passthroughConsole) {
+        originalLog.apply(this.context.console, args);
+      }
       consoleOutput += args.map(arg => 
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
       ).join(' ') + '\n';

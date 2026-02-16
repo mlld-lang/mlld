@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pipeline null values**: JSON `null` values now pass through pipeline stages correctly (previously conflated with parse failure)
 - **Guard transform unwrapping**: Fixed double-wrapping that caused Variable-inside-Variable nesting in guard transforms
 - **Before label guard transform composition**: Sequential `before ... for <label>` guards evaluate against the latest transformed input so each transform applies once in order and conditional guards see prior transforms.
+- **`run js`/`run node` console precedence**: Run blocks suppress direct console passthrough while still capturing `console.log`, so log-only blocks emit once and explicit return values take precedence over logged output.
 - **`before op:cmd` guard matching for exe operations**: `exe @fn() = cmd { ... }` invocations now match operation guards filtered by `op:cmd`, with regression coverage for `cmd`, `sh`, `js`, `node`, and `py` op-label key expansion.
 - **Guard `op:run`/`op:exe` alias dispatch**: Command-capable `run` and `exe` operations share guard dispatch keys, `run cmd` operation labels include `op:run`, and regression coverage verifies `cmd`, `sh`, `js`, `node`, and `py` alias matching plus direct `run cmd` `src:exec` taint.
 - **NaN truthiness handling**: Truthiness checks now treat `"NaN"` (case-insensitive) as falsy across `if`, `when`, and conditional inclusion contexts, with regression coverage for numeric `NaN` and text `NaN` paths.

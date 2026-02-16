@@ -193,7 +193,9 @@ export class NodeExecutor extends BaseCommandExecutor {
       }
 
       // Use shadow environment with VM
-      const result = await nodeShadowEnv.execute(code, shadowParams);
+      const result = await nodeShadowEnv.execute(code, shadowParams, {
+        passthroughConsole: context?.directiveType !== 'run'
+      });
 
       // Format result (same as subprocess version)
       let output = '';

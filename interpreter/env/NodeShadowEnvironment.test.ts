@@ -49,6 +49,30 @@ describe('NodeShadowEnvironment', () => {
       expect(result).toBe(20); // (5 * 2) + 10
     });
   });
+
+  describe('console output handling', () => {
+    it('returns console output once when there is no explicit return value', async () => {
+      const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true as any);
+
+      const result = await env.execute('console.log("hello")', undefined, {
+        passthroughConsole: false
+      });
+
+      expect(result).toBe('hello');
+      expect(stdoutSpy).not.toHaveBeenCalled();
+    });
+
+    it('prefers explicit return values over console output', async () => {
+      const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true as any);
+
+      const result = await env.execute('console.log("hello"); return "world"', undefined, {
+        passthroughConsole: false
+      });
+
+      expect(result).toBe('world');
+      expect(stdoutSpy).not.toHaveBeenCalled();
+    });
+  });
   
   describe('timer cleanup', () => {
     it('should clear timers on cleanup', async () => {

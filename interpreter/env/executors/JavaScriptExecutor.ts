@@ -39,7 +39,7 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       `js: ${code.substring(0, 50)}...`,
       jsOptions,
       context,
-      () => this.executeJavaScript(code, params, metadata, jsOptions?.workingDirectory)
+      () => this.executeJavaScript(code, params, metadata, jsOptions?.workingDirectory, context)
     );
   }
 
@@ -47,7 +47,8 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
     code: string,
     params?: Record<string, any>,
     metadata?: Record<string, any>,
-    workingDirectory?: string
+    workingDirectory?: string,
+    context?: CommandExecutionContext
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
     const targetCwd = workingDirectory || process.cwd();
@@ -62,8 +63,11 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       // Create a function that captures console.log output
       let consoleOutput = '';
       const originalLog = console.log;
+      const passthroughConsole = context?.directiveType !== 'run';
       console.log = (...args: any[]) => {
-        originalLog(...args);
+        if (passthroughConsole) {
+          originalLog(...args);
+        }
         consoleOutput += args.map(arg => 
           typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
         ).join(' ') + '\n';
