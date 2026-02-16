@@ -19,6 +19,10 @@ export interface QuantifierTokensHelper {
   greaterThan(value: number): boolean;
 }
 
+export interface QuantifierTextHelper {
+  includes(fragment: string): boolean;
+}
+
 export interface QuantifierContextHelper {
   labels: QuantifierLabelsHelper;
   taint: QuantifierLabelsHelper;
@@ -27,10 +31,12 @@ export interface QuantifierContextHelper {
 
 export interface QuantifierHelper {
   mx: QuantifierContextHelper;
+  text: QuantifierTextHelper;
 }
 
 export interface ArrayAggregateSnapshot {
   readonly contexts: VariableContextSnapshot[];
+  readonly texts: readonly string[];
   readonly labels: readonly DataLabel[];
   readonly taint: readonly DataLabel[];
   readonly sources: readonly string[];
@@ -62,7 +68,7 @@ export interface ArrayAggregateOptions {
 
 export function createGuardInputHelper(inputs: readonly Variable[]): GuardInputHelper {
   const aggregate = buildArrayAggregate(inputs, { nameHint: '__guard_input__' });
-  const quantifiers = createQuantifierHelpers(aggregate.contexts);
+  const quantifiers = createQuantifierHelpers(aggregate.contexts, aggregate.texts);
   return {
     raw: inputs,
     mx: {
@@ -96,7 +102,7 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
   const aggregate = buildArrayAggregate(arrayValues, {
     nameHint: variable.name ?? '__array_helper__'
   });
-  const quantifiers = createQuantifierHelpers(aggregate.contexts);
+  const quantifiers = createQuantifierHelpers(aggregate.contexts, aggregate.texts);
 
   const helperTargets: unknown[] = [variable];
   if (Array.isArray(arrayValues)) {
@@ -155,6 +161,7 @@ export function buildArrayAggregate(
     })
     .filter((value): value is Variable => Boolean(value));
   const contexts = variables.map(ensureContext);
+  const texts = Object.freeze(variables.map(variable => formatQuantifierText(variable.value)));
   const tokenValues = contexts.map(mx => mx.tokens ?? mx.tokest ?? 0);
   const tokens = Object.freeze(tokenValues.slice()) as readonly number[];
   const labels = freezeArray(
@@ -174,6 +181,7 @@ export function buildArrayAggregate(
 
   return {
     contexts,
+    texts,
     labels,
     taint,
     sources,
@@ -183,23 +191,27 @@ export function buildArrayAggregate(
   };
 }
 
-function createQuantifierHelpers(contexts: VariableContextSnapshot[]): {
+function createQuantifierHelpers(
+  contexts: VariableContextSnapshot[],
+  texts: readonly string[]
+): {
   any: QuantifierHelper;
   all: QuantifierHelper;
   none: QuantifierHelper;
 } {
   return {
-    any: createQuantifierHelper('any', contexts),
-    all: createQuantifierHelper('all', contexts),
-    none: createQuantifierHelper('none', contexts)
+    any: createQuantifierHelper('any', contexts, texts),
+    all: createQuantifierHelper('all', contexts, texts),
+    none: createQuantifierHelper('none', contexts, texts)
   };
 }
 
 function createQuantifierHelper(
   type: QuantifierType,
-  contexts: VariableContextSnapshot[]
+  contexts: VariableContextSnapshot[],
+  texts: readonly string[]
 ): QuantifierHelper {
-  const evaluate = (predicate: (mx: VariableContextSnapshot) => boolean): boolean => {
+  const evaluateContext = (predicate: (mx: VariableContextSnapshot) => boolean): boolean => {
     switch (type) {
       case 'any':
         return contexts.some(predicate);
@@ -209,10 +221,20 @@ function createQuantifierHelper(
         return contexts.every(mx => !predicate(mx));
     }
   };
+  const evaluateText = (predicate: (text: string) => boolean): boolean => {
+    switch (type) {
+      case 'any':
+        return texts.some(predicate);
+      case 'all':
+        return texts.every(predicate);
+      case 'none':
+        return texts.every(text => !predicate(text));
+    }
+  };
 
   const labelsHelper: QuantifierLabelsHelper = {
     includes(label: DataLabel): boolean {
-      return evaluate(mx => (mx.labels ?? []).includes(label));
+      return evaluateContext(mx => (mx.labels ?? []).includes(label));
     }
   };
 
@@ -226,16 +248,16 @@ function createQuantifierHelper(
 
   const tokensHelper: QuantifierTokensHelper = {
     some(predicate: (token: number) => boolean): boolean {
-      return evaluate(mx => predicate(mx.tokens ?? mx.tokest ?? 0));
+      return evaluateContext(mx => predicate(mx.tokens ?? mx.tokest ?? 0));
     },
     greaterThan(value: number): boolean {
-      return evaluate(mx => (mx.tokens ?? mx.tokest ?? 0) > value);
+      return evaluateContext(mx => (mx.tokens ?? mx.tokest ?? 0) > value);
     }
   };
 
   const taintHelper: QuantifierLabelsHelper = {
     includes(label: DataLabel): boolean {
-      return evaluate(mx => (mx.taint ?? mx.labels ?? []).includes(label));
+      return evaluateContext(mx => (mx.taint ?? mx.labels ?? []).includes(label));
     }
   };
 
@@ -262,13 +284,52 @@ function createQuantifierHelper(
     }
   });
 
+  const textHelper: QuantifierTextHelper = {
+    includes(fragment: string): boolean {
+      const needle = String(fragment ?? '');
+      return evaluateText(text => text.includes(needle));
+    }
+  };
+
+  attachQuantifierEvaluator(textHelper, (method, args) => {
+    if (method === 'includes') {
+      return textHelper.includes(String(args[0] ?? ''));
+    }
+    return false;
+  });
+
   return {
     mx: {
       labels: labelsHelper,
       taint: taintHelper,
       tokens: tokensHelper
-    }
+    },
+    text: textHelper
   };
+}
+
+function formatQuantifierText(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  if (value && typeof value === 'object') {
+    const candidate = value as { text?: unknown; data?: unknown };
+    if (typeof candidate.text === 'string' && 'data' in candidate) {
+      return candidate.text;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
 }
 
 function ensureContext(variable: Variable): VariableContextSnapshot {

@@ -274,8 +274,8 @@ Before guards check inputs before operations execute:
 
 ```mlld
 guard @validateInput before op:exe = when [
-  @input[0].length > 1000 => deny "Input too large"
-  @input[0].includes("<script") => deny "Potentially malicious input"
+  @input.any.text.includes("<script") => deny "Potentially malicious input"
+  @input.any.text.includes("sk-") => deny "Potentially sensitive token"
   * => allow
 ]
 
@@ -803,6 +803,7 @@ Array quantifiers for per-operation guards:
 ```mlld
 guard @blockSecretsInRun before op:run = when [
   @input.any.mx.labels.includes("secret") => deny "Shell cannot access secrets"
+  @input.any.text.includes("sk-") => deny "Shell input contains a token pattern"
   @input.all.mx.tokest < 1000 => allow
   @input.none.mx.labels.includes("pii") => allow
   * => deny "Input validation failed"

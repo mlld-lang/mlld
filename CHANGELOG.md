@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`py` alias parity in assignment grammar**: `py { ... }` now parses in assignment contexts wherever `python { ... }` is accepted, including `var` RHS and assignment-style executable definitions.
 - **`run` cwd overrides in block contexts**: Working-directory overrides for `run cmd:@dir { ... }` execute consistently in top-level, `if`, `for`, `when`, and nested block contexts, with regression coverage in `slash/run/run-cwd-in-block-contexts`.
 - **`run` cwd overrides in `=>` result collection**: Command expressions used in result-collecting forms (`for ... => cmd:@dir { ... }` and `when ... => cmd:@dir { ... }`) now honor cwd overrides, with regression coverage in `slash/run/run-cwd-expression-collection`.
+- **Guard `@input` content inspection**: Operation guard input helpers now expose `@input.any.text.includes(...)` (with `all`/`none` variants) for content-level inspection alongside metadata quantifiers, with regression coverage in `security/guard-input-content-inspection` and `tests/interpreter/variable-ctx.test.ts`.
 - **Tool-call tracking in exec invocation**: `@mx.tools.calls` now records regular executable invocations (not only MCP router calls), so guard patterns like `@mx.tools.calls.includes("name")` work for direct exe calls; env `mcpConfig` tool registration now populates `@mx.tools.allowed` and `@mx.tools.denied`.
 - **String concatenation with `+` diagnostics**: Expressions now raise a targeted error when `+` is used with non-numeric strings and include a template-interpolation hint; numeric addition and mixed string-number `NaN` behavior remain unchanged.
 - **Var `run ... using auth:name` parity**: `var @value = run cmd { ... } using auth:name` now preserves `using` metadata in var command nodes and applies auth injection during var-run execution.
@@ -35,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Guard transform chaining**: Corrected docs to reflect before-phase uses last-wins (not chaining), after-phase chains sequentially
 - **@ escaping universality**: Clarified both `@@` and `\@` work in all string contexts (not just templates)
 - **Removed deprecated transformers**: `@xml`, `@csv`, `@md`, `@upper`, `@lower` no longer documented (moving to userland modules)
-- **Guard `@input` examples**: Security docs replace `@input.includes(...)` guard snippets with operation-input access via `@input[0].includes(...)`, and guard basics include a context reference for `@input`, `@output`, and `@mx`.
+- **Guard `@input` examples**: Security docs use `@input.any.text.includes(...)` for operation-input content inspection and include a context reference for `@input`, `@output`, and `@mx`.
 - **`show { ... }` object-literal docs cleanup**: Docs and plugin guidance remove inline object-literal forms after `show` and use `var`-then-`show` examples instead.
 
 ### Added

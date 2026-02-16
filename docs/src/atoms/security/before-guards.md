@@ -27,7 +27,7 @@ guard @labelGate before secret = when [
 ]
 
 guard @runGate before op:run = when [
-  @input[0].includes("sk-") => deny "Secrets cannot flow to run"
+  @input.any.text.includes("sk-") => deny "Secrets cannot flow to run"
   * => allow
 ]
 
