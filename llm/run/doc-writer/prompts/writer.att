@@ -1,0 +1,195 @@
+You are writing an atom for the mlld documentation system. An atom is a small, self-contained markdown file covering ONE concept, stored in `docs/src/atoms/`.
+
+## Your Assignment
+
+<assignment>
+Action: @action
+Atom path: docs/src/atoms/@atom
+Category: @category
+</assignment>
+
+<changelog_context>
+@changelog
+</changelog_context>
+
+<search_hints>
+@hints
+</search_hints>
+
+## Style Reference
+
+<style_reference>
+@styleRef
+</style_reference>
+
+## Existing Atom (if updating)
+
+<existing_atom>
+@existingContent
+</existing_atom>
+
+## Example Atoms (format reference)
+
+<example_atom_1>
+---
+id: for-parallel
+title: Parallel For
+brief: Concurrent iteration with for parallel
+category: control-flow
+parent: for
+tags: [iteration, loops, parallel, concurrency]
+related: [for-arrow, for-block]
+related-code: [interpreter/eval/for.ts, interpreter/eval/parallel.ts]
+updated: 2026-01-30
+qa_tier: 2
+---
+
+Run iterations concurrently with `for parallel`.
+
+```mlld
+>> Default concurrency (MLLD_PARALLEL_LIMIT, default 4)
+for parallel @x in @items => show @x
+
+>> Custom concurrency cap
+for parallel(3) @task in @tasks => @runTask(@task)
+
+>> With pacing (delay between starts)
+for parallel(2, 1s) @x in @items => @process(@x)
+
+>> Variable cap and pacing
+var @cap = 2
+var @pace = "1s"
+for parallel(@cap, @pace) @x in @items => @process(@x)
+```
+
+**Parallel blocks:**
+
+```mlld
+for parallel(3) @task in @tasks [
+  let @result = @runTask(@task)
+  show `Done: @task.id`
+]
+```
+
+**Error handling:**
+- Errors accumulate in `@mx.errors`
+- Failed iterations add error markers to results
+- Outer-scope writes blocked (use block-scoped `let` only)
+
+```mlld
+exe @process(tasks) = [
+  let @results = for parallel @t in @tasks => @run(@t)
+  => when [
+    @mx.errors.length == 0 => @results
+    * => @repair(@results, @mx.errors)
+  ]
+]
+```
+</example_atom_1>
+
+<example_atom_2>
+---
+id: exe-blocks
+title: Exe Block Syntax
+brief: Multi-statement function bodies
+category: commands
+parent: exe
+tags: [functions, blocks, let, accumulation]
+related: [exe-simple, exe-when, for-block]
+related-code: [interpreter/eval/exe.ts, interpreter/eval/block.ts]
+updated: 2026-01-31
+qa_tier: 2
+---
+
+**Block syntax** (multi-statement bodies):
+
+```mlld
+exe @process(data) = [
+  let @validated = @validate(@data)
+  let @transformed = @transform(@validated)
+  => @transformed
+]
+
+>> With accumulation
+exe @countItems(items) = [
+  let @count = 0
+  for @item in @items [
+    let @count += 1
+  ]
+  => @count
+]
+```
+
+Block rules:
+- Use `[...]` for multi-statement bodies
+- `let @var = value` for block-scoped variables
+- `let @var += value` for accumulation (arrays/strings/objects)
+- `=> value` required as last statement for return
+</example_atom_2>
+
+## Instructions
+
+Complete these three phases in order.
+
+### Phase 1: Research
+
+Find the actual implementation to understand what this feature does from code, not just the changelog summary.
+
+1. Use Grep to search the codebase for the hint keywords in `src/`, `interpreter/`, `grammar/`, `cli/`, and `tests/cases/`.
+2. Read the implementation files you find. Understand the actual behavior, edge cases, and constraints.
+3. Search `tests/cases/` for test fixtures related to the feature — these show real usage patterns.
+4. If the search hints don't immediately find the right files, use the Task tool with an Explore sub-agent for broader searches. Then read the specific files yourself to verify.
+5. If updating: read the existing atom carefully to understand what's already documented.
+
+Record what you find: key source files, test cases, behavioral details.
+
+### Phase 2: Write
+
+Draft the atom following the style reference and example atoms exactly.
+
+Frontmatter:
+- `id`: derive from the atom filename (e.g., `for-context.md` → `for-context`)
+- `title`: derive from the feature name
+- `brief`: one-line summary of what it does
+- `category`: from the atom path (e.g., `control-flow/for-context.md` → `control-flow`)
+- `parent`: the logical parent topic
+- `related`: IDs of related atoms (find them in `docs/src/atoms/`)
+- `related-code`: source files you found in Phase 1 (relative to repo root, must be real files)
+- `updated`: 2026-02-16
+- `qa_tier`: 1 for core features, 2 for advanced
+
+Content:
+- Code examples first, then explanation
+- All examples in strict mode (bare directives, no `/` prefix)
+- Fence code blocks with ` ```mlld `
+- Use `>>` for comments in code blocks
+- Present tense, no marketing language, no time references
+- No headings (use bold text for section labels if needed)
+- Stay within the size guidelines from the style reference
+- For updates: preserve valid content from the existing atom, integrate new information
+
+Before including any code block, validate it with:
+```bash
+npm run ast -- '<code>'
+```
+
+If the AST command shows a parse error, fix the code before including it. Multi-line examples can be validated by writing them to a temp file first:
+```bash
+cat > tmp/doc-writer-check.mld << 'MLLDEOF'
+<your code here>
+MLLDEOF
+npm run ast -- tmp/doc-writer-check.mld
+```
+
+### Phase 3: Structural Check
+
+Before writing the final output:
+
+1. Verify every path in `related-code` is a real file — use Glob or Read to confirm each one exists.
+2. Verify every `related` ID corresponds to an actual atom — check `docs/src/atoms/` for the file.
+3. Verify every code block passes `npm run ast` validation.
+4. Fix any issues found.
+
+Write the final atom to: @outputPath
+
+This is your only deliverable. Write the complete atom (frontmatter + content) to that path using the Write tool.
