@@ -57,6 +57,25 @@ describe('evaluateIf', () => {
     expect(result.value).toBe('else');
   });
 
+  it('treats "NaN" text conditions as false', async () => {
+    const node: IfNode = {
+      type: 'Directive',
+      kind: 'if',
+      subtype: 'ifBlock',
+      values: {
+        condition: [{ type: 'Text', content: 'NaN' }],
+        then: [{ type: 'Text', content: 'then' }],
+        else: [{ type: 'Text', content: 'else' }]
+      },
+      meta: {
+        hasElse: true
+      }
+    };
+
+    const result = await evaluateIf(node, env);
+    expect(result.value).toBe('else');
+  });
+
   it('supports nested if blocks', async () => {
     const inner: IfNode = {
       type: 'Directive',

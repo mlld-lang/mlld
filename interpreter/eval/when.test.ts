@@ -169,6 +169,22 @@ describe('evaluateWhen', () => {
       const result = await evaluateWhen(node, env);
       expect(result.value).toBe('');
     });
+
+    it('should treat "NaN" string as false', async () => {
+      const node: WhenSimpleNode = {
+        type: 'Directive',
+        kind: 'when',
+        subtype: 'whenSimple',
+        nodeId: 'test',
+        values: {
+          condition: [{ type: 'Text', content: 'NaN', nodeId: 'cond1' }],
+          action: [{ type: 'Text', content: 'Should not execute', nodeId: 'act1' }]
+        }
+      };
+
+      const result = await evaluateWhen(node, env);
+      expect(result.value).toBe('');
+    });
     
     it('should treat non-empty strings as true', async () => {
       const node: WhenSimpleNode = {

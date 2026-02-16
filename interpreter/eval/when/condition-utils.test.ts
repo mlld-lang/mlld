@@ -74,6 +74,8 @@ describe('when condition utilities', () => {
   it('keeps direct truthiness utility behavior stable for strings and collections', () => {
     expect(isTruthy('false')).toBe(false);
     expect(isTruthy('True')).toBe(true);
+    expect(isTruthy('NaN')).toBe(false);
+    expect(isTruthy('nan')).toBe(false);
     expect(isTruthy([])).toBe(false);
     expect(isTruthy([1])).toBe(true);
   });

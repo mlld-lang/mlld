@@ -138,7 +138,7 @@ export function isTruthy(value: unknown): boolean {
 
     if (isTextLike(variable)) {
       const str = variable.value;
-      if (str === '' || str.toLowerCase() === 'false' || str === '0') {
+      if (str === '' || str.toLowerCase() === 'false' || str === '0' || str.toLowerCase() === 'nan') {
         return false;
       }
       return true;
@@ -191,6 +191,10 @@ export function isTruthy(value: unknown): boolean {
     }
 
     if (value === '0') {
+      return false;
+    }
+
+    if (value.toLowerCase() === 'nan') {
       return false;
     }
 
