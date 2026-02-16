@@ -187,8 +187,9 @@ UnifiedTemplateVariableReference "variable reference in template context"
 // Variable boundary pattern - handles backslash escape for disambiguation
 // Single \ is consumed as boundary, double \\ produces literal \
 VariableBoundary "variable boundary"
-  = "\\\\" { return { type: 'literal', value: '\\' }; }  // Double backslash -> literal
-  / "\\" !"\\" { return { type: 'consumed' }; }           // Single backslash -> boundary only
+  = "\\@" { return { type: 'literal', value: '@' }; }      // Backslash-at -> literal @
+  / "\\\\" { return { type: 'literal', value: '\\' }; }    // Double backslash -> literal
+  / "\\" !("\\" / "@") { return { type: 'consumed' }; }    // Single backslash -> boundary only
 
 // Boundary-aware field access - checks for boundary BEFORE consuming field access
 // This allows @var\.ext to stop at the backslash instead of consuming .ext as field access

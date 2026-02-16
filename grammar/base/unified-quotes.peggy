@@ -178,6 +178,12 @@ UnifiedBacktickInterpolation "Backtick interpolation content"
   / ConditionalVariableOmission
   / TemplateUnaryNegation            // !@var, !@func(), !@obj.method() - must come before text
   / UnifiedInterpolationContent      // Use shared interpolation
+  / "@@" {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "\\@" {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
@@ -244,6 +250,12 @@ UnifiedBacktickCharInline
 UnifiedBacktickInterpolationInline
   = TemplateUnaryNegation
   / UnifiedInterpolationContent
+  / "@@" {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "\\@" {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
   / "@" !BaseIdentifier char:. {
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
