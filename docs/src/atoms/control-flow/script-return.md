@@ -10,7 +10,7 @@ updated: 2026-02-16
 qa_tier: 2
 ---
 
-`=> @value` terminates script execution immediately and returns a value. Top-level `if` and `when` branches can return through the script context.
+`=> @value` terminates script execution immediately. When `=>` appears inside a top-level `if` or `when` block, it terminates the script, not just the block.
 
 **Basic script return:**
 

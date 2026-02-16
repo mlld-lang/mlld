@@ -47,7 +47,7 @@ Labels propagate through all transformations — template interpolation, method 
 
 Guards are imperative hooks that run before and/or after operations. They inspect data labels and operation context, then allow, deny, retry, or transform.
 
-### Guard Lifecycle
+### Operation Guards (core)
 
 ```
 before guards → directive executes → after guards
@@ -64,18 +64,15 @@ before guards → directive executes → after guards
 - `@mx.taint` — labels on the output (including auto-applied source labels)
 - Actions: `allow`, `allow @transformed` (replace output), `deny "reason"`, `retry "reason"`
 
-**Two trigger styles for before guards:**
+Operation labels are hierarchical: `op:cmd:git` matches all git subcommands (`op:cmd:git:push`, `op:cmd:git:status`, etc.). Guard denials can be caught with `denied =>` handlers for graceful fallback.
 
-| Form | Fires when | Frequency | `denied` handler |
-|------|-----------|-----------|-----------------|
-| `before LABEL` / `for LABEL` | Labeled data is created | Once per labeled value | Not available |
-| `before op:TYPE` | Operation executes | Every matching operation | Available |
+### Data Validation Guards
 
-Operation labels are hierarchical: `op:cmd:git` matches all git subcommands (`op:cmd:git:push`, `op:cmd:git:status`, etc.).
+`before LABEL` / `for LABEL` guards fire when labeled data is created — once per labeled value. They validate or sanitize data at entry time. Because no operation context exists at creation time, `denied` handlers do not apply.
 
 ### Composition
 
-Guards run top-to-bottom in declaration order. Precedence: `deny` > `retry` > `allow @value` > `allow`. Before-phase transforms are last-wins; after-phase transforms chain sequentially. `always` timing participates in both phases.
+For operation guards: run top-to-bottom in declaration order. Precedence: `deny` > `retry` > `allow @value` > `allow`. Before-phase transforms are last-wins; after-phase transforms chain sequentially. `always` timing participates in both phases.
 
 ### Privileged Guards
 

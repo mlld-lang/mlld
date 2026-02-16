@@ -13,18 +13,12 @@ qa_tier: 2
 
 The `denied` keyword is a when-condition that tests if we're in a denied context. Use it to handle guard denials gracefully.
 
-Scope note:
-- `denied` handlers catch denials that happen at operation time (for example `before op:run`, `before op:exe`, `after op:exe`).
-- `denied` handlers do not catch `before LABEL` denials because the value is blocked at label-entry time, before operation context exists.
-
-**`deny` vs `denied`:**
-
-- `deny "reason"` - Guard action that blocks an operation
-- `denied` - When condition that matches inside a denied handler
+- `deny "reason"` — guard action that blocks an operation
+- `denied` — when-condition that matches inside a denied handler
 
 ```mlld
-guard before secret = when [
-  @mx.op.type == "run" => deny "Secrets blocked from shell"
+guard before op:run = when [
+  @input.any.mx.labels.includes("secret") => deny "Secrets blocked from shell"
   * => allow
 ]
 
@@ -33,6 +27,8 @@ exe @safe(value) = when [
   * => @value
 ]
 ```
+
+`denied` handlers catch denials from operation guards (`before op:TYPE`, `after op:TYPE`). Label-entry guards (`before LABEL`) fire at data creation time before any operation context exists, so `denied` handlers do not apply to them.
 
 **Accessing guard context:**
 

@@ -1,6 +1,0 @@
-guard @noShellSecrets before secret = when [
-  @mx.op.type == "run" => deny "Secrets blocked from shell"
-  * => allow
-]
-
-run cmd { echo @apiKey }   >> Blocked by guard

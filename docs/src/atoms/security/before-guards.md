@@ -11,23 +11,16 @@ updated: 2026-01-05
 qa_tier: 2
 ---
 
-`before` guards use two trigger styles with different timing:
-
-| Guard form | Trigger moment | Frequency | `denied` handler scope |
+| Guard form | Trigger moment | Frequency | `denied` handler |
 |---|---|---|---|
-| `before LABEL` (or `for LABEL`) | When labeled data is created | Once per labeled value | Not available (operation context does not exist yet) |
-| `before op:TYPE` | Right before an operation executes | Every operation attempt | Available (`denied => ...` can catch it) |
+| `before op:TYPE` | Right before an operation executes | Every operation attempt | Yes (`denied => ...`) |
+| `before LABEL` / `for LABEL` | When labeled data is created | Once per labeled value | Not applicable |
 
-Use `before LABEL` for data-entry policy and `before op:TYPE` for per-operation policy.
+**Operation guards** — block or transform at trust boundaries:
 
 ```mlld
-guard @labelGate before secret = when [
-  @input.length < 8 => deny "Secret is too short"
-  * => allow
-]
-
 guard @runGate before op:run = when [
-  @input.any.text.includes("sk-") => deny "Secrets cannot flow to run"
+  @input.any.mx.labels.includes("secret") => deny "Secrets cannot flow to run"
   * => allow
 ]
 
@@ -35,10 +28,23 @@ exe @safe(value) = when [
   denied => `[blocked] @mx.guard.reason`
   * => @value
 ]
+```
+
+Operation type matching is hierarchical: `before op:cmd:git` matches `op:cmd:git:push`, `op:cmd:git:status`, etc.
+
+When multiple `before` guards return `allow @value`, the operation receives the replacement from the last matching guard in declaration order.
+
+**Data validation guards** — validate or sanitize at label-entry time:
+
+```mlld
+guard @validateSecret before secret = when [
+  @input.length < 8 => deny "Secret is too short"
+  * => allow
+]
 
 guard @sanitize before untrusted = when [
   * => allow @input.trim().slice(0, 100)
 ]
 ```
 
-When multiple `before` guards return `allow @value`, the operation receives the replacement from the last matching guard in declaration order.
+These fire when data receives a label, before any operation context exists. `denied` handlers cannot catch these denials — they're creation-time validation, not flow control.

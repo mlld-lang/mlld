@@ -1,5 +1,5 @@
-guard before secret = when [
-  @mx.op.type == "run" => deny "Secrets blocked from shell"
+guard before op:run = when [
+  @input.any.mx.labels.includes("secret") => deny "Secrets blocked from shell"
   * => allow
 ]
 

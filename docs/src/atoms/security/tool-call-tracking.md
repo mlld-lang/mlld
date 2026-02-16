@@ -41,7 +41,7 @@ guard @checkAccess before op:exe = when [
 ]
 ```
 
-Array of tool names the current context is permitted to use.
+Array of tool names the current context is permitted to use. Populated inside `env` blocks with tool restrictions; empty at top level.
 
 **@mx.tools.denied - Blocked tools:**
 
@@ -55,7 +55,7 @@ guard @logDenied before op:exe = when [
 ]
 ```
 
-Array of tool names explicitly denied in current context.
+Array of tool names explicitly denied in current context. Populated inside `env` blocks with tool restrictions; empty at top level.
 
 **Rate limiting example:**
 

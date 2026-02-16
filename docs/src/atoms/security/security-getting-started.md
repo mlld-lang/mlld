@@ -115,8 +115,8 @@ guard @noMcpToShell before op:cmd = when [
   * => allow
 ]
 
-guard @auditSecrets before secret = when [
-  @mx.op.type == "run" => deny "Secrets blocked from shell execution"
+guard @noSecretExfil before op:exe = when [
+  @input.any.mx.labels.includes("secret") && @mx.op.labels.includes("net:w") => deny "Secrets blocked from network operations"
   * => allow
 ]
 ```

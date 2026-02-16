@@ -11,6 +11,8 @@ updated: 2026-02-15
 qa_tier: 2
 ---
 
+These rules apply to **operation guards** (`before op:TYPE`, `after op:TYPE`):
+
 1. Guards run top-to-bottom in declaration order.
 2. `always` timing participates in both phases (`before` and `after`).
 3. Decision precedence is `deny` > `retry` > `allow @value` > `allow`.
@@ -20,3 +22,5 @@ qa_tier: 2
 7. `before op:exe` transforms run before executable evaluation, so guard logic reads `@input` in this phase. `@output` is available in `after` phase only.
 
 Guards are non-reentrant (won't trigger on their own operations).
+
+Label-entry guards (`before LABEL`) fire independently per labeled value and do not participate in operation-phase composition.

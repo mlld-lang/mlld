@@ -1,2 +1,0 @@
-var secret @apiKey = "sk-12345"
-var pii @email = "user@example.com"

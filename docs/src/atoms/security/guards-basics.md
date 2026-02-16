@@ -12,41 +12,33 @@ updated: 2026-01-05
 qa_tier: 2
 ---
 
-**Labeling data:**
+**Operation guards** block labeled data at trust boundaries:
 
 ```mlld
-var secret @apiKey = "sk-12345"
-var pii @email = "user@example.com"
-```
-
-**Defining guards:**
-
-```mlld
-guard @noShellSecrets before secret = when [
-  @mx.op.type == "run" => deny "Secrets blocked from shell"
+guard before op:run = when [
+  @input.any.mx.labels.includes("secret") => deny "Secrets blocked from shell"
+  @mx.taint.includes("src:mcp") => deny "MCP data cannot reach shell"
   * => allow
 ]
-
-run cmd { echo @apiKey }   >> Blocked by guard
 ```
 
 **Guard syntax:**
 
 ```
-guard [@name] TIMING LABEL = when [...]
+guard [@name] TIMING TRIGGER = when [...]
 ```
 
-- `TIMING`: `before`, `after`, or `always`
-- Shorthand: `for` equals `before`
+- `TIMING`: `before`, `after`, or `always` (`for` is shorthand for `before`)
+- `TRIGGER`: `op:TYPE` for operations, `LABEL` for data validation
 
-**`before` timing comparison:**
+**Two trigger types:**
 
-| Form | Trigger moment | Frequency | `denied` handler support |
+| Form | Fires when | Frequency | `denied` handler |
 |---|---|---|---|
-| `before LABEL` / `for LABEL` | Labeled value creation | Once per labeled value | No |
-| `before op:TYPE` | Operation execution | Every operation attempt | Yes |
+| `before op:TYPE` | Operation executes | Every matching operation | Yes |
+| `before LABEL` / `for LABEL` | Labeled data created | Once per labeled value | Not applicable |
 
-`before LABEL` denials happen before an operation exists, so `denied => ...` handlers do not run for that case.
+Operation guards are the primary security mechanism — they enforce label-based flow control at runtime. Label-entry guards (`before LABEL`) validate or sanitize data at creation time; see `before-guards` for that pattern.
 
 **Security context in guards:**
 
@@ -61,9 +53,9 @@ Guards have access to three complementary dimensions:
 
 | Guard type | `@input` | `@output` | `@mx` highlights |
 |---|---|---|---|
-| `before LABEL` | The current labeled value (`string`, `object`, `array`, etc.) | String view of the current value | `@mx.labels`, `@mx.taint`, `@mx.sources`, `@mx.guard.try`, `@mx.guard.timing` |
 | `before op:TYPE` | Array of operation inputs | String view of the first input | `@mx.op.type`, `@mx.op.name`, `@mx.op.labels`, `@mx.guard.try` |
 | `after op:TYPE` | Array of operation outputs in the current guard scope | String view of the current output | `@mx.op.*`, `@mx.guard.try`, `@mx.guard.reasons`, `@mx.guard.hintHistory` |
+| `before LABEL` | The current labeled value (`string`, `object`, `array`, etc.) | String view of the current value | `@mx.labels`, `@mx.taint`, `@mx.sources`, `@mx.guard.try`, `@mx.guard.timing` |
 
 Operation guard inputs expose helper metadata for aggregate checks:
 
