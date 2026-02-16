@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Bare `bail` statement boundary**: `bail` without an inline message no longer consumes the next directive line as its message expression.
+- **Content loader parse diagnostics**: JSON and JSONL parse failures now retain their specific parse error details instead of only showing a generic load failure.
 - **cmd {} block @ escaping**: `@@` and `\@` now produce literal `@` in cmd blocks (previously passed verbatim to shell)
 - **Position-independent `@` escapes**: `@@` and `\@` now resolve to literal `@` at string start and after interpolated variables in backtick/prose templates; streaming templates also treat `\@` as escaped and skip `@evt.*` substitution when escaped.
 - **Pipeline null values**: JSON `null` values now pass through pipeline stages correctly (previously conflated with parse failure)

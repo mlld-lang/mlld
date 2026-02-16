@@ -186,6 +186,11 @@ export class ContentLoaderOrchestrator {
       }
 
       let errorMessage = `Failed to load content: ${pathOrUrl}`;
+      const isJsonParseError = error instanceof MlldError
+        && (error.code === 'JSON_PARSE_ERROR' || error.code === 'JSONL_PARSE_ERROR');
+      if (isJsonParseError && typeof error.message === 'string' && error.message.length > 0) {
+        errorMessage += `\n\n${error.message}`;
+      }
       const hasAngleBracket = pathOrUrl.includes('<') || pathOrUrl.includes('>');
       if (!hasAngleBracket && !pathOrUrl.startsWith('/') && !pathOrUrl.startsWith('@') && !env.isURL(pathOrUrl)) {
         errorMessage += '\n\nHint: Paths are relative to mlld files. You can make them relative to your project root with the `@base/` prefix';

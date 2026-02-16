@@ -309,6 +309,25 @@ describe('Content Loader with Glob Support', () => {
 
       await expect(processContentLoader(node, env)).rejects.toThrow('Failed to load content: missing.md');
     });
+
+    it('includes JSON parse details when loading invalid JSON', async () => {
+      await fileSystem.writeFile(
+        path.join(process.cwd(), 'invalid-json.json'),
+        '{ "name": "Ada", }'
+      );
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: 'invalid-json.json' }],
+          raw: 'invalid-json.json'
+        }
+      };
+
+      await expect(processContentLoader(node, env)).rejects.toThrow('Failed to load content: invalid-json.json');
+      await expect(processContentLoader(node, env)).rejects.toThrow('Failed to parse JSON from invalid-json.json');
+    });
   });
 
   describe('Relative path resolution', () => {
