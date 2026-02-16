@@ -1052,12 +1052,23 @@ function extractGuards(ast: MlldNode[]): GuardInfo[] {
   walkAST(ast, (node) => {
     if (node.type === 'Directive' && node.kind === 'guard') {
       const guardNode = node as GuardDirectiveNode;
-      const name = extractText(guardNode.values?.name);
+      const name = (
+        (guardNode.values?.name ?? []).find((part: any) => part?.type === 'VariableReference')?.identifier
+        ?? extractText(guardNode.values?.name)
+        ?? (typeof guardNode.raw?.name === 'string' ? guardNode.raw.name.replace(/^@/, '') : '')
+      );
 
       if (name) {
+        const timing = (
+          (guardNode.values as Record<string, unknown> | undefined)?.timing
+          ?? guardNode.meta?.timing
+          ?? guardNode.raw?.timing
+        );
         const guard: GuardInfo = {
           name,
-          timing: guardNode.subtype === 'guardBefore' ? 'before' : 'after'
+          timing: typeof timing === 'string'
+            ? timing
+            : (guardNode.subtype === 'guardBefore' ? 'before' : 'after')
         };
 
         // Extract label if present

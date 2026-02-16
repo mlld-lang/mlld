@@ -224,6 +224,22 @@ show @blockDestructive
     expect(undefs).not.toContain('blockDestructive');
   });
 
+  it('extracts guard timing from guard fields instead of subtype', async () => {
+    const modulePath = await writeModule('guard-timing.mld', `guard @beforeGuard before op:run = when [* => allow]
+guard @afterGuard after op:run = when [* => allow]
+guard @alwaysGuard always op:run = when [* => allow]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.guards).toEqual(expect.arrayContaining([
+      { name: 'beforeGuard', timing: 'before' },
+      { name: 'afterGuard', timing: 'after' },
+      { name: 'alwaysGuard', timing: 'always' }
+    ]));
+  });
+
   it('does not flag for-loop key variables as undefined', async () => {
     const modulePath = await writeModule('for-key-decl.mld', `var @items = { a: 1, b: 2 }
 for @k, @v in @items => show @k
