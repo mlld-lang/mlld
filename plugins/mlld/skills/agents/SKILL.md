@@ -1,7 +1,19 @@
 ---
-name: agents
+name: mlld:agents
 description: Building LLM agents with mlld — tool agents (MCP tools), event-driven agents (routers and dispatchers), and workflow agents (stateless jobs). Use when creating agents, exposing tools, or building event-driven systems.
 ---
+
+## Prerequisites
+
+**YOU MUST RUN `mlld howto intro` before writing any mlld code.** The intro covers syntax, gotchas, built-in methods, file loading, and common traps. Skipping it leads to inventing non-existent features and writing code that validates but fails at runtime.
+
+```bash
+mlld howto intro              # Language fundamentals — read this first
+mlld init                     # Initialize project (enables mlld run)
+mlld install @mlld/claude-poll  # Install the Claude polling module
+```
+
+It is *strongly* encouraged to view at least one of the examples in `plugins/mlld/examples/` before writing an agent — `tool-agent/`, `event-agent/`, and `workflow-agent/` each demonstrate a different paradigm.
 
 ## Agent Paradigms
 
@@ -15,7 +27,7 @@ Three ways to build agents with mlld, each for a different integration pattern:
 
 Tool agents expose capabilities. Event-driven agents react to stimuli. Workflow agents do work on demand. All three compose — a workflow agent might call tool agents via MCP, and an event-driven system might dispatch workflow agents.
 
-For pipeline orchestration (decision loops, parallel fan-out, adversarial invalidation), see the `orchestrator` skill.
+For pipeline orchestration (decision loops, parallel fan-out, adversarial invalidation), see `/mlld:orchestrator`.
 
 ---
 
@@ -387,17 +399,12 @@ project/
 - `llm/prompts/` — Shared `.att` templates and `.md` prompt fragments.
 - `llm/lib/` — Shared mlld utilities (`@logEvent`, `@claudePoll` wrappers, etc.).
 
-## Prerequisites
-
-```bash
-mlld init                          # Initialize project (enables mlld run)
-mlld install @mlld/claude-poll     # Install the Claude polling module
-```
-
 ## Getting Started
 
-Use `mlld quickstart` and `mlld howto` for language fundamentals. Use `mlld howto mcp` for MCP-specific patterns.
+To scaffold a new orchestrator that coordinates your agents, use `/mlld:scaffold`.
 
-For pipeline orchestration (decision loops, parallel fan-out, adversarial invalidation), see the `orchestrator` skill and its examples.
+For pipeline orchestration (decision loops, parallel fan-out, adversarial invalidation), see `/mlld:orchestrator`.
+
+Use `mlld howto mcp` for MCP-specific patterns.
 
 See `patterns.md` for cross-cutting patterns that apply across all agent paradigms.

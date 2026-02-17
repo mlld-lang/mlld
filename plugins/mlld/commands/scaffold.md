@@ -1,6 +1,14 @@
 ---
-description: Generate a starter mlld orchestrator for your domain
+description: Generate a starter mlld orchestrator for your use case
 ---
+
+**YOU MUST RUN `mlld howto intro` before writing any mlld code.** The intro covers syntax, gotchas, built-in methods, file loading, and common traps. Skipping it leads to inventing non-existent features and writing code that validates but fails at runtime.
+
+```bash
+mlld howto intro              # Language fundamentals — read this first
+```
+
+It is *strongly* encouraged to view at least one of the examples in `plugins/mlld/examples/` before scaffolding — `audit/`, `research/`, and `development/` each demonstrate a complete archetype.
 
 Generate a new mlld orchestrator by asking the user four questions, then creating a complete working scaffold.
 

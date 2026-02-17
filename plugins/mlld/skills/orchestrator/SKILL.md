@@ -1,5 +1,5 @@
 ---
-name: orchestrator
+name: mlld:orchestrator
 description: Designing and building mlld orchestrators for LLM workflows. Use when creating pipelines that coordinate LLM calls, processing data at scale, or building decision-driven automation.
 ---
 
@@ -12,6 +12,8 @@ mlld howto intro              # Language fundamentals — read this first
 mlld init                     # Initialize project (enables mlld run)
 mlld install @mlld/claude-poll  # Install the Claude polling module
 ```
+
+It is *strongly* encouraged to view at least one of the examples in `plugins/mlld/examples/` before writing an orchestrator — `audit/`, `research/`, and `development/` each demonstrate a complete archetype.
 
 ## Core Pattern
 
@@ -395,6 +397,6 @@ See `gotchas.md` for mlld language gotchas and sharp edges.
 
 ## Getting Started
 
-To scaffold a new orchestrator: use the `/mlld:scaffold` command.
+To scaffold a new orchestrator: `/mlld:scaffold`.
 
 To learn by example: read the three archetypes in [../../examples/](../../examples/).
