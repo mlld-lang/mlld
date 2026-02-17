@@ -1,16 +1,18 @@
 ---
 id: tool-call-tracking
 title: Tool Call Tracking
-brief: Track tool usage with @mx.tools namespace
+brief: Track exe invocations with @mx.tools namespace
 category: security
 tags: [tools, guards, mx, tracking]
 related: [mcp, mcp-tool-gateway, security-guards-basics, env-directive]
 related-code: [interpreter/env/ContextManager.ts, cli/mcp/FunctionRouter.ts]
-updated: 2026-02-11
+updated: 2026-02-16
 qa_tier: 2
 ---
 
-The `@mx.tools` namespace tracks tool call history and availability. Guards and exes can access tool call information.
+The `@mx.tools` namespace tracks `exe` invocations — the tools you define and expose to LLMs during orchestration. Guards can use this to enforce rate limits, prevent duplicate calls, and require verification steps.
+
+Raw commands (`run cmd {}`, `run sh {}`) are not tracked. Only `exe`-defined functions count as tools.
 
 **@mx.tools.calls - Call history:**
 
@@ -21,7 +23,7 @@ guard @limitCalls before op:exe = when [
 ]
 ```
 
-Array of tool names that have been called this session.
+Array of tool names invoked this session (both direct calls and MCP-routed).
 
 **Check if specific tool was called:**
 
@@ -86,13 +88,14 @@ exe @smartFetch(url) = when [
 ]
 ```
 
-**Tool call tracking scope:**
+**Tracking scope:**
 
-Tool calls are tracked within the current execution context. When using `env` blocks, each block can have its own tracking scope based on the environment configuration.
+Calls are tracked within the current execution context. `env` blocks with tool restrictions get their own scope.
 
 ```mlld
 env @agent with { tools: @agentTools } [
-  >> @mx.tools.calls tracks calls within this env block
-  run cmd { claude -p @task }
+  >> @mx.tools.calls scoped to this env block
+  >> only tracks exe invocations the agent makes
+  var @result = @fetchData("input")
 ]
 ```

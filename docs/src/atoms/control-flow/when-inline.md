@@ -11,9 +11,9 @@ updated: 2026-02-16
 qa_tier: 1
 ---
 
-Match a value against patterns using `when @expr [patterns]`.
+Two forms: value matching (`when @expr [patterns]`) and condition matching (`when [conditions]`).
 
-**Value matching** (literal patterns):
+**Value matching** — match a value against literal patterns:
 
 ```mlld
 var @status = "active"
@@ -26,10 +26,10 @@ when @status [
 
 The colon form `when @expr: [patterns]` also works but the colon is optional.
 
-**Condition matching** (boolean expressions):
+**Condition matching** — evaluate boolean expressions (no value after `when`):
 
 ```mlld
-when @score [
+when [
   @score > 90 => show "A"
   @score > 80 => show "B"
   * => show "F"
@@ -38,10 +38,10 @@ when @score [
 
 Patterns evaluate in order. First match wins.
 
-**Simple inline** (single action):
+**Simple inline** (single condition, single result):
 
 ```mlld
 when @cond => show "Match"
 ```
 
-Use block form `when [@cond => action; * => default]` when you need multiple branches or a fallback.
+Returns the result when the condition is truthy. Use block form `when [@cond => action; * => default]` when you need multiple branches or a fallback.

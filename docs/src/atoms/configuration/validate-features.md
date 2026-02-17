@@ -24,7 +24,7 @@ mlld validate module.mld --format json
 ```mlld
 var @name = "alice"
 show @nmae
->> Warning: @nmae undefined, did you mean @name?
+>> Warning: @nmae undefined
 ```
 
 Warns about typos like `@mx.now` (should be `@now`).
