@@ -213,7 +213,7 @@ var @data = @text | @parse              >> parse JSON
 var @data = @text | @parse.llm          >> extract JSON from LLM output
 ```
 
-**Path resolution**: `<@file>` resolves from the current script's directory, not the project root. Use `@root` (or its alias `@base`) for absolute paths: `<@root/@file>`. This matters when `cmd` output gives project-root-relative paths but your script is in a subdirectory.
+**Path resolution**: `<@file>` resolves from the current script's directory, not the project root. Use `@root` for absolute paths: `<@root/@file>`. This matters when `cmd` output gives project-root-relative paths but your script is in a subdirectory.
 
 ## Next Steps
 
