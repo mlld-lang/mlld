@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc82]
 
 ### Fixed
+- **Per-item parse resilience in glob JSON loading**: When a glob loads multiple `.json` files, one malformed file no longer kills the entire array; the bad item degrades to text with `parseError` metadata while all other items parse normally.
 - **Bare `bail` statement boundary**: `bail` without an inline message no longer consumes the next directive line as its message expression.
 - **Content loader parse diagnostics**: JSON and JSONL parse failures now retain their specific parse error details instead of only showing a generic load failure.
 - **`mlld validate` guard timing extraction**: Guard analysis now reads timing from guard timing fields instead of `subtype`, so `before`/`after`/`always` guards are reported correctly.
@@ -53,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **File loading docs for `.jsonl`**: `file-loading-basics` now documents that `<file.jsonl>` auto-parses into an array of JSON records.
 
 ### Added
+- **JSON5 fallback for `.json` / `.jsonl` loading**: Files with trailing commas, single quotes, or comments now parse via JSON5 fallback when strict `JSON.parse` fails.
 - **`mlld live --stdio`**: persistent NDJSON RPC transport for long-running SDK calls
   - Accepts `process`, `execute`, `analyze`, `cancel`, and `state:update` methods over stdio
   - Streams SDK events as NDJSON while requests execute
