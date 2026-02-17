@@ -4,6 +4,12 @@ import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
+import { LspAstNode, asLspAstNode } from '@services/lsp/visitors/base/LspAstNode';
+
+interface ConditionPairNode extends LspAstNode {
+  condition?: Array<LspAstNode | LspAstNode[]>;
+  action?: LspAstNode[] | LspAstNode;
+}
 
 export class ExpressionVisitor extends BaseVisitor {
   private mainVisitor!: INodeVisitor;
@@ -20,51 +26,53 @@ export class ExpressionVisitor extends BaseVisitor {
     this.mainVisitor = visitor;
   }
   
-  canHandle(node: any): boolean {
-    return node.type === 'BinaryExpression' ||
-           node.type === 'UnaryExpression' ||
-           node.type === 'TernaryExpression' ||
-           node.type === 'NewExpression' ||
-           node.type === 'WhenExpression' ||
-           node.type === 'ForExpression' ||
-           node.type === 'LoopExpression' ||
-           node.type === 'LetAssignment' ||
-           node.type === 'ExeReturn';
+  canHandle(node: unknown): boolean {
+    const astNode = asLspAstNode(node);
+    return astNode.type === 'BinaryExpression' ||
+           astNode.type === 'UnaryExpression' ||
+           astNode.type === 'TernaryExpression' ||
+           astNode.type === 'NewExpression' ||
+           astNode.type === 'WhenExpression' ||
+           astNode.type === 'ForExpression' ||
+           astNode.type === 'LoopExpression' ||
+           astNode.type === 'LetAssignment' ||
+           astNode.type === 'ExeReturn';
   }
   
-  visitNode(node: any, context: VisitorContext): void {
-    if (!node.location) return;
+  visitNode(node: unknown, context: VisitorContext): void {
+    const astNode = asLspAstNode(node);
+    if (!astNode.location) return;
 
-    switch (node.type) {
+    switch (astNode.type) {
       case 'BinaryExpression':
       case 'UnaryExpression':
-        this.visitOperator(node, context);
+        this.visitOperator(astNode, context);
         break;
       case 'TernaryExpression':
-        this.visitTernaryExpression(node, context);
+        this.visitTernaryExpression(astNode, context);
         break;
       case 'NewExpression':
-        this.visitNewExpression(node, context);
+        this.visitNewExpression(astNode, context);
         break;
       case 'WhenExpression':
-        this.visitWhenExpression(node, context);
+        this.visitWhenExpression(astNode, context);
         break;
       case 'ForExpression':
-        this.visitForExpression(node, context);
+        this.visitForExpression(astNode, context);
         break;
       case 'LoopExpression':
-        this.visitLoopExpression(node, context);
+        this.visitLoopExpression(astNode, context);
         break;
       case 'LetAssignment':
-        this.visitLetAssignment(node, context);
+        this.visitLetAssignment(astNode, context);
         break;
       case 'ExeReturn':
-        this.visitExeReturn(node, context);
+        this.visitExeReturn(astNode, context);
         break;
     }
   }
 
-  private visitNewExpression(node: any, context: VisitorContext): void {
+  private visitNewExpression(node: LspAstNode, context: VisitorContext): void {
     if (!node.location) return;
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
@@ -85,7 +93,7 @@ export class ExpressionVisitor extends BaseVisitor {
     }
   }
   
-  private visitOperator(node: any, context: VisitorContext): void {
+  private visitOperator(node: LspAstNode, context: VisitorContext): void {
     if (!node.operator) return;
     
     const operatorText = Array.isArray(node.operator) ? node.operator[0] : node.operator;
@@ -142,7 +150,7 @@ export class ExpressionVisitor extends BaseVisitor {
     }
   }
   
-  private visitTernaryExpression(node: any, context: VisitorContext): void {
+  private visitTernaryExpression(node: LspAstNode, context: VisitorContext): void {
     if (node.condition) this.mainVisitor.visitNode(node.condition, context);
     
     if (node.trueBranch) this.mainVisitor.visitNode(node.trueBranch, context);
@@ -160,7 +168,7 @@ export class ExpressionVisitor extends BaseVisitor {
     }
   }
   
-  private visitWhenExpression(node: any, context: VisitorContext): void {
+  private visitWhenExpression(node: LspAstNode, context: VisitorContext): void {
     // Add 'when' keyword token
     if (node.keywordLocation) {
       this.tokenBuilder.addToken({
@@ -217,13 +225,14 @@ export class ExpressionVisitor extends BaseVisitor {
     
     // Process each condition/action pair
     if (node.conditions && Array.isArray(node.conditions)) {
-      node.conditions.forEach((conditionPair: any) => {
+      node.conditions.forEach((conditionPair) => {
+        const pair = asLspAstNode(conditionPair) as ConditionPairNode;
         // Visit condition expression(s)
-        if (conditionPair.condition && Array.isArray(conditionPair.condition)) {
-          conditionPair.condition.forEach((cond: any) => {
+        if (pair.condition && Array.isArray(pair.condition)) {
+          pair.condition.forEach((cond) => {
             // Handle nested array structure [[BinaryExpression]]
             if (Array.isArray(cond)) {
-              cond.forEach((innerCond: any) => {
+              cond.forEach((innerCond) => {
                 this.mainVisitor.visitNode(innerCond, context);
               });
             } else {
@@ -233,13 +242,13 @@ export class ExpressionVisitor extends BaseVisitor {
         }
         
         // Find and tokenize '=>' between condition and action
-        if (conditionPair.condition && conditionPair.action) {
-          const lastCondition = Array.isArray(conditionPair.condition)
-            ? conditionPair.condition[conditionPair.condition.length - 1]
-            : conditionPair.condition;
-          let firstAction = Array.isArray(conditionPair.action)
-            ? conditionPair.action[0]
-            : conditionPair.action;
+        if (pair.condition && pair.action) {
+          const lastCondition = Array.isArray(pair.condition)
+            ? pair.condition[pair.condition.length - 1]
+            : pair.condition;
+          let firstAction = Array.isArray(pair.action)
+            ? pair.action[0]
+            : pair.action;
 
           // For string literal actions, get a representative inner node for location
           if (firstAction?.content && firstAction?.wrapperType && firstAction.content[0]) {
@@ -263,14 +272,18 @@ export class ExpressionVisitor extends BaseVisitor {
         }
         
         // Visit action expression(s)
-        if (conditionPair.action) {
-          if (Array.isArray(conditionPair.action)) {
-            conditionPair.action.forEach((action: any) => {
+        if (pair.action) {
+          if (Array.isArray(pair.action)) {
+            pair.action.forEach((action) => {
+              const actionNode = asLspAstNode(action);
               // Handle string literal actions (they have content property)
-              if (action.content && action.wrapperType) {
+              if (actionNode.content && actionNode.wrapperType) {
                 // This is a string literal - visit as a StringLiteral node
                 // We need to adjust the location to include the quotes
-                const firstContent = action.content[0];
+                const contentNodes = Array.isArray(actionNode.content)
+                  ? actionNode.content
+                  : [actionNode.content];
+                const firstContent = asLspAstNode(contentNodes[0]);
                 if (firstContent?.location) {
                   const adjustedLocation = {
                     start: {
@@ -287,17 +300,17 @@ export class ExpressionVisitor extends BaseVisitor {
                   const stringNode = {
                     type: 'StringLiteral',
                     location: adjustedLocation,
-                    content: action.content,
-                    wrapperType: action.wrapperType
+                    content: contentNodes,
+                    wrapperType: actionNode.wrapperType
                   };
                   this.mainVisitor.visitNode(stringNode, context);
                 }
               } else {
-                this.mainVisitor.visitNode(action, context);
+                this.mainVisitor.visitNode(actionNode, context);
               }
             });
           } else {
-            this.mainVisitor.visitNode(conditionPair.action, context);
+            this.mainVisitor.visitNode(pair.action, context);
           }
         }
       });
@@ -313,7 +326,7 @@ export class ExpressionVisitor extends BaseVisitor {
     }
   }
   
-  private visitForExpression(node: any, context: VisitorContext): void {
+  private visitForExpression(node: LspAstNode, context: VisitorContext): void {
     if (!node.location) return;
 
     // Add 'for' keyword token
@@ -445,7 +458,7 @@ export class ExpressionVisitor extends BaseVisitor {
     }
   }
 
-  private visitLoopExpression(node: any, context: VisitorContext): void {
+  private visitLoopExpression(node: LspAstNode, context: VisitorContext): void {
     if (!node.location) return;
 
     const sourceText = this.document.getText();
@@ -553,7 +566,7 @@ export class ExpressionVisitor extends BaseVisitor {
     }
   }
 
-  private visitLetAssignment(node: any, context: VisitorContext): void {
+  private visitLetAssignment(node: LspAstNode, context: VisitorContext): void {
     // Tokenize "let" keyword
     const sourceText = this.document.getText();
     const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
@@ -605,7 +618,7 @@ export class ExpressionVisitor extends BaseVisitor {
     }
   }
 
-  private visitExeReturn(node: any, context: VisitorContext): void {
+  private visitExeReturn(node: LspAstNode, context: VisitorContext): void {
     // Tokenize => operator
     const sourceText = this.document.getText();
     const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);

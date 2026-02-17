@@ -3,6 +3,7 @@ import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
+import { asLspAstNode } from '@services/lsp/visitors/base/LspAstNode';
 
 export class LabelVisitor extends BaseVisitor {
   private operatorHelper: OperatorTokenHelper;
@@ -12,15 +13,17 @@ export class LabelVisitor extends BaseVisitor {
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
   }
 
-  canHandle(node: any): boolean {
-    return node.type === 'LabelModification';
+  canHandle(node: unknown): boolean {
+    const astNode = asLspAstNode(node);
+    return astNode.type === 'LabelModification';
   }
 
-  visitNode(node: any, context: VisitorContext): void {
-    if (!node.location) return;
+  visitNode(node: unknown, context: VisitorContext): void {
+    const astNode = asLspAstNode(node);
+    if (!astNode.location) return;
 
     const sourceText = this.document.getText();
-    const segment = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const segment = sourceText.substring(astNode.location.start.offset, astNode.location.end.offset);
     const tokenMatch = segment.match(/^\s*([^\s]+)/);
     if (!tokenMatch) return;
 
@@ -28,7 +31,7 @@ export class LabelVisitor extends BaseVisitor {
     if (!labelToken) return;
 
     const matchIndex = tokenMatch.index ?? 0;
-    const tokenOffset = node.location.start.offset + matchIndex + tokenMatch[0].indexOf(labelToken);
+    const tokenOffset = astNode.location.start.offset + matchIndex + tokenMatch[0].indexOf(labelToken);
 
     let labelWord = labelToken;
     let labelOffset = tokenOffset;

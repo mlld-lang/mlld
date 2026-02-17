@@ -5,26 +5,12 @@ import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
+import { LspAstNode, asLspAstNode } from '@services/lsp/visitors/base/LspAstNode';
 
-interface SourcePosition {
-  offset: number;
-  line: number;
-  column: number;
-}
-
-interface SourceLocation {
-  start: SourcePosition;
-  end: SourcePosition;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface AstNode extends Record<string, any> {
-  type: string;
-  location?: SourceLocation;
-}
+type AstNode = LspAstNode;
 
 interface AstNodeWithLocation extends AstNode {
-  location: SourceLocation;
+  location: NonNullable<AstNode['location']>;
 }
 
 interface ObjectEntry {
@@ -46,32 +32,34 @@ export class StructureVisitor extends BaseVisitor {
     this.mainVisitor = visitor;
   }
 
-  canHandle(node: any): boolean {
-    return node.type === 'ObjectExpression' ||
-           node.type === 'object' ||
-           node.type === 'ArrayExpression' ||
-           node.type === 'array' ||
-           node.type === 'Property' ||
-           node.type === 'MemberExpression';
+  canHandle(node: unknown): boolean {
+    const astNode = asLspAstNode(node);
+    return astNode.type === 'ObjectExpression' ||
+           astNode.type === 'object' ||
+           astNode.type === 'ArrayExpression' ||
+           astNode.type === 'array' ||
+           astNode.type === 'Property' ||
+           astNode.type === 'MemberExpression';
   }
 
-  visitNode(node: any, context: VisitorContext): void {
-    if (!node.location) return;
+  visitNode(node: unknown, context: VisitorContext): void {
+    const astNode = asLspAstNode(node);
+    if (!astNode.location) return;
     
-    switch (node.type) {
+    switch (astNode.type) {
       case 'ObjectExpression':
       case 'object':
-        this.visitObjectExpression(node, context);
+        this.visitObjectExpression(astNode as AstNodeWithLocation, context);
         break;
       case 'ArrayExpression':
       case 'array':
-        this.visitArrayExpression(node, context);
+        this.visitArrayExpression(astNode as AstNodeWithLocation, context);
         break;
       case 'Property':
-        this.visitProperty(node, context);
+        this.visitProperty(astNode as AstNodeWithLocation, context);
         break;
       case 'MemberExpression':
-        this.visitMemberExpression(node, context);
+        this.visitMemberExpression(astNode as AstNodeWithLocation, context);
         break;
     }
   }

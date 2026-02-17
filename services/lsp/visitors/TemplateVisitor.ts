@@ -1,48 +1,51 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
+import { LspAstNode, asLspAstNode } from '@services/lsp/visitors/base/LspAstNode';
 
 export class TemplateVisitor extends BaseVisitor {
-  private mainVisitor: INodeVisitor;
+  private mainVisitor!: INodeVisitor;
 
   setMainVisitor(visitor: INodeVisitor): void {
     this.mainVisitor = visitor;
   }
   
-  canHandle(node: any): boolean {
-    return node.type === 'Template' ||
-           node.type === 'StringLiteral' ||
-           node.type === 'TemplateForBlock' ||
-           node.type === 'TemplateInlineShow' ||
-           node.type === 'Text';
+  canHandle(node: unknown): boolean {
+    const astNode = asLspAstNode(node);
+    return astNode.type === 'Template' ||
+           astNode.type === 'StringLiteral' ||
+           astNode.type === 'TemplateForBlock' ||
+           astNode.type === 'TemplateInlineShow' ||
+           astNode.type === 'Text';
   }
   
-  visitNode(node: any, context: VisitorContext): void {
-    if (!node.location) return;
+  visitNode(node: unknown, context: VisitorContext): void {
+    const astNode = asLspAstNode(node);
+    if (!astNode.location) return;
 
-    if (node.type === 'TemplateForBlock') {
-      this.visitTemplateForBlock(node, context);
+    if (astNode.type === 'TemplateForBlock') {
+      this.visitTemplateForBlock(astNode, context);
       return;
     }
 
-    if (node.type === 'TemplateInlineShow') {
-      this.visitTemplateInlineShow(node, context);
+    if (astNode.type === 'TemplateInlineShow') {
+      this.visitTemplateInlineShow(astNode, context);
       return;
     }
 
-    if (node.type === 'Text') {
-      this.visitTextNode(node, context);
+    if (astNode.type === 'Text') {
+      this.visitTextNode(astNode, context);
       return;
     }
 
-    if (node.type === 'StringLiteral') {
-      this.visitStringLiteral(node, context);
+    if (astNode.type === 'StringLiteral') {
+      this.visitStringLiteral(astNode, context);
     } else {
-      this.visitTemplate(node, context);
+      this.visitTemplate(astNode, context);
     }
   }
   
-  private visitTextNode(node: any, context: VisitorContext): void {
+  private visitTextNode(node: LspAstNode, context: VisitorContext): void {
     // Handle Text nodes based on wrapper type
     // - In double-quoted strings: tokenize as 'string' (light green)
     // - In backtick/colon templates: tokenize /for and /end as 'property' (teal), rest as default
@@ -61,7 +64,7 @@ export class TemplateVisitor extends BaseVisitor {
       });
     } else if (wrapperType === 'backtick' || wrapperType === 'doubleColon' || wrapperType === 'tripleColon' || wrapperType === 'att') {
       // Backtick/colon templates: check for /for, /end, {{for}}, {{end}} keywords
-      const content = node.content || '';
+      const content = typeof node.content === 'string' ? node.content : '';
 
       // Match both /for and {{for}} styles
       const forMatch = content.match(/\/(for|end)\b|\{\{\s*(for|end)\b/);
@@ -87,13 +90,14 @@ export class TemplateVisitor extends BaseVisitor {
           this.tokenBuilder.addToken({
             line: keywordPos.line,
             char: keywordPos.character,
-            length: forMatch[1].length,
+            length: forMatch[1]?.length ?? 0,
             tokenType: 'property', // teal color (italic via nvim config)
             modifiers: []
           });
         } else {
           // Mustache style: {{for}} or {{end}}
           const keywordName = forMatch[2];
+          if (!keywordName) return;
           const keywordIndex = forMatch[0].indexOf(keywordName);
           const keywordOffset = node.location.start.offset + forMatch.index + keywordIndex;
           const keywordPos = this.document.positionAt(keywordOffset);
@@ -110,11 +114,12 @@ export class TemplateVisitor extends BaseVisitor {
       // Don't tokenize rest of Text - let it be default/white color
     } else if (wrapperType === 'mtt') {
       // MTT templates: only {{for}}, {{end}} keywords (no slash syntax)
-      const content = node.content || '';
+      const content = typeof node.content === 'string' ? node.content : '';
       const forMatch = content.match(/\{\{\s*(for|end)\b/);
 
       if (forMatch && forMatch.index !== undefined) {
         const keywordName = forMatch[1];
+        if (!keywordName) return;
         const keywordIndex = forMatch[0].indexOf(keywordName);
         const keywordOffset = node.location.start.offset + forMatch.index + keywordIndex;
         const keywordPos = this.document.positionAt(keywordOffset);
@@ -131,7 +136,7 @@ export class TemplateVisitor extends BaseVisitor {
     }
   }
 
-  private visitStringLiteral(node: any, context: VisitorContext): void {
+  private visitStringLiteral(node: LspAstNode, context: VisitorContext): void {
     const text = this.getCachedText(
       { line: node.location.start.line - 1, character: node.location.start.column - 1 },
       { line: node.location.end.line - 1, character: node.location.end.column }
@@ -163,12 +168,12 @@ export class TemplateVisitor extends BaseVisitor {
     }
   }
   
-  private visitTemplate(node: any, context: VisitorContext): void {
+  private visitTemplate(node: LspAstNode, context: VisitorContext): void {
     let templateType: 'backtick' | 'doubleColon' | 'tripleColon' | null = null;
     let variableStyle: '@var' | '{{var}}' = '@var';
     let delimiterLength = 1;
     
-    if (node.delimiter) {
+    if (typeof node.delimiter === 'string') {
       switch (node.delimiter) {
         case '`':
           templateType = 'backtick';
@@ -184,8 +189,8 @@ export class TemplateVisitor extends BaseVisitor {
           delimiterLength = 3;
           break;
       }
-    } else if (node.templateType) {
-      templateType = node.templateType;
+    } else if (typeof node.templateType === 'string') {
+      templateType = node.templateType as 'backtick' | 'doubleColon' | 'tripleColon';
       delimiterLength = templateType === 'tripleColon' ? 3 : (templateType === 'doubleColon' ? 2 : 1);
       if (templateType === 'tripleColon') {
         variableStyle = '{{var}}';
@@ -225,7 +230,7 @@ export class TemplateVisitor extends BaseVisitor {
     }
   }
 
-  private visitTemplateForBlock(node: any, context: VisitorContext): void {
+  private visitTemplateForBlock(node: LspAstNode, context: VisitorContext): void {
     // Heuristic tokenization: highlight 'for' and 'end' markers inside the block span
     const src = this.document.getText();
     const text = src.substring(node.location.start.offset, node.location.end.offset);
@@ -278,7 +283,7 @@ export class TemplateVisitor extends BaseVisitor {
     }
   }
 
-  private visitTemplateInlineShow(node: any, context: VisitorContext): void {
+  private visitTemplateInlineShow(node: LspAstNode, context: VisitorContext): void {
     // Highlight '/show' or '{{show}}' marker at start of node
     const src = this.document.getText();
     const text = src.substring(node.location.start.offset, node.location.end.offset);

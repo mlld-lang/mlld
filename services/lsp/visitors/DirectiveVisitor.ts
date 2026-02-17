@@ -10,6 +10,7 @@ import { CommentTokenHelper } from '@services/lsp/utils/CommentTokenHelper';
 import { LanguageBlockHelper } from '@services/lsp/utils/LanguageBlockHelper';
 import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
+import { LspAstNode } from '@services/lsp/visitors/base/LspAstNode';
 
 export class DirectiveVisitor extends BaseVisitor {
   private mainVisitor!: INodeVisitor;
@@ -28,11 +29,11 @@ export class DirectiveVisitor extends BaseVisitor {
     this.mainVisitor = visitor;
   }
   
-  canHandle(node: any): boolean {
+  canHandle(node: LspAstNode): boolean {
     return node.type === 'Directive';
   }
   
-  visitNode(node: any, context: VisitorContext): void {
+  visitNode(node: LspAstNode, context: VisitorContext): void {
     if (!node.location) return;
 
 
@@ -320,7 +321,7 @@ export class DirectiveVisitor extends BaseVisitor {
     this.handleDirectiveComment(node);
   }
 
-  private visitExportDirective(directive: any, context: VisitorContext): void {
+  private visitExportDirective(directive: LspAstNode, context: VisitorContext): void {
     // Tokenize exported symbols within braces
     const exports = directive.values?.exports;
     if (Array.isArray(exports)) {
@@ -338,7 +339,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
   
-  private visitEndOfLineComment(comment: any): void {
+  private visitEndOfLineComment(comment: LspAstNode): void {
     if (!comment.location) return;
 
     this.commentHelper.tokenizeEndOfLineComment(comment);
@@ -349,7 +350,7 @@ export class DirectiveVisitor extends BaseVisitor {
    * and leading comments via meta.leadingComments
    * Call this before early returns to ensure comments are tokenized
    */
-  private handleDirectiveComment(node: any): void {
+  private handleDirectiveComment(node: LspAstNode): void {
     // Handle leading comments (comments that appear before a statement on their own line)
     if (node.meta?.leadingComments && Array.isArray(node.meta.leadingComments)) {
       for (const comment of node.meta.leadingComments) {
@@ -362,10 +363,10 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private collectBlockCommentSkipRanges(nodes: any[]): Array<{ start: number; end: number }> {
+  private collectBlockCommentSkipRanges(nodes: LspAstNode[]): Array<{ start: number; end: number }> {
     const ranges: Array<{ start: number; end: number }> = [];
 
-    const pushNode = (node: any): void => {
+    const pushNode = (node: LspAstNode): void => {
       if (!node) return;
       if (Array.isArray(node)) {
         for (const entry of node) {
@@ -396,7 +397,7 @@ export class DirectiveVisitor extends BaseVisitor {
   private tokenizeBlockComments(
     openOffset: number | null,
     closeOffset: number | null,
-    blockNodes: any[] = []
+    blockNodes: LspAstNode[] = []
   ): void {
     if (openOffset === null || closeOffset === null) return;
     if (closeOffset <= openOffset) return;
@@ -408,7 +409,7 @@ export class DirectiveVisitor extends BaseVisitor {
     });
   }
 
-  private handleVariableDeclaration(node: any, skipEquals: boolean = false): void {
+  private handleVariableDeclaration(node: LspAstNode, skipEquals: boolean = false): void {
     const identifierNodes = node.values.identifier;
     if (Array.isArray(identifierNodes) && identifierNodes.length > 0) {
       const firstIdentifier = identifierNodes[0];
@@ -495,7 +496,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
   
-  private visitDirectiveValues(directive: any, context: VisitorContext): void {
+  private visitDirectiveValues(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     
     
@@ -679,7 +680,7 @@ export class DirectiveVisitor extends BaseVisitor {
     this.tokenizeSecurityLabels(directive);
   }
   
-  private visitWithClause(withClause: any, directive: any, context: VisitorContext): void {
+  private visitWithClause(withClause: LspAstNode, directive: LspAstNode, context: VisitorContext): void {
     // Find and tokenize the "with" keyword
     const source = this.document.getText();
     const directiveText = source.substring(directive.location.start.offset, directive.location.end.offset);
@@ -892,14 +893,14 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private tokenizePipelineEffectsFromStages(stages: any[], directive: any): void {
+  private tokenizePipelineEffectsFromStages(stages: LspAstNode[], directive: LspAstNode): void {
     if (!directive.location || !Array.isArray(stages) || stages.length === 0) return;
 
     const sourceText = this.document.getText();
     const effectHelper = new EffectTokenHelper(this.document, this.tokenBuilder);
     const directiveEnd = directive.location.end.offset;
 
-    const tokenizeStage = (stage: any): void => {
+    const tokenizeStage = (stage: LspAstNode): void => {
       const rawIdentifier = stage?.rawIdentifier;
       if (!rawIdentifier || !/^(show|log|output)$/.test(rawIdentifier)) return;
       const idNode = Array.isArray(stage.identifier) ? stage.identifier[0] : stage.identifier;
@@ -936,7 +937,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
   
-  private visitRunDirective(directive: any, context: VisitorContext): void {
+  private visitRunDirective(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
 
     this.tokenizeRunArgs(directive, values, context);
@@ -1274,7 +1275,7 @@ export class DirectiveVisitor extends BaseVisitor {
     this.tokenizeSecurityLabels(directive);
   }
 
-  private tokenizeRunArgs(directive: any, values: any, context: VisitorContext): void {
+  private tokenizeRunArgs(directive: LspAstNode, values: LspAstNode, context: VisitorContext): void {
     if (directive?.subtype === 'runExec') return;
     if (!directive?.location || !Array.isArray(values?.args)) return;
 
@@ -1311,10 +1312,10 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private tokenizeRunWorkingDirSeparator(directive: any, values: any): void {
+  private tokenizeRunWorkingDirSeparator(directive: LspAstNode, values: LspAstNode): void {
     if (!directive?.location || !Array.isArray(values?.workingDir) || values.workingDir.length === 0) return;
 
-    const firstPathPart = values.workingDir.find((part: any) => part?.location);
+    const firstPathPart = values.workingDir.find((part: LspAstNode) => part?.location);
     if (!firstPathPart?.location) return;
 
     const sourceText = this.document.getText();
@@ -1331,8 +1332,8 @@ export class DirectiveVisitor extends BaseVisitor {
   }
 
   private findRunHeaderParenOffsets(
-    directive: any,
-    values: any
+    directive: LspAstNode,
+    values: LspAstNode
   ): { openOffset: number; closeOffset: number } | null {
     if (!directive?.location) return null;
 
@@ -1364,7 +1365,7 @@ export class DirectiveVisitor extends BaseVisitor {
     };
   }
 
-  private visitOutputDirective(directive: any, context: VisitorContext): void {
+  private visitOutputDirective(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     if (!values) return;
     
@@ -1500,7 +1501,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
   
-  private visitTemplateValue(directive: any, context: VisitorContext): void {
+  private visitTemplateValue(directive: LspAstNode, context: VisitorContext): void {
     const wrapperType = directive.meta?.wrapperType;
     // For /exe directives, use template array instead of value
     const values = directive.kind === 'exe' ? (directive.values?.template || []) : (directive.values?.value || []);
@@ -1591,11 +1592,11 @@ export class DirectiveVisitor extends BaseVisitor {
       
       const newContext = {
         ...context,
-        templateType: templateType as any,
+        templateType: templateType,
         interpolationAllowed,
         variableStyle,
         inSingleQuotes: wrapperType === 'singleQuote',
-        wrapperType: wrapperType as any
+        wrapperType: wrapperType
       };
 
       for (const node of values) {
@@ -1631,7 +1632,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
   
-  private visitInlineCode(directive: any, context: VisitorContext): void {
+  private visitInlineCode(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     
     // Handle different code structures:
@@ -1644,7 +1645,7 @@ export class DirectiveVisitor extends BaseVisitor {
     this.languageHelper.tokenizeInlineCode(directive, codeNode);
   }
   
-  private handlePrimitiveValue(value: any, directive: any): void {
+  private handlePrimitiveValue(value: LspAstNode, directive: LspAstNode): void {
     const source = this.document.getText();
     const directiveText = source.substring(directive.location.start.offset, directive.location.end.offset);
     const equalIndex = directiveText.indexOf('=');
@@ -1685,7 +1686,7 @@ export class DirectiveVisitor extends BaseVisitor {
     });
   }
   
-  private visitWhenDirective(node: any, context: VisitorContext): void {
+  private visitWhenDirective(node: LspAstNode, context: VisitorContext): void {
     if (node.values) {
       // Handle simple when form: /when @condition => action
       if (node.values.condition && node.values.action) {
@@ -1756,8 +1757,8 @@ export class DirectiveVisitor extends BaseVisitor {
       
       // Handle block form: /when @var: [...] or /when [...]
       if (node.values.conditions && Array.isArray(node.values.conditions)) {
-        const blockCommentNodes: any[] = [];
-        const registerBlockNode = (value: any): void => {
+        const blockCommentNodes: LspAstNode[] = [];
+        const registerBlockNode = (value: LspAstNode): void => {
           if (!value || typeof value !== 'object') return;
           if (Array.isArray(value)) {
             for (const entry of value) {
@@ -2183,7 +2184,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private visitIfDirective(node: any, context: VisitorContext): void {
+  private visitIfDirective(node: LspAstNode, context: VisitorContext): void {
     const values = node.values;
     if (!values || !node.location) return;
 
@@ -2258,7 +2259,7 @@ export class DirectiveVisitor extends BaseVisitor {
       }
     }
 
-    const handleBlock = (blockNodes: any[]): void => {
+    const handleBlock = (blockNodes: LspAstNode[]): void => {
       for (const blockNode of blockNodes) {
         if (blockNode.type === 'LetAssignment') {
           this.visitLetAssignment(blockNode, node, context);
@@ -2283,7 +2284,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private visitImportDirective(directive: any, context: VisitorContext): void {
+  private visitImportDirective(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     if (!values || !directive.location) return;
     
@@ -2759,7 +2760,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
   
-  private visitForDirective(directive: any, context: VisitorContext): void {
+  private visitForDirective(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     if (!values || !directive.location) return;
     
@@ -2963,7 +2964,7 @@ export class DirectiveVisitor extends BaseVisitor {
     this.tokenizePipelineOperators(directive);
   }
 
-  private visitExeBlock(directive: any, context: VisitorContext): void {
+  private visitExeBlock(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     if (!values || !directive.location) return;
 
@@ -3041,7 +3042,7 @@ export class DirectiveVisitor extends BaseVisitor {
     this.tokenizeBlockComments(openOffset, closeOffset, blockNodes);
   }
 
-  private visitEnvDirective(directive: any, context: VisitorContext): void {
+  private visitEnvDirective(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     if (!values || !directive.location) return;
 
@@ -3088,7 +3089,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private visitPolicyDirective(directive: any, context: VisitorContext): void {
+  private visitPolicyDirective(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     if (!values || !directive.location) return;
 
@@ -3166,7 +3167,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private visitGuardDirective(directive: any, context: VisitorContext): void {
+  private visitGuardDirective(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     if (!values || !directive.location) return;
 
@@ -3456,7 +3457,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private visitLetAssignment(letNode: any, directive: any, context: VisitorContext): void {
+  private visitLetAssignment(letNode: LspAstNode, directive: LspAstNode, context: VisitorContext): void {
     if (!letNode.location) return;
 
     const sourceText = this.document.getText();
@@ -3519,7 +3520,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private visitAugmentedAssignment(augNode: any, directive: any, context: VisitorContext): void {
+  private visitAugmentedAssignment(augNode: LspAstNode, directive: LspAstNode, context: VisitorContext): void {
     if (!augNode.location) return;
 
     const sourceText = this.document.getText();
@@ -3582,7 +3583,7 @@ export class DirectiveVisitor extends BaseVisitor {
    * - | separates sequential pipeline stages
    * - || separates parallel stages within a group
    */
-  private tokenizePipelineOperators(directive: any): void {
+  private tokenizePipelineOperators(directive: LspAstNode): void {
     if (!directive.location) return;
 
     const sourceText = this.document.getText();
@@ -3665,7 +3666,7 @@ export class DirectiveVisitor extends BaseVisitor {
    * Labels appear as comma-separated identifiers after the main directive content.
    * Example: /run {echo hello} sensitive, pii
    */
-  private tokenizeSecurityLabels(directive: any): void {
+  private tokenizeSecurityLabels(directive: LspAstNode): void {
     const labels = directive.values?.securityLabels || directive.meta?.securityLabels;
     const rawLabels = directive.raw?.securityLabels;
 
@@ -3710,7 +3711,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private visitWhileDirective(node: any, context: VisitorContext): void {
+  private visitWhileDirective(node: LspAstNode, context: VisitorContext): void {
     if (!node.values || !node.location) return;
 
     const sourceText = this.document.getText();
@@ -3750,7 +3751,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
-  private visitLoopDirective(node: any, context: VisitorContext): void {
+  private visitLoopDirective(node: LspAstNode, context: VisitorContext): void {
     const values = node.values;
     if (!values || !node.location) return;
 
@@ -3867,7 +3868,7 @@ export class DirectiveVisitor extends BaseVisitor {
     this.tokenizeBlockComments(openOffset, closeOffset, blockNodes);
   }
 
-  private visitStreamDirective(node: any, context: VisitorContext): void {
+  private visitStreamDirective(node: LspAstNode, context: VisitorContext): void {
     if (!node.values || !node.location) return;
 
     // Visit the invocation/reference

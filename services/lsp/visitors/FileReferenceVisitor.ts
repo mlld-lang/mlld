@@ -6,6 +6,7 @@ import { CommentTokenHelper } from '@services/lsp/utils/CommentTokenHelper';
 import { EffectTokenHelper } from '@services/lsp/utils/EffectTokenHelper';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
+import { LspAstNode, asLspAstNode } from '@services/lsp/visitors/base/LspAstNode';
 
 export class FileReferenceVisitor extends BaseVisitor {
   private mainVisitor!: INodeVisitor;
@@ -20,43 +21,45 @@ export class FileReferenceVisitor extends BaseVisitor {
     this.mainVisitor = visitor;
   }
 
-  canHandle(node: any): boolean {
-    return node.type === 'FileReference' || 
-           node.type === 'load-content' ||
-           node.type === 'Comment' ||
-           node.type === 'Parameter' ||
-           node.type === 'Frontmatter' ||
-           node.type === 'CodeFence' ||
-           node.type === 'MlldRunBlock';
+  canHandle(node: unknown): boolean {
+    const astNode = asLspAstNode(node);
+    return astNode.type === 'FileReference' || 
+           astNode.type === 'load-content' ||
+           astNode.type === 'Comment' ||
+           astNode.type === 'Parameter' ||
+           astNode.type === 'Frontmatter' ||
+           astNode.type === 'CodeFence' ||
+           astNode.type === 'MlldRunBlock';
   }
   
-  visitNode(node: any, context: VisitorContext): void {
-    if (!node.location) return;
+  visitNode(node: unknown, context: VisitorContext): void {
+    const astNode = asLspAstNode(node);
+    if (!astNode.location) return;
     
-    switch (node.type) {
+    switch (astNode.type) {
       case 'FileReference':
-        this.visitFileReference(node, context);
+        this.visitFileReference(astNode, context);
         break;
       case 'load-content':
-        this.visitLoadContent(node, context);
+        this.visitLoadContent(astNode, context);
         break;
       case 'Comment':
-        this.visitComment(node);
+        this.visitComment(astNode);
         break;
       case 'Parameter':
-        this.visitParameter(node);
+        this.visitParameter(astNode);
         break;
       case 'Frontmatter':
-        this.visitFrontmatter(node, context);
+        this.visitFrontmatter(astNode, context);
         break;
       case 'CodeFence':
       case 'MlldRunBlock':
-        this.visitCodeFence(node);
+        this.visitCodeFence(astNode);
         break;
     }
   }
   
-  private visitFileReference(node: any, context: VisitorContext): void {
+  private visitFileReference(node: LspAstNode, context: VisitorContext): void {
     const text = TextExtractor.extract([node]);
     
     // Check if this is a placeholder FileReference (<>)
@@ -427,7 +430,7 @@ export class FileReferenceVisitor extends BaseVisitor {
       }
     }
   
-  private visitLoadContent(node: any, context: VisitorContext): void {
+  private visitLoadContent(node: LspAstNode, context: VisitorContext): void {
     const sourceText = this.document.getText();
     const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
     const nodeStartChar = node.location.start.column - 1;
@@ -901,11 +904,11 @@ export class FileReferenceVisitor extends BaseVisitor {
     }
   }
 
-  private visitComment(node: any): void {
+  private visitComment(node: LspAstNode): void {
     this.commentHelper.tokenizeStandaloneComment(node);
   }
 
-  private visitParameter(node: any): void {
+  private visitParameter(node: LspAstNode): void {
     // Parameter location includes @ symbol but name doesn't, so add 1
     const length = node.name ? (node.name.length + 1) : TextExtractor.extract([node]).length;
     this.tokenBuilder.addToken({
@@ -917,7 +920,7 @@ export class FileReferenceVisitor extends BaseVisitor {
     });
   }
 
-  private visitFrontmatter(node: any, context: VisitorContext): void {
+  private visitFrontmatter(node: LspAstNode, context: VisitorContext): void {
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
       char: node.location.start.column - 1,
@@ -937,7 +940,7 @@ export class FileReferenceVisitor extends BaseVisitor {
     }
   }
 
-  private visitCodeFence(node: any): void {
+  private visitCodeFence(node: LspAstNode): void {
     if (node.language && node.languageLocation) {
       this.tokenBuilder.addToken({
         line: node.languageLocation.start.line - 1,
