@@ -5,7 +5,7 @@ description: Building LLM agents with mlld — tool agents (MCP tools), event-dr
 
 ## Prerequisites
 
-**YOU MUST RUN `mlld howto intro` before writing any mlld code.** The intro covers syntax, gotchas, built-in methods, file loading, and common traps. Skipping it leads to inventing non-existent features and writing code that validates but fails at runtime.
+**IMMEDIATELY AFTER READING THIS SKILL, YOU MUST RUN `mlld howto intro` before writing any mlld code.** The intro covers syntax, gotchas, built-in methods, file loading, and common traps. Skipping it leads to inventing non-existent features and writing code that validates but fails at runtime.
 
 ```bash
 mlld howto intro              # Language fundamentals — read this first
