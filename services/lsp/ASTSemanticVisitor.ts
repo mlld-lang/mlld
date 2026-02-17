@@ -199,11 +199,7 @@ export class ASTSemanticVisitor {
 
     // Initialize embedded language service if not already initialized
     await embeddedLanguageService.initialize();
-    
-    if (process.env.DEBUG_LSP) {
-      console.log('ASTSemanticVisitor: Processing AST with', ast.length, 'nodes');
-    }
-    
+
     for (const node of ast) {
       this.visitNode(node);
     }
@@ -227,17 +223,6 @@ export class ASTSemanticVisitor {
     };
 
     try {
-      if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld') || this.document.uri.includes('test-syntax')) {
-        console.log(`[VISITOR] Node: ${node.type}`, {
-          location: node.location ? `${node.location.start.line}:${node.location.start.column}` : 'none',
-          content: node.content || node.identifier || node.value || '?'
-        });
-      }
-
-      if (!node.location && node.type !== 'Text' && node.type !== 'Newline' && process.env.DEBUG_LSP) {
-        console.warn(`Node type ${node.type} missing location`);
-      }
-
       const visitor = this.visitors.get(node.type);
       if (visitor) {
         diagnostic.visitorClass = visitor.constructor.name;
@@ -433,16 +418,7 @@ export class ASTSemanticVisitor {
         const source = this.document?.getText() || '';
         const lineStart = source.split('\n').slice(0, node.location.start.line - 1).join('\n').length + (node.location.start.line > 1 ? 1 : 0);
         const charStart = lineStart + node.location.start.column - 1;
-        
-        if (process.env.DEBUG_LSP === 'true') {
-          console.log('[TEXT-QUOTE-CHECK]', {
-            charStart,
-            charBefore: charStart > 0 ? source[charStart - 1] : 'N/A',
-            content: node.content,
-            locationCol: node.location.start.column
-          });
-        }
-        
+
         // Check if this is likely a quoted string argument
         // The AST location often points to the content, not the quotes
         // Check if we're in a context that suggests quotes (like after '(' or ',')

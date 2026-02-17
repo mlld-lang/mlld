@@ -41,16 +41,6 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
   if (isStructured(variable)) {
     const complexFlag = (variable as any).isComplex;
 
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('resolveVariableValue for structured variable:', {
-        variableName: variable.name,
-        variableType: variable.type,
-        isComplex: complexFlag,
-        valueType: typeof variable.value,
-        hasTypeProperty: variable.value && typeof variable.value === 'object' && 'type' in variable.value
-      });
-    }
-
     if (complexFlag) {
       const evaluatedValue = await evaluateDataValue(variable.value as any, env);
       return evaluatedValue as VariableValue;
@@ -69,9 +59,6 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
   }
 
   if (isExecutableVariable(variable)) {
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('Auto-executing executable during interpolation:', { name: variable.name });
-    }
     const { evaluateExecInvocation } = await import('@interpreter/eval/exec-invocation');
     const invocation = {
       type: 'ExecInvocation',

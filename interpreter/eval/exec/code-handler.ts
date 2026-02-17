@@ -164,15 +164,6 @@ export async function executeCodeExecutable(
       const paramName = params[i];
       const paramVar = execEnv.getVariable(paramName);
 
-      if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('Checking parameter:', {
-          paramName,
-          hasParamVar: !!paramVar,
-          paramVarType: paramVar?.type,
-          isPipelineInput: paramVar?.type === 'pipeline-input'
-        });
-      }
-
       if (paramVar && paramVar.type === 'pipeline-input') {
         codeParams[paramName] = paramVar.value;
       } else if (paramVar) {
@@ -237,34 +228,9 @@ export async function executeCodeExecutable(
             isVariable: true
           };
         }
-
-        if (process.env.DEBUG_EXEC || process.env.MLLD_DEBUG === 'true') {
-          const subtype =
-            paramVar.type === 'primitive' && 'primitiveType' in paramVar
-              ? (paramVar as any).primitiveType
-              : paramVar.subtype;
-
-          logger.debug(`Variable passing for ${paramName}:`, {
-            variableType: paramVar.type,
-            variableSubtype: subtype,
-            hasInternal: !!paramVar.internal,
-            isPrimitive: paramVar.value === null || typeof paramVar.value !== 'object',
-            language: definition.language
-          });
-        }
       } else {
         const argValue = evaluatedArgs[i];
         codeParams[paramName] = await ASTEvaluator.evaluateToRuntime(argValue, execEnv);
-
-        if (process.env.DEBUG_EXEC) {
-          logger.debug(`Code parameter ${paramName}:`, {
-            argValue,
-            type: typeof argValue,
-            isNumber: typeof argValue === 'number',
-            evaluatedArgs_i: evaluatedArgs[i],
-            evaluatedArgStrings_i: evaluatedArgStrings[i]
-          });
-        }
       }
     }
 
@@ -335,18 +301,6 @@ export async function executeCodeExecutable(
     }
 
     result = AutoUnwrapManager.restore(processedResult);
-
-    if (process.env.MLLD_DEBUG_STRUCTURED === 'true' && result && typeof result === 'object') {
-      try {
-        const debugData = (result as any).data;
-        console.error('[exec-invocation] rehydrate candidate', {
-          hasType: 'type' in (result as Record<string, unknown>),
-          hasText: 'text' in (result as Record<string, unknown>),
-          dataType: typeof debugData,
-          dataKeys: debugData && typeof debugData === 'object' ? Object.keys(debugData) : undefined
-        });
-      } catch {}
-    }
 
     if (
       result &&

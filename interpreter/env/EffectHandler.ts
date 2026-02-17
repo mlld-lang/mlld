@@ -134,9 +134,6 @@ export class DefaultEffectHandler implements EffectHandler {
 
   getDocument(): string {
     const raw = this.documentBuffer.join('');
-    if (process.env.DEBUG_NORMALIZER) {
-      console.error(`[EffectHandler.getDocument] buffer length=${raw.length}, content=${raw.substring(0, 100).replace(/\n/g, '\\n')}`);
-    }
     // Basic newline normalization
     return raw.replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive newlines
   }

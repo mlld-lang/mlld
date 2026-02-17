@@ -60,14 +60,6 @@ export async function executeProseExecutable(
   args: Record<string, string>,
   env: Environment
 ): Promise<string> {
-  if (process.env.DEBUG_EXEC) {
-    logger.debug('Executing prose executable:', {
-      contentType: definition.contentType,
-      hasConfig: !!definition.configRef,
-      paramNames: definition.paramNames
-    });
-  }
-
   // 1. Resolve the config reference
   const configRef = definition.configRef;
   if (!configRef || configRef.length === 0) {
@@ -192,15 +184,6 @@ export async function executeProseExecutable(
   const skillPrompt = config.skillPrompt || buildSkillInjectionPrompt(config.skills);
   const skillPromptEnd = config.skillPromptEnd || buildSkillInjectionEnd(config.skills);
   const fullPrompt = skillPrompt + proseContent + skillPromptEnd;
-
-  if (process.env.DEBUG_EXEC) {
-    logger.debug('Prose prompt constructed:', {
-      contentLength: proseContent.length,
-      fullPromptLength: fullPrompt.length,
-      modelName: config.modelName,
-      skills: config.skills
-    });
-  }
 
   // 6. Execute via model executor
   const result = await invokeModelExecutor(fullPrompt, config, env);
@@ -356,10 +339,6 @@ async function parseAndInterpolateTemplate(
     templateNodes = parseSync(maskedContent, { startRule });
   } catch (parseErr: any) {
     // Fallback to simple interpolation if parser fails
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('Template parse failed, using fallback:', parseErr.message);
-    }
-
     if (style === 'mtt') {
       // Normalize {{var}} to @var for fallback interpolation
       const normalized = maskedContent.replace(/{{\s*([A-Za-z_][\w.]*)\s*}}/g, '@$1');

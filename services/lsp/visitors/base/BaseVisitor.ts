@@ -55,9 +55,4 @@ export abstract class BaseVisitor implements INodeVisitor {
     return false;
   }
   
-  protected debugLog(message: string, data?: unknown): void {
-    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld')) {
-      console.log(`[${this.constructor.name}] ${message}`, data || '');
-    }
-  }
 }

@@ -14,7 +14,6 @@ import { isVariable } from '../utils/variable-resolution';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
 
 const DEFAULT_GUARD_MAX = 3;
-const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
 
 interface GuardDecisionInfo {
   guardName: string | null;
@@ -174,22 +173,6 @@ function enforcePipelineGuardRetry(
   }
 
   if (!canRetryWithinPipeline(pipelineContext)) {
-    if (afterRetryDebugEnabled) {
-      try {
-        console.error('[after-guard-retry] pipeline retry denied (non-retryable source)', {
-          guardName: info.guardName,
-          guardFilter: info.guardFilter,
-          operation: {
-            type: operationContext.type,
-            subtype: operationContext.subtype,
-            name: operationContext.name
-          },
-          retryHint: info.retryHint
-        });
-      } catch {
-        // ignore debug failures
-      }
-    }
     throw new GuardError({
       decision: 'deny',
       guardName: info.guardName,

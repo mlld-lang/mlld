@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import type { Variable, ExecutableVariable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
@@ -29,13 +28,6 @@ export class ObjectReferenceResolver {
     
     // Check if this is a VariableReference AST node
     if (typeof value === 'object' && value.type === 'VariableReference' && value.identifier) {
-      if (process.env.MLLD_DEBUG_FIX === 'true') {
-        console.error('[ObjectReferenceResolver] Found VariableReference AST node:', {
-          identifier: value.identifier,
-          hasFields: !!(value as any).fields,
-          fields: (value as any).fields
-        });
-      }
       return this.resolveVariableReference(value.identifier, variableMap, (value as any).fields);
     }
     
@@ -227,22 +219,6 @@ export class ObjectReferenceResolver {
           }
         }
       }
-      if (process.env.MLLD_DEBUG_FIX === 'true') {
-        console.error('[ObjectReferenceResolver] resolved entries object', {
-          keys: Object.keys(resolved),
-          hasEntries: true
-        });
-        try {
-          fs.appendFileSync(
-            '/tmp/mlld-debug.log',
-            JSON.stringify({
-              source: 'ObjectReferenceResolver',
-              keys: Object.keys(resolved),
-              hasEntries: true
-            }) + '\n'
-          );
-        } catch {}
-      }
       return resolved;
     }
 
@@ -250,22 +226,6 @@ export class ObjectReferenceResolver {
     if (value.properties) {
       for (const [key, val] of Object.entries(value.properties)) {
         resolved[key] = this.resolveObjectReferences(val, variableMap, options);
-      }
-      if (process.env.MLLD_DEBUG_FIX === 'true') {
-        console.error('[ObjectReferenceResolver] resolved properties object', {
-          keys: Object.keys(resolved),
-          hasProperties: true
-        });
-        try {
-          fs.appendFileSync(
-            '/tmp/mlld-debug.log',
-            JSON.stringify({
-              source: 'ObjectReferenceResolver',
-              keys: Object.keys(resolved),
-              hasProperties: true
-            }) + '\n'
-          );
-        } catch {}
       }
       return resolved;
     }

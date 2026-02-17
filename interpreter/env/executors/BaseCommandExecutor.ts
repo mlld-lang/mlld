@@ -94,16 +94,7 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
       
     } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      
-      // Optional debug logging for bash executor failures
-      if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1' && command.startsWith('bash')) {
-        try {
-          console.error('[BashExecutor][debug] executeWithCommonHandling error', error);
-        } catch {
-          // ignore logging errors
-        }
-      }
-      
+
       // If it's already an MlldCommandExecutionError, preserve it
       let commandError: MlldCommandExecutionError;
       if (error instanceof MlldCommandExecutionError) {
@@ -227,10 +218,6 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
       if (command.includes('\'s/^/> /\'')) {
         // Read from stdin and prefix each line with "> "
         const input = options?.input || '';
-        // Debug logging
-        if (process.env.DEBUG_PIPELINE) {
-          console.log('SED MOCK: input=', JSON.stringify(input), 'options=', options);
-        }
         return input.split('\n').map(line => `> ${line}`).join('\n');
       }
     }

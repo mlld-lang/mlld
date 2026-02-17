@@ -310,19 +310,9 @@ export class NodeShadowEnvironment {
     const devNodeModulesExists = fs.existsSync(devNodeModules);
     const devPackageJsonExists = fs.existsSync(devPackageJson);
 
-    const debugShadow = process.env.DEBUG_NODE_SHADOW || process.env.CI;
-    if (debugShadow) {
-      console.error('[NodeShadowEnv] cwd:', process.cwd());
-      console.error('[NodeShadowEnv] devNodeModules:', devNodeModules, 'exists:', devNodeModulesExists);
-      console.error('[NodeShadowEnv] devPackageJson:', devPackageJson, 'exists:', devPackageJsonExists);
-    }
-
     if (devNodeModulesExists && devPackageJsonExists) {
       try {
         const packageJson = JSON.parse(fs.readFileSync(devPackageJson, 'utf8'));
-        if (debugShadow) {
-          console.error('[NodeShadowEnv] package.json name:', packageJson.name);
-        }
         if (packageJson.name === 'mlld') {
           mlldNodeModules = devNodeModules;
         }
@@ -349,9 +339,6 @@ export class NodeShadowEnvironment {
               const pkg = JSON.parse(fs.readFileSync(candidatePackageJson, 'utf8'));
               if (pkg.name === 'mlld') {
                 mlldNodeModules = candidateNodeModules;
-                if (debugShadow) {
-                  console.error('[NodeShadowEnv] Found mlld via import.meta.url:', mlldNodeModules);
-                }
                 break;
               }
             } catch {
@@ -414,11 +401,6 @@ export class NodeShadowEnvironment {
           paths.push(p);
         }
       }
-    }
-
-    if (process.env.DEBUG_NODE_SHADOW || process.env.CI) {
-      console.error('[NodeShadowEnv] Final module paths:', paths);
-      console.error('[NodeShadowEnv] mlldNodeModules:', mlldNodeModules);
     }
 
     return paths;

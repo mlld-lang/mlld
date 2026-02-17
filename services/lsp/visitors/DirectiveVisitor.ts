@@ -341,15 +341,6 @@ export class DirectiveVisitor extends BaseVisitor {
   private visitEndOfLineComment(comment: any): void {
     if (!comment.location) return;
 
-    if (process.env.DEBUG_LSP || this.document.uri.includes('test-syntax')) {
-      console.log('[EOL-COMMENT]', {
-        marker: comment.marker,
-        content: comment.content,
-        location: `${comment.location.start.line}:${comment.location.start.column}-${comment.location.end.line}:${comment.location.end.column}`,
-        offset: `${comment.location.start.offset}-${comment.location.end.offset}`
-      });
-    }
-
     this.commentHelper.tokenizeEndOfLineComment(comment);
   }
 
@@ -2487,32 +2478,14 @@ export class DirectiveVisitor extends BaseVisitor {
         // Parse the module path to handle multi-segment paths
         const fullPath = pathNode?.content || '';
         const parts = fullPath.split('/');
-        
-        if (process.env.DEBUG_LSP === 'true') {
-          console.log('[IMPORT-MODULE]', {
-            fullPath,
-            parts,
-            directiveText,
-            pathNode: pathNode?.content
-          });
-        }
-        
+
         if (parts.length >= 2 && parts[0].startsWith('@')) {
           // Find the start position of the module path
           const moduleStartMatch = directiveText.indexOf(fullPath);
           if (moduleStartMatch !== -1) {
             const moduleStartOffset = directive.location.start.offset + moduleStartMatch;
             const moduleStartPosition = this.document.positionAt(moduleStartOffset);
-            
-            if (process.env.DEBUG_LSP === 'true') {
-              console.log('[IMPORT-TOKEN-MODULE]', {
-                line: moduleStartPosition.line,
-                char: moduleStartPosition.character,
-                length: fullPath.length,
-                fullPath
-              });
-            }
-            
+
             // Try highlighting the entire module path as one token
             // This might work better for visibility
             this.tokenBuilder.addToken({

@@ -269,10 +269,6 @@ export class EmbeddedLanguageService {
       
       this.parsers.set(name, parser);
       this.languages.set(name, language);
-      
-      if (process.env.DEBUG_LSP) {
-        console.log(`Loaded tree-sitter-${name} from ${loadedPath}`);
-      }
     } catch (error) {
       console.warn(`Failed to load tree-sitter parser for ${name}:`, error);
     }

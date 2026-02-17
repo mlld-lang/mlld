@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import type { DirectiveNode, SourceLocation } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
 import {
@@ -187,18 +186,9 @@ export async function evaluateShowVariable({
       if (isTemplate(variable)) {
         // For double-bracket templates, the value is the AST array
         if (Array.isArray(value)) {
-          if (process.env.MLLD_DEBUG === 'true') {
-            logger.debug('Template interpolation in show', {
-              variableName: variable.name,
-              astArray: value
-            });
-          }
           value = await interpolate(value, env, undefined, {
             collectSecurityDescriptor: collectInterpolatedDescriptor
           });
-          if (process.env.MLLD_DEBUG === 'true') {
-            logger.debug('Interpolation result:', { value });
-          }
         } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
           // GOTCHA: Some legacy paths store template AST in internal metadata
           value = await interpolate(variable.internal.templateAst, env, undefined, {
@@ -226,31 +216,10 @@ export async function evaluateShowVariable({
       value = variable.value;
       originalValue = value;
 
-      // Debug logging
-      if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('show.ts: Processing array variable:', {
-          varName: variable.name,
-          valueType: typeof value,
-          hasType: value && typeof value === 'object' && 'type' in value,
-          typeValue: value && typeof value === 'object' && value.type,
-          hasItems: value && typeof value === 'object' && 'items' in value,
-          isArray: Array.isArray(value),
-          value
-        });
-      }
-
       // Check if it's a lazy-evaluated array (still in AST form)
       if (value && typeof value === 'object' && value.type === 'array' && 'items' in value) {
         // Evaluate the array to get the actual values
         value = await evaluateDataValue(value, env);
-
-        // Debug logging
-        if (process.env.MLLD_DEBUG === 'true') {
-          logger.debug('show.ts: After evaluation:', {
-            varName: variable.name,
-            value
-          });
-        }
       }
     } else if (isComputed(variable)) {
       // Computed value from code execution
@@ -378,17 +347,6 @@ export async function evaluateShowVariable({
     }
   } // Close the if (value === undefined && variable) block
 
-  // Debug logging for LoadContentResult
-  if (process.env.MLLD_DEBUG === 'true' && variable) {
-    logger.debug('Show variable value:', {
-      varName: variable.name,
-      varType: variable.type,
-      valueType: typeof value,
-      isObject: isObject(variable),
-      valueKeys: value && typeof value === 'object' ? Object.keys(value) : undefined
-    });
-  }
-
   // Check if the value contains unevaluated directives
   if (!isStructuredValue(value) && hasUnevaluatedDirectives(value)) {
     // Evaluate any embedded directives
@@ -410,37 +368,7 @@ export async function evaluateShowVariable({
   const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
   const isNamespaceVariable = variable?.internal?.isNamespace && !hadFieldAccess;
 
-  if (process.env.MLLD_DEBUG_FIX === 'true' && varName === 'complex') {
-    try {
-      fs.appendFileSync(
-        '/tmp/mlld-debug.log',
-        JSON.stringify({
-          source: 'show-variable',
-          name: varName,
-          valueType: typeof value,
-          isStructured: isStructuredValue(value),
-          valuePreview:
-            value && typeof value === 'object'
-              ? {
-                  keys: Object.keys(value).slice(0, 5),
-                  settings: (value as any).config?.settings,
-                  dataKeys: (value as any).data ? Object.keys((value as any).data) : undefined
-                }
-              : value
-        }) + '\n'
-      );
-    } catch {}
-  }
-
   if (isNamespaceVariable && value && typeof value === 'object') {
-    if (process.env.DEBUG_NAMESPACE) {
-      logger.debug('Cleaning namespace for display:', {
-        varName: variable.name,
-        hasMetadata: !!variable.internal,
-        isNamespace: variable.internal?.isNamespace,
-        valueKeys: Object.keys(value)
-      });
-    }
     content = JSONFormatter.stringifyNamespace(value);
   } else if (value && typeof value === 'object' && (value as any).__executable) {
     const params = (value as any).paramNames || [];
@@ -454,14 +382,6 @@ export async function evaluateShowVariable({
         content = formatForDisplay(value, { isForeachSection, pretty: true });
       }
     } else {
-      if (Array.isArray(value) && process.env.MLLD_DEBUG === 'true') {
-        logger.debug('show.ts: Formatting array:', {
-          varName: variable.name,
-          valueLength: value.length,
-          value,
-          isForeachSection
-        });
-      }
       content = formatForDisplay(value, { isForeachSection, pretty: false });
     }
   }

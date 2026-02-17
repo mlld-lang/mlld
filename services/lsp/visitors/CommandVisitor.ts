@@ -27,16 +27,6 @@ export class CommandVisitor extends BaseVisitor {
   }
   
   visitNode(node: unknown, context: VisitorContext): void {
-    if (process.env.DEBUG_LSP === 'true' && node.type === 'ExecInvocation') {
-      console.log('[EXEC-NODE]', {
-        type: node.type,
-        location: node.location,
-        locationType: typeof node.location,
-        isNone: node.location === 'none',
-        commandRef: !!node.commandRef
-      });
-    }
-    
     if (!node.location || node.location === 'none') {
       // For ExecInvocation with location 'none', try to process it anyway
       if (node.type === 'ExecInvocation' && node.commandRef) {
@@ -86,15 +76,6 @@ export class CommandVisitor extends BaseVisitor {
         const searchText = sourceText.substring(searchStart, searchEnd);
         const runIndex = searchText.lastIndexOf('run');
 
-        if (process.env.DEBUG_LSP === 'true') {
-          console.log('[COMMAND-LOC]', {
-            hasRunKeyword: node.hasRunKeyword,
-            firstChild: firstChild.location,
-            searchText,
-            runIndex
-          });
-        }
-
         if (runIndex !== -1 && node.hasRunKeyword) {
           // Find the end of the command block (closing brace or last child)
           const lastChild = node.command?.[node.command.length - 1];
@@ -119,15 +100,6 @@ export class CommandVisitor extends BaseVisitor {
       const sourceText = this.document.getText();
       const nodeText = sourceText.substring(effectiveLocation.start.offset, effectiveLocation.end.offset);
       const runMatch = nodeText.match(/^\s*run\b/);
-
-      if (process.env.DEBUG_LSP === 'true') {
-        console.log('[RUN-TOKENIZE]', {
-          hasRunKeyword: node.hasRunKeyword,
-          effectiveLocation,
-          nodeText,
-          runMatch: !!runMatch
-        });
-      }
 
       if (runMatch) {
         const runOffset = effectiveLocation.start.offset + runMatch.index! + runMatch[0].indexOf('run');
@@ -296,14 +268,6 @@ export class CommandVisitor extends BaseVisitor {
 
   private visitCodeNode(node: unknown, context: VisitorContext): void {
     // Handle code nodes (run js/node/py/sh blocks)
-    if (process.env.DEBUG_LSP === 'true') {
-      console.log('[CODE-NODE]', {
-        language: node.language,
-        hasRunKeyword: node.hasRunKeyword,
-        code: node.code?.substring(0, 20)
-      });
-    }
-
     if (!node.language) return;
 
     // Reconstruct location from code content or use hasRunKeyword
@@ -402,31 +366,11 @@ export class CommandVisitor extends BaseVisitor {
   }
 
   private visitExecInvocation(node: unknown, context: VisitorContext): void {
-    if (process.env.DEBUG) {
-      console.log('[EXEC-INVOCATION-VISITOR]', {
-        hasCommandRef: !!node.commandRef,
-        name: node.commandRef?.name,
-        location: node.location
-      });
-    }
-
     if (node.commandRef && node.commandRef.name) {
       const name = node.commandRef.name;
       
       // Handle case where location is 'none' or undefined - use identifier location
       if (node.location === 'none' || !node.location) {
-        if (process.env.DEBUG) {
-          console.log('[EXEC-INV] Using identifier location path');
-        }
-        if (process.env.DEBUG_LSP === 'true') {
-          console.log('[EXEC-INVOCATION]', {
-            name: node.commandRef.name,
-            hasIdentifier: !!node.commandRef.identifier,
-            identifierLength: node.commandRef.identifier?.length,
-            firstIdentifier: node.commandRef.identifier?.[0]
-          });
-        }
-        
         if (!node.commandRef.identifier?.[0]?.location) {
           // Can't process without location info
           return;
@@ -469,10 +413,6 @@ export class CommandVisitor extends BaseVisitor {
         } else {
           // Location is correct - use it directly
           const atCharPos = identifierLoc.start.column - 1;
-
-          if (process.env.DEBUG) {
-            console.log('[EXEC-INV-NOLOC]', { name, atCharPos, includesAt });
-          }
 
           // Tokenize @functionName as a single token for consistent coloring
           if (name && typeof name === 'string' && name.length > 0 && atCharPos >= 0) {
@@ -542,13 +482,6 @@ export class CommandVisitor extends BaseVisitor {
               }
             } else {
               // Regular AST node
-              if (process.env.DEBUG_LSP === 'true') {
-                console.log('[CMD-ARG]', {
-                  argType: arg.type,
-                  argIdentifier: arg.identifier,
-                  hasFields: !!arg.fields
-                });
-              }
               this.mainVisitor.visitNode(arg, newContext);
             }
             
@@ -644,16 +577,9 @@ export class CommandVisitor extends BaseVisitor {
         }
         return;
       }
-      
-      // Original code for when location is available
-      if (process.env.DEBUG) {
-        console.log('[EXEC-INV] Using node location path');
-      }
 
+      // Original code for when location is available
       if (!node.location || typeof node.location !== 'object') {
-        if (process.env.DEBUG) {
-          console.log('[EXEC-INV] Returning early - bad location', { location: node.location });
-        }
         return;
       }
       const source = this.document.getText();
@@ -661,14 +587,6 @@ export class CommandVisitor extends BaseVisitor {
 
       // Check if this is a method call (has objectReference) vs simple function call
       const isMethodCall = !!node.commandRef.objectReference;
-
-      if (process.env.DEBUG) {
-        console.log('[EXEC-INV] Tokenizing exec invocation', {
-          name,
-          isMethodCall,
-          hasObjectRef: !!node.commandRef.objectReference
-        });
-      }
 
       let methodEndOffset: number;
 
@@ -1103,18 +1021,7 @@ export class CommandVisitor extends BaseVisitor {
             // We need to use the actual span from the AST
             const tokenStart = arg.location.start.column - 1; // Convert 1-based to 0-based
             const tokenLength = arg.location.end.column - arg.location.start.column;
-            
-            if (process.env.DEBUG_LSP === 'true') {
-              console.log('[STRING-ARG]', {
-                content: arg.content,
-                start: arg.location.start,
-                end: arg.location.end,
-                tokenStart,
-                tokenLength,
-                calc: `${arg.location.end.column} - ${arg.location.start.column} = ${tokenLength}`
-              });
-            }
-            
+
             this.tokenBuilder.addToken({
               line: arg.location.start.line - 1,
               char: tokenStart,
@@ -1285,9 +1192,6 @@ export class CommandVisitor extends BaseVisitor {
   private visitCommandReference(node: unknown, context: VisitorContext): void {
     // Check for invalid location
     if (!node.location || node.location.start.column <= 0) {
-      if (process.env.DEBUG) {
-        console.log('[CMD-REF] Invalid location', { location: node.location, name: node.name });
-      }
       return;
     }
 
@@ -1303,8 +1207,6 @@ export class CommandVisitor extends BaseVisitor {
         tokenType: 'variableRef',
         modifiers: ['reference']
       });
-    } else if (process.env.DEBUG) {
-      console.log('[CMD-REF] Skipping invalid token', { char, length, name: node.name, column: node.location.start.column });
     }
   }
 }

@@ -315,12 +315,7 @@ export class ExpressionVisitor extends BaseVisitor {
   
   private visitForExpression(node: any, context: VisitorContext): void {
     if (!node.location) return;
-    
-    // Debug logging
-    if (process.env.DEBUG_LSP || this.document.uri.includes('test-syntax')) {
-      console.log('[FOR-EXPRESSION] Processing', { node });
-    }
-    
+
     // Add 'for' keyword token
     const sourceText = this.document.getText();
     const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);

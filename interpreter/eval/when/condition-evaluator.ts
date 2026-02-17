@@ -94,16 +94,6 @@ async function evaluateUnifiedExpressionCondition(
   }
 
   const truthy = runtime.isTruthy(resultValue);
-  if (process.env.MLLD_DEBUG === 'true') {
-    try {
-      console.error('[evaluateCondition] expression node result:', {
-        nodeType: node.type,
-        result: resultValue,
-        truthy
-      });
-    } catch {}
-  }
-
   return truthy;
 }
 
@@ -158,10 +148,6 @@ async function evaluateGenericConditionPath(
     }
   }
 
-  if (process.env.DEBUG_WHEN) {
-    logger.debug('Evaluating condition:', { condition });
-  }
-
   let result: any;
   try {
     result = await runtime.evaluateNode(condition, childEnv, { isCondition: true, isExpression: true });
@@ -172,10 +158,6 @@ async function evaluateGenericConditionPath(
       (condition[0] as any)?.location,
       { originalError: err as Error } as any
     );
-  }
-
-  if (process.env.DEBUG_WHEN) {
-    logger.debug('Condition evaluation result:', { result });
   }
 
   if (variableName && childEnv.hasVariable('_whenValue')) {

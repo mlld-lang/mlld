@@ -53,11 +53,8 @@ import {
 import { extractGuardOverride, normalizeGuardOverride } from './guard-override-utils';
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
-import { appendFileSync } from 'fs';
 import { getExpressionProvenance } from '../utils/expression-provenance';
 import { formatGuardWarning } from '../eval/guard-denial-handler';
-
-const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
 
 const GUARD_INPUT_SOURCE: VariableSource = {
   directive: 'var',
@@ -66,29 +63,6 @@ const GUARD_INPUT_SOURCE: VariableSource = {
   isMultiLine: false
 };
 
-function logAfterRetryDebug(label: string, payload: Record<string, unknown>): void {
-  if (!afterRetryDebugEnabled) {
-    return;
-  }
-  try {
-    console.error(`[after-guard-debug] ${label}`, payload);
-  } catch {
-    // ignore debug failures
-  }
-}
-
-function summarizeOperation(operation: OperationContext | undefined): Record<string, unknown> {
-  if (!operation) {
-    return {};
-  }
-  return {
-    type: operation.type,
-    subtype: operation.subtype,
-    name: operation.name,
-    labels: operation.labels,
-    metadata: operation.metadata
-  };
-}
 
 export interface ExecutePostGuardOptions {
   node: HookableNode;
@@ -100,18 +74,6 @@ export interface ExecutePostGuardOptions {
 
 export async function executePostGuard(options: ExecutePostGuardOptions): Promise<EvalResult> {
   const { node, result, inputs, env, operation } = options;
-  if (process.env.MLLD_DEBUG_GUARDS === '1' && operation?.name === 'emit') {
-    try {
-      const names = Array.from(env.getAllVariables().keys()).slice(0, 50);
-      console.error('[guard-post-hook] debug emit context', {
-        parentHasPrefix: env.hasVariable('prefixWith'),
-        parentHasTag: env.hasVariable('tagValue'),
-        names
-      });
-    } catch {
-      // ignore debug failures
-    }
-  }
   const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
 
   if (guardOverride.kind === 'disableAll' || guardOverride.kind === 'except' || guardOverride.kind === 'only') {
@@ -173,35 +135,6 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
   }
 
   const streamingActive = Boolean(operation?.metadata && (operation.metadata as any).streaming);
-  if (process.env.MLLD_DEBUG_GUARDS === '1') {
-    const guardNames = [
-      ...perInputCandidates.flatMap(c => c.guards.map(g => g.name || g.filterKind)),
-      ...operationGuards.map(g => g.name || g.filterKind)
-    ].filter(Boolean);
-    try {
-      console.error('[guard-post-hook] selection', {
-        operation: summarizeOperation(operation),
-        streamingFlag: (operation.metadata as any)?.streaming,
-        selectionSources,
-        guardNames
-      });
-      appendFileSync(
-        '/tmp/mlld_guard_post.log',
-        JSON.stringify(
-          {
-            operation: summarizeOperation(operation),
-            streamingFlag: (operation.metadata as any)?.streaming,
-            selectionSources,
-            guardNames
-          },
-          null,
-          2
-        ) + '\n'
-      );
-    } catch {
-      // ignore debug logging failures
-    }
-  }
   if (streamingActive && (perInputCandidates.length > 0 || operationGuards.length > 0)) {
     const streamingMessage = [
       'Cannot run after-guards when streaming is enabled.',
@@ -221,27 +154,8 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
   }
 
   if (perInputCandidates.length === 0 && operationGuards.length === 0) {
-    logAfterRetryDebug('no after-guards collected', {
-      operation: summarizeOperation(operation),
-      selectionSources,
-      outputCount: outputVariables.length,
-      inputCount: inputVariables.length
-    });
     return result;
   }
-
-  logAfterRetryDebug('after-guard selection', {
-    operation: summarizeOperation(operation),
-    selectionSources,
-    perInputCandidates: perInputCandidates.map(candidate => ({
-      index: candidate.index,
-      labels: candidate.labels,
-      sources: candidate.sources,
-      guards: candidate.guards.map(def => def.name ?? `${def.filterKind}:${def.filterValue}`)
-    })),
-    operationGuards: operationGuards.map(def => def.name ?? `${def.filterKind}:${def.filterValue}`),
-    streamingActive
-  });
 
   const decisionResult = await runPostGuardDecisionEngine({
     perInputCandidates,
@@ -356,15 +270,6 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
     const { sourceRetryable, denyRetry } = evaluateRetryEnforcement(operation, pipelineContext);
 
     if (denyRetry) {
-      logAfterRetryDebug('after-guard retry denied (non-retryable source)', {
-        operation: summarizeOperation(operation),
-        selectionSources,
-        reasons: retryReasons,
-        hints,
-        sourceRetryable,
-        pipeline: Boolean(pipelineContext),
-        attempt: retryContext.attempt
-      });
       throw buildPostRetryDeniedError({
         guardResults: guardTrace,
         reasons: retryReasons,
@@ -374,20 +279,6 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
         retryHint
       });
     }
-
-    logAfterRetryDebug('after-guard retry signal', {
-      operation: summarizeOperation(operation),
-      selectionSources,
-      reasons: retryReasons,
-      hints,
-      sourceRetryable,
-      pipeline: Boolean(pipelineContext),
-      attempt: retryContext.attempt,
-      guardTrace: guardTrace.map(entry => ({
-        guard: entry.guardName ?? entry.metadata?.guardFilter,
-        decision: entry.decision
-      }))
-    });
 
     throw buildPostGuardRetrySignal({
       guardResults: guardTrace,
@@ -414,16 +305,6 @@ function preparePostGuardEnvironment(
   guard: GuardDefinition
 ): void {
   inheritParentVariables(sourceEnv, guardEnv);
-  if (process.env.MLLD_DEBUG_GUARDS === '1' && guard.name === 'wrap') {
-    try {
-      console.error('[guard-post-hook] prefixWith availability', {
-        envHas: sourceEnv.hasVariable('prefixWith'),
-        childHas: guardEnv.hasVariable('prefixWith')
-      });
-    } catch {
-      // ignore debug
-    }
-  }
   ensurePostPrefixHelper(sourceEnv, guardEnv);
   ensurePostTagHelper(sourceEnv, guardEnv);
   if (!guardEnv.hasVariable('prefixWith') && sourceEnv.hasVariable('prefixWith')) {

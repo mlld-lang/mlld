@@ -380,15 +380,7 @@ export class StructureVisitor extends BaseVisitor {
         }
         return false;
       });
-      
-      if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
-        console.log('[ARRAY]', {
-          hasASTNodes,
-          items: node.items,
-          arrayText
-        });
-      }
-      
+
       if (!hasASTNodes) {
         // Plain array - let embedded service handle all tokens including brackets
         this.tokenizePlainArray(node, arrayText);

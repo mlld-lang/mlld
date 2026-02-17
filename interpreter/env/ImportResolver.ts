@@ -170,15 +170,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       return this.fetchURL(pathOrUrl);
     }
     const resolvedPath = await this.resolvePath(pathOrUrl);
-    if (process.env.MLLD_DEBUG === 'true') {
-      // eslint-disable-next-line no-console
-      console.error('[ImportResolver.readFile] path=', pathOrUrl, 'resolved=', resolvedPath);
-    }
     const content = await this.dependencies.fileSystem.readFile(resolvedPath);
-    if (process.env.MLLD_DEBUG === 'true') {
-      // eslint-disable-next-line no-console
-      console.error('[ImportResolver.readFile] len=', content?.length ?? 0);
-    }
     return content;
   }
   
@@ -215,11 +207,6 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       : localFileFuzzyMatch.enabled !== false;
     const collectedSuggestions: string[] = [];
 
-    // Debug log
-    if (process.env.DEBUG_FUZZY) {
-      console.log(`resolvePath called with: ${inputPath}, fuzzyEnabled: ${fuzzyEnabled}`);
-    }
-
     if (!path.isAbsolute(inputPath) && fuzzyEnabled && this.pathMatcher) {
       // Try fuzzy matching for local files
       const matchResult = await this.pathMatcher.findMatch(
@@ -229,9 +216,6 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       );
       
       if (matchResult.path) {
-        if (process.env.DEBUG_FUZZY) {
-          console.log(`Fuzzy match found: ${matchResult.path}`);
-        }
         return matchResult.path;
       }
 

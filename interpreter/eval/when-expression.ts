@@ -350,8 +350,6 @@ async function evaluateWhenExpressionInternal(
   context?: EvaluationContext,
   options?: WhenExpressionOptions
 ): Promise<EvalResult> {
-  // console.error('🚨 WHEN-EXPRESSION EVALUATOR CALLED');
-  
   const sourceInfo = getWhenExpressionSource(env);
 
   // Validate none placement
@@ -533,14 +531,6 @@ async function evaluateWhenExpressionInternal(
       if (hasBoundValue) setBoundValue(conditionEnv);
       const conditionResult = await evaluateCondition(pair.condition, conditionEnv);
 
-      if (process.env.DEBUG_WHEN) {
-        logger.debug('WhenExpression condition result:', { 
-          index: i, 
-          conditionResult,
-          hasAction: !!(pair.action && pair.action.length > 0)
-        });
-      }
-      
       if (conditionResult) {
         // Condition matched - evaluate the action
         const matchedDeniedCondition = conditionTargetsDenied(pair.condition);
@@ -599,16 +589,6 @@ async function evaluateWhenExpressionInternal(
             }
           }
 
-          // Debug: What are we trying to evaluate?
-          if (Array.isArray(pair.action) && pair.action[0]) {
-            const firstAction = pair.action[0];
-            logger.debug('WhenExpression evaluating action:', {
-              actionType: firstAction.type,
-              actionKind: firstAction.kind,
-              actionSubtype: firstAction.subtype
-            });
-          }
-          
           // Evaluate the action to get its value
           // IMPORTANT SCOPING RULE:
           // - /when (directive) uses global scope semantics (handled elsewhere)

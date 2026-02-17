@@ -136,13 +136,6 @@ export async function executeCommandExecutable(
     InterpolationContext.ShellCommand
   );
 
-  if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
-    logger.debug('Executing command', {
-      command,
-      commandTemplate: definition.commandTemplate
-    });
-  }
-
   const scopedEnvConfig = resolveEnvironmentConfig(execEnv, preDecisionMetadata);
   const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, execEnv.getPolicySummary());
   services.mergeResultDescriptor(buildEnvironmentOutputDescriptor(command, resolvedEnvConfig));
@@ -598,13 +591,6 @@ async function executeLocalCommand(options: {
     }
     if (autoverifyVars.length > 0) {
       codeParams.MLLD_VERIFY_VARS = autoverifyVars.join(',');
-    }
-
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[exec-invocation] Falling back to bash heredoc for oversized command params', {
-        fallbackSnippet: fallbackCommand.slice(0, 120),
-        paramCount: Object.keys(codeParams).length
-      });
     }
 
     const commandOutput = await execEnv.executeCode(

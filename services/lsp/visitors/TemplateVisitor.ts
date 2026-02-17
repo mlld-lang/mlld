@@ -261,14 +261,8 @@ export class TemplateVisitor extends BaseVisitor {
 
     // Visit source (the iterable)
     if (node.source) {
-      if (process.env.DEBUG_LSP) {
-        console.log('[TEMPLATE-FOR] Visiting source:', Array.isArray(node.source) ? node.source.length + ' items' : 'single');
-      }
       if (Array.isArray(node.source)) {
         for (const sourceNode of node.source) {
-          if (process.env.DEBUG_LSP) {
-            console.log('[TEMPLATE-FOR] Source node:', sourceNode.type, sourceNode.identifier);
-          }
           this.mainVisitor.visitNode(sourceNode, context);
         }
       } else {

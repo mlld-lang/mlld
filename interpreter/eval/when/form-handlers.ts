@@ -3,7 +3,6 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import type { WhenSimpleNode, WhenMatchNode, WhenBlockNode } from '@core/types/when';
 import { isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
-import { logger } from '@core/utils/logger';
 import { MlldConditionError } from '@core/errors';
 import {
   evaluateFirstMatch,
@@ -31,10 +30,6 @@ export async function evaluateWhenSimpleForm(
   }
 
   const conditionResult = await runtime.matcherRuntime.evaluateCondition(node.values.condition, env);
-
-  if (process.env.DEBUG_WHEN) {
-    logger.debug('When condition result:', { conditionResult });
-  }
 
   if (!conditionResult) {
     return { value: '', env };
@@ -218,23 +213,7 @@ export async function evaluateWhenBlockForm(
     node.values.action
   );
 
-  if (process.env.DEBUG_WHEN) {
-    logger.debug('Before merge:', {
-      parentNodes: env.nodes.length,
-      childNodes: childEnv.nodes.length,
-      childInitialCount: childEnv.initialNodeCount,
-      resultEnvNodes: result.env.nodes.length
-    });
-  }
-
   env.mergeChild(result.env);
-
-  if (process.env.DEBUG_WHEN) {
-    logger.debug('After merge:', {
-      parentEnvNodes: env.nodes.length,
-      resultValue: result.value
-    });
-  }
 
   return { value: result.value, env };
 }

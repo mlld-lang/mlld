@@ -79,13 +79,6 @@ export async function interpret(
           source: options.filePath || 'stdin',
           text: source
         }]);
-        
-        // Debug: Log what Peggy's format returns
-        if (process.env.DEBUG_PEGGY) {
-          console.log('Peggy formatted output:');
-          console.log(peggyFormatted);
-          console.log('---');
-        }
       } catch (e) {
         // Fallback - format not available or failed
       }
@@ -371,14 +364,7 @@ export async function interpret(
     } else {
       // Fallback to old node-based system if effect handler doesn't have getDocument
       const nodes = env.getNodes();
-      
-      if (process.env.DEBUG_WHEN) {
-        console.log('Final nodes count:', nodes.length);
-        nodes.forEach((node, i) => {
-          console.log(`Node ${i}:`, node.type, node.type === 'Text' ? node.content : '');
-        });
-      }
-      
+
       // Format the output
       output = await formatOutput(nodes, {
         format: options.format || 'markdown',

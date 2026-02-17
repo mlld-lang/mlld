@@ -139,16 +139,7 @@ export async function evaluateAllMatches(
     }
 
     if (allMatch) {
-      if (process.env.DEBUG_WHEN) {
-        logger.debug('Executing block action', { envNodesBefore: env.nodes.length });
-      }
       const result = await runtime.evaluateActionSequence(blockAction, env);
-      if (process.env.DEBUG_WHEN) {
-        logger.debug('Block action completed', {
-          result,
-          envNodesAfter: env.nodes.length
-        });
-      }
       return result;
     }
 

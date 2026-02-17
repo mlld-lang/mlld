@@ -155,10 +155,6 @@ export class ContentLoaderOrchestrator {
       if (error instanceof MlldSecurityError) {
         throw error;
       }
-      if (process.env.DEBUG_CONTENT_LOADER) {
-        console.log(`ERROR in processContentLoader: ${error.message}`);
-        console.log(`Error stack:`, error.stack);
-      }
 
       if (error.message && error.message.includes('Unknown transform:')) {
         throw error;

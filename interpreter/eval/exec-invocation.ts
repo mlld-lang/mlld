@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import type { ExecInvocation } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
@@ -313,18 +312,7 @@ async function evaluateExecInvocationInternal(
     }
     return createEvalResult(value, env, wrapOptions);
   };
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[evaluateExecInvocation] Entry:', {
-      hasCommandRef: !!node.commandRef,
-      hasWithClause: !!node.withClause,
-      hasPipeline: !!(node.withClause?.pipeline),
-      pipelineLength: node.withClause?.pipeline?.length
-    });
-  }
 
-  if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
-    logger.debug('evaluateExecInvocation called with:', { commandRef: node.commandRef });
-  }
   const nodeSourceLocation = astLocationToSourceLocation(node.location, env.getCurrentFilePath());
 
   // Get the command name from the command reference or legacy format
@@ -425,21 +413,6 @@ async function evaluateExecInvocationInternal(
       let objectValue = builtinResolution.value.objectValue;
       const objectVar = builtinResolution.value.objectVar;
       const sourceDescriptor = builtinResolution.value.sourceDescriptor;
-
-      if (process.env.DEBUG_EXEC) {
-        logger.debug('Builtin invocation object value', {
-          commandName,
-          objectType: Array.isArray(objectValue) ? 'array' : typeof objectValue,
-          objectPreview:
-            typeof objectValue === 'string'
-              ? objectValue.slice(0, 80)
-              : Array.isArray(objectValue)
-                ? `[array length=${objectValue.length}]`
-                : objectValue && typeof objectValue === 'object'
-                  ? Object.keys(objectValue)
-                  : objectValue
-        });
-      }
 
       chainDebug('builtin invocation start', {
         commandName,
@@ -1078,10 +1051,6 @@ async function evaluateExecInvocationInternal(
   if (isPartial) {
     definition = definition.base;
   }
-  if (process.env.DEBUG_EXEC === 'true' && commandName === 'pipe') {
-    // Debug aid for pipeline identity scenarios
-    console.error('[debug-exec] definition for @pipe:', JSON.stringify(definition, null, 2));
-  }
   ({ streamingRequested, streamingEnabled } = mergeExecInvocationStreamingFromDefinition(
     streamingRequested,
     streamingOptions,
@@ -1121,19 +1090,6 @@ async function evaluateExecInvocationInternal(
     }
   });
 
-  if (process.env.MLLD_DEBUG_FIX === 'true') {
-    console.error('[evaluateExecInvocation] evaluated args', {
-      commandName,
-      argCount: evaluatedArgs.length,
-      argTypes: evaluatedArgs.map(a => (a === null ? 'null' : Array.isArray(a) ? 'array' : typeof a)),
-      argPreview: evaluatedArgs.map(a => {
-        if (isStructuredValue(a)) return { structured: true, type: a.type, dataType: typeof a.data };
-        if (a && typeof a === 'object') return { keys: Object.keys(a).slice(0, 5) };
-        return a;
-      })
-    });
-  }
-  
   // Track original Variables for arguments
   const originalVariables: (Variable | undefined)[] = new Array(args.length);
   const guardVariableCandidates: (Variable | undefined)[] = new Array(args.length);
@@ -1154,19 +1110,6 @@ async function evaluateExecInvocationInternal(
         } else {
           originalVariables[i] = variable;
           guardVariableCandidates[i] = variable;
-        }
-        
-        if (process.env.MLLD_DEBUG === 'true') {
-          const subtype = variable.type === 'primitive' && 'primitiveType' in variable 
-            ? (variable as any).primitiveType 
-            : variable.subtype;
-            
-          logger.debug(`Preserving original Variable for arg ${i}:`, {
-            varName,
-            variableType: variable.type,
-            variableSubtype: subtype,
-            isPrimitive: typeof variable.value !== 'object' || variable.value === null
-          });
         }
       }
     } else if (
@@ -1549,55 +1492,15 @@ async function evaluateExecInvocationInternal(
   // Skip builtin methods and reserved names as they were never added to the resolution stack
   endResolutionTrackingIfNeeded();
 
-  if (process.env.MLLD_DEBUG_FIX === 'true') {
-    try {
-      const summary = {
-        commandName,
-        type: typeof result,
-        isStructured: isStructuredValue(result),
-        keys: result && typeof result === 'object' ? Object.keys(result as any).slice(0, 5) : undefined,
-        preview:
-          isStructuredValue(result) && typeof (result as any).data === 'object'
-            ? Object.keys((result as any).data || {}).slice(0, 5)
-            : undefined,
-        text:
-          isStructuredValue(result) && typeof (result as any).text === 'string'
-            ? String((result as any).text).slice(0, 120)
-            : undefined
-      };
-      console.error('[evaluateExecInvocation] result summary', summary);
-      if (
-        commandName === 'needsMeta' ||
-        commandName === 'jsDefault' ||
-        commandName === 'jsKeep' ||
-        commandName === 'agentsContext'
-      ) {
-        try {
-          fs.appendFileSync('/tmp/mlld-debug.log', JSON.stringify(summary) + '\n');
-        } catch {}
-      }
-    } catch {}
-  }
-
   // Apply withClause transformations if present
   if (node.withClause) {
     if (node.withClause.pipeline) {
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[exec-invocation] Handling pipeline:', {
-          pipelineLength: node.withClause.pipeline.length,
-          stages: node.withClause.pipeline.map((p: any) => Array.isArray(p) ? '[parallel]' : (p.rawIdentifier || 'unknown'))
-        });
-      }
-      
       // When an ExecInvocation has a pipeline, we need to create a special pipeline
       // where the ExecInvocation itself becomes stage 0, retryable
       const { executePipeline } = await import('./pipeline');
       
       // Create a source function that re-executes this ExecInvocation (without the pipeline)
       const sourceFunction = async () => {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[exec-invocation] sourceFunction called - re-executing ExecInvocation');
-        }
         // Re-execute this same ExecInvocation but without the pipeline
         // IMPORTANT: Use execEnv not env, so the function parameters are available
         const nodeWithoutPipeline = { ...node, withClause: undefined };
@@ -1627,15 +1530,7 @@ async function evaluateExecInvocationInternal(
 
       // Prepend synthetic source stage after effect attachment
       const normalizedPipeline = [SOURCE_STAGE, ...userPipeline];
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[exec-invocation] Creating pipeline with synthetic source:', {
-          originalLength: node.withClause.pipeline.length,
-          normalizedLength: normalizedPipeline.length,
-          stages: normalizedPipeline.map((p: any) => Array.isArray(p) ? '[parallel]' : (p.rawIdentifier || 'unknown'))
-        });
-      }
-      
+
       // Execute the pipeline with the ExecInvocation result as initial input
       // Mark it as retryable with the source function
       const pipelineInput = wrapExecResult(result);
@@ -1678,16 +1573,7 @@ async function evaluateExecInvocationInternal(
       return finalWithClauseResult;
     }
   }
-  
-  if (process.env.MLLD_DEBUG === 'true') {
-    try {
-      console.log('[exec-invocation] returning result', {
-        commandName,
-        typeofResult: typeof result,
-        isArrayResult: Array.isArray(result)
-      });
-    } catch {}
-  }
+
   const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
   return finalEvalResult;
       });

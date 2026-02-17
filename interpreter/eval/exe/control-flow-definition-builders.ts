@@ -1,6 +1,5 @@
 import type { DirectiveNode, ExeBlockNode } from '@core/types';
 import type { ExecutableDefinition, CodeExecutable } from '@core/types/executable';
-import { logger } from '@core/utils/logger';
 import { extractParamNames } from './definition-helpers';
 
 export function buildControlFlowExecutableDefinition(
@@ -20,14 +19,6 @@ export function buildControlFlowExecutableDefinition(
 
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
-
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('Creating exe when expression:', {
-        identifier,
-        paramNames,
-        conditionCount: whenExprNode.conditions?.length
-      });
-    }
 
     return {
       type: 'code',
@@ -55,13 +46,6 @@ export function buildControlFlowExecutableDefinition(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
 
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('Creating exe foreach expression:', {
-        identifier,
-        paramNames
-      });
-    }
-
     return {
       type: 'code',
       codeTemplate: contentNodes,
@@ -85,14 +69,6 @@ export function buildControlFlowExecutableDefinition(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
 
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('Creating exe for expression:', {
-        identifier,
-        paramNames,
-        variable: forExprNode.variable?.identifier
-      });
-    }
-
     return {
       type: 'code',
       codeTemplate: contentNodes,
@@ -115,13 +91,6 @@ export function buildControlFlowExecutableDefinition(
 
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
-
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('Creating exe loop expression:', {
-        identifier,
-        paramNames
-      });
-    }
 
     return {
       type: 'code',

@@ -589,7 +589,6 @@ async function handleCodeDefinition(
   );
 
   if ((definition as any).language === 'mlld-when') {
-    logger.debug('🎯 mlld-when handler in run.ts CALLED');
     const whenExprNode = (definition as any).codeTemplate[0];
     if (!whenExprNode || whenExprNode.type !== 'WhenExpression') {
       throw new Error('mlld-when executable missing WhenExpression node');
@@ -603,11 +602,6 @@ async function handleCodeDefinition(
     const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
     const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
     const normalized = normalizeWhenShowEffect(whenResult.value);
-
-    logger.debug('🎯 mlld-when result:', {
-      outputType: typeof normalized.normalized,
-      outputValue: String(normalized.normalized ?? '').substring(0, 100)
-    });
 
     return {
       value: normalized.normalized,
@@ -643,13 +637,6 @@ async function handleCodeDefinition(
     InterpolationContext.ShellCommand,
     tempEnv
   );
-  if (process.env.DEBUG_EXEC) {
-    logger.debug('run.ts code execution debug:', {
-      codeTemplate: (definition as any).codeTemplate,
-      interpolatedCode: code,
-      argValues
-    });
-  }
 
   const value = await AutoUnwrapManager.executeWithPreservation(async () => {
     return env.executeCode(
