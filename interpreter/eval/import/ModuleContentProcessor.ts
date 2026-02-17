@@ -264,12 +264,6 @@ export class ModuleContentProcessor {
         );
       }
 
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log(`[ModuleContentProcessor] Processing resolver content for: ${ref}`);
-        console.log(`[ModuleContentProcessor] Content length: ${content.length}`);
-        console.log(`[ModuleContentProcessor] Content preview: ${content.substring(0, 200)}`);
-      }
-
       // Cache the source content for error reporting
       this.env.cacheSource(ref, content);
 
@@ -305,14 +299,6 @@ export class ModuleContentProcessor {
 
       // Process mlld content - IMPORTANT: await here so finally runs AFTER processing completes
       const result = await this.processMLLDContent(parsed, processedContent, ref, false);
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log(`[ModuleContentProcessor] Module object keys: ${Object.keys(result.moduleObject).join(', ')}`);
-        console.log(`[ModuleContentProcessor] Has frontmatter: ${result.frontmatter !== null}`);
-        console.log(`[ModuleContentProcessor] Child env vars: ${result.childEnvironment.getCurrentVariables().size}`);
-        console.log(`[ModuleContentProcessor] Child env var names: ${Array.from(result.childEnvironment.getCurrentVariables().keys()).join(', ')}`);
-      }
-      
       return result;
     } finally {
       // End import tracking (both global and security validator)
@@ -794,13 +780,6 @@ export class ModuleContentProcessor {
   ): Promise<ModuleProcessingResult> {
     const ast = parseResult.ast;
 
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log(`[processMLLDContent] Processing ${resolvedPath}:`, {
-        astLength: ast.length,
-        astTypes: ast.slice(0, 10).map((n: any) => `${n.type}${n.kind ? ':' + n.kind : ''}`)
-      });
-    }
-
     // Extract and validate frontmatter
     const frontmatterData = await this.extractAndValidateFrontmatter(ast, resolvedPath);
 
@@ -827,14 +806,6 @@ export class ModuleContentProcessor {
 
     // Process module exports
     const childVars = childEnv.getCurrentVariables();
-    
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log(`[processMLLDContent] After evaluation:`, {
-        childVarsSize: childVars.size,
-        childVarNames: Array.from(childVars.keys()),
-        evalResult: evalResult?.value ? 'has value' : 'no value'
-      });
-    }
     const exportManifest = childEnv.getExportManifest();
     const { moduleObject, frontmatter, guards } = this.variableImporter.processModuleExports(
       childVars,

@@ -241,13 +241,6 @@ export function createRhsDispatcher(dependencies: RhsDispatcherDependencies): Rh
         const isComplex = hasComplexArrayItems(items);
 
         if (isComplex) {
-          if (process.env.MLLD_DEBUG === 'true') {
-            logger.debug('var.ts: Storing complex array AST for lazy evaluation:', {
-              identifier,
-              valueNode: arrayNode
-            });
-          }
-
           const dataDescriptor = extractDescriptorsFromDataAst(arrayNode, env);
           if (dataDescriptor) {
             mergeResolvedDescriptor(dataDescriptor);
@@ -315,15 +308,6 @@ export function createRhsDispatcher(dependencies: RhsDispatcherDependencies): Rh
 
       case 'variable-reference': {
         const varRefNode = valueNode as any;
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('Processing VariableReference in var.ts:', {
-            identifier,
-            varIdentifier: varRefNode.identifier,
-            hasFields: !!(varRefNode.fields && varRefNode.fields.length > 0),
-            fields: varRefNode.fields?.map((field: any) => field.value)
-          });
-        }
-
         const referenceResult = await referenceEvaluator.evaluateVariableReference(
           varRefNode,
           identifier
@@ -364,12 +348,6 @@ export function createRhsDispatcher(dependencies: RhsDispatcherDependencies): Rh
               mergeResolvedDescriptor(astDescriptor);
             }
 
-            logger.debug('Storing template AST for triple-colon template', {
-              identifier,
-              ast: templateNodes,
-              extractedLabels: astDescriptor?.labels
-            });
-
             return {
               type: 'resolved',
               handler: handlerKey,
@@ -395,10 +373,6 @@ export function createRhsDispatcher(dependencies: RhsDispatcherDependencies): Rh
       }
 
       case 'variable-reference-tail': {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('Processing VariableReferenceWithTail in var.ts');
-        }
-
         const referenceResult = await referenceEvaluator.evaluateVariableReferenceWithTail(
           valueNode,
           identifier
@@ -435,10 +409,6 @@ export function createRhsDispatcher(dependencies: RhsDispatcherDependencies): Rh
 
       case 'fallback':
       default: {
-        if (process.env.MLLD_DEBUG === 'true') {
-          logger.debug('var.ts: Default case for valueNode:', { valueNode });
-        }
-
         const value = await interpolateWithSecurity([valueNode]);
         return {
           type: 'resolved',

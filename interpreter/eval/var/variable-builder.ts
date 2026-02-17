@@ -251,51 +251,10 @@ export function createVariableBuilder(dependencies: VariableBuilderDependencies)
   const build = async (input: VariableBuildInput): Promise<Variable> => {
     const { resolvedValue, toolCollection } = input;
 
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Creating variable:', {
-        identifier,
-        valueNodeType: (valueNode as any)?.type,
-        resolvedValue,
-        resolvedValueType: typeof resolvedValue
-      });
-    }
-
-    if (process.env.MLLD_DEBUG_IDS === 'true' && (identifier === 'squared' || identifier === 'ids')) {
-      try {
-        const structuredInfo = isStructuredValue(resolvedValue)
-          ? {
-              type: resolvedValue.type,
-              text: resolvedValue.text,
-              dataType: typeof resolvedValue.data,
-              preview: resolvedValue.data && typeof resolvedValue.data === 'object'
-                ? Array.isArray(resolvedValue.data)
-                  ? { length: resolvedValue.data.length, first: resolvedValue.data[0] }
-                  : { keys: Object.keys(resolvedValue.data).slice(0, 5) }
-                : resolvedValue.data
-            }
-          : undefined;
-        console.error('[var-debug]', {
-          identifier,
-          resolvedType: typeof resolvedValue,
-          isStructured: isStructuredValue(resolvedValue),
-          structuredInfo,
-          rawValue: resolvedValue
-        });
-      } catch {}
-    }
-
     const { isVariable } = await import('@interpreter/utils/variable-resolution');
     const strategyKey = resolveStrategyKey(directive, valueNode, resolvedValue, isVariable);
 
     if (strategyKey === 'existing-variable') {
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log('Preserving existing Variable:', {
-          identifier,
-          resolvedValueType: (resolvedValue as any).type,
-          resolvedValueName: (resolvedValue as any).name
-        });
-      }
-
       const overrides: Partial<VariableFactoryInitOptions> = {
         mx: { ...((resolvedValue as any).mx ?? {}), ...baseCtx },
         internal: { ...((resolvedValue as any).internal ?? {}), ...baseInternal }
@@ -357,16 +316,6 @@ export function createVariableBuilder(dependencies: VariableBuilderDependencies)
     if (strategyKey === 'array-node') {
       const arrayNode = valueNode as any;
       const isComplex = hasComplexArrayItems(arrayNode.items || arrayNode.elements || []);
-
-      if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('var.ts: Creating array variable:', {
-          identifier,
-          isComplex,
-          resolvedValueType: typeof resolvedValue,
-          resolvedValueIsArray: Array.isArray(resolvedValue),
-          resolvedValue
-        });
-      }
 
       const options = applySecurityOptions();
       return createArrayVariable(identifier, resolvedValue as any, isComplex, source, options);

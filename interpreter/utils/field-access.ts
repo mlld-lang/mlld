@@ -2,8 +2,6 @@
  * Utility for accessing fields on objects/arrays
  */
 
-import * as fs from 'fs';
-import * as util from 'util';
 import { FieldAccessNode } from '@core/types/primitives';
 import { FieldAccessError } from '@core/errors';
 import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
@@ -393,18 +391,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   }
   const fieldValue = field.value;
   const missingValue = options?.returnUndefinedForMissing ? undefined : null;
-  
-  // DEBUG: Log what we're working with
-  if (process.env.MLLD_DEBUG === 'true' && String(fieldValue) === 'try') {
-    console.log('🔍 FIELD ACCESS PRE-CHECK:', {
-      isVar: isVariable(value),
-      rawValueType: typeof rawValue,
-      rawValueKeys: Object.keys(rawValue || {}),
-      rawValueTypeField: rawValue?.type,
-      isObjectAST: isObjectAST(rawValue)
-    });
-  }
-  
+
   // Perform the actual field access
   let accessedValue: any;
   const fieldName = String(fieldValue);
@@ -415,39 +402,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     case 'bracketAccess': {
       // All handle string-based property access
       const name = String(fieldValue);
-      if (process.env.MLLD_DEBUG_FIX === 'true' && name === 'length') {
-        console.error('[field-access] length access', {
-          isVariable: isVariable(value),
-          rawType: typeof rawValue,
-          isArray: Array.isArray(rawValue),
-          rawKeys: rawValue && typeof rawValue === 'object' ? Object.keys(rawValue) : null,
-          rawValueTypeField: (rawValue as any)?.type,
-          hasStructuredWrapper: !!structuredWrapper
-        });
-        try {
-          const preview =
-            Array.isArray(rawValue) && rawValue.length > 0
-              ? { isArray: true, length: rawValue.length, first: rawValue[0] }
-              : rawValue && typeof rawValue === 'object'
-                ? {
-                    isArray: Array.isArray(rawValue),
-                    sample: util.inspect(rawValue, { depth: 2, breakLength: 120 })
-                  }
-                : rawValue;
-          fs.appendFileSync(
-            '/tmp/mlld-debug.log',
-            JSON.stringify({
-              source: 'field-access',
-              field: name,
-              isVariable: isVariable(value),
-              rawType: typeof rawValue,
-              rawKeys: rawValue && typeof rawValue === 'object' ? Object.keys(rawValue) : null,
-              rawValueTypeField: (rawValue as any)?.type,
-              preview
-            }) + '\n'
-          );
-        } catch {}
-      }
       if (structuredWrapper) {
         if (name === 'keepStructured') {
           if (structuredWrapper.internal) {
@@ -471,19 +425,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = createObjectUtilityMxView(structuredWrapper.mx, rawValue, structuredWrapper);
           break;
         }
-      }
-      if (process.env.MLLD_DEBUG_STRUCTURED === 'true') {
-        const debugKeys = typeof rawValue === 'object' && rawValue !== null ? Object.keys(rawValue) : undefined;
-        const dataKeys = structuredWrapper && structuredWrapper.data && typeof structuredWrapper.data === 'object'
-          ? Object.keys(structuredWrapper.data as Record<string, unknown>)
-          : undefined;
-        console.error('[field-access]', {
-          name,
-          rawValueType: typeof rawValue,
-          hasStructuredWrapper: Boolean(structuredWrapper),
-          keys: debugKeys,
-          dataKeys
-        });
       }
       if (typeof rawValue === 'string') {
         // Support .length on strings (like JavaScript)
@@ -588,33 +529,13 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // Handle normalized AST arrays with direct length access
       if (rawValue && typeof rawValue === 'object' && rawValue.type === 'array' && Array.isArray(rawValue.items)) {
         if (name === 'length') {
-          if (process.env.MLLD_DEBUG_FIX === 'true') {
-            console.error('[field-access] AST array length', {
-              length: rawValue.items.length,
-              itemsPreview: rawValue.items.slice(0, 2)
-            });
-          }
           accessedValue = rawValue.items.length;
           break;
         }
       }
-      
-      // DEBUG: Log what we're checking
-      if (process.env.MLLD_DEBUG === 'true' && name === 'try') {
-        console.log('🔍 FIELD ACCESS DEBUG:', {
-          fieldName: name,
-          rawValueType: typeof rawValue,
-          rawValueKeys: Object.keys(rawValue || {}),
-          hasField: name in rawValue,
-          fieldValue: rawValue?.[name]
-        });
-      }
-      
+
       // Handle plain arrays - check .length before falling through to generic object access
       if (Array.isArray(rawValue) && name === 'length') {
-        if (process.env.MLLD_DEBUG_FIX === 'true') {
-          console.error('[field-access] plain array length', { length: rawValue.length });
-        }
         accessedValue = rawValue.length;
         break;
       }

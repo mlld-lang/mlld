@@ -73,7 +73,6 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         ).join(' ') + '\n';
       };
 
-      // NEW CODE: Extract and handle captured shadow environments
       const capturedEnvs = params?.__capturedShadowEnvs;
       if (params && '__capturedShadowEnvs' in params) {
         delete params.__capturedShadowEnvs;

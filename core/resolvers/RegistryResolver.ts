@@ -362,13 +362,6 @@ export class RegistryResolver implements Resolver {
         );
       }
 
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log(`[RegistryResolver] Resolved to version: ${resolvedVersion}`);
-        console.log(`[RegistryResolver] Fetched content from ${sourceUrl}`);
-        console.log(`[RegistryResolver] Fetched content length: ${content.length}`);
-        console.log(`[RegistryResolver] First 200 chars:`, content.substring(0, 200));
-      }
-
       return {
         content,
         contentType: 'module',
@@ -484,12 +477,6 @@ export class RegistryResolver implements Resolver {
         `Entry point '${entryPoint}' not found in directory module files: ${files.join(', ')}`,
         { code: 'E_MODULE_NOT_FOUND' }
       );
-    }
-
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log(`[RegistryResolver] Resolved directory module: ${moduleKey}@${resolvedVersion}`);
-      console.log(`[RegistryResolver] Fetched ${files.length} files`);
-      console.log(`[RegistryResolver] Entry point content length: ${entryContent.length}`);
     }
 
     return {

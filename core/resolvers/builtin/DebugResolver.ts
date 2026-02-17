@@ -149,9 +149,6 @@ export class DebugResolver implements Resolver {
     const cwd = (process as any).cwd?.() || '/';
     const projectPath = await this.findProjectRoot(cwd);
     const time = this.getMockedTime() || new Date();
-    
-    // Debug logging
-    // console.log('DebugResolver collectDebugInfo:', { cwd, projectPath });
 
     const version = await this.getMlldVersion();
     

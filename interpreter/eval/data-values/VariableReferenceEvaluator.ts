@@ -301,17 +301,6 @@ export class VariableReferenceEvaluator {
     this.attachProvenance(result, variable as Variable);
 
     if (varRef.fields && varRef.fields.length > 0) {
-      // DEBUG: Log what we're about to access  
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log('🔍 BEFORE FIELD ACCESS (VariableReferenceWithTail):', {
-          variableIdentifier: varRef.identifier,
-          fields: varRef.fields,
-          resultType: typeof result,
-          resultKeys: typeof result === 'object' && result !== null ? Object.keys(result) : 'N/A',
-          resultValue: result
-        });
-      }
-      
       const { accessFields } = await import('../../utils/field-access');
       const fieldResult = await accessFields(result, varRef.fields, { 
         preserveContext: true,
@@ -332,18 +321,7 @@ export class VariableReferenceEvaluator {
         descriptorHint: variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
       });
     }
-    
-    // Debug logging
-    if (process.env.MLLD_DEBUG === 'true') {
-      logger.debug('VariableReferenceWithTail final result:', {
-        variableIdentifier: varRef.identifier,
-        resultValue: result,
-        resultType: typeof result,
-        resultIsNull: result === null,
-        resultIsUndefined: result === undefined
-      });
-    }
-    
+
     return result;
   }
 
@@ -372,18 +350,7 @@ export class VariableReferenceEvaluator {
       result = await this.extractVariableValue(variable, env);
     }
     this.attachProvenance(result, variable);
-    
-    // DEBUG: Log what we extracted
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('🔍 EXTRACTED VARIABLE VALUE:', {
-        variableIdentifier: value.identifier,
-        variableType: variable.type,
-        resultType: typeof result,
-        resultKeys: typeof result === 'object' && result !== null ? Object.keys(result) : 'N/A',
-        resultValue: result
-      });
-    }
-    
+
     // Apply field access if present
     if (hasFieldAccess) {
       // Apply each field access in sequence
@@ -444,16 +411,7 @@ export class VariableReferenceEvaluator {
         node: value,
         identifier: value.identifier
       });
-      
-      // Debug logging
-      if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('ExecInvocation pipeline result:', {
-          pipelineResult,
-          pipelineResultType: typeof pipelineResult,
-          isPipelineInput: !!(pipelineResult && typeof pipelineResult === 'object' && 'text' in pipelineResult)
-        });
-      }
-      
+
       // Try to parse the pipeline result back to maintain type consistency
       try {
         const parsed = JSON.parse(pipelineResult);

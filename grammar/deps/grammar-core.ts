@@ -79,7 +79,6 @@ export interface BlockReparseOptions {
 
 export const helpers = {
   debug(msg: string, ...args: unknown[]) {
-    if (process.env.DEBUG_MLLD_GRAMMAR) console.log('[DEBUG GRAMMAR]', msg, ...args);
   },
 
   warn(message: string, suggestion?: string, loc?: any, code?: string): GrammarWarning {
@@ -297,14 +296,6 @@ export const helpers = {
   },
 
   createNode<T extends object>(type: NodeTypeKey, props: T & { location?: any }) {
-    // Add development-time validation for missing locations
-    if (!props.location && process.env.DEBUG_MLLD_GRAMMAR) {
-      console.warn(`WARNING: Creating ${type} node without location data`);
-      if (process.env.DEBUG_MLLD_GRAMMAR_TRACE) {
-        console.trace();
-      }
-    }
-    
     return Object.freeze({
       type,
       nodeId: randomUUID(),
@@ -373,7 +364,6 @@ export const helpers = {
       ...finalFlags
     };
 
-    this.debug('PATH', 'validatePath final result:', JSON.stringify(result, null, 2));
     return result;
   },
 
@@ -653,7 +643,6 @@ export const helpers = {
     
     // If no base location provided, we can't calculate proper locations
     if (!baseLocation) {
-      console.warn('parseCommandContent called without baseLocation');
       // Fallback behavior for backward compatibility
       return this.parseCommandContentLegacy(content);
     }
@@ -1025,8 +1014,6 @@ export const helpers = {
     let hasCommentMarker = false;
     let firstNewlinePos = -1;
 
-    this.debug('isUnclosedArray starting at pos', pos, 'first 50 chars:', input.substring(pos, pos + 50));
-
     // First pass: scan until end of line or closing bracket to determine if this is
     // a multi-line section syntax (has #) or a single-line array
     while (i < input.length && depth > 0) {
@@ -1035,18 +1022,14 @@ export const helpers = {
       // Check for >> comment marker
       if (char === '>' && i + 1 < input.length && input[i + 1] === '>') {
         hasCommentMarker = true;
-        this.debug('Found >> comment at', i, 'inside array');
       }
 
       if (char === '[') {
         depth++;
-        this.debug('Found [ at', i, 'depth now', depth);
       } else if (char === ']') {
         depth--;
-        this.debug('Found ] at', i, 'depth now', depth);
       } else if (char === '#' && depth === 1) {
         hasHash = true; // Section syntax detected
-        this.debug('Found # at', i, 'in brackets - this is section syntax');
       } else if (char === '\n' && depth > 0) {
         // Record first newline position but continue scanning to find any >> markers
         if (firstNewlinePos === -1) {
@@ -1056,7 +1039,6 @@ export const helpers = {
         if (!hasHash) {
           // For non-section arrays, scan ahead to look for >> before giving up
           // Continue until we hit another newline or end of content
-          this.debug('Found newline at', i, 'without # - checking for comment markers ahead');
         }
       }
       i++;
@@ -1065,8 +1047,6 @@ export const helpers = {
     // Determine if unclosed: if we exited with depth > 0, it's unclosed
     // Or if we hit a newline in a non-section array
     const isUnclosed = depth > 0 || (firstNewlinePos !== -1 && !hasHash);
-
-    this.debug('isUnclosedArray finished: result=', isUnclosed, 'hasHash=', hasHash, 'hasCommentMarker=', hasCommentMarker, 'depth=', depth);
 
     if (isUnclosed) {
       this.parserState.lastUnclosedReason = hasCommentMarker ? 'commentInside' : 'generic';
@@ -1338,10 +1318,6 @@ export const helpers = {
     this.parserState.stringChar = null;
     // Keep track of function count and position for debugging
     this.parserState.functionCount++;
-    this.debug('Parser state reset', {
-      functionCount: this.parserState.functionCount,
-      lastEndPos: this.parserState.lastDirectiveEndPos
-    });
   },
   
   /**
@@ -1367,11 +1343,6 @@ export const helpers = {
   decrementBraceDepth(): void {
     this.parserState.braceDepth--;
     if (this.parserState.braceDepth < 0) {
-      // This indicates parser state corruption
-      this.debug('WARNING: Brace depth underflow detected', {
-        depth: this.parserState.braceDepth,
-        functionCount: this.parserState.functionCount
-      });
       // Reset to prevent cascading errors
       this.parserState.braceDepth = 0;
     }
@@ -1382,17 +1353,9 @@ export const helpers = {
    * Returns true if state is valid, false if corrupted
    */
   validateParserState(): boolean {
-    const isValid = this.parserState.braceDepth >= 0 && 
+    const isValid = this.parserState.braceDepth >= 0 &&
                    this.parserState.braceDepth <= this.parserState.maxNestingDepth;
-    
-    if (!isValid) {
-      this.debug('Parser state validation failed', {
-        braceDepth: this.parserState.braceDepth,
-        inString: this.parserState.inString,
-        functionCount: this.parserState.functionCount
-      });
-    }
-    
+
     return isValid;
   },
   

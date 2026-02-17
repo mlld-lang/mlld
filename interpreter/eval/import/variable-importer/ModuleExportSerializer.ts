@@ -73,9 +73,6 @@ export class ModuleExportSerializer {
       }
 
       if (!request.isLegitimateVariableForExport(variable)) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log(`[processModuleExports] Skipping non-legitimate variable '${name}' with type: ${variable.type}`);
-        }
         continue;
       }
 

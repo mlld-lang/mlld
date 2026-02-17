@@ -3290,9 +3290,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       try {
         this.cleanupSdkEmitter();
       } catch (error) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[Environment] Failed to detach stream bridge', error);
-        }
+        // Silently handle cleanup errors
       }
     }
     if (!this.parent) {

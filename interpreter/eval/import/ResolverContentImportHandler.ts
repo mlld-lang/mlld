@@ -38,14 +38,6 @@ export class ResolverContentImportHandler {
     }
 
     try {
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log(`[ImportDirectiveEvaluator] Resolver content for ${ref}:`, {
-          contentLength: resolverContent.content.length,
-          contentType: resolverContent.contentType,
-          firstChars: resolverContent.content.substring(0, 100)
-        });
-      }
-
       const processingRef = typeof resolverContent.metadata?.source === 'string'
         ? resolverContent.metadata.source
         : ref;
@@ -59,14 +51,6 @@ export class ResolverContentImportHandler {
       );
 
       this.validateModuleResult(processingResult, directive, processingRef);
-
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log(`[ImportDirectiveEvaluator] Processing result for ${ref}:`, {
-          moduleObjectKeys: Object.keys(processingResult.moduleObject),
-          moduleObjectSize: Object.keys(processingResult.moduleObject).length,
-          hasFrontmatter: processingResult.frontmatter !== null
-        });
-      }
 
       await this.variableImporter.importVariables(processingResult, directive, env);
       this.applyPolicyImportContext(directive, env, processingRef);

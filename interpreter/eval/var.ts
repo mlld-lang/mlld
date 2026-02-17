@@ -165,20 +165,7 @@ export async function prepareVarAssignment(
 
   // Get the value node - this contains type information from the parser
   const valueNodes = directive.values?.value;
-  
-  // Debug: Log the value structure
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.log(`\n=== Processing @${identifier} ===`);
-    if (Array.isArray(valueNodes) && valueNodes.length > 0) {
-      console.log('  Value node type:', valueNodes[0].type);
-      console.log('  Has directive.values.withClause?', !!directive.values?.withClause);
-      console.log('  Has directive.meta.withClause?', !!directive.meta?.withClause);
-      if (directive.values?.withClause || directive.meta?.withClause) {
-        const wc = directive.values?.withClause || directive.meta?.withClause;
-        console.log('  Pipeline:', wc.pipeline?.map((p: any) => p.rawIdentifier).join(' | '));
-      }
-    }
-  }
+
   if (!valueNodes || !Array.isArray(valueNodes) || valueNodes.length === 0) {
     throw new Error('Var directive missing value');
   }
@@ -199,16 +186,6 @@ export async function prepareVarAssignment(
     rhsContentEvaluator,
     sourceLocation
   });
-
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[var.ts] Extracted valueNode:', {
-      identifier,
-      type: valueNode?.type,
-      isArray: Array.isArray(valueNode),
-      hasWithClause: !!(valueNode?.withClause),
-      hasPipeline: !!(valueNode?.withClause?.pipeline)
-    });
-  }
 
   if (isToolsCollection && (!valueNode || typeof valueNode !== 'object' || valueNode.type !== 'object')) {
     throw new Error('Tool collections must be object literals');
@@ -297,19 +274,8 @@ export async function prepareVarAssignment(
     valueNode
   });
   variable = await pipelineFinalizer.process(variable);
-  
+
   const finalVar = finalizeVariable(variable);
-  
-  // Debug logging for primitive values
-  if (process.env.MLLD_DEBUG === 'true' && identifier === 'sum') {
-    logger.debug('Setting variable @sum:', {
-      identifier,
-      resolvedValue,
-      valueType: typeof resolvedValue,
-      variableType: finalVar.type,
-      variableValue: finalVar.value
-    });
-  }
 
   return { identifier, variable: finalVar };
 }

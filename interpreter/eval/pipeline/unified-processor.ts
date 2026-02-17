@@ -8,7 +8,7 @@
 import type { Environment } from '@interpreter/env/Environment';
 import type { Variable } from '@core/types/variable';
 import { MlldDirectiveError } from '@core/errors';
-import { detectPipeline, debugPipelineDetection, type DetectedPipeline } from './detector';
+import { detectPipeline, type DetectedPipeline } from './detector';
 import type { PipelineStage, PipelineCommand, WhilePipelineStage } from '@core/types';
 import { PipelineExecutor } from './executor';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
@@ -113,11 +113,6 @@ export async function processPipeline(
   }
   if (pipelineDescriptor) {
     env.recordSecurityDescriptor(pipelineDescriptor);
-  }
-  
-  // Debug detection
-  if (identifier && process.env.MLLD_DEBUG === 'true') {
-    debugPipelineDetection(identifier, node, directive);
   }
   
   // Detect pipeline from various sources

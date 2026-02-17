@@ -178,36 +178,3 @@ export function extractPipelineMetadata(
   
   return null;
 }
-
-/**
- * Debug helper to log pipeline detection details
- */
-export function debugPipelineDetection(
-  identifier: string,
-  node: any,
-  directive?: DirectiveNode
-): void {
-  if (process.env.MLLD_DEBUG !== 'true') return;
-  
-  console.log(`\n=== Pipeline Detection for @${identifier} ===`);
-  
-  const sources = [];
-  if (node?.pipes?.length) sources.push(`node.pipes (${node.pipes.length} pipes)`);
-  if (node?.withClause?.pipeline) sources.push('node.withClause');
-  if (directive?.values?.withClause?.pipeline) sources.push('directive.values.withClause');
-  if (directive?.meta?.withClause?.pipeline) sources.push('directive.meta.withClause');
-  
-  if (sources.length === 0) {
-    console.log('  No pipeline found');
-  } else {
-    console.log('  Pipeline sources found:', sources.join(', '));
-    
-    const detected = detectPipeline(node, directive);
-    if (detected) {
-      console.log('  Selected source:', detected.source);
-      console.log('  Pipeline:', detected.pipeline.map(p => p.rawIdentifier).join(' | '));
-      console.log('  Format:', detected.format || 'none');
-      console.log('  Retryable:', detected.isRetryable);
-    }
-  }
-}

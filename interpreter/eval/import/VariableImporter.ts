@@ -169,12 +169,6 @@ export class VariableImporter {
     const { explicitExports, guardNames } = this.exportManifestValidator.resolveExportPlan(childVars, manifest);
     this.guardExportChecker.validateGuardExports(guardNames, childEnv, manifest);
     
-    // Export all top-level variables directly (except system variables)
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log(`[processModuleExports] childVars size: ${childVars.size}`);
-      console.log(`[processModuleExports] childVars keys: ${Array.from(childVars.keys()).join(', ')}`);
-    }
-
     const { moduleObject } = this.moduleExportSerializer.serialize({
       childVars,
       explicitExports,
