@@ -1,15 +1,5 @@
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
-import type { SourceLocation } from '@core/types';
-
-interface InlineComment {
-  location: SourceLocation;
-  marker: string;
-}
-
-interface CommentNode {
-  location?: SourceLocation;
-}
 
 /**
  * Helper class for consistent comment tokenization across visitors.
@@ -25,7 +15,7 @@ export class CommentTokenHelper {
    * Tokenize an end-of-line comment attached to a directive
    * @param comment Comment object with location and marker info
    */
-  tokenizeEndOfLineComment(comment: InlineComment): void {
+  tokenizeEndOfLineComment(comment: any): void {
     if (!comment.location) return;
 
     const sourceText = this.document.getText();
@@ -87,7 +77,7 @@ export class CommentTokenHelper {
    * Tokenize a standalone comment node (full line comment)
    * @param node Comment AST node
    */
-  tokenizeStandaloneComment(node: CommentNode): void {
+  tokenizeStandaloneComment(node: any): void {
     if (!node.location) return;
     
     // For standalone comments, the location includes the marker

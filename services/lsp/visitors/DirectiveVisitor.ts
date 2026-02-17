@@ -1,6 +1,4 @@
-import { TextDocument } from 'vscode-languageserver-textdocument';
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
-import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { EffectTokenHelper } from '@services/lsp/utils/EffectTokenHelper';
 import { LocationHelpers } from '@services/lsp/utils/LocationHelpers';
@@ -8,23 +6,22 @@ import { TextExtractor } from '@services/lsp/utils/TextExtractor';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 import { CommentTokenHelper } from '@services/lsp/utils/CommentTokenHelper';
 import { LanguageBlockHelper } from '@services/lsp/utils/LanguageBlockHelper';
-import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 
 export class DirectiveVisitor extends BaseVisitor {
-  private mainVisitor!: INodeVisitor;
+  private mainVisitor: any;
   private operatorHelper: OperatorTokenHelper;
   private commentHelper: CommentTokenHelper;
   private languageHelper: LanguageBlockHelper;
-
-  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
+  
+  constructor(document: any, tokenBuilder: any) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
     this.commentHelper = new CommentTokenHelper(document, tokenBuilder);
     this.languageHelper = new LanguageBlockHelper(document, tokenBuilder);
   }
-
-  setMainVisitor(visitor: INodeVisitor): void {
+  
+  setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
   }
   

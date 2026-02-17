@@ -1,25 +1,22 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
-import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { TextExtractor } from '@services/lsp/utils/TextExtractor';
 import { CommentTokenHelper } from '@services/lsp/utils/CommentTokenHelper';
 import { EffectTokenHelper } from '@services/lsp/utils/EffectTokenHelper';
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 
 export class FileReferenceVisitor extends BaseVisitor {
-  private mainVisitor!: INodeVisitor;
+  private mainVisitor: any;
   private commentHelper: CommentTokenHelper;
-
-  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
+  
+  constructor(document: any, tokenBuilder: any) {
     super(document, tokenBuilder);
     this.commentHelper = new CommentTokenHelper(document, tokenBuilder);
   }
-
-  setMainVisitor(visitor: INodeVisitor): void {
+  
+  setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
   }
-
+  
   canHandle(node: any): boolean {
     return node.type === 'FileReference' || 
            node.type === 'load-content' ||

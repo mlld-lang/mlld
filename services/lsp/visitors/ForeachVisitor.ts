@@ -1,20 +1,17 @@
-import { TextDocument } from 'vscode-languageserver-textdocument';
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
-import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
-import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 
 export class ForeachVisitor extends BaseVisitor {
-  private mainVisitor: INodeVisitor;
+  private mainVisitor: any;
   private operatorHelper: OperatorTokenHelper;
-
-  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
+  
+  constructor(document: any, tokenBuilder: any) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
   }
-
-  setMainVisitor(visitor: INodeVisitor): void {
+  
+  setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
   }
   

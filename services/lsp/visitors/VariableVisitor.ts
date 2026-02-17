@@ -2,36 +2,25 @@ import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { LocationHelpers } from '@services/lsp/utils/LocationHelpers';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
-import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
-import { VariableReferenceNode, BaseMlldNode, FieldAccessNode } from '@core/types';
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
-
-interface AstPipe {
-  transform?: string;
-  hasAt?: boolean;
-  args?: unknown[];
-  fields?: unknown[];
-}
 
 export class VariableVisitor extends BaseVisitor {
-  private mainVisitor!: INodeVisitor;
+  private mainVisitor: any;
   private operatorHelper: OperatorTokenHelper;
-
-  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
+  
+  constructor(document: any, tokenBuilder: any) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
   }
-
-  setMainVisitor(visitor: INodeVisitor): void {
+  
+  setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
   }
-
-  canHandle(node: BaseMlldNode): boolean {
+  
+  canHandle(node: any): boolean {
     return node.type === 'VariableReference';
   }
-
-  visitNode(node: VariableReferenceNode, context: VisitorContext): void {
+  
+  visitNode(node: any, context: VisitorContext): void {
     if (!node.location) return;
 
     const identifier = node.identifier || '';
@@ -43,8 +32,7 @@ export class VariableVisitor extends BaseVisitor {
 
     // Handle import aliases and special resolvers which may not include '@' at location
     if (valueType === 'import' || valueType === 'importAlias' || valueType === 'specialResolver') {
-      const nodeAlias = (node as VariableReferenceNode & { alias?: string }).alias;
-      const targetIdentifier = (nodeAlias && (identifier === '*' || !identifier)) ? nodeAlias : identifier;
+      const targetIdentifier = (node.alias && (identifier === '*' || !identifier)) ? node.alias : identifier;
       this.handleImportLikeReference(node, targetIdentifier);
       return;
     }
@@ -90,7 +78,7 @@ export class VariableVisitor extends BaseVisitor {
   }
   
   private handleInterpolation(
-    node: VariableReferenceNode,
+    node: any,
     context: VisitorContext,
     identifier: string,
     valueType: string,
@@ -99,13 +87,13 @@ export class VariableVisitor extends BaseVisitor {
     // In triple-colon templates, only {{var}} form interpolates; '@var' is plain text
     if (context.variableStyle === '@var' && valueType === 'varIdentifier') {
       this.tokenBuilder.addToken({
-        line: node.location!.start.line - 1,
-        char: node.location!.start.column - 1,
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
         length: baseLength,
         tokenType: 'interpolation',
         modifiers: []
       });
-
+      
       // Still need to handle property access for interpolated variables
       if (node.fields) {
         if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
@@ -116,19 +104,19 @@ export class VariableVisitor extends BaseVisitor {
             fields: node.fields
           });
         }
-        this.operatorHelper.tokenizePropertyAccess(node as BaseMlldNode & { fields: FieldAccessNode[] });
-
+        this.operatorHelper.tokenizePropertyAccess(node);
+        
         // Visit nested VariableReferences inside variableIndex fields (e.g., @obj[@key])
         for (const field of node.fields) {
-          if (field.type === 'variableIndex' && (field.value as unknown as BaseMlldNode)?.type === 'VariableReference') {
-            this.mainVisitor.visitNode(field.value as unknown as BaseMlldNode, context);
+          if (field.type === 'variableIndex' && field.value?.type === 'VariableReference') {
+            this.mainVisitor.visitNode(field.value, context);
           }
         }
       }
     } else if (context.variableStyle === '{{var}}' && valueType === 'varInterpolation') {
       this.tokenBuilder.addToken({
-        line: node.location!.start.line - 1,
-        char: node.location!.start.column - 1,
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
         length: identifier.length + 4,
         tokenType: 'interpolation',
         modifiers: []
@@ -144,12 +132,12 @@ export class VariableVisitor extends BaseVisitor {
             fields: node.fields
           });
         }
-        this.operatorHelper.tokenizePropertyAccess(node as BaseMlldNode & { fields: FieldAccessNode[] });
+        this.operatorHelper.tokenizePropertyAccess(node);
       }
     } else if (node.identifier) {
       this.tokenBuilder.addToken({
-        line: node.location!.start.line - 1,
-        char: node.location!.start.column - 1,
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
         length: baseLength,
         tokenType: 'variable',
         modifiers: ['invalid']
@@ -158,7 +146,7 @@ export class VariableVisitor extends BaseVisitor {
   }
   
   private handleRegularReference(
-    node: VariableReferenceNode,
+    node: any,
     context: VisitorContext,
     identifier: string,
     valueType: string,
@@ -169,7 +157,7 @@ export class VariableVisitor extends BaseVisitor {
       // This is more reliable than column arithmetic which breaks with:
       // - Multi-byte characters, tabs, datatype labels, etc.
       const source = this.document.getText();
-      const startOffset = node.location!.start.offset;
+      const startOffset = node.location.start.offset;
       const charAtOffset = source.charAt(startOffset);
       const includesAt = charAtOffset === '@';
 
@@ -179,8 +167,8 @@ export class VariableVisitor extends BaseVisitor {
           startOffset,
           charAtOffset,
           includesAt,
-          line: node.location!.start.line,
-          column: node.location!.start.column
+          line: node.location.start.line,
+          column: node.location.start.column
         });
       }
 
@@ -242,7 +230,7 @@ export class VariableVisitor extends BaseVisitor {
       }
 
       this.tokenBuilder.addToken({
-        line: node.location!.start.line - 1,
+        line: node.location.start.line - 1,
         char: charPos,
         length: baseLength,
         tokenType,
@@ -258,40 +246,39 @@ export class VariableVisitor extends BaseVisitor {
           fields: node.fields
         });
       }
-      this.operatorHelper.tokenizePropertyAccess(node as BaseMlldNode & { fields: FieldAccessNode[] });
+      this.operatorHelper.tokenizePropertyAccess(node);
 
       // Visit nested VariableReferences inside variableIndex fields (e.g., @templates[@key])
       if (node.fields && Array.isArray(node.fields)) {
         for (const field of node.fields) {
-          if (field.type === 'variableIndex' && (field.value as unknown as BaseMlldNode)?.type === 'VariableReference') {
+          if (field.type === 'variableIndex' && field.value?.type === 'VariableReference') {
             // Visit the nested VariableReference
-            this.mainVisitor.visitNode(field.value as unknown as BaseMlldNode, context);
+            this.mainVisitor.visitNode(field.value, context);
           }
         }
       }
 
       // Handle pipes if present
       if (node.pipes && Array.isArray(node.pipes) && node.pipes.length > 0) {
-        const astPipes = node.pipes as unknown as AstPipe[];
         if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax') || this.document.uri.includes('test-vscode')) {
           console.log('[VAR-PIPES]', {
             identifier: node.identifier,
-            pipeCount: astPipes.length,
-            pipes: astPipes.map(p => ({ transform: p.transform, hasAt: p.hasAt }))
+            pipeCount: node.pipes.length,
+            pipes: node.pipes.map(p => ({ transform: p.transform, hasAt: p.hasAt }))
           });
         }
-
+        
         // Parse text to find pipe and transform positions
         const sourceText = this.document.getText();
-        const nodeText = sourceText.substring(node.location!.start.offset, node.location!.end.offset);
-
+        const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+        
         if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax') || this.document.uri.includes('test-vscode')) {
           console.log('[VAR-PIPES-TEXT]', { nodeText });
         }
-
+        
         let currentPos = 0;
 
-        for (let pipeIndex = 0; pipeIndex < astPipes.length; pipeIndex++) {
+        for (let pipeIndex = 0; pipeIndex < node.pipes.length; pipeIndex++) {
           const pipePos = nodeText.indexOf('|', currentPos);
           if (pipePos === -1) break;
           
@@ -306,7 +293,7 @@ export class VariableVisitor extends BaseVisitor {
           }
           
           // Token for '|' or '||' (parallel group)
-          const absolutePipePos = node.location!.start.offset + pipePos;
+          const absolutePipePos = node.location.start.offset + pipePos;
           const isParallel = nodeText[pipePos + 1] === '|';
           const pipePosition = this.document.positionAt(absolutePipePos);
           this.tokenBuilder.addToken({
@@ -317,7 +304,7 @@ export class VariableVisitor extends BaseVisitor {
             modifiers: []
           });
           
-          const pipe = astPipes[pipeIndex];
+          const pipe = node.pipes[pipeIndex];
           if (pipe && pipe.transform) {
             // Skip whitespace after |
             let transformStart = pipePos + (isParallel ? 2 : 1);
@@ -336,7 +323,7 @@ export class VariableVisitor extends BaseVisitor {
             }
             
             // Calculate absolute position of the transform
-            const transformStartOffset = node.location!.start.offset + transformStart;
+            const transformStartOffset = node.location.start.offset + transformStart;
             const transformPosition = this.document.positionAt(transformStartOffset);
             const hasAt = pipe.hasAt !== false;
 
@@ -435,7 +422,7 @@ export class VariableVisitor extends BaseVisitor {
                 if (simpleArg && simpleArg.index !== undefined) {
                   const argText = simpleArg[1] || simpleArg[0].trim();
                   const argStartLocal = afterEffectPos + simpleArg.index + simpleArg[0].indexOf(argText);
-                  const argOffset = node.location!.start.offset + argStartLocal;
+                  const argOffset = node.location.start.offset + argStartLocal;
                   const argPos = this.document.positionAt(argOffset);
                   const tokenType = argText.startsWith('@') ? 'variable' : 'string';
                   this.tokenBuilder.addToken({
@@ -486,7 +473,7 @@ export class VariableVisitor extends BaseVisitor {
     }
   }
 
-  private handleImportLikeReference(node: VariableReferenceNode, identifier: string): void {
+  private handleImportLikeReference(node: any, identifier: string): void {
     if (!identifier || !node.location) return;
 
     const source = this.document.getText();

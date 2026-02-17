@@ -1,14 +1,5 @@
-interface ExtractableNode {
-  type?: string;
-  content?: string;
-  value?: string | number | boolean;
-  values?: ExtractableNode[];
-  identifier?: string;
-  name?: string;
-}
-
 export class TextExtractor {
-  static extract(nodes: ExtractableNode[]): string {
+  static extract(nodes: any[]): string {
     let text = '';
     for (const node of nodes) {
       if (node.type === 'Text' && node.content) {
@@ -23,22 +14,22 @@ export class TextExtractor {
     }
     return text.trim();
   }
-
-  static extractFromNode(node: ExtractableNode | ExtractableNode[] | string | number | boolean | null | undefined): string {
+  
+  static extractFromNode(node: any): string {
     if (!node) return '';
-
+    
     if (typeof node === 'string') return node;
     if (typeof node === 'number' || typeof node === 'boolean') return String(node);
-
+    
     if (node.content) return node.content;
     if (node.value) return String(node.value);
     if (node.identifier) return node.identifier;
     if (node.name) return node.name;
-
+    
     if (Array.isArray(node)) {
       return this.extract(node);
     }
-
+    
     return '';
   }
 }

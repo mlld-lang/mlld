@@ -1,22 +1,19 @@
-import { TextDocument } from 'vscode-languageserver-textdocument';
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
-import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
-import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 
 export class ExpressionVisitor extends BaseVisitor {
-  private mainVisitor!: INodeVisitor;
+  private mainVisitor: any;
   private operatorHelper: OperatorTokenHelper;
   private tokenizedParentheses: Set<number>;
-
-  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
+  
+  constructor(document: any, tokenBuilder: any) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
     this.tokenizedParentheses = new Set();
   }
-
-  setMainVisitor(visitor: INodeVisitor): void {
+  
+  setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
   }
   

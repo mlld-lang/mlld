@@ -1,8 +1,8 @@
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 
 export interface INodeVisitor {
-  visitNode(node: unknown, context: VisitorContext): void;
-  canHandle(node: unknown): boolean;
+  visitNode(node: any, context: VisitorContext): void;
+  canHandle(node: any): boolean;
 }
 
 export interface IVisitorRegistry {

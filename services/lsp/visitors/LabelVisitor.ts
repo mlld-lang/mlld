@@ -1,13 +1,11 @@
-import { TextDocument } from 'vscode-languageserver-textdocument';
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
-import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 
 export class LabelVisitor extends BaseVisitor {
   private operatorHelper: OperatorTokenHelper;
 
-  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
+  constructor(document: any, tokenBuilder: any) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
   }

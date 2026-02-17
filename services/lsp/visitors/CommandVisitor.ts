@@ -1,24 +1,21 @@
-import { TextDocument } from 'vscode-languageserver-textdocument';
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
-import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
-import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 
 export class CommandVisitor extends BaseVisitor {
-  private mainVisitor!: INodeVisitor;
+  private mainVisitor: any;
   private operatorHelper: OperatorTokenHelper;
-
-  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
+  
+  constructor(document: any, tokenBuilder: any) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
   }
-
-  setMainVisitor(visitor: INodeVisitor): void {
+  
+  setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
   }
-
-  canHandle(node: unknown): boolean {
+  
+  canHandle(node: any): boolean {
     return node.type === 'CommandBase' ||
            node.type === 'command' ||
            node.type === 'code' ||
@@ -26,7 +23,7 @@ export class CommandVisitor extends BaseVisitor {
            node.type === 'CommandReference';
   }
   
-  visitNode(node: unknown, context: VisitorContext): void {
+  visitNode(node: any, context: VisitorContext): void {
     if (process.env.DEBUG_LSP === 'true' && node.type === 'ExecInvocation') {
       console.log('[EXEC-NODE]', {
         type: node.type,
@@ -72,7 +69,7 @@ export class CommandVisitor extends BaseVisitor {
     }
   }
   
-  private visitCommand(node: unknown, context: VisitorContext): void {
+  private visitCommand(node: any, context: VisitorContext): void {
     // Handle command nodes without location (common in nested contexts)
     let effectiveLocation = node.location;
     if (!effectiveLocation || effectiveLocation === 'none') {
@@ -294,7 +291,7 @@ export class CommandVisitor extends BaseVisitor {
     }
   }
 
-  private visitCodeNode(node: unknown, context: VisitorContext): void {
+  private visitCodeNode(node: any, context: VisitorContext): void {
     // Handle code nodes (run js/node/py/sh blocks)
     if (process.env.DEBUG_LSP === 'true') {
       console.log('[CODE-NODE]', {
@@ -401,7 +398,7 @@ export class CommandVisitor extends BaseVisitor {
     }
   }
 
-  private visitExecInvocation(node: unknown, context: VisitorContext): void {
+  private visitExecInvocation(node: any, context: VisitorContext): void {
     if (process.env.DEBUG) {
       console.log('[EXEC-INVOCATION-VISITOR]', {
         hasCommandRef: !!node.commandRef,
@@ -1282,7 +1279,7 @@ export class CommandVisitor extends BaseVisitor {
     }
   }
 
-  private visitCommandReference(node: unknown, context: VisitorContext): void {
+  private visitCommandReference(node: any, context: VisitorContext): void {
     // Check for invalid location
     if (!node.location || node.location.start.column <= 0) {
       if (process.env.DEBUG) {
