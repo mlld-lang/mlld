@@ -329,7 +329,7 @@ function checkFixtures(lastBuildTime, dirtyFiles) {
   }
 
   try {
-    const fixtureFiles = glob.sync(`${fixturesDir}/**/*.generated-fixture.json`);
+    const fixtureFiles = globSync(`${fixturesDir}/**/*.generated-fixture.json`);
     if (fixtureFiles.length === 0) {
       console.log(`${cyan}  Fixtures:${reset} ${fixturesDir} is empty`);
       return true;
@@ -444,7 +444,7 @@ async function main() {
     }
 
     if (needsRebuild.typescript) {
-      runBuildStep('TypeScript', 'npx tsup');
+      runBuildStep('TypeScript', 'tsup');
     }
 
     if (needsRebuild.python) {
