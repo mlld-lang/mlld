@@ -66,6 +66,12 @@ var secret @data = <@private/customer-list.txt>
 
 See `mlld howto security` for comprehensive prompt injection defense strategies.
 
+## Richly featured, many examples
+
+mlld is very full-featured for creating LLM workflows. It *should* be possible to do most things you'd want to do natively in mlld, but you can also fallback to python or javascript or shell scripts *inside* mlld.
+
+Use the `mlld` skill (installed with `mlld skill install`) and see the examples included with the skill.
+
 ## Two Syntax Modes
 
 **.mld files (strict mode)** - Default for scripts
@@ -74,7 +80,6 @@ See `mlld howto security` for comprehensive prompt injection defense strategies.
 
 **.md files (markdown mode)** - For literate scripts
 - Slash prefix required for directives: `/var @x = 1`
-- Bare `=>` at line start returns from the script
 - Text lines become content output
 
 ```mlld
