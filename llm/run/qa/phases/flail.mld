@@ -14,8 +14,8 @@ exe @flailPrompt(topic, outputDir) = template "../prompts/phase1-flail.att"
 var @qaTools = "Read,Write,Glob,Grep,Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(find:*),Bash(grep:*),Bash(uuidgen),Bash(tr:*),Bash(mlld:*)"
 
 exe @runFlail(runDir, topics) = [
-  let @_ = @logPhaseStart(@runDir, "flail")
-  let @_ = @updatePhaseStatus(@runDir, "flail", "in-progress")
+  @logPhaseStart(@runDir, "flail")
+  @updatePhaseStatus(@runDir, "flail", "in-progress")
 
   show `Testing @topics.length topics with limited access...`
 
@@ -39,7 +39,7 @@ exe @runFlail(runDir, topics) = [
     let @sessionInfo = { topic: @t, session_id: @sessionId, phase1_started: @existingSession && @existingSession.phase1_started ? @existingSession.phase1_started : @now, phase1_complete: false }
     output @sessionInfo to "@topicDir/session.json"
 
-    let @_ = @logItemStart(@runDir, @t, "flail")
+    @logItemStart(@runDir, @t, "flail")
 
     >> Build prompt and run with session ID
     let @prompt = @flailPrompt(@t, @runDir)
@@ -56,21 +56,21 @@ exe @runFlail(runDir, topics) = [
       show `BLOCKED: @t - @blockedFile.blocked`
       let @blockedSession = { topic: @t, session_id: @sessionId, phase1_started: @sessionInfo.phase1_started, phase1_complete: false, phase1_blocked: true, phase1_blocked_reason: @blockedFile.blocked, phase1_finished: @now }
       output @blockedSession to "@topicDir/session.json"
-      let @_ = @logItemDone(@runDir, @t, "blocked", null)
+      @logItemDone(@runDir, @t, "blocked", null)
       => @t
     ]
 
     >> Mark phase 1 complete
     let @updatedSession = { topic: @t, session_id: @sessionId, phase1_started: @sessionInfo.phase1_started, phase1_complete: true, phase1_finished: @now }
     output @updatedSession to "@topicDir/session.json"
-    let @_ = @logItemDone(@runDir, @t, "complete", null)
+    @logItemDone(@runDir, @t, "complete", null)
 
     => @t
   ]
 
   show `Phase 1 complete. Tested @results.length topics.`
-  let @_ = @logPhaseComplete(@runDir, "flail", { tested: @results.length })
-  let @_ = @updatePhaseStatus(@runDir, "flail", "complete")
+  @logPhaseComplete(@runDir, "flail", { tested: @results.length })
+  @updatePhaseStatus(@runDir, "flail", "complete")
 
   => @results
 ]

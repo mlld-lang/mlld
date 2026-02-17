@@ -31,7 +31,7 @@ exe @latestRunId() = [
 exe @createRun(config) = [
   let @runId = @nextRunId()
   let @runDir = `@qaRoot/@runId`
-  let @_ = @mkRunDirs(@runDir)
+  @mkRunDirs(@runDir)
 
   let @run = {
     id: @runId,

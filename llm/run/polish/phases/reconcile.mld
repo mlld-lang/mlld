@@ -56,7 +56,7 @@ exe @_doReconcileTicketOnly(runDir, outputPath) = [
   let @existingTickets = for @tkt in @allTickets when !@needsHumanDesign(@tkt) => @tkt
 
   >> Log phase start
-  let @_ = @logPhaseStart(@runDir, "reconcile")
+  @logPhaseStart(@runDir, "reconcile")
 
   show `  Existing tickets: @allTickets.length (@humanDesignTickets.length need human design, skipped)`
   show `  Running in ticket-only mode (no QA reconciliation)`
@@ -85,7 +85,7 @@ exe @_doReconcileTicketOnly(runDir, outputPath) = [
   }
 
   output @result to "@outputPath"
-  let @_ = @logPhaseComplete(@runDir, "reconcile", { items: @items.length })
+  @logPhaseComplete(@runDir, "reconcile", { items: @items.length })
   show `  Generated @items.length items (ticket-only mode)`
   => @result
 ]
@@ -99,7 +99,7 @@ exe @_doReconcileWithQa(runDir, outputPath, strategy) = [
   let @existingJson = @existingTickets | @json
 
   >> Log phase start
-  let @_ = @logPhaseStart(@runDir, "reconcile")
+  @logPhaseStart(@runDir, "reconcile")
 
   show `  Existing tickets: @allTickets.length (@humanDesignTickets.length need human design, skipped)`
   show `  Strategy classifications: @strategy.classifications.length`
@@ -134,7 +134,7 @@ exe @_finishReconcile(runDir, outputPath, result) = [
 
   >> Log completion
   let @itemCount = @result.items ? @result.items.length : 0
-  let @_ = @logPhaseComplete(@runDir, "reconcile", { items: @itemCount })
+  @logPhaseComplete(@runDir, "reconcile", { items: @itemCount })
 
   show `  Merged @itemCount items`
   when @result.summary => [

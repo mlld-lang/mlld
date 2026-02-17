@@ -77,7 +77,7 @@ exe @_callClaudeForEnrich(runDir, issueId, issueType, issuePriority, createdDate
   let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON response to @markerFile using the Write tool. Write ONLY the JSON object as its contents.`
 
   @logItemStart(@runDir, @issueId, 0)
-  let @response = @claudePoll(@fullPrompt, "sonnet", @base, @enrichTools, @markerFile)
+  @claudePoll(@fullPrompt, "sonnet", @base, @enrichTools, @markerFile)
 
   >> Parse result
   let @result = <@markerFile>?
@@ -104,7 +104,7 @@ exe @_finishEnrichTicket(runDir, issueId, result) = [
   ]
 
   >> Add timestamped note so we can skip re-enrichment for 24h
-  let @_ = @addEnrichNote(@issueId)
+  @addEnrichNote(@issueId)
 
   >> Build return object
   let @returnObj = {
@@ -116,7 +116,7 @@ exe @_finishEnrichTicket(runDir, issueId, result) = [
   }
 
   >> Append enrich_done event to events.jsonl
-  let @_ = @logEvent(@runDir, { event: "enrich_done", id: @issueId, ...@returnObj })
+  @logEvent(@runDir, { event: "enrich_done", id: @issueId, ...@returnObj })
   @logItemDone(@runDir, @issueId, "enriched", {})
 
   => @returnObj

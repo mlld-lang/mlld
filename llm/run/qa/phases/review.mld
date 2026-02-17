@@ -20,8 +20,8 @@ exe @hasFailingExperiments(topicDir) = [
 ]
 
 exe @runReview(runDir, topics) = [
-  let @_ = @logPhaseStart(@runDir, "review")
-  let @_ = @updatePhaseStatus(@runDir, "review", "in-progress")
+  @logPhaseStart(@runDir, "review")
+  @updatePhaseStatus(@runDir, "review", "in-progress")
 
   >> Find all topics with sessions that completed phase 1
   let @sessionFiles = <@runDir/topics/**/session.json>
@@ -32,14 +32,14 @@ exe @runReview(runDir, topics) = [
 
   if @needsReview.length == 0 [
     show `No topics completed phase 1 yet.`
-    let @_ = @logPhaseComplete(@runDir, "review", { reviewed: 0 })
-    let @_ = @updatePhaseStatus(@runDir, "review", "complete")
+    @logPhaseComplete(@runDir, "review", { reviewed: 0 })
+    @updatePhaseStatus(@runDir, "review", "complete")
     => []
   ]
 
   let @results = for parallel(20) @s in @needsReview [
     let @topicDir = `@runDir/topics/@s.topic`
-    let @_ = @logItemStart(@runDir, @s.topic, "review")
+    @logItemStart(@runDir, @s.topic, "review")
 
     let @prompt = @reviewPrompt(@s.topic, @runDir)
     let @markerFile = `@topicDir/phase2-done.marker`
@@ -55,21 +55,21 @@ exe @runReview(runDir, topics) = [
       show `BLOCKED (review): @s.topic - @blockedFile.blocked`
       let @blockedSession = { topic: @s.topic, session_id: @s.session_id, phase1_started: @s.phase1_started, phase1_complete: @s.phase1_complete, phase1_finished: @s.phase1_finished, phase2_complete: false, phase2_blocked: true, phase2_blocked_reason: @blockedFile.blocked, phase2_finished: @now }
       output @blockedSession to "@topicDir/session.json"
-      let @_ = @logItemDone(@runDir, @s.topic, "blocked", null)
+      @logItemDone(@runDir, @s.topic, "blocked", null)
       => @s.topic
     ]
 
     >> Update session info
     let @updatedSession = { topic: @s.topic, session_id: @s.session_id, phase1_started: @s.phase1_started, phase1_complete: @s.phase1_complete, phase1_finished: @s.phase1_finished, phase2_complete: true, phase2_finished: @now }
     output @updatedSession to "@topicDir/session.json"
-    let @_ = @logItemDone(@runDir, @s.topic, "complete", null)
+    @logItemDone(@runDir, @s.topic, "complete", null)
 
     => @s.topic
   ]
 
   show `Phase 2 complete. Reviewed @results.length topics.`
-  let @_ = @logPhaseComplete(@runDir, "review", { reviewed: @results.length })
-  let @_ = @updatePhaseStatus(@runDir, "review", "complete")
+  @logPhaseComplete(@runDir, "review", { reviewed: @results.length })
+  @updatePhaseStatus(@runDir, "review", "complete")
 
   => @results
 ]

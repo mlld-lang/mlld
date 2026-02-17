@@ -53,7 +53,7 @@ exe @_doVerify(runDir, mergeResult, baseBranch, mergedCount) = [
   when @verifyResult => [
     >> Append verify_done event to events.jsonl
     let @runId = @runDir.split("/").pop()
-    let @_ = @logEvent(@runDir, { event: "verify_done", id: `verify-@runId`, ...@verifyResult })
+    @logEvent(@runDir, { event: "verify_done", id: `verify-@runId`, ...@verifyResult })
   ]
 
   => when [

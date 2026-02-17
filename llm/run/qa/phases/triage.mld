@@ -31,8 +31,8 @@ exe @triagePrompt(allTopics, gitChanges, failureHistory, testStatus, outputDir) 
 
 >> Run triage phase
 exe @runTriage(runDir, allTopics, lastRunDir) = [
-  let @_ = @logPhaseStart(@runDir, "triage")
-  let @_ = @updatePhaseStatus(@runDir, "triage", "in-progress")
+  @logPhaseStart(@runDir, "triage")
+  @updatePhaseStatus(@runDir, "triage", "in-progress")
 
   let @lastCommit = @lastRunDir ? <@lastRunDir/run.json>?.config.git_commit : null
   let @gitChanges = @gitChangesSince(@lastCommit)
@@ -52,8 +52,8 @@ exe @runTriage(runDir, allTopics, lastRunDir) = [
 
   show `Triage selected @selectedTopics.length of @allTopics.length topics`
 
-  let @_ = @logPhaseComplete(@runDir, "triage", { selected: @selectedTopics.length, total: @allTopics.length })
-  let @_ = @updatePhaseStatus(@runDir, "triage", "complete")
+  @logPhaseComplete(@runDir, "triage", { selected: @selectedTopics.length, total: @allTopics.length })
+  @updatePhaseStatus(@runDir, "triage", "complete")
 
   => @selectedTopics
 ]

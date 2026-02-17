@@ -70,7 +70,7 @@ exe @_doAnalyzeTicket(runDir, ticketId, ticketContent, analysisPath, dryRun) = [
   when @result => [
     show `        Analysis complete`
     >> Append analysis_done event to events.jsonl
-    let @_ = @logEvent(@runDir, { event: "analysis_done", id: @ticketId, ...@result })
+    @logEvent(@runDir, { event: "analysis_done", id: @ticketId, ...@result })
   ]
   when !@result => show `        Analysis failed - no result file`
   let @finalResult = when [@result => @result; * => { ticket_id: @ticketId, error: "analysis failed" }]
@@ -100,7 +100,7 @@ exe @processTicket(runDir, ticketId, baseBranch, dryRun) = [
 >> Internal function to process ticket after initial checks
 exe @_doProcessTicket(runDir, ticketId, baseBranch, dryRun) = [
   >> Log item start
-  let @_ = @logItemStart(@runDir, @ticketId, "single")
+  @logItemStart(@runDir, @ticketId, "single")
 
   show `      Analyzing @ticketId...`
 
@@ -126,16 +126,16 @@ exe @_processAfterAnalysis(runDir, ticketId, baseBranch, dryRun, analysis) = [
 
   => when [
     !@canApprove => [
-      let @_ = @logItemDone(@runDir, @ticketId, "needs-review", { analysis: @analysis })
+      @logItemDone(@runDir, @ticketId, "needs-review", { analysis: @analysis })
       >> Log to prominent file in project root for visibility
       let @reviewReason = @analysis.recommendation && @analysis.recommendation.notes ? @analysis.recommendation.notes : "confidence too low"
-      let @_ = @logManualReview(@runDir, @ticketId, "execute", @reviewReason, @analysis)
+      @logManualReview(@runDir, @ticketId, "execute", @reviewReason, @analysis)
       => { ticket_id: @ticketId, status: "needs-review", analysis: @analysis }
     ]
     @dryRun => [
       show `      [DRY RUN] Skipping apply for @ticketId`
       let @dryResult = { ticket_id: @ticketId, applied: false, verified: false, dry_run: true, analysis: @analysis }
-      let @_ = @logItemDone(@runDir, @ticketId, "dry-run", @dryResult)
+      @logItemDone(@runDir, @ticketId, "dry-run", @dryResult)
       => @dryResult
     ]
     * => @_applyFix(@runDir, @ticketId, @baseBranch, @analysis)
@@ -160,13 +160,13 @@ exe @_applyFix(runDir, ticketId, baseBranch, analysis) = [
   when @result => [
     show `        [apply] success for @ticketId`
     >> Append apply_done event to events.jsonl
-    let @_ = @logEvent(@runDir, { event: "apply_done", id: @ticketId, ...@result })
+    @logEvent(@runDir, { event: "apply_done", id: @ticketId, ...@result })
   ]
   when !@result => show `        [apply] failed for @ticketId`
 
   => when [
     !@result => [
-      let @_ = @logItemDone(@runDir, @ticketId, "apply-failed", { error: "no result file" })
+      @logItemDone(@runDir, @ticketId, "apply-failed", { error: "no result file" })
       => { ticket_id: @ticketId, error: "apply failed - no result" }
     ]
     * => @_finishApply(@runDir, @ticketId, @result)
@@ -177,15 +177,15 @@ exe @_applyFix(runDir, ticketId, baseBranch, analysis) = [
 exe @_finishApply(runDir, ticketId, result) = [
   >> Log completion
   let @status = @result.verified ? "completed" : "fix-failed"
-  let @_ = @logItemDone(@runDir, @ticketId, @status, @result)
+  @logItemDone(@runDir, @ticketId, @status, @result)
 
   >> Tag ticket based on result
   when @result.verified => [
-    let @_ = @addTags(@ticketId, "impl-done")
+    @addTags(@ticketId, "impl-done")
     show `        Fix verified in worktree`
   ]
   when @result.applied && !@result.verified => [
-    let @_ = @addTags(@ticketId, "impl-blocked")
+    @addTags(@ticketId, "impl-blocked")
     show `        Fix applied but verification failed`
   ]
 

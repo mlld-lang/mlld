@@ -70,7 +70,7 @@ exe @executeInterpret(runDir, qaDir, trendReportPath, outputPath) = [
   let @hasStrategyQuestions = @strategyQuestions ? true : false
 
   >> Log phase start
-  let @_ = @logPhaseStart(@runDir, "interpret")
+  @logPhaseStart(@runDir, "interpret")
 
   show `  Trend report: @trendReportPath`
   show `  Strategy questions: @hasStrategyQuestions`
@@ -94,7 +94,7 @@ exe @executeInterpret(runDir, qaDir, trendReportPath, outputPath) = [
     * => [
       >> Log completion
       let @classCount = @strategy.classifications ? @strategy.classifications.length : 0
-      let @_ = @logPhaseComplete(@runDir, "interpret", { classifications: @classCount })
+      @logPhaseComplete(@runDir, "interpret", { classifications: @classCount })
       show `  Generated @classCount classifications`
       => @strategy
     ]

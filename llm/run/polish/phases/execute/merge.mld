@@ -55,7 +55,7 @@ exe @_doMerge(runDir, verifiedItems, baseBranch, batchNum) = [
   when @mergeResult => [
     show `    [merge] success for batch @batchNum`
     >> Append merge_batch_done event to events.jsonl
-    let @_ = @logEvent(@runDir, { event: "merge_batch_done", id: `batch-@batchNum`, ...@mergeResult })
+    @logEvent(@runDir, { event: "merge_batch_done", id: `batch-@batchNum`, ...@mergeResult })
   ]
   when !@mergeResult => show `    [merge] failed for batch @batchNum`
 
@@ -63,7 +63,7 @@ exe @_doMerge(runDir, verifiedItems, baseBranch, batchNum) = [
     !@mergeResult => { merged_count: 0, error: "merge failed - no result" }
     * => [
       >> Log individual merge events (cleanup happens in verify phase)
-      let @_ = @logMergeResults(@runDir, @mergeResult)
+      @logMergeResults(@runDir, @mergeResult)
       => @mergeResult
     ]
   ]
@@ -80,7 +80,7 @@ exe @logMergeResults(runDir, mergeResult) = [
   for @item in @merged [
     let @ticketId = @item.ticket_id
     let @commitSha = @item.commit_sha ? @item.commit_sha : ""
-    let @_ = @logMergeDone(@runDir, @ticketId, @commitSha)
+    @logMergeDone(@runDir, @ticketId, @commitSha)
     show `      Merged: @ticketId`
   ]
 
@@ -88,7 +88,7 @@ exe @logMergeResults(runDir, mergeResult) = [
   for @item in @failed [
     let @ticketId = @item.ticket_id
     let @error = @item.error ? @item.error : "unknown error"
-    let @_ = @logMergeFailed(@runDir, @ticketId, @error)
+    @logMergeFailed(@runDir, @ticketId, @error)
     show `      Merge failed: @ticketId - @error`
   ]
 

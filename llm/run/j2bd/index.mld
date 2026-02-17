@@ -220,7 +220,7 @@ IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool.
     model: "opus",
     tools: @decisionTools
   })
-  let @_ = @claudePoll(@decisionFullPrompt, "opus", "@base", @decisionTools, @decisionOutputPath)
+  @claudePoll(@decisionFullPrompt, "opus", "@base", @decisionTools, @decisionOutputPath)
   let @decision = <@decisionOutputPath>?
 
   if !@decision [

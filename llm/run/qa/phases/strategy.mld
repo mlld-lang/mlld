@@ -8,14 +8,14 @@ import { @updatePhaseStatus } from "../lib/state.mld"
 exe @strategyPrompt(outputDir) = template "../prompts/phase4-strategy.att"
 
 exe @runStrategy(runDir) = [
-  let @_ = @logPhaseStart(@runDir, "strategy")
-  let @_ = @updatePhaseStatus(@runDir, "strategy", "in-progress")
+  @logPhaseStart(@runDir, "strategy")
+  @updatePhaseStatus(@runDir, "strategy", "in-progress")
 
   >> Guard: trend-report.json must exist
   let @trendReport = <@runDir/trend-report.json>?
   if !@trendReport [
     show `Error: No trend-report.json found. Run phase 3 first.`
-    let @_ = @updatePhaseStatus(@runDir, "strategy", "failed")
+    @updatePhaseStatus(@runDir, "strategy", "failed")
     => null
   ]
 
@@ -34,8 +34,8 @@ exe @runStrategy(runDir) = [
   show ``
   show `Next step: Review and answer questions in strategy-questions.md, then run 'mlld run polish'.`
 
-  let @_ = @logPhaseComplete(@runDir, "strategy", null)
-  let @_ = @updatePhaseStatus(@runDir, "strategy", "complete")
+  @logPhaseComplete(@runDir, "strategy", null)
+  @updatePhaseStatus(@runDir, "strategy", "complete")
 
   => { strategy_questions: `@runDir/strategy-questions.md` }
 ]
