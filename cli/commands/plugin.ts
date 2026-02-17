@@ -45,15 +45,23 @@ function runClaude(args: string[], verbose?: boolean): { success: boolean; outpu
     process.exit(1);
   }
 
+  // Strip CLAUDECODE env var so the child claude process doesn't think
+  // it's a nested session and refuse to run
+  const env = { ...process.env };
+  delete env.CLAUDECODE;
+
   try {
     const output = execFileSync(claudePath, args, {
       encoding: 'utf8',
       timeout: 30000,
       stdio: verbose ? 'inherit' : 'pipe',
+      env,
     });
     return { success: true, output: output || '' };
   } catch (error: any) {
-    const output = error.stdout?.toString() || error.stderr?.toString() || error.message;
+    const stdout = error.stdout?.toString() || '';
+    const stderr = error.stderr?.toString() || '';
+    const output = [stdout, stderr].filter(Boolean).join('\n') || error.message;
     return { success: false, output };
   }
 }
@@ -66,7 +74,7 @@ export interface PluginInstallOptions {
 
 export async function pluginInstall(opts: PluginInstallOptions = {}): Promise<void> {
   const { scope = 'user', verbose, local } = opts;
-  const marketplaceSource = local ? join(getPackageRoot(), 'plugins', 'mlld') : MARKETPLACE_SOURCE;
+  const marketplaceSource = local ? getPackageRoot() : MARKETPLACE_SOURCE;
   const sourceLabel = local ? 'local' : 'registry';
 
   console.log(chalk.blue(`Adding mlld marketplace (${sourceLabel})...`));
