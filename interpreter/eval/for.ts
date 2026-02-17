@@ -2,7 +2,8 @@ import type {
   ForDirective,
   ForExpression,
   Environment,
-  ArrayVariable
+  ArrayVariable,
+  BaseMlldNode
 } from '@core/types';
 import type { EvalResult } from '../core/interpreter';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
@@ -40,6 +41,8 @@ import type {
   ForIterationError
 } from './for/types';
 import { isBailError } from '@core/errors';
+import { isConditionPair } from '@core/types/when';
+import { evaluateCondition } from './when';
 
 function extractControlKind(value: unknown): ReturnType<ForControlKindResolver> {
   const v = isStructuredValue(value) ? asData(value) : value;
@@ -53,6 +56,124 @@ function extractControlKind(value: unknown): ReturnType<ForControlKindResolver> 
   }
   if (v === 'done') return 'done';
   if (v === 'continue') return 'continue';
+  return null;
+}
+
+type ForTask = {
+  entry: [any, any];
+  index: number;
+};
+
+function isLiteralValueType(node: unknown, valueType: string): boolean {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    (node as any).type === 'Literal' &&
+    (node as any).valueType === valueType
+  );
+}
+
+function isSkipLiteralAction(action: unknown): boolean {
+  if (!Array.isArray(action) || action.length !== 1) {
+    return false;
+  }
+  return isLiteralValueType(action[0], 'skip');
+}
+
+function getDirectiveWhenFilterCondition(directive: ForDirective): BaseMlldNode[] | null {
+  if (directive.meta?.actionType !== 'single' || directive.values.action.length !== 1) {
+    return null;
+  }
+
+  const action = directive.values.action[0] as any;
+  if (!action || action.type !== 'WhenExpression' || !Array.isArray(action.conditions)) {
+    return null;
+  }
+  if (action.conditions.length !== 1) {
+    return null;
+  }
+
+  const first = action.conditions[0];
+  if (!isConditionPair(first) || !Array.isArray(first.condition) || first.condition.length === 0) {
+    return null;
+  }
+  if (first.condition.length === 1) {
+    const single = first.condition[0];
+    if (isLiteralValueType(single, 'none') || isLiteralValueType(single, 'wildcard')) {
+      return null;
+    }
+  }
+
+  return first.condition as BaseMlldNode[];
+}
+
+function getExpressionWhenFilterNode(expr: ForExpression): any | null {
+  if (!Array.isArray(expr.expression) || expr.expression.length !== 1) {
+    return null;
+  }
+
+  const action = expr.expression[0] as any;
+  if (!action || action.type !== 'WhenExpression' || !Array.isArray(action.conditions)) {
+    return null;
+  }
+
+  const hasNoneSkip = action.conditions.some((entry: unknown) => {
+    if (!isConditionPair(entry as any) || !Array.isArray((entry as any).condition)) {
+      return false;
+    }
+    const condition = (entry as any).condition;
+    return condition.length === 1 && isLiteralValueType(condition[0], 'none') && isSkipLiteralAction((entry as any).action);
+  });
+
+  return hasNoneSkip ? action : null;
+}
+
+async function evaluateWhenFilterMatch(whenExpr: any, env: Environment): Promise<boolean> {
+  if (!whenExpr || !Array.isArray(whenExpr.conditions)) {
+    return true;
+  }
+
+  for (const entry of whenExpr.conditions) {
+    if (!isConditionPair(entry) || !Array.isArray(entry.condition) || entry.condition.length === 0) {
+      continue;
+    }
+
+    if (entry.condition.length === 1) {
+      const single = entry.condition[0];
+      if (isLiteralValueType(single, 'none')) {
+        return false;
+      }
+      if (isLiteralValueType(single, 'wildcard')) {
+        return true;
+      }
+    }
+
+    const matched = await evaluateCondition(entry.condition, env);
+    if (matched) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function findCanaryTask(
+  tasks: ForTask[],
+  qualifies?: (task: ForTask) => Promise<boolean>
+): Promise<ForTask | null> {
+  if (tasks.length === 0) {
+    return null;
+  }
+  if (!qualifies) {
+    return tasks[0];
+  }
+
+  for (const task of tasks) {
+    if (await qualifies(task)) {
+      return task;
+    }
+  }
+
   return null;
 }
 
@@ -81,12 +202,21 @@ export async function evaluateForDirective(
     const effective = await resolveParallelOptions(specified ?? inherited, env, directive.location);
 
     const iterableArray = Array.from(iterable);
+    const tasks: ForTask[] = iterableArray.map((entry, index) => ({
+      entry: entry as [any, any],
+      index
+    }));
     const forErrors = effective?.parallel ? ([] as ForIterationError[]) : null;
     if (forErrors) {
       publishForErrorsContext(env, forErrors);
     }
+    const whenFilterCondition = getDirectiveWhenFilterCondition(directive);
 
-    const runOne = async (entry: [any, any], idx: number) => {
+    const runOne = async (
+      entry: [any, any],
+      idx: number,
+      options?: { failFast?: boolean }
+    ) => {
       const setup = await setupIterationContext({
         rootEnv: env,
         entry,
@@ -121,7 +251,7 @@ export async function evaluateForDirective(
         if (isBailError(err)) {
           throw err;
         }
-        if (forErrors) {
+        if (forErrors && !options?.failFast) {
           forErrors.push(createForIterationError({
             index: idx,
             key: key ?? null,
@@ -138,8 +268,49 @@ export async function evaluateForDirective(
     };
 
     if (effective?.parallel) {
-      const cap = Math.min(effective.cap ?? getParallelLimit(), iterableArray.length);
-      const results = await runWithConcurrency(iterableArray, cap, runOne, { ordered: false, paceMs: effective.rateMs });
+      const canaryTask = await findCanaryTask(tasks, whenFilterCondition
+        ? async (task: ForTask) => {
+            const setup = await setupIterationContext({
+              rootEnv: env,
+              entry: task.entry,
+              index: task.index,
+              total: iterableArray.length,
+              effective,
+              sourceKind,
+              varName,
+              keyVarName,
+              varFields,
+              fieldPathString,
+              sourceLocation: varNode.location,
+              sourceDescriptor
+            });
+            const childEnv = setup.childEnv;
+            try {
+              return await evaluateCondition(whenFilterCondition, childEnv);
+            } finally {
+              popForIterationContext(childEnv);
+            }
+          }
+        : undefined);
+
+      if (canaryTask) {
+        const canaryResult = await runOne(canaryTask.entry, canaryTask.index, { failFast: true });
+        if (isExeReturnControl(canaryResult)) {
+          return { value: canaryResult, env };
+        }
+      }
+
+      const remainingTasks = canaryTask
+        ? tasks.filter(task => task.index !== canaryTask.index)
+        : (whenFilterCondition ? [] : tasks);
+
+      const cap = Math.min(effective.cap ?? getParallelLimit(), remainingTasks.length);
+      const results = await runWithConcurrency(
+        remainingTasks,
+        cap,
+        task => runOne(task.entry, task.index),
+        { ordered: false, paceMs: effective.rateMs }
+      );
       const returnControl = results.find(result => isExeReturnControl(result));
       if (returnControl) {
         return { value: returnControl, env };
@@ -189,10 +360,19 @@ export async function evaluateForExpression(
   }
 
   const iterableArray = Array.from(iterable);
+  const tasks: ForTask[] = iterableArray.map((entry, index) => ({
+    entry: entry as [any, any],
+    index
+  }));
+  const expressionWhenFilter = getExpressionWhenFilterNode(expr);
 
   const SKIP = Symbol('skip');
   const DONE = Symbol('done');
-  const runOne = async (entry: [any, any], idx: number) => {
+  const runOne = async (
+    entry: [any, any],
+    idx: number,
+    options?: { failFast?: boolean }
+  ) => {
     const setup = await setupIterationContext({
       rootEnv: env,
       entry,
@@ -234,7 +414,7 @@ export async function evaluateForExpression(
       if (isBailError(error)) {
         throw error;
       }
-      if (!effective?.parallel) {
+      if (!effective?.parallel || options?.failFast) {
         throw error;
       }
       const marker = recordParallelExpressionIterationError({
@@ -251,8 +431,57 @@ export async function evaluateForExpression(
   };
 
   if (effective?.parallel) {
-    const cap = Math.min(effective.cap ?? getParallelLimit(), iterableArray.length);
-    const orderedResults = await runWithConcurrency(iterableArray, cap, runOne, { ordered: true, paceMs: effective.rateMs });
+    const canaryTask = await findCanaryTask(tasks, expressionWhenFilter
+      ? async (task: ForTask) => {
+          const setup = await setupIterationContext({
+            rootEnv: env,
+            entry: task.entry,
+            index: task.index,
+            total: iterableArray.length,
+            effective,
+            sourceKind,
+            varName,
+            keyVarName,
+            varFields,
+            fieldPathString,
+            sourceLocation: expr.variable.location,
+            sourceDescriptor
+          });
+          const childEnv = setup.childEnv;
+          try {
+            return await evaluateWhenFilterMatch(expressionWhenFilter, childEnv);
+          } finally {
+            popForIterationContext(childEnv);
+          }
+        }
+      : undefined);
+
+    const orderedResults: unknown[] = new Array(iterableArray.length).fill(SKIP);
+
+    if (canaryTask) {
+      orderedResults[canaryTask.index] = await runOne(
+        canaryTask.entry,
+        canaryTask.index,
+        { failFast: true }
+      );
+    }
+
+    const remainingTasks = canaryTask
+      ? tasks.filter(task => task.index !== canaryTask.index)
+      : (expressionWhenFilter ? [] : tasks);
+    const cap = Math.min(effective.cap ?? getParallelLimit(), remainingTasks.length);
+    const parallelResults = await runWithConcurrency(
+      remainingTasks,
+      cap,
+      async task => ({
+        index: task.index,
+        value: await runOne(task.entry, task.index)
+      }),
+      { ordered: false, paceMs: effective.rateMs }
+    );
+    for (const item of parallelResults) {
+      orderedResults[item.index] = item.value;
+    }
     for (const r of orderedResults) if (r !== SKIP && r !== DONE) results.push(r);
   } else {
     for (let i = 0; i < iterableArray.length; i++) {

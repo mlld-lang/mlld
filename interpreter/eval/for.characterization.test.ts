@@ -547,4 +547,75 @@ describe('for evaluator characterization', () => {
     const summaryText = isStructuredValue(summary) ? asText(summary) : String(summary);
     expect(summaryText).toBe('1,2');
   });
+
+  it('fails fast for for-parallel expressions when first qualifying iteration errors', async () => {
+    const { fileSystem, pathService: runtimePathService } = createRuntime();
+    const input = `
+/exe @explode(n) = js {
+  if (n == 1) {
+    throw new Error("first qualifying failed");
+  }
+  return n;
+}
+/var @result = for parallel(2) @n in [1, 2] => @explode(@n)
+`;
+
+    await expect(
+      interpret(input, {
+        fileSystem,
+        pathService: runtimePathService,
+        format: 'markdown',
+        mlldMode: 'markdown',
+        ephemeral: true,
+        useMarkdownFormatter: false
+      })
+    ).rejects.toThrow('first qualifying failed');
+  });
+
+  it('fails fast for for-parallel directives when first qualifying iteration errors', async () => {
+    const { fileSystem, pathService: runtimePathService } = createRuntime();
+    const input = `
+/exe @explode(n) = js {
+  if (n == 2) {
+    throw new Error("directive canary failed");
+  }
+  return n;
+}
+/for parallel(2) @n in [0, 2, 3] when @n > 1 [
+  let @value = @explode(@n)
+  show @value
+]
+`;
+
+    await expect(
+      interpret(input, {
+        fileSystem,
+        pathService: runtimePathService,
+        format: 'markdown',
+        mlldMode: 'markdown',
+        ephemeral: true,
+        useMarkdownFormatter: false
+      })
+    ).rejects.toThrow('When expression evaluation failed');
+  });
+
+  it('keeps post-canary parallel expression errors as iteration markers', async () => {
+    const env = await interpretWithEnv(`
+/exe @maybeFail(n) = js {
+  if (n == 2) {
+    throw new Error("late iteration failed");
+  }
+  return n;
+}
+/var @result = for parallel(2) @n in [1, 2] => @maybeFail(@n)
+`);
+
+    expect(await requireValue(env, 'result')).toEqual([
+      1,
+      expect.objectContaining({
+        index: 1,
+        error: 'late iteration failed'
+      })
+    ]);
+  });
 });
