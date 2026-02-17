@@ -1,8 +1,8 @@
 ---
-updated: 2026-02-10
+updated: 2026-02-17
 tags: #arch, #interpreter
-related-docs: docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/RESOLVERS.md, docs/dev/SHADOW-ENV.md, docs/dev/IMPORTS.md, docs/dev/ITERATORS.md, docs/dev/ALLIGATOR.md, docs/dev/EXEC-VARS.md, docs/dev/VAR-EVALUATION.md, llms.txt
-related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/eval/exec/*.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/executors/*.ts, interpreter/eval/pipeline/*, core/types/*
+related-docs: docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/RESOLVERS.md, docs/dev/SHADOW-ENV.md, docs/dev/IMPORTS.md, docs/dev/ITERATORS.md, docs/dev/ALLIGATOR.md, docs/dev/EXEC-VARS.md, docs/dev/VAR-EVALUATION.md, docs/dev/SECURITY.md, docs/dev/HOOKS.md, docs/dev/OUTPUT.md, llms.txt
+related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/eval/exec/*.ts, interpreter/eval/import/*.ts, interpreter/eval/pipeline/*, interpreter/eval/auto-unwrap-manager.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/executors/*.ts, interpreter/output/*.ts, core/types/*, core/policy/*
 related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableReferenceNode, WithClause }, core/types/variable { Variable }
 ---
 
@@ -12,7 +12,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 - Single-pass, AST-driven evaluation: parse once, evaluate directly.
 - `Environment` is the runtime: variables, imports, execution, effects, security.
-- Output uses effect streaming (doc/stdout/stderr); nodes are no longer the output surface.
+- Output is intent-first (`OutputIntent` → `OutputRenderer` → effects) with effect-handler output as primary and node formatting as fallback.
 - Lazy by default for complex data; strict contexts switch behavior (conditions, interpolation, field access).
 - Unified exec invocation and pipelines; resolvers unify modules, paths, and built-ins.
 
@@ -30,7 +30,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 - `interpreter/index.ts`:
   - `interpret(source, options)`: parses with `@grammar/parser`, builds `PathContext`, constructs `Environment`, then calls `evaluate(ast, env)`.
-  - Attaches optional streaming sinks (`progress`, `full`) before evaluation; formats final output (Markdown/XML) from effect handler.
+  - Configures streaming defaults and output mode; per-run/per-exec streaming sinks are configured later by evaluators via `StreamingManager.configure(...)`.
 - `interpreter/core/interpreter.ts`:
   - Entry point composition for `evaluate`, `interpolate`, and `cleanNamespaceForDisplay`.
   - Wires interpolation security recording and delegates node dispatch to `interpreter/core/interpreter/evaluator.ts`.
@@ -44,7 +44,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 2. Evaluate (single pass):
    - Document: iterate nodes; emit "doc" effects for non-directive content.
    - Directives: route to eval modules (run/sh/exe, when, for, import, output, etc.).
-   - Expressions/Literals: `eval/expression.ts` and literal handlers.
+   - Expressions/Literals: `eval/expressions.ts`, `eval/new-expression.ts`, and literal handlers.
    - Exec Invocation: `eval/exec-invocation.ts` (unified for `@fn(...)`, with tail `with { ... }`).
      - Orchestration and dispatch: `eval/exec-invocation.ts`
      - Argument binding: `eval/exec/args.ts`
@@ -55,20 +55,23 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
      - Non-command/non-code handlers: `eval/exec/non-command-handlers.ts`
      - Streaming setup/teardown: `eval/exec/streaming.ts`
    - Data values: `eval/data-value-evaluator.ts` (arrays/objects; lazy for complex nodes).
-   - Pipelines: `eval/pipeline/unified-processor.ts` (condensed pipes and `with { pipeline: [...] }`); optional streaming sinks.
-3. Effects → Formatter: `Environment.emitEffect('doc'|'stdout'|'stderr'|'file', ...)` accumulated by effect handler; formatted by `interpreter/output/formatter.ts` + markdown formatter when selected.
+   - Pipelines: `eval/pipeline/unified-processor.ts` (condensed pipes and `with { pipeline: [...] }`), with retry orchestration via `eval/pipeline/state-machine.ts`.
+3. Intent/Effects → Output:
+   - Interpreter/evaluators emit intents and effects (`doc|stdout|stderr|both|file`) through `Environment`.
+   - `OutputRenderer` collapses/flushes intent output and routes to effects.
+   - `interpret()` reads final document from effect handler when available; falls back to node formatter only if no document-capable effect handler is present.
 
 ### Environment Responsibilities
 
 - File/path context: `PathContext` for project/file/execution directories.
 - Variables: `VariableManager` manages typed variables, reserved names, parameter scoping, wrappers for complex data.
-- Imports: `ImportResolver` orchestrates file/module/function resolvers, URL cache, approval bypass, fuzzy local matching.
-- Resolvers: `ResolverManager` with built-ins (`now`, `debug`, `input`) and prefix configs (e.g., `@root/...`).
+- Imports: `ImportDirectiveEvaluator` + `ImportRequestRouter` orchestrate import semantics; `ImportResolver` handles low-level path/module/url resolution.
+- Resolvers: `ResolverManager` with built-ins (`now`, `debug`, `input`, `keychain`) and prefix configs (e.g., `@root/...`).
 - Execution: `Environment` composes command/code execution and keeps `CommandExecutorFactory` creation behind a single boundary.
-- Shadow envs: `Environment` manages language-specific injection (`js`, `node`, `python`) and VM-backed shadow-environment lifecycle.
+- Shadow envs: `Environment` manages language-specific injection (`js`, `node`, `python`) and shadow-environment lifecycle.
 - Caching and registry: URL/module cache + lock file via registry manager.
-- Security: `SecurityManager` for URL limits, protocol/domain validation.
-- Effects and output: `Environment` maps intents/effects and mirrors SDK/runtime events.
+- Security: policy and guard integration across run/exec/pipeline/output/import contexts, tool/MCP scope enforcement, plus URL/domain validation.
+- Effects and output: `Environment` maps intents/effects, controls import-time doc suppression, and mirrors SDK/runtime events.
 
 ### Environment Internal Zones
 
@@ -107,12 +110,13 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
   - Condensed: `@value|@parse|@xml|@upper` processed by `eval/pipeline/unified-processor`.
   - With-clause: `run [...] with { pipeline: [...] }` sets `pipelineContext` on env for each stage.
   - Inline effects: built-ins `| log`, `| output`, `| show` attach to the preceding stage, run after it succeeds, and re-run on each retry attempt.
-  - Streaming: optional sinks in `eval/pipeline/stream-sinks/*` (progress-only, terminal); ambient `@mx` exposes attempt/hint history for retry semantics.
+  - Retry/source semantics: `processPipeline()` can inject synthetic source-stage context for retryable sources; attempts are tracked by the pipeline state machine.
+  - Streaming: run/exec configure `StreamingManager` sinks at execution time; defaults are terminal+progress, while `streamFormat` uses adapter sinks and suppresses terminal output.
 - Structured execution: exec invocation, `/run`, and pipeline stages surface `StructuredValue` wrappers with `.text` and `.data` properties. Display/interpolation paths automatically use `.text`. `@p`/`@pipeline` hold wrappers, so use helpers (`asText`/`asData`) in low-level code that inspects stage history.
 
 ### Metadata Preservation
 
-- LoadContentResult metadata shelf: exec invocation preserves file metadata across JS transforms (see `eval/exec-invocation.ts`).
+- `AutoUnwrapManager` preserves LoadContentResult metadata across JS/Node/Python boundaries and is used in exec, run, and pipeline command paths (`eval/auto-unwrap-manager.ts`).
 
 ### Iteration
 
@@ -121,25 +125,25 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 ### Imports and Resolvers
 
-- Imports: `eval/import/*` delegates to `Environment.importResolver`:
-  - Module imports: `@user/module` via registry/HTTP/GitHub resolvers.
-  - Path imports: quoted/local paths and resolver-prefixed angle brackets (e.g., `<@root/file.mld>`); angle brackets denote "load contents" semantics.
-- Import directive guard: module child environments set `isImporting` so `/run`, `/output`, and `/show` skip execution while the import evaluates, preventing module-level side effects.
+- Imports are orchestrated by `ImportDirectiveEvaluator` and routed by `ImportRequestRouter` across input/resolver/module/node/file-url/directory/MCP handlers (`eval/import/*`).
+- `Environment.importResolver` remains the low-level resolver/cache layer used by import handlers.
+- Policy import context handling is applied by `PolicyImportContextManager` during import evaluation.
+- Import directive guard: module child environments set `isImporting` and evaluate with `isExpression: true`, suppressing doc emission and skipping side-effect directives (`/run`, `/output`, `/show`, `/append`) during import-time execution.
 - Export manifests: `eval/export.ts` records `/export` declarations on the child environment; `VariableImporter.processModuleExports` enforces the manifest and surfaces `EXPORTED_NAME_NOT_FOUND` while `/export { * }` defers to the temporary auto-export fallback.
-- Import collisions: `Environment.setImportBinding` stores successful bindings per directive and `ensureImportBindingAvailable` throws `IMPORT_NAME_CONFLICT` before a duplicate alias reaches `setVariable`.
+- Import collisions: `ImportBindingGuards` (and MCP import checks) enforce `IMPORT_NAME_CONFLICT` before binding; `Environment.setImportBinding` records successful bindings.
 - Name protection: resolver names reserved (cannot create variables shadowing them); prefixes registered into env as path variables when configured.
 
 ### Shadow Environments
 
 - JS: in-process execution; shadow functions injected as parameters; designed for synchronous composition among shadow functions.
-- Node: isolated VM (`NodeShadowEnvironment`) with captured shadow functions; used for `node`/`js` executors as configured.
-- Helpers: variable proxy/introspection helpers for external envs are provided (e.g., Python generator utilities) but no Python shadow execution.
+- Node: isolated VM (`NodeShadowEnvironment`) with captured shadow functions; used by node execution paths.
+- Python: `PythonShadowEnvironment` exists and executes with shadow-function injection when present; Python execution falls back to subprocess behavior when no shadow state is needed.
 
 ### Errors and Debugging
 
 - Parse: `MlldParseError` with enhanced formatting and location; optional pattern capture.
 - Runtime: directive-scoped errors (e.g., `MlldInterpreterError`, specialized directive errors) with source context.
-- Debug flags: `DEBUG_EXEC`, `DEBUG_FOR`, `DEBUG_PIPELINE`, `MLLD_DEBUG`, `DEBUG_PEGGY`; directive trace enabled by default and configurable via `enableTrace`.
+- Debug flags: `MLLD_DEBUG` plus targeted flags (`MLLD_DEBUG_GUARDS`, `MLLD_DEBUG_CHAINING`, `MLLD_DEBUG_STDIN`, `MLLD_DEBUG_EXEC_IO`, `MLLD_DEBUG_STRUCTURED`, `MLLD_DEBUG_FOREACH`, `MLLD_DEBUG_FIX`, `MLLD_DEBUG_VERSION`). `DEBUG_EXEC` is used in import object-reference resolution.
 - Collected errors: `outputOptions.collectErrors` aggregates and formats at end of run.
 
 ## Gotchas
@@ -152,7 +156,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 ## Debugging
 
-- Enable granular logs: `DEBUG_EXEC=1`, `DEBUG_FOR=1`, `DEBUG_PIPELINE=1`, `MLLD_DEBUG=true`.
+- Enable granular logs with `MLLD_DEBUG=true`, then add scoped flags as needed (for guards/chaining/stdin/exec-io/structured/foreach/fix/version).
 - Capture parse errors (pattern dev): `captureErrors: true` interpret option.
 - Use directive trace: `enableTrace` option (on by default) to inspect directive flow.
 - Inspect pipeline context via ambient `@mx` (stages, attempts, hint).
@@ -161,9 +165,8 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 `@mx` is ambient and amnesiac: it reflects only the current stage. As part of retry semantics, `@mx.hint` (the retry payload) is:
 
-- Visible only inside the body of the retried stage while it executes.
-- Cleared before inline effects on that stage and before re-executing the requesting stage.
-- Null in downstream stages and inline effects.
+- Visible in the current stage context, including inline effects for that stage.
+- Not carried into downstream stage contexts (each stage gets its own pipeline snapshot).
 
 This keeps `@mx.hint` tightly scoped to the location where it is meaningful, while leaving aggregate history visible via `@p.retries.all`.
 
@@ -183,9 +186,9 @@ This keeps `@mx.hint` tightly scoped to the location where it is meaningful, whi
 - /for: `interpreter/eval/for.ts` — iteration over arrays/objects
 - foreach (operator): `interpreter/eval/data-value-evaluator.ts` and `interpreter/eval/foreach.ts` — cartesian execution
 - Executable foreach: code executable with language `mlld-foreach` handled in `interpreter/eval/exec/code-handler.ts`
-- /import: `interpreter/eval/import/*` — path/module/function resolvers, namespace/selected
+- /import: `interpreter/eval/import/ImportDirectiveEvaluator.ts` + `interpreter/eval/import/ImportRequestRouter.ts` — import orchestration, handler routing, and binding/manifest integration
 - /output: `interpreter/eval/output.ts` — file and stream outputs
-- Expressions: `interpreter/eval/expression.ts` — binary/unary/ternary
+- Expressions: `interpreter/eval/expressions.ts` + `interpreter/eval/new-expression.ts` — binary/unary/ternary and `new` expression handling
 - Pipelines: `interpreter/eval/pipeline/unified-processor.ts` — condensed + structured
 - Pipeline executor runtime: `interpreter/eval/pipeline/executor.ts` + `interpreter/eval/pipeline/executor/*` — composition root, execution loop, stage runners, and streaming lifecycle
 - Interpolation: `interpreter/core/interpreter.ts#interpolate` — templates, pipes, file refs
