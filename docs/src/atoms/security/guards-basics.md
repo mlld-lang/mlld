@@ -63,7 +63,7 @@ Operation guard inputs expose helper metadata for aggregate checks:
 - `@input.all.mx.taint.includes("src:file")`
 - `@input.none.mx.labels.includes("pii")`
 - `@input.mx.labels`, `@input.mx.taint`, `@input.mx.sources`
-- `@input.any.text.includes("sk-")` for content-level text inspection
+- `@input.any.text.includes("SSN")` for content-level text inspection
 
 Use labels to classify data types, taint to track untrusted origins, and sources for audit trails:
 

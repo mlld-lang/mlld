@@ -50,8 +50,8 @@ var @policyConfig = {
 }
 policy @p = union(@policyConfig)
 
-var secret @key = "sk-12345"
-show @key
+var secret @customerList = <internal/customers.csv>
+show @customerList
 ```
 
 Error: `Label 'secret' cannot flow to 'op:show'` -- the policy blocks secret-labeled data from reaching show.

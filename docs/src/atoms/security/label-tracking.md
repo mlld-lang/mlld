@@ -16,45 +16,45 @@ Labels propagate through all transformations automatically.
 
 ```mlld
 >> Method calls preserve labels
-var secret @key = "sk-123"
-var @trimmed = @key.trim()
+var secret @data = <internal/customers.csv>
+var @trimmed = @data.trim()
 show @trimmed.mx.labels    // ["secret"]
 ```
 
 **Templates:** Interpolated values carry labels to the result.
 
 ```mlld
-var secret @token = "abc"
-var @msg = `Token: @token`
+var secret @recipe = <vault/secret-recipe.txt>
+var @msg = `Recipe: @recipe`
 show @msg.mx.labels        // ["secret"]
 ```
 
 **Collections:** Items retain labels; collection has union.
 
 ```mlld
-var secret @key = "sk-123"
-var @arr = [@key, "public"]
+var secret @data = <internal/customers.csv>
+var @arr = [@data, "public"]
 show @arr.mx.labels        // ["secret"]
 ```
 
 **Pipelines:** Labels accumulate through stages.
 
 ```mlld
-var secret @seed = "data"
-var @result = @seed | @transform | @process
+var secret @financials = <internal/q4-earnings.txt>
+var @result = @financials | @transform | @process
 show @result.mx.labels     // ["secret"]
 ```
 
 **File I/O:** When labeled data is written to disk, the audit log records the taint. Reading the file restores it.
 
 ```mlld
-var secret @token = "sk-live-123"
-output @token to "@root/tmp/demo.txt"
+var secret @records = <internal/patients.csv>
+output @records to "@root/tmp/export.txt"
 
-var @loaded = <@root/tmp/demo.txt>
+var @loaded = <@root/tmp/export.txt>
 show @loaded.mx.labels     // ["secret"]
 ```
 
 The audit log stores a `write` event with the taint set. On subsequent reads, mlld consults the log and applies the recorded labels. See [audit-log](audit-log.md) for the ledger format.
 
-**Note:** If `@loaded.mx.labels` shows `[]`, check that you declared the sensitivity label on the original variable (e.g., `var secret @token`). Labels are not inferred from content—they must be declared explicitly.
+**Note:** If `@loaded.mx.labels` shows `[]`, check that you declared the sensitivity label on the original variable (e.g., `var secret @records`). Labels are not inferred from content—they must be declared explicitly.

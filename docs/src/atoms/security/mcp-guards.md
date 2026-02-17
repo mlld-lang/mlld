@@ -21,12 +21,12 @@ guard @noSecretToMcp for secret = when [
   * => allow
 ]
 
-var secret @key = "sk-12345"
+var secret @customerList = <internal/customers.csv>
 import tools { @createIssue } from mcp "@github/issues"
-show @createIssue("title", @key)
+show @createIssue("title", @customerList)
 ```
 
-The guard fires before any exe operation that receives secret-labeled data. Since `@key` carries the `secret` label, the MCP tool call is denied.
+The guard fires before any exe operation that receives secret-labeled data. Since `@customerList` carries the `secret` label, the MCP tool call is denied.
 
 **Validate MCP tool output:**
 
