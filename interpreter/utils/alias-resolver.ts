@@ -59,7 +59,11 @@ export function resolveAlias(command: string): AliasResolutionResult {
   try {
     // Method 1: Try to get alias definition using bash -c
     // This runs in an interactive-like context that loads aliases
-    const aliasResult = execSync(`bash -ic "alias ${commandName} 2>/dev/null || echo 'NOT_FOUND'"`, {
+    // Use BASH_ENV to load aliases without -i (interactive) flag.
+    // bash -i tries to take terminal control via tcsetpgrp(), which sends
+    // SIGTTIN when run inside a non-foreground process group (e.g. vitest workers),
+    // causing "zsh: suspended (tty input)".
+    const aliasResult = execSync(`BASH_ENV=~/.bashrc bash -c "alias ${commandName} 2>/dev/null || echo 'NOT_FOUND'"`, {
       encoding: 'utf8',
       timeout: 2000,
       stdio: ['ignore', 'pipe', 'ignore']
@@ -249,7 +253,7 @@ export function extractCommandCandidates(code: string): string[] {
  * no aliases were resolved or if alias resolution is disabled.
  */
 export function buildAliasPreamble(code: string): string {
-  if (process.env.MLLD_RESOLVE_ALIASES === 'false') return '';
+  if (process.env.MLLD_RESOLVE_ALIASES === 'false' || process.env.NODE_ENV === 'test') return '';
   const candidates = extractCommandCandidates(code);
   const aliases: string[] = [];
   for (const cmd of candidates) {
