@@ -8,7 +8,7 @@ export interface TokenInfo {
   length: number;
   tokenType: string;
   modifiers: string[];
-  data?: any;
+  data?: unknown;
 }
 
 export class TokenBuilder {

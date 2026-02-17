@@ -3,6 +3,13 @@ import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 import { embeddedLanguageService, EmbeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 import { ISemanticToken } from '@services/lsp/types';
+import { BaseMlldNode, DirectiveNode } from '@core/types';
+
+interface CodeNode {
+  lang?: string;
+  language?: string;
+  code?: string;
+}
 
 /**
  * Helper class for consistent embedded language block tokenization across all visitors.
@@ -86,7 +93,7 @@ export class LanguageBlockHelper {
    * @returns true if successfully tokenized
    */
   tokenizeCodeBlock(
-    directive: any,
+    directive: DirectiveNode,
     language?: string,
     codeContent?: string
   ): boolean {
@@ -204,7 +211,7 @@ export class LanguageBlockHelper {
    * @param codeNode Optional code node with language and code content
    * @returns true if successfully tokenized
    */
-  tokenizeInlineCode(directive: any, codeNode?: any): boolean {
+  tokenizeInlineCode(directive: DirectiveNode, codeNode?: CodeNode): boolean {
     if (!directive.location) return false;
     
     const sourceText = this.document.getText();
@@ -250,7 +257,7 @@ export class LanguageBlockHelper {
    * @param langText Optional language text already extracted
    * @returns true if successfully tokenized
    */
-  tokenizeRunDirective(directive: any, langText?: string): boolean {
+  tokenizeRunDirective(directive: DirectiveNode, langText?: string): boolean {
     if (!directive.location || !directive.values) return false;
     
     const values = directive.values;
@@ -345,7 +352,7 @@ export class LanguageBlockHelper {
    * @param firstCommand First command node (for opening brace)
    * @param lastCommand Last command node (for closing brace)
    */
-  tokenizeCommandBraces(firstCommand: any, lastCommand: any): void {
+  tokenizeCommandBraces(firstCommand: BaseMlldNode | null | undefined, lastCommand: BaseMlldNode | null | undefined): void {
     // Add opening brace (namespace with readonly modifier for dimmer cmd blocks)
     if (firstCommand?.location) {
       const openBracePos = this.document.positionAt(firstCommand.location.start.offset - 1);

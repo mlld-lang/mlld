@@ -1,5 +1,6 @@
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
+import { BinaryExpression, BaseMlldNode, FieldAccessNode } from '@core/types';
 
 /**
  * Helper class for consistent operator tokenization across all visitors.
@@ -49,7 +50,7 @@ export class OperatorTokenHelper {
    * Handles: ==, !=, >=, <=, >, <, &&, ||
    * @param node Binary expression node with left, right, and operator
    */
-  tokenizeBinaryExpression(node: any): void {
+  tokenizeBinaryExpression(node: BinaryExpression): void {
     if (!node.operator || !node.left?.location || !node.right?.location) return;
     
     const operatorText = Array.isArray(node.operator) ? node.operator[0] : node.operator;
@@ -68,7 +69,7 @@ export class OperatorTokenHelper {
    * Handles: .property, [index]
    * @param node Node with property access (must have accurate field locations)
    */
-  tokenizePropertyAccess(node: any): void {
+  tokenizePropertyAccess(node: BaseMlldNode & { fields: FieldAccessNode[] }): void {
     if (!node.fields || !Array.isArray(node.fields)) return;
     
     let currentOffset = node.location.end.offset;
@@ -525,7 +526,7 @@ export class OperatorTokenHelper {
     });
   }
 
-  private addOptionalSuffixToken(field: any): void {
+  private addOptionalSuffixToken(field: FieldAccessNode): void {
     if (!field?.optional || !field.location) return;
 
     const sourceText = this.document.getText();

@@ -1,30 +1,60 @@
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
+import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
+import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 
+interface SourcePosition {
+  offset: number;
+  line: number;
+  column: number;
+}
+
+interface SourceLocation {
+  start: SourcePosition;
+  end: SourcePosition;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface AstNode extends Record<string, any> {
+  type: string;
+  location?: SourceLocation;
+}
+
+interface AstNodeWithLocation extends AstNode {
+  location: SourceLocation;
+}
+
+interface ObjectEntry {
+  type: string;
+  key: string;
+  value: AstNode | unknown;
+}
+
 export class StructureVisitor extends BaseVisitor {
-  private mainVisitor: any;
+  private mainVisitor!: INodeVisitor;
   private operatorHelper: OperatorTokenHelper;
-  
-  constructor(document: any, tokenBuilder: any) {
+
+  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
   }
-  
-  setMainVisitor(visitor: any): void {
+
+  setMainVisitor(visitor: INodeVisitor): void {
     this.mainVisitor = visitor;
   }
-  
+
   canHandle(node: any): boolean {
-    return node.type === 'ObjectExpression' || 
+    return node.type === 'ObjectExpression' ||
            node.type === 'object' ||
            node.type === 'ArrayExpression' ||
            node.type === 'array' ||
            node.type === 'Property' ||
            node.type === 'MemberExpression';
   }
-  
+
   visitNode(node: any, context: VisitorContext): void {
     if (!node.location) return;
     
@@ -46,7 +76,7 @@ export class StructureVisitor extends BaseVisitor {
     }
   }
   
-  private visitObjectExpression(node: any, context: VisitorContext): void {
+  private visitObjectExpression(node: AstNodeWithLocation, context: VisitorContext): void {
     const sourceText = this.document.getText();
     const objectText = sourceText.substring(node.location.start.offset, node.location.end.offset);
 
@@ -59,9 +89,9 @@ export class StructureVisitor extends BaseVisitor {
 
     if (entries.length > 0) {
       // Check if this is a plain object (all values are primitives) or has mlld constructs
-      const hasASTNodes = entries.some((entry: any) => {
+      const hasASTNodes = entries.some((entry: ObjectEntry) => {
         const value = entry.value;
-        return typeof value === 'object' && value !== null && value.type;
+        return typeof value === 'object' && value !== null && (value as AstNode).type;
       });
 
       if (!hasASTNodes) {
@@ -317,7 +347,7 @@ export class StructureVisitor extends BaseVisitor {
     return 0;
   }
   
-  private tokenizePlainObject(node: any, objectText: string): void {
+  private tokenizePlainObject(node: AstNodeWithLocation, objectText: string): void {
     // Always use embedded language service for JSON tokenization
     embeddedLanguageService.ensureInitialized();
     
@@ -335,17 +365,18 @@ export class StructureVisitor extends BaseVisitor {
     }
   }
   
-  private visitArrayExpression(node: any, context: VisitorContext): void {
+  private visitArrayExpression(node: AstNodeWithLocation, context: VisitorContext): void {
     const sourceText = this.document.getText();
     const arrayText = sourceText.substring(node.location.start.offset, node.location.end.offset);
     
     if (node.items && Array.isArray(node.items)) {
       // Check if this is a plain array (all values are primitives) or has mlld constructs
-      const hasASTNodes = node.items.some((item: any) => {
+      const hasASTNodes = node.items.some((item: AstNode | unknown) => {
         if (typeof item !== 'object' || item === null) return false;
-        if (item.type) return true;
-        if (Array.isArray(item.content)) {
-          return item.content.some((part: any) => typeof part === 'object' && part !== null && part.type);
+        const n = item as AstNode;
+        if (n.type) return true;
+        if (Array.isArray(n.content)) {
+          return n.content.some((part: AstNode | unknown) => typeof part === 'object' && part !== null && (part as AstNode).type);
         }
         return false;
       });
@@ -382,7 +413,7 @@ export class StructureVisitor extends BaseVisitor {
                 this.mainVisitor.visitNode(part, context);
               }
             }
-            const lastPartWithLocation = [...item.content].reverse().find((p: any) => p?.location);
+            const lastPartWithLocation = [...item.content].reverse().find((p: AstNode | unknown) => (p as AstNode)?.location);
             if (lastPartWithLocation?.location) {
               lastItemEndOffset = lastPartWithLocation.location.end.offset;
             }
@@ -403,7 +434,7 @@ export class StructureVisitor extends BaseVisitor {
             const nextItemContent = Array.isArray(nextItem?.content) ? nextItem.content : [];
             const nextItemStart =
               (nextItem?.location?.start?.offset) ??
-              (nextItemContent.find((p: any) => p?.location)?.location?.start?.offset) ??
+              ((nextItemContent.find((p: AstNode | unknown) => (p as AstNode)?.location) as AstNode | undefined)?.location?.start?.offset) ??
               node.location.end.offset;
             this.operatorHelper.tokenizeOperatorBetween(
               lastItemEndOffset,
@@ -419,7 +450,7 @@ export class StructureVisitor extends BaseVisitor {
     this.operatorHelper.addOperatorToken(node.location.end.offset - 1, 1);
   }
   
-  private tokenizePlainArray(node: any, arrayText: string): void {
+  private tokenizePlainArray(node: AstNodeWithLocation, arrayText: string): void {
     // Always use embedded language service for JSON tokenization
     embeddedLanguageService.ensureInitialized();
     
@@ -437,7 +468,7 @@ export class StructureVisitor extends BaseVisitor {
     }
   }
   
-  private visitMemberExpression(node: any, context: VisitorContext): void {
+  private visitMemberExpression(node: AstNodeWithLocation, context: VisitorContext): void {
     if (node.object) {
       this.mainVisitor.visitNode(node.object, context);
     }
@@ -468,7 +499,7 @@ export class StructureVisitor extends BaseVisitor {
     }
   }
   
-  private visitProperty(node: any, context: VisitorContext): void {
+  private visitProperty(node: AstNodeWithLocation, context: VisitorContext): void {
     if (node.key) {
       if (node.key.type === 'Literal' || node.key.type === 'StringLiteral') {
         this.mainVisitor.visitNode(node.key, context);
