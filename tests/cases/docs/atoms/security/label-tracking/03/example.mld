@@ -1,3 +1,3 @@
-var secret @key = "sk-123"
-var @arr = [@key, "public"]
+var secret @data = <internal/customers.csv>
+var @arr = [@data, "public"]
 show @arr.mx.labels        // ["secret"]

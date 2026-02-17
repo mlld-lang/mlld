@@ -1,3 +1,3 @@
-var secret @apiKey = "sk-12345"
-var pii @userEmail = "user@example.com"
+var secret @customerList = <internal/customers.csv>
+var pii @patientRecords = <clinic/patients.csv>
 var untrusted @externalData = "from outside"

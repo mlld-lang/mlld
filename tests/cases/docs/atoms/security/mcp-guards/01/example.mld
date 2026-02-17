@@ -3,6 +3,6 @@ guard @noSecretToMcp for secret = when [
   * => allow
 ]
 
-var secret @key = "sk-12345"
+var secret @customerList = <internal/customers.csv>
 import tools { @createIssue } from mcp "@github/issues"
-show @createIssue("title", @key)
+show @createIssue("title", @customerList)

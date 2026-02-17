@@ -1,5 +1,5 @@
-var secret @token = "sk-live-123"
-output @token to "@root/tmp/demo.txt"
+var secret @records = <internal/patients.csv>
+output @records to "@root/tmp/export.txt"
 
-var @loaded = <@root/tmp/demo.txt>
+var @loaded = <@root/tmp/export.txt>
 show @loaded.mx.labels     // ["secret"]

@@ -1,6 +1,6 @@
-var secret @apiKey = "sk-12345"
-var @upper = @apiKey | @upper
-var @excerpt = @upper.slice(0, 5)
-var @message = `Key prefix: @excerpt`
+var secret @customerList = <internal/customers.csv>
+var @parsed = @customerList | @parse
+var @firstTen = @parsed.slice(0, 10)
+var @summary = `Top customers: @firstTen`
 
-show @message.mx.labels
+show @summary.mx.labels

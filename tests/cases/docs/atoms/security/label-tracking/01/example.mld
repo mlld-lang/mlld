@@ -1,4 +1,4 @@
 >> Method calls preserve labels
-var secret @key = "sk-123"
-var @trimmed = @key.trim()
+var secret @data = <internal/customers.csv>
+var @trimmed = @data.trim()
 show @trimmed.mx.labels    // ["secret"]

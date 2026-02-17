@@ -5,5 +5,5 @@ var @policyConfig = {
 }
 policy @p = union(@policyConfig)
 
-var secret @key = "sk-12345"
-show @key
+var secret @customerList = <internal/customers.csv>
+show @customerList

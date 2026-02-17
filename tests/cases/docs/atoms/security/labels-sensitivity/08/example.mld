@@ -3,5 +3,5 @@ guard before op:show = when [
   * => allow
 ]
 
-var secret @key = "abc123"
-show @key
+var secret @recipe = <vault/secret-recipe.txt>
+show @recipe
