@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Nested guard denials in `when` actions**: Guard denials raised by nested executable calls in `when` action branches now route through denied handlers instead of surfacing as `MlldWhenExpressionError` condition failures.
 - **cmd {} block @ escaping**: `@@` and `\@` now produce literal `@` in cmd blocks (previously passed verbatim to shell)
 - **Position-independent `@` escapes**: `@@` and `\@` now resolve to literal `@` at string start and after interpolated variables in backtick/prose templates; streaming templates also treat `\@` as escaped and skip `@evt.*` substitution when escaped.
+- **`@` escape consistency coverage**: Added integration regression coverage confirming `@@` and `\@` behave identically across backticks, double/single quotes, `::...::` templates, `.att` template files, and `cmd {}` blocks.
 - **Pipeline null values**: JSON `null` values now pass through pipeline stages correctly (previously conflated with parse failure)
 - **Guard transform unwrapping**: Fixed double-wrapping that caused Variable-inside-Variable nesting in guard transforms
 - **Before label guard transform composition**: Sequential `before ... for <label>` guards evaluate against the latest transformed input so each transform applies once in order and conditional guards see prior transforms.
