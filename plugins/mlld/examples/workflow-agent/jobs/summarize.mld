@@ -30,7 +30,7 @@ if @inputs.length == 0 [
 IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
 
   show `Synthesizing @inputs.length inputs...`
-  let @_ = @claudePoll(@fullPrompt, "opus", "@root", "Read,Write", @outputPath)
+  @claudePoll(@fullPrompt, "opus", "@root", "Read,Write", @outputPath)
   let @result = <@outputPath>?
 
   if @result [

@@ -171,6 +171,45 @@ var @results = for parallel(4) @item in @list [ => @process(@item) ]
 var @failures = for @r in @results when @r.error => @r
 ```
 
+## Key Syntax
+
+Common patterns for quick reference. See topic-specific `mlld howto` pages for details.
+
+```mlld
+>> Variables and templates
+var @name = "Alice"
+var @greeting = `Hello @name!`
+var @list = ["a", "b", "c"]
+var @obj = { key: "value", ...@other }
+
+>> File loading
+var @content = <README.md>              >> load file
+var @optional = <config.json>?          >> null if missing
+var @files = <src/**/*.ts>              >> glob (returns array)
+
+>> Functions
+exe @greet(name) = `Hello @name!`
+exe @prompt(ctx) = template "prompt.att"
+exe @run(dir) = cmd { ls @dir }
+exe @check(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+
+>> Method chains (see `mlld howto methods-builtin`)
+var @trimmed = @raw.trim().split("\n")
+var @slug = @name.replaceAll("/", "-")
+var @upper = @text.toLowerCase().startsWith("hello")
+
+>> Parallel loops
+var @results = for parallel(10) @file in @files [
+  => @process(@file)
+]
+
+>> Pipes
+var @data = @text | @parse              >> parse JSON
+var @data = @text | @parse.llm          >> extract JSON from LLM output
+```
+
+**Path resolution**: `<@file>` resolves from the current script's directory, not the project root. Use `@root` (or its alias `@base`) for absolute paths: `<@root/@file>`. This matters when `cmd` output gives project-root-relative paths but your script is in a subdirectory.
+
 ## Next Steps
 
 - `mlld howto syntax` — variables, templates, file loading

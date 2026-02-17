@@ -3,6 +3,16 @@ name: orchestrator
 description: Designing and building mlld orchestrators for LLM workflows. Use when creating pipelines that coordinate LLM calls, processing data at scale, or building decision-driven automation.
 ---
 
+## Prerequisites
+
+**YOU MUST RUN `mlld howto intro` before writing any mlld code.** The intro covers syntax, gotchas, built-in methods, file loading, and common traps. Skipping it leads to inventing non-existent features and writing code that validates but fails at runtime.
+
+```bash
+mlld howto intro              # Language fundamentals — read this first
+mlld init                     # Initialize project (enables mlld run)
+mlld install @mlld/claude-poll  # Install the Claude polling module
+```
+
 ## Core Pattern
 
 Every mlld orchestrator follows one flow:
@@ -58,7 +68,7 @@ No decision agent. Linear pipeline. Fastest to build.
 
 **Use when**: Processing a batch of similar items independently (file review, data extraction, classification).
 
-**See**: `examples/audit/`
+**See**: [../../examples/audit/](../../examples/audit/)
 
 ```mlld
 var @files = <src/**/*.ts>
@@ -75,7 +85,7 @@ Decision agent infers phase from filesystem state. Parallel fan-out for batch op
 
 **Use when**: Multi-step analysis where phases depend on prior results (document analysis, research synthesis, data pipeline).
 
-**See**: `examples/research/`
+**See**: [../../examples/research/](../../examples/research/)
 
 ```mlld
 loop(endless) [
@@ -97,7 +107,7 @@ Continuous decision loop with external state (GitHub Issues). Creates issues, di
 
 **Use when**: Open-ended tasks requiring iteration, external coordination, and quality assurance (feature development, project automation).
 
-**See**: `examples/development/`
+**See**: [../../examples/development/](../../examples/development/)
 
 ```mlld
 loop(endless) [
@@ -289,13 +299,12 @@ Decision agents: read + write (for output file). Workers: full access scoped to 
 Use `for parallel(N)` for batch operations. All examples emphasize parallelism.
 
 ```mlld
->> Aggressive: 20 concurrent with 1s delay (safe for most APIs)
 var @results = for parallel(20) @item in @items [
-  let @outPath = `@runDir/results/@item.id.json`
+  let @outPath = `@runDir/results/@item.id\.json`
 
   >> Idempotency: skip if already done
-  let @fileCheck = @fileExists(@outPath)
-  if @fileCheck == "yes" => "skipped"
+  let @existing = <@outPath>?
+  if @existing => @existing | @parse
 
   >> Do work...
   => @result
@@ -310,10 +319,10 @@ var @results = for parallel(20) @item in @items [
 Check if output exists before doing work. Makes reruns safe and enables resume.
 
 ```mlld
-let @fileCheck = @fileExists(@outPath)
-if @fileCheck == "yes" [
-  show `  Skipped (exists): @outPath`
-  => "skipped"
+let @existing = <@outPath>?
+if @existing [
+  show `  Skipped: @outPath`
+  => @existing | @parse
 ]
 ```
 
@@ -384,19 +393,8 @@ See `anti-patterns.md` for traps to avoid.
 See `syntax-reference.md` for mlld syntax cheat sheet.
 See `gotchas.md` for mlld language gotchas and sharp edges.
 
-## Prerequisites
-
-```bash
-mlld init                          # Initialize project (enables mlld run)
-mlld install @mlld/claude-poll     # Install the Claude polling module
-```
-
-`mlld init` creates a `mlld-config.json` config so scripts in `llm/run/` can be run with `mlld run <name>`. `@mlld/claude-poll` provides the `@claudePoll` function used by all orchestrator archetypes.
-
 ## Getting Started
-
-Use `mlld quickstart` and `mlld howto` for language fundamentals. This skill covers orchestrator-specific patterns only.
 
 To scaffold a new orchestrator: use the `/mlld:scaffold` command.
 
-To learn by example: read the three archetypes in `examples/`.
+To learn by example: read the three archetypes in [../../examples/](../../examples/).

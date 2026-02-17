@@ -47,7 +47,7 @@ var @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @agentOutputPath using the Write tool.`
 
-var @_ = @claudePoll(@fullPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @agentOutputPath)
+@claudePoll(@fullPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @agentOutputPath)
 var @agentResult = <@agentOutputPath>?
 
 if !@agentResult [
@@ -73,7 +73,7 @@ Address the feedback and try again.
 
 IMPORTANT: Write your JSON response to @agentOutputPath using the Write tool.`
 
-    let @_ = @claudePoll(@retryPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @agentOutputPath)
+    @claudePoll(@retryPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @agentOutputPath)
     let @retryResult = <@agentOutputPath>?
 
     if @retryResult [

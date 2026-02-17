@@ -35,7 +35,7 @@ exe @invalidatePrompt(claim, assessments, evidenceRules) = template "./prompts/w
 >> Resolve run directory
 var @today = @now.slice(0, 10)
 var @resolvedRunId = @runId ?? @today
-var @runDir = `@root/runs/@resolvedRunId`
+var @runDir = `@base/runs/@resolvedRunId`
 run @mkdirp(@runDir)
 run @mkdirp(`@runDir/assessments`)
 run @mkdirp(`@runDir/invalidations`)
@@ -82,7 +82,7 @@ loop(endless) [
 IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool. Write ONLY valid JSON.`
 
   @logEvent(@runDir, "decision_call", { iteration: @iterationCount })
-  let @_ = @claudePoll(@fullPrompt, "sonnet", "@root", @decisionTools, @decisionOutputPath)
+  @claudePoll(@fullPrompt, "sonnet", "@root", @decisionTools, @decisionOutputPath)
   let @decision = <@decisionOutputPath>?
 
   if !@decision [
@@ -133,7 +133,7 @@ IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool.
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
-        let @_ = @claudePoll(@fullPrompt, "sonnet", "@root", @workerTools, @outPath)
+        @claudePoll(@fullPrompt, "sonnet", "@root", @workerTools, @outPath)
         let @result = <@outPath>?
         show `    @filename: @result.relevance`
         @logEvent(@runDir, "assess_complete", { source: @filename, relevance: @result.relevance })
@@ -156,7 +156,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
       show `  Synthesizing from @assessmentData.length assessments`
-      let @_ = @claudePoll(@fullPrompt, "opus", "@root", @workerTools, @outPath)
+      @claudePoll(@fullPrompt, "opus", "@root", @workerTools, @outPath)
       let @synthesis = <@outPath>?
 
       if @synthesis [
@@ -193,7 +193,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
-        let @_ = @claudePoll(@fullPrompt, "opus", "@root", @workerTools, @outPath)
+        @claudePoll(@fullPrompt, "opus", "@root", @workerTools, @outPath)
         let @result = <@outPath>?
 
         let @status = when @result.verdict [ "supported" => "OK"; * => "FLAGGED" ]

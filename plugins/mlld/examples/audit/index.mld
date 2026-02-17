@@ -79,7 +79,7 @@ if @files.length == 0 [
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema in the prompt.`
 
     >> Call reviewer
-    let @_ = @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
+    @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
     let @result = <@outPath>?
 
     if !@result [
@@ -127,7 +127,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
 
-      let @_ = @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
+      @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
       let @result = <@outPath>?
 
       if !@result [

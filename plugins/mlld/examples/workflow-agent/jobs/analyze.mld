@@ -29,7 +29,7 @@ var @fullPrompt = `@prompt
 IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
 
 >> Single LLM call — analysis is read-only
-var @_ = @claudePoll(@fullPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @outputPath)
+@claudePoll(@fullPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @outputPath)
 var @result = <@outputPath>?
 
 if @result [

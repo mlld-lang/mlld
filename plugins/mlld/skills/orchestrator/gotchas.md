@@ -1,86 +1,51 @@
-# mlld Gotchas
+# Orchestrator-Specific Gotchas
 
-Things that catch you by surprise.
+These are gotchas specific to orchestrator development. For general mlld gotchas, run `mlld howto intro` and `mlld howto gotchas`.
 
-## `var` vs `let`
+## File path resolution in orchestrators
 
-`var` is module-level, immutable. `let` is block-scoped, mutable. `var` inside blocks is a parse error.
+`cmd` and `sh` blocks run at the **project root**. File loading with `<@file>` resolves from the **script's directory**. When your orchestrator lives in `llm/run/my-orch/` and uses `cmd { grep ... }` to find files, the paths will be project-root-relative (e.g. `services/lsp/foo.ts`). Loading them with `<@file>` will fail silently in `for parallel`.
 
 ```mlld
-var @config = "global"
-if true [
-  let @temp = "local"
-  let @temp = "reassigned"     >> ok — let is mutable
+>> BAD: <@file> resolves from llm/run/my-orch/, not project root
+var @raw = cmd { grep -rl "pattern" src --include="*.ts" }
+var @files = @raw.trim().split("\n")
+for parallel(10) @file in @files [
+  let @content = <@file>             >> ERROR: looks for llm/run/my-orch/src/...
+]
+
+>> GOOD: use @root to anchor to project root
+for parallel(10) @file in @files [
+  let @content = <@root/@file>       >> correct: resolves from project root
 ]
 ```
 
-## Comments are `>>`
+## `@fileExists` is not a builtin
+
+The idempotency pattern uses `@fileExists` which you must define yourself:
 
 ```mlld
->> This is a comment
-var @x = 1    >> inline comment
+exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
 ```
 
-`//` doesn't exist in mlld.
-
-## `cmd` vs `sh`
-
-`cmd` interpolates `@variables`. Pipes work, but `>`, `&&`, `;`, `2>/dev/null` are rejected. Use `sh` for full shell syntax.
-
+Or use optional file loading as an alternative:
 ```mlld
-exe @list(dir) = cmd { ls -la "@dir" | head -5 }
-exe @count(dir) = sh { ls "$dir" 2>/dev/null | wc -l }
+let @existing = <@outPath>?
+if @existing [
+  show `  Skipped (exists): @outPath`
+  => @existing | @parse
+]
 ```
-
-Use native variable syntax in `js`, `node`, `sh`, `py` blocks — pass mlld values as parameters.
-
-## `if` vs `when`
-
-```
-if @cond [block]                 Run block if true
-when @cond => value              Select first match
-when [cond => val; * => default] First-match list
-when @val ["a" => x; * => y]    Match value against patterns
-```
-
-`if` runs blocks (side effects). `when` returns values (expressions). Don't mix them up.
-
-## Labels are comma-separated
-
-```mlld
-var secret,pii @data = "sensitive"     >> correct
-var secret pii @data = "sensitive"     >> parse error
-```
-
-## Angle brackets trigger file loading
-
-```mlld
-var @readme = <README.md>
-var @files = <src/**/*.ts>
-```
-
-In backtick templates, `<word>` with dots or slashes is treated as a file path. Simple HTML-like tags (`<div>`, `<span>`) are passed through as literal text.
-
-## Path dot escaping
-
-`@var.json` is field access. Escape the dot for file extensions: `@name\.json`.
-
-```mlld
-let @out = `@dir/@name\.json`          >> correct
-let @out = `@dir/@name.json`           >> accesses .json field
-```
-
-## Escaping `@`
-
-`\@` produces a literal `@`: `user\@example.com` outputs `user@example.com`.
 
 ## Error handling in parallel loops
 
-Errors in `for parallel` loops become data objects with `.error` and `.message` fields. The loop continues. Regular (non-parallel) `for` loops throw on error.
+Errors in `for parallel` loops become data objects with `.error` and `.message` fields. The loop continues silently. If your loop body has a systemic bug (wrong paths, missing import), every iteration fails but the script appears to succeed.
 
+Always check results:
 ```mlld
-var @results = for parallel(4) @item in @list [ => @process(@item) ]
+var @results = for parallel(20) @item in @items [ => @process(@item) ]
 var @failures = for @r in @results when @r.error => @r
+if @failures.length > 0 [
+  show `@failures.length failures out of @results.length`
+]
 ```
-
-

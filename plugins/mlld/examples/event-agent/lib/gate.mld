@@ -12,7 +12,7 @@ exe @checkOutput(task, output) = [
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
-  let @_ = @claudePoll(@fullPrompt, "haiku", "@root", "Read,Write", @outPath)
+  @claudePoll(@fullPrompt, "haiku", "@root", "Read,Write", @outPath)
   let @result = <@outPath>? | @json
 
   >> Default to pass if gate itself fails

@@ -68,7 +68,7 @@ loop(endless) [
   var @iterationId = `iter-@mx.loop.iteration-@runTs`
 
   >> Log iteration start
-  let @_ = @logEvent(@eventsFile, { event: "iteration_start", id: @iterationId })
+  @logEvent(@eventsFile, { event: "iteration_start", id: @iterationId })
   log `Started: @iterationId`
 
   >> Build task from template
@@ -89,7 +89,7 @@ loop(endless) [
   >> FATAL: Exit loop if task is too short
   when @taskLen < 1000 => [
     log `FATAL: Task too short (@taskLen chars) - template likely failed`
-    let @_ = @logEvent(@eventsFile, {
+    @logEvent(@eventsFile, {
       event: "fatal_error",
       id: @iterationId,
       error: "task_build_failed",
@@ -104,15 +104,15 @@ loop(endless) [
   >> Agent spawn - skip if dry run
   if !@dryRun [
     log `Spawning agent...`
-    let @_ = @logEvent(@eventsFile, { event: "agent_spawned", id: @iterationId, taskLen: @taskLen })
+    @logEvent(@eventsFile, { event: "agent_spawned", id: @iterationId, taskLen: @taskLen })
     let @result = @claudePollEvent(@task, "opus", @base, "Read,Write,Edit,Glob,Grep,Bash", @eventsFile, "iteration_done", @iterationId) | log
     log `Agent completed: @iterationId`
-    let @_ = @logEvent(@eventsFile, { event: "agent_completed", id: @iterationId })
+    @logEvent(@eventsFile, { event: "agent_completed", id: @iterationId })
   ]
 
   if @dryRun [
     log `DRY RUN: Would spawn agent with @taskLen char task`
-    let @_ = @logEvent(@eventsFile, { event: "dry_run_skip", id: @iterationId, taskLen: @taskLen })
+    @logEvent(@eventsFile, { event: "dry_run_skip", id: @iterationId, taskLen: @taskLen })
     log `DRY RUN: Skipping validation and commit`
   ]
 

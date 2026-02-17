@@ -34,7 +34,7 @@ var @genFull = `@genPrompt
 IMPORTANT: Write your JSON response to @optionsPath using the Write tool.`
 
 show `Generating options...`
-var @_ = @claudePoll(@genFull, "sonnet", "@root", @tools, @optionsPath)
+@claudePoll(@genFull, "sonnet", "@root", @tools, @optionsPath)
 var @options = <@optionsPath>?
 
 if !@options [
@@ -55,7 +55,7 @@ if !@options [
 IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
 
   show `Evaluating options...`
-  let @_ = @claudePoll(@evalFull, "opus", "@root", @tools, @outputPath)
+  @claudePoll(@evalFull, "opus", "@root", @tools, @outputPath)
   let @decision = <@outputPath>?
 
   if @decision [

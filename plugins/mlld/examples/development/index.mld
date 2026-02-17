@@ -42,7 +42,7 @@ var @statusFormat = <./prompts/shared/status-format.md>
 >> Resolve run directory
 var @today = @now.slice(0, 10)
 var @resolvedRunId = @runId ?? @today
-var @runDir = `@root/runs/@resolvedRunId`
+var @runDir = `@base/runs/@resolvedRunId`
 run @mkdirp(@runDir)
 
 >> Load goal
@@ -105,7 +105,7 @@ loop(endless) [
 IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool. Write ONLY valid JSON.`
 
   @logEvent(@runDir, "decision_call", { iteration: @iterationCount })
-  let @_ = @claudePoll(@fullPrompt, "opus", "@root", @decisionTools, @decisionOutputPath)
+  @claudePoll(@fullPrompt, "opus", "@root", @decisionTools, @decisionOutputPath)
   let @decision = <@decisionOutputPath>?
 
   if !@decision [
@@ -159,7 +159,7 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
         prompt_path: @workerPromptPath
       })
 
-      let @_ = @claudePoll(@workerFullPrompt, @model, "@repoDir", @workerTools, @workerOutputPath)
+      @claudePoll(@workerFullPrompt, @model, "@repoDir", @workerTools, @workerOutputPath)
       let @result = <@workerOutputPath>?
 
       if !@result [
