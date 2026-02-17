@@ -39,7 +39,10 @@ describe('@base and @root path resolution', () => {
       '/output "root-write" to "@root/root.txt"',
       '/show <@base/base.txt>',
       '/show <@root/root.txt>',
-      '/show @base'
+      '/show @base',
+      '/show @root',
+      '/show `inline-base:@base`',
+      '/show `inline-root:@root`'
     ].join('\n');
     await fs.writeFile(scriptPath, script, 'utf-8');
 
@@ -57,6 +60,12 @@ describe('@base and @root path resolution', () => {
 
     expect(lines).toContain('base-write');
     expect(lines).toContain('root-write');
+    expect(lines).toContain(`inline-base:${projectDir}`);
+    expect(lines).toContain(`inline-root:${projectDir}`);
+    expect(lines).not.toContain('inline-root:@root');
+
+    const projectRootOutputs = lines.filter(line => line === projectDir);
+    expect(projectRootOutputs.length).toBeGreaterThanOrEqual(2);
 
     // Both @base and @root write to project root
     const baseFile = await fs.readFile(path.join(projectDir, 'base.txt'), 'utf-8');

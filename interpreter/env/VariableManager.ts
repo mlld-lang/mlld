@@ -566,7 +566,7 @@ export class VariableManager implements IVariableManager {
     // Direct assignment for reserved variables during initialization
     this.variables.set('debug', debugVar);
     
-    // Initialize @base with the project root path
+    // Initialize @base and @root with the project root path
     const baseSource: VariableSource = {
       directive: 'var',
       syntax: 'quoted',
@@ -574,24 +574,26 @@ export class VariableManager implements IVariableManager {
       isMultiLine: false
     };
     const basePath = getProjectPathValue(this.deps.getBasePath());
-    const baseVar = createPathVariable(
-      'base',
-      basePath,
-      basePath,
-      false, // Not a URL
-      true, // Is absolute
-      baseSource,
-      {
-        mx: {
-          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-        },
-        internal: {
-          isReserved: true
+    const createProjectRootVar = (name: 'base' | 'root'): Variable =>
+      createPathVariable(
+        name,
+        basePath,
+        basePath,
+        false, // Not a URL
+        true, // Is absolute
+        baseSource,
+        {
+          mx: {
+            definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+          },
+          internal: {
+            isReserved: true
+          }
         }
-      }
-    );
+      );
     // Direct assignment for reserved variables during initialization
-    this.variables.set('base', baseVar);
+    this.variables.set('base', createProjectRootVar('base'));
+    this.variables.set('root', createProjectRootVar('root'));
     
     // Built-in transformers are initialized separately in Environment.initializeBuiltinTransformers()
   }
