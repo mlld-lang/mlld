@@ -15,7 +15,7 @@
       "resolved": "555f34fbc1eed832d05738e381338c8155729c9d0c1a474f0ad0e24c59c21788",
       "source": "registry://@mlld/claude-poll@1.1.0",
       "integrity": "sha256:555f34fbc1eed832d05738e381338c8155729c9d0c1a474f0ad0e24c59c21788",
-      "fetchedAt": "2026-01-30T12:31:48.412Z",
+      "fetchedAt": "2026-02-17T19:44:59.001Z",
       "registryVersion": "1.1.0",
       "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/ab27254c0888169ddcce64b9ad2f26a20fe4c9af/llm/modules/claude-poll.mld.md"
     },
@@ -29,6 +29,6 @@
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-02-15T07:39:30.108Z"
+    "updatedAt": "2026-02-17T19:44:59.001Z"
   }
 }

@@ -7,7 +7,7 @@ import { MlldSecurityError } from '@core/errors';
 import { unwrapStructuredForTest } from './test-helpers';
 import { glob } from 'tinyglobby';
 import path from 'path';
-import minimatch from 'minimatch';
+import { minimatch } from 'minimatch';
 import { isStructuredValue } from '../utils/structured-value';
 import { createSimpleTextVariable, type VariableSource } from '@core/types/variable';
 import { llmxmlInstance } from '../utils/llmxml-instance';

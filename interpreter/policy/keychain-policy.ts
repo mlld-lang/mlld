@@ -1,4 +1,4 @@
-import minimatch from 'minimatch';
+import { minimatch } from 'minimatch';
 import type { Environment } from '@interpreter/env/Environment';
 import type { SourceLocation } from '@core/types';
 import type { PolicyKeychainConfig } from '@core/policy/union';

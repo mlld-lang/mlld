@@ -1,7 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
-import minimatch from 'minimatch';
-const { Minimatch } = minimatch;
+import { Minimatch } from 'minimatch';
 import { IMMUTABLE_SECURITY_PATTERNS } from '@security/policy/patterns';
 import { MlldFileSystemError } from '@core/errors';
 

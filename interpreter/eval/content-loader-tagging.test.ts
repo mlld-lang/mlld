@@ -6,7 +6,7 @@ import { PathService } from '@services/fs/PathService';
 import path from 'path';
 import { unwrapStructuredForTest } from './test-helpers';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
-import minimatch from 'minimatch';
+import { minimatch } from 'minimatch';
 import { glob } from 'tinyglobby';
 
 vi.mock('tinyglobby', () => ({

@@ -444,8 +444,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       await walkDir(cwd);
       
       // Filter files by pattern
-      const mmModule = require('minimatch');
-      const matcher = typeof mmModule === 'function' ? mmModule : mmModule.minimatch;
+      const { minimatch: matcher } = require('minimatch');
       const matches = allFiles.filter(file => {
         const relativePath = path.relative(cwd, file);
         return typeof matcher === 'function' ? matcher(relativePath, pattern) : false;

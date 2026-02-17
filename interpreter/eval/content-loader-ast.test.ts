@@ -4,7 +4,7 @@ import { Environment } from '../env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import * as path from 'path';
-import minimatch from 'minimatch';
+import { minimatch } from 'minimatch';
 import { glob } from 'tinyglobby';
 import { unwrapStructuredForTest } from './test-helpers';
 import type { StructuredValueMetadata } from '../utils/structured-value';

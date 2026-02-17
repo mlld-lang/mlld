@@ -6,7 +6,7 @@ import { PathService } from '@services/fs/PathService';
 import { isStructuredValue } from '../utils/structured-value';
 import { unwrapStructuredForTest } from './test-helpers';
 import * as path from 'path';
-import minimatch from 'minimatch';
+import { minimatch } from 'minimatch';
 import { glob } from 'tinyglobby';
 
 // Mock tinyglobby for tests

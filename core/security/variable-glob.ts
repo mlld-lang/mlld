@@ -1,6 +1,4 @@
-import minimatch from 'minimatch';
-
-const { Minimatch } = minimatch;
+import { Minimatch } from 'minimatch';
 
 function normalizeVariableName(name: string): string {
   return name.startsWith('@') ? name.slice(1) : name;
@@ -17,7 +15,7 @@ function normalizePattern(pattern: string): string | null {
   return normalizeVariableName(trimmed);
 }
 
-export function compileVariablePattern(pattern: string): minimatch.Minimatch | null {
+export function compileVariablePattern(pattern: string): Minimatch | null {
   const normalized = normalizePattern(pattern);
   if (!normalized) {
     return null;

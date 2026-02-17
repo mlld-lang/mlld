@@ -6,7 +6,7 @@ import type { Environment } from '../../env/Environment';
 import type { SerializedGuardDefinition } from '../../guards';
 import type { ModuleProcessingResult } from './ModuleContentProcessor';
 import type { ImportResolution } from './ImportPathResolver';
-import minimatch from 'minimatch';
+import { minimatch } from 'minimatch';
 import * as path from 'path';
 
 const DIRECTORY_INDEX_FILENAME = 'index.mld';
