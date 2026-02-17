@@ -1,3 +1,5 @@
+import JSON5 from 'json5';
+
 import {
   isLoadContentResult,
   type LoadContentResult,
@@ -42,7 +44,11 @@ function tryParseJson(text: string): { success: boolean; value?: unknown } {
   try {
     return { success: true, value: JSON.parse(trimmed) };
   } catch {
-    return { success: false };
+    try {
+      return { success: true, value: JSON5.parse(trimmed) };
+    } catch {
+      return { success: false };
+    }
   }
 }
 
@@ -50,12 +56,16 @@ function parseJsonWithContext(text: string, sourceLabel: string): unknown {
   try {
     return JSON.parse(text);
   } catch (error: any) {
-    const message = error?.message ? ` (${error.message})` : '';
-    throw new MlldError(`Failed to parse JSON from ${sourceLabel}${message}`, {
-      code: 'JSON_PARSE_ERROR',
-      severity: ErrorSeverity.Fatal,
-      details: { sourceLabel }
-    });
+    try {
+      return JSON5.parse(text);
+    } catch {
+      const message = error?.message ? ` (${error.message})` : '';
+      throw new MlldError(`Failed to parse JSON from ${sourceLabel}${message}`, {
+        code: 'JSON_PARSE_ERROR',
+        severity: ErrorSeverity.Fatal,
+        details: { sourceLabel }
+      });
+    }
   }
 }
 
@@ -68,16 +78,20 @@ function parseJsonLines(text: string, sourceLabel: string): unknown[] {
     try {
       results.push(JSON.parse(line));
     } catch (error: any) {
-      const message = error?.message ? ` (${error.message})` : '';
-      throw new MlldError(`Failed to parse JSONL from ${sourceLabel} at line ${i + 1}${message}`, {
-        code: 'JSONL_PARSE_ERROR',
-        severity: ErrorSeverity.Fatal,
-        details: {
-          sourceLabel,
-          line: i + 1,
-          offendingLine: line
-        }
-      });
+      try {
+        results.push(JSON5.parse(line));
+      } catch {
+        const message = error?.message ? ` (${error.message})` : '';
+        throw new MlldError(`Failed to parse JSONL from ${sourceLabel} at line ${i + 1}${message}`, {
+          code: 'JSONL_PARSE_ERROR',
+          severity: ErrorSeverity.Fatal,
+          details: {
+            sourceLabel,
+            line: i + 1,
+            offendingLine: line
+          }
+        });
+      }
     }
   }
   return results;
@@ -267,7 +281,17 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     // This makes glob results behave the same as single file loads
     const processedItems = value.map(item => {
       if (isLoadContentResult(item)) {
-        return wrapLoadContentValue(item);
+        try {
+          return wrapLoadContentValue(item);
+        } catch (error: any) {
+          // Per-item resilience: degrade to text instead of failing the whole array
+          const contentText = typeof item.content === 'string' ? item.content : String(item.content ?? '');
+          const baseMetadata = extractLoadContentMetadata(item);
+          const metadata = buildMetadata(baseMetadata, {
+            parseError: error?.message ?? 'Unknown parse error'
+          });
+          return wrapStructured(contentText, 'text', contentText, metadata);
+        }
       }
       return item;
     });

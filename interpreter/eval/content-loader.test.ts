@@ -313,7 +313,7 @@ describe('Content Loader with Glob Support', () => {
     it('includes JSON parse details when loading invalid JSON', async () => {
       await fileSystem.writeFile(
         path.join(process.cwd(), 'invalid-json.json'),
-        '{ "name": "Ada", }'
+        '{ invalid json here'
       );
 
       const node = {
