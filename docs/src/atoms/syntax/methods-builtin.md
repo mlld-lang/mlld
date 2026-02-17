@@ -22,6 +22,7 @@ updated: 2026-01-05
 - `@str.substring(start, end?)` - extract substring (no negative indices)
 - `@str.replace(search, replacement)` - replace first match (accepts string or regex)
 - `@str.replaceAll(search, replacement)` - replace all matches (accepts string or regex)
+- `@str.replaceAll({"old": "new", ...})` - bulk replacement via object map (applied sequentially)
 - `@str.match(pattern)` - match against string or regex, returns match array or null
 - `@str.padStart(length, char?)` / `padEnd(length, char?)` - pad to target length
 - `@str.repeat(count)` - repeat string N times

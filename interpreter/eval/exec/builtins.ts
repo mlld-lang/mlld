@@ -186,6 +186,13 @@ function handleStringBuiltin(method: StringBuiltinMethod, target: unknown, args:
       return value.replace(searchValue as any, replaceValue);
     }
     case 'replaceAll': {
+      if (args[0] !== null && typeof args[0] === 'object' && !Array.isArray(args[0]) && !(args[0] instanceof RegExp)) {
+        let result = value;
+        for (const [search, replacement] of Object.entries(args[0] as Record<string, unknown>)) {
+          result = result.replaceAll(search, String(replacement ?? ''));
+        }
+        return result;
+      }
       const searchValue = args[0] instanceof RegExp ? args[0] : String(args[0] ?? '');
       const replaceValue = String(args[1] ?? '');
       if (searchValue instanceof RegExp && !searchValue.global) {
