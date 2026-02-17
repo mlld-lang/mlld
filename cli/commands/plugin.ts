@@ -66,7 +66,7 @@ export interface PluginInstallOptions {
 
 export async function pluginInstall(opts: PluginInstallOptions = {}): Promise<void> {
   const { scope = 'user', verbose, local } = opts;
-  const marketplaceSource = local ? getPackageRoot() : MARKETPLACE_SOURCE;
+  const marketplaceSource = local ? join(getPackageRoot(), 'plugins', 'mlld') : MARKETPLACE_SOURCE;
   const sourceLabel = local ? 'local' : 'registry';
 
   console.log(chalk.blue(`Adding mlld marketplace (${sourceLabel})...`));
