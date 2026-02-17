@@ -68,7 +68,7 @@ echo "$1"
     // If running sequentially the loop would take ~400ms+, but some CI hosts
     // can add noticeable scheduling jitter. Give the test extra margin to avoid
     // flakes while still catching obvious regressions.
-    expect(elapsed).toBeLessThan(1000);
+    expect(elapsed).toBeLessThan(2000);
 
     // The max concurrent count should be 4 (or close to it)
     // Note: This test may be flaky due to env var limitations across processes

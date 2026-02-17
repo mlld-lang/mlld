@@ -7,7 +7,7 @@ describe('ArgumentParser --payload alias', () => {
     const parser = new ArgumentParser();
     const options = parser.parseArgs(['script.mld', '--payload', '@data={"name":"test"}']);
 
-    expect(options.inject).toEqual(['@data={"name":"test"}']);
+    expect(options.inject).toEqual(['@data={"name":"test"}', '@payload={}']);
   });
 
   it('allows mixing --inject and --payload', () => {
@@ -18,7 +18,7 @@ describe('ArgumentParser --payload alias', () => {
       '--payload', '@data={"b":2}'
     ]);
 
-    expect(options.inject).toEqual(['@config={"a":1}', '@data={"b":2}']);
+    expect(options.inject).toEqual(['@config={"a":1}', '@data={"b":2}', '@payload={}']);
   });
 
   it('supports multiple --payload flags', () => {
@@ -29,7 +29,7 @@ describe('ArgumentParser --payload alias', () => {
       '--payload', '@b=2'
     ]);
 
-    expect(options.inject).toEqual(['@a=1', '@b=2']);
+    expect(options.inject).toEqual(['@a=1', '@b=2', '@payload={}']);
   });
 });
 
