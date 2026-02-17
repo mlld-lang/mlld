@@ -616,6 +616,8 @@ Options:
   -d, --debug             Stream execution with progress logs to stderr
   --json                  With --debug, emit DebugResult JSON to stdout (no streaming)
   --structured            Output JSON with effects, exports, and security metadata
+  --timeout <duration>    Overall execution timeout (e.g., 5m, 1h, 30s)
+  --metrics               Show execution timing on stderr
   --inject, --payload KEY=VALUE
                           Inject dynamic module (can use multiple times)
                           VALUE formats: JSON object, @file.json, or mlld source
@@ -651,6 +653,11 @@ Output Formatting Options:
 
 Security Options:
   --allow-absolute            Allow absolute paths outside project root (use with caution!)
+
+Payload Injection:
+  Unknown flags become @payload fields (always available, even when empty):
+  mlld script.mld --topic foo         # @payload = {"topic":"foo"}
+  mlld script.mld                     # @payload = {}
 
 Examples:
   mlld script.mld                     # Run a local file

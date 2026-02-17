@@ -5,9 +5,9 @@ brief: Execute scripts with payload injection
 category: configuration
 parent: cli
 tags: [cli, run, scripts, payload]
-related: [syntax-payload, config-sdk-dynamic-modules]
+related: [syntax-payload, config-sdk-dynamic-modules, config-cli-file]
 related-code: [cli/commands/run.ts]
-updated: 2026-01-11
+updated: 2026-02-17
 ---
 
 Run mlld scripts from a configured directory with automatic payload injection.

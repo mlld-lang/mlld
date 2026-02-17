@@ -5,9 +5,9 @@ brief: Access data passed via SDK or CLI
 category: syntax
 parent: variables
 tags: [variables, payload, sdk, cli]
-related: [reserved-variables, config-sdk-dynamic-modules]
-related-code: [sdk/execute.ts, cli/commands/run.ts]
-updated: 2026-01-11
+related: [reserved-variables, config-sdk-dynamic-modules, config-cli-file]
+related-code: [sdk/execute.ts, cli/commands/run.ts, cli/parsers/ArgumentParser.ts]
+updated: 2026-02-17
 ---
 
 `@payload` contains data passed to a script at invocation time.
@@ -33,12 +33,13 @@ var @count = @payload.count ? @payload.count : 0
 execute('./script.mld', { topic: 'foo', count: 5 });
 ```
 
-**CLI usage** with `mlld run`:
+**CLI usage** — both `mlld run` and direct invocation support payload:
 
 ```bash
 mlld run myscript --topic foo --count 5
+mlld script.mld --topic foo --count 5
 ```
 
 Unknown flags become `@payload` fields automatically. Kebab-case flags are converted to camelCase (e.g., `--dry-run` becomes `@dryRun`).
 
-`@payload` requires run or SDK invocation context. Running `mlld path/to/file.mld` without payload injection does not provide `@payload`.
+`@payload` is always available as `{}` even when no flags are passed — scripts can safely reference `@payload` fields without checking whether payload was injected.

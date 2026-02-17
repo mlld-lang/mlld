@@ -117,6 +117,10 @@ export interface CLIOptions {
   streamOutputFormat?: 'text' | 'ansi' | 'json';
   // Structured output mode
   structured?: boolean;
+  // Overall execution timeout (e.g., "5m", "1h", "30s")
+  timeout?: string;
+  // Show parse/evaluate timing metrics
+  metrics?: boolean;
   // Dynamic module injection
   inject?: string[];  // ['@module=value', '@data=@file.json']
   _?: string[]; // Remaining args after command

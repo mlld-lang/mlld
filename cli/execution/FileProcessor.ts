@@ -17,6 +17,8 @@ import type { OptionProcessor } from '../parsers/OptionProcessor';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 import { URLLoader } from '../utils/url-loader';
 import { parseInjectOptions } from '../utils/inject-parser';
+import { parseDuration, formatDuration } from '@core/config/utils';
+import chalk from 'chalk';
 
 export interface ProcessingEnvironment {
   fileSystem: NodeFileSystem;
@@ -129,12 +131,46 @@ export class FileProcessor {
     let interpretEnvironment: Environment | null = null;
     let detachLogging: (() => void) | undefined;
 
+    // Parse --timeout if provided
+    let timeoutMs: number | undefined;
+    if (cliOptions.timeout) {
+      try {
+        timeoutMs = parseDuration(cliOptions.timeout);
+        if (timeoutMs <= 0) {
+          throw new Error('--timeout must be a positive duration');
+        }
+      } catch {
+        throw new Error('--timeout must be a valid duration (e.g., 5m, 1h, 30s, or milliseconds)');
+      }
+    }
+
     try {
       // Read stdin if available, but NOT if input is /dev/stdin (or - alias) since
       // fs.readFile('/dev/stdin') will consume stdin directly
       const stdinContent = isStdinInput ? undefined : await this.readStdinIfAvailable();
 
-      const interpretation = await this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL, isStdinInput);
+      const startTime = cliOptions.metrics ? performance.now() : 0;
+
+      // Execute with optional timeout
+      let interpretPromise = this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL, isStdinInput);
+
+      if (timeoutMs) {
+        const timeout = timeoutMs;
+        interpretPromise = Promise.race([
+          interpretPromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Execution timed out after ${formatDuration(timeout)}`)), timeout)
+          )
+        ]);
+      }
+
+      const interpretation = await interpretPromise;
+
+      if (cliOptions.metrics) {
+        const elapsed = performance.now() - startTime;
+        console.error(chalk.gray(`\nTotal: ${elapsed.toFixed(1)}ms`));
+      }
+
       interpretEnvironment = interpretation.interpretEnvironment ?? null;
       detachLogging = interpretation.detachLogging;
 

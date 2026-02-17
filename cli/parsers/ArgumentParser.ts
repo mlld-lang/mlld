@@ -170,6 +170,15 @@ export class ArgumentParser {
             throw new Error('--command-timeout must be a positive number (milliseconds)');
           }
           break;
+        case '--timeout': {
+          const timeoutVal = args[++i];
+          if (!timeoutVal) throw new Error('--timeout requires a duration value (e.g., 5m, 1h, 30s)');
+          options.timeout = timeoutVal;
+          break;
+        }
+        case '--metrics':
+          options.metrics = true;
+          break;
         // Import approval bypass options
         case '--risky-approve-all':
           options.riskyApproveAll = true;
@@ -425,7 +434,8 @@ export class ArgumentParser {
   private attachPayloadInject(options: CLIOptions, payloadFlags: Record<string, unknown>): void {
     if (!options.input) return;
     if (this.commandsWithSubcommands.includes(options.input)) return;
-    if (Object.keys(payloadFlags).length === 0) return;
+    // Always inject @payload (even when empty) so scripts can safely reference @payload
+    // This matches `mlld run` behavior where @payload={} is always available
 
     if (!options.inject) options.inject = [];
     options.inject.push(`@payload=${JSON.stringify(payloadFlags)}`);
