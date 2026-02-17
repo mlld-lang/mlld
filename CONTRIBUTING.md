@@ -4,7 +4,7 @@ Thank you for your interest in contributing to mlld! We welcome contributions fr
 
 ## Contributors Needed!
 
-mlld is a weird and ambitious project. It's been just me (plus llms) toiling on this alone for 8 months. Your help and involvement is highly welcomed and encouraged!
+mlld is a novel and ambitious project. Your help and involvement is highly welcomed and encouraged!
 
 ## Reporting Bugs
 

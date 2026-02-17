@@ -3109,7 +3109,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
 
     if (this.pythonShadowEnv) {
-      this.pythonShadowEnv.cleanup().catch(() => {});
+      void this.pythonShadowEnv.cleanup();
       this.pythonShadowEnv = undefined;
     }
 

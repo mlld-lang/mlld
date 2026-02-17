@@ -624,7 +624,7 @@ export class MCPOrchestrator {
       const pidFile = await writePidFile(server.name, child.pid);
       this.pidFiles.set(server.name, pidFile);
       child.once('exit', () => {
-        removePidFile(pidFile).catch(() => {});
+        removePidFile(pidFile);
         this.pidFiles.delete(server.name);
       });
     }

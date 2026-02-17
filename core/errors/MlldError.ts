@@ -1,5 +1,5 @@
 /**
- * Defines the severity levels for Mlld errors.
+ * Defines the severity levels for mlld errors.
  */
 export enum ErrorSeverity {
   /** The operation can potentially continue */
@@ -18,7 +18,7 @@ import type { DirectiveTrace } from '@core/types/trace';
 import type { Environment } from '@interpreter/env/Environment';
 
 /**
- * Base interface for Mlld error details.
+ * Base interface for mlld error details.
  * Specific error types should extend this.
  */
 export interface BaseErrorDetails {
@@ -41,7 +41,7 @@ export interface MlldErrorOptions {
 import { formatLocationForError } from '@core/utils/locationFormatter';
 
 /**
- * Base class for all custom Mlld errors.
+ * Base class for all custom mlld errors.
  * Provides structure for error codes, severity, details, and source location.
  */
 export class MlldError extends Error {

@@ -1,7 +1,7 @@
 {
   "name": "mlld",
-  "version": "2.0.0-rc81-ab",
-  "description": "mlld: llm scripting language",
+  "version": "2.0.0",
+  "description": "An LLM scripting language for orchestrating workflows and building agents with infrastructure-level defense against prompt injection",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -36,7 +36,6 @@
   ],
   "scripts": {
     "cli": "node ./dist/cli.cjs",
-    "dev": "npm run cli",
     "mlld": "npm run cli",
     "build:grammar:core": "npx tsc -p grammar/tsconfig.grammar.json && node grammar/build-grammar.mjs",
     "build:grammar:fixtures": "node ./scripts/build-fixtures.mjs",
@@ -112,7 +111,6 @@
     "bump:patch": "node scripts/bump-version.js patch",
     "bump:minor": "node scripts/bump-version.js minor",
     "bump:major": "node scripts/bump-version.js major",
-    "testecho": "echo",
     "install:vim": "cd editors/vim && ./install.sh",
     "sync:vscode-version": "node -e \"const fs=require('fs'); const main=JSON.parse(fs.readFileSync('package.json')); const vscode=JSON.parse(fs.readFileSync('editors/vscode/package.json')); vscode.version=main.version; fs.writeFileSync('editors/vscode/package.json', JSON.stringify(vscode,null,2)+'\\n')\"",
     "install:vscode": "npm run sync:vscode-version && cd editors/vscode && rm -f *.vsix && npm install && npx vsce package && code --install-extension *.vsix",
@@ -142,7 +140,6 @@
   },
   "homepage": "https://github.com/mlld-lang/mlld#readme",
   "dependencies": {
-    "-": "^0.0.1",
     "@disreguard/sig": "^0.3.0",
     "@mozilla/readability": "^0.6.0",
     "@octokit/rest": "^22.0.0",
@@ -156,7 +153,6 @@
     "chalk": "^4.1.2",
     "commander": "^13.1.0",
     "fs-extra": "^11.3.0",
-    "g": "^2.0.1",
     "glob": "^11.0.1",
     "gray-matter": "^4.0.3",
     "inquirer": "^12.8.2",

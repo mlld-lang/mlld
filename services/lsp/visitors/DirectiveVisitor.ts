@@ -41,7 +41,6 @@ export class DirectiveVisitor extends BaseVisitor {
       const startOffset = node.location.start.offset;
       const hasSlash = sourceText[startOffset] === '/';
 
-      // TEST: Use different token types for different directives to see colors
       const tokenType = this.getDirectiveTokenType(node.kind);
 
       // For implicit directives, check if the keyword appears at the start

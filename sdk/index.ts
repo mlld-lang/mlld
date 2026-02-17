@@ -1,7 +1,7 @@
 /**
- * Mlld API Entry Point
- * 
- * Provides the main API for processing Mlld documents programmatically.
+ * mlld API Entry Point
+ *
+ * Provides the main API for processing mlld documents programmatically.
  */
 /// <reference types="node" />
 import { MlldError } from '@core/errors/MlldError';

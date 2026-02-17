@@ -376,84 +376,27 @@ async function processFile(options: CLIOptions): Promise<void> {
   const optionProcessorInstance = new OptionProcessor();
   const apiOptions = optionProcessorInstance.cliToApiOptions(options);
   
-  if (options.debugContext) {
-    // TODO: debugContextCommand is not imported
-    console.error('Debug context command not yet implemented');
-    return;
-    /*
-    await debugContextCommand({
-      filePath: options.input,
-      variableName: options.variableName,
-      visualizationType: options.visualizationType || 'hierarchy',
-      rootStateId: options.rootStateId,
-      outputFormat: options.outputFormat as 'mermaid' | 'dot' | 'json' || 'mermaid',
-      outputFile: options.output,
-      includeVars: options.includeVars,
-      includeTimestamps: options.includeTimestamps,
-      includeFilePaths: options.includeFilePaths
-    });
-    return;
-    */
-  }
-
   // Use the common processing function
   await processFileWithOptions(options, apiOptions);
 }
 
-// Keep track of error messages we've seen
 const seenErrors = new Set<string>();
-
-// Flag to bypass the error deduplication for formatted errors
-const bypassDeduplication = false;
-
-// Check if error deduplication should be completely disabled
-const disableDeduplication = !!(global as any).MLLD_DISABLE_ERROR_DEDUPLICATION;
-
-// Store the original console.error
 const originalConsoleError = console.error;
 
-// Replace console.error with our custom implementation
 console.error = function(...args: any[]) {
-  // If deduplication is completely disabled via global flag, call original directly
-  if (disableDeduplication) {
+  if ((global as any).MLLD_DISABLE_ERROR_DEDUPLICATION) {
     originalConsoleError.apply(console, args);
     return;
   }
 
-  // Enhanced error displays from our service should bypass deduplication
-  if (bypassDeduplication) {
-    // Call the original console.error directly
-    originalConsoleError.apply(console, args);
-    return;
-  }
-  
-  // Convert the arguments to a string for comparison
   const errorMsg = args.join(' ');
-  
-  // If we've seen this error before, don't print it
-  if (seenErrors.has(errorMsg)) {
-    return;
-  }
-  
-  // Add this error to the set of seen errors
+  if (seenErrors.has(errorMsg)) return;
   seenErrors.add(errorMsg);
-  
-  // Call the original console.error
   originalConsoleError.apply(console, args);
 };
 
-// Moved handleError definition before main
-
-/**
- * Central entry point for the CLI, parsing arguments and orchestrating file processing.
- * Allows injecting a filesystem adapter for testing.
- */
 export async function main(customArgs?: string[]): Promise<void> {
-  // Clear the set of seen errors
   seenErrors.clear();
-
   const orchestrator = new CLIOrchestrator();
   await orchestrator.main(customArgs);
 }
-
-// This file is now imported by cli-entry.ts, which handles the main execution

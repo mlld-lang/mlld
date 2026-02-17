@@ -78,13 +78,7 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       if (params && '__capturedShadowEnvs' in params) {
         delete params.__capturedShadowEnvs;
       }
-      
-      
-      // OLD CODE TO REPLACE:
-      // const shadowEnv = this.shadowEnvironment.getShadowEnv('js') || 
-      //                  this.shadowEnvironment.getShadowEnv('javascript');
-      
-      // NEW CODE:
+
       const shadowEnv = resolveShadowEnvironment(
         'js', 
         capturedEnvs, 

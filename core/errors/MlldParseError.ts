@@ -23,7 +23,7 @@ export interface MlldParseErrorOptions {
 }
 
 /**
- * Error thrown when parsing Mlld content fails
+ * Error thrown when parsing mlld content fails
  */
 export class MlldParseError extends MlldError {
   /**

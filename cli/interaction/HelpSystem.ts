@@ -451,7 +451,7 @@ Examples:
     console.log(`
 Usage: mlld debug-resolution [options] <input-file>
 
-Debug variable resolution in a Mlld file.
+Debug variable resolution in a mlld file.
 
 Options:
   --var, --variable <n>     Filter to a specific variable
@@ -662,7 +662,7 @@ Examples:
   npx mlld@latest https://raw.githubusercontent.com/mlld-lang/registry/main/llm/scripts/review-pr.mld
 
 Configuration:
-  Mlld looks for configuration in:
+  mlld looks for configuration in:
   1. ~/.config/mlld/mlld-config.json (global/user config)
   2. mlld-config.json (project config)
   3. mlld-lock.json (project module lockfile)

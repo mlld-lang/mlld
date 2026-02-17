@@ -56,7 +56,6 @@ describe('handleExecGuardDenial', () => {
     });
 
     const result = await handleExecGuardDenial(error, { execEnv, env, whenExprNode: whenExpr });
-    console.log('RESULT', result);
     expect(result).not.toBeNull();
     expect(result?.value).toBe('Denied fallback');
     expect(result?.internal?.deniedHandlerRan).toBe(true);

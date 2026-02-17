@@ -1,5 +1,5 @@
 /**
- * Central export point for Mlld error types.
+ * Central export point for mlld error types.
  */
 
 // Export all error types from the errors directory
