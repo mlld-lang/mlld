@@ -112,7 +112,7 @@ var @alt = ::Hello @name!::
 
 ## Gotchas
 
-mlld is not JavaScript/Python.
+mlld is not JavaScript/Python, but it has familiar built-in JS methods. See `mlld howto methods-builtin` for the full list.
 
 **Use `>>` for comments, not `//`**
 

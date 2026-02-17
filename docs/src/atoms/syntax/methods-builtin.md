@@ -10,21 +10,33 @@ related-code: [interpreter/eval/method-call.ts, core/builtins/array-methods.ts, 
 updated: 2026-01-05
 ---
 
-**Array methods:**
-- `@arr.includes(value)` - true if contains value
-- `@arr.indexOf(value)` - index or -1
-- `@arr.length` - array length
-- `@arr.join(separator)` - join to string
-
 **String methods:**
+- `@str.length` - string length
 - `@str.includes(sub)` - true if contains substring
 - `@str.indexOf(sub)` - index or -1
-- `@str.length` - string length
+- `@str.startsWith(prefix)` / `endsWith(suffix)`
 - `@str.toLowerCase()` / `toUpperCase()`
 - `@str.trim()` - remove whitespace
-- `@str.startsWith(prefix)` / `endsWith(suffix)`
 - `@str.split(separator)` - split to array
-- Method chains can continue across lines when continuation lines start with `.`
+- `@str.slice(start, end?)` - extract substring by position
+- `@str.substring(start, end?)` - extract substring (no negative indices)
+- `@str.replace(search, replacement)` - replace first match (accepts string or regex)
+- `@str.replaceAll(search, replacement)` - replace all matches (accepts string or regex)
+- `@str.match(pattern)` - match against string or regex, returns match array or null
+- `@str.padStart(length, char?)` / `padEnd(length, char?)` - pad to target length
+- `@str.repeat(count)` - repeat string N times
+
+**Array methods:**
+- `@arr.length` - array length
+- `@arr.includes(value)` - true if contains value
+- `@arr.indexOf(value)` - index or -1
+- `@arr.join(separator)` - join to string
+- `@arr.slice(start, end?)` - extract sub-array by position
+- `@arr.concat(other)` - combine arrays
+- `@arr.reverse()` - reverse order (returns new array)
+- `@arr.sort()` - sort alphabetically (returns new array)
+
+Method chains can continue across lines when continuation lines start with `.`
 
 ```mlld
 var @fruits = ["apple", "banana", "cherry"]
