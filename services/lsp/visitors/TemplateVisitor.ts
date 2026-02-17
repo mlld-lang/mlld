@@ -1,10 +1,11 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
+import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 
 export class TemplateVisitor extends BaseVisitor {
-  private mainVisitor: any;
-  
-  setMainVisitor(visitor: any): void {
+  private mainVisitor: INodeVisitor;
+
+  setMainVisitor(visitor: INodeVisitor): void {
     this.mainVisitor = visitor;
   }
   

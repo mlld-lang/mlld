@@ -25,6 +25,39 @@ import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 import type { VisitorDiagnostic } from '@tests/utils/token-validator/types.js';
 
+interface ASTLocation {
+  start: { line: number; column: number; offset: number };
+  end: { line: number; column: number; offset: number };
+}
+
+interface ASTNode {
+  type: string;
+  nodeId?: string;
+  location?: ASTLocation;
+  content?: string;
+  identifier?: string;
+  value?: ASTNode | ASTNode[] | unknown;
+  values?: Record<string, unknown>;
+  variable?: ASTNode;
+  withClause?: { pipeline?: Array<{ identifier?: ASTNode[] }> };
+  operator?: string;
+  name?: string;
+  text?: string;
+  expectedType?: string;
+  partialContent?: unknown;
+  children?: ASTNode[];
+  nodes?: ASTNode[];
+  elements?: ASTNode[];
+  body?: ASTNode | ASTNode[];
+  invocation?: ASTNode;
+  error?: boolean;
+  isError?: boolean;
+  parent?: ASTNode;
+  previousSibling?: ASTNode;
+  nextSibling?: ASTNode;
+  [key: string]: unknown;
+}
+
 export class ASTSemanticVisitor {
   private contextStack: ContextStack;
   private tokenBuilder: TokenBuilder;
@@ -159,7 +192,7 @@ export class ASTSemanticVisitor {
     return this.tokenBuilder;
   }
 
-  async visitAST(ast: any[]): Promise<void> {
+  async visitAST(ast: ASTNode[]): Promise<void> {
     this.textCache.clear();
     this.visitedNodeIds.clear();
     this.visitorCalls = [];
@@ -176,7 +209,7 @@ export class ASTSemanticVisitor {
     }
   }
   
-  visitNode(node: any, context?: VisitorContext): void {
+  visitNode(node: ASTNode, context?: VisitorContext): void {
     if (!node || !node.type) return;
 
     if (this.shouldSkipNode(node)) return;
@@ -288,9 +321,10 @@ export class ASTSemanticVisitor {
       }
     } catch (error) {
       diagnostic.called = true;
+      const err = error instanceof Error ? error : new Error(String(error));
       console.error(`[SEMANTIC-TOKEN-ERROR] Error visiting node type ${node.type}:`, {
-        error: error.message,
-        stack: error.stack,
+        error: err.message,
+        stack: err.stack,
         node: {
           type: node.type,
           location: node.location,
@@ -303,7 +337,7 @@ export class ASTSemanticVisitor {
     this.visitorCalls.push(diagnostic);
   }
   
-  private shouldSkipNode(node: any): boolean {
+  private shouldSkipNode(node: ASTNode): boolean {
     if (!node.type) return true;
 
     const skipTypes = ['Newline', 'Whitespace', 'EOF'];
@@ -326,7 +360,7 @@ export class ASTSemanticVisitor {
     return false;
   }
   
-  visitChildren(node: any, context?: VisitorContext): void {
+  visitChildren(node: ASTNode, context?: VisitorContext): void {
     const actualContext = context || this.currentContext;
 
     // If this is a container object without .type, visit ALL its properties
@@ -335,10 +369,10 @@ export class ASTSemanticVisitor {
         const value = node[key];
         if (Array.isArray(value)) {
           for (const child of value) {
-            this.visitNode(child, actualContext);
+            this.visitNode(child as ASTNode, actualContext);
           }
         } else if (value && typeof value === 'object') {
-          this.visitNode(value, actualContext);
+          this.visitNode(value as ASTNode, actualContext);
         }
       }
       return;
@@ -359,25 +393,27 @@ export class ASTSemanticVisitor {
     ];
 
     for (const prop of childProps) {
-      if (node[prop]) {
-        if (Array.isArray(node[prop])) {
-          for (const child of node[prop]) {
-            this.visitNode(child, actualContext);
+      const propVal = node[prop];
+      if (propVal) {
+        if (Array.isArray(propVal)) {
+          for (const child of propVal) {
+            this.visitNode(child as ASTNode, actualContext);
           }
-        } else if (typeof node[prop] === 'object') {
+        } else if (typeof propVal === 'object') {
+          const propNode = propVal as ASTNode;
           // Check if it's a node or a container object
-          if (node[prop].type) {
-            this.visitNode(node[prop], actualContext);
+          if (propNode.type) {
+            this.visitNode(propNode, actualContext);
           } else {
             // Plain container object - recurse into its properties
-            this.visitChildren(node[prop], actualContext);
+            this.visitChildren(propNode, actualContext);
           }
         }
       }
     }
   }
   
-  visitText(node: any, context: VisitorContext): void {
+  visitText(node: ASTNode, context: VisitorContext): void {
     if (!node.location || !node.content) return;
     
     // In command context, check if this is a quoted string or a string argument
@@ -451,7 +487,7 @@ export class ASTSemanticVisitor {
     }
   }
   
-  visitError(node: any): void {
+  visitError(node: ASTNode): void {
     if (!node.location) {
       if (this.tryInferLocation(node)) {
       } else {
@@ -474,7 +510,7 @@ export class ASTSemanticVisitor {
     }
   }
   
-  private tryInferLocation(node: any): boolean {
+  private tryInferLocation(node: ASTNode): boolean {
     if (node.parent?.location) {
       node.location = node.parent.location;
       return true;
@@ -491,7 +527,7 @@ export class ASTSemanticVisitor {
     return false;
   }
   
-  private getErrorTokenType(node: any): string {
+  private getErrorTokenType(node: ASTNode): string {
     if (node.expectedType) {
       switch (node.expectedType) {
         case 'directive': return 'directive';
@@ -513,7 +549,7 @@ export class ASTSemanticVisitor {
     return 'variable';
   }
   
-  visitParameter(node: any, context: VisitorContext): void {
+  visitParameter(node: ASTNode, context: VisitorContext): void {
     if (!node.location || !node.name) return;
 
     this.tokenBuilder.addToken({
@@ -525,7 +561,7 @@ export class ASTSemanticVisitor {
     });
   }
 
-  visitVariableReferenceWithTail(node: any, context: VisitorContext): void {
+  visitVariableReferenceWithTail(node: ASTNode, context: VisitorContext): void {
     // Visit the main variable reference
     if (node.variable) {
       this.visitNode(node.variable, context);
@@ -566,7 +602,7 @@ export class ASTSemanticVisitor {
    * Visit an ExeBlock node (statement block with let/+=/=> return)
    * Used in both /exe definitions and /var blocks
    */
-  private visitExeBlock(node: any, context: VisitorContext): void {
+  private visitExeBlock(node: ASTNode, context: VisitorContext): void {
     if (!node.location) return;
 
     const sourceText = this.document.getText();
@@ -616,7 +652,7 @@ export class ASTSemanticVisitor {
   /**
    * Visit a LetAssignment node (let @var = value)
    */
-  private visitLetAssignment(node: any, context: VisitorContext): void {
+  private visitLetAssignment(node: ASTNode, context: VisitorContext): void {
     if (!node.location) return;
 
     const sourceText = this.document.getText();
@@ -677,7 +713,7 @@ export class ASTSemanticVisitor {
   /**
    * Visit an AugmentedAssignment node (@var += value)
    */
-  private visitAugmentedAssignment(node: any, context: VisitorContext): void {
+  private visitAugmentedAssignment(node: ASTNode, context: VisitorContext): void {
     if (!node.location) return;
 
     const sourceText = this.document.getText();
@@ -727,7 +763,7 @@ export class ASTSemanticVisitor {
   /**
    * Visit an ExeReturn node (=> value)
    */
-  private visitExeReturn(node: any, context: VisitorContext): void {
+  private visitExeReturn(node: ASTNode, context: VisitorContext): void {
     if (!node.location) return;
 
     const sourceText = this.document.getText();

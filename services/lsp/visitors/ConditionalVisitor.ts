@@ -1,21 +1,32 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
+import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
+import {
+  BaseMlldNode,
+  ConditionalTemplateSnippetNode,
+  ConditionalStringFragmentNode,
+  ConditionalVarOmissionNode,
+  ConditionalArrayElementNode,
+  NullCoalescingTightNode
+} from '@core/types/primitives';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 
 export class ConditionalVisitor extends BaseVisitor {
-  private mainVisitor: any;
+  private mainVisitor: INodeVisitor | undefined;
   private operatorHelper: OperatorTokenHelper;
 
-  constructor(document: any, tokenBuilder: any) {
+  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
   }
 
-  setMainVisitor(visitor: any): void {
+  setMainVisitor(visitor: INodeVisitor): void {
     this.mainVisitor = visitor;
   }
 
-  canHandle(node: any): boolean {
+  canHandle(node: BaseMlldNode): boolean {
     return node.type === 'ConditionalTemplateSnippet' ||
       node.type === 'ConditionalStringFragment' ||
       node.type === 'ConditionalVarOmission' ||
@@ -23,51 +34,51 @@ export class ConditionalVisitor extends BaseVisitor {
       node.type === 'NullCoalescingTight';
   }
 
-  visitNode(node: any, context: VisitorContext): void {
+  visitNode(node: BaseMlldNode, context: VisitorContext): void {
     if (!node.location) return;
 
     switch (node.type) {
       case 'ConditionalTemplateSnippet':
-        this.visitConditionalTemplateSnippet(node, context);
+        this.visitConditionalTemplateSnippet(node as ConditionalTemplateSnippetNode, context);
         break;
       case 'ConditionalStringFragment':
-        this.visitConditionalStringFragment(node, context);
+        this.visitConditionalStringFragment(node as ConditionalStringFragmentNode, context);
         break;
       case 'ConditionalVarOmission':
-        this.visitConditionalVarOmission(node, context);
+        this.visitConditionalVarOmission(node as ConditionalVarOmissionNode, context);
         break;
       case 'ConditionalArrayElement':
-        this.visitConditionalArrayElement(node, context);
+        this.visitConditionalArrayElement(node as ConditionalArrayElementNode, context);
         break;
       case 'NullCoalescingTight':
-        this.visitNullCoalescingTight(node, context);
+        this.visitNullCoalescingTight(node as NullCoalescingTightNode, context);
         break;
     }
   }
 
-  private visitConditionalTemplateSnippet(node: any, context: VisitorContext): void {
+  private visitConditionalTemplateSnippet(node: ConditionalTemplateSnippetNode, context: VisitorContext): void {
     this.visitChildNode(node.condition, context);
     this.tokenizeConditionalMarker(node, node.condition);
     this.tokenizeBacktickDelimiters(node);
   }
 
-  private visitConditionalStringFragment(node: any, context: VisitorContext): void {
+  private visitConditionalStringFragment(node: ConditionalStringFragmentNode, context: VisitorContext): void {
     this.visitChildNode(node.condition, context);
     this.tokenizeConditionalMarker(node, node.condition);
   }
 
-  private visitConditionalVarOmission(node: any, context: VisitorContext): void {
+  private visitConditionalVarOmission(node: ConditionalVarOmissionNode, context: VisitorContext): void {
     this.visitChildNode(node.variable, context);
     this.tokenizeTrailingOperator(node, '?');
   }
 
-  private visitConditionalArrayElement(node: any, context: VisitorContext): void {
+  private visitConditionalArrayElement(node: ConditionalArrayElementNode, context: VisitorContext): void {
     this.visitChildNode(node.condition, context);
     this.visitChildNode(node.value, context);
     this.tokenizeTrailingOperator(node, '?');
   }
 
-  private visitNullCoalescingTight(node: any, context: VisitorContext): void {
+  private visitNullCoalescingTight(node: NullCoalescingTightNode, context: VisitorContext): void {
     this.visitChildNode(node.variable, context);
     const operatorOffset = this.findOperatorOffset(node, '??');
     if (operatorOffset !== null) {
@@ -76,15 +87,15 @@ export class ConditionalVisitor extends BaseVisitor {
     }
   }
 
-  private visitChildNode(node: any, context: VisitorContext): void {
+  private visitChildNode(node: BaseMlldNode, context: VisitorContext): void {
     if (!node || !node.type || !this.mainVisitor) return;
     this.mainVisitor.visitNode(node, context);
   }
 
-  private tokenizeConditionalMarker(node: any, condition: any): void {
+  private tokenizeConditionalMarker(node: BaseMlldNode, condition: BaseMlldNode): void {
     const sourceText = this.document.getText();
-    const startOffset = condition?.location?.end?.offset ?? node.location.start.offset;
-    const endOffset = node.location.end.offset;
+    const startOffset = condition?.location?.end?.offset ?? node.location!.start.offset;
+    const endOffset = node.location!.end.offset;
     const segment = sourceText.substring(startOffset, endOffset);
     const markerIndex = segment.indexOf('?');
 
@@ -93,11 +104,11 @@ export class ConditionalVisitor extends BaseVisitor {
     }
   }
 
-  private tokenizeTrailingOperator(node: any, operator: string): void {
+  private tokenizeTrailingOperator(node: BaseMlldNode, operator: string): void {
     const sourceText = this.document.getText();
-    const operatorOffset = node.location.end.offset - operator.length;
+    const operatorOffset = node.location!.end.offset - operator.length;
 
-    if (operatorOffset >= node.location.start.offset &&
+    if (operatorOffset >= node.location!.start.offset &&
       sourceText.substring(operatorOffset, operatorOffset + operator.length) === operator) {
       this.operatorHelper.addOperatorToken(operatorOffset, operator.length);
       return;
@@ -109,24 +120,24 @@ export class ConditionalVisitor extends BaseVisitor {
     }
   }
 
-  private findOperatorOffset(node: any, operator: string): number | null {
+  private findOperatorOffset(node: BaseMlldNode, operator: string): number | null {
     const sourceText = this.document.getText();
-    const segment = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const segment = sourceText.substring(node.location!.start.offset, node.location!.end.offset);
     const index = segment.indexOf(operator);
     if (index === -1) return null;
-    return node.location.start.offset + index;
+    return node.location!.start.offset + index;
   }
 
-  private tokenizeBacktickDelimiters(node: any): void {
+  private tokenizeBacktickDelimiters(node: BaseMlldNode): void {
     const sourceText = this.document.getText();
-    const segment = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const segment = sourceText.substring(node.location!.start.offset, node.location!.end.offset);
     const openIndex = segment.indexOf('`');
     const closeIndex = segment.lastIndexOf('`');
 
     if (openIndex === -1 || closeIndex === -1 || openIndex === closeIndex) return;
 
-    const openPos = this.document.positionAt(node.location.start.offset + openIndex);
-    const closePos = this.document.positionAt(node.location.start.offset + closeIndex);
+    const openPos = this.document.positionAt(node.location!.start.offset + openIndex);
+    const closePos = this.document.positionAt(node.location!.start.offset + closeIndex);
 
     this.tokenBuilder.addToken({
       line: openPos.line,
@@ -145,7 +156,7 @@ export class ConditionalVisitor extends BaseVisitor {
     });
   }
 
-  private tokenizeDefaultString(node: any, searchStartOffset: number): void {
+  private tokenizeDefaultString(node: NullCoalescingTightNode, searchStartOffset: number): void {
     const quote = node.default?.quote === 'single' ? '\'' : '"';
     const sourceText = this.document.getText();
     const segment = sourceText.substring(searchStartOffset, node.location.end.offset);

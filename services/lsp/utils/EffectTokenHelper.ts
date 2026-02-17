@@ -1,5 +1,21 @@
+interface PositionAt {
+  positionAt(offset: number): { line: number; character: number };
+}
+
+interface TokenEntry {
+  line: number;
+  char: number;
+  length: number;
+  tokenType: string;
+  modifiers: string[];
+}
+
+interface TokenBuilder {
+  addToken(token: TokenEntry): void;
+}
+
 export class EffectTokenHelper {
-  constructor(private document: any, private tokenBuilder: any) {}
+  constructor(private document: PositionAt, private tokenBuilder: TokenBuilder) {}
 
   tokenizeEffectKeyword(effect: string, absOffset: number): void {
     const pos = this.document.positionAt(absOffset);

@@ -1,6 +1,7 @@
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
+import type { BaseMlldNode, SourceLocation } from '@core/types/primitives';
 
 /**
  * Helper class for consistent template delimiter tokenization.
@@ -21,8 +22,8 @@ export class TemplateTokenHelper {
    */
   tokenizeTemplateDelimiters(
     wrapperType: string,
-    templateNodes: any[],
-    nodeLocation: any
+    templateNodes: BaseMlldNode[],
+    nodeLocation: SourceLocation
   ): { templateType: string | null; variableStyle: '@var' | '{{var}}'; interpolationAllowed: boolean; delimiterLength: number } {
     let templateType: 'backtick' | 'doubleColon' | 'tripleColon' | 'string' | null = null;
     let variableStyle: '@var' | '{{var}}' = '@var';
@@ -111,7 +112,7 @@ export class TemplateTokenHelper {
    * @param node String literal node
    * @param offset Offset adjustment if needed
    */
-  tokenizeStringLiteral(node: any, offset: number = 0): void {
+  tokenizeStringLiteral(node: BaseMlldNode, offset: number = 0): void {
     if (!node.location) return;
     
     const startOffset = node.location.start.offset - 1; // Include opening quote
@@ -140,7 +141,7 @@ export class TemplateTokenHelper {
    */
   createTemplateContext(
     baseContext: VisitorContext,
-    templateType: any,
+    templateType: VisitorContext['templateType'],
     interpolationAllowed: boolean,
     variableStyle: '@var' | '{{var}}'
   ): VisitorContext {
@@ -160,7 +161,7 @@ export class TemplateTokenHelper {
    * @param directiveText Full directive text
    */
   tokenizeAsClauseQuotes(
-    directiveLocation: any,
+    directiveLocation: SourceLocation,
     asIndex: number,
     directiveText: string
   ): void {
