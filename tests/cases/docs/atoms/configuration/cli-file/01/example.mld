@@ -1,0 +1,2 @@
+import { topic } from @payload
+show @topic
