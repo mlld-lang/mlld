@@ -1,10 +1,2 @@
->> 1. Use \@ escape sequence (recommended)
 var @email = `user\@example.com`  >> "user@example.com"
-
->> 2. Use @@ escape sequence
 var @email = `user@@example.com`  >> "user@example.com"
-
->> 3. String concatenation via variables
-var @at = "@"
-var @name = "username"
-var @handle = `@at@name`          >> "@username"

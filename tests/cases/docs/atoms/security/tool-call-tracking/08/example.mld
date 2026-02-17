@@ -1,4 +1,5 @@
 env @agent with { tools: @agentTools } [
-  >> @mx.tools.calls tracks calls within this env block
-  run cmd { claude -p @task }
+  >> @mx.tools.calls scoped to this env block
+  >> only tracks exe invocations the agent makes
+  var @result = @fetchData("input")
 ]
