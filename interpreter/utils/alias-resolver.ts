@@ -57,13 +57,14 @@ export function resolveAlias(command: string): AliasResolutionResult {
   }
   
   try {
-    // Method 1: Try to get alias definition using bash -c
-    // This runs in an interactive-like context that loads aliases
-    // Use BASH_ENV to load aliases without -i (interactive) flag.
-    // bash -i tries to take terminal control via tcsetpgrp(), which sends
-    // SIGTTIN when run inside a non-foreground process group (e.g. vitest workers),
-    // causing "zsh: suspended (tty input)".
-    const aliasResult = execSync(`BASH_ENV=~/.bashrc bash -c "alias ${commandName} 2>/dev/null || echo 'NOT_FOUND'"`, {
+    // Method 1: Try to get alias definition using the user's actual shell
+    // Use -l (login) to source profile/rc files for full PATH and aliases.
+    // DO NOT use -i (interactive) — interactive shells call tcsetpgrp() for
+    // job control, which sends SIGTTIN in non-foreground process groups
+    // (e.g. vitest workers), causing "zsh: suspended (tty input)".
+    // Using $SHELL ensures zsh users get their .zshrc PATH entries.
+    const userShell = process.env.SHELL || '/bin/bash';
+    const aliasResult = execSync(`${userShell} -lc "alias ${commandName} 2>/dev/null || echo 'NOT_FOUND'"`, {
       encoding: 'utf8',
       timeout: 2000,
       stdio: ['ignore', 'pipe', 'ignore']
@@ -89,8 +90,9 @@ export function resolveAlias(command: string): AliasResolutionResult {
   }
   
   try {
-    // Method 2: Try which command to see if it's in PATH
-    const whichResult = execSync(`which ${commandName}`, {
+    // Method 2: Try command -v in user's login shell to get full PATH
+    const userShell = process.env.SHELL || '/bin/bash';
+    const whichResult = execSync(`${userShell} -lc "command -v ${commandName}"`, {
       encoding: 'utf8',
       timeout: 1000,
       stdio: ['ignore', 'pipe', 'ignore']
