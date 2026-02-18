@@ -72,6 +72,16 @@ export interface ExecutePostGuardOptions {
   operation: OperationContext;
 }
 
+function collectCandidateGuardIds(candidates: Array<{ guards: GuardDefinition[] }>): Set<string> {
+  const ids = new Set<string>();
+  for (const candidate of candidates) {
+    for (const guard of candidate.guards) {
+      ids.add(guard.id);
+    }
+  }
+  return ids;
+}
+
 export async function executePostGuard(options: ExecutePostGuardOptions): Promise<EvalResult> {
   const { node, result, inputs, env, operation } = options;
   const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
@@ -123,14 +133,17 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
     usedInputFallback = perInputCandidates.length > 0;
     selectionSources.push('input-fallback');
   }
+  const excludeGuardIds = collectCandidateGuardIds(perInputCandidates);
   let operationGuards = collectOperationGuards(registry, operation, guardOverride, {
     timing: 'after',
-    variables: outputVariables
+    variables: outputVariables,
+    excludeGuardIds
   });
   if (operationGuards.length === 0 && usedInputFallback && inputVariables.length > 0) {
     operationGuards = collectOperationGuards(registry, operation, guardOverride, {
       timing: 'after',
-      variables: inputVariables
+      variables: inputVariables,
+      excludeGuardIds
     });
   }
 

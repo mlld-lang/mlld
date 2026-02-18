@@ -57,6 +57,8 @@ export function buildPerInputCandidates(
 export interface OperationGuardCollectionOptions {
   timing?: GuardTiming;
   variables?: readonly Variable[];
+  excludeGuardIds?: ReadonlySet<string>;
+  includeDataIndexForOperationKeys?: boolean;
 }
 
 export function collectOperationGuards(
@@ -67,15 +69,29 @@ export function collectOperationGuards(
 ): GuardDefinition[] {
   const timing = options.timing ?? 'before';
   const keys = buildOperationKeys(operation);
+  const excluded = options.excludeGuardIds;
+  const includeDataIndexForOperationKeys = options.includeDataIndexForOperationKeys ?? true;
   const seen = new Set<string>();
   const results: GuardDefinition[] = [];
 
-  for (const key of keys) {
-    const defs = registry.getOperationGuardsForTiming(key, timing);
+  const addDefinitions = (defs: readonly GuardDefinition[]): void => {
     for (const def of defs) {
-      if (!seen.has(def.id)) {
-        seen.add(def.id);
-        results.push(def);
+      if (excluded?.has(def.id) || seen.has(def.id)) {
+        continue;
+      }
+      seen.add(def.id);
+      results.push(def);
+    }
+  };
+
+  for (const key of keys) {
+    addDefinitions(registry.getOperationGuardsForTiming(key, timing));
+    if (includeDataIndexForOperationKeys) {
+      const dataLookup = registry as {
+        getDataGuardsForTiming?: (label: string, guardTiming: GuardTiming) => GuardDefinition[];
+      };
+      if (typeof dataLookup.getDataGuardsForTiming === 'function') {
+        addDefinitions(dataLookup.getDataGuardsForTiming(key, timing));
       }
     }
   }
@@ -84,13 +100,7 @@ export function collectOperationGuards(
     for (const variable of options.variables) {
       const labels = Array.isArray(variable.mx?.labels) ? variable.mx.labels : [];
       for (const label of labels) {
-        const defs = registry.getOperationGuardsForTiming(label, timing);
-        for (const def of defs) {
-          if (!seen.has(def.id)) {
-            seen.add(def.id);
-            results.push(def);
-          }
-        }
+        addDefinitions(registry.getOperationGuardsForTiming(label, timing));
       }
     }
   }

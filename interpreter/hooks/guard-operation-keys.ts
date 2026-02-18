@@ -87,6 +87,14 @@ export function buildOperationKeys(operation: OperationContext): string[] {
     }
   }
 
+  if (operation.labels && operation.labels.length > 0) {
+    for (const label of operation.labels) {
+      if (typeof label === 'string' && label.length > 0) {
+        keys.add(label.toLowerCase());
+      }
+    }
+  }
+
   if (operationType === 'exe' && hasCommandSubtype) {
     keys.add('run');
   }

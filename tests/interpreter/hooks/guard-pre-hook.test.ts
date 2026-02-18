@@ -1245,6 +1245,110 @@ it('keeps combined before guards on op:exe resolved to plain values', async () =
   expect(String(value)).not.toContain('"type":"');
 });
 
+it('fires bare-label before guards for exe labels without op: prefix', async () => {
+  const env = createEnv();
+  const labelGuard = parseSync(
+    '/guard before @byLabel for exfil = when [ * => allow @prefixWith("guard", @input) ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(labelGuard, env);
+
+  const helperDirective = parseSync(
+    '/exe @prefixWith(tag, value) = js { return `${tag}:${value}`; }'
+  )[0] as DirectiveNode;
+  const exeDirective = parseSync('/exe exfil @emit(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(helperDirective, env);
+  await evaluateDirective(exeDirective, env);
+
+  env.setVariable(
+    'plainVar',
+    createSimpleTextVariable(
+      'plainVar',
+      'raw',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor()
+      }
+    )
+  );
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'plainVar' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  expect(String(value)).toBe('guard:raw');
+});
+
+it('does not double-fire bare-label guards when input and exe share a label', async () => {
+  const env = createEnv();
+  const labelGuard = parseSync(
+    '/guard before @byLabel for secret = when [ * => allow @prefixWith("guard", @input) ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(labelGuard, env);
+
+  const helperDirective = parseSync(
+    '/exe @prefixWith(tag, value) = js { return `${tag}:${value}`; }'
+  )[0] as DirectiveNode;
+  const exeDirective = parseSync('/exe secret @emit(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(helperDirective, env);
+  await evaluateDirective(exeDirective, env);
+
+  env.setVariable(
+    'secretVar',
+    createSimpleTextVariable(
+      'secretVar',
+      'raw-secret',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'secretVar' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  const text = String(value);
+  expect(text).toBe('guard:raw-secret');
+  expect(text.match(/guard:/g)?.length ?? 0).toBe(1);
+});
+
+it('does not run bare-label operation matching for zero-input exe calls', async () => {
+  const env = createEnv();
+  const labelGuard = parseSync(
+    '/guard before @retryableCheck for retryable = when [ @mx.op.type == "exe" => deny "should not run" \n * => allow ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(labelGuard, env);
+
+  const exeDirective = parseSync('/exe retryable @seed() = "ok"')[0] as DirectiveNode;
+  await evaluateDirective(exeDirective, env);
+
+  const directive = parseSync('/show @seed()')[0] as DirectiveNode;
+  await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+});
+
 it('composes multiple before label transforms in guard registration order', async () => {
   const env = createEnv();
   const firstGuard = parseSync(

@@ -58,6 +58,16 @@ function applyCurrentInputToCandidate(
   };
 }
 
+function collectCandidateGuardIds(candidates: readonly PerInputCandidate[]): Set<string> {
+  const ids = new Set<string>();
+  for (const candidate of candidates) {
+    for (const guard of candidate.guards) {
+      ids.add(guard.id);
+    }
+  }
+  return ids;
+}
+
 export const guardPreHook: PreHook = async (
   node,
   inputs,
@@ -91,7 +101,10 @@ export const guardPreHook: PreHook = async (
     const variableInputs = materializeGuardInputs(inputs, { nameHint: '__guard_input__' });
 
     const perInputCandidates = buildPerInputCandidates(registry, variableInputs, guardOverride);
-    const operationGuards = collectOperationGuards(registry, operation, guardOverride);
+    const operationGuards = collectOperationGuards(registry, operation, guardOverride, {
+      excludeGuardIds: collectCandidateGuardIds(perInputCandidates),
+      includeDataIndexForOperationKeys: variableInputs.length > 0
+    });
 
     if (perInputCandidates.length === 0 && operationGuards.length === 0) {
       return { action: 'continue' };

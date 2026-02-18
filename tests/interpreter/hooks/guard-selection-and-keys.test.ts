@@ -201,6 +201,127 @@ describe('guard candidate selection utilities', () => {
     expect(results.map(guard => guard.id)).toEqual(['g-exe', 'g-op-label', 'g-secret']);
   });
 
+  it('matches bare-label guards from the data index using operation labels', () => {
+    const gOpLabel = createGuard({
+      id: 'g-op-label',
+      name: 'gOpLabel',
+      filterKind: 'operation',
+      filterValue: 'op:exfil'
+    });
+    const gDataLabel = createGuard({
+      id: 'g-data-label',
+      name: 'gDataLabel',
+      filterKind: 'data',
+      filterValue: 'exfil'
+    });
+
+    const registry = {
+      getOperationGuardsForTiming(key: string): GuardDefinition[] {
+        if (key === 'op:exfil') {
+          return [gOpLabel];
+        }
+        return [];
+      },
+      getDataGuardsForTiming(key: string): GuardDefinition[] {
+        if (key === 'exfil') {
+          return [gDataLabel];
+        }
+        return [];
+      }
+    } as any;
+
+    const operation: OperationContext = {
+      type: 'exe',
+      labels: ['Exfil'],
+      opLabels: ['op:exfil']
+    };
+
+    const results = collectOperationGuards(registry, operation, { kind: 'none' });
+    expect(results.map(guard => guard.id)).toEqual(['g-op-label', 'g-data-label']);
+  });
+
+  it('can skip data-index lookup for operation keys when requested', () => {
+    const gOpLabel = createGuard({
+      id: 'g-op-label',
+      name: 'gOpLabel',
+      filterKind: 'operation',
+      filterValue: 'op:exfil'
+    });
+    const gDataLabel = createGuard({
+      id: 'g-data-label',
+      name: 'gDataLabel',
+      filterKind: 'data',
+      filterValue: 'exfil'
+    });
+
+    const registry = {
+      getOperationGuardsForTiming(key: string): GuardDefinition[] {
+        if (key === 'op:exfil') {
+          return [gOpLabel];
+        }
+        return [];
+      },
+      getDataGuardsForTiming(key: string): GuardDefinition[] {
+        if (key === 'exfil') {
+          return [gDataLabel];
+        }
+        return [];
+      }
+    } as any;
+
+    const operation: OperationContext = {
+      type: 'exe',
+      labels: ['Exfil'],
+      opLabels: ['op:exfil']
+    };
+
+    const results = collectOperationGuards(registry, operation, { kind: 'none' }, {
+      includeDataIndexForOperationKeys: false
+    });
+    expect(results.map(guard => guard.id)).toEqual(['g-op-label']);
+  });
+
+  it('excludes operation guards that already matched during per-input selection', () => {
+    const gOpLabel = createGuard({
+      id: 'g-op-label',
+      name: 'gOpLabel',
+      filterKind: 'operation',
+      filterValue: 'op:secret'
+    });
+    const gShared = createGuard({
+      id: 'g-shared',
+      name: 'gShared',
+      filterKind: 'data',
+      filterValue: 'secret'
+    });
+
+    const registry = {
+      getOperationGuardsForTiming(key: string): GuardDefinition[] {
+        if (key === 'op:secret') {
+          return [gOpLabel];
+        }
+        return [];
+      },
+      getDataGuardsForTiming(key: string): GuardDefinition[] {
+        if (key === 'secret') {
+          return [gShared];
+        }
+        return [];
+      }
+    } as any;
+
+    const operation: OperationContext = {
+      type: 'exe',
+      labels: ['secret'],
+      opLabels: ['op:secret']
+    };
+
+    const results = collectOperationGuards(registry, operation, { kind: 'none' }, {
+      excludeGuardIds: new Set(['g-shared'])
+    });
+    expect(results.map(guard => guard.id)).toEqual(['g-op-label']);
+  });
+
   it('preserves privileged inclusion for operation override filtering', () => {
     const privileged = createGuard({
       id: 'g-privileged',
@@ -384,6 +505,16 @@ describe('guard operation key utilities', () => {
       'op:publish',
       'run'
     ]);
+  });
+
+  it('includes normalized operation labels as operation keys', () => {
+    const keys = buildOperationKeys({
+      type: 'exe',
+      opLabels: ['op:publish'],
+      labels: ['Exfil', 'Sensitive']
+    } as OperationContext);
+
+    expect(keys).toEqual(['exe', 'op:publish', 'exfil', 'sensitive']);
   });
 
   it('does not alias non-command exe operation labels to run', () => {
