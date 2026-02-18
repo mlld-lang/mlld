@@ -25,6 +25,23 @@ gather context → execute (LLM call) → invalidate → remediate → re-invali
 
 Work is broken until the adversary can't break it. This is the default stance.
 
+## Best Practices
+
+Every orchestrator should be:
+
+1. **Resumable** — Append progress to `events.jsonl`. Idempotency checks (`<@outPath>?`) skip completed work. Require `--new` to start a fresh run; default to resuming the latest.
+2. **Parallel** — Use `for parallel(N)` wherever items are independent. Accept `--parallel n` to let the caller cap concurrency (default: 20).
+3. **Observable** — Pipe LLM calls through `| log` so progress is visible. Write structured events to JSONL. Save prompts to debug files (`output @prompt to "@runDir/worker-*.prompt.md"`).
+4. **Dumb** — Code gathers context and executes actions. The LLM decides everything. No if-else for business logic. See `/mlld:llm-first` for the full design philosophy.
+5. **Organized** — Write logs and artifacts to `llm/output/{script-name}/YYYY-MM-DD-n` by default unless the caller specifies otherwise.
+
+**LLM-first cheat sheet** (see `/mlld:llm-first` for details):
+- Dumb orchestrator, smart decision calls — code gathers, model decides
+- Fresh context each iteration — no chat history, the context IS the history
+- Structured JSON actions — orchestrator switches mechanically, no interpretation
+- Prompts over predicates — rules in prompts, not if-else in code
+- Logs over state machines — event log shows everything, debug by reading it
+
 ## The Dumb Orchestrator
 
 Your mlld code should be boring. It gathers context, asks an LLM "what should I do?", executes the answer mechanically, and repeats. All intelligence lives in prompts. The orchestrator is a switch statement.
@@ -378,18 +395,18 @@ Infer phase from filesystem state:
 
 Put this logic in the decision prompt. The orchestrator never checks what phase it's in.
 
-## LLM-First Principles (Summary)
+## LLM-First Principles
 
 1. Dumb orchestrator — code gathers context, model decides
 2. Fresh decision calls — full context each iteration, no chat history
 3. Structured actions — JSON with action type, orchestrator switches mechanically
 4. Prompts over predicates — rules in prompts, not if-else in code
-5. Multi-phase via prompt — phase logic in decision prompt, not state machine
+5. Multi-phase via prompt — let a decision agent track phases and progress via guidance in prompts and their access to history logs rather than creating a programmatic state machine
 6. Edge cases in prompts — add guidance text, not conditionals
-7. Worker guidance — decision agent provides per-action instructions
-8. File-based output — write JSON to path, don't parse streams
-9. Logs over state machines — event log shows everything
-10. External state — separate state management from orchestration
+7. File-based output — write JSON to path, don't parse streams
+8. External state — separate state management from orchestration
+
+For the full design philosophy with 17 principles and worked examples, see `/mlld:llm-first`.
 
 See `anti-patterns.md` for traps to avoid.
 See `syntax-reference.md` for mlld syntax cheat sheet.
