@@ -67,6 +67,37 @@ describe('ArgumentParser custom payload flags', () => {
   });
 });
 
+describe('ArgumentParser eval mode', () => {
+  it('parses -e/--eval inline code', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['-e', 'show @now']);
+
+    expect(options.eval).toBe('show @now');
+    expect(options.input).toBe('');
+  });
+
+  it('accepts empty eval string', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['--eval', '']);
+
+    expect(options.eval).toBe('');
+  });
+
+  it('throws when --eval has no argument', () => {
+    const parser = new ArgumentParser();
+
+    expect(() => parser.parseArgs(['-e'])).toThrow('--eval requires a code string');
+  });
+
+  it('throws when both input file and --eval are provided', () => {
+    const parser = new ArgumentParser();
+
+    expect(() => parser.parseArgs(['script.mld', '--eval', 'show @now'])).toThrow(
+      'Cannot specify both an input file and --eval'
+    );
+  });
+});
+
 describe('ArgumentParser streaming flag', () => {
   it('parses --no-stream', () => {
     const parser = new ArgumentParser();

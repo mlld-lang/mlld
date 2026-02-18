@@ -111,15 +111,16 @@ export class FileProcessor {
   }
 
   async processFileWithOptions(cliOptions: CLIOptions, apiOptions: any): Promise<void> {
-    // Check if input is a URL or stdin
+    // Check if input is a URL, stdin, or inline eval
     const isURL = URLLoader.isURL(cliOptions.input);
     const isStdinInput = cliOptions.input === '/dev/stdin' || cliOptions.input === '-';
+    const isEvalInput = cliOptions.eval !== undefined;
 
     // Set up environment based on input type
     let environment: ProcessingEnvironment;
     if (isURL) {
       environment = await this.setupEnvironmentForURL();
-    } else if (isStdinInput) {
+    } else if (isStdinInput || isEvalInput) {
       environment = await this.setupEnvironmentForStdin();
     } else {
       if (!existsSync(cliOptions.input)) {
@@ -152,7 +153,15 @@ export class FileProcessor {
       const startTime = cliOptions.metrics ? performance.now() : 0;
 
       // Execute with optional timeout
-      let interpretPromise = this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL, isStdinInput);
+      let interpretPromise = this.executeInterpretation(
+        cliOptions,
+        apiOptions,
+        environment,
+        stdinContent,
+        isURL,
+        isStdinInput,
+        isEvalInput
+      );
 
       if (timeoutMs) {
         const timeout = timeoutMs;
@@ -206,9 +215,10 @@ export class FileProcessor {
         return;
       }
 
+      const outputOptions = isEvalInput ? { ...cliOptions, stdout: true } : cliOptions;
       await this.handleOutput(
         interpretation.result,
-        cliOptions,
+        outputOptions,
         environment,
         interpretation.hasExplicitOutput,
         interpretation.interpretEnvironment
@@ -321,7 +331,8 @@ export class FileProcessor {
     environment: ProcessingEnvironment,
     stdinContent?: string,
     isURL?: boolean,
-    isStdinInput?: boolean
+    isStdinInput?: boolean,
+    isEvalInput?: boolean
   ): Promise<
     | { kind: 'document'; result: string; hasExplicitOutput: boolean; interpretEnvironment?: Environment | null; detachLogging?: () => void }
     | { kind: 'stream'; handle: StreamExecution; interpretEnvironment?: Environment | null; detachLogging?: () => void }
@@ -341,6 +352,9 @@ export class FileProcessor {
       content = urlResult.content;
       // Use the URL as the effective path for error reporting
       effectivePath = urlResult.finalUrl;
+    } else if (isEvalInput) {
+      content = cliOptions.eval ?? '';
+      effectivePath = path.resolve(process.cwd(), '<eval>.mld');
     } else {
       // Read the input file
       content = await fs.readFile(cliOptions.input, 'utf8');

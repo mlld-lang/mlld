@@ -42,6 +42,7 @@ import { CLIOrchestrator } from './CLIOrchestrator';
 // CLI Options interface
 export interface CLIOptions {
   input: string;
+  eval?: string;
   output?: string;
   format?: 'markdown' | 'md' | 'xml';
   mode?: MlldMode;

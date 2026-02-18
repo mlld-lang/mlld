@@ -572,6 +572,7 @@ Examples:
   private displayMainHelp(command?: string, context?: HelpContext): void {
     console.log(`
 Usage: mlld [command] [options] <input-file-or-url>
+       mlld -e '<code>' [options]
 
 Commands:
   init                    Create a new mlld module
@@ -603,9 +604,10 @@ Commands:
 
 Options:
   -f, --format <format>   Output format: md, markdown, xml, llm [default: llm]
-  --mode <mode>           Parser mode: strict or markdown (default: .mld strict, .mld.md/.md markdown, stdin strict)
+  --mode <mode>           Parser mode: strict or markdown (default: .mld strict, .mld.md/.md markdown, stdin/eval strict)
   --loose, --markdown, --md
                           Set parser mode to markdown (aliases for --mode markdown)
+  -e, --eval <code>       Execute inline mlld code
   -o, --output <path>     Output file path
   --stdout                Print to stdout instead of file
   --strict                Enable strict mode (fail on all errors)
@@ -663,6 +665,8 @@ Examples:
   mlld script.mld                     # Run a local file
   mlld script.mld --stdout            # Output to stdout
   mlld script.mld -o output.md        # Output to file
+  mlld -e 'show @now'                 # Execute inline code
+  mlld -e 'var @x = "test" | @json; show @x'
   
   # Run scripts directly from URLs
   mlld https://example.com/script.mld

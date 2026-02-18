@@ -3,6 +3,8 @@ import { FileProcessor } from './FileProcessor';
 import type { CLIOptions } from '../index';
 import { OptionProcessor } from '../parsers/OptionProcessor';
 import { ExecutionEmitter } from '@sdk/execution-emitter';
+import * as path from 'path';
+import * as fs from 'fs/promises';
 
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<any>();
@@ -154,5 +156,40 @@ describe('FileProcessor CLI flag matrix', () => {
     const payload = logSpy.mock.calls[0]?.[0] as string;
     expect(() => JSON.parse(payload)).not.toThrow();
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('executes --eval content without reading from disk and forces stdout', async () => {
+    vi.mocked(fs.readFile).mockClear();
+    interpretHolder.fn.mockImplementation(async (content, options) => {
+      expect(content).toBe('show @now');
+      expect(options.filePath).toBe(path.resolve(process.cwd(), '<eval>.mld'));
+      return 'EVAL';
+    });
+
+    await runWithOptions({
+      input: '',
+      eval: 'show @now',
+      stdout: false,
+      output: 'out.md'
+    });
+
+    expect(vi.mocked(fs.readFile)).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith('EVAL');
+  });
+
+  it('passes piped stdin content to --eval via @input', async () => {
+    const readStdinSpy = vi.spyOn(fileProcessor, 'readStdinIfAvailable').mockResolvedValue('piped-data');
+    interpretHolder.fn.mockImplementation(async (_content, options) => {
+      expect(options.stdinContent).toBe('piped-data');
+      return 'EVAL';
+    });
+
+    await runWithOptions({
+      input: '',
+      eval: 'show @input.content'
+    });
+
+    expect(readStdinSpy).toHaveBeenCalled();
+    readStdinSpy.mockRestore();
   });
 });

@@ -65,6 +65,15 @@ export class ArgumentParser {
         case '--mode':
           options.mode = this.normalizeMode(args[++i]);
           break;
+        case '-e':
+        case '--eval': {
+          const inlineCode = args[++i];
+          if (inlineCode === undefined) {
+            throw new Error('--eval requires a code string');
+          }
+          options.eval = inlineCode;
+          break;
+        }
         case '--stdout':
           options.stdout = true;
           break;
@@ -377,8 +386,12 @@ export class ArgumentParser {
 
   validateOptions(options: CLIOptions): void {
     // Version and help can be used without an input file
-    if (!options.input && !options.version && !options.help) {
+    if (!options.input && options.eval === undefined && !options.version && !options.help) {
       throw new Error('No input file specified');
+    }
+
+    if (options.input && options.eval !== undefined) {
+      throw new Error('Cannot specify both an input file and --eval');
     }
   }
 
