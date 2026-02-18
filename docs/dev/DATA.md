@@ -1,8 +1,8 @@
 ---
-updated: 2025-11-13
+updated: 2026-02-18
 tags: #arch, #data, #pipeline
-related-docs: docs/dev/PIPELINE.md, docs/dev/ALLIGATOR.md, docs/dev/INTERPRETER.md
-related-code: interpreter/utils/structured-value.ts, interpreter/eval/pipeline/*.ts
+related-docs: docs/dev/PIPELINE.md, docs/dev/INTERPRETER.md
+related-code: grammar/patterns/file-reference.peggy, grammar/deps/grammar-core.ts, interpreter/utils/structured-value.ts, interpreter/utils/load-content-structured.ts, interpreter/eval/content-loader/finalization-adapter.ts, interpreter/eval/auto-unwrap-manager.ts, interpreter/eval/pipeline/*.ts
 related-types: core/types { StructuredValue, PipelineInput }
 ---
 
@@ -11,6 +11,7 @@ related-types: core/types { StructuredValue, PipelineInput }
 ## tldr
 
 mlld treats structured data (arrays, objects, JSON) as first-class values via `StructuredValue` wrappers. All pipeline stages, variables, and content loaders preserve both `.text` (string view) and `.data` (parsed structure). Templates and display automatically stringify; computations access native values.
+Angle-bracket content loading (`<...>`, alligator syntax) is part of this same data model.
 
 ## Principles
 
@@ -144,8 +145,8 @@ assertStructuredValue(value, context?)         // Throw when boundary requires S
 ### Where Values Flow
 
 **Pipelines**
-- `PipelineExecutor` wraps all stage outputs in `StructuredValue`
-- `structuredOutputs` map tracks wrappers; `previousOutputs` stores `.text`
+- `PipelineStateMachine.buildStageContext()` assembles stage context fields (`previousOutputs`, `structuredOutputs`, attempt/history snapshots)
+- `PipelineExecutor` runtime owns stage output normalization and caching (`PipelineOutputProcessor`, `StageOutputCache`)
 - `@pipeline`/`@p` exposes wrappers to subsequent stages
 - Parallel stages aggregate structured arrays (`.data` is array, `.text` is JSON)
 - Batch pipelines on `for`/`foreach` create synthetic array variables (`for-batch-input`, `foreach-batch-input`) so `processPipeline()` receives structured arrays; results may be scalars, arrays, or objects and are normalized using the standard variable factories.
@@ -168,6 +169,47 @@ assertStructuredValue(value, context?)         // Throw when boundary requires S
 - Loader metadata (filenames, URLs) lands directly in `.mx` (flattened from `LoadContentResult`)
 - Transformers (`@parse`, `@yaml`) forward native arrays/objects in `.data`
   - `@parse` uses JSON5 for relaxed parsing (single quotes, trailing commas, comments) and exposes `@parse.loose`/`@parse.strict` variants for explicit control. `@json` remains a deprecated alias.
+  - `@parse.llm` attempts JSON extraction from LLM-style prose/code-fence responses and returns `false` (not an exception) when no parseable JSON is found.
+
+### Alligator / Angle-Bracket Content Loading
+
+Source of truth:
+
+- `grammar/patterns/file-reference.peggy`
+- `grammar/deps/grammar-core.ts` (`isFileReferenceContent`)
+- `interpreter/utils/load-content-structured.ts`
+- `interpreter/eval/content-loader/finalization-adapter.ts`
+
+Detection behavior in interpolation contexts:
+
+- `<...>` is treated as file-reference content when trigger characters are present: `.`, `*`, or `@`.
+- `/` is not a trigger character.
+- HTML comments (`<!...`) and HTML/XML-like tags with attributes are guarded and treated as literals.
+- Escapes (`\\@`, `\\.`, `\\*`, `@@`) are honored before trigger checks.
+
+Wrapper and metadata access pattern:
+
+- System metadata and wrapper views are accessed through `.mx.*`.
+- Canonical wrapper view access is `@value.mx.text` and `@value.mx.data`.
+- Do not treat top-level `@value.text` / `@value.data` as canonical wrapper access.
+
+JSON / JSONL and finalization semantics:
+
+- `wrapLoadContentValue(...)` parses `.json` via `parseJsonWithContext(...)`; parse failures raise `JSON_PARSE_ERROR`.
+- `wrapLoadContentValue(...)` parses `.jsonl` line-by-line via `parseJsonLines(...)`; parse failures include line index and raise `JSONL_PARSE_ERROR`.
+- Non-json content keeps raw `.text`; best-effort JSON/JSON5 detection is applied when content looks parseable.
+- `ContentLoaderFinalizationAdapter.finalizeLoaderResult(...)` normalizes loader outputs to StructuredValues and merges metadata/security descriptors.
+
+Glob aggregate metadata:
+
+- Glob arrays are wrapped with array metadata containing `length` (`.mx.length`).
+- Elements keep per-file metadata (`.mx.filename`, `.mx.relative`, `.mx.absolute`, etc.) after per-item wrapping.
+- `.mx.fileCount` is not a current metadata field.
+
+JS/Node boundary behavior:
+
+- `AutoUnwrapManager` unwraps StructuredValues to `.data` unless `internal.keepStructured` is set.
+- Use `.keep` / `.keepStructured` when metadata/wrapper access must survive JS/Node handoff.
 
 **Display**
 - Templates interpolate using `asText()` automatically
@@ -207,7 +249,7 @@ AutoUnwrapManager unwraps StructuredValues to `.data` for JS/Node execution unle
 
 ```typescript
 array.data.map(item => (isStructuredValue(item) ? asText(item) : item));
-// Example: interpreter/eval/show.ts:630
+// Example: interpreter/eval/show/show-invocation-handlers.ts:56
 ```
 
 ### Context Snapshots (`.mx`) and `.internal`
@@ -215,6 +257,12 @@ array.data.map(item => (isStructuredValue(item) ? asText(item) : item));
 - `StructuredValue.mx` is a real property populated when the wrapper is created (see `interpreter/utils/structured-value.ts`). The snapshot includes security labels, taint arrays, policy context, provenance (filename, relative, absolute, url, domain, title, description), execution metadata (`source`, `retries`), metrics (`tokens`, `tokest`, `length`), plus helper fields such as `fm` and `json`. Consumers mutate `.mx` directly when they need to update provenance or retry counts.
 - `StructuredValue.internal` holds mlld-specific details (custom serialization hooks, transformer information, lazy loaders). Treat it as implementation detail; surface only what the interpreter needs.
 - `Variable.mx` comes from `VariableMetadataUtils.attachContext()` (`core/types/variable/VariableMetadata.ts`). The snapshot includes `name`, `type`, `definedAt`, security labels, taint, token metrics, array size, export status, sources, and policy context. Use `.mx` instead of manually reading `variable.metadata` to avoid cache invalidation bugs.
+
+### Ambient `@mx` vs Value `.mx`
+
+- Ambient `@mx` is execution context, not value metadata. It is built by `ContextManager.buildAmbientContext()` and surfaced by `VariableManager` as a reserved runtime variable.
+- Value `.mx` is metadata attached to StructuredValues and Variables (labels, provenance, retry/context snapshots for that value).
+- Keep them separate in docs and code paths: use `@mx.*` for current execution state; use `@value.mx.*` for metadata on a specific value.
 
 ### `.mx` Field Access Collision Rule
 
@@ -230,6 +278,26 @@ Top-level dotted access does not expose wrapper metadata like `@val.filename`, `
 - **Unwrap at stage boundaries only** - Stages work with plain JS values; use `asData()`/`asText()` right before execution
 - **Preserve metadata** - Don't strip `.mx` or convert wrappers to raw JSON unless at display boundary
 - **Avoid deep unwrap helpers** - Call helpers at appropriate boundaries, not recursively through nested objects
+
+### Large Variable Boundaries
+
+- Bash/sh parameter adaptation (`interpreter/env/bash-variable-adapter.ts`) resolves values in `ResolutionContext.CommandExecution`, stringifies them, and returns `envVars` with `tempFiles: []`.
+- Oversized bash/sh values are handled in `BashExecutor` via heredoc prelude injection before script execution.
+  - Threshold: `MLLD_MAX_BASH_ENV_VAR_SIZE`; default is `64 * 1024` bytes when unset.
+  - Oversized values are removed from exported env and assigned as shell-local variables in the prelude.
+  - Variable names are sanitized to bash-safe identifiers (`[^a-zA-Z0-9_]` -> `_`).
+  - Heredoc markers are generated uniquely with collision checks against payload content.
+- Simple `/run` command fallback for oversized payloads is in `CommandExecutorFactory.executeCommand(...)`.
+  - If `MLLD_DISABLE_SH` is not set, large payloads are routed to `BashExecutor` (stdin + heredoc path) instead of strict shell execution.
+  - Pre-check thresholds (defaults):
+    - `MLLD_MAX_SHELL_ENV_VAR_SIZE`: `128 * 1024`
+    - `MLLD_MAX_SHELL_ENV_TOTAL_SIZE`: `200 * 1024`
+    - `MLLD_MAX_SHELL_COMMAND_SIZE`: `128 * 1024`
+    - `MLLD_MAX_SHELL_ARGS_ENV_TOTAL`: `256 * 1024`
+- Debug knobs:
+  - `MLLD_DEBUG` logs heredoc/fallback decisions.
+  - `MLLD_DEBUG_BASH_SCRIPT=1` dumps constructed script/env diagnostics.
+  - Debug output uses mixed channels (`console.*` and direct writes); do not assume stderr-only behavior.
 
 ### Common Fix Patterns
 

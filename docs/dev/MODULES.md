@@ -1,368 +1,232 @@
 ---
-updated: 2026-01-04
-tags: #arch, #modules, #imports
-related-docs: docs/modules.md, docs/registry.md, docs/resolvers.md, docs/dev/REGISTRY.md
-related-code: interpreter/eval/directives/import/*.ts, core/resolvers/*.ts, interpreter/eval/import/*.ts, cli/commands/info.ts, cli/commands/docs.ts
-related-types: core/types { ImportDirective, ExportManifest, ModuleLockEntry }
+updated: 2026-02-18
+tags: #arch, #modules, #imports, #needs
+related-docs: docs/dev/RESOLVERS.md, docs/dev/REGISTRY.md, docs/dev/INTERPRETER.md, docs/dev/DATA.md
+related-code: core/registry/types.ts, core/resolvers/types.ts, core/resolvers/HTTPResolver.ts, interpreter/eval/needs.ts, interpreter/eval/import/ImportDirectiveEvaluator.ts, interpreter/eval/import/ImportRequestRouter.ts, interpreter/eval/import/ImportPathResolver.ts, interpreter/eval/import/ImportTypePolicy.ts, interpreter/eval/import/ImportSecurityValidator.ts, interpreter/eval/import/ModuleContentProcessor.ts, interpreter/eval/import/ModuleNeedsValidator.ts, interpreter/eval/import/DirectoryImportHandler.ts, interpreter/eval/import/ModuleImportHandler.ts, interpreter/eval/import/VariableImporter.ts, interpreter/eval/import/ShadowEnvSerializer.ts, interpreter/eval/import/variable-importer/*.ts, interpreter/eval/exec/context.ts, interpreter/env/ImportResolver.ts, interpreter/eval/export.ts, core/errors/MlldImportError.ts, core/types/security.ts, cli/commands/info.ts
+related-types: core/registry/types { ModuleType, MODULE_TYPE_PATHS }, core/policy/needs { NeedsDeclaration, CommandNeeds }, core/types/security { ImportType }, interpreter/eval/import/ImportPathResolver { ImportResolution }, core/resolvers/types { Resolver, ResolverCapabilities }, core/errors/MlldImportError { MlldImportErrorOptions }
 ---
 
-# Module System Architecture
+# MODULES
 
 ## tldr
 
-mlld's module system resolves imports through type-specific resolvers, evaluates module content in isolated environments with side-effect suppression, serializes exports with full scope capture, and validates versions against lock files. Import types (module/static/live/cached/local) determine resolution behavior; export manifests control visibility; captured environments preserve module scope for executables.
+- This is the canonical module+import architecture doc.
+- Import orchestration is rooted in `ImportDirectiveEvaluator` and routed through `interpreter/eval/import/*` handlers.
+- `/needs` is optional module metadata and is enforced at import time (`NEEDS_UNMET`).
+- Circular import detection is layered: `ModuleContentProcessor` global stack + environment/import-resolver stack checks.
+- Resolver internals stay in `docs/dev/RESOLVERS.md`; this doc only tracks resolver contracts used by module/import flow.
 
 ## Principles
 
-- Import types declare resolution behavior explicitly (network, cache, timing)
-- Module evaluation suppresses side effects via `isImporting` flag
-- Exports serialize complete module scope for cross-module references
-- Lock files enforce version contracts for reproducibility
-- Resolvers are pluggable and type-specific
+- Keep module packaging concerns separate from runtime import execution mechanics.
+- Keep import routing (`resolveImportPath` + request router) separate from import-type policy.
+- Keep `/needs` normalized before enforcement and fail fast at import boundaries.
+- Keep import side effects explicit: binding collisions, policy registration, guard registration.
 
 ## Details
 
-### Import Resolution Flow
+### Module Type Paths
 
-Entry point: `interpreter/eval/directives/import/ImportDirectiveEvaluator.ts:48`
+Source of truth: `core/registry/types.ts` (`MODULE_TYPE_PATHS`).
 
-1. **Import Type Determination** (line 94-119)
-   - Explicit: `/import module { x } from @author/mod` → Registry resolver
-   - Inferred from source: `@author/mod` → module, `<file>` → static, `<url>` → cached(5m)
-   - Default fallback: cached imports for URLs, static for files
+| Module Type | Local Path Root | Global Path Root |
+| --- | --- | --- |
+| `library` | `llm/lib` | `.mlld/lib` |
+| `app` | `llm/run` | `.mlld/run` |
+| `command` | `.claude/commands` | `.claude/commands` |
+| `skill` | `.claude/skills` | `.claude/skills` |
+| `environment` | `.mlld/env` | `.mlld/env` |
 
-2. **Resolver Selection** (`core/registry/ModuleInstaller.ts:98-104`, `core/resolvers/ResolverManager.ts:321-520`)
-   - Runtime registers: `ProjectPathResolver`, `RegistryResolver`, `LocalResolver`, `GitHubResolver`, `HTTPResolver`
-   - All resolution routes through `ResolverManager.resolve`
-   - Import types control caching behavior, not resolver selection
-   - Prefix matching (@author/, @root/, custom prefixes) determines resolver priority
+### Import Evaluator Composition Boundaries
 
-3. **Lock File Validation** (`ImportDirectiveEvaluator.ts:245-276`)
-   - Registry imports check `mlld-lock.json` for version/hash
-   - Version mismatch throws generic `Error` when registry versions differ (`ImportDirectiveEvaluator.ts:640-650`)
-   - File/URL imports are not validated (no mtime or ETag checks in current implementation)
-   - Only registry modules with `registryVersion` metadata are enforced
-   - Missing lock entries allowed (first import adds entry automatically)
+Entrypoint and composition root:
 
-4. **Content Resolution** (`core/resolvers/[Resolver].ts`)
-   - Each resolver fetches content per its contract
-   - Registry: `RegistryResolver.ts:209` fetches from `modules.json` CDN
-   - Local: `LocalResolver.ts:87` reads from filesystem
-   - HTTP: `HttpResolver.ts:142` fetches with cache headers
-   - Integrity verification via SHA256 hash
+- `interpreter/eval/import/ImportDirectiveEvaluator.ts`
 
-5. **Module Processing** (`interpreter/eval/import/ModuleContentProcessor.ts:63-138`)
-   - Parse content → AST
-   - Create child environment with `isImporting = true`
-   - Evaluate AST (side effects suppressed)
-   - Extract export manifest if present
-   - Serialize module scope
+Evaluator-owned collaborators:
 
-6. **Environment Binding** (`interpreter/eval/directives/import/VariableImporter.ts:58-124`)
-   - Selected imports: bind specific names
-   - Namespace imports: bind entire module object
-   - Collision detection via `Environment.trackImportedBinding`
-   - Throws `IMPORT_NAME_CONFLICT` with directive locations
+- `ImportPathResolver` (`resolveImportPath(...)`)
+- `ImportRequestRouter` (routes by resolved source type)
+- `McpImportHandler` (MCP directive variants)
+- `ResolverContentImportHandler` (resolver-content import path)
+- `ModuleNeedsValidator` (`enforceModuleNeeds(...)`)
+- `ImportBindingValidator` (export binding validation)
+- `PolicyImportContextManager` (policy import context)
 
-### Export System
+Router boundary (`ImportRequestRouter`):
 
-Entry point: `interpreter/eval/directives/export.ts:21`
+- `InputImportHandler`
+- `ResolverImportHandler`
+- `ModuleImportHandler`
+- `NodeImportHandler`
+- `FileUrlImportHandler`
 
-**Export Manifest** (`interpreter/eval/import/ExportManifest.ts`)
-- Stores set of exported identifiers
-- Multiple `/export` directives accumulate
-- Deduplicates automatically (Set-based)
+Module-content processing boundary:
 
-**Evaluation** (`export.ts:7-50`)
-- Collects names from `/export { name1, name2 }` AST
-- Adds to environment's manifest via `env.setExportManifest`
-- Wildcard `/export { * }` triggers auto-export mode
-- Validation deferred until module evaluation completes
+- `ModuleContentProcessor` composes content read/parse/eval with:
+  - `ImportSecurityValidator`
+  - `VariableImporter`
+- `DirectoryImportHandler` enforces child `index.mld` needs using the same needs validator callback.
 
-**Processing** (`VariableImporter.processModuleExports:189-310`)
-- If manifest exists: filter childVars to exported names only
-- Missing exported name throws `EXPORTED_NAME_NOT_FOUND` with location
-- No manifest: auto-export all variables (legacy fallback)
-- System variables (@root, @base, @now, etc.) always filtered
+### Resolution Flow and Import Types
 
-**Serialization** (`VariableImporter.ts:321-489`)
-- Primitives: direct value copy
-- Executables: serialize `ExecutableDef` + `capturedModuleEnv`
-- Templates: serialize `templateAst` + interpolation type + captured env
-- Objects: recursive serialization via `serializeObjectForModule`
-- Arrays: element-wise serialization
-- Pipelines: preserve `PipelineContext` metadata
+Source of truth: `ImportDirectiveEvaluator.ts`, `ImportPathResolver.ts`, `ImportTypePolicy.ts`, `core/types/security.ts`.
 
-### Module Environment Capture
-
-**Purpose**: Executables/templates reference their defining module's variables
-
-**Capture** (`VariableImporter.ts:265-272` capture, `144-148` serialization)
-- Serialize all module variables → `Record<string, SerializedVariable>`
-- Recursive serialization handles nested executables
-- Shadow environments serialized separately (`capturedShadowEnvs`)
-- Stored in `metadata.capturedModuleEnv`
-- **Executable scope**: Serialization captures the complete module scope, so executables always see sibling bindings during invocation (`interpreter/eval/exec-invocation.ts:169-214`)
-
-**Resolution** (`interpreter/eval/exec-invocation.ts:189-215`)
-- Check invocation parameters first
-- Fall back to `capturedModuleEnv` for missing identifiers
-- Caller environment never consulted
-- Missing variables throw interpolation errors with module context
-
-**Template Interpolation** (`interpreter/eval/template-renderer.ts:98-127`)
-- `@var` syntax: resolve against captured env
-- `{{var}}` syntax (triple-colon): resolve through captured module environment fallback
-- Both syntaxes preserve module scope across import boundaries
-
-### Side Effect Suppression
-
-**Mechanism** (`Environment.ts:142, 168`)
-- `setImporting(true)` before module evaluation
-- `getIsImporting()` checked by directive evaluators
-- `finally` block ensures flag reset
-
-**Suppressed Directives** (`interpreter/eval/directives/`)
-- `/run`: `run.ts:47` early return when importing
-- `/output`: `output.ts:38` early return when importing
-- `/show`: `show.ts:32` early return when importing
-
-**Active Directives**
-- `/var`: always executes (builds module state)
-- `/exe`: always executes (defines functions)
-- `/import`: always executes (nested imports allowed)
-- `/export`: always executes (builds manifest)
-
-### Lock File Integration
-
-**Structure** (`core/registry/LockFile.ts:5-24`)
-```typescript
-interface ModuleLockEntry {
-  version: string;           // "1.0.0" or "latest"
-  resolved: string;          // content hash
-  source: string;            // original specifier
-  integrity: string;         // "sha256:..."
-  fetchedAt: string;         // ISO timestamp
-  registryVersion?: string;  // resolved version
-  sourceUrl?: string;        // fetch URL
-}
+```ts
+const resolution = await this.pathResolver.resolveImportPath(directive);
+const importContext = resolveImportType(directive, resolution);
+resolution.importType = importContext.importType;
 ```
 
-**Operations** (`LockFile.ts:221-298`)
-- `addModule`: write new entry after successful fetch
-- `updateModule`: merge updates (preserves unlisted fields)
-- `verifyModuleIntegrity`: SHA256 content verification
-- `calculateIntegrity`: hash generation
+- `ImportResolution.type` includes `'node'` (`'file' | 'url' | 'module' | 'resolver' | 'input' | 'node'`).
+- Supported import keywords: `module`, `static`, `live`, `cached`, `local`, `templates`.
 
-**Validation** (`ImportDirectiveEvaluator.ts:610-649`)
-- Registry imports: enforces version match when `registryVersion` metadata is present
-- File/URL imports: no mtime or ETag validation in current implementation
-- Lock validation only applies to registry modules with version metadata
-- Missing lock entries allowed (first import adds entry automatically)
+| Import Type | Allowed Resolution Types | Notes |
+| --- | --- | --- |
+| `module` | `module`, `node` | `node` resolves through module import policy path. |
+| `static` | `file`, resolver `@base/@root/@project` | Resolver static scope is intentionally narrow. |
+| `live` | `url`, `resolver`, `input` | No static embedding semantics. |
+| `cached` | `url` | Cache duration from `cached(...)` parsed to milliseconds. |
+| `local` | `module` (with `preferLocal`) or resolver `@local` | Enables local-module preference path. |
+| `templates` | `file` or resolver `@base/@root/@project/@local` | Template params are only valid for this import type. |
 
-### Import Collision Detection
+### Circular Import Detection
 
-**Tracking** (`Environment.ts:312-328`)
-- `importedBindings: Map<string, ImportBinding>` per environment
-- Records: identifier, source path, directive location
+- `ModuleContentProcessor` uses a global stack (`globalImportStack`) to guard module content processing entrypoints.
+- `ImportSecurityValidator` delegates import lifecycle checks to environment methods:
+  - `env.isImporting(...)`
+  - `env.beginImport(...)`
+  - `env.endImport(...)`
+- `Environment` delegates those lifecycle methods to `ImportResolver`, which tracks a shared `Set<string>` stack and checks parent contexts.
 
-**Detection** (`VariableImporter.ensureImportBindingAvailable:141-167`)
-- Check if identifier already imported
-- Throws `IMPORT_NAME_CONFLICT` with:
-  - Both directive locations
-  - Source paths
-  - Suggestion to use namespace imports
+### `/needs` Declaration (Optional)
 
-**Error Example**
-```
-Import collision: 'helper' already imported from '@alice/utils' at file.mld:5
-Attempting to import from '@bob/tools' at file.mld:8
-Use namespace imports to avoid collisions: import @alice/utils as @alice
-```
+Source of truth: `grammar/directives/needs-wants.peggy` and `core/policy/needs.ts`.
 
-### Resolver System
+`/needs` is optional. Modules can omit it.
 
-**Interface** (`core/resolvers/types.ts:29-71`)
-```typescript
-interface IResolver {
-  resolve(spec: string, mx: ResolverContext): Promise<ResolverResult>;
-  shouldHandle(spec: string): boolean;
-  priority: number;
-}
-```
+Supported package ecosystems:
 
-**Implementations**
-- `RegistryResolver`: Fetches from mlld registry (modules.json)
-- `LocalResolver`: Reads from filesystem (project-relative)
-- `HttpResolver`: Fetches via HTTP/HTTPS with caching
-- `GitHubResolver`: Resolves GitHub URLs/repo paths
-- `ProjectPathResolver`: Handles @root/@base prefixes for project-relative paths
+- `node` / `js`
+- `python` / `py`
+- `ruby` / `rb`
+- `go`
+- `rust`
 
-**Orchestration** (`ResolverManager.ts:321-520`)
-- Prefix matching determines resolver (@author/ → Registry, @root/ → ProjectPath, custom → LocalResolver)
-- Priority ordering for ambiguous cases
-- All resolution routed through `ResolverManager.resolve`
-- Import types control caching/timing, not which resolver is selected
+Supported boolean capabilities:
 
-### Registry Data Access
+- `sh` / `bash`
+- `network` / `net`
+- `filesystem` / `fs`
 
-**Registry URL**: `https://raw.githubusercontent.com/mlld-lang/registry/main/modules.json`
+`cmd` forms:
 
-**Entry point**: `core/resolvers/RegistryResolver.ts`
+- wildcard: `cmd: *`
+- list: `cmd: [curl, jq]`
+- map: `cmd: { git: { methods: [...], subcommands: [...], flags: [...] } }`
+- bare command entries normalize into command needs through the grammar `__commands` path.
 
-**Module Entry Structure** (from modules.json):
-```typescript
-{
-  "@mlld/array": {
-    name: "array",
-    author: "mlld",
-    about: "Array operations with native return values",
-    version: "2.0.0",
-    needs: ["node"],
-    license: "CC0",
-    source: {
-      type: "github",
-      url: "https://raw.githubusercontent.com/...",  // ← Raw content URL
-      contentHash: "sha256:...",
-      repository: { type: "git", url: "...", commit: "...", path: "..." }
-    },
-    keywords: [...],
-    availableVersions: ["2.0.0"],
-    tags: { latest: "2.0.0", stable: "2.0.0" },
-    owners: ["mlld"]
-  }
-}
-```
+### Import-Time `/needs` Enforcement
 
-**Key Fields**:
-- `source.url`: Raw URL to fetch module content (use for section extraction)
-- `about`: Module description
-- `version`: Current version
-- `availableVersions`: All published versions
-- `tags`: Named version aliases (latest, stable, beta)
+Enforcement flow:
 
-**Fetching Module Info** (`RegistryResolver.ts:379-434`):
-1. Fetch `modules.json` from registry CDN
-2. Look up `@author/module` key
-3. `source.url` points to raw module content
+1. `/needs` evaluation records normalized needs (`interpreter/eval/needs.ts`, env `recordModuleNeeds(...)`).
+2. `ModuleContentProcessor` returns `moduleNeeds` in processing results.
+3. `ImportDirectiveEvaluator.validateModuleResult(...)` enforces via `ModuleNeedsValidator.enforceModuleNeeds(...)`.
+4. `DirectoryImportHandler` enforces needs for child `index.mld` modules using the same validator callback.
 
-**CLI Usage Pattern** (for `mlld info`, `mlld docs`):
-```typescript
-// Fetch modules.json
-const registry = await fetch(registryUrl).then(r => r.json());
-const entry = registry.modules[`@${author}/${module}`];
+Failure surface:
 
-// Get source URL for section extraction
-const sourceUrl = entry.source.url;
+- Exception type: `MlldImportError`
+- Error code: `NEEDS_UNMET`
+- Message includes detail lines per unmet capability/runtime/package/command.
 
-// Use interpreter to extract sections
-const source = `var @tldr = <${sourceUrl} # tldr>\nshow @tldr`;
-await interpret(source, options);
-```
+### Lock Version and Binding Enforcement
 
-**Private Registries**: Use `ResolverManager` for resolution - it handles both public registry and locally-configured private registries via prefix matching. Don't hardcode the public registry URL in CLI commands.
+- Lock-version validation is owned by `ModuleImportHandler.validateLockFileVersion(resolverContent, env)`.
+- Call site is inside `ModuleImportHandler.evaluateModuleImport(...)`.
+- Binding collision enforcement is owned by `ImportBindingGuards`, not `Environment`:
+  - `ensureImportBindingAvailable(...)`
+  - `setVariableWithImportBinding(...)`
+- Successful import bindings are registered through `Environment.setImportBinding(...)`.
 
-### Configuration
+### VariableImporter Composition Map
 
-**mlld-config.json** (`core/registry/ConfigFile.ts:10-37`)
-- `dependencies`: registry module versions
-- `resolvers.prefixes`: custom resolver mappings
-- `security`: allowed domains, env vars, paths
-- `dev.localModulesPath`: local development path
+Source of truth: `interpreter/eval/import/VariableImporter.ts` and `interpreter/eval/import/variable-importer/*`.
 
-**mlld-lock.json** (`core/registry/LockFile.ts:5-24`)
-- Auto-generated, never manually edited
-- Version locks for reproducibility
-- Content hashes for integrity
-- Fetch timestamps for debugging
+- Composition root: `VariableImporter`
+- Export serialization and manifest validation:
+  - `ModuleExportSerializer`
+  - `ModuleExportManifestValidator`
+  - `GuardExportChecker`
+- Import subtype routing:
+  - `ImportTypeRouter`
+  - `NamespaceSelectedImportHandler`
+  - `PolicyImportHandler`
+- Variable reconstruction:
+  - `factory/ImportVariableFactoryOrchestrator`
+  - shape strategies in `factory/*ImportStrategy.ts`
+- Executable/captured-env rehydration:
+  - `executable/ExecutableImportRehydrator`
+  - `executable/CapturedEnvRehydrator`
+- Metadata envelope parsing:
+  - `MetadataMapParser`
 
-## Module Structure
+### Export Metadata and Environment Boundaries
 
-Modules are directories with an entry point, manifest, and optional supporting files. They support four types that install to different locations. (Single-file "packed" format is a future compilation target for gist publishing.)
+- `ModuleExportSerializer` writes per-variable metadata to `moduleObject.__metadata__`.
+- `MetadataMapParser.extractMetadataMap(...)` reads metadata for import-side reconstruction.
+- Shadow-env serialization path:
+  - `serializeShadowEnvironmentMaps(...)` (`ShadowEnvSerializer.ts`)
+  - `CapturedEnvRehydrator.deserializeShadowEnvs(...)`
+  - `deserializeShadowEnvs(...)` fallback in `interpreter/eval/exec/context.ts`
+- Captured module-env serialization recursion is cycle-controlled with `WeakSet<object>` tracking.
 
-### Module Types & Paths
+### Optional Selected Import Behavior
 
-| Type | Local Install | Global Install |
-|------|---------------|----------------|
-| `library` | `llm/lib/{name}/` | `~/.mlld/lib/{name}/` |
-| `app` | `llm/run/{name}/` | `~/.mlld/run/{name}/` |
-| `command` | `.claude/commands/{name}/` | `~/.claude/commands/{name}/` |
-| `skill` | `.claude/skills/{name}/` | `~/.claude/skills/{name}/` |
+- `NamespaceSelectedImportHandler.handleSelectedImport(...)` allows missing selected fields only for `@payload` and `@state` imports.
+- Missing keys in those imports synthesize `null` variable bindings instead of throwing.
 
-### Directory Structure
+### Resolver Contracts (High-Level Only)
 
-```
-mymodule/
-├── index.mld          # Entry point
-├── module.yml         # Manifest (or .yaml, .json)
-├── README.md          # Docs
-└── lib/               # Optional supporting files
+Source of truth: `core/resolvers/types.ts`.
+
+- Resolver interface is `Resolver` (not legacy `IResolver`).
+- Capability contract is `ResolverCapabilities` (`io`, `contexts`, `supportedContentTypes`, `defaultContentType`, `priority`, optional `cache`).
+- HTTP resolver class is `core/resolvers/HTTPResolver.ts`.
+- Resolver internals/capability specifics are tracked in `docs/dev/RESOLVERS.md`.
+
+### Registry Info Surface
+
+- `cli/commands/info.ts` fetches live registry JSON (`modules.json`) and caches it in-process.
+- Do not document this command as mock-data based.
+
+### Error Surface
+
+`MlldImportError` constructor shape:
+
+```ts
+new MlldImportError(message, {
+  code,
+  details,
+  cause,
+  severity,
+  context
+});
 ```
 
-### Key Files
+## Regression Hazards
 
-- **Types**: `core/registry/types.ts` - `ModuleType`, `ModuleManifest`, `MODULE_TYPE_PATHS`
-- **Manifest Detection**: `cli/commands/publish/utils/ModuleReader.ts` - `detectManifest()`, `readDirectoryModule()`
-- **Publishing**: `cli/commands/publish/strategies/RepoPublishingStrategy.ts` - `createDirectoryRegistryEntry()`
-- **Resolution**: `core/resolvers/RegistryResolver.ts` - `resolveDirectoryModule()`
-- **Installation**: `core/registry/ModuleInstaller.ts` - writes files to type-based paths
-- **Run Command**: `cli/commands/run.ts` - directory script detection with `index.mld`/`main.mld`
-- **Scaffolding**: `cli/commands/init-module.ts` - `scaffoldDirectoryModule()`
-
-### Registry Format
-
-Directory modules use `source.type: "directory"` in registry entries:
-
-```json
-{
-  "source": {
-    "type": "directory",
-    "baseUrl": "https://raw.githubusercontent.com/author/repo/sha/path/",
-    "files": ["index.mld", "module.yml", "README.md"],
-    "entryPoint": "index.mld",
-    "contentHash": "combined-hash"
-  },
-  "type": "app"
-}
-```
-
-### CLI Commands
-
-```bash
-mlld module app myapp              # Create llm/run/myapp/
-mlld module library mylib          # Create llm/lib/mylib/
-mlld module command mycmd          # Create .claude/commands/mycmd/
-mlld module skill myskill          # Create .claude/skills/myskill/
-mlld module app myapp --global     # Create ~/.mlld/run/myapp/
-mlld run myapp                     # Run directory app (finds index.mld)
-mlld install @author/mod --global  # Install globally
-```
+- Captured module-env serialization recursion control (`WeakSet` cycle prevention) in importer/export serializer paths.
+- Captured shadow-env serialize/rehydrate compatibility between import and exec-context paths.
+- `__metadata__` envelope parsing plus `VariableMetadataUtils` propagation for label/taint continuity.
+- Binding-collision diagnostic payload shape (`IMPORT_NAME_CONFLICT`) in `ImportBindingGuards`.
+- Namespace policy side effects via `PolicyImportHandler.applyNamespacePolicyImport(...)`.
 
 ## Gotchas
 
-- `isImporting` flag must be reset in `finally` blocks (cache hits can skip try body)
-- Module scope serialization is deep (recursive) - watch for circular references
-- Lock validation only applies to registry imports (file/URL use different mechanisms)
-- Collision detection is per-file, not global (same name from different sources in different files is fine)
-- Auto-export includes all variables except system variables (@root, @base, @now, etc.)
-- CLI commands (`info`, `docs`) must use ResolverManager, not hardcoded registry URL, to support private registries
-- `cli/commands/info.ts` has mock data in `fetchModuleInfo()` - needs to use real registry data
-
-## Debugging
-
-**Environment Variables**
-- `MLLD_DEBUG=1`: log import resolution, cache hits, lock validation
-- `MLLD_DEBUG_IMPORTS=1`: detailed import chain with namespace assignments
-
-**Key Decision Points**
-1. Import type inference: `ImportDirectiveEvaluator.ts:94-119`
-2. Resolver selection: `ResolverManager.resolve` (core/resolvers/ResolverManager.ts:321-520)
-3. Lock validation: `ImportDirectiveEvaluator.ts:245-276`
-4. Export filtering: `VariableImporter.ts:237-269`
-5. Collision detection: `VariableImporter.ts:141-167`
-
-**Common Issues**
-- Side effects during import: check `isImporting` flag state
-- Missing exports: verify `/export` manifest matches variable names
-- Version conflicts: inspect `mlld-lock.json` entries
-- Resolution failures: enable `MLLD_DEBUG` to trace resolver chain
+- `/needs` is optional; do not require it for every module.
+- Keep `/needs` alias docs aligned with `normalizeNeedsDeclaration(...)`.
+- Keep lock-version attribution on `ModuleImportHandler`, not `ImportDirectiveEvaluator`.
+- Keep circular detection docs set-based (global + env/import-resolver), not a private array on `ImportSecurityValidator`.
+- Keep `templates` in import type docs; it is part of the current `ImportType` union.

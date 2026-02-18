@@ -1,5 +1,5 @@
 ---
-updated: 2026-02-11
+updated: 2026-02-18
 tags: #arch, #var
 related-docs: docs/dev/INTERPRETER.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/ALLIGATOR.md
 related-code: interpreter/eval/var.ts, interpreter/eval/var/*.ts
@@ -7,7 +7,7 @@ related-code: interpreter/eval/var.ts, interpreter/eval/var/*.ts
 
 # VAR EVALUATION ARCHITECTURE
 
-## TLDR
+## tldr
 
 - `prepareVarAssignment` and `evaluateVar` remain the `/var` entrypoints.
 - `interpreter/eval/var.ts` orchestrates assignment flow.
@@ -35,9 +35,23 @@ related-code: interpreter/eval/var.ts, interpreter/eval/var/*.ts
 - `interpreter/eval/var/reference-evaluator.ts`
   - Evaluates variable references and tails, including condensed-pipe reference forms.
 - `interpreter/eval/var/execution-evaluator.ts`
-  - Evaluates execution-capable RHS nodes (`command`, `code`, `ExecInvocation`, `ForExpression`, `WhenExpression`, `NewExpression`, and env directives).
+  - Evaluates execution-capable RHS nodes:
+    - `code`
+    - `command`
+    - `ExecInvocation`
+    - `ExeBlock`
+    - `WhenExpression`
+    - `ForExpression`
+    - `LoopExpression`
+    - `foreach`
+    - `foreach-command`
+    - `NewExpression`
+    - `Directive` where `kind === 'env'`
 - `interpreter/eval/var/rhs-dispatcher.ts`
   - Routes RHS nodes to the correct evaluator branch and returns typed dispatch results.
+- `interpreter/eval/var/collection-evaluator.ts`
+  - Detects complex object/array shapes used by variable-construction strategy selection.
+  - Evaluates collection entries/items for dispatcher and variable-builder flows.
 - `interpreter/eval/var/tool-scope.ts`
   - Normalizes tool collections and tool scopes.
   - Enforces bind/expose validation and parent-child subset constraints.
@@ -68,3 +82,12 @@ related-code: interpreter/eval/var.ts, interpreter/eval/var/*.ts
 - Descriptor state merges security metadata from interpolation, RHS evaluation, and pipeline inputs.
 - Variable wrappers remain typed through the full flow (`simple-text`, `primitive`, `array`, `object`, `template`, `structured`, executable-derived forms).
 - Tool collection validation reads executable signatures from environment variables and enforces parameter coverage constraints.
+
+## Executable Variables
+
+- `/exe` defines executable variables (grammar: `grammar/directives/exe.peggy`).
+- Reference/invocation semantics are universal:
+  - `@fn` returns an executable reference.
+  - `@fn(...)` invokes through `interpreter/eval/exec-invocation.ts`.
+- Lazy reference behavior in value contexts:
+  - `interpreter/eval/data-values/VariableReferenceEvaluator.ts` preserves executable variables for non-invocation references, enabling deferred execution.

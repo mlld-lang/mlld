@@ -1,7 +1,7 @@
 ---
-updated: 2026-02-17
+updated: 2026-02-18
 tags: #arch, #interpreter
-related-docs: docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/RESOLVERS.md, docs/dev/SHADOW-ENV.md, docs/dev/IMPORTS.md, docs/dev/ITERATORS.md, docs/dev/ALLIGATOR.md, docs/dev/EXEC-VARS.md, docs/dev/VAR-EVALUATION.md, docs/dev/SECURITY.md, docs/dev/HOOKS.md, docs/dev/OUTPUT.md, llms.txt
+related-docs: docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/PIPELINE.md, docs/dev/RESOLVERS.md, docs/dev/SHADOW-ENV.md, docs/dev/IMPORTS.md, docs/dev/ITERATORS.md, docs/dev/DATA.md, docs/dev/VAR-EVALUATION.md, docs/dev/SECURITY.md, docs/dev/HOOKS.md, docs/dev/OUTPUT.md, docs/dev/STREAMING.md, llms.txt
 related-code: interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/core/interpolation-context.ts, interpreter/eval/*.ts, interpreter/eval/exec/*.ts, interpreter/eval/import/*.ts, interpreter/eval/pipeline/*, interpreter/eval/auto-unwrap-manager.ts, interpreter/env/Environment.ts, interpreter/env/ImportResolver.ts, interpreter/env/VariableManager.ts, interpreter/env/executors/*.ts, interpreter/output/*.ts, core/types/*, core/policy/*
 related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableReferenceNode, WithClause }, core/types/variable { Variable }
 ---
@@ -13,6 +13,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Single-pass, AST-driven evaluation: parse once, evaluate directly.
 - `Environment` is the runtime: variables, imports, execution, effects, security.
 - Output is intent-first (`OutputIntent` → `OutputRenderer` → effects) with effect-handler output as primary and node formatting as fallback.
+- OUTPUT/STREAMING boundary: `docs/dev/OUTPUT.md` owns intent/effect/normalization; `docs/dev/STREAMING.md` owns StreamBus/sinks/adapters/SDK stream-event transport.
 - Lazy by default for complex data; strict contexts switch behavior (conditions, interpolation, field access).
 - Unified exec invocation and pipelines; resolvers unify modules, paths, and built-ins.
 
@@ -38,6 +39,22 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
   - Core AST node dispatch pipeline for directives, literals, expressions, exec invocations, when/for, objects/arrays, file/code fences, and frontmatter.
   - Owns document/text traversal behavior and routes to extracted handler modules under `interpreter/core/interpreter/handlers/`.
 
+### Core Extraction Seams
+
+- Entrypoint contract (`interpreter/core/interpreter.ts`) stays stable:
+  - `evaluate(node, env, context?)` returns `{ value, env }` (plus optional process metadata in command/code paths).
+  - `interpolate(nodes, env, context?, options?)` returns interpolated string output.
+  - `cleanNamespaceForDisplay(namespaceObject)` returns JSON text with frontmatter plus exported variables/executables.
+- Ownership map for extracted core modules:
+  - `interpreter/core/interpreter/traversal.ts`: array/document traversal, frontmatter-first handling, non-directive intent emission, node recording order.
+  - `interpreter/core/interpreter/dispatch.ts`: node-type to dispatch-target mapping and unknown-node error creation.
+  - `interpreter/core/interpreter/resolve-variable-reference.ts`: variable lookup fallback, expression-context missing-variable behavior, field traversal, condensed-pipe application, `commandRef` execution branch.
+  - `interpreter/core/interpreter/interpolation-security.ts`: descriptor collection, merge, and recording around interpolation.
+  - `interpreter/core/interpreter/value-resolution.ts`: shared helper for resolving variable kinds to runtime values.
+  - `interpreter/core/interpreter/namespace-display.ts`: namespace display formatting/filtering for frontmatter and exports.
+- Unknown-node invariant remains: `Unknown node type: <type>` (`interpreter/core/interpreter/dispatch.ts`).
+- Characterization coverage for these seams lives in `interpreter/core/interpreter.characterization.test.ts`.
+
 ### Phases and Data Flow
 
 1. Parse (Peggy) → AST (`core/types`)
@@ -60,6 +77,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
    - Interpreter/evaluators emit intents and effects (`doc|stdout|stderr|both|file`) through `Environment`.
    - `OutputRenderer` collapses/flushes intent output and routes to effects.
    - `interpret()` reads final document from effect handler when available; falls back to node formatter only if no document-capable effect handler is present.
+   - Canonical docs: `docs/dev/OUTPUT.md` (intent/effect/normalization) and `docs/dev/STREAMING.md` (StreamBus/sinks/adapters/SDK stream-mode flow).
 
 ### Environment Responsibilities
 
@@ -98,6 +116,9 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Field access: `utils/field-access.ts` supports dot/bracket/numeric; `@obj.field?` is a valid optional suffix; handles `variableIndex` indirection by resolving index variables.
 - Array slicing: supports `@arr[a:b]`, negative indices, and open ranges; preserves metadata for special arrays.
 - Interpolation: `interpolate()` processes unified template/quote nodes, variable refs, file refs, and condensed pipes; escapes via `interpolation-context`.
+- Ambient execution context: `@mx` is built by `ContextManager.buildAmbientContext()` and exposed at lookup time by `VariableManager` (`getVariable('mx')`).
+- Reserved-name rule: user code cannot define `@mx`; `VariableManager.setVariable()` throws for `name === 'mx'`.
+- Value metadata is separate: `.mx` on Variables/StructuredValues is data metadata and provenance (see `docs/dev/DATA.md`).
 
 ### Exec + Pipelines
 
@@ -108,7 +129,8 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
   - `eval/exec/non-command-handlers.ts` executes template/data/pipeline/command-ref/section/resolver executable types.
 - Pipelines:
   - Condensed: `@value|@parse|@xml|@upper` processed by `eval/pipeline/unified-processor`.
-  - With-clause: `run [...] with { pipeline: [...] }` sets `pipelineContext` on env for each stage.
+  - Command-execution orchestration entrypoint: `eval/pipeline/command-execution.ts` (command reference resolution, executable normalization, preflight checks, branch handler dispatch, final result wrapping).
+  - `/with` clause behavior is canonical in `docs/dev/PIPELINE.md` (grammar: `grammar/patterns/with-clause.peggy`, runtime: `eval/with-clause.ts`).
   - Inline effects: built-ins `| log`, `| output`, `| show` attach to the preceding stage, run after it succeeds, and re-run on each retry attempt.
   - Retry/source semantics: `processPipeline()` can inject synthetic source-stage context for retryable sources; attempts are tracked by the pipeline state machine.
   - Streaming: run/exec configure `StreamingManager` sinks at execution time; defaults are terminal+progress, while `streamFormat` uses adapter sinks and suppresses terminal output.
@@ -117,6 +139,33 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 ### Metadata Preservation
 
 - `AutoUnwrapManager` preserves LoadContentResult metadata across JS/Node/Python boundaries and is used in exec, run, and pipeline command paths (`eval/auto-unwrap-manager.ts`).
+
+### Content Loader Seams
+
+Canonical user-facing alligator/content behavior lives in `docs/dev/DATA.md`; interpreter seam ownership is documented here.
+
+- Composition entrypoint: `interpreter/eval/content-loader.ts`.
+  - Wires shared dependencies and delegates runtime routing to `ContentLoaderOrchestrator`.
+- Orchestration router: `interpreter/eval/content-loader/orchestrator.ts`.
+  - Routes AST, URL, glob, and single-file branches.
+- Branch boundaries:
+  - AST: `interpreter/eval/content-loader/ast-pattern-resolution.ts`, `interpreter/eval/content-loader/ast-variant-loader.ts`
+  - URL: `interpreter/eval/content-loader/url-handler.ts`
+  - Glob: `interpreter/eval/content-loader/glob-loader.ts`
+  - Single file: `interpreter/eval/content-loader/single-file-loader.ts`
+- Shared helper boundaries:
+  - `interpreter/eval/content-loader/source-reconstruction.ts`
+  - `interpreter/eval/content-loader/section-utils.ts`
+  - `interpreter/eval/content-loader/transform-utils.ts`
+  - `interpreter/eval/content-loader/policy-aware-read.ts`
+  - `interpreter/eval/content-loader/security-metadata.ts`
+- Finalization boundary:
+  - `interpreter/eval/content-loader/finalization-adapter.ts` (`finalizeLoaderResult(...)`)
+  - Load-content normalization uses `wrapLoadContentValue(...)` from `interpreter/utils/load-content-structured.ts` with metadata/security merge.
+- Optional/error behavior invariants:
+  - Optional glob failure path returns empty-array wrapper (`finalizeLoaderResult([], { type: 'array' })`).
+  - Optional non-glob failure path returns `null`.
+  - `MlldSecurityError` is passed through (not remapped) by orchestrator/glob paths.
 
 ### Iteration
 
@@ -160,6 +209,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Capture parse errors (pattern dev): `captureErrors: true` interpret option.
 - Use directive trace: `enableTrace` option (on by default) to inspect directive flow.
 - Inspect pipeline context via ambient `@mx` (stages, attempts, hint).
+- Keep namespaces distinct: ambient `@mx` is runtime execution context; value `.mx` metadata is documented in `docs/dev/DATA.md`.
 
 ### Hint Scoping in Pipelines
 
@@ -181,15 +231,20 @@ This keeps `@mx.hint` tightly scoped to the location where it is meaningful, whi
 - Exec code handler: `interpreter/eval/exec/code-handler.ts` — code executable execution path
 - Exec non-command handlers: `interpreter/eval/exec/non-command-handlers.ts` — template/data/pipeline/ref/section/resolver execution paths
 - /show: `interpreter/eval/show.ts` — display content, header transforms
-- /log: inline effect via pipelines; shorthand for output-to-stdout in actions
+- /log: `grammar/directives/output.peggy` + `interpreter/eval/pipeline/builtin-effects.ts` — `/log` directive sugar and inline `| log` both emit to `stderr`
 - /when: `interpreter/eval/when.ts`, `interpreter/eval/when-expression.ts` — conditionals
+- /bail: `interpreter/eval/bail.ts` — fail-fast bailout directive evaluation
+- /env: `interpreter/eval/env.ts` — environment variable and env-file handling
 - /for: `interpreter/eval/for.ts` — iteration over arrays/objects
+- /loop: `interpreter/eval/loop.ts` + `interpreter/core/interpreter/evaluator.ts` — `/loop` directive and `LoopExpression` runtime evaluation
 - foreach (operator): `interpreter/eval/data-value-evaluator.ts` and `interpreter/eval/foreach.ts` — cartesian execution
 - Executable foreach: code executable with language `mlld-foreach` handled in `interpreter/eval/exec/code-handler.ts`
 - /import: `interpreter/eval/import/ImportDirectiveEvaluator.ts` + `interpreter/eval/import/ImportRequestRouter.ts` — import orchestration, handler routing, and binding/manifest integration
 - /output: `interpreter/eval/output.ts` — file and stream outputs
+- /load-content (`<...>`): `interpreter/eval/content-loader.ts` + `interpreter/eval/content-loader/*` — source reconstruction, branch routing, and finalization
 - Expressions: `interpreter/eval/expressions.ts` + `interpreter/eval/new-expression.ts` — binary/unary/ternary and `new` expression handling
 - Pipelines: `interpreter/eval/pipeline/unified-processor.ts` — condensed + structured
+- Pipeline command execution orchestration: `interpreter/eval/pipeline/command-execution.ts` — stage command reference resolution + executable branch dispatch
 - Pipeline executor runtime: `interpreter/eval/pipeline/executor.ts` + `interpreter/eval/pipeline/executor/*` — composition root, execution loop, stage runners, and streaming lifecycle
 - Interpolation: `interpreter/core/interpreter.ts#interpolate` — templates, pipes, file refs
 

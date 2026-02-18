@@ -1,5 +1,5 @@
 ---
-updated: 2025-01-07
+updated: 2026-02-18
 tags: #grammar, #parser, #peggy
 related-docs: docs/dev/AST.md, grammar/docs/DEBUG.md
 related-code: grammar/*.peggy, grammar/deps/grammar-core.ts, grammar/build-grammar.mjs
@@ -88,9 +88,9 @@ Level 7: directives/    → Directive implementations
 
 Before creating patterns, check `patterns/` for existing abstractions:
 - `AtVar` - Variable references
-- `WrappedPathContent` - Path handling
+- `PathExpression` + alligator/file-reference patterns - path/content entrypoints (`PathExpression`, `AlligatorExpression`, `FileReferenceInterpolation`)
 - `TemplateCore` - Template parsing
-- `GenericList` - Comma-separated lists
+- `CommaSpace` + rule-specific first/rest list rules in `grammar/patterns/lists.peggy` (Peggy parametric GenericList is not used)
 
 ## Gotchas
 
@@ -101,7 +101,7 @@ Before creating patterns, check `patterns/` for existing abstractions:
 - VALUES must be node arrays for interpolation support
 - JavaScript in `{...}` blocks has undocumented PEG.js limitations
 - NAMING: Use PascalCase, follow prefixes (Base*, At*, Wrapped*) and suffixes (*Identifier, *Pattern, *Content, *Core, *Token, *List not *sList)
-- ANTI-PATTERNS: Don't duplicate list logic (use GenericList), don't redefine variable patterns (use AtVar), don't ignore core abstractions (use TemplateCore), don't create local versions of existing patterns
+- ANTI-PATTERNS: Don't duplicate list logic (use `CommaSpace` + shared list style from `patterns/lists.peggy`), don't redefine variable patterns (use AtVar), don't ignore core abstractions (use TemplateCore), don't create local versions of existing patterns
 - ALWAYS make sure you build before doing any testing! `npm run build` to get both grammar and test fixtures. 
 - ALWAYS make sure you're using a local build -- `./dist/cli.cjs` or `npm run reinstall` to get a globally runnable symlink with `mlld-<branch>`
 
@@ -176,10 +176,25 @@ helpers.isUnclosedObject = function(input, pos) {
 
 `grammar/deps/grammar-core.ts` exposes `captureBracketContent`, `offsetLocation`, and `reparseBlock` to surface inner errors from bracketed blocks with correct offsets. When a rule owns a `[...]` body and outer parsing fails, add a fallback branch that:
 - grabs the raw substring with `captureBracketContent`
-- calls `reparseBlock` with the inner start rule (e.g., `ExeBlockBody`, `ForBlockBody`, `WhenConditionList`, `WhenActionBlockContent`, `GuardRuleList`, `WhenExpressionConditionList`)
+- calls `reparseBlock` with the inner start rule (for example: `ExeBlockBody`, `ForBlockBody`, `LoopBlockBody`, `WhenConditionList`, `WhenExpressionConditionList`, `WhenBoundExpressionConditionList`, `GuardRuleList`, `WhenActionBlockContent`, `IfActionBlockBody`)
 - passes `peg$computeLocation` for the base offset
 
-`grammar/build-grammar.mjs` lists the allowed inner start rules; update that list when adding new block parsers. Current blocks wired for reparsing: exe statement blocks, for block actions, when block/match/action blocks (including when expressions), and guard when clauses.
+`grammar/build-grammar.mjs` lists the allowed start rules. Keep docs aligned with `allowedStartRules` there. Current allowed start rules are:
+
+- `Start`
+- `ExeBlockBody`
+- `ForBlockBody`
+- `LoopBlockBody`
+- `ForBlockStatementList`
+- `WhenConditionList`
+- `WhenExpressionConditionList`
+- `WhenBoundExpressionConditionList`
+- `IfActionBlockBody`
+- `GuardRuleList`
+- `WhenActionBlockContent`
+- `WhenActionBlockBody`
+- `TemplateBodyAtt`
+- `TemplateBodyMtt`
 
 ### Error Recovery Pattern
 ```peggy
