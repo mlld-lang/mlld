@@ -77,6 +77,43 @@ All three example archetypes include invalidation workers. See:
 - `examples/research/` — invalidation of synthesis claims
 - `examples/development/` — adversarial verification of implementation
 
+### Blind Invalidation vs Verified Invalidation
+
+The naive pattern — give the adversary the same context as the worker and ask "is this right?" — produces false positives. The adversary has no more information than the original worker, so it either rubber-stamps or invents objections from thin air.
+
+**The fix: give the adversary more tools than the worker had.** This is the verified invalidation pattern:
+
+1. **Phase 1 (constrained)**: Worker operates with limited context. Produces candidate findings.
+2. **Phase 2 (expanded)**: Verifier gets the same findings PLUS broader tool access to check them empirically.
+
+The verifier must answer: "Can I prove this finding is real?" — not "Does this look right?"
+
+```
+Phase 1 worker:    Read-only, scoped context → candidate findings
+Phase 2 verifier:  Read + search + execute → verified findings with evidence
+```
+
+**Concrete tool escalation**:
+- Phase 1 gets `Read,Write,Glob,Grep` (enough to compare inputs)
+- Phase 2 gets `Read,Write,Glob,Grep,Bash(mlld:*),Bash(ls:*)` (can search the codebase, run validation commands, check test cases)
+
+**Verification requirements** (enforce in the prompt):
+- "WRONG" claims → run the actual command or validator on both versions
+- "FABRICATED" claims → search the full codebase before declaring something doesn't exist
+- "MISSING" claims → confirm the content is genuinely absent, not just in a different location
+- Every kept finding must cite a specific file path + line as evidence
+- Apply **Chesterton's Fence**: before confirming a finding, state why the current content might be intentional
+
+**Classification taxonomy** (give the verifier these options):
+- `confirmed`: Evidence supports the finding — cite specific files
+- `false-positive`: The feature/content exists, worker just didn't see it
+- `insufficient-context`: Worker's context was too narrow — note where the answer lives
+- `needs-human`: Ambiguous, might be intentional design
+
+This pattern comes from the QA workflow (`llm/run/qa/`), where Phase 1 (black-box testing with limited docs) produces candidate issues, and Phase 2 (self-review with test cases + source access) verifies them empirically. The self-review consistently reclassifies 30-50% of Phase 1 findings as false positives.
+
+**Anti-pattern**: Giving the adversary the exact same tools and context as the original worker. If the worker couldn't tell, neither can the adversary. Escalate access or the invalidation step is theater.
+
 ## Three Archetypes
 
 ### 1. Audit (parallel fan-out + invalidation)
