@@ -399,11 +399,9 @@ WhenBareBlockForm
 
 WhenModifier
   = mod:("first") {
-      helpers.mlldError(
-        "The 'first' modifier is not needed. 'when' uses first-match semantics by default. Remove 'first' from your when block.",
-        'when',
-        location()
-      );
+      // 'first' is redundant — when already uses first-match semantics by default.
+      // Silently accept for backwards compatibility with existing modules.
+      return mod;
     }
 
 // -------------------------------------------------------------

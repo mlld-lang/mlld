@@ -911,11 +911,9 @@ WhenBoundPatternAtom
 
 // Optional modifier for when-expression in /exe RHS (rejected)
 WhenExprModifier = mod:("first") {
-      helpers.mlldError(
-        "The 'first' modifier is not needed. 'when' uses first-match semantics by default. Remove 'first' from your when expression.",
-        'when',
-        location()
-      );
+      // 'first' is redundant — when already uses first-match semantics by default.
+      // Silently accept for backwards compatibility with existing modules.
+      return mod;
     }
 
 // Value-oriented condition list for when expressions

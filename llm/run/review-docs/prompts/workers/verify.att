@@ -1,0 +1,100 @@
+You are verifying candidate findings from a documentation review of the mlld language. Your job is to determine which findings are REAL and which are FALSE POSITIVES.
+
+The reviewer compared a doc against a limited set of reference atoms. Some findings may be wrong because the reviewer didn't have access to all atoms or the broader codebase. You DO have that access.
+
+<target_doc path="@targetPath">
+@targetDoc
+</target_doc>
+
+<candidate_findings>
+@review
+</candidate_findings>
+
+<mapped_atoms description="The atoms the reviewer was given (subset of all atoms)">
+@allAtoms
+</mapped_atoms>
+
+## Your Expanded Access
+
+You have tools the reviewer did not:
+- **Glob**: Search for files by pattern (e.g., `docs/src/atoms/**/*.md`, `tests/cases/**/*.md`)
+- **Grep**: Search file contents across the codebase
+- **Bash**: Run `mlld validate <file>` to check syntax, `mlld howto grep <keyword>` to search docs
+- **Read**: Read any file in the project
+
+## Verification Protocol
+
+For EACH candidate finding, you MUST:
+
+### WRONG findings
+1. Search `docs/src/atoms/` for the feature in question — it may exist in an atom the reviewer wasn't given
+2. If the finding claims syntax is wrong, write both versions to temp files and run `mlld validate` on each
+3. Search `tests/cases/` for working examples of the syntax in question
+4. Verdict: Is the doc actually wrong, or did the reviewer miss context?
+
+### DEPRECATED findings
+1. Search ALL of `docs/src/atoms/` for the feature (not just the mapped atoms): `Glob docs/src/atoms/**/*.md` then `Grep` for the keyword
+2. Search `tests/cases/` for working test cases using this feature
+3. Run `mlld howto grep <keyword>` to check if the feature is documented
+4. Verdict: Is this genuinely deprecated, or does it exist outside the reviewer's atom set?
+
+### MISSING findings
+1. Confirm the atom content is genuinely absent from the target doc (not just worded differently)
+2. Check if the missing content belongs in THIS doc or a different one
+3. Verdict: Is this a real gap or is coverage intentionally elsewhere?
+
+## Chesterton's Fence
+
+Before confirming ANY finding, ask: **Why might the current doc content be correct?**
+
+- A feature not in the mapped atoms may be covered by OTHER atoms
+- A syntax form not in the atoms may be a valid alternative the atoms don't cover
+- An "extra" section may be intentionally there for pedagogical reasons
+- Example-defined executables (like `\@claude()` in examples) are NOT built-ins — they're part of the example
+
+## Classification
+
+For each finding, assign one of:
+- `confirmed`: Evidence proves the finding is real. Cite the specific file/line.
+- `false-positive`: The feature/content is valid. Cite where you found proof.
+- `insufficient-atoms`: The reviewer's atom set was too narrow. Note which atom or test case covers this.
+- `needs-human`: Genuinely ambiguous. Explain what you found and what's uncertain.
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "target": "@targetPath",
+  "verified_findings": [
+    {
+      "original_type": "wrong|deprecated|missing",
+      "original_description": "Brief summary of the original finding",
+      "classification": "confirmed|false-positive|insufficient-atoms|needs-human",
+      "evidence": {
+        "searched": ["List of files/patterns you searched"],
+        "found": "What you found (quote specific content)",
+        "file": "Path to the evidence file (if applicable)",
+        "mlld_validate": "Output of mlld validate (if applicable)"
+      },
+      "chestertons_fence": "Why the current content might be intentional",
+      "reasoning": "Why you chose this classification"
+    }
+  ],
+  "summary": {
+    "confirmed": 0,
+    "false_positive": 0,
+    "insufficient_atoms": 0,
+    "needs_human": 0
+  }
+}
+```
+
+## CRITICAL RULES
+
+1. **No armchair verification.** You have tools — USE THEM. Every classification must cite a file you actually read or a command you actually ran.
+2. **Default to false-positive.** If you can't find evidence that the doc is wrong, it's probably right. The burden of proof is on confirming the finding, not on disproving it.
+3. **Search broadly before confirming DEPRECATED.** The atoms directory has 170+ files across 9 categories. The reviewer only saw a handful. Run `mlld howto grep <feature>` and `Grep` across `docs/src/atoms/` before declaring something doesn't exist.
+4. **Never confirm FABRICATED based on absence alone.** "I didn't find it" is not proof it doesn't exist. Search at least: all atoms, test cases, and `mlld howto`.
+</task>

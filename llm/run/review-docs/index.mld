@@ -1,0 +1,284 @@
+>> Review Docs Orchestrator
+>> Usage: mlld run review-docs [--parallel 10] [--priority high] [--new]
+>>
+>> Reviews docs/user/ and website/ against authoritative atom ground truth.
+>> Three phases: review (candidates) → verify (with codebase access) → revise (confirmed only).
+>> Audit archetype with verified invalidation.
+>> Default: resume latest run for today. --new forces a fresh run.
+
+import { @claudePoll } from @local/claude-poll
+import { @logEvent, @fileExists, @flatName, @loadAtoms } from "./lib/context.mld"
+import "@payload" as @p
+
+>> ─── Config ───
+
+var @parallelism = @p.parallel ? @p.parallel * 1 : 10
+var @priorityFilter = @p.priority ?? ""
+var @forceNew = @p.new ?? ""
+var @reviewTools = "Read,Write,Glob,Grep"
+var @verifyTools = "Read,Write,Glob,Grep,Bash(mlld:*),Bash(ls:*),Bash(cat:*),Bash(find:*)"
+var @reviseTools = "Read,Write"
+
+>> ─── Prompt templates ───
+
+exe @reviewPrompt(targetPath, targetDoc, allAtoms) = template "./prompts/workers/review.att"
+exe @verifyPrompt(targetPath, targetDoc, review, allAtoms) = template "./prompts/workers/verify.att"
+exe @revisePrompt(targetPath, targetDoc, allAtoms, verifiedFindings) = template "./prompts/workers/revise.att"
+
+>> ─── Helpers ───
+
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+exe @countConfirmed(text) = [
+  let @data = @text | @parse.llm
+  when [
+    @data.summary => @data.summary.confirmed ?? 0
+    @data.verified_findings => [
+      let @matched = for @f in @data.verified_findings when @f.classification == "confirmed" => @f
+      => @matched.length
+    ]
+    * => 0
+  ]
+]
+
+>> ─── Load manifest ───
+
+var @manifest = <./manifest.json> | @json
+var @targets = when @priorityFilter [
+  "" => for @d in @manifest.docs when @d.atoms.length > 0 => @d
+  * => for @d in @manifest.docs when @d.atoms.length > 0 && @d.priority == @priorityFilter => @d
+]
+
+>> ─── Set up run directory ───
+
+var @today = @now.slice(0, 10)
+var @runsRoot = `@root/runs`
+exe @countExisting(dir, date) = sh { ls -1 "$dir" 2>/dev/null | grep "^review-docs-$date" | wc -l | tr -d ' ' }
+var @existingCount = @countExisting(@runsRoot, @today)
+exe @latestRun(dir, date) = sh { ls -1d "$dir"/review-docs-$date* 2>/dev/null | sort -r | head -1 }
+
+var @runDir = when @forceNew [
+  "" => when @existingCount [
+    "0" => `@runsRoot/review-docs-@today-0`
+    * => @latestRun(@runsRoot, @today)
+  ]
+  * => `@runsRoot/review-docs-@today-@existingCount`
+]
+
+run @mkdirp(@runDir)
+run @mkdirp(`@runDir/reviews`)
+run @mkdirp(`@runDir/verified`)
+run @mkdirp(`@runDir/finals`)
+
+show `═══════════════════════════════════════════════════════════════════`
+show `Review Docs: @targets.length targets`
+show `═══════════════════════════════════════════════════════════════════`
+show `Parallelism: @parallelism`
+show `Priority filter: @priorityFilter`
+show `Run dir: @runDir`
+show `───────────────────────────────────────────────────────────────────`
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 1: Review — compare each doc against mapped atoms
+>> Produces candidate findings (unverified)
+>> ═══════════════════════════════════════════════════════════════════
+
+show `\nPhase 1: Review (@targets.length docs, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+var @reviewResults = for parallel(@parallelism) @entry in @targets [
+  let @targetPath = @entry.target
+  let @flatTarget = @flatName(@targetPath)
+  let @outPath = `@runDir/reviews/@flatTarget\.json`
+
+  >> Idempotency
+  let @check = @fileExists(@outPath)
+  if @check == "yes" [
+    show `  [@mx.for.index] @targetPath: skipped`
+    => <@outPath> | @json
+  ]
+
+  show `  [@mx.for.index] @targetPath: reviewing...`
+  let @targetDoc = <@root/@targetPath>
+  let @allAtoms = @loadAtoms(@entry)
+
+  let @prompt = @reviewPrompt(@targetPath, @targetDoc, @allAtoms)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+  @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
+
+  let @result = <@outPath>?
+  if !@result [
+    show `  [@mx.for.index] @targetPath: FAILED`
+    let @evtData = { target: @targetPath, error: "no review output" }
+    @logEvent(@runDir, "review_failed", @evtData)
+    => null
+  ]
+
+  let @evtData = { target: @targetPath }
+  @logEvent(@runDir, "review_complete", @evtData)
+  show `  [@mx.for.index] @targetPath: done`
+  => @result | @json
+]
+
+>> Filter to docs that need changes
+var @needsChanges = for @entry in @targets [
+  let @flatTarget = @flatName(@entry.target)
+  let @reviewFile = <@runDir/reviews/@flatTarget\.json>?
+  if !@reviewFile [ => null ]
+
+  let @reviewData = @reviewFile | @parse.llm
+  let @verdict = @reviewData.verdict ?? "needs-changes"
+  if @verdict == "up-to-date" [ => null ]
+
+  => @entry
+]
+var @toVerify = for @e in @needsChanges when @e => @e
+
+show `\nPhase 1 complete: @toVerify.length docs need changes`
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 2: Verify — check each finding against the full codebase
+>> Workers get expanded tool access (Glob, Grep, Bash for mlld validate)
+>> ═══════════════════════════════════════════════════════════════════
+
+show `\nPhase 2: Verify (@toVerify.length docs, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+var @verifyResults = for parallel(@parallelism) @entry in @toVerify [
+  let @targetPath = @entry.target
+  let @flatTarget = @flatName(@targetPath)
+  let @outPath = `@runDir/verified/@flatTarget\.json`
+
+  >> Idempotency
+  let @check = @fileExists(@outPath)
+  if @check == "yes" [
+    show `  [@mx.for.index] @targetPath: skipped`
+    => <@outPath> | @json
+  ]
+
+  show `  [@mx.for.index] @targetPath: verifying...`
+  let @targetDoc = <@root/@targetPath>
+  let @allAtoms = @loadAtoms(@entry)
+  let @review = <@runDir/reviews/@flatTarget\.json>
+
+  let @prompt = @verifyPrompt(@targetPath, @targetDoc, @review, @allAtoms)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+  @claudePoll(@fullPrompt, "sonnet", "@root", @verifyTools, @outPath)
+
+  let @result = <@outPath>?
+  if !@result [
+    show `  [@mx.for.index] @targetPath: FAILED`
+    let @evtData = { target: @targetPath, error: "no verify output" }
+    @logEvent(@runDir, "verify_failed", @evtData)
+    => null
+  ]
+
+  let @evtData = { target: @targetPath }
+  @logEvent(@runDir, "verify_complete", @evtData)
+  show `  [@mx.for.index] @targetPath: done`
+  => @result | @json
+]
+
+>> Filter to docs with confirmed findings
+var @toRevise = for @entry in @toVerify [
+  let @flatTarget = @flatName(@entry.target)
+  let @verifyFile = <@runDir/verified/@flatTarget\.json>?
+  if !@verifyFile [ => null ]
+
+  let @confirmed = @countConfirmed(@verifyFile)
+  if @confirmed == 0 [ => null ]
+
+  => @entry
+]
+var @reviseTargets = for @e in @toRevise when @e => @e
+
+show `\nPhase 2 complete: @reviseTargets.length docs have confirmed findings`
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 3: Revise — apply only confirmed findings
+>> ═══════════════════════════════════════════════════════════════════
+
+show `\nPhase 3: Revise (@reviseTargets.length docs, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+var @reviseResults = for parallel(@parallelism) @entry in @reviseTargets [
+  let @targetPath = @entry.target
+  let @flatTarget = @flatName(@targetPath)
+  let @outPath = `@runDir/finals/@flatTarget\.md`
+
+  >> Idempotency
+  let @check = @fileExists(@outPath)
+  if @check == "yes" [
+    show `  [@mx.for.index] @targetPath: skipped`
+    => { target: @targetPath, status: "complete" }
+  ]
+
+  show `  [@mx.for.index] @targetPath: revising...`
+  let @targetDoc = <@root/@targetPath>
+  let @allAtoms = @loadAtoms(@entry)
+  let @verifiedFindings = <@runDir/verified/@flatTarget\.json>
+
+  let @prompt = @revisePrompt(@targetPath, @targetDoc, @allAtoms, @verifiedFindings)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write the complete revised document to @outPath using the Write tool.`
+
+  @claudePoll(@fullPrompt, "sonnet", "@root", @reviseTools, @outPath)
+
+  let @result = <@outPath>?
+  if !@result [
+    show `  [@mx.for.index] @targetPath: FAILED`
+    let @evtData = { target: @targetPath, error: "no revision output" }
+    @logEvent(@runDir, "revise_failed", @evtData)
+    => { target: @targetPath, status: "error" }
+  ]
+
+  let @evtData = { target: @targetPath }
+  @logEvent(@runDir, "revise_complete", @evtData)
+  show `  [@mx.for.index] @targetPath: done`
+  => { target: @targetPath, status: "complete" }
+]
+
+>> ─── Summary ───
+
+exe @countStatus(results, status) = js {
+  return results.filter(r => r && (r.data || r).status === status).length;
+}
+
+var @completeCount = @countStatus(@reviseResults, "complete")
+var @errorCount = @countStatus(@reviseResults, "error")
+
+show `\n═══════════════════════════════════════════════════════════════════`
+show `Review Docs Complete`
+show `═══════════════════════════════════════════════════════════════════`
+show `  Total targets: @targets.length`
+show `  Needed changes: @toVerify.length`
+show `  Confirmed findings: @reviseTargets.length`
+show `  Revised: @completeCount`
+show `  Errors: @errorCount`
+show `  Run dir: @runDir`
+show `═══════════════════════════════════════════════════════════════════`
+
+var @summary = {
+  runDate: @now,
+  total: @targets.length,
+  neededChanges: @toVerify.length,
+  confirmedFindings: @reviseTargets.length,
+  revised: @completeCount,
+  errors: @errorCount
+}
+output @summary to `@runDir/summary\.json`
+
+var @finalEvt = {
+  total: @targets.length,
+  needed_changes: @toVerify.length,
+  confirmed: @reviseTargets.length,
+  revised: @completeCount,
+  errors: @errorCount
+}
+run @logEvent(@runDir, "run_complete", @finalEvt)
