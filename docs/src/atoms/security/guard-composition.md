@@ -5,13 +5,13 @@ brief: How multiple guards resolve
 category: security
 parent: guards
 tags: [security, guards, composition, resolution]
-related: [security-guards-basics, security-before-guards]
+related: [security-guards-basics]
 related-code: [interpreter/eval/guard.ts]
-updated: 2026-02-15
+updated: 2026-02-17
 qa_tier: 2
 ---
 
-These rules apply to **operation guards** (`before op:TYPE`, `after op:TYPE`):
+These rules apply to **all guards** (per-operation and per-input):
 
 1. Guards run top-to-bottom in declaration order.
 2. `always` timing participates in both phases (`before` and `after`).
@@ -23,4 +23,4 @@ These rules apply to **operation guards** (`before op:TYPE`, `after op:TYPE`):
 
 Guards are non-reentrant (won't trigger on their own operations).
 
-Label-entry guards (`before LABEL`) fire independently per labeled value and do not participate in operation-phase composition.
+Per-input guards (matched via data labels) fire once per matching input and participate in the same decision pipeline — their `deny`/`allow`/`retry` results compose with per-operation guard results using the same precedence rules above.

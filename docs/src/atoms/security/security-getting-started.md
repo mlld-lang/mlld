@@ -123,7 +123,7 @@ guard @noSecretExfil before op:exe = when [
 
 Policy denials are hard errors. Guard denials can be caught with `denied =>` handlers for graceful fallback. Use policy for absolute constraints; use guards when you need inspection, transformation, or recovery logic.
 
-See `guards-basics` for syntax and security context. See `before-guards` and `after-guards` for timing. See `guard-composition` for ordering rules.
+See `guards-basics` for syntax, timing, and security context. See `guard-composition` for ordering rules.
 
 ## Level 4: Full Custom Security with Environments
 

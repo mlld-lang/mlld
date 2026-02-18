@@ -7,7 +7,7 @@ parent: security
 tags: [labels, taint, security, tracking]
 related: [labels-source-auto, labels-sensitivity, security-label-tracking]
 related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]
-updated: 2026-01-31
+updated: 2026-02-17
 qa_tier: 2
 ---
 
@@ -58,8 +58,9 @@ When an operation is attempted:
 ```mlld
 var secret @customerList = <internal/customers.csv>
 
-guard @noSecretExfil before op:exe = when [
-  @input.any.mx.labels.includes("secret") && @mx.op.labels.includes("net:w") => deny "Secret data cannot flow to network operations"
+>> Guard on the data label — fires when secret data flows to any operation
+guard @noSecretExfil before secret = when [
+  @mx.op.labels.includes("net:w") => deny "Secret data cannot flow to network operations"
   * => allow
 ]
 
@@ -69,6 +70,8 @@ show @postToWebhook(@customerList)
 ```
 
 The `@customerList` has label `secret`. The operation `@postToWebhook` has label `net:w`. The guard blocks the flow: `Guard blocked operation: Secret data cannot flow to network operations`.
+
+You can guard from either direction — `guard before secret` (check the operation) or `guard before net:w` (check the data). See `guards-basics` for the matching model.
 
 **Label context (`@mx`):**
 

@@ -7,11 +7,11 @@ parent: security
 tags: [mcp, guards, for secret, src:mcp, security]
 related: [mcp, mcp-security, mcp-policy, mcp-import, security-guards-basics]
 related-code: [interpreter/eval/exec-invocation.ts, interpreter/eval/guard.ts]
-updated: 2026-02-04
+updated: 2026-02-17
 qa_tier: 2
 ---
 
-Guards use data-label filters (like `for secret`) to catch labeled data flowing to MCP calls. The guard condition narrows to exe operations using `@mx.op.type == "exe"`, since MCP tool calls execute as exe operations.
+Guards catch labeled data flowing to MCP calls. A bare label trigger like `for secret` matches both data labels on inputs and operation labels on exes (see `guards-basics`). Since MCP tool calls execute as exe operations, use `@mx.op.type == "exe"` to narrow to MCP/exe context, or guard directly on the tool's operation labels (e.g., `guard before destructive`).
 
 **Block MCP calls that carry secret data:**
 

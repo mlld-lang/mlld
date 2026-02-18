@@ -7,7 +7,7 @@ parent: guards
 tags: [security, guards, denied, error-handling]
 related: [security-guards-basics, when]
 related-code: [interpreter/eval/guard.ts, interpreter/eval/when.ts]
-updated: 2026-01-31
+updated: 2026-02-17
 qa_tier: 2
 ---
 
@@ -28,7 +28,7 @@ exe @safe(value) = when [
 ]
 ```
 
-`denied` handlers catch denials from operation guards (`before op:TYPE`, `after op:TYPE`). Label-entry guards (`before LABEL`) fire at data creation time before any operation context exists, so `denied` handlers do not apply to them.
+`denied` handlers catch denials from guards in both per-operation and per-input scope. When a guard denies an operation, the exe's `when` block can match `denied` and provide a fallback value.
 
 **Accessing guard context:**
 

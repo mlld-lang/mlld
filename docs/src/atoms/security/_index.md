@@ -80,7 +80,7 @@ Policy-generated guards and guards declared with `privileged` cannot be bypassed
 
 Guards are regular module exports — they can be imported, composed, and bundled.
 
-**Atoms:** `guards-basics` (start here), `before-guards`, `after-guards`, `guard-composition`, `guards-privileged`, `transform-with-allow`, `denied-handlers`
+**Atoms:** `guards-basics` (start here), `guard-composition`, `guards-privileged`, `transform-with-allow`, `denied-handlers`
 
 ## Policies
 
@@ -181,8 +181,7 @@ Composite patterns that combine multiple security primitives:
 6. `policies` — declaring policy objects
 7. `policy-operations` — semantic labels → risk categories
 8. `policy-label-flow` — deny/allow rules for data flow (includes hierarchical op:* matching)
-9. `guards-basics` — guard syntax and security context
-10. `before-guards` / `after-guards` — timing and trigger styles
+9. `guards-basics` — guard syntax, timing, triggers, and security context
 11. `signing-overview` → `sign-verify` → `autosign-autoverify`
 12. `mcp-security` → `mcp-policy` → `mcp-guards`
 13. `env-overview` → `env-config` → `env-blocks`
