@@ -1,7 +1,8 @@
 var secret @customerList = <internal/customers.csv>
 
-guard @noSecretExfil before op:exe = when [
-  @input.any.mx.labels.includes("secret") && @mx.op.labels.includes("net:w") => deny "Secret data cannot flow to network operations"
+>> Guard on the data label — fires when secret data flows to any operation
+guard @noSecretExfil before secret = when [
+  @mx.op.labels.includes("net:w") => deny "Secret data cannot flow to network operations"
   * => allow
 ]
 
