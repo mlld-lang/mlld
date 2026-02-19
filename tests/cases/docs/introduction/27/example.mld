@@ -1,4 +1,8 @@
-exe @getJSON(prompt) = when [
-  @mx.try == 1 => @claude(@prompt)
-  @mx.try > 1 => @claude("@prompt Return ONLY valid JSON. Previous attempt: @mx.hint")
+loop(endless) until @state.stop [
+  let @plan = <fix_plan.md>
+  let @task = @classify(@plan)
+  let @result = @execute(@task)
+
+  when @validate(@result) => @commit(@result)
+  continue
 ]

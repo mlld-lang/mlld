@@ -1,12 +1,6 @@
-exe @source() = when [
-  @mx.try == 1 => "draft"
-  * => "final"
-]
-
-exe @validator() = when [
-  @mx.input == "draft" => retry "missing title"
-  * => `Used hint: @mx.hint`
-]
-
-var @result = @source() | @validator
-show @result
+var @tpl = `
+/for @v in ["x","y"]
+- @v
+/end
+`
+show @tpl

@@ -425,7 +425,7 @@ Include content only when a variable is truthy. The `?` suffix checks the variab
 Declare an optional variable that omits itself when falsy:
 
 ```mlld
-var @subtitle? = @item.subtitle      >> omit if falsy
+var @subtitle = @item.subtitle
 show `Title: @item.title @subtitle?` >> subtitle only if present
 ```
 

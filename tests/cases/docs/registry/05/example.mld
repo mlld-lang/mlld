@@ -1,1 +1,7 @@
 import { @helper } from @alice/my-tool@beta
+
+>> Namespace alias
+import @corp/utils as @corp
+
+>> Semver range
+import { @helper } from @alice/utils@^1.0.0

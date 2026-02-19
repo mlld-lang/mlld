@@ -1,5 +1,9 @@
-var @canDeploy = @testsPass && @isApproved
-when [
-  @canDeploy => run {npm run deploy}
-  !@canDeploy => show "Deployment blocked - check tests and approval"
-]
+exe @left(input) = `L:@input`
+exe @right(input) = `R:@input`
+exe @combine(input) = js {
+  const [l, r] = JSON.parse(input);
+  return `${l} | ${r}`;
+}
+
+var @out = "seed" | @left || @right | @combine
+show @out

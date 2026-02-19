@@ -1,7 +1,2 @@
-for @user in @users [
-  let @status = when [
-    @user.active => "active"
-    * => "inactive"
-  ]
-  show "@user.name: @status"
-]
+var @items = [10, 20, 30]
+for @n in @items => show `Index: @mx.for.index, Value: @n`

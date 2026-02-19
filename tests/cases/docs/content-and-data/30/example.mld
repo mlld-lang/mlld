@@ -1,7 +1,11 @@
-var @a = "first"
-var @b = ""
-var @c = "third"
+var @title = ""
+var @primary = null
+var @secondary = "pal"
+var @fallback = @primary ?? @secondary ?? "fallback"
 
-var @list = [@a, @b?, @c]
-show @list
->> ["first", "third"] - @b was omitted because it's falsy
+show `Hello,@title??"friend"`
+show @fallback
+show `Hello,@missing??"friend"`
+>> "Hello,"
+>> "Hello,pal"
+>> "Hello,friend"

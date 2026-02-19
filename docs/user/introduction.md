@@ -327,7 +327,7 @@ Objects support spread syntax: `var @merged = { ...@obj, "extra": 1 }`
 Append `?` to `@var` in templates to omit it when falsy:
 
 ```mlld
-var @subtitle? = @item.subtitle
+var @subtitle = @item.subtitle
 show `Title: @item.title @subtitle?`
 ```
 

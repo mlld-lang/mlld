@@ -1,1 +1,2 @@
-when @score > 90 => show "Excellent!"
+var @simple = `Hello @name`
+var @codeblocks = ::Run `npm test` before @action::

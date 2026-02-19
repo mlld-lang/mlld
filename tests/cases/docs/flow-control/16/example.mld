@@ -1,2 +1,4 @@
-var @fruits = ["apple", "banana", "cherry"]
-for @fruit in @fruits => show `Fruit: @fruit`
+>> module.mld
+var @status = "active"
+=> { code: 200, status: @status }
+var @unreachable = "never runs"

@@ -1,13 +1,7 @@
-guard @secretBlock before secret = when [
-  @mx.op.type == "show" => deny "Cannot display secrets"
+guard @noShellSecrets before secret = when [
+  @mx.op.type == "run" => deny "Secrets cannot appear in shell"
   * => allow
 ]
 
 var secret @key = "sk-12345"
-
-exe @display(value) = when [
-  denied => `[REDACTED] - @mx.guard.reason`
-  * => `Value: @value`
-]
-
-show @display(@key)  >> Shows: [REDACTED] - Cannot display secrets
+run cmd { echo @key }  >> Blocked

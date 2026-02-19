@@ -1,2 +1,3 @@
 exe @greet(name) = cmd {echo "Hello @name"}
 exe @process(data) = js { return data.toUpperCase(); }
+exe @welcome(name, role) = template "./prompts/welcome.att"

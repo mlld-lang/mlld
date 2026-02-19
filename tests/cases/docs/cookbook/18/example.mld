@@ -1,0 +1,38 @@
+import { @claude, @haiku } from "@lib/claude.mld"
+
+>> Classify the most important task from a plan file
+exe @classifyTask(plan) = [
+  let @prompt = `Identify the SINGLE most important next task:
+@plan
+Return JSON: { "task": "...", "type": "implement|fix|test" }`
+  => @haiku(@prompt) | @parse.llm
+]
+
+>> Build context (collect all specs)
+exe @buildContext(task, specs) = [
+  => { task: @task, specs: @specs }
+]
+
+>> Execute the task with full agent
+exe @executeTask(task, context) = @claude(`
+# Task: @task.task
+# Specs: @context.specs.join("\n")
+Implement this. Search before assuming not implemented.
+`, "sonnet", ".", "Read,Edit,Write,Bash,Grep,Glob")
+
+>> Validate with tests (returns exit code)
+exe @validate() = cmd { npm test }
+
+>> The loop
+loop(endless) until @state.stop [
+  let @plan = <fix_plan.md>
+  when @plan.trim() == "" => done "complete"
+
+  let @task = @classifyTask(@plan)
+  let @context = @buildContext(@task, <specs/*.md>)
+  let @result = @executeTask(@task, @context)
+  let @check = @validate()
+
+  when @check.exitCode == 0 => run cmd { git commit -am "fix" }
+  continue
+]

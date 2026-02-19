@@ -1,6 +1,7 @@
-exe @combine(a, b) = [
-  let @result = "@a-@b"
-  => @result
+exe @greet(name) = [
+  let @greeting = "Hello"
+  let @punctuation = "!"
+  => "@greeting @name@punctuation"
 ]
 
-show @combine("hello", "world")
+show @greet("World")

@@ -27,7 +27,7 @@ var @firstItem = @items[0]  >> "apple"
 Optional variables (omit if falsy):
 
 ```mlld
-var @subtitle? = @item.subtitle      >> omit if falsy
+var @subtitle = @item.subtitle
 show `Title: @item.title @subtitle?` >> subtitle only if present
 ```
 
@@ -553,7 +553,7 @@ Local execution with different auth (no provider = local):
 var @cfg = { auth: "claude-alt" }
 
 env @cfg [
-  run cmd { claude -p @task } using auth:claude-alt
+  run cmd { claude -p @task } using auth:claude_alt
 ]
 ```
 
@@ -901,4 +901,3 @@ All file fields plus:
 - `headers`: HTTP headers
 - `status`: HTTP status code
 - `contentType`: content type
-

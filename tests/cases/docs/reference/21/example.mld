@@ -1,2 +1,1 @@
-exe @greet(name) = ::Hi @name!::
-var @greetings = foreach @greet(@names)
+for @value in @config => show `@value_key: @value`

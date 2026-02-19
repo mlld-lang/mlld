@@ -1,7 +1,10 @@
 >> Registry module (offline after install)
 import module { @api } from @company/tools
 
->> Embedded at parse time
+>> Embedded at parse time (named import)
+import static { @prompt } from "./prompt.md"
+
+>> Embedded at parse time (namespace import)
 import static <./prompts/system.md> as @systemPrompt
 
 >> Always fetch fresh

@@ -1,3 +1,13 @@
-/var @loose = "{'name': 'Ada', /* comment */ age: 32,}"
-/var @parsedLoose = @loose | @parse              >> Uses relaxed parsing
-/var @parsedStrict = @loose | @parse.strict      >> Fails with hint to use @parse.loose
+>> Load and parse CSV data
+var @data = <file.csv>
+var @tojson = @data | @parse
+show @tojson
+
+>> Convert to XML (SCREAMING_SNAKE_CASE)
+var @toxml = @data | @XML
+show @toxml
+
+>> Convert arrays to CSV
+var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+var @tocsv = @users | @CSV
+show @tocsv

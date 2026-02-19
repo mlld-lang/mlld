@@ -1,7 +1,13 @@
-guard @sanitize before untrusted = when [
-  * => allow @input.trim().slice(0, 100)
+guard @secretBlock before secret = when [
+  @mx.op.type == "show" => deny "Cannot display secrets"
+  * => allow
 ]
 
-var untrusted @userInput = "  very long input...  "
-exe @process(data) = `Processed: @data`
-show @process(@userInput)  >> Input trimmed and truncated
+var secret @key = "sk-12345"
+
+exe @display(value) = when [
+  denied => `[REDACTED] - @mx.guard.reason`
+  * => `Value: @value`
+]
+
+show @display(@key)  >> Shows: [REDACTED] - Cannot display secrets

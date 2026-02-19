@@ -1,5 +1,4 @@
 when [
-  @env == "prod" => @deploy("careful")
-  @env == "staging" => @deploy("normal")
-  * => show "Local only"
+  @accept(@response) => "Accepted"
+  * => "Rejected"
 ]

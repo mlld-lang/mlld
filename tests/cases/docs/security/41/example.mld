@@ -1,0 +1,5 @@
+var @sandbox = { tools: ["Read", "Write", "Bash"] }
+
+env @sandbox [
+  run cmd { echo "inside sandbox" }
+]

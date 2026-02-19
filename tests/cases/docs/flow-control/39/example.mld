@@ -1,7 +1,4 @@
-var @msg = "  hello pipeline  "
-var @shout = @msg | @trim | @upper
-show @shout
-
-var @record = `{"z":2,"a":1}`
-var @normalized = @record | @sort | @pretty
-show @normalized
+var @names = ["Ann","Ben"]
+exe @greet(n) = `Hello @n`
+show foreach @greet(@names) with { separator: " | ", template: "{{index}}={{result}}" }
+>> Output: 0=Hello Ann | 1=Hello Ben

@@ -1,7 +1,6 @@
-guard @validateOutput after op:exe = when [
-  @output.includes("ERROR") => deny "Operation failed"
-  * => allow
+exe @handler(value) = when [
+  denied => show "Blocked: @mx.guard.reason"
+  denied => show "Guard: @mx.guard.name"
+  denied => show "Labels: @mx.labels.join(', ')"
+  * => show @value
 ]
-
-exe @query() = run { curl api.example.com/status }
-show @query()  >> Blocked if output contains ERROR

@@ -1,13 +1,6 @@
-guard @first before secret = when [
-  * => allow "first"
+guard @validateJson after op:exe = when [
+  @isValidJson(@output) => allow
+  * => deny "LLM did not return valid JSON"
 ]
 
-guard @second before secret = when [
-  * => allow "second"
-]
-
-var secret @data = "original"
-exe @deliver(v) = `Result: @v`
-
->> Result: second
-show @deliver(@data)
+exe @isValidJson(text) = js { try { JSON.parse(text); return true; } catch { return false; } }

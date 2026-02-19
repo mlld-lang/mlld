@@ -1,6 +1,10 @@
-var @result = loop(10) [
-  let @count = (@input ?? 0) + 1
-  when @count >= 3 => done @count
-  continue @count
-]
-show @result
+var @items = ["  beta  ", " alpha "]
+
+>> One stage receives the whole array value
+var @whole = @items | @trim
+
+>> Per-item transform requires explicit iteration
+var @each = for @item in @items => @item | @trim | @upper
+
+show @whole
+show @each

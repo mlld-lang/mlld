@@ -1,13 +1,5 @@
-exe @generate() = when [
-  @mx.try == 1 => @haiku("Write a haiku about code")
-  * => @haiku("Write a haiku about code. Hint: @mx.hint")
+for parallel(3) @task in @tasks [
+  let @result = @process(@task)
+  show `Done: @task.id`
 ]
-
-exe @validate(text) = when [
-  @text.includes("code") => @text
-  @mx.try < 3 => retry "Must mention 'code'"
-  * => "Failed after 3 tries"
-]
-
-var @result = @generate() | @validate
-show @result
+show `Errors: @mx.errors.length`

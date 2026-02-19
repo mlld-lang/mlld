@@ -1,3 +1,15 @@
-import { @config, @respond } from "./support-bot.mld"
+---
+name: Support Bot
+model: sonnet
+---
 
-show @respond("How do I reset my password?")
+var @config = {
+  name: @fm.name,
+  model: @fm.model,
+  workDir: "/projects/support"
+}
+
+exe @systemPrompt(context) = template "./prompts/system.att"
+exe @respond(message) = template "./prompts/respond.att"
+
+export { @config, @systemPrompt, @respond }

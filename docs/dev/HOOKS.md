@@ -19,6 +19,7 @@ mlld's hook system enables pre-execution and post-execution extensions at evalua
 - Post-hooks run in registration order, transform results sequentially
 - Hooks receive extracted inputs (any type), operation context, and optional helpers
 - Non-reentrant per directive invocation (prevent infinite loops)
+- Hooks/checkpoint/resume rollout contract is tracked in `docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md` (Phase 0 decision lock before implementation phases).
 
 ## Details
 

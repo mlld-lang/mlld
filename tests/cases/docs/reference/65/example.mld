@@ -1,0 +1,9 @@
+>> Python shadow environment
+exe @greet(name) = py { print(f"Hello, {name}!") }
+exe @shout(text) = py { print(text.upper()) }
+exe py = { greet, shout }
+
+run py {
+greet("World")
+shout("mlld rocks")
+}

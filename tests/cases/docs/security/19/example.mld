@@ -1,8 +1,7 @@
-guard @validateInput before op:exe = when [
-  @input.any.text.includes("<script") => deny "Potentially malicious input"
-  @input.any.text.includes("sk-") => deny "Potentially sensitive token"
+guard @blockSend before op:exe = when [
+  @mx.op.name == "sendData" => deny "Network calls blocked"
   * => allow
 ]
 
-exe @process(data) = run { echo "@data" }
-show @process("<script>alert('xss')</script>")  >> Blocked
+exe @sendData(value) = run { curl -d "@value" api.example.com }
+show @sendData("test")  >> Blocked
