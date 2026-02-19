@@ -65,7 +65,7 @@ BacktickSequence "Backtick Sequence"
 ReservedDirective "Reserved Directive Name"
   = "/var" / "/show" / "/stream" / "/run" / "/exe"
   / "/import" / "/when" / "/if" / "/output" / "/append" / "/for" / "/loop" / "/log" / "/bail"
-  / "/guard" / "/export" / "/policy" / "/sign" / "/verify"
+  / "/guard" / "/hook" / "/export" / "/policy" / "/sign" / "/verify"
 
 // Streaming keyword for syntax sugar
 StreamKeyword "stream keyword"

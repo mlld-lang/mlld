@@ -3888,6 +3888,7 @@ export class DirectiveVisitor extends BaseVisitor {
       case 'var':
       case 'exe':
       case 'guard':
+      case 'hook':
       case 'policy':
         return 'directiveDefinition';
 

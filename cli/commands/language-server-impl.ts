@@ -1052,6 +1052,7 @@ export async function startLanguageServer(): Promise<void> {
       { name: 'append', desc: 'Append output to target' },
       { name: 'log', desc: 'Log to stdout; alias of output to stdout' },
       { name: 'guard', desc: 'Define security guard' },
+      { name: 'hook', desc: 'Define lifecycle hook' },
       { name: 'stream', desc: 'Stream output' },
       { name: 'env', desc: 'Scoped environment block' },
       { name: 'needs', desc: 'Declare dependencies' },

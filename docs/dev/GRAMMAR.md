@@ -1,5 +1,5 @@
 ---
-updated: 2026-02-18
+updated: 2026-02-19
 tags: #grammar, #parser, #peggy
 related-docs: docs/dev/AST.md, grammar/docs/DEBUG.md
 related-code: grammar/*.peggy, grammar/deps/grammar-core.ts, grammar/build-grammar.mjs
@@ -15,6 +15,7 @@ mlld's Peggy.js grammar uses abstraction-first design with hierarchical patterns
 Recent additions:
 - `||` marks parallel pipeline stages
 - `/append` directive and `append` pipeline builtin enable incremental file writes
+- `/hook` directive grammar support (`before`/`after` + function/op/data filters)
 
 ## Principles
 
@@ -113,6 +114,12 @@ Before creating patterns, check `patterns/` for existing abstractions:
 3. Use existing cores from `core/` for shared logic
 4. Add to `directives/` with proper naming
 5. Update `mlld.peggy` to include it
+
+Example (`/hook`):
+- add `grammar/directives/hook.peggy`
+- wire `SlashHook` into `Directive` alternatives in `grammar/mlld.peggy`
+- update keyword surfaces (`grammar/base/tokens.peggy`, `grammar/deps/grammar-core.ts`, and syntax generator patterns)
+- add parser tests in `grammar/tests/hook.test.ts`
 
 ### Creating a Shared Pattern
 1. Identify duplication across files

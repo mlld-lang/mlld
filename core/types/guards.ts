@@ -53,6 +53,7 @@ import {
 import { ImportWildcardNode } from './values';
 import { WithClause } from './run';
 import type { GuardDirectiveNode } from './guard';
+import type { HookDirectiveNode } from './hook';
 import type { CapabilityContext, CapabilityKind } from './security';
 
 // Define InterpolatableValue for the guard function
@@ -139,6 +140,10 @@ export function isWildcardImport(node: VariableReferenceNode): node is ImportWil
 
 export function isGuardDirective(node: DirectiveNode): node is GuardDirectiveNode {
   return node.kind === 'guard';
+}
+
+export function isHookDirective(node: DirectiveNode): node is HookDirectiveNode {
+  return node.kind === 'hook';
 }
 
 /**

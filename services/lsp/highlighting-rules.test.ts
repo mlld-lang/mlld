@@ -109,6 +109,7 @@ describe('Highlighting Rules', () => {
       expect(current).toContain('if');
       expect(current).toContain('output');
       expect(current).toContain('path');
+      expect(current).toContain('hook');
     });
     
     it('should have deprecated directives', () => {

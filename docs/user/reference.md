@@ -529,6 +529,21 @@ show @results  >> => ["L","R"]
 - Env: `MLLD_NO_STREAM=true`
 - API: `interpret(..., { streaming: { enabled: false } })`
 
+### Hooks (`hook`)
+
+Register user lifecycle hooks with required timing (`before` or `after`):
+
+| Syntax | Filter Type | Notes |
+|---|---|---|
+| `hook before @fn = [ ... ]` | Function | Matches executable name |
+| `hook before @fn("prefix") = [ ... ]` | Function + arg prefix | Matches first argument string prefix |
+| `hook after op:exe = when [ ... ]` | Operation | Matches operation type |
+| `hook before untrusted = [ ... ]` | Data label | Matches label-filtered inputs |
+
+Supported operation filters: `op:var`, `op:run`, `op:exe`, `op:show`, `op:output`, `op:append`, `op:for`, `op:for:iteration`, `op:for:batch`, `op:loop`, `op:import`.
+
+Hook bodies accept either a block (`[ ... ]`) or a `when [...]` expression.
+
 ### `env` - Scoped Execution
 
 Create scoped execution contexts with isolation, credential management, and capability control:

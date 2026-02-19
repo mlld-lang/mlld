@@ -254,6 +254,7 @@ export type DirectiveKind =
   | 'if'
   | 'when'
   | 'guard'
+  | 'hook'
   | 'stream'
   | 'needs'
   | 'profiles'
@@ -291,6 +292,8 @@ export type DirectiveSubtype =
   | 'ifBlock'
   // Guard subtype
   | 'guard'
+  // Hook subtype
+  | 'hook'
   // For subtype
   | 'for'
   // While subtype

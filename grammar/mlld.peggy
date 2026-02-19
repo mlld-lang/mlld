@@ -250,6 +250,7 @@ Directive
     / SlashAppend   // Append directives (incremental file writing)
     / SlashIf       // If directives (conditional blocks)
     / SlashWhen     // When directives (conditional execution)
+    / SlashHook     // Hook directives (user lifecycle hooks)
     / SlashGuard    // Guard directives (security policies)
     / SlashPolicy   // Policy composition directives
     / SlashSign     // Sign directives (signature storage)

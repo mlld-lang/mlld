@@ -210,7 +210,7 @@ World
   });
 
   it('recognizes all standard directive keywords in strict mode', () => {
-    const directives = ['var', 'show', 'exe', 'run', 'for', 'when', 'while', 'stream', 'guard', 'import', 'export', 'output', 'append', 'log', 'path'];
+    const directives = ['var', 'show', 'exe', 'run', 'for', 'when', 'while', 'stream', 'guard', 'hook', 'import', 'export', 'output', 'append', 'log', 'path'];
 
     for (const directive of directives) {
       const text = `${directive} @a = 1

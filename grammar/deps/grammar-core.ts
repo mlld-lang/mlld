@@ -44,6 +44,7 @@ export const DirectiveKind = {
   if: 'if',
   when: 'when',
   guard: 'guard',
+  hook: 'hook',
   // NO deprecated entries - clean break!
   needs: 'needs',
   profiles: 'profiles',

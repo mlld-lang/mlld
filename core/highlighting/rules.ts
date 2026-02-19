@@ -80,7 +80,7 @@ export const HIGHLIGHTING_RULES: HighlightingRules = {
   },
   
   directives: {
-    current: ['var', 'show', 'run', 'exe', 'env', 'import', 'when', 'if', 'output', 'path'],
+    current: ['var', 'show', 'run', 'exe', 'env', 'import', 'when', 'if', 'output', 'path', 'hook'],
     deprecated: ['text', 'data', 'add', 'exec']
   },
   

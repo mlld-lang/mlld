@@ -55,8 +55,8 @@ class MlldSyntaxGenerator {
       wildcard: '(?:^|\\s)\\*(?=\\s|$|=>)',
       // Object keys in literals: key:
       objectKey: '(?<=^|[{,\\s])[\\w]+(?=\\s*:(?!:))',
-      // Guard filter syntax
-      guardFilter: '\\bop:(run|exe|output|show|import)\\b',
+      // Guard/hook operation filter syntax
+      guardFilter: '\\bop:(var|run|exe|show|output|append|for(?::(iteration|batch))?|loop|import)\\b',
       // Type-checking builtin methods
       typeCheckMethods: '\\.(isArray|isObject|isString|isNumber|isBoolean|isNull|isDefined)\\s*\\(',
       // AST selector patterns inside { }
@@ -96,7 +96,7 @@ class MlldSyntaxGenerator {
           // Extract directive names without the / prefix
           const directives = directiveMatches.map(d => d.replace(/["\/]/g, ''));
           // Ensure newer directives are present even if grammar scan misses them
-          ['for', 'log', 'guard', 'export', 'stream', 'append'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
+          ['for', 'log', 'guard', 'hook', 'export', 'stream', 'append'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
           return directives;
         }
       }
@@ -106,7 +106,7 @@ class MlldSyntaxGenerator {
     }
     
     // Fallback to known list (v2 directives)
-    return ['var', 'show', 'stream', 'run', 'exe', 'path', 'import', 'when', 'output', 'append', 'for', 'log', 'guard', 'export'];
+    return ['var', 'show', 'stream', 'run', 'exe', 'path', 'import', 'when', 'output', 'append', 'for', 'log', 'guard', 'hook', 'export'];
   }
 
   generatePrism() {
