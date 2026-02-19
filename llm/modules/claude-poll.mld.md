@@ -14,7 +14,7 @@ mlldVersion: ">=2.0.0-rc78"
   sh
 }
 
-# @local/claude-poll
+# @mlld/claude-poll
 
 Claude invocation that detects completion by polling for an output file or JSONL pattern, then kills the process. Works around a known issue where `claude -p` doesn't terminate after the agent session completes ([anthropics/claude-code#20084](https://github.com/anthropics/claude-code/issues/20084)).
 
@@ -26,7 +26,7 @@ Supports two polling modes:
 
 **File mode** - watch for a marker file:
 ```mlld
-/import { @claudePoll } from @local/claude-poll
+/import { @claudePoll } from @mlld/claude-poll
 
 >> Agent writes /tmp/result.json during its session
 /var @output = @claudePoll(
@@ -41,7 +41,7 @@ Supports two polling modes:
 
 **JSONL mode** - watch for an event in a JSONL file:
 ```mlld
-/import { @claudePollEvent } from @local/claude-poll
+/import { @claudePollEvent } from @mlld/claude-poll
 
 >> Agent appends event to events.jsonl
 /var @eventsFile = "@runDir/events.jsonl"
@@ -156,7 +156,7 @@ Set `MLLD_CLAUDE_POLL_LOG=/path/to/claude.log` to capture `claude` stdout/stderr
 ## module
 
 ```mlld-run
-exe @claudePoll(prompt, model, dir, tools, markerFile) = sh {
+exe llm @claudePoll(prompt, model, dir, tools, markerFile) = sh {
   PROMPT_FILE=$(mktemp)
   printf '%s' "$prompt" > "$PROMPT_FILE"
 
@@ -201,7 +201,7 @@ exe @claudePoll(prompt, model, dir, tools, markerFile) = sh {
   cat "$markerFile" 2>/dev/null
 }
 
-exe @claudePollTimeout(prompt, model, dir, tools, markerFile, timeout) = sh {
+exe llm @claudePollTimeout(prompt, model, dir, tools, markerFile, timeout) = sh {
   PROMPT_FILE=$(mktemp)
   printf '%s' "$prompt" > "$PROMPT_FILE"
 
@@ -258,7 +258,7 @@ exe @claudePollTimeout(prompt, model, dir, tools, markerFile, timeout) = sh {
 }
 
 >> JSONL polling - watch for pattern in a JSONL file
-exe @claudePollJsonl(prompt, model, dir, tools, jsonlFile, pattern) = sh {
+exe llm @claudePollJsonl(prompt, model, dir, tools, jsonlFile, pattern) = sh {
   PROMPT_FILE=$(mktemp)
   printf '%s' "$prompt" > "$PROMPT_FILE"
 
@@ -306,7 +306,7 @@ exe @claudePollJsonl(prompt, model, dir, tools, jsonlFile, pattern) = sh {
 }
 
 >> JSONL polling with timeout
-exe @claudePollJsonlTimeout(prompt, model, dir, tools, jsonlFile, pattern, timeout) = sh {
+exe llm @claudePollJsonlTimeout(prompt, model, dir, tools, jsonlFile, pattern, timeout) = sh {
   PROMPT_FILE=$(mktemp)
   printf '%s' "$prompt" > "$PROMPT_FILE"
 
@@ -363,7 +363,7 @@ exe @claudePollJsonlTimeout(prompt, model, dir, tools, jsonlFile, pattern, timeo
 }
 
 >> Convenience: poll for specific event type + item ID
-exe @claudePollEvent(prompt, model, dir, tools, jsonlFile, eventType, itemId) = sh {
+exe llm @claudePollEvent(prompt, model, dir, tools, jsonlFile, eventType, itemId) = sh {
   PROMPT_FILE=$(mktemp)
   printf '%s' "$prompt" > "$PROMPT_FILE"
 

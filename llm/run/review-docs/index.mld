@@ -7,7 +7,7 @@
 >> Audit archetype with verified invalidation and retry on failure.
 >> Default: resume latest run for today. --new forces a fresh run.
 
-import { @claudePoll } from @local/claude-poll
+import { @claudePoll } from @mlld/claude-poll
 import { @logEvent, @fileExists, @flatName, @loadAtoms, @countMissingFiles } from "./lib/context.mld"
 import "@payload" as @p
 

@@ -4,7 +4,7 @@
 >> Parallel review of docs/dev/ files to identify outdated documentation.
 >> Each doc gets its own LLM session with codebase access to verify claims.
 
-import { @claudePoll } from @local/claude-poll
+import { @claudePoll } from @mlld/claude-poll
 import { @logEvent, @fileExists } from "./lib/context.mld"
 import "@payload" as @p
 

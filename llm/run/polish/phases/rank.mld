@@ -4,7 +4,7 @@
 >> Input: pipeline/<run>/enrich/enriched-items.json
 >> Output: pipeline/<run>/rank/work-plan.json
 
-import { @claudePoll } from @local/claude-poll
+import { @claudePoll } from @mlld/claude-poll
 import { @updatePhaseStatus } from "../lib/state.mld"
 import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
 import { @createTicket } from "../lib/tickets.mld"
