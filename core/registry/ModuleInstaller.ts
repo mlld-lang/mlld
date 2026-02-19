@@ -629,11 +629,12 @@ export class ModuleInstaller {
       const resolver = new RegistryResolver();
       const parsed = splitModuleNameVersion(spec.name);
       const name = this.workspace.normalizeModuleName(parsed.name);
-      const version = spec.version ?? parsed.version;
-      const resolution = await resolver.resolve(this.workspace.buildReference({ name, version }));
-      const metadata = resolution.content.metadata ?? {};
+      // Don't pass a version — let the resolver find the latest
+      const reference = this.workspace.buildReference({ name });
+      const resolution = await resolver.resolve(reference);
+      const metadata = resolution.metadata ?? {};
       return {
-        version: metadata.version ?? metadata.registryVersion ?? version,
+        version: metadata.version ?? metadata.registryVersion,
         hash: metadata.hash,
         source: metadata.source ?? metadata.sourceUrl
       };
@@ -643,8 +644,9 @@ export class ModuleInstaller {
   }
 
   private isRegistryEntry(entry: ModuleLockEntry): boolean {
-    const source = entry.sourceUrl ?? entry.source ?? '';
-    return source.startsWith('registry://') || source.includes('gist.githubusercontent.com') || source.includes('github.com');
+    const source = entry.source ?? '';
+    const sourceUrl = entry.sourceUrl ?? '';
+    return source.startsWith('registry://') || sourceUrl.includes('githubusercontent.com') || sourceUrl.includes('github.com');
   }
 
   async resolveDependencies(
