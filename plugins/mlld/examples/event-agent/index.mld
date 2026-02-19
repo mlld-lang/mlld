@@ -35,7 +35,7 @@ show `Task: @task.type — @task.description`
 var @routing = @routeTask(@task, @agents)
 show `Router: @routing.agent (@routing.confidence) — @routing.reasoning`
 
->> Step 2: Dispatch — call the selected agent
+>> Step 2: Build prompt from routing
 var @prompt = when @routing.agent [
   "classifier" => @classifyPrompt(@task)
   "writer" => @writePrompt(@task)
@@ -43,46 +43,35 @@ var @prompt = when @routing.agent [
   * => @classifyPrompt(@task)
 ]
 var @agentOutputPath = `@outputPath\.agent.json`
-var @fullPrompt = `@prompt
+
+>> Step 3: Dispatch + gate via pipeline (retries up to 2x with gate feedback)
+exe @callAgent() = [
+  let @feedback = @mx.hint ? `\n\nPrevious attempt was rejected: @mx.hint\n\nAddress the feedback and try again.` : ""
+  if @mx.try > 1 [ show `  Retrying with gate feedback (attempt @mx.try)` ]
+  let @fullPrompt = `@prompt@feedback
 
 IMPORTANT: Write your JSON response to @agentOutputPath using the Write tool.`
-
-@claudePoll(@fullPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @agentOutputPath)
-var @agentResult = <@agentOutputPath>?
-
-if !@agentResult [
-  show `Agent @routing.agent failed: no output`
-  let @err = { status: "failed", agent: @routing.agent, task: @task.id }
-  output @err to "@outputPath"
-] else [
-  >> Step 3: Gate — does the output meet quality standards?
-  let @gateResult = @checkOutput(@task, @agentResult)
-
-  if @gateResult.pass [
-    show `Gate: passed`
-    output @agentResult to "@outputPath"
-  ] else [
-    show `Gate: failed — @gateResult.feedback`
-
-    >> Retry once with gate feedback
-    let @retryPrompt = `@prompt
-
-Previous attempt was rejected: @gateResult.feedback
-
-Address the feedback and try again.
-
-IMPORTANT: Write your JSON response to @agentOutputPath using the Write tool.`
-
-    @claudePoll(@retryPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @agentOutputPath)
-    let @retryResult = <@agentOutputPath>?
-
-    if @retryResult [
-      output @retryResult to "@outputPath"
-      show `Retry accepted`
-    ] else [
-      let @err = { status: "failed", agent: @routing.agent, reason: "gate_retry_failed" }
-      output @err to "@outputPath"
-      show `Retry failed`
-    ]
-  ]
+  @claudePoll(@fullPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @agentOutputPath)
+  => <@agentOutputPath>?
 ]
+
+exe @qualityGate() = [
+  if !@mx.input [
+    show `Agent @routing.agent failed: no output`
+    => { status: "failed", agent: @routing.agent, task: @task.id }
+  ]
+  let @gate = @checkOutput(@task, @mx.input)
+  if @gate.pass [
+    show `Gate: passed`
+    => @mx.input
+  ]
+  if @mx.try < 3 [
+    show `Gate: failed — @gate.feedback`
+    => retry @gate.feedback
+  ]
+  show `Gate: failed after @mx.try attempts — giving up`
+  => { status: "failed", agent: @routing.agent, reason: "gate_retry_failed" }
+]
+
+var @result = @callAgent() | @qualityGate
+output @result to "@outputPath"

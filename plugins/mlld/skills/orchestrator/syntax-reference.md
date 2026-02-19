@@ -122,3 +122,59 @@ loop(endless) [
   ]
 ]
 ```
+
+## Pipeline retry with quality gate
+
+Use `=> retry` in a pipeline stage to re-run from the source with feedback. Available context:
+- `@mx.try` — attempt number (1-indexed)
+- `@mx.hint` — value from the last `retry` (string or object)
+- `@mx.input` — current stage's input (previous stage's output)
+
+```mlld
+>> Source re-runs on retry; @mx.hint carries gate feedback
+exe @callAgent() = [
+  let @feedback = @mx.hint ? `\n\nPrevious attempt rejected: @mx.hint` : ""
+  let @fullPrompt = `@prompt@feedback
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool.`
+  @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
+  => <@outPath>?
+]
+
+>> Gate: accept, retry with feedback, or fall back
+exe @qualityGate() = [
+  if !@mx.input [ => { status: "failed" } ]
+  let @gate = @checkOutput(@task, @mx.input)
+  if @gate.pass [ => @mx.input ]
+  if @mx.try < 3 [ => retry @gate.feedback ]
+  => { status: "failed", reason: "gate_retry_failed" }
+]
+
+var @result = @callAgent() | @qualityGate
+```
+
+Retry with structured hint objects:
+
+```mlld
+>> Pass an object as the hint
+=> retry { code: 429, reason: "rate limit" }
+
+>> Read structured hint in the source
+let @delay = @mx.hint.code == 429 ? "backoff" : "none"
+```
+
+Model escalation via `@mx.try`:
+
+```mlld
+exe @classify() = [
+  let @model = @mx.try > 1 ? "sonnet" : "haiku"
+  >> ...
+]
+
+exe @ensureConfidence() = when [
+  @mx.input.confidence == "low" && @mx.try < 2 => retry
+  * => @mx.input
+]
+
+var @routing = @classify() | @ensureConfidence
+```

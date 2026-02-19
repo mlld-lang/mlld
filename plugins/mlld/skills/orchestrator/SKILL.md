@@ -114,6 +114,58 @@ This pattern comes from the QA workflow (`llm/run/qa/`), where Phase 1 (black-bo
 
 **Anti-pattern**: Giving the adversary the exact same tools and context as the original worker. If the worker couldn't tell, neither can the adversary. Escalate access or the invalidation step is theater.
 
+## Quality Gates and Retry
+
+Use pipeline `=> retry` with `@mx.hint` for step-level quality checks on LLM output. The gate validates the output and either accepts it, retries with feedback, or falls back after max attempts.
+
+```mlld
+>> Source: calls the LLM (re-runs on retry with gate feedback via @mx.hint)
+exe @callAgent() = [
+  let @feedback = @mx.hint ? `\n\nPrevious attempt was rejected: @mx.hint\n\nAddress the feedback and try again.` : ""
+  let @fullPrompt = `@prompt@feedback
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool.`
+  @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
+  => <@outPath>?
+]
+
+>> Gate: validates output, retries with feedback, falls back after 3 attempts
+exe @qualityGate() = [
+  if !@mx.input [ => { status: "failed" } ]
+  let @gate = @checkOutput(@task, @mx.input)
+  if @gate.pass [ => @mx.input ]
+  if @mx.try < 3 [ => retry @gate.feedback ]
+  => { status: "failed", reason: "gate_retry_failed" }
+]
+
+var @result = @callAgent() | @qualityGate
+```
+
+On retry, `@callAgent()` re-executes with `@mx.try` incremented and `@mx.hint` set to the gate's feedback. The LLM sees the rejection reason and can correct its output.
+
+**Model escalation** follows the same pattern — use `@mx.try` to pick the model:
+
+```mlld
+exe @classify() = [
+  let @model = @mx.try > 1 ? "sonnet" : "haiku"
+  >> ... call @claudePoll with @model ...
+  => @result
+]
+
+exe @ensureConfidence() = when [
+  @mx.input.confidence == "low" && @mx.try < 2 => retry
+  * => @mx.input
+]
+
+var @routing = @classify() | @ensureConfidence
+```
+
+**When to use pipeline retry vs. decision-loop repair**:
+- **Pipeline retry**: Within-step validation of a single LLM call — "did this output meet the bar?" Bounded, deterministic, fast.
+- **Decision loop**: Cross-step correction — the decision agent sees failures in context and adjusts strategy. Open-ended, judgment-driven.
+
+Both can coexist. A worker might use pipeline retry for output quality, while the outer decision loop handles strategic failures.
+
 ## Three Archetypes
 
 ### 1. Audit (parallel fan-out + verified invalidation)

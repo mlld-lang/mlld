@@ -4,41 +4,33 @@ import { @claudePoll } from @mlld/claude-poll
 
 exe @scorePrompt(task, agents) = template "./prompts/router/score.att"
 
->> Score agents and pick the best match
-exe @routeTask(task, agents) = [
-  >> Build agent summary for the scoring prompt
-  let @agentSummary = for @a in @agents => `@a.id: @a.capabilities`
-  let @agentList = @agentSummary.join("\n")
-
-  >> Fast classification with haiku
-  let @outPath = `@root/tmp/router-@task.id\.json`
+>> Classify task — escalates from haiku to sonnet on retry
+exe @classify(task, agentList, defaultAgent) = [
+  let @model = @mx.try > 1 ? "sonnet" : "haiku"
+  let @escalation = @mx.try > 1 ? "\n\nA fast classifier scored this as low-confidence. Re-evaluate carefully." : ""
+  let @outPath = `@root/tmp/router-@task.id\-@mx.try\.json`
   let @prompt = @scorePrompt(@task, @agentList)
-  let @fullPrompt = `@prompt
+  let @fullPrompt = `@prompt@escalation
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
-  @claudePoll(@fullPrompt, "haiku", "@root", "Read,Write", @outPath)
+  @claudePoll(@fullPrompt, @model, "@root", "Read,Write", @outPath)
   let @result = <@outPath>? | @parse
-
-  when !@result => [ => { agent: @agents.0.id, confidence: "low", reasoning: "router failed, defaulting" } ]
-
-  >> If confidence is low, refine with a stronger model
-  if @result.confidence == "low" [
-    let @refinePath = `@root/tmp/router-refine-@task.id\.json`
-    let @refinePrompt = `@prompt
-
-A fast classifier scored this as low-confidence. Re-evaluate carefully.
-
-IMPORTANT: Write your JSON response to @refinePath using the Write tool.`
-
-    @claudePoll(@refinePrompt, "sonnet", "@root", "Read,Write", @refinePath)
-    let @refined = <@refinePath>? | @parse
-    if @refined [
-      => @refined
-    ]
-  ]
-
+  when !@result => { agent: @defaultAgent, confidence: "low", reasoning: "router failed, defaulting" }
   => @result
+]
+
+>> Retry once with a stronger model if confidence is low
+exe @ensureConfidence() = when [
+  @mx.input.confidence == "low" && @mx.try < 2 => retry
+  * => @mx.input
+]
+
+>> Score agents and pick the best match
+exe @routeTask(task, agents) = [
+  let @agentSummary = for @a in @agents => `@a.id: @a.capabilities`
+  let @agentList = @agentSummary.join("\n")
+  => @classify(@task, @agentList, @agents.0.id) | @ensureConfidence
 ]
 
 export { @routeTask }

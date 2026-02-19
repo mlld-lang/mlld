@@ -140,3 +140,48 @@ to the human with your analysis.
 ```
 
 The model handles escalation better than code because it reads the *reason* for failure, not just the count.
+
+## 8. The Manual Retry Trap
+
+**Symptom**: Manually checking LLM output, rebuilding the prompt with feedback, and calling the LLM again in code.
+
+```mlld
+>> BAD
+@claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+let @result = <@outPath>?
+let @gate = @checkOutput(@task, @result)
+if !@gate.pass [
+  let @retryPrompt = `@prompt
+
+Previous attempt was rejected: @gate.feedback
+
+Address the feedback and try again.`
+  @claudePoll(@retryPrompt, "sonnet", "@root", @tools, @outPath)
+  let @retryResult = <@outPath>?
+  >> ... more manual checking ...
+]
+```
+
+**Fix**: Use pipeline `=> retry` with `@mx.hint`. The source stage reads `@mx.hint` for feedback; the gate stage validates and retries declaratively.
+
+```mlld
+>> GOOD
+exe @callAgent() = [
+  let @feedback = @mx.hint ? `\n\nPrevious attempt rejected: @mx.hint` : ""
+  let @fullPrompt = `@prompt@feedback
+  ...`
+  @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
+  => <@outPath>?
+]
+
+exe @qualityGate() = [
+  let @gate = @checkOutput(@task, @mx.input)
+  if @gate.pass [ => @mx.input ]
+  if @mx.try < 3 [ => retry @gate.feedback ]
+  => { status: "failed" }
+]
+
+var @result = @callAgent() | @qualityGate
+```
+
+The pipeline handles retry count, feedback passing, and fallback. The orchestrator code stays declarative.

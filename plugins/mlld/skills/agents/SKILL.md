@@ -238,6 +238,28 @@ Gate design principles:
 - **Fail with feedback**: When rejecting, explain what's missing so a retry can succeed
 - **Default to pass on gate failure**: If the gate itself errors, let the output through rather than silently dropping it
 
+Integrate the gate with pipeline `=> retry` so the agent automatically retries with feedback:
+
+```mlld
+exe @callAgent() = [
+  let @feedback = @mx.hint ? `\n\nPrevious attempt rejected: @mx.hint` : ""
+  >> ... build prompt with @feedback, call @claudePoll ...
+  => <@outPath>?
+]
+
+exe @qualityGate() = [
+  if !@mx.input [ => { status: "failed" } ]
+  let @gate = @checkOutput(@task, @mx.input)
+  if @gate.pass [ => @mx.input ]
+  if @mx.try < 3 [ => retry @gate.feedback ]
+  => { status: "failed", reason: "gate_retry_failed" }
+]
+
+var @result = @callAgent() | @qualityGate
+```
+
+The gate's feedback flows to the source via `@mx.hint`, where the agent appends it to the prompt before retrying. See `examples/event-agent/` for the full working implementation.
+
 ### Agent Contracts
 
 Agents follow a convention-based contract. Each agent module exports:

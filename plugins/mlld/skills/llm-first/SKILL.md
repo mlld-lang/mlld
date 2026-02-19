@@ -70,7 +70,13 @@ This happens naturally because:
 
 You don't need a separate "check" step. The decision loop IS the check.
 
-> **Example**: [`examples/development/lib/context.mld:44-51`](../../examples/development/lib/context.mld) — `@buildContext` loads `lastWorkerResult` and `lastError` into context. [`examples/development/index.mld:164-171`](../../examples/development/index.mld) — Worker failure is recorded in state and the loop continues, letting the decision agent see the failure next iteration.
+**Two levels of repair**:
+- **Decision-loop repair** (this principle): The outer loop catches failures across steps. The decision agent sees what went wrong and adjusts strategy. Open-ended and judgment-driven.
+- **Step-level retry**: For within-step quality checks on a single LLM call, use pipeline `=> retry` with `@mx.hint`. A gate stage validates output and retries with feedback before the step completes. Bounded and deterministic. See the Quality Gates section in `/mlld:orchestrator`.
+
+Both coexist naturally — a worker can use pipeline retry for output quality, while the outer decision loop handles strategic failures.
+
+> **Example**: [`examples/development/lib/context.mld:44-51`](../../examples/development/lib/context.mld) — `@buildContext` loads `lastWorkerResult` and `lastError` into context. [`examples/development/index.mld:164-171`](../../examples/development/index.mld) — Worker failure is recorded in state and the loop continues, letting the decision agent see the failure next iteration. For step-level retry: [`examples/event-agent/index.mld`](../../examples/event-agent/index.mld) — Pipeline gate retries with feedback via `@mx.hint`.
 
 ### 4. Structured Actions
 
