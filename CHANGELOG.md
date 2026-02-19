@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added pre-3A hooks/checkpoint risk-gate documentation, lifecycle trace test helper scaffolding, and checkpoint manifest/atomic-write compatibility scaffolds to lock rollout semantics before lifecycle/runtime phases.
 - Inserted ordering-only user hook lifecycle layering so user hooks run around built-in guard/taint hooks across directive, exec, and pipeline effect boundaries.
 - Enforced user-hook non-reentrancy boundaries so nested operations triggered inside hook bodies suppress user hooks while preserving nested guard execution; guard-evaluation suppression behavior remains unchanged.
+- Added Phase 6A checkpoint decision adapter (`fulfill` action + legacy metadata normalization) and inert built-in checkpoint pre/post hook wiring before activating cache-hit short-circuit semantics.
 
 ### Documentation
 - Hooks/checkpoint/resume implementation contract is now locked in `docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md`, including the selected short-circuit protocol rollout and canonical hook operation keys (`for`, `for:iteration`, `for:batch`, `loop`, `import`).

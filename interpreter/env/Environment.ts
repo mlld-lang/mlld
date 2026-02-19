@@ -98,6 +98,8 @@ import {
 } from './ContextManager';
 import { HookManager } from '../hooks/HookManager';
 import { HookRegistry } from '../hooks/HookRegistry';
+import { checkpointPreHook } from '../hooks/checkpoint-pre-hook';
+import { checkpointPostHook } from '../hooks/checkpoint-post-hook';
 import { guardPreHook } from '../hooks/guard-pre-hook';
 import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
@@ -1710,9 +1712,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   private registerBuiltinHooks(): void {
+    this.hookManager.registerPre(checkpointPreHook);
     this.hookManager.registerPre(guardPreHook);
     this.hookManager.registerPost(guardPostHook);
     this.hookManager.registerPost(taintPostHook);
+    this.hookManager.registerPost(checkpointPostHook);
   }
 
   private registerKeepBuiltins(): void {

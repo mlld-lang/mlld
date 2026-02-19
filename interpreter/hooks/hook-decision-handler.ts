@@ -1,5 +1,5 @@
 import { GuardError } from '@core/errors/GuardError';
-import type { HookDecision } from './HookManager';
+import type { HookDecision, HookDecisionAction } from './HookManager';
 import type { HookableNode } from '@core/types/hooks';
 import { isDirectiveHookTarget } from '@core/types/hooks';
 import type { GuardHint, GuardResult, GuardScope } from '@core/types/guard';
@@ -26,17 +26,55 @@ interface GuardDecisionInfo {
   guardInput?: Variable | readonly Variable[] | null | unknown;
 }
 
+const CHECKPOINT_HIT_KEY = 'checkpointHit';
+const CHECKPOINT_CACHED_RESULT_KEY = 'cachedResult';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function normalizeHookDecision(decision: HookDecision): HookDecision {
+  if (decision.action !== 'continue') {
+    return decision;
+  }
+
+  const metadata = decision.metadata;
+  if (!isRecord(metadata)) {
+    return decision;
+  }
+
+  const checkpointHit = metadata[CHECKPOINT_HIT_KEY];
+  const hasCachedResult = Object.prototype.hasOwnProperty.call(metadata, CHECKPOINT_CACHED_RESULT_KEY);
+  if (checkpointHit === true && hasCachedResult) {
+    return {
+      action: 'fulfill',
+      metadata
+    };
+  }
+
+  return decision;
+}
+
+export function getNormalizedHookDecisionAction(decision: HookDecision): HookDecisionAction {
+  return normalizeHookDecision(decision).action;
+}
+
 export async function handleGuardDecision(
   decision: HookDecision,
   node: HookableNode,
   env: Environment,
   operationContext: OperationContext
 ): Promise<void> {
-  if (!decision || decision.action === 'continue') {
+  if (!decision) {
     return;
   }
 
-  const metadata = decision.metadata ?? {};
+  const normalizedDecision = normalizeHookDecision(decision);
+  if (normalizedDecision.action === 'continue' || normalizedDecision.action === 'fulfill') {
+    return;
+  }
+
+  const metadata = normalizedDecision.metadata ?? {};
   const guardName =
     typeof metadata.guardName === 'string' || metadata.guardName === null
       ? (metadata.guardName as string | null)
@@ -70,7 +108,7 @@ export async function handleGuardDecision(
     baseMessage:
       primaryReason && primaryReason.length > 0
         ? primaryReason
-        : decision.action === 'abort' || decision.action === 'deny'
+        : normalizedDecision.action === 'abort' || normalizedDecision.action === 'deny'
           ? 'Operation aborted by guard'
           : 'Guard requested retry'
     ,
@@ -84,7 +122,7 @@ export async function handleGuardDecision(
     ? ((metadata as any).policySuggestions as string[])
     : undefined;
 
-  if (decision.action === 'abort' || decision.action === 'deny') {
+  if (normalizedDecision.action === 'abort' || normalizedDecision.action === 'deny') {
     throw new GuardError({
       decision: 'deny',
       guardName: info.guardName,
@@ -107,7 +145,7 @@ export async function handleGuardDecision(
     });
   }
 
-  if (decision.action === 'retry') {
+  if (normalizedDecision.action === 'retry') {
     enforcePipelineGuardRetry(info, env, operationContext, node, {
       reasons: reasonsArray,
       guardResults,

@@ -23,6 +23,7 @@ mlld's hook system enables pre-execution and post-execution extensions at evalua
 - Function hooks support optional first-arg prefix matching via `hook ... @fn("prefix")`
 - Non-reentrant per directive invocation (prevent infinite loops)
 - Hooks/checkpoint/resume rollout contract is tracked in `docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md` (Phase 0 decision lock before implementation phases).
+- Checkpoint protocol adapter uses explicit `fulfill` hook decisions, with legacy metadata (`checkpointHit` + `cachedResult`) normalized centrally in `hook-decision-handler` during Phase 6A.
 
 ## Details
 
@@ -40,7 +41,7 @@ type PreHook = (
   helpers?: HookInputHelpers
 ) => Promise<HookDecision>;
 
-type HookDecisionAction = 'continue' | 'abort' | 'retry';
+type HookDecisionAction = 'continue' | 'abort' | 'retry' | 'deny' | 'fulfill';
 
 interface HookDecision {
   action: HookDecisionAction;
