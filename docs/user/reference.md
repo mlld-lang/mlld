@@ -570,6 +570,25 @@ Behavior notes:
 - Function filter arg-prefix matching (`@fn("prefix")`) uses `startsWith` against the first argument string form.
 - Observability pattern: emit telemetry from hooks with `output ... to "state://telemetry"` and read errors from `@mx.hooks.errors`.
 
+Hook body context variables:
+
+| Variable | Availability | Description |
+|---|---|---|
+| `@input` | `before`, `after` | Current operation inputs. Function hooks expose the function args for `before`; non-function hooks expose the current operation input payload. |
+| `@output` | `after` | Current operation result value (or guard-denial payload when an operation is denied before execution). |
+| `@mx.op.name` | `before`, `after` | Operation/executable name for the active hook target. |
+| `@mx.op.type` | `before`, `after` | Operation type string (for example: `exe`, `run`, `show`, `for:iteration`, `loop`). |
+| `@mx.op.labels` | `before`, `after` | Merged input + operation labels on the active operation context. |
+| `@mx.for.index` | `op:for:iteration`, `op:for:batch` | Zero-based iteration index (or batch index for batch hooks). |
+| `@mx.for.total` | `op:for:iteration`, `op:for:batch` | Total number of iterable items in the parent `for` run. |
+| `@mx.for.key` | `op:for:iteration` | Current key for object/map iteration (or `null` for array iteration). |
+| `@mx.for.parallel` | `op:for:iteration`, `op:for:batch` | `true` when the parent `for` is running in parallel mode. |
+| `@mx.for.batchIndex` | `op:for:iteration`, `op:for:batch` | Zero-based parallel batch window index. |
+| `@mx.for.batchSize` | `op:for:iteration`, `op:for:batch` | Number of items in the current parallel batch window. |
+| `@mx.hooks.errors` | `before`, `after` | Array of isolated hook body errors (`hookName`, `timing`, `filterKind`, `message`). |
+| `@mx.checkpoint.hit` | `before`, `after` | `true` when the current operation was served from checkpoint cache, otherwise `false`. |
+| `@mx.checkpoint.key` | `before`, `after` | Checkpoint cache key for the current operation (when checkpointing is active). |
+
 ### `env` - Scoped Execution
 
 Create scoped execution contexts with isolation, credential management, and capability control:
