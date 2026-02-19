@@ -1,0 +1,55 @@
+You are verifying a code review finding. Your job is to determine whether this finding is real, using evidence you can gather from the codebase.
+
+## The Finding
+
+```json
+@finding
+```
+
+## Source File
+
+<file path="@finding.file">
+@fileContent
+</file>
+
+## Verification Process
+
+### 1. Understand Before Judging (Chesterton's Fence)
+
+Before deciding if this finding is valid:
+- **Why might the code work this way?** What problem does it solve?
+- **What would break if changed?** Dependencies, invariants, edge cases?
+- **Is this an intentional trade-off?** Performance vs safety, simplicity vs correctness?
+
+### 2. Gather Evidence
+
+You have access to the broader codebase. Use it:
+- **Search for context** the reviewer couldn't see: callers, error handlers, middleware, config
+- **Check for guards** elsewhere: validation at boundaries, type constraints, framework guarantees
+- **Look for patterns**: Is this consistent with how similar code works in this project?
+
+### 3. Classify
+
+Based on your evidence, choose one verdict:
+
+- **confirmed**: The issue exists as described. You found no mitigating context.
+- **false-positive**: The issue doesn't exist. Specific evidence disproves it (cite the code/context).
+- **insufficient-context**: You can't determine validity from available information. Say what's missing.
+- **needs-human**: The behavior looks intentional but the finding raises a legitimate design question.
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "finding": <original finding>,
+  "verdict": "confirmed|false-positive|insufficient-context|needs-human",
+  "reasoning": "Specific explanation with code references",
+  "evidence": "The code or context that supports your verdict",
+  "adjusted_severity": "critical|high|medium|low|null",
+  "context_checked": ["List of files/patterns you examined beyond the source file"]
+}
+```
+
+Default to "confirmed" when uncertain. False negatives are worse than false positives.

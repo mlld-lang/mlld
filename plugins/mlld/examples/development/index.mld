@@ -32,7 +32,7 @@ exe @mkdirp(dir) = sh { mkdir -p "$dir" }
 exe @decisionPrompt(goal, issues, recentEvents, lastWorkerResult, lastError, humanAnswers) = template "./prompts/decision/core.att"
 exe @implementPrompt(issue, guidance, goal, statusFormat) = template "./prompts/workers/implement.att"
 exe @invalidatePrompt(issue, guidance, goal, evidenceRules) = template "./prompts/workers/invalidate.att"
-exe @reviewPrompt(issue, guidance, goal, evidence) = template "./prompts/workers/review.att"
+exe @reviewPrompt(issue, guidance, goal, evidenceRules) = template "./prompts/workers/review.att"
 
 >> Load shared prompt fragments
 var @evidenceRules = <./prompts/shared/evidence-rules.md>
@@ -83,7 +83,7 @@ loop(endless) [
   let @issues = cmd { gh issue list --json number,title,body,state,labels,assignees --limit 50 } with { ok: true }
   let @issueList = when @issues [
     "" => []
-    * => @issues | @json
+    * => @issues | @parse
   ]
 
   >> Check for human answers

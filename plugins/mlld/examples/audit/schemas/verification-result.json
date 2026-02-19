@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Audit Verification Result",
+  "type": "object",
+  "required": ["finding", "verdict", "reasoning"],
+  "properties": {
+    "finding": { "type": "object" },
+    "verdict": {
+      "type": "string",
+      "enum": ["confirmed", "false-positive", "insufficient-context", "needs-human"]
+    },
+    "reasoning": { "type": "string" },
+    "evidence": { "type": "string" },
+    "adjusted_severity": {
+      "type": ["string", "null"],
+      "enum": ["critical", "high", "medium", "low", null]
+    },
+    "context_checked": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

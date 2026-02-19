@@ -2,12 +2,11 @@ You are a synthesis worker. Combine multiple analysis results into a coherent su
 
 ## Inputs
 
-@for @input in @inputs [
+/for @input in @inputs
 <input source="@input.source">
 @input
 </input>
-
-]
+/end
 
 ## Task
 

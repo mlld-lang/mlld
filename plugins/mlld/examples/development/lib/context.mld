@@ -3,9 +3,9 @@
 exe @tailFile(path, limit) = sh { tail -n "$limit" "$path" 2>/dev/null }
 
 >> Log event to events.jsonl
-exe @logEvent(runDir, eventType, data) = [
+exe @logEvent(runDir, eventType, eventData) = [
   let @eventsFile = `@runDir/events.jsonl`
-  let @parsed = @data | @json
+  let @parsed = @eventData | @parse
   let @event = { ts: @now, event: @eventType, ...@parsed }
   append @event to "@eventsFile"
 ]
@@ -13,9 +13,9 @@ exe @logEvent(runDir, eventType, data) = [
 >> Load recent events
 exe @loadRecentEvents(runDir, limit) = [
   let @eventsFile = `@runDir/events.jsonl`
-  when !@exists(@eventsFile) => []
+  when !@exists(@eventsFile) => [ => [] ]
   let @lines = @tailFile(@eventsFile, @limit)
-  => for @line in @lines.split("\n") when @line.trim() => @line | @json
+  => for @line in @lines.split("\n") when @line.trim() => @line | @parse
 ]
 
 >> Count iterations
@@ -29,8 +29,8 @@ exe @countIterations(runDir) = [
 exe @loadRunState(runDir) = [
   let @stateFile = `@runDir/run.json`
   let @content = <@stateFile>?
-  when !@content => { lastWorkerResult: null, lastError: null }
-  => @content | @json
+  when !@content => [ => { lastWorkerResult: null, lastError: null } ]
+  => @content | @parse
 ]
 
 >> Save run state

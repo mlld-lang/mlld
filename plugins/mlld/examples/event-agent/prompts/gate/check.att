@@ -10,7 +10,7 @@ Description: @task.description
 ## Agent Output
 
 <output>
-@output
+@agentOutput
 </output>
 
 ## Evaluation Criteria

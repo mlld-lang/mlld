@@ -17,7 +17,7 @@ var @outputFormat = <./prompts/shared/output-format.md>
 
 >> Load all inputs
 var @files = <@inputGlob>
-var @inputs = for @f in @files => @f | @json
+var @inputs = for @f in @files => @f | @parse
 
 if @inputs.length == 0 [
   show `No inputs matched: @inputGlob`

@@ -145,7 +145,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
     "synthesize" => [
       >> Load all assessments and source content for synthesis
       let @assessmentFiles = <@runDir/assessments/*.json>
-      let @assessmentData = for @f in @assessmentFiles => @f | @json
+      let @assessmentData = for @f in @assessmentFiles => @f | @parse
 
       let @prompt = @synthesizePrompt(@assessmentData, @sources, @evidenceRules)
       let @outPath = `@runDir/synthesis.json`
@@ -168,7 +168,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
     "invalidate" => [
       >> Load synthesis and invalidate each claim
-      let @synthesis = <@runDir/synthesis.json> | @json
+      let @synthesis = <@runDir/synthesis.json> | @parse
       let @claims = @synthesis.claims ?? []
       show `  Invalidating @claims.length claims`
 
@@ -179,11 +179,11 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
         >> Idempotency
         if @exists(@outPath) [
           show `    @claimId: skipped`
-          => <@outPath> | @json
+          => <@outPath> | @parse
         ]
 
         let @assessmentFiles = <@runDir/assessments/*.json>
-        let @assessments = for @f in @assessmentFiles => @f | @json
+        let @assessments = for @f in @assessmentFiles => @f | @parse
 
         let @prompt = @invalidatePrompt(@claim, @assessments, @evidenceRules)
         let @fullPrompt = `@prompt
@@ -205,9 +205,9 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
     "complete" => [
       >> Build final report from synthesis + invalidation results
-      let @synthesis = <@runDir/synthesis.json>? | @json
+      let @synthesis = <@runDir/synthesis.json>? | @parse
       let @invalidationFiles = <@runDir/invalidations/*.json>
-      let @invalidations = for @f in @invalidationFiles => @f | @json
+      let @invalidations = for @f in @invalidationFiles => @f | @parse
 
       let @supported = for @inv in @invalidations when @inv.verdict == "supported" => @inv
       let @unsupported = for @inv in @invalidations when @inv.verdict != "supported" => @inv

@@ -1,12 +1,12 @@
->> Audit Orchestrator
+>> Audit Orchestrator (Verified Invalidation)
 >> Usage: mlld plugins/mlld/examples/audit/index.mld --glob "src/**/*.ts" [--parallel 20] [--output findings.json]
 >>
->> Parallel fan-out codebase review with adversarial invalidation.
+>> Parallel fan-out codebase review with verified invalidation.
 >> 1. Glob source files
->> 2. Fan out: each file reviewed by LLM in parallel
+>> 2. Fan out: each file reviewed by LLM with limited tools (file content only)
 >> 3. Collect findings
->> 4. Invalidation pass: adversary attempts to disprove each finding
->> 5. Output only validated findings (those that survived invalidation)
+>> 4. Verification pass: verifier gets expanded tools to check codebase context
+>> 5. Output classified findings (confirmed, false-positive, insufficient-context, needs-human)
 
 import { @claudePoll } from @mlld/claude-poll
 import { @logEvent } from "./lib/context.mld"
@@ -17,26 +17,29 @@ var @glob = @p.glob ?? "src/**/*.ts"
 var @parallelism = @p.parallel ? @p.parallel * 1 : 20
 var @outputPath = @p.output ?? "findings.json"
 
->> Tool permissions
-var @reviewTools = "Read,Write,Glob,Grep"
+>> Tool permissions — escalation between phases
+>> Phase 1: reviewer sees only the file (Read to load, Write for output)
+var @reviewTools = "Read,Write"
+>> Phase 2: verifier can explore the codebase for surrounding context
+var @verifyTools = "Read,Write,Glob,Grep"
 
 >> Prompt templates
 exe @reviewPrompt(file, fileContent) = template "./prompts/review.att"
-exe @invalidatePrompt(finding, fileContent) = template "./prompts/invalidate.att"
+exe @verifyPrompt(finding, fileContent) = template "./prompts/verify.att"
 
 >> Shell helpers
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }
 
 >> Array helpers
 exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => (a.data || a).findings || []) }
-exe @filterValid(results) = js { return results.filter(r => { r = r.data || r; return r && (r.verdict === 'valid' || !r.verdict); }).map(r => { r = r.data || r; return r.finding || r; }) }
+exe @filterByVerdict(results, verdict) = js { return results.filter(r => { r = r.data || r; return r && r.verdict === verdict }) }
 
 >> Set up run directory
 var @today = @now.slice(0, 10)
 var @runDir = `@root/runs/@today`
 run @mkdirp(@runDir)
 run @mkdirp(`@runDir/reviews`)
-run @mkdirp(`@runDir/invalidations`)
+run @mkdirp(`@runDir/verifications`)
 
 show `═══════════════════════════════════════════════════════════════════`
 show `Audit: @glob`
@@ -56,8 +59,9 @@ if @files.length == 0 [
 ] else [
   show `Found @files.length files to review`
 
-  >> 2. Fan out: parallel review of each file
+  >> 2. Fan out: parallel review (limited tools — reviewer sees only the file)
   show `\nPhase 1: Review (@files.length files, parallel @parallelism)`
+  show `  Tools: @reviewTools`
   show `───────────────────────────────────────────────────────────────────`
 
   let @reviewResults = for parallel(@parallelism) @file in @files [
@@ -67,7 +71,7 @@ if @files.length == 0 [
     >> Idempotency: skip if already reviewed
     if @exists(@outPath) [
       show `  @filename: skipped (exists)`
-      => <@outPath> | @json
+      => <@outPath> | @parse
     ]
 
     >> Build review prompt
@@ -76,7 +80,7 @@ if @files.length == 0 [
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema in the prompt.`
 
-    >> Call reviewer
+    >> Call reviewer (limited tools)
     @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
     let @result = <@outPath>?
 
@@ -90,7 +94,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
     show `  @filename: @result.findings.length findings`
     let @evtData = { file: @filename, finding_count: @result.findings.length }
     @logEvent(@runDir, "review_complete", @evtData)
-    => @result | @json
+    => @result | @parse
   ]
 
   >> Collect all findings from review results
@@ -103,59 +107,87 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
     output @empty to "@outputPath"
     show `No findings. Written empty result to @outputPath`
   ] else [
-    >> 3. Invalidation pass: adversary attempts to disprove each finding
-    show `\nPhase 2: Invalidation (@allFindings.length findings, parallel @parallelism)`
+    >> 3. Verification pass (expanded tools — verifier can explore codebase)
+    show `\nPhase 2: Verification (@allFindings.length findings, parallel @parallelism)`
+    show `  Tools: @verifyTools`
     show `───────────────────────────────────────────────────────────────────`
 
-    let @invalidationResults = for parallel(@parallelism) @finding in @allFindings [
+    let @verificationResults = for parallel(@parallelism) @finding in @allFindings [
       let @findingId = `@finding.file-@finding.line`
-      let @outPath = `@runDir/invalidations/@findingId\.json`
+      let @outPath = `@runDir/verifications/@findingId\.json`
 
       >> Idempotency
       if @exists(@outPath) [
         show `  @findingId: skipped (exists)`
-        => <@outPath> | @json
+        => <@outPath> | @parse
       ]
 
-      >> Load the source file for the adversary
+      >> Load the source file for the verifier
       let @sourceFile = <@finding.file>?
-      let @prompt = @invalidatePrompt(@finding, @sourceFile)
+      let @prompt = @verifyPrompt(@finding, @sourceFile)
       let @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
 
-      @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
+      >> Call verifier (expanded tools)
+      @claudePoll(@fullPrompt, "sonnet", "@root", @verifyTools, @outPath)
       let @result = <@outPath>?
 
       if !@result [
-        show `  @findingId: invalidation failed (no output) - keeping finding`
-        => { finding: @finding, survived: true, reason: "invalidation failed" }
+        show `  @findingId: verification failed (no output) — keeping as confirmed`
+        => { finding: @finding, verdict: "confirmed", reasoning: "verification failed" }
       ]
 
       let @status = when @result.verdict [
-        "valid" => "KEPT"
-        "invalid" => "REMOVED"
-        * => "KEPT"
+        "confirmed" => "CONFIRMED"
+        "false-positive" => "FALSE POSITIVE"
+        "insufficient-context" => "NEEDS CONTEXT"
+        "needs-human" => "NEEDS HUMAN"
+        * => "CONFIRMED"
       ]
-      show `  @findingId [@finding.severity]: @status - @result.reasoning`
-      let @invEvt = { finding: @findingId, verdict: @result.verdict }
-      @logEvent(@runDir, "invalidation_complete", @invEvt)
+      show `  @findingId [@finding.severity]: @status — @result.reasoning`
+      let @verEvt = { finding: @findingId, verdict: @result.verdict }
+      @logEvent(@runDir, "verification_complete", @verEvt)
       => @result
     ]
 
-    >> 4. Filter to only validated findings (those the adversary couldn't disprove)
-    let @validatedFindings = @filterValid(@invalidationResults)
+    >> 4. Classify results by verdict
+    let @confirmed = @filterByVerdict(@verificationResults, "confirmed")
+    let @falsePositives = @filterByVerdict(@verificationResults, "false-positive")
+    let @needsContext = @filterByVerdict(@verificationResults, "insufficient-context")
+    let @needsHuman = @filterByVerdict(@verificationResults, "needs-human")
 
     >> 5. Output results
     show `\n═══════════════════════════════════════════════════════════════════`
-    show `Results: @validatedFindings.length validated findings (from @allFindings.length total)`
+    show `Results: @allFindings.length total findings`
+    show `  Confirmed:            @confirmed.length`
+    show `  False positives:      @falsePositives.length`
+    show `  Insufficient context: @needsContext.length`
+    show `  Needs human review:   @needsHuman.length`
     show `═══════════════════════════════════════════════════════════════════`
 
-    output @validatedFindings to "@outputPath"
+    let @output = {
+      summary: {
+        total_findings: @allFindings.length,
+        confirmed: @confirmed.length,
+        false_positives: @falsePositives.length,
+        insufficient_context: @needsContext.length,
+        needs_human: @needsHuman.length
+      },
+      confirmed: @confirmed,
+      needs_human: @needsHuman,
+      insufficient_context: @needsContext,
+      false_positives: @falsePositives
+    }
+
+    output @output to "@outputPath"
     let @finalEvt = {
       files_reviewed: @files.length,
       total_findings: @allFindings.length,
-      validated_findings: @validatedFindings.length
+      confirmed: @confirmed.length,
+      false_positives: @falsePositives.length,
+      insufficient_context: @needsContext.length,
+      needs_human: @needsHuman.length
     }
     run @logEvent(@runDir, "audit_complete", @finalEvt)
 

@@ -18,7 +18,7 @@ exe @routeTask(task, agents) = [
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
   @claudePoll(@fullPrompt, "haiku", "@root", "Read,Write", @outPath)
-  let @result = <@outPath>? | @json
+  let @result = <@outPath>? | @parse
 
   when !@result => [ => { agent: @agents.0.id, confidence: "low", reasoning: "router failed, defaulting" } ]
 
@@ -32,7 +32,7 @@ A fast classifier scored this as low-confidence. Re-evaluate carefully.
 IMPORTANT: Write your JSON response to @refinePath using the Write tool.`
 
     @claudePoll(@refinePrompt, "sonnet", "@root", "Read,Write", @refinePath)
-    let @refined = <@refinePath>? | @json
+    let @refined = <@refinePath>? | @parse
     if @refined [
       => @refined
     ]

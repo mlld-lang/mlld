@@ -13,7 +13,7 @@ var @outputPath = @p.output ?? "decision.json"
 var @tools = "Read,Write"
 
 >> Load context
-var @context = <@inputPath> | @json
+var @context = <@inputPath> | @parse
 
 >> Prompt templates
 exe @generatePrompt(context) = template "./prompts/decide/generate.att"

@@ -31,7 +31,7 @@ exe @addNote(root: string, title: string, body: string) = [
 exe @listNotes(root: string) = [
   let @files = <@root/notes/*.json>?
   when !@files => [ => [] ]
-  => for @f in @files => @f | @json
+  => for @f in @files => @f | @parse
 ] with { description: "List all project notes" }
 
 exe @deleteNote(root: string, id: string) = sh {

@@ -2,21 +2,19 @@ You are a research synthesis worker. Your job is to identify cross-cutting theme
 
 ## Assessed Sources
 
-@for @assessment in @assessments [
+/for @assessment in @assessments
 <assessment source="@assessment.source">
 @assessment
 </assessment>
-
-]
+/end
 
 ## Source Material
 
-@for @source in @sources [
+/for @source in @sources
 <source name="@source.mx.filename">
 @source
 </source>
-
-]
+/end
 
 ## Task
 

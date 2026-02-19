@@ -8,12 +8,11 @@ You are an adversarial invalidation worker. Your job is to DISPROVE the followin
 
 ## Available Evidence
 
-@for @assessment in @assessments [
+/for @assessment in @assessments
 <assessment source="@assessment.source">
 @assessment
 </assessment>
-
-]
+/end
 
 ## Task
 

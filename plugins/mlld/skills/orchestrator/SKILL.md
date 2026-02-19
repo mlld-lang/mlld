@@ -73,7 +73,7 @@ The throughline of every orchestrator. Default is failure. Work is broken until 
 **Remediation requires re-invalidation**: Fixing a finding doesn't close it. The adversary must re-test after the fix.
 
 All three example archetypes include invalidation workers. See:
-- `examples/audit/` — invalidation pass over review findings
+- `examples/audit/` — verified invalidation with tool escalation
 - `examples/research/` — invalidation of synthesis claims
 - `examples/development/` — adversarial verification of implementation
 
@@ -116,23 +116,28 @@ This pattern comes from the QA workflow (`llm/run/qa/`), where Phase 1 (black-bo
 
 ## Three Archetypes
 
-### 1. Audit (parallel fan-out + invalidation)
+### 1. Audit (parallel fan-out + verified invalidation)
 
-Glob files → parallel LLM review → collect findings → parallel invalidation → output validated results.
+Glob files → parallel LLM review (limited tools) → collect findings → parallel verification (expanded tools) → output classified results.
 
-No decision agent. Linear pipeline. Fastest to build.
+No decision agent. Linear pipeline. Fastest to build. Demonstrates tool escalation between phases.
 
 **Use when**: Processing a batch of similar items independently (file review, data extraction, classification).
 
 **See**: [../../examples/audit/](../../examples/audit/)
 
 ```mlld
+>> Phase 1: reviewer sees only the file
+var @reviewTools = "Read,Write"
+>> Phase 2: verifier can explore the codebase
+var @verifyTools = "Read,Write,Glob,Grep"
+
 var @files = <src/**/*.ts>
 var @results = for parallel(20) @file in @files [
-  let @review = @claudePoll(@reviewPrompt(@file), "sonnet", "@root", @tools, @outPath)
+  @claudePoll(@reviewPrompt(@file), "sonnet", "@root", @reviewTools, @outPath)
   => <@outPath> | @json
 ]
->> Then invalidation pass over findings
+>> Then verification pass with expanded tools + 4-way taxonomy
 ```
 
 ### 2. Research (multi-phase pipeline + invalidation)
@@ -214,7 +219,7 @@ llm/run/my-orchestrator/
 │   │   └── core.att             # Decision agent prompt template
 │   ├── workers/
 │   │   ├── [role].att           # One template per worker type
-│   │   └── invalidate.att       # Adversarial invalidation worker
+│   │   └── verify.att            # Verification worker (expanded tools)
 │   └── shared/
 │       └── [fragment].md        # Reusable prompt fragments
 └── schemas/

@@ -16,7 +16,7 @@ var @taskPath = @p.task
 var @outputPath = @p.output
 
 >> Load task
-var @task = <@taskPath> | @json
+var @task = <@taskPath> | @parse
 
 >> Agent registry
 exe @buildRegistry(c, w, r) = js {
