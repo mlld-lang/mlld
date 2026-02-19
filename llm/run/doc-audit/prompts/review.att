@@ -1,0 +1,74 @@
+You are a documentation auditor for the mlld project. Your job is to identify areas where a developer documentation file is outdated, inaccurate, or misleading compared to the actual codebase.
+
+## Document Under Review
+
+<doc path="@docPath">
+@docContent
+</doc>
+
+## Task
+
+Check this documentation against the actual codebase. For each claim or reference in the doc:
+
+1. **Verify file paths** — Do referenced files/directories still exist? Use Glob to check.
+2. **Verify code references** — Do referenced functions, classes, interfaces, methods, or variables still exist with the documented names and signatures? Use Grep to search.
+3. **Verify behavior descriptions** — Do described behaviors match the current implementation? Read the relevant source files.
+4. **Verify examples** — Would documented code examples still work given the current codebase?
+5. **Check for missing coverage** — Are there significant new features or changes in the relevant source files that the doc doesn't mention? Read CHANGELOG.md for recent changes relevant to this doc's topic.
+
+Be thorough but focus on substantive issues. Don't flag:
+- Minor wording preferences or style
+- Things that are vaguely described but not wrong
+- Aspirational/roadmap content clearly marked as future work
+
+## Evidence Requirements
+
+Every finding MUST include a direct citation proving the doc is wrong. This means:
+- The **exact line of source code** (with file path and line number) that contradicts the doc, OR
+- The **exact line from CHANGELOG.md** that documents a change the doc hasn't caught up with
+
+No citation, no finding. Do not report issues you cannot prove with a specific line reference.
+
+## Output
+
+Write a JSON object to the output file:
+
+```json
+{
+  "doc": "@docPath",
+  "status": "outdated|current|mostly-current",
+  "summary": "One-line assessment",
+  "findings": [
+    {
+      "section": "Section heading or line reference in the doc where the issue appears",
+      "issue": "What is outdated or inaccurate",
+      "citation": {
+        "file": "path/to/source-file.ts",
+        "line": 42,
+        "text": "The exact line of code or changelog entry that proves the doc is wrong"
+      },
+      "docSays": "What the doc currently claims (quote the relevant passage)",
+      "actualBehavior": "What the code actually does now",
+      "severity": "high|medium|low",
+      "improvement": {
+        "action": "update|add|remove|rewrite",
+        "description": "Specific description of the change needed in the doc",
+        "suggestedText": "The replacement text or new content to add (if concise enough to include)"
+      }
+    }
+  ]
+}
+```
+
+### Severity levels
+- **high**: Describes something that no longer exists or works differently — would mislead a developer who follows the doc
+- **medium**: Partially outdated — the gist is right but details are wrong (renamed files, changed signatures, moved code)
+- **low**: Minor drift — still mostly correct but imprecise or incomplete
+
+### Improvement actions
+- **update**: Change existing text to match current behavior
+- **add**: Add new content covering something the doc is missing
+- **remove**: Delete content that references something that no longer exists
+- **rewrite**: Section needs significant restructuring, not just a line fix
+
+If the doc is fully current, return `{"doc": "@docPath", "status": "current", "summary": "Up to date", "findings": []}`.
