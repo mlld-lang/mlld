@@ -1,5 +1,5 @@
 ---
-updated: 2026-02-18
+updated: 2026-02-19
 tags: #arch, #lsp, #tooling
 related-docs: docs/dev/GRAMMAR.md
 related-code: cli/commands/language-server.ts, cli/commands/language-server-impl.ts, cli/execution/CommandDispatcher.ts, services/lsp/ASTSemanticVisitor.ts, services/lsp/visitors/*.ts, services/lsp/utils/*.ts, tests/utils/token-validator/*.ts, services/lsp/*.test.ts
@@ -13,6 +13,7 @@ related-types: cli/commands/language-server { MlldLanguageServerConfig, Document
 - Start the server with `mlld language-server` (alias: `mlld lsp`).
 - `vscode-languageserver` is a runtime dependency (`package.json` `dependencies`), not a dev-only dependency.
 - Semantic highlighting is AST-driven via `ASTSemanticVisitor` + specialized visitors.
+- Embedded tree-sitter WASM parsing is enabled for JavaScript, Python, and Bash code blocks.
 - Semantic token validation is also AST-driven and now documented here as canonical architecture.
 
 ## Principles
@@ -38,6 +39,7 @@ related-types: cli/commands/language-server { MlldLanguageServerConfig, Document
 - Traverse AST using `services/lsp/ASTSemanticVisitor.ts`.
 - Emit tokens through `services/lsp/utils/TokenBuilder.ts`.
 - Map visitor token names to LSP standard token types via `TOKEN_TYPE_MAP` in `cli/commands/language-server-impl.ts`.
+- For embedded code blocks, `services/lsp/embedded/EmbeddedLanguageService.ts` loads WASM parsers for `javascript`, `python`, and `bash` (alias support: `js/node`, `py/python3`, `sh/shell/zsh`).
 
 Current `TOKEN_TYPE_MAP` highlights to keep accurate:
 
@@ -101,6 +103,7 @@ Flow:
 
 Use only existing commands/scripts:
 
+- `npm run build:wasm`
 - `npm run validate:tokens`
 - `npm run dump:tokens <file> -- --diagnostics`
 - `npm run test:nvim-lsp <file>`

@@ -179,10 +179,8 @@ export class LanguageBlockHelper {
           });
         }
       } else {
-        // For unsupported languages (sh/py/js when WASM unavailable):
-        // Tokenize as string until WASM parsers are set up
-        // But still highlight @variable interpolations
-        // TODO: Enable tree-sitter parsing when WASM bundles are available for sh/py
+        // Fallback when a parser isn't available: tokenize as string,
+        // while still highlighting @variable interpolations.
         this.tokenizeCodeWithVariables(
           fullCodeContent,
           codePosition.line,
