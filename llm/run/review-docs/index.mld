@@ -32,6 +32,11 @@ exe @revisePrompt(targetPath, targetDoc, allAtoms, verifiedFindings) = template 
 >> ─── Helpers ───
 
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+exe @copyFile(src, dest) = sh { cp "$src" "$dest" }
+exe @writeJson(data, path) = [
+  let @str = @data | @json
+  output @str to "@path"
+]
 exe @countConfirmed(text) = [
   let @data = @text | @parse.llm
   when [
@@ -303,8 +308,8 @@ var @writeBackResults = for @entry in @reviseTargets [
     => null
   ]
 
-  let @revised = <@revisedPath>
-  output @revised to `@root/@entry.target`
+  let @dest = `@root/@entry.target`
+  run @copyFile(@revisedPath, @dest)
   show `  @entry.target: updated`
   => @entry.target
 ]
@@ -336,7 +341,7 @@ var @summary = {
   revised: @revisedCount,
   errors: @errorCount
 }
-output @summary to `@runDir/summary\.json`
+run @writeJson(@summary, `@runDir/summary\.json`)
 
 var @finalEvt = {
   total: @targets.length,

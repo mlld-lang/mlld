@@ -1,0 +1,424 @@
+{
+  "docs": [
+    {
+      "target": "docs/user/quickstart.md",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "syntax/comments.md",
+        "commands/exe-simple.md",
+        "commands/exe-blocks.md",
+        "commands/run-basics.md",
+        "commands/log.md",
+        "commands/output.md",
+        "control-flow/when-inline.md",
+        "control-flow/for-arrow.md",
+        "syntax/escaping-defaults.md",
+        "configuration/cli-run.md"
+      ],
+      "priority": "high",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/introduction.md",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "syntax/variables-truthiness.md",
+        "syntax/comments.md",
+        "syntax/escaping-defaults.md",
+        "commands/exe-simple.md",
+        "commands/exe-blocks.md",
+        "commands/run-basics.md",
+        "commands/log.md",
+        "commands/output.md",
+        "commands/stream.md",
+        "configuration/paths-urls.md",
+        "configuration/frontmatter.md",
+        "modules/philosophy.md"
+      ],
+      "priority": "high",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/reference.md",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "syntax/variables-truthiness.md",
+        "syntax/comments.md",
+        "syntax/escaping-defaults.md",
+        "syntax/file-loading-ast.md",
+        "syntax/templates-loops.md",
+        "commands/exe-simple.md",
+        "commands/exe-blocks.md",
+        "commands/exe-shadow.md",
+        "commands/exe-metadata.md",
+        "commands/exe-when.md",
+        "commands/exe-prose.md",
+        "commands/run-basics.md",
+        "commands/run-cwd.md",
+        "commands/run-stdin.md",
+        "commands/log.md",
+        "commands/output.md",
+        "commands/append.md",
+        "commands/stream.md",
+        "commands/env-directive.md",
+        "control-flow/bail.md",
+        "control-flow/script-return.md",
+        "configuration/paths-urls.md",
+        "configuration/frontmatter.md",
+        "configuration/environment-variables.md"
+      ],
+      "priority": "high",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/flow-control.md",
+      "atoms": [
+        "control-flow/when.md",
+        "control-flow/when-inline.md",
+        "control-flow/when-blocks.md",
+        "control-flow/when-operators.md",
+        "control-flow/when-local-vars.md",
+        "control-flow/if.md",
+        "control-flow/for-arrow.md",
+        "control-flow/for-block.md",
+        "control-flow/for-collection.md",
+        "control-flow/for-object.md",
+        "control-flow/for-parallel.md",
+        "control-flow/for-batch.md",
+        "control-flow/for-nested.md",
+        "control-flow/for-context.md",
+        "control-flow/for-filter.md",
+        "control-flow/for-skip.md",
+        "control-flow/foreach.md",
+        "control-flow/loop.md",
+        "control-flow/while.md",
+        "control-flow/bail.md",
+        "control-flow/no-early-exit.md",
+        "control-flow/script-return.md",
+        "syntax/pipelines-retry.md",
+        "syntax/pipelines-parallel.md"
+      ],
+      "priority": "high",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/content-and-data.md",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "syntax/variables-truthiness.md",
+        "syntax/escaping-defaults.md",
+        "syntax/file-loading-ast.md",
+        "syntax/templates-loops.md",
+        "configuration/paths-urls.md",
+        "configuration/frontmatter.md"
+      ],
+      "priority": "high",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/security.md",
+      "atoms": [
+        "security/automatic-labels.md",
+        "security/labels-influenced.md",
+        "security/env-blocks.md",
+        "security/policy-composition.md",
+        "commands/env-directive.md",
+        "commands/tool-reshaping.md",
+        "patterns/guarded-execution.md"
+      ],
+      "priority": "high",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/modules.md",
+      "atoms": [
+        "modules/philosophy.md",
+        "modules/import-types.md",
+        "modules/importing-namespace.md",
+        "modules/importing-registry.md",
+        "modules/registry.md",
+        "modules/local-development.md",
+        "modules/module-patterns.md",
+        "modules/frontmatter-access.md",
+        "modules/updating.md"
+      ],
+      "priority": "medium",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/cli.md",
+      "atoms": [
+        "configuration/cli-run.md",
+        "configuration/config-files.md",
+        "configuration/environment-variables.md",
+        "configuration/validate-features.md",
+        "configuration/plugin.md",
+        "configuration/live-stdio.md",
+        "configuration/mcp-dev.md"
+      ],
+      "priority": "medium",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/mcp.md",
+      "atoms": [
+        "commands/mcp.md",
+        "commands/mcp-import.md",
+        "commands/mcp-export.md",
+        "commands/mcp-tools.md",
+        "commands/tool-reshaping.md"
+      ],
+      "priority": "medium",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/sdk.md",
+      "atoms": [
+        "configuration/sdk-execution-modes.md",
+        "configuration/sdk-dynamic-modules.md",
+        "configuration/sdk-execute-function.md",
+        "configuration/sdk-analyze-module.md"
+      ],
+      "priority": "medium",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/prose.md",
+      "atoms": [
+        "commands/exe-prose.md"
+      ],
+      "priority": "medium",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/testing.md",
+      "atoms": [],
+      "priority": "low",
+      "type": "revision",
+      "notes": "No atom coverage — check against actual test framework behavior"
+    },
+    {
+      "target": "docs/user/streaming.md",
+      "atoms": [
+        "commands/stream.md"
+      ],
+      "priority": "low",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/cookbook.md",
+      "atoms": [
+        "patterns/conditional-workflows.md",
+        "patterns/gate.md",
+        "patterns/guarded-execution.md",
+        "patterns/parallel-execution.md",
+        "patterns/router.md",
+        "patterns/tool-orchestration.md"
+      ],
+      "priority": "low",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/markdown-mode.md",
+      "atoms": [
+        "syntax/comments.md",
+        "syntax/escaping-defaults.md"
+      ],
+      "priority": "low",
+      "type": "revision"
+    },
+    {
+      "target": "website/src/index.njk",
+      "atoms": [
+        "security/automatic-labels.md",
+        "security/env-blocks.md",
+        "security/policy-composition.md",
+        "patterns/guarded-execution.md",
+        "configuration/cli-run.md"
+      ],
+      "priority": "high",
+      "type": "revision"
+    },
+    {
+      "target": "website/src/examples/anonymous-retry.mld",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "commands/exe-simple.md",
+        "control-flow/when-inline.md",
+        "control-flow/when-blocks.md",
+        "syntax/pipelines-retry.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "website/src/examples/ast-selectors.mld",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "syntax/file-loading-ast.md",
+        "control-flow/for-arrow.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "website/src/examples/code-review.mld",
+      "atoms": [
+        "modules/import-types.md",
+        "syntax/variables-basics.md",
+        "commands/run-basics.md",
+        "syntax/file-loading-ast.md",
+        "configuration/paths-urls.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "website/src/examples/imports.mld",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "commands/exe-simple.md",
+        "commands/mcp-export.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "website/src/examples/injection-defense.mld",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "security/automatic-labels.md",
+        "patterns/guarded-execution.md",
+        "control-flow/when-blocks.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "website/src/examples/parallel-audit.mld",
+      "atoms": [
+        "commands/exe-simple.md",
+        "syntax/pipelines-parallel.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "website/src/examples/parallel-fanout.mld",
+      "atoms": [
+        "commands/exe-simple.md",
+        "control-flow/for-parallel.md",
+        "control-flow/for-arrow.md",
+        "syntax/file-loading-ast.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "website/src/examples/plan.mld",
+      "atoms": [
+        "modules/import-types.md",
+        "syntax/variables-basics.md",
+        "commands/run-basics.md",
+        "configuration/paths-urls.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "website/src/examples/readme-embed.mld.md",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "commands/run-basics.md",
+        "syntax/file-loading-ast.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "website/src/examples/test-plan.mld",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "commands/run-basics.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "website/src/examples/standup.mld",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "commands/exe-simple.md",
+        "commands/exe-blocks.md",
+        "control-flow/when-inline.md",
+        "control-flow/when-blocks.md",
+        "syntax/pipelines-retry.md"
+      ],
+      "priority": "medium",
+      "type": "example"
+    },
+    {
+      "target": "docs/user/registry.md",
+      "atoms": [
+        "modules/registry.md",
+        "modules/importing-registry.md",
+        "modules/updating.md"
+      ],
+      "priority": "medium",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/resolvers.md",
+      "atoms": [
+        "modules/import-types.md",
+        "modules/importing-namespace.md"
+      ],
+      "priority": "low",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/security/signing-overview.md",
+      "atoms": [
+        "security/automatic-labels.md",
+        "security/policy-composition.md"
+      ],
+      "priority": "low",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/security/sign-verify.md",
+      "atoms": [
+        "security/automatic-labels.md"
+      ],
+      "priority": "low",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/security/autosign-autoverify.md",
+      "atoms": [
+        "security/automatic-labels.md",
+        "security/policy-composition.md"
+      ],
+      "priority": "low",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/security/labels-influenced.md",
+      "atoms": [
+        "security/labels-influenced.md",
+        "security/automatic-labels.md"
+      ],
+      "priority": "low",
+      "type": "revision"
+    },
+    {
+      "target": "docs/user/large-variables.md",
+      "atoms": [
+        "syntax/variables-basics.md",
+        "syntax/escaping-defaults.md"
+      ],
+      "priority": "low",
+      "type": "revision"
+    }
+  ]
+}

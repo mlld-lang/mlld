@@ -1,0 +1,38 @@
+>> Review-docs context helpers
+
+exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+
+>> Log event to events.jsonl
+exe @logEvent(runDir, eventType, data) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  let @parsed = @data | @json
+  let @event = { ts: @now, event: @eventType, ...@parsed }
+  append @event to "@eventsFile"
+]
+
+>> Flatten a target path into a safe filename
+exe @flatName(path) = @path.replaceAll("/", "--")
+
+>> Load and concatenate atom contents for a manifest entry
+exe @loadAtoms(entry) = [
+  let @contents = for @f in @entry.atoms [
+    let @path = `@root/docs/src/atoms/@f`
+    let @content = <@path>
+    => `--- @f ---\n@content\n`
+  ]
+  => @contents.join("\n")
+]
+
+>> Count entries missing their output file in a directory
+exe @countMissingFiles(dir, entries, ext) = [
+  let @checks = for @entry in @entries [
+    let @flat = @flatName(@entry.target)
+    let @exists = @fileExists(`@dir/@flat@ext`)
+    if @exists == "yes" [ => null ]
+    => 1
+  ]
+  let @nonNull = for @c in @checks when @c => @c
+  => @nonNull.length
+]
+
+export { @fileExists, @logEvent, @flatName, @loadAtoms, @countMissingFiles }
