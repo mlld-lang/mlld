@@ -1,4 +1,4 @@
-# CLI Usage 
+# CLI Usage
 
 The mlld CLI provides commands for processing mlld files, managing modules, and configuring your mlld environment.
 
@@ -8,13 +8,7 @@ Install globally to use the CLI:
 
 ```bash
 npm install -g mlld
-```
-
-Or use it from a local installation:
-
-```bash
-npm install mlld
-npx mlld <command>
+mlld <command>
 ```
 
 ## Core Commands
@@ -300,7 +294,14 @@ Scripts are loaded from the directory configured in `mlld-config.json` (default:
 - AST caching: Scripts are cached after first parse (mtime-based invalidation)
 - Timeout support: Automatically aborts long-running scripts
 - Metrics: Debug mode shows parse time, evaluation time, cache hits, effect counts
-- Payload injection: Unknown flags become `@payload` fields (`mlld run my-script --topic foo`), and `@payload` is available in `mlld run` context.
+- Payload injection: Unknown flags become `@payload` fields (`mlld run my-script --topic foo`). Import `@payload` in your script to access them.
+
+**Example script with payload** (`llm/run/build.mld`):
+```mlld
+import "@payload" as @payload
+var @env = @payload.env ? @payload.env : "dev"
+var @fast = @payload.fast ? @payload.fast : false
+```
 
 **Example script** (`llm/run/hello.mld`):
 ```mlld
@@ -341,6 +342,119 @@ mlld test --env .env.staging
 - Multiple test files run in separate processes automatically
 - Prevents shadow environment contamination between tests
 - Each test gets a clean environment state
+
+### `mlld validate`
+
+Detect common mistakes with static analysis before runtime.
+
+```bash
+mlld validate module.mld
+mlld validate module.mld --error-on-warnings
+mlld validate module.mld --format json
+```
+
+**Options:**
+- `--error-on-warnings` - Exit 1 if any warnings are present
+- `--format <format>` - Output format: `text` (default), `json`
+
+**What it detects:**
+- Undefined variables (typos like `@nmae` instead of `@name`)
+- Variable redefinition in nested scopes (mlld variables are immutable)
+- Reserved name conflicts (`@now`, `@base`, `@mx`, `@p`, `@env`, `@payload`, `@state`)
+- Builtin shadowing (`@parse`, `@exists`, `@upper`, `@lower`, etc.)
+- Exe parameter shadowing (generic names like `result`, `output`, `data` that risk collision)
+
+**Suppressing warnings:**
+
+Add to `mlld-config.json` to suppress intentional patterns:
+
+```json
+{
+  "validate": {
+    "suppressWarnings": ["exe-parameter-shadowing"]
+  }
+}
+```
+
+Suppressible codes: `exe-parameter-shadowing`, `mutable-state`, `when-exe-implicit-return`, `deprecated-json-transform`.
+
+**Exit codes:**
+- Exit 0: valid syntax, no errors
+- Exit 1: parse errors or hard validation errors
+- Exit 1 with `--error-on-warnings`: any warnings present
+
+**JSON output** returns structured data: `executables`, `exports`, `imports`, `guards`, `needs`, `warnings`, `redefinitions`, `antiPatterns`.
+
+### `mlld mcp-dev`
+
+Start an MCP server that provides language introspection tools for development. Use with Claude Code or other MCP clients to validate syntax, analyze modules, and inspect ASTs.
+
+```bash
+mlld mcp-dev
+```
+
+Configure in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "mlld-dev": {
+      "command": "mlld",
+      "args": ["mcp-dev"]
+    }
+  }
+}
+```
+
+**Tools provided:**
+- `mlld_validate` — Validate syntax, return errors and warnings
+- `mlld_analyze` — Full module analysis: exports, executables, imports, guards, statistics
+- `mlld_ast` — Get the raw parsed AST
+
+All tools accept either `file` (path to `.mld` file) or `code` (inline string). Mode is inferred from file extension; override with `"mode": "strict"` or `"mode": "markdown"`.
+
+### `mlld live --stdio`
+
+Persistent NDJSON RPC server for long-running SDK operations.
+
+```bash
+mlld live --stdio
+```
+
+**Protocol format:**
+
+```json
+>> Request
+{"method":"process","id":1,"params":{"script":"show 'hello'"}}
+
+>> Event stream (during execution)
+{"event":{"id":1,"type":"stream:chunk","content":"hello"}}
+
+>> Result
+{"result":{"id":1,"output":"hello","exports":[]}}
+```
+
+**Methods:**
+- `process` — Execute script text via `params.script`
+- `execute` — Run file via `params.filepath` with optional payload/state/dynamicModules
+- `analyze` — Static analysis via `params.filepath`
+- `state:update` — Update in-flight `@state` for `params.requestId`
+- `cancel` — Abort active request by id
+
+**SDK integration:**
+
+Go, Python, Rust, and Ruby SDKs maintain persistent `mlld live --stdio` subprocesses:
+
+```python
+handle = client.execute_async("./script.mld", payload)
+handle.update_state("flag", True)  # In-flight state mutation
+result = handle.wait()
+```
+
+**Lifecycle:**
+- Server runs until stdin EOF, SIGINT, or SIGTERM
+- Each request uses fresh interpreter environment
+- AST caching persists across requests (mtime-based invalidation)
 
 ## CI/CD and Ephemeral Execution
 
@@ -481,6 +595,31 @@ mlld vars remove API_KEY
 ```mlld
 import { GITHUB_TOKEN, NODE_ENV } from @input
 ```
+
+### `mlld plugin`
+
+Install the mlld Claude Code plugin for orchestrator authoring skills, language server integration, and MCP dev tools.
+
+```bash
+mlld plugin install                  # Install for current user
+mlld plugin install --scope project  # Install for current project only
+mlld plugin status                   # Check if installed
+mlld plugin uninstall                # Remove the plugin
+mlld skill install                   # Install skills for codex, opencode, pi 
+```
+
+Requires the `claude` CLI to be installed. Restart Claude Code after installing to activate the plugin.
+
+**What's included:**
+
+| Component | Description |
+|-----------|-------------|
+| Orchestrator skill | Patterns for audit, research, and development pipelines |
+| Agent skill | Tool agents, event-driven agents, workflow agents |
+| `/mlld:scaffold` | Generate starter orchestrator projects |
+| Language server | `.mld` syntax highlighting and diagnostics |
+| MCP dev tools | `mlld mcp-dev` for development |
+
 
 ## Environment Commands
 
@@ -652,50 +791,66 @@ mlld registry update
 
 ## Configuration Files
 
-### mlld.lock.json
+mlld uses two configuration files:
+- `mlld-config.json` — Your project settings (edit manually)
+- `mlld-lock.json` — Auto-generated locks (do not edit)
 
-Project configuration and module lock file. Created by `mlld setup` or when installing modules.
+### mlld-config.json
+
+Your project settings. Edit manually to configure resolvers, validation options, and script directories.
 
 **Location:** Project root
 
 **Example:**
 ```json
 {
-  "version": "1.0",
-  "config": {
-    "resolvers": {
-      "registries": [
-        {
-          "prefix": "@local/",
-          "resolver": "LOCAL",
-          "type": "input",
-          "config": {
-            "basePath": "./llm/modules"
-          }
-        },
-        {
-          "prefix": "@myorg/",
-          "resolver": "GITHUB",
-          "type": "input",
-          "config": {
-            "repository": "myorg/private-modules",
-            "branch": "main",
-            "basePath": "modules"
-          }
+  "resolvers": {
+    "prefixes": [
+      {
+        "prefix": "@local/",
+        "resolver": "LOCAL",
+        "type": "input",
+        "config": {
+          "basePath": "./llm/modules"
         }
-      ]
-    }
+      },
+      {
+        "prefix": "@myorg/",
+        "resolver": "GITHUB",
+        "type": "input",
+        "config": {
+          "repository": "myorg/private-modules",
+          "branch": "main",
+          "basePath": "modules"
+        }
+      }
+    ]
   },
+  "validate": {
+    "suppressWarnings": ["exe-parameter-shadowing"]
+  }
+}
+```
+
+### mlld-lock.json
+
+Auto-generated lock file. Do not edit manually. Created by `mlld setup` or when installing modules.
+
+**Location:** Project root
+
+**Example:**
+```json
+{
   "modules": {},
   "security": {
-    "allowedEnv": ["NODE_ENV", "API_KEY"]
+    "allowedEnv": ["MLLD_NODE_ENV", "MLLD_API_KEY"]
   }
 }
 ```
 
 ### Global Configuration
 
-**Location:** `~/.config/mlld/mlld.lock.json`
+**Location:** `~/.config/mlld/mlld-config.json`
 
 Used for global aliases and user-wide settings. Created by `mlld alias --global`.
 
@@ -709,7 +864,7 @@ Used for global aliases and user-wide settings. Created by `mlld alias --global`
 
 ### Custom Variables
 
-Must be allowed in mlld.lock.json:
+All custom environment variables must be prefixed with `MLLD_`. Allow them in `mlld-lock.json`:
 ```bash
 mlld vars allow MY_API_KEY
 ```
@@ -725,8 +880,8 @@ mlld supports several file extensions:
 
 - `.mld` - Standard mlld files
 - `.mld.md` - mlld files with Markdown (recommended for modules)
-- `.mll` - Alternative extension
-- `.mll.md` - Alternative Markdown extension
+- `.mlld` - Alternative extension
+- `.mlld.md` - Alternative Markdown extension
 
 ## Common Workflows
 

@@ -101,6 +101,40 @@ Import it like any other policy module:
 /import policy @production from "./policies.mld"
 ```
 
+## Policy Composition
+
+Multiple policies compose automatically when imported or declared:
+
+```mlld
+>> Team policy allows echo and git
+var @team = {
+  capabilities: { allow: ["cmd:echo:*", "cmd:git:*"] }
+}
+policy @p1 = union(@team)
+
+>> Project policy allows echo and node
+var @project = {
+  capabilities: { allow: ["cmd:echo:*", "cmd:node:*"] }
+}
+policy @p2 = union(@project)
+
+>> Effective: only echo (intersection of both policies)
+run { echo "allowed by both" }
+```
+
+Composition rules:
+
+| Field | Rule | Effect |
+|-------|------|--------|
+| `allow` | Intersection | Must be allowed by ALL policies |
+| `deny` | Union | Denied by ANY policy |
+| `danger` | Intersection | Must be opted into by ALL |
+| `limits` | Minimum | Most restrictive wins |
+
+**Note:** If allow lists have no overlap, the intersection is empty and all operations are blocked. Ensure shared baseline commands appear in all layers.
+
+Label deny rules and auth configs from all layers merge via union — a `deny` on `secret → op:cmd` from ANY layer blocks that flow in the merged policy.
+
 ## Data Labels
 
 Mark data as sensitive by adding labels to variable declarations:
@@ -151,6 +185,37 @@ guard @noUploads before op:run = when [
   @input.any.mx.taint.includes("src:exec") => deny "No nesting command output"
   * => allow
 ]
+```
+
+### Influenced Label
+
+The `influenced` label marks LLM outputs that processed untrusted data, defending against prompt injection:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    rules: ["untrusted-llms-get-influenced"]
+  }
+}
+policy @p = union(@policyConfig)
+
+var untrusted @task = "Review this external input"
+exe llm @process(input) = run cmd { claude -p "@input" }
+
+var @result = @process(@task)
+show @result.mx.labels  >> ["llm", "untrusted", "influenced"]
+```
+
+The label is applied automatically when the `untrusted-llms-get-influenced` rule is enabled, the executable is labeled `llm`, and the input contains the `untrusted` label. The label propagates through interpolation.
+
+Restrict influenced outputs via policy:
+
+```mlld
+labels: {
+  influenced: {
+    deny: ["destructive", "exfil"]
+  }
+}
 ```
 
 ## Guards
@@ -544,6 +609,92 @@ var secret @key = "sk-12345"
 run cmd { echo @key }  >> Protected by imported guard
 ```
 
+## Environment Isolation
+
+Use `env` blocks to scope execution within a named environment configuration:
+
+```mlld
+var @sandbox = { tools: ["Read", "Write", "Bash"] }
+
+env @sandbox [
+  run cmd { echo "inside sandbox" }
+]
+```
+
+The environment is active only within the block and released on exit. Variables defined inside don't leak out, but the block can access parent scope variables.
+
+Return a value from a block with `=>`:
+
+```mlld
+var @config = { tools: ["Read", "Write"] }
+
+var @result = env @config [
+  => "completed"
+]
+
+show @result
+```
+
+Derive a restricted environment inline with `with`:
+
+```mlld
+var @sandbox = { tools: ["Read", "Write", "Bash"] }
+
+var @result = env @sandbox with { tools: ["Read"] } [
+  => "read-only mode"
+]
+```
+
+Child environments can only restrict parent capabilities, never extend them.
+
+### Sandboxed Execution with the env Directive
+
+The full `env` directive supports provider-based isolation, credential management, and capability control:
+
+```mlld
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  fs: { read: [".:/app"], write: ["/tmp"] },
+  net: "none",
+  tools: ["Read", "Bash"],
+  mcps: []
+}
+
+env @sandbox [
+  run cmd { claude -p "Analyze the codebase" } using auth:claude
+]
+```
+
+The provider runs commands in a Docker container. `fs` restricts filesystem mounts, `net` blocks network access, `tools` limits runtime tool availability, and `mcps: []` blocks MCP servers. Credentials flow through sealed paths via `using auth:*` — never interpolated into command strings.
+
+**Config fields:**
+
+| Field | Purpose |
+|-------|---------|
+| `provider` | Isolation provider (`"@mlld/env-docker"`, `"@mlld/env-sprites"`) |
+| `auth` | Authentication reference from policy |
+| `tools` | Runtime tool allowlist |
+| `mcps` | MCP server allowlist (`[]` blocks all) |
+| `fs` | Filesystem access (passed to provider) |
+| `net` | Network restrictions (passed to provider) |
+| `limits` | Resource limits (passed to provider) |
+| `profile` | Explicit profile selection |
+| `profiles` | Profile definitions for policy-based selection |
+
+**Capability attenuation:**
+
+```mlld
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  tools: ["Read", "Write", "Bash"]
+}
+
+env @sandbox with { tools: ["Read"] } [
+  >> Only Read is available here
+  run cmd { claude -p @task }
+]
+```
+
 ## Expression Tracking
 
 Guards see labels through all transformations:
@@ -804,7 +955,7 @@ Array quantifiers for per-operation guards:
 guard @blockSecretsInRun before op:run = when [
   @input.any.mx.labels.includes("secret") => deny "Shell cannot access secrets"
   @input.any.text.includes("sk-") => deny "Shell input contains a token pattern"
-  @input.all.mx.tokest < 1000 => allow
+  @input.all.mx.tokens < 1000 => allow
   @input.none.mx.labels.includes("pii") => allow
   * => deny "Input validation failed"
 ]

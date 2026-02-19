@@ -42,19 +42,21 @@ The MCP server uses static analysis (`analyzeModule()`) to discover tools withou
 Tips:
 - Serve a directory or glob: `mlld mcp llm/mcp/` or `mlld mcp "llm/mcp/*.mld.md"`.
 - JSON-RPC responses always print to stdout. Logs and warnings stay on stderr, so piping works cleanly.
+- Type annotations (`string`, `number`, `boolean`, `object`, `array`) on parameters generate JSON Schema for the tool's input schema visible to MCP clients.
+- The `with { description }` clause on `exe` populates the tool description shown to MCP clients.
 
 ## Common Patterns
 
-- **Environment overrides**  
+- **Environment overrides**
   ```bash
   mlld mcp tools.mld.md --env MLLD_GITHUB_TOKEN=ghp_xxx
   ```
   Keys must start with `MLLD_`. Modules read them with `/import { @MLLD_GITHUB_TOKEN } from @input`.
 
-- **Directory defaults**  
-  Structure multi-tool projects under `llm/mcp/` so `mlld mcp` “just works” without arguments.
+- **Directory defaults**
+  Structure multi-tool projects under `llm/mcp/` so `mlld mcp` "just works" without arguments.
 
-- **Name collisions**  
+- **Name collisions**
   If two modules export the same function name, the command prints both source paths and exits. Rename one of the exports or split the modules into separate servers.
 
 ## Import MCP Tools
@@ -109,8 +111,8 @@ Tool collections define what an agent sees and how tools behave.
 
 Tool definitions support:
 - `labels`: guard and policy signals for operations
-- `bind`: pre-fill parameters
-- `expose`: limit visible parameters
+- `bind`: pre-fill parameters; values can be string literals or variable references resolved at definition time
+- `expose`: limit visible parameters; without `expose`, all parameters except those in `bind` are visible
 - `description`: override tool metadata
 
 ### Serving Tool Collections
@@ -162,7 +164,7 @@ See `mlld howto pattern-guarded-tool-export` for more examples including operati
 
 ## Advanced Usage
 
-- **Config modules**  
+- **Config modules**
   Provide a companion module that exports `@config`:
   ```mlld
   /var @config = {
@@ -176,13 +178,13 @@ See `mlld howto pattern-guarded-tool-export` for more examples including operati
   ```
   `config.tools` filters the served tools (snake_case or camelCase both match). `config.env` merges into the process environment after CLI overrides.
 
-- **Manual allow-list**  
+- **Manual allow-list**
   Override everything with `--tools`:
   ```bash
   mlld mcp llm/mcp/ --tools status,create_issue
   ```
 
-- **Multiple modules**  
+- **Multiple modules**
   ```bash
   mlld mcp "llm/mcp/{github,party}.mld.md"
   ```
@@ -229,4 +231,4 @@ Guards can inspect these:
 - **Tool not found**: Confirm the MCP client calls the snake_case name (`greet_user`), which maps back to `@greetUser`.
 - **Environment ignored**: Only `MLLD_`-prefixed variables apply. Anything else is skipped deliberately.
 - **Config module skipped**: Export `@config` and run `mlld mcp … --config path.mld.md`. Errors during config evaluation appear on stderr.
-- **Client connection issues**: Verify the client runs the same command you use locally and inherits the required environment variables. A quick local check is to pipe JSON requests as shown in the tldr example. 
+- **Client connection issues**: Verify the client runs the same command you use locally and inherits the required environment variables. A quick local check is to pipe JSON requests as shown in the tldr example.

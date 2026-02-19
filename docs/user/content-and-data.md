@@ -106,7 +106,7 @@ show @filename  >> Shows "README.md"
 ```mlld
 >> Load different file types
 var @config = <package.json>            >> JSON file
-var @docs = <README.md>                 >> Markdown file  
+var @docs = <README.md>                 >> Markdown file
 var @script = <build.sh>                >> Shell script
 ```
 
@@ -133,7 +133,7 @@ Extract specific sections from markdown files:
 >> Extract single section
 var @install = <README.md # Installation>
 
->> Extract from multiple files  
+>> Extract from multiple files
 var @apis = <docs/*.md # API Reference>
 
 >> Rename sections with 'as'
@@ -419,6 +419,15 @@ show @config.db.users[1]                 >> "guest"
 Include content only when a variable is truthy. The `?` suffix checks the variable and omits the following content if falsy.
 
 **Truthiness rules** (same as `when`): Falsy values are `null`, `undefined`, `""`, `"false"`, `"0"`, `0`, `NaN`, `[]`, `{}`.
+
+#### Variable Declaration with `?`
+
+Declare an optional variable that omits itself when falsy:
+
+```mlld
+var @subtitle? = @item.subtitle      >> omit if falsy
+show `Title: @item.title @subtitle?` >> subtitle only if present
+```
 
 #### In Commands and Templates
 
@@ -745,7 +754,7 @@ var @config = <config.json> | @parse
 var @uppercase = <readme.txt> | @upper
 
 >> Chain transformations
-exe @first(text, n) = js { 
+exe @first(text, n) = js {
   return text.split('\n').slice(0, n).join('\n');
 }
 var @summary = <docs.md> | @first(3) | @upper
@@ -756,7 +765,7 @@ var @summary = <docs.md> | @first(3) | @upper
 mlld provides built-in transformers (both uppercase and lowercase work):
 
 ```mlld
->> Format JSON with indentation
+>> Load and parse CSV data
 var @data = <file.csv>
 var @tojson = @data | @parse
 show @tojson
@@ -805,7 +814,6 @@ For extracting JSON from LLM responses that may contain markdown code fences or 
 /var @result = @text | @parse.llm
 /show @result                                   >> false
 ````
-```
 
 ## Templates and Interpolation
 
@@ -1045,7 +1053,7 @@ Pipe data to mlld via stdin:
 # JSON input
 echo '{"version": "1.0.0", "author": "Alice"}' | mlld release.mld
 
-# Text input  
+# Text input
 echo "Hello World" | mlld process.mld
 ```
 

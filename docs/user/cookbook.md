@@ -94,6 +94,21 @@ exe @validate(text) = [
 ]
 ```
 
+### Pipeline Guard
+
+For sequential validation stages, pipe them directly and check the result:
+
+```mlld
+var @processed = @data | @validate | @normalize | @analyze
+
+when [
+  @processed.ok => @emitReport(@processed)
+  !@processed.ok => show "Validation failed"
+]
+```
+
+Each stage passes its output to the next. A failed stage can return a value with `.ok: false` to short-circuit downstream checks.
+
 ## Recipe 3: Configuration Modules
 
 Use frontmatter and templates for configurable modules:
@@ -138,7 +153,7 @@ var @THRESHOLD = 0.7
 
 exe @score(input) = [
   let @length = @input.length()
-  let @hasQuestion = @input.text.includes("?")
+  let @hasQuestion = @input.includes("?")
 
   let @scoreBase = when [
     @length > 100 => 0.5
@@ -165,6 +180,26 @@ var @decision = @route("What's the weather like today?")
 show `Handler: @decision.handler (score: @decision.score)`
 ```
 
+### Handler Dispatch
+
+Use the scored result to select and invoke the actual handler from a map:
+
+```mlld
+exe @router(message, handlers) = [
+  let @scores = for @h in @handlers => {
+    handler: @h.name,
+    score: @h.scorer(@message)
+  }
+  let @best = @scores | @sortBy("score") | @first
+  => when [
+    @best.score > 0.7 => @handlers[@best.handler].handle(@message)
+    * => null
+  ]
+]
+```
+
+`@handlers[@best.handler]` retrieves the handler by its scored key at runtime, then calls `.handle(@message)` to dispatch.
+
 ## Recipe 5: Parallel Processing
 
 Process multiple items concurrently:
@@ -183,6 +218,17 @@ show @results
 ```
 
 The `parallel(3)` runs up to 3 at once. Results preserve input order.
+
+### Function Mapping
+
+For the common case of applying one function to every item in a collection, use `foreach`:
+
+```mlld
+exe @runQA(area) = cmd { echo "Testing @area.name" | cat }
+var @results = foreach @runQA(@areas)
+```
+
+`foreach @fn(@collection)` is shorthand for mapping `@fn` over each element and collecting results.
 
 ### With Error Handling
 
@@ -373,6 +419,7 @@ loop(endless) until @state.stop [
 | `cmd:@dir { ... }` | Run in directory |
 | `exe @f(x) = [...]` | Multi-statement function |
 | `when [...]` | Switch/match logic |
+| `foreach @fn(@items)` | Map function over collection |
 | `for parallel(n) ...` | Concurrent processing |
 | `\|\| @a \|\| @b` | Parallel pipeline group |
 | `retry "hint"` | Retry with context |

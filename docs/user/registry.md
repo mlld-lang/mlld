@@ -36,7 +36,7 @@ All fields required. License must be CC0. Declare runtimes in the module body:
 ### Publish Command
 
 ```bash
-mlld publish my-tool.mld
+mlld publish my-tool.mld.md
 ```
 
 First time publishing:
@@ -95,7 +95,7 @@ Your module must pass validation before publishing:
 
 Run validation locally:
 ```bash
-mlld publish --dry-run my-tool.mld
+mlld publish --dry-run my-tool.mld.md
 ```
 
 ## Publishing Workflow
@@ -105,7 +105,7 @@ mlld publish --dry-run my-tool.mld
 Creates a pull request:
 
 ```bash
-mlld publish my-tool.mld
+mlld publish my-tool.mld.md
 ```
 
 1. **Validation** - Checks syntax, exports, metadata
@@ -125,7 +125,7 @@ mlld publish my-tool.mld
 After first module is merged:
 
 ```bash
-mlld publish my-tool.mld
+mlld publish my-tool.mld.md
 ```
 
 1. **Version Bump** - Prompts for patch/minor/major
@@ -141,7 +141,7 @@ Version bump options:
 
 Force PR workflow:
 ```bash
-mlld publish --pr my-tool.mld
+mlld publish --pr my-tool.mld.md
 ```
 
 ### Existing PR Detection
@@ -149,7 +149,7 @@ mlld publish --pr my-tool.mld
 If you have an open PR:
 
 ```bash
-mlld publish my-tool.mld
+mlld publish my-tool.mld.md
 ```
 
 Options:
@@ -163,12 +163,12 @@ After your first module is merged, you can publish updates directly using the Re
 
 ```bash
 # Via mlld CLI (recommended)
-mlld publish my-tool.mld
+mlld publish my-tool.mld.md
 
 # Via API directly
 curl -X POST https://registry-api.mlld.org/api/publish \
   -H "Authorization: Bearer $TOKEN" \
-  -F "module=@my-tool.mld"
+  -F "module=@my-tool.mld.md"
 ```
 
 **Authentication:**
@@ -189,7 +189,7 @@ curl -X POST https://registry-api.mlld.org/api/publish \
 
 **Force PR workflow:**
 ```bash
-mlld publish --pr my-tool.mld  # Creates PR even if you have direct publish rights
+mlld publish --pr my-tool.mld.md  # Creates PR even if you have direct publish rights
 ```
 
 ## Module Structure
@@ -240,7 +240,7 @@ registry/
       "type": "git",
       "url": "https://github.com/alice/repo",
       "commit": "abc123",
-      "path": "my-tool.mld"
+      "path": "my-tool.mld.md"
     }
   },
   "dependencies": {
@@ -279,7 +279,7 @@ registry/
 If your module is in a git repo:
 
 ```bash
-mlld publish my-tool.mld
+mlld publish my-tool.mld.md
 ```
 
 Detects:
@@ -380,12 +380,18 @@ Follow semver (major.minor.patch):
 Publish with tags:
 
 ```bash
-mlld publish --tag beta my-tool.mld
+mlld publish --tag beta my-tool.mld.md
 ```
 
 Users import via tag:
 ```mlld
 import { @helper } from @alice/my-tool@beta
+
+>> Namespace alias
+import @corp/utils as @corp
+
+>> Semver range
+import { @helper } from @alice/utils@^1.0.0
 ```
 
 Common tags:
@@ -455,6 +461,7 @@ When you install modules, mlld creates `mlld-lock.json` to ensure reproducible i
 - **Version control** - Commit to git for reproducible builds
 - **Never edit manually** - Use CLI commands to update
 - **Registry-only validation** - Lock file only enforces version matches for registry modules
+- **Version pinning** - `version: "latest"` updates to newest on `mlld update`; exact version (e.g. `"1.2.0"`) stays pinned until manually changed
 
 ### Commands
 
@@ -463,14 +470,30 @@ When you install modules, mlld creates `mlld-lock.json` to ensure reproducible i
 mlld install  # Installs exact versions from lock file
 ```
 
+**List installed modules:**
+```bash
+mlld ls  # Lists installed modules with versions
+```
+
 **Update lock file:**
 ```bash
 mlld update @alice/utils  # Updates lock entry for specific module
+mlld update               # Updates all modules in mlld-lock.json
+```
+
+**Check module info:**
+```bash
+mlld registry info @alice/utils  # Show module details from registry
 ```
 
 **Check lock file status:**
 ```bash
 mlld outdated  # Shows modules with newer versions available
+```
+
+**Verify after updating:**
+```bash
+mlld validate your-file.mld  # Check imports resolve
 ```
 
 ## Ownership & Permissions
@@ -566,7 +589,7 @@ mlld auth login
 Bump version or publish with new version number.
 
 **Import validation failed**:
-Fix import references or use `--skip-validation` (not recommended).
+Fix import references before publishing.
 
 ### PR Issues
 
@@ -584,7 +607,7 @@ Check github.com/mlld-lang/registry/pulls.
 **Test locally first**:
 ```bash
 mlld my-tool.mld  # Run as script
-mlld publish --dry-run my-tool.mld  # Validate
+mlld publish --dry-run my-tool.mld.md  # Validate
 ```
 
 **Use explicit exports**:
@@ -633,7 +656,7 @@ curl https://registry-api.mlld.org/api/resolve?module=@alice/my-tool
 ```bash
 curl -X POST https://registry-api.mlld.org/api/publish \
   -H "Authorization: Bearer $TOKEN" \
-  -F "module=@my-tool.mld"
+  -F "module=@my-tool.mld.md"
 ```
 
 See API docs for details.
@@ -646,7 +669,7 @@ See API docs for details.
 2. Add `export` directive
 3. Run `mlld add-needs` to detect dependencies
 4. Test locally: `mlld my-tool.mld`
-5. Publish: `mlld publish my-tool.mld`
+5. Publish: `mlld publish my-tool.mld.md`
 
 ### From Gist to Repo
 
@@ -654,7 +677,7 @@ See API docs for details.
 2. Commit and push
 3. Publish update:
 ```bash
-mlld publish my-tool.mld
+mlld publish my-tool.mld.md
 ```
 
 Source automatically updates to repo reference.

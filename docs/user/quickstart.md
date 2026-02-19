@@ -1,6 +1,6 @@
 # Quick Start
 
-Get running with mlld in 5 minutes. 
+Get running with mlld in 5 minutes.
 
 ## Installation
 
@@ -179,7 +179,7 @@ Create reusable functions:
 
 ```mlld
 exe @greet(name, title) = `Hello, @title @name!`
-exe @calculate(x, y) = js { return @x * @y + 10 }
+exe @calculate(x, y) = js { return x * y + 10 }
 
 show @greet("Smith", "Dr.")       >> "Hello, Dr. Smith!"
 show @calculate(5, 3)             >> 25
@@ -278,4 +278,3 @@ Now that you know the basics, explore these topics:
 - **[Language Reference](reference.md)** - Syntax guide
 - **[Content and Data](content-and-data.md)** - Advanced file loading and data handling
 - **[Flow Control](flow-control.md)** - Complex conditionals, loops, and pipelines
-- **[Language Reference](reference.md)** - Complete syntax guide

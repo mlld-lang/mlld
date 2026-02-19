@@ -170,7 +170,10 @@ Control when and how imports resolve:
 >> Registry module (offline after install)
 import module { @api } from @company/tools
 
->> Embedded at parse time
+>> Embedded at parse time (named import)
+import static { @prompt } from "./prompt.md"
+
+>> Embedded at parse time (namespace import)
 import static <./prompts/system.md> as @systemPrompt
 
 >> Always fetch fresh
@@ -182,6 +185,15 @@ import cached(30m) <https://feed.xml> as @feed
 >> Local development (llm/modules/)
 import local { @helper } from @alice/dev-module
 ```
+
+| Type | Behavior | Use Case |
+|------|----------|----------|
+| `module` | Content-addressed cache | Registry modules (default) |
+| `static` | Embedded at parse time | Prompts, templates |
+| `live` | Always fresh | Status APIs |
+| `cached(TTL)` | Time-based cache | Feeds, configs |
+| `local` | Dev modules (llm/modules/) | Development |
+| `templates` | Directory of .att files | Template collections |
 
 ### Import Patterns
 
@@ -333,17 +345,24 @@ mlld install @alice/utils       # Install specific module
 mlld install @alice/utils@1.2.0 # Install specific version
 ```
 
+### List Installed Modules
+```bash
+mlld ls                         # List all installed modules with versions
+```
+
 ### Update Modules
 ```bash
 mlld update                     # Update all modules
 mlld update @alice/utils        # Update specific module
 mlld outdated                   # Check for newer versions
+mlld registry info @alice/utils # Show module details from registry
 ```
 
 ### Publishing
 ```bash
 mlld publish my-module.mld      # Publish to registry
 mlld publish --pr               # Force PR workflow
+mlld publish --tag beta my-tool.mld.md  # Publish with tag
 ```
 
 See [registry.md](registry.md) for publishing details.
