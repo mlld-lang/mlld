@@ -115,15 +115,22 @@ function unwrapStructuredRecursively(
  * while exposing type information through special properties
  */
 export function createVariableProxy(variable: Variable): any {
-  const value = variable.value;
-  
+  let value = variable.value;
+
+  // Unwrap StructuredValue to its .data so the proxy target is the native
+  // JS value (array/object). This ensures Array.isArray(), .flat(), .map()
+  // etc. all work correctly in js {} blocks.
+  // Respect .keep/.keepStructured — when set, preserve the wrapper for
+  // metadata access in JS.
+  if (isStructuredValue(value) && !(value.internal as any)?.keepStructured) {
+    value = unwrapStructuredRecursively(asData(value));
+  }
+
   // Can't proxy primitives (string, number, boolean, null)
   if (value === null || typeof value !== 'object') {
-    // For primitives, we'll need a different strategy
-    // Could wrap in an object but that changes behavior
     return value;
   }
-  
+
   // Create proxy for objects and arrays
   return new Proxy(value, {
     get(target, prop, receiver) {
