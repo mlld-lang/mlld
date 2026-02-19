@@ -103,4 +103,59 @@ describe('imported executable parameter shadowing', () => {
 
     expect((output as string).trim()).toBe('outer:42\ninner:7');
   });
+
+  it('unwraps nested structured arrays when passed to imported js executables', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-import-array-unwrap-'));
+    tempDirs.push(root);
+
+    const helperPath = path.join(root, 'flatten-lib.mld');
+    const mainPath = path.join(root, 'main-flatten.mld');
+
+    await fs.writeFile(
+      helperPath,
+      [
+        '/exe @flatten(arrays) = js { return arrays.filter(Boolean).flat() }',
+        '/exe @tag(findings, phase, source) = js {',
+        '  return (findings || []).map((f, i) => ({',
+        '    ...f,',
+        '    id: f.id || (phase + "-" + source + "-" + i),',
+        '    phase: phase,',
+        '    source: source',
+        '  }));',
+        '}',
+        '/export { @flatten, @tag }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await fs.writeFile(
+      mainPath,
+      [
+        `/import { @flatten, @tag } from "${helperPath}"`,
+        '/var @items = ["a", "b"]',
+        '/var @phase1 = for @item in @items [',
+        '  => @tag([{sev: "high"}, {sev: "low"}], "p1", @item)',
+        ']',
+        '/var @p1flat = @flatten(@phase1)',
+        '/var @phase2 = for @item in @items [',
+        '  => @tag([{sev: "med"}], "p2", @item)',
+        ']',
+        '/var @p2flat = @flatten(@phase2)',
+        '/var @all = @flatten([@p1flat, @p2flat])',
+        '/show `p1:@p1flat.length p2:@p2flat.length all:@all.length`'
+      ].join('\n'),
+      'utf8'
+    );
+
+    const output = await interpret(await fs.readFile(mainPath, 'utf8'), {
+      filePath: mainPath,
+      fileSystem: new NodeFileSystem(),
+      pathService: new PathService(),
+      approveAllImports: true,
+      useMarkdownFormatter: false,
+      normalizeBlankLines: true
+    });
+
+    expect((output as string).trim()).toBe('p1:4 p2:2 all:6');
+  });
 });
