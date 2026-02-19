@@ -2,13 +2,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
-import { RunCommand } from './run';
+import { RunCommand, createRunCommand } from './run';
 import { MlldError } from '@core/errors/index';
 
 // Mock modules
 vi.mock('fs/promises');
 vi.mock('fs');
 vi.mock('@sdk/execute');
+vi.mock('../utils/inject-parser', () => ({
+  parseInjectOptions: vi.fn().mockResolvedValue({})
+}));
 
 // Create a shared mock function that can be controlled in tests
 const mockGetScriptDir = vi.fn().mockReturnValue(undefined);
@@ -349,6 +352,61 @@ describe('RunCommand', () => {
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('cached'));
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Effects: 5'));
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('State writes: 2'));
+
+      consoleLogSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+  });
+
+  describe('createRunCommand', () => {
+    it('forwards checkpoint flags and keeps them out of @payload injection', async () => {
+      const { execute } = await import('@sdk/execute');
+      const { parseInjectOptions } = await import('../utils/inject-parser');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+      vi.mocked(parseInjectOptions).mockResolvedValue({
+        '@payload': { topic: 'security' }
+      } as any);
+
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('pipeline.mld'));
+
+      const command = createRunCommand();
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as any);
+
+      await command.execute(['pipeline'], {
+        checkpoint: true,
+        fresh: true,
+        resume: '@processFiles',
+        fork: 'collect',
+        topic: 'security'
+      });
+
+      const injectArgs = vi.mocked(parseInjectOptions).mock.calls[0]?.[0] as string[];
+      expect(injectArgs).toContain('@payload={"topic":"security"}');
+      expect(injectArgs.join(' ')).not.toContain('checkpoint');
+      expect(injectArgs.join(' ')).not.toContain('fresh');
+      expect(injectArgs.join(' ')).not.toContain('resume');
+      expect(injectArgs.join(' ')).not.toContain('fork');
+
+      const executeOptions = vi.mocked(execute).mock.calls[0]?.[2] as Record<string, unknown>;
+      expect(executeOptions).toEqual(
+        expect.objectContaining({
+          checkpoint: true,
+          fresh: true,
+          resume: '@processFiles',
+          fork: 'collect',
+          checkpointScriptName: 'pipeline'
+        })
+      );
+      expect(exitSpy).toHaveBeenCalledWith(0);
 
       consoleLogSpy.mockRestore();
       consoleErrorSpy.mockRestore();

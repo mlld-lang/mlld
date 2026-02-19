@@ -594,6 +594,7 @@ Commands:
   publish                 Publish module to mlld registry
   registry                Manage mlld module registry
   run                     Run mlld scripts from script directory
+  checkpoint              Inspect and clean checkpoint caches
   verify                  Verify signed variables from MLLD_VERIFY_VARS
   setup                   Configure mlld project with interactive wizard
   test                    Run mlld tests
@@ -665,6 +666,7 @@ Payload Injection:
   Unknown flags become @payload fields (always available, even when empty):
   mlld script.mld --topic foo         # @payload = {"topic":"foo"}
   mlld script.mld                     # @payload = {}
+  Reserved checkpoint flags (--checkpoint, --fresh, --resume, --fork) are not added to @payload.
 
 Examples:
   mlld script.mld                     # Run a local file

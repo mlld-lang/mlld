@@ -13,6 +13,7 @@ export class ArgumentParser {
     'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'docs',
     'publish', 'init', 'module', 'mod', 'add-needs', 'needs', 'deps',
     'setup', 'alias', 'keychain', 'vars', 'env', 'dev', 'test', 'run', 'error-test', 'clean',
+    'checkpoint',
     'mcp', 'serve', 'live', 'language-server', 'lsp', 'nvim-setup', 'nvim', 'nvim-doctor', 'verify',
     'howto', 'ht', 'qs', 'quickstart', 'validate', 'analyze',
     'update', 'outdated', 'plugin', 'skill'
@@ -183,6 +184,30 @@ export class ArgumentParser {
           const timeoutVal = args[++i];
           if (!timeoutVal) throw new Error('--timeout requires a duration value (e.g., 5m, 1h, 30s)');
           options.timeout = timeoutVal;
+          break;
+        }
+        case '--checkpoint':
+          options.checkpoint = true;
+          break;
+        case '--fresh':
+          options.fresh = true;
+          break;
+        case '--resume': {
+          const candidate = args[i + 1];
+          if (candidate && !candidate.startsWith('-')) {
+            options.resume = candidate;
+            i++;
+          } else {
+            options.resume = true;
+          }
+          break;
+        }
+        case '--fork': {
+          const forkScript = args[++i];
+          if (!forkScript || forkScript.startsWith('-')) {
+            throw new Error('--fork requires a script name');
+          }
+          options.fork = forkScript;
           break;
         }
         case '--metrics':

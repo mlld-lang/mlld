@@ -65,6 +65,35 @@ describe('ArgumentParser custom payload flags', () => {
 
     expect(options.inject).toEqual(['@config={"a":1}', '@payload={"topic":"mlld"}']);
   });
+
+  it('excludes checkpoint lifecycle flags from @payload while preserving unknown flags', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs([
+      'script.mld',
+      '--checkpoint',
+      '--fresh',
+      '--resume',
+      '@processFiles',
+      '--fork',
+      'collect',
+      '--topic',
+      'security'
+    ]);
+
+    expect(options.checkpoint).toBe(true);
+    expect(options.fresh).toBe(true);
+    expect(options.resume).toBe('@processFiles');
+    expect(options.fork).toBe('collect');
+    expect(options.inject).toEqual(['@payload={"topic":"security"}']);
+  });
+
+  it('parses --resume without target as boolean true', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--resume']);
+
+    expect(options.resume).toBe(true);
+    expect(options.inject).toEqual(['@payload={}']);
+  });
 });
 
 describe('ArgumentParser eval mode', () => {

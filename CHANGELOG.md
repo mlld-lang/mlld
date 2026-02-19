@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added loop hook operation contexts for `op:for:iteration` and `op:for:batch`, including `@mx.for.batchIndex`/`@mx.for.batchSize` metadata and parallel batch boundary lifecycle emission.
 - Added persistent `CheckpointManager` core (`interpreter/checkpoint/CheckpointManager.ts`) with deterministic key/hash helpers, JSONL+manifest+results disk layout, corruption-tolerant loading, function/prefix invalidation APIs, and fork read-only overlay support.
 - Added active checkpoint short-circuit semantics for `llm` operations (directive/exec/effect paths), including `@mx.checkpoint.hit`/`@mx.checkpoint.key`, miss-only cache writes, and guard bypass on cache-hit paths.
+- Added checkpoint CLI/SDK wiring: `mlld run --checkpoint|--fresh|--resume|--fork`, new `mlld checkpoint list|inspect|clean` command surface, and end-to-end checkpoint option propagation through execute/interpret entry points.
 
 ### Changed
 - Added pre-3A hooks/checkpoint risk-gate documentation, lifecycle trace test helper scaffolding, and checkpoint manifest/atomic-write compatibility scaffolds to lock rollout semantics before lifecycle/runtime phases.

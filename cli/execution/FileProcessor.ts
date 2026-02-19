@@ -417,6 +417,10 @@ export class FileProcessor {
       captureErrors: cliOptions.captureErrors,
       ephemeral: cliOptions.ephemeral,
       allowAbsolutePaths: cliOptions.allowAbsolute,
+      checkpoint: cliOptions.checkpoint || cliOptions.fresh || cliOptions.resume !== undefined || cliOptions.fork !== undefined,
+      fresh: cliOptions.fresh,
+      resume: cliOptions.resume,
+      fork: cliOptions.fork,
       captureEnvironment: env => {
         resultEnvironment = env;
       },

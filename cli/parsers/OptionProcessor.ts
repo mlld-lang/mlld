@@ -45,6 +45,11 @@ export class OptionProcessor {
       ephemeral: cliOptions.ephemeral,
       // Absolute path override
       allowAbsolutePaths: cliOptions.allowAbsolute,
+      // Checkpoint/resume options
+      checkpoint: cliOptions.checkpoint,
+      fresh: cliOptions.fresh,
+      resume: cliOptions.resume,
+      fork: cliOptions.fork,
       // Streaming options
       streaming: this.buildStreamingOptions(cliOptions)
     };
@@ -209,6 +214,7 @@ export class OptionProcessor {
       '--max-output-lines',
       '--error-behavior',
       '--command-timeout',
+      '--fork',
       '--viz-type',
       '--root-state-id',
       '--variable-name',

@@ -285,6 +285,10 @@ mlld run my-script --debug
 **Options:**
 - `--timeout <duration>` - Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
 - `--debug` - Show execution metrics (timing, cache hits, effects, state writes)
+- `--checkpoint` - Enable checkpoint reuse for `llm`-labeled operations
+- `--fresh` - Clear the script checkpoint cache before running
+- `--resume [target]` - Resume with checkpoints enabled (optional target for later resume phases)
+- `--fork <script>` - Seed reads from another script's checkpoint cache
 - `-h, --help` - Show help message
 
 **Script Directory:**
@@ -295,6 +299,7 @@ Scripts are loaded from the directory configured in `mlld-config.json` (default:
 - Timeout support: Automatically aborts long-running scripts
 - Metrics: Debug mode shows parse time, evaluation time, cache hits, effect counts
 - Payload injection: Unknown flags become `@payload` fields (`mlld run my-script --topic foo`). Import `@payload` in your script to access them.
+  Known checkpoint flags (`--checkpoint`, `--fresh`, `--resume`, `--fork`) are excluded from `@payload`.
 
 **Example script with payload** (`llm/run/build.mld`):
 ```mlld
@@ -307,6 +312,21 @@ var @fast = @payload.fast ? @payload.fast : false
 ```mlld
 var @greeting = "Hello from mlld script!"
 show @greeting
+```
+
+### `mlld checkpoint <list|inspect|clean> <script>`
+
+Inspect and manage checkpoint cache files for a script.
+
+```bash
+# List cached call keys/previews
+mlld checkpoint list pipeline
+
+# Inspect manifest + records as JSON
+mlld checkpoint inspect pipeline
+
+# Remove a script cache
+mlld checkpoint clean pipeline
 ```
 
 ### `mlld test [patterns...]`

@@ -25,6 +25,50 @@ import { evaluateDirective } from './eval/directive';
 import type { DirectiveNode } from '@core/types';
 import { isExeReturnControl } from './eval/exe-return';
 import { materializeDisplayValue } from './utils/display-materialization';
+import { CheckpointManager } from './checkpoint/CheckpointManager';
+
+function stripCheckpointScriptSuffix(baseName: string): string {
+  if (baseName.endsWith('.mld.md')) {
+    return baseName.slice(0, -'.mld.md'.length);
+  }
+  if (baseName.endsWith('.mld')) {
+    return baseName.slice(0, -'.mld'.length);
+  }
+  return baseName;
+}
+
+function resolveCheckpointScriptName(
+  filePath?: string,
+  explicitName?: string
+): string | undefined {
+  if (typeof explicitName === 'string' && explicitName.trim().length > 0) {
+    return explicitName.trim();
+  }
+  if (!filePath || typeof filePath !== 'string') {
+    return undefined;
+  }
+
+  const parsed = path.parse(filePath);
+  const normalizedBase = parsed.base.toLowerCase();
+  if (normalizedBase === 'index.mld' || normalizedBase === 'main.mld' || normalizedBase === 'index.mld.md' || normalizedBase === 'main.mld.md') {
+    const dirName = path.basename(parsed.dir);
+    if (dirName && dirName !== path.sep) {
+      return dirName;
+    }
+  }
+
+  const candidate = stripCheckpointScriptSuffix(parsed.base).trim();
+  return candidate.length > 0 ? candidate : undefined;
+}
+
+function shouldEnableCheckpoint(options: InterpretOptions): boolean {
+  return (
+    options.checkpoint === true ||
+    options.fresh === true ||
+    options.resume !== undefined ||
+    typeof options.fork === 'string'
+  );
+}
 
 /**
  * Main entry point for the Mlld interpreter.
@@ -203,6 +247,26 @@ export async function interpret(
   );
   env.setStreamingManager(options.streamingManager ?? new StreamingManager());
   env.setProvenanceEnabled(provenanceEnabled);
+
+  if (shouldEnableCheckpoint(options)) {
+    const scriptName = resolveCheckpointScriptName(options.filePath, options.checkpointScriptName);
+    if (scriptName) {
+      const checkpointManager = new CheckpointManager(scriptName, {
+        scriptPath: options.filePath,
+        ...(typeof options.fork === 'string' && options.fork.length > 0
+          ? { forkScriptName: options.fork }
+          : {}),
+        ...(typeof options.checkpointCacheRootDir === 'string' && options.checkpointCacheRootDir.length > 0
+          ? { cacheRootDir: options.checkpointCacheRootDir }
+          : {})
+      });
+      await checkpointManager.load();
+      if (options.fresh) {
+        await checkpointManager.clear();
+      }
+      env.setCheckpointManager(checkpointManager);
+    }
+  }
 
   if (options.emitter) {
     env.enableSDKEvents(options.emitter);

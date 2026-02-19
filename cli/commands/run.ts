@@ -25,6 +25,10 @@ export interface RunOptions {
   timeoutMs?: number;
   debug?: boolean;
   inject?: string[];
+  checkpoint?: boolean;
+  fresh?: boolean;
+  resume?: string | true;
+  fork?: string;
 }
 
 export class RunCommand {
@@ -196,6 +200,11 @@ export class RunCommand {
         pathService: new PathService(),
         timeoutMs: options.timeoutMs, // undefined = no timeout
         dynamicModules,
+        checkpoint: options.checkpoint,
+        fresh: options.fresh,
+        resume: options.resume,
+        fork: options.fork,
+        checkpointScriptName: scriptName
       }) as StructuredResult;
 
       // Check if streaming was enabled - if so, skip final output since it was already streamed
@@ -318,6 +327,10 @@ Options:
   -h, --help              Show this help message
   --timeout <duration>    Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
   --debug                 Show execution metrics (timing, cache hits, effects)
+  --checkpoint            Enable checkpoint cache reuse for llm-labeled calls
+  --fresh                 Rebuild checkpoint cache from scratch for this script
+  --resume [target]       Resume with checkpoints (optionally from target)
+  --fork <script>         Read checkpoints from another script as seed cache
   --<name> <value>        Any other flag becomes payload (see below)
 
 Script Locations (checked in order):
@@ -375,7 +388,20 @@ Creating Scripts:
       }
 
       // Known flags that are NOT payload
-      const knownFlags = new Set(['help', 'h', 'timeout', 'debug', 'd', 'inject', 'payload', '_']);
+      const knownFlags = new Set([
+        'help',
+        'h',
+        'timeout',
+        'debug',
+        'd',
+        'inject',
+        'payload',
+        'checkpoint',
+        'fresh',
+        'resume',
+        'fork',
+        '_'
+      ]);
 
       // Collect inject/payload flags (explicit format: @key=value)
       const inject: string[] = [];
@@ -384,6 +410,21 @@ Creating Scripts:
       }
       if (flags.payload) {
         inject.push(...(Array.isArray(flags.payload) ? flags.payload : [flags.payload]));
+      }
+      const checkpointEnabled =
+        Boolean(flags.checkpoint) ||
+        Boolean(flags.fresh) ||
+        flags.resume !== undefined ||
+        flags.fork !== undefined;
+      const fresh = Boolean(flags.fresh);
+      const resume = flags.resume === undefined ? undefined : flags.resume === true ? true : String(flags.resume);
+      let fork: string | undefined;
+      if (flags.fork !== undefined) {
+        if (flags.fork === true) {
+          console.error(chalk.red('Error: --fork requires a script name'));
+          process.exit(1);
+        }
+        fork = String(flags.fork);
       }
 
       // Build @payload object from unknown flags: --topic foo --count 5 => @payload={"topic":"foo","count":"5"}
@@ -404,7 +445,11 @@ Creating Scripts:
       const options: RunOptions = {
         timeoutMs,
         debug: isDebug,
-        inject: inject.length > 0 ? inject : undefined
+        inject: inject.length > 0 ? inject : undefined,
+        checkpoint: checkpointEnabled,
+        fresh,
+        resume,
+        fork
       };
 
       try {

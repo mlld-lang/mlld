@@ -120,6 +120,11 @@ export interface CLIOptions {
   structured?: boolean;
   // Overall execution timeout (e.g., "5m", "1h", "30s")
   timeout?: string;
+  // Checkpoint/resume options
+  checkpoint?: boolean;
+  fresh?: boolean;
+  resume?: string | true;
+  fork?: string;
   // Show parse/evaluate timing metrics
   metrics?: boolean;
   // Dynamic module injection

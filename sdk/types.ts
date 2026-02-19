@@ -70,6 +70,12 @@ export interface InterpretOptions {
   dynamicModuleMode?: MlldMode;
   ast?: any;
   streamingManager?: any;
+  checkpoint?: boolean;
+  fresh?: boolean;
+  resume?: string | true;
+  fork?: string;
+  checkpointScriptName?: string;
+  checkpointCacheRootDir?: string;
 }
 
 export interface StructuredEffect extends Effect {

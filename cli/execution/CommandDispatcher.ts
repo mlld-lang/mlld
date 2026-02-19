@@ -16,6 +16,7 @@ import { envCommand } from '../commands/env';
 import { languageServerCommand } from '../commands/language-server';
 import { testCommand } from '../commands/test';
 import { createRunCommand } from '../commands/run';
+import { createCheckpointCommand } from '../commands/checkpoint';
 import { errorTestCommand } from '../commands/error-test';
 import { createDevCommand } from '../commands/dev';
 import { createCleanCommand } from '../commands/clean';
@@ -67,6 +68,7 @@ export class CommandDispatcher {
     this.commandMap.set('lsp', languageServerCommand); // Alias for language-server
     this.commandMap.set('test', testCommand);
     this.commandMap.set('run', createRunCommand());
+    this.commandMap.set('checkpoint', createCheckpointCommand());
     this.commandMap.set('error-test', errorTestCommand);
     this.commandMap.set('dev', createDevCommand());
     this.commandMap.set('clean', createCleanCommand());
@@ -219,6 +221,7 @@ export class CommandDispatcher {
       'language-server': 'Start language server',
       'test': 'Run mlld tests',
       'run': 'Run mlld scripts',
+      'checkpoint': 'Manage script checkpoint caches',
       'verify': 'Verify signed variables from MLLD_VERIFY_VARS',
       'error-test': 'Test error handling',
       'clean': 'Remove modules from lock file and cache',
