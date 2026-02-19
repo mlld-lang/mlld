@@ -240,7 +240,18 @@ function recordPrimitiveMetadata(
 
 export function prepareValueForShadow(value: any, key?: string, target?: Record<string, any>): any {
   if (isVariable(value)) {
-    if (value.type === 'primitive' || value.type === 'simple-text' || value.type === 'interpolated-text') {
+    const rawVariableValue = value.value;
+    const isPrimitiveLikeValue =
+      rawVariableValue === null ||
+      typeof rawVariableValue === 'string' ||
+      typeof rawVariableValue === 'number' ||
+      typeof rawVariableValue === 'boolean';
+
+    // Fast-path true JS primitives for native JS semantics (typeof, arithmetic, etc).
+    if (
+      (value.type === 'primitive' || value.type === 'simple-text' || value.type === 'interpolated-text') &&
+      isPrimitiveLikeValue
+    ) {
       if (target && key) {
         recordPrimitiveMetadata(target, key, {
           isVariable: true,
@@ -250,13 +261,13 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
           internal: value.internal
         });
       }
-      return value.value;
+      return rawVariableValue;
     }
     // Handle imported variables with primitive values - return raw value for JS semantics
     if (value.type === 'imported' && 'originalType' in value) {
       const originalType = (value as any).originalType;
       if (originalType === 'simple-text' || originalType === 'primitive') {
-        const rawValue = value.value;
+        const rawValue = rawVariableValue;
         // Return primitives directly so typeof works correctly in JS
         if (typeof rawValue === 'number' || typeof rawValue === 'boolean' || typeof rawValue === 'string') {
           if (target && key) {
