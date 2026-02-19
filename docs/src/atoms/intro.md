@@ -13,7 +13,7 @@ updated: 2026-02-15
 ```
 mlld howto                 Browse all documentation topics
 mlld howto grep <pattern>  Search docs for keywords
-mlld validate <file>       Check syntax before running
+mlld validate <file|dir>   Check syntax before running
 ```
 
 ---

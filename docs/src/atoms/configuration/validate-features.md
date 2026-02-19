@@ -4,17 +4,19 @@ title: Validate Features
 brief: Static analysis warnings and error detection
 category: configuration
 parent: config-files
-tags: [validation, warnings, static-analysis, undefined-variables]
+tags: [validation, warnings, static-analysis, undefined-variables, templates]
 related: [config-files, config-cli-run]
 related-code: [cli/commands/analyze.ts, core/registry/ConfigFile.ts]
-updated: 2026-02-16
+updated: 2026-02-18
 qa_tier: 2
 ---
 
-The `mlld validate` command detects common mistakes before runtime.
+The `mlld validate` command detects common mistakes before runtime. Supports `.mld`, `.mld.md`, `.att`, and `.mtt` files. Pass a directory to validate all files recursively.
 
 ```bash
 mlld validate module.mld
+mlld validate template.att
+mlld validate ./my-project/
 mlld validate module.mld --error-on-warnings
 mlld validate module.mld --format json
 ```
@@ -87,6 +89,33 @@ Add `mlld-config.json` to suppress intentional patterns:
 
 Suppressible codes: `exe-parameter-shadowing`, `mutable-state`, `when-exe-implicit-return`, `deprecated-json-transform`.
 
+**Template validation (.att / .mtt):**
+
+```bash
+mlld validate prompts/welcome.att
+```
+
+Reports all `@variable` and `@function()` references found in the template. If a sibling `.mld` file declares an `exe` using the template, discovered parameters are shown and undefined references are flagged:
+
+```
+Valid template (.att)
+
+variables    @name, @role, @unknownVar
+params       name, role (from exe declarations)
+
+Warnings (1):
+  @unknownVar (line 5:1) - undefined variable
+    hint: @unknownVar is not a known parameter. Known: name, role
+```
+
+**Directory validation:**
+
+```bash
+mlld validate ./my-project/
+```
+
+Recursively validates all `.mld`, `.mld.md`, `.att`, and `.mtt` files. Reports per-file results with a summary. Exit code 1 if any file fails.
+
 **Exit codes:**
 
 - Exit 0: valid syntax, no errors
@@ -99,4 +128,4 @@ Suppressible codes: `exe-parameter-shadowing`, `mutable-state`, `when-exe-implic
 mlld validate module.mld --format json
 ```
 
-Returns structured data: `executables`, `exports`, `imports`, `guards`, `needs`, `warnings`, `redefinitions`, `antiPatterns`.
+Returns structured data: `executables`, `exports`, `imports`, `guards`, `needs`, `warnings`, `redefinitions`, `antiPatterns`. For templates, includes `template` with `type`, `variables`, and `discoveredParams`.

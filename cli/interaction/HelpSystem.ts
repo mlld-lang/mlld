@@ -149,25 +149,30 @@ Related:
 
   private displayValidateHelp(): void {
     console.log(`
-Usage: mlld validate <filepath> [options]
+Usage: mlld validate <filepath|directory> [options]
 
-Validate mlld syntax and analyze module structure without executing.
-Returns validation status, exports, imports, guards, executables, and runtime needs.
+Validate mlld syntax and analyze module/template structure without executing.
+Supports .mld, .mld.md, .att (@ templates), and .mtt (mustache templates).
+When given a directory, recursively validates all mlld files.
 Includes anti-pattern warnings such as generic exe parameter shadowing.
 Intentional anti-pattern warnings can be suppressed in mlld-config.json via validate.suppressWarnings.
 
 Options:
-  --format <format>  Output format: json or text (default: text)
-  --ast              Include the parsed AST in output (requires --format json)
-  -h, --help         Show this help message
+  --format <format>     Output format: json or text (default: text)
+  --ast                 Include the parsed AST in output (requires --format json)
+  --no-check-variables  Skip undefined variable checking
+  --error-on-warnings   Exit with code 1 if warnings are found
+  -h, --help            Show this help message
 
 Examples:
-  mlld validate module.mld                # Validate with text output
-  mlld validate module.mld --format json  # Validate with JSON output
-  mlld validate module.mld --ast --format json  # Include AST
+  mlld validate module.mld                     # Validate a module
+  mlld validate template.att                   # Validate a template
+  mlld validate ./my-project/                  # Validate all files recursively
+  mlld validate module.mld --format json       # JSON output
+  mlld validate module.mld --error-on-warnings # Fail on warnings
 
 Aliases:
-  mlld analyze                            # Same as validate
+  mlld analyze                                 # Same as validate
     `);
   }
 
@@ -229,11 +234,11 @@ Start an MCP server with language introspection tools for development.
 
 Tools provided:
   mlld_validate   Validate syntax, return errors/warnings
-  mlld_analyze    Full module analysis (exports, executables, imports, guards)
+  mlld_analyze    Full module/template analysis (exports, executables, imports, guards)
   mlld_ast        Get parsed AST for debugging
 
 Tool arguments:
-  file            Path to .mld file
+  file            Path to .mld, .mld.md, .att, or .mtt file
   code            Inline mlld code (alternative to file)
   mode            Parsing mode: "strict" or "markdown"
   includeAst      Include AST in analyze response (boolean)
@@ -598,7 +603,7 @@ Commands:
   language-server, lsp    Start the mlld language server for editor integration
   nvim-setup, nvim        Set up mlld Language Server for Neovim
   nvim-doctor             Diagnose and fix mlld Neovim LSP configuration
-  validate, analyze       Validate mlld syntax and show module structure
+  validate, analyze       Validate mlld syntax and show module/template structure
   debug-resolution        Debug variable resolution in a mlld file
   debug-transform         Debug node transformations through the pipeline
 

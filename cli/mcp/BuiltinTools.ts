@@ -13,7 +13,8 @@ import { promises as fs } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { parse } from '@grammar/parser';
 import { analyzeModule, type ModuleAnalysis } from '@sdk/analyze';
-import { inferMlldMode, type MlldMode } from '@core/utils/mode';
+import { analyze as analyzeFile } from '@cli/commands/analyze';
+import { inferMlldMode, inferStartRule, isTemplateFile, type MlldMode } from '@core/utils/mode';
 import type { MCPToolSchema, ToolsCallResult } from './types';
 
 // =============================================================================
@@ -108,6 +109,7 @@ interface ResolvedInput {
   source: string;
   mode: MlldMode;
   filepath?: string;
+  startRule?: string;
 }
 
 // =============================================================================
@@ -129,7 +131,13 @@ async function resolveInput(args: ToolInput): Promise<ResolvedInput> {
     const filepath = resolvePath(args.file);
     const source = await fs.readFile(filepath, 'utf8');
     const inferredMode = mode ?? inferMlldMode(filepath);
-    return { source, mode: inferredMode, filepath };
+    const startRule = inferStartRule(filepath);
+    return {
+      source,
+      mode: inferredMode,
+      filepath,
+      startRule: startRule !== 'Start' ? startRule : undefined,
+    };
   }
 
   return {
@@ -151,8 +159,8 @@ function parseMode(mode?: string): MlldMode | undefined {
 
 async function executeValidate(args: ToolInput): Promise<ToolsCallResult> {
   try {
-    const { source, mode, filepath } = await resolveInput(args);
-    const result = await parse(source, { mode });
+    const { source, mode, filepath, startRule } = await resolveInput(args);
+    const result = await parse(source, { mode, ...(startRule ? { startRule } : {}) });
 
     const response: Record<string, unknown> = {
       valid: result.success,
@@ -181,9 +189,18 @@ async function executeValidate(args: ToolInput): Promise<ToolsCallResult> {
 
 async function executeAnalyze(args: ToolInput): Promise<ToolsCallResult> {
   try {
-    const { source, mode, filepath } = await resolveInput(args);
+    const { source, mode, filepath, startRule } = await resolveInput(args);
 
-    // For file inputs, use existing analyzeModule
+    // For template files, use CLI analyze which handles templates
+    if (filepath && isTemplateFile(filepath)) {
+      const result = await analyzeFile(filepath);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        isError: !result.valid
+      };
+    }
+
+    // For module file inputs, use existing analyzeModule
     if (filepath) {
       const analysis = await analyzeModule(filepath);
       const response = formatAnalysis(analysis, args.includeAst);
@@ -251,8 +268,8 @@ async function executeAnalyze(args: ToolInput): Promise<ToolsCallResult> {
 
 async function executeAst(args: ToolInput): Promise<ToolsCallResult> {
   try {
-    const { source, mode, filepath } = await resolveInput(args);
-    const result = await parse(source, { mode });
+    const { source, mode, filepath, startRule } = await resolveInput(args);
+    const result = await parse(source, { mode, ...(startRule ? { startRule } : {}) });
 
     if (!result.success) {
       return {

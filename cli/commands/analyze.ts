@@ -6,11 +6,17 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import chalk from 'chalk';
+import { glob } from 'glob';
 import { MlldError, ErrorSeverity } from '@core/errors';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import { DependencyDetector } from '@core/utils/dependency-detector';
+import { inferStartRule, isTemplateFile } from '@core/utils/mode';
 import { parseSync } from '@grammar/parser';
 import { builtinTransformers } from '@interpreter/builtin/transformers';
+import {
+  maskPlainMlldTemplateFences,
+  restorePlainMlldTemplateFences
+} from '@interpreter/eval/template-fence-literals';
 import * as yaml from 'js-yaml';
 import type { MlldNode, ImportDirectiveNode, ExportDirectiveNode, GuardDirectiveNode, ExecutableDirectiveNode, RunDirective, ExecDirective } from '@core/types';
 
@@ -81,6 +87,19 @@ export interface AntiPatternWarning {
   suggestion?: string;
 }
 
+export interface TemplateVariableInfo {
+  name: string;
+  type: 'variable' | 'function';
+  line?: number;
+  column?: number;
+}
+
+export interface TemplateInfo {
+  type: 'att' | 'mtt';
+  variables: TemplateVariableInfo[];
+  discoveredParams?: string[];
+}
+
 export interface AnalyzeResult {
   filepath: string;
   valid: boolean;
@@ -93,6 +112,7 @@ export interface AnalyzeResult {
   imports?: ImportInfo[];
   guards?: GuardInfo[];
   needs?: NeedsInfo;
+  template?: TemplateInfo;
   ast?: MlldNode[];
 }
 
@@ -141,6 +161,10 @@ function walkAST(nodes: MlldNode[], callback: (node: MlldNode) => void): void {
     if (node.commandRef) walkNode(node.commandRef);
     if (node.arguments) walkNode(node.arguments);
     if (node.elements) walkNode(node.elements);
+    // Template-relevant properties
+    if (Array.isArray(node.content)) walkNode(node.content);
+    if (node.variable && typeof node.variable === 'object') walkNode(node.variable);
+    if (node.source && typeof node.source === 'object') walkNode(node.source);
   }
 
   walkNode(nodes);
@@ -1167,6 +1191,147 @@ function extractNeeds(content: string, ast: MlldNode[]): NeedsInfo | undefined {
 }
 
 /**
+ * Collect all variable and function references from a template AST
+ */
+function collectTemplateVariables(ast: MlldNode[]): TemplateVariableInfo[] {
+  const variables: TemplateVariableInfo[] = [];
+  const seen = new Set<string>();
+
+  walkAST(ast, (node: any) => {
+    if (node.type === 'VariableReference') {
+      const name = node.identifier;
+      if (!name || seen.has(`var:${name}`)) return;
+      seen.add(`var:${name}`);
+      variables.push({
+        name,
+        type: 'variable',
+        line: node.location?.start?.line,
+        column: node.location?.start?.column,
+      });
+    }
+
+    if (node.type === 'ExecInvocation') {
+      const name = node.commandRef?.name;
+      if (!name || seen.has(`fn:${name}`)) return;
+      seen.add(`fn:${name}`);
+      variables.push({
+        name,
+        type: 'function',
+        line: node.location?.start?.line,
+        column: node.location?.start?.column,
+      });
+    }
+  });
+
+  return variables;
+}
+
+/**
+ * Detect undefined template variable references.
+ * If knownParams is provided, flags references not in params and not builtin.
+ * If knownParams is empty/not provided, flags all references as informational.
+ */
+function detectUndefinedTemplateVariables(
+  templateVars: TemplateVariableInfo[],
+  knownParams?: Set<string>
+): UndefinedVariableWarning[] {
+  const warnings: UndefinedVariableWarning[] = [];
+
+  for (const tv of templateVars) {
+    if (BUILTIN_VARIABLES.has(tv.name)) continue;
+
+    if (knownParams && knownParams.size > 0) {
+      if (knownParams.has(tv.name)) continue;
+      warnings.push({
+        variable: tv.name,
+        line: tv.line,
+        column: tv.column,
+        suggestion: tv.type === 'function'
+          ? `@${tv.name}() is not a known parameter. Known: ${[...knownParams].join(', ')}`
+          : `@${tv.name} is not a known parameter. Known: ${[...knownParams].join(', ')}`,
+      });
+    } else {
+      warnings.push({
+        variable: tv.name,
+        line: tv.line,
+        column: tv.column,
+        suggestion: tv.type === 'function'
+          ? `@${tv.name}() reference — no exe declaration found in sibling modules`
+          : `@${tv.name} reference — no exe declaration found in sibling modules`,
+      });
+    }
+  }
+
+  return warnings;
+}
+
+/**
+ * Scan sibling .mld/.mld.md files for exe declarations that use this template file.
+ * Returns the union of all parameter names found across callers.
+ */
+async function discoverTemplateParams(templatePath: string): Promise<Set<string>> {
+  const absTemplatePath = path.resolve(templatePath);
+  const templateFilename = path.basename(absTemplatePath);
+  const params = new Set<string>();
+
+  const dirsToScan = new Set<string>();
+  dirsToScan.add(path.dirname(absTemplatePath));
+  const parentDir = path.dirname(path.dirname(absTemplatePath));
+  if (parentDir !== path.dirname(absTemplatePath)) {
+    dirsToScan.add(parentDir);
+  }
+
+  for (const dir of dirsToScan) {
+    let entries: string[];
+    try {
+      entries = await fs.readdir(dir);
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const lower = entry.toLowerCase();
+      if (!lower.endsWith('.mld') && !lower.endsWith('.mld.md')) continue;
+
+      const modulePath = path.join(dir, entry);
+      try {
+        const content = await fs.readFile(modulePath, 'utf8');
+        const mode = lower.endsWith('.mld.md') ? 'markdown' : 'strict';
+        const ast = parseSync(content, { mode });
+
+        walkAST(ast, (node: any) => {
+          if (node.type !== 'Directive' || node.kind !== 'exe') return;
+
+          // Check if this exe references our template file
+          const pathNodes = node.values?.path;
+          if (!Array.isArray(pathNodes)) return;
+
+          const pathText = pathNodes
+            .filter((n: any) => n.type === 'Text')
+            .map((n: any) => n.content)
+            .join('');
+
+          // Match if the path ends with our template filename
+          if (!pathText.endsWith(templateFilename)) return;
+
+          // Extract parameter names
+          const exeParams = node.values?.params;
+          if (Array.isArray(exeParams)) {
+            for (const param of exeParams) {
+              if (param?.name) params.add(param.name);
+            }
+          }
+        });
+      } catch {
+        // Skip files that fail to parse
+      }
+    }
+  }
+
+  return params;
+}
+
+/**
  * Analyze an mlld module without executing it
  */
 export async function analyze(filepath: string, options: AnalyzeOptions = {}): Promise<AnalyzeResult> {
@@ -1175,14 +1340,26 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
     valid: true
   };
 
+  const isTemplate = isTemplateFile(filepath);
+
   try {
     const content = await fs.readFile(filepath, 'utf8');
 
     let ast: MlldNode[];
     try {
-      // Use strict mode for .mld files, markdown mode for .mld.md files
-      const mode = filepath.endsWith('.mld.md') ? 'markdown' : 'strict';
-      ast = parseSync(content, { mode });
+      const startRule = inferStartRule(filepath);
+
+      if (isTemplate && filepath.toLowerCase().endsWith('.att')) {
+        // Mask ```mlld``` fences before parsing .att files (matches runtime behavior)
+        const { maskedContent, literalBlocks } = maskPlainMlldTemplateFences(content);
+        ast = restorePlainMlldTemplateFences(parseSync(maskedContent, { startRule }), literalBlocks);
+      } else if (isTemplate) {
+        ast = parseSync(content, { startRule });
+      } else {
+        // Use strict mode for .mld files, markdown mode for .mld.md files
+        const mode = filepath.endsWith('.mld.md') ? 'markdown' : 'strict';
+        ast = parseSync(content, { mode });
+      }
     } catch (parseError: any) {
       result.valid = false;
 
@@ -1198,45 +1375,70 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       return result;
     }
 
-    // Extract module information
-    const executables = extractExecutables(ast);
-    const exports = extractExports(ast);
-    const imports = extractImports(ast);
-    const guards = extractGuards(ast);
-    const needs = extractNeeds(content, ast);
+    if (isTemplate) {
+      // Template-specific analysis
+      const templateType = filepath.toLowerCase().endsWith('.mtt') ? 'mtt' : 'att';
+      const templateVars = collectTemplateVariables(ast);
 
-    if (executables.length > 0) result.executables = executables;
-    if (exports.length > 0) result.exports = exports;
-    if (imports.length > 0) result.imports = imports;
-    if (guards.length > 0) result.guards = guards;
-    if (needs) result.needs = needs;
-    if (options.ast) result.ast = ast;
+      const templateInfo: TemplateInfo = {
+        type: templateType,
+        variables: templateVars,
+      };
 
-    // Check for undefined variables (enabled by default)
-    if (options.checkVariables !== false) {
-      const suppressedWarningCodes = await loadSuppressedWarningCodes(filepath);
-
-      const warnings = detectUndefinedVariables(ast);
-      if (warnings.length > 0) {
-        result.warnings = warnings;
+      if (options.checkVariables !== false && templateVars.length > 0) {
+        const discoveredParams = await discoverTemplateParams(filepath);
+        if (discoveredParams.size > 0) {
+          templateInfo.discoveredParams = [...discoveredParams];
+        }
+        const warnings = detectUndefinedTemplateVariables(templateVars, discoveredParams);
+        if (warnings.length > 0) {
+          result.warnings = warnings;
+        }
       }
 
-      // Check for variable redefinitions in nested scopes
-      const redefinitions = detectVariableRedefinitions(ast);
-      if (redefinitions.length > 0) {
-        result.redefinitions = redefinitions;
-      }
+      result.template = templateInfo;
+    } else {
+      // Module-specific extraction
+      const executables = extractExecutables(ast);
+      const exports = extractExports(ast);
+      const imports = extractImports(ast);
+      const guards = extractGuards(ast);
+      const needs = extractNeeds(content, ast);
 
-      const antiPatterns = [
-        ...detectMutableStateAntiPatterns(ast, content),
-        ...detectWhenExeImplicitReturnAntiPatterns(ast),
-        ...detectDeprecatedJsonTransformAntiPatterns(ast),
-        ...detectExeParameterShadowingWarnings(ast),
-      ].filter(warning => !suppressedWarningCodes.has(warning.code));
-      if (antiPatterns.length > 0) {
-        result.antiPatterns = antiPatterns;
+      if (executables.length > 0) result.executables = executables;
+      if (exports.length > 0) result.exports = exports;
+      if (imports.length > 0) result.imports = imports;
+      if (guards.length > 0) result.guards = guards;
+      if (needs) result.needs = needs;
+
+      // Check for undefined variables (enabled by default)
+      if (options.checkVariables !== false) {
+        const suppressedWarningCodes = await loadSuppressedWarningCodes(filepath);
+
+        const warnings = detectUndefinedVariables(ast);
+        if (warnings.length > 0) {
+          result.warnings = warnings;
+        }
+
+        // Check for variable redefinitions in nested scopes
+        const redefinitions = detectVariableRedefinitions(ast);
+        if (redefinitions.length > 0) {
+          result.redefinitions = redefinitions;
+        }
+
+        const antiPatterns = [
+          ...detectMutableStateAntiPatterns(ast, content),
+          ...detectWhenExeImplicitReturnAntiPatterns(ast),
+          ...detectDeprecatedJsonTransformAntiPatterns(ast),
+          ...detectExeParameterShadowingWarnings(ast),
+        ].filter(warning => !suppressedWarningCodes.has(warning.code));
+        if (antiPatterns.length > 0) {
+          result.antiPatterns = antiPatterns;
+        }
       }
     }
+
+    if (options.ast) result.ast = ast;
 
   } catch (error: any) {
     result.valid = false;
@@ -1262,8 +1464,10 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
   console.log(chalk.bold(result.filepath));
   console.log();
 
+  const fileType = result.template ? `template (.${result.template.type})` : 'module';
+
   if (!result.valid) {
-    console.log(chalk.red('Invalid module'));
+    console.log(chalk.red(`Invalid ${fileType}`));
     if (result.errors) {
       for (const err of result.errors) {
         const loc = err.line ? ` (line ${err.line}${err.column ? `:${err.column}` : ''})` : '';
@@ -1273,10 +1477,24 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
     return;
   }
 
-  console.log(chalk.green('Valid module'));
+  console.log(chalk.green(`Valid ${fileType}`));
   console.log();
 
   const label = (s: string) => chalk.dim(s.padEnd(12));
+
+  if (result.template) {
+    const vars = result.template.variables.filter(v => v.type === 'variable');
+    const fns = result.template.variables.filter(v => v.type === 'function');
+    if (vars.length > 0) {
+      console.log(`${label('variables')} ${vars.map(v => `@${v.name}`).join(', ')}`);
+    }
+    if (fns.length > 0) {
+      console.log(`${label('functions')} ${fns.map(v => `@${v.name}()`).join(', ')}`);
+    }
+    if (result.template.discoveredParams && result.template.discoveredParams.length > 0) {
+      console.log(`${label('params')} ${result.template.discoveredParams.join(', ')} ${chalk.dim('(from exe declarations)')}`);
+    }
+  }
 
   if (result.executables && result.executables.length > 0) {
     console.log(`${label('executables')} ${result.executables.map(e => e.name).join(', ')}`);
@@ -1376,6 +1594,52 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
   }
 }
 
+const MLLD_FILE_EXTENSIONS = '**/*.{mld,mld.md,att,mtt}';
+
+async function resolveFilePaths(inputs: string[]): Promise<string[]> {
+  const files: string[] = [];
+
+  for (const input of inputs) {
+    const resolved = path.resolve(input);
+    let stat: import('fs').Stats;
+    try {
+      stat = await fs.stat(resolved);
+    } catch {
+      files.push(resolved);
+      continue;
+    }
+
+    if (stat.isDirectory()) {
+      const matched = await glob(MLLD_FILE_EXTENSIONS, {
+        cwd: resolved,
+        absolute: true,
+        nodir: true,
+      });
+      files.push(...matched.sort());
+    } else {
+      files.push(resolved);
+    }
+  }
+
+  return files;
+}
+
+function hasErrors(result: AnalyzeResult): boolean {
+  if (!result.valid) return true;
+  const hardRedefinitions = (result.redefinitions ?? []).filter(
+    redef => redef.reason !== 'builtin-conflict'
+  );
+  return hardRedefinitions.length > 0;
+}
+
+function hasWarnings(result: AnalyzeResult): boolean {
+  return (
+    (result.warnings?.length ?? 0) +
+    (result.antiPatterns?.length ?? 0) +
+    (result.redefinitions?.filter(redef => redef.reason === 'builtin-conflict').length ?? 0)
+  ) > 0;
+}
+
 export async function analyzeCommand(filepath: string, options: AnalyzeOptions = {}): Promise<void> {
   if (!filepath) {
     console.error(chalk.red('File path is required'));
@@ -1387,28 +1651,71 @@ export async function analyzeCommand(filepath: string, options: AnalyzeOptions =
     const result = await analyze(filepath, options);
     displayResult(result, options.format || 'text');
 
-    if (!result.valid) {
+    if (hasErrors(result)) {
       process.exit(1);
     }
 
-    // Redefinitions that are not builtin-shadow warnings are errors.
-    const hardRedefinitions = (result.redefinitions ?? []).filter(
-      redef => redef.reason !== 'builtin-conflict'
-    );
-    if (hardRedefinitions.length > 0) {
-      process.exit(1);
-    }
-
-    // Exit with error if warnings found and errorOnWarnings is set
-    const warningCount =
-      (result.warnings?.length ?? 0) +
-      (result.antiPatterns?.length ?? 0) +
-      (result.redefinitions?.filter(redef => redef.reason === 'builtin-conflict').length ?? 0);
-    if (options.errorOnWarnings && warningCount > 0) {
+    if (options.errorOnWarnings && hasWarnings(result)) {
       process.exit(1);
     }
   } catch (error: any) {
     console.error(chalk.red(`Error: ${error.message}`));
+    process.exit(1);
+  }
+}
+
+export async function analyzeMultiple(filepaths: string[], options: AnalyzeOptions = {}): Promise<void> {
+  const files = await resolveFilePaths(filepaths);
+
+  if (files.length === 0) {
+    console.error(chalk.red('No mlld files found'));
+    process.exit(1);
+  }
+
+  if (files.length === 1) {
+    await analyzeCommand(files[0], options);
+    return;
+  }
+
+  const format = options.format || 'text';
+  let anyErrors = false;
+  let anyWarnings = false;
+  const allResults: AnalyzeResult[] = [];
+
+  for (const file of files) {
+    try {
+      const result = await analyze(file, options);
+      allResults.push(result);
+      if (hasErrors(result)) anyErrors = true;
+      if (hasWarnings(result)) anyWarnings = true;
+    } catch (error: any) {
+      allResults.push({
+        filepath: path.resolve(file),
+        valid: false,
+        errors: [{ message: error.message }],
+      });
+      anyErrors = true;
+    }
+  }
+
+  if (format === 'json') {
+    console.log(JSON.stringify(allResults, null, 2));
+  } else {
+    for (const result of allResults) {
+      displayResult(result, 'text');
+    }
+
+    console.log();
+    const passed = allResults.filter(r => !hasErrors(r)).length;
+    const failed = allResults.length - passed;
+    const summary = `${allResults.length} files: ${passed} passed${failed > 0 ? `, ${failed} failed` : ''}`;
+    console.log(failed > 0 ? chalk.red(summary) : chalk.green(summary));
+  }
+
+  if (anyErrors) {
+    process.exit(1);
+  }
+  if (options.errorOnWarnings && anyWarnings) {
     process.exit(1);
   }
 }
@@ -1421,12 +1728,11 @@ export function createValidateCommand() {
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
       if (flags.help || flags.h) {
         console.log(`
-Usage: mlld validate <filepath> [options]
+Usage: mlld validate <filepath|directory> [options]
 
-Validate mlld syntax and analyze module structure without executing.
-Returns validation status, exports, imports, guards, executables, and runtime needs.
-Also checks for undefined variable references, reserved-name conflicts, builtin shadowing info, and anti-pattern warnings (including generic exe parameter shadowing).
-Intentional anti-pattern warnings can be suppressed in mlld-config.json via validate.suppressWarnings.
+Validate mlld syntax and analyze module/template structure without executing.
+Supports .mld, .mld.md, .att (@ templates), and .mtt (mustache templates).
+When given a directory, recursively validates all mlld files.
 
 Options:
   --format <format>     Output format: json or text (default: text)
@@ -1436,14 +1742,21 @@ Options:
   -h, --help            Show this help message
 
 Examples:
-  mlld validate module.mld                     # Validate with text output
-  mlld validate module.mld --format json       # Validate with JSON output
+  mlld validate module.mld                     # Validate a module
+  mlld validate template.att                   # Validate a template
+  mlld validate ./my-project/                  # Validate all files recursively
+  mlld validate module.mld --format json       # JSON output
   mlld validate module.mld --error-on-warnings # Fail on warnings
         `);
         return;
       }
 
-      const filepath = args[0];
+      if (args.length === 0) {
+        console.error(chalk.red('File path or directory is required'));
+        console.log('Usage: mlld validate <filepath|directory> [options]');
+        process.exit(1);
+      }
+
       const format = (flags.format || 'text') as 'json' | 'text';
       const ast = flags.ast === true;
       const checkVariables = flags['no-check-variables'] !== true && flags.noCheckVariables !== true;
@@ -1459,7 +1772,24 @@ Examples:
         process.exit(1);
       }
 
-      await analyzeCommand(filepath, { format, ast, checkVariables, errorOnWarnings });
+      const options: AnalyzeOptions = { format, ast, checkVariables, errorOnWarnings };
+
+      // Detect if any arg is a directory or if multiple args
+      let isMulti = args.length > 1;
+      if (!isMulti) {
+        try {
+          const stat = await fs.stat(path.resolve(args[0]));
+          isMulti = stat.isDirectory();
+        } catch {
+          // File doesn't exist yet — let analyzeCommand handle the error
+        }
+      }
+
+      if (isMulti) {
+        await analyzeMultiple(args, options);
+      } else {
+        await analyzeCommand(args[0], options);
+      }
     }
   };
 }
