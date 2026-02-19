@@ -1,6 +1,5 @@
 >> Research context management
 
-exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
 exe @tailFile(path, limit) = sh { tail -n "$limit" "$path" 2>/dev/null }
 exe @countDir(dir) = sh { ls -1 "$dir" 2>/dev/null | wc -l | tr -d ' ' }
 
@@ -15,8 +14,7 @@ exe @logEvent(runDir, eventType, data) = [
 >> Load recent events from events.jsonl
 exe @loadRecentEvents(runDir, limit) = [
   let @eventsFile = `@runDir/events.jsonl`
-  let @check = @fileExists(@eventsFile)
-  when @check == "no" => []
+  when !@exists(@eventsFile) => []
   let @lines = @tailFile(@eventsFile, @limit)
   => for @line in @lines.split("\n") when @line.trim() => @line | @json
 ]
@@ -47,8 +45,8 @@ exe @buildContext(runDir, sourceList) = [
   let @events = @loadRecentEvents(@runDir, 20)
 
   >> Infer state from filesystem
-  let @inventoryExists = @fileExists(`@runDir/inventory.json`)
-  let @synthesisExists = @fileExists(`@runDir/synthesis.json`)
+  let @inventoryExists = @exists(`@runDir/inventory.json`)
+  let @synthesisExists = @exists(`@runDir/synthesis.json`)
 
   >> Count assessments and invalidations
   let @assessmentCount = @countDir(`@runDir/assessments`) * 1

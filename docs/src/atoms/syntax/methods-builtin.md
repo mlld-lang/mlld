@@ -3,9 +3,9 @@ id: methods-builtin
 title: Builtin Methods
 brief: Array and string methods
 category: syntax
-parent: methods
+parent: builtins
 tags: [arrays, strings, methods, builtins]
-related: [variables-basics, templates-basics]
+related: [variables-basics, templates-basics, builtins]
 related-code: [interpreter/eval/method-call.ts, core/builtins/array-methods.ts, core/builtins/string-methods.ts]
 updated: 2026-01-05
 ---

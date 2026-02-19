@@ -20,12 +20,15 @@ for parallel(10) @file in @files [
 ]
 ```
 
-## `@fileExists` is not a builtin
+## File existence checks
 
-The idempotency pattern uses `@fileExists` which you must define yourself:
+Use the built-in `@exists()` for file existence checks:
 
 ```mlld
-exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+if @exists(@outPath) [
+  show `  Skipped (exists): @outPath`
+  => <@outPath> | @parse
+]
 ```
 
 Or use optional file loading as an alternative:

@@ -23,7 +23,6 @@ var @workerTools = "Read,Write,Glob,Grep"
 
 >> Shell helpers
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }
-exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
 exe @countFiles(dir) = sh { ls -1 "$dir" 2>/dev/null | wc -l | tr -d ' ' }
 
 >> Prompt templates
@@ -116,8 +115,7 @@ IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool.
         let @outPath = `@runDir/assessments/@filename\.json`
 
         >> Idempotency
-        let @fileCheck = @fileExists(@outPath)
-        if @fileCheck == "yes" [
+        if @exists(@outPath) [
           show `    @filename: skipped`
           => "skipped"
         ]
@@ -179,8 +177,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
         let @outPath = `@runDir/invalidations/@claimId\.json`
 
         >> Idempotency
-        let @fileCheck = @fileExists(@outPath)
-        if @fileCheck == "yes" [
+        if @exists(@outPath) [
           show `    @claimId: skipped`
           => <@outPath> | @json
         ]

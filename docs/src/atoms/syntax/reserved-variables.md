@@ -5,7 +5,7 @@ brief: Built-in system variables
 category: syntax
 parent: variables
 tags: [variables, reserved, system]
-related: [variables-basics, file-loading-metadata, syntax-payload]
+related: [variables-basics, file-loading-metadata, syntax-payload, builtins]
 related-code: [interpreter/env/Environment.ts, core/reserved-vars.ts]
 updated: 2026-01-11
 ---

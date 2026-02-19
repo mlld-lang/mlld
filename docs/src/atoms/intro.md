@@ -117,7 +117,7 @@ var @alt = ::Hello @name!::
 
 ## Gotchas
 
-mlld is not JavaScript/Python, but it has familiar built-in JS methods. See `mlld howto methods-builtin` for the full list.
+mlld is not JavaScript/Python, but it has familiar built-in JS methods. See `mlld howto builtins` for the full list.
 
 **Use `>>` for comments, not `//`**
 
@@ -196,9 +196,9 @@ var @files = <src/**/*.ts>              >> glob (returns array)
 exe @greet(name) = `Hello @name!`
 exe @prompt(ctx) = template "prompt.att"
 exe @run(dir) = cmd { ls @dir }
-exe @check(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+exe @check(path) = @exists(@path)
 
->> Method chains (see `mlld howto methods-builtin`)
+>> Method chains (see `mlld howto builtins`)
 var @trimmed = @raw.trim().split("\n")
 var @slug = @name.replaceAll("/", "-")
 var @upper = @text.toLowerCase().startsWith("hello")
@@ -214,6 +214,24 @@ var @data = @text | @parse.llm          >> extract JSON from LLM output
 ```
 
 **Path resolution**: `<@file>` resolves from the current script's directory, not the project root. Use `@root` for absolute paths: `<@root/@file>`. This matters when `cmd` output gives project-root-relative paths but your script is in a subdirectory.
+
+## Built-ins at a Glance
+
+**Reserved variables**: `@root`, `@base`, `@now`, `@input`, `@payload`, `@state`, `@debug`, `@fm`, `@mx`
+
+**Transformers** (pipes): `@parse` (`.strict`, `.loose`, `.llm`), `@xml`, `@csv`, `@md`, `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+
+**Checks**: `@exists`, `@typeof`
+
+**Helpers**: `@keep`, `@keepStructured`
+
+**String methods**: `.length`, `.includes()`, `.indexOf()`, `.startsWith()`, `.endsWith()`, `.toLowerCase()`, `.toUpperCase()`, `.trim()`, `.split()`, `.slice()`, `.substring()`, `.replace()`, `.replaceAll()`, `.match()`, `.padStart()`, `.padEnd()`, `.repeat()`
+
+**Array methods**: `.length`, `.includes()`, `.indexOf()`, `.join()`, `.slice()`, `.concat()`, `.reverse()`, `.sort()`
+
+**Type checks**: `.isArray()`, `.isObject()`, `.isString()`, `.isNumber()`, `.isBoolean()`, `.isNull()`, `.isDefined()`
+
+See `mlld howto builtins` for full reference with examples.
 
 ## Next Steps
 

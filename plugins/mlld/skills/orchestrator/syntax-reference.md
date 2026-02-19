@@ -53,11 +53,8 @@ append @event to "@runDir/events.jsonl"
 Check if output exists before doing work. Makes reruns safe and enables resume.
 
 ```mlld
->> Option A: shell check
-exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
-
-let @fileCheck = @fileExists(@outPath)
-if @fileCheck == "yes" [
+>> Option A: @exists() builtin
+if @exists(@outPath) [
   show `  Skipped: @outPath`
   => "skipped"
 ]

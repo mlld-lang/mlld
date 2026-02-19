@@ -1,6 +1,5 @@
 >> Development context management
 
-exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
 exe @tailFile(path, limit) = sh { tail -n "$limit" "$path" 2>/dev/null }
 
 >> Log event to events.jsonl
@@ -14,8 +13,7 @@ exe @logEvent(runDir, eventType, data) = [
 >> Load recent events
 exe @loadRecentEvents(runDir, limit) = [
   let @eventsFile = `@runDir/events.jsonl`
-  let @check = @fileExists(@eventsFile)
-  when @check == "no" => []
+  when !@exists(@eventsFile) => []
   let @lines = @tailFile(@eventsFile, @limit)
   => for @line in @lines.split("\n") when @line.trim() => @line | @json
 ]

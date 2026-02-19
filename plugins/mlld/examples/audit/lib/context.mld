@@ -1,7 +1,5 @@
 >> Audit context helpers
 
-exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
-
 >> Log event to events.jsonl
 exe @logEvent(runDir, eventType, data) = [
   let @eventsFile = `@runDir/events.jsonl`
@@ -10,4 +8,4 @@ exe @logEvent(runDir, eventType, data) = [
   append @event to "@eventsFile"
 ]
 
-export { @fileExists, @logEvent }
+export { @logEvent }

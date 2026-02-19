@@ -26,7 +26,6 @@ exe @invalidatePrompt(finding, fileContent) = template "./prompts/invalidate.att
 
 >> Shell helpers
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }
-exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
 
 >> Array helpers
 exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => (a.data || a).findings || []) }
@@ -66,8 +65,7 @@ if @files.length == 0 [
     let @outPath = `@runDir/reviews/@filename\.json`
 
     >> Idempotency: skip if already reviewed
-    let @fileCheck = @fileExists(@outPath)
-    if @fileCheck == "yes" [
+    if @exists(@outPath) [
       show `  @filename: skipped (exists)`
       => <@outPath> | @json
     ]
@@ -114,8 +112,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
       let @outPath = `@runDir/invalidations/@findingId\.json`
 
       >> Idempotency
-      let @fileCheck = @fileExists(@outPath)
-      if @fileCheck == "yes" [
+      if @exists(@outPath) [
         show `  @findingId: skipped (exists)`
         => <@outPath> | @json
       ]
