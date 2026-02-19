@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dead code removal**: Removed unused `interpolateWithSecurity` interface member and `matchesCommandPatterns` export
 - **Specificity consistency**: `inferCapabilityRule` now uses same specificity logic as `evaluateCommandAccess` for deny/allow resolution
 - **StructuredValue `.trim()` parity for JSONL arrays**: Builtin target normalization treats structured array values as text for string-view methods (including `.trim()`), so `<file.jsonl>.trim()` and `<file.json>.trim()` both succeed instead of arrays throwing `Cannot call .trim() on object`.
+- **JS block array unwrapping**: StructuredValue arrays and nested Variable elements (e.g. `[@a, @b]`) passed to `js {}` blocks now arrive as native JavaScript arrays. `Array.isArray()`, `.flat()`, `.map()`, and bracket indexing work without manual `.data` access. `.keep`/`.keepStructured` still preserves the wrapper when metadata access is needed.
 
 ### Changed
 - **Mandatory whitespace around arithmetic operators**: `@a - @b` requires spaces; `@a-b` is a hyphenated identifier, not subtraction. Applies to `+`, `-`, `*`, `/`, `%`.
