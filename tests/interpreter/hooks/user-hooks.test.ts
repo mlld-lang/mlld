@@ -86,6 +86,26 @@ describe('user hook runtime', () => {
     expect(readTextVariable(env, 'result')).toBe('[REDACTED]-token');
   });
 
+  it('does not transform output for observation-only when hook bodies', async () => {
+    const env = createEnv();
+
+    await evaluateDirectives(
+      `
+/exe @emit() = js { return "stable"; }
+/hook @observeOnly after @emit = when [
+  * => output \`observed:@output\` to "state://hook-observe"
+]
+/var @result = @emit()
+      `,
+      env
+    );
+
+    expect(readTextVariable(env, 'result')).toBe('stable');
+    const writes = env.getStateWrites().filter(write => write.path === 'hook-observe');
+    expect(writes).toHaveLength(1);
+    expect(String(writes[0].value)).toBe('observed:stable');
+  });
+
   it('isolates hook body errors, records them in @mx.hooks.errors, and continues hook chain', async () => {
     const env = createEnv();
     const key = '__mlldUserHookErrors';
@@ -176,6 +196,56 @@ describe('user hook runtime', () => {
     expect(writes).toHaveLength(1);
     expect(writes[0].path).toBe('telemetry');
     expect(String(writes[0].value)).toContain('event:hook');
+  });
+
+  it('runs before data-label hooks and applies transforms for labeled operations', async () => {
+    const env = createEnv();
+
+    await evaluateDirectives(
+      `
+/exe sensitive @emit(value) = js {
+  const raw = value && typeof value === "object" && "value" in value ? value.value : value;
+  return String(raw);
+}
+/exe @trimValue(value) = js {
+  const raw = value && typeof value === "object" && "value" in value ? value.value : value;
+  return String(raw).trim();
+}
+/hook @trimSensitive before sensitive = [ => @trimValue(@input) ]
+/var @result = @emit("  labeled-input  ")
+      `,
+      env
+    );
+
+    expect(readTextVariable(env, 'result')).toBe('labeled-input');
+  });
+
+  it('runs after data-label hooks for observation and transform in declaration order', async () => {
+    const env = createEnv();
+
+    await evaluateDirectives(
+      `
+/exe untrusted @emit(value) = js {
+  const raw = value && typeof value === "object" && "value" in value ? value.value : value;
+  return String(raw);
+}
+/exe @suffixValue(value) = js {
+  const raw = value && typeof value === "object" && "value" in value ? value.value : value;
+  return String(raw) + "-after";
+}
+/hook @observeUntrusted after untrusted = when [
+  * => output \`seen:@output\` to "state://data-hooks"
+]
+/hook @transformUntrusted after untrusted = [ => @suffixValue(@output) ]
+/var @result = @emit("label-base")
+      `,
+      env
+    );
+
+    expect(readTextVariable(env, 'result')).toBe('label-base-after');
+    const writes = env.getStateWrites().filter(write => write.path === 'data-hooks');
+    expect(writes).toHaveLength(1);
+    expect(String(writes[0].value)).toBe('seen:label-base');
   });
 
   it('exposes op:for:iteration and op:for:batch hook visibility with @mx.for metadata', async () => {

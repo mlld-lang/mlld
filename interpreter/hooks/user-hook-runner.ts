@@ -269,6 +269,12 @@ function createHookEnvironment(
 async function executeHookBody(body: HookBodyNode, hookEnv: Environment): Promise<HookExecutionOutcome> {
   if (body.type === 'WhenExpression') {
     const evaluated = await evaluateWhenExpression(body as any, hookEnv);
+    const hasReturn = (body as any)?.meta?.hasReturn === true;
+    if (!hasReturn) {
+      return {
+        transformed: false
+      };
+    }
     return {
       transformed: true,
       value: evaluated.value
