@@ -37,7 +37,7 @@ Test --resume: run a checkpoint-enabled script, then re-run with --resume. Test 
 - You can create test scripts in `tmp/review-tests/` (create the directory first)
 - Run mlld scripts with: `mlld tmp/review-tests/<script>.mld [flags]`
 - Validate syntax with: `mlld validate tmp/review-tests/<script>.mld`
-- The `@@local/claude-poll` module is available for LLM calls
+- The `@@mlld/claude-poll` module is available for LLM calls
 - Use `haiku` model for any LLM calls (cheapest, fastest)
 
 ## Protocol
@@ -63,7 +63,7 @@ show `done`
 
 For checkpoint tests (requiring LLM calls):
 ```
-import { @@claudePoll } from @@local/claude-poll
+import { @@claudePoll } from @@mlld/claude-poll
 var llm @@result = @@claudePoll("Reply with exactly: CHECKPOINT_TEST_OK", "haiku", "@@root", "Read,Write", "@@root/tmp/review-tests/marker.txt")
 show `result: @@result`
 ```

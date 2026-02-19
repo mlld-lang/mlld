@@ -12,7 +12,7 @@
 >>   5. Adversarial invalidation of all findings
 >>   6. Final synthesis and deficiency report
 
-import { @claudePoll } from @local/claude-poll
+import { @claudePoll } from @mlld/claude-poll
 import { @logEvent, @fileExists, @flatName, @mkdirp, @writeJson, @flatten, @countBySeverity, @tagFindings } from "./lib/context.mld"
 import "@payload" as @p
 
