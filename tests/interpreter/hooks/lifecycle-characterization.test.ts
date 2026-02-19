@@ -6,17 +6,22 @@ import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
+import { runBuiltinEffect } from '@interpreter/eval/pipeline/builtin-effects';
 import { asText } from '@interpreter/utils/structured-value';
 import { TestEffectHandler, type Effect } from '@interpreter/env/EffectHandler';
+import type { PipelineCommand } from '@core/types/run';
 
 class TracingEffectHandler extends TestEffectHandler {
-  constructor(private readonly events: string[]) {
+  constructor(
+    private readonly events: string[],
+    private readonly operationEvent: string = 'operation:decision:show'
+  ) {
     super();
   }
 
   override handleEffect(effect: Effect): void {
     if (effect.type === 'both') {
-      this.events.push('operation:decision:show');
+      this.events.push(this.operationEvent);
     }
     super.handleEffect(effect);
   }
@@ -38,6 +43,15 @@ function createExecInvocation(identifier: string): ExecInvocation {
       args: []
     }
   };
+}
+
+async function registerDirectives(source: string, env: Environment): Promise<void> {
+  const directives = parseSync(source).filter(
+    node => (node as DirectiveNode | undefined)?.type === 'Directive'
+  ) as DirectiveNode[];
+  for (const directive of directives) {
+    await evaluateDirective(directive, env);
+  }
 }
 
 describe('hook lifecycle characterization baseline', () => {
@@ -148,6 +162,137 @@ describe('hook lifecycle characterization baseline', () => {
       expect(events).toEqual([
         'operation:decision:emit-body',
         'operation:decision:helper-body'
+      ]);
+    } finally {
+      delete (globalThis as Record<string, unknown>)[key];
+    }
+  });
+
+  it('orders user hooks around built-in guard hooks for directive boundaries', async () => {
+    const key = '__mlldDirectiveOrderingEvents';
+    const events: string[] = [];
+    (globalThis as Record<string, unknown>)[key] = events;
+
+    try {
+      const env = createEnv(new TracingEffectHandler(events, 'operation:decision:show'));
+      await registerDirectives(
+        `
+/exe @record(event) = js {
+  const raw = event && typeof event === "object" && "value" in event ? event.value : event;
+  globalThis.${key}.push(String(raw));
+  return raw;
+}
+/guard before @guardBefore for op:show = when [ * => allow @record("guard:before:show") ]
+/guard after @guardAfter for op:show = when [ * => allow @record("guard:after:show") ]
+/hook @userBefore before op:show = [ => @record("user:before:show") ]
+/hook @userAfter after op:show = [ => @record("user:after:show") ]
+        `,
+        env
+      );
+
+      await evaluateDirective(parseSync('/show "directive ordering"')[0] as DirectiveNode, env);
+
+      expect(events).toEqual([
+        'user:before:show',
+        'guard:before:show',
+        'guard:after:show',
+        'user:after:show',
+        'operation:decision:show'
+      ]);
+    } finally {
+      delete (globalThis as Record<string, unknown>)[key];
+    }
+  });
+
+  it('orders user hooks around built-in guard hooks for exec boundaries', async () => {
+    const key = '__mlldExecOrderingEvents';
+    const events: string[] = [];
+    (globalThis as Record<string, unknown>)[key] = events;
+
+    try {
+      const env = createEnv();
+      await registerDirectives(
+        `
+/exe @record(event) = js {
+  const raw = event && typeof event === "object" && "value" in event ? event.value : event;
+  globalThis.${key}.push(String(raw));
+  return raw;
+}
+/exe @emit() = js {
+  globalThis.${key}.push("operation:decision:exe-body");
+  return "emit";
+}
+/guard before @guardBefore for op:exe = when [
+  @mx.op.name == "emit" => allow @record("guard:before:exe")
+  * => allow
+]
+/guard after @guardAfter for op:exe = when [
+  @mx.op.name == "emit" => allow @record("guard:after:exe")
+  * => allow
+]
+/hook @userBefore before @emit = [ => @record("user:before:exe") ]
+/hook @userAfter after @emit = [ => @record("user:after:exe") ]
+        `,
+        env
+      );
+
+      await evaluateExecInvocation(createExecInvocation('emit'), env);
+      expect(events).toEqual([
+        'user:before:exe',
+        'guard:before:exe',
+        'operation:decision:exe-body',
+        'guard:after:exe',
+        'user:after:exe'
+      ]);
+    } finally {
+      delete (globalThis as Record<string, unknown>)[key];
+    }
+  });
+
+  it('keeps effect-path ordering parity for user hooks and guard hooks', async () => {
+    const key = '__mlldEffectOrderingEvents';
+    const events: string[] = [];
+    (globalThis as Record<string, unknown>)[key] = events;
+
+    try {
+      const env = createEnv(new TracingEffectHandler(events, 'operation:decision:effect-show'));
+      await registerDirectives(
+        `
+/exe @record(event) = js {
+  const raw = event && typeof event === "object" && "value" in event ? event.value : event;
+  globalThis.${key}.push(String(raw));
+  return raw;
+}
+/guard before @guardBeforeEffect for op:show = when [
+  @mx.op.metadata.isEffect => allow @record("guard:before:effect")
+  * => allow
+]
+/guard after @guardAfterEffect for op:show = when [
+  @mx.op.metadata.isEffect => allow @record("guard:after:effect")
+  * => allow
+]
+/hook @userBeforeEffect before op:show = [ => @record("user:before:effect") ]
+/hook @userAfterEffect after op:show = [ => @record("user:after:effect") ]
+        `,
+        env
+      );
+
+      const effectCommand = {
+        identifier: [{ type: 'VariableReference', identifier: 'show' }],
+        args: [],
+        rawIdentifier: 'show',
+        rawArgs: [],
+        meta: { hasExplicitSource: false }
+      } as PipelineCommand;
+
+      await runBuiltinEffect(effectCommand, 'effect ordering', env);
+
+      expect(events).toEqual([
+        'user:before:effect',
+        'guard:before:effect',
+        'operation:decision:effect-show',
+        'guard:after:effect',
+        'user:after:effect'
       ]);
     } finally {
       delete (globalThis as Record<string, unknown>)[key];

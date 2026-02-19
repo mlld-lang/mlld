@@ -20,6 +20,7 @@ import type { EvalResult } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { HookDecision } from '@interpreter/hooks/HookManager';
 import { getGuardTransformedInputs, handleGuardDecision } from '@interpreter/hooks/hook-decision-handler';
+import { runUserAfterHooks, runUserBeforeHooks } from '@interpreter/hooks/user-hook-runner';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { materializeGuardInputsWithMapping, type GuardInputMappingEntry } from '@interpreter/utils/guard-inputs';
@@ -522,6 +523,7 @@ export async function runExecPreGuards(options: RunExecPreGuardsOptions): Promis
     evaluatedArgStrings
   } = options;
   const hookManager = env.getHookManager();
+  await runUserBeforeHooks(node, guardInputs, env, operationContext);
   const preDecision = await hookManager.runPre(node, guardInputs, env, operationContext);
   const transformedGuardInputs = getGuardTransformedInputs(preDecision, guardInputs);
   let postHookInputs: readonly Variable[] = guardInputs;
@@ -653,7 +655,8 @@ export async function runExecPostGuards(options: RunExecPostGuardsOptions): Prom
   } = options;
   const hookManager = env.getHookManager();
   try {
-    return await hookManager.runPost(node, result, postHookInputs, env, operationContext);
+    const guardedResult = await hookManager.runPost(node, result, postHookInputs, env, operationContext);
+    return await runUserAfterHooks(node, guardedResult, postHookInputs, env, operationContext);
   } catch (error) {
     if (whenExprNode) {
       const handled = await handleExecGuardDenial(error, {

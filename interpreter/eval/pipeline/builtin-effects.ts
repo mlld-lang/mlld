@@ -7,6 +7,7 @@ import { asText } from '../../utils/structured-value';
 import type { OperationContext } from '../../env/ContextManager';
 import { materializeGuardInputs } from '../../utils/guard-inputs';
 import { getGuardTransformedInputs, handleGuardDecision } from '../../hooks/hook-decision-handler';
+import { runUserAfterHooks, runUserBeforeHooks } from '../../hooks/user-hook-runner';
 import { getOperationLabels, getOperationSources } from '@core/policy/operation-labels';
 import type { EffectHookNode } from '@core/types/hooks';
 import type { Variable } from '@core/types/variable';
@@ -260,6 +261,7 @@ export async function runBuiltinEffect(
   }
 
   await env.withOpContext(operationContext, async () => {
+    await runUserBeforeHooks(hookNode, inputs, env, operationContext);
     const preDecision = await hookManager.runPre(hookNode, inputs, env, operationContext);
     const transformedInputs = getGuardTransformedInputs(preDecision, inputs);
     const resolvedInputs = transformedInputs ?? inputs;
@@ -281,7 +283,8 @@ export async function runBuiltinEffect(
     const effectResult = await executeEffect(effect, payloadValue, payloadVariable, env);
 
     try {
-      await hookManager.runPost(hookNode, effectResult, resolvedInputs, env, operationContext);
+      const guardedResult = await hookManager.runPost(hookNode, effectResult, resolvedInputs, env, operationContext);
+      await runUserAfterHooks(hookNode, guardedResult, resolvedInputs, env, operationContext);
     } catch (error) {
       if (isGuardRetrySignal(error)) {
         throw convertEffectRetryToDeny(error as GuardError, operationContext, env);

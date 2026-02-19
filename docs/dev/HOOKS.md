@@ -208,23 +208,27 @@ Directive boundary
 1. evaluateDirective() called
 2. Build operation context (buildOperationContext)
 3. Extract inputs (extractDirectiveInputs or prepareVarAssignment)
-4. → Run pre-hooks (HookManager.runPre)
-5.   ├─ guardPreHook evaluates guard definitions
-6.   └─ First non-continue → abort or retry
-7. → Evaluate directive (directive-specific evaluator)
-8. → Run post-hooks (HookManager.runPost)
-9.   └─ taint-post-hook collects and merges security descriptors
+4. → Run user `before` hooks (HookRegistry)
+5. → Run pre-hooks (HookManager.runPre)
+6.   ├─ guardPreHook evaluates guard definitions
+7.   └─ First non-continue → abort or retry
+8. → Evaluate directive (directive-specific evaluator)
+9. → Run post-hooks (HookManager.runPost)
+10.   └─ taint-post-hook collects and merges security descriptors
+11. → Run user `after` hooks (HookRegistry)
 
 Exe boundary
 1. evaluateExecInvocation() called
 2. Collect original argument Variables (guardInputs)
 3. Build operation context `{ type: 'exe', ... }`
-4. → Run pre-hooks (HookManager.runPre)
-5.   ├─ guardPreHook evaluates guard definitions
-6.   └─ First non-continue → abort or retry
-7. → Execute user-defined /exe implementation
-8. → Run post-hooks (HookManager.runPost)
-9.   └─ taint-post-hook propagates taint to exe result
+4. → Run user `before` hooks (HookRegistry)
+5. → Run pre-hooks (HookManager.runPre)
+6.   ├─ guardPreHook evaluates guard definitions
+7.   └─ First non-continue → abort or retry
+8. → Execute user-defined /exe implementation
+9. → Run post-hooks (HookManager.runPost)
+10.   └─ taint-post-hook propagates taint to exe result
+11. → Run user `after` hooks (HookRegistry)
 ```
 
 ### Suppression Matrix (Phase 0.5 Gate)

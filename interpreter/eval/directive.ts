@@ -31,6 +31,7 @@ import { evaluateNeeds } from './needs';
 import { evaluateProfiles } from './profiles';
 import { clearDirectiveReplay } from './directive-replay';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
+import { runUserAfterHooks, runUserBeforeHooks } from '../hooks/user-hook-runner';
 import { extractSecurityDescriptor } from '../utils/structured-value';
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluatePolicy } from './policy';
@@ -170,6 +171,7 @@ export async function evaluateDirective(
           operationContext,
           context
         );
+        await runUserBeforeHooks(directive, extractedInputs, env, operationContext);
         const preDecision = await hookManager.runPre(
           directive,
           extractedInputs,
@@ -201,6 +203,7 @@ export async function evaluateDirective(
 
         let result = await dispatchDirective(directive, env, mergedContext);
         result = await hookManager.runPost(directive, result, resolvedInputs, env, operationContext);
+        result = await runUserAfterHooks(directive, result, resolvedInputs, env, operationContext);
 
         if (directive.kind === 'var' && precomputedVarAssignment && (result as any).__guardTransformed) {
           const targetVar = env.getVariable(precomputedVarAssignment.identifier) ?? {
