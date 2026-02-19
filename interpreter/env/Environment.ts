@@ -97,6 +97,7 @@ import {
   type ToolCallRecord
 } from './ContextManager';
 import { HookManager } from '../hooks/HookManager';
+import { HookRegistry } from '../hooks/HookRegistry';
 import { guardPreHook } from '../hooks/guard-pre-hook';
 import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
@@ -212,6 +213,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private importResolver: IImportResolver;
   private contextManager: ContextManager;
   private hookManager: HookManager;
+  private hookRegistry: HookRegistry;
   private guardRegistry: GuardRegistry;
   private pipelineGuardHistoryStore: { entries?: GuardHistoryEntry[] };
   private mcpImportManager?: McpImportManager;
@@ -360,10 +362,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     if (parent) {
       this.contextManager = parent.contextManager;
       this.hookManager = parent.hookManager;
+      this.hookRegistry = parent.hookRegistry.createChild();
       this.guardRegistry = parent.guardRegistry.createChild();
     } else {
       this.contextManager = new ContextManager();
       this.hookManager = new HookManager();
+      this.hookRegistry = new HookRegistry();
       this.guardRegistry = new GuardRegistry();
       this.registerBuiltinHooks();
     }
@@ -1395,6 +1399,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getHookManager(): HookManager {
     return this.hookManager;
+  }
+
+  getHookRegistry(): HookRegistry {
+    return this.hookRegistry;
   }
 
   getGuardRegistry(): GuardRegistry {

@@ -26,6 +26,7 @@ import { evaluateForDirective } from './for';
 import { evaluateLoopDirective } from './loop';
 import { evaluateExport } from './export';
 import { evaluateGuard } from './guard';
+import { evaluateHook } from './hook';
 import { evaluateNeeds } from './needs';
 import { evaluateProfiles } from './profiles';
 import { clearDirectiveReplay } from './directive-replay';
@@ -760,6 +761,9 @@ async function dispatchDirective(
 
     case 'guard':
       return await evaluateGuard(directive, env);
+
+    case 'hook':
+      return await evaluateHook(directive, env);
 
     case 'needs':
       return await evaluateNeeds(directive, env);

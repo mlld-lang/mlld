@@ -1,5 +1,5 @@
 ---
-updated: 2026-02-18
+updated: 2026-02-19
 tags: #arch, #system, #interpreter
 related-docs: docs/dev/INTERPRETER.md, docs/dev/GRAMMAR.md, docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/MODULES.md, docs/dev/RESOLVERS.md, docs/dev/REGISTRY.md, docs/dev/PIPELINE.md, docs/dev/DATA.md, docs/dev/SECURITY.md, docs/dev/OUTPUT.md, docs/dev/STREAMING.md, docs/dev/SDK.md, docs/dev/MCP.md, docs/dev/LANGUAGE-SERVER.md, docs/dev/TESTS.md
 related-code: bin/mlld.ts, cli/commands/*.ts, sdk/*.ts, grammar/*.peggy, grammar/parser/index.ts, core/types/*.ts, interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/env/Environment.ts, interpreter/eval/*.ts, interpreter/eval/import/*.ts, interpreter/eval/pipeline/*.ts, interpreter/output/*.ts, interpreter/streaming/*.ts, core/resolvers/*.ts, core/policy/*.ts, services/lsp/*.ts
@@ -37,7 +37,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, PipelineInp
 | 4. Directive execution | Directive semantics (`/var`, `/run`, `/exe`, `/when`, `/for`, `/output`, `/show`) and exec invocation | `interpreter/eval/*.ts`, `interpreter/eval/exec/*.ts` | [INTERPRETER.md](INTERPRETER.md), [VAR-EVALUATION.md](VAR-EVALUATION.md), [ITERATORS.md](ITERATORS.md), [WHEN.md](WHEN.md) |
 | 5. Data and pipelines | Structured values, pipeline execution, retries, transformers, stream bus | `interpreter/utils/structured-value.ts`, `interpreter/eval/pipeline/*.ts`, `interpreter/builtin/transformers.ts`, `interpreter/eval/pipeline/stream-bus.ts` | [DATA.md](DATA.md), [PIPELINE.md](PIPELINE.md), [STREAMING.md](STREAMING.md) |
 | 6. Modules and resolution | Imports, resolver dispatch, registry and lock behavior | `interpreter/eval/import/*.ts`, `core/resolvers/*.ts`, `core/registry/*.ts` | [MODULES.md](MODULES.md), [RESOLVERS.md](RESOLVERS.md), [REGISTRY.md](REGISTRY.md), [IMPORTS.md](IMPORTS.md), [SDK.md](SDK.md) |
-| 7. Security and policy | Label flow, policy enforcement, guard hooks, credential flow | `core/policy/*.ts`, `interpreter/policy/PolicyEnforcer.ts`, `interpreter/hooks/*.ts` | [SECURITY.md](SECURITY.md), [HOOKS.md](HOOKS.md), [ESCAPING.md](ESCAPING.md) |
+| 7. Security and policy | Label flow, policy enforcement, guard hooks, user hook registry, credential flow | `core/policy/*.ts`, `interpreter/policy/PolicyEnforcer.ts`, `interpreter/hooks/*.ts` | [SECURITY.md](SECURITY.md), [HOOKS.md](HOOKS.md), [ESCAPING.md](ESCAPING.md) |
 | 8. Effects and output | Effect routing, document rendering, normalization, CLI-facing output | `interpreter/output/*.ts`, `interpreter/eval/output.ts`, `interpreter/eval/show.ts` | [OUTPUT.md](OUTPUT.md) (intent/effect/normalization), [STREAMING.md](STREAMING.md) (StreamBus/sinks/adapters/SDK stream events) |
 
 ### Runtime Flow
@@ -46,7 +46,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, PipelineInp
 2. Parser builds an AST from grammar rules and typed nodes.
 3. Interpreter evaluates AST nodes in a live `Environment`.
 4. Directive evaluators execute commands, expressions, imports, loops, and pipelines.
-5. Policy and hook layers enforce security decisions before and after operations.
+5. Policy and hook layers enforce security decisions before and after operations, with `Environment` runtime state carrying `HookManager`, `HookRegistry`, and `GuardRegistry`.
 6. Resolver/import layers load modules or content and bind results into environment scope.
 7. Pipeline and streaming components process stage outputs and emit stream events when enabled.
 8. Effect/output components assemble final document or structured result.

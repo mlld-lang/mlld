@@ -1,5 +1,5 @@
 ---
-updated: 2025-11-13
+updated: 2026-02-19
 tags: #arch, #hooks, #security
 related-docs: docs/dev/DATA.md, docs/dev/INTERPRETER.md
 related-code: interpreter/hooks/*.ts, interpreter/eval/directive.ts, interpreter/eval/directive-inputs.ts
@@ -90,6 +90,12 @@ interface GuardInputHelper {
 - Builds HookInputHelpers when inputs are all Variables
 - Returns first non-continue decision for pre-hooks
 
+**HookRegistry** (`interpreter/hooks/HookRegistry.ts`)
+- Stores user-defined `/hook` directives as typed hook definitions
+- Indexes definitions by function name, operation type, and data label
+- Preserves registration order for deterministic retrieval
+- Shares definitions across parent/child environments through `Environment.getHookRegistry()`
+
 **ContextManager** (`interpreter/env/ContextManager.ts`)
 - Manages @mx namespace state (@mx.op, @mx.pipe, @mx.guard)
 - Push/pop context stacks for nested operations
@@ -142,6 +148,7 @@ return env.withOpContext(operationContext, async () => {
 });
 ```
 Hooks run only for user-defined `/exe` functions. Built-in helpers and guard helper executables short-circuit before hook execution to avoid recursion.
+`/hook` directives are registered into `HookRegistry` during directive evaluation; execution of user-defined hook bodies is enabled in later lifecycle phases.
 
 ### Built-in Hooks
 
