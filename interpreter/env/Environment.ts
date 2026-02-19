@@ -321,6 +321,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // TODO: Introduce guard registration and evaluation using capability contexts.
   // Guard evaluation depth prevents reentrant guard execution
   private guardEvaluationDepth = 0;
+  // Hook evaluation depth prevents user-hook reentrancy while hook bodies execute.
+  private hookEvaluationDepth = 0;
 
   // ═══════════════════════════════════════════════════════════════
   // ZONE 1: Constructor & Bootstrap
@@ -1517,6 +1519,22 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return true;
     }
     return this.parent?.shouldSuppressGuards() ?? false;
+  }
+
+  async withHookSuppression<T>(fn: () => Promise<T> | T): Promise<T> {
+    this.hookEvaluationDepth += 1;
+    try {
+      return await fn();
+    } finally {
+      this.hookEvaluationDepth = Math.max(0, this.hookEvaluationDepth - 1);
+    }
+  }
+
+  shouldSuppressUserHooks(): boolean {
+    if (this.hookEvaluationDepth > 0 || this.guardEvaluationDepth > 0) {
+      return true;
+    }
+    return this.parent?.shouldSuppressUserHooks() ?? false;
   }
 
   async withDeniedContext<T>(

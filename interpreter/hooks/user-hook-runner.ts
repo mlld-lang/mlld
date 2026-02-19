@@ -281,6 +281,13 @@ async function runUserHooks(
   options: UserHookRunOptions
 ): Promise<{ inputs: readonly unknown[]; result?: EvalResult }> {
   const { timing, node, env, operation, inputs, result } = options;
+  if (env.shouldSuppressUserHooks()) {
+    return {
+      inputs,
+      result
+    };
+  }
+
   const matches = collectMatchingUserHooks(timing, node, env, operation, inputs);
   const hookErrors = ensureOperationHookErrorBucket(operation);
   if (matches.length === 0) {
@@ -292,31 +299,33 @@ async function runUserHooks(
 
   let currentInputs = inputs;
   let currentResult = result;
-  for (const hook of matches) {
-    const hookEnv = createHookEnvironment(env, hook, timing, currentInputs, currentResult);
-    try {
-      const execution = await executeHookBody(hook.body, hookEnv);
-      if (!execution.transformed) {
-        continue;
-      }
+  return env.withHookSuppression(async () => {
+    for (const hook of matches) {
+      const hookEnv = createHookEnvironment(env, hook, timing, currentInputs, currentResult);
+      try {
+        const execution = await executeHookBody(hook.body, hookEnv);
+        if (!execution.transformed) {
+          continue;
+        }
 
-      if (timing === 'before') {
-        currentInputs = applyBeforeHookTransform(currentInputs, execution.value);
-        continue;
-      }
+        if (timing === 'before') {
+          currentInputs = applyBeforeHookTransform(currentInputs, execution.value);
+          continue;
+        }
 
-      if (currentResult !== undefined) {
-        currentResult = applyAfterHookTransform(currentResult, execution.value);
+        if (currentResult !== undefined) {
+          currentResult = applyAfterHookTransform(currentResult, execution.value);
+        }
+      } catch (error) {
+        hookErrors.push(toHookExecutionError(hook, timing, error));
       }
-    } catch (error) {
-      hookErrors.push(toHookExecutionError(hook, timing, error));
     }
-  }
 
-  return {
-    inputs: currentInputs,
-    result: currentResult
-  };
+    return {
+      inputs: currentInputs,
+      result: currentResult
+    };
+  });
 }
 
 export async function runUserBeforeHooks(

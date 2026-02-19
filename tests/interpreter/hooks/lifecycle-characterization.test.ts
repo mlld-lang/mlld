@@ -168,6 +168,88 @@ describe('hook lifecycle characterization baseline', () => {
     }
   });
 
+  it('suppresses nested user hooks for operations triggered inside hook bodies', async () => {
+    const key = '__mlldHookSuppressionEvents';
+    const events: string[] = [];
+    (globalThis as Record<string, unknown>)[key] = events;
+
+    try {
+      const env = createEnv();
+      await registerDirectives(
+        `
+/exe @record(event) = js {
+  const raw = event && typeof event === "object" && "value" in event ? event.value : event;
+  globalThis.${key}.push(String(raw));
+  return raw;
+}
+/exe @inner() = js {
+  globalThis.${key}.push("operation:decision:inner-body");
+  return "inner";
+}
+/exe @outer() = js {
+  globalThis.${key}.push("operation:decision:outer-body");
+  return "outer";
+}
+/hook @outerAfter after @outer = [ => @inner() ]
+/hook @innerAfter after @inner = [ => @record("user:after:inner") ]
+        `,
+        env
+      );
+
+      const result = await evaluateExecInvocation(createExecInvocation('outer'), env);
+      expect(asText(result.value)).toContain('inner');
+      expect(events).toEqual([
+        'operation:decision:outer-body',
+        'operation:decision:inner-body'
+      ]);
+    } finally {
+      delete (globalThis as Record<string, unknown>)[key];
+    }
+  });
+
+  it('keeps guard execution active for nested operations triggered inside hooks', async () => {
+    const key = '__mlldHookNestedGuardEvents';
+    const events: string[] = [];
+    (globalThis as Record<string, unknown>)[key] = events;
+
+    try {
+      const env = createEnv();
+      await registerDirectives(
+        `
+/exe @record(event) = js {
+  const raw = event && typeof event === "object" && "value" in event ? event.value : event;
+  globalThis.${key}.push(String(raw));
+  return raw;
+}
+/exe @inner() = js {
+  globalThis.${key}.push("operation:decision:inner-body");
+  return "inner";
+}
+/exe @outer() = js {
+  globalThis.${key}.push("operation:decision:outer-body");
+  return "outer";
+}
+/guard before @innerGuard for op:exe = when [
+  @mx.op.name == "inner" => allow @record("guard:before:inner")
+  * => allow
+]
+/hook @outerAfter after @outer = [ => @inner() ]
+/hook @innerAfter after @inner = [ => @record("user:after:inner") ]
+        `,
+        env
+      );
+
+      await evaluateExecInvocation(createExecInvocation('outer'), env);
+      expect(events).toEqual([
+        'operation:decision:outer-body',
+        'guard:before:inner',
+        'operation:decision:inner-body'
+      ]);
+    } finally {
+      delete (globalThis as Record<string, unknown>)[key];
+    }
+  });
+
   it('orders user hooks around built-in guard hooks for directive boundaries', async () => {
     const key = '__mlldDirectiveOrderingEvents';
     const events: string[] = [];

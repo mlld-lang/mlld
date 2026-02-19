@@ -235,7 +235,7 @@ Exe boundary
 11. → Run user `after` hooks (HookRegistry)
 ```
 
-### Suppression Matrix (Phase 0.5 Gate)
+### Suppression Matrix (Phase 3C Runtime)
 
 | Context | User hooks | Guard hooks | Contract |
 |---|---|---|---|
@@ -243,7 +243,7 @@ Exe boundary
 | Inside user hook body | Suppressed | Enabled | Prevent hook recursion, keep guard enforcement |
 | Inside guard evaluation | Suppressed | Suppressed | Preserve existing guard non-reentrancy behavior |
 
-Risk-gate reference: `docs/dev/HOOKS-CHECKPOINT-RISK-GATES.md`.
+Runtime behavior is enforced by `Environment.withHookSuppression()` + `Environment.shouldSuppressUserHooks()` and validated in lifecycle characterization tests.
 
 Lifecycle trace diagnostics helper (test-only):
 - `tests/helpers/hook-lifecycle-trace.ts`
@@ -251,6 +251,7 @@ Lifecycle trace diagnostics helper (test-only):
 
 Characterization baseline (Phase 2.5):
 - `tests/interpreter/hooks/lifecycle-characterization.test.ts` pins directive and exec lifecycle ordering around `HookManager.runPre/runPost`, plus current nested-guard suppression behavior.
+- Phase 3C extends the same suite to pin hook non-reentrancy: nested operations triggered by hooks skip user hooks but still execute guards.
 
 ### Input Extraction
 
