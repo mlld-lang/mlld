@@ -286,4 +286,40 @@ describe('user hook runtime', () => {
       'iter:2:3:1:1'
     ]));
   });
+
+  it('fires op:loop hooks for each loop iteration with loop context metadata', async () => {
+    const env = createEnv();
+
+    await evaluateDirectives(
+      `
+/hook @loopBefore before op:loop = [
+  output \`before:@mx.loop.iteration\` to "state://loop-hooks"
+]
+/hook @loopAfter after op:loop = [
+  output \`after:@mx.loop.iteration:@output.status\` to "state://loop-hooks"
+]
+/var @result = loop(3) [
+  let @next = (@input ?? 0) + 1
+  when @next >= 3 => done @next
+  continue @next
+]
+      `,
+      env
+    );
+
+    expect(readTextVariable(env, 'result')).toBe('3');
+    const writes = env
+      .getStateWrites()
+      .filter(write => write.path === 'loop-hooks')
+      .map(write => String(write.value).trim());
+
+    expect(writes).toEqual([
+      'before:1',
+      'after:1:continue',
+      'before:2',
+      'after:2:continue',
+      'before:3',
+      'after:3:done'
+    ]);
+  });
 });

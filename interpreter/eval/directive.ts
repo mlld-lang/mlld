@@ -737,6 +737,8 @@ function buildOperationContext(
   const streamingEnabled = readStreamFlag(directive);
   const effectiveKind = directive.kind === 'output' && directive.meta?.isLogSugar
     ? 'log'
+    : directive.kind === 'loop'
+      ? 'loop:directive'
     : directive.kind;
   const context: OperationContext = {
     type: effectiveKind,
