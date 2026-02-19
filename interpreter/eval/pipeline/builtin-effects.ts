@@ -12,6 +12,7 @@ import {
   getGuardTransformedInputs,
   handleGuardDecision
 } from '../../hooks/hook-decision-handler';
+import { runUserAfterHooksOnGuardDenial } from '../../hooks/guard-denial-after-hooks';
 import { runUserAfterHooks, runUserBeforeHooks } from '../../hooks/user-hook-runner';
 import { getOperationLabels, getOperationSources } from '@core/policy/operation-labels';
 import type { EffectHookNode } from '@core/types/hooks';
@@ -297,10 +298,17 @@ export async function runBuiltinEffect(
     try {
       await handleGuardDecision(preDecision, hookNode, env, operationContext);
     } catch (error) {
-      if (isGuardRetrySignal(error)) {
-        throw convertEffectRetryToDeny(error as GuardError, operationContext, env);
-      }
-      throw error;
+      const normalizedError = isGuardRetrySignal(error)
+        ? convertEffectRetryToDeny(error as GuardError, operationContext, env)
+        : error;
+      await runUserAfterHooksOnGuardDenial({
+        node: hookNode,
+        env,
+        operationContext,
+        inputs: resolvedInputs,
+        error: normalizedError
+      });
+      throw normalizedError;
     }
 
     const primaryInput = resolvedInputs[0] ?? preHookInputs[0];

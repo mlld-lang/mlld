@@ -25,6 +25,7 @@ import {
   getGuardTransformedInputs,
   handleGuardDecision
 } from '@interpreter/hooks/hook-decision-handler';
+import { runUserAfterHooksOnGuardDenial } from '@interpreter/hooks/guard-denial-after-hooks';
 import { runUserAfterHooks, runUserBeforeHooks } from '@interpreter/hooks/user-hook-runner';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
@@ -120,6 +121,7 @@ export type HandleExecPreGuardDecisionOptions = {
   env: Environment;
   execEnv: Environment;
   operationContext: OperationContext;
+  postHookInputs: readonly Variable[];
   whenExprNode?: WhenExpressionNode | null;
 };
 
@@ -578,7 +580,7 @@ export async function runExecPreGuards(options: RunExecPreGuardsOptions): Promis
 export async function handleExecPreGuardDecision(
   options: HandleExecPreGuardDecisionOptions
 ): Promise<EvalResult | null> {
-  const { preDecision, node, env, execEnv, operationContext, whenExprNode } = options;
+  const { preDecision, node, env, execEnv, operationContext, postHookInputs, whenExprNode } = options;
   const checkpointDecision = getCheckpointDecisionState(preDecision);
   applyCheckpointDecisionToOperation(operationContext, checkpointDecision);
   if (checkpointDecision?.hit && checkpointDecision.hasCachedResult) {
@@ -619,6 +621,13 @@ export async function handleExecPreGuardDecision(
         return handled;
       }
     }
+    await runUserAfterHooksOnGuardDenial({
+      node,
+      env,
+      operationContext,
+      inputs: postHookInputs,
+      error
+    });
     throw error;
   }
   return null;

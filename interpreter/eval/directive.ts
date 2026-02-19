@@ -37,6 +37,7 @@ import { evaluateProfiles } from './profiles';
 import { clearDirectiveReplay } from './directive-replay';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import { runUserAfterHooks, runUserBeforeHooks } from '../hooks/user-hook-runner';
+import { runUserAfterHooksOnGuardDenial } from '../hooks/guard-denial-after-hooks';
 import { extractSecurityDescriptor } from '../utils/structured-value';
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluatePolicy } from './policy';
@@ -231,7 +232,18 @@ export async function evaluateDirective(
           cachedResult = await runUserAfterHooks(directive, cachedResult, resolvedInputs, env, operationContext);
           return cachedResult;
         }
-        await handleGuardDecision(preDecision, directive, env, operationContext);
+        try {
+          await handleGuardDecision(preDecision, directive, env, operationContext);
+        } catch (error) {
+          await runUserAfterHooksOnGuardDenial({
+            node: directive,
+            env,
+            operationContext,
+            inputs: resolvedInputs,
+            error
+          });
+          throw error;
+        }
 
         const mergedContext = mergeEvaluationContext(
           context,

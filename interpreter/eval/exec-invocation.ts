@@ -1460,6 +1460,7 @@ async function evaluateExecInvocationInternal(
         env,
         execEnv,
         operationContext,
+        postHookInputs,
         whenExprNode
       });
       if (preGuardHandled) {
