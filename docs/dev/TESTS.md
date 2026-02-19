@@ -195,6 +195,11 @@ Located in `tests/cases/invalid/`. These tests:
 - Should fail to parse
 - Test grammar edge cases and error conditions
 
+#### 6. Checkpoint/Resume Coverage Strategy
+- Keep low-level checkpoint correctness in focused unit tests under `tests/interpreter/checkpoint/` (`CheckpointManager` persistence, deterministic keys, corruption tolerance, invalidation, and fork overlay reads).
+- Keep scenario-level behavior in fixture/integration cases under `tests/cases/integration/checkpoint/` for miss/hit semantics, resume targeting, fuzzy invalidation, and fork hit/miss overlays.
+- For docs-published checkpoint/resume examples, generated syntax smoke fixtures are expected artifacts and should be committed with phase updates when regenerated.
+
 ## Fixture Generation
 
 ### Build Process

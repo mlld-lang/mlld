@@ -2,7 +2,7 @@
 updated: 2026-02-19
 tags: #arch, #system, #interpreter
 related-docs: docs/dev/INTERPRETER.md, docs/dev/GRAMMAR.md, docs/dev/AST.md, docs/dev/TYPES.md, docs/dev/MODULES.md, docs/dev/RESOLVERS.md, docs/dev/REGISTRY.md, docs/dev/PIPELINE.md, docs/dev/DATA.md, docs/dev/SECURITY.md, docs/dev/OUTPUT.md, docs/dev/STREAMING.md, docs/dev/SDK.md, docs/dev/MCP.md, docs/dev/LANGUAGE-SERVER.md, docs/dev/TESTS.md
-related-code: bin/mlld.ts, cli/commands/*.ts, sdk/*.ts, grammar/*.peggy, grammar/parser/index.ts, core/types/*.ts, interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/env/Environment.ts, interpreter/eval/*.ts, interpreter/eval/import/*.ts, interpreter/eval/pipeline/*.ts, interpreter/output/*.ts, interpreter/streaming/*.ts, core/resolvers/*.ts, core/policy/*.ts, services/lsp/*.ts
+related-code: bin/mlld.ts, cli/commands/*.ts, sdk/*.ts, grammar/*.peggy, grammar/parser/index.ts, core/types/*.ts, interpreter/index.ts, interpreter/core/interpreter.ts, interpreter/env/Environment.ts, interpreter/checkpoint/*.ts, interpreter/eval/*.ts, interpreter/eval/import/*.ts, interpreter/eval/pipeline/*.ts, interpreter/output/*.ts, interpreter/streaming/*.ts, core/resolvers/*.ts, core/policy/*.ts, services/lsp/*.ts
 related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, PipelineInput }, core/types/security { SecurityDescriptor }, core/types/structured-value { StructuredValue }
 ---
 
@@ -46,7 +46,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, PipelineInp
 2. Parser builds an AST from grammar rules and typed nodes.
 3. Interpreter evaluates AST nodes in a live `Environment`.
 4. Directive evaluators execute commands, expressions, imports, loops, and pipelines.
-5. Policy and hook layers enforce security decisions before and after operations, with `Environment` runtime state carrying `HookManager`, `HookRegistry`, and `GuardRegistry`.
+5. Policy and hook layers enforce security decisions before and after operations, with `Environment` runtime state carrying `HookManager`, `HookRegistry`, `GuardRegistry`, and checkpoint cache state (`interpreter/checkpoint/CheckpointManager.ts`) when checkpointing is enabled.
 6. Resolver/import layers load modules or content and bind results into environment scope.
 7. Pipeline and streaming components process stage outputs and emit stream events when enabled.
 8. Effect/output components assemble final document or structured result.
