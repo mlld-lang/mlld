@@ -588,6 +588,8 @@ Commands:
   docs                    Show module documentation (# tldr + # docs)
   env                     Manage environment variables allowed in @INPUT
   install, i              Install mlld modules
+  update                  Update installed modules to latest versions
+  outdated                List modules with available updates
   ls, list               List installed modules
   info, show             Show module details (includes # tldr)
   auth                    Manage GitHub authentication

@@ -20,15 +20,17 @@
       "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/ab27254c0888169ddcce64b9ad2f26a20fe4c9af/llm/modules/claude-poll.mld.md"
     },
     "@mlld/claude": {
-      "version": "latest",
+      "version": "2.0.0",
       "resolved": "d7799fef01e57fbef8fe36c7a4a3d3c51c79c2454522699cd53fc9be1acc4a40",
       "source": "registry://@mlld/claude@2.0.0",
       "integrity": "sha256:d7799fef01e57fbef8fe36c7a4a3d3c51c79c2454522699cd53fc9be1acc4a40",
-      "fetchedAt": "2026-02-15T07:39:30.108Z"
+      "fetchedAt": "2026-02-19T22:57:34.033Z",
+      "registryVersion": "2.0.0",
+      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/86aefe5caf0e63bc67d624a48a5be3f421ed738f/llm/modules/claude.mld.md"
     }
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-02-17T19:44:59.001Z"
+    "updatedAt": "2026-02-19T22:57:34.033Z"
   }
 }
