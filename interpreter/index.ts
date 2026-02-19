@@ -98,6 +98,10 @@ function parseResumePrefix(raw: string): string | null {
     return trimmed.slice(1, -1).replace(/\\'/g, "'");
   }
 
+  if (trimmed.startsWith('`') && trimmed.endsWith('`')) {
+    return trimmed.slice(1, -1).replace(/\\`/g, '`');
+  }
+
   return null;
 }
 
@@ -107,92 +111,72 @@ function parseResumeTarget(target: string): ParsedResumeTarget | null {
     return null;
   }
 
-  // Named checkpoints are the default for non-@ targets.
-  if (!trimmed.startsWith('@')) {
-    if (trimmed.includes('(') || trimmed.includes(')') || trimmed.includes(':')) {
-      // Continue into legacy no-@ function targeting below.
-    } else {
-      const namedCheckpoint = parseResumePrefix(trimmed);
-      if (namedCheckpoint !== null) {
-        return { kind: 'named-checkpoint', checkpointName: namedCheckpoint };
+  const parseFunctionTarget = (
+    rawTarget: string,
+    opts: { requireAtPrefix: boolean; allowBareFunction: boolean }
+  ): ParsedResumeTarget | null => {
+    const prefix = opts.requireAtPrefix ? '@' : '';
+    const fuzzyMatch = rawTarget.match(new RegExp(`^${prefix}([^\\s:()]+)(?::(\\d+))?\\((.*)\\)$`));
+    if (fuzzyMatch) {
+      const functionName = fuzzyMatch[1];
+      const invocationIndex =
+        fuzzyMatch[2] !== undefined ? Number.parseInt(fuzzyMatch[2], 10) : undefined;
+      const parsedPrefix = parseResumePrefix(fuzzyMatch[3]);
+      if (!functionName || parsedPrefix === null) {
+        return null;
       }
-      if (!/\s/.test(trimmed)) {
-        return { kind: 'named-checkpoint', checkpointName: trimmed };
+      if (invocationIndex !== undefined && !Number.isInteger(invocationIndex)) {
+        return null;
       }
-      return null;
+      return {
+        kind: 'function-prefix',
+        functionName,
+        prefix: parsedPrefix,
+        ...(invocationIndex === undefined ? {} : { invocationIndex })
+      };
     }
-  }
 
-  const fuzzyMatch = trimmed.match(/^@([^\s:()]+)(?::(\d+))?\((.*)\)$/);
-  if (fuzzyMatch) {
-    const functionName = fuzzyMatch[1];
-    const invocationIndex = fuzzyMatch[2] !== undefined ? Number.parseInt(fuzzyMatch[2], 10) : undefined;
-    const prefix = parseResumePrefix(fuzzyMatch[3]);
-    if (!functionName || prefix === null) {
-      return null;
+    const indexedMatch = rawTarget.match(new RegExp(`^${prefix}([^\\s:()]+):(\\d+)$`));
+    if (indexedMatch) {
+      const functionName = indexedMatch[1];
+      const invocationIndex = Number.parseInt(indexedMatch[2], 10);
+      if (!functionName || !Number.isInteger(invocationIndex)) {
+        return null;
+      }
+      return { kind: 'function-index', functionName, invocationIndex };
     }
-    if (invocationIndex !== undefined && !Number.isInteger(invocationIndex)) {
-      return null;
-    }
-    return {
-      kind: 'function-prefix',
-      functionName,
-      prefix,
-      ...(invocationIndex === undefined ? {} : { invocationIndex })
-    };
-  }
 
-  const indexedMatch = trimmed.match(/^@([^\s:()]+):(\d+)$/);
-  if (indexedMatch) {
-    const functionName = indexedMatch[1];
-    const invocationIndex = Number.parseInt(indexedMatch[2], 10);
-    if (!functionName || !Number.isInteger(invocationIndex)) {
-      return null;
+    const functionMatch = rawTarget.match(new RegExp(`^${prefix}([^\\s:()]+)$`));
+    if (opts.allowBareFunction && functionMatch) {
+      const functionName = functionMatch[1];
+      if (!functionName) {
+        return null;
+      }
+      return { kind: 'function', functionName };
     }
-    return { kind: 'function-index', functionName, invocationIndex };
-  }
 
-  const functionMatch = trimmed.match(/^@([^\s:()]+)$/);
-  if (functionMatch) {
-    const functionName = functionMatch[1];
-    if (!functionName) {
-      return null;
-    }
-    return { kind: 'function', functionName };
+    return null;
+  };
+
+  if (trimmed.startsWith('@')) {
+    return parseFunctionTarget(trimmed, { requireAtPrefix: true, allowBareFunction: true });
   }
 
   // Backward compatibility: legacy unprefixed function target forms.
-  const legacyFuzzyMatch = trimmed.match(/^([^\s:()]+)(?::(\d+))?\((.*)\)$/);
-  if (legacyFuzzyMatch) {
-    const functionName = legacyFuzzyMatch[1];
-    const invocationIndex =
-      legacyFuzzyMatch[2] !== undefined ? Number.parseInt(legacyFuzzyMatch[2], 10) : undefined;
-    const prefix = parseResumePrefix(legacyFuzzyMatch[3]);
-    if (!functionName || prefix === null) {
-      return null;
-    }
-    if (invocationIndex !== undefined && !Number.isInteger(invocationIndex)) {
-      return null;
-    }
-    return {
-      kind: 'function-prefix',
-      functionName,
-      prefix,
-      ...(invocationIndex === undefined ? {} : { invocationIndex })
-    };
+  const legacyFunctionTarget = parseFunctionTarget(trimmed, {
+    requireAtPrefix: false,
+    allowBareFunction: false
+  });
+  if (legacyFunctionTarget) {
+    return legacyFunctionTarget;
   }
 
-  const legacyIndexedMatch = trimmed.match(/^([^\s:()]+):(\d+)$/);
-  if (legacyIndexedMatch) {
-    const functionName = legacyIndexedMatch[1];
-    const invocationIndex = Number.parseInt(legacyIndexedMatch[2], 10);
-    if (!functionName || !Number.isInteger(invocationIndex)) {
-      return null;
-    }
-    return { kind: 'function-index', functionName, invocationIndex };
+  const namedCheckpoint = parseResumePrefix(trimmed);
+  if (namedCheckpoint !== null) {
+    return { kind: 'named-checkpoint', checkpointName: namedCheckpoint };
   }
 
-  return null;
+  return { kind: 'named-checkpoint', checkpointName: trimmed };
 }
 
 async function applyResumeTargetInvalidation(

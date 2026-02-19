@@ -132,6 +132,33 @@ describe('CheckpointManager', () => {
     await expect(manager.get(keyB)).resolves.toBe('B');
   });
 
+  it('supports exact and prefix named checkpoint invalidation', async () => {
+    const root = await createTempDir('checkpoint-manager-named-prefix-');
+    const manager = new CheckpointManager('pipeline', createOptions(root));
+    await manager.load();
+
+    await manager.registerNamedCheckpoint('data');
+    await manager.registerNamedCheckpoint('data-processing');
+    await manager.registerNamedCheckpoint('review');
+
+    await expect(manager.invalidateFromNamedCheckpoint('review')).resolves.toBe(0);
+    await expect(manager.invalidateFromNamedCheckpoint('data-pro')).resolves.toBe(0);
+    await expect(manager.invalidateFromNamedCheckpoint('data')).resolves.toBe(0);
+  });
+
+  it('errors with candidate list for ambiguous named checkpoint prefixes', async () => {
+    const root = await createTempDir('checkpoint-manager-named-ambiguous-');
+    const manager = new CheckpointManager('pipeline', createOptions(root));
+    await manager.load();
+
+    await manager.registerNamedCheckpoint('data-collection-complete');
+    await manager.registerNamedCheckpoint('data-processing-complete');
+
+    await expect(manager.invalidateFromNamedCheckpoint('data')).rejects.toThrow(
+      'Ambiguous checkpoint match "data"'
+    );
+  });
+
   it('clears local cache state for fresh runs', async () => {
     const root = await createTempDir('checkpoint-manager-clear-');
     const manager = new CheckpointManager('pipeline', createOptions(root));

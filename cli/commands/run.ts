@@ -333,7 +333,7 @@ Options:
   --new                   Start a fresh checkpoint run (alias: --fresh)
   --fresh                 Rebuild checkpoint cache from scratch for this script
   --no-checkpoint         Disable checkpoint reads/writes for this run
-  --resume [target]       Resume from checkpoint name or function target (@fn, @fn:index, @fn("prefix"))
+  --resume [target]       Resume from checkpoint name/prefix or function target (@fn, @fn:index, @fn("prefix"))
   --fork <script>         Read checkpoints from another script as seed cache
   --<name> <value>        Any other flag becomes payload (see below)
 

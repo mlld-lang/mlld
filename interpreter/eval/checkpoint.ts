@@ -2,13 +2,29 @@ import type { DirectiveNode } from '@core/types';
 import type { CheckpointDirectiveNode } from '@core/types/checkpoint';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import { evaluateDataValue } from './data-value-evaluator';
 
-function readCheckpointName(node: CheckpointDirectiveNode): string {
+async function readCheckpointName(
+  node: CheckpointDirectiveNode,
+  env: Environment
+): Promise<string> {
   const rawName = node.values?.name;
   if (typeof rawName === 'string') {
     return rawName.trim();
   }
-  return '';
+
+  if (rawName === null || rawName === undefined) {
+    return '';
+  }
+
+  const resolvedName = await evaluateDataValue(rawName as any, env);
+  if (typeof resolvedName === 'string') {
+    return resolvedName.trim();
+  }
+  if (resolvedName === null || resolvedName === undefined) {
+    return '';
+  }
+  return String(resolvedName).trim();
 }
 
 export async function evaluateCheckpoint(
@@ -16,7 +32,7 @@ export async function evaluateCheckpoint(
   env: Environment
 ): Promise<EvalResult> {
   const checkpointNode = directive as CheckpointDirectiveNode;
-  const name = readCheckpointName(checkpointNode);
+  const name = await readCheckpointName(checkpointNode, env);
   if (!name) {
     throw new Error('checkpoint directive requires a non-empty name');
   }

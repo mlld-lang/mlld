@@ -23,7 +23,25 @@ WhenRHSActionBase "when RHS action base"
   / WhenRHSSkipAction
   / WhenRHSVariableReference  // Allow @var (optionally with pipelines) as value-returning action
   / WhenRHSRetryAction
+  / WhenRHSCheckpointAction
   / VarRHSContent  // Pure values (fallback)
+
+WhenRHSCheckpointAction
+  = CheckpointKeyword __ name:CheckpointNameValue {
+      const values = { name };
+      const raw = { name };
+      const meta = { checkpointContext: 'when-expression-action' };
+
+      return [helpers.createStructuredDirective(
+        DirectiveKind.checkpoint,
+        'checkpoint',
+        values,
+        raw,
+        meta,
+        location(),
+        'directive'
+      )];
+    }
 
 LabelModificationAction
   = mods:ReturnLabelModifierList ws:[ \t]+ value:WhenRHSActionBase {

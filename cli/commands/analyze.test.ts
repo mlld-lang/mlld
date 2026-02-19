@@ -330,6 +330,69 @@ for @k, @v in @items => show @k
       ])
     );
   });
+
+  it('accepts checkpoints as direct actions in top-level when forms', async () => {
+    const modulePath = await writeModule('checkpoint-top-level-when.mld', `/when [
+  @mode == "deep" => checkpoint "deep-path"
+  * => checkpoint "default-path"
+]
+/when @mode [
+  "quick" => checkpoint "quick-path"
+]
+/when @enabled => checkpoint "inline-path"
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors ?? []).toHaveLength(0);
+  });
+
+  it('reports checkpoints nested inside when action blocks as validation errors', async () => {
+    const modulePath = await writeModule('checkpoint-nested-when-block.mld', `/when @enabled => [
+  checkpoint "nested"
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(error => error.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('checkpoint "nested" is only allowed at top level or as a direct => result of a top-level when')
+      ])
+    );
+  });
+
+  it('reports checkpoints inside when expressions as validation errors', async () => {
+    const modulePath = await writeModule('checkpoint-when-expression.mld', `/var @phase = when [
+  * => checkpoint "not-allowed"
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(error => error.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('checkpoint "not-allowed" is only allowed at top level or as a direct => result of a top-level when')
+      ])
+    );
+  });
+
+  it('skips static duplicate-name validation for dynamic checkpoint names', async () => {
+    const modulePath = await writeModule('checkpoint-dynamic-names.mld', `/var @phase = "same"
+/checkpoint "@phase"
+/checkpoint "@phase"
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    expect((result.errors ?? []).map(error => error.message)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('duplicate checkpoint')])
+    );
+  });
 });
 
 describe('template validation', () => {

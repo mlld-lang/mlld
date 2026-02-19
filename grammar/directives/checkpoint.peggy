@@ -4,8 +4,11 @@
 CheckpointKeyword
   = "/"? "checkpoint" ![a-zA-Z0-9_]
 
+CheckpointNameValue
+  = value:ExpressionString { return value; }
+
 SlashCheckpoint
-  = DirectiveContext CheckpointKeyword __ name:StringLiteral ending:CommentedDirectiveEnding? {
+  = DirectiveContext CheckpointKeyword __ name:CheckpointNameValue ending:CommentedDirectiveEnding? {
       const values = { name };
       const raw = { name };
       const meta = {

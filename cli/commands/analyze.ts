@@ -1543,6 +1543,42 @@ function detectCheckpointDirectiveErrors(ast: MlldNode[]): AnalysisError[] {
   const errors: AnalysisError[] = [];
   const firstSeen = new Map<string, { line?: number; column?: number }>();
 
+  const readLocation = (value: Record<string, unknown>): { line?: number; column?: number } => {
+    const location =
+      value.location && typeof value.location === 'object'
+        ? (value.location as Record<string, unknown>)
+        : undefined;
+    const start =
+      location?.start && typeof location.start === 'object'
+        ? (location.start as Record<string, unknown>)
+        : undefined;
+    return {
+      line: typeof start?.line === 'number' ? start.line : undefined,
+      column: typeof start?.column === 'number' ? start.column : undefined
+    };
+  };
+
+  const readLiteralCheckpointName = (rawName: unknown): string | null => {
+    if (typeof rawName === 'string') {
+      return rawName.trim();
+    }
+    if (rawName && typeof rawName === 'object') {
+      const literal = rawName as Record<string, unknown>;
+      if (literal.type === 'Literal' && typeof literal.value === 'string') {
+        return literal.value.trim();
+      }
+    }
+    return null;
+  };
+
+  const readCheckpointContext = (value: Record<string, unknown>): string | undefined => {
+    const meta =
+      value.meta && typeof value.meta === 'object'
+        ? (value.meta as Record<string, unknown>)
+        : undefined;
+    return typeof meta?.checkpointContext === 'string' ? meta.checkpointContext : undefined;
+  };
+
   const visit = (node: unknown, insideExeBody: boolean): void => {
     if (!node || typeof node !== 'object') {
       return;
@@ -1561,50 +1597,52 @@ function detectCheckpointDirectiveErrors(ast: MlldNode[]): AnalysisError[] {
     const isExeDirective = isDirective && value.kind === 'exe';
 
     if (isCheckpoint) {
-      const location =
-        value.location && typeof value.location === 'object'
-          ? (value.location as Record<string, unknown>)
-          : undefined;
-      const start =
-        location?.start && typeof location.start === 'object'
-          ? (location.start as Record<string, unknown>)
-          : undefined;
-      const line = typeof start?.line === 'number' ? start.line : undefined;
-      const column = typeof start?.column === 'number' ? start.column : undefined;
+      const { line, column } = readLocation(value);
       const values =
         value.values && typeof value.values === 'object'
           ? (value.values as Record<string, unknown>)
           : undefined;
-      const checkpointName = typeof values?.name === 'string' ? values.name.trim() : '';
 
-      if (!checkpointName) {
+      const literalCheckpointName = readLiteralCheckpointName(values?.name);
+      const checkpointContext = readCheckpointContext(value);
+      const validCheckpointContext =
+        checkpointContext === undefined || checkpointContext === 'top-level-when-direct';
+      const isPlacementValid = !insideExeBody && validCheckpointContext;
+
+      if (!isPlacementValid) {
+        const displayName =
+          typeof literalCheckpointName === 'string' && literalCheckpointName.length > 0
+            ? `"${literalCheckpointName}"`
+            : '<dynamic>';
         errors.push({
-          message: 'checkpoint directive requires a non-empty name',
+          message: `checkpoint ${displayName} is only allowed at top level or as a direct => result of a top-level when`,
           line,
           column
         });
-      } else {
-        if (insideExeBody) {
-          errors.push({
-            message: `checkpoint "${checkpointName}" is only allowed at top level (not inside /exe bodies)`,
-            line,
-            column
-          });
-        }
+      }
 
-        const existing = firstSeen.get(checkpointName);
-        if (existing) {
-          const suffix =
-            existing.line !== undefined
-              ? ` (first declared at line ${existing.line}${existing.column !== undefined ? `:${existing.column}` : ''})`
-              : '';
+      if (literalCheckpointName !== null) {
+        if (!literalCheckpointName) {
           errors.push({
-            message: `duplicate checkpoint "${checkpointName}"${suffix}`,
+            message: 'checkpoint directive requires a non-empty name',
             line,
             column
           });
         } else {
-          firstSeen.set(checkpointName, { line, column });
+          const existing = firstSeen.get(literalCheckpointName);
+          if (existing) {
+            const suffix =
+              existing.line !== undefined
+                ? ` (first declared at line ${existing.line}${existing.column !== undefined ? `:${existing.column}` : ''})`
+                : '';
+            errors.push({
+              message: `duplicate checkpoint "${literalCheckpointName}"${suffix}`,
+              line,
+              column
+            });
+          } else {
+            firstSeen.set(literalCheckpointName, { line, column });
+          }
         }
       }
     }

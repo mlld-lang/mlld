@@ -2,15 +2,16 @@ import type { TypedDirectiveNode } from './base';
 import type { DirectiveNode, SourceLocation } from './primitives';
 
 export interface CheckpointDirectiveValues {
-  name: string;
+  name: unknown;
 }
 
 export interface CheckpointDirectiveRaw {
-  name: string;
+  name: unknown;
 }
 
 export interface CheckpointDirectiveMeta {
   location?: SourceLocation | null;
+  checkpointContext?: 'top-level-when-direct' | 'when-action-block' | 'when-expression-action';
 }
 
 export type CheckpointDirectiveNode = TypedDirectiveNode<'checkpoint', 'checkpoint'> & {

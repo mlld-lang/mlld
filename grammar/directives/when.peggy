@@ -643,8 +643,26 @@ WhenConditionPair
 // Action (single directive or block of directives)
 WhenAction
   = WhenActionBlock
+  / WhenCheckpointAction
   / WhenImplicitAction   // NEW: Implicit actions without directive prefix
   / WhenActionDirective
+
+WhenCheckpointAction
+  = CheckpointKeyword __ name:CheckpointNameValue {
+      const values = { name };
+      const raw = { name };
+      const meta = { checkpointContext: 'top-level-when-direct' };
+
+      return [helpers.createStructuredDirective(
+        DirectiveKind.checkpoint,
+        'checkpoint',
+        values,
+        raw,
+        meta,
+        location(),
+        'directive'
+      )];
+    }
 
 // Block of directives as action: [directive1, directive2, ...]
 WhenActionBlock
@@ -766,11 +784,29 @@ WhenActionBlockStatement "when action block statement"
   = WhenVarInActionBlockError
   / LetAssignment
   / AugmentedAssignment
+  / WhenCheckpointActionInBlock
   / WhenExpressionAny
   / SlashIf
   / SlashBail
   / ForNestedDirective
   / WhenBlockAction
+
+WhenCheckpointActionInBlock
+  = CheckpointKeyword __ name:CheckpointNameValue {
+      const values = { name };
+      const raw = { name };
+      const meta = { checkpointContext: 'when-action-block' };
+
+      return [helpers.createStructuredDirective(
+        DirectiveKind.checkpoint,
+        'checkpoint',
+        values,
+        raw,
+        meta,
+        location(),
+        'directive'
+      )];
+    }
 
 WhenVarInActionBlockError
   = "var" _ {

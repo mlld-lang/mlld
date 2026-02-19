@@ -137,6 +137,60 @@ function buildNamedCheckpointScript(counterKey: string): string {
 `.trim();
 }
 
+function buildNamedCheckpointWithSpacesScript(counterKey: string): string {
+  return `
+/exe llm @llm(prompt, model) = js {
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  const rawPrompt = prompt && typeof prompt === "object" && "value" in prompt ? prompt.value : prompt;
+  const rawModel = model && typeof model === "object" && "value" in model ? model.value : model;
+  return "call:" + globalThis.${counterKey} + ":" + rawPrompt + ":" + rawModel;
+}
+/var @first = @llm("alpha", "sonnet")
+/checkpoint "after first"
+/var @second = @llm("beta", "sonnet")
+/show @first
+/show @second
+`.trim();
+}
+
+function buildCheckpointPrefixScript(counterKey: string): string {
+  return `
+/exe llm @llm(prompt, model) = js {
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  const rawPrompt = prompt && typeof prompt === "object" && "value" in prompt ? prompt.value : prompt;
+  const rawModel = model && typeof model === "object" && "value" in model ? model.value : model;
+  return "call:" + globalThis.${counterKey} + ":" + rawPrompt + ":" + rawModel;
+}
+/var @first = @llm("alpha", "sonnet")
+/checkpoint "data-collection-complete"
+/var @second = @llm("beta", "sonnet")
+/checkpoint "data-processing-complete"
+/var @third = @llm("gamma", "sonnet")
+/show @first
+/show @second
+/show @third
+`.trim();
+}
+
+function buildCheckpointExactPriorityScript(counterKey: string): string {
+  return `
+/exe llm @llm(prompt, model) = js {
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  const rawPrompt = prompt && typeof prompt === "object" && "value" in prompt ? prompt.value : prompt;
+  const rawModel = model && typeof model === "object" && "value" in model ? model.value : model;
+  return "call:" + globalThis.${counterKey} + ":" + rawPrompt + ":" + rawModel;
+}
+/var @first = @llm("alpha", "sonnet")
+/checkpoint "data"
+/var @second = @llm("beta", "sonnet")
+/checkpoint "data-processing-complete"
+/var @third = @llm("gamma", "sonnet")
+/show @first
+/show @second
+/show @third
+`.trim();
+}
+
 afterEach(async () => {
   for (const key of cleanupGlobals.splice(0)) {
     delete (globalThis as Record<string, unknown>)[key];
@@ -262,6 +316,30 @@ describe('checkpoint resume + fork runtime semantics', () => {
     expect(resumed).toContain('call:3:beta:sonnet');
   });
 
+  it('supports named checkpoints with spaces in --resume targets', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-named-space-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointResumeNamedSpaceCounter';
+    registerCounter(counterKey);
+
+    const source = buildNamedCheckpointWithSpacesScript(counterKey);
+    await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'resume-named-space'
+    });
+    const resumed = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'resume-named-space',
+      resume: 'after first'
+    });
+
+    expect(readCounter(counterKey)).toBe(3);
+    expect(resumed).toContain('call:1:alpha:sonnet');
+    expect(resumed).toContain('call:3:beta:sonnet');
+  });
+
   it('invalidates from fuzzy cursor for --resume @fn("prefix") in parallel loops', async () => {
     const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-fuzzy-'));
     cleanupDirs.push(checkpointRoot);
@@ -309,6 +387,79 @@ describe('checkpoint resume + fork runtime semantics', () => {
     expect(readCounter(counterKey)).toBe(3);
     expect(resumed).toContain('call:1:alpha:sonnet');
     expect(resumed).toContain('call:3:beta:sonnet');
+  });
+
+  it('matches named checkpoints by prefix for --resume "prefix"', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-prefix-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointResumePrefixCounter';
+    registerCounter(counterKey);
+
+    const source = buildCheckpointPrefixScript(counterKey);
+    await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'resume-prefix'
+    });
+    const resumed = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'resume-prefix',
+      resume: 'data-col'
+    });
+
+    expect(readCounter(counterKey)).toBe(5);
+    expect(resumed).toContain('call:1:alpha:sonnet');
+    expect(resumed).toContain('call:4:beta:sonnet');
+    expect(resumed).toContain('call:5:gamma:sonnet');
+  });
+
+  it('prefers exact named checkpoint matches over prefix matches', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-exact-priority-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointResumeExactPriorityCounter';
+    registerCounter(counterKey);
+
+    const source = buildCheckpointExactPriorityScript(counterKey);
+    await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'resume-exact-priority'
+    });
+    const resumed = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'resume-exact-priority',
+      resume: 'data'
+    });
+
+    expect(readCounter(counterKey)).toBe(5);
+    expect(resumed).toContain('call:1:alpha:sonnet');
+    expect(resumed).toContain('call:4:beta:sonnet');
+    expect(resumed).toContain('call:5:gamma:sonnet');
+  });
+
+  it('errors on ambiguous named checkpoint prefixes', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-ambiguous-prefix-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointResumeAmbiguousPrefixCounter';
+    registerCounter(counterKey);
+
+    const source = buildCheckpointPrefixScript(counterKey);
+    await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'resume-ambiguous-prefix'
+    });
+
+    await expect(
+      runScript({
+        source,
+        checkpointRoot,
+        scriptName: 'resume-ambiguous-prefix',
+        resume: 'data'
+      })
+    ).rejects.toThrow('Ambiguous checkpoint match "data"');
   });
 
   it('uses fork cache as read-only seed and writes misses to local target cache', async () => {

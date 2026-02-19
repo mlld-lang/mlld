@@ -556,15 +556,34 @@ export class CheckpointManager {
       return 0;
     }
     const executionOrder = this.namedCheckpointOrders.get(normalizedName);
-    if (executionOrder === undefined) {
-      const available = this.listNamedCheckpoints();
+    if (executionOrder !== undefined) {
+      return this.invalidateFromExecutionOrder(executionOrder);
+    }
+
+    const prefixMatches = this.listNamedCheckpoints().filter(candidate =>
+      candidate.startsWith(normalizedName)
+    );
+    if (prefixMatches.length === 1) {
+      const match = prefixMatches[0];
+      const matchedExecutionOrder = this.namedCheckpointOrders.get(match);
+      if (matchedExecutionOrder !== undefined) {
+        return this.invalidateFromExecutionOrder(matchedExecutionOrder);
+      }
+    }
+
+    if (prefixMatches.length > 1) {
+      const candidates = prefixMatches.map(candidate => `  "${candidate}"`).join('\n');
       throw new Error(
-        available.length > 0
-          ? `Unknown checkpoint "${normalizedName}". Available checkpoints: ${available.join(', ')}`
-          : `Unknown checkpoint "${normalizedName}". No named checkpoints are registered yet.`
+        `Ambiguous checkpoint match "${normalizedName}" — matches:\n${candidates}`
       );
     }
-    return this.invalidateFromExecutionOrder(executionOrder);
+
+    const available = this.listNamedCheckpoints();
+    throw new Error(
+      available.length > 0
+        ? `Unknown checkpoint "${normalizedName}". Available checkpoints: ${available.join(', ')}`
+        : `Unknown checkpoint "${normalizedName}". No named checkpoints are registered yet.`
+    );
   }
 
   async invalidateFromExecutionOrder(executionOrder: number): Promise<number> {
