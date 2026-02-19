@@ -8,7 +8,7 @@ export const pattern = {
 
     // Check if the line contains | followed by a bare identifier (not @)
     const line = mx?.line || '';
-    const match = line.match(/\|\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*$/);
+    const match = line.match(/\|\s*([a-zA-Z_][a-zA-Z0-9_]*(?:-[a-zA-Z0-9_]+)*)\s*$/);
     if (!match) return false;
 
     // Make sure it's not already prefixed with @
@@ -19,7 +19,7 @@ export const pattern = {
 
   enhance(error, mx) {
     const line = mx?.line || '';
-    const match = line.match(/\|\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*$/);
+    const match = line.match(/\|\s*([a-zA-Z_][a-zA-Z0-9_]*(?:-[a-zA-Z0-9_]+)*)\s*$/);
     const filterName = match ? match[1] : 'filter';
 
     return {

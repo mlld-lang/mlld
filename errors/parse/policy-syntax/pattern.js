@@ -24,7 +24,7 @@ export const pattern = {
 
   enhance(error, mx) {
     const line = mx.line || '';
-    const policyMatch = line.match(/policy\s+@([a-zA-Z_][a-zA-Z0-9_]*)/);
+    const policyMatch = line.match(/policy\s+@([a-zA-Z_][a-zA-Z0-9_]*(?:-[a-zA-Z0-9_]+)*)/);
     const policyName = policyMatch ? policyMatch[1] : 'myPolicy';
 
     // Detect what they might have been trying to do

@@ -436,8 +436,8 @@ export class ArgumentParser {
     if (!arg.startsWith('-')) return null;
     const rawKey = arg.startsWith('--') ? arg.slice(2) : arg.slice(1);
     if (!rawKey) return null;
-    // Convert kebab-case to camelCase (e.g., dry-run -> dryRun)
-    const key = rawKey.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+    // Keep raw hyphenated key as primary (e.g., --dry-run -> dry-run)
+    const key = rawKey;
     if (nextArg !== undefined && !nextArg.startsWith('-')) {
       return { key, value: nextArg, consumed: true };
     }
@@ -450,8 +450,19 @@ export class ArgumentParser {
     // Always inject @payload (even when empty) so scripts can safely reference @payload
     // This matches `mlld run` behavior where @payload={} is always available
 
+    // Add camelCase aliases for hyphenated keys (deprecated, for backward compat)
+    const withAliases: Record<string, unknown> = { ...payloadFlags };
+    for (const [key, value] of Object.entries(payloadFlags)) {
+      if (key.includes('-')) {
+        const camelKey = key.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+        if (!(camelKey in withAliases)) {
+          withAliases[camelKey] = value;
+        }
+      }
+    }
+
     if (!options.inject) options.inject = [];
-    options.inject.push(`@payload=${JSON.stringify(payloadFlags)}`);
+    options.inject.push(`@payload=${JSON.stringify(withAliases)}`);
   }
 
 }

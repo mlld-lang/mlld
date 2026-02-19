@@ -69,7 +69,7 @@ function replaceVariables(
 ): string {
   // Match @evt.path or @evt[index].path patterns
   // Uses negative lookbehind to skip escaped @@ and \@
-  const variablePattern = /(?<![@\\])@evt\.([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*|\[\d+\])*)/g;
+  const variablePattern = /(?<![@\\])@evt\.([a-zA-Z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*(?:\.[a-zA-Z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*|\[\d+\])*)/g;
 
   return template.replace(variablePattern, (_match, path: string) => {
     const value = extractPath(eventData, path, { returnUndefined: true });
@@ -183,14 +183,14 @@ export function applyTemplates(
  * Check if a string contains template variables.
  */
 export function hasTemplateVariables(template: string): boolean {
-  return /(?<![@\\])@evt\.[a-zA-Z_]/.test(template);
+  return /(?<![@\\])@evt\.[a-zA-Z_-]/.test(template);
 }
 
 /**
  * Extract variable paths from a template.
  */
 export function extractVariablePaths(template: string): string[] {
-  const variablePattern = /(?<![@\\])@evt\.([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*|\[\d+\])*)/g;
+  const variablePattern = /(?<![@\\])@evt\.([a-zA-Z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*(?:\.[a-zA-Z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*|\[\d+\])*)/g;
   const paths: string[] = [];
   let match;
 

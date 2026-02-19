@@ -14,9 +14,11 @@ building blocks for all higher-level grammar components.
 // -------------------------------------------------------------
 
 // Base identifier pattern - variable/directive names, keywords
+// Hyphens allowed between segments: foo-bar, max-retry-count
+// No trailing/double/leading hyphens: foo-, foo--bar, -foo are invalid
 BaseIdentifier "Identifier"
-  = first:[a-zA-Z_] rest:[a-zA-Z0-9_]* {
-      return first + rest.join('');
+  = first:[a-zA-Z_] rest:([a-zA-Z0-9_] / "-" [a-zA-Z0-9_])* {
+      return first + rest.map(r => Array.isArray(r) ? r.join('') : r).join('');
     }
 
 // Special path characters (.~) that act like identifiers in path contexts

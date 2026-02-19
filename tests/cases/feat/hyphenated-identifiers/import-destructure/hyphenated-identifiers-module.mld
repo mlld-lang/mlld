@@ -1,0 +1,5 @@
+var @skip-live = true
+var @max-retries = 3
+var @output-format = "json"
+
+export { @skip-live, @max-retries, @output-format }

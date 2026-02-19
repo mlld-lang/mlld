@@ -391,6 +391,13 @@ Creating Scripts:
       for (const [key, value] of Object.entries(flags)) {
         if (!knownFlags.has(key) && value !== undefined) {
           payloadObj[key] = value;
+          // Add camelCase alias for hyphenated keys (deprecated, for backward compat)
+          if (key.includes('-')) {
+            const camelKey = key.replace(/-([a-z])/g, (_, char: string) => char.toUpperCase());
+            if (!(camelKey in payloadObj)) {
+              payloadObj[camelKey] = value;
+            }
+          }
         }
       }
       const isDebug = Boolean(flags.debug || flags.d);

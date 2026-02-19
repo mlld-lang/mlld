@@ -80,7 +80,8 @@ export type AntiPatternWarningCode =
   | 'when-exe-implicit-return'
   | 'deprecated-json-transform'
   | 'exe-parameter-shadowing'
-  | 'template-strict-for-syntax';
+  | 'template-strict-for-syntax'
+  | 'hyphenated-identifier-in-template';
 
 export interface AntiPatternWarning {
   code: AntiPatternWarningCode;
@@ -219,7 +220,8 @@ const SUPPRESSIBLE_WARNING_CODES = new Set<AntiPatternWarningCode>([
   'mutable-state',
   'when-exe-implicit-return',
   'deprecated-json-transform',
-  'exe-parameter-shadowing'
+  'exe-parameter-shadowing',
+  'hyphenated-identifier-in-template'
 ]);
 const GENERIC_EXE_PARAMETER_SUGGESTIONS = new Map<string, string>([
   ['result', 'status'],
@@ -1250,6 +1252,53 @@ function detectTemplateStrictForSyntax(ast: MlldNode[]): AntiPatternWarning[] {
 }
 
 /**
+ * Detect hyphenated identifiers in template contexts.
+ * Since hyphens are now valid in identifiers, @item-file resolves as a single
+ * variable "item-file" instead of @item followed by literal "-file".
+ * Warn users who may have code relying on the old behavior.
+ */
+function detectHyphenatedIdentifiersInTemplates(ast: MlldNode[]): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+  const definedVars = new Set<string>();
+
+  // First pass: collect all defined variable names
+  walkAST(ast, (node: any) => {
+    if (node.type === 'Directive' && node.kind === 'var') {
+      const identNode = node.values?.identifier?.[0];
+      if (identNode?.identifier) {
+        definedVars.add(identNode.identifier);
+      }
+    }
+    if (node.type === 'Directive' && node.kind === 'exe') {
+      const identNode = node.values?.identifier?.[0];
+      if (identNode?.identifier) {
+        definedVars.add(identNode.identifier);
+      }
+    }
+  });
+
+  // Second pass: find hyphenated identifiers that might be accidental
+  walkAST(ast, (node: any) => {
+    if (node.type === 'VariableReference' && node.identifier && node.identifier.includes('-')) {
+      const id = node.identifier;
+      // Check if the non-hyphenated prefix is a defined variable
+      const prefix = id.split('-')[0];
+      if (definedVars.has(prefix) && !definedVars.has(id)) {
+        warnings.push({
+          code: 'hyphenated-identifier-in-template',
+          message: `@${id} is now parsed as a single identifier. Previously, @${prefix} was the variable and "-${id.slice(prefix.length + 1)}" was literal text.`,
+          line: node.location?.start?.line,
+          column: node.location?.start?.column,
+          suggestion: `If you want @${prefix} followed by literal text, use @${prefix}\\-${id.slice(prefix.length + 1)} (backslash boundary).`,
+        });
+      }
+    }
+  });
+
+  return warnings;
+}
+
+/**
  * Collect all variable and function references from a template AST
  */
 function collectTemplateVariables(ast: MlldNode[]): TemplateVariableInfo[] {
@@ -1599,6 +1648,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
           ...detectWhenExeImplicitReturnAntiPatterns(ast),
           ...detectDeprecatedJsonTransformAntiPatterns(ast),
           ...detectExeParameterShadowingWarnings(ast),
+          ...detectHyphenatedIdentifiersInTemplates(ast),
         ].filter(warning => !suppressedWarningCodes.has(warning.code));
         if (antiPatterns.length > 0) {
           result.antiPatterns = antiPatterns;
