@@ -247,6 +247,7 @@ export type DirectiveKind =
   | 'var'
   | 'show'
   | 'exe'
+  | 'checkpoint'
   | 'env'
   | 'path'
   | 'output'
@@ -278,6 +279,8 @@ export type DirectiveSubtype =
   // Unified exe subtypes
   | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeValue' | 'exeTemplate' | 'exeTemplateFile'
   | 'exeSection' | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeLoop' | 'exeResolver' | 'exeBlock'
+  // Checkpoint subtype
+  | 'checkpoint'
   // Path subtypes
   | 'pathAssignment'
   // Run subtypes

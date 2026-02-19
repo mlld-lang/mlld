@@ -1539,6 +1539,86 @@ async function discoverTemplateParams(templatePath: string, knownTemplateParams?
   return params;
 }
 
+function detectCheckpointDirectiveErrors(ast: MlldNode[]): AnalysisError[] {
+  const errors: AnalysisError[] = [];
+  const firstSeen = new Map<string, { line?: number; column?: number }>();
+
+  const visit = (node: unknown, insideExeBody: boolean): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        visit(child, insideExeBody);
+      }
+      return;
+    }
+
+    const value = node as Record<string, unknown>;
+    const isDirective = value.type === 'Directive';
+    const isCheckpoint = isDirective && value.kind === 'checkpoint';
+    const isExeDirective = isDirective && value.kind === 'exe';
+
+    if (isCheckpoint) {
+      const location =
+        value.location && typeof value.location === 'object'
+          ? (value.location as Record<string, unknown>)
+          : undefined;
+      const start =
+        location?.start && typeof location.start === 'object'
+          ? (location.start as Record<string, unknown>)
+          : undefined;
+      const line = typeof start?.line === 'number' ? start.line : undefined;
+      const column = typeof start?.column === 'number' ? start.column : undefined;
+      const values =
+        value.values && typeof value.values === 'object'
+          ? (value.values as Record<string, unknown>)
+          : undefined;
+      const checkpointName = typeof values?.name === 'string' ? values.name.trim() : '';
+
+      if (!checkpointName) {
+        errors.push({
+          message: 'checkpoint directive requires a non-empty name',
+          line,
+          column
+        });
+      } else {
+        if (insideExeBody) {
+          errors.push({
+            message: `checkpoint "${checkpointName}" is only allowed at top level (not inside /exe bodies)`,
+            line,
+            column
+          });
+        }
+
+        const existing = firstSeen.get(checkpointName);
+        if (existing) {
+          const suffix =
+            existing.line !== undefined
+              ? ` (first declared at line ${existing.line}${existing.column !== undefined ? `:${existing.column}` : ''})`
+              : '';
+          errors.push({
+            message: `duplicate checkpoint "${checkpointName}"${suffix}`,
+            line,
+            column
+          });
+        } else {
+          firstSeen.set(checkpointName, { line, column });
+        }
+      }
+    }
+
+    for (const [key, child] of Object.entries(value)) {
+      const childInsideExeBody = isExeDirective && key === 'values' ? true : insideExeBody;
+      visit(child, childInsideExeBody);
+    }
+  };
+
+  visit(ast, false);
+  return errors;
+}
+
 /**
  * Analyze an mlld module without executing it
  */
@@ -1621,12 +1701,18 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       const imports = extractImports(ast);
       const guards = extractGuards(ast);
       const needs = extractNeeds(content, ast);
+      const checkpointErrors = detectCheckpointDirectiveErrors(ast);
 
       if (executables.length > 0) result.executables = executables;
       if (exports.length > 0) result.exports = exports;
       if (imports.length > 0) result.imports = imports;
       if (guards.length > 0) result.guards = guards;
       if (needs) result.needs = needs;
+      if (checkpointErrors.length > 0) {
+        result.valid = false;
+        result.errors = checkpointErrors;
+        return result;
+      }
 
       // Check for undefined variables (enabled by default)
       if (options.checkVariables !== false) {

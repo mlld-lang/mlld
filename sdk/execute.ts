@@ -39,6 +39,7 @@ export interface ExecuteOptions {
   allowAbsolutePaths?: boolean;
   mode?: MlldMode;
   checkpoint?: boolean;
+  noCheckpoint?: boolean;
   fresh?: boolean;
   resume?: string | true;
   fork?: string;
@@ -77,6 +78,7 @@ export async function execute(
     dynamicModuleSource: options.dynamicModuleSource,
     ast: cacheEntry.ast,
     checkpoint: options.checkpoint,
+    noCheckpoint: options.noCheckpoint,
     fresh: options.fresh,
     resume: options.resume,
     fork: options.fork,

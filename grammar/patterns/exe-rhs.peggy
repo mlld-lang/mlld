@@ -688,6 +688,7 @@ ExeBlockStatement
   / ForNestedDirective
   / SlashIf
   / SlashBail
+  / SlashCheckpoint
   / ExeBlockAction
 
 ExeBlockAction

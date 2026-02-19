@@ -47,6 +47,7 @@ export class OptionProcessor {
       allowAbsolutePaths: cliOptions.allowAbsolute,
       // Checkpoint/resume options
       checkpoint: cliOptions.checkpoint,
+      noCheckpoint: cliOptions.noCheckpoint,
       fresh: cliOptions.fresh,
       resume: cliOptions.resume,
       fork: cliOptions.fork,

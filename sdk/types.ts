@@ -71,6 +71,7 @@ export interface InterpretOptions {
   ast?: any;
   streamingManager?: any;
   checkpoint?: boolean;
+  noCheckpoint?: boolean;
   fresh?: boolean;
   resume?: string | true;
   fork?: string;

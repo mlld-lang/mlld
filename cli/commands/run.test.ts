@@ -412,5 +412,45 @@ describe('RunCommand', () => {
       consoleErrorSpy.mockRestore();
       exitSpy.mockRestore();
     });
+
+    it('maps --new to fresh and forwards --no-checkpoint', async () => {
+      const { execute } = await import('@sdk/execute');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('pipeline.mld'));
+
+      const command = createRunCommand();
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`exit:${code}`);
+      });
+
+      try {
+        await command.execute(['pipeline'], {
+          checkpoint: true,
+          new: true,
+          'no-checkpoint': true
+        });
+      } catch (error: any) {
+        if (!error.message.includes('exit:1')) throw error;
+      }
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('--no-checkpoint cannot be combined')
+      );
+      expect(execute).not.toHaveBeenCalled();
+      expect(exitSpy).toHaveBeenCalledWith(1);
+
+      consoleLogSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
   });
 });

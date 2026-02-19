@@ -50,6 +50,7 @@ import type { WithClause } from '@core/types';
 import { evaluateSign, evaluateVerify } from './sign-verify';
 import { evaluateBail } from './bail';
 import { VariableImporter } from './import/VariableImporter';
+import { evaluateCheckpoint } from './checkpoint';
 
 /**
  * Extract trace information from a directive
@@ -131,6 +132,11 @@ function extractTraceInfo(directive: DirectiveNode): {
       const policyName = getTextContent(policyNameNode);
       if (policyName) {
         info.varName = policyName;
+      }
+      break;
+    case 'checkpoint':
+      if (typeof directive.values?.name === 'string') {
+        info.varName = directive.values.name;
       }
       break;
   }
@@ -824,6 +830,9 @@ async function dispatchDirective(
 
     case 'bail':
       return await evaluateBail(directive, env);
+
+    case 'checkpoint':
+      return await evaluateCheckpoint(directive, env);
 
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);

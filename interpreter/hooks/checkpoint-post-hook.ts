@@ -86,12 +86,20 @@ function readCheckpointInvocationOrdinal(metadata: Record<string, unknown>): num
   return undefined;
 }
 
+function readCheckpointExecutionOrder(metadata: Record<string, unknown>): number | undefined {
+  const value = metadata.checkpointExecutionOrder;
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+  return undefined;
+}
+
 export const checkpointPostHook: PostHook = async (_node, result, inputs, env, operation) => {
   if (!isCheckpointEligibleOperation(operation)) {
     return result;
   }
 
-  const manager = env.getCheckpointManager();
+  const manager = await env.ensureCheckpointManager();
   if (!manager) {
     return result;
   }
@@ -111,6 +119,7 @@ export const checkpointPostHook: PostHook = async (_node, result, inputs, env, o
   const invocationSite = readCheckpointInvocationSite(metadata);
   const invocationIndex = readCheckpointInvocationIndex(metadata);
   const invocationOrdinal = readCheckpointInvocationOrdinal(metadata);
+  const executionOrder = readCheckpointExecutionOrder(metadata);
   await manager.put(checkpointKey, {
     fn: resolveOperationName(operation),
     args: normalizedInputs,
@@ -119,7 +128,8 @@ export const checkpointPostHook: PostHook = async (_node, result, inputs, env, o
     result: normalizeCheckpointResult(result.value),
     ...(invocationSite ? { invocationSite } : {}),
     ...(invocationIndex !== undefined ? { invocationIndex } : {}),
-    ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {})
+    ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {}),
+    ...(executionOrder !== undefined ? { executionOrder } : {})
   });
 
   return result;

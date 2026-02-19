@@ -71,7 +71,7 @@ describe('ArgumentParser custom payload flags', () => {
     const options = parser.parseArgs([
       'script.mld',
       '--checkpoint',
-      '--fresh',
+      '--new',
       '--resume',
       '@processFiles',
       '--fork',
@@ -84,6 +84,14 @@ describe('ArgumentParser custom payload flags', () => {
     expect(options.fresh).toBe(true);
     expect(options.resume).toBe('@processFiles');
     expect(options.fork).toBe('collect');
+    expect(options.inject).toEqual(['@payload={"topic":"security"}']);
+  });
+
+  it('parses --no-checkpoint and excludes it from @payload', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--no-checkpoint', '--topic', 'security']);
+
+    expect(options.noCheckpoint).toBe(true);
     expect(options.inject).toEqual(['@payload={"topic":"security"}']);
   });
 

@@ -31,6 +31,7 @@ export const DirectiveKind = {
     show: 'show', // NEW: Replaces add
     stream: 'stream',
     exe: 'exe', // NEW: Replaces exec
+    checkpoint: 'checkpoint',
     env: 'env',
     for: 'for', // For loops
     path: 'path',

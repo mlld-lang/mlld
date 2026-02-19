@@ -14,6 +14,8 @@ interface RunScriptOptions {
   source: string;
   checkpointRoot: string;
   scriptName: string;
+  checkpoint?: boolean;
+  noCheckpoint?: boolean;
   resume?: string | true;
   fork?: string;
 }
@@ -33,7 +35,8 @@ async function runScript(options: RunScriptOptions): Promise<string> {
     fileSystem: new MemoryFileSystem(),
     pathService: new PathService(),
     filePath: path.join(options.checkpointRoot, `${options.scriptName}.mld`),
-    checkpoint: true,
+    ...(options.checkpoint === undefined ? {} : { checkpoint: options.checkpoint }),
+    ...(options.noCheckpoint === undefined ? {} : { noCheckpoint: options.noCheckpoint }),
     checkpointScriptName: options.scriptName,
     checkpointCacheRootDir: options.checkpointRoot,
     ...(options.resume === undefined ? {} : { resume: options.resume }),
@@ -118,6 +121,22 @@ function buildForkTargetScript(counterKey: string): string {
 `.trim();
 }
 
+function buildNamedCheckpointScript(counterKey: string): string {
+  return `
+/exe llm @llm(prompt, model) = js {
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  const rawPrompt = prompt && typeof prompt === "object" && "value" in prompt ? prompt.value : prompt;
+  const rawModel = model && typeof model === "object" && "value" in model ? model.value : model;
+  return "call:" + globalThis.${counterKey} + ":" + rawPrompt + ":" + rawModel;
+}
+/var @first = @llm("alpha", "sonnet")
+/checkpoint "after-first"
+/var @second = @llm("beta", "sonnet")
+/show @first
+/show @second
+`.trim();
+}
+
 afterEach(async () => {
   for (const key of cleanupGlobals.splice(0)) {
     delete (globalThis as Record<string, unknown>)[key];
@@ -126,6 +145,52 @@ afterEach(async () => {
 });
 
 describe('checkpoint resume + fork runtime semantics', () => {
+  it('auto-enables checkpointing for llm-labeled calls when --checkpoint is omitted', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-auto-enable-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointAutoEnableCounter';
+    registerCounter(counterKey);
+
+    const source = buildSingleCallScript(counterKey);
+    const first = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'auto-enable'
+    });
+    const second = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'auto-enable'
+    });
+
+    expect(first).toBe(second);
+    expect(readCounter(counterKey)).toBe(1);
+  });
+
+  it('disables checkpointing when --no-checkpoint is enabled', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-no-checkpoint-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointNoCheckpointCounter';
+    registerCounter(counterKey);
+
+    const source = buildSingleCallScript(counterKey);
+    const first = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'no-checkpoint',
+      noCheckpoint: true
+    });
+    const second = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'no-checkpoint',
+      noCheckpoint: true
+    });
+
+    expect(first).not.toBe(second);
+    expect(readCounter(counterKey)).toBe(2);
+  });
+
   it('keeps checkpoint hits when --resume is used without a target', async () => {
     const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-auto-'));
     cleanupDirs.push(checkpointRoot);
@@ -220,6 +285,30 @@ describe('checkpoint resume + fork runtime semantics', () => {
     expect(resumed).toContain('parallel:aa:sonnet:1');
     expect(resumed).not.toContain('parallel:bb:sonnet:2');
     expect(resumed).not.toContain('parallel:cc:sonnet:3');
+  });
+
+  it('invalidates cached calls after a named checkpoint with --resume "name"', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-named-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointResumeNamedCounter';
+    registerCounter(counterKey);
+
+    const source = buildNamedCheckpointScript(counterKey);
+    await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'resume-named'
+    });
+    const resumed = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'resume-named',
+      resume: 'after-first'
+    });
+
+    expect(readCounter(counterKey)).toBe(3);
+    expect(resumed).toContain('call:1:alpha:sonnet');
+    expect(resumed).toContain('call:3:beta:sonnet');
   });
 
   it('uses fork cache as read-only seed and writes misses to local target cache', async () => {

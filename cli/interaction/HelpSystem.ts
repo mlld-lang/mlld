@@ -666,7 +666,7 @@ Payload Injection:
   Unknown flags become @payload fields (always available, even when empty):
   mlld script.mld --topic foo         # @payload = {"topic":"foo"}
   mlld script.mld                     # @payload = {}
-  Reserved checkpoint flags (--checkpoint, --fresh, --resume, --fork) are not added to @payload.
+  Reserved checkpoint flags (--checkpoint, --new, --fresh, --no-checkpoint, --resume, --fork) are not added to @payload.
 
 Examples:
   mlld script.mld                     # Run a local file

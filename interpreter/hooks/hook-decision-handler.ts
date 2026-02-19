@@ -32,6 +32,7 @@ const CHECKPOINT_CACHED_RESULT_KEY = 'cachedResult';
 const CHECKPOINT_INVOCATION_SITE_KEY = 'checkpointInvocationSite';
 const CHECKPOINT_INVOCATION_INDEX_KEY = 'checkpointInvocationIndex';
 const CHECKPOINT_INVOCATION_ORDINAL_KEY = 'checkpointInvocationOrdinal';
+const CHECKPOINT_EXECUTION_ORDER_KEY = 'checkpointExecutionOrder';
 
 export interface CheckpointDecisionState {
   hit: boolean;
@@ -41,6 +42,7 @@ export interface CheckpointDecisionState {
   invocationSite?: string;
   invocationIndex?: number;
   invocationOrdinal?: number;
+  executionOrder?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,6 +105,12 @@ export function getCheckpointDecisionState(decision?: HookDecision): CheckpointD
     (metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] as number) >= 0
       ? (metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] as number)
       : undefined;
+  const executionOrder =
+    typeof metadata[CHECKPOINT_EXECUTION_ORDER_KEY] === 'number' &&
+    Number.isInteger(metadata[CHECKPOINT_EXECUTION_ORDER_KEY] as number) &&
+    (metadata[CHECKPOINT_EXECUTION_ORDER_KEY] as number) >= 0
+      ? (metadata[CHECKPOINT_EXECUTION_ORDER_KEY] as number)
+      : undefined;
   if (!hit && !key && !hasCachedResult) {
     return null;
   }
@@ -114,7 +122,8 @@ export function getCheckpointDecisionState(decision?: HookDecision): CheckpointD
     ...(hasCachedResult ? { cachedResult: metadata[CHECKPOINT_CACHED_RESULT_KEY] } : {}),
     ...(invocationSite ? { invocationSite } : {}),
     ...(invocationIndex !== undefined ? { invocationIndex } : {}),
-    ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {})
+    ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {}),
+    ...(executionOrder !== undefined ? { executionOrder } : {})
   };
 }
 
@@ -154,12 +163,18 @@ export function applyCheckpointDecisionToOperation(
   } else {
     delete metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY];
   }
+  if (checkpointState.executionOrder !== undefined) {
+    metadata[CHECKPOINT_EXECUTION_ORDER_KEY] = checkpointState.executionOrder;
+  } else {
+    delete metadata[CHECKPOINT_EXECUTION_ORDER_KEY];
+  }
   metadata.checkpoint = {
     hit: checkpointState.hit,
     key: checkpointState.key ?? null,
     invocationSite: checkpointState.invocationSite ?? null,
     invocationIndex: checkpointState.invocationIndex ?? null,
-    invocationOrdinal: checkpointState.invocationOrdinal ?? null
+    invocationOrdinal: checkpointState.invocationOrdinal ?? null,
+    executionOrder: checkpointState.executionOrder ?? null
   };
 }
 

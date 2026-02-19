@@ -319,6 +319,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Export manifest populated by /export directives within this environment
   private exportManifest?: ExportManifest;
   private checkpointManager?: CheckpointManager;
+  private checkpointManagerFactory?: () => Promise<CheckpointManager | undefined>;
+  private checkpointManagerInitPromise?: Promise<CheckpointManager | undefined>;
 
   // Tracks imported bindings to surface collisions across directives.
   private importBindings: Map<string, ImportBindingInfo> = new Map();
@@ -371,6 +373,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.hookRegistry = parent.hookRegistry.createChild();
       this.guardRegistry = parent.guardRegistry.createChild();
       this.checkpointManager = parent.checkpointManager;
+      this.checkpointManagerFactory = parent.checkpointManagerFactory;
+      this.checkpointManagerInitPromise = parent.checkpointManagerInitPromise;
     } else {
       this.contextManager = new ContextManager();
       this.hookManager = new HookManager();
@@ -1419,7 +1423,46 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   setCheckpointManager(manager: CheckpointManager | undefined): void {
     const root = this.getRootEnvironment();
     root.checkpointManager = manager;
+    root.checkpointManagerFactory = undefined;
+    root.checkpointManagerInitPromise = undefined;
     this.checkpointManager = manager;
+  }
+
+  setCheckpointManagerFactory(
+    factory: (() => Promise<CheckpointManager | undefined>) | undefined
+  ): void {
+    const root = this.getRootEnvironment();
+    root.checkpointManagerFactory = factory;
+    root.checkpointManagerInitPromise = undefined;
+    root.checkpointManager = undefined;
+    this.checkpointManager = undefined;
+  }
+
+  async ensureCheckpointManager(): Promise<CheckpointManager | undefined> {
+    const root = this.getRootEnvironment();
+    if (root.checkpointManager) {
+      return root.checkpointManager;
+    }
+
+    if (!root.checkpointManagerFactory) {
+      return undefined;
+    }
+
+    if (!root.checkpointManagerInitPromise) {
+      root.checkpointManagerInitPromise = root
+        .checkpointManagerFactory()
+        .then(manager => {
+          root.checkpointManager = manager;
+          return manager;
+        })
+        .finally(() => {
+          root.checkpointManagerInitPromise = undefined;
+        });
+    }
+
+    const manager = await root.checkpointManagerInitPromise;
+    this.checkpointManager = manager;
+    return manager;
   }
 
   getCheckpointManager(): CheckpointManager | undefined {

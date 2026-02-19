@@ -189,7 +189,11 @@ export class ArgumentParser {
         case '--checkpoint':
           options.checkpoint = true;
           break;
+        case '--no-checkpoint':
+          options.noCheckpoint = true;
+          break;
         case '--fresh':
+        case '--new':
           options.fresh = true;
           break;
         case '--resume': {

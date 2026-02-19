@@ -100,7 +100,7 @@ export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) 
     return { action: 'continue' };
   }
 
-  const manager = env.getCheckpointManager();
+  const manager = await env.ensureCheckpointManager();
   if (!manager) {
     return { action: 'continue' };
   }
@@ -125,7 +125,8 @@ export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) 
         ...(invocationMetadata.invocationIndex !== undefined
           ? { checkpointInvocationIndex: invocationMetadata.invocationIndex }
           : {}),
-        checkpointInvocationOrdinal: invocationMetadata.invocationOrdinal
+        checkpointInvocationOrdinal: invocationMetadata.invocationOrdinal,
+        checkpointExecutionOrder: invocationMetadata.executionOrder
       }
     };
   }
@@ -139,7 +140,8 @@ export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) 
       ...(invocationMetadata.invocationIndex !== undefined
         ? { checkpointInvocationIndex: invocationMetadata.invocationIndex }
         : {}),
-      checkpointInvocationOrdinal: invocationMetadata.invocationOrdinal
+      checkpointInvocationOrdinal: invocationMetadata.invocationOrdinal,
+      checkpointExecutionOrder: invocationMetadata.executionOrder
     }
   };
 };

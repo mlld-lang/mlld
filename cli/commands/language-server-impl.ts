@@ -1041,6 +1041,7 @@ export async function startLanguageServer(): Promise<void> {
       { name: 'path', desc: 'Define a file path' },
       { name: 'run', desc: 'Execute a command' },
       { name: 'exe', desc: 'Define a reusable command (replaces @exec)' },
+      { name: 'checkpoint', desc: 'Define a named resume checkpoint marker' },
       { name: 'import', desc: 'Import from files or modules' },
       { name: 'export', desc: 'Export values from a module' },
       { name: 'when', desc: 'Conditional execution' },

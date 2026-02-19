@@ -26,6 +26,7 @@ export interface RunOptions {
   debug?: boolean;
   inject?: string[];
   checkpoint?: boolean;
+  noCheckpoint?: boolean;
   fresh?: boolean;
   resume?: string | true;
   fork?: string;
@@ -201,6 +202,7 @@ export class RunCommand {
         timeoutMs: options.timeoutMs, // undefined = no timeout
         dynamicModules,
         checkpoint: options.checkpoint,
+        noCheckpoint: options.noCheckpoint,
         fresh: options.fresh,
         resume: options.resume,
         fork: options.fork,
@@ -327,9 +329,11 @@ Options:
   -h, --help              Show this help message
   --timeout <duration>    Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
   --debug                 Show execution metrics (timing, cache hits, effects)
-  --checkpoint            Enable checkpoint cache reuse for llm-labeled calls
+  --checkpoint            Backward-compatible no-op (checkpointing auto-detects llm-labeled calls)
+  --new                   Start a fresh checkpoint run (alias: --fresh)
   --fresh                 Rebuild checkpoint cache from scratch for this script
-  --resume [target]       Resume with checkpoints (@fn, @fn:index, @fn("prefix"))
+  --no-checkpoint         Disable checkpoint reads/writes for this run
+  --resume [target]       Resume from checkpoint name or function target (@fn, @fn:index, @fn("prefix"))
   --fork <script>         Read checkpoints from another script as seed cache
   --<name> <value>        Any other flag becomes payload (see below)
 
@@ -397,6 +401,9 @@ Creating Scripts:
         'inject',
         'payload',
         'checkpoint',
+        'no-checkpoint',
+        'noCheckpoint',
+        'new',
         'fresh',
         'resume',
         'fork',
@@ -411,12 +418,9 @@ Creating Scripts:
       if (flags.payload) {
         inject.push(...(Array.isArray(flags.payload) ? flags.payload : [flags.payload]));
       }
-      const checkpointEnabled =
-        Boolean(flags.checkpoint) ||
-        Boolean(flags.fresh) ||
-        flags.resume !== undefined ||
-        flags.fork !== undefined;
-      const fresh = Boolean(flags.fresh);
+      const noCheckpoint = Boolean(flags['no-checkpoint'] || flags.noCheckpoint);
+      const checkpointEnabled = Boolean(flags.checkpoint);
+      const fresh = Boolean(flags.fresh || flags.new);
       const resume = flags.resume === undefined ? undefined : flags.resume === true ? true : String(flags.resume);
       let fork: string | undefined;
       if (flags.fork !== undefined) {
@@ -425,6 +429,12 @@ Creating Scripts:
           process.exit(1);
         }
         fork = String(flags.fork);
+      }
+      if (noCheckpoint && (fresh || resume !== undefined || fork !== undefined)) {
+        console.error(
+          chalk.red('Error: --no-checkpoint cannot be combined with --new/--fresh, --resume, or --fork')
+        );
+        process.exit(1);
       }
 
       // Build @payload object from unknown flags: --topic foo --count 5 => @payload={"topic":"foo","count":"5"}
@@ -454,6 +464,7 @@ Creating Scripts:
         debug: isDebug,
         inject: inject.length > 0 ? inject : undefined,
         checkpoint: checkpointEnabled,
+        noCheckpoint,
         fresh,
         resume,
         fork

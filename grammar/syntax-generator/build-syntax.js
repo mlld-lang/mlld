@@ -96,7 +96,7 @@ class MlldSyntaxGenerator {
           // Extract directive names without the / prefix
           const directives = directiveMatches.map(d => d.replace(/["\/]/g, ''));
           // Ensure newer directives are present even if grammar scan misses them
-          ['for', 'log', 'guard', 'hook', 'export', 'stream', 'append'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
+          ['for', 'log', 'guard', 'hook', 'export', 'stream', 'append', 'checkpoint'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
           return directives;
         }
       }
@@ -106,7 +106,7 @@ class MlldSyntaxGenerator {
     }
     
     // Fallback to known list (v2 directives)
-    return ['var', 'show', 'stream', 'run', 'exe', 'path', 'import', 'when', 'output', 'append', 'for', 'log', 'guard', 'hook', 'export'];
+    return ['var', 'show', 'stream', 'run', 'exe', 'checkpoint', 'path', 'import', 'when', 'output', 'append', 'for', 'log', 'guard', 'hook', 'export'];
   }
 
   generatePrism() {

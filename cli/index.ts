@@ -122,6 +122,7 @@ export interface CLIOptions {
   timeout?: string;
   // Checkpoint/resume options
   checkpoint?: boolean;
+  noCheckpoint?: boolean;
   fresh?: boolean;
   resume?: string | true;
   fork?: string;

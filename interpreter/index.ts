@@ -61,19 +61,23 @@ function resolveCheckpointScriptName(
   return candidate.length > 0 ? candidate : undefined;
 }
 
-function shouldEnableCheckpoint(options: InterpretOptions): boolean {
-  return (
-    options.checkpoint === true ||
-    options.fresh === true ||
-    options.resume !== undefined ||
-    typeof options.fork === 'string'
-  );
+function validateCheckpointOptions(options: InterpretOptions): void {
+  if (options.noCheckpoint !== true) {
+    return;
+  }
+
+  if (options.fresh || options.resume !== undefined || typeof options.fork === 'string') {
+    throw new Error(
+      'Cannot combine --no-checkpoint with --new/--fresh, --resume, or --fork.'
+    );
+  }
 }
 
 type ParsedResumeTarget =
   | { kind: 'function'; functionName: string }
   | { kind: 'function-index'; functionName: string; invocationIndex: number }
-  | { kind: 'function-prefix'; functionName: string; prefix: string; invocationIndex?: number };
+  | { kind: 'function-prefix'; functionName: string; prefix: string; invocationIndex?: number }
+  | { kind: 'named-checkpoint'; checkpointName: string };
 
 function parseResumePrefix(raw: string): string | null {
   const trimmed = raw.trim();
@@ -103,7 +107,23 @@ function parseResumeTarget(target: string): ParsedResumeTarget | null {
     return null;
   }
 
-  const fuzzyMatch = trimmed.match(/^@?([^\s:()]+)(?::(\d+))?\((.*)\)$/);
+  // Named checkpoints are the default for non-@ targets.
+  if (!trimmed.startsWith('@')) {
+    if (trimmed.includes('(') || trimmed.includes(')') || trimmed.includes(':')) {
+      // Continue into legacy no-@ function targeting below.
+    } else {
+      const namedCheckpoint = parseResumePrefix(trimmed);
+      if (namedCheckpoint !== null) {
+        return { kind: 'named-checkpoint', checkpointName: namedCheckpoint };
+      }
+      if (!/\s/.test(trimmed)) {
+        return { kind: 'named-checkpoint', checkpointName: trimmed };
+      }
+      return null;
+    }
+  }
+
+  const fuzzyMatch = trimmed.match(/^@([^\s:()]+)(?::(\d+))?\((.*)\)$/);
   if (fuzzyMatch) {
     const functionName = fuzzyMatch[1];
     const invocationIndex = fuzzyMatch[2] !== undefined ? Number.parseInt(fuzzyMatch[2], 10) : undefined;
@@ -122,7 +142,7 @@ function parseResumeTarget(target: string): ParsedResumeTarget | null {
     };
   }
 
-  const indexedMatch = trimmed.match(/^@?([^\s:()]+):(\d+)$/);
+  const indexedMatch = trimmed.match(/^@([^\s:()]+):(\d+)$/);
   if (indexedMatch) {
     const functionName = indexedMatch[1];
     const invocationIndex = Number.parseInt(indexedMatch[2], 10);
@@ -132,13 +152,44 @@ function parseResumeTarget(target: string): ParsedResumeTarget | null {
     return { kind: 'function-index', functionName, invocationIndex };
   }
 
-  const functionMatch = trimmed.match(/^@?([^\s:()]+)$/);
+  const functionMatch = trimmed.match(/^@([^\s:()]+)$/);
   if (functionMatch) {
     const functionName = functionMatch[1];
     if (!functionName) {
       return null;
     }
     return { kind: 'function', functionName };
+  }
+
+  // Backward compatibility: legacy unprefixed function target forms.
+  const legacyFuzzyMatch = trimmed.match(/^([^\s:()]+)(?::(\d+))?\((.*)\)$/);
+  if (legacyFuzzyMatch) {
+    const functionName = legacyFuzzyMatch[1];
+    const invocationIndex =
+      legacyFuzzyMatch[2] !== undefined ? Number.parseInt(legacyFuzzyMatch[2], 10) : undefined;
+    const prefix = parseResumePrefix(legacyFuzzyMatch[3]);
+    if (!functionName || prefix === null) {
+      return null;
+    }
+    if (invocationIndex !== undefined && !Number.isInteger(invocationIndex)) {
+      return null;
+    }
+    return {
+      kind: 'function-prefix',
+      functionName,
+      prefix,
+      ...(invocationIndex === undefined ? {} : { invocationIndex })
+    };
+  }
+
+  const legacyIndexedMatch = trimmed.match(/^([^\s:()]+):(\d+)$/);
+  if (legacyIndexedMatch) {
+    const functionName = legacyIndexedMatch[1];
+    const invocationIndex = Number.parseInt(legacyIndexedMatch[2], 10);
+    if (!functionName || !Number.isInteger(invocationIndex)) {
+      return null;
+    }
+    return { kind: 'function-index', functionName, invocationIndex };
   }
 
   return null;
@@ -155,8 +206,13 @@ async function applyResumeTargetInvalidation(
   const parsed = parseResumeTarget(resume);
   if (!parsed) {
     throw new Error(
-      `Invalid --resume target "${resume}". Expected @function, @function:index, or @function("prefix").`
+      `Invalid --resume target "${resume}". Expected checkpoint-name, @function, @function:index, or @function("prefix").`
     );
+  }
+
+  if (parsed.kind === 'named-checkpoint') {
+    await checkpointManager.invalidateFromNamedCheckpoint(parsed.checkpointName);
+    return;
   }
 
   if (parsed.kind === 'function') {
@@ -186,6 +242,7 @@ export async function interpret(
 ): Promise<InterpretResult> {
   // Initialize error patterns on first use
   await initializePatterns();
+  validateCheckpointOptions(options);
 
   const languageMode = resolveMlldMode(
     options.mlldMode,
@@ -354,15 +411,19 @@ export async function interpret(
   env.setStreamingManager(options.streamingManager ?? new StreamingManager());
   env.setProvenanceEnabled(provenanceEnabled);
 
-  if (shouldEnableCheckpoint(options)) {
-    const scriptName = resolveCheckpointScriptName(options.filePath, options.checkpointScriptName);
-    if (scriptName) {
-      const checkpointManager = new CheckpointManager(scriptName, {
+  const checkpointScriptName = resolveCheckpointScriptName(
+    options.filePath,
+    options.checkpointScriptName
+  );
+  if (options.noCheckpoint !== true && checkpointScriptName) {
+    env.setCheckpointManagerFactory(async () => {
+      const checkpointManager = new CheckpointManager(checkpointScriptName, {
         scriptPath: options.filePath,
         ...(typeof options.fork === 'string' && options.fork.length > 0
           ? { forkScriptName: options.fork }
           : {}),
-        ...(typeof options.checkpointCacheRootDir === 'string' && options.checkpointCacheRootDir.length > 0
+        ...(typeof options.checkpointCacheRootDir === 'string' &&
+        options.checkpointCacheRootDir.length > 0
           ? { cacheRootDir: options.checkpointCacheRootDir }
           : {})
       });
@@ -371,8 +432,20 @@ export async function interpret(
         await checkpointManager.clear();
       }
       await applyResumeTargetInvalidation(checkpointManager, options.resume);
-      env.setCheckpointManager(checkpointManager);
+      checkpointManager.beginRun();
+      return checkpointManager;
+    });
+
+    const shouldEagerInitializeCheckpoint =
+      options.fresh === true ||
+      options.resume !== undefined ||
+      (typeof options.fork === 'string' && options.fork.length > 0);
+
+    if (shouldEagerInitializeCheckpoint) {
+      await env.ensureCheckpointManager();
     }
+  } else {
+    env.setCheckpointManagerFactory(undefined);
   }
 
   if (options.emitter) {

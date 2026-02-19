@@ -300,6 +300,36 @@ for @k, @v in @items => show @k
     const undefs = (result.warnings ?? []).map(w => w.variable);
     expect(undefs).toContain('typo');
   });
+
+  it('reports duplicate checkpoint names as validation errors', async () => {
+    const modulePath = await writeModule('checkpoint-duplicate.mld', `/checkpoint "stage-a"
+/checkpoint "stage-a"
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(error => error.message)).toEqual(
+      expect.arrayContaining([expect.stringContaining('duplicate checkpoint "stage-a"')])
+    );
+  });
+
+  it('reports checkpoint directives inside /exe bodies as validation errors', async () => {
+    const modulePath = await writeModule('checkpoint-in-exe.mld', `/exe @task() = [
+  checkpoint "inside"
+  => "ok"
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(error => error.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('checkpoint "inside" is only allowed at top level')
+      ])
+    );
+  });
 });
 
 describe('template validation', () => {

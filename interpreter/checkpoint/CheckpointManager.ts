@@ -15,7 +15,8 @@ const MANIFEST_CORE_KEYS = new Set([
   'lastUpdated',
   'totalCached',
   'totalSizeBytes',
-  'forkedFrom'
+  'forkedFrom',
+  'namedCheckpoints'
 ]);
 
 interface CheckpointManifest {
@@ -27,6 +28,7 @@ interface CheckpointManifest {
   totalCached: number;
   totalSizeBytes: number;
   forkedFrom?: string;
+  namedCheckpoints?: Record<string, number>;
   [key: string]: unknown;
 }
 
@@ -41,6 +43,7 @@ interface CheckpointRecord {
   invocationSite?: string;
   invocationIndex?: number;
   invocationOrdinal?: number;
+  executionOrder?: number;
 }
 
 interface StoredResultEnvelope {
@@ -67,12 +70,14 @@ export interface CheckpointPutEntry {
   invocationSite?: string;
   invocationIndex?: number;
   invocationOrdinal?: number;
+  executionOrder?: number;
 }
 
 export interface CheckpointInvocationMetadata {
   invocationSite?: string;
   invocationIndex?: number;
   invocationOrdinal: number;
+  executionOrder: number;
 }
 
 export interface CheckpointStats {
@@ -225,6 +230,34 @@ function extractManifestExtras(manifest: CheckpointManifest): Record<string, unk
   return extras;
 }
 
+function parseNamedCheckpoints(raw: unknown): Map<string, number> {
+  const parsed = new Map<string, number>();
+  if (!isPlainObject(raw)) {
+    return parsed;
+  }
+
+  for (const [name, value] of Object.entries(raw)) {
+    if (typeof name !== 'string' || name.trim().length === 0) {
+      continue;
+    }
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+      continue;
+    }
+    parsed.set(name.trim(), value);
+  }
+
+  return parsed;
+}
+
+function serializeNamedCheckpoints(checkpoints: Map<string, number>): Record<string, number> {
+  const serialized: Record<string, number> = {};
+  const entries = Array.from(checkpoints.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  for (const [name, order] of entries) {
+    serialized[name] = order;
+  }
+  return serialized;
+}
+
 function keyToResultStem(key: string): string {
   if (key.startsWith('sha256:')) {
     const digest = key.slice('sha256:'.length);
@@ -272,6 +305,12 @@ function parseCheckpointRecord(raw: unknown): CheckpointRecord | null {
     raw.invocationOrdinal >= 0
       ? raw.invocationOrdinal
       : undefined;
+  const executionOrder =
+    typeof raw.executionOrder === 'number' &&
+    Number.isInteger(raw.executionOrder) &&
+    raw.executionOrder >= 0
+      ? raw.executionOrder
+      : undefined;
 
   return {
     key: raw.key,
@@ -283,7 +322,8 @@ function parseCheckpointRecord(raw: unknown): CheckpointRecord | null {
     ...(durationMs === undefined ? {} : { durationMs }),
     ...(invocationSite === undefined ? {} : { invocationSite }),
     ...(invocationIndex === undefined ? {} : { invocationIndex }),
-    ...(invocationOrdinal === undefined ? {} : { invocationOrdinal })
+    ...(invocationOrdinal === undefined ? {} : { invocationOrdinal }),
+    ...(executionOrder === undefined ? {} : { executionOrder })
   };
 }
 
@@ -341,6 +381,9 @@ export class CheckpointManager {
   private localSizeBytes = 0;
   private invocationSiteIndexes = new Map<string, Map<string, number>>();
   private invocationOrdinalCounters = new Map<string, number>();
+  private executionOrderCounter = 0;
+  private namedCheckpointOrders = new Map<string, number>();
+  private runRegisteredCheckpointNames = new Set<string>();
 
   constructor(scriptName: string, options: CheckpointManagerOptions = {}) {
     if (!scriptName || scriptName.trim().length === 0) {
@@ -378,6 +421,8 @@ export class CheckpointManager {
     this.localSizeBytes = this.sumResultSizes(this.localIndex);
     this.hydrateInvocationSiteIndexes();
     this.invocationOrdinalCounters.clear();
+    this.executionOrderCounter = 0;
+    this.runRegisteredCheckpointNames.clear();
 
     if (this.forkScriptName && this.forkCacheIndexPath && this.forkManifestPath) {
       await this.loadForkManifestAndIndex();
@@ -385,6 +430,13 @@ export class CheckpointManager {
     }
 
     this.loaded = true;
+  }
+
+  beginRun(): void {
+    this.invocationOrdinalCounters.clear();
+    this.executionOrderCounter = 0;
+    this.runRegisteredCheckpointNames.clear();
+    this.namedCheckpointOrders = new Map();
   }
 
   assignInvocationMetadata(fnName: string, invocationSite?: string): CheckpointInvocationMetadata {
@@ -396,10 +448,13 @@ export class CheckpointManager {
     const counterKey = this.buildInvocationCounterKey(normalizedFn, normalizedSite);
     const invocationOrdinal = this.invocationOrdinalCounters.get(counterKey) ?? 0;
     this.invocationOrdinalCounters.set(counterKey, invocationOrdinal + 1);
+    const executionOrder = this.executionOrderCounter;
+    this.executionOrderCounter += 1;
     return {
       ...(normalizedSite ? { invocationSite: normalizedSite } : {}),
       ...(invocationIndex === undefined ? {} : { invocationIndex }),
-      invocationOrdinal
+      invocationOrdinal,
+      executionOrder
     };
   }
 
@@ -432,6 +487,12 @@ export class CheckpointManager {
       entry.argsPreview ?? CheckpointManager.buildArgsPreview(args, this.argsPreviewLimit),
       this.argsPreviewLimit
     );
+    const executionOrder =
+      typeof entry.executionOrder === 'number' &&
+      Number.isInteger(entry.executionOrder) &&
+      entry.executionOrder >= 0
+        ? entry.executionOrder
+        : this.computeNextExecutionOrder();
 
     const resultEnvelope: StoredResultEnvelope = {
       version: RESULT_WRAPPER_VERSION,
@@ -453,7 +514,8 @@ export class CheckpointManager {
       ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
       ...(entry.invocationSite ? { invocationSite: entry.invocationSite } : {}),
       ...(typeof entry.invocationIndex === 'number' ? { invocationIndex: entry.invocationIndex } : {}),
-      ...(typeof entry.invocationOrdinal === 'number' ? { invocationOrdinal: entry.invocationOrdinal } : {})
+      ...(typeof entry.invocationOrdinal === 'number' ? { invocationOrdinal: entry.invocationOrdinal } : {}),
+      ...(typeof executionOrder === 'number' ? { executionOrder } : {})
     };
 
     this.localResultCache.set(key, resultEnvelope.value);
@@ -465,6 +527,55 @@ export class CheckpointManager {
 
     await appendFile(this.cacheIndexPath, `${JSON.stringify(record)}\n`, 'utf8');
     await this.writeManifest();
+  }
+
+  async registerNamedCheckpoint(name: string): Promise<number> {
+    await this.ensureLoaded();
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      throw new Error('Checkpoint name must be non-empty');
+    }
+    if (this.runRegisteredCheckpointNames.has(normalizedName)) {
+      throw new Error(`Duplicate checkpoint "${normalizedName}" encountered at runtime`);
+    }
+
+    this.runRegisteredCheckpointNames.add(normalizedName);
+    this.namedCheckpointOrders.set(normalizedName, this.executionOrderCounter);
+    await this.writeManifest();
+    return this.executionOrderCounter;
+  }
+
+  listNamedCheckpoints(): string[] {
+    return Array.from(this.namedCheckpointOrders.keys()).sort((a, b) => a.localeCompare(b));
+  }
+
+  async invalidateFromNamedCheckpoint(name: string): Promise<number> {
+    await this.ensureLoaded();
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      return 0;
+    }
+    const executionOrder = this.namedCheckpointOrders.get(normalizedName);
+    if (executionOrder === undefined) {
+      const available = this.listNamedCheckpoints();
+      throw new Error(
+        available.length > 0
+          ? `Unknown checkpoint "${normalizedName}". Available checkpoints: ${available.join(', ')}`
+          : `Unknown checkpoint "${normalizedName}". No named checkpoints are registered yet.`
+      );
+    }
+    return this.invalidateFromExecutionOrder(executionOrder);
+  }
+
+  async invalidateFromExecutionOrder(executionOrder: number): Promise<number> {
+    await this.ensureLoaded();
+    if (!Number.isInteger(executionOrder) || executionOrder < 0) {
+      return 0;
+    }
+    const keys = Array.from(this.localIndex.values())
+      .filter(entry => entry.executionOrder === undefined || entry.executionOrder >= executionOrder)
+      .map(entry => entry.key);
+    return this.removeKeys(keys);
   }
 
   async invalidateFunction(fnName: string): Promise<number> {
@@ -559,6 +670,9 @@ export class CheckpointManager {
     this.localCreatedAt = undefined;
     this.invocationSiteIndexes = new Map();
     this.invocationOrdinalCounters = new Map();
+    this.executionOrderCounter = 0;
+    this.namedCheckpointOrders = new Map();
+    this.runRegisteredCheckpointNames = new Set();
 
     await this.rewriteCacheIndex();
     await this.writeManifest();
@@ -597,7 +711,10 @@ export class CheckpointManager {
       lastUpdated: nowIso,
       totalCached: this.localIndex.size,
       totalSizeBytes: this.localSizeBytes,
-      ...(this.forkScriptName ? { forkedFrom: this.forkScriptName } : {})
+      ...(this.forkScriptName ? { forkedFrom: this.forkScriptName } : {}),
+      ...(this.namedCheckpointOrders.size > 0
+        ? { namedCheckpoints: serializeNamedCheckpoints(this.namedCheckpointOrders) }
+        : {})
     };
 
     this.localCreatedAt = manifest.created;
@@ -633,6 +750,7 @@ export class CheckpointManager {
     }
 
     this.localManifestExtras = extractManifestExtras(manifest);
+    this.namedCheckpointOrders = parseNamedCheckpoints(manifest.namedCheckpoints);
     const created = manifest.created;
     if (typeof created === 'string' && created.length > 0) {
       this.localCreatedAt = created;
@@ -749,6 +867,19 @@ export class CheckpointManager {
 
   private buildInvocationCounterKey(fnName: string, invocationSite?: string): string {
     return `${fnName}\u0000${invocationSite ?? ''}`;
+  }
+
+  private computeNextExecutionOrder(): number {
+    let nextOrder = 0;
+    for (const entry of this.localIndex.values()) {
+      if (typeof entry.executionOrder !== 'number') {
+        continue;
+      }
+      if (entry.executionOrder >= nextOrder) {
+        nextOrder = entry.executionOrder + 1;
+      }
+    }
+    return nextOrder;
   }
 
   private getOrAssignInvocationSiteIndex(

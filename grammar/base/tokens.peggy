@@ -66,7 +66,7 @@ BacktickSequence "Backtick Sequence"
 // Reserved directive names that cannot be used as variable names
 ReservedDirective "Reserved Directive Name"
   = "/var" / "/show" / "/stream" / "/run" / "/exe"
-  / "/import" / "/when" / "/if" / "/output" / "/append" / "/for" / "/loop" / "/log" / "/bail"
+  / "/import" / "/when" / "/if" / "/output" / "/append" / "/for" / "/loop" / "/log" / "/bail" / "/checkpoint"
   / "/guard" / "/hook" / "/export" / "/policy" / "/sign" / "/verify"
 
 // Streaming keyword for syntax sugar
