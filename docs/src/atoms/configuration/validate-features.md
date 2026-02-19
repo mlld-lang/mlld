@@ -88,7 +88,7 @@ Add `mlld-config.json` to suppress intentional patterns:
 }
 ```
 
-Suppressible codes: `exe-parameter-shadowing`, `mutable-state`, `when-exe-implicit-return`, `deprecated-json-transform`, `template-strict-for-syntax`.
+Suppressible codes: `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`.
 
 **Template validation (.att / .mtt):**
 

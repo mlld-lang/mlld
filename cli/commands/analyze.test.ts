@@ -111,24 +111,6 @@ describe('analyze/validate warnings', () => {
     expect(reservedConflicts).toEqual(['base']);
   });
 
-  it('warns for local mutable-state anti-patterns', async () => {
-    const modulePath = await writeModule('mutable-state-pattern.mld', `/exe @loop() = [
-  let @state = { stop: false }
-  when @state.stop => [
-    => "done"
-  ]
-  => @state
-]
-`);
-
-    const result = await analyze(modulePath, { checkVariables: true });
-
-    expect(result.valid).toBe(true);
-    expect(result.antiPatterns).toHaveLength(1);
-    expect(result.antiPatterns?.[0]?.code).toBe('mutable-state');
-    expect(result.antiPatterns?.[0]?.message).toContain('@state');
-  });
-
   it('warns when exe parameters use generic names that can shadow caller variables', async () => {
     const modulePath = await writeModule('exe-param-shadowing.mld', `/var @result = "queued"
 /exe @logItemDone(result) = [
@@ -172,51 +154,6 @@ describe('analyze/validate warnings', () => {
       entry => entry.code === 'exe-parameter-shadowing'
     );
     expect(paramWarnings).toHaveLength(0);
-  });
-
-  it('warns when a bare when action inside an exe block implies an early return', async () => {
-    const modulePath = await writeModule('when-exe-implicit-return.mld', `/exe @guard(x) = [
-  when !@x => "missing"
-  => "ok"
-]
-`);
-
-    const result = await analyze(modulePath, { checkVariables: true });
-
-    expect(result.valid).toBe(true);
-    const whenWarnings = (result.antiPatterns ?? []).filter(entry => entry.code === 'when-exe-implicit-return');
-    expect(whenWarnings).toHaveLength(1);
-    expect(whenWarnings[0]?.message).toContain('returns from the exe');
-  });
-
-  it('does not warn for explicit block-form when returns in exe blocks', async () => {
-    const modulePath = await writeModule('when-exe-explicit-return.mld', `/exe @guard(x) = [
-  when !@x => [
-    => "missing"
-  ]
-  => "ok"
-]
-`);
-
-    const result = await analyze(modulePath, { checkVariables: true });
-
-    expect(result.valid).toBe(true);
-    const whenWarnings = (result.antiPatterns ?? []).filter(entry => entry.code === 'when-exe-implicit-return');
-    expect(whenWarnings).toHaveLength(0);
-  });
-
-  it('does not warn for directive actions in when branches inside exe blocks', async () => {
-    const modulePath = await writeModule('when-exe-directive-action.mld', `/exe @guard(x) = [
-  when !@x => show "missing"
-  => "ok"
-]
-`);
-
-    const result = await analyze(modulePath, { checkVariables: true });
-
-    expect(result.valid).toBe(true);
-    const whenWarnings = (result.antiPatterns ?? []).filter(entry => entry.code === 'when-exe-implicit-return');
-    expect(whenWarnings).toHaveLength(0);
   });
 
   it('does not flag @root as undefined', async () => {

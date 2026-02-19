@@ -404,7 +404,7 @@ Add to `mlld-config.json` to suppress intentional patterns:
 }
 ```
 
-Suppressible codes: `exe-parameter-shadowing`, `mutable-state`, `when-exe-implicit-return`, `deprecated-json-transform`.
+Suppressible codes: `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`.
 
 **Exit codes:**
 - Exit 0: valid syntax, no errors

@@ -71,13 +71,11 @@ export interface VariableRedefinitionWarning {
   column?: number;
   originalLine?: number;
   originalColumn?: number;
-  reason?: 'builtin-conflict' | 'reserved-conflict' | 'scope-redefinition';
+  reason?: 'builtin-conflict' | 'reserved-conflict' | 'soft-reserved-conflict' | 'scope-redefinition';
   suggestion?: string;
 }
 
 export type AntiPatternWarningCode =
-  | 'mutable-state'
-  | 'when-exe-implicit-return'
   | 'deprecated-json-transform'
   | 'exe-parameter-shadowing'
   | 'template-strict-for-syntax'
@@ -193,9 +191,20 @@ const BUILTIN_TRANSFORMER_NAMES = builtinTransformers.flatMap(transformer => [
   transformer.uppercase,
 ]);
 
+/**
+ * Names that cause a hard runtime error when redefined.
+ * These are enforced by VariableManager.setVariable().
+ */
 const RESERVED_VARIABLE_NAMES = new Set([
-  'now', 'base', 'root', 'debug', 'INPUT', 'mx', 'fm',
-  'payload', 'state', 'keychain', 'input', 'ctx', 'pipeline'
+  'now', 'base', 'root', 'debug', 'mx', 'keychain', 'input'
+]);
+
+/**
+ * Names that are conventionally reserved (SDK-injected, frontmatter, etc.)
+ * but are not runtime-enforced. Redefining them produces a warning, not an error.
+ */
+const SOFT_RESERVED_NAMES = new Set([
+  'fm', 'payload', 'state', 'ctx', 'pipeline'
 ]);
 
 const SHADOWABLE_BUILTIN_NAMES = new Set([
@@ -206,6 +215,7 @@ const SHADOWABLE_BUILTIN_NAMES = new Set([
 
 const BUILTIN_VARIABLES = new Set([
   ...RESERVED_VARIABLE_NAMES,
+  ...SOFT_RESERVED_NAMES,
   ...SHADOWABLE_BUILTIN_NAMES,
   // Builtin helpers
   'yaml', 'html', 'text'
@@ -217,8 +227,6 @@ const WARNING_CODE_ALIASES: Record<string, AntiPatternWarningCode> = {
   'parameter-shadowing': 'exe-parameter-shadowing'
 };
 const SUPPRESSIBLE_WARNING_CODES = new Set<AntiPatternWarningCode>([
-  'mutable-state',
-  'when-exe-implicit-return',
   'deprecated-json-transform',
   'exe-parameter-shadowing',
   'hyphenated-identifier-in-template'
@@ -231,15 +239,6 @@ const GENERIC_EXE_PARAMETER_SUGGESTIONS = new Map<string, string>([
   ['value', 'inputValue']
 ]);
 
-/**
- * Common mistakes: variable.field patterns that are wrong
- * Maps "identifier.field" to suggestion message
- */
-const SUSPICIOUS_FIELD_ACCESS: Record<string, string> = {
-  'mx.now': '@now is a reserved variable, not @mx.now',
-  'mx.base': '@base is a reserved variable, not @mx.base',
-  'ctx.now': '@now is a reserved variable, not @ctx.now',
-};
 
 function normalizeSuppressedWarningCode(code: string): AntiPatternWarningCode | null {
   const normalized = code.trim().toLowerCase();
@@ -421,33 +420,11 @@ function detectUndefinedVariables(ast: MlldNode[]): UndefinedVariableWarning[] {
 
   // Second pass: check all variable references
   const seen = new Set<string>(); // Avoid duplicate warnings for same variable
-  const seenPaths = new Set<string>(); // Avoid duplicate warnings for same path
 
   walkAST(ast, (node: any) => {
     if (node.type === 'VariableReference') {
       const name = node.identifier;
       if (!name) return;
-
-      // Build full path for suspicious access check (e.g., mx.now)
-      let fullPath = name;
-      if (node.fields && node.fields.length > 0) {
-        const firstField = node.fields[0];
-        if (firstField.type === 'field' && firstField.value) {
-          fullPath = `${name}.${firstField.value}`;
-        }
-      }
-
-      // Check for suspicious field access patterns (even if base variable is valid)
-      if (SUSPICIOUS_FIELD_ACCESS[fullPath] && !seenPaths.has(fullPath)) {
-        seenPaths.add(fullPath);
-        warnings.push({
-          variable: fullPath,
-          line: node.location?.start?.line,
-          column: node.location?.start?.column,
-          suggestion: SUSPICIOUS_FIELD_ACCESS[fullPath],
-        });
-        return; // Don't also warn about the base variable
-      }
 
       // Skip if already declared, builtin, or already warned
       if (declared.has(name) || BUILTIN_VARIABLES.has(name) || seen.has(name)) {
@@ -528,6 +505,14 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
             reason: 'reserved-conflict',
             suggestion: `Cannot redefine reserved @${name}.`,
           });
+        } else if (SOFT_RESERVED_NAMES.has(name)) {
+          warnings.push({
+            variable: name,
+            line,
+            column,
+            reason: 'soft-reserved-conflict',
+            suggestion: `@${name} is conventionally reserved (SDK/system use). Redefining it may cause unexpected behavior.`,
+          });
         } else if (SHADOWABLE_BUILTIN_NAMES.has(name)) {
           warnings.push({
             variable: name,
@@ -570,6 +555,14 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
             column,
             reason: 'reserved-conflict',
             suggestion: `Cannot redefine reserved @${name}.`,
+          });
+        } else if (SOFT_RESERVED_NAMES.has(name)) {
+          warnings.push({
+            variable: name,
+            line,
+            column,
+            reason: 'soft-reserved-conflict',
+            suggestion: `@${name} is conventionally reserved (SDK/system use). Redefining it may cause unexpected behavior.`,
           });
         } else if (SHADOWABLE_BUILTIN_NAMES.has(name)) {
           warnings.push({
@@ -623,127 +616,6 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
   }
 
   walkWithScope(ast, 0);
-  return warnings;
-}
-
-/**
- * Detect mutable-state anti-patterns where local @state objects are used with @state.stop
- */
-function detectMutableStateAntiPatterns(ast: MlldNode[], sourceText: string): AntiPatternWarning[] {
-  const stateObjectDeclarations: Array<{ line?: number; column?: number }> = [];
-
-  walkAST(ast, (node: any) => {
-    if (node.type === 'Directive' && node.kind === 'var') {
-      const identifier = node.values?.identifier?.[0]?.identifier;
-      const valueNode = node.values?.value?.[0];
-      if (identifier === 'state' && valueNode?.type === 'object') {
-        stateObjectDeclarations.push({
-          line: node.location?.start?.line,
-          column: node.location?.start?.column,
-        });
-      }
-    }
-
-    if (node.type === 'LetAssignment') {
-      const valueNode = node.value?.[0];
-      if (node.identifier === 'state' && valueNode?.type === 'object') {
-        stateObjectDeclarations.push({
-          line: node.location?.start?.line,
-          column: node.location?.start?.column,
-        });
-      }
-    }
-
-  });
-
-  const hasStateStopAccess = /@state\.stop\b/.test(sourceText);
-  if (stateObjectDeclarations.length === 0 || !hasStateStopAccess) {
-    return [];
-  }
-
-  return stateObjectDeclarations.map(declaration => ({
-    code: 'mutable-state',
-    message: 'Local @state object with @state.stop access is a mutable-state anti-pattern. @state is SDK-managed and local variable objects are immutable.',
-    line: declaration.line,
-    column: declaration.column,
-    suggestion: 'Use a different variable name (for example @runState) and model updates by creating new values instead of mutating fields.'
-  }));
-}
-
-function getNodeStart(node: any): { line?: number; column?: number } {
-  const line = node?.location?.start?.line
-    ?? node?.content?.[0]?.location?.start?.line;
-  const column = node?.location?.start?.column
-    ?? node?.content?.[0]?.location?.start?.column;
-  return { line, column };
-}
-
-function isImplicitWhenExeReturnAction(action: any[]): boolean {
-  if (!Array.isArray(action) || action.length === 0) {
-    return false;
-  }
-
-  if (action.length !== 1) {
-    return true;
-  }
-
-  const first = action[0];
-  if (!first || typeof first !== 'object') {
-    return true;
-  }
-
-  // Explicit return block form is clear and intentional.
-  if (first.type === 'ExeBlock') {
-    return false;
-  }
-
-  // Directive actions represent imperative effects/statements.
-  if (first.type === 'Directive') {
-    return false;
-  }
-
-  return true;
-}
-
-function detectWhenExeImplicitReturnAntiPatterns(ast: MlldNode[]): AntiPatternWarning[] {
-  const warnings: AntiPatternWarning[] = [];
-
-  walkAST(ast, (node: any) => {
-    if (node.type !== 'Directive' || node.kind !== 'exe' || node.subtype !== 'exeBlock') {
-      return;
-    }
-
-    const statements = node.values?.statements;
-    if (!Array.isArray(statements)) {
-      return;
-    }
-
-    for (const statement of statements) {
-      if (!statement || statement.type !== 'WhenExpression' || !Array.isArray(statement.conditions)) {
-        continue;
-      }
-
-      for (const rawEntry of statement.conditions) {
-        const entry = Array.isArray(rawEntry) && rawEntry.length === 1 ? rawEntry[0] : rawEntry;
-        const action = entry?.action;
-
-        if (!Array.isArray(action) || action.length === 0 || !isImplicitWhenExeReturnAction(action)) {
-          continue;
-        }
-
-        const actionStart = getNodeStart(action[0]);
-        const statementStart = getNodeStart(statement);
-        warnings.push({
-          code: 'when-exe-implicit-return',
-          message: 'when action in an exe block returns from the exe when matched. Use block-form return to make return intent explicit.',
-          line: actionStart.line ?? statementStart.line,
-          column: actionStart.column ?? statementStart.column,
-          suggestion: 'Use `when @cond => [ => @value ]` for explicit returns, or use a directive action for side effects.'
-        });
-      }
-    }
-  });
-
   return warnings;
 }
 
@@ -1768,8 +1640,6 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         }
 
         const antiPatterns = [
-          ...detectMutableStateAntiPatterns(ast, content),
-          ...detectWhenExeImplicitReturnAntiPatterns(ast),
           ...detectDeprecatedJsonTransformAntiPatterns(ast),
           ...detectExeParameterShadowingWarnings(ast),
           ...detectHyphenatedIdentifiersInTemplates(ast),
@@ -1885,15 +1755,22 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
 
   // Display informational notices and errors for variable redefinitions
   if (result.redefinitions && result.redefinitions.length > 0) {
-    const builtinShadowWarnings = result.redefinitions.filter(redef => redef.reason === 'builtin-conflict');
-    const hardErrors = result.redefinitions.filter(redef => redef.reason !== 'builtin-conflict');
+    const builtinShadowWarnings = result.redefinitions.filter(
+      redef => redef.reason === 'builtin-conflict' || redef.reason === 'soft-reserved-conflict'
+    );
+    const hardErrors = result.redefinitions.filter(
+      redef => redef.reason !== 'builtin-conflict' && redef.reason !== 'soft-reserved-conflict'
+    );
 
     if (builtinShadowWarnings.length > 0) {
       console.log();
       console.log(chalk.yellow(`Info (${builtinShadowWarnings.length}):`));
       for (const redef of builtinShadowWarnings) {
         const loc = redef.line ? ` (line ${redef.line}${redef.column ? `:${redef.column}` : ''})` : '';
-        console.log(chalk.yellow(`  @${redef.variable}${loc} - shadows a built-in transform in this scope`));
+        const desc = redef.reason === 'soft-reserved-conflict'
+          ? 'shadows a conventionally reserved name'
+          : 'shadows a built-in transform in this scope';
+        console.log(chalk.yellow(`  @${redef.variable}${loc} - ${desc}`));
         if (redef.suggestion) {
           console.log(chalk.dim(`    hint: ${redef.suggestion}`));
         }
@@ -1969,7 +1846,7 @@ async function resolveFilePaths(inputs: string[]): Promise<string[]> {
 function hasErrors(result: AnalyzeResult): boolean {
   if (!result.valid) return true;
   const hardRedefinitions = (result.redefinitions ?? []).filter(
-    redef => redef.reason !== 'builtin-conflict'
+    redef => redef.reason !== 'builtin-conflict' && redef.reason !== 'soft-reserved-conflict'
   );
   return hardRedefinitions.length > 0;
 }
@@ -1978,7 +1855,7 @@ function hasWarnings(result: AnalyzeResult): boolean {
   return (
     (result.warnings?.length ?? 0) +
     (result.antiPatterns?.length ?? 0) +
-    (result.redefinitions?.filter(redef => redef.reason === 'builtin-conflict').length ?? 0)
+    (result.redefinitions?.filter(redef => redef.reason === 'builtin-conflict' || redef.reason === 'soft-reserved-conflict').length ?? 0)
   ) > 0;
 }
 
@@ -2039,10 +1916,15 @@ function displayResultCompact(result: AnalyzeResult, basePath: string): void {
   }
 
   if (result.redefinitions) {
-    const builtinShadows = result.redefinitions.filter(r => r.reason === 'builtin-conflict');
-    for (const redef of builtinShadows) {
+    const softWarnings = result.redefinitions.filter(
+      r => r.reason === 'builtin-conflict' || r.reason === 'soft-reserved-conflict'
+    );
+    for (const redef of softWarnings) {
       const loc = redef.line ? ` (line ${redef.line}${redef.column ? `:${redef.column}` : ''})` : '';
-      console.log(chalk.yellow(`      @${redef.variable}${loc} - shadows built-in`));
+      const desc = redef.reason === 'soft-reserved-conflict'
+        ? 'shadows reserved name'
+        : 'shadows built-in';
+      console.log(chalk.yellow(`      @${redef.variable}${loc} - ${desc}`));
     }
   }
 
