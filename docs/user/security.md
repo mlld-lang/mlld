@@ -135,6 +135,19 @@ Composition rules:
 
 Label deny rules and auth configs from all layers merge via union — a `deny` on `secret → op:cmd` from ANY layer blocks that flow in the merged policy.
 
+## Checkpoint Cache Drift and Guard Changes
+
+Checkpointing is memoization for `llm`-labeled work. Cache validity is based on invocation key matching, not dynamic policy diffing.
+
+- If guard/policy rules change and you want safety checks to re-run on previously cached paths, re-run with `--fresh`.
+- If you keep checkpoint cache enabled without `--fresh`, existing cache hits may still be returned.
+- This behavior is intentional in early rollout phases; targeted guard/policy fingerprint invalidation is planned as a future enhancement.
+
+```bash
+# Force miss path and rebuild cache after policy/guard changes
+mlld run pipeline --checkpoint --fresh
+```
+
 ## Data Labels
 
 Mark data as sensitive by adding labels to variable declarations:

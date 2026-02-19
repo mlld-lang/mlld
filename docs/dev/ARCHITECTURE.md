@@ -59,6 +59,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, PipelineInp
 - Policy/hook layers gate operations; they do not replace directive semantics.
 - Output layers render already-evaluated effects; they do not re-run evaluation.
 - Output boundary: `OUTPUT.md` owns intent/effect/document assembly + normalization; `STREAMING.md` owns stream transport/runtime event flow.
+- Checkpoint persistence contract uses manifest `version` plus atomic temp-file + rename writes; unknown fields are tolerated and unknown future versions degrade to cold-cache behavior (see `docs/dev/HOOKS-CHECKPOINT-RISK-GATES.md`).
 
 ### Deep-Dive Index
 
@@ -67,6 +68,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, PipelineInp
 - Data and execution: [DATA.md](DATA.md), [PIPELINE.md](PIPELINE.md), [STREAMING.md](STREAMING.md), [OUTPUT.md](OUTPUT.md)
 - Imports and modules: [MODULES.md](MODULES.md), [RESOLVERS.md](RESOLVERS.md), [REGISTRY.md](REGISTRY.md), [IMPORTS.md](IMPORTS.md), [SDK.md](SDK.md)
 - Security model: [SECURITY.md](SECURITY.md), [HOOKS.md](HOOKS.md), [ESCAPING.md](ESCAPING.md)
+- Hooks/checkpoint risk gates: [HOOKS-CHECKPOINT-RESUME-CONTRACT.md](HOOKS-CHECKPOINT-RESUME-CONTRACT.md), [HOOKS-CHECKPOINT-RISK-GATES.md](HOOKS-CHECKPOINT-RISK-GATES.md)
 - Integration surfaces: [SDK.md](SDK.md), [MCP.md](MCP.md), [LANGUAGE-SERVER.md](LANGUAGE-SERVER.md)
 - Validation and testing: [TESTS.md](TESTS.md), [BUILD-TEST.md](BUILD-TEST.md)
 

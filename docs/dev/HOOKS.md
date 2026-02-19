@@ -220,6 +220,20 @@ Exe boundary
 9.   └─ taint-post-hook propagates taint to exe result
 ```
 
+### Suppression Matrix (Phase 0.5 Gate)
+
+| Context | User hooks | Guard hooks | Contract |
+|---|---|---|---|
+| Normal execution | Enabled | Enabled | Baseline lifecycle |
+| Inside user hook body | Suppressed | Enabled | Prevent hook recursion, keep guard enforcement |
+| Inside guard evaluation | Suppressed | Suppressed | Preserve existing guard non-reentrancy behavior |
+
+Risk-gate reference: `docs/dev/HOOKS-CHECKPOINT-RISK-GATES.md`.
+
+Lifecycle trace diagnostics helper (test-only):
+- `tests/helpers/hook-lifecycle-trace.ts`
+- `tests/interpreter/hooks/lifecycle-trace-helper.test.ts`
+
 ### Input Extraction
 
 Each directive kind has custom input extraction:
