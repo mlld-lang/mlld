@@ -299,6 +299,7 @@ Scripts are loaded from the directory configured in `mlld-config.json` (default:
 - Timeout support: Automatically aborts long-running scripts
 - Metrics: Debug mode shows parse time, evaluation time, cache hits, effect counts
 - `--resume` implies checkpoint behavior. Without a target, it re-runs with cache reuse only.
+- `--fork` keeps source cache read-only; changed model/prompt arguments miss locally and are written to the current script cache.
 - Payload injection: Unknown flags become `@payload` fields (`mlld run my-script --topic foo`). Import `@payload` in your script to access them.
   Known checkpoint flags (`--checkpoint`, `--fresh`, `--resume`, `--fork`) are excluded from `@payload`.
 

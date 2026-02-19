@@ -1,5 +1,5 @@
 var @policyConfig = {
   defaults: {
-    autoverify: "./verify.att"
+    autosign: { variables: ["@*Prompt", "@*Instructions"] }
   }
 }

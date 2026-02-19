@@ -1,12 +1,16 @@
-hook @recordBefore before op:exe = [
-  append `before | @mx.op.type | @mx.op.name` to "trace.log"
+/exe llm @review(prompt, model) = js {
+  globalThis.__fixtureHooksCheckpointCounter = (globalThis.__fixtureHooksCheckpointCounter || 0) + 1;
+  const rawPrompt = prompt && typeof prompt === "object" && "value" in prompt ? prompt.value : prompt;
+  const rawModel = model && typeof model === "object" && "value" in model ? model.value : model;
+  return "review:" + rawPrompt + ":" + rawModel;
+}
+
+/hook @trace after @review = [
+  append `hook|hit=@mx.checkpoint.hit|fn=@mx.op.name` to "hooks-checkpoint.log"
 ]
 
-hook @recordAfter after op:exe = [
-  append `after | @mx.op.type | @mx.op.name` to "trace.log"
-]
+/var @first = @review("src/a.ts", "sonnet")
+/var @second = @review("src/a.ts", "sonnet")
 
-exe llm @summarize(prompt) = run cmd { claude -p "@prompt" }
-
-var @out = @summarize("summarize this file")
-show @out
+/show @first
+/show @second

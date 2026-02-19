@@ -1,7 +1,5 @@
-var @config = { tools: ["Read", "Write"] }
+var @sandbox = { tools: ["Read", "Write", "Bash"] }
 
-var @result = env @config [
-  => "completed"
+env @sandbox [
+  run cmd { echo "inside sandbox" }
 ]
-
-show @result

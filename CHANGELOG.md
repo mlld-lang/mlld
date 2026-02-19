@@ -17,15 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added active checkpoint short-circuit semantics for `llm` operations (directive/exec/effect paths), including `@mx.checkpoint.hit`/`@mx.checkpoint.key`, miss-only cache writes, and guard bypass on cache-hit paths.
 - Added checkpoint CLI/SDK wiring: `mlld run --checkpoint|--fresh|--resume|--fork`, new `mlld checkpoint list|inspect|clean` command surface, and end-to-end checkpoint option propagation through execute/interpret entry points.
 - Added resume/fork runtime semantics: `--resume` target parsing (`@fn`, `@fn:index`, `@fn("prefix")`), invocation-site checkpoint indexing, function-scoped fuzzy invalidation, and fork hit/miss integration coverage.
+- Added end-to-end checkpoint integration fixtures under `tests/cases/integration/checkpoint/` and fixture-driven runtime coverage in `tests/interpreter/checkpoint/integration-fixtures.test.ts` for hooks+checkpoint, checkpoint+guards, resume+parallel fuzzy targeting, fork hit/miss overlays, and hook observability emissions with non-fatal hook-side failures.
 
 ### Changed
 - Added pre-3A hooks/checkpoint risk-gate documentation, lifecycle trace test helper scaffolding, and checkpoint manifest/atomic-write compatibility scaffolds to lock rollout semantics before lifecycle/runtime phases.
 - Inserted ordering-only user hook lifecycle layering so user hooks run around built-in guard/taint hooks across directive, exec, and pipeline effect boundaries.
 - Enforced user-hook non-reentrancy boundaries so nested operations triggered inside hook bodies suppress user hooks while preserving nested guard execution; guard-evaluation suppression behavior remains unchanged.
 - Added Phase 6A checkpoint decision adapter (`fulfill` action + legacy metadata normalization) and inert built-in checkpoint pre/post hook wiring before activating cache-hit short-circuit semantics.
+- Added `npm run test:coverage` coverage gate command aligned with the fast-suite exclusion profile used in local development.
 
 ### Documentation
 - Hooks/checkpoint/resume implementation contract is now locked in `docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md`, including the selected short-circuit protocol rollout and canonical hook operation keys (`for`, `for:iteration`, `for:batch`, `loop`, `import`).
+- Finalized Phase 9 hooks/checkpoint/resume/fork documentation sweep across dev architecture/testing/hooks docs and user CLI/reference/flow-control/security guidance, including fork miss semantics and hook observability error-isolation examples.
 
 ## [2.0.0-rc82]
 

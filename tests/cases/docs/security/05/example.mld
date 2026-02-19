@@ -1,5 +1,10 @@
 var @policyConfig = {
   defaults: {
-    autosign: { variables: ["@*Prompt", "@*Instructions"] }
+    autosign: ["templates"],
+    autoverify: true
   }
 }
+policy @p = union(@policyConfig)
+
+var @auditPrompt = ::Review @input::
+exe llm @audit() = run cmd { claude -p "@auditPrompt" }

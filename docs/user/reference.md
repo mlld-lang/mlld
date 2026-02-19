@@ -681,7 +681,7 @@ Checkpoint run flags:
   - `@function` (invalidate that function's checkpoint entries)
   - `@function:index` (invalidate only one invocation site, 0-based)
   - `@function("prefix")` (fuzzy cursor invalidation by args preview prefix)
-- `mlld run <script> --fork <script>`: read checkpoint hits from another script cache as seed state.
+- `mlld run <script> --fork <script>`: read checkpoint hits from another script cache as seed state (read-only); fork misses write only to the current script cache.
 - `mlld checkpoint list|inspect|clean <script>`: inspect or clear stored checkpoint files.
 
 Retry with hints:

@@ -699,6 +699,7 @@ mlld run analyze --fork collect
 ```
 
 `--resume` implies checkpoint behavior. `--fork` reads from the source cache as a seed (read-only) and writes new misses only into the current script cache.
+In forked runs, changed prompt/model arguments miss locally while unchanged invocations can still hit from the source cache.
 
 ## Pipelines
 

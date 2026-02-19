@@ -197,7 +197,13 @@ Located in `tests/cases/invalid/`. These tests:
 
 #### 6. Checkpoint/Resume Coverage Strategy
 - Keep low-level checkpoint correctness in focused unit tests under `tests/interpreter/checkpoint/` (`CheckpointManager` persistence, deterministic keys, corruption tolerance, invalidation, and fork overlay reads).
-- Keep scenario-level behavior in fixture/integration cases under `tests/cases/integration/checkpoint/` for miss/hit semantics, resume targeting, fuzzy invalidation, and fork hit/miss overlays.
+- Keep scenario-level behavior in fixture/integration cases under `tests/cases/integration/checkpoint/` for:
+  - hooks + checkpoint lifecycle visibility (`hooks-ordering-visibility`)
+  - checkpoint + guard bypass semantics (`miss-hit-semantics`)
+  - resume + parallel fuzzy targeting (`resume-fuzzy-targeting`)
+  - fork hit/miss overlays with changed model/prompt args (`fork-hit-miss-overlay`)
+  - hook observability emissions (`output`/`append`/`run`) with non-fatal hook-side failures (`hooks-state-emission-nonfatal`)
+- Execute multi-run checkpoint fixture scenarios in `tests/interpreter/checkpoint/integration-fixtures.test.ts`.
 - For docs-published checkpoint/resume examples, generated syntax smoke fixtures are expected artifacts and should be committed with phase updates when regenerated.
 
 ## Fixture Generation
@@ -245,14 +251,14 @@ npm run test:coverage
 # Watch mode for development
 npm run test:watch
 
-# Run examples (includes long-running LLM calls)
-npm run test:examples
+# Run fixture tests including examples
+INCLUDE_EXAMPLES=true npm test interpreter/interpreter.fixture.test.ts
 
 # Run semantic token precision tests
-npm test tests/tokens/
+npm run test:tokens
 ```
 
-**Note**: Examples are excluded from the default test run because they can include long-running LLM calls via `oneshot` commands. Use `npm run test:examples` to test examples specifically.
+**Note**: Examples are excluded from the default test run because they can include long-running LLM calls via `oneshot` commands. Set `INCLUDE_EXAMPLES=true` when running the fixture suite if you want those included.
 
 ### Test Structure
 

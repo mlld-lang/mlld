@@ -1,13 +1,7 @@
-guard @first before secret = when [
-  * => allow "first"
-]
+exe @tagValue(timing, out, inp) = js {
+  const val = out ?? inp ?? '';
+  return `${timing}:${val}`;
+}
 
-guard @second before secret = when [
-  * => allow "second"
-]
-
-var secret @data = "original"
-exe @deliver(v) = `Result: @v`
-
->> Result: second
-show @deliver(@data)
+exe @emit(v) = js { return v; }
+show @emit("test")  >> after:before:test

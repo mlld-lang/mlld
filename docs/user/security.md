@@ -26,6 +26,22 @@ Use guards for enforcement and hooks for instrumentation/observability:
 - Hook failures are isolated and surfaced in `@mx.hooks.errors` so the parent operation continues.
 - Hook bodies can call normal directives/executables (`output`, `append`, `run`, `state://`, and function calls), but those failures stay inside hook error collection.
 
+Example pattern (telemetry + non-fatal sink failure):
+
+```mlld
+hook @telemetry after op:exe = [
+  output `event:@mx.op.name` to "state://telemetry"
+]
+
+hook @sinkFailure after op:exe = [
+  append "not-json" to "telemetry.jsonl"   >> intentionally fails
+]
+
+hook @capture after op:exe = [
+  append `hook-errors:@mx.hooks.errors.length` to "hook-errors.log"
+]
+```
+
 ## Standard Policy Patterns
 
 These are conventional policy module names you can create for your project:

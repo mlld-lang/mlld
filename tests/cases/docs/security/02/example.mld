@@ -1,1 +1,11 @@
-import policy @prod from "./policies/production.mld"
+hook @telemetry after op:exe = [
+  output `event:@mx.op.name` to "state://telemetry"
+]
+
+hook @sinkFailure after op:exe = [
+  append "not-json" to "telemetry.jsonl"   >> intentionally fails
+]
+
+hook @capture after op:exe = [
+  append `hook-errors:@mx.hooks.errors.length` to "hook-errors.log"
+]

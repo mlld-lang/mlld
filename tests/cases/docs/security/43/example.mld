@@ -1,5 +1,7 @@
-var @sandbox = { tools: ["Read", "Write", "Bash"] }
+var @config = { tools: ["Read", "Write"] }
 
-var @result = env @sandbox with { tools: ["Read"] } [
-  => "read-only mode"
+var @result = env @config [
+  => "completed"
 ]
+
+show @result

@@ -1,8 +1,5 @@
-/policy @production = {
-  defaults: { rules: ["no-secret-exfil", "no-sensitive-exfil"] },
-  capabilities: {
-    allow: ["cmd:git:*"],
-    danger: ["@keychain"]
+var @policyConfig = {
+  defaults: {
+    autoverify: "./verify.att"
   }
 }
-/export { @production }

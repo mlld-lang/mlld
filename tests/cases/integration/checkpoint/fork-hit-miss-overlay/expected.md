@@ -1,1 +1,2 @@
-<phase-0.5-scaffold>
+review:prompt-a:sonnet
+review:prompt-b:sonnet

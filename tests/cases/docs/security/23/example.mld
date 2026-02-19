@@ -1,7 +1,8 @@
-guard @sanitize before untrusted = when [
-  * => allow @input.trim().slice(0, 100)
+guard @validateInput before op:exe = when [
+  @input.any.text.includes("<script") => deny "Potentially malicious input"
+  @input.any.text.includes("sk-") => deny "Potentially sensitive token"
+  * => allow
 ]
 
-var untrusted @userInput = "  very long input...  "
-exe @process(data) = `Processed: @data`
-show @process(@userInput)  >> Input trimmed and truncated
+exe @process(data) = run { echo "@data" }
+show @process("<script>alert('xss')</script>")  >> Blocked

@@ -285,6 +285,11 @@ Characterization baseline (Phase 2.5):
 - `tests/interpreter/hooks/lifecycle-characterization.test.ts` pins directive and exec lifecycle ordering around `HookManager.runPre/runPost`, plus current nested-guard suppression behavior.
 - Phase 3C extends the same suite to pin hook non-reentrancy: nested operations triggered by hooks skip user hooks but still execute guards.
 
+Checkpoint/resume integration fixture coverage (Phase 9):
+- `tests/interpreter/checkpoint/integration-fixtures.test.ts`
+- `tests/cases/integration/checkpoint/hooks-ordering-visibility/`
+- `tests/cases/integration/checkpoint/hooks-state-emission-nonfatal/`
+
 ### Input Extraction
 
 Each directive kind has custom input extraction:
