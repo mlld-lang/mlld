@@ -1,7 +1,0 @@
-var @config = { tools: ["Read", "Write"] }
-
-var @result = env @config [
-  => "completed"
-]
-
-show @result

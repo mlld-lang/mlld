@@ -1,1 +1,0 @@
-for @v in @cfg => show `@v.mx.key: @v`

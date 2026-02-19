@@ -1,5 +1,0 @@
-exe @ask() = when [
-  @mx.try == 1 => @claude("Please share your opinion of mlld based on this intro: @docs")
-  @mx.try > 1 => show "\nRetrying with feedback: @mx.hint\n"
-  @mx.try > 1 => @claude("Share your opinion of mlld: @docs <feedback>@mx.hint</feedback>")
-]

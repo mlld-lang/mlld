@@ -1,6 +1,0 @@
-import { @fetchData, @validate, @transform } from @data/pipeline
-
-var @raw = @fetchData("https://api.example.com/users")
-var @valid = @validate(@raw, { schema: "user" })
-var @report = @transform(@valid, { format: "report" })
-show `Processed @report.count users`

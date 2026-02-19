@@ -1,3 +1,0 @@
-env @agent with { tools: @agentTools } [
-  run cmd { claude -p @task }
-]

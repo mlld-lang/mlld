@@ -1,5 +1,0 @@
-env @agent with { tools: @agentTools } [
-  >> @mx.tools.calls scoped to this env block
-  >> only tracks exe invocations the agent makes
-  var @result = @fetchData("input")
-]

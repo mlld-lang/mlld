@@ -1,6 +1,0 @@
-when [
-  @role == "admin" || @role == "mod" => show "Privileged"
-  @active && @verified => show "Active user"
-  !@banned => show "Allowed"
-  * => show "Blocked"
-]

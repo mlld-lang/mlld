@@ -1,5 +1,0 @@
-var @prompt = ::Review @input::
-sign @prompt with sha256
-exe llm @audit(input) = run cmd {
-  MLLD_VERIFY_VARS=prompt claude -p "Verify first: mlld verify prompt\n@prompt"
-}

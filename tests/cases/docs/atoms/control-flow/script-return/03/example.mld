@@ -1,7 +1,0 @@
-var @mode = "fast"
-when @mode == "fast" => [
-  if @ready [
-    => "immediate"
-  ]
-]
-=> "deferred"

@@ -1,5 +1,0 @@
-var @meta = {
-  id: @fm.id,
-  name: @fm.name,
-  version: @fm.version
-}

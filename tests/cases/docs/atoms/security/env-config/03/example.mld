@@ -1,1 +1,0 @@
-var @readonly = @sandbox with { fs: { read: [".:/app"], write: [] } }

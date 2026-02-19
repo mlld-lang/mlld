@@ -1,4 +1,0 @@
-var @score = 85
-if @score > 80 [
-  show "Excellent work!"
-]

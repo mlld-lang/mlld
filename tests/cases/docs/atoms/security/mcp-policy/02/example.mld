@@ -1,9 +1,0 @@
-var @strictPolicy = {
-  labels: {
-    "src:mcp": {
-      allow: ["op:cmd:git:status", "op:cmd:git:log"],
-      deny: ["op:cmd:git:push", "op:cmd:git:reset"]
-    }
-  }
-}
-policy @p = union(@strictPolicy)

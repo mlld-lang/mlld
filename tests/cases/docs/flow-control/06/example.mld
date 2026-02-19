@@ -1,4 +1,0 @@
-var @score = 95
-if @score > 90 [ show "Excellent!" ]
-if @score > 80 [ show "Above average!" ]
-if @score == 95 [ show "Perfect score!" ]

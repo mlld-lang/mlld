@@ -1,5 +1,0 @@
-var @policyConfig = {
-  allow: ["cmd:echo:*", "fs:r:**"],
-  deny: { sh: true, network: true }
-}
-policy @p = union(@policyConfig)

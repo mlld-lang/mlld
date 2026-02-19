@@ -1,8 +1,0 @@
-var @policyConfig = {
-  defaults: { rules: [...], unlabeled: "untrusted" },
-  operations: { "net:w": "exfil", "fs:w": "destructive" },
-  capabilities: { allow: [...], deny: [...], danger: [...] },
-  labels: { secret: { deny: ["op:show", "exfil"] } },
-  auth: { claude: { from: "keychain:...", as: "ANTHROPIC_API_KEY" } }
-}
-policy @p = union(@policyConfig)

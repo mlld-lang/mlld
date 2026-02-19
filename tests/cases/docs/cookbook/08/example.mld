@@ -1,3 +1,0 @@
-import { @config, @respond } from "./support-bot.mld"
-
-show @respond("How do I reset my password?")

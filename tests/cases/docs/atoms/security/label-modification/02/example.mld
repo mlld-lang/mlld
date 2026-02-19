@@ -1,9 +1,0 @@
->> Downgrade trust (always allowed)
-exe @taint(data) = [
-  => untrusted @data
-]
-
->> Add trusted (warning if already untrusted)
-exe @suggest(data) = [
-  => trusted @data
-]

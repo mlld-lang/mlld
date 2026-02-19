@@ -1,3 +1,0 @@
->> module.mld
-var @status = "active"
-=> { code: 200, status: @status }

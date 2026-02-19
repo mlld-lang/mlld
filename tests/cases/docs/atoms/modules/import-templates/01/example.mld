@@ -1,5 +1,0 @@
-import templates from "@root/agents" as @agents(message, context)
-
->> Access templates by name (bracket or dot notation)
-show @agents["alice"](@msg, @ctx)           >> agents/alice.att
-show @agents.support["helper"](@msg, @ctx)  >> agents/support/helper.att

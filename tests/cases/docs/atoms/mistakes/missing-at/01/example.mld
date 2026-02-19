@@ -1,5 +1,0 @@
->> Wrong
-var greeting = "Hello"
-
->> Correct
-var @greeting = "Hello"

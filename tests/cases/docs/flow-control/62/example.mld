@@ -1,6 +1,0 @@
-exe @guard(input) = [
-  when !@input => [
-    => "missing"
-  ]
-  => "ok"
-]

@@ -1,6 +1,0 @@
-var @input = "test"
-
-env @config [
-  let @processed = @input | @transform
-  => @processed
-]

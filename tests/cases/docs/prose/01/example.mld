@@ -1,3 +1,0 @@
-exe @function(params) = prose:@config { inline prose content }
-exe @function(params) = prose:@config "path/to/file.prose"
-exe @function(params) = prose:@config template "path/to/file.prose.att"

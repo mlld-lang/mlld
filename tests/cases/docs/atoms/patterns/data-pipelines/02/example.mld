@@ -1,3 +1,0 @@
-var @data = cmd {curl -s https://api.example.com/data}
-var @processed = @data | @parse | @validate | @transform | @csv
-output @processed to "report.csv"

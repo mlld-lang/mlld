@@ -1,5 +1,0 @@
-var @policyConfig = {
-  defaults: {
-    autoverify: "./verify.att"
-  }
-}

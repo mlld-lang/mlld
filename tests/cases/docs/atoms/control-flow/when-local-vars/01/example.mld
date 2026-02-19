@@ -1,6 +1,0 @@
-when @mode [
-  let @prefix = "Status:"
-  "active" => show "@prefix Active"
-  "pending" => show "@prefix Pending"
-  * => show "@prefix Unknown"
-]

@@ -1,3 +1,0 @@
-exe @llm(prompt) = stream cmd {claude "@prompt"}
-
-show @llm("Hello")  >> Content streams once (not duplicated)

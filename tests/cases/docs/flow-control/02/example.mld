@@ -1,7 +1,0 @@
-exe @classify(score) = [
-  if @score >= 90 [
-    => "A"
-  ] else [
-    => "B"
-  ]
-]

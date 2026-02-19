@@ -1,5 +1,0 @@
-exe @classify(score) = when [
-  @score >= 90 => "A"
-  @score >= 80 => "B"
-  * => "F"
-]

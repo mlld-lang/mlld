@@ -1,9 +1,0 @@
-var @policyConfig = {
-  labels: {
-    secret: { deny: ["op:show"] }
-  }
-}
-policy @p = union(@policyConfig)
-
-var secret @customerList = <internal/customers.csv>
-show @customerList

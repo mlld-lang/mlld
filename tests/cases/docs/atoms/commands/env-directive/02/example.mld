@@ -1,5 +1,0 @@
-var @cfg = { auth: "claude-alt" }
-
-env @cfg [
-  run cmd { claude -p @task } using auth:claude-alt
-]

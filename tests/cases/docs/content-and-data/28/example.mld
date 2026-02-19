@@ -1,9 +1,0 @@
-var @title = "MyTitle"
-var @empty = ""
-
-var @msg1 = `DEBUG:@title?`
-var @msg2 = `DEBUG:@empty?`
-show @msg1
-show @msg2
->> "DEBUG:MyTitle"
->> "DEBUG:"

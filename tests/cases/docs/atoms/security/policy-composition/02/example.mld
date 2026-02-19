@@ -1,4 +1,0 @@
-/import policy @baseline from "./baseline.mld"
-/import policy @company from "./company.mld"
-/var @localConfig = { deny: { sh: true } }
-/policy @localPolicy = union(@localConfig)

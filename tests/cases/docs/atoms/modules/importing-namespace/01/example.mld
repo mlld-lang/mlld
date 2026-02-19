@@ -1,5 +1,0 @@
-import @alice/utils as @alice
-import @bob/utils as @bob
-
-show @alice.format(@data)
-show @bob.format(@data)   >> no collision

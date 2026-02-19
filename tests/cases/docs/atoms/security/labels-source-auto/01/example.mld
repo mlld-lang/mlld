@@ -1,2 +1,0 @@
-var @config = <@root/config.txt>
-show @config.mx.taint | @parse

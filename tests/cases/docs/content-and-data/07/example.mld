@@ -1,5 +1,0 @@
-var @baseUser = { "name": "Ada", "role": "user" }
-var @admin = { ...@baseUser, "role": "admin", "active": true }
-
-show @admin.role  >> admin
-show @admin.active  >> true

@@ -1,5 +1,0 @@
-var secret @records = <internal/patients.csv>
-output @records to "@root/tmp/export.txt"
-
-var @loaded = <@root/tmp/export.txt>
-show @loaded.mx.labels     // ["secret"]

@@ -1,3 +1,0 @@
-var @files = <docs/*.md>
-for @file in @files => show @file.mx.filename
-for @file in @files => show @file.mx.data.status

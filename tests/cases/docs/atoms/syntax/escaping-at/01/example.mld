@@ -1,2 +1,0 @@
-var @email = `user\@example.com`  >> "user@example.com"
-var @email = `user@@example.com`  >> "user@example.com"

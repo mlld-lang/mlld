@@ -1,6 +1,0 @@
-var @status = "active"
-when @status [
-  "active" => show "Running"
-  "pending" => show "Waiting"
-  * => show "Unknown"
-]

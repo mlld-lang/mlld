@@ -1,5 +1,0 @@
-/import tools { @echo } from mcp "@anthropic/filesystem"
-/show @echo("hello")
-
-/import tools from mcp "@github/issues" as @github
-/show @github.createIssue("title", "body")

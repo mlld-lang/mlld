@@ -1,5 +1,0 @@
->> Wrong
-run cmd echo "hello"
-
->> Correct
-run cmd {echo "hello"}

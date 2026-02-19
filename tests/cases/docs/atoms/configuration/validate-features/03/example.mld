@@ -1,2 +1,0 @@
-var @now = "custom"
->> Error: cannot redefine reserved @now

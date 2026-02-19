@@ -1,3 +1,0 @@
-show "Processing..."
-=> { status: "ok" }
-show "unreachable"

@@ -1,4 +1,0 @@
-var @config = {"tools": "json", "model": ""}
-
-run cmd { echo @config.tools?`--tools` @config.model?`--model` }
->> Output: --tools

@@ -1,4 +1,0 @@
-exe @chat(prompt) = stream cmd {claude "@prompt"}
-
-show @chat("Explain mlld in one sentence")
->> Shows chunks as they arrive, not all at once

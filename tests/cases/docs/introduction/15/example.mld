@@ -1,5 +1,0 @@
-exe @analyze(data) = [
-  let @cleaned = @data.trim()
-  let @parsed = @cleaned | @parse
-  => @parsed.result
-]

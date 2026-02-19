@@ -1,7 +1,0 @@
-guard before op:show = when [
-  @input.any.mx.labels.includes("secret") => deny "Cannot display secrets"
-  * => allow
-]
-
-var secret @recipe = <vault/secret-recipe.txt>
-show @recipe

@@ -1,1 +1,0 @@
-exe @analyze(data) = prose:@config "./analysis.prose"

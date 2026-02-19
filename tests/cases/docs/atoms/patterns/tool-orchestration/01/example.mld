@@ -1,7 +1,0 @@
-var @areas = [
-  {"name": "auth", "files": ["auth/*.ts"], "tests": ["test/auth/*"]},
-  {"name": "api", "files": ["api/*.ts"], "tests": ["test/api/*"]}
-]
-
-exe @runQA(area) = cmd {echo "Testing @area.name" | cat}
-var @results = foreach @runQA(@areas)

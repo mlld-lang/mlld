@@ -1,5 +1,0 @@
-exe @process(result) = [
-  => @result
-]
->> Warning: @result can shadow caller variables
->> Suggestion: use @status instead

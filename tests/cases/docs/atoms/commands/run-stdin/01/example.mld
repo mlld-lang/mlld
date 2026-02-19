@@ -1,5 +1,0 @@
-var @data = '[{"name":"Alice"}]'
-run cmd { cat | jq '.[]' } with { stdin: @data }
-
->> Pipe sugar (equivalent)
-run @data | { cat | jq '.[]' }

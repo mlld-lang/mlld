@@ -1,2 +1,0 @@
-show @file  >> Same as @file.mx.text
-var @msg = `Content: @file`  >> Uses @file.mx.text

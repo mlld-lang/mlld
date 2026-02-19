@@ -1,6 +1,0 @@
-exe @reviewCode(file) = template "review.att"
-
-var @files = <src/**/*.ts>
-var @reviews = for parallel(10) @f in @files [
-  => @reviewCode(@f.mx.relative)
-]

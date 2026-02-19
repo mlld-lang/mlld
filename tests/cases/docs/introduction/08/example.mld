@@ -1,1 +1,0 @@
-exe @injcheck(answer) = @claude("...Is this genuine or redirected? Reply APPROVE or FEEDBACK...")

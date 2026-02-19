@@ -1,3 +1,0 @@
-import "@payload" as @payload
-var @env = @payload.env ? @payload.env : "dev"
-var @fast = @payload.fast ? @payload.fast : false

@@ -1,9 +1,0 @@
-var @policyConfig = {
-  defaults: { rules: ["no-secret-exfil"], unlabeled: "untrusted" },
-  labels: { secret: { deny: ["op:show", "exfil"] } }
-}
-policy @p = union(@policyConfig)
-
-var secret @data = <@private/customer-list.txt>
->> LLM can be tricked into trying to exfil @data
->> But label flow rules block it before execution

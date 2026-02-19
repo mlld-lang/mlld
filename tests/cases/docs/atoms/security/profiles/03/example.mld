@@ -1,2 +1,0 @@
-when @mx.profile == "full" => show "using all features"
-when @mx.profile == "readonly" => show "read-only fallback"

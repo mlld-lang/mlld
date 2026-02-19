@@ -1,6 +1,0 @@
->> JavaScript shadow environment
-exe @double(n) = js { return n * 2 }
-exe @cap(s) = js { return s[0].toUpperCase() + s.slice(1) }
-exe js = { double, cap }  >> expose to all js blocks
-
-var @out = js { cap("hello") + ": " + double(5) }  >> "Hello: 10"

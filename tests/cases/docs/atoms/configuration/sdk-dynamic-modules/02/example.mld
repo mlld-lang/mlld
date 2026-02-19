@@ -1,3 +1,0 @@
->> Namespace import for optional field access
-import "@payload" as @payload
-var @text = @payload.text ? @payload.text : "default"

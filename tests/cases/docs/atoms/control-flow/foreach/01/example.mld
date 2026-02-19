@@ -1,5 +1,0 @@
-var @names = ["alice", "bob", "charlie"]
-exe @greet(name) = `Hi @name!`
-
-var @greetings = foreach @greet(@names)
->> ["Hi alice!", "Hi bob!", "Hi charlie!"]

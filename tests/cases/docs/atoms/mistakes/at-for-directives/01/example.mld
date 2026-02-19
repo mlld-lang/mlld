@@ -1,7 +1,0 @@
->> Wrong
-@run cmd {echo "hello"}
-var @result = @run cmd {echo "hello"}
-
->> Correct
-run cmd {echo "hello"}
-var @result = cmd {echo "hello"}

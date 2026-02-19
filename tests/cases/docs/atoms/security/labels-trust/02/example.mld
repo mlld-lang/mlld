@@ -1,4 +1,0 @@
-var @policyConfig = {
-  defaults: { rules: ["no-untrusted-destructive", "no-untrusted-privileged"] }
-}
-policy @p = union(@policyConfig)

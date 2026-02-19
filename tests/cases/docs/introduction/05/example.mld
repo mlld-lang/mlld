@@ -1,6 +1,0 @@
-exe @check(input) = when [
-  let @review = @injcheck(@input)
-  @review.includes("APPROVE") => @input
-  @mx.try < 3 => retry "@review"
-  none => "Check failed after retries"
-]

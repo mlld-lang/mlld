@@ -1,4 +1,0 @@
-var secret @key = "abc"
-show @key.mx.labels
-show @key.mx.taint
-show @key.mx.sources

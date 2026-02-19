@@ -1,5 +1,0 @@
-exe @task1() = stream sh {sleep 2 && echo "Task 1 done"}
-exe @task2() = stream sh {sleep 1 && echo "Task 2 done"}
-
-var @results = stream @task1() || stream @task2()
->> Both tasks stream output as they complete

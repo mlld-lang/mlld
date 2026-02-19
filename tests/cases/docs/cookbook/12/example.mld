@@ -1,2 +1,0 @@
-exe @runQA(area) = cmd { echo "Testing @area.name" | cat }
-var @results = foreach @runQA(@areas)

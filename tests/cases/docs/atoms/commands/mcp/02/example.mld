@@ -1,2 +1,0 @@
-import tools { @echo } from mcp "@anthropic/filesystem"
-show @echo("hello")

@@ -1,6 +1,0 @@
-exe @validator(input) = when [
-  @input.valid => @input
-  @mx.try < 3 => retry "need more detail"
-  * => "fallback"
-]
-var @result = @raw | @validator

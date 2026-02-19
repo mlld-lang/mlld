@@ -1,3 +1,0 @@
-var secret @financials = <internal/q4-earnings.txt>
-var @result = @financials | @transform | @process
-show @result.mx.labels     // ["secret"]

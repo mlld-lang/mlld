@@ -1,2 +1,0 @@
-var @doubled = for @x in [1,2,3] => @x * 2     >> [2, 4, 6]
-var @names = for @user in @users => @user.name

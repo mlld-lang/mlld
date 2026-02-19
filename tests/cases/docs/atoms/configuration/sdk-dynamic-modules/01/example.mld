@@ -1,3 +1,0 @@
->> Destructuring import (fields must exist)
-import { text, userId } from @payload
-show @text

@@ -1,1 +1,0 @@
-var @result = @initial | while(100, 1s) @processor

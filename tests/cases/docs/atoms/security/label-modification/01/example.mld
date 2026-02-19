@@ -1,8 +1,0 @@
-exe @classify(data) = [
-  let @processed = @data | @transform
-  => pii @processed
-]
-
-exe @markMultiple(data) = [
-  => pii,internal @data
-]

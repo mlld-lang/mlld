@@ -1,5 +1,0 @@
-when [
-  @score > 90 => show "A"
-  @score > 80 => show "B"
-  * => show "F"
-]

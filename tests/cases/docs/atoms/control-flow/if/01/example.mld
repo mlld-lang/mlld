@@ -1,5 +1,0 @@
-if @isProd [
-  show "Production mode"
-] else [
-  show "Local mode"
-]

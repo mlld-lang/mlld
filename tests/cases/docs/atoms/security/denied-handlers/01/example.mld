@@ -1,9 +1,0 @@
-guard before op:run = when [
-  @input.any.mx.labels.includes("secret") => deny "Secrets blocked from shell"
-  * => allow
-]
-
-exe @safe(value) = when [
-  denied => `[blocked] @mx.guard.reason`
-  * => @value
-]

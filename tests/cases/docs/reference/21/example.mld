@@ -1,1 +1,0 @@
-for @value in @config => show `@value_key: @value`

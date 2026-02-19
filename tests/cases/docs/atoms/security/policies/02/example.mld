@@ -1,4 +1,0 @@
-export { @p }
-
->> In another file
-import policy @p from "./policies.mld"

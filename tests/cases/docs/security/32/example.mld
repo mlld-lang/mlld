@@ -1,5 +1,0 @@
-exe @normalize(value) = js { return String(@value).trim().toLowerCase(); }
-
-guard @normalizeExeInput before op:exe = when [
-  * => allow @normalize(@input)
-]

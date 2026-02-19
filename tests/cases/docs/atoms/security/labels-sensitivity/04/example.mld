@@ -1,6 +1,0 @@
-var secret @customerList = <internal/customers.csv>
-var @parsed = @customerList | @parse
-var @firstTen = @parsed.slice(0, 10)
-var @summary = `Top customers: @firstTen`
-
-show @summary.mx.labels

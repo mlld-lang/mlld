@@ -1,7 +1,0 @@
-guard @logDenied before op:exe = when [
-  @mx.tools.denied.includes(@mx.op.name) => [
-    log `Attempted blocked tool: @mx.op.name`
-    deny "Tool is blocked"
-  ]
-  * => allow
-]

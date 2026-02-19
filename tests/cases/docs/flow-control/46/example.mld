@@ -1,7 +1,0 @@
-var @msg = "  hello pipeline  "
-var @shout = @msg | @trim | @upper
-show @shout
-
-var @record = `{"z":2,"a":1}`
-var @normalized = @record | @sort | @pretty
-show @normalized

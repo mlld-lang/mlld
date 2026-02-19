@@ -1,9 +1,0 @@
->> module.mld
-if !@configured [
-  bail "module not configured"
-]
-export { data: "ok" }
-
->> main.mld
-import { data } from "./module.mld"  >> terminates here
-show @data  >> never reached

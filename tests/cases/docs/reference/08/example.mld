@@ -1,4 +1,0 @@
-run sh(@project):/tmp {
-  npm test && npm run build
-  echo "$project"
-}

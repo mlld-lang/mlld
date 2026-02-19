@@ -1,4 +1,0 @@
-var @data = @echo("test")
-var @upper = @data | @upper
-var @msg = `Result: @upper`
-show @msg.mx.taint | @parse

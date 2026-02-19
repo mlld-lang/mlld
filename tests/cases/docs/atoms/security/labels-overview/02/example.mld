@@ -1,3 +1,0 @@
-var secret @customerList = <internal/customers.csv>
-var @summary = @customerList | @summarize
-show @summary.mx.labels

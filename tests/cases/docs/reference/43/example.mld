@@ -1,9 +1,0 @@
-if @checkFailed [
-  bail "validation failed"
-]
-
-for @item in @items [
-  if !@item.valid [
-    bail `Invalid item: @item.id`
-  ]
-]

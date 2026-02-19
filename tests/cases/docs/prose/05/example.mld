@@ -1,5 +1,0 @@
-exe @summarize(text) = prose:@config {
-  session "Summarize the following"
-  input @text
-  output summary
-}

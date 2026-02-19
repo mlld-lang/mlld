@@ -1,2 +1,0 @@
-import { @MLLD_NODE_ENV, @MLLD_API_KEY } from @input
-show `Running in @MLLD_NODE_ENV`

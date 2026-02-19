@@ -1,1 +1,0 @@
-exe @codeReview(files, instructions) = template "./prompts/review.mtt"

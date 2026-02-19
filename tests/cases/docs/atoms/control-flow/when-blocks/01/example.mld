@@ -1,8 +1,0 @@
-var @result = when [
-  @needsProcessing => [
-    show "Processing..."
-    let @processed = @transform(@data)
-    => @processed
-  ]
-  * => @data
-]

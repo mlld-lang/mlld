@@ -1,3 +1,0 @@
-var @name = "alice"
-show @nmae
->> Warning: @nmae undefined

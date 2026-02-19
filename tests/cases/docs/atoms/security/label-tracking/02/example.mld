@@ -1,3 +1,0 @@
-var secret @recipe = <vault/secret-recipe.txt>
-var @msg = `Recipe: @recipe`
-show @msg.mx.labels        // ["secret"]

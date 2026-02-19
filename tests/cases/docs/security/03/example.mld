@@ -1,1 +1,0 @@
-import policy @prod from "./policies/production.mld"

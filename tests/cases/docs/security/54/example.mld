@@ -1,4 +1,0 @@
-var @policyConfig = { defaults: { autosign: ["templates"] } }
-policy @p = union(@policyConfig)
-
-exe @auditPrompt(input) = template "./audit.att"

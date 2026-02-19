@@ -1,1 +1,0 @@
-exe @greet(name: string) = js { return "Hello " + name; } with { description: "Greet a user by name" }

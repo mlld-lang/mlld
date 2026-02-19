@@ -1,2 +1,0 @@
-var @subtitle? = @item.subtitle
-show `Title: @item.title @subtitle?`

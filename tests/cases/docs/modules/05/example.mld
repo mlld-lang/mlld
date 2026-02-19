@@ -1,6 +1,0 @@
-import { @config } from "./config.mld"
-import "./helpers.mld" as @helpers
-import "./agents" as @agents
-show @config.apiKey
-show @helpers.format("ok")
-show @agents.support.reply("hello")

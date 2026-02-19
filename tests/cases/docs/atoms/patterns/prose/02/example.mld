@@ -1,7 +1,0 @@
-exe @refine(draft) = prose:@opus {
-  session "Refine document"
-  loop until **the draft meets publication standards** {
-    critique @draft
-    revise based on critique
-  }
-}

@@ -1,1 +1,0 @@
-exe @_internal(name) = "opaque"  >> Not in export list

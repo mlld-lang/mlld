@@ -1,9 +1,0 @@
-exe @assertEq(actual, expected) = js { return actual === expected }
-exe @assertContains(container, item) = js { return container.includes(item) }
-exe @assertLength(array, len) = js { return array.length === len }
-
->> Use helpers in tests
-var @user = { name: "Alice", tags: ["admin", "user"], permissions: [1, 2, 3] }
-var @test_user_name = @assertEq(@user.name, "Alice")
-var @test_tags_include_admin = @assertContains(@user.tags, "admin")
-var @test_permissions_count = @assertLength(@user.permissions, 3)

@@ -1,7 +1,0 @@
->> CORRECT: Sign before interpolation
-var @template = `Evaluate @data for issues.`
-sign @template with sha256
-
->> WRONG: Signing after interpolation includes tainted content
-var @result = `Evaluate @untrustedData for issues.`
-sign @result with sha256

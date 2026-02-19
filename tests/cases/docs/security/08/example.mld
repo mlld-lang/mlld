@@ -1,8 +1,0 @@
-/policy @production = {
-  defaults: { rules: ["no-secret-exfil", "no-sensitive-exfil"] },
-  capabilities: {
-    allow: ["cmd:git:*"],
-    danger: ["@keychain"]
-  }
-}
-/export { @production }

@@ -1,5 +1,0 @@
->> Two transforms run concurrently
-var @results = || @fetchA() || @fetchB() || @fetchC()
-
->> With concurrency cap
-var @capped = || @a() || @b() || @c() (2, 100ms)  >> cap=2, 100ms pacing

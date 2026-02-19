@@ -1,2 +1,0 @@
-var @config = {"host": "localhost", "port": 3000}
-for @key, @value in @config => show `@key: @value`

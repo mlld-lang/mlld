@@ -1,2 +1,0 @@
-var @relevantDocs = <docs/**/*.md>.section("API")
-var @recentChanges = <CHANGELOG.md> | @lines | @first(10)

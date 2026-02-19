@@ -1,6 +1,0 @@
-var @role = "admin"
-when [
-  @role == "admin" => show "✓ Admin access granted"
-  @role == "user" => show "User access granted"
-  * => show "Access denied"
-]

@@ -1,4 +1,0 @@
-exe @transform() = [
-  let @parse = "not-a-transformer"
-  >> Info: @parse shadows built-in transform in this scope
-]

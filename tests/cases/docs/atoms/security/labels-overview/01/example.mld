@@ -1,3 +1,0 @@
-var secret @customerList = <internal/customers.csv>
-var pii @patientRecords = <clinic/patients.csv>
-var untrusted @externalData = "from outside"

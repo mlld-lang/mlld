@@ -1,9 +1,0 @@
-import { @claude } from @mlld/claude
-
->> Create a model executor
-exe @opusModel(prompt) = @claude(@prompt, "opus", @root)
-
-var @config = {
-  model: @opusModel,
-  skills: ["open-prose:prose-boot", "open-prose:prose-compile", "open-prose:prose-run"]
-}

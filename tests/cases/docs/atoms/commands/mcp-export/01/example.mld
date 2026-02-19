@@ -1,3 +1,0 @@
-exe @status() = js { return "ok"; }
-exe @greet(name: string) = js { return "Hello " + name; }
-export { @status, @greet }

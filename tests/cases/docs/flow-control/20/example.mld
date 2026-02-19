@@ -1,9 +1,0 @@
-exe @filter(items) = [
-  let @results = []
-  for @item in @items [
-    when @item.valid => [
-      let @results += [@item]
-    ]
-  ]
-  => @results
-]

@@ -1,4 +1,0 @@
-env @sandbox with { tools: ["Read"] } [
-  >> Only Read is available here
-  run cmd { claude -p @task }
-]

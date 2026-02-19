@@ -1,3 +1,0 @@
->> main.mld
-import { default as @result } from "./module.mld"
-show @result.code     >> 200

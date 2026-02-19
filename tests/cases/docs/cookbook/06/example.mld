@@ -1,6 +1,0 @@
-var @processed = @data | @validate | @normalize | @analyze
-
-when [
-  @processed.ok => @emitReport(@processed)
-  !@processed.ok => show "Validation failed"
-]

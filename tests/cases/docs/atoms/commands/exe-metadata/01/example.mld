@@ -1,3 +1,0 @@
-exe @greet(name: string, times: number) = js { return "Hello " + name; }
-exe @process(data: object, format: string) = js { return data; }
-exe @count(items: array) = js { return items.length; }

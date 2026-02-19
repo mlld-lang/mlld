@@ -1,8 +1,0 @@
-guard @noSecretToMcp for secret = when [
-  @mx.op.type == "exe" => deny "Secret data cannot flow to executable operations"
-  * => allow
-]
-
-var secret @customerList = <internal/customers.csv>
-import tools { @createIssue } from mcp "@github/issues"
-show @createIssue("title", @customerList)

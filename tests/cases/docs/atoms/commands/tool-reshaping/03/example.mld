@@ -1,9 +1,0 @@
-var @org = "mlld"
-var @defaultRepo = "main"
-
-var tools @agentTools = {
-  createIssue: {
-    mlld: @createIssue,
-    bind: { owner: @org, repo: @defaultRepo }
-  }
-}

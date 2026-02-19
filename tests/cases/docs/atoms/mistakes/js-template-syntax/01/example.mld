@@ -1,7 +1,0 @@
->> Wrong
-var @msg = "Hello ${name}"
-show `Result: ${count}`
-
->> Correct
-var @msg = "Hello @name"
-show `Result: @count`

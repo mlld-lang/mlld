@@ -1,3 +1,0 @@
-exe @successOnly(value) = when [
-  !denied => @value
-]

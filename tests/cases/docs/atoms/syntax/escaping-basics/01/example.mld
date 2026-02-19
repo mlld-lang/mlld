@@ -1,5 +1,0 @@
->> Triple-colon disables all @ interpolation — treats @ as literal text
-var @xml = :::<USER id="@id">@name</USER>:::
-
->> Useful for XML/HTML with @ attributes
-var @elem = :::<input type="email" placeholder="user@example.com">:::

@@ -1,6 +1,0 @@
-env @config with { tools: ["read", "write"] } [...]
-env @config with { tools: "read, write" } [...]
-env @config with { tools: "*" } [...]
-
-var @subset = { read: @readTool, write: @writeTool }
-env @config with { tools: @subset } [...]

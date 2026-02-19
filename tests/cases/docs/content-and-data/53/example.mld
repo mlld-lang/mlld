@@ -1,5 +1,0 @@
-import templates from "@root/agents" as @agents(message, context)
-import templates from "@root/formatters" as @fmt(data)
-
-show @agents["alice"](@msg, @mx)    >> (message, context)
-show @fmt["json"](@result)           >> (data)

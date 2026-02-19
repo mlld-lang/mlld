@@ -1,2 +1,0 @@
-show foreach @greet(@names) with { separator: " | " }
->> "Hi alice! | Hi bob! | Hi charlie!"

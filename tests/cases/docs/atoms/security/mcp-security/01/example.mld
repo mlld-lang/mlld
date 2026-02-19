@@ -1,3 +1,0 @@
-import tools { @echo } from mcp "echo-server"
-var @result = @echo("hello")
-show @result.mx.taint | @parse

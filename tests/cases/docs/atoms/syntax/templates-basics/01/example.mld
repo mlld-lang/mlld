@@ -1,9 +1,0 @@
-var @message = `Hello @name, welcome!`
-var @doc = ::Use `mlld` to orchestrate::
-
->> Multi-line
-var @report = `
-Status: @status
-Config: <@root/config.json>
-Data: @data|@parse
-`

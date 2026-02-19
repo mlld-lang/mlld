@@ -1,5 +1,0 @@
-import module { @api } from @corp/tools
-import static { @prompt } from "./prompt.md"
-import live <https://status.io> as @status
-import cached(1h) <https://feed.xml> as @feed
-import local { @dev } from @alice/experimental

@@ -1,8 +1,0 @@
-var @jsonStr = '{"name": "Alice", "active": true}'
-
-exe @length(str) = js {
-  return str.length;
-}
-
-run @length(@jsonStr)          >> Default: string
-run @length(@jsonStr)          >> Raw JSON string

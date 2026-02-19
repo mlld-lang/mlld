@@ -1,6 +1,0 @@
-log @message                        >> same as output @message to stderr
-log `Processing: @item`
-
->> In action contexts
-for @item in @items => log @item
-when @debug => log "Debug info"

@@ -1,3 +1,0 @@
->> In myscript.mld - required fields
-import { topic, count } from @payload
-show `Topic: @topic, Count: @count`

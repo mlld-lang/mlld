@@ -1,8 +1,0 @@
-exe @greet(name: string, times: number) = js { return "Hello " + name; }
-exe @process(data: object, format: string) = js { return data; }
-exe @count(items: array) = js { return items.length; }
-
->> With description for MCP tool listings
-exe @searchIssues(repo: string, query: string, limit: number) = cmd {
-  gh issue list -R @repo --search "@query" -L @limit --json number,title
-} with { description: "Search GitHub issues by query" }

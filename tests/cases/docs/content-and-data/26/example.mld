@@ -1,2 +1,0 @@
-var @subtitle? = @item.subtitle      >> omit if falsy
-show `Title: @item.title @subtitle?` >> subtitle only if present
