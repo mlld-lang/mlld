@@ -10,7 +10,7 @@ related-types: HookManager { PreHook, PostHook, HookDecision, HookInputHelpers }
 
 ## tldr
 
-mlld's hook system enables pre-execution and post-execution extensions at evaluation boundaries (directives and user-defined exe invocations). Pre-hooks inspect inputs and can abort operations (guard insertion point). Post-hooks transform results and propagate metadata (taint tracking). Hooks receive extracted inputs, operation context, and optional input helpers for analysis.
+mlld's hook system enables pre-execution and post-execution extensions at evaluation boundaries (directives, effects, and user-defined exe invocations). Built-in hooks enforce guard/taint behavior, while user `/hook` directives add ordered transforms and observability with isolated failures. Hooks receive extracted inputs, operation context, and optional input helpers for analysis.
 
 ## Principles
 
@@ -18,6 +18,9 @@ mlld's hook system enables pre-execution and post-execution extensions at evalua
 - Pre-hooks run in registration order, first non-continue action stops chain
 - Post-hooks run in registration order, transform results sequentially
 - Hooks receive extracted inputs (any type), operation context, and optional helpers
+- User `/hook` transforms chain in declaration order for both `before` and `after` timing
+- User hook body failures are isolated and recorded in `@mx.hooks.errors` (operation continues)
+- Function hooks support optional first-arg prefix matching via `hook ... @fn("prefix")`
 - Non-reentrant per directive invocation (prevent infinite loops)
 - Hooks/checkpoint/resume rollout contract is tracked in `docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md` (Phase 0 decision lock before implementation phases).
 
@@ -101,6 +104,7 @@ interface GuardInputHelper {
 - Push/pop context stacks for nested operations
 - Builds ambient @mx object with security and pipeline state
 - Provides guard context snapshots so denied handlers can access the guarded Variable via `@mx.guard.input` (alias `@mx.input`)
+- Exposes hook runtime errors at `@mx.hooks.errors` from operation metadata
 
 **extractDirectiveInputs** (`interpreter/eval/directive-inputs.ts`)
 - Extracts inputs from directives (Variables or other values)
@@ -147,8 +151,8 @@ return env.withOpContext(operationContext, async () => {
   return hookManager.runPost(node, result, guardInputs, env, operationContext);
 });
 ```
-Hooks run only for user-defined `/exe` functions. Built-in helpers and guard helper executables short-circuit before hook execution to avoid recursion.
-`/hook` directives are registered into `HookRegistry` during directive evaluation; execution of user-defined hook bodies is enabled in later lifecycle phases.
+Hooks run for directive, effect, and user-defined `/exe` boundaries. Built-in helper executables still short-circuit hook execution to avoid recursion loops.
+`/hook` directives are registered into `HookRegistry` during directive evaluation, then executed by `interpreter/hooks/user-hook-runner.ts` at lifecycle boundaries.
 
 ### Built-in Hooks
 

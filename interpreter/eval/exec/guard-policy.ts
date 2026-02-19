@@ -23,7 +23,11 @@ import { getGuardTransformedInputs, handleGuardDecision } from '@interpreter/hoo
 import { runUserAfterHooks, runUserBeforeHooks } from '@interpreter/hooks/user-hook-runner';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
-import { materializeGuardInputsWithMapping, type GuardInputMappingEntry } from '@interpreter/utils/guard-inputs';
+import {
+  materializeGuardInputs,
+  materializeGuardInputsWithMapping,
+  type GuardInputMappingEntry
+} from '@interpreter/utils/guard-inputs';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { resolveOpTypeFromLanguage } from '@interpreter/eval/exec/context';
 import { formatGuardWarning, handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
@@ -523,14 +527,34 @@ export async function runExecPreGuards(options: RunExecPreGuardsOptions): Promis
     evaluatedArgStrings
   } = options;
   const hookManager = env.getHookManager();
-  await runUserBeforeHooks(node, guardInputs, env, operationContext);
-  const preDecision = await hookManager.runPre(node, guardInputs, env, operationContext);
-  const transformedGuardInputs = getGuardTransformedInputs(preDecision, guardInputs);
-  let postHookInputs: readonly Variable[] = guardInputs;
-  let transformedGuardSet: ReadonlySet<Variable> | null = null;
+  const userHookInputs = await runUserBeforeHooks(node, guardInputs, env, operationContext);
+  const preHookInputs =
+    userHookInputs === guardInputs
+      ? guardInputs
+      : materializeGuardInputs(userHookInputs, { nameHint: '__guard_input__' });
+  let transformedGuardSet: Set<Variable> | null = null;
+  if (preHookInputs !== guardInputs) {
+    transformedGuardSet = new Set(preHookInputs);
+    applyGuardTransformsToExecArgs({
+      guardInputEntries: guardInputsWithMapping,
+      transformedInputs: preHookInputs,
+      guardVariableCandidates,
+      evaluatedArgs,
+      evaluatedArgStrings
+    });
+  }
+
+  const preDecision = await hookManager.runPre(node, preHookInputs, env, operationContext);
+  const transformedGuardInputs = getGuardTransformedInputs(preDecision, preHookInputs);
+  let postHookInputs: readonly Variable[] = preHookInputs;
   if (transformedGuardInputs && transformedGuardInputs.length > 0) {
     postHookInputs = transformedGuardInputs;
-    transformedGuardSet = new Set(transformedGuardInputs as readonly Variable[]);
+    if (!transformedGuardSet) {
+      transformedGuardSet = new Set<Variable>();
+    }
+    for (const transformedInput of transformedGuardInputs) {
+      transformedGuardSet.add(transformedInput);
+    }
     applyGuardTransformsToExecArgs({
       guardInputEntries: guardInputsWithMapping,
       transformedInputs: transformedGuardInputs,
@@ -542,7 +566,7 @@ export async function runExecPreGuards(options: RunExecPreGuardsOptions): Promis
   return {
     preDecision,
     postHookInputs,
-    transformedGuardSet
+    transformedGuardSet: transformedGuardSet && transformedGuardSet.size > 0 ? transformedGuardSet : null
   };
 }
 

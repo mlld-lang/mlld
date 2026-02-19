@@ -44,6 +44,7 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import type { WithClause } from '@core/types';
 import { evaluateSign, evaluateVerify } from './sign-verify';
 import { evaluateBail } from './bail';
+import { VariableImporter } from './import/VariableImporter';
 
 /**
  * Extract trace information from a directive
@@ -171,14 +172,32 @@ export async function evaluateDirective(
           operationContext,
           context
         );
-        await runUserBeforeHooks(directive, extractedInputs, env, operationContext);
+        let hookInputs = await runUserBeforeHooks(directive, extractedInputs, env, operationContext);
+        if (precomputedVarAssignment && hookInputs[0] !== undefined) {
+          const firstHookInput = hookInputs[0];
+          const replacementVariable = isVariable(firstHookInput)
+            ? (firstHookInput as Variable)
+            : new VariableImporter().createVariableFromValue(
+                precomputedVarAssignment.identifier,
+                firstHookInput,
+                'let',
+                undefined,
+                { env }
+              );
+          precomputedVarAssignment = {
+            ...precomputedVarAssignment,
+            variable: replacementVariable
+          };
+          hookInputs = [replacementVariable, ...hookInputs.slice(1)];
+        }
+
         const preDecision = await hookManager.runPre(
           directive,
-          extractedInputs,
+          hookInputs,
           env,
           operationContext
         );
-        const transformedInputs = getGuardTransformedInputs(preDecision, extractedInputs);
+        const transformedInputs = getGuardTransformedInputs(preDecision, hookInputs);
         if (precomputedVarAssignment && transformedInputs && transformedInputs[0]) {
           const firstTransformed = transformedInputs[0];
           if (isVariable(firstTransformed)) {
@@ -189,7 +208,7 @@ export async function evaluateDirective(
           }
         }
 
-        const resolvedInputs = transformedInputs ?? extractedInputs;
+        const resolvedInputs = transformedInputs ?? hookInputs;
         await handleGuardDecision(preDecision, directive, env, operationContext);
 
         const mergedContext = mergeEvaluationContext(
@@ -205,7 +224,11 @@ export async function evaluateDirective(
         result = await hookManager.runPost(directive, result, resolvedInputs, env, operationContext);
         result = await runUserAfterHooks(directive, result, resolvedInputs, env, operationContext);
 
-        if (directive.kind === 'var' && precomputedVarAssignment && (result as any).__guardTransformed) {
+        if (
+          directive.kind === 'var' &&
+          precomputedVarAssignment &&
+          ((result as any).__guardTransformed || (result as any).__userHookTransformed)
+        ) {
           const targetVar = env.getVariable(precomputedVarAssignment.identifier) ?? {
             ...precomputedVarAssignment.variable
           };

@@ -261,10 +261,14 @@ export async function runBuiltinEffect(
   }
 
   await env.withOpContext(operationContext, async () => {
-    await runUserBeforeHooks(hookNode, inputs, env, operationContext);
-    const preDecision = await hookManager.runPre(hookNode, inputs, env, operationContext);
-    const transformedInputs = getGuardTransformedInputs(preDecision, inputs);
-    const resolvedInputs = transformedInputs ?? inputs;
+    const userHookInputs = await runUserBeforeHooks(hookNode, inputs, env, operationContext);
+    const preHookInputs =
+      userHookInputs === inputs
+        ? inputs
+        : materializeGuardInputs(userHookInputs, { nameHint: '__effect_input__' });
+    const preDecision = await hookManager.runPre(hookNode, preHookInputs, env, operationContext);
+    const transformedInputs = getGuardTransformedInputs(preDecision, preHookInputs);
+    const resolvedInputs = transformedInputs ?? preHookInputs;
 
     try {
       await handleGuardDecision(preDecision, hookNode, env, operationContext);
@@ -275,7 +279,7 @@ export async function runBuiltinEffect(
       throw error;
     }
 
-    const primaryInput = resolvedInputs[0] ?? inputs[0];
+    const primaryInput = resolvedInputs[0] ?? preHookInputs[0];
     const payloadVariable = isVariable(primaryInput) ? primaryInput : undefined;
     const payloadValue =
       payloadVariable !== undefined ? await extractVariableValue(payloadVariable, env) : payload;

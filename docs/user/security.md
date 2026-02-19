@@ -17,6 +17,15 @@ run cmd { echo @apiKey }  >> Blocked by guard
 
 Inline effects (`| output`, `| show`, `| append`, `| log`) use the same guard path as directives. Guard filters `op:output`/`op:show`/`op:append`/`op:log` cover both inline effects and directives.
 
+## Guards vs Hooks
+
+Use guards for enforcement and hooks for instrumentation/observability:
+
+- Guards can deny/retry and are part of policy enforcement.
+- Hooks cannot deny operations; they can transform values and emit telemetry.
+- Hook failures are isolated and surfaced in `@mx.hooks.errors` so the parent operation continues.
+- Hook bodies can call normal directives/executables (`output`, `append`, `run`, `state://`, and function calls), but those failures stay inside hook error collection.
+
 ## Standard Policy Patterns
 
 These are conventional policy module names you can create for your project:

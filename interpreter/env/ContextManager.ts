@@ -312,6 +312,14 @@ export class ContextManager {
       errorsContext && typeof errorsContext === 'object' && Array.isArray((errorsContext as any).errors)
         ? (errorsContext as any).errors
         : this.latestErrors;
+    const hookErrors =
+      normalizedOperation &&
+      typeof normalizedOperation === 'object' &&
+      normalizedOperation !== null &&
+      typeof (normalizedOperation as any).metadata === 'object' &&
+      Array.isArray((normalizedOperation as any).metadata.userHookErrors)
+        ? (((normalizedOperation as any).metadata.userHookErrors as unknown[]) ?? [])
+        : [];
 
     const mxValue: Record<string, unknown> = {
       ...pipelineFields.root,
@@ -338,6 +346,9 @@ export class ContextManager {
       ...(loopContext ? { loop: loopContext } : {}),
       ...(forContext ? { for: forContext } : {}),
       errors: Array.isArray(resolvedErrors) ? resolvedErrors : [],
+      hooks: {
+        errors: Array.isArray(hookErrors) ? [...hookErrors] : []
+      },
       tools: this.getToolsSnapshot()
     };
 

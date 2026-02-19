@@ -1,4 +1,4 @@
-import type { HookTiming, HookBodyNode } from '@core/types/hook';
+import type { HookBodyNode, HookFilterKind, HookTiming } from '@core/types/hook';
 import type { HookableNode } from '@core/types/hooks';
 import { isExecHookTarget } from '@core/types/hooks';
 import type { EvalResult } from '../core/interpreter';
@@ -7,6 +7,8 @@ import type { OperationContext } from '../env/ContextManager';
 import type { Environment } from '../env/Environment';
 import { evaluateWhenExpression } from '../eval/when-expression';
 import { VariableImporter } from '../eval/import/VariableImporter';
+import { asText, isStructuredValue } from '../utils/structured-value';
+import { isVariable } from '../utils/variable-resolution';
 import type { HookDefinition } from './HookRegistry';
 
 interface UserHookRunOptions {
@@ -16,6 +18,44 @@ interface UserHookRunOptions {
   operation?: OperationContext;
   inputs: readonly unknown[];
   result?: EvalResult;
+}
+
+interface HookExecutionOutcome {
+  transformed: boolean;
+  value?: unknown;
+}
+
+interface HookExecutionError {
+  hookId: string;
+  hookName: string | null;
+  timing: HookTiming;
+  filterKind: HookFilterKind;
+  message: string;
+}
+
+const USER_HOOK_ERRORS_METADATA_KEY = 'userHookErrors';
+
+function ensureOperationHookErrorBucket(operation?: OperationContext): HookExecutionError[] {
+  if (!operation) {
+    return [];
+  }
+
+  const operationRef = operation as OperationContext & {
+    metadata?: Record<string, unknown>;
+  };
+  if (!operationRef.metadata || typeof operationRef.metadata !== 'object') {
+    operationRef.metadata = {};
+  }
+
+  const metadata = operationRef.metadata as Record<string, unknown>;
+  const existing = metadata[USER_HOOK_ERRORS_METADATA_KEY];
+  if (Array.isArray(existing)) {
+    return existing as HookExecutionError[];
+  }
+
+  const created: HookExecutionError[] = [];
+  metadata[USER_HOOK_ERRORS_METADATA_KEY] = created;
+  return created;
 }
 
 function addUniqueHooks(
@@ -60,11 +100,52 @@ function resolveFunctionName(node: HookableNode, operation?: OperationContext): 
   return commandName && commandName.length > 0 ? commandName : undefined;
 }
 
+function stringifyHookArgument(value: unknown): string {
+  const normalized = isVariable(value) ? value.value : value;
+
+  if (isStructuredValue(normalized)) {
+    return asText(normalized);
+  }
+
+  if (normalized === undefined) {
+    return '';
+  }
+
+  if (normalized === null) {
+    return 'null';
+  }
+
+  if (typeof normalized === 'string' || typeof normalized === 'number' || typeof normalized === 'boolean') {
+    return String(normalized);
+  }
+
+  try {
+    return JSON.stringify(normalized);
+  } catch {
+    return String(normalized);
+  }
+}
+
+function matchesFunctionArgPattern(hook: HookDefinition, inputs: readonly unknown[]): boolean {
+  if (hook.filterKind !== 'function') {
+    return true;
+  }
+
+  const pattern = typeof hook.argPattern === 'string' ? hook.argPattern : null;
+  if (!pattern || pattern.length === 0) {
+    return true;
+  }
+
+  const firstInput = inputs.length > 0 ? inputs[0] : undefined;
+  return stringifyHookArgument(firstInput).startsWith(pattern);
+}
+
 function collectMatchingUserHooks(
   timing: HookTiming,
   node: HookableNode,
   env: Environment,
-  operation?: OperationContext
+  operation: OperationContext | undefined,
+  inputs: readonly unknown[]
 ): HookDefinition[] {
   const registry = env.getHookRegistry();
   const matches: HookDefinition[] = [];
@@ -85,7 +166,10 @@ function collectMatchingUserHooks(
 
   const functionName = resolveFunctionName(node, operation);
   if (functionName) {
-    addUniqueHooks(matches, registry.getFunctionHooks(functionName, timing), seen);
+    const functionHooks = registry
+      .getFunctionHooks(functionName, timing)
+      .filter(hook => matchesFunctionArgPattern(hook, inputs));
+    addUniqueHooks(matches, functionHooks, seen);
   }
 
   return matches.sort((a, b) => a.registrationOrder - b.registrationOrder);
@@ -103,12 +187,15 @@ function bindHookVariable(
 
 function createHookEnvironment(
   env: Environment,
+  hook: HookDefinition,
+  timing: HookTiming,
   inputs: readonly unknown[],
   result?: EvalResult
 ): Environment {
   const hookEnv = env.createChild();
   const importer = new VariableImporter();
-  const inputValue = inputs.length === 1 ? inputs[0] : inputs;
+  const shouldExposeInputArray = hook.filterKind === 'function' && timing === 'before';
+  const inputValue = shouldExposeInputArray ? Array.from(inputs) : inputs.length === 1 ? inputs[0] : Array.from(inputs);
   bindHookVariable(hookEnv, importer, 'input', inputValue);
   if (result !== undefined) {
     bindHookVariable(hookEnv, importer, 'output', result.value);
@@ -116,33 +203,120 @@ function createHookEnvironment(
   return hookEnv;
 }
 
-async function executeHookBody(body: HookBodyNode, hookEnv: Environment): Promise<void> {
+async function executeHookBody(body: HookBodyNode, hookEnv: Environment): Promise<HookExecutionOutcome> {
   if (body.type === 'WhenExpression') {
-    await evaluateWhenExpression(body as any, hookEnv);
-    return;
+    const evaluated = await evaluateWhenExpression(body as any, hookEnv);
+    return {
+      transformed: true,
+      value: evaluated.value
+    };
   }
 
   if (body.type === 'HookBlock') {
+    let lastStatementResult: EvalResult | undefined;
     for (const statement of body.statements ?? []) {
-      await evaluate(statement as any, hookEnv);
+      lastStatementResult = await evaluate(statement as any, hookEnv);
     }
-    return;
+
+    if (body.meta?.hasReturn === true) {
+      return {
+        transformed: true,
+        value: lastStatementResult?.value
+      };
+    }
+
+    return {
+      transformed: false
+    };
+  }
+
+  const evaluated = await evaluate(body as any, hookEnv);
+  return {
+    transformed: true,
+    value: evaluated.value
+  };
+}
+
+function applyBeforeHookTransform(_currentInputs: readonly unknown[], value: unknown): readonly unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  return [value];
+}
+
+function applyAfterHookTransform(result: EvalResult, value: unknown): EvalResult {
+  const transformed: EvalResult = {
+    ...result,
+    value
+  };
+  (transformed as any).__userHookTransformed = true;
+  return transformed;
+}
+
+function normalizeHookErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
   }
 }
 
-async function runUserHooks(options: UserHookRunOptions): Promise<EvalResult | undefined> {
+function toHookExecutionError(hook: HookDefinition, timing: HookTiming, error: unknown): HookExecutionError {
+  return {
+    hookId: hook.id,
+    hookName: hook.name ?? null,
+    timing,
+    filterKind: hook.filterKind,
+    message: normalizeHookErrorMessage(error)
+  };
+}
+
+async function runUserHooks(
+  options: UserHookRunOptions
+): Promise<{ inputs: readonly unknown[]; result?: EvalResult }> {
   const { timing, node, env, operation, inputs, result } = options;
-  const matches = collectMatchingUserHooks(timing, node, env, operation);
+  const matches = collectMatchingUserHooks(timing, node, env, operation, inputs);
+  const hookErrors = ensureOperationHookErrorBucket(operation);
   if (matches.length === 0) {
-    return result;
+    return {
+      inputs,
+      result
+    };
   }
 
+  let currentInputs = inputs;
+  let currentResult = result;
   for (const hook of matches) {
-    const hookEnv = createHookEnvironment(env, inputs, result);
-    await executeHookBody(hook.body, hookEnv);
+    const hookEnv = createHookEnvironment(env, hook, timing, currentInputs, currentResult);
+    try {
+      const execution = await executeHookBody(hook.body, hookEnv);
+      if (!execution.transformed) {
+        continue;
+      }
+
+      if (timing === 'before') {
+        currentInputs = applyBeforeHookTransform(currentInputs, execution.value);
+        continue;
+      }
+
+      if (currentResult !== undefined) {
+        currentResult = applyAfterHookTransform(currentResult, execution.value);
+      }
+    } catch (error) {
+      hookErrors.push(toHookExecutionError(hook, timing, error));
+    }
   }
 
-  return result;
+  return {
+    inputs: currentInputs,
+    result: currentResult
+  };
 }
 
 export async function runUserBeforeHooks(
@@ -150,14 +324,15 @@ export async function runUserBeforeHooks(
   inputs: readonly unknown[],
   env: Environment,
   operation?: OperationContext
-): Promise<void> {
-  await runUserHooks({
+): Promise<readonly unknown[]> {
+  const runResult = await runUserHooks({
     timing: 'before',
     node,
     env,
     operation,
     inputs
   });
+  return runResult.inputs;
 }
 
 export async function runUserAfterHooks(
@@ -167,14 +342,13 @@ export async function runUserAfterHooks(
   env: Environment,
   operation?: OperationContext
 ): Promise<EvalResult> {
-  return (
-    (await runUserHooks({
-      timing: 'after',
-      node,
-      env,
-      operation,
-      inputs,
-      result
-    })) ?? result
-  );
+  const runResult = await runUserHooks({
+    timing: 'after',
+    node,
+    env,
+    operation,
+    inputs,
+    result
+  });
+  return runResult.result ?? result;
 }

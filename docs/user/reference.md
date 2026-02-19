@@ -544,6 +544,13 @@ Supported operation filters: `op:var`, `op:run`, `op:exe`, `op:show`, `op:output
 
 Hook bodies accept either a block (`[ ... ]`) or a `when [...]` expression.
 
+Behavior notes:
+- Matching hooks run in declaration order.
+- `before` and `after` hook return values chain. A later hook receives the previous transformed value.
+- Hook body errors do not abort the parent operation; they are collected in `@mx.hooks.errors`.
+- Function filter arg-prefix matching (`@fn("prefix")`) uses `startsWith` against the first argument string form.
+- Observability pattern: emit telemetry from hooks with `output ... to "state://telemetry"` and read errors from `@mx.hooks.errors`.
+
 ### `env` - Scoped Execution
 
 Create scoped execution contexts with isolation, credential management, and capability control:
