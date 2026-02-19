@@ -1,0 +1,546 @@
+>> Review: Hooks + Checkpoint + Resume Implementation
+>> Usage: mlld run review [--parallel 5] [--phase 1|2|3|4|5|6] [--skip-live]
+>>
+>> Adversarial multi-phase review of the hooks, checkpointing, and resume features.
+>> Uses hooks and checkpoint features itself — run with --checkpoint for caching.
+>>
+>> Phases:
+>>   1. Spec compliance review (implementation against spec)
+>>   2. Test quality review (coverage and rigor)
+>>   3. Documentation accuracy review
+>>   4. Live feature testing (real CLI execution, real LLM calls)
+>>   5. Adversarial invalidation of all findings
+>>   6. Final synthesis and deficiency report
+
+import { @claudePoll } from @local/claude-poll
+import { @logEvent, @fileExists, @flatName, @mkdirp, @writeJson, @flatten, @countBySeverity, @tagFindings } from "./lib/context.mld"
+import "@payload" as @p
+
+>> ─── Config ───
+
+var @parallelism = @p.parallel ? @p.parallel * 1 : 5
+var @startPhase = @p.phase ? @p.phase * 1 : 1
+var @skipLive = @p.nolive ?? ""
+var @maxRetries = 2
+var @maxAttempts = @maxRetries + 1
+
+>> Tool permissions — escalation by role
+var @reviewTools = "Read,Write,Glob,Grep"
+var @liveTestTools = "Read,Write,Edit,Glob,Grep,Bash(mlld:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(rm:tmp/*),Bash(time:*),Bash(diff:*)"
+var @invalidateTools = "Read,Write,Glob,Grep,Bash(mlld:*),Bash(npm:*),Bash(ls:*),Bash(cat:*)"
+var @synthesizeTools = "Read,Write,Glob,Grep"
+
+>> Prompt templates
+exe @specCompliancePrompt(clusterName, clusterFiles, specPath, planPath, evidenceRules) = template "./prompts/workers/spec-compliance.att"
+exe @testQualityPrompt(clusterName, clusterFiles, specPath, evidenceRules) = template "./prompts/workers/test-quality.att"
+exe @docsAccuracyPrompt(docFile, specPath, evidenceRules) = template "./prompts/workers/docs-accuracy.att"
+exe @liveTestPrompt(scenarioName, scenarioDesc, specPath, evidenceRules) = template "./prompts/workers/live-test.att"
+exe @invalidatePrompt(findingJson, findingPhase, findingSource, findingId, findingSeverity, evidenceRules) = template "./prompts/workers/invalidate.att"
+exe @synthesizePrompt(runDir, specPath, planPath, evidenceRules) = template "./prompts/workers/synthesize.att"
+
+>> Shared fragments
+var @evidenceRules = <./prompts/shared/evidence-rules.md>
+var @specPath = "spec-hooks-checkpoints-resume.md"
+var @planPath = "plan-hooks-checkpoints-resume.md"
+
+>> ─── LLM call wrapper with llm label for checkpointing ───
+>> Labels live on immutable declarations (var/exe), not let (mutable).
+>> This exe wraps claudePoll so invocations are checkpoint-eligible.
+exe llm @llmCall(prompt, model, dir, tools, outPath) = @claudePoll(@prompt, @model, @dir, @tools, @outPath)
+
+>> ─── Hooks — using the features under review ───
+
+>> Track LLM invocations with checkpoint awareness
+hook @trackLlm after op:exe = [
+  if @mx.op.name == "llmCall" [
+    append `@now | @mx.op.name | cached:@mx.checkpoint.hit` to "@runDir/llm-calls.log"
+  ]
+]
+
+>> ─── Review targets ───
+
+>> Implementation clusters
+var @implClusters = [
+  { id: "grammar-ast", name: "Grammar and AST", files: "grammar/directives/hook.peggy, core/types/hook.ts, core/types/hooks.ts" },
+  { id: "registry", name: "HookRegistry and Registration", files: "interpreter/hooks/HookRegistry.ts, interpreter/eval/hook.ts" },
+  { id: "user-hooks", name: "User Hook Runtime", files: "interpreter/hooks/user-hook-runner.ts, interpreter/hooks/hook-decision-handler.ts" },
+  { id: "checkpoint-mgr", name: "Checkpoint Manager", files: "interpreter/checkpoint/CheckpointManager.ts" },
+  { id: "checkpoint-hooks", name: "Checkpoint Hooks", files: "interpreter/hooks/checkpoint-pre-hook.ts, interpreter/hooks/checkpoint-post-hook.ts" },
+  { id: "eval-integration", name: "Evaluation Integration", files: "interpreter/eval/directive.ts, interpreter/eval/exec/guard-policy.ts, interpreter/eval/for.ts, interpreter/eval/for/iteration-runner.ts" },
+  { id: "env-context", name: "Environment and Context", files: "interpreter/env/Environment.ts, interpreter/env/ContextManager.ts" },
+  { id: "cli-sdk", name: "CLI and SDK", files: "cli/commands/run.ts, cli/commands/checkpoint.ts, sdk/execute.ts, sdk/types.ts" }
+]
+
+>> Test clusters
+var @testClusters = [
+  { id: "hook-registry-tests", name: "Hook Registry Tests", files: "tests/interpreter/hooks/HookRegistry.test.ts" },
+  { id: "user-hook-tests", name: "User Hook Tests", files: "tests/interpreter/hooks/user-hooks.test.ts" },
+  { id: "lifecycle-tests", name: "Lifecycle Characterization Tests", files: "tests/interpreter/hooks/lifecycle-characterization.test.ts, tests/interpreter/hooks/lifecycle-trace-helper.test.ts" },
+  { id: "checkpoint-mgr-tests", name: "Checkpoint Manager Tests", files: "tests/interpreter/checkpoint/CheckpointManager.test.ts" },
+  { id: "checkpoint-runtime-tests", name: "Checkpoint Runtime Tests", files: "tests/interpreter/checkpoint/checkpoint-runtime-semantics.test.ts, tests/interpreter/checkpoint/checkpoint-decision-adapter.test.ts" },
+  { id: "resume-fork-tests", name: "Resume and Fork Tests", files: "tests/interpreter/checkpoint/resume-fork.test.ts" },
+  { id: "integration-fixture-tests", name: "Integration Fixture Tests", files: "tests/interpreter/checkpoint/integration-fixtures.test.ts" }
+]
+
+>> Doc files
+var @docItems = [
+  { id: "dev-hooks", name: "Dev Hooks Architecture", file: "docs/dev/HOOKS.md" },
+  { id: "contract", name: "Implementation Contract", file: "docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md" },
+  { id: "risk-gates", name: "Risk Reduction Gates", file: "docs/dev/HOOKS-CHECKPOINT-RISK-GATES.md" },
+  { id: "user-cli", name: "User CLI Reference", file: "docs/user/cli.md" },
+  { id: "user-reference", name: "User Language Reference", file: "docs/user/reference.md" },
+  { id: "changelog", name: "CHANGELOG", file: "CHANGELOG.md" }
+]
+
+>> Live test scenario descriptions (kept short to avoid parse issues with special chars)
+>> Full instructions are in the prompt template and spec
+var @liveTests = [
+  { id: "hook-syntax", name: "Hook Syntax Validation", desc: "Validate all hook syntax forms parse correctly and invalid forms fail" },
+  { id: "hook-execution", name: "Hook Execution and Ordering", desc: "Verify hooks fire in declaration order at correct lifecycle points" },
+  { id: "hook-error-isolation", name: "Hook Error Isolation", desc: "Verify hook errors do not crash the main operation" },
+  { id: "hook-transforms", name: "Hook Transform Chaining", desc: "Verify before and after hooks chain value transforms correctly" },
+  { id: "checkpoint-caching", name: "Checkpoint Cache Creation and Reuse", desc: "Verify llm-labeled calls are cached to disk and reused on re-run" },
+  { id: "checkpoint-cli-cmds", name: "Checkpoint CLI Commands", desc: "Verify mlld checkpoint list and inspect and clean commands work" },
+  { id: "resume-fork", name: "Resume and Fork Behavior", desc: "Verify resume invalidates target and fork loads another cache read-only" }
+]
+
+>> ─── Set up run directory ───
+
+var @today = @now.slice(0, 10)
+var @runDir = `@root/runs/review-@today`
+run @mkdirp(@runDir)
+run @mkdirp(`@runDir/phase1-impl`)
+run @mkdirp(`@runDir/phase2-tests`)
+run @mkdirp(`@runDir/phase3-docs`)
+run @mkdirp(`@runDir/phase4-live`)
+run @mkdirp(`@runDir/phase5-invalidation`)
+run @mkdirp(`@root/tmp/review-tests`)
+
+show `═══════════════════════════════════════════════════════════════════`
+show `Review: Hooks + Checkpoint + Resume Implementation`
+show `═══════════════════════════════════════════════════════════════════`
+show `Parallelism: @parallelism`
+show `Start phase: @startPhase`
+show `Skip live: @skipLive`
+show `Run dir: @runDir`
+show `───────────────────────────────────────────────────────────────────`
+
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 1: Spec Compliance Review
+>> Each cluster reviewer reads the spec and implementation, finds gaps
+>> ═══════════════════════════════════════════════════════════════════
+
+if @startPhase <= 1 [
+
+show `\nPhase 1: Spec Compliance (@implClusters.length clusters, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+loop(@maxAttempts) [
+  let @batch = for parallel(@parallelism) @cluster in @implClusters [
+    let @outPath = `@runDir/phase1-impl/@cluster.id\.json`
+
+    let @alreadyDone = @fileExists(@outPath)
+    if @alreadyDone == "yes" [
+      show `  @cluster.name: skipped (exists)`
+      => null
+    ]
+
+    show `  @cluster.name: reviewing...`
+    let @prompt = @specCompliancePrompt(@cluster.name, @cluster.files, @specPath, @planPath, @evidenceRules)
+    let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+    let @poll = @llmCall(@fullPrompt, "opus", "@root", @reviewTools, @outPath)
+    let @result = <@outPath>?
+
+    if !@result [
+      show `  @cluster.name: FAILED (no output)`
+      @logEvent(@runDir, "impl_review_failed", { cluster: @cluster.id })
+      => null
+    ]
+
+    @logEvent(@runDir, "impl_review_complete", { cluster: @cluster.id })
+    show `  @cluster.name: done`
+    => null
+  ]
+
+  >> Check for completeness
+  let @missing = 0
+  let @checks = for @c in @implClusters [
+    let @exists = @fileExists(`@runDir/phase1-impl/@c.id\.json`)
+    if @exists != "yes" [ => 1 ]
+    => null
+  ]
+  let @missingItems = for @x in @checks when @x => @x
+  if @missingItems.length == 0 [ done ]
+  show `  Retrying @missingItems.length failed reviews...`
+  continue
+]
+
+show `Phase 1 complete`
+
+]
+
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 2: Test Quality Review
+>> Each cluster reviewer reads tests and spec, finds coverage gaps
+>> ═══════════════════════════════════════════════════════════════════
+
+if @startPhase <= 2 [
+
+show `\nPhase 2: Test Quality (@testClusters.length clusters, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+loop(@maxAttempts) [
+  let @batch = for parallel(@parallelism) @cluster in @testClusters [
+    let @outPath = `@runDir/phase2-tests/@cluster.id\.json`
+
+    let @alreadyDone = @fileExists(@outPath)
+    if @alreadyDone == "yes" [
+      show `  @cluster.name: skipped (exists)`
+      => null
+    ]
+
+    show `  @cluster.name: reviewing...`
+    let @prompt = @testQualityPrompt(@cluster.name, @cluster.files, @specPath, @evidenceRules)
+    let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+    let @poll = @llmCall(@fullPrompt, "opus", "@root", @reviewTools, @outPath)
+    let @result = <@outPath>?
+
+    if !@result [
+      show `  @cluster.name: FAILED (no output)`
+      @logEvent(@runDir, "test_review_failed", { cluster: @cluster.id })
+      => null
+    ]
+
+    @logEvent(@runDir, "test_review_complete", { cluster: @cluster.id })
+    show `  @cluster.name: done`
+    => null
+  ]
+
+  let @checks = for @c in @testClusters [
+    let @exists = @fileExists(`@runDir/phase2-tests/@c.id\.json`)
+    if @exists != "yes" [ => 1 ]
+    => null
+  ]
+  let @missingItems = for @x in @checks when @x => @x
+  if @missingItems.length == 0 [ done ]
+  show `  Retrying @missingItems.length failed reviews...`
+  continue
+]
+
+show `Phase 2 complete`
+
+]
+
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 3: Documentation Accuracy Review
+>> Each reviewer reads a doc and verifies against implementation
+>> ═══════════════════════════════════════════════════════════════════
+
+if @startPhase <= 3 [
+
+show `\nPhase 3: Docs Accuracy (@docItems.length docs, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+loop(@maxAttempts) [
+  let @batch = for parallel(@parallelism) @doc in @docItems [
+    let @outPath = `@runDir/phase3-docs/@doc.id\.json`
+
+    let @alreadyDone = @fileExists(@outPath)
+    if @alreadyDone == "yes" [
+      show `  @doc.name: skipped (exists)`
+      => null
+    ]
+
+    show `  @doc.name: reviewing...`
+    let @prompt = @docsAccuracyPrompt(@doc.file, @specPath, @evidenceRules)
+    let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+    let @poll = @llmCall(@fullPrompt, "opus", "@root", @reviewTools, @outPath)
+    let @result = <@outPath>?
+
+    if !@result [
+      show `  @doc.name: FAILED (no output)`
+      @logEvent(@runDir, "docs_review_failed", { doc: @doc.id })
+      => null
+    ]
+
+    @logEvent(@runDir, "docs_review_complete", { doc: @doc.id })
+    show `  @doc.name: done`
+    => null
+  ]
+
+  let @checks = for @d in @docItems [
+    let @exists = @fileExists(`@runDir/phase3-docs/@d.id\.json`)
+    if @exists != "yes" [ => 1 ]
+    => null
+  ]
+  let @missingItems = for @x in @checks when @x => @x
+  if @missingItems.length == 0 [ done ]
+  show `  Retrying @missingItems.length failed reviews...`
+  continue
+]
+
+show `Phase 3 complete`
+
+]
+
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 4: Live Feature Testing
+>> Agents create and run real mlld scripts exercising hooks/checkpoint
+>> ═══════════════════════════════════════════════════════════════════
+
+if @startPhase <= 4 [
+if @skipLive != "true" [
+
+show `\nPhase 4: Live Testing (@liveTests.length scenarios, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+loop(@maxAttempts) [
+  let @batch = for parallel(@parallelism) @scenario in @liveTests [
+    let @outPath = `@runDir/phase4-live/@scenario.id\.json`
+
+    let @alreadyDone = @fileExists(@outPath)
+    if @alreadyDone == "yes" [
+      show `  @scenario.name: skipped (exists)`
+      => null
+    ]
+
+    show `  @scenario.name: testing...`
+    let @prompt = @liveTestPrompt(@scenario.name, @scenario.desc, @specPath, @evidenceRules)
+    let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+    let @poll = @llmCall(@fullPrompt, "opus", "@root", @liveTestTools, @outPath)
+    let @result = <@outPath>?
+
+    if !@result [
+      show `  @scenario.name: FAILED (no output)`
+      @logEvent(@runDir, "live_test_failed", { scenario: @scenario.id })
+      => null
+    ]
+
+    @logEvent(@runDir, "live_test_complete", { scenario: @scenario.id })
+    show `  @scenario.name: done`
+    => null
+  ]
+
+  let @checks = for @s in @liveTests [
+    let @exists = @fileExists(`@runDir/phase4-live/@s.id\.json`)
+    if @exists != "yes" [ => 1 ]
+    => null
+  ]
+  let @missingItems = for @x in @checks when @x => @x
+  if @missingItems.length == 0 [ done ]
+  show `  Retrying @missingItems.length failed tests...`
+  continue
+]
+
+show `Phase 4 complete`
+
+]
+]
+
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Collect all findings for invalidation
+>> ═══════════════════════════════════════════════════════════════════
+
+show `\nCollecting findings from phases 1-4...`
+
+>> Load findings from each phase
+var @phase1Findings = for @c in @implClusters [
+  let @path = `@runDir/phase1-impl/@c.id\.json`
+  let @data = <@path>?
+  if !@data [ => [] ]
+  let @parsed = @data | @parse.llm
+  => @tagFindings(@parsed.findings, "spec-compliance", @c.id)
+]
+var @p1flat = @flatten(@phase1Findings)
+
+var @phase2Findings = for @c in @testClusters [
+  let @path = `@runDir/phase2-tests/@c.id\.json`
+  let @data = <@path>?
+  if !@data [ => [] ]
+  let @parsed = @data | @parse.llm
+  => @tagFindings(@parsed.findings, "test-quality", @c.id)
+]
+var @p2flat = @flatten(@phase2Findings)
+
+var @phase3Findings = for @d in @docItems [
+  let @path = `@runDir/phase3-docs/@d.id\.json`
+  let @data = <@path>?
+  if !@data [ => [] ]
+  let @parsed = @data | @parse.llm
+  => @tagFindings(@parsed.findings, "docs-accuracy", @d.id)
+]
+var @p3flat = @flatten(@phase3Findings)
+
+var @phase4Findings = for @s in @liveTests [
+  let @path = `@runDir/phase4-live/@s.id\.json`
+  let @data = <@path>?
+  if !@data [ => [] ]
+  let @parsed = @data | @parse.llm
+  => @tagFindings(@parsed.findings, "live-test", @s.id)
+]
+var @p4flat = @flatten(@phase4Findings)
+
+var @allFindings = @flatten([@p1flat, @p2flat, @p3flat, @p4flat])
+
+show `  Spec compliance findings: @p1flat.length`
+show `  Test quality findings: @p2flat.length`
+show `  Docs accuracy findings: @p3flat.length`
+show `  Live test findings: @p4flat.length`
+show `  Total findings: @allFindings.length`
+
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 5: Adversarial Invalidation
+>> Each finding gets an adversarial defender trying to disprove it
+>> ═══════════════════════════════════════════════════════════════════
+
+if @startPhase <= 5 [
+if @allFindings.length > 0 [
+
+show `\nPhase 5: Invalidation (@allFindings.length findings, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+loop(@maxAttempts) [
+  let @batch = for parallel(@parallelism) @finding in @allFindings [
+    let @fid = @finding.id ?? "unknown"
+    let @safeFid = @flatName(@fid)
+    let @outPath = `@runDir/phase5-invalidation/@safeFid\.json`
+
+    let @alreadyDone = @fileExists(@outPath)
+    if @alreadyDone == "yes" [
+      show `  @fid: skipped (exists)`
+      => null
+    ]
+
+    show `  @fid: invalidating...`
+    let @findingStr = @finding
+    let @prompt = @invalidatePrompt(
+      @findingStr,
+      @finding.phase,
+      @finding.source,
+      @fid,
+      @finding.severity,
+      @evidenceRules
+    )
+    let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+    let @poll = @llmCall(@fullPrompt, "opus", "@root", @invalidateTools, @outPath)
+    let @result = <@outPath>?
+
+    if !@result [
+      show `  @fid: FAILED (no output)`
+      @logEvent(@runDir, "invalidation_failed", { finding: @fid })
+      => null
+    ]
+
+    let @resultData = @result | @parse.llm
+    let @verdict = @resultData.verdict ?? "confirmed"
+    show `  @fid: @verdict`
+    @logEvent(@runDir, "invalidation_complete", { finding: @fid, verdict: @verdict })
+    => null
+  ]
+
+  let @checks = for @f in @allFindings [
+    let @fid = @f.id ?? "unknown"
+    let @safeFid = @flatName(@fid)
+    let @exists = @fileExists(`@runDir/phase5-invalidation/@safeFid\.json`)
+    if @exists != "yes" [ => 1 ]
+    => null
+  ]
+  let @missingItems = for @x in @checks when @x => @x
+  if @missingItems.length == 0 [ done ]
+  show `  Retrying @missingItems.length failed invalidations...`
+  continue
+]
+
+show `Phase 5 complete`
+
+] else [
+  show `\nPhase 5: No findings to invalidate`
+]
+]
+
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 6: Synthesis
+>> One agent reads all artifacts and produces the final report
+>> ═══════════════════════════════════════════════════════════════════
+
+if @startPhase <= 6 [
+
+show `\nPhase 6: Synthesis`
+show `───────────────────────────────────────────────────────────────────`
+
+let @reportPath = `@runDir/report.json`
+
+let @reportExists = @fileExists(@reportPath)
+if @reportExists == "yes" [
+  show `  Report already exists, skipping synthesis`
+] else [
+  let @prompt = @synthesizePrompt(@runDir, @specPath, @planPath, @evidenceRules)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON report to @reportPath and your markdown report to @runDir/report.md using the Write tool.`
+
+  let @poll = @llmCall(@fullPrompt, "opus", "@root", @synthesizeTools, @reportPath)
+
+  let @report = <@reportPath>?
+  if !@report [
+    show `  Synthesis FAILED (no output)`
+    @logEvent(@runDir, "synthesis_failed", {})
+  ] else [
+    let @reportData = @report | @parse.llm
+    show `  Grade: @reportData.summary.overall_grade`
+    show `  @reportData.summary.one_line_assessment`
+    @logEvent(@runDir, "synthesis_complete", { grade: @reportData.summary.overall_grade })
+  ]
+]
+
+]
+
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Summary
+>> ═══════════════════════════════════════════════════════════════════
+
+show `\n═══════════════════════════════════════════════════════════════════`
+show `Review Complete`
+show `═══════════════════════════════════════════════════════════════════`
+show `  Findings collected: @allFindings.length`
+show `  Run dir: @runDir`
+show `  Report: @runDir/report.json`
+show `  Narrative: @runDir/report.md`
+show `  LLM call log: @runDir/llm-calls.log`
+show `═══════════════════════════════════════════════════════════════════`
+show ``
+show `To re-run with caching: mlld run review --checkpoint`
+show `To skip live tests: mlld run review --skip-live true`
+show `To start from a phase: mlld run review --phase 5`
+
+var @finalEvt = {
+  total_findings: @allFindings.length,
+  spec_compliance: @p1flat.length,
+  test_quality: @p2flat.length,
+  docs_accuracy: @p3flat.length,
+  live_test: @p4flat.length
+}
+run @logEvent(@runDir, "review_complete", @finalEvt)
