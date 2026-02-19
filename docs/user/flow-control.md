@@ -156,6 +156,17 @@ when @status [
 >> @msg is not accessible here
 ```
 
+Use `+=` for augmented assignment in when blocks — works with arrays (concat), strings (append), and objects (merge):
+
+```mlld
+exe @collect() = when [
+  let @items = []
+  @items += "a"
+  @items += "b"
+  * => @items  >> ["a", "b"]
+]
+```
+
 ### Exe Block Syntax
 
 Use `[...]` for multi-statement exe bodies with local variables:
@@ -208,6 +219,24 @@ With script returns, final output is explicit:
 - `=> @value` returns final script output and terminates execution
 - No `=>` means no implicit final return output
 
+Imported `.mld` modules expose script return values through `default`:
+
+```mlld
+>> module.mld
+var @status = "active"
+=> { code: 200, status: @status }
+var @unreachable = "never runs"
+```
+
+```mlld
+>> main.mld
+import { default as @result, status as @s } from "./module.mld"
+show @result.code     >> 200
+show @s               >> "active"
+```
+
+Scripts without `=>` do not emit implicit final return output. Use `=>` explicitly when module consumers need a default export value.
+
 Use `let @var += value` for accumulation within blocks:
 
 ```mlld
@@ -243,6 +272,48 @@ Output:
 Fruit: apple
 Fruit: banana
 Fruit: cherry
+```
+
+`for` loops always iterate all items — there is no `break` or `continue`. Use conditional logic and accumulation instead (`loop` and `while` do have `done` and `continue` — see below):
+
+```mlld
+exe @filter(items) = [
+  let @results = []
+  for @item in @items [
+    when @item.valid => [
+      let @results += [@item]
+    ]
+  ]
+  => @results
+]
+```
+
+### For Loop Context
+
+Access loop state with `@mx.for` inside any iteration body:
+
+```mlld
+var @items = [10, 20, 30]
+for @n in @items => show `Index: @mx.for.index, Value: @n`
+```
+
+Output:
+```
+Index: 0, Value: 10
+Index: 1, Value: 20
+Index: 2, Value: 30
+```
+
+Available `@mx.for` fields:
+- `@mx.for.index` - Current 0-based iteration index
+- `@mx.for.total` - Total number of items in collection
+- `@mx.for.key` - Key for objects, stringified index for arrays
+- `@mx.for.parallel` - Boolean indicating parallel execution
+
+Array-bound variables also expose `@item.mx.index`:
+
+```mlld
+for @item in @items => show `Item @item.mx.index: @item`
 ```
 
 ### Object Iteration with Keys
@@ -336,6 +407,15 @@ Output:
 [2, 4, 6, 8]
 ```
 
+### Inline Filter
+
+Filter items during iteration with an inline `when` clause:
+
+```mlld
+var @valid = for @x in @items when @x != null => @x
+var @admins = for @u in @users when @u.role == "admin" => @u.name
+```
+
 ### Parallel /for
 
 Run iterations in parallel with an optional per-loop cap and pacing between starts. Use the directive form for side effects (order may vary) or the collection form for ordered results.
@@ -375,6 +455,7 @@ show `errors:@mx.errors.length`
 - Directive form keeps streaming effects as iterations finish (order may vary).
 - Expression form preserves input order; failed iterations add error markers `{ index, key?, message, error, value }` in the results array.
 - `@mx.errors` resets at the start of each parallel loop and records any failures; outer-scope variables cannot be mutated inside a parallel block body.
+- `@mx.for.parallel` is `true` inside parallel loops; `@mx.for.index` preserves original array position even when iterations complete out of order.
 
 **Error handling with repair pattern:**
 
@@ -925,6 +1006,46 @@ when [
 ]
 ```
 
+### Bail
+
+Use `bail` to terminate the entire script immediately with exit code 1:
+
+```mlld
+>> Explicit message
+bail "config file missing"
+
+>> With variable interpolation
+var @missing = "database"
+bail `Missing: @missing`
+
+>> Bare bail (uses default message)
+bail
+```
+
+`bail` works from any context including nested blocks, loops, and imported modules:
+
+```mlld
+>> From if blocks
+if @checkFailed [
+  bail "validation failed"
+]
+
+>> From when expressions
+when [
+  !@ready => bail "not ready"
+  * => @process()
+]
+
+>> From for loops
+for @item in @items [
+  if !@item.valid [
+    bail `Invalid item: @item.id`
+  ]
+]
+```
+
+When an imported module calls `bail`, the entire script terminates, not just the module.
+
 ## Common Patterns
 
 ### Guarded Execution
@@ -959,3 +1080,4 @@ exe @processFile(file) = when [
 var @results = foreach @processFile(@files)
 for @result in @results => show @result
 ```
+

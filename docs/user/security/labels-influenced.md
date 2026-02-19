@@ -1,11 +1,11 @@
 ---
 id: labels-influenced
 title: Influenced Label
-brief: Track LLM outputs affected by untrusted data
+brief: Track LLM outputs potentially influenced by untrusted data
 category: security
 parent: security
-tags: [labels, influenced, llm, untrusted]
-related: [labels-overview, labels-source-auto, pattern-audit-guard, pattern-dual-audit]
+tags: [labels, influenced, llm, untrusted, security, prompt-injection]
+related: [labels-overview, labels-source-auto, labels-sensitivity, guards-basics, signing-overview, pattern-audit-guard, pattern-dual-audit]
 related-code: [core/policy/builtin-rules.ts, interpreter/policy/PolicyEnforcer.ts]
 updated: 2026-02-01
 qa_tier: 2
@@ -55,9 +55,7 @@ The output includes `["llm", "untrusted", "influenced"]` because:
 1. `@task` has the `untrusted` label
 2. `@processTask` is labeled `llm`
 3. The policy rule `untrusted-llms-get-influenced` is enabled
-4. Therefore, `@result` receives the `influenced` label
-
-The rule only auto-applies the label. Enforcement comes from `policy.labels.influenced`.
+4. Therefore, `@result` receives the `influenced` label (in addition to the `llm` and `untrusted` labels it inherits)
 
 **Label propagation:**
 
@@ -199,4 +197,5 @@ Use the `influenced` label to implement defense in depth against prompt injectio
 3. Enable `untrusted-llms-get-influenced` in policy
 4. Restrict what influenced outputs can do via label flow rules
 
-This ensures that even if an LLM is tricked by prompt injection, the consequences are limited by the label system. For complete implementations using these patterns in real auditing scenarios, see `pattern-audit-guard` and `pattern-dual-audit`.
+This ensures that even if an LLM is tricked by prompt injection, the consequences are limited by the label system.
+

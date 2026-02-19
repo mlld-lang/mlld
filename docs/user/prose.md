@@ -97,6 +97,13 @@ exe @analyze(data) = prose:@myInterpreter {
 
 ## Content Sources
 
+Interpolation rules by content source:
+
+- `prose:@config { inline }` — interpolates `@var` like templates
+- `"file.prose"` — no interpolation, raw content
+- `"file.prose.att"` — ATT interpolation (`@var`, `<file.md>` loading, `/for.../end` loops for arrays)
+- `"file.prose.mtt"` — MTT interpolation (`{{var}}`)
+
 ### Inline Content
 
 Variables are interpolated using `@var` syntax:
@@ -180,3 +187,4 @@ To fix:
 2. Install it: `/plugin install open-prose@prose`
 3. Restart Claude Code and run `/prose-boot`
 4. Approve the skills when prompted
+

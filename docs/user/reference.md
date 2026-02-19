@@ -14,6 +14,7 @@ var @age = 25
 var @active = true
 var @items = ["apple", "banana", "cherry"]
 var @user = {"name": "Alice", "role": "admin"}
+var @merged = { ...@user, "role": "superadmin" }    >> object spread
 ```
 
 Access object properties and array elements:
@@ -21,6 +22,13 @@ Access object properties and array elements:
 ```mlld
 var @userName = @user.name  >> "Alice"
 var @firstItem = @items[0]  >> "apple"
+```
+
+Optional variables (omit if falsy):
+
+```mlld
+var @subtitle? = @item.subtitle      >> omit if falsy
+show `Title: @item.title @subtitle?` >> subtitle only if present
 ```
 
 Array slicing:
@@ -50,6 +58,13 @@ Execute shell commands:
 run cmd {echo "Hello World"}
 run cmd {ls -la}
 run @data | { cat | jq '.[]' }       >> stdin via pipe
+run cmd { cat | jq '.[]' } with { stdin: @data }  >> explicit stdin form
+```
+
+In strict mode (`.mld` files), you can call executables directly without `run`:
+
+```mlld
+@task()        >> same as: run @task()
 ```
 
 Multi-line commands with `run sh`:
@@ -72,14 +87,14 @@ Output:
 <project root path>
 ```
 
-Paths must be absolute (for example `/tmp`, `/var/log`, `/`). Relative paths, `~`, or Windows-style paths fail. Executables accept the same suffix when you need to parameterize it:
+Paths can be absolute (for example `/tmp`, `/var/log`, `/`) or use `~` for home directory expansion. Relative paths or Windows-style paths fail. Executables accept the same suffix when you need to parameterize it:
 
 ```mlld
 exe @list(dir) = cmd:@dir {pwd}
 run @list("/")
 ```
 
-`sh`, `bash`, `js`, `node`, and `python` accept the same `:/abs/path` suffix. JavaScript and Node switch `process.cwd()` to the provided directory before running code.
+`sh`, `bash`, `js`, `node`, and `python` accept the same `:/abs/path` suffix (and `~`). JavaScript and Node switch `process.cwd()` to the provided directory before running code.
 
 ### Executables (`exe`)
 
@@ -114,10 +129,10 @@ print(result)
 }
 
 >> Prose execution (requires config, see docs/user/prose.md)
-var @llm = { model: "claude-3", skillName: "prose" }
-exe @summarize(text) = prose:@llm { summarize @text }      << inline interpolates
-exe @review(code) = prose:@llm "./review.prose"            << .prose = no interpolation
-exe @greet(name) = prose:@llm "./greet.prose.att"          << .prose.att/.mtt interpolate
+import { @opus } from @mlld/prose
+exe @summarize(text) = prose:@opus { summarize @text }      << inline interpolates
+exe @review(code) = prose:@opus "./review.prose"            << .prose = no interpolation
+exe @greet(name) = prose:@opus "./greet.prose.att"          << .prose.att/.mtt interpolate
 
 >> Templates
 exe @welcome(name, role) = ::Welcome @name! Role: @role::
@@ -144,6 +159,21 @@ exe @greet(name) = [
 ]
 show @greet("World")  >> => Hello World!
 ```
+
+Typed parameters (for tooling and MCP integration):
+
+```mlld
+exe @greet(name: string, times: number) = js { return "Hello " + name; }
+exe @process(data: object, format: string) = js { return data; }
+exe @count(items: array) = js { return items.length; }
+
+>> With description for MCP tool listings
+exe @searchIssues(repo: string, query: string, limit: number) = cmd {
+  gh issue list -R @repo --search "@query" -L @limit --json number,title
+} with { description: "Search GitHub issues by query" }
+```
+
+Supported parameter types: `string`, `number`, `boolean`, `object`, `array`.
 
 ### Conditionals (`if` and `when`)
 
@@ -257,7 +287,6 @@ var @filtered = for @x in @xs => when [
   none => skip
 ]
 ```
-```
 
 ### Template loops (backticks and ::)
 
@@ -316,6 +345,28 @@ Glob patterns:
 var @allDocs = <docs/*.md>
 var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 ```
+
+AST selection (extract code definitions from source files):
+
+```mlld
+>> Exact names
+var @handler = <src/api.ts { createUser }>
+
+>> Wildcards
+var @handlers = <api.ts { handle* }>         >> prefix match
+var @validators = <api.ts { *Validator }>    >> suffix match
+
+>> Type filters
+var @funcs = <service.ts { *fn }>            >> all functions
+var @classes = <service.ts { *class }>       >> all classes
+
+>> Name listing (returns string arrays)
+var @names = <api.ts { ?? }>                 >> all definition names
+var @funcNames = <api.ts { fn?? }>           >> function names only
+```
+
+Supported languages: `.js`, `.ts`, `.jsx`, `.tsx`, `.py`, `.go`, `.rs`, `.java`, `.rb`
+Type keywords: `fn`, `var`, `class`, `interface`, `type`, `enum`, `struct`
 
 ### Imports (`import`)
 
@@ -399,6 +450,44 @@ Strict-mode final output is explicit:
 - `=> @value` emits final script output and stops execution
 - No `=>` means no implicit final return output
 
+Imported `.mld` modules expose the script return value through the `default` binding:
+
+```mlld
+>> module.mld
+var @status = "active"
+=> { code: 200, status: @status }
+```
+
+```mlld
+>> main.mld
+import { default as @result } from "./module.mld"
+show @result.code     >> 200
+```
+
+### `bail` - Terminate on Error
+
+Terminate the entire script immediately with exit code 1:
+
+```mlld
+bail "config file missing"
+bail `Missing: @required`
+bail                        >> uses default message
+```
+
+Works from any context including nested blocks, loops, and imported modules:
+
+```mlld
+if @checkFailed [
+  bail "validation failed"
+]
+
+for @item in @items [
+  if !@item.valid [
+    bail `Invalid item: @item.id`
+  ]
+]
+```
+
 ### `stream` - Stream Output
 
 **Purpose**: Display output with live chunks as they arrive (instead of buffering until completion)
@@ -439,6 +528,52 @@ show @results  >> => ["L","R"]
 - CLI: `--no-stream`
 - Env: `MLLD_NO_STREAM=true`
 - API: `interpret(..., { streaming: { enabled: false } })`
+
+### `env` - Scoped Execution
+
+Create scoped execution contexts with isolation, credential management, and capability control:
+
+```mlld
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  fs: { read: [".:/app"], write: ["/tmp"] },
+  net: "none",
+  tools: ["Read", "Bash"],
+  mcps: []
+}
+
+env @sandbox [
+  run cmd { claude -p "Analyze the codebase" } using auth:claude
+]
+```
+
+Local execution with different auth (no provider = local):
+
+```mlld
+var @cfg = { auth: "claude-alt" }
+
+env @cfg [
+  run cmd { claude -p @task } using auth:claude-alt
+]
+```
+
+Capability attenuation with `with`:
+
+```mlld
+env @sandbox with { tools: ["Read"] } [
+  >> Only Read is available here
+  run cmd { claude -p @task }
+]
+```
+
+Return values from env blocks:
+
+```mlld
+var @result = env @config [
+  let @data = run cmd { fetch-data }
+  => @data
+]
+```
 
 ## Advanced Features
 
@@ -577,6 +712,12 @@ Special built-in variables:
 @debug  >> debug information
 ```
 
+### Truthiness
+
+Conditions evaluate to false for: `null`, `undefined`, `""`, `"false"`, `"0"`, `0`, `NaN`, `[]`, `{}`
+
+All other values — including non-empty strings, non-zero numbers, and non-empty arrays/objects — are truthy.
+
 ### Data Structures
 
 Complex nested structures:
@@ -593,6 +734,13 @@ var @config = {
 show @config.database.host  >> "localhost"
 show @config.database.ports[0]  >> 5432
 show @config.features[1]  >> "api"
+```
+
+Object spread:
+
+```mlld
+var @base = {"host": "localhost", "port": 3000}
+var @prod = { ...@base, "port": 443 }    >> override port
 ```
 
 ## Code Execution Languages
@@ -693,9 +841,10 @@ Create modules with frontmatter:
 
 ```yaml
 ---
-module: @myorg/helpers
-description: Utility functions
+name: my-helpers
+author: myorg
 version: 1.0.0
+about: Utility functions
 ---
 ```
 
@@ -726,7 +875,7 @@ Where interpolation applies:
 - `@parse`: JSON parse/stringify
 - `@json`: deprecated alias for `@parse`
 - `@xml`: XML parse/format
-- `@csv`: CSV parse/format  
+- `@csv`: CSV parse/format
 - `@md`: Markdown formatting
 
 ### File Metadata Fields
@@ -734,7 +883,7 @@ Where interpolation applies:
 - `content`: file contents (default)
 - `filename`: filename only
 - `relative`: relative path
-- `absolute`: absolute path  
+- `absolute`: absolute path
 - `tokens`: approximate token count
 - `fm`: frontmatter object
 - `json`: parsed JSON (for .json files)
@@ -752,3 +901,4 @@ All file fields plus:
 - `headers`: HTTP headers
 - `status`: HTTP status code
 - `contentType`: content type
+

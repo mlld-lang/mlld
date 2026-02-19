@@ -101,7 +101,7 @@ See [registry.md](registry.md) for full publishing documentation.
 |---------|-----------------|----------------------|
 | Directive prefix | None required | `/` required |
 | Plain text | Error | Becomes content |
-| Comments | `>> comment` | `>> comment` (same) |
+| Comments | `>> comment` or `value << comment` | same |
 | GitHub rendering | Code only | Full markdown |
 
 ## Best Practices
@@ -110,3 +110,4 @@ See [registry.md](registry.md) for full publishing documentation.
 2. **Use `.mld` for scripts** - Cleaner, no slash noise
 3. **Keep prose minimal** - Markdown mode is for docs, not novels
 4. **Test both ways** - Ensure your module works when imported
+

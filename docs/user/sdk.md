@@ -90,8 +90,8 @@ const handle = interpret(script, {
 });
 
 // Attach handlers before execution completes
-handle.on('stream:chunk', (event) => {
-  process.stdout.write(event.event.text);
+handle.on('stream:chunk', (e) => {
+  process.stdout.write(e.event.chunk);
 });
 
 handle.on('effect', (event) => {
@@ -395,7 +395,7 @@ const result = await execute('./agent.mld',
   }
 );
 
-console.log(result.output);       // Execution output (NOT result.value)
+console.log(result.output);       // Execution output
 console.log(result.stateWrites);  // State updates
 console.log(result.effects);      // All effects
 console.log(result.metrics);      // Performance data
@@ -416,6 +416,14 @@ import { @count, @messages } from @state
 var @newCount = @count + 1
 var @history = @messages
 show "User @userId said: @text"
+```
+
+For optional fields, use namespace import with ternary:
+
+```mlld
+>> Namespace import for optional field access
+import "@payload" as @payload
+var @text = @payload.text ? @payload.text : "default"
 ```
 
 The SDK automatically provides `@payload` and `@state` as importable modules when you call `execute()` with payload and state arguments.
@@ -485,7 +493,7 @@ async function handleUserMessage(userId: string, message: string) {
     await saveUserState(userId, write.path, write.value);
   }
 
-  return result.value;
+  return result.output;
 }
 ```
 
@@ -662,3 +670,4 @@ These wrappers require the mlld CLI to be installed (`npm install -g mlld`).
 - [CLI Usage](cli.md) - Command line interface
 - [Modules](modules.md) - Import system
 - [Security](security.md) - Guards and taint tracking
+
