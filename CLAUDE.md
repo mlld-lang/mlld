@@ -2,6 +2,9 @@
 
 repo: github.com/mlld-lang/mlld
 
+## Ticket management
+- Use `tk` cli for ticket management. `tk help` to see how to use it.
+
 ## Style Guide
 - **Name convention**: Always write "mlld" in all lowercase when referring to the language (not "MLLD", "Mlld", or "MllD")
 
@@ -43,6 +46,9 @@ mlld run <script>    # Run mlld script from script directory (default: llm/run/)
 - **Test fixtures**: `tests/fixtures/**/*.generated-fixture.json`
 - **Always run**: `npm run build:grammar` after pulling to regenerate files locally
 - This prevents merge conflicts from generated files
+
+## Generated Files (not gitignored)
+- `tests/cases/docs` are syntax validation smoke tests built from docs in order to ensure we do not ship syntactically invalid examples. They are built whenever running tests and should be committed alongside docs updates.
 
 ## Code Style
 - **Imports**: Use @ paths aliases (@ core/, @ services/, etc.) as defined in tsconfig.json -- no relative paths for imports
