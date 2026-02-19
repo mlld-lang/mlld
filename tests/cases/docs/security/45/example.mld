@@ -1,3 +1,9 @@
-var @auditPrompt = `Review @input for policy issues.`
-sign @auditPrompt
-verify @auditPrompt
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  tools: ["Read", "Write", "Bash"]
+}
+
+env @sandbox with { tools: ["Read"] } [
+  >> Only Read is available here
+  run cmd { claude -p @task }
+]

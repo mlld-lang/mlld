@@ -83,7 +83,8 @@ WithProperty
     }
 
 AuthName
-  = name:BaseIdentifier { return name; }
+  = chars:$([a-zA-Z0-9_.-]+) { return chars; }
+  / name:BaseIdentifier { return name; }
   / name:StringLiteral { return name; }
 
 UsingEnvName

@@ -1,4 +1,9 @@
-for @item in ["a", "b", "c"] [
-  show "Processing: @item"
-  show "Done with: @item"
+exe @filter(items) = [
+  let @results = []
+  for @item in @items [
+    when @item.valid => [
+      let @results += [@item]
+    ]
+  ]
+  => @results
 ]

@@ -1,2 +1,2 @@
-import { utils } from @shared/utils
-import { data } from @desktop/my-data
+var @greeting = "Hello from mlld script!"
+show @greeting

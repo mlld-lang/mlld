@@ -1,33 +1,10 @@
->> Claude model helper - haiku for fast, cheap reviews
-exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
+exe @analyze(text) = @haiku("Analyze: @text")
+exe @summarize(text) = @haiku("Summarize: @text")
+exe @keywords(text) = @haiku("Keywords: @text")
 
->> Build review prompt
-exe @buildPrompt(filename, content) = `
-Review this code for issues:
-File: @filename
----
-@content
----
-List 2-3 issues or "LGTM". Be concise (max 3 lines).
-`
+var @input = "Long document text here..."
+var @results = || @analyze(@input) || @summarize(@input) || @keywords(@input)
 
->> Load TypeScript files
-var @allFiles = <src/**/*.ts>
-
->> Review function
-exe @reviewFile(file) = [
-  let @prompt = @buildPrompt(@file.mx.relative, @file)
-  let @review = @haiku(@prompt)
-  let @trimmed = @review.trim()
-  => { file: @file.mx.relative, review: @trimmed }
-]
-
->> Parallel review - up to 5 concurrent
-var @reviews = for parallel(5) @f in @allFiles => @reviewFile(@f)
-
->> Output results
-for @r in @reviews [
-  show `## @r.file`
-  show @r.review
-  show ""
-]
+show @results[0]
+show @results[1]
+show @results[2]

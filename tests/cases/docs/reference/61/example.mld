@@ -1,0 +1,2 @@
+var @base = {"host": "localhost", "port": 3000}
+var @prod = { ...@base, "port": 443 }    >> override port

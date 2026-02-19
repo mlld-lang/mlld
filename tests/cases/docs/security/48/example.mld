@@ -1,4 +1,9 @@
-var @policyConfig = { defaults: { autoverify: true } }
-policy @p = union(@policyConfig)
+exe @isValidJson(text) = js {
+  try { JSON.parse(text); return true; }
+  catch { return false; }
+}
 
-exe llm @audit() = run cmd { claude -p "@auditPrompt" }
+guard @validateJson after op:exe = when [
+  @mx.op.name == "llmCall" && !@isValidJson(@output) => deny "Invalid JSON from LLM"
+  * => allow
+]

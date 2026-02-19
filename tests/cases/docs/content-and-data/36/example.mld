@@ -1,13 +1,8 @@
->> Filter JSON array from command
-var @payload = run {./mkjson.sh}
-exe @filterHigh(entries) = js {
-  return entries.filter(e => e.finding.startsWith("High"));
-}
-var @result = @filterHigh(@payload | @parse)
+var @jsonStr = '{"name": "Alice", "active": true}'
 
->> Process API response
-var @response = run {curl -s api.example.com/data}
-exe @getActive(data) = js {
-  return data.users.filter(u => u.active);
+exe @length(str) = js {
+  return str.length;
 }
-var @active = @getActive(@response | @parse)
+
+run @length(@jsonStr)          >> Default: string
+run @length(@jsonStr)          >> Raw JSON string

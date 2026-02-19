@@ -1,2 +1,5 @@
-var @names = ["Alice", "Bob", "Charlie"]
-for @name in @names => show `Hello @name`
+when [
+  @role == "admin" => show "Admin access"
+  @role == "user" => show "User access"
+  * => show "Guest access"
+]

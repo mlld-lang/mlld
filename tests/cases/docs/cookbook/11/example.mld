@@ -1,10 +1,10 @@
-exe @analyze(text) = @haiku("Analyze: @text")
-exe @summarize(text) = @haiku("Summarize: @text")
-exe @keywords(text) = @haiku("Keywords: @text")
+var @prompts = [
+  "Summarize: The quick brown fox",
+  "Summarize: Hello world",
+  "Summarize: Testing 123"
+]
 
-var @input = "Long document text here..."
-var @results = || @analyze(@input) || @summarize(@input) || @keywords(@input)
+exe @summarize(text) = @haiku(@text)
 
-show @results[0]
-show @results[1]
-show @results[2]
+var @results = for parallel(3) @p in @prompts => @summarize(@p)
+show @results

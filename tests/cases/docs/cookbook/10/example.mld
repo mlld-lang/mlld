@@ -1,5 +1,11 @@
-for parallel(3) @task in @tasks [
-  let @result = @process(@task)
-  show `Done: @task.id`
+exe @router(message, handlers) = [
+  let @scores = for @h in @handlers => {
+    handler: @h.name,
+    score: @h.scorer(@message)
+  }
+  let @best = @scores | @sortBy("score") | @first
+  => when [
+    @best.score > 0.7 => @handlers[@best.handler].handle(@message)
+    * => null
+  ]
 ]
-show `Errors: @mx.errors.length`

@@ -1,0 +1,14 @@
+var @ok = true
+var @state = "ready"
+
+if @ok [
+  show "if-ok"
+] >> end if
+
+when [
+  @ok => show "when-bare-ok"
+] >> end when bare
+
+when @state [
+  "ready" => show "when-match-ready"
+] >> end when match

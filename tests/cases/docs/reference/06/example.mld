@@ -1,4 +1,4 @@
-run sh(@project):/tmp {
-  npm test && npm run build
-  echo "$project"
-}
+run cmd {echo "Hello World"}
+run cmd {ls -la}
+run @data | { cat | jq '.[]' }       >> stdin via pipe
+run cmd { cat | jq '.[]' } with { stdin: @data }  >> explicit stdin form

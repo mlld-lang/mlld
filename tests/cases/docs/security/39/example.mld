@@ -1,9 +1,7 @@
-exe @redact(text) = js { return text.slice(0, 4) + '****'; }
-
-guard @redactSecrets before secret = when [
-  @mx.op.type == "show" => allow @redact(@input)
+>> guards/secrets.mld
+guard @secretProtection before secret = when [
+  @mx.op.type == "run" => deny "Secrets blocked from shell"
   * => allow
 ]
 
-var secret @key = "sk-12345678"
-show @key  >> Output: sk-1****
+export { @secretProtection }

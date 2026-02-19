@@ -1,10 +1,5 @@
-var @items = ["  beta  ", " alpha "]
+var @runs = ["alpha", "beta", "gamma"]
+var @_ = for @name in @runs =>
+  `processed @name` | append "runs.log"
 
->> One stage receives the whole array value
-var @whole = @items | @trim
-
->> Per-item transform requires explicit iteration
-var @each = for @item in @items => @item | @trim | @upper
-
-show @whole
-show @each
+show <runs.log>

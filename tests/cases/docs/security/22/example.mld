@@ -1,7 +1,8 @@
-guard @redactSecrets after op:exe = when [
-  @output.includes("sk-") => allow @output.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]')
+guard @validateInput before op:exe = when [
+  @input.any.text.includes("<script") => deny "Potentially malicious input"
+  @input.any.text.includes("sk-") => deny "Potentially sensitive token"
   * => allow
 ]
 
-exe @getStatus() = run { echo "Status: ok, key: sk-12345" }
-show @getStatus()  >> Output: Status: ok, key: [REDACTED]
+exe @process(data) = run { echo "@data" }
+show @process("<script>alert('xss')</script>")  >> Blocked

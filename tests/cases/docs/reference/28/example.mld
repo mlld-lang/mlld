@@ -1,2 +1,7 @@
-var @allDocs = <docs/*.md>
-var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
+var @items = ["A","B"]
+var @msg = ::
+/for @x in @items
+- @x
+/end
+::
+show @msg

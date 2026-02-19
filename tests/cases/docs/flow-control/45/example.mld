@@ -1,5 +1,2 @@
-exe @process(state) = when [
-  @mx.while.iteration > 5 => done @state
-  @mx.while.iteration == @mx.while.limit => done "hit cap"
-  * => continue @state
-]
+var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @parse
+show @data.users[0].name

@@ -1,4 +1,10 @@
-import { @secretProtection } from "./guards/secrets.mld"
+guard @blocker before secret = when [
+  * => deny "should skip"
+]
 
-var secret @key = "sk-12345"
-run cmd { echo @key }  >> Protected by imported guard
+guard @allowed before secret = when [
+  * => allow
+]
+
+var secret @data = "visible"
+show @data with { guards: { except: ["@blocker"] } }  >> Only @allowed runs

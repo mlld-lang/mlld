@@ -1,3 +1,6 @@
-var @filename = <package.json>.mx.filename
-var @tokens = <large-file.md>.mx.tokens
-var @frontmatter = <doc.md>.mx.fm.title
+var @tpl = `
+/for @v in ["x","y"]
+- @v
+/end
+`
+show @tpl

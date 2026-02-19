@@ -1,22 +1,4 @@
->> Basic Python
-exe @add(a, b) = py { print(int(a) + int(b)) }
-exe @square(x) = py {
-result = int(x) ** 2
-print(result)
-}
-
->> Standard library access
-exe @parseJson(data) = py {
-import json
-obj = json.loads(data)
-print(json.dumps(obj, indent=2))
-}
-
->> Multi-line with variables
-var @numbers = [1, 2, 3, 4, 5]
-exe @sumList(items) = py {
-import json
-nums = json.loads(items)
-print(sum(nums))
-}
-show @sumList(@numbers)  >> 15
+var @result = env @config [
+  let @data = run cmd { fetch-data }
+  => @data
+]

@@ -1,11 +1,7 @@
-var @title = ""
-var @primary = null
-var @secondary = "pal"
-var @fallback = @primary ?? @secondary ?? "fallback"
+var @title = "Dr."
+var @nickname = ""
 
-show `Hello,@title??"friend"`
-show @fallback
-show `Hello,@missing??"friend"`
->> "Hello,"
->> "Hello,pal"
->> "Hello,friend"
+var @greeting = "Hello @title?\"@title \"@name@nickname?\" (@nickname)\""
+show @greeting
+>> With @title="Dr." and @name="Ada": "Hello Dr. Ada"
+>> With @nickname="Ace": "Hello Ada (Ace)"

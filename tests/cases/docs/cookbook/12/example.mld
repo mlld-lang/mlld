@@ -1,10 +1,2 @@
-var @files = <src/**/*.ts>
-exe @analyze(file) = @haiku("Review this code: @file")
-
-var @reviews = for parallel(5) @f in @files => [
-  let @review = @analyze(@f)
-  => { file: @f.mx.relative, review: @review }
-]
-
-var @reviewsJson = @reviews | @parse
-output @reviewsJson to "reviews.json"
+exe @runQA(area) = cmd { echo "Testing @area.name" | cat }
+var @results = foreach @runQA(@areas)

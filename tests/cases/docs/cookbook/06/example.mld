@@ -1,15 +1,6 @@
----
-name: Support Bot
-model: sonnet
----
+var @processed = @data | @validate | @normalize | @analyze
 
-var @config = {
-  name: @fm.name,
-  model: @fm.model,
-  workDir: "/projects/support"
-}
-
-exe @systemPrompt(context) = template "./prompts/system.att"
-exe @respond(message) = template "./prompts/respond.att"
-
-export { @config, @systemPrompt, @respond }
+when [
+  @processed.ok => @emitReport(@processed)
+  !@processed.ok => show "Validation failed"
+]

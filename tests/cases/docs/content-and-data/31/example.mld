@@ -1,9 +1,7 @@
-var @name = "Ada"
-var @title = ""
+var @a = "first"
+var @b = ""
+var @c = "third"
 
-var @person = {
-  "name": @name,
-  "title"?: @title
-}
-show @person
->> {"name": "Ada"} - title was omitted because @title is falsy
+var @list = [@a, @b?, @c]
+show @list
+>> ["first", "third"] - @b was omitted because it's falsy

@@ -1,5 +1,12 @@
-guard @noShell before op:run = when [
-  * => deny "Shell access disabled"
-]
+var @policyConfig = {
+  defaults: {
+    rules: ["untrusted-llms-get-influenced"]
+  }
+}
+policy @p = union(@policyConfig)
 
-run cmd { ls }  >> Blocked
+var untrusted @task = "Review this external input"
+exe llm @process(input) = run cmd { claude -p "@input" }
+
+var @result = @process(@task)
+show @result.mx.labels  >> ["llm", "untrusted", "influenced"]

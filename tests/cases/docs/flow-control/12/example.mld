@@ -1,7 +1,6 @@
-exe @greet(name) = [
-  let @greeting = "Hello"
-  let @punctuation = "!"
-  => "@greeting @name@punctuation"
+exe @collect() = when [
+  let @items = []
+  @items += "a"
+  @items += "b"
+  * => @items  >> ["a", "b"]
 ]
-
-show @greet("World")

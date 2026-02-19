@@ -1,9 +1,12 @@
->> Load and transform files
-var @config = <config.json> | @parse
-var @uppercase = <readme.txt> | @upper
+>> Path existence
+when @exists("config.json") => show "Config found"
 
->> Chain transformations
-exe @first(text, n) = js { 
-  return text.split('\n').slice(0, n).join('\n');
-}
-var @summary = <docs.md> | @first(3) | @upper
+>> Glob pattern existence (true if at least one match)
+when @exists(<*.md>) => show "Markdown files exist"
+
+>> Use in conditionals
+exe @loadConfig() = when [
+  @exists("config.local.json") => <config.local.json>
+  @exists("config.json") => <config.json>
+  * => {}
+]

@@ -1,6 +1,10 @@
-guard @block before secret = when [
-  * => deny "blocked"
+guard @stepOne after op:exe = when [
+  * => allow `one:@output`
 ]
 
-var secret @data = "test"
-show @data with { guards: false }  >> Guards disabled (warning emitted)
+guard @stepTwo after op:exe = when [
+  * => allow `two:@output`
+]
+
+exe @emit(v) = js { return v; }
+show @emit("base")  >> two:one:base

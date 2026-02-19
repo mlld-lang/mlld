@@ -1,2 +1,3 @@
-var @greeting = "Hello from mlld script!"
-show @greeting
+import "@payload" as @payload
+var @env = @payload.env ? @payload.env : "dev"
+var @fast = @payload.fast ? @payload.fast : false

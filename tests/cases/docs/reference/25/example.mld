@@ -1,7 +1,3 @@
-var @items = ["A","B"]
-var @msg = ::
-/for @x in @items
-- @x
-/end
-::
-show @msg
+var @names = ["Ann","Ben"]
+exe @hello(n) = `Hello @n`
+show foreach @hello(@names) with { separator: " | ", template: "{{index}}={{result}}" }

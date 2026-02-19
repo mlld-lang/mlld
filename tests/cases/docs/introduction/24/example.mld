@@ -1,2 +1,2 @@
-var @summary = <docs/*.md> | @extractTitles | @claude("summarize these")
-var @clean = @raw | @validate | @normalize | @format
+var @docs = <docs/user/*.md>
+for @doc in @docs => show @doc.mx.filename

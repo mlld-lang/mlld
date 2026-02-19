@@ -208,6 +208,28 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
       return null;
     }
 
+    // Fixture helper used by slash/run/command-bases npm tests
+    const npmTestEchoMatch = command.match(
+      /^npm\s+run(?:\s+-s)?\s+testecho(?:\s+--\s+(.+))?\s*$/
+    );
+    if (npmTestEchoMatch) {
+      const rawArg = (npmTestEchoMatch[1] || '').trim();
+      if (rawArg.length === 0) {
+        return '';
+      }
+
+      const quotedMatch = rawArg.match(/^(['"])([\s\S]*)\1$/);
+      if (quotedMatch) {
+        const [, quote, content] = quotedMatch;
+        if (quote === '"') {
+          return content.replace(/\\"/g, '"');
+        }
+        return content.replace(/\\'/g, "'");
+      }
+
+      return rawArg;
+    }
+
     // Common test mocks
     if (command === 'npm --version') {
       return '11.3.0';

@@ -1,5 +1,0 @@
->> Backticks (primary)
-var @msg = `Hello @name, welcome!`
-
->> Double-colon (for content with backticks)
-var @doc = ::Use `npm install` to get started, @name::

@@ -1,5 +1,9 @@
-exe @validator(input) = when [
-  @input.valid => @input
-  @mx.try < 3 => retry "need more validation"
-  * => "fallback"
+if @checkFailed [
+  bail "validation failed"
+]
+
+for @item in @items [
+  if !@item.valid [
+    bail `Invalid item: @item.id`
+  ]
 ]

@@ -1,18 +1,1 @@
-/needs { cmd: [claude] }
-/policy @env = {
-  auth: {
-    claude: { from: "keychain:mlld-env/my-claude", as: "CLAUDE_CODE_OAUTH_TOKEN" }
-  }
-}
-
-/exe @spawn(prompt) = run { \
-  CLAUDE_CONFIG_DIR=@fm.dir/.claude \
-  claude -p @prompt
-} using auth:claude
-
-/exe @shell() = run { \
-  CLAUDE_CONFIG_DIR=@fm.dir/.claude \
-  claude
-} using auth:claude
-
-/export { @spawn, @shell }
+import { GITHUB_TOKEN, NODE_ENV } from @input

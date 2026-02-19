@@ -1,2 +1,4 @@
-exe @list(dir) = cmd:@dir {pwd}
-run @list("/")
+run sh(@project):/tmp {
+  npm test && npm run build
+  echo "$project"
+}

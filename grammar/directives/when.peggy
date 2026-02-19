@@ -246,8 +246,15 @@ WhenSimpleBlockForm
 
 WhenMatchForm
   // Colon form: when @expr: [patterns] — full error recovery via WhenConditionBlock
-  = DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ ":" _ conditions:WhenConditionBlock {
+  = DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ ":" _ conditions:WhenConditionBlock ending:CommentedDirectiveEnding {
       helpers.debug('WhenMatchForm matched (colon)', { expression, conditions });
+      const meta = {
+        conditionCount: conditions.length
+      };
+
+      if (ending && ending.comment) {
+        meta.comment = ending.comment;
+      }
 
       return helpers.createStructuredDirective(
         'when',
@@ -263,16 +270,21 @@ WhenMatchForm
             action: c.action ? helpers.reconstructRawString(c.action) : undefined
           }))
         },
-        {
-          conditionCount: conditions.length
-        },
+        meta,
         location()
       );
     }
   // Bare form: when @expr [patterns] — silently fails if block isn't valid conditions
   // (falls through to WhenSimpleBlockForm for educational error)
-  / DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ "[" _ conditions:WhenConditionList _ "]" {
+  / DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ "[" _ conditions:WhenConditionList _ "]" ending:CommentedDirectiveEnding {
       helpers.debug('WhenMatchForm matched (bare)', { expression, conditions });
+      const meta = {
+        conditionCount: conditions.length
+      };
+
+      if (ending && ending.comment) {
+        meta.comment = ending.comment;
+      }
 
       return helpers.createStructuredDirective(
         'when',
@@ -288,9 +300,7 @@ WhenMatchForm
             action: c.action ? helpers.reconstructRawString(c.action) : undefined
           }))
         },
-        {
-          conditionCount: conditions.length
-        },
+        meta,
         location()
       );
     }
@@ -306,9 +316,9 @@ WhenBlockForm
       }, location()); 
     })? _ 
     modifier:WhenModifier? _ ":"? _ conditions:WhenConditionBlock 
-    _ action:("=>" _ a:WhenAction { return a; })? {
+    _ action:("=>" _ a:WhenAction { return a; })? ending:CommentedDirectiveEnding {
       
-      helpers.debug('WhenBlockForm matched', { variable, modifier, conditions, action });
+      helpers.debug('WhenBlockForm matched', { variable, modifier, conditions, action, ending });
       
       const values = {
         conditions: conditions
@@ -344,16 +354,22 @@ WhenBlockForm
         raw.action = helpers.reconstructRawString(action);
       }
       
+      const meta = {
+        modifier: modifier ? modifier.content : 'default',  // Use 'default' when no modifier specified
+        conditionCount: conditions.length,
+        hasVariable: !!variable
+      };
+
+      if (ending && ending.comment) {
+        meta.comment = ending.comment;
+      }
+
       return helpers.createStructuredDirective(
         'when',
         'whenBlock',
         values,
         raw,
-        {
-          modifier: modifier ? modifier.content : 'default',  // Use 'default' when no modifier specified
-          conditionCount: conditions.length,
-          hasVariable: !!variable
-        },
+        meta,
         location()
       );
     }
@@ -363,9 +379,9 @@ WhenBlockForm
 // -------------------------------------------------------------
 
 WhenBareBlockForm
-  = DirectiveContext WhenKeyword _ conditions:WhenConditionBlock {
+  = DirectiveContext WhenKeyword _ conditions:WhenConditionBlock ending:CommentedDirectiveEnding {
       
-      helpers.debug('WhenBareBlockForm matched', { conditions });
+      helpers.debug('WhenBareBlockForm matched', { conditions, ending });
       
       const values = {
         conditions: conditions
@@ -379,16 +395,22 @@ WhenBareBlockForm
         }))
       };
       
+      const meta = {
+        modifier: 'default',  // When blocks use default first-match behavior
+        conditionCount: conditions.length,
+        hasVariable: false
+      };
+
+      if (ending && ending.comment) {
+        meta.comment = ending.comment;
+      }
+
       return helpers.createStructuredDirective(
         'when',
         'whenBlock',
         values,
         raw,
-        {
-          modifier: 'default',  // When blocks use default first-match behavior
-          conditionCount: conditions.length,
-          hasVariable: false
-        },
+        meta,
         location()
       );
     }

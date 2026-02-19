@@ -1,2 +1,3 @@
-import { @sortBy, @unique } from @mlld/array
-import @company/utils as @utils
+var @readme = <README.md>
+var @config = <package.json>
+show <documentation.md>

@@ -1,6 +1,7 @@
-guard @validateJson after op:exe = when [
-  @isValidJson(@output) => allow
-  * => deny "LLM did not return valid JSON"
+guard @sanitize before untrusted = when [
+  * => allow @input.trim().slice(0, 100)
 ]
 
-exe @isValidJson(text) = js { try { JSON.parse(text); return true; } catch { return false; } }
+var untrusted @userInput = "  very long input...  "
+exe @process(data) = `Processed: @data`
+show @process(@userInput)  >> Input trimmed and truncated

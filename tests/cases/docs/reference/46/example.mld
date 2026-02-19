@@ -1,3 +1,4 @@
->> Start-of-line comment
-var @name = "Alice"    >> end-of-line comment
-show @greeting         << also end-of-line
+exe @left() = sh { echo "L" }
+exe @right() = sh { echo "R" }
+var @results = stream @left() || stream @right()
+show @results  >> => ["L","R"]

@@ -1,7 +1,9 @@
-var @title = "Dr."
-var @nickname = ""
+var @title = "MyTitle"
+var @empty = ""
 
-var @greeting = "Hello @title?\"@title \"@name@nickname?\" (@nickname)\""
-show @greeting
->> With @title="Dr." and @name="Ada": "Hello Dr. Ada"
->> With @nickname="Ace": "Hello Ada (Ace)"
+var @msg1 = `DEBUG:@title?`
+var @msg2 = `DEBUG:@empty?`
+show @msg1
+show @msg2
+>> "DEBUG:MyTitle"
+>> "DEBUG:"

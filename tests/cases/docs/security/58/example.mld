@@ -1,1 +1,2 @@
-var secret @key = "sk-12345"
+var secret @apiKey = <.env>
+var pii @userData = <users.json>
