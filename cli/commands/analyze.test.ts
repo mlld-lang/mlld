@@ -57,6 +57,25 @@ describe('analyze/validate warnings', () => {
     expect(deprecations).toHaveLength(1);
     expect(deprecations[0]?.message).toContain('@json.strict');
     expect(deprecations[0]?.suggestion).toContain('@parse.strict');
+    expect(deprecations[0]?.suggestion).toContain('auto-serialize');
+  });
+
+  it('warns on plain @json with both parsing and serialization guidance', async () => {
+    const modulePath = await writeModule('deprecated-json-plain.mld', `/var @payload = '{"count":2}'
+/var @parsed = @payload | @json
+/show @parsed
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const deprecations = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'deprecated-json-transform'
+    );
+    expect(deprecations).toHaveLength(1);
+    expect(deprecations[0]?.message).toContain('@json');
+    expect(deprecations[0]?.suggestion).toContain('@parse');
+    expect(deprecations[0]?.suggestion).toContain('auto-serialize');
   });
 
   it('does not warn on @json alias usage when user-defined @json shadows the builtin', async () => {

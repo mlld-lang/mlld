@@ -857,10 +857,10 @@ function detectDeprecatedJsonTransformAntiPatterns(ast: MlldNode[]): AntiPattern
 
     warnings.push({
       code: 'deprecated-json-transform',
-      message: `@${identifier} is a deprecated alias for @${replacement}.`,
+      message: `@${identifier} is deprecated.`,
       line,
       column,
-      suggestion: `Use @${replacement} instead.`
+      suggestion: `If parsing JSON text → use @${replacement} (e.g. @input | @${replacement}). If serializing an object to JSON → the pipe can usually be removed: structured values auto-serialize in templates and show.`
     });
   };
 
