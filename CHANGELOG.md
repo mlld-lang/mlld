@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **File loading docs for `.jsonl`**: `file-loading-basics` now documents that `<file.jsonl>` auto-parses into an array of JSON records.
 
 ### Added
+- **`@fileExists(path)` builtin**: Filesystem existence check that always resolves its argument to a path string first, then checks if the file exists. Unlike `@exists(@var)` (which checks variable existence), `@fileExists(@var)` resolves the variable value and checks the file. Supports string paths, variable paths, load-content syntax, object fields, and globs.
 - **`mlld validate` concise directory output**: Directory validation defaults to a compact view — green checkmarks for clean files, inline warnings/errors for issues, and a summary line. `--verbose` restores full per-file details.
 - **`mlld validate` cross-directory template param resolution**: Directory validation builds a project-wide map of `exe` template declarations so `.att`/`.mtt` files resolve parameters from any module in the tree, not just siblings.
 - **`mlld validate` template for-loop iterator exclusion**: For-loop iterator variables (`@item` in `/for @item in @list`) are no longer flagged as undefined in template analysis.

@@ -155,6 +155,14 @@ export const builtinTransformers: TransformerDefinition[] = [
     }
   },
   {
+    name: 'fileExists',
+    uppercase: 'FILEEXISTS',
+    description: 'Check if a file path exists on the filesystem',
+    implementation: async (input: string) => {
+      return input.trim().length > 0;
+    }
+  },
+  {
     name: 'xml',
     uppercase: 'XML',
     description: 'Convert content to SCREAMING_SNAKE_CASE XML',

@@ -20,7 +20,7 @@ updated: 2026-01-11
 - `@fm` - current file's frontmatter (in modules)
 
 Built-in transformer/helper names are available for `var`/`let` declarations and are shadowable per scope:
-- `@exists`, `@typeof`
+- `@exists`, `@fileExists`, `@typeof`
 - `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`
 - `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
 - `@keep`, `@keepStructured`

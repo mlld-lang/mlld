@@ -1,9 +1,9 @@
->> Load and transform files
-var @config = <config.json> | @parse
-var @uppercase = <readme.txt> | @upper
+var @configPath = "config.json"
 
->> Chain transformations
-exe @first(text, n) = js {
-  return text.split('\n').slice(0, n).join('\n');
-}
-var @summary = <docs.md> | @first(3) | @upper
+>> @exists(@configPath) checks if the VARIABLE is defined (always true here)
+>> @fileExists(@configPath) checks if the FILE "config.json" exists
+when @fileExists(@configPath) => show "Config found"
+
+>> Works with object fields and globs
+when @fileExists(@settings.configFile) => show "Settings loaded"
+when @fileExists(<*.md>) => show "Markdown files exist"

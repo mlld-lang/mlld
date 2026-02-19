@@ -222,7 +222,7 @@ var @data = @text | @parse.llm          >> extract JSON from LLM output
 
 **Transformers** (pipes): `@parse` (`.strict`, `.loose`, `.llm`), `@xml`, `@csv`, `@md`, `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
 
-**Checks**: `@exists`, `@typeof`
+**Checks**: `@exists`, `@fileExists`, `@typeof`
 
 **Helpers**: `@keep`, `@keepStructured`
 

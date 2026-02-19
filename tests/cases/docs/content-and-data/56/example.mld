@@ -1,7 +1,10 @@
->> Access piped JSON data
-import { version, author } from @input
-show `Release @version by @author`
+>> Import specific variables
+import { API_KEY, NODE_ENV } from @input
+show `Deploying to @NODE_ENV with key @API_KEY`
 
->> Access piped text (becomes 'content' field)
-import { content } from @input
-show `Received: @content`
+>> Import and use in objects
+var @config = {
+  "apiKey": @API_KEY,
+  "environment": @NODE_ENV,
+  "timestamp": @now
+}

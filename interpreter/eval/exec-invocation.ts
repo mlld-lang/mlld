@@ -900,6 +900,124 @@ async function evaluateExecInvocationInternal(
       }
     }
 
+    // Special handling for @fileExists - evaluate argument to string path, then check filesystem
+    if (commandName === 'fileExists' || commandName === 'FILEEXISTS') {
+      const arg = args[0];
+      const isGlobPattern = (value: string): boolean => /[\*\?\{\}\[\]]/.test(value);
+      const isEmptyLoadArray = (value: unknown): boolean => {
+        if (isStructuredValue(value)) {
+          return (
+            value.type === 'array' &&
+            Array.isArray(value.data) &&
+            value.data.length === 0
+          );
+        }
+        return Array.isArray(value) && value.length === 0;
+      };
+
+      const finalizeFileExistsResult = async (existsResult: boolean): Promise<EvalResult> => {
+        endResolutionTrackingIfNeeded();
+        return applyInvocationWithClause(existsResult);
+      };
+
+      if (!arg) {
+        return finalizeFileExistsResult(false);
+      }
+
+      try {
+        // Step 1: Evaluate the argument to a string path, regardless of AST type
+        let pathString: string;
+
+        if (arg && typeof arg === 'object' && (arg as any).type === 'load-content') {
+          // <path> syntax - extract the path string
+          const source = (arg as any).source;
+          if (source?.type === 'path') {
+            if (source.meta?.hasVariables && Array.isArray(source.segments)) {
+              pathString = (await interpolateWithResultDescriptor(source.segments, env)).trim();
+            } else {
+              pathString = String(source.raw ?? '').trim();
+            }
+          } else {
+            return finalizeFileExistsResult(false);
+          }
+        } else if (arg && typeof arg === 'object' && (arg as any).type === 'VariableReference') {
+          // @var - resolve variable to its string value, then check the FILE (not variable existence)
+          const varRef = arg as any;
+          let targetVar = env.getVariable(varRef.identifier);
+          if (!targetVar && env.hasVariable(varRef.identifier)) {
+            targetVar = await env.getResolverVariable(varRef.identifier);
+          }
+          if (!targetVar) {
+            return finalizeFileExistsResult(false);
+          }
+
+          const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+          let resolvedValue = await resolveVariable(targetVar, env, ResolutionContext.Display);
+
+          // Handle field access (e.g., @obj.path)
+          if (varRef.fields && varRef.fields.length > 0) {
+            const { accessField } = await import('../utils/field-access');
+            const normalized = normalizeFields(varRef.fields);
+            for (const field of normalized) {
+              const fieldResult = await accessField(resolvedValue, field, {
+                preserveContext: true,
+                env,
+                sourceLocation: nodeSourceLocation,
+                returnUndefinedForMissing: true
+              });
+              resolvedValue = (fieldResult as any).value;
+              if (resolvedValue === undefined) {
+                return finalizeFileExistsResult(false);
+              }
+            }
+          }
+
+          pathString = String(asText(resolvedValue) ?? resolvedValue ?? '').trim();
+        } else if (arg && typeof arg === 'object' && (arg as any).type === 'ExecInvocation') {
+          // @func() result - evaluate, then use result as path
+          const execResult = await evaluateExecInvocation(arg as any, env);
+          const val = execResult?.value ?? '';
+          pathString = String(asText(val) ?? val ?? '').trim();
+        } else if (Array.isArray(arg)) {
+          pathString = (await interpolateWithResultDescriptor(arg, env, InterpolationContext.Default)).trim();
+        } else if (arg && typeof arg === 'object' && (arg as any).type === 'Text') {
+          pathString = String((arg as any).content ?? '').trim();
+        } else if (arg && typeof arg === 'object' && (arg as any).type === 'Literal') {
+          pathString = String((arg as any).value ?? '').trim();
+        } else if (arg && typeof arg === 'object' && 'wrapperType' in arg && Array.isArray((arg as any).content)) {
+          pathString = (await interpolateWithResultDescriptor((arg as any).content, env, InterpolationContext.Default)).trim();
+        } else {
+          pathString = String(arg ?? '').trim();
+        }
+
+        if (!pathString) {
+          return finalizeFileExistsResult(false);
+        }
+
+        // Step 2: Check filesystem existence
+        if (isGlobPattern(pathString)) {
+          // For globs, use processContentLoader (works with virtual FS in tests)
+          const { processContentLoader } = await import('./content-loader');
+          const loadNode = {
+            type: 'load-content',
+            source: { type: 'path', raw: pathString }
+          };
+          const loadResult = await processContentLoader(loadNode as any, env);
+          if (isEmptyLoadArray(loadResult)) {
+            return finalizeFileExistsResult(false);
+          }
+          return finalizeFileExistsResult(true);
+        } else {
+          // For single paths, resolve and check via IFileSystemService.exists()
+          const resolvedPath = await env.resolvePath(pathString);
+          const fileExists = await env.getFileSystemService().exists(resolvedPath);
+          return finalizeFileExistsResult(fileExists);
+        }
+      } catch {
+        return finalizeFileExistsResult(false);
+      }
+    }
+
     // Check if this is a multi-arg builtin transformer (like keychain functions)
     if (variable.internal?.keychainFunction) {
       // Keychain functions need all args passed as an array
