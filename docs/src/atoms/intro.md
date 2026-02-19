@@ -125,6 +125,7 @@ mlld is not JavaScript/Python, but it has familiar built-in JS methods. See `mll
 Labels are comma-separated: `var secret,pii @data = "x"`
 
 `var` is module-level and immutable, `let` is block-scoped and mutable
+
 ```mlld
 var @config = "global"
 if true [
@@ -132,6 +133,8 @@ if true [
   var @temp = "local"    >> WRONG: var not allowed in blocks
 ]
 ```
+
+`var` can be labeled, `let` cannot be labeled. This is because labels get taint-tracked (taint tracking on a mutable object is a nightmare). Design your variable usage accordingly; use `exe` to create abstractions at top level which can also be labeled.
 
 `if` vs `when`
 ```
