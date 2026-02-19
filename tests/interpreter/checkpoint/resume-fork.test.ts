@@ -462,6 +462,42 @@ describe('checkpoint resume + fork runtime semantics', () => {
     ).rejects.toThrow('Ambiguous checkpoint match "data"');
   });
 
+  it('honors --resume @fn when matching entries come from --fork cache', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-fork-resume-function-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointForkResumeFunctionCounter';
+    registerCounter(counterKey);
+
+    const source = buildForkSourceScript(counterKey);
+    await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'collect-resume-fn'
+    });
+    const seeded = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'analyze-resume-fn',
+      fork: 'collect-resume-fn'
+    });
+
+    expect(readCounter(counterKey)).toBe(2);
+    expect(seeded).toContain('call:1:prompt-a:sonnet');
+    expect(seeded).toContain('call:2:prompt-b:sonnet');
+
+    const resumed = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'analyze-resume-fn',
+      fork: 'collect-resume-fn',
+      resume: '@llm'
+    });
+
+    expect(readCounter(counterKey)).toBe(4);
+    expect(resumed).toContain('call:3:prompt-a:sonnet');
+    expect(resumed).toContain('call:4:prompt-b:sonnet');
+  });
+
   it('uses fork cache as read-only seed and writes misses to local target cache', async () => {
     const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-fork-matrix-'));
     cleanupDirs.push(checkpointRoot);

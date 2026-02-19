@@ -259,4 +259,82 @@ describe('CheckpointManager', () => {
     const sourceCacheRaw = await readFile(path.join(root, 'collect', 'llm-cache.jsonl'), 'utf8');
     expect(sourceCacheRaw.trim().split('\n')).toHaveLength(1);
   });
+
+  it('invalidates forked entries in memory across all resume selector paths', async () => {
+    const root = await createTempDir('checkpoint-manager-fork-invalidate-');
+
+    const source = new CheckpointManager('collect', createOptions(root));
+    await source.load();
+
+    const siteZeroKey = CheckpointManager.computeCacheKey('llm', ['alpha', 'sonnet']);
+    const siteOneFirstKey = CheckpointManager.computeCacheKey('llm', ['beta', 'sonnet']);
+    const siteOneSecondKey = CheckpointManager.computeCacheKey('llm', ['charlie', 'sonnet']);
+    const otherFnKey = CheckpointManager.computeCacheKey('summarize', ['alpha-notes', 'opus']);
+
+    await source.put(siteZeroKey, {
+      fn: 'llm',
+      args: ['alpha', 'sonnet'],
+      result: 'site-0',
+      invocationSite: 'script:1',
+      invocationIndex: 0,
+      invocationOrdinal: 0
+    });
+    await source.put(siteOneFirstKey, {
+      fn: 'llm',
+      args: ['beta', 'sonnet'],
+      result: 'site-1-first',
+      invocationSite: 'script:2',
+      invocationIndex: 1,
+      invocationOrdinal: 1
+    });
+    await source.put(siteOneSecondKey, {
+      fn: 'llm',
+      args: ['charlie', 'sonnet'],
+      result: 'site-1-second',
+      invocationSite: 'script:2',
+      invocationIndex: 1,
+      invocationOrdinal: 2
+    });
+    await source.put(otherFnKey, {
+      fn: 'summarize',
+      args: ['alpha-notes', 'opus'],
+      result: 'other-fn'
+    });
+
+    const forked = new CheckpointManager(
+      'analyze',
+      createOptions(root, {
+        forkScriptName: 'collect'
+      })
+    );
+    await forked.load();
+
+    expect(forked.getStats().forkCached).toBe(4);
+
+    await expect(forked.invalidateFunctionSite('llm', 1)).resolves.toBe(2);
+    await expect(forked.get(siteOneFirstKey)).resolves.toBeNull();
+    await expect(forked.get(siteOneSecondKey)).resolves.toBeNull();
+    expect(forked.getStats().forkCached).toBe(2);
+
+    await expect(forked.invalidateFunctionFrom('llm', 'alpha')).resolves.toBe(1);
+    await expect(forked.get(siteZeroKey)).resolves.toBeNull();
+    expect(forked.getStats().forkCached).toBe(1);
+
+    await expect(forked.invalidateFrom('alpha')).resolves.toBe(1);
+    await expect(forked.get(otherFnKey)).resolves.toBeNull();
+    expect(forked.getStats().forkCached).toBe(0);
+
+    const reloaded = new CheckpointManager(
+      'analyze',
+      createOptions(root, {
+        forkScriptName: 'collect'
+      })
+    );
+    await reloaded.load();
+    expect(reloaded.getStats().forkCached).toBe(4);
+
+    await expect(reloaded.invalidateFunction('summarize')).resolves.toBe(1);
+    await expect(reloaded.get(otherFnKey)).resolves.toBeNull();
+    expect(reloaded.getStats().forkCached).toBe(3);
+  });
 });

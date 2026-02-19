@@ -602,8 +602,9 @@ export class CheckpointManager {
     if (!fnName || fnName.trim().length === 0) {
       return 0;
     }
-    const keys = Array.from(this.localIndex.values())
-      .filter(entry => entry.fn === fnName)
+    const normalizedFn = fnName.trim();
+    const keys = this.listEntries(true)
+      .filter(entry => entry.fn === normalizedFn)
       .map(entry => entry.key);
     return this.removeKeys(keys);
   }
@@ -615,7 +616,7 @@ export class CheckpointManager {
     }
 
     const normalizedFn = fnName.trim();
-    const entries = Array.from(this.localIndex.values()).filter(entry => entry.fn === normalizedFn);
+    const entries = this.listEntries(true).filter(entry => entry.fn === normalizedFn);
     if (entries.length === 0) {
       return 0;
     }
@@ -640,7 +641,11 @@ export class CheckpointManager {
       return 0;
     }
 
-    const scopedEntries = this.filterEntriesByFunctionAndInvocationIndex(normalizedFn, invocationIndex);
+    const scopedEntries = this.filterEntriesByFunctionAndInvocationIndex(
+      normalizedFn,
+      invocationIndex,
+      true
+    );
     if (scopedEntries.length === 0) {
       return 0;
     }
@@ -671,7 +676,7 @@ export class CheckpointManager {
     if (!normalizedPattern) {
       return 0;
     }
-    const keys = Array.from(this.localIndex.values())
+    const keys = this.listEntries(true)
       .filter(entry => entry.argsPreview.startsWith(normalizedPattern))
       .map(entry => entry.key);
     return this.removeKeys(keys);
@@ -826,33 +831,60 @@ export class CheckpointManager {
   }
 
   private async removeKeys(keys: readonly string[]): Promise<number> {
-    if (keys.length === 0) {
+    const uniqueKeys = Array.from(new Set(keys));
+    if (uniqueKeys.length === 0) {
       return 0;
     }
 
     let removed = 0;
-    for (const key of keys) {
-      const deleted = this.localIndex.delete(key);
+    let localChanged = false;
+    let forkChanged = false;
+    for (const key of uniqueKeys) {
+      const localDeleted = this.localIndex.delete(key);
       this.localResultCache.delete(key);
-      if (!deleted) {
-        continue;
+      if (localDeleted) {
+        localChanged = true;
+        await rm(this.getResultPath(this.resultsDir, key), { force: true });
       }
-      removed += 1;
-      await rm(this.getResultPath(this.resultsDir, key), { force: true });
+
+      const forkDeleted = this.forkIndex.delete(key);
+      this.forkResultCache.delete(key);
+      if (forkDeleted) {
+        forkChanged = true;
+      }
+
+      if (localDeleted || forkDeleted) {
+        removed += 1;
+      }
     }
 
-    this.localSizeBytes = this.sumResultSizes(this.localIndex);
-    this.hydrateInvocationSiteIndexes();
-    await this.rewriteCacheIndex();
-    await this.writeManifest();
+    if (localChanged) {
+      this.localSizeBytes = this.sumResultSizes(this.localIndex);
+      this.hydrateInvocationSiteIndexes();
+      await this.rewriteCacheIndex();
+      await this.writeManifest();
+    }
+
+    if (forkChanged) {
+      this.forkSizeBytes = this.sumResultSizes(this.forkIndex);
+    }
+
     return removed;
+  }
+
+  private listEntries(includeFork = false): CheckpointRecord[] {
+    if (!includeFork) {
+      return Array.from(this.localIndex.values());
+    }
+    return [...this.localIndex.values(), ...this.forkIndex.values()];
   }
 
   private filterEntriesByFunctionAndInvocationIndex(
     fnName: string,
-    invocationIndex?: number
+    invocationIndex?: number,
+    includeFork = false
   ): CheckpointRecord[] {
-    const fnEntries = Array.from(this.localIndex.values()).filter(entry => entry.fn === fnName);
+    const fnEntries = this.listEntries(includeFork).filter(entry => entry.fn === fnName);
     if (!Number.isInteger(invocationIndex) || invocationIndex === undefined || invocationIndex < 0) {
       return fnEntries;
     }
