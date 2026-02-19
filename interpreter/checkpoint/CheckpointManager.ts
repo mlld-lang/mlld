@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -651,7 +651,7 @@ export class CheckpointManager {
   private async writeAtomic(targetPath: string, content: string): Promise<void> {
     const dir = path.dirname(targetPath);
     await mkdir(dir, { recursive: true });
-    const tempPath = `${targetPath}.tmp-${process.pid}-${Date.now()}`;
+    const tempPath = `${targetPath}.tmp-${process.pid}-${Date.now()}-${randomUUID()}`;
     await writeFile(tempPath, content, 'utf8');
     try {
       await rename(tempPath, targetPath);

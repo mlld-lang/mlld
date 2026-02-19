@@ -150,6 +150,8 @@ Checkpointing is memoization for `llm`-labeled work. Cache validity is based on 
 
 - If guard/policy rules change and you want safety checks to re-run on previously cached paths, re-run with `--fresh`.
 - If you keep checkpoint cache enabled without `--fresh`, existing cache hits may still be returned.
+- Cache-hit path skips guard evaluation (both `before` and `after`); guard hooks run only on miss path.
+- Use `--fresh` (or targeted resume invalidation) when you need updated guard/policy logic to re-evaluate prior `llm` calls.
 - This behavior is intentional in early rollout phases; targeted guard/policy fingerprint invalidation is planned as a future enhancement.
 
 ```bash

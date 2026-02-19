@@ -98,6 +98,7 @@ import {
 } from './ContextManager';
 import { HookManager } from '../hooks/HookManager';
 import { HookRegistry } from '../hooks/HookRegistry';
+import type { CheckpointManager } from '../checkpoint/CheckpointManager';
 import { checkpointPreHook } from '../hooks/checkpoint-pre-hook';
 import { checkpointPostHook } from '../hooks/checkpoint-post-hook';
 import { guardPreHook } from '../hooks/guard-pre-hook';
@@ -317,6 +318,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   // Export manifest populated by /export directives within this environment
   private exportManifest?: ExportManifest;
+  private checkpointManager?: CheckpointManager;
 
   // Tracks imported bindings to surface collisions across directives.
   private importBindings: Map<string, ImportBindingInfo> = new Map();
@@ -368,6 +370,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.hookManager = parent.hookManager;
       this.hookRegistry = parent.hookRegistry.createChild();
       this.guardRegistry = parent.guardRegistry.createChild();
+      this.checkpointManager = parent.checkpointManager;
     } else {
       this.contextManager = new ContextManager();
       this.hookManager = new HookManager();
@@ -1411,6 +1414,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getGuardRegistry(): GuardRegistry {
     return this.guardRegistry;
+  }
+
+  setCheckpointManager(manager: CheckpointManager | undefined): void {
+    const root = this.getRootEnvironment();
+    root.checkpointManager = manager;
+    this.checkpointManager = manager;
+  }
+
+  getCheckpointManager(): CheckpointManager | undefined {
+    const root = this.getRootEnvironment();
+    return root.checkpointManager;
   }
 
   /**

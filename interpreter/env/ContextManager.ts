@@ -320,6 +320,7 @@ export class ContextManager {
       Array.isArray((normalizedOperation as any).metadata.userHookErrors)
         ? (((normalizedOperation as any).metadata.userHookErrors as unknown[]) ?? [])
         : [];
+    const checkpointContext = this.buildCheckpointContext(normalizedOperation);
 
     const mxValue: Record<string, unknown> = {
       ...pipelineFields.root,
@@ -349,7 +350,8 @@ export class ContextManager {
       hooks: {
         errors: Array.isArray(hookErrors) ? [...hookErrors] : []
       },
-      tools: this.getToolsSnapshot()
+      tools: this.getToolsSnapshot(),
+      ...(checkpointContext ? { checkpoint: checkpointContext } : {})
     };
 
     if (deniedContext) {
@@ -407,6 +409,36 @@ export class ContextManager {
       labels: mergedLabels,
       opLabels
     };
+  }
+
+  private buildCheckpointContext(
+    operation: Record<string, unknown> | null
+  ): Record<string, unknown> | null {
+    if (!operation) {
+      return null;
+    }
+
+    const metadata = operation.metadata;
+    if (!metadata || typeof metadata !== 'object') {
+      return null;
+    }
+
+    const metadataRecord = metadata as Record<string, unknown>;
+    const explicitCheckpoint = metadataRecord.checkpoint;
+    if (explicitCheckpoint && typeof explicitCheckpoint === 'object') {
+      const checkpointRecord = explicitCheckpoint as Record<string, unknown>;
+      const hit = checkpointRecord.hit === true;
+      const key = typeof checkpointRecord.key === 'string' ? checkpointRecord.key : null;
+      return { hit, key };
+    }
+
+    const hit = metadataRecord.checkpointHit === true;
+    const key = typeof metadataRecord.checkpointKey === 'string' ? metadataRecord.checkpointKey : null;
+    if (!hit && key === null) {
+      return null;
+    }
+
+    return { hit, key };
   }
 
   pushGenericContext(type: string, context: unknown): void {

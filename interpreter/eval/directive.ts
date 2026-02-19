@@ -6,7 +6,12 @@ import { getTextContent } from '../utils/type-guard-helpers';
 import type { OperationContext, PipelineContextSnapshot } from '../env/ContextManager';
 import type { PolicyDirectiveNode } from '@core/types/policy';
 import { extractDirectiveInputs } from './directive-inputs';
-import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
+import {
+  applyCheckpointDecisionToOperation,
+  getCheckpointDecisionState,
+  getGuardTransformedInputs,
+  handleGuardDecision
+} from '../hooks/hook-decision-handler';
 import type { Variable, VariableSource } from '@core/types/variable';
 import { createSimpleTextVariable, isExecutableVariable } from '@core/types/variable';
 import { isVariable } from '../utils/variable-resolution';
@@ -197,6 +202,8 @@ export async function evaluateDirective(
           env,
           operationContext
         );
+        const checkpointDecision = getCheckpointDecisionState(preDecision);
+        applyCheckpointDecisionToOperation(operationContext, checkpointDecision);
         const transformedInputs = getGuardTransformedInputs(preDecision, hookInputs);
         if (precomputedVarAssignment && transformedInputs && transformedInputs[0]) {
           const firstTransformed = transformedInputs[0];
@@ -209,6 +216,15 @@ export async function evaluateDirective(
         }
 
         const resolvedInputs = transformedInputs ?? hookInputs;
+        if (checkpointDecision?.hit && checkpointDecision.hasCachedResult) {
+          let cachedResult: EvalResult = {
+            value: checkpointDecision.cachedResult,
+            env
+          };
+          cachedResult = await hookManager.runPost(directive, cachedResult, resolvedInputs, env, operationContext);
+          cachedResult = await runUserAfterHooks(directive, cachedResult, resolvedInputs, env, operationContext);
+          return cachedResult;
+        }
         await handleGuardDecision(preDecision, directive, env, operationContext);
 
         const mergedContext = mergeEvaluationContext(

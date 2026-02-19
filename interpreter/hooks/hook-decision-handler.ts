@@ -27,7 +27,15 @@ interface GuardDecisionInfo {
 }
 
 const CHECKPOINT_HIT_KEY = 'checkpointHit';
+const CHECKPOINT_KEY_KEY = 'checkpointKey';
 const CHECKPOINT_CACHED_RESULT_KEY = 'cachedResult';
+
+export interface CheckpointDecisionState {
+  hit: boolean;
+  key?: string;
+  hasCachedResult: boolean;
+  cachedResult?: unknown;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -57,6 +65,59 @@ export function normalizeHookDecision(decision: HookDecision): HookDecision {
 
 export function getNormalizedHookDecisionAction(decision: HookDecision): HookDecisionAction {
   return normalizeHookDecision(decision).action;
+}
+
+export function getCheckpointDecisionState(decision?: HookDecision): CheckpointDecisionState | null {
+  if (!decision) {
+    return null;
+  }
+
+  const normalizedDecision = normalizeHookDecision(decision);
+  const metadata = isRecord(normalizedDecision.metadata) ? normalizedDecision.metadata : null;
+  if (!metadata) {
+    return null;
+  }
+
+  const hasCachedResult = Object.prototype.hasOwnProperty.call(metadata, CHECKPOINT_CACHED_RESULT_KEY);
+  const hit = normalizedDecision.action === 'fulfill' || metadata[CHECKPOINT_HIT_KEY] === true;
+  const key = typeof metadata[CHECKPOINT_KEY_KEY] === 'string' ? (metadata[CHECKPOINT_KEY_KEY] as string) : undefined;
+  if (!hit && !key && !hasCachedResult) {
+    return null;
+  }
+
+  return {
+    hit,
+    key,
+    hasCachedResult,
+    ...(hasCachedResult ? { cachedResult: metadata[CHECKPOINT_CACHED_RESULT_KEY] } : {})
+  };
+}
+
+export function applyCheckpointDecisionToOperation(
+  operationContext: OperationContext,
+  checkpointState: CheckpointDecisionState | null
+): void {
+  if (!checkpointState) {
+    return;
+  }
+
+  const operationRef = operationContext as OperationContext & {
+    metadata?: Record<string, unknown>;
+  };
+  if (!operationRef.metadata || typeof operationRef.metadata !== 'object') {
+    operationRef.metadata = {};
+  }
+  const metadata = operationRef.metadata as Record<string, unknown>;
+  metadata[CHECKPOINT_HIT_KEY] = checkpointState.hit;
+  if (checkpointState.key) {
+    metadata[CHECKPOINT_KEY_KEY] = checkpointState.key;
+  } else {
+    delete metadata[CHECKPOINT_KEY_KEY];
+  }
+  metadata.checkpoint = {
+    hit: checkpointState.hit,
+    key: checkpointState.key ?? null
+  };
 }
 
 export async function handleGuardDecision(

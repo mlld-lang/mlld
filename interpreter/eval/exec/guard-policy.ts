@@ -19,7 +19,12 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { HookDecision } from '@interpreter/hooks/HookManager';
-import { getGuardTransformedInputs, handleGuardDecision } from '@interpreter/hooks/hook-decision-handler';
+import {
+  applyCheckpointDecisionToOperation,
+  getCheckpointDecisionState,
+  getGuardTransformedInputs,
+  handleGuardDecision
+} from '@interpreter/hooks/hook-decision-handler';
 import { runUserAfterHooks, runUserBeforeHooks } from '@interpreter/hooks/user-hook-runner';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
@@ -574,6 +579,15 @@ export async function handleExecPreGuardDecision(
   options: HandleExecPreGuardDecisionOptions
 ): Promise<EvalResult | null> {
   const { preDecision, node, env, execEnv, operationContext, whenExprNode } = options;
+  const checkpointDecision = getCheckpointDecisionState(preDecision);
+  applyCheckpointDecisionToOperation(operationContext, checkpointDecision);
+  if (checkpointDecision?.hit && checkpointDecision.hasCachedResult) {
+    return {
+      value: checkpointDecision.cachedResult,
+      env: execEnv
+    };
+  }
+
   const guardInputVariable =
     preDecision && preDecision.metadata && (preDecision.metadata as Record<string, unknown>).guardInput;
   try {

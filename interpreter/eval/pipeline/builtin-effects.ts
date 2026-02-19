@@ -6,7 +6,12 @@ import { materializeDisplayValue } from '../../utils/display-materialization';
 import { asText } from '../../utils/structured-value';
 import type { OperationContext } from '../../env/ContextManager';
 import { materializeGuardInputs } from '../../utils/guard-inputs';
-import { getGuardTransformedInputs, handleGuardDecision } from '../../hooks/hook-decision-handler';
+import {
+  applyCheckpointDecisionToOperation,
+  getCheckpointDecisionState,
+  getGuardTransformedInputs,
+  handleGuardDecision
+} from '../../hooks/hook-decision-handler';
 import { runUserAfterHooks, runUserBeforeHooks } from '../../hooks/user-hook-runner';
 import { getOperationLabels, getOperationSources } from '@core/policy/operation-labels';
 import type { EffectHookNode } from '@core/types/hooks';
@@ -267,8 +272,27 @@ export async function runBuiltinEffect(
         ? inputs
         : materializeGuardInputs(userHookInputs, { nameHint: '__effect_input__' });
     const preDecision = await hookManager.runPre(hookNode, preHookInputs, env, operationContext);
+    const checkpointDecision = getCheckpointDecisionState(preDecision);
+    applyCheckpointDecisionToOperation(operationContext, checkpointDecision);
     const transformedInputs = getGuardTransformedInputs(preDecision, preHookInputs);
     const resolvedInputs = transformedInputs ?? preHookInputs;
+
+    if (checkpointDecision?.hit && checkpointDecision.hasCachedResult) {
+      let cachedResult: EvalResult = {
+        value: checkpointDecision.cachedResult,
+        env
+      };
+      try {
+        cachedResult = await hookManager.runPost(hookNode, cachedResult, resolvedInputs, env, operationContext);
+        await runUserAfterHooks(hookNode, cachedResult, resolvedInputs, env, operationContext);
+        return;
+      } catch (error) {
+        if (isGuardRetrySignal(error)) {
+          throw convertEffectRetryToDeny(error as GuardError, operationContext, env);
+        }
+        throw error;
+      }
+    }
 
     try {
       await handleGuardDecision(preDecision, hookNode, env, operationContext);

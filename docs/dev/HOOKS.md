@@ -23,7 +23,7 @@ mlld's hook system enables pre-execution and post-execution extensions at evalua
 - Function hooks support optional first-arg prefix matching via `hook ... @fn("prefix")`
 - Non-reentrant per directive invocation (prevent infinite loops)
 - Hooks/checkpoint/resume rollout contract is tracked in `docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md` (Phase 0 decision lock before implementation phases).
-- Checkpoint protocol adapter uses explicit `fulfill` hook decisions, with legacy metadata (`checkpointHit` + `cachedResult`) normalized centrally in `hook-decision-handler` during Phase 6A.
+- Checkpoint short-circuit uses explicit `fulfill` hook decisions, with legacy metadata (`checkpointHit` + `cachedResult`) normalized centrally in `hook-decision-handler`.
 
 ## Details
 
@@ -190,6 +190,17 @@ Hooks run for directive, effect, and user-defined `/exe` boundaries. Built-in he
 - Streaming compatibility: guard-post-hook denies when streaming is enabled and after-timed guards are registered. After-guards require non-streaming execution so the hook can validate a stable output; streamed effects are not retractable.
 - Effects: `runBuiltinEffect()` builds an `OperationContext` with the effect identifier as `type` (`output`/`show`/`append`/`log`) and `subtype: "effect"`, materializes the effect payload for guard inputs, and routes through guard pre/post hooks. `op:output`/`op:show`/`op:append`/`op:log` guard filters apply to both directives and inline effects. Guard retries on effects convert to a deny with a clear error because effect replay is not supported.
 
+**checkpoint-before / checkpoint-after** (`interpreter/hooks/checkpoint-pre-hook.ts`, `interpreter/hooks/checkpoint-post-hook.ts`)
+- Applies to `llm`-labeled `exe`/`run` operations and `effect` boundaries.
+- Pre-hook computes deterministic cache keys from operation name + normalized inputs and returns `action: "fulfill"` on cache hit.
+- Legacy metadata hit signals are normalized to `fulfill` by `hook-decision-handler` so hot paths use one protocol.
+- On hit:
+  - execution short-circuits in directive/exec/effect call sites,
+  - guard hooks are skipped,
+  - built-in post-hooks and user `after` hooks still run,
+  - `@mx.checkpoint.hit`/`@mx.checkpoint.key` are populated.
+- Post-hook writes cache entries only on miss (hit path is read-only).
+
 ### OperationContext
 
 Provides metadata to hooks about the pending/completed operation:
@@ -229,12 +240,15 @@ Directive boundary
 3. Extract inputs (extractDirectiveInputs or prepareVarAssignment)
 4. → Run user `before` hooks (HookRegistry)
 5. → Run pre-hooks (HookManager.runPre)
-6.   ├─ guardPreHook evaluates guard definitions
-7.   └─ First non-continue → abort or retry
-8. → Evaluate directive (directive-specific evaluator)
-9. → Run post-hooks (HookManager.runPost)
-10.   └─ taint-post-hook collects and merges security descriptors
-11. → Run user `after` hooks (HookRegistry)
+6.   ├─ checkpointPreHook resolves cache hit/miss for eligible llm operations
+7.   ├─ guardPreHook evaluates guard definitions on miss path
+8.   └─ First non-continue (`abort`/`retry`/`fulfill`) exits pre-chain
+9. → Evaluate directive (directive-specific evaluator) unless fulfilled from cache
+10. → Run post-hooks (HookManager.runPost)
+11.   ├─ guardPostHook (miss only)
+12.   ├─ taint-post-hook collects and merges security descriptors
+13.   └─ checkpointPostHook writes miss-path cache entries
+14. → Run user `after` hooks (HookRegistry)
 
 Exe boundary
 1. evaluateExecInvocation() called
@@ -242,12 +256,15 @@ Exe boundary
 3. Build operation context `{ type: 'exe', ... }`
 4. → Run user `before` hooks (HookRegistry)
 5. → Run pre-hooks (HookManager.runPre)
-6.   ├─ guardPreHook evaluates guard definitions
-7.   └─ First non-continue → abort or retry
-8. → Execute user-defined /exe implementation
-9. → Run post-hooks (HookManager.runPost)
-10.   └─ taint-post-hook propagates taint to exe result
-11. → Run user `after` hooks (HookRegistry)
+6.   ├─ checkpointPreHook resolves cache hit/miss for eligible llm operations
+7.   ├─ guardPreHook evaluates guard definitions on miss path
+8.   └─ First non-continue (`abort`/`retry`/`fulfill`) exits pre-chain
+9. → Execute user-defined /exe implementation unless fulfilled from cache
+10. → Run post-hooks (HookManager.runPost)
+11.   ├─ guardPostHook (miss only)
+12.   ├─ taint-post-hook propagates taint to exe result
+13.   └─ checkpointPostHook writes miss-path cache entries
+14. → Run user `after` hooks (HookRegistry)
 ```
 
 ### Suppression Matrix (Phase 3C Runtime)
