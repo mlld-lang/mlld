@@ -55,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **File loading docs for `.jsonl`**: `file-loading-basics` now documents that `<file.jsonl>` auto-parses into an array of JSON records.
 
 ### Added
+- **`mlld validate` concise directory output**: Directory validation defaults to a compact view — green checkmarks for clean files, inline warnings/errors for issues, and a summary line. `--verbose` restores full per-file details.
+- **`mlld validate` cross-directory template param resolution**: Directory validation builds a project-wide map of `exe` template declarations so `.att`/`.mtt` files resolve parameters from any module in the tree, not just siblings.
+- **`mlld validate` template for-loop iterator exclusion**: For-loop iterator variables (`@item` in `/for @item in @list`) are no longer flagged as undefined in template analysis.
+- **`mlld validate` `@for` anti-pattern detection**: `.att` templates containing `@for` (strict-mode syntax) warn with a hint to use `/for ... /end` instead.
 - **JSON5 fallback for `.json` / `.jsonl` loading**: Files with trailing commas, single quotes, or comments now parse via JSON5 fallback when strict `JSON.parse` fails.
 - **`mlld live --stdio`**: persistent NDJSON RPC transport for long-running SDK calls
   - Accepts `process`, `execute`, `analyze`, `cancel`, and `state:update` methods over stdio

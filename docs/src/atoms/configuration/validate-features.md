@@ -14,11 +14,12 @@ qa_tier: 2
 The `mlld validate` command detects common mistakes before runtime. Supports `.mld`, `.mld.md`, `.att`, and `.mtt` files. Pass a directory to validate all files recursively.
 
 ```bash
-mlld validate module.mld
-mlld validate template.att
-mlld validate ./my-project/
-mlld validate module.mld --error-on-warnings
-mlld validate module.mld --format json
+mlld validate ./my-project/                   # Validate all files recursively (recommended)
+mlld validate ./my-project/ --verbose         # Full details for all files
+mlld validate module.mld                      # Validate a single module
+mlld validate template.att                    # Validate a template
+mlld validate module.mld --error-on-warnings  # Fail on warnings
+mlld validate module.mld --format json        # JSON output
 ```
 
 **Undefined variable detection:**
@@ -87,7 +88,7 @@ Add `mlld-config.json` to suppress intentional patterns:
 }
 ```
 
-Suppressible codes: `exe-parameter-shadowing`, `mutable-state`, `when-exe-implicit-return`, `deprecated-json-transform`.
+Suppressible codes: `exe-parameter-shadowing`, `mutable-state`, `when-exe-implicit-return`, `deprecated-json-transform`, `template-strict-for-syntax`.
 
 **Template validation (.att / .mtt):**
 
@@ -95,7 +96,7 @@ Suppressible codes: `exe-parameter-shadowing`, `mutable-state`, `when-exe-implic
 mlld validate prompts/welcome.att
 ```
 
-Reports all `@variable` and `@function()` references found in the template. If a sibling `.mld` file declares an `exe` using the template, discovered parameters are shown and undefined references are flagged:
+Reports all `@variable` and `@function()` references found in the template. When validating a directory, parameters are resolved from `exe` declarations across the entire project tree. For single-file validation, sibling `.mld` files are scanned. Discovered parameters are shown and undefined references are flagged:
 
 ```
 Valid template (.att)
@@ -108,13 +109,37 @@ Warnings (1):
     hint: @unknownVar is not a known parameter. Known: name, role
 ```
 
+**Template `@for` anti-pattern:**
+
+`.att` templates using strict-mode `@for` syntax are flagged — use `/for ... /end` instead:
+
+```
+⚠ prompts/report.att
+    "@for" is not valid in templates. Use "/for ... /end" instead. (line 8)
+      hint: In .att templates, use /for @var in @collection ... /end (slash prefix, no brackets).
+```
+
 **Directory validation:**
 
 ```bash
 mlld validate ./my-project/
+mlld validate ./my-project/ --verbose
 ```
 
-Recursively validates all `.mld`, `.mld.md`, `.att`, and `.mtt` files. Reports per-file results with a summary. Exit code 1 if any file fails.
+Recursively validates all `.mld`, `.mld.md`, `.att`, and `.mtt` files. Default output is concise — clean files get a green checkmark, only files with issues show details:
+
+```
+  ✓ lib/utils.mld
+  ✓ lib/helpers.mld
+  ⚠ prompts/welcome.att
+      @unknownVar (line 5) - undefined variable
+  ✗ broken.mld
+      Expected directive (line 3:1)
+
+4 files: 3 passed, 1 failed, 1 with warnings
+```
+
+Use `--verbose` for full per-file details. Exit code 1 if any file fails.
 
 **Exit codes:**
 

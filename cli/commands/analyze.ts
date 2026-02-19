@@ -25,6 +25,8 @@ export interface AnalyzeOptions {
   ast?: boolean;
   checkVariables?: boolean;
   errorOnWarnings?: boolean;
+  verbose?: boolean;
+  knownTemplateParams?: Map<string, Set<string>>;
 }
 
 export interface AnalysisError {
@@ -77,7 +79,8 @@ export type AntiPatternWarningCode =
   | 'mutable-state'
   | 'when-exe-implicit-return'
   | 'deprecated-json-transform'
-  | 'exe-parameter-shadowing';
+  | 'exe-parameter-shadowing'
+  | 'template-strict-for-syntax';
 
 export interface AntiPatternWarning {
   code: AntiPatternWarningCode;
@@ -1191,6 +1194,62 @@ function extractNeeds(content: string, ast: MlldNode[]): NeedsInfo | undefined {
 }
 
 /**
+ * Collect for-loop iterator variable names from a template AST.
+ * These are locally-scoped bindings, not template parameters.
+ * In .att templates, for-loops produce TemplateForBlock nodes (not Directive nodes).
+ */
+function collectTemplateForIterators(ast: MlldNode[]): Set<string> {
+  const iterators = new Set<string>();
+
+  walkAST(ast, (node: any) => {
+    // Template for-loops: TemplateForBlock with variable.identifier
+    if (node.type === 'TemplateForBlock') {
+      const varNode = node.variable;
+      if (varNode?.type === 'VariableReference' && varNode.identifier) {
+        iterators.add(varNode.identifier);
+      }
+    }
+
+    // Module for-loops (if templates ever contain them): Directive kind=for
+    if (node.type === 'Directive' && node.kind === 'for') {
+      const varNodes = node.values?.variable;
+      if (Array.isArray(varNodes)) {
+        for (const v of varNodes) {
+          if (v.type === 'VariableReference' && v.identifier) {
+            iterators.add(v.identifier);
+          }
+        }
+      }
+    }
+  });
+
+  return iterators;
+}
+
+/**
+ * Detect @for in .att templates — common mistake where users use strict-mode
+ * for-loop syntax instead of /for ... /end. The .att parser produces
+ * VariableReference nodes for @for (since it's just @word syntax).
+ */
+function detectTemplateStrictForSyntax(ast: MlldNode[]): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+
+  walkAST(ast, (node: any) => {
+    if (node.type === 'VariableReference' && node.identifier === 'for') {
+      warnings.push({
+        code: 'template-strict-for-syntax',
+        message: `"@for" is not valid in templates. Use "/for ... /end" instead.`,
+        line: node.location?.start?.line,
+        column: node.location?.start?.column,
+        suggestion: 'In .att templates, use /for @var in @collection ... /end (slash prefix, no brackets).',
+      });
+    }
+  });
+
+  return warnings;
+}
+
+/**
  * Collect all variable and function references from a template AST
  */
 function collectTemplateVariables(ast: MlldNode[]): TemplateVariableInfo[] {
@@ -1230,15 +1289,18 @@ function collectTemplateVariables(ast: MlldNode[]): TemplateVariableInfo[] {
  * Detect undefined template variable references.
  * If knownParams is provided, flags references not in params and not builtin.
  * If knownParams is empty/not provided, flags all references as informational.
+ * forIterators are excluded — these are locally-scoped loop bindings.
  */
 function detectUndefinedTemplateVariables(
   templateVars: TemplateVariableInfo[],
-  knownParams?: Set<string>
+  knownParams?: Set<string>,
+  forIterators?: Set<string>
 ): UndefinedVariableWarning[] {
   const warnings: UndefinedVariableWarning[] = [];
 
   for (const tv of templateVars) {
     if (BUILTIN_VARIABLES.has(tv.name)) continue;
+    if (forIterators && forIterators.has(tv.name)) continue;
 
     if (knownParams && knownParams.size > 0) {
       if (knownParams.has(tv.name)) continue;
@@ -1266,10 +1328,99 @@ function detectUndefinedTemplateVariables(
 }
 
 /**
+ * Exe template declarations collected from all modules during directory validation.
+ * Each entry maps a normalized path suffix to parameter names.
+ */
+interface TemplateParamEntry {
+  absPath: string;
+  suffix: string;
+  params: Set<string>;
+}
+
+/**
+ * Build a map of template paths to their parameter names from all .mld modules in the file list.
+ * Used during directory validation to resolve template params across the full tree.
+ *
+ * Stores both absolute resolved paths and normalized suffixes for matching, since
+ * exe declarations may reference templates relative to a different base than the module dir.
+ */
+async function buildTemplateParamMap(files: string[]): Promise<Map<string, Set<string>>> {
+  const entries: TemplateParamEntry[] = [];
+
+  for (const file of files) {
+    const lower = file.toLowerCase();
+    if (!lower.endsWith('.mld') && !lower.endsWith('.mld.md')) continue;
+
+    try {
+      const content = await fs.readFile(file, 'utf8');
+      const mode = lower.endsWith('.mld.md') ? 'markdown' : 'strict';
+      const ast = parseSync(content, { mode });
+      const moduleDir = path.dirname(path.resolve(file));
+
+      walkAST(ast, (node: any) => {
+        if (node.type !== 'Directive' || node.kind !== 'exe') return;
+
+        const pathNodes = node.values?.path;
+        if (!Array.isArray(pathNodes)) return;
+
+        const pathText = pathNodes
+          .filter((n: any) => n.type === 'Text')
+          .map((n: any) => n.content)
+          .join('');
+
+        if (!pathText) return;
+
+        const exeParams = node.values?.params;
+        if (!Array.isArray(exeParams)) return;
+
+        const params = new Set<string>();
+        for (const param of exeParams) {
+          if (param?.name) params.add(param.name);
+        }
+
+        // Store with both absolute resolution and normalized suffix
+        const absPath = path.resolve(moduleDir, pathText);
+        const suffix = pathText.replace(/^\.\//, '');
+
+        entries.push({ absPath, suffix, params });
+      });
+    } catch {
+      // Skip files that fail to parse
+    }
+  }
+
+  // Build the map: for each actual template file, find matching entries
+  const paramMap = new Map<string, Set<string>>();
+  const templateFiles = files.filter(f => {
+    const l = f.toLowerCase();
+    return l.endsWith('.att') || l.endsWith('.mtt');
+  });
+
+  for (const tplFile of templateFiles) {
+    const absTpl = path.resolve(tplFile);
+    const merged = new Set<string>();
+
+    for (const entry of entries) {
+      // Match by exact absolute path or by path suffix
+      if (entry.absPath === absTpl || absTpl.endsWith('/' + entry.suffix)) {
+        for (const p of entry.params) merged.add(p);
+      }
+    }
+
+    if (merged.size > 0) {
+      paramMap.set(absTpl, merged);
+    }
+  }
+
+  return paramMap;
+}
+
+/**
  * Scan sibling .mld/.mld.md files for exe declarations that use this template file.
  * Returns the union of all parameter names found across callers.
+ * When knownTemplateParams is provided (directory validation), uses it as fallback.
  */
-async function discoverTemplateParams(templatePath: string): Promise<Set<string>> {
+async function discoverTemplateParams(templatePath: string, knownTemplateParams?: Map<string, Set<string>>): Promise<Set<string>> {
   const absTemplatePath = path.resolve(templatePath);
   const templateFilename = path.basename(absTemplatePath);
   const params = new Set<string>();
@@ -1328,6 +1479,14 @@ async function discoverTemplateParams(templatePath: string): Promise<Set<string>
     }
   }
 
+  // Fallback to cross-directory map when local scanning finds nothing
+  if (params.size === 0 && knownTemplateParams) {
+    const known = knownTemplateParams.get(absTemplatePath);
+    if (known) {
+      for (const p of known) params.add(p);
+    }
+  }
+
   return params;
 }
 
@@ -1379,6 +1538,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       // Template-specific analysis
       const templateType = filepath.toLowerCase().endsWith('.mtt') ? 'mtt' : 'att';
       const templateVars = collectTemplateVariables(ast);
+      const forIterators = collectTemplateForIterators(ast);
 
       const templateInfo: TemplateInfo = {
         type: templateType,
@@ -1386,13 +1546,21 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       };
 
       if (options.checkVariables !== false && templateVars.length > 0) {
-        const discoveredParams = await discoverTemplateParams(filepath);
+        const discoveredParams = await discoverTemplateParams(filepath, options.knownTemplateParams);
         if (discoveredParams.size > 0) {
           templateInfo.discoveredParams = [...discoveredParams];
         }
-        const warnings = detectUndefinedTemplateVariables(templateVars, discoveredParams);
+        const warnings = detectUndefinedTemplateVariables(templateVars, discoveredParams, forIterators);
         if (warnings.length > 0) {
           result.warnings = warnings;
+        }
+      }
+
+      // Detect @for in .att text nodes (should be /for ... /end)
+      if (templateType === 'att') {
+        const strictForWarnings = detectTemplateStrictForSyntax(ast);
+        if (strictForWarnings.length > 0) {
+          result.antiPatterns = [...(result.antiPatterns ?? []), ...strictForWarnings];
         }
       }
 
@@ -1664,6 +1832,57 @@ export async function analyzeCommand(filepath: string, options: AnalyzeOptions =
   }
 }
 
+function displayResultCompact(result: AnalyzeResult, basePath: string): void {
+  const relPath = path.relative(basePath, result.filepath);
+
+  if (!result.valid) {
+    console.log(chalk.red(`  ✗ ${relPath}`));
+    if (result.errors) {
+      for (const err of result.errors) {
+        const loc = err.line ? ` (line ${err.line}${err.column ? `:${err.column}` : ''})` : '';
+        console.log(chalk.red(`      ${err.message}${loc}`));
+      }
+    }
+    return;
+  }
+
+  if (!hasWarnings(result)) {
+    console.log(chalk.green(`  ✓ ${relPath}`));
+    return;
+  }
+
+  // Has warnings — show the file then its issues
+  console.log(chalk.yellow(`  ⚠ ${relPath}`));
+
+  if (result.warnings && result.warnings.length > 0) {
+    for (const warn of result.warnings) {
+      const loc = warn.line ? ` (line ${warn.line}${warn.column ? `:${warn.column}` : ''})` : '';
+      console.log(chalk.yellow(`      @${warn.variable}${loc} - undefined variable`));
+      if (warn.suggestion) {
+        console.log(chalk.dim(`        hint: ${warn.suggestion}`));
+      }
+    }
+  }
+
+  if (result.redefinitions) {
+    const builtinShadows = result.redefinitions.filter(r => r.reason === 'builtin-conflict');
+    for (const redef of builtinShadows) {
+      const loc = redef.line ? ` (line ${redef.line}${redef.column ? `:${redef.column}` : ''})` : '';
+      console.log(chalk.yellow(`      @${redef.variable}${loc} - shadows built-in`));
+    }
+  }
+
+  if (result.antiPatterns && result.antiPatterns.length > 0) {
+    for (const warning of result.antiPatterns) {
+      const loc = warning.line ? ` (line ${warning.line}${warning.column ? `:${warning.column}` : ''})` : '';
+      console.log(chalk.yellow(`      ${warning.message}${loc}`));
+      if (warning.suggestion) {
+        console.log(chalk.dim(`        hint: ${warning.suggestion}`));
+      }
+    }
+  }
+}
+
 export async function analyzeMultiple(filepaths: string[], options: AnalyzeOptions = {}): Promise<void> {
   const files = await resolveFilePaths(filepaths);
 
@@ -1677,6 +1896,10 @@ export async function analyzeMultiple(filepaths: string[], options: AnalyzeOptio
     return;
   }
 
+  // Build cross-directory template param map for better template variable resolution
+  const knownTemplateParams = await buildTemplateParamMap(files);
+  const analyzeOptions = { ...options, knownTemplateParams };
+
   const format = options.format || 'text';
   let anyErrors = false;
   let anyWarnings = false;
@@ -1684,7 +1907,7 @@ export async function analyzeMultiple(filepaths: string[], options: AnalyzeOptio
 
   for (const file of files) {
     try {
-      const result = await analyze(file, options);
+      const result = await analyze(file, analyzeOptions);
       allResults.push(result);
       if (hasErrors(result)) anyErrors = true;
       if (hasWarnings(result)) anyWarnings = true;
@@ -1700,7 +1923,7 @@ export async function analyzeMultiple(filepaths: string[], options: AnalyzeOptio
 
   if (format === 'json') {
     console.log(JSON.stringify(allResults, null, 2));
-  } else {
+  } else if (options.verbose) {
     for (const result of allResults) {
       displayResult(result, 'text');
     }
@@ -1710,6 +1933,23 @@ export async function analyzeMultiple(filepaths: string[], options: AnalyzeOptio
     const failed = allResults.length - passed;
     const summary = `${allResults.length} files: ${passed} passed${failed > 0 ? `, ${failed} failed` : ''}`;
     console.log(failed > 0 ? chalk.red(summary) : chalk.green(summary));
+  } else {
+    // Concise output: green checkmarks for clean files, details only for issues
+    const basePath = path.resolve(filepaths[0]);
+    console.log();
+
+    for (const result of allResults) {
+      displayResultCompact(result, basePath);
+    }
+
+    console.log();
+    const passed = allResults.filter(r => !hasErrors(r)).length;
+    const failed = allResults.length - passed;
+    const withWarnings = allResults.filter(r => !hasErrors(r) && hasWarnings(r)).length;
+    let summary = `${allResults.length} files: ${passed} passed`;
+    if (failed > 0) summary += `, ${failed} failed`;
+    if (withWarnings > 0) summary += `, ${withWarnings} with warnings`;
+    console.log(failed > 0 ? chalk.red(summary) : withWarnings > 0 ? chalk.yellow(summary) : chalk.green(summary));
   }
 
   if (anyErrors) {
@@ -1735,6 +1975,7 @@ Supports .mld, .mld.md, .att (@ templates), and .mtt (mustache templates).
 When given a directory, recursively validates all mlld files.
 
 Options:
+  --verbose             Show full details for all files (default: concise for directories)
   --format <format>     Output format: json or text (default: text)
   --ast                 Include the parsed AST in output (requires --format json)
   --no-check-variables  Skip undefined variable checking
@@ -1745,6 +1986,7 @@ Examples:
   mlld validate module.mld                     # Validate a module
   mlld validate template.att                   # Validate a template
   mlld validate ./my-project/                  # Validate all files recursively
+  mlld validate ./my-project/ --verbose        # Full details for all files
   mlld validate module.mld --format json       # JSON output
   mlld validate module.mld --error-on-warnings # Fail on warnings
         `);
@@ -1761,6 +2003,7 @@ Examples:
       const ast = flags.ast === true;
       const checkVariables = flags['no-check-variables'] !== true && flags.noCheckVariables !== true;
       const errorOnWarnings = flags['error-on-warnings'] === true || flags.errorOnWarnings === true;
+      const verbose = flags.verbose === true;
 
       if (!['json', 'text'].includes(format)) {
         console.error(chalk.red('Invalid format. Must be: json or text'));
@@ -1772,7 +2015,7 @@ Examples:
         process.exit(1);
       }
 
-      const options: AnalyzeOptions = { format, ast, checkVariables, errorOnWarnings };
+      const options: AnalyzeOptions = { format, ast, checkVariables, errorOnWarnings, verbose };
 
       // Detect if any arg is a directory or if multiple args
       let isMulti = args.length > 1;
