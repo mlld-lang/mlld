@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`mlld update` silently skipping registry modules**: `isRegistryEntry()` failed to recognize modules hosted at `raw.githubusercontent.com` because it checked for substring `github.com` which doesn't match `githubusercontent.com`. All registry modules were incorrectly treated as "local" and skipped during updates.
+- **`mlld outdated` showing "no registry metadata"**: `fetchLatestMetadata()` read `resolution.content.metadata` but `RegistryResolver` returns `ResolverContent` directly — metadata is at `resolution.metadata`, not nested under `.content`.
+
 ### Added
+- **`mlld update` and `mlld outdated` in CLI help**: Both commands existed but were missing from `mlld --help` output, making them undiscoverable.
+- **`mlld registry update` unified with `mlld update`**: `mlld registry update` now delegates to the same `updateCommand` used by the top-level `mlld update`, ensuring consistent behavior.
 - Added embedded LSP tree-sitter WASM support for `python` and `bash` code blocks (alongside `javascript`), including parser loading, WASM copy wiring, and semantic token coverage updates.
 - Added `/hook` directive grammar + AST/type wiring (function/op/data filters, `before|after` timing, and new operation filter keys: `for`, `for:iteration`, `for:batch`, `loop`, `import`) with parser/LSP keyword-surface integration.
 - Added `HookRegistry` and `/hook` directive evaluation registration path, including environment root/child sharing and indexed hook retrieval by function/operation/data filters.
