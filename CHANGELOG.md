@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc82]
 
+### Breaking
+- **Template interpolation behavior change**: `@item-file` in templates resolves as a single identifier instead of `@item` plus literal `-file`. Use `@item\-file` (backslash boundary) for the old behavior.
+
 ### Fixed
 - **Per-item parse resilience in glob JSON loading**: When a glob loads multiple `.json` files, one malformed file no longer kills the entire array; the bad item degrades to text with `parseError` metadata while all other items parse normally.
 - **Bare `bail` statement boundary**: `bail` without an inline message no longer consumes the next directive line as its message expression.
@@ -67,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **StructuredValue `.trim()` parity for JSONL arrays**: Builtin target normalization treats structured array values as text for string-view methods (including `.trim()`), so `<file.jsonl>.trim()` and `<file.json>.trim()` both succeed instead of arrays throwing `Cannot call .trim() on object`.
 
 ### Changed
+- **Mandatory whitespace around arithmetic operators**: `@a - @b` requires spaces; `@a-b` is a hyphenated identifier, not subtraction. Applies to `+`, `-`, `*`, `/`, `%`.
+- **CLI payload keys preserve hyphens**: `--skip-live` produces `@payload.skip-live` (primary) with deprecated `@payload.skipLive` camelCase alias.
 - **QA self-review phase**: Added mandatory empirical verification step requiring agents to re-run experiments with corrected syntax before classifying as "genuine-bug"
 
 ### Documentation
@@ -80,6 +85,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **File loading docs for `.jsonl`**: `file-loading-basics` now documents that `<file.jsonl>` auto-parses into an array of JSON records.
 
 ### Added
+- **Hyphenated identifiers**: Variable names, field access, imports, and exports support hyphens (`@skip-live`, `@payload.max-retries`, `import { output-format } from @payload`). No trailing, leading, or double hyphens.
+- **`mlld validate` hyphenated identifier migration warning**: Detects `@var-literal` patterns where a hyphenated reference shadows what was previously `@var` plus literal text; suggests backslash boundary (`@var\-literal`).
+- **`@fileExists(path)` builtin**: Filesystem existence check that always resolves its argument to a path string first, then checks if the file exists. Unlike `@exists(@var)` (which checks variable existence), `@fileExists(@var)` resolves the variable value and checks the file. Supports string paths, variable paths, load-content syntax, object fields, and globs.
 - **`mlld validate` concise directory output**: Directory validation defaults to a compact view — green checkmarks for clean files, inline warnings/errors for issues, and a summary line. `--verbose` restores full per-file details.
 - **`mlld validate` cross-directory template param resolution**: Directory validation builds a project-wide map of `exe` template declarations so `.att`/`.mtt` files resolve parameters from any module in the tree, not just siblings.
 - **`mlld validate` template for-loop iterator exclusion**: For-loop iterator variables (`@item` in `/for @item in @list`) are no longer flagged as undefined in template analysis.

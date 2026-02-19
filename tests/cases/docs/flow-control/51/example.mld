@@ -1,12 +1,7 @@
-exe @source() = when [
-  @mx.try == 1 => "draft"
-  * => "final"
+exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
 ]
 
-exe @validator() = when [
-  @mx.input == "draft" => retry "missing title"
-  * => `Used hint: @mx.hint`
-]
-
-var @result = @source() | @validator
+var @result = 5 | while(10) @countdown
 show @result

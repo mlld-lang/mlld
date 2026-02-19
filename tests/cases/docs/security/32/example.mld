@@ -1,9 +1,5 @@
-exe @redact(text) = js { return text.replace(/./g, '*'); }
+exe @normalize(value) = js { return String(@value).trim().toLowerCase(); }
 
-guard @redactSecrets before secret = when [
-  @mx.op.type == "show" => allow @redact(@input)
-  * => allow
+guard @normalizeExeInput before op:exe = when [
+  * => allow @normalize(@input)
 ]
-
-var secret @key = "sk-12345"
-show @key  >> Output: *********

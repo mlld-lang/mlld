@@ -1,7 +1,6 @@
-guard @redactSecrets after op:exe = when [
-  @output.includes("sk-") => allow @output.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]')
-  * => allow
+guard @validateJson after op:exe = when [
+  @isValidJson(@output) => allow
+  * => deny "LLM did not return valid JSON"
 ]
 
-exe @getStatus() = run { echo "Status: ok, key: sk-12345" }
-show @getStatus()  >> Output: Status: ok, key: [REDACTED]
+exe @isValidJson(text) = js { try { JSON.parse(text); return true; } catch { return false; } }

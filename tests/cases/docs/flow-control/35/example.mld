@@ -1,8 +1,7 @@
-exe @wrap(x) = js { return [x, x * 2]; }
-exe @flat(values) = js {
+exe @sum(values) = js {
   if (!Array.isArray(values)) throw new Error('expected array input');
-  return values.flat();
+  return values.reduce((total, value) => total + Number(value), 0);
 }
 
-var @pairs = for @x in [1, 2, 3] => @wrap(@x) => | @flat
-show @pairs
+var @total = for @n in [1, 2, 3, 4] => @n => | @sum
+show @total

@@ -1,4 +1,8 @@
-var @files = <docs/*.md>
-for @file in @files => show @file.mx.filename        >> Works
-for @file in @files => show @file.mx.data.status     >> Works
-for @file in @files => show @file.mx.fm.title        >> Works
+var @file = <config.json>
+
+>> ✗ JS receives unwrapped data by default - no .mx
+exe @process(file) = js { return file.mx.filename }  >> Error
+
+>> ✓ Use .keep to preserve metadata for JS
+exe @process(file) = js { return file.mx.filename }
+run @process(@file.keep)                              >> Works

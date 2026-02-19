@@ -1,5 +1,10 @@
-exe @normalize(value) = js { return String(@value).trim().toLowerCase(); }
-
-guard @normalizeExeInput before op:exe = when [
-  * => allow @normalize(@input)
+guard @stepOne after op:exe = when [
+  * => allow `one:@output`
 ]
+
+guard @stepTwo after op:exe = when [
+  * => allow `two:@output`
+]
+
+exe @emit(v) = js { return v; }
+show @emit("base")  >> two:one:base

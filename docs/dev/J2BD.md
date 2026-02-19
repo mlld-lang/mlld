@@ -126,7 +126,7 @@ mlld run j2bd --topic newtopic
 - Workers must commit before returning (orchestrator doesn't write files)
 - `npm test` runs after commit; failures trigger revert + notes
 - Nested `when` blocks don't propagate return values (m-d777)
-- `@local/claude-poll` must be available
+- `@mlld/claude-poll` must be available
 - Tickets persist across runs. Fresh runs (`--new`) see closed tickets from prior runs. Decision prompt handles this: empty events log = must re-verify before completing
 - Adversarial workers must prove failures AND successes with execution evidence. Speculation is invalid in either direction
 - Complex remediation plans should be reviewed by adversarial worker before escalating to human

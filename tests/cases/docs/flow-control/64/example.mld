@@ -1,5 +1,5 @@
-var @validation = @validate(@input)
+var @canDeploy = @testsPass && @isApproved
 when [
-  @validation.valid => show "Processing successful"
-  !@validation.valid => show `Error: @validation.message`
+  @canDeploy => run {npm run deploy}
+  !@canDeploy => show "Deployment blocked - check tests and approval"
 ]

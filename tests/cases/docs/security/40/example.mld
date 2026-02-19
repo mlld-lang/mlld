@@ -1,7 +1,4 @@
->> guards/secrets.mld
-guard @secretProtection before secret = when [
-  @mx.op.type == "run" => deny "Secrets blocked from shell"
-  * => allow
-]
+import { @secretProtection } from "./guards/secrets.mld"
 
-export { @secretProtection }
+var secret @key = "sk-12345"
+run cmd { echo @key }  >> Protected by imported guard

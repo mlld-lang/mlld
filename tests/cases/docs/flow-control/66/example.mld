@@ -1,9 +1,17 @@
->> Explicit message
-bail "config file missing"
+>> From if blocks
+if @checkFailed [
+  bail "validation failed"
+]
 
->> With variable interpolation
-var @missing = "database"
-bail `Missing: @missing`
+>> From when expressions
+when [
+  !@ready => bail "not ready"
+  * => @process()
+]
 
->> Bare bail (uses default message)
-bail
+>> From for loops
+for @item in @items [
+  if !@item.valid [
+    bail `Invalid item: @item.id`
+  ]
+]

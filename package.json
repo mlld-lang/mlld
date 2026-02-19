@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "2.0.0",
+  "version": "2.0.0-rc82",
   "description": "An LLM scripting language for orchestrating workflows and building agents with infrastructure-level defense against prompt injection",
   "type": "module",
   "main": "dist/index.cjs",

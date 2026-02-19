@@ -6,8 +6,8 @@ VarKeyword
   = "/"? "var"
 
 SlashVar "var directive"
-  = DirectiveContext VarKeyword toolsSegment:(HWS "tools")? labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
-      helpers.debug('AtVar matched', { id, value, ending });
+  = DirectiveContext VarKeyword toolsSegment:(HWS "tools")? labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier optionalMarker:("?" { return true; })? _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
+      helpers.debug('AtVar matched', { id, optionalMarker: !!optionalMarker, value, ending });
       
       // Extract ending components
       let tail = ending.tail;
@@ -186,6 +186,10 @@ SlashVar "var directive"
       if (isToolsCollection) {
         metaInfo.isToolsCollection = true;
       }
+
+      if (optionalMarker) {
+        metaInfo.optionalAssignment = true;
+      }
       
       // Add comment to meta if present
       if (comment) {
@@ -195,6 +199,9 @@ SlashVar "var directive"
       const raw = {}; // raw object
       if (labelInfo) {
         raw.securityLabels = labelInfo.raw;
+      }
+      if (optionalMarker) {
+        raw.optionalAssignment = '?';
       }
 
       // Create directive with 'var' kind and single subtype
@@ -270,7 +277,7 @@ SlashVar "var directive"
     }
 
   // Error: Missing = after variable name
-  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ &{
+  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier ("?" { return true; })? _ &{
       // Look ahead to see if there's content but no =
       const rest = input.substring(peg$currPos).trim();
       return rest.length > 0 && rest[0] !== '=';

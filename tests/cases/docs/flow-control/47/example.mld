@@ -1,7 +1,10 @@
-var @msg = "  hello pipeline  "
-var @shout = @msg | @trim | @upper
-show @shout
+var @items = ["  beta  ", " alpha "]
 
-var @record = `{"z":2,"a":1}`
-var @normalized = @record | @sort | @pretty
-show @normalized
+>> One stage receives the whole array value
+var @whole = @items | @trim
+
+>> Per-item transform requires explicit iteration
+var @each = for @item in @items => @item | @trim | @upper
+
+show @whole
+show @each

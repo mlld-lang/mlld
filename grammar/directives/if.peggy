@@ -5,12 +5,20 @@ IfKeyword
   = "/"? "if"
 
 SlashIf
-  = IfKeyword _ condition:WhenConditionExpression _ thenBlock:IfActionBlock elseBlock:IfElseBlock? {
-      helpers.debug('SlashIf matched', { condition, thenBlock, elseBlock });
+  = IfKeyword _ condition:WhenConditionExpression _ thenBlock:IfActionBlock elseBlock:IfElseBlock? ending:CommentedDirectiveEnding {
+      helpers.debug('SlashIf matched', { condition, thenBlock, elseBlock, ending });
 
       const hasElse = !!elseBlock;
       const hasReturn = Array.isArray(thenBlock) && thenBlock.some(node => node && node.type === 'ExeReturn') ||
         (Array.isArray(elseBlock) && elseBlock.some(node => node && node.type === 'ExeReturn'));
+      const meta = {
+        hasElse,
+        hasReturn
+      };
+
+      if (ending && ending.comment) {
+        meta.comment = ending.comment;
+      }
 
       const values = {
         condition: condition,
@@ -33,10 +41,7 @@ SlashIf
         'ifBlock',
         values,
         raw,
-        {
-          hasElse,
-          hasReturn
-        },
+        meta,
         location()
       );
     }

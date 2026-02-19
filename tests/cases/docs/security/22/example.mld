@@ -1,6 +1,8 @@
-exe @handler(value) = when [
-  denied => show "Blocked: @mx.guard.reason"
-  denied => show "Guard: @mx.guard.name"
-  denied => show "Labels: @mx.labels.join(', ')"
-  * => show @value
+guard @validateInput before op:exe = when [
+  @input.any.text.includes("<script") => deny "Potentially malicious input"
+  @input.any.text.includes("sk-") => deny "Potentially sensitive token"
+  * => allow
 ]
+
+exe @process(data) = run { echo "@data" }
+show @process("<script>alert('xss')</script>")  >> Blocked

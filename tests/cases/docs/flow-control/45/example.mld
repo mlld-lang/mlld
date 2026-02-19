@@ -1,7 +1,2 @@
-var @items = ["A","B"]
-var @msg = ::
-/for @x in @items
-- @x
-/end
-::
-show @msg
+var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @parse
+show @data.users[0].name

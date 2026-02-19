@@ -1,6 +1,6 @@
-exe @validate(input) = [
-  if !@input [
-    => { error: "missing" }
+exe @guard(input) = [
+  when !@input => [
+    => "missing"
   ]
-  => { ok: @input }
+  => "ok"
 ]

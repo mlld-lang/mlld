@@ -1,17 +1,5 @@
->> From if blocks
-if @checkFailed [
-  bail "validation failed"
-]
-
->> From when expressions
+var @result = @data | @validate | @process
 when [
-  !@ready => bail "not ready"
-  * => @process()
-]
-
->> From for loops
-for @item in @items [
-  if !@item.valid [
-    bail `Invalid item: @item.id`
-  ]
+  @result.success => output @result.data to "output.json"
+  !@result.success => show `Processing failed: @result.error`
 ]

@@ -1,7 +1,7 @@
 >> j2bd/security/index.mld
 >> Iterate on security docs + features until plan is complete
 
-import { @claudePollEvent } from @local/claude-poll
+import { @claudePollEvent } from @mlld/claude-poll
 
 >> Run directory for this session
 var @runDir = `@base/j2bd/security/runs/@now.split("T")[0]`

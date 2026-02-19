@@ -1,7 +1,5 @@
-guard @noShellSecrets before secret = when [
-  @mx.op.type == "run" => deny "Secrets cannot appear in shell"
-  * => allow
+guard @noShell before op:run = when [
+  * => deny "Shell access disabled"
 ]
 
-var secret @key = "sk-12345"
-run cmd { echo @key }  >> Blocked
+run cmd { ls }  >> Blocked

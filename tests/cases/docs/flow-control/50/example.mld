@@ -1,8 +1,12 @@
-exe @validator(input) = when [
-  @input.valid => @input.value
-  @mx.try < 3 => retry "validation failed"
-  none => "fallback value"
+exe @source() = when [
+  @mx.try == 1 => "draft"
+  * => "final"
 ]
 
-var @result = "invalid" | @validator
+exe @validator() = when [
+  @mx.input == "draft" => retry "missing title"
+  * => `Used hint: @mx.hint`
+]
+
+var @result = @source() | @validator
 show @result

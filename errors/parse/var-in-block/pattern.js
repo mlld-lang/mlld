@@ -35,7 +35,7 @@ export const pattern = {
   },
 
   enhance(error, mx) {
-    const varMatch = mx.line.match(/var\s+@([a-zA-Z_][a-zA-Z0-9_]*)/);
+    const varMatch = mx.line.match(/var\s+@([a-zA-Z_][a-zA-Z0-9_]*(?:-[a-zA-Z0-9_]+)*)/);
     const varName = varMatch ? varMatch[1] : 'value';
 
     let blockType = 'block';

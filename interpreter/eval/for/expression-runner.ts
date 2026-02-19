@@ -51,7 +51,7 @@ function resolveForExpressionNodes(expr: ForExpression): unknown[] {
     expr.expression.length === 1 &&
     (expr.expression[0] as any).content &&
     (expr.expression[0] as any).wrapperType &&
-    !(expr.expression[0] as any).hasInterpolation
+    (expr.expression[0] as any).hasInterpolation === false
   ) {
     return (expr.expression[0] as any).content;
   }

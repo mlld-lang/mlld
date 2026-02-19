@@ -1,2 +1,2 @@
-var @policyConfig = { defaults: { autoverify: "./verify.att" } }
-policy @p = union(@policyConfig)
+var secret @apiKey = <.env>
+var pii @userData = <users.json>

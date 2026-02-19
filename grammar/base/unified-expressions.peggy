@@ -91,14 +91,15 @@ UnifiedComparison
 UnifiedComparisonOp
   = "==" / "!=" / "~=" / "<=" / ">=" / "<" !("=" / "<") / ">" !("=" / ">")
 
-// Arithmetic operators
+// Arithmetic operators — mandatory whitespace around operators
+// Required to disambiguate from hyphenated identifiers (e.g. @a-b is identifier, @a - @b is subtraction)
 UnifiedAdditive
-  = first:UnifiedMultiplicative rest:(_ op:("+" / "-") _ right:UnifiedMultiplicative { return { op, right }; })* {
+  = first:UnifiedMultiplicative rest:(__ op:("+" / "-") __ right:UnifiedMultiplicative { return { op, right }; })* {
       return helpers.createBinaryExpression(first, rest, location());
     }
 
 UnifiedMultiplicative
-  = first:UnifiedPrimary rest:(_ op:("*" / "/" / "%") _ right:UnifiedPrimary { return { op, right }; })* {
+  = first:UnifiedPrimary rest:(__ op:("*" / "/" / "%") __ right:UnifiedPrimary { return { op, right }; })* {
       return helpers.createBinaryExpression(first, rest, location());
     }
 

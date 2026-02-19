@@ -45,17 +45,23 @@ var @clean = @raw | @trim | @lower
 
 ## Checks
 
-- `@exists(target)` - returns `true`/`false`. Works with file paths, variables, object fields, array indices, and globs.
+- `@exists(target)` - returns `true`/`false`. Works with file paths, variables, object fields, array indices, and globs. Note: `@exists(@var)` checks if the *variable* is defined, not if a file at that path exists.
+- `@fileExists(path)` - returns `true`/`false`. Always resolves argument to a path string, then checks filesystem. Unlike `@exists(@var)`, `@fileExists(@var)` resolves the variable and checks the *file*.
 - `@typeof(value)` - returns type as string
 
 ```mlld
->> File existence
+>> File existence (literal paths)
 if @exists("config.json") [ show "config found" ]
 if @exists(<src/**/*.ts>) [ show "has ts files" ]
 
 >> Variable/field existence
 if @exists(@obj.field) [ show "field defined" ]
 if @exists(@arr[5]) [ show "index 5 exists" ]
+
+>> File existence with dynamic paths
+var @configPath = "config.json"
+if @fileExists(@configPath) [ show "config found" ]
+if @fileExists(@settings.configPath) [ show "found" ]
 ```
 
 ## Effects

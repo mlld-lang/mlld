@@ -742,6 +742,22 @@ exe @loadConfig() = when [
 ]
 ```
 
+### @fileExists() Builtin
+
+Check if a file exists at a given path. Unlike `@exists()`, this always resolves its argument to a string path first, then checks the filesystem:
+
+```mlld
+var @configPath = "config.json"
+
+>> @exists(@configPath) checks if the VARIABLE is defined (always true here)
+>> @fileExists(@configPath) checks if the FILE "config.json" exists
+when @fileExists(@configPath) => show "Config found"
+
+>> Works with object fields and globs
+when @fileExists(@settings.configFile) => show "Settings loaded"
+when @fileExists(<*.md>) => show "Markdown files exist"
+```
+
 ## Data Transformations
 
 ### Pipeline Transformations

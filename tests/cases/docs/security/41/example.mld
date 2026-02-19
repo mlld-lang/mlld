@@ -1,4 +1,5 @@
-import { @secretProtection } from "./guards/secrets.mld"
+var @sandbox = { tools: ["Read", "Write", "Bash"] }
 
-var secret @key = "sk-12345"
-run cmd { echo @key }  >> Protected by imported guard
+env @sandbox [
+  run cmd { echo "inside sandbox" }
+]

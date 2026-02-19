@@ -1,5 +1,5 @@
 /guard @gImported for secret = when [
-  * => allow `@input-imported`
+  * => allow `@input\-imported`
 ]
 
 /export { @gImported }

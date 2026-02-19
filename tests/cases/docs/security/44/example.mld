@@ -1,5 +1,11 @@
-var @sandbox = { tools: ["Read", "Write", "Bash"] }
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  fs: { read: [".:/app"], write: ["/tmp"] },
+  net: "none",
+  tools: ["Read", "Bash"],
+  mcps: []
+}
 
-var @result = env @sandbox with { tools: ["Read"] } [
-  => "read-only mode"
+env @sandbox [
+  run cmd { claude -p "Analyze the codebase" } using auth:claude
 ]

@@ -7,7 +7,7 @@ description: Output works inside parallel for-expression blocks
 /var @items = ["one", "two"]
 /var @results = for parallel(2) @item in @items [
   let @data = { name: @item }
-  output @data to "for-output-parallel-@item-data.json"
+  output @data to "for-output-parallel-@item\-data.json"
   => @item
 ]
 /show `Wrote @results.length files`

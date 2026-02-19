@@ -1,7 +1,13 @@
-guard @blockSend before op:exe = when [
-  @mx.op.name == "sendData" => deny "Network calls blocked"
+guard @secretBlock before secret = when [
+  @mx.op.type == "show" => deny "Cannot display secrets"
   * => allow
 ]
 
-exe @sendData(value) = run { curl -d "@value" api.example.com }
-show @sendData("test")  >> Blocked
+var secret @key = "sk-12345"
+
+exe @display(value) = when [
+  denied => `[REDACTED] - @mx.guard.reason`
+  * => `Value: @value`
+]
+
+show @display(@key)  >> Shows: [REDACTED] - Cannot display secrets

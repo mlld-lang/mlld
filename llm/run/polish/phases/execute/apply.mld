@@ -6,7 +6,7 @@
 >>
 >> Can run in parallel - each ticket gets its own worktree
 
-import { @claudePoll } from @local/claude-poll
+import { @claudePoll } from @mlld/claude-poll
 import { @logItemStart, @logItemDone, @logManualReview, @loadEvents, @logEvent } from "../../lib/events.mld"
 import { @getTicket, @addTags, @isImplDone } from "../../lib/tickets.mld"
 import { @debuglog } from "../../lib/debug.mld"

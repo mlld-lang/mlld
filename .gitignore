@@ -44,6 +44,9 @@ tests/fixtures/**/*.generated-fixture.json
 tests/fixtures/**/index.ts
 tests/cases/EXAMPLES.md
 
+# Doc test cases (generated from docs/src/ and docs/user/)
+tests/cases/docs/
+
 # Logs
 logs/
 *.log

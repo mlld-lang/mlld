@@ -1,12 +1,9 @@
-guard @secretBlock before secret = when [
-  @mx.op.type == "show" => deny "No secrets"
+exe @redact(text) = js { return text.slice(0, 4) + '****'; }
+
+guard @redactSecrets before secret = when [
+  @mx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
 
-var secret @key = "  sk-12345  "
-
->> All of these preserve 'secret' label:
-show @key.trim()  >> Blocked
-show @key.slice(0, 5)  >> Blocked
-show @key.toUpperCase()  >> Blocked
-show @key.trim().slice(0, 3).toUpperCase()  >> Blocked
+var secret @key = "sk-12345678"
+show @key  >> Output: sk-1****

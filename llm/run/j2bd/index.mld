@@ -13,7 +13,7 @@
 >>   mlld run j2bd --topic security --polish med         # Set quality bar (false|med|high)
 
 >> Imports
-import { @claudePoll } from @local/claude-poll
+import { @claudePoll } from @mlld/claude-poll
 import { @buildContext, @loadRunState, @saveRunState, @countIterations, @loadTickets, @buildReferenceMaterial, @extractJobSections } from "./lib/context.mld"
 import { @writeQuestionsFile, @logEvent } from "./lib/questions.mld"
 import "@payload" as @p

@@ -1,2 +1,2 @@
-var @subtitle = @item.subtitle
+var @subtitle? = @item.subtitle
 show `Title: @item.title @subtitle?`

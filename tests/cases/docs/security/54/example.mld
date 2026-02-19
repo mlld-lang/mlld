@@ -1,3 +1,4 @@
-var @auditPrompt = `Review @input for policy issues.`
-sign @auditPrompt
-verify @auditPrompt
+var @policyConfig = { defaults: { autosign: ["templates"] } }
+policy @p = union(@policyConfig)
+
+exe @auditPrompt(input) = template "./audit.att"
