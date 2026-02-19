@@ -50,6 +50,15 @@ function unwrapStructuredRecursively(
     return unwrapStructuredRecursively(asData(value), seen);
   }
 
+  // Unwrap Variables (e.g. elements inside array literals like [@a, @b])
+  if (isVariable(value)) {
+    const inner = value.value;
+    if (isStructuredValue(inner) && !(inner.internal as any)?.keepStructured) {
+      return unwrapStructuredRecursively(asData(inner), seen);
+    }
+    return unwrapStructuredRecursively(inner, seen);
+  }
+
   if (value === null || typeof value !== 'object') {
     return value;
   }

@@ -453,6 +453,11 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
     ]
 
     let @resultData = @result | @parse.llm
+    if !@resultData [
+      show `  @fid: FAILED (unparseable output)`
+      @logEvent(@runDir, "invalidation_failed", { finding: @fid, reason: "unparseable" })
+      => null
+    ]
     let @verdict = @resultData.verdict ?? "confirmed"
     show `  @fid: @verdict`
     @logEvent(@runDir, "invalidation_complete", { finding: @fid, verdict: @verdict })
