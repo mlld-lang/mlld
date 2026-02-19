@@ -514,6 +514,7 @@ async function handleCodeDefinition(
     directive,
     env,
     context,
+    withClause,
     executionContext,
     streamingEnabled,
     pipelineId,
@@ -638,13 +639,35 @@ async function handleCodeDefinition(
     tempEnv
   );
 
+  const usingParts = await resolveUsingEnvParts(tempEnv, (definition as any).withClause, withClause);
+  const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor);
+  checkRunInputLabelFlow({
+    descriptor: envInputDescriptor,
+    policyEnforcer,
+    policyChecksEnabled: Boolean(opType),
+    opLabels,
+    exeLabels,
+    flowChannel: 'using',
+    env,
+    sourceLocation: directive.location ?? undefined
+  });
+
+  const injectedEnv = usingParts.merged;
+  const codeOptions =
+    workingDirectory || Object.keys(injectedEnv).length > 0
+      ? {
+          ...(workingDirectory ? { workingDirectory } : {}),
+          ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
+        }
+      : undefined;
+
   const value = await AutoUnwrapManager.executeWithPreservation(async () => {
     return env.executeCode(
       code,
       (definition as any).language || 'javascript',
       codeParams,
       undefined,
-      workingDirectory ? { workingDirectory } : undefined,
+      codeOptions,
       {
         ...executionContext,
         streamingEnabled,

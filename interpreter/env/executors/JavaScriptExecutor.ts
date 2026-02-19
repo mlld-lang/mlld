@@ -39,7 +39,15 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       `js: ${code.substring(0, 50)}...`,
       jsOptions,
       context,
-      () => this.executeJavaScript(code, params, metadata, jsOptions?.workingDirectory, context)
+      () =>
+        this.executeJavaScript(
+          code,
+          params,
+          metadata,
+          jsOptions?.workingDirectory,
+          context,
+          jsOptions?.env
+        )
     );
   }
 
@@ -48,7 +56,8 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
     params?: Record<string, any>,
     metadata?: Record<string, any>,
     workingDirectory?: string,
-    context?: CommandExecutionContext
+    context?: CommandExecutionContext,
+    envOverrides?: Record<string, string>
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
     const targetCwd = workingDirectory || process.cwd();
@@ -58,6 +67,8 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
     if (shouldRestoreCwd) {
       process.chdir(targetCwd);
     }
+
+    const restoreEnv = applyProcessEnvOverrides(envOverrides);
 
     try {
       // Create a function that captures console.log output
@@ -206,9 +217,37 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       );
       throw codeError;
     } finally {
+      restoreEnv();
       if (shouldRestoreCwd) {
         process.chdir(previousCwd);
       }
     }
   }
+}
+
+function applyProcessEnvOverrides(overrides?: Record<string, string>): () => void {
+  if (!overrides) {
+    return () => {};
+  }
+  const keys = Object.keys(overrides);
+  if (keys.length === 0) {
+    return () => {};
+  }
+
+  const previous = new Map<string, string | undefined>();
+  for (const key of keys) {
+    previous.set(key, process.env[key]);
+    process.env[key] = overrides[key];
+  }
+
+  return () => {
+    for (const key of keys) {
+      const prior = previous.get(key);
+      if (prior === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = prior;
+      }
+    }
+  };
 }

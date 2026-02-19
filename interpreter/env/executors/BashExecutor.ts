@@ -122,6 +122,10 @@ export class BashExecutor extends BaseCommandExecutor {
         }
       }
 
+      if (options?.env && Object.keys(options.env).length > 0) {
+        envVars = { ...envVars, ...options.env };
+      }
+
       // Check for test mocks first
       const isMocking = process.env.MOCK_BASH === 'true';
       const mockResult = this.handleBashTestMocks(code, envVars);

@@ -1425,6 +1425,10 @@ async function evaluateExecInvocationInternal(
       params,
       evaluatedArgs,
       evaluatedArgStrings,
+      exeLabels,
+      policyEnforcer,
+      operationContext,
+      mergePolicyInputDescriptor,
       workingDirectory,
       whenExprNode,
       services: {

@@ -227,6 +227,7 @@ export async function evaluateRun(
       directive,
       env,
       context,
+      withClause,
       executionContext,
       streamingEnabled,
       pipelineId,

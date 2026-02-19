@@ -253,9 +253,13 @@ SlashRun
       }
 
       if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+        const baseWithClause = values.withClause || raw.withClause || meta.withClause;
+        const mergedWithClause = baseWithClause
+          ? { ...baseWithClause, ...tail }
+          : tail;
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
       }
 
       const endingInfo = {

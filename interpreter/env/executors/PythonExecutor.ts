@@ -89,6 +89,7 @@ export class PythonExecutor extends BaseCommandExecutor {
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
     const streamingEnabled = Boolean(context?.streamingEnabled);
+    const envOverrides = options?.env;
     const normalizedCode = this.normalizePythonUserCode(code);
 
     // Check if we have a shadow environment with functions defined
@@ -106,13 +107,22 @@ export class PythonExecutor extends BaseCommandExecutor {
         startTime,
         context,
         options?.workingDirectory,
-        shadowFunctionDefs
+        shadowFunctionDefs,
+        envOverrides
       );
     }
 
     // Non-streaming path
     if (shadowFunctionDefs) {
-      return this.executePythonWithShadowEnv(normalizedCode, params, metadata, options, context, pythonShadowEnv!);
+      return this.executePythonWithShadowEnv(
+        normalizedCode,
+        params,
+        metadata,
+        options,
+        context,
+        pythonShadowEnv!,
+        envOverrides
+      );
     }
 
     return this.executePythonSubprocess(normalizedCode, params, metadata, options, context);
@@ -128,7 +138,8 @@ export class PythonExecutor extends BaseCommandExecutor {
     startTime: number,
     context?: CommandExecutionContext,
     workingDirectory?: string,
-    shadowFunctionDefs?: string
+    shadowFunctionDefs?: string,
+    envOverrides?: Record<string, string>
   ): Promise<CommandExecutionResult> {
     const bus = context?.bus ?? this.getBus();
     const pipelineId = context?.pipelineId || 'pipeline';
@@ -179,7 +190,7 @@ export class PythonExecutor extends BaseCommandExecutor {
 
       const child = spawn('python3', [tmpFile], {
         cwd: workingDirectory || this.workingDirectory,
-        env: { ...process.env },
+        env: { ...process.env, ...(envOverrides || {}) },
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
@@ -279,10 +290,12 @@ export class PythonExecutor extends BaseCommandExecutor {
     metadata?: Record<string, any>,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext,
-    pythonShadowEnv?: PythonShadowEnvironment
+    pythonShadowEnv?: PythonShadowEnvironment,
+    envOverrides?: Record<string, string>
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
     const workingDirectory = options?.workingDirectory || this.workingDirectory;
+    const restoreEnv = applyProcessEnvOverrides(envOverrides);
 
     try {
       const result = await pythonShadowEnv!.execute(code, params, metadata);
@@ -332,6 +345,8 @@ export class PythonExecutor extends BaseCommandExecutor {
           directiveType: context?.directiveType || 'exec'
         }
       );
+    } finally {
+      restoreEnv();
     }
   }
 
@@ -485,4 +500,31 @@ export class PythonExecutor extends BaseCommandExecutor {
       .map(line => (line.trim().length === 0 ? '' : line.slice(minIndent)))
       .join('\n');
   }
+}
+
+function applyProcessEnvOverrides(overrides?: Record<string, string>): () => void {
+  if (!overrides) {
+    return () => {};
+  }
+  const keys = Object.keys(overrides);
+  if (keys.length === 0) {
+    return () => {};
+  }
+
+  const previous = new Map<string, string | undefined>();
+  for (const key of keys) {
+    previous.set(key, process.env[key]);
+    process.env[key] = overrides[key];
+  }
+
+  return () => {
+    for (const key of keys) {
+      const prior = previous.get(key);
+      if (prior === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = prior;
+      }
+    }
+  };
 }

@@ -7,11 +7,15 @@ import type { Variable } from '@core/types/variable';
 import type { WhenExpressionNode } from '@core/types/when';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
+import type { OperationContext } from '@interpreter/env/ContextManager';
 import { prepareValueForShadow } from '@interpreter/env/variable-proxy';
 import { evaluateExeBlock } from '@interpreter/eval/exe';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 import { applyWithClause } from '@interpreter/eval/with-clause';
 import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import {
   asText,
   isStructuredValue,
@@ -38,6 +42,10 @@ export type CodeExecutableHandlerOptions = {
   params: string[];
   evaluatedArgs: unknown[];
   evaluatedArgStrings: string[];
+  exeLabels: readonly string[];
+  policyEnforcer: PolicyEnforcer;
+  operationContext: OperationContext;
+  mergePolicyInputDescriptor: (descriptor?: SecurityDescriptor) => SecurityDescriptor | undefined;
   workingDirectory?: string;
   whenExprNode?: WhenExpressionNode | null;
   services: CodeExecutableHandlerServices;
@@ -66,6 +74,10 @@ export async function executeCodeExecutable(
     params,
     evaluatedArgs,
     evaluatedArgStrings,
+    exeLabels,
+    policyEnforcer,
+    operationContext,
+    mergePolicyInputDescriptor,
     workingDirectory,
     whenExprNode,
     services
@@ -269,12 +281,35 @@ export async function executeCodeExecutable(
       (codeParams as any).__capturedShadowEnvs = capturedEnvs;
     }
 
+    const usingParts = await resolveUsingEnvParts(execEnv, definition.withClause, node.withClause);
+    const envInputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(usingParts.descriptor));
+    if (envInputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint: envInputTaint,
+          opLabels: operationContext.opLabels ?? [],
+          exeLabels,
+          flowChannel: 'using'
+        },
+        { env, sourceLocation: node.location }
+      );
+    }
+
+    const injectedEnv = usingParts.merged;
+    const codeOptions =
+      workingDirectory || Object.keys(injectedEnv).length > 0
+        ? {
+            ...(workingDirectory ? { workingDirectory } : {}),
+            ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
+          }
+        : undefined;
+
     const codeResult = await execEnv.executeCode(
       code,
       definition.language || 'javascript',
       codeParams,
       Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined,
-      workingDirectory ? { workingDirectory } : undefined,
+      codeOptions,
       workingDirectory
         ? { directiveType: 'exec', sourceLocation: node.location, workingDirectory }
         : { directiveType: 'exec', sourceLocation: node.location }

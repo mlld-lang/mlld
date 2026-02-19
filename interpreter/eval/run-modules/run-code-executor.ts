@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/types';
+import type { DirectiveNode, WithClause } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
@@ -6,6 +6,7 @@ import { resolveWorkingDirectory } from '@interpreter/utils/working-directory';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import {
   applyRunOperationContext,
   buildRunCapabilityOperationUpdate,
@@ -22,6 +23,7 @@ export type RunCodeExecutionParams = {
   directive: DirectiveNode;
   env: Environment;
   context?: EvaluationContext;
+  withClause?: WithClause;
   executionContext: Record<string, unknown>;
   streamingEnabled: boolean;
   pipelineId: string;
@@ -81,6 +83,7 @@ export async function executeRunCode(
     directive,
     env,
     context,
+    withClause: passedWithClause,
     executionContext,
     streamingEnabled,
     pipelineId,
@@ -94,6 +97,7 @@ export async function executeRunCode(
   }
 
   const code = dedentCommonIndent(extractRawTextContent(codeNodes));
+  const withClause = passedWithClause || ((directive.values as any)?.withClause as WithClause | undefined);
   const workingDirectory = await resolveWorkingDirectory(
     (directive.values as any)?.workingDir,
     env,
@@ -137,13 +141,34 @@ export async function executeRunCode(
     sourceLocation: directive.location ?? undefined
   });
 
+  const usingParts = await resolveUsingEnvParts(env, withClause);
+  checkRunInputLabelFlow({
+    descriptor: usingParts.descriptor,
+    policyEnforcer,
+    policyChecksEnabled: Boolean(opType),
+    opLabels,
+    exeLabels: Array.from(env.getEnclosingExeLabels()),
+    flowChannel: 'using',
+    env,
+    sourceLocation: directive.location ?? undefined
+  });
+
+  const injectedEnv = usingParts.merged;
+  const codeOptions =
+    workingDirectory || Object.keys(injectedEnv).length > 0
+      ? {
+          ...(workingDirectory ? { workingDirectory } : {}),
+          ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
+        }
+      : undefined;
+
   const value = await AutoUnwrapManager.executeWithPreservation(async () => {
     return env.executeCode(
       code,
       language,
       argValues,
       undefined,
-      workingDirectory ? { workingDirectory } : undefined,
+      codeOptions,
       {
         ...executionContext,
         streamingEnabled,

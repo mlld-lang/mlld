@@ -154,6 +154,102 @@ describe('Policy label flow integration', () => {
     }
   });
 
+  it('injects policy auth credentials via using auth for run code blocks', async () => {
+    const scenarios = [
+      {
+        language: 'sh',
+        code: (envVarName: string) => `echo "$${envVarName}"`
+      },
+      {
+        language: 'js',
+        code: (envVarName: string) => `return process.env.${envVarName};`
+      },
+      {
+        language: 'node',
+        code: (envVarName: string) => `return process.env.${envVarName};`
+      },
+      {
+        language: 'py',
+        code: (envVarName: string) => `import os\nprint(os.environ["${envVarName}"])`
+      }
+    ] as const;
+
+    for (const scenario of scenarios) {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), `mlld-label-using-auth-${scenario.language}-`));
+      tempDirs.push(root);
+
+      const envVarName = `MLLD_TEST_AUTH_TOKEN_${scenario.language.toUpperCase()}`;
+      const expectedToken = `auth-token-${scenario.language}`;
+      const originalValue = process.env[envVarName];
+      process.env[envVarName] = expectedToken;
+
+      try {
+        await fs.writeFile(
+          path.join(root, 'main.mld'),
+          [
+            `/var @policyConfig = { auth: { test: { from: "env:${envVarName}", as: "${envVarName}" } } }`,
+            '/policy @p = union(@policyConfig)',
+            `/run ${scenario.language} {`,
+            scenario.code(envVarName),
+            '} using auth:test'
+          ].join('\n'),
+          'utf8'
+        );
+
+        const output = await interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+          filePath: path.join(root, 'main.mld'),
+          fileSystem: new NodeFileSystem(),
+          pathService: new PathService(),
+          approveAllImports: true
+        });
+
+        expect((output as string).trim()).toBe(expectedToken);
+      } finally {
+        if (originalValue === undefined) {
+          delete process.env[envVarName];
+        } else {
+          process.env[envVarName] = originalValue;
+        }
+      }
+    }
+  });
+
+  it('enforces label flow checks for run code blocks with using auth', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-label-using-auth-code-flow-'));
+    tempDirs.push(root);
+
+    const envVarName = 'MLLD_TEST_AUTH_TOKEN_CODE_FLOW';
+    const originalValue = process.env[envVarName];
+    process.env[envVarName] = 'secret-token';
+
+    try {
+      await fs.writeFile(
+        path.join(root, 'main.mld'),
+        [
+          `/var @policyConfig = { auth: { test: { from: "env:${envVarName}", as: "${envVarName}" } }, labels: { secret: { deny: ["op:js"] } } }`,
+          '/policy @p = union(@policyConfig)',
+          `/run js { return process.env.${envVarName}; } using auth:test`
+        ].join('\n'),
+        'utf8'
+      );
+
+      await expect(
+        interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+          filePath: path.join(root, 'main.mld'),
+          fileSystem: new NodeFileSystem(),
+          pathService: new PathService(),
+          approveAllImports: true
+        })
+      ).rejects.toThrow("Label 'secret' cannot flow to 'op:js'");
+    } finally {
+      if (originalValue === undefined) {
+        delete process.env[envVarName];
+      } else {
+        process.env[envVarName] = originalValue;
+      }
+    }
+  });
+
   it('injects auth config from exec definitions with using', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-label-using-exe-'));
     tempDirs.push(root);
@@ -182,6 +278,81 @@ describe('Policy label flow integration', () => {
       });
 
       expect((output as string).trim()).toBe('exec-auth-token');
+    } finally {
+      if (originalValue === undefined) {
+        delete process.env[envVarName];
+      } else {
+        process.env[envVarName] = originalValue;
+      }
+    }
+  });
+
+  it('injects auth config from code exec definitions when invoked via run', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-label-using-code-exe-run-'));
+    tempDirs.push(root);
+
+    const envVarName = 'MLLD_TEST_EXEC_CODE_AUTH_TOKEN';
+    const originalValue = process.env[envVarName];
+    process.env[envVarName] = 'exec-code-auth-token';
+
+    try {
+      await fs.writeFile(
+        path.join(root, 'main.mld'),
+        [
+          `/var @policyConfig = { auth: { test: { from: "env:${envVarName}", as: "${envVarName}" } } }`,
+          '/policy @p = union(@policyConfig)',
+          `/exe @spawnCode() = js { return process.env.${envVarName}; } using auth:test`,
+          '/run @spawnCode()'
+        ].join('\n'),
+        'utf8'
+      );
+
+      const output = await interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+        filePath: path.join(root, 'main.mld'),
+        fileSystem: new NodeFileSystem(),
+        pathService: new PathService(),
+        approveAllImports: true
+      });
+
+      expect((output as string).trim()).toBe('exec-code-auth-token');
+    } finally {
+      if (originalValue === undefined) {
+        delete process.env[envVarName];
+      } else {
+        process.env[envVarName] = originalValue;
+      }
+    }
+  });
+
+  it('enforces label flow checks for code exec invocations with using auth', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-label-using-code-exe-flow-'));
+    tempDirs.push(root);
+
+    const envVarName = 'MLLD_TEST_EXEC_CODE_FLOW_AUTH_TOKEN';
+    const originalValue = process.env[envVarName];
+    process.env[envVarName] = 'exec-code-secret-token';
+
+    try {
+      await fs.writeFile(
+        path.join(root, 'main.mld'),
+        [
+          `/var @policyConfig = { auth: { test: { from: "env:${envVarName}", as: "${envVarName}" } }, labels: { secret: { deny: ["op:js"] } } }`,
+          '/policy @p = union(@policyConfig)',
+          `/exe @spawnCode() = js { return process.env.${envVarName}; } using auth:test`,
+          '/var @result = @spawnCode()',
+          '/show @result'
+        ].join('\n'),
+        'utf8'
+      );
+
+      await expect(
+        interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+          filePath: path.join(root, 'main.mld'),
+          fileSystem: new NodeFileSystem(),
+          pathService: new PathService(),
+          approveAllImports: true
+        })
+      ).rejects.toThrow("Label 'secret' cannot flow to 'op:js'");
     } finally {
       if (originalValue === undefined) {
         delete process.env[envVarName];
