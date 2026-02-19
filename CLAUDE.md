@@ -2,71 +2,96 @@
 
 repo: github.com/mlld-lang/mlld
 
-## Style Guide
-- **Name convention**: Always write "mlld" in all lowercase when referring to the language (not "MLLD", "Mlld", or "MllD")
+## Learn the Language
 
-## Reduce Clutter
-- Use tmp/ for temporary test files and throwaway scripts
-- Edit existing files rather than writing new 'revised' versions of the same file.
+Run `mlld howto intro` for a quick overview of what mlld is and how it works. Run `mlld howto` to browse all documentation topics, `mlld howto grep <pattern>` to search.
 
-## Git Guidelines
-- **NEVER EVER USE `git add -A`** ALWAYS add the specific files to be committed
-- NEVER use `git clean -fd` -- we use uncommitted files for temporary project files and scripts, etc.
+## Everyday Commands
 
-## Module System (JavaScript/TypeScript)
-- **Package Type**: ESM-first (`"type": "module"`) - all `.js` files are ES modules
-- **Dual Build**: tsup creates both `.mjs` and `.cjs` outputs for compatibility
-- **Parser Generation**: Peggy generates both `parser.js` (ESM) and `parser.ts` (with types)
-- **Important**: Run `npm run build:grammar` before other builds to generate the parser
-- **Scripts**: Build scripts import parser directly from `grammar/parser/parser.js`
-- **TypeScript**: Uses `@grammar/parser` which resolves to the index.ts wrapper
-- See `docs/dev/MODULES.md` for complete module system documentation
-
-## Build & Test Commands
 ```bash
-npm run build        # Build the project
-npm test <dir>       # Run tests for a specific section of code
-npm test <file_path> # Run specific test file (e.g. npm test cli/priority-cli.test.ts)
-npm run test:case -- <fixture-path>  # Run specific fixture test(s) by path
-                     # Examples:
-                     #   npm run test:case -- feat
-                     #   npm run test:case -- feat/alligator
-                     #   npm run test:case -- feat/alligator/glob-concat
-npm run ast -- '<mlld syntax>'  # Shows AST for any valid mlld syntax
-npm run ast -- file.mld         # Shows AST for a file (auto-detects if file exists)
-cat file.mld | npm run ast      # Shows AST from stdin
-mlld run <script>    # Run mlld script from script directory (default: llm/run/)
+npm run build                        # Full build (grammar + TS + fixtures + outputs)
+npm test                             # Run tests (incremental build runs automatically via pretest)
+npm test <dir>                       # Run tests for a section (e.g. npm test interpreter/)
+npm test <file>                      # Run specific test file
+npm run test:case -- <fixture-path>  # Run fixture tests by path
+                                     #   npm run test:case -- feat/alligator
+                                     #   npm run test:case -- slash/var
+npm run ast -- '<mlld syntax>'       # Show AST for syntax (also accepts file paths or stdin)
+mlld validate <file|dir>             # Validate mlld syntax without executing
+mlld run <script>                    # Run script from llm/run/
 ```
 
-## Generated Files (Gitignored)
-- **Grammar files**: `grammar/parser/*.js`, `grammar/parser/*.ts`, `grammar/generated/*`
-- **Test fixtures**: `tests/fixtures/**/*.generated-fixture.json`
-- **Always run**: `npm run build:grammar` after pulling to regenerate files locally
-- This prevents merge conflicts from generated files
-
 ## Code Style
-- **Imports**: Use @ paths aliases (@ core/, @ services/, etc.) as defined in tsconfig.json -- no relative paths for imports
-- **Structure**: Use interface-first design (I[Name]Service interfaces + implementation)
-- **Formatting**: 2-space indentation, single quotes, semicolons
-- **Types**: Strict type checking enabled, always provide explicit return types
+
+- **Imports**: Use `@` path aliases (`@core/`, `@interpreter/`, `@grammar/`, etc.) from tsconfig.json. No relative paths.
+- **Formatting**: 2-space indent, single quotes, semicolons
 - **Naming**: PascalCase for classes/interfaces, camelCase for methods/variables
-- **Test Structure**:
-  - **Directories**: `tests/cases/` root for valid tests, subdirs `{invalid,exceptions,warnings}/` for special cases → fixtures to `tests/fixtures/`
-  - **Files**: `example.md` (input), `expected.md` (output for valid), `error.md` (error pattern for invalid/exceptions)
-  - **Support files**: Auto-copied from test dir to VFS root. Manual setup in `interpreter.fixture.test.ts:870+` for complex cases
-  - **Naming**: CRITICAL - Unique names across ALL tests. Prefix with context: `import-all-config.mld` not `config.mld`
-  - **Build**: `npm run build:fixtures` → generates `.generated-fixture.json` files with AST + expected output
-  - **Skip system**: Place `skip.md` or `skip-*.md` files in test dirs to skip during fixture generation
-- **Error Handling**: Use specialized MlldError classes (MlldDirectiveError, MlldParseError, etc.) Many error conditions use the same method as tests to test our effectiveness at capturing error conditions and delivering consistent error messages. tests/cases/invalid (syntax errors), tests/cases/exceptions (runtime errors), tests/cases/warnings (plausibly valid syntax but common mistakes new mlld learners make), tests/cases/deprecated (deprecated examples - empty currently) 
-- **Grammar:** Our peggy.js grammar uses an abstraction-focused modular design for DRY code that makes peggy's hierarchical traversal clear. Look for patterns to consolidate and abstract where possible. Key grammar docs: grammar/docs/README.md grammar/docs/DEBUG.md Refer to grammar/docs/NAMING-CONVENTIONS.md for naming patterns.
+- **Types**: Strict checking, explicit return types
 
-## Architecture 
-- **Interpreter**: Single recursive `evaluate()` function
-- **Environment class**: Combines state + capabilities (file I/O, command execution)
-- **Direct evaluation**: No service orchestration or ResolutionService
-- **Smart evaluators**: Each directive evaluator does all the work directly
-- **CLI/API integrated**: Both now use the new interpreter directly
+## Architecture Map
 
-## Important notes
-- Don't ever run `mlld run polish` or `mlld run qa` -- have the user run them. They will take 30+ minutes to run.
-- Don't ever run `npx mlld` -- use `mlld` (which is our local dir installed with `npm install -g .`)
+See `docs/dev/ARCHITECTURE.md` for the full system map. Key layers:
+
+| Layer | Code | Deep dive |
+|---|---|---|
+| Grammar/Parser | `grammar/*.peggy`, `grammar/deps/grammar-core.ts` | `docs/dev/GRAMMAR.md` |
+| Interpreter | `interpreter/core/`, `interpreter/eval/` | `docs/dev/INTERPRETER.md` |
+| Environment | `interpreter/env/Environment.ts` | `docs/dev/INTERPRETER.md` |
+| Modules/Imports | `interpreter/eval/import/*` | `docs/dev/MODULES.md` |
+| Pipelines | `interpreter/eval/pipeline/*` | `docs/dev/PIPELINE.md` |
+| Errors | `errors/{parse,js}/*/`, `core/errors/` | `docs/dev/ERRORS.md` |
+| Tests | `tests/cases/`, `tests/fixtures/` | `docs/dev/TESTS.md` |
+| SDK | `sdk/` | `docs/dev/SDK.md` |
+| CLI | `bin/mlld.ts`, `cli/commands/` | — |
+
+Runtime flow: parse AST → single-pass `evaluate()` → emit effects → format output. No separate resolution phase.
+
+## Test System
+
+Full details in `docs/dev/TESTS.md`. The essentials:
+
+- **Valid tests**: `tests/cases/{slash,feat,integration}/` — `example.md` + `expected.md`
+- **Error tests**: `tests/cases/{invalid,exceptions,warnings}/` — `example.md` + `error.md`
+- **File naming**: CRITICAL — unique names across ALL tests. Prefix with context: `import-all-config.mld` not `config.mld`
+- **Skip tests**: Place `skip.md` in a test dir to skip it during fixture generation
+- **Build fixtures**: `npm run build:fixtures` regenerates `.generated-fixture.json` files
+- **Fast mode**: Set `TESTFAST=true` in `.env.local` to skip slow integration tests (~9s vs ~16s)
+
+## Error System
+
+Full details in `docs/dev/ERRORS.md`. Error patterns are compiled at build time from `errors/{parse,js}/*/` directories. Each pattern has a `pattern.js` (pure function, no imports) and `error.md` (template). Run `npm run build:errors` after adding patterns.
+
+## Grammar
+
+Full details in `docs/dev/GRAMMAR.md`. Peggy.js grammar with abstraction-first design. Files in `grammar/*.peggy` concatenate during build. Edit helpers in `grammar/deps/grammar-core.ts` only, never in `grammar/generated/`. Always `npm run build:grammar` before testing grammar changes.
+
+## Generated Files (Gitignored)
+
+- `grammar/generated/*` — parser output
+- `tests/fixtures/**/*.generated-fixture.json` — test fixtures
+- `core/errors/patterns/*.generated.js` — compiled error patterns
+
+Run `npm run build` after pulling to regenerate.
+
+## Documentation Map
+
+Three audiences: `docs/dev/` (contributors), `docs/user/` (users → website), `docs/src/atoms/` → `docs/llm/` (LLM context). See `docs/dev/DOCS.md` for the full guide.
+
+Key dev docs beyond architecture:
+- `docs/dev/VAR-EVALUATION.md` — variable resolution contexts and behavior
+- `docs/dev/DATA.md` — structured values, metadata, content loading
+- `docs/dev/SECURITY.md` — label flow, policy enforcement, guards
+- `docs/dev/OUTPUT.md` — intent/effect system, document rendering
+- `docs/dev/STREAMING.md` — StreamBus, sinks, SDK stream events
+- `docs/dev/BUILD-TEST.md` — incremental build system details
+
+## Rules
+
+- Always write "mlld" in lowercase (not "MLLD", "Mlld")
+- Use `tmp/` for throwaway scripts and temp files
+- Edit existing files; don't create revised copies
+- **NEVER use `git add -A`** — always add specific files
+- **NEVER use `git clean -fd`** — uncommitted files are used for project work
+- Don't run `mlld run polish` or `mlld run qa` — have the user run them (30+ min)
+- Don't run `npx mlld` — use `mlld` (locally installed via `npm install -g .`)
+- Always build before testing grammar or fixture changes: `npm run build`
