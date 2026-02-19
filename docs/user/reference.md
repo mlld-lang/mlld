@@ -368,6 +368,25 @@ var @funcNames = <api.ts { fn?? }>           >> function names only
 Supported languages: `.js`, `.ts`, `.jsx`, `.tsx`, `.py`, `.go`, `.rs`, `.java`, `.rb`
 Type keywords: `fn`, `var`, `class`, `interface`, `type`, `enum`, `struct`
 
+File existence checking:
+
+```mlld
+>> Optional load: returns null if file doesn't exist (no error)
+var @cfg = <config.json>?
+if @cfg [ show "config loaded" ]
+
+>> Pipeline check: pipe a path through @fileExists
+var @path = "/tmp/output.txt"
+var @found = @path | @fileExists
+if @found [ show "file exists" ]
+
+>> Shell recipe for yes/no string result
+exe @checkFile(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+if @checkFile("/tmp/output.txt") == "yes" [ show "exists" ]
+```
+
+The `<path>?` operator is the simplest approach — it attempts to load the file and returns null on failure. The `@fileExists` transformer checks whether a path points to an existing file. For more complex checks (directories, permissions), use a shell recipe.
+
 ### Imports (`import`)
 
 Import from modules (modules should declare `export { ... }` to list public bindings; the auto-export fallback for modules without manifests is still supported for now):
@@ -622,28 +641,70 @@ Interpolation rules:
 
 ### Builtin Methods
 
+Common methods (work on both arrays and strings):
+
+```mlld
+var @fruits = ["apple", "banana", "cherry"]
+show @fruits.length()           >> 3
+show @fruits.includes("banana") >> true
+show @fruits.indexOf("cherry")  >> 2
+show @fruits.slice(0, 2)        >> ["apple", "banana"]
+
+var @text = "Hello World"
+show @text.length()              >> 11
+show @text.includes("World")     >> true
+show @text.indexOf("W")          >> 6
+show @text.slice(0, 5)           >> "Hello"
+```
+
 Array methods:
 
 ```mlld
 var @fruits = ["apple", "banana", "cherry"]
-show @fruits.includes("banana")  >> true
-show @fruits.indexOf("cherry")  >> 2
-show @fruits.length()  >> 3
-show @fruits.join(", ")  >> "apple, banana, cherry"
+show @fruits.join(", ")          >> "apple, banana, cherry"
+show @fruits.concat(["date"])    >> ["apple", "banana", "cherry", "date"]
+show @fruits.reverse()           >> ["cherry", "banana", "apple"]
+show @fruits.sort()              >> ["apple", "banana", "cherry"]
 ```
 
 String methods:
 
 ```mlld
 var @text = "Hello World"
-show @text.includes("World")  >> true
-show @text.indexOf("W")  >> 6
-show @text.toLowerCase()  >> "hello world"
-show @text.toUpperCase()  >> "HELLO WORLD"
-show @text.trim()  >> removes whitespace
-show @text.startsWith("Hello")  >> true
-show @text.endsWith("World")  >> true
-show @text.split(" ")  >> ["Hello", "World"]
+show @text.toLowerCase()         >> "hello world"
+show @text.toUpperCase()         >> "HELLO WORLD"
+show @text.trim()                >> removes whitespace
+show @text.startsWith("Hello")   >> true
+show @text.endsWith("World")     >> true
+show @text.split(" ")            >> ["Hello", "World"]
+show @text.replace("World", "mlld")  >> "Hello mlld"
+show @text.replaceAll("l", "L")  >> "HeLLo WorLd"
+show @text.substring(6)          >> "World"
+show @text.padStart(15, "-")     >> "----Hello World"
+show @text.padEnd(15, "!")       >> "Hello World!!!!"
+show @text.repeat(2)             >> "Hello WorldHello World"
+```
+
+Pattern matching:
+
+```mlld
+var @text = "error: line 42"
+var @matched = @text.match("[0-9]+")  >> ["42"]
+```
+
+Type checking methods:
+
+```mlld
+var @items = ["a", "b"]
+var @config = {"key": "value"}
+var @name = "Alice"
+show @items.isArray()    >> true
+show @config.isObject()  >> true
+show @name.isString()    >> true
+show @name.isNumber()    >> false
+show @name.isBoolean()   >> false
+show @name.isNull()      >> false
+show @name.isDefined()   >> true
 ```
 
 ### Pipelines
@@ -656,7 +717,7 @@ var @processed = @data | @validate | @transform
 ```
 
 Built-in transformers:
-- `@parse`: parse/format JSON, accepting relaxed JSON syntax (single quotes, trailing commas, comments). Use `@parse.strict` to require standard JSON, `@parse.loose` to be explicit about relaxed parsing, or `@parse.llm` to extract JSON from LLM responses (code fences, prose). Returns `false` if no JSON found.
+- `@parse`: parse/format JSON, accepting relaxed JSON syntax (single quotes, trailing commas, comments). Use `@parse.strict` to require standard JSON, `@parse.loose` to be explicit about relaxed parsing, or `@parse.llm` to extract JSON from LLM responses (code fences, prose). Returns `null` if no JSON found.
 - `@json`: deprecated alias for `@parse`
 - `@xml`: parse/format XML
 - `@csv`: parse/format CSV
@@ -751,6 +812,24 @@ Special built-in variables:
 Conditions evaluate to false for: `null`, `undefined`, `""`, `"false"`, `"0"`, `0`, `NaN`, `[]`, `{}`
 
 All other values — including non-empty strings, non-zero numbers, and non-empty arrays/objects — are truthy.
+
+### Undefined Variables
+
+Behavior depends on context:
+
+| Context | Behavior |
+|---|---|
+| Template interpolation (`` `@var` ``, `::@var::`) | Preserves literal text `@varName` in output |
+| Conditional omission (`@var?`) | Omits silently (empty string) |
+| Null coalescing (`@var ?? default`) | Uses fallback value |
+| Conditions (`if`, `when`, expressions) | Evaluates as `undefined` (falsy) — no error |
+| `show @var` | Error: `Variable not found: @var` |
+| `var @x = @undefined` | Error: `Variable not found: @undefined` |
+| Function arguments `@fn(@undefined)` | Error: `Undefined variable '@x' passed to function @fn` |
+| Object/array literal values | Error: `Variable not found: @var` |
+| Pipeline function | Error: `Pipeline function '@name' is not defined` |
+
+In templates, undefined variables pass through as literal text. This means `@exists(@outPath)` in a template doesn't call a function — it produces the string `@exists(@outPath)`, which is truthy. Use `@val | @exists` (pipeline) or `@val.isDefined()` (method) to test whether a value exists.
 
 ### Data Structures
 
@@ -906,11 +985,28 @@ Where interpolation applies:
 
 ### Built-in Transformers
 
-- `@parse`: JSON parse/stringify
+Data formats:
+- `@parse`: JSON parse (relaxed JSON5 syntax by default)
+- `@parse.strict`: JSON parse (strict syntax only)
+- `@parse.loose`: JSON parse (explicit relaxed JSON5)
+- `@parse.llm`: extract JSON from LLM responses (code fences, prose); returns `null` if no JSON found
+- `@parse.fromlist`: convert plain text list (one item per line) to JSON array
 - `@json`: deprecated alias for `@parse`
 - `@xml`: XML parse/format
 - `@csv`: CSV parse/format
 - `@md`: Markdown formatting
+
+Text transforms:
+- `@upper`: convert text to uppercase
+- `@lower`: convert text to lowercase
+- `@trim`: remove leading and trailing whitespace
+- `@pretty`: pretty-print JSON with indentation
+- `@sort`: sort array elements, object keys, or text lines alphabetically
+
+Inspection:
+- `@typeof`: get type information (`"simple-text"`, `"array (3 items)"`, `"object (2 properties)"`, `"primitive (boolean)"`, etc.)
+- `@exists`: returns true when the piped expression is non-empty (tests that a value exists, not file existence — see `@fileExists`)
+- `@fileExists`: returns true when the piped value is a path to an existing file on disk
 
 ### File Metadata Fields
 
