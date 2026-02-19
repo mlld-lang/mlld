@@ -371,6 +371,71 @@ describe('for evaluator characterization', () => {
     ]);
   });
 
+  it('emits op:for:iteration hook metadata for sequential and parallel loops', async () => {
+    const env = await interpretWithEnv(`
+/hook @iterTelemetry after op:for:iteration = [
+  output \`iter:@mx.for.index:@mx.for.total:@mx.for.key:@mx.for.parallel:@mx.for.batchIndex:@mx.for.batchSize\` to "state://for-iter"
+]
+/for @item in ["a", "b"] => show @item
+/var @parallel = for parallel(2) @item in ["x", "y", "z"] => @item
+`);
+
+    const iterWrites = env
+      .getStateWrites()
+      .filter(write => write.path === 'for-iter')
+      .map(write => String(write.value).trim());
+    expect(iterWrites).toHaveLength(5);
+
+    const parsed = iterWrites.map(line => {
+      const parts = line.split(':');
+      return {
+        index: Number(parts[1]),
+        total: Number(parts[2]),
+        key: parts[3],
+        parallel: parts[4] === 'true',
+        batchIndexRaw: parts[5],
+        batchSizeRaw: parts[6]
+      };
+    });
+
+    const sequential = parsed.filter(item => item.total === 2);
+    const parallel = parsed.filter(item => item.total === 3);
+
+    expect(sequential.map(item => item.index).sort((a, b) => a - b)).toEqual([0, 1]);
+    expect(sequential.every(item => item.parallel === false)).toBe(true);
+
+    expect(parallel.map(item => item.index).sort((a, b) => a - b)).toEqual([0, 1, 2]);
+    expect(parallel.every(item => item.parallel === true)).toBe(true);
+    expect(parallel.every(item => Number.isInteger(Number(item.batchIndexRaw)))).toBe(true);
+    expect(parallel.every(item => Number(item.batchSizeRaw) > 0)).toBe(true);
+  });
+
+  it('emits op:for:batch hook boundaries for each parallel window', async () => {
+    const env = await interpretWithEnv(`
+/hook @batchBefore before op:for:batch = [
+  output \`before:@mx.for.batchIndex:@mx.for.batchSize:@mx.for.parallel\` to "state://for-batch"
+]
+/hook @batchAfter after op:for:batch = [
+  output \`after:@mx.for.batchIndex:@mx.for.batchSize:@mx.for.parallel\` to "state://for-batch"
+]
+/var @result = for parallel(2) @item in ["a", "b", "c", "d", "e"] => @item
+`);
+
+    const batchWrites = env
+      .getStateWrites()
+      .filter(write => write.path === 'for-batch')
+      .map(write => String(write.value).trim());
+
+    expect(batchWrites).toEqual([
+      'before:0:2:true',
+      'after:0:2:true',
+      'before:1:2:true',
+      'after:1:2:true',
+      'before:2:1:true',
+      'after:2:1:true'
+    ]);
+  });
+
   it('emits bare exec invocation output for directive non-block actions', async () => {
     const { fileSystem, pathService: runtimePathService } = createRuntime();
     const output = await interpret(`

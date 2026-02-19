@@ -6,11 +6,25 @@ import type {
   BaseMlldNode
 } from '@core/types';
 import type { EvalResult } from '../core/interpreter';
-import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
+import type { HookableNode } from '@core/types/hooks';
+import type { OperationContext } from '@interpreter/env/ContextManager';
+import {
+  getParallelLimit,
+  runWithConcurrency,
+  type ParallelBatchInfo
+} from '@interpreter/utils/parallel';
 import {
   asData,
   isStructuredValue
 } from '../utils/structured-value';
+import {
+  getGuardTransformedInputs,
+  handleGuardDecision
+} from '@interpreter/hooks/hook-decision-handler';
+import {
+  runUserAfterHooks,
+  runUserBeforeHooks
+} from '@interpreter/hooks/user-hook-runner';
 import { isExeReturnControl } from './exe-return';
 import { resolveParallelOptions, type ForParallelOptions } from './for/parallel-options';
 import { executeDirectiveActions } from './for/directive-action-runner';
@@ -63,6 +77,178 @@ type ForTask = {
   entry: [any, any];
   index: number;
 };
+
+type ForLoopNode = ForDirective | ForExpression;
+
+type ForOperationBatch = {
+  batchIndex?: number;
+  batchSize?: number;
+};
+
+type ForBatchWindow = {
+  batch: ParallelBatchInfo;
+  tasks: ForTask[];
+};
+
+function toHookNode(node: ForLoopNode): HookableNode {
+  return node as unknown as HookableNode;
+}
+
+function resolveIterationInputValue(input: unknown): unknown {
+  return input;
+}
+
+function buildForIterationContext(
+  entry: [any, any],
+  index: number,
+  total: number,
+  parallel: boolean,
+  batch?: ForOperationBatch
+): Record<string, unknown> {
+  return {
+    index,
+    total,
+    key: entry[0] ?? null,
+    parallel,
+    ...(typeof batch?.batchIndex === 'number' ? { batchIndex: batch.batchIndex } : {}),
+    ...(typeof batch?.batchSize === 'number' ? { batchSize: batch.batchSize } : {})
+  };
+}
+
+function buildForBatchContext(
+  batch: ParallelBatchInfo
+): Record<string, unknown> {
+  return {
+    index: batch.batchIndex,
+    total: batch.totalItems,
+    key: null,
+    parallel: true,
+    batchIndex: batch.batchIndex,
+    batchSize: batch.batchSize
+  };
+}
+
+function buildForIterationOperationContext(
+  options: {
+    node: ForLoopNode;
+    varName: string;
+    labels?: readonly string[];
+    entry: [any, any];
+    index: number;
+    total: number;
+    parallel: boolean;
+    batch?: ForOperationBatch;
+  }
+): OperationContext {
+  return {
+    type: 'for:iteration',
+    name: options.varName,
+    labels: options.labels,
+    location: options.node.location ?? null,
+    metadata: {
+      index: options.index,
+      total: options.total,
+      key: options.entry[0] ?? null,
+      parallel: options.parallel,
+      ...(typeof options.batch?.batchIndex === 'number' ? { batchIndex: options.batch.batchIndex } : {}),
+      ...(typeof options.batch?.batchSize === 'number' ? { batchSize: options.batch.batchSize } : {})
+    }
+  };
+}
+
+function buildForBatchOperationContext(
+  options: {
+    node: ForLoopNode;
+    varName: string;
+    labels?: readonly string[];
+    batch: ParallelBatchInfo;
+  }
+): OperationContext {
+  return {
+    type: 'for:batch',
+    name: options.varName,
+    labels: options.labels,
+    location: options.node.location ?? null,
+    metadata: {
+      batchIndex: options.batch.batchIndex,
+      batchSize: options.batch.batchSize,
+      parallel: true
+    }
+  };
+}
+
+async function runForOperationBoundary<T>(
+  options: {
+    env: Environment;
+    node: ForLoopNode;
+    operationContext: OperationContext;
+    inputs: readonly unknown[];
+    execute: (resolvedInputs: readonly unknown[]) => Promise<T>;
+  }
+): Promise<T> {
+  const { env, node, operationContext, inputs, execute } = options;
+  const hookNode = toHookNode(node);
+  const hookManager = env.getHookManager();
+
+  return env.withOpContext(operationContext, async () => {
+    const hookEnv = env.createChild();
+    const userHookInputs = await runUserBeforeHooks(hookNode, inputs, hookEnv, operationContext);
+    const preDecision = await hookManager.runPre(hookNode, userHookInputs, hookEnv, operationContext);
+    const resolvedInputs = getGuardTransformedInputs(preDecision, userHookInputs) ?? userHookInputs;
+    await handleGuardDecision(preDecision, hookNode, hookEnv, operationContext);
+
+    const value = await execute(resolvedInputs);
+    let result: EvalResult = { value, env };
+    result = await hookManager.runPost(hookNode, result, resolvedInputs, hookEnv, operationContext);
+    result = await runUserAfterHooks(hookNode, result, resolvedInputs, hookEnv, operationContext);
+    return result.value as T;
+  });
+}
+
+function resolveBatchInfoForTask(
+  taskIndex: number,
+  totalItems: number,
+  cap: number
+): ParallelBatchInfo {
+  const safeCap = Math.max(1, cap);
+  const batchIndex = Math.floor(taskIndex / safeCap);
+  const batchStart = batchIndex * safeCap;
+  const batchSize = Math.min(safeCap, Math.max(0, totalItems - batchStart));
+  return {
+    batchIndex,
+    batchSize,
+    totalItems
+  };
+}
+
+function toOperationBatch(batch: ParallelBatchInfo): ForOperationBatch {
+  return {
+    batchIndex: batch.batchIndex,
+    batchSize: batch.batchSize
+  };
+}
+
+function buildBatchWindows(
+  tasks: readonly ForTask[],
+  totalItems: number,
+  cap: number
+): ForBatchWindow[] {
+  const windows = new Map<number, ForBatchWindow>();
+  for (const task of tasks) {
+    const batch = resolveBatchInfoForTask(task.index, totalItems, cap);
+    const existing = windows.get(batch.batchIndex);
+    if (existing) {
+      existing.tasks.push(task);
+      continue;
+    }
+    windows.set(batch.batchIndex, {
+      batch,
+      tasks: [task]
+    });
+  }
+
+  return Array.from(windows.values()).sort((a, b) => a.batch.batchIndex - b.batch.batchIndex);
+}
 
 function isLiteralValueType(node: unknown, valueType: string): boolean {
   return (
@@ -200,6 +386,16 @@ export async function evaluateForDirective(
     const specified = (directive.values as any).forOptions as ForParallelOptions | undefined;
     const inherited = (env as any).__forOptions as ForParallelOptions | undefined;
     const effective = await resolveParallelOptions(specified ?? inherited, env, directive.location);
+    const hookRegistry = env.getHookRegistry();
+    const guardRegistry = env.getGuardRegistry();
+    const iterationLifecycleEnabled =
+      hookRegistry.getOperationHooks('for:iteration', 'before').length > 0 ||
+      hookRegistry.getOperationHooks('for:iteration', 'after').length > 0 ||
+      guardRegistry.getOperationGuards('for:iteration').length > 0;
+    const batchLifecycleEnabled =
+      hookRegistry.getOperationHooks('for:batch', 'before').length > 0 ||
+      hookRegistry.getOperationHooks('for:batch', 'after').length > 0 ||
+      guardRegistry.getOperationGuards('for:batch').length > 0;
 
     const iterableArray = Array.from(iterable);
     const tasks: ForTask[] = iterableArray.map((entry, index) => ({
@@ -212,10 +408,11 @@ export async function evaluateForDirective(
     }
     const whenFilterCondition = getDirectiveWhenFilterCondition(directive);
 
-    const runOne = async (
+    const executeDirectiveIteration = async (
       entry: [any, any],
       idx: number,
-      options?: { failFast?: boolean }
+      options?: { failFast?: boolean },
+      batch?: ForOperationBatch
     ) => {
       const setup = await setupIterationContext({
         rootEnv: env,
@@ -229,7 +426,9 @@ export async function evaluateForDirective(
         varFields,
         fieldPathString,
         sourceLocation: varNode.location,
-        sourceDescriptor
+        sourceDescriptor,
+        batchIndex: batch?.batchIndex,
+        batchSize: batch?.batchSize
       });
       const { iterationRoot, key, value } = setup;
       let childEnv = setup.childEnv;
@@ -247,7 +446,6 @@ export async function evaluateForDirective(
         childEnv = actionResult.childEnv;
         returnControl = actionResult.returnControl;
       } catch (err: any) {
-        popForIterationContext(childEnv);
         if (isBailError(err)) {
           throw err;
         }
@@ -258,17 +456,68 @@ export async function evaluateForDirective(
             error: err,
             value
           }));
-          return;
+          return undefined;
         }
         throw err;
+      } finally {
+        popForIterationContext(childEnv);
       }
 
-      popForIterationContext(childEnv);
       return returnControl;
     };
 
-    if (effective?.parallel) {
-      const canaryTask = await findCanaryTask(tasks, whenFilterCondition
+    const runOne = async (
+      entry: [any, any],
+      idx: number,
+      options?: { failFast?: boolean },
+      batch?: ForOperationBatch
+    ) => {
+      if (!iterationLifecycleEnabled) {
+        return executeDirectiveIteration(entry, idx, options, batch);
+      }
+
+      const iterationContext = buildForIterationContext(
+        entry,
+        idx,
+        iterableArray.length,
+        !!effective?.parallel,
+        batch
+      );
+      const iterationOperation = buildForIterationOperationContext({
+        node: directive,
+        varName,
+        labels: sourceDescriptor?.labels,
+        entry,
+        index: idx,
+        total: iterableArray.length,
+        parallel: !!effective?.parallel,
+        batch
+      });
+
+      const boundaryEnv = env.createChild();
+      return boundaryEnv.withExecutionContext('for', iterationContext, async () =>
+        runForOperationBoundary({
+          env: boundaryEnv,
+          node: directive,
+          operationContext: iterationOperation,
+          inputs: [entry[1]],
+          execute: async (resolvedInputs) => {
+            const nextValue = resolvedInputs.length > 0
+              ? resolveIterationInputValue(resolvedInputs[0])
+              : entry[1];
+            return executeDirectiveIteration(
+              [entry[0], nextValue],
+              idx,
+              options,
+              batch
+            );
+          }
+        })
+      );
+    };
+
+	    if (effective?.parallel) {
+	      const canaryTask = await findCanaryTask(tasks, whenFilterCondition
         ? async (task: ForTask) => {
             const setup = await setupIterationContext({
               rootEnv: env,
@@ -291,31 +540,108 @@ export async function evaluateForDirective(
               popForIterationContext(childEnv);
             }
           }
-        : undefined);
+	        : undefined);
 
-      if (canaryTask) {
-        const canaryResult = await runOne(canaryTask.entry, canaryTask.index, { failFast: true });
-        if (isExeReturnControl(canaryResult)) {
-          return { value: canaryResult, env };
-        }
-      }
+	      const configuredCap = effective.cap ?? getParallelLimit();
+	      const batchCap = Math.max(1, Math.min(configuredCap, Math.max(tasks.length, 1)));
 
-      const remainingTasks = canaryTask
-        ? tasks.filter(task => task.index !== canaryTask.index)
-        : (whenFilterCondition ? [] : tasks);
+	      if (batchLifecycleEnabled) {
+	        const batchWindows = buildBatchWindows(tasks, iterableArray.length, batchCap);
+	        for (const window of batchWindows) {
+	          const operationBatch = toOperationBatch(window.batch);
+	          const canaryInWindow = !!canaryTask && window.tasks.some(task => task.index === canaryTask.index);
+	          const windowTasks = canaryInWindow && canaryTask
+	            ? window.tasks.filter(task => task.index !== canaryTask.index)
+	            : window.tasks;
 
-      const cap = Math.min(effective.cap ?? getParallelLimit(), remainingTasks.length);
-      const results = await runWithConcurrency(
-        remainingTasks,
-        cap,
-        task => runOne(task.entry, task.index),
-        { ordered: false, paceMs: effective.rateMs }
-      );
-      const returnControl = results.find(result => isExeReturnControl(result));
-      if (returnControl) {
-        return { value: returnControl, env };
-      }
-    } else {
+	          const runBatchWindow = async () => {
+	            const windowResults: unknown[] = [];
+	            if (canaryInWindow && canaryTask) {
+	              const canaryResult = await runOne(
+	                canaryTask.entry,
+	                canaryTask.index,
+	                { failFast: true },
+	                operationBatch
+	              );
+	              windowResults.push(canaryResult);
+	              if (isExeReturnControl(canaryResult)) {
+	                return windowResults;
+	              }
+	            }
+
+	            if (windowTasks.length > 0) {
+	              const parallelWindowResults = await runWithConcurrency(
+	                windowTasks,
+	                windowTasks.length,
+	                task => runOne(task.entry, task.index, undefined, operationBatch),
+	                { ordered: false, paceMs: effective.rateMs }
+	              );
+	              windowResults.push(...parallelWindowResults);
+	            }
+	            return windowResults;
+	          };
+
+	          const batchEnv = env.createChild();
+	          const batchResults = await batchEnv.withExecutionContext('for', buildForBatchContext(window.batch), async () =>
+	            runForOperationBoundary({
+	              env: batchEnv,
+	              node: directive,
+	              operationContext: buildForBatchOperationContext({
+	                node: directive,
+	                varName,
+	                labels: sourceDescriptor?.labels,
+	                batch: window.batch
+	              }),
+	              inputs: [],
+	              execute: runBatchWindow
+	            })
+	          );
+	          const returnControl = Array.isArray(batchResults)
+	            ? batchResults.find(result => isExeReturnControl(result))
+	            : undefined;
+	          if (returnControl) {
+	            return { value: returnControl, env };
+	          }
+	        }
+	      } else {
+	        const canaryBatch = canaryTask && iterationLifecycleEnabled
+	          ? toOperationBatch(resolveBatchInfoForTask(canaryTask.index, iterableArray.length, batchCap))
+	          : undefined;
+	        if (canaryTask) {
+	          const canaryResult = await runOne(
+	            canaryTask.entry,
+	            canaryTask.index,
+	            { failFast: true },
+	            canaryBatch
+	          );
+	          if (isExeReturnControl(canaryResult)) {
+	            return { value: canaryResult, env };
+	          }
+	        }
+
+	        const remainingTasks = canaryTask
+	          ? tasks.filter(task => task.index !== canaryTask.index)
+	          : (whenFilterCondition ? [] : tasks);
+	        const cap = Math.min(configuredCap, remainingTasks.length);
+	        const results = await runWithConcurrency(
+	          remainingTasks,
+	          cap,
+	          task => runOne(
+	            task.entry,
+	            task.index,
+	            undefined,
+	            iterationLifecycleEnabled
+	              ? toOperationBatch(resolveBatchInfoForTask(task.index, iterableArray.length, batchCap))
+	              : undefined
+	          ),
+	          { ordered: false, paceMs: effective.rateMs }
+	        );
+	        const returnControl = results.find(result => isExeReturnControl(result));
+	        if (returnControl) {
+	          return { value: returnControl, env };
+	        }
+	      }
+	    } else {
       for (let i = 0; i < iterableArray.length; i++) {
         const result = await runOne(iterableArray[i], i);
         if (isExeReturnControl(result)) {
@@ -355,6 +681,16 @@ export async function evaluateForExpression(
   const specified = (expr.meta as any)?.forOptions as ForParallelOptions | undefined;
   const inherited = (env as any).__forOptions as ForParallelOptions | undefined;
   const effective = await resolveParallelOptions(specified ?? inherited, env, expr.location);
+  const hookRegistry = env.getHookRegistry();
+  const guardRegistry = env.getGuardRegistry();
+  const iterationLifecycleEnabled =
+    hookRegistry.getOperationHooks('for:iteration', 'before').length > 0 ||
+    hookRegistry.getOperationHooks('for:iteration', 'after').length > 0 ||
+    guardRegistry.getOperationGuards('for:iteration').length > 0;
+  const batchLifecycleEnabled =
+    hookRegistry.getOperationHooks('for:batch', 'before').length > 0 ||
+    hookRegistry.getOperationHooks('for:batch', 'after').length > 0 ||
+    guardRegistry.getOperationGuards('for:batch').length > 0;
   if (effective?.parallel) {
     publishForErrorsContext(env, errors);
   }
@@ -368,10 +704,11 @@ export async function evaluateForExpression(
 
   const SKIP = Symbol('skip');
   const DONE = Symbol('done');
-  const runOne = async (
+  const executeExpressionIteration = async (
     entry: [any, any],
     idx: number,
-    options?: { failFast?: boolean }
+    options?: { failFast?: boolean },
+    batch?: ForOperationBatch
   ) => {
     const setup = await setupIterationContext({
       rootEnv: env,
@@ -385,7 +722,9 @@ export async function evaluateForExpression(
       varFields,
       fieldPathString,
       sourceLocation: expr.variable.location,
-      sourceDescriptor
+      sourceDescriptor,
+      batchIndex: batch?.batchIndex,
+      batchSize: batch?.batchSize
     });
     let childEnv = setup.childEnv;
     const { key, value } = setup;
@@ -401,7 +740,6 @@ export async function evaluateForExpression(
         extractControlKind
       });
       childEnv = iterationResult.childEnv;
-      popExpressionIterationContexts(childEnv);
       if (iterationResult.outcome === 'skip') {
         return SKIP as any;
       }
@@ -410,7 +748,6 @@ export async function evaluateForExpression(
       }
       return iterationResult.value as any;
     } catch (error) {
-      popExpressionIterationContexts(childEnv);
       if (isBailError(error)) {
         throw error;
       }
@@ -427,7 +764,59 @@ export async function evaluateForExpression(
         sourceLocation: expr.location
       });
       return marker as any;
+    } finally {
+      popExpressionIterationContexts(childEnv);
     }
+  };
+
+  const runOne = async (
+    entry: [any, any],
+    idx: number,
+    options?: { failFast?: boolean },
+    batch?: ForOperationBatch
+  ) => {
+    if (!iterationLifecycleEnabled) {
+      return executeExpressionIteration(entry, idx, options, batch);
+    }
+
+    const iterationContext = buildForIterationContext(
+      entry,
+      idx,
+      iterableArray.length,
+      !!effective?.parallel,
+      batch
+    );
+    const iterationOperation = buildForIterationOperationContext({
+      node: expr,
+      varName,
+      labels: sourceDescriptor?.labels,
+      entry,
+      index: idx,
+      total: iterableArray.length,
+      parallel: !!effective?.parallel,
+      batch
+    });
+
+    const boundaryEnv = env.createChild();
+    return boundaryEnv.withExecutionContext('for', iterationContext, async () =>
+      runForOperationBoundary({
+        env: boundaryEnv,
+        node: expr,
+        operationContext: iterationOperation,
+        inputs: [entry[1]],
+        execute: async (resolvedInputs) => {
+          const nextValue = resolvedInputs.length > 0
+            ? resolveIterationInputValue(resolvedInputs[0])
+            : entry[1];
+          return executeExpressionIteration(
+            [entry[0], nextValue],
+            idx,
+            options,
+            batch
+          );
+        }
+      })
+    );
   };
 
   if (effective?.parallel) {
@@ -456,32 +845,106 @@ export async function evaluateForExpression(
         }
       : undefined);
 
-    const orderedResults: unknown[] = new Array(iterableArray.length).fill(SKIP);
+	    const orderedResults: unknown[] = new Array(iterableArray.length).fill(SKIP);
 
-    if (canaryTask) {
-      orderedResults[canaryTask.index] = await runOne(
-        canaryTask.entry,
-        canaryTask.index,
-        { failFast: true }
-      );
-    }
+	    const configuredCap = effective.cap ?? getParallelLimit();
+	    const batchCap = Math.max(1, Math.min(configuredCap, Math.max(tasks.length, 1)));
+	    const parallelResults: Array<{ index: number; value: unknown }> = [];
 
-    const remainingTasks = canaryTask
-      ? tasks.filter(task => task.index !== canaryTask.index)
-      : (expressionWhenFilter ? [] : tasks);
-    const cap = Math.min(effective.cap ?? getParallelLimit(), remainingTasks.length);
-    const parallelResults = await runWithConcurrency(
-      remainingTasks,
-      cap,
-      async task => ({
-        index: task.index,
-        value: await runOne(task.entry, task.index)
-      }),
-      { ordered: false, paceMs: effective.rateMs }
-    );
-    for (const item of parallelResults) {
-      orderedResults[item.index] = item.value;
-    }
+	    if (batchLifecycleEnabled) {
+	      const batchWindows = buildBatchWindows(tasks, iterableArray.length, batchCap);
+	      for (const window of batchWindows) {
+	        const operationBatch = toOperationBatch(window.batch);
+	        const canaryInWindow = !!canaryTask && window.tasks.some(task => task.index === canaryTask.index);
+	        const windowTasks = canaryInWindow && canaryTask
+	          ? window.tasks.filter(task => task.index !== canaryTask.index)
+	          : window.tasks;
+
+	        const runBatchWindow = async () => {
+	          const windowResults: Array<{ index: number; value: unknown }> = [];
+	          if (canaryInWindow && canaryTask) {
+	            const canaryResult = await runOne(
+	              canaryTask.entry,
+	              canaryTask.index,
+	              { failFast: true },
+	              operationBatch
+	            );
+	            windowResults.push({ index: canaryTask.index, value: canaryResult });
+	          }
+
+	          if (windowTasks.length > 0) {
+	            const parallelWindowResults = await runWithConcurrency(
+	              windowTasks,
+	              windowTasks.length,
+	              async task => ({
+	                index: task.index,
+	                value: await runOne(task.entry, task.index, undefined, operationBatch)
+	              }),
+	              { ordered: false, paceMs: effective.rateMs }
+	            );
+	            windowResults.push(...parallelWindowResults);
+	          }
+
+	          return windowResults;
+	        };
+
+	        const batchEnv = env.createChild();
+	        const batchResults = await batchEnv.withExecutionContext('for', buildForBatchContext(window.batch), async () =>
+	          runForOperationBoundary({
+	            env: batchEnv,
+	            node: expr,
+	            operationContext: buildForBatchOperationContext({
+	              node: expr,
+	              varName,
+	              labels: sourceDescriptor?.labels,
+	              batch: window.batch
+	            }),
+	            inputs: [],
+	            execute: runBatchWindow
+	          })
+	        );
+	        if (Array.isArray(batchResults)) {
+	          parallelResults.push(...batchResults);
+	        }
+	      }
+	    } else {
+	      const canaryBatch = canaryTask && iterationLifecycleEnabled
+	        ? toOperationBatch(resolveBatchInfoForTask(canaryTask.index, iterableArray.length, batchCap))
+	        : undefined;
+	      if (canaryTask) {
+	        orderedResults[canaryTask.index] = await runOne(
+	          canaryTask.entry,
+	          canaryTask.index,
+	          { failFast: true },
+	          canaryBatch
+	        );
+	      }
+
+	      const remainingTasks = canaryTask
+	        ? tasks.filter(task => task.index !== canaryTask.index)
+	        : (expressionWhenFilter ? [] : tasks);
+	      const cap = Math.min(configuredCap, remainingTasks.length);
+	      const concurrentResults = await runWithConcurrency(
+	        remainingTasks,
+	        cap,
+	        async task => ({
+	          index: task.index,
+	          value: await runOne(
+	            task.entry,
+	            task.index,
+	            undefined,
+	            iterationLifecycleEnabled
+	              ? toOperationBatch(resolveBatchInfoForTask(task.index, iterableArray.length, batchCap))
+	              : undefined
+	          )
+	        }),
+	        { ordered: false, paceMs: effective.rateMs }
+	      );
+	      parallelResults.push(...concurrentResults);
+	    }
+	    for (const item of parallelResults) {
+	      orderedResults[item.index] = item.value;
+	    }
     for (const r of orderedResults) if (r !== SKIP && r !== DONE) results.push(r);
   } else {
     for (let i = 0; i < iterableArray.length; i++) {

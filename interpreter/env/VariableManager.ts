@@ -283,7 +283,7 @@ export class VariableManager implements IVariableManager {
     // Ambient, read-only @mx support (calculated on access)
     if (name === 'mx') {
       // Allow tests to override via @test_mx
-      const testCtxVar = this.variables.get('test_mx') || this.deps.getParent()?.getVariable('test_mx');
+      const testCtxVar = this.variables.get('test_mx');
       if (testCtxVar) {
         return createObjectVariable('mx', testCtxVar.value, false, undefined, {
           mx: {

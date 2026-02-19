@@ -1,8 +1,13 @@
-exe @invokeAll(agents, msg) = [
-  let @results = for parallel @a in @agents => @invoke(@a, @msg)
-  => when [
-    @mx.errors.length == 0 => @results
-    @results.length >= 2 => @results  << 2/3 succeeded is acceptable
-    * => @repair(@results, @mx.errors, @msg)  << AI-driven repair
-  ]
+hook @iter after op:for:iteration = [
+  output `iter:@mx.for.index/@mx.for.total key=@mx.for.key batch=@mx.for.batchIndex:@mx.for.batchSize` to "state://loop-events"
 ]
+
+hook @batchBefore before op:for:batch = [
+  output `batch-start:@mx.for.batchIndex size=@mx.for.batchSize` to "state://loop-events"
+]
+
+hook @batchAfter after op:for:batch = [
+  output `batch-end:@mx.for.batchIndex size=@mx.for.batchSize` to "state://loop-events"
+]
+
+var @res = for parallel(2) @x in ["a", "b", "c", "d", "e"] => @x

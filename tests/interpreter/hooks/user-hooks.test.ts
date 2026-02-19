@@ -177,4 +177,43 @@ describe('user hook runtime', () => {
     expect(writes[0].path).toBe('telemetry');
     expect(String(writes[0].value)).toContain('event:hook');
   });
+
+  it('exposes op:for:iteration and op:for:batch hook visibility with @mx.for metadata', async () => {
+    const env = createEnv();
+
+    await evaluateDirectives(
+      `
+/hook @iter after op:for:iteration = [
+  output \`iter:@mx.for.index:@mx.for.total:@mx.for.batchIndex:@mx.for.batchSize\` to "state://for-hooks"
+]
+/hook @batchBefore before op:for:batch = [
+  output \`batch-before:@mx.for.batchIndex:@mx.for.batchSize\` to "state://for-hooks"
+]
+/hook @batchAfter after op:for:batch = [
+  output \`batch-after:@mx.for.batchIndex:@mx.for.batchSize\` to "state://for-hooks"
+]
+/var @items = ["a", "b", "c"]
+/var @result = for parallel(2) @item in @items => @item
+      `,
+      env
+    );
+
+    const writes = env
+      .getStateWrites()
+      .filter(write => write.path === 'for-hooks')
+      .map(write => String(write.value).trim());
+
+    const batchBefore = writes.filter(write => write.startsWith('batch-before:'));
+    const batchAfter = writes.filter(write => write.startsWith('batch-after:'));
+    const iterWrites = writes.filter(write => write.startsWith('iter:'));
+
+    expect(batchBefore).toEqual(['batch-before:0:2', 'batch-before:1:1']);
+    expect(batchAfter).toEqual(['batch-after:0:2', 'batch-after:1:1']);
+    expect(iterWrites).toHaveLength(3);
+    expect(iterWrites).toEqual(expect.arrayContaining([
+      'iter:0:3:0:2',
+      'iter:1:3:0:2',
+      'iter:2:3:1:1'
+    ]));
+  });
 });

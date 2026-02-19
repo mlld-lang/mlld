@@ -1,10 +1,10 @@
-exe @source() = "not-json"
+var @items = ["  beta  ", " alpha "]
 
-exe @parseOrFallback(input) = when [
-  @input.startsWith("{") => @input | @parse
-  @mx.try < 2 => retry "expected JSON object"
-  * => { ok: false, error: "invalid-json", raw: @input }
-]
+>> One stage receives the whole array value
+var @whole = @items | @trim
 
-var @result = @source() | @parseOrFallback
-show @result
+>> Per-item transform requires explicit iteration
+var @each = for @item in @items => @item | @trim | @upper
+
+show @whole
+show @each

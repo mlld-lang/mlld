@@ -182,7 +182,65 @@ function bindHookVariable(
   value: unknown
 ): void {
   const variable = importer.createVariableFromValue(name, value, 'let', undefined, { env: hookEnv });
-  hookEnv.setVariable(name, variable);
+  hookEnv.setParameterVariable(name, variable);
+}
+
+function buildForContextFromOperation(operation?: OperationContext): Record<string, unknown> | null {
+  if (!operation || (operation.type !== 'for:iteration' && operation.type !== 'for:batch')) {
+    return null;
+  }
+
+  const metadata = operation.metadata;
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const data = metadata as Record<string, unknown>;
+  if (operation.type === 'for:iteration') {
+    const forContext: Record<string, unknown> = {
+      index: typeof data.index === 'number' ? data.index : 0,
+      total: typeof data.total === 'number' ? data.total : 0,
+      key: data.key ?? null,
+      parallel: data.parallel === true
+    };
+    if (typeof data.batchIndex === 'number') {
+      forContext.batchIndex = data.batchIndex;
+    }
+    if (typeof data.batchSize === 'number') {
+      forContext.batchSize = data.batchSize;
+    }
+    return forContext;
+  }
+
+  const batchIndex = typeof data.batchIndex === 'number' ? data.batchIndex : 0;
+  const forContext: Record<string, unknown> = {
+    index: batchIndex,
+    key: null,
+    parallel: data.parallel === true,
+    batchIndex
+  };
+  if (typeof data.batchSize === 'number') {
+    forContext.batchSize = data.batchSize;
+  }
+  return forContext;
+}
+
+function buildHookMxOverride(env: Environment, operation?: OperationContext): Record<string, unknown> | null {
+  if (!operation) {
+    return null;
+  }
+
+  const baseMx = env.getContextManager().buildAmbientContext({
+    pipelineContext: env.getPipelineContext(),
+    securitySnapshot: env.getSecuritySnapshot()
+  });
+  const forContext = buildForContextFromOperation(operation);
+  return {
+    ...baseMx,
+    operation,
+    op: operation,
+    ...(forContext ? { for: forContext } : {})
+  };
 }
 
 function createHookEnvironment(
@@ -190,7 +248,8 @@ function createHookEnvironment(
   hook: HookDefinition,
   timing: HookTiming,
   inputs: readonly unknown[],
-  result?: EvalResult
+  result?: EvalResult,
+  operation?: OperationContext
 ): Environment {
   const hookEnv = env.createChild();
   const importer = new VariableImporter();
@@ -199,6 +258,10 @@ function createHookEnvironment(
   bindHookVariable(hookEnv, importer, 'input', inputValue);
   if (result !== undefined) {
     bindHookVariable(hookEnv, importer, 'output', result.value);
+  }
+  const mxOverride = buildHookMxOverride(env, operation);
+  if (mxOverride) {
+    bindHookVariable(hookEnv, importer, 'test_mx', mxOverride);
   }
   return hookEnv;
 }
@@ -301,7 +364,7 @@ async function runUserHooks(
   let currentResult = result;
   return env.withHookSuppression(async () => {
     for (const hook of matches) {
-      const hookEnv = createHookEnvironment(env, hook, timing, currentInputs, currentResult);
+      const hookEnv = createHookEnvironment(env, hook, timing, currentInputs, currentResult, operation);
       try {
         const execution = await executeHookBody(hook.body, hookEnv);
         if (!execution.transformed) {

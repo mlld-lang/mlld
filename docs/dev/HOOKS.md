@@ -205,6 +205,20 @@ interface OperationContext {
 }
 ```
 
+### Loop Operation Contexts
+
+Loop hooks now expose dedicated operation keys and `@mx.for` metadata for per-item and per-batch observability:
+
+| Hook filter | Boundary | `@mx.for` fields |
+|---|---|---|
+| `op:for:iteration` | Each loop item | `index`, `total`, `key`, `parallel`, `batchIndex`, `batchSize` (parallel) |
+| `op:for:batch` | Parallel batch window start/end | `batchIndex`, `batchSize`, `parallel` |
+
+Runtime notes:
+- `batchIndex` is 0-based.
+- `batchSize` is the actual item count in that window (last window may be partial).
+- `op:for:batch` wraps each parallel window boundary (`before` at window start, `after` after window completion).
+
 ### Hook Lifecycle
 
 ```

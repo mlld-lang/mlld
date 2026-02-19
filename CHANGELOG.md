@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `HookRegistry` and `/hook` directive evaluation registration path, including environment root/child sharing and indexed hook retrieval by function/operation/data filters.
 - Added lifecycle characterization coverage that snapshots directive/exec hook ordering and nested guard-suppression behavior ahead of hook lifecycle refactors.
 - Added user hook transform chaining and per-hook error isolation (`@mx.hooks.errors`), including function arg-prefix (`startsWith`) matching and compatibility coverage for hook-body directive/executable emissions (`output`/`append`/`state://`).
+- Added loop hook operation contexts for `op:for:iteration` and `op:for:batch`, including `@mx.for.batchIndex`/`@mx.for.batchSize` metadata and parallel batch boundary lifecycle emission.
 
 ### Changed
 - Added pre-3A hooks/checkpoint risk-gate documentation, lifecycle trace test helper scaffolding, and checkpoint manifest/atomic-write compatibility scaffolds to lock rollout semantics before lifecycle/runtime phases.

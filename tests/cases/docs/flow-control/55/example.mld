@@ -1,5 +1,6 @@
-loop until @input >= 3 [
-  let @next = (@input ?? 0) + 1
-  show `@next`
-  continue @next
+var @result = loop(10) [
+  let @count = (@input ?? 0) + 1
+  when @count >= 3 => done @count
+  continue @count
 ]
+show @result

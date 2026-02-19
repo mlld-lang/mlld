@@ -6,6 +6,7 @@ import type {
 import { FieldAccessError } from '@core/errors';
 import type { SecurityDescriptor } from '@core/types/security';
 import { accessFields } from '@interpreter/utils/field-access';
+import { isVariable } from '@interpreter/utils/variable-resolution';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { ForParallelOptions } from './parallel-options';
@@ -23,6 +24,8 @@ export type ForContextSnapshot = {
   total: number;
   key: string | number | null;
   parallel: boolean;
+  batchIndex?: number;
+  batchSize?: number;
 };
 
 export type IterationSetupParams = {
@@ -38,6 +41,8 @@ export type IterationSetupParams = {
   fieldPathString: string | null;
   sourceLocation?: SourceLocation;
   sourceDescriptor?: SecurityDescriptor;
+  batchIndex?: number;
+  batchSize?: number;
 };
 
 export type IterationSetupResult = {
@@ -51,6 +56,7 @@ export async function setupIterationContext(
   params: IterationSetupParams
 ): Promise<IterationSetupResult> {
   const [key, value] = params.entry;
+  const accessBaseValue = isVariable(value) ? value.value : value;
   const iterationRoot = params.rootEnv.createChildEnvironment();
   if (params.effective?.parallel) {
     (iterationRoot as any).__parallelIsolationRoot = iterationRoot;
@@ -63,7 +69,7 @@ export async function setupIterationContext(
   let derivedValue: unknown;
   if (params.varFields && params.varFields.length > 0) {
     try {
-      const accessed = await accessFields(value, params.varFields, {
+      const accessed = await accessFields(accessBaseValue, params.varFields, {
         env: childEnv,
         preserveContext: true,
         returnUndefinedForMissing: true,
@@ -76,7 +82,7 @@ export async function setupIterationContext(
           ? accessed.accessPath
           : [];
         throw new FieldAccessError(`Field "${missingField}" not found in object`, {
-          baseValue: value,
+          baseValue: accessBaseValue,
           fieldAccessChain: [],
           failedAtIndex: Math.max(0, params.varFields.length - 1),
           failedKey: missingField,
@@ -87,7 +93,7 @@ export async function setupIterationContext(
         });
       }
       derivedValue = accessedValue;
-      inheritExpressionProvenance(derivedValue, value);
+      inheritExpressionProvenance(derivedValue, accessBaseValue);
     } catch (error) {
       throw enhanceFieldAccessError(error, {
         fieldPath: params.fieldPathString,
@@ -139,7 +145,9 @@ export async function setupIterationContext(
     index: params.index,
     total: params.total,
     key: key ?? null,
-    parallel: !!params.effective?.parallel
+    parallel: !!params.effective?.parallel,
+    ...(typeof params.batchIndex === 'number' ? { batchIndex: params.batchIndex } : {}),
+    ...(typeof params.batchSize === 'number' ? { batchSize: params.batchSize } : {})
   };
   childEnv.pushExecutionContext('for', forCtx);
 

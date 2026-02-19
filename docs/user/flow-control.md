@@ -457,6 +457,26 @@ show `errors:@mx.errors.length`
 - `@mx.errors` resets at the start of each parallel loop and records any failures; outer-scope variables cannot be mutated inside a parallel block body.
 - `@mx.for.parallel` is `true` inside parallel loops; `@mx.for.index` preserves original array position even when iterations complete out of order.
 
+**Hook telemetry for loop progress and batches:**
+
+```mlld
+hook @iter after op:for:iteration = [
+  output `iter:@mx.for.index/@mx.for.total key=@mx.for.key batch=@mx.for.batchIndex:@mx.for.batchSize` to "state://loop-events"
+]
+
+hook @batchBefore before op:for:batch = [
+  output `batch-start:@mx.for.batchIndex size=@mx.for.batchSize` to "state://loop-events"
+]
+
+hook @batchAfter after op:for:batch = [
+  output `batch-end:@mx.for.batchIndex size=@mx.for.batchSize` to "state://loop-events"
+]
+
+var @res = for parallel(2) @x in ["a", "b", "c", "d", "e"] => @x
+```
+
+`op:for:iteration` fires once per item. `op:for:batch` fires once per parallel window (`before` + `after`).
+
 **Error handling with repair pattern:**
 
 ```mlld
@@ -1080,4 +1100,3 @@ exe @processFile(file) = when [
 var @results = foreach @processFile(@files)
 for @result in @results => show @result
 ```
-

@@ -8,6 +8,14 @@ export function getParallelLimit(): number {
 export interface ParallelOptions {
   ordered?: boolean;
   paceMs?: number; // minimum delay between task starts
+  onBatchStart?: (batch: ParallelBatchInfo) => Promise<void> | void;
+  onBatchEnd?: (batch: ParallelBatchInfo) => Promise<void> | void;
+}
+
+export interface ParallelBatchInfo {
+  batchIndex: number;
+  batchSize: number;
+  totalItems: number;
 }
 
 /**
@@ -19,7 +27,7 @@ export interface ParallelOptions {
 export async function runWithConcurrency<T, R>(
   items: readonly T[],
   limit: number,
-  run: (item: T, index: number) => Promise<R>,
+  run: (item: T, index: number, batch: ParallelBatchInfo) => Promise<R>,
   opts: ParallelOptions = {}
 ): Promise<R[]> {
   const count = items.length;
@@ -29,6 +37,11 @@ export async function runWithConcurrency<T, R>(
   const paceMs = opts.paceMs && opts.paceMs > 0 ? opts.paceMs : 0;
 
   const results: R[] = ordered ? new Array(count) : [];
+  const batchInfo: ParallelBatchInfo = {
+    batchIndex: 0,
+    batchSize: count,
+    totalItems: count
+  };
   let index = 0;
   let pacingChain: Promise<void> = Promise.resolve();
 
@@ -45,12 +58,13 @@ export async function runWithConcurrency<T, R>(
     return index++;
   };
 
+  await opts.onBatchStart?.(batchInfo);
   const worker = async () => {
     while (true) {
       const i = await nextIndex();
       if (i < 0) break;
       const item = items[i];
-      const r = await run(item, i);
+      const r = await run(item, i, batchInfo);
       if (ordered) {
         (results as R[])[i] = r;
       } else {
@@ -61,5 +75,6 @@ export async function runWithConcurrency<T, R>(
 
   const workers = Array.from({ length: cap }, () => worker());
   await Promise.all(workers);
+  await opts.onBatchEnd?.(batchInfo);
   return results;
 }
