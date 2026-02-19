@@ -110,6 +110,7 @@ describe('Highlighting Rules', () => {
       expect(current).toContain('output');
       expect(current).toContain('path');
       expect(current).toContain('hook');
+      expect(current).toContain('checkpoint');
     });
     
     it('should have deprecated directives', () => {

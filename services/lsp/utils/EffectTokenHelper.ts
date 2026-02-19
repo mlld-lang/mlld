@@ -30,7 +30,7 @@ export class EffectTokenHelper {
 
   // Tokenize a simple argument immediately following an effect (e.g., log "msg" or log @a)
   tokenizeSimpleArg(absAfterEffectOffset: number, segment: string): void {
-    const m = segment.match(/\s+(@[A-Za-z_][A-Za-z0-9_]*|`[^`]*`|"([^"\\]|\\.)*"|'([^'\\]|\\.)*')/);
+    const m = segment.match(/\s+(@[A-Za-z_][A-Za-z0-9_-]*|`[^`]*`|"([^"\\]|\\.)*"|'([^'\\]|\\.)*')/);
     if (m && m.index !== undefined) {
       const argText = m[1] || m[0].trim();
       const aOffset = absAfterEffectOffset + m.index + m[0].indexOf(argText);
@@ -48,7 +48,7 @@ export class EffectTokenHelper {
   // Tokenize output effect arguments: optional source var, 'to', target (stdout|stderr|@var|"quoted")
   tokenizeOutputArgs(absAfterEffectOffset: number, segment: string): void {
     // Optional source var after 'output'
-    const varMatch = segment.match(/\s+(@[A-Za-z_][A-Za-z0-9_]*)/);
+    const varMatch = segment.match(/\s+(@[A-Za-z_][A-Za-z0-9_-]*)/);
     if (varMatch && varMatch.index !== undefined) {
       const vOffset = absAfterEffectOffset + varMatch.index + varMatch[0].indexOf('@');
       const vPos = this.document.positionAt(vOffset);
@@ -71,7 +71,7 @@ export class EffectTokenHelper {
         return;
       }
       // Target variable
-      const tVar = targetRest.match(/^\s*(@[A-Za-z_][A-Za-z0-9_]*)/);
+      const tVar = targetRest.match(/^\s*(@[A-Za-z_][A-Za-z0-9_-]*)/);
       if (tVar) {
         const tvRel = toMatch.index + toMatch[0].length + targetRest.indexOf(tVar[1]);
         const tOffset = absAfterEffectOffset + tvRel;
@@ -90,4 +90,3 @@ export class EffectTokenHelper {
     }
   }
 }
-

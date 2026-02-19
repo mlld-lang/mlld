@@ -295,7 +295,7 @@ export class LanguageBlockHelper {
    */
   private tokenizeCodeWithVariables(code: string, startLine: number, startChar: number): void {
     // Pattern to match @variables including field access like @var.field
-    const varPattern = /@[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/g;
+    const varPattern = /@[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*/g;
     const lines = code.split('\n');
 
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {

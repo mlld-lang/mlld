@@ -128,6 +128,12 @@ export class DirectiveVisitor extends BaseVisitor {
       return;
     }
 
+    if (node.kind === 'hook') {
+      this.visitHookDirective(node, context);
+      this.handleDirectiveComment(node);
+      return;
+    }
+
     if (node.kind === 'env') {
       this.visitEnvDirective(node, context);
       this.handleDirectiveComment(node);
@@ -791,7 +797,7 @@ export class DirectiveVisitor extends BaseVisitor {
           const segment = directiveText.substring(segmentStartRel, segmentEndRel);
 
           // Effects: show, log, output (only when not prefixed by @)
-          const effectRegex = /(^|[^@A-Za-z0-9_])(show|log|output)\b/g;
+          const effectRegex = /(^|[^@A-Za-z0-9_-])(show|log|output)\b/g;
           let m: RegExpExecArray | null;
           while ((m = effectRegex.exec(segment)) !== null) {
             const effect = m[2];
@@ -1155,7 +1161,7 @@ export class DirectiveVisitor extends BaseVisitor {
 
         // Highlight @var interpolations inside command content for shell-style runs
         // This is a simple heuristic that finds @identifiers within the braces
-        const varRegex = /@[A-Za-z_][A-Za-z0-9_]*/g;
+        const varRegex = /@[A-Za-z_][A-Za-z0-9_-]*/g;
         let match: RegExpExecArray | null;
         while ((match = varRegex.exec(commandContent)) !== null) {
           const varRel = match.index; // relative to contentStart
@@ -1198,7 +1204,7 @@ export class DirectiveVisitor extends BaseVisitor {
 
         // Highlight @var occurrences inside the quoted command
         const inner = directiveText.substring(quoteStart + 1, quoteEnd);
-        const varRegex = /@[A-Za-z_][A-Za-z0-9_]*/g;
+        const varRegex = /@[A-Za-z_][A-Za-z0-9_-]*/g;
         let match: RegExpExecArray | null;
         while ((match = varRegex.exec(inner)) !== null) {
           const varOffset = directive.location.start.column - 1 + quoteStart + 1 + match.index;
@@ -1421,7 +1427,7 @@ export class DirectiveVisitor extends BaseVisitor {
           }
         } else if (values.target.raw) {
           // Handle variable references in target (e.g., to @path)
-          const targetVarMatch = directiveText.match(/\s+to\s+(@\w+)/);
+          const targetVarMatch = directiveText.match(/\s+to\s+(@[A-Za-z_][A-Za-z0-9_-]*)/);
           if (targetVarMatch && targetVarMatch.index !== undefined) {
             const varOffset = directive.location.start.offset + targetVarMatch.index + targetVarMatch[0].indexOf('@');
             const varPosition = this.document.positionAt(varOffset);
@@ -1453,7 +1459,7 @@ export class DirectiveVisitor extends BaseVisitor {
         }
       } else if (values.target.type === 'resolver' && values.target.raw) {
         // Handle variable references in target (e.g., to @path)
-        const targetVarMatch = directiveText.match(/\s+to\s+(@\w+)/);
+        const targetVarMatch = directiveText.match(/\s+to\s+(@[A-Za-z_][A-Za-z0-9_-]*)/);
         if (targetVarMatch && targetVarMatch.index !== undefined) {
           const varOffset = directive.location.start.offset + targetVarMatch.index + targetVarMatch[0].indexOf('@');
           const varPosition = this.document.positionAt(varOffset);
@@ -2717,7 +2723,7 @@ export class DirectiveVisitor extends BaseVisitor {
           const aliasName = namespaceNode.identifier || namespaceNode.content || directive.raw?.namespace?.slice(1); // Support both node types
           if (aliasName) {
             // Find @ before the alias name
-            const atMatch = directiveText.match(/as\s+(@\w+)/);
+            const atMatch = directiveText.match(/as\s+(@[A-Za-z_][A-Za-z0-9_-]*)/);
             if (atMatch && atMatch.index !== undefined) {
               const aliasOffset = directive.location.start.offset + atMatch.index + atMatch[0].indexOf('@');
               const aliasPosition = this.document.positionAt(aliasOffset);
@@ -2735,7 +2741,7 @@ export class DirectiveVisitor extends BaseVisitor {
 
         // Token for template parameters if present
         if (directive.raw?.templateParams && Array.isArray(directive.raw.templateParams)) {
-          const paramsMatch = directiveText.match(/@\w+\(([^)]+)\)/);
+          const paramsMatch = directiveText.match(/@[A-Za-z_][A-Za-z0-9_-]*\(([^)]+)\)/);
           if (paramsMatch && paramsMatch[1]) {
             const params = paramsMatch[1].split(',').map(p => p.trim());
             let searchStart = directive.location.start.offset + paramsMatch.index + paramsMatch[0].indexOf('(') + 1;
@@ -3098,7 +3104,7 @@ export class DirectiveVisitor extends BaseVisitor {
 
     // Tokenize policy name (@name) - the AST stores it as a Text node without @
     if (values.name && Array.isArray(values.name) && values.name[0]) {
-      const nameMatch = directiveText.match(/policy\s+@(\w+)/);
+      const nameMatch = directiveText.match(/policy\s+@([A-Za-z_][A-Za-z0-9_-]*)/);
       if (nameMatch && nameMatch.index !== undefined) {
         const atOffset = directive.location.start.offset + directiveText.indexOf('@' + nameMatch[1]);
         const atPos = this.document.positionAt(atOffset);
@@ -3167,6 +3173,117 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
+  private visitHookDirective(directive: LspAstNode, context: VisitorContext): void {
+    const values = directive.values;
+    if (!values || !directive.location) return;
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+
+    // Tokenize optional hook name (@name)
+    if (values.name && Array.isArray(values.name) && values.name[0]) {
+      const nameNode = values.name[0];
+      if (nameNode.location && nameNode.identifier) {
+        this.tokenBuilder.addToken({
+          line: nameNode.location.start.line - 1,
+          char: nameNode.location.start.column - 1,
+          length: nameNode.identifier.length + 1,
+          tokenType: 'variable',
+          modifiers: ['declaration']
+        });
+      }
+    }
+
+    // Tokenize timing keyword (before/after)
+    const timingMatch = directiveText.match(/\b(before|after)\b/);
+    if (timingMatch && timingMatch.index !== undefined) {
+      const timingOffset = directive.location.start.offset + timingMatch.index;
+      const timingPosition = this.document.positionAt(timingOffset);
+      this.tokenBuilder.addToken({
+        line: timingPosition.line,
+        char: timingPosition.character,
+        length: timingMatch[1].length,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    // Tokenize filter segment
+    if (values.filter && Array.isArray(values.filter) && values.filter[0]) {
+      const filterNode = values.filter[0];
+
+      if (filterNode.filterKind === 'operation') {
+        const opMatch = directiveText.match(/\bop:([A-Za-z_][A-Za-z0-9_-]*(?::[A-Za-z_][A-Za-z0-9_-]*)*)/);
+        if (opMatch && opMatch.index !== undefined) {
+          const opOffset = directive.location.start.offset + opMatch.index;
+          const opPosition = this.document.positionAt(opOffset);
+
+          this.tokenBuilder.addToken({
+            line: opPosition.line,
+            char: opPosition.character,
+            length: 2,
+            tokenType: 'keyword',
+            modifiers: []
+          });
+          this.tokenBuilder.addToken({
+            line: opPosition.line,
+            char: opPosition.character + 2,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+          this.tokenBuilder.addToken({
+            line: opPosition.line,
+            char: opPosition.character + 3,
+            length: opMatch[1].length,
+            tokenType: 'variable',
+            modifiers: []
+          });
+        }
+      } else if (filterNode.filterKind === 'function') {
+        const fnMatch = directiveText.match(/@([A-Za-z_][A-Za-z0-9_.-]*)/);
+        if (fnMatch && fnMatch.index !== undefined) {
+          const fnOffset = directive.location.start.offset + fnMatch.index;
+          const fnPosition = this.document.positionAt(fnOffset);
+          this.tokenBuilder.addToken({
+            line: fnPosition.line,
+            char: fnPosition.character,
+            length: fnMatch[1].length + 1,
+            tokenType: 'variable',
+            modifiers: []
+          });
+        }
+      } else if (filterNode.filterKind === 'data' && filterNode.value) {
+        const labelMatch = directiveText.match(new RegExp(`\\b${filterNode.value}\\b`));
+        if (labelMatch && labelMatch.index !== undefined) {
+          const labelOffset = directive.location.start.offset + labelMatch.index;
+          const labelPosition = this.document.positionAt(labelOffset);
+          this.tokenBuilder.addToken({
+            line: labelPosition.line,
+            char: labelPosition.character,
+            length: filterNode.value.length,
+            tokenType: 'label',
+            modifiers: []
+          });
+        }
+      }
+    }
+
+    // Tokenize '=' operator
+    const equalMatch = directiveText.match(/\s+=\s+/);
+    if (equalMatch && equalMatch.index !== undefined) {
+      const equalOffset = directive.location.start.offset + equalMatch.index + equalMatch[0].indexOf('=');
+      this.operatorHelper.addOperatorToken(equalOffset, 1);
+    }
+
+    // Tokenize hook body nodes
+    if (values.body && Array.isArray(values.body)) {
+      for (const bodyNode of values.body) {
+        this.mainVisitor.visitNode(bodyNode, context);
+      }
+    }
+  }
+
   private visitGuardDirective(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     if (!values || !directive.location) return;
@@ -3221,7 +3338,7 @@ export class DirectiveVisitor extends BaseVisitor {
 
       if (filterNode.filterKind === 'operation') {
         // op:run, op:exe, etc.
-        const opMatch = directiveText.match(/\bop:(\w+(?:\.\w+)*)/);
+        const opMatch = directiveText.match(/\bop:([A-Za-z_][A-Za-z0-9_-]*(?::[A-Za-z_][A-Za-z0-9_-]*)*)/);
         if (opMatch && opMatch.index !== undefined) {
           const opOffset = directive.location.start.offset + opMatch.index;
           const opPosition = this.document.positionAt(opOffset);
@@ -3883,13 +4000,14 @@ export class DirectiveVisitor extends BaseVisitor {
    */
   private getDirectiveTokenType(kind: string): string {
     switch (kind) {
-      // Definition directives: var, exe, guard, policy
+      // Definition directives: var, exe, guard, hook, policy, checkpoint
       // Use 'modifier' semantic type → renders as pink italic
       case 'var':
       case 'exe':
       case 'guard':
       case 'hook':
       case 'policy':
+      case 'checkpoint':
         return 'directiveDefinition';
 
       // Action directives: run, show, output, append, log, stream

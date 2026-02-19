@@ -48,6 +48,11 @@ Current `TOKEN_TYPE_MAP` highlights to keep accurate:
 - `alligator`, `alligatorOpen`, `alligatorClose` -> `interface`
 - `section -> namespace`
 
+Current directive keyword grouping in `DirectiveVisitor`:
+
+- `directiveDefinition`: `var`, `exe`, `guard`, `hook`, `policy`, `checkpoint`
+- `directiveAction`: `run`, `show`, `output`, `append`, `log`, `stream`, `sign`, `verify`
+
 Pass-through entries currently include:
 
 - `function`, `label`, `typeParameter`, `interface`, `namespace`, `modifier`, `enum`

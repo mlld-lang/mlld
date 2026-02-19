@@ -210,7 +210,12 @@ World
   });
 
   it('recognizes all standard directive keywords in strict mode', () => {
-    const directives = ['var', 'show', 'exe', 'run', 'for', 'when', 'while', 'stream', 'guard', 'hook', 'import', 'export', 'output', 'append', 'log', 'path'];
+    const directives = [
+      'var', 'show', 'stream', 'run', 'exe', 'checkpoint', 'path',
+      'import', 'when', 'if', 'for', 'loop', 'while',
+      'output', 'append', 'log', 'guard', 'hook', 'export',
+      'policy', 'sign', 'verify', 'env', 'bail'
+    ];
 
     for (const directive of directives) {
       const text = `${directive} @a = 1
