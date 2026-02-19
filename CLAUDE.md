@@ -47,9 +47,6 @@ mlld run <script>    # Run mlld script from script directory (default: llm/run/)
 - **Always run**: `npm run build:grammar` after pulling to regenerate files locally
 - This prevents merge conflicts from generated files
 
-## Generated Files (not gitignored)
-- `tests/cases/docs` are syntax validation smoke tests built from docs in order to ensure we do not ship syntactically invalid examples. They are built whenever running tests and should be committed alongside docs updates.
-
 ## Code Style
 - **Imports**: Use @ paths aliases (@ core/, @ services/, etc.) as defined in tsconfig.json -- no relative paths for imports
 - **Structure**: Use interface-first design (I[Name]Service interfaces + implementation)
