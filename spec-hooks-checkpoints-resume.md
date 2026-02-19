@@ -157,12 +157,14 @@ Any invocation with the `llm` label:
 ```mlld
 # Cached — has llm label
 var llm @summary = @claudePoll(@prompt, "sonnet")
-let llm @decision = @claudePoll(@decisionPrompt, "opus")
+exe llm @decide(prompt) = @claudePoll(@prompt, "opus")
+var @decision = @decide(@decisionPrompt)
 
 # Cached — inside a parallel loop, each call independently cached
+exe llm @review(prompt) = @claudePoll(@prompt, "sonnet")
 var @results = for parallel(20) @file in @files [
-  let llm @review = @claudePoll(@reviewPrompt(@file), "sonnet")
-  => @review
+  var @result = @review(@reviewPrompt(@file))
+  => @result
 ]
 
 # NOT cached — no llm label
@@ -171,6 +173,31 @@ var @parsed = @data | @json
 ```
 
 The cache key is `sha256(functionName + serializedArguments)`. If the prompt changes, the hash changes, and the call re-executes. If the prompt is the same, the cached result is returned without calling the LLM.
+
+#### Checkpoint patterns: why labels live on `exe`/`var`, not `let`
+
+The `llm` label belongs on immutable declarations (`var`, `exe`) because checkpoint taint tracking on mutable `let` bindings is not feasible — a `let` variable can be reassigned, so the system cannot guarantee the cached value still corresponds to the original LLM call.
+
+The correct pattern is to define an `exe llm` wrapper at module level, then call it from blocks:
+
+```mlld
+# Define the labeled wrapper once
+exe llm @review(prompt) = @claudePoll(@prompt, "sonnet")
+
+# Call it anywhere — each call is independently cached
+var @results = for parallel(20) @file in @files [
+  var @result = @review(@reviewPrompt(@file))
+  => @result
+]
+```
+
+For one-off calls, use `var llm` directly:
+
+```mlld
+var llm @summary = @claudePoll(@prompt, "sonnet")
+```
+
+Do **not** use `let llm` — it will not parse. Labels are only valid on `var` and `exe` declarations.
 
 #### What re-runs
 
@@ -688,13 +715,14 @@ The `CheckpointManager` is instantiated in the CLI layer when `--checkpoint` or 
 No special integration needed. Each LLM call inside a for-parallel loop independently hits or misses the cache. The `runWithConcurrency` function (`interpreter/utils/parallel.ts:19`) doesn't change at all.
 
 ```mlld
+exe llm @review(prompt) = @claudePoll(@prompt, "sonnet")
 var @results = for parallel(20) @file in @files [
-  let llm @review = @claudePoll(@reviewPrompt(@file), "sonnet")
-  # Each @claudePoll call:
-  #   1. checkpoint-pre-hook computes hash of (claudePoll, @reviewPrompt(@file), "sonnet")
+  # Each @review call:
+  #   1. checkpoint-pre-hook computes hash of (review, @reviewPrompt(@file))
   #   2. If cached: result injected, @claudePoll not called
   #   3. If not cached: @claudePoll executes, checkpoint-post-hook writes result
-  => @review
+  var @result = @review(@reviewPrompt(@file))
+  => @result
 ]
 ```
 
@@ -808,16 +836,20 @@ Cache hits require identical function name + arguments. This means:
 
 ```mlld
 # In collect/index.mld:
-var llm @review = @claudePoll(@reviewPrompt(@file), "sonnet")
+exe llm @review(prompt) = @claudePoll(@prompt, "sonnet")
+var @result = @review(@reviewPrompt(@file))
 
 # In analyze/index.mld — HITS if @reviewPrompt(@file) produces same string:
-var llm @review = @claudePoll(@reviewPrompt(@file), "sonnet")
+exe llm @review(prompt) = @claudePoll(@prompt, "sonnet")
+var @result = @review(@reviewPrompt(@file))
 
 # MISSES — different model:
-var llm @review = @claudePoll(@reviewPrompt(@file), "opus")
+exe llm @review(prompt) = @claudePoll(@prompt, "opus")
+var @result = @review(@reviewPrompt(@file))
 
 # MISSES — different prompt:
-var llm @review = @claudePoll(@deepReviewPrompt(@file), "sonnet")
+exe llm @review(prompt) = @claudePoll(@prompt, "sonnet")
+var @result = @review(@deepReviewPrompt(@file))
 ```
 
 This is the correct behavior: you only get cached results when you're asking the same question.

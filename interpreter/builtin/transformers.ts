@@ -27,13 +27,13 @@ function makeJsonTransformer(mode: 'loose' | 'strict' | 'llm') {
     if (mode === 'llm') {
       const extracted = extractJsonFromLLMResponse(input);
       if (!extracted) {
-        return false;
+        return null;
       }
 
       try {
         return JSON5.parse(extracted);
       } catch {
-        return false;
+        return null;
       }
     }
 
@@ -204,7 +204,7 @@ export const builtinTransformers: TransformerDefinition[] = [
       },
       {
         field: 'llm',
-        description: 'Extract JSON from LLM responses (code fences, prose). Returns false if no JSON found.',
+        description: 'Extract JSON from LLM responses (code fences, prose). Returns null if no JSON found.',
         implementation: makeJsonTransformer('llm')
       },
       {
