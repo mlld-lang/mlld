@@ -76,27 +76,24 @@ OutputTargetFile "file target"
     }
 
 // OUTPUT FILE PATH - Flexible path parsing for output targets
-// Allows quoted strings, bracketed paths, or unquoted paths
+// Allows quoted strings, backtick templates, or unquoted paths
 OutputFilePath "output file path"
-  = str:DataString {
-      // Handle both simple strings and interpolated content
-      if (typeof str === 'string') {
-        return {
-          parts: [helpers.createNode(NodeType.Text, { content: str, location: location() })],
-          raw: `"${str}"`,
-          meta: { quoted: true }
-        };
-      } else if (str.needsInterpolation) {
-        // Return the parts for runtime interpolation
-        return {
-          parts: str.parts,
-          raw: helpers.reconstructRawString(str.parts),
-          meta: { quoted: true, needsInterpolation: true }
-        };
-      }
+  = qt:UnifiedQuoteOrTemplate {
+      // Handles "...", '...', `...`, ::...::, :::...:::, [[...]]
+      // Normalize Literal nodes to Text nodes for path interpolation compatibility
+      const parts = qt.content.map(node => {
+        if (node.type === 'Literal' && typeof node.value === 'string') {
+          return helpers.createNode(NodeType.Text, { content: node.value, location: node.location });
+        }
+        return node;
+      });
+      return {
+        parts: parts,
+        raw: helpers.reconstructRawString(qt.content),
+        meta: { quoted: true, needsInterpolation: qt.hasInterpolation || !!qt.interpolationType }
+      };
     }
-  // REMOVED: Bracket syntax - use quoted paths instead
-  / chars:[^ \t\n\r"'\[\]]+ {
+  / chars:[^ \t\n\r"'`\[\]]+ {
       const path = chars.join('');
       return {
         parts: [helpers.createNode(NodeType.Text, { content: path, location: location() })],
