@@ -329,7 +329,7 @@ Options:
   --debug                 Show execution metrics (timing, cache hits, effects)
   --checkpoint            Enable checkpoint cache reuse for llm-labeled calls
   --fresh                 Rebuild checkpoint cache from scratch for this script
-  --resume [target]       Resume with checkpoints (optionally from target)
+  --resume [target]       Resume with checkpoints (@fn, @fn:index, @fn("prefix"))
   --fork <script>         Read checkpoints from another script as seed cache
   --<name> <value>        Any other flag becomes payload (see below)
 

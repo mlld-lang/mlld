@@ -29,12 +29,18 @@ interface GuardDecisionInfo {
 const CHECKPOINT_HIT_KEY = 'checkpointHit';
 const CHECKPOINT_KEY_KEY = 'checkpointKey';
 const CHECKPOINT_CACHED_RESULT_KEY = 'cachedResult';
+const CHECKPOINT_INVOCATION_SITE_KEY = 'checkpointInvocationSite';
+const CHECKPOINT_INVOCATION_INDEX_KEY = 'checkpointInvocationIndex';
+const CHECKPOINT_INVOCATION_ORDINAL_KEY = 'checkpointInvocationOrdinal';
 
 export interface CheckpointDecisionState {
   hit: boolean;
   key?: string;
   hasCachedResult: boolean;
   cachedResult?: unknown;
+  invocationSite?: string;
+  invocationIndex?: number;
+  invocationOrdinal?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,6 +87,22 @@ export function getCheckpointDecisionState(decision?: HookDecision): CheckpointD
   const hasCachedResult = Object.prototype.hasOwnProperty.call(metadata, CHECKPOINT_CACHED_RESULT_KEY);
   const hit = normalizedDecision.action === 'fulfill' || metadata[CHECKPOINT_HIT_KEY] === true;
   const key = typeof metadata[CHECKPOINT_KEY_KEY] === 'string' ? (metadata[CHECKPOINT_KEY_KEY] as string) : undefined;
+  const invocationSite =
+    typeof metadata[CHECKPOINT_INVOCATION_SITE_KEY] === 'string'
+      ? (metadata[CHECKPOINT_INVOCATION_SITE_KEY] as string)
+      : undefined;
+  const invocationIndex =
+    typeof metadata[CHECKPOINT_INVOCATION_INDEX_KEY] === 'number' &&
+    Number.isInteger(metadata[CHECKPOINT_INVOCATION_INDEX_KEY] as number) &&
+    (metadata[CHECKPOINT_INVOCATION_INDEX_KEY] as number) >= 0
+      ? (metadata[CHECKPOINT_INVOCATION_INDEX_KEY] as number)
+      : undefined;
+  const invocationOrdinal =
+    typeof metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] === 'number' &&
+    Number.isInteger(metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] as number) &&
+    (metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] as number) >= 0
+      ? (metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] as number)
+      : undefined;
   if (!hit && !key && !hasCachedResult) {
     return null;
   }
@@ -89,7 +111,10 @@ export function getCheckpointDecisionState(decision?: HookDecision): CheckpointD
     hit,
     key,
     hasCachedResult,
-    ...(hasCachedResult ? { cachedResult: metadata[CHECKPOINT_CACHED_RESULT_KEY] } : {})
+    ...(hasCachedResult ? { cachedResult: metadata[CHECKPOINT_CACHED_RESULT_KEY] } : {}),
+    ...(invocationSite ? { invocationSite } : {}),
+    ...(invocationIndex !== undefined ? { invocationIndex } : {}),
+    ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {})
   };
 }
 
@@ -114,9 +139,27 @@ export function applyCheckpointDecisionToOperation(
   } else {
     delete metadata[CHECKPOINT_KEY_KEY];
   }
+  if (checkpointState.invocationSite) {
+    metadata[CHECKPOINT_INVOCATION_SITE_KEY] = checkpointState.invocationSite;
+  } else {
+    delete metadata[CHECKPOINT_INVOCATION_SITE_KEY];
+  }
+  if (checkpointState.invocationIndex !== undefined) {
+    metadata[CHECKPOINT_INVOCATION_INDEX_KEY] = checkpointState.invocationIndex;
+  } else {
+    delete metadata[CHECKPOINT_INVOCATION_INDEX_KEY];
+  }
+  if (checkpointState.invocationOrdinal !== undefined) {
+    metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] = checkpointState.invocationOrdinal;
+  } else {
+    delete metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY];
+  }
   metadata.checkpoint = {
     hit: checkpointState.hit,
-    key: checkpointState.key ?? null
+    key: checkpointState.key ?? null,
+    invocationSite: checkpointState.invocationSite ?? null,
+    invocationIndex: checkpointState.invocationIndex ?? null,
+    invocationOrdinal: checkpointState.invocationOrdinal ?? null
   };
 }
 

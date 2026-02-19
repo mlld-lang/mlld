@@ -70,6 +70,112 @@ function shouldEnableCheckpoint(options: InterpretOptions): boolean {
   );
 }
 
+type ParsedResumeTarget =
+  | { kind: 'function'; functionName: string }
+  | { kind: 'function-index'; functionName: string; invocationIndex: number }
+  | { kind: 'function-prefix'; functionName: string; prefix: string; invocationIndex?: number };
+
+function parseResumePrefix(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed.length < 2) {
+    return null;
+  }
+
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return typeof parsed === 'string' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1).replace(/\\'/g, "'");
+  }
+
+  return null;
+}
+
+function parseResumeTarget(target: string): ParsedResumeTarget | null {
+  const trimmed = target.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const fuzzyMatch = trimmed.match(/^@?([^\s:()]+)(?::(\d+))?\((.*)\)$/);
+  if (fuzzyMatch) {
+    const functionName = fuzzyMatch[1];
+    const invocationIndex = fuzzyMatch[2] !== undefined ? Number.parseInt(fuzzyMatch[2], 10) : undefined;
+    const prefix = parseResumePrefix(fuzzyMatch[3]);
+    if (!functionName || prefix === null) {
+      return null;
+    }
+    if (invocationIndex !== undefined && !Number.isInteger(invocationIndex)) {
+      return null;
+    }
+    return {
+      kind: 'function-prefix',
+      functionName,
+      prefix,
+      ...(invocationIndex === undefined ? {} : { invocationIndex })
+    };
+  }
+
+  const indexedMatch = trimmed.match(/^@?([^\s:()]+):(\d+)$/);
+  if (indexedMatch) {
+    const functionName = indexedMatch[1];
+    const invocationIndex = Number.parseInt(indexedMatch[2], 10);
+    if (!functionName || !Number.isInteger(invocationIndex)) {
+      return null;
+    }
+    return { kind: 'function-index', functionName, invocationIndex };
+  }
+
+  const functionMatch = trimmed.match(/^@?([^\s:()]+)$/);
+  if (functionMatch) {
+    const functionName = functionMatch[1];
+    if (!functionName) {
+      return null;
+    }
+    return { kind: 'function', functionName };
+  }
+
+  return null;
+}
+
+async function applyResumeTargetInvalidation(
+  checkpointManager: CheckpointManager,
+  resume: string | true | undefined
+): Promise<void> {
+  if (resume === undefined || resume === true) {
+    return;
+  }
+
+  const parsed = parseResumeTarget(resume);
+  if (!parsed) {
+    throw new Error(
+      `Invalid --resume target "${resume}". Expected @function, @function:index, or @function("prefix").`
+    );
+  }
+
+  if (parsed.kind === 'function') {
+    await checkpointManager.invalidateFunction(parsed.functionName);
+    return;
+  }
+
+  if (parsed.kind === 'function-index') {
+    await checkpointManager.invalidateFunctionSite(parsed.functionName, parsed.invocationIndex);
+    return;
+  }
+
+  await checkpointManager.invalidateFunctionFrom(
+    parsed.functionName,
+    parsed.prefix,
+    parsed.invocationIndex
+  );
+}
+
 /**
  * Main entry point for the Mlld interpreter.
  * This replaces the complex service orchestration with a simple function.
@@ -264,6 +370,7 @@ export async function interpret(
       if (options.fresh) {
         await checkpointManager.clear();
       }
+      await applyResumeTargetInvalidation(checkpointManager, options.resume);
       env.setCheckpointManager(checkpointManager);
     }
   }

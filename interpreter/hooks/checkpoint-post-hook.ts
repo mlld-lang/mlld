@@ -62,6 +62,30 @@ function getCheckpointMetadata(operation: OperationContext): Record<string, unkn
   return operationRef.metadata as Record<string, unknown>;
 }
 
+function readCheckpointInvocationSite(metadata: Record<string, unknown>): string | undefined {
+  const value = metadata.checkpointInvocationSite;
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value;
+  }
+  return undefined;
+}
+
+function readCheckpointInvocationIndex(metadata: Record<string, unknown>): number | undefined {
+  const value = metadata.checkpointInvocationIndex;
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+  return undefined;
+}
+
+function readCheckpointInvocationOrdinal(metadata: Record<string, unknown>): number | undefined {
+  const value = metadata.checkpointInvocationOrdinal;
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+  return undefined;
+}
+
 export const checkpointPostHook: PostHook = async (_node, result, inputs, env, operation) => {
   if (!isCheckpointEligibleOperation(operation)) {
     return result;
@@ -84,12 +108,18 @@ export const checkpointPostHook: PostHook = async (_node, result, inputs, env, o
   }
 
   const normalizedInputs = inputs.map(normalizeCheckpointInput);
+  const invocationSite = readCheckpointInvocationSite(metadata);
+  const invocationIndex = readCheckpointInvocationIndex(metadata);
+  const invocationOrdinal = readCheckpointInvocationOrdinal(metadata);
   await manager.put(checkpointKey, {
     fn: resolveOperationName(operation),
     args: normalizedInputs,
     argsHash: CheckpointManager.computeArgsHash(normalizedInputs),
     argsPreview: CheckpointManager.buildArgsPreview(normalizedInputs),
-    result: normalizeCheckpointResult(result.value)
+    result: normalizeCheckpointResult(result.value),
+    ...(invocationSite ? { invocationSite } : {}),
+    ...(invocationIndex !== undefined ? { invocationIndex } : {}),
+    ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {})
   });
 
   return result;

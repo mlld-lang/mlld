@@ -46,6 +46,55 @@ function resolveOperationName(operation: OperationContext): string {
   return operation.type;
 }
 
+function readNumericField(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return undefined;
+}
+
+function resolveLocationPosition(
+  location: unknown
+): { line?: number; column?: number; offset?: number } | null {
+  if (!location || typeof location !== 'object') {
+    return null;
+  }
+  const locationRecord = location as Record<string, unknown>;
+  const start =
+    locationRecord.start && typeof locationRecord.start === 'object'
+      ? (locationRecord.start as Record<string, unknown>)
+      : locationRecord;
+  const line = readNumericField(start.line);
+  const column = readNumericField(start.column);
+  const offset = readNumericField(start.offset);
+  if (line === undefined && column === undefined && offset === undefined) {
+    return null;
+  }
+  return { line, column, offset };
+}
+
+function resolveInvocationSite(operation: OperationContext, env: { getCurrentFilePath?: () => string | undefined }): string | undefined {
+  const filePath =
+    typeof env.getCurrentFilePath === 'function'
+      ? env.getCurrentFilePath()
+      : undefined;
+  const position = resolveLocationPosition(operation.location);
+  if (!position) {
+    return filePath && filePath.length > 0 ? `${filePath}#unknown` : undefined;
+  }
+
+  const positionLabel =
+    position.line !== undefined && position.column !== undefined
+      ? `${position.line}:${position.column}`
+      : position.offset !== undefined
+        ? `offset:${position.offset}`
+        : 'unknown';
+  if (filePath && filePath.length > 0) {
+    return `${filePath}#${positionLabel}`;
+  }
+  return positionLabel;
+}
+
 export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) => {
   if (!isCheckpointEligibleOperation(operation)) {
     return { action: 'continue' };
@@ -57,9 +106,11 @@ export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) 
   }
 
   const normalizedInputs = inputs.map(normalizeCheckpointInput);
-  const cacheKey = CheckpointManager.computeCacheKey(
-    resolveOperationName(operation),
-    normalizedInputs
+  const operationName = resolveOperationName(operation);
+  const cacheKey = CheckpointManager.computeCacheKey(operationName, normalizedInputs);
+  const invocationMetadata = manager.assignInvocationMetadata(
+    operationName,
+    resolveInvocationSite(operation, env)
   );
   const cachedResult = await manager.get(cacheKey);
 
@@ -69,7 +120,12 @@ export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) 
       metadata: {
         checkpointHit: true,
         checkpointKey: cacheKey,
-        cachedResult
+        cachedResult,
+        ...(invocationMetadata.invocationSite ? { checkpointInvocationSite: invocationMetadata.invocationSite } : {}),
+        ...(invocationMetadata.invocationIndex !== undefined
+          ? { checkpointInvocationIndex: invocationMetadata.invocationIndex }
+          : {}),
+        checkpointInvocationOrdinal: invocationMetadata.invocationOrdinal
       }
     };
   }
@@ -78,7 +134,12 @@ export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) 
     action: 'continue',
     metadata: {
       checkpointHit: false,
-      checkpointKey: cacheKey
+      checkpointKey: cacheKey,
+      ...(invocationMetadata.invocationSite ? { checkpointInvocationSite: invocationMetadata.invocationSite } : {}),
+      ...(invocationMetadata.invocationIndex !== undefined
+        ? { checkpointInvocationIndex: invocationMetadata.invocationIndex }
+        : {}),
+      checkpointInvocationOrdinal: invocationMetadata.invocationOrdinal
     }
   };
 };

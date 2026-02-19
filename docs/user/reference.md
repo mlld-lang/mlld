@@ -677,7 +677,10 @@ Pipeline context variables:
 Checkpoint run flags:
 - `mlld run <script> --checkpoint`: enable checkpoint cache reads/writes for eligible `llm` operations.
 - `mlld run <script> --fresh`: clear that script cache before execution.
-- `mlld run <script> --resume [target]`: enables checkpointed resume flow (target semantics expand in flow-control docs).
+- `mlld run <script> --resume [target]`: enables checkpointed resume flow; target forms are:
+  - `@function` (invalidate that function's checkpoint entries)
+  - `@function:index` (invalidate only one invocation site, 0-based)
+  - `@function("prefix")` (fuzzy cursor invalidation by args preview prefix)
 - `mlld run <script> --fork <script>`: read checkpoint hits from another script cache as seed state.
 - `mlld checkpoint list|inspect|clean <script>`: inspect or clear stored checkpoint files.
 

@@ -38,6 +38,9 @@ interface CheckpointRecord {
   resultSize: number;
   ts: string;
   durationMs?: number;
+  invocationSite?: string;
+  invocationIndex?: number;
+  invocationOrdinal?: number;
 }
 
 interface StoredResultEnvelope {
@@ -61,6 +64,15 @@ export interface CheckpointPutEntry {
   result: unknown;
   ts?: string;
   durationMs?: number;
+  invocationSite?: string;
+  invocationIndex?: number;
+  invocationOrdinal?: number;
+}
+
+export interface CheckpointInvocationMetadata {
+  invocationSite?: string;
+  invocationIndex?: number;
+  invocationOrdinal: number;
 }
 
 export interface CheckpointStats {
@@ -246,6 +258,20 @@ function parseCheckpointRecord(raw: unknown): CheckpointRecord | null {
     typeof raw.resultSize === 'number' && Number.isFinite(raw.resultSize) && raw.resultSize >= 0 ? raw.resultSize : 0;
   const durationMs =
     typeof raw.durationMs === 'number' && Number.isFinite(raw.durationMs) ? raw.durationMs : undefined;
+  const invocationSite =
+    typeof raw.invocationSite === 'string' && raw.invocationSite.trim().length > 0 ? raw.invocationSite : undefined;
+  const invocationIndex =
+    typeof raw.invocationIndex === 'number' &&
+    Number.isInteger(raw.invocationIndex) &&
+    raw.invocationIndex >= 0
+      ? raw.invocationIndex
+      : undefined;
+  const invocationOrdinal =
+    typeof raw.invocationOrdinal === 'number' &&
+    Number.isInteger(raw.invocationOrdinal) &&
+    raw.invocationOrdinal >= 0
+      ? raw.invocationOrdinal
+      : undefined;
 
   return {
     key: raw.key,
@@ -254,7 +280,10 @@ function parseCheckpointRecord(raw: unknown): CheckpointRecord | null {
     argsPreview: raw.argsPreview,
     resultSize,
     ts: raw.ts,
-    ...(durationMs === undefined ? {} : { durationMs })
+    ...(durationMs === undefined ? {} : { durationMs }),
+    ...(invocationSite === undefined ? {} : { invocationSite }),
+    ...(invocationIndex === undefined ? {} : { invocationIndex }),
+    ...(invocationOrdinal === undefined ? {} : { invocationOrdinal })
   };
 }
 
@@ -310,6 +339,8 @@ export class CheckpointManager {
   private localCreatedAt?: string;
   private forkSizeBytes = 0;
   private localSizeBytes = 0;
+  private invocationSiteIndexes = new Map<string, Map<string, number>>();
+  private invocationOrdinalCounters = new Map<string, number>();
 
   constructor(scriptName: string, options: CheckpointManagerOptions = {}) {
     if (!scriptName || scriptName.trim().length === 0) {
@@ -345,6 +376,8 @@ export class CheckpointManager {
     await this.loadLocalManifest();
     await this.loadIndex(this.cacheIndexPath, this.localIndex);
     this.localSizeBytes = this.sumResultSizes(this.localIndex);
+    this.hydrateInvocationSiteIndexes();
+    this.invocationOrdinalCounters.clear();
 
     if (this.forkScriptName && this.forkCacheIndexPath && this.forkManifestPath) {
       await this.loadForkManifestAndIndex();
@@ -352,6 +385,22 @@ export class CheckpointManager {
     }
 
     this.loaded = true;
+  }
+
+  assignInvocationMetadata(fnName: string, invocationSite?: string): CheckpointInvocationMetadata {
+    const normalizedFn = fnName.trim();
+    const normalizedSite = invocationSite?.trim().length ? invocationSite.trim() : undefined;
+    const invocationIndex = normalizedSite
+      ? this.getOrAssignInvocationSiteIndex(normalizedFn, normalizedSite)
+      : undefined;
+    const counterKey = this.buildInvocationCounterKey(normalizedFn, normalizedSite);
+    const invocationOrdinal = this.invocationOrdinalCounters.get(counterKey) ?? 0;
+    this.invocationOrdinalCounters.set(counterKey, invocationOrdinal + 1);
+    return {
+      ...(normalizedSite ? { invocationSite: normalizedSite } : {}),
+      ...(invocationIndex === undefined ? {} : { invocationIndex }),
+      invocationOrdinal
+    };
   }
 
   async get(key: string): Promise<unknown | null> {
@@ -401,11 +450,17 @@ export class CheckpointManager {
       argsPreview,
       resultSize,
       ts,
-      ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs })
+      ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
+      ...(entry.invocationSite ? { invocationSite: entry.invocationSite } : {}),
+      ...(typeof entry.invocationIndex === 'number' ? { invocationIndex: entry.invocationIndex } : {}),
+      ...(typeof entry.invocationOrdinal === 'number' ? { invocationOrdinal: entry.invocationOrdinal } : {})
     };
 
     this.localResultCache.set(key, resultEnvelope.value);
     this.localIndex.set(key, record);
+    if (record.invocationSite && typeof record.invocationIndex === 'number') {
+      this.getOrAssignInvocationSiteIndex(record.fn, record.invocationSite, record.invocationIndex);
+    }
     this.localSizeBytes = this.sumResultSizes(this.localIndex);
 
     await appendFile(this.cacheIndexPath, `${JSON.stringify(record)}\n`, 'utf8');
@@ -420,6 +475,63 @@ export class CheckpointManager {
     const keys = Array.from(this.localIndex.values())
       .filter(entry => entry.fn === fnName)
       .map(entry => entry.key);
+    return this.removeKeys(keys);
+  }
+
+  async invalidateFunctionSite(fnName: string, invocationIndex: number): Promise<number> {
+    await this.ensureLoaded();
+    if (!fnName || fnName.trim().length === 0 || !Number.isInteger(invocationIndex) || invocationIndex < 0) {
+      return 0;
+    }
+
+    const normalizedFn = fnName.trim();
+    const entries = Array.from(this.localIndex.values()).filter(entry => entry.fn === normalizedFn);
+    if (entries.length === 0) {
+      return 0;
+    }
+
+    const indexedEntries = entries.filter(entry => typeof entry.invocationIndex === 'number');
+    if (indexedEntries.length === 0) {
+      // Backward compatibility for caches created before invocation-site indexing.
+      return invocationIndex === 0 ? this.removeKeys(entries.map(entry => entry.key)) : 0;
+    }
+
+    const keys = indexedEntries
+      .filter(entry => entry.invocationIndex === invocationIndex)
+      .map(entry => entry.key);
+    return this.removeKeys(keys);
+  }
+
+  async invalidateFunctionFrom(fnName: string, pattern: string, invocationIndex?: number): Promise<number> {
+    await this.ensureLoaded();
+    const normalizedFn = fnName.trim();
+    const normalizedPattern = pattern.trim();
+    if (!normalizedFn || !normalizedPattern) {
+      return 0;
+    }
+
+    const scopedEntries = this.filterEntriesByFunctionAndInvocationIndex(normalizedFn, invocationIndex);
+    if (scopedEntries.length === 0) {
+      return 0;
+    }
+
+    const orderedEntries = scopedEntries
+      .filter(entry => typeof entry.invocationOrdinal === 'number')
+      .sort((a, b) => (a.invocationOrdinal as number) - (b.invocationOrdinal as number));
+    const firstCursor = orderedEntries.find(entry => entry.argsPreview.startsWith(normalizedPattern));
+
+    const keys = scopedEntries
+      .filter(entry => {
+        if (firstCursor && typeof firstCursor.invocationOrdinal === 'number') {
+          if (typeof entry.invocationOrdinal === 'number') {
+            return entry.invocationOrdinal >= firstCursor.invocationOrdinal;
+          }
+          return entry.argsPreview.startsWith(normalizedPattern);
+        }
+        return entry.argsPreview.startsWith(normalizedPattern);
+      })
+      .map(entry => entry.key);
+
     return this.removeKeys(keys);
   }
 
@@ -445,6 +557,8 @@ export class CheckpointManager {
     this.localSizeBytes = 0;
     this.localManifestExtras = {};
     this.localCreatedAt = undefined;
+    this.invocationSiteIndexes = new Map();
+    this.invocationOrdinalCounters = new Map();
 
     await this.rewriteCacheIndex();
     await this.writeManifest();
@@ -591,9 +705,81 @@ export class CheckpointManager {
     }
 
     this.localSizeBytes = this.sumResultSizes(this.localIndex);
+    this.hydrateInvocationSiteIndexes();
     await this.rewriteCacheIndex();
     await this.writeManifest();
     return removed;
+  }
+
+  private filterEntriesByFunctionAndInvocationIndex(
+    fnName: string,
+    invocationIndex?: number
+  ): CheckpointRecord[] {
+    const fnEntries = Array.from(this.localIndex.values()).filter(entry => entry.fn === fnName);
+    if (!Number.isInteger(invocationIndex) || invocationIndex === undefined || invocationIndex < 0) {
+      return fnEntries;
+    }
+
+    const indexedEntries = fnEntries.filter(entry => typeof entry.invocationIndex === 'number');
+    if (indexedEntries.length === 0) {
+      // Backward compatibility for caches created before invocation-site indexing.
+      return invocationIndex === 0 ? fnEntries : [];
+    }
+    return indexedEntries.filter(entry => entry.invocationIndex === invocationIndex);
+  }
+
+  private hydrateInvocationSiteIndexes(): void {
+    const nextIndexes = new Map<string, Map<string, number>>();
+    for (const entry of this.localIndex.values()) {
+      if (!entry.invocationSite || typeof entry.invocationIndex !== 'number') {
+        continue;
+      }
+      let fnMap = nextIndexes.get(entry.fn);
+      if (!fnMap) {
+        fnMap = new Map();
+        nextIndexes.set(entry.fn, fnMap);
+      }
+      const existing = fnMap.get(entry.invocationSite);
+      if (existing === undefined || entry.invocationIndex < existing) {
+        fnMap.set(entry.invocationSite, entry.invocationIndex);
+      }
+    }
+    this.invocationSiteIndexes = nextIndexes;
+  }
+
+  private buildInvocationCounterKey(fnName: string, invocationSite?: string): string {
+    return `${fnName}\u0000${invocationSite ?? ''}`;
+  }
+
+  private getOrAssignInvocationSiteIndex(
+    fnName: string,
+    invocationSite: string,
+    explicitIndex?: number
+  ): number {
+    let fnMap = this.invocationSiteIndexes.get(fnName);
+    if (!fnMap) {
+      fnMap = new Map();
+      this.invocationSiteIndexes.set(fnName, fnMap);
+    }
+
+    const existing = fnMap.get(invocationSite);
+    if (typeof existing === 'number') {
+      return existing;
+    }
+
+    if (typeof explicitIndex === 'number' && Number.isInteger(explicitIndex) && explicitIndex >= 0) {
+      fnMap.set(invocationSite, explicitIndex);
+      return explicitIndex;
+    }
+
+    let nextIndex = 0;
+    for (const index of fnMap.values()) {
+      if (index >= nextIndex) {
+        nextIndex = index + 1;
+      }
+    }
+    fnMap.set(invocationSite, nextIndex);
+    return nextIndex;
   }
 
   private async rewriteCacheIndex(): Promise<void> {

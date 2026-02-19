@@ -674,6 +674,32 @@ Notes:
 - Loops are supported in backticks and `::…::` templates.
 - Alternative template syntaxes (`:::…:::`, `[[…]]`) do not support loops.
 
+## Resume and Fork
+
+Checkpointed resumes are useful when parallel `llm` work is expensive and you only want to re-run part of a flow.
+
+```bash
+# Baseline cache
+mlld run pipeline --checkpoint
+
+# Resume with cache reuse (no invalidation target)
+mlld run pipeline --resume
+
+# Invalidate one function's cached calls
+mlld run pipeline --resume @processFiles
+
+# Invalidate one invocation site (0-based among same function name)
+mlld run pipeline --resume @processFiles:0
+
+# Fuzzy cursor by first-argument prefix
+mlld run pipeline --resume '@processFiles("tests/cases/docs")'
+
+# Fork from another script's cache
+mlld run analyze --fork collect
+```
+
+`--resume` implies checkpoint behavior. `--fork` reads from the source cache as a seed (read-only) and writes new misses only into the current script cache.
+
 ## Pipelines
 
 ### Basic Pipelines

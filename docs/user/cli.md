@@ -287,7 +287,7 @@ mlld run my-script --debug
 - `--debug` - Show execution metrics (timing, cache hits, effects, state writes)
 - `--checkpoint` - Enable checkpoint reuse for `llm`-labeled operations
 - `--fresh` - Clear the script checkpoint cache before running
-- `--resume [target]` - Resume with checkpoints enabled (optional target for later resume phases)
+- `--resume [target]` - Resume with checkpoint reuse (`@fn`, `@fn:index`, `@fn("prefix")`)
 - `--fork <script>` - Seed reads from another script's checkpoint cache
 - `-h, --help` - Show help message
 
@@ -298,6 +298,7 @@ Scripts are loaded from the directory configured in `mlld-config.json` (default:
 - AST caching: Scripts are cached after first parse (mtime-based invalidation)
 - Timeout support: Automatically aborts long-running scripts
 - Metrics: Debug mode shows parse time, evaluation time, cache hits, effect counts
+- `--resume` implies checkpoint behavior. Without a target, it re-runs with cache reuse only.
 - Payload injection: Unknown flags become `@payload` fields (`mlld run my-script --topic foo`). Import `@payload` in your script to access them.
   Known checkpoint flags (`--checkpoint`, `--fresh`, `--resume`, `--fork`) are excluded from `@payload`.
 
@@ -327,6 +328,12 @@ mlld checkpoint inspect pipeline
 
 # Remove a script cache
 mlld checkpoint clean pipeline
+
+# Resume target forms
+mlld run pipeline --resume
+mlld run pipeline --resume @processFiles
+mlld run pipeline --resume @processFiles:0
+mlld run pipeline --resume '@processFiles("tests/cases/docs")'
 ```
 
 ### `mlld test [patterns...]`
