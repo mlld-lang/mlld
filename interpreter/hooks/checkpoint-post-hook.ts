@@ -2,7 +2,10 @@ import { CheckpointManager } from '@interpreter/checkpoint/CheckpointManager';
 import type { OperationContext } from '@interpreter/env/ContextManager';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
+import { logger } from '@core/utils/logger';
 import type { PostHook } from './HookManager';
+
+const CHECKPOINT_START_TIME_MS_KEY = 'checkpointStartTimeMs';
 
 function hasLlmLabel(labels: readonly string[] | undefined): boolean {
   if (!labels || labels.length === 0) {
@@ -94,6 +97,21 @@ function readCheckpointExecutionOrder(metadata: Record<string, unknown>): number
   return undefined;
 }
 
+function readCheckpointStartTimeMs(metadata: Record<string, unknown>): number | undefined {
+  const value = metadata[CHECKPOINT_START_TIME_MS_KEY];
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  return undefined;
+}
+
+function computeDurationMs(startTimeMs: number | undefined): number | undefined {
+  if (startTimeMs === undefined) {
+    return undefined;
+  }
+  return Math.max(0, Date.now() - startTimeMs);
+}
+
 export const checkpointPostHook: PostHook = async (_node, result, inputs, env, operation) => {
   if (!isCheckpointEligibleOperation(operation)) {
     return result;
@@ -120,17 +138,27 @@ export const checkpointPostHook: PostHook = async (_node, result, inputs, env, o
   const invocationIndex = readCheckpointInvocationIndex(metadata);
   const invocationOrdinal = readCheckpointInvocationOrdinal(metadata);
   const executionOrder = readCheckpointExecutionOrder(metadata);
-  await manager.put(checkpointKey, {
-    fn: resolveOperationName(operation),
-    args: normalizedInputs,
-    argsHash: CheckpointManager.computeArgsHash(normalizedInputs),
-    argsPreview: CheckpointManager.buildArgsPreview(normalizedInputs),
-    result: normalizeCheckpointResult(result.value),
-    ...(invocationSite ? { invocationSite } : {}),
-    ...(invocationIndex !== undefined ? { invocationIndex } : {}),
-    ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {}),
-    ...(executionOrder !== undefined ? { executionOrder } : {})
-  });
+  const durationMs = computeDurationMs(readCheckpointStartTimeMs(metadata));
+  try {
+    await manager.put(checkpointKey, {
+      fn: resolveOperationName(operation),
+      args: normalizedInputs,
+      argsHash: CheckpointManager.computeArgsHash(normalizedInputs),
+      argsPreview: CheckpointManager.buildArgsPreview(normalizedInputs),
+      result: normalizeCheckpointResult(result.value),
+      ...(durationMs !== undefined ? { durationMs } : {}),
+      ...(invocationSite ? { invocationSite } : {}),
+      ...(invocationIndex !== undefined ? { invocationIndex } : {}),
+      ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {}),
+      ...(executionOrder !== undefined ? { executionOrder } : {})
+    });
+  } catch (error) {
+    logger.warn('[checkpoint] cache write failed; skipping checkpoint persistence', {
+      operation: resolveOperationName(operation),
+      key: checkpointKey,
+      error
+    });
+  }
 
   return result;
 };

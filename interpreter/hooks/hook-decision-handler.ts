@@ -33,6 +33,7 @@ const CHECKPOINT_INVOCATION_SITE_KEY = 'checkpointInvocationSite';
 const CHECKPOINT_INVOCATION_INDEX_KEY = 'checkpointInvocationIndex';
 const CHECKPOINT_INVOCATION_ORDINAL_KEY = 'checkpointInvocationOrdinal';
 const CHECKPOINT_EXECUTION_ORDER_KEY = 'checkpointExecutionOrder';
+const CHECKPOINT_START_TIME_MS_KEY = 'checkpointStartTimeMs';
 
 export interface CheckpointDecisionState {
   hit: boolean;
@@ -43,6 +44,7 @@ export interface CheckpointDecisionState {
   invocationIndex?: number;
   invocationOrdinal?: number;
   executionOrder?: number;
+  startTimeMs?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -111,6 +113,12 @@ export function getCheckpointDecisionState(decision?: HookDecision): CheckpointD
     (metadata[CHECKPOINT_EXECUTION_ORDER_KEY] as number) >= 0
       ? (metadata[CHECKPOINT_EXECUTION_ORDER_KEY] as number)
       : undefined;
+  const startTimeMs =
+    typeof metadata[CHECKPOINT_START_TIME_MS_KEY] === 'number' &&
+    Number.isFinite(metadata[CHECKPOINT_START_TIME_MS_KEY] as number) &&
+    (metadata[CHECKPOINT_START_TIME_MS_KEY] as number) >= 0
+      ? (metadata[CHECKPOINT_START_TIME_MS_KEY] as number)
+      : undefined;
   if (!hit && !key && !hasCachedResult) {
     return null;
   }
@@ -123,7 +131,8 @@ export function getCheckpointDecisionState(decision?: HookDecision): CheckpointD
     ...(invocationSite ? { invocationSite } : {}),
     ...(invocationIndex !== undefined ? { invocationIndex } : {}),
     ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {}),
-    ...(executionOrder !== undefined ? { executionOrder } : {})
+    ...(executionOrder !== undefined ? { executionOrder } : {}),
+    ...(startTimeMs !== undefined ? { startTimeMs } : {})
   };
 }
 
@@ -168,13 +177,19 @@ export function applyCheckpointDecisionToOperation(
   } else {
     delete metadata[CHECKPOINT_EXECUTION_ORDER_KEY];
   }
+  if (checkpointState.startTimeMs !== undefined) {
+    metadata[CHECKPOINT_START_TIME_MS_KEY] = checkpointState.startTimeMs;
+  } else {
+    delete metadata[CHECKPOINT_START_TIME_MS_KEY];
+  }
   metadata.checkpoint = {
     hit: checkpointState.hit,
     key: checkpointState.key ?? null,
     invocationSite: checkpointState.invocationSite ?? null,
     invocationIndex: checkpointState.invocationIndex ?? null,
     invocationOrdinal: checkpointState.invocationOrdinal ?? null,
-    executionOrder: checkpointState.executionOrder ?? null
+    executionOrder: checkpointState.executionOrder ?? null,
+    startTimeMs: checkpointState.startTimeMs ?? null
   };
 }
 

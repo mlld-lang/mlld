@@ -7,7 +7,7 @@ import type { DirectiveNode } from '@core/types';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
-import { CheckpointManager } from '@interpreter/checkpoint/CheckpointManager';
+import { CheckpointManager, type CheckpointInvocationMetadata } from '@interpreter/checkpoint/CheckpointManager';
 import { evaluateDirective } from '@interpreter/eval/directive';
 import { asText } from '@interpreter/utils/structured-value';
 
@@ -134,6 +134,9 @@ describe('checkpoint runtime semantics', () => {
       .map(line => line.trim())
       .filter(Boolean);
     expect(lines).toHaveLength(1);
+    const record = JSON.parse(lines[0]) as { durationMs?: number };
+    expect(typeof record.durationMs).toBe('number');
+    expect((record.durationMs as number) >= 0).toBe(true);
   });
 
   it('skips guards on checkpoint hits while still running user after hooks with checkpoint telemetry', async () => {
@@ -178,5 +181,70 @@ describe('checkpoint runtime semantics', () => {
     const runThree = await createEnvWithCheckpoint(root);
     await evaluateDirectives(buildParallelScript(counterKey, ['a', 'x', 'c']), runThree.env);
     expect(getGlobalCounter(counterKey)).toBe(4);
+  });
+
+  it('degrades checkpoint pre-hook read failures to cache-miss behavior', async () => {
+    const counterKey = '__mlldCheckpointReadFailure';
+    registerGlobalCounter(counterKey);
+
+    let readCalls = 0;
+    let writeCalls = 0;
+    const manager = {
+      assignInvocationMetadata(): CheckpointInvocationMetadata {
+        return {
+          invocationOrdinal: 0,
+          executionOrder: 0
+        };
+      },
+      async get(): Promise<unknown | null> {
+        readCalls += 1;
+        throw new Error('simulated read failure');
+      },
+      async put(): Promise<void> {
+        writeCalls += 1;
+      }
+    } as unknown as CheckpointManager;
+
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    env.setCheckpointManager(manager);
+
+    await evaluateDirectives(buildLlmScript(counterKey), env);
+    expect(getGlobalCounter(counterKey)).toBe(1);
+    expect(readTextVariable(env, 'result')).toContain('call:1');
+    expect(readCalls).toBe(1);
+    expect(writeCalls).toBe(1);
+  });
+
+  it('degrades checkpoint post-hook write failures without aborting execution', async () => {
+    const counterKey = '__mlldCheckpointWriteFailure';
+    registerGlobalCounter(counterKey);
+
+    let readCalls = 0;
+    let writeCalls = 0;
+    const manager = {
+      assignInvocationMetadata(): CheckpointInvocationMetadata {
+        return {
+          invocationOrdinal: 0,
+          executionOrder: 0
+        };
+      },
+      async get(): Promise<unknown | null> {
+        readCalls += 1;
+        return null;
+      },
+      async put(): Promise<void> {
+        writeCalls += 1;
+        throw new Error('simulated write failure');
+      }
+    } as unknown as CheckpointManager;
+
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    env.setCheckpointManager(manager);
+
+    await evaluateDirectives(buildLlmScript(counterKey), env);
+    expect(getGlobalCounter(counterKey)).toBe(1);
+    expect(readTextVariable(env, 'result')).toContain('call:1');
+    expect(readCalls).toBe(1);
+    expect(writeCalls).toBe(1);
   });
 });

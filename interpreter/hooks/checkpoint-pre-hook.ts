@@ -2,7 +2,10 @@ import { CheckpointManager } from '@interpreter/checkpoint/CheckpointManager';
 import type { OperationContext } from '@interpreter/env/ContextManager';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
+import { logger } from '@core/utils/logger';
 import type { PreHook } from './HookManager';
+
+const CHECKPOINT_START_TIME_MS_KEY = 'checkpointStartTimeMs';
 
 function hasLlmLabel(labels: readonly string[] | undefined): boolean {
   if (!labels || labels.length === 0) {
@@ -95,6 +98,35 @@ function resolveInvocationSite(operation: OperationContext, env: { getCurrentFil
   return positionLabel;
 }
 
+function buildCheckpointMetadata(
+  cacheKey: string,
+  invocationMetadata: {
+    invocationSite?: string;
+    invocationIndex?: number;
+    invocationOrdinal: number;
+    executionOrder: number;
+  },
+  options: {
+    hit: boolean;
+    cachedResult?: unknown;
+    startTimeMs?: number;
+  }
+): Record<string, unknown> {
+  const { hit, cachedResult, startTimeMs } = options;
+  return {
+    checkpointHit: hit,
+    checkpointKey: cacheKey,
+    ...(cachedResult !== undefined ? { cachedResult } : {}),
+    ...(invocationMetadata.invocationSite ? { checkpointInvocationSite: invocationMetadata.invocationSite } : {}),
+    ...(invocationMetadata.invocationIndex !== undefined
+      ? { checkpointInvocationIndex: invocationMetadata.invocationIndex }
+      : {}),
+    checkpointInvocationOrdinal: invocationMetadata.invocationOrdinal,
+    checkpointExecutionOrder: invocationMetadata.executionOrder,
+    ...(typeof startTimeMs === 'number' ? { [CHECKPOINT_START_TIME_MS_KEY]: startTimeMs } : {})
+  };
+}
+
 export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) => {
   if (!isCheckpointEligibleOperation(operation)) {
     return { action: 'continue' };
@@ -112,36 +144,39 @@ export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) 
     operationName,
     resolveInvocationSite(operation, env)
   );
-  const cachedResult = await manager.get(cacheKey);
+  let cachedResult: unknown | null = null;
+  try {
+    cachedResult = await manager.get(cacheKey);
+  } catch (error) {
+    logger.warn('[checkpoint] cache read failed; treating as cache miss', {
+      operation: operationName,
+      key: cacheKey,
+      error
+    });
+    return {
+      action: 'continue',
+      metadata: buildCheckpointMetadata(cacheKey, invocationMetadata, {
+        hit: false,
+        startTimeMs: Date.now()
+      })
+    };
+  }
 
   if (cachedResult !== null) {
     return {
       action: 'fulfill',
-      metadata: {
-        checkpointHit: true,
-        checkpointKey: cacheKey,
-        cachedResult,
-        ...(invocationMetadata.invocationSite ? { checkpointInvocationSite: invocationMetadata.invocationSite } : {}),
-        ...(invocationMetadata.invocationIndex !== undefined
-          ? { checkpointInvocationIndex: invocationMetadata.invocationIndex }
-          : {}),
-        checkpointInvocationOrdinal: invocationMetadata.invocationOrdinal,
-        checkpointExecutionOrder: invocationMetadata.executionOrder
-      }
+      metadata: buildCheckpointMetadata(cacheKey, invocationMetadata, {
+        hit: true,
+        cachedResult
+      })
     };
   }
 
   return {
     action: 'continue',
-    metadata: {
-      checkpointHit: false,
-      checkpointKey: cacheKey,
-      ...(invocationMetadata.invocationSite ? { checkpointInvocationSite: invocationMetadata.invocationSite } : {}),
-      ...(invocationMetadata.invocationIndex !== undefined
-        ? { checkpointInvocationIndex: invocationMetadata.invocationIndex }
-        : {}),
-      checkpointInvocationOrdinal: invocationMetadata.invocationOrdinal,
-      checkpointExecutionOrder: invocationMetadata.executionOrder
-    }
+    metadata: buildCheckpointMetadata(cacheKey, invocationMetadata, {
+      hit: false,
+      startTimeMs: Date.now()
+    })
   };
 };
