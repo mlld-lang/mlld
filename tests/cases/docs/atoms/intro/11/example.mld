@@ -13,9 +13,9 @@ var @files = <src/**/*.ts>              >> glob (returns array)
 exe @greet(name) = `Hello @name!`
 exe @prompt(ctx) = template "prompt.att"
 exe @run(dir) = cmd { ls @dir }
-exe @check(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+exe @check(path) = @exists(@path)
 
->> Method chains (see `mlld howto methods-builtin`)
+>> Method chains (see `mlld howto builtins`)
 var @trimmed = @raw.trim().split("\n")
 var @slug = @name.replaceAll("/", "-")
 var @upper = @text.toLowerCase().startsWith("hello")

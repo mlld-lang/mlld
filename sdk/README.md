@@ -1,6 +1,6 @@
 # mlld SDKs
 
-Thin wrappers around the mlld CLI for Go, Python, Rust, and Ruby.
+Thin wrappers around the mlld CLI for Go, Python, Rust, Ruby, and Elixir.
 
 ## Philosophy
 
@@ -39,6 +39,13 @@ mlld = "0.1"
 cd sdk/ruby
 gem build mlld.gemspec
 gem install ./mlld-*.gem
+```
+
+### Elixir
+
+```bash
+cd sdk/elixir
+mix deps.get
 ```
 
 ## Core API

@@ -1,0 +1,3 @@
+var @users = cmd { cat users.json } | @parse
+var @extracted = @llmResponse | @parse.llm
+var @clean = @raw | @trim | @lower

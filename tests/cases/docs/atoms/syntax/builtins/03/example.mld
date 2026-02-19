@@ -1,0 +1,9 @@
+>> Method chaining
+var @slug = @name.trim().toLowerCase().replaceAll(" ", "-")
+var @items = @csv.split("\n").slice(1)
+
+>> Multiline chaining
+exe @normalize(text) = @text
+  .trim()
+  .toLowerCase()
+  .replace("hello", "hi")
