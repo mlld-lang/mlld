@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added `/hook` directive grammar + AST/type wiring (function/op/data filters, `before|after` timing, and new operation filter keys: `for`, `for:iteration`, `for:batch`, `loop`, `import`) with parser/LSP keyword-surface integration.
 - Added `HookRegistry` and `/hook` directive evaluation registration path, including environment root/child sharing and indexed hook retrieval by function/operation/data filters.
+- Added lifecycle characterization coverage that snapshots directive/exec hook ordering and nested guard-suppression behavior ahead of hook lifecycle refactors.
 
 ### Changed
 - Added pre-3A hooks/checkpoint risk-gate documentation, lifecycle trace test helper scaffolding, and checkpoint manifest/atomic-write compatibility scaffolds to lock rollout semantics before lifecycle/runtime phases.

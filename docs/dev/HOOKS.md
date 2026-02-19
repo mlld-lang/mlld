@@ -241,6 +241,9 @@ Lifecycle trace diagnostics helper (test-only):
 - `tests/helpers/hook-lifecycle-trace.ts`
 - `tests/interpreter/hooks/lifecycle-trace-helper.test.ts`
 
+Characterization baseline (Phase 2.5):
+- `tests/interpreter/hooks/lifecycle-characterization.test.ts` pins directive and exec lifecycle ordering around `HookManager.runPre/runPost`, plus current nested-guard suppression behavior.
+
 ### Input Extraction
 
 Each directive kind has custom input extraction:
