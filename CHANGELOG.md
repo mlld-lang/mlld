@@ -7,129 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- **`mlld update` silently skipping registry modules**: `isRegistryEntry()` failed to recognize modules hosted at `raw.githubusercontent.com` because it checked for substring `github.com` which doesn't match `githubusercontent.com`. All registry modules were incorrectly treated as "local" and skipped during updates.
-- **`mlld outdated` showing "no registry metadata"**: `fetchLatestMetadata()` read `resolution.content.metadata` but `RegistryResolver` returns `ResolverContent` directly — metadata is at `resolution.metadata`, not nested under `.content`.
-
-### Added
-- **`mlld update` and `mlld outdated` in CLI help**: Both commands existed but were missing from `mlld --help` output, making them undiscoverable.
-- **`mlld registry update` unified with `mlld update`**: `mlld registry update` now delegates to the same `updateCommand` used by the top-level `mlld update`, ensuring consistent behavior.
-- Added embedded LSP tree-sitter WASM support for `python` and `bash` code blocks (alongside `javascript`), including parser loading, WASM copy wiring, and semantic token coverage updates.
-- Added `/hook` directive grammar + AST/type wiring (function/op/data filters, `before|after` timing, and new operation filter keys: `for`, `for:iteration`, `for:batch`, `loop`, `import`) with parser/LSP keyword-surface integration.
-- Added `HookRegistry` and `/hook` directive evaluation registration path, including environment root/child sharing and indexed hook retrieval by function/operation/data filters.
-- Added lifecycle characterization coverage that snapshots directive/exec hook ordering and nested guard-suppression behavior ahead of hook lifecycle refactors.
-- Added user hook transform chaining and per-hook error isolation (`@mx.hooks.errors`), including function arg-prefix (`startsWith`) matching and compatibility coverage for hook-body directive/executable emissions (`output`/`append`/`state://`).
-- Added loop hook operation contexts for `op:for:iteration` and `op:for:batch`, including `@mx.for.batchIndex`/`@mx.for.batchSize` metadata and parallel batch boundary lifecycle emission.
-- Added persistent `CheckpointManager` core (`interpreter/checkpoint/CheckpointManager.ts`) with deterministic key/hash helpers, JSONL+manifest+results disk layout, corruption-tolerant loading, function/prefix invalidation APIs, and fork read-only overlay support.
-- Added active checkpoint short-circuit semantics for `llm` operations (directive/exec/effect paths), including `@mx.checkpoint.hit`/`@mx.checkpoint.key`, miss-only cache writes, and guard bypass on cache-hit paths.
-- Added checkpoint CLI/SDK wiring: `mlld run --checkpoint|--fresh|--resume|--fork`, new `mlld checkpoint list|inspect|clean` command surface, and end-to-end checkpoint option propagation through execute/interpret entry points.
-- Added resume/fork runtime semantics: `--resume` target parsing (`@fn`, `@fn:index`, `@fn("prefix")`), invocation-site checkpoint indexing, function-scoped fuzzy invalidation, and fork hit/miss integration coverage.
-- Added end-to-end checkpoint integration fixtures under `tests/cases/integration/checkpoint/` and fixture-driven runtime coverage in `tests/interpreter/checkpoint/integration-fixtures.test.ts` for hooks+checkpoint, checkpoint+guards, resume+parallel fuzzy targeting, fork hit/miss overlays, and hook observability emissions with non-fatal hook-side failures.
-- Added named checkpoint directive support: `checkpoint "name"` now registers runtime execution-order cursors (single-quote literal names, double-quote/backtick interpolation), with parser/AST/evaluator wiring and static duplicate validation for literal names.
-- Added top-level `when` checkpoint branch support for all directive `when` forms (`when [ ... ]`, `when @expr [ ... ]`, `when @cond => ...`) when checkpoint is the direct `=>` branch result, including placement validation for invalid nested contexts.
-- Added named resume cursor matching for `--resume` non-`@` targets with exact-match priority, prefix fallback, and ambiguity errors that list matching checkpoint candidates.
-
-### Changed
-- Added pre-3A hooks/checkpoint risk-gate documentation, lifecycle trace test helper scaffolding, and checkpoint manifest/atomic-write compatibility scaffolds to lock rollout semantics before lifecycle/runtime phases.
-- Inserted ordering-only user hook lifecycle layering so user hooks run around built-in guard/taint hooks across directive, exec, and pipeline effect boundaries.
-- Enforced user-hook non-reentrancy boundaries so nested operations triggered inside hook bodies suppress user hooks while preserving nested guard execution; guard-evaluation suppression behavior remains unchanged.
-- Added Phase 6A checkpoint decision adapter (`fulfill` action + legacy metadata normalization) and inert built-in checkpoint pre/post hook wiring before activating cache-hit short-circuit semantics.
-- Added `npm run test:coverage` coverage gate command aligned with the fast-suite exclusion profile used in local development.
-- Checkpointing now auto-detects eligible `llm` operations by default (no `--checkpoint` opt-in required), `--checkpoint` is retained as a backward-compatible no-op, `--new` aliases `--fresh`, and `--no-checkpoint` disables checkpoint reads/writes entirely.
-- `--resume` target parsing now treats non-`@` values as named checkpoint cursors (including names with spaces and quoted/backtick forms), while keeping legacy unprefixed function index/prefix forms.
-
-### Documentation
-- Hooks/checkpoint/resume implementation contract is now locked in `docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md`, including the selected short-circuit protocol rollout and canonical hook operation keys (`for`, `for:iteration`, `for:batch`, `loop`, `import`).
-- Finalized Phase 9 hooks/checkpoint/resume/fork documentation sweep across dev architecture/testing/hooks docs and user CLI/reference/flow-control/security guidance, including fork miss semantics and hook observability error-isolation examples.
-
 ## [2.0.0-rc82]
 
 ### Breaking
 - **Template interpolation behavior change**: `@item-file` in templates resolves as a single identifier instead of `@item` plus literal `-file`. Use `@item\-file` (backslash boundary) for the old behavior.
 
-### Fixed
-- **Per-item parse resilience in glob JSON loading**: When a glob loads multiple `.json` files, one malformed file no longer kills the entire array; the bad item degrades to text with `parseError` metadata while all other items parse normally.
-- **Bare `bail` statement boundary**: `bail` without an inline message no longer consumes the next directive line as its message expression.
-- **Content loader parse diagnostics**: JSON and JSONL parse failures now retain their specific parse error details instead of only showing a generic load failure.
-- **`mlld validate` guard timing extraction**: Guard analysis now reads timing from guard timing fields instead of `subtype`, so `before`/`after`/`always` guards are reported correctly.
-- **`mlld validate` exe invocation argument checks**: Undefined variable detection now traverses executable invocation argument lists, so missing variables in calls like `@fn(@missing)` are reported.
-- **`mlld validate --format json` guards/needs coverage**: Validation output now includes guard declarations and `/needs` runtime declarations for modules that define them.
-- **Nested guard denials in `when` actions**: Guard denials raised by nested executable calls in `when` action branches now route through denied handlers instead of surfacing as `MlldWhenExpressionError` condition failures.
-- **cmd {} block @ escaping**: `@@` and `\@` now produce literal `@` in cmd blocks (previously passed verbatim to shell)
-- **Position-independent `@` escapes**: `@@` and `\@` now resolve to literal `@` at string start and after interpolated variables in backtick/prose templates; streaming templates also treat `\@` as escaped and skip `@evt.*` substitution when escaped.
-- **`@` escape consistency coverage**: Added integration regression coverage confirming `@@` and `\@` behave identically across backticks, double/single quotes, `::...::` templates, `.att` template files, and `cmd {}` blocks.
-- **Pipeline null values**: JSON `null` values now pass through pipeline stages correctly (previously conflated with parse failure)
-- **Guard transform unwrapping**: Fixed double-wrapping that caused Variable-inside-Variable nesting in guard transforms
-- **Before label guard transform composition**: Sequential `before ... for <label>` guards evaluate against the latest transformed input so each transform applies once in order and conditional guards see prior transforms.
-- **`run js`/`run node` console precedence**: Run blocks suppress direct console passthrough while still capturing `console.log`, so log-only blocks emit once and explicit return values take precedence over logged output.
-- **`before op:cmd` guard matching for exe operations**: `exe @fn() = cmd { ... }` invocations now match operation guards filtered by `op:cmd`, with regression coverage for `cmd`, `sh`, `js`, `node`, and `py` op-label key expansion.
-- **Guard `op:run`/`op:exe` alias dispatch**: Command-capable `run` and `exe` operations share guard dispatch keys, `run cmd` operation labels include `op:run`, and regression coverage verifies `cmd`, `sh`, `js`, `node`, and `py` alias matching plus direct `run cmd` `src:exec` taint.
-- **Bare-label guard matching for operation labels**: `guard before <label>` now matches exe operation labels in addition to per-input data labels, while `op:<label>` remains operation-only syntax; shared dedupe prevents double-firing across per-input and per-operation passes, and zero-input exe calls retain previous behavior.
-- **NaN truthiness handling**: Truthiness checks now treat `"NaN"` (case-insensitive) as falsy across `if`, `when`, and conditional inclusion contexts, with regression coverage for numeric `NaN` and text `NaN` paths.
-- **Python `exe` code indentation normalization**: Python executable blocks now dedent shared leading indentation before execution, so single-line `py { ... }` syntax and indented multiline `py` blocks run without `IndentationError`; regression coverage added in `slash/exe/exe-py-single-line`.
-- **`py` alias parity in assignment grammar**: `py { ... }` now parses in assignment contexts wherever `python { ... }` is accepted, including `var` RHS and assignment-style executable definitions.
-- **`run` cwd overrides in block contexts**: Working-directory overrides for `run cmd:@dir { ... }` execute consistently in top-level, `if`, `for`, `when`, and nested block contexts, with regression coverage in `slash/run/run-cwd-in-block-contexts`.
-- **`run` cwd overrides in `=>` result collection**: Command expressions used in result-collecting forms (`for ... => cmd:@dir { ... }` and `when ... => cmd:@dir { ... }`) now honor cwd overrides, with regression coverage in `slash/run/run-cwd-expression-collection`.
-- **Guard `@input` content inspection**: Operation guard input helpers now expose `@input.any.text.includes(...)` (with `all`/`none` variants) for content-level inspection alongside metadata quantifiers, with regression coverage in `security/guard-input-content-inspection` and `tests/interpreter/variable-ctx.test.ts`.
-- **After `op:exe`/`op:cmd` guard context separation**: Post-operation guards now bind `@input` to operation inputs and `@output` to operation return values (including non-identity executable results), with regression coverage in `security/guard-after-op-exe-output-separation` and post-hook unit tests.
-- **Run-dispatched exec null parameter preservation**: Command and template exec definitions invoked via `/run @exe(...)` preserve runtime `null` for conditional fragments (instead of stringifying to `"null"`), while literal `"null"` strings remain truthy; regression coverage in `run-exec-definition-dispatcher` tests and `slash/exe/run-exec-null-conditional-fragments`.
-- **Tool-call tracking in exec invocation**: `@mx.tools.calls` now records regular executable invocations (not only MCP router calls), so guard patterns like `@mx.tools.calls.includes("name")` work for direct exe calls; env `mcpConfig` tool registration now populates `@mx.tools.allowed` and `@mx.tools.denied`.
-- **String concatenation with `+` diagnostics**: Expressions now raise a targeted error when `+` is used with non-numeric strings and include a template-interpolation hint; numeric addition and mixed string-number `NaN` behavior remain unchanged.
-- **Var `run ... using auth:name` parity**: `var @value = run cmd { ... } using auth:name` now preserves `using` metadata in var command nodes and applies auth injection during var-run execution.
-- **Var expression descriptor propagation**: Descriptor metadata from expression evaluation now carries through var RHS dispatch and var assignment resolution, so taint/label metadata remains attached for ternary and other expression-based assignments.
-- **Dead code removal**: Removed unused `interpolateWithSecurity` interface member and `matchesCommandPatterns` export
-- **Specificity consistency**: `inferCapabilityRule` now uses same specificity logic as `evaluateCommandAccess` for deny/allow resolution
-- **StructuredValue `.trim()` parity for JSONL arrays**: Builtin target normalization treats structured array values as text for string-view methods (including `.trim()`), so `<file.jsonl>.trim()` and `<file.json>.trim()` both succeed instead of arrays throwing `Cannot call .trim() on object`.
-- **JS block array unwrapping**: StructuredValue arrays and nested Variable elements (e.g. `[@a, @b]`) passed to `js {}` blocks now arrive as native JavaScript arrays. `Array.isArray()`, `.flat()`, `.map()`, and bracket indexing work without manual `.data` access. `.keep`/`.keepStructured` still preserves the wrapper when metadata access is needed.
-
-### Changed
-- **Mandatory whitespace around arithmetic operators**: `@a - @b` requires spaces; `@a-b` is a hyphenated identifier, not subtraction. Applies to `+`, `-`, `*`, `/`, `%`.
-- **CLI payload keys preserve hyphens**: `--skip-live` produces `@payload.skip-live` (primary) with deprecated `@payload.skipLive` camelCase alias.
-- **QA self-review phase**: Added mandatory empirical verification step requiring agents to re-run experiments with corrected syntax before classifying as "genuine-bug"
-
-### Documentation
-- **Restored `defaults.unlabeled` docs**: Feature is implemented and spec-defined; docs now correctly document this opt-in policy option
-- **Clarified privileged label syntax**: `trusted!`/`!label`/`clear!` syntax only works in privileged guards (not exe/when blocks); both shorthand and `allow with { addLabels, removeLabels }` forms documented
-- **Guard transform chaining**: Corrected docs to reflect before-phase uses last-wins (not chaining), after-phase chains sequentially
-- **@ escaping universality**: Clarified both `@@` and `\@` work in all string contexts (not just templates)
-- **Removed deprecated transformers**: `@xml`, `@csv`, `@md`, `@upper`, `@lower` no longer documented (moving to userland modules)
-- **Guard `@input` examples**: Security docs use `@input.any.text.includes(...)` for operation-input content inspection and include a context reference for `@input`, `@output`, and `@mx`.
-- **`show { ... }` object-literal docs cleanup**: Docs and plugin guidance remove inline object-literal forms after `show` and use `var`-then-`show` examples instead.
-- **File loading docs for `.jsonl`**: `file-loading-basics` now documents that `<file.jsonl>` auto-parses into an array of JSON records.
-
 ### Added
-- **Hyphenated identifiers**: Variable names, field access, imports, and exports support hyphens (`@skip-live`, `@payload.max-retries`, `import { output-format } from @payload`). No trailing, leading, or double hyphens.
-- **`mlld validate` hyphenated identifier migration warning**: Detects `@var-literal` patterns where a hyphenated reference shadows what was previously `@var` plus literal text; suggests backslash boundary (`@var\-literal`).
-- **`@fileExists(path)` builtin**: Filesystem existence check that always resolves its argument to a path string first, then checks if the file exists. Unlike `@exists(@var)` (which checks variable existence), `@fileExists(@var)` resolves the variable value and checks the file. Supports string paths, variable paths, load-content syntax, object fields, and globs.
-- **`mlld validate` concise directory output**: Directory validation defaults to a compact view — green checkmarks for clean files, inline warnings/errors for issues, and a summary line. `--verbose` restores full per-file details.
-- **`mlld validate` cross-directory template param resolution**: Directory validation builds a project-wide map of `exe` template declarations so `.att`/`.mtt` files resolve parameters from any module in the tree, not just siblings.
-- **`mlld validate` template for-loop iterator exclusion**: For-loop iterator variables (`@item` in `/for @item in @list`) are no longer flagged as undefined in template analysis.
-- **`mlld validate` `@for` anti-pattern detection**: `.att` templates containing `@for` (strict-mode syntax) warn with a hint to use `/for ... /end` instead.
+- **Hyphenated identifiers**: Variable names, field access, imports, and exports support hyphens (`@skip-live`, `@payload.max-retries`, `import { output-format } from @payload`). No trailing, leading, or double hyphens. `mlld validate` detects `@var-literal` patterns that shadow previous `@var` + literal text behavior and suggests backslash boundary (`@var\-literal`).
+- **`@fileExists(path)` builtin**: Filesystem existence check that resolves its argument to a path string, then checks if the file exists. Unlike `@exists(@var)` (which checks variable existence), `@fileExists(@var)` resolves the variable value and checks the file.
+- **`mlld validate` improvements**:
+  - Concise directory output with compact view (green checkmarks, inline issues, summary line); `--verbose` for full details
+  - Cross-directory template param resolution across the project tree
+  - Template for-loop iterator exclusion (no longer flags `@item` as undefined)
+  - `@for` anti-pattern detection in `.att` templates
+  - Undefined variable detection with hints for common mistakes (e.g., `@mx.now` → `@now`)
+  - Variable redefinition detection with immutability guidance
+  - Exe parameter shadowing warnings with suppression via `mlld-config.json`
+  - Guard timing extraction, exe invocation argument checks, and `--format json` guards/needs coverage
+  - Built-in name conflict detection for `let`/`var` collisions with transformer names
+  - When-in-exe clarity warning for implicit value actions
+  - Mutable `@state` anti-pattern warnings
+  - `--error-on-warnings` flag exits with code 1
 - **JSON5 fallback for `.json` / `.jsonl` loading**: Files with trailing commas, single quotes, or comments now parse via JSON5 fallback when strict `JSON.parse` fails.
-- **`mlld live --stdio`**: persistent NDJSON RPC transport for long-running SDK calls
+- **`mlld live --stdio`**: Persistent NDJSON RPC transport for long-running SDK calls
   - Accepts `process`, `execute`, `analyze`, `cancel`, and `state:update` methods over stdio
   - Streams SDK events as NDJSON while requests execute
   - Returns structured completion payloads per request id
   - Aborts active requests on `cancel`, stdin EOF, SIGINT, or SIGTERM
 - **Ruby SDK wrapper**: `sdk/ruby` adds persistent live transport support with `process`, `execute`, `analyze`, and module-level convenience helpers.
-- **`mlld mcp-dev`**: MCP server for language introspection tools
-  - `mlld_validate` - Syntax validation with errors/warnings
-  - `mlld_analyze` - Module analysis (exports, executables, imports, guards)
-  - `mlld_ast` - Raw AST output
-  - Separate from `mlld mcp` which serves user-defined tools
+- **`mlld mcp-dev`**: MCP server for language introspection tools (`mlld_validate`, `mlld_analyze`, `mlld_ast`), separate from `mlld mcp` which serves user-defined tools
 - **Template interpolation shortcuts**: `@var?` omits falsy values and `@var??"default"` (or single-quoted) provides nullish fallback in templates
-- **Multiline method chaining**: Method chains can continue across lines in expressions when each continuation line starts with `.` (for example `@text` newline `.trim()` newline `.replace(...)`).
-- **`@mx.for` iteration context**: Access loop state inside `for` blocks
-  - `@mx.for.index` - Current 0-based index
-  - `@mx.for.total` - Total items in collection
-  - `@mx.for.key` - Key for objects, index string for arrays
-  - `@mx.for.parallel` - Whether loop is parallel
-  - Works in both sequential and `parallel()` for loops
-- **Array `for` binding metadata `@item.mx.index`**: Loop-bound variables in array iteration expose a zero-based `mx.index` value.
-  - Works in expressions, `when` filters, templates, directive bodies, and nested loops.
-  - Preserves original array position in `for parallel(...)` iterations.
-  - Object iteration keeps `@item.mx.key` and does not set `@item.mx.index`.
-- **Top-level script returns (`=>`)**: strict scripts accept bare `=>` and markdown scripts use `/=>` as an explicit script return.
+- **Multiline method chaining**: Method chains can continue across lines in expressions when each continuation line starts with `.`
+- **Loop iteration metadata**: Access loop state via `@mx.for.index`, `@mx.for.total`, `@mx.for.key`, `@mx.for.parallel` inside `for` blocks (works in both sequential and `parallel()` loops). Loop-bound variables expose `@item.mx.index` (zero-based, preserves original position in parallel). Object iteration exposes `@item.mx.key`.
+- **Top-level script returns (`=>`)**: Strict scripts accept bare `=>` and markdown scripts use `/=>` as an explicit script return.
   - `=> @value` terminates script execution immediately.
   - Top-level `if` and `when` branches can return through the script context.
   - Imported `.mld` modules expose script return values through `default`.
@@ -140,63 +50,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Execute multiple statements when condition is true: `when @ready => [let @x = 1; show @x]`
   - Supports `let`, `var`, nested `when`, `for`, and return via `=>`
   - Consistent with `exe` and `for` block semantics
-- **`env` directive**: Scoped environment blocks with per-block environment config and `with { tools }` tool filtering
+- **`env` directive**: Scoped environment blocks with per-block environment config, `with { tools }` tool filtering, and `mcps` server allowlists enforced at runtime
 - **MCP tool imports**: `import tools { @tool } from mcp "server"` and `import tools from mcp "server" as @name` proxy MCP servers as mlld executables
 - **External MCP server spawning**: MCP configs accept command/npm servers with startup/idle lifecycle limits and guard routing
 - **Return label modifications**: `=> pii @var`, `=> untrusted @var`, `=> trusted! @var`, `=> !label @var`, `=> clear! @var` apply label changes to returned values with trust asymmetry and privilege checks
 - **Node module imports**: `import { @x } from node @package` auto-wraps exports, supports `new` constructor expressions, and streams async iterables
-- **`mlld howto core-modules`**: List official @mlld modules with descriptions
-  - Shows ai-cli, array, claude, env, github, prose, string modules
-  - `mlld howto @mlld/claude` shows module documentation directly
-- **`mlld validate` undefined variable detection**: Warns about undefined variable references before runtime
-  - Detects common mistakes like `@mx.now` with hint suggesting `@now`
-  - Tracks declarations from `var`, `let`, imports, for loops, and exe blocks
-  - Recognizes builtins: `@now`, `@base`, `@parse`, `@json` (deprecated alias), `@local`, `@cache`, `@env`, `@p`, `@mx`
-  - `--error-on-warnings` flag exits with code 1 when warnings are found
-- **`mlld validate` variable redefinition detection**: Catches attempts to redefine outer-scope variables
-  - Detects `var @x = ...` inside when/for blocks when `@x` is already defined
-  - Educational error explains mlld's immutability model
-  - Suggests alternatives: `let` for block-scoped values, new names, or augmented assignment
-- **`mlld validate` exe parameter shadowing warning**: Warns when executable parameters use generic names that commonly collide with caller variables (for example `result`)
-  - Suggests more specific names (for example `status`)
-  - Supports intentional suppression with `validate.suppressWarnings` in `mlld-config.json`
+- **`mlld howto core-modules`**: List official @mlld modules with descriptions; `mlld howto @mlld/claude` shows module documentation directly
 - **`mlld init`**: Quick non-interactive project initialization
   - Creates `mlld-config.json` and `mlld-lock.json` with sensible defaults
   - Creates `llm/run/` (scripts) and `llm/modules/` (local modules) directories
-  - `--force` to overwrite existing config
-  - `--script-dir` and `--local-path` for customization
-  - Suggests `mlld setup` for more configuration options
-- **Policy label flow enforcement**: Security policies now check labeled data flows through run/show/output and pipelines
-- **Policy defaults**: `defaults.unlabeled` and `defaults.rules` enforce built-in label flow rules, including `untrusted-llms-get-influenced`
-- **Named policies**: `/policy @name = { ... }` defines policy objects for export/import
-- **`using` auth injection**: `using auth:name` and `using @var as "ENV"` (plus `with { auth, using }`) pass credentials into exec/run from policy auth sources
-- **Policy defaults `autosign`**: Sign template content or variables selected by name patterns
-- **Policy defaults `autoverify`**: Prepend verify instructions for signed variables passed to llm-labeled executables and set `MLLD_VERIFY_VARS`
-- **Security audit log events**: Records sign/verify, label/bless, and file write taint entries in `.mlld/sec/audit.jsonl`
-- **Security audit log index**: Loads and caches write-taint entries for file read lookups
-- **Audit taint propagation for file reads**: Load content and imports merge prior file write taint from the audit log
-- **Optional load syntax:** `<file.md>?` and `<**/*.md>?` returns null or empty array if file or glob results don't exist
-- **`claude-poll` debug hooks**: `MLLD_DEBUG_CLAUDE_POLL` emits poll diagnostics and `MLLD_CLAUDE_POLL_LOG` captures `claude` output
-- **Executor stdin debug flag**: `MLLD_DEBUG_EXEC_IO` logs stdin write failures with byte counts
-- **Bare match form**: `when @expr [patterns]` works without the colon — `when @mode ["active" => x; * => y]` is now valid alongside the colon form `when @mode: [...]`
-  - The `=> [block]` form disambiguates imperative blocks, so the colon is no longer needed for parsing
-  - Colon form still works (backward compatible) but is no longer shown in docs
+  - `--force` to overwrite existing config; `--script-dir` and `--local-path` for customization
+- **Policy and security system**:
+  - Label flow enforcement checks labeled data flows through run/show/output, pipelines, and `using` auth injections
+  - `defaults.unlabeled` and `defaults.rules` enforce built-in label flow rules, including `untrusted-llms-get-influenced` auto-labeling and `no-sensitive-exfil`
+  - Named policies via `/policy @name = { ... }` for export/import
+  - `using auth:name` and `using @var as "ENV"` (plus `with { auth, using }`) pass credentials into exec/run from policy auth sources
+  - `defaults.autosign` signs template content or variables selected by name patterns
+  - `defaults.autoverify` prepends verify instructions for signed variables passed to llm-labeled executables
+  - `capabilities.deny` command patterns block commands at runtime with hierarchical `op:cmd:*` most-specific precedence
+  - Keychain access enforcement for auth injection and builtins with `{projectname}` expansion
+  - Linux keychain provider uses secret-tool for system keychain access
+- **Security audit log**: Records sign/verify, label/bless, and file write taint entries in `.mlld/sec/audit.jsonl`. Caches write-taint entries for file read lookups. File loads and imports merge prior write taint from the audit log.
+- **User-defined privileged guards**: Guard directives support `guard privileged ...` and `with { privileged: true }`, staying active under guard overrides with privileged label operations.
+- **Optional load syntax**: `<file.md>?` and `<**/*.md>?` returns null or empty array if file or glob results don't exist
+- **Debug flags**: `MLLD_DEBUG_CLAUDE_POLL` emits poll diagnostics, `MLLD_CLAUDE_POLL_LOG` captures `claude` output, `MLLD_DEBUG_EXEC_IO` logs stdin write failures
+- **Bare match form**: `when @expr [patterns]` works without the colon — `when @mode ["active" => x; * => y]` is now valid alongside the colon form
 - **Bare exec invocation statements**: `@func()` in strict mode and `/@func()` in markdown mode execute with the same semantics as `run @func()`
 - **`bail` directive**: `bail <message>` (and `/bail <message>` in markdown mode) terminates the entire script with exit code `1`, including from nested `if`/`when`/`for` blocks and imported modules.
+- **CLI file payload flags**: `mlld <file>` accepts extra `--flag value` pairs and exposes them via `@payload`
+- **`/hook` directive**: User-defined before/after hooks on functions, operations (`op:for:iteration`, `op:for:batch`, `op:loop`, `op:import`), and data labels
+  - Transform chaining and per-hook error isolation (`@mx.hooks.errors`)
+  - Function arg-prefix (`startsWith`) matching and hook-body directive/executable emissions
+  - Loop operation contexts with `@mx.for.batchIndex`/`@mx.for.batchSize` metadata
+  - User hooks run around built-in guard/taint hooks; nested operations suppress user hooks (non-reentrancy)
+- **Checkpoint caching**: Automatic checkpoint caching for `llm` operations (no opt-in required)
+  - `mlld run --fresh|--resume|--fork` and `mlld checkpoint list|inspect|clean`
+  - Named checkpoints: `checkpoint "name"` with interpolation and `when` branch support
+  - Resume targeting: `--resume @fn`, `--resume @fn:index`, `--resume @fn("prefix")`, `--resume "name"` with exact-match priority, prefix fallback, and ambiguity errors
+  - Fork read-only overlay support for branching from existing checkpoint state
+  - `@mx.checkpoint.hit`/`@mx.checkpoint.key` metadata; guard bypass on cache-hit paths
+  - `--no-checkpoint` disables entirely, `--new` aliases `--fresh`
+- **`mlld update` and `mlld outdated` in CLI help**: Both commands were missing from `mlld --help` output
+- **`mlld registry update` unified with `mlld update`**: Delegates to the same `updateCommand` for consistent behavior
+- **LSP tree-sitter WASM support**: `python` and `bash` code blocks (alongside `javascript`) for embedded syntax analysis
 
 ### Changed
-- StructuredValue field access now exposes wrapper accessors at `.mx.text` and `.mx.data`, and plain dotted access resolves through wrapper data consistently (`@value.field` aligns with `@value.mx.data.field`).
-- Built-in transformer/helper names are shadowable by user variables in scope (`@exists`, `@json`, `@upper`, `@keep`, etc.), and pipeline validation resolves scoped variables before builtin fallback.
-- `mlld validate` reports builtin-name shadowing as informational output while reserved-name collisions remain validation errors.
-- JSON parsing transformers are canonicalized under `@parse` (`@parse`, `@parse.strict`, `@parse.loose`, `@parse.llm`, `@parse.fromlist`), while `@json*` names continue as deprecated aliases.
-- `mlld validate` reports informational deprecation warnings for `@json*` alias usage and suggests `@parse*`, unless a user-defined `@json` shadows the builtin.
-- StructuredValue field access no longer exposes system metadata at the top level (`.text`, `.data`, `.type`, loader/execution metadata aliases); wrapper/system access is `.mx.*` only, and top-level dotted access resolves through user data.
+- **Mandatory whitespace around arithmetic operators**: `@a - @b` requires spaces; `@a-b` is a hyphenated identifier, not subtraction. Applies to `+`, `-`, `*`, `/`, `%`.
+- **CLI payload keys preserve hyphens**: `--skip-live` produces `@payload.skip-live` (primary) with deprecated `@payload.skipLive` camelCase alias.
+- **StructuredValue `.mx` surface model**: Field access uses `.mx.*` for wrapper/system metadata (`.mx.text`, `.mx.data`). Top-level dotted access resolves through user data. System metadata (`.text`, `.data`, `.type`) no longer leaks at the top level.
+- Built-in transformer/helper names are shadowable by user variables in scope (`@exists`, `@json`, `@upper`, `@keep`, etc.), and pipeline validation resolves scoped variables before builtin fallback. `mlld validate` reports builtin-name shadowing as informational output.
+- JSON parsing transformers are canonicalized under `@parse` (`@parse`, `@parse.strict`, `@parse.loose`, `@parse.llm`, `@parse.fromlist`), while `@json*` names continue as deprecated aliases. `mlld validate` warns on `@json*` usage.
 - Go/Python/Rust/Ruby SDK wrappers use persistent `mlld live --stdio` transport instead of per-call CLI shellouts.
-  - Go, Python, Rust, and Ruby expose async handle APIs for `process` and `execute` with `wait/result`, `cancel`, and `update_state`.
+  - All expose async handle APIs for `process` and `execute` with `wait/result`, `cancel`, and `update_state`.
   - `process` accepts payload/state/dynamic module injection options across wrappers.
   - `execute` merges `stateWrites` from final results and streamed `state:write` events.
-  - SDK integration tests cover state injection, dynamic module injection, state write capture, persisted state replay, and loop-stop signaling via in-flight `state:update`.
-  - SDK integration tests assert `update_state` after completion fails with `REQUEST_NOT_FOUND` across Go/Python/Rust/Ruby.
 - **`mlld init` renamed to `mlld module`**: Module creation is now `mlld module` (alias: `mlld mod`)
   - Previous `mlld init` behavior (interactive module creation) moved to `mlld module`
   - New `mlld init` provides quick project setup (see Added above)
@@ -207,193 +114,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`mlld run` timeout is now unlimited by default**
   - Previously defaulted to 5 minutes (300000ms)
   - `--timeout` now accepts human-readable durations: `5m`, `1h`, `30s`, `2d`, or raw milliseconds
-  - Timeout error messages display formatted durations (e.g., "timed out after 5m")
+- **`run` is now silent by default**: No more "Running: ..." status messages or blank lines for no-output commands. Use `| log "message"` for custom progress, or `--show-progress` to restore old behavior.
 
 ### Fixed
-- **`@root` alias**: `@root` is now available as a preferred alias for `@base` — both resolve to the project root directory for file/output/import path handling.
-- **`@root` interpolation parity with `@base`**: `@root` now initializes as a reserved project-root path variable, so direct and template interpolation (`@root`, `` `...@root...` ``) resolve the same way as `@base`.
-- **`for parallel` canary fail-fast**: Directive and expression `for parallel` loops now run the first qualifying iteration (respecting `when` filters) synchronously and propagate its error, while later iteration errors keep existing parallel marker/swallow behavior.
-- **LSP visitor typing hardening**: Removed remaining explicit `any` usage across `services/lsp/visitors` by introducing shared `LspAstNode` typing, and added a regression test (`services/lsp/visitors/typing-regression.test.ts`) to prevent explicit `any` from reappearing in the visitor layer.
-- **`var` inside block statements**: `if`, `for`, and `when ... => [ ... ]` action blocks now raise a targeted parse error with guidance to use `let` for block-scoped bindings.
-- **Inline comment marker spacing in expressions**: `<<` and `>>` require preceding whitespace when used as inline comments, so `3<<value` and `3>>value` fail at the offending line instead of being parsed as comparison/alligator expression content.
-- **Template syntax docs accuracy**: `.att` documentation now uses `/for ... /end` syntax, removes `when` block support claims, and clarifies condensed template pipe syntax (`@var|@pipe`) plus `.att`/`.mtt` loops and pipe comparison rows.
-- **When inline docs clarity**: `when` inline documentation now states single-expression shorthand semantics (`when @cond => action`), maps it to first-match `when [ ... ]` behavior, and directs multi-branch or multi-statement usage to block/list form.
-- **MCP security docs targeting**: MCP docs now clarify that tool output provenance uses `src:mcp` (without automatic `untrusted` trust labels) and update guard examples to use `op:cmd` filters when controlling command operations.
-- **MCP guard docs retry semantics**: MCP guard docs now scope tool-label checks to `op:exe`, document `@mx.guard.try` as a 1-based retry counter, and include a working retry/deny guard pattern for transient MCP tool failures.
-- **Guard timing docs clarity**: Security docs now compare `before LABEL` (label-entry, once) vs `before op:TYPE` (operation-time, per use), and document that `denied` handlers only apply to operation-time denials.
-- **Guard composition docs scope clarity**: Security docs now state that `always` runs in both phases, `before` transforms are last-wins while `after` transforms chain, `retry` applies only in retryable pipeline contexts, and `before op:exe` transforms should use `@input` (not `@output`).
-- **Guard retry scope regression coverage (`op:exe`)**: Added fixture coverage that `before op:exe => retry ...` outside retryable pipeline context is denied with the retry-scope error.
-- **Needs declaration docs and key validation clarity**: Security docs now define `needs` as module requirement validation (not capability authorization), enumerate supported keys/aliases, and direct keychain control to policy capabilities. Added unit coverage for supported aliases and unsupported keys.
-- **Modules structure docs clarity**: Module docs now distinguish selected file imports, file namespace imports, and directory namespace imports; document that relative local imports resolve from the importing script directory (not shell cwd); and explain runtime frontmatter metadata versus `module.yml` packaging metadata responsibilities.
-- **CLI import path regression coverage**: Integration tests now assert that relative `import "./..."` resolution follows the script file directory even when CLI executes from a different cwd.
-- **Conditional variable docs spacing clarity**: Nullish fallback docs now distinguish tight template interpolation form (`@var??"default"`) from spaced expression form (`@a ?? @b`), including chained expression fallback examples.
-- **Pipeline basics docs completeness**: Pipeline docs now list built-in transformers (`@trim`, `@upper`, `@lower`, `@pretty`, `@sort`), clarify that stages receive whole values (arrays are not auto-mapped), and include retry/fallback error-handling examples.
-- **Path resolution guidance for missing files**: Missing local file paths now include did-you-mean suggestions across imports, template files, and content loaders, plus guidance that relative paths resolve from the current mlld file and `@base/...` resolves from project root.
-- **Template extension field-access hint**: When template interpolation parses `@name.json` (and similar common extensions) as field access, runtime errors now explain the ambiguity and suggest escaping the dot (for example `@name\.json`).
-- **Before operation guard transform boundaries**: Combined before guards for data labels and operation filters (including `op:exe` and `op:show`) now unwrap replacement values before reinsertion, so operations receive resolved values instead of serialized internal Variable structures.
-- **`@mx.op.labels` guard access**: The `@mx.op.labels` context value now resolves as an array even when operations have no labels, so checks like `@mx.op.labels.includes("destructive")` return `false` instead of throwing.
-- **Denied handler consistency in `for` loops**: Guard-denied handlers now return the same fallback values inside `/for` iteration bodies as outside loops by preserving iteration security metadata from the source collection.
-- **Var-assigned command execution parity**: Command nodes evaluated inside `var` assignments now route through `/run` execution handling, so working-directory overrides, policy checks, and guard hooks apply consistently with direct run execution. Bare run-exec directives also expose `op:exe` labels for guard matching parity.
-- **VFS module export regression coverage**: Fixture cases for `executable-in-object-property` and `module-isolation-nested-import` are re-enabled in the VFS harness and validate exported binding resolution through nested imports.
-- **For dotted binding key-context coverage**: Regression tests assert missing-field errors for dotted `/for` bindings across array and object iteration keys.
-- **Install confirmation guidance**: `mlld install` now prints direct-module confirmation lines as `module@version installed` (or `installed (cached)`) and includes a ready-to-copy import statement.
-- **For directive `when` guard blocks**: `/for` and nested `for` directives now parse `for @item in @items when @cond [ ... ]`, including multiline block return syntax.
-- **Relative path scope**: Relative paths in `output`/`append` directives now resolve from the script file directory instead of the project root, so `output @data to "local.txt"` writes next to the script.
-- **`run` cwd `~` expansion**: Working-directory overrides now accept `~` in `/run` (and related exec forms), alongside absolute paths and `@var` path references.
-- **Template file alligator path scope**: Relative `<file>` loads inside `template "file.att"`/`template "file.mtt"` executables now resolve from the template file directory instead of the caller script directory.
-- **Export manifest enforcement for executable internals**: Importers can no longer read unexported module members through `@namespace.exec.internal.capturedModuleEnv.*` (or via selected imported executables).
-- **`mlld validate` built-in name conflicts**: Validation now reports `let`/`var` collisions with built-in names (including transformer names like `@upper`) as explicit built-in conflicts.
-- **Reserved variable docs**: Reserved-variable documentation now lists built-in transformer names that cannot be reused for variable declarations.
-- **Mutable `@state` anti-pattern warnings**: Validation now emits an anti-pattern warning when local `@state` objects are used with `@state.stop` patterns that imply mutable state updates.
-- **Multi-line import parsing**: Selected import lists parse correctly when spread across multiple lines inside `{ ... }`.
-- **Import parse error anchoring**: Malformed multi-line import list errors report the import directive location instead of surfacing at downstream directives.
-- **`mlld init` resolver config shape**: `mlld init` now writes resolver prefixes under `resolvers.prefixes` in `mlld-config.json` instead of a top-level `resolverPrefixes` key.
-- **Resolver prefix config compatibility**: Runtime config loading reads top-level `resolverPrefixes` when present, and writes normalized resolver mappings to `resolvers.prefixes`.
-- **Command/shell StructuredValue parity**: `cmd`/`sh` outputs now stay wrapped as StructuredValues with raw stdout in `.text`, auto-parsed payload in `.data`, and execution metadata (`.mx.source`, `.mx.command`, `.mx.exitCode`, `.mx.duration`, `.mx.stderr`).
-- Dynamic module registration supports mixed user-data and external modules in one run without throwing `Resolver 'dynamic' is already registered`.
-- **`when` values in exe blocks**: `WhenExpression` statements in exe blocks now correctly early-return when they produce a non-null value — previously the value was silently discarded and execution continued to the next statement. Side-effect actions (`show`/`output`) are correctly excluded from early return.
-- **`mlld validate` when-in-exe clarity warning**: Validation emits an anti-pattern warning when an exe-block `when` branch uses an implicit value action (`when @cond => "value"`), with guidance to use block-form return (`when @cond => [ => @value ]`) for explicit intent.
-- **Python exception fixture runtime gating**: `tests/cases/exceptions/python/*` fixtures now require `python3` availability in the test runner, preventing false failures when only `python` is present or Python execution is unavailable.
-- **`@payload` resolver guidance**: Unresolved `@payload` imports now explain that `@payload` is available in `mlld run <name>` context and suggest the correct invocation pattern with payload flags.
-- **`file.mx.path` metadata alias**: Loaded file metadata now exposes `.mx.path` as an alias of `.mx.absolute`, including structured metadata and loop-bound file values.
-- **Directive error line numbers**: `MlldDirectiveError` now correctly extracts line/column from AST `SourceLocation` objects — previously showed `at line undefined, column undefined` for all directive errors
-- **Error messages no longer prefix directives with `/`**: Error messages now say `for expects an array` instead of `/for expects an array` — the `/` is a line-start disambiguator in markdown mode, not part of the directive name. Updated across grammar parse errors, interpreter runtime errors, and error templates.
-- **`no-sensitive-exfil`**: Policy rule blocks sensitive data from flowing to `exfil` operations without requiring `untrusted`.
-- Security docs and fixtures cover defaults.rules enforcement for `exfil`, `destructive`, and `privileged` flows.
-- Policy capability denies enforce interpolated command checks for `/run` and exec invocations, and code execution respects allow/deny for `sh`, `js`, `node`, `py`, and `prose`.
-- **Env tool scope enforcement**: `env` block `tools` now enforces runtime access for shell execution (`Bash`) and MCP tool calls.
-- **Env MCP scope enforcement**: `env` block `mcps` now enforces MCP server allowlists at invocation time (including `mcps: []` blocking all MCP calls).
-- **Command deny pattern runtime enforcement**: `capabilities.deny` command patterns block `git push` and equivalent command-executable invocations at runtime.
-- **Hierarchical `op:cmd` policy pattern matching**: Command allow/deny policy entries now accept `op:cmd:*` forms (for example `op:cmd:git:add`) and apply most-specific precedence between allow and deny matches.
-- Policy capability docs and fixtures cover interpolated command matching, network denies, and run/exec code blocks.
-- `untrusted-llms-get-influenced` auto-labeling applies across exec, run-exec, and pipeline execution paths.
-- Influenced label docs clarify auto-labeling and fixtures cover pipeline deny behavior.
-- Policy keychain config merges provider and allow/deny lists for enforcement helpers.
-- Keychain access enforcement applies to auth injection and keychain builtins with `{projectname}` expansion.
-- Security fixtures cover keychain auth policy denies.
-- Policy auth and capabilities docs cover keychain allow/deny patterns.
-- Security fixtures cover defaults.rules secret protection precedence.
-- Policy label flow checks now include `using auth:*` and `using @var as ENV` injections.
-- Security fixtures cover secret label flow for `using` env injection.
-- Security fixtures cover defaults.rules secret flow through exfil-labeled show.
-- Security fixtures cover defaults.rules secret flow through exfil-labeled run interpolation.
-- **Label modification docs syntax and semantics**: Security docs now show guard-action label changes with `allow with { addLabels, removeLabels }`, clarify that privileged scope applies to guard declarations, and clarify that factual `src:*` provenance labels belong to `.mx.taint`; regression coverage includes `security/guard-label-modification-with-clause`.
-- Audit log docs cover event fields and taint usage.
-- Security fixtures cover audit log write events and taint propagation.
-- Claude sign/verify demo script covers autoverify with @mlld/claude.
-- Claude manual tests share a claude path probe helper.
-- Claude sign/verify demo includes an env-gated integration test.
-- Autosign/autoverify docs include an @mlld/claude demo block.
-- Linux keychain provider uses secret-tool for system keychain access.
-- Keychain docs note secret-tool and fixtures include a Linux manual test.
-- Draft j2bd security jobs cover audit ledger, policy composition, and defaults.rules demos.
-- **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables instead of silently shadowing them.
-- **When expression error context**: When-expression errors include condition text and source location (file/line/column) in error output.
-- **When expression action-error diagnostics**: Failing `when` actions now report the full condition/action pair text (for example `* => @line | @json`) and preserve caller file paths from path context instead of defaulting to `<stdin>`.
-- **Spread operator typo**: `..@var` produces a targeted parse error that suggests `...@var`.
-- **`/run @exe(...)` structured arguments**: Inline object/array literals are preserved as runtime data for code executables (`js`, `node`, `mlld-exe-block`, `mlld-when`) instead of degrading to empty strings or text-only fallbacks.
-- **`/run` exe-block object spread parameters**: Spreading executable parameters (`{ ...@data }`) uses object data rather than serialized text, so state merge patterns work without manual re-parse.
-- **Shadow JS/Node nested StructuredValue unwrapping**: Parameters passed to shadow environments recursively unwrap nested StructuredValues inside arrays/objects, so helper code reads plain values instead of wrapper objects.
-- **Array `.includes()` with variable references**: `@array.includes(@value)` compares normalized values so membership checks align with equality behavior in common validation patterns.
-- **Structured field-access arguments in search method chains**: Builtin search methods (`includes`, `indexOf`, `startsWith`, `endsWith`) normalize StructuredValue field-access arguments and resolve nested structured object paths consistently across for/when/exe expression contexts.
-- **Imported executable parameter shadowing**: Caller variables no longer collide with imported executable parameter names (for example `@run` in caller vs `run` parameter), preventing false variable redefinition errors and misleading line reports.
-- **Exe-block code parameter binding**: `sh`/`cmd`/`js`/`python`/`node` code blocks inside executable block bodies now receive bound executable parameters, matching direct executable assignment behavior.
-- **Shell path parameter coercion**: Path objects passed as executable parameters (for example `@base`) now bind to their resolved path string in `sh` blocks instead of JSON object text.
-- **`for ... when @cond [block]` guard syntax**: For-expression guards now accept block bodies in addition to `=>` forms, so guarded multi-statement collection logic parses and evaluates correctly.
-- **Exe return arithmetic after invocations**: `=> @fn(...) * 1` and similar arithmetic/logical continuations now parse in exe block return lines instead of failing at the first operator.
-- **User-defined privileged guards**: Guard directives support `guard privileged ...` and `with { privileged: true }`, and user-defined privileged guards stay active under guard overrides and support privileged label operations.
-- **If/when guidance**: All when/if parse errors include an educational cheat sheet showing if vs when semantics, return behavior differences inside exe/for, and valid forms. The `when @cond [block]` error now explains the ambiguity and suggests both `when @cond => [block]` and `if @cond [block]` with a note about their different return semantics.
-- Binary and ternary expressions parse inside function arguments and array literals
-- Block expressions inside argument and array contexts surface a targeted parse error
-- **CLI file payload flags**: `mlld <file>` accepts extra `--flag value` pairs and exposes them via `@payload`
-- **Structured output JSON**: `/output` now writes clean JSON for structured arrays instead of emitting StructuredValue wrapper fields
-- **Show/JSON StructuredValue unwrapping**: `JSONFormatter` and `/show` invocation object serialization unwrap StructuredValues to `.data`, so bare and nested values no longer emit wrapper fields (`type`, `text`, `data`, `metadata`, `mx`)
-- **For-expression file metadata**: Mapping or filtering file-loaded values preserves `.mx` metadata on results
-- Return statements inside when-expression blocks bubble to the enclosing exe function
-- **Function parameter scoping**: Function parameters no longer leak back to the caller's scope. Previously, when calling `@helper(data)` with a value, the `data` parameter would overwrite any `@data` variable in the caller's scope after the function returned. Parameters are now properly block-scoped like `let` bindings.
-- **Shell alias resolution in `sh {}` blocks**: Commands available only as shell aliases (e.g., `claude`) now resolve correctly in `sh {}` blocks. Previously, only `cmd {}` blocks resolved aliases — `sh {}` blocks ran non-interactive bash where aliases aren't loaded, causing alias-only commands to silently fail with "command not found".
-- **`output ... to @variable` in when blocks**: Variable targets now work in output directives inside when blocks (e.g., `output @content to @path`). Previously, `WhenOutputTarget` only supported streams, env, and quoted strings.
-- **`let` pipelines with backtick templates**: `let @x = \`template\` | log` now correctly executes the pipeline. Previously, pipelines were stripped from backtick-wrapped templates in `let` and `var` assignments.
-- **`run stream @exec()` parsing**: Run directives accept stream modifiers and tail options on exec invocations
-- **After-guard retry output**: Retryable after-guard flows emit output once after a successful retry
-- **Run-exec after-guard retry eligibility**: `run @exe(...)` directive contexts mark run-exec sources as retryable, so non-pipeline `guard after ... => retry` decisions re-execute the guarded run operation.
-- **Ternary expressions with arrays/objects**: Ternary expressions returning arrays or objects (e.g., `@tier ? @tier.split(",") : []`) now preserve the actual value instead of stringifying to JSON. Previously, `[].length` would return 2 (string length of `"[]"`) instead of 0.
-- **Ternary condition field access**: Accessing missing fields in ternary conditions now returns undefined instead of throwing, enabling patterns like `@p.tier ? @p.tier : ""` for optional payload fields
-- **Ternary values in complex objects**: Ternary expressions stored inside lazily-evaluated object values now resolve to their evaluated result instead of emitting raw AST nodes
-- **`run` is now silent by default**: `run` no longer shows "Running: ..." status messages or emits blank lines for commands with no output. Use `| log "message"` for custom progress logging, or `--show-progress` flag to restore old behavior
-- **For block return-only syntax**: `[ => @x * 2 ]` (return statement with no preceding statements) now parses correctly in for loops
-- **Conditional object keys**: Object keys with conditional syntax (`"key"?: @value`) now correctly include the key when the value is truthy. Previously, conditional keys were always omitted regardless of the value's truthiness.
-- **Conditional object fields**: Fixed bug where conditional fields (`"key"?: @var`) were silently dropped when the object contained literal values in other fields
-- **Conditional object fields**: Objects with only conditional fields (e.g., `{"key"?: @val}`) now correctly include truthy values instead of producing empty objects
-- **Conditional object fields with literals**: Fixed bug where conditional object fields (`key?: @value`) were incorrectly omitted when the object also contained literal (non-variable) values
-- **When expressions in var assignments**: Fixed when expressions without explicit `first` modifier to use first-match semantics, matching behavior in for/loop contexts
-- **Bound-value when expressions with wildcard fallback**: `*` patterns match instead of throwing condition errors
-- **Command stdin EPIPE handling**: stdin write errors no longer crash mlld; optional `MLLD_DEBUG_EXEC_IO` logging
-- **Bash env heredoc threshold**: large shell parameters now switch to heredoc at 64KB by default
-- **Bash heredoc assignment**: large parameter injection uses `read` to avoid command substitution limits
-- **Pipeline scalar stage binding**: Stage inputs auto-parse JSON scalars (`number`, `boolean`, `null`) for code-language stages, and primitive structured inputs bind as primitive parameters instead of text.
-- **Pipeline JS transformer logging**: Multiline `js`/`node` transformer blocks keep trailing expression return values even when earlier statements write to `console.log`.
-- **Pipeline context references**: @p[-1] and similar negative index references now correctly return evaluated string outputs when pipelines start with exe calls
-- **`@p[-1]` previous-stage regression coverage**: Added pipeline tests for `when`-branch access to `@p[-1]` and clarified docs that it equals the current stage input value (the previous stage output).
-- **log/output falsy values**: Boolean `false` and `0` now output correctly instead of empty string when used with `/log` or `/output`
-- **`escaping-at` guidance**: Docs now recommend `\@` as the primary escape and document `@@` as template-context-only shorthand.
-- **`@mx.tools` docs clarity**: Tool-call-tracking docs now show `@mx.tools` as guard-context metadata with explicit guard examples for `calls`, `allowed`, and `denied`.
-- **`defaults.unlabeled` docs restored**: `defaults.unlabeled` works correctly (auto-labels unlabeled data as `trusted` or `untrusted`). Docs clarify it is opt-in via policy config, not default behavior.
-- **Guard composition docs clarity**: Security docs now explicitly describe before-transform last-wins behavior, `always` timing across both phases, and sequential after-guard transform chaining.
-- **Field access on 'type' property**: When accessing `.type` on objects that have a 'type' property in their data, mlld now correctly returns the data value instead of the internal Variable type discriminator
-- **JSON/JSONL parse errors**: Invalid JSON now shows proper error messages instead of "Failed to load content"
-  - `parseJsonWithContext` and `parseJsonLines` now include required `code` and `severity` in error options
-- **Backslash-escaped characters in XML contexts**: `\@`, `\.`, `\*`, and `@@` now prevent file reference detection inside angle brackets
-  - `<input placeholder="user\@example\.com">` now treated as literal XML, not a file reference
-- **HTML/XML tag detection in templates**: Angle bracket content matching HTML tag patterns (e.g., `<tagname attr="value">`) is now recognized as literal HTML instead of file references
-  - `<input placeholder="user@example.com">` is now correctly preserved as literal XML text
-- **Backtick template literals in exec arguments**: `@echo(@name)` where `@name` holds a backtick literal now correctly evaluates instead of producing `[object Object]`
-- **Pipeline on `let` with backtick templates**: `let @x = \`template\` | log` now correctly executes the pipeline. Previously, pipelines were incorrectly stripped from backtick-wrapped templates in `let` and `var` assignments, causing `| log` and other pipeline operations to silently fail.
-- **Pipeline retry @input staleness**: Fixed bug where leading effects (like show) in pipelines saw stale @input values during retry instead of fresh values from re-executed source stages
-- **Circular imports**: Local file imports now correctly trigger circular import detection, producing a clear error message instead of infinite recursion
-- **`@mx.for` in for-expressions**: Fixed `@mx.for.index` and `@mx.for.total` not being available when a for loop is assigned to a variable (e.g., `var @results = for @i in @items [...@mx.for.index...]`). The for execution context was only pushed in the directive path, not the expression path.
-- **Nested array normalization**: Nested arrays now properly normalize their contents when displayed
-  - `[[StructuredValue, StructuredValue]]` now correctly formats to `[["clean","values"]]`
-  - `normalizeArrayEntry` now recursively processes nested arrays
-- **Empty arrays in for loops**: For loops now correctly iterate zero times over empty arrays instead of throwing an error
-- **foreach with separator**: `foreach @array with {separator: " | "}` now correctly applies the separator option
-  - Property path mismatch: show.ts was accessing `foreachExpression.with` which was undefined
-  - AST stores withClause at `foreachExpression.execInvocation.withClause` as array of inlineValue objects
-- **`sh {}` blocks in `for parallel()`**: `sh {}` blocks now execute concurrently in parallel for loops. Previously, `sh {}` used `spawnSync()` which blocked the Node.js event loop, causing `for parallel(N)` to serialize all iterations.
-- **Empty comments consuming next line**: Comments with no content (`>>` alone) no longer consume the following line as comment content
-- **Array literals in expressions**: Empty arrays `[]` and array literals now work in ternary expressions and when result positions
-- **Ternary with method calls**: `@tier ? @tier.split(",") : []` now parses correctly
-- **Negation with method calls in templates**: `!@arr.includes("c")` in backtick templates now evaluates correctly instead of returning string `"!false"`
-- **for-when in exe blocks**: `let @result = for @x in @arr when ... => @x` now returns the array value, allowing `.length` and other array operations
-- **Streaming stdin errors**: Unhandled EPIPE from child stdin writes now reports a command error with context instead of crashing
-- **When block accumulation in exe**: `when (condition) [let @x += value]` now correctly evaluates the condition and executes augmented assignments inside the block
-- **let bindings in when blocks**: let bindings that shadow outer variables now work correctly instead of silently failing
-- **Glob JSON parsing**: Glob-loaded JSON files (e.g., `<*.json>`) now auto-parse like single file loads
-  - `@glob[0].data.name` now works consistently with `@single.data.name`
-  - `.mx` metadata preserved when iterating glob results in for loops
-- **`mlld howto` display**: Fixed atom list not showing under category headers
-  - Caused by `.content` getter being lost when passing through JS function boundaries
-- **Conditional object fields**: Fixed bug where conditional pairs (`"key"?: @value`) were silently dropped when the object also contained literal string values
-- **Conditional object fields with bare var keyword**: Objects with conditional field syntax (`"key"?: @value`) now correctly include/exclude fields when using the bare `var` keyword instead of `/var`
-- **Conditional object fields with literals**: `{"key"?: "value"}` now correctly includes the field when the literal value is truthy, instead of silently omitting it
-- **Triple-colon template file references**: `<...>` inside triple-colon templates is now treated as literal text
-  - Triple-colon templates should only support `{{var}}` interpolation per the documented design
-  - Angle brackets like `<this>` no longer incorrectly parse as file references
-- **When expression null actions**: when-expressions now correctly return null when a matched action evaluates to null, instead of incorrectly falling through to the next condition
-- **Loop control in when action blocks**: `done` and `continue` inside `when @cond => [ ... ]` now propagate to enclosing loop/while execution
-- **For-expression OR conditions**: `for ... when` filters now treat `||` as logical OR in condition contexts
-- **Section extraction with parentheses**: `<file # section>` now matches headings that include parentheses
-- **Policy capability allow lists**: command and filesystem allow lists enforce wildcard and `@base`-relative patterns
-- **Variable shadowing in nested scopes**: `let` bindings in nested function scopes no longer clobber outer loop variables. Previously, if a function used `let @t = ...` and the caller had a `for @t in ...` loop, the function's `@t` would overwrite the loop variable on return. Let bindings now never merge back to parent scope.
+- **`mlld update` silently skipping registry modules**: `isRegistryEntry()` now recognizes `raw.githubusercontent.com` hosts, so registry modules are no longer skipped during updates.
+- **`mlld outdated` showing "no registry metadata"**: Metadata path corrected to `resolution.metadata`.
+- **`@` escaping consistency**: `@@` and `\@` produce literal `@` in all contexts — cmd blocks, backtick/prose templates, double/single quotes, `::...::` templates, `.att` template files, and streaming templates.
+- **Guard operation label matching**: `op:cmd`, `op:run`, and `op:exe` labels match exe invocations with alias expansion across `cmd`, `sh`, `js`, `node`, and `py`. `guard before <label>` matches exe operation labels in addition to data labels, with deduplication preventing double-firing.
+- **Guard `@input`/`@output` operation context**: Operation guards expose `@input.any.text.includes(...)` (with `all`/`none` variants) for content inspection. Post-operation guards bind `@input` to inputs and `@output` to return values.
+- **Working-directory overrides for `run`**: `run cmd:@dir { ... }` works consistently in top-level, `if`, `for`, `when`, nested block, and result-collecting (`=>`) contexts. `var` assignments route through run execution for cwd/policy/guard parity. `~` expansion supported.
+- **Ternary expression correctness**: Ternary expressions returning arrays or objects preserve actual values instead of stringifying to JSON. Missing field access in conditions returns undefined instead of throwing. Method calls in branches (`@tier ? @tier.split(",") : []`) parse correctly. Array/object literals work in ternary and when result positions.
+- **Conditional object fields**: `"key"?: @value` syntax correctly includes/excludes fields across all compositions — objects with only conditional fields, mixed literal and conditional fields, bare `var` keyword, and literal truthy values.
+- **Variable scoping isolation**: Function parameters no longer leak back to the caller's scope. `let` bindings in when/for blocks and nested function scopes no longer clobber outer variables. Let bindings never merge back to parent scope.
+- **StructuredValue correctness**: `.trim()` works on JSONL arrays. JS blocks receive native arrays from StructuredValue inputs (`.keep` preserves wrapper when needed). `cmd`/`sh` outputs wrapped with `.text`, `.data`, and `.mx` metadata. `/output` and `/show` write clean JSON without wrapper fields. Nested arrays normalize correctly. Parameters in shadow environments recursively unwrap.
+- **`@root` alias**: `@root` is available as a preferred alias for `@base` — both resolve to the project root with full interpolation parity.
+- **`for parallel` canary fail-fast**: Runs the first qualifying iteration synchronously and propagates its error.
+- **`var` inside block statements**: `if`, `for`, and `when ... => [ ... ]` action blocks raise a targeted parse error with guidance to use `let`.
+- **Inline comment marker spacing**: `<<` and `>>` require preceding whitespace when used as inline comments.
+- **Per-item parse resilience in glob JSON loading**: One malformed `.json` file no longer kills the entire glob array; it degrades to text with `parseError` metadata.
+- **Bare `bail` statement boundary**: `bail` without an inline message no longer consumes the next directive line.
+- **Content loader parse diagnostics**: JSON and JSONL parse failures retain specific error details.
+- **Nested guard denials in `when` actions**: Route through denied handlers instead of surfacing as condition failures.
+- **Pipeline null values**: JSON `null` values pass through pipeline stages correctly.
+- **Guard transform unwrapping**: Fixed double-wrapping that caused Variable-inside-Variable nesting.
+- **Before label guard transform composition**: Sequential `before ... for <label>` guards evaluate against the latest transformed input.
+- **`run js`/`run node` console precedence**: Explicit return values take precedence over `console.log` output.
+- **NaN truthiness handling**: `"NaN"` (case-insensitive) is falsy across `if`, `when`, and conditional inclusion.
+- **Python `exe` code normalization**: Python blocks dedent shared leading indentation; `py { ... }` single-line syntax works. `py` parses in assignment contexts wherever `python` is accepted.
+- **Run-dispatched exec null parameter preservation**: `/run @exe(...)` preserves runtime `null` for conditional fragments.
+- **Tool-call tracking in exec invocation**: `@mx.tools.calls` records regular executable invocations (not only MCP calls). `@mx.tools.allowed` and `@mx.tools.denied` populated from env mcpConfig.
+- **String concatenation with `+` diagnostics**: Targeted error for non-numeric `+` with template-interpolation hint.
+- **`var run ... using auth:name` parity**: Auth injection preserved through var command nodes.
+- **Var expression descriptor propagation**: Taint/label metadata carries through var RHS and assignment resolution.
+- **`@mx.op.labels` guard access**: Resolves as an array even when operations have no labels.
+- **Before operation guard transform boundaries**: Combined guards unwrap replacement values before reinsertion.
+- **Denied handler consistency in `for` loops**: Same fallback values inside and outside loops.
+- **Install confirmation guidance**: `mlld install` prints `module@version installed` with ready-to-copy import statement.
+- **For directive `when` guard blocks**: `/for` directives parse `for @item in @items when @cond [ ... ]` with block return syntax. For-expression guards accept block bodies in addition to `=>` forms.
+- **Relative path scope**: `output`/`append` paths resolve from the script file directory.
+- **Template file alligator path scope**: `<file>` loads in templates resolve from the template file directory.
+- **Export manifest enforcement**: Importers cannot read unexported module members through internal captured env.
+- **Multi-line import parsing**: Import lists parse correctly across multiple lines. Malformed import errors anchor to the import directive.
+- **`mlld init` resolver config**: Writes resolver prefixes to `resolvers.prefixes`. Runtime reads both legacy `resolverPrefixes` and normalized form.
+- **`when` values in exe blocks**: `WhenExpression` statements correctly early-return non-null values. Validation warns on implicit value actions in exe-block `when` branches.
+- **`@payload` resolver guidance**: Unresolved `@payload` imports explain the `mlld run` context.
+- **`file.mx.path` metadata alias**: Exposes `.mx.path` as alias of `.mx.absolute`.
+- **Directive error line numbers**: Correctly extracts line/column from AST source locations.
+- **Error messages no longer prefix directives with `/`**: `for expects an array` instead of `/for expects an array`.
+- **`let` shadowing**: `let` inside blocks errors when redefining outer non-block-scoped variables.
+- **When expression error diagnostics**: Errors include condition text, source location, full condition/action pair text, and preserve caller file paths.
+- **Spread operator typo**: `..@var` produces a targeted error suggesting `...@var`.
+- **`/run @exe(...)` structured arguments**: Inline object/array literals and spread parameters (`{ ...@data }`) preserved as runtime data for code executables.
+- **Array `.includes()` with variable references**: Compares normalized values for consistent membership checks.
+- **Structured field-access arguments in search methods**: `includes`, `indexOf`, `startsWith`, `endsWith` normalize StructuredValue arguments across expression contexts.
+- **Imported executable parameter shadowing**: Caller variables no longer collide with imported parameter names.
+- **Exe-block code parameter binding**: Code blocks (`sh`/`cmd`/`js`/`python`/`node`) inside executable blocks receive bound parameters. Path objects bind to resolved path strings.
+- **Exe return arithmetic after invocations**: `=> @fn(...) * 1` and similar continuations parse correctly.
+- **If/when guidance**: Parse errors include educational cheat sheet showing if vs when semantics and valid forms.
+- **Expressions in function arguments**: Binary and ternary expressions parse inside function arguments and array literals. Block expressions surface a targeted parse error.
+- **For-expression file metadata**: Mapping/filtering file-loaded values preserves `.mx` metadata.
+- **Return statements in when-expression blocks**: Bubble to the enclosing exe function.
+- **Shell alias resolution in `sh {}` blocks**: Shell aliases now resolve correctly (previously only worked in `cmd {}` blocks).
+- **`output ... to @variable` in when blocks**: Variable targets work in output directives inside when blocks.
+- **`let` pipelines with backtick templates**: `let @x = \`template\` | log` correctly executes the pipeline instead of silently stripping it.
+- **`run stream @exec()` parsing**: Run directives accept stream modifiers and tail options on exec invocations.
+- **After-guard retry**: Retryable after-guard flows emit output once. `run @exe(...)` contexts mark sources as retryable for `guard after ... => retry`.
+- **For block return-only syntax**: `[ => @x * 2 ]` parses correctly in for loops.
+- **When expressions in var assignments**: Uses first-match semantics. Wildcard `*` patterns match correctly.
+- **Command stdin EPIPE handling**: stdin write errors no longer crash mlld. Large shell parameters switch to heredoc at 64KB using `read` to avoid command substitution limits.
+- **Pipeline scalar stage binding**: Stage inputs auto-parse JSON scalars for code-language stages.
+- **Pipeline JS transformer logging**: Trailing expression return values preserved alongside `console.log` output.
+- **Pipeline context references**: `@p[-1]` correctly returns evaluated outputs when pipelines start with exe calls.
+- **log/output falsy values**: `false` and `0` output correctly instead of empty string.
+- **Field access on 'type' property**: Returns user data value instead of internal Variable type discriminator.
+- **JSON/JSONL parse errors**: Shows proper error messages instead of "Failed to load content".
+- **HTML/XML detection in templates**: Angle bracket content matching HTML patterns (`<tagname attr="value">`) recognized as literal HTML. Backslash-escaped characters (`\@`, `\.`, `\*`, `@@`) prevent false file reference detection inside angle brackets.
+- **Backtick template literals in exec arguments**: `@echo(@name)` where `@name` holds a backtick literal correctly evaluates.
+- **Pipeline retry @input staleness**: Leading effects see fresh values during retry.
+- **Circular imports**: Clear error message instead of infinite recursion.
+- **Empty arrays in for loops**: Iterate zero times instead of throwing.
+- **`foreach` with separator**: `with {separator: "..."}` applies correctly.
+- **`sh {}` blocks in `for parallel()`**: Execute concurrently instead of blocking the event loop.
+- **Empty comments consuming next line**: `>>` alone no longer consumes the following line.
+- **Negation with method calls in templates**: `!@arr.includes("c")` evaluates correctly.
+- **for-when in exe blocks**: Returns array value for `.length` and other operations.
+- **When block accumulation in exe**: Augmented assignments execute correctly inside when blocks.
+- **Glob JSON parsing**: Glob-loaded `.json` files auto-parse; `.mx` metadata preserved in for loops.
+- **`mlld howto` display**: Atom list shows correctly under category headers.
+- **Triple-colon template file references**: `<...>` inside triple-colon templates treated as literal text.
+- **When expression null actions**: Null results no longer fall through to the next condition.
+- **Loop control in when action blocks**: `done` and `continue` propagate to enclosing loops.
+- **For-expression OR conditions**: `||` treated as logical OR in `for ... when` filters.
+- **Section extraction with parentheses**: `<file # section>` matches headings with parentheses.
+- **Dynamic module registration**: Supports mixed user-data and external modules in one run.
+- **Path resolution guidance**: Missing file paths include did-you-mean suggestions; relative paths resolve from current mlld file.
+- **Template extension field-access hint**: `@name.json` ambiguity explained with escape suggestion.
+
+### Documentation
+- **Removed deprecated transformers**: `@xml`, `@csv`, `@md`, `@upper`, `@lower` no longer documented (moving to userland modules)
+- **`show { ... }` object-literal docs cleanup**: Uses `var`-then-`show` examples instead of inline forms
+- **File loading docs for `.jsonl`**: Documents `<file.jsonl>` auto-parsing
+- **Guard timing and composition clarity**: Docs compare `before LABEL` vs `before op:TYPE`, document `always` timing, before-transform last-wins vs after-transform chaining, and `denied` handler scope
+- **Module and import docs**: Distinguish import forms, document relative path resolution from script directory, and clarify `needs` as requirement validation
+- **Pipeline basics docs**: Lists built-in transformers, clarifies stage behavior, includes retry/fallback examples
+- **Conditional variable docs**: Distinguishes tight template form (`@var??"default"`) from spaced expression form (`@a ?? @b`)
+- **Template syntax accuracy**: `.att` documentation uses correct syntax and clarifies condensed pipe syntax
 
 ### Removed
-- **`when` first-match modifier**: Removed the first-match modifier for `when` blocks and expressions. `when` uses first-match semantics by default.
-- **`.content` accessor on StructuredValue**: Use `.text` instead
-  - `.content` was a non-enumerable getter alias that broke in complex data flows
-  - `.text` is now the canonical text representation accessor
-  - `LoadContentResult.content` unchanged (still holds raw file content)
-- **`/show` command/code execution forms**: `/show { ... }` and `/show <lang> { ... }` are removed. Use `/run` for command and code execution.
-- **`/path` directive**: Removed from grammar and directive evaluation. Use `/var` assignments (and alligator `<...>` for content loading).
+- **`when` first-match modifier**: Removed. `when` uses first-match semantics by default.
+- **`.content` accessor on StructuredValue**: Use `.text` instead. `LoadContentResult.content` unchanged.
+- **`/show` command/code execution forms**: Use `/run` instead.
+- **`/path` directive**: Use `/var` assignments and `<...>` for content loading.
 
 ## [2.0.0-rc81-ab]
 
