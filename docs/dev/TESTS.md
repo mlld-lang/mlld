@@ -162,6 +162,10 @@ Located in `tests/cases/` (at root level, organized in subdirectories like `slas
 - Compare actual output against expected output
 - Fail if output doesn't match exactly
 - When a test exercises file effects (e.g., `/append`), read the generated files back via `<@root/...>` in the fixture so assertions cover both the output document and the filesystem side effects.
+- Security label-flow regressions for expression/template propagation are covered in:
+  - `tests/cases/security/exe-template-arg-label-propagation/`
+  - `tests/cases/security/exe-expression-arg-label-propagation/`
+  - `tests/cases/security/collection-expression-label-propagation/`
 
 #### 2. Documentation Tests
 Located in `tests/cases/docs/`. Automatically extracted from `docs/user/*.md`:
