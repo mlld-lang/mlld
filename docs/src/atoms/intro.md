@@ -120,6 +120,8 @@ var @alt = ::Hello @name!::
 
 mlld is not JavaScript/Python, but it has familiar built-in JS methods. See `mlld howto builtins` for the full list.
 
+`@exists(@var)` checks if the *variable* is defined. `@fileExists(@var)` checks if the *file at that path* exists.
+
 **Use `>>` for comments, not `//`**
 
 Labels are comma-separated: `var secret,pii @data = "x"`

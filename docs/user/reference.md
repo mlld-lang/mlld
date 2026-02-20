@@ -847,6 +847,7 @@ Behavior depends on context:
 | Function arguments `@fn(@undefined)` | Error: `Undefined variable '@x' passed to function @fn` |
 | Object/array literal values | Error: `Variable not found: @var` |
 | Pipeline function | Error: `Pipeline function '@name' is not defined` |
+| Function call `@undefined()` | Error: `Command not found: undefined` |
 
 In templates, undefined variables pass through as literal text. This means `@exists(@outPath)` in a template doesn't call a function — it produces the string `@exists(@outPath)`, which is truthy. Use `@val | @exists` (pipeline) or `@val.isDefined()` (method) to test whether a value exists.
 
@@ -1024,8 +1025,24 @@ Text transforms:
 
 Inspection:
 - `@typeof`: get type information (`"simple-text"`, `"array (3 items)"`, `"object (2 properties)"`, `"primitive (boolean)"`, etc.)
-- `@exists`: returns true when the piped expression is non-empty (tests that a value exists, not file existence — see `@fileExists`)
-- `@fileExists`: returns true when the piped value is a path to an existing file on disk
+
+Existence checks:
+- `@exists(target)`: returns true when the expression evaluates without error
+  - `@exists(@var)` — checks if variable is defined
+  - `@exists(@obj.field)` — checks if field access succeeds
+  - `@exists(<path>)` — checks if file path is accessible
+  - `@exists(<glob>)` — checks if glob matches at least one file
+  - Pipeline form: `@var | @exists`
+- `@fileExists(path)`: resolves argument to a path string, then checks filesystem
+  - `@fileExists(@var)` — resolves variable value, checks if that *file* exists
+  - `@fileExists("path/to/file")` — checks literal path
+  - Pipeline form: `@path | @fileExists`
+
+**`@exists` vs `@fileExists`**: `@exists(@configPath)` checks if the *variable* `@configPath` is defined — not whether the file exists. `@fileExists(@configPath)` resolves the variable to a path and checks the *filesystem*. For file checks, use `@fileExists` or the optional load operator `<path>?`.
+
+Helpers:
+- `@keep(obj, [...keys])`: keep only specified keys from an object
+- `@keepStructured(obj, schema)`: keep keys matching a schema structure
 
 ### File Metadata Fields
 
