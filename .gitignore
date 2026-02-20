@@ -170,3 +170,6 @@ core/version.ts
 /qa
 
 j2bd/security/runs/*
+
+# LLM orchestrator output
+llm/output/
