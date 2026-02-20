@@ -65,7 +65,7 @@
     "dump:tokens": "tsx scripts/dump-tokens-for-file.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "clean": "rimraf dist",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\"",
     "postinstall": "node ./scripts/postinstall.cjs",
     "prepublishOnly": "npm run clean && npm run build",
     "sync:mlldx": "node scripts/sync-mlldx.cjs",
