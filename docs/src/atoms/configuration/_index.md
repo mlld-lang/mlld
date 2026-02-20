@@ -6,4 +6,4 @@ category: configuration
 updated: 2026-01-05
 ---
 
-Configuration includes project settings, environment variables, frontmatter, and SDK modes.
+Configuration includes project settings, environment variables, frontmatter, SDK modes, and checkpoint/resume for caching LLM call results.

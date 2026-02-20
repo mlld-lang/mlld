@@ -5,7 +5,7 @@ brief: Autonomous agent loop with dynamic context assembly
 category: patterns
 parent: patterns
 tags: [patterns, agents, loops, orchestration, autonomous]
-related: [loop, pattern-gate, pattern-llm-integration, config-sdk-execute]
+related: [loop, pattern-gate, pattern-llm-integration, config-sdk-execute, checkpoint, hooks]
 related-code: [interpreter/eval/loop.ts]
 updated: 2026-01-11
 ---
@@ -99,3 +99,13 @@ loop(endless) until @state.stop [
 ```
 
 **SDK control** - External processes can stop the loop by setting `@state.stop = true`.
+
+**Checkpoint/resume** - Label LLM exes with `llm` to auto-cache results. If the loop crashes, `--resume` restarts without re-calling prior LLM operations. `--resume @classifyTask` re-runs only that function's cached entries.
+
+**Hook telemetry** - Track loop progress with lifecycle hooks:
+
+```mlld
+hook @progress after op:loop = [
+  log `iteration @mx.loop.iteration`    >> fires per iteration
+]
+```

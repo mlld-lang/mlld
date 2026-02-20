@@ -52,3 +52,11 @@ exe @analyze(data) = prose:@config { session "Analyze @data" }
 - Use `print()` to return values (captured as string output)
 - Parameters arrive as strings; use `int()`, `float()` for math
 - Standard library available: `import json`, `import math`, etc.
+
+**Labels**: Add labels before the name for runtime behavior. The `llm` label enables automatic checkpointing:
+
+```mlld
+exe llm @review(file) = template "review.att"
+```
+
+Cached results persist across runs. Use `--resume @review` to selectively re-call. See `mlld howto checkpoint`.

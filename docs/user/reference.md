@@ -559,7 +559,9 @@ Register user lifecycle hooks with required timing (`before` or `after`):
 | `hook after op:exe = when [ ... ]` | Operation | Matches operation type |
 | `hook before untrusted = [ ... ]` | Data label | Matches label-filtered inputs |
 
-Supported operation filters: `op:var`, `op:run`, `op:exe`, `op:show`, `op:output`, `op:append`, `op:for`, `op:for:iteration`, `op:for:batch`, `op:loop`, `op:import`.
+Supported operation filters: `op:var`, `op:run`, `op:exe`, `op:show`, `op:output`, `op:log`, `op:append`, `op:stream`, `op:for`, `op:for:iteration`, `op:for:batch`, `op:loop`, `op:import`.
+
+`op:loop` fires per iteration (each call to `loop()`), not once for the whole `/loop` directive. `op:log` matches `/log` directives specifically (not `/output`).
 
 Hook bodies accept either a block (`[ ... ]`) or a `when [...]` expression.
 

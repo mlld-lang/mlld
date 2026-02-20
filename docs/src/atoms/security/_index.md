@@ -80,6 +80,8 @@ Policy-generated guards and guards declared with `privileged` cannot be bypassed
 
 Guards are regular module exports — they can be imported, composed, and bundled.
 
+**Checkpoint interaction**: Cache hits bypass guard evaluation. After changing guard or policy rules, use `--fresh` to rebuild the cache.
+
 **Atoms:** `guards-basics` (start here), `guard-composition`, `guards-privileged`, `transform-with-allow`, `denied-handlers`
 
 ## Policies

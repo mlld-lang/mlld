@@ -15,6 +15,8 @@ var @sdkModes = <@base/docs/src/atoms/configuration/sdk-execution-modes.md>
 var @sdkDynamic = <@base/docs/src/atoms/configuration/sdk-dynamic-modules.md>
 var @sdkExecute = <@base/docs/src/atoms/configuration/sdk-execute-function.md>
 var @sdkAnalyze = <@base/docs/src/atoms/configuration/sdk-analyze-module.md>
+var @cliRun = <@base/docs/src/atoms/configuration/cli-run.md>
+var @checkpoint = <@base/docs/src/atoms/configuration/checkpoint.md>
 
 >> Build sections
 exe @wrapSection(tag, content) = js {
@@ -29,12 +31,16 @@ var @sdkModesSection = @wrapSection("SDK_EXECUTION_MODES", @strip(@sdkModes))
 var @sdkDynamicSection = @wrapSection("DYNAMIC_MODULE_INJECTION", @strip(@sdkDynamic))
 var @sdkExecuteSection = @wrapSection("EXECUTE_FUNCTION", @strip(@sdkExecute))
 var @sdkAnalyzeSection = @wrapSection("ANALYZE_MODULE", @strip(@sdkAnalyze))
+var @cliRunSection = @wrapSection("CLI_RUN", @strip(@cliRun))
+var @checkpointSection = @wrapSection("CHECKPOINT_AND_RESUME", @strip(@checkpoint))
 
 var @allSections = [
   @configFilesSection,
   @envVarsSection,
   @frontmatterSection,
   @pathsUrlsSection,
+  @cliRunSection,
+  @checkpointSection,
   @sdkModesSection,
   @sdkDynamicSection,
   @sdkExecuteSection,

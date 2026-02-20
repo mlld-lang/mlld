@@ -95,7 +95,7 @@ show `Hello @name!`
 
 ## Key Concepts
 
-**Directives** - Commands: `var`, `show`, `run`, `if`, `for`, `when`, `import`, `export`, `guard`, `policy`
+**Directives** - Commands: `var`, `show`, `run`, `if`, `for`, `when`, `import`, `export`, `guard`, `policy`, `hook`, `checkpoint`
 
 **Variables** - Always `@` prefixed: `@name`, `@data`, `@result`
 
@@ -115,6 +115,10 @@ var @alt = ::Hello @name!::
 **Modules** - Import/export: `import { @helper } from @corp/utils`
 
 **Security** - Labels + policies + guards = prompt injection defense
+
+**Hooks** - Lifecycle observers: `hook after @fn = [...]` for logging, telemetry, transforms
+
+**Checkpoint** - Auto-caches `llm`-labeled exe results; `--resume` re-runs selectively
 
 ## Gotchas
 

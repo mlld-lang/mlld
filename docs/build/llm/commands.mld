@@ -36,6 +36,7 @@ var @output = <@base/docs/src/atoms/commands/output.md>
 var @log = <@base/docs/src/atoms/commands/log.md>
 var @append = <@base/docs/src/atoms/commands/append.md>
 var @stream = <@base/docs/src/atoms/commands/stream.md>
+var @hooks = <@base/docs/src/atoms/commands/hooks.md>
 
 >> Strip each atom group
 var @runStripped = for @a in @runAtoms => @strip(@a)
@@ -59,6 +60,7 @@ var @outputSection = @wrapSection("OUTPUT_DIRECTIVE", "Write data to files or st
 var @logSection = @wrapSection("LOG_DIRECTIVE", "Syntactic sugar for `output to stdout`. Works in action contexts.", @strip(@log))
 var @appendSection = @wrapSection("APPEND_DIRECTIVE", "Append newline-delimited records.", @strip(@append))
 var @streamSection = @wrapSection("STREAMING", "Stream output during execution.", @strip(@stream))
+var @hooksSection = @wrapSection("HOOKS", "Register lifecycle hooks for observability and transforms.", @strip(@hooks))
 
 var @allSections = [
   @runSection,
@@ -67,7 +69,8 @@ var @allSections = [
   @outputSection,
   @logSection,
   @appendSection,
-  @streamSection
+  @streamSection,
+  @hooksSection
 ]
 
 var @body = @allSections.join("\n\n")

@@ -5,7 +5,7 @@ brief: Run independent tasks concurrently
 category: patterns
 parent: patterns
 tags: [patterns, parallel, concurrency, async]
-related: [for-parallel, pipelines-parallel]
+related: [for-parallel, pipelines-parallel, checkpoint, hooks]
 related-code: []
 updated: 2026-01-05
 ---
@@ -29,3 +29,5 @@ exe @runAll(tasks) = [
   ]
 ]
 ```
+
+**Hooks** for batch telemetry: `op:for:iteration` and `op:for:batch` filters observe parallel loop progress. **Checkpoint** caches `llm`-labeled calls across parallel items — `--resume` avoids re-calling completed items.

@@ -41,7 +41,9 @@ hook @router after op:exe = when [
 | Operation | `op:run`, `op:exe`, `op:var` | All operations of that type |
 | Data label | `untrusted` | Operations with labeled inputs |
 
-Supported operation filters: `op:var`, `op:run`, `op:exe`, `op:show`, `op:output`, `op:append`, `op:for`, `op:for:iteration`, `op:for:batch`, `op:loop`, `op:import`.
+Supported operation filters: `op:var`, `op:run`, `op:exe`, `op:show`, `op:output`, `op:log`, `op:append`, `op:stream`, `op:for`, `op:for:iteration`, `op:for:batch`, `op:loop`, `op:import`.
+
+`op:loop` fires per iteration (each call to `loop()`), not once for the whole `/loop` directive. `op:log` matches `/log` directives specifically (not `/output`).
 
 **Hook body context:**
 
