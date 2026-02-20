@@ -1,0 +1,13 @@
+exe @partialMask(value) = js {
+  return value.split(' ').map(function(w) {
+    if (w.length <= 1) return w;
+    return w.charAt(0) + new Array(w.length).join('*');
+  }).join(' ');
+}
+
+guard @partialRedactPii for pii = when [
+  @mx.op.type == "show" => allow @partialMask(@input)
+  * => allow
+]
+
+export { @partialRedactPii }

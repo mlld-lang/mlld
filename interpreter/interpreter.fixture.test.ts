@@ -925,12 +925,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     const shouldSkipSlow = isFastTestMode && isKnownSlowFixture;
     const requiresPythonRuntime = fixture.name.startsWith('exceptions/python/');
     const shouldSkipMissingPython = requiresPythonRuntime && !pythonRuntimeAvailable;
+    const shouldSkipLive = fixture.live && process.env.MLLD_LIVE !== '1';
 
-    const testFn = (skipTests[fixture.name] || shouldSkipDoc || shouldSkipSlow || shouldSkipMissingPython) ? it.skip : it;
+    const testFn = (skipTests[fixture.name] || shouldSkipDoc || shouldSkipSlow || shouldSkipMissingPython || shouldSkipLive) ? it.skip : it;
     const skipReason = skipTests[fixture.name] ? ` (Skipped: ${skipTests[fixture.name]})` :
                        shouldSkipDoc ? ` (Skipped: Intentional partial/educational example)` :
                        shouldSkipSlow ? ` (Skipped: Slow test in fast mode)` :
-                       shouldSkipMissingPython ? ` (Skipped: Python runtime not available)` : '';
+                       shouldSkipMissingPython ? ` (Skipped: Python runtime not available)` :
+                       shouldSkipLive ? ` (Skipped: Requires MLLD_LIVE=1)` : '';
 
     testFn(`should handle ${fixture.name}${isDocumentationTest ? ' (syntax only)' : isSmokeTest ? ' (smoke test)' : ''}${skipReason}`, async () => {
       // Check if this is a valid fixture that has a parse error

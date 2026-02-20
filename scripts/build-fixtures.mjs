@@ -570,9 +570,10 @@ async function processExampleDirectory(dirPath, category, name, directive = null
 
   // Check for skip files
   const skipFiles = files.filter(f => f === 'skip.md' || f.startsWith('skip-') && f.endsWith('.md'));
-  if (skipFiles.length > 0) {
-    // Read the skip reason from the first skip file
-    const skipFile = skipFiles[0];
+  const isLiveTest = skipFiles.includes('skip-live.md');
+  const nonLiveSkipFiles = skipFiles.filter(f => f !== 'skip-live.md');
+  if (nonLiveSkipFiles.length > 0) {
+    const skipFile = nonLiveSkipFiles[0];
     const skipReason = await fs.readFile(path.join(dirPath, skipFile), 'utf-8');
     console.log(`  ⏭️  Skipping ${path.relative(CASES_DIR, dirPath)}: ${skipFile}`);
     if (process.env.VERBOSE) {
@@ -727,7 +728,8 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         parseError: parseError,
         ...(config?.env ? { environmentVariables: config.env } : {}),
         ...(inferredMode ? { mlldMode: inferredMode } : {}),
-        ...(sourceInfo ? { sourceInfo } : {})
+        ...(sourceInfo ? { sourceInfo } : {}),
+        ...(isLiveTest ? { live: true } : {})
       };
       
       // Write fixture only if content changed

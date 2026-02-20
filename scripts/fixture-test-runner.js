@@ -50,13 +50,15 @@ function getMatchingFixtures(pattern) {
     return exact;
   }
 
-  // Prefix match (with path boundary awareness)
-  const prefixMatches = allFixtures.filter(f =>
+  // Prefix match and substring match (catches exceptions/security/... for pattern security/...)
+  const matches = allFixtures.filter(f =>
     f.startsWith(normalizedPattern + '/') ||
-    f.startsWith(normalizedPattern)
+    f.startsWith(normalizedPattern) ||
+    f.includes('/' + normalizedPattern + '/') ||
+    f.includes('/' + normalizedPattern)
   );
 
-  return prefixMatches;
+  return matches;
 }
 
 function main() {

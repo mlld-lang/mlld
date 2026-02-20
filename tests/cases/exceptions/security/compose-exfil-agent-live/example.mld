@@ -1,0 +1,8 @@
+import { @blockPiiExfil } from "./compose-exfil-agent-live-module.mld"
+
+var pii @name = "John Doe"
+exe llm @askClaude(prompt: string) = cmd { claude -p "@prompt" --output-format text }
+exe net:w @sendToApi(data: string) = `sent: @data`
+
+var @greeting = @askClaude(`Say hello to @name in one short sentence.`)
+show @sendToApi(@greeting)

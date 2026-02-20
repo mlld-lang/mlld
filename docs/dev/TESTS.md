@@ -119,6 +119,7 @@ Tests can be skipped by placing a `skip.md` or `skip-*.md` file in the test dire
 - `skip-doc-example.md` - Documentation examples with intentional errors
 - `skip-future-enhancement.md` - Planned features not yet implemented
 - `skip-needs-investigation.md` - Tests with unclear failures needing debugging
+- `skip-live.md` - Tests requiring live API calls (see [Live Tests](#live-tests) below)
 
 #### Skip File Format
 
@@ -205,6 +206,38 @@ Located in `tests/cases/invalid/`. These tests:
   - hook observability emissions (`output`/`append`/`run`) with non-fatal hook-side failures (`hooks-state-emission-nonfatal`)
 - Execute multi-run checkpoint fixture scenarios in `tests/interpreter/checkpoint/integration-fixtures.test.ts`.
 - For docs-published checkpoint/resume examples, generated syntax smoke fixtures are expected artifacts and should be committed with phase updates when regenerated.
+
+### Live Tests
+
+Tests that make real API calls (LLM, network services) use `skip-live.md` to gate on the `MLLD_LIVE=1` environment variable. Fixtures are always generated for live tests, but the test runner skips them unless `MLLD_LIVE=1` is set.
+
+```bash
+# Default: live tests skipped at runtime
+npm run test:case -- exceptions/security/compose-exfil-agent-live
+# ↓ should handle exceptions/security/compose-exfil-agent-live (Skipped: Requires MLLD_LIVE=1)
+
+# Run live tests
+MLLD_LIVE=1 npm run test:case -- exceptions/security/compose-exfil-agent-live
+```
+
+#### Creating a Live Test
+
+1. Create the test directory and files as usual (`example.mld`, `error.md` or `expected.md`)
+2. Add a `skip-live.md` file with a description of what the test requires:
+
+```markdown
+Requires MLLD_LIVE=1 to run. Makes actual LLM API calls.
+```
+
+The build-fixtures script sets `live: true` in the fixture JSON when `skip-live.md` is present. The test runner checks this flag and skips unless `MLLD_LIVE=1` is set. All other `skip-*.md` files remain unconditional build-time skips.
+
+#### When to Use Live Tests
+
+- Tests that invoke Claude or other LLMs via `run cmd { claude -p ... }`
+- Tests that make real network requests
+- End-to-end scenarios that validate behavior with actual external services
+
+Pair each live test with a mocked equivalent that runs in the normal test suite. The mocked version proves the mechanism works; the live version proves it works end-to-end.
 
 ## Fixture Generation
 

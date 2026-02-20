@@ -1,0 +1,10 @@
+guard @redactPii for pii = when [
+  @mx.op.type == "show" => allow "[PII REDACTED]"
+  * => allow
+]
+
+var @config = {
+  labels: { pii: { deny: ["exfil"] } }
+}
+
+export { @redactPii, @config }

@@ -1,0 +1,6 @@
+guard @tagPii for pii = when [
+  @mx.op.type == "show" => allow `[PII:@input]`
+  * => allow
+]
+
+export { @tagPii }
