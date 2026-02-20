@@ -335,7 +335,9 @@ export async function executeRunCommand(
   const commandTaint = deriveCommandTaint({ command });
   const scopedEnvConfig = resolveEnvironmentConfig(env, context?.guardMetadata);
   const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, env.getPolicySummary());
-  const outputDescriptor = buildEnvironmentOutputDescriptor(command, resolvedEnvConfig);
+  const baseOutputDescriptor = buildEnvironmentOutputDescriptor(command, resolvedEnvConfig);
+  let outputDescriptor =
+    mergeInputDescriptors(baseOutputDescriptor, commandInputDescriptor) ?? baseOutputDescriptor;
   if (resolvedEnvConfig?.provider) {
     env.enforceToolAllowed('bash', {
       sourceLocation: directive.location ?? undefined,
@@ -388,6 +390,9 @@ export async function executeRunCommand(
   const envAuthSecrets = await resolveEnvironmentAuthSecrets(env, resolvedEnvConfig);
   const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
   const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
+
+  outputDescriptor =
+    mergeInputDescriptors(outputDescriptor, stdinDescriptor, envInputDescriptor) ?? outputDescriptor;
 
   checkRunInputLabelFlow({
     descriptor: envInputDescriptor,

@@ -57,6 +57,33 @@ describe('security descriptor services', () => {
     expect(descriptor?.labels).toEqual(expect.arrayContaining(['left', 'right']));
   });
 
+  it('extracts descriptors from object spread entries', () => {
+    const env = createEnvStub({
+      spreadSource: createVariableWithLabels(['secret'])
+    });
+
+    const descriptor = extractDescriptorsFromDataAst(
+      {
+        type: 'object',
+        entries: [
+          {
+            type: 'spread',
+            value: [
+              {
+                type: 'VariableReference',
+                identifier: 'spreadSource'
+              }
+            ]
+          }
+        ]
+      },
+      env
+    );
+
+    expect(descriptor?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(descriptor?.taint).toEqual(expect.arrayContaining(['secret']));
+  });
+
   it('extracts descriptors from template AST references', () => {
     const env = createEnvStub({
       payload: createVariableWithLabels(['payload'])

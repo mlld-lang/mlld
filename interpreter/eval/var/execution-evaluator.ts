@@ -3,7 +3,11 @@ import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import {
+  asText,
+  extractSecurityDescriptor,
+  isStructuredValue
+} from '@interpreter/utils/structured-value';
 import { isExeReturnControl } from '../exe-return';
 import {
   enforceToolSubset,
@@ -100,6 +104,13 @@ export function createExecutionEvaluator(
       }
     };
     const result = await evaluateRun(runDirective, env);
+    const commandResultDescriptor = extractSecurityDescriptor(result.value, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (commandResultDescriptor) {
+      descriptorState.mergeResolvedDescriptor(commandResultDescriptor);
+    }
     const textOutput = isStructuredValue(result.value)
       ? asText(result.value)
       : typeof result.value === 'string'

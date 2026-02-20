@@ -128,8 +128,12 @@ export function extractDescriptorsFromDataAst(
     }
     seen.add(node);
 
-    if (node.type === 'VariableReference' && node.identifier) {
-      const variable = env.getVariable(node.identifier);
+    if (
+      (node.type === 'VariableReference' || node.type === 'InterpolationVar' || node.type === 'TemplateVariable')
+      && (node.identifier || node.name)
+    ) {
+      const identifier = node.identifier || node.name;
+      const variable = env.getVariable(identifier);
       if (variable?.mx) {
         const descriptor = varMxToSecurityDescriptor(variable.mx);
         if (descriptor && (descriptor.labels.length > 0 || descriptor.taint.length > 0)) {
@@ -148,8 +152,13 @@ export function extractDescriptorsFromDataAst(
       for (const entry of node.entries) {
         if (entry.type === 'pair' && entry.value) {
           collectFromNode(entry.value);
-        } else if (entry.type === 'spread' && entry.variable) {
-          collectFromNode(entry.variable);
+        } else if (entry.type === 'spread') {
+          if (entry.value) {
+            collectFromNode(entry.value);
+          }
+          if (entry.variable) {
+            collectFromNode(entry.variable);
+          }
         } else if (entry.type === 'conditionalPair' && entry.value) {
           collectFromNode(entry.value);
         }
