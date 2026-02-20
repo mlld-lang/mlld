@@ -332,7 +332,7 @@ For /var directives, the variable is pre-computed via prepareVarAssignment and p
 - Taint: `interpreter/hooks/taint-post-hook.ts`
 - Context: `interpreter/env/ContextManager.ts`
 - Input extraction: `interpreter/eval/directive-inputs.ts`
- - Helpers: `core/types/variable/ArrayHelpers.ts`
+- Helpers: `core/types/variable/ArrayHelpers.ts`
 
 **Debug approach**:
 - Add logging in HookManager.runPre/runPost to trace hook execution

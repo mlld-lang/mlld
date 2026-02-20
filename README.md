@@ -4,7 +4,7 @@ A scripting language for secure LLM orchestration. Compose prompts from files, c
 
 ```bash
 npm install -g mlld
-mlld howto intro      # give this to your llm
+mlld quickstart          # give this to your llm
 ```
 
 [VSCode Extension](https://marketplace.visualstudio.com/items?itemName=andyet.mlld-vscode) | [Documentation](https://mlld.ai/docs)
