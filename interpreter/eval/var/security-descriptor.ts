@@ -117,11 +117,16 @@ export function extractDescriptorsFromDataAst(
   }
 
   const descriptors: SecurityDescriptor[] = [];
+  const seen = new WeakSet<object>();
 
   const collectFromNode = (node: any): void => {
     if (!node || typeof node !== 'object') {
       return;
     }
+    if (seen.has(node)) {
+      return;
+    }
+    seen.add(node);
 
     if (node.type === 'VariableReference' && node.identifier) {
       const variable = env.getVariable(node.identifier);
@@ -173,6 +178,22 @@ export function extractDescriptorsFromDataAst(
       for (const part of node.parts) {
         collectFromNode(part);
       }
+    }
+
+    // Fallback traversal for expression node shapes and future AST additions.
+    // This ensures labels are discovered from nested fields like
+    // condition/trueBranch/falseBranch, left/right, operand, etc.
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === 'location' || key === 'nodeId' || key === 'type') {
+        continue;
+      }
+      if (Array.isArray(value)) {
+        for (const entry of value) {
+          collectFromNode(entry);
+        }
+        continue;
+      }
+      collectFromNode(value);
     }
   };
 

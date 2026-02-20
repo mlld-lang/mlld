@@ -5,7 +5,7 @@ import type { EvalResult } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
 
 export type EvaluatedExecArguments = {
@@ -180,6 +180,9 @@ export async function evaluateExecInvocationArgs(options: {
         case 'ArraySliceExpression': {
           const { evaluateUnifiedExpression } = await import('@interpreter/eval/expressions');
           const exprResult = await evaluateUnifiedExpression(arg as any, env, { isExpression: true });
+          if (exprResult.descriptor) {
+            services.mergeResultDescriptor(exprResult.descriptor);
+          }
           argValueAny = exprResult.value;
           if (argValueAny === undefined) {
             argValue = 'undefined';
@@ -199,6 +202,13 @@ export async function evaluateExecInvocationArgs(options: {
         case 'WhenExpression': {
           const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
           const whenRes = await evaluateWhenExpression(arg as any, env);
+          const whenDescriptor = extractSecurityDescriptor(whenRes.value, {
+            recursive: true,
+            mergeArrayElements: true
+          });
+          if (whenDescriptor) {
+            services.mergeResultDescriptor(whenDescriptor);
+          }
           argValueAny = whenRes.value;
           if (argValueAny === undefined) {
             argValue = 'undefined';

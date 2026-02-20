@@ -1427,10 +1427,13 @@ async function evaluateExecInvocationInternal(
         descriptorPieces.push(mcpSecurityDescriptor);
       }
       if (descriptorPieces.length > 0) {
-        resultSecurityDescriptor =
+        const descriptorFromPieces =
           descriptorPieces.length === 1
             ? descriptorPieces[0]
             : env.mergeSecurityDescriptors(...descriptorPieces);
+        resultSecurityDescriptor = resultSecurityDescriptor
+          ? env.mergeSecurityDescriptors(resultSecurityDescriptor, descriptorFromPieces)
+          : descriptorFromPieces;
       }
       const paramFlowHandled = await enforceExecParamLabelFlow({
         env,

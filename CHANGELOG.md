@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Imported guards now resolve internal executable dependencies in the module where the guard was defined; consumers do not need to import helper executables separately.
 - Re-importing the same module in one execution (for example, guard import plus policy import) reuses cached module evaluation and no longer re-registers guards.
+- Security label/taint propagation now survives template-literal interpolation passed as executable arguments.
+- Executable argument expressions (`? :`, unary/binary forms, and when-expression values) now preserve security descriptors.
+- Array/object literals now retain label/taint metadata from nested expression values.
 
 ## [2.0.0-rc82]
 

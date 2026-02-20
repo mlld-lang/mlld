@@ -316,6 +316,64 @@ describe('Security metadata propagation', () => {
     expect(messageVar?.mx.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
+  it('preserves labels for template-literal exe arguments', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const directives = [
+      '/var pii @name = "John Doe"',
+      '/exe @echo(input) = cmd { printf "@input" }',
+      '/var @direct = @echo(@name)',
+      '/var @template = @echo(`hello @name`)'
+    ];
+
+    for (const source of directives) {
+      const directive = parseSync(source)[0] as DirectiveNode;
+      await evaluateDirective(directive, env);
+    }
+
+    const directVar = env.getVariable('direct');
+    const templateVar = env.getVariable('template');
+    expect(directVar?.mx.labels).toEqual(expect.arrayContaining(['pii']));
+    expect(templateVar?.mx.labels).toEqual(expect.arrayContaining(['pii']));
+  });
+
+  it('preserves labels for expression exe arguments', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const directives = [
+      '/var pii @name = "John Doe"',
+      '/var @flag = true',
+      '/exe @echo(input) = cmd { printf "@input" }',
+      '/var @result = @echo(@flag ? @name : "x")'
+    ];
+
+    for (const source of directives) {
+      const directive = parseSync(source)[0] as DirectiveNode;
+      await evaluateDirective(directive, env);
+    }
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['pii']));
+  });
+
+  it('preserves labels for expression values in array and object literals', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const directives = [
+      '/var pii @name = "John Doe"',
+      '/var @flag = true',
+      '/var @arrTern = [@flag ? @name : "x"]',
+      '/var @objTern = {"k": @flag ? @name : "x"}'
+    ];
+
+    for (const source of directives) {
+      const directive = parseSync(source)[0] as DirectiveNode;
+      await evaluateDirective(directive, env);
+    }
+
+    const arrVar = env.getVariable('arrTern');
+    const objVar = env.getVariable('objTern');
+    expect(arrVar?.mx.labels).toEqual(expect.arrayContaining(['pii']));
+    expect(objVar?.mx.labels).toEqual(expect.arrayContaining(['pii']));
+  });
+
   it('propagates pipeline taint and labels into structured outputs and downstream results', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
     const tokenDirective = parseSync('/var secret @token = "abc123"')[0] as DirectiveNode;
