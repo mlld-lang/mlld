@@ -10,6 +10,7 @@ import { glob } from 'glob';
 import { MlldError, ErrorSeverity } from '@core/errors';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import { DependencyDetector } from '@core/utils/dependency-detector';
+import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { inferStartRule, isTemplateFile } from '@core/utils/mode';
 import { parseSync } from '@grammar/parser';
 import { builtinTransformers } from '@interpreter/builtin/transformers';
@@ -17,6 +18,7 @@ import {
   maskPlainMlldTemplateFences,
   restorePlainMlldTemplateFences
 } from '@interpreter/eval/template-fence-literals';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import * as yaml from 'js-yaml';
 import type { MlldNode, ImportDirectiveNode, ExportDirectiveNode, GuardDirectiveNode, ExecutableDirectiveNode, RunDirective, ExecDirective } from '@core/types';
 
@@ -27,6 +29,8 @@ export interface AnalyzeOptions {
   errorOnWarnings?: boolean;
   verbose?: boolean;
   knownTemplateParams?: Map<string, Set<string>>;
+  deep?: boolean;
+  strictTemplateVariables?: boolean;
 }
 
 export interface AnalysisError {
@@ -116,6 +120,23 @@ export interface AnalyzeResult {
   needs?: NeedsInfo;
   template?: TemplateInfo;
   ast?: MlldNode[];
+}
+
+interface ImportReference {
+  from: string;
+  line?: number;
+  column?: number;
+}
+
+interface TemplateReference {
+  path: string;
+  line?: number;
+  column?: number;
+}
+
+interface DeepValidationTargets {
+  files: string[];
+  diagnostics: AnalyzeResult[];
 }
 
 /**
@@ -223,6 +244,17 @@ const BUILTIN_VARIABLES = new Set([
 
 const DEPRECATED_JSON_BASE_NAMES = new Set(['json', 'JSON']);
 const VALIDATE_CONFIG_FILENAMES = ['mlld-config.json', 'mlld.config.json'];
+const MODULE_FILE_EXTENSIONS = ['.mld.md', '.mld', '.mlld.md', '.mlld'] as const;
+const MODULE_ENTRY_CANDIDATES = [
+  'index.mld',
+  'main.mld',
+  'index.mld.md',
+  'main.mld.md',
+  'index.mlld',
+  'main.mlld',
+  'index.mlld.md',
+  'main.mlld.md'
+] as const;
 const WARNING_CODE_ALIASES: Record<string, AntiPatternWarningCode> = {
   'parameter-shadowing': 'exe-parameter-shadowing'
 };
@@ -946,6 +978,64 @@ function extractImports(ast: MlldNode[]): ImportInfo[] {
   return imports;
 }
 
+function extractImportReferences(ast: MlldNode[]): ImportReference[] {
+  const imports: ImportReference[] = [];
+
+  walkAST(ast, (node) => {
+    if (node.type !== 'Directive' || node.kind !== 'import') {
+      return;
+    }
+
+    const importNode = node as any;
+    const from = importNode.raw?.path;
+    if (!from || typeof from !== 'string') {
+      return;
+    }
+
+    imports.push({
+      from,
+      line: importNode.location?.start?.line,
+      column: importNode.location?.start?.column
+    });
+  });
+
+  return imports;
+}
+
+function extractTemplateReferences(ast: MlldNode[]): TemplateReference[] {
+  const templates: TemplateReference[] = [];
+
+  walkAST(ast, (node) => {
+    if (node.type !== 'Directive' || node.kind !== 'exe') {
+      return;
+    }
+
+    const exeNode = node as any;
+    const pathNodes = exeNode.values?.path;
+    if (!Array.isArray(pathNodes) || pathNodes.length === 0) {
+      return;
+    }
+
+    // Skip dynamic template paths (interpolated path fragments).
+    if (!pathNodes.every((part: any) => part?.type === 'Text' && typeof part.content === 'string')) {
+      return;
+    }
+
+    const templatePath = pathNodes.map((part: any) => part.content).join('');
+    if (!templatePath) {
+      return;
+    }
+
+    templates.push({
+      path: templatePath,
+      line: exeNode.location?.start?.line,
+      column: exeNode.location?.start?.column
+    });
+  });
+
+  return templates;
+}
+
 /**
  * Extract guards from AST
  */
@@ -1267,6 +1357,7 @@ interface TemplateParamEntry {
  */
 async function buildTemplateParamMap(files: string[]): Promise<Map<string, Set<string>>> {
   const entries: TemplateParamEntry[] = [];
+  const projectRoot = await resolveProjectRootForDeepValidation(files);
 
   for (const file of files) {
     const lower = file.toLowerCase();
@@ -1299,8 +1390,9 @@ async function buildTemplateParamMap(files: string[]): Promise<Map<string, Set<s
           if (param?.name) params.add(param.name);
         }
 
-        // Store with both absolute resolution and normalized suffix
-        const absPath = path.resolve(moduleDir, pathText);
+        // Store with both absolute resolution and normalized suffix.
+        const absPath = resolveStaticReferenceBasePath(pathText, file, projectRoot)
+          ?? path.resolve(moduleDir, pathText);
         const suffix = pathText.replace(/^\.\//, '');
 
         entries.push({ absPath, suffix, params });
@@ -1409,6 +1501,341 @@ async function discoverTemplateParams(templatePath: string, knownTemplateParams?
   }
 
   return params;
+}
+
+function isModuleFilePath(filepath: string): boolean {
+  const normalized = filepath.toLowerCase();
+  return MODULE_FILE_EXTENSIONS.some(ext => normalized.endsWith(ext));
+}
+
+function isUrlLikePath(ref: string): boolean {
+  return /^https?:\/\//i.test(ref);
+}
+
+async function isFilePath(candidate: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(candidate);
+    return stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
+function resolveStaticReferenceBasePath(
+  reference: string,
+  importerFilepath: string,
+  projectRoot: string
+): string | null {
+  const trimmed = reference.trim();
+  if (!trimmed || isUrlLikePath(trimmed)) {
+    return null;
+  }
+
+  if (/^@(base|root)(?:\/|$)/.test(trimmed)) {
+    const withoutPrefix = trimmed.replace(/^@(base|root)(?:\/)?/, '');
+    if (!withoutPrefix) {
+      return projectRoot;
+    }
+    const relative = withoutPrefix.startsWith('/') ? withoutPrefix.slice(1) : withoutPrefix;
+    return path.resolve(projectRoot, relative);
+  }
+
+  if (trimmed.startsWith('@')) {
+    return null;
+  }
+
+  if (path.isAbsolute(trimmed)) {
+    return path.resolve(trimmed);
+  }
+
+  return path.resolve(path.dirname(importerFilepath), trimmed);
+}
+
+function buildModuleCandidatesForDeepValidation(basePath: string): string[] {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+  const addCandidate = (candidate: string): void => {
+    const normalized = path.resolve(candidate);
+    if (seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    candidates.push(normalized);
+  };
+
+  addCandidate(basePath);
+
+  const lower = basePath.toLowerCase();
+  const hasModuleExtension = MODULE_FILE_EXTENSIONS.some(ext => lower.endsWith(ext));
+  if (!hasModuleExtension) {
+    for (const ext of MODULE_FILE_EXTENSIONS) {
+      addCandidate(basePath + ext);
+    }
+    for (const entry of MODULE_ENTRY_CANDIDATES) {
+      addCandidate(path.join(basePath, entry));
+    }
+  }
+
+  return candidates;
+}
+
+async function resolveModuleImportForDeepValidation(
+  importRef: string,
+  importerFilepath: string,
+  projectRoot: string
+): Promise<string | null> {
+  const basePath = resolveStaticReferenceBasePath(importRef, importerFilepath, projectRoot);
+  if (!basePath) {
+    return null;
+  }
+
+  const candidates = buildModuleCandidatesForDeepValidation(basePath);
+  for (const candidate of candidates) {
+    if (await isFilePath(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+async function resolveTemplatePathForDeepValidation(
+  templateRef: string,
+  importerFilepath: string,
+  projectRoot: string
+): Promise<string | null> {
+  const basePath = resolveStaticReferenceBasePath(templateRef, importerFilepath, projectRoot);
+  if (!basePath) {
+    return null;
+  }
+
+  const ext = path.extname(basePath).toLowerCase();
+  if (ext !== '.att' && ext !== '.mtt') {
+    return null;
+  }
+
+  if (await isFilePath(basePath)) {
+    return path.resolve(basePath);
+  }
+
+  return null;
+}
+
+async function parseModuleAstForDeepTraversal(filepath: string): Promise<MlldNode[] | null> {
+  try {
+    const content = await fs.readFile(filepath, 'utf8');
+    const mode = filepath.toLowerCase().endsWith('.mld.md') ? 'markdown' : 'strict';
+    return parseSync(content, { mode });
+  } catch {
+    return null;
+  }
+}
+
+function addTraversalDiagnostic(
+  diagnostics: Map<string, AnalysisError[]>,
+  filepath: string,
+  error: AnalysisError
+): void {
+  const current = diagnostics.get(filepath) ?? [];
+  current.push(error);
+  diagnostics.set(filepath, current);
+}
+
+function diagnosticsToAnalyzeResults(diagnostics: Map<string, AnalysisError[]>): AnalyzeResult[] {
+  return Array.from(diagnostics.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([filepath, errors]) => ({
+      filepath,
+      valid: false,
+      errors
+    }));
+}
+
+async function resolveProjectRootForDeepValidation(entryFiles: string[]): Promise<string> {
+  const firstPath = entryFiles.find(Boolean);
+  if (!firstPath) {
+    return process.cwd();
+  }
+
+  const nodeFs = new NodeFileSystem();
+  const startDir = path.dirname(path.resolve(firstPath));
+  return findProjectRoot(startDir, nodeFs);
+}
+
+async function collectDeepValidationTargets(entryFiles: string[]): Promise<DeepValidationTargets> {
+  const diagnostics = new Map<string, AnalysisError[]>();
+  const modules = new Set<string>();
+  const templates = new Set<string>();
+  const queue: string[] = [];
+
+  const normalizedEntries = entryFiles.map(file => path.resolve(file));
+  const projectRoot = await resolveProjectRootForDeepValidation(normalizedEntries);
+
+  for (const entry of normalizedEntries) {
+    const lower = entry.toLowerCase();
+    if (lower.endsWith('.att') || lower.endsWith('.mtt')) {
+      templates.add(entry);
+      continue;
+    }
+
+    if (isModuleFilePath(entry)) {
+      modules.add(entry);
+      queue.push(entry);
+    } else {
+      // Keep unknown files in the module set so analyze() can return a concrete error.
+      modules.add(entry);
+      queue.push(entry);
+    }
+  }
+
+  const visited = new Set<string>();
+  while (queue.length > 0) {
+    const currentModule = queue.shift() as string;
+    const normalizedModule = path.resolve(currentModule);
+    if (visited.has(normalizedModule)) {
+      continue;
+    }
+    visited.add(normalizedModule);
+
+    const ast = await parseModuleAstForDeepTraversal(normalizedModule);
+    if (!ast) {
+      continue;
+    }
+
+    const imports = extractImportReferences(ast);
+    for (const imported of imports) {
+      const resolvedImport = await resolveModuleImportForDeepValidation(
+        imported.from,
+        normalizedModule,
+        projectRoot
+      );
+
+      if (resolvedImport) {
+        if (!modules.has(resolvedImport)) {
+          modules.add(resolvedImport);
+          queue.push(resolvedImport);
+        }
+        continue;
+      }
+
+      const isLocalLike =
+        imported.from.startsWith('@base') ||
+        imported.from.startsWith('@root') ||
+        (!imported.from.startsWith('@') && !isUrlLikePath(imported.from));
+      if (isLocalLike) {
+        addTraversalDiagnostic(diagnostics, normalizedModule, {
+          message: `Unable to resolve import "${imported.from}" during deep validation`,
+          line: imported.line,
+          column: imported.column
+        });
+      }
+    }
+
+    const templateRefs = extractTemplateReferences(ast);
+    for (const templateRef of templateRefs) {
+      const resolvedTemplate = await resolveTemplatePathForDeepValidation(
+        templateRef.path,
+        normalizedModule,
+        projectRoot
+      );
+
+      if (resolvedTemplate) {
+        templates.add(resolvedTemplate);
+        continue;
+      }
+
+      addTraversalDiagnostic(diagnostics, normalizedModule, {
+        message: `Unable to resolve template "${templateRef.path}" during deep validation`,
+        line: templateRef.line,
+        column: templateRef.column
+      });
+    }
+  }
+
+  const files = [...modules, ...templates].sort();
+  return {
+    files,
+    diagnostics: diagnosticsToAnalyzeResults(diagnostics)
+  };
+}
+
+function buildTemplateUndefinedVariableErrors(result: AnalyzeResult): AnalysisError[] {
+  if (!result.template || !result.warnings || result.warnings.length === 0) {
+    return [];
+  }
+
+  const discoveredParams = result.template.discoveredParams ?? [];
+  const definedParamsText = discoveredParams.length > 0 ? discoveredParams.join(', ') : '(none)';
+
+  return result.warnings.map(warning => ({
+    message: [
+      `undefined variable @${warning.variable} in template`,
+      `defined parameters: ${definedParamsText}`,
+      `hint: use @@${warning.variable} or \\@${warning.variable} for literal @ text (use @@var or \\@var for literal @ text)`
+    ].join('\n'),
+    line: warning.line,
+    column: warning.column
+  }));
+}
+
+function promoteTemplateWarningsToErrors(result: AnalyzeResult): AnalyzeResult {
+  const templateErrors = buildTemplateUndefinedVariableErrors(result);
+  if (templateErrors.length === 0) {
+    return result;
+  }
+
+  return {
+    ...result,
+    valid: false,
+    warnings: undefined,
+    errors: [...(result.errors ?? []), ...templateErrors]
+  };
+}
+
+export async function analyzeDeep(filepaths: string[], options: AnalyzeOptions = {}): Promise<AnalyzeResult[]> {
+  const { files, diagnostics } = await collectDeepValidationTargets(filepaths);
+  const dedupedFiles = [...new Set(files)];
+  const knownTemplateParams = await buildTemplateParamMap(dedupedFiles);
+  const analyzeOptions: AnalyzeOptions = {
+    ...options,
+    knownTemplateParams
+  };
+
+  const diagnosticsByFile = new Map<string, AnalysisError[]>();
+  for (const diagnostic of diagnostics) {
+    if (!diagnostic.filepath || !diagnostic.errors || diagnostic.errors.length === 0) {
+      continue;
+    }
+    diagnosticsByFile.set(path.resolve(diagnostic.filepath), diagnostic.errors);
+  }
+
+  const analyzedResults: AnalyzeResult[] = [];
+  for (const file of dedupedFiles) {
+    const baseResult = await analyze(file, analyzeOptions);
+    const strictResult = options.strictTemplateVariables ? promoteTemplateWarningsToErrors(baseResult) : baseResult;
+    const fileDiagnostics = diagnosticsByFile.get(path.resolve(strictResult.filepath));
+
+    if (fileDiagnostics && fileDiagnostics.length > 0) {
+      analyzedResults.push({
+        ...strictResult,
+        valid: false,
+        errors: [...(strictResult.errors ?? []), ...fileDiagnostics]
+      });
+      diagnosticsByFile.delete(path.resolve(strictResult.filepath));
+    } else {
+      analyzedResults.push(strictResult);
+    }
+  }
+
+  for (const [filepath, errors] of diagnosticsByFile.entries()) {
+    analyzedResults.push({
+      filepath,
+      valid: false,
+      errors
+    });
+  }
+
+  return analyzedResults.sort((a, b) => a.filepath.localeCompare(b.filepath));
 }
 
 function detectCheckpointDirectiveErrors(ast: MlldNode[]): AnalysisError[] {
@@ -1867,6 +2294,49 @@ export async function analyzeCommand(filepath: string, options: AnalyzeOptions =
   }
 
   try {
+    if (options.deep) {
+      const results = await analyzeDeep([filepath], options);
+
+      if (results.length === 1) {
+        displayResult(results[0], options.format || 'text');
+      } else if ((options.format || 'text') === 'json') {
+        console.log(JSON.stringify(results, null, 2));
+      } else if (options.verbose) {
+        for (const deepResult of results) {
+          displayResult(deepResult, 'text');
+        }
+
+        console.log();
+        const passed = results.filter(r => !hasErrors(r)).length;
+        const failed = results.length - passed;
+        const summary = `${results.length} files: ${passed} passed${failed > 0 ? `, ${failed} failed` : ''}`;
+        console.log(failed > 0 ? chalk.red(summary) : chalk.green(summary));
+      } else {
+        const basePath = path.dirname(path.resolve(filepath));
+        console.log();
+        for (const deepResult of results) {
+          displayResultCompact(deepResult, basePath);
+        }
+
+        console.log();
+        const passed = results.filter(r => !hasErrors(r)).length;
+        const failed = results.length - passed;
+        const withWarnings = results.filter(r => !hasErrors(r) && hasWarnings(r)).length;
+        let summary = `${results.length} files: ${passed} passed`;
+        if (failed > 0) summary += `, ${failed} failed`;
+        if (withWarnings > 0) summary += `, ${withWarnings} with warnings`;
+        console.log(failed > 0 ? chalk.red(summary) : withWarnings > 0 ? chalk.yellow(summary) : chalk.green(summary));
+      }
+
+      if (results.some(result => hasErrors(result))) {
+        process.exit(1);
+      }
+      if (options.errorOnWarnings && results.some(result => hasWarnings(result))) {
+        process.exit(1);
+      }
+      return;
+    }
+
     const result = await analyze(filepath, options);
     displayResult(result, options.format || 'text');
 
@@ -1947,35 +2417,38 @@ export async function analyzeMultiple(filepaths: string[], options: AnalyzeOptio
     process.exit(1);
   }
 
-  if (files.length === 1) {
+  if (files.length === 1 && !options.deep) {
     await analyzeCommand(files[0], options);
     return;
   }
 
-  // Build cross-directory template param map for better template variable resolution
-  const knownTemplateParams = await buildTemplateParamMap(files);
-  const analyzeOptions = { ...options, knownTemplateParams };
-
   const format = options.format || 'text';
-  let anyErrors = false;
-  let anyWarnings = false;
   const allResults: AnalyzeResult[] = [];
 
-  for (const file of files) {
-    try {
-      const result = await analyze(file, analyzeOptions);
-      allResults.push(result);
-      if (hasErrors(result)) anyErrors = true;
-      if (hasWarnings(result)) anyWarnings = true;
-    } catch (error: any) {
-      allResults.push({
-        filepath: path.resolve(file),
-        valid: false,
-        errors: [{ message: error.message }],
-      });
-      anyErrors = true;
+  if (options.deep) {
+    const deepResults = await analyzeDeep(files, options);
+    allResults.push(...deepResults);
+  } else {
+    // Build cross-directory template param map for better template variable resolution
+    const knownTemplateParams = await buildTemplateParamMap(files);
+    const analyzeOptions = { ...options, knownTemplateParams };
+
+    for (const file of files) {
+      try {
+        const result = await analyze(file, analyzeOptions);
+        allResults.push(result);
+      } catch (error: any) {
+        allResults.push({
+          filepath: path.resolve(file),
+          valid: false,
+          errors: [{ message: error.message }],
+        });
+      }
     }
   }
+
+  const anyErrors = allResults.some(result => hasErrors(result));
+  const anyWarnings = allResults.some(result => hasWarnings(result));
 
   if (format === 'json') {
     console.log(JSON.stringify(allResults, null, 2));
@@ -2033,6 +2506,7 @@ When given a directory, recursively validates all mlld files.
 Options:
   --verbose             Show full details for all files (default: concise for directories)
   --format <format>     Output format: json or text (default: text)
+  --deep                Follow imports/templates recursively (recommended for entry scripts)
   --ast                 Include the parsed AST in output (requires --format json)
   --no-check-variables  Skip undefined variable checking
   --error-on-warnings   Exit with code 1 if warnings are found
@@ -2043,6 +2517,7 @@ Examples:
   mlld validate template.att                   # Validate a template
   mlld validate ./my-project/                  # Validate all files recursively
   mlld validate ./my-project/ --verbose        # Full details for all files
+  mlld validate llm/run/review/index.mld --deep
   mlld validate module.mld --format json       # JSON output
   mlld validate module.mld --error-on-warnings # Fail on warnings
         `);
@@ -2057,6 +2532,7 @@ Examples:
 
       const format = (flags.format || 'text') as 'json' | 'text';
       const ast = flags.ast === true;
+      const deep = flags.deep === true;
       const checkVariables = flags['no-check-variables'] !== true && flags.noCheckVariables !== true;
       const errorOnWarnings = flags['error-on-warnings'] === true || flags.errorOnWarnings === true;
       const verbose = flags.verbose === true;
@@ -2071,7 +2547,15 @@ Examples:
         process.exit(1);
       }
 
-      const options: AnalyzeOptions = { format, ast, checkVariables, errorOnWarnings, verbose };
+      const options: AnalyzeOptions = {
+        format,
+        ast,
+        checkVariables,
+        errorOnWarnings,
+        verbose,
+        deep,
+        strictTemplateVariables: deep
+      };
 
       // Detect if any arg is a directory or if multiple args
       let isMulti = args.length > 1;

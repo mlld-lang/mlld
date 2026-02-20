@@ -18,6 +18,7 @@ import { ExecuteError, type StructuredResult } from '@sdk/types';
 import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { parseInjectOptions, type DynamicModuleMap } from '../utils/inject-parser';
+import { analyzeDeep, type AnalyzeResult } from './analyze';
 
 const ENTRY_POINTS = ['index.mld', 'main.mld', 'index.mld.md', 'main.mld.md'];
 
@@ -30,6 +31,92 @@ export interface RunOptions {
   fresh?: boolean;
   resume?: string | true;
   fork?: string;
+  noWarn?: boolean;
+}
+
+function hasBlockingAnalysisErrors(result: AnalyzeResult): boolean {
+  if (!result.valid) return true;
+  const hardRedefinitions = (result.redefinitions ?? []).filter(
+    redef => redef.reason !== 'builtin-conflict' && redef.reason !== 'soft-reserved-conflict'
+  );
+  return hardRedefinitions.length > 0;
+}
+
+function formatRelativePath(filePath: string): string {
+  const relative = path.relative(process.cwd(), filePath);
+  return relative && !relative.startsWith('..') ? relative : filePath;
+}
+
+function formatLocation(filePath: string, line?: number, column?: number): string {
+  const base = formatRelativePath(filePath);
+  if (line === undefined) {
+    return base;
+  }
+  if (column === undefined) {
+    return `${base}:${line}`;
+  }
+  return `${base}:${line}:${column}`;
+}
+
+function formatBlockingAnalysisErrors(results: AnalyzeResult[]): string {
+  const lines: string[] = [];
+
+  for (const result of results) {
+    if (!result.errors || result.errors.length === 0) {
+      continue;
+    }
+
+    for (const error of result.errors) {
+      const location = formatLocation(result.filepath, error.line, error.column);
+      const messageLines = String(error.message ?? 'Unknown validation error').split('\n');
+      lines.push(`error: ${location} - ${messageLines[0]}`);
+      for (const extraLine of messageLines.slice(1)) {
+        lines.push(`  ${extraLine}`);
+      }
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function collectPreflightWarnings(results: AnalyzeResult[]): string[] {
+  const lines: string[] = [];
+
+  for (const result of results) {
+    const filepath = result.filepath;
+
+    for (const warning of result.warnings ?? []) {
+      const location = formatLocation(filepath, warning.line, warning.column);
+      lines.push(`warning: ${location} - @${warning.variable} undefined variable`);
+      if (warning.suggestion) {
+        lines.push(`  hint: ${warning.suggestion}`);
+      }
+    }
+
+    for (const warning of result.antiPatterns ?? []) {
+      const location = formatLocation(filepath, warning.line, warning.column);
+      lines.push(`warning: ${location} - ${warning.message}`);
+      if (warning.suggestion) {
+        lines.push(`  hint: ${warning.suggestion}`);
+      }
+    }
+
+    for (const redef of result.redefinitions ?? []) {
+      if (redef.reason !== 'builtin-conflict' && redef.reason !== 'soft-reserved-conflict') {
+        continue;
+      }
+      const location = formatLocation(filepath, redef.line, redef.column);
+      const description = redef.reason === 'soft-reserved-conflict'
+        ? 'shadows a conventionally reserved name'
+        : 'shadows a built-in transform';
+      lines.push(`warning: ${location} - @${redef.variable} ${description}`);
+      if (redef.suggestion) {
+        lines.push(`  hint: ${redef.suggestion}`);
+      }
+    }
+  }
+
+  return lines;
 }
 
 export class RunCommand {
@@ -182,6 +269,40 @@ export class RunCommand {
       );
     }
 
+    const preflightStartedAt = Date.now();
+    const preflightResults = await analyzeDeep([scriptPath], {
+      checkVariables: true,
+      strictTemplateVariables: true
+    });
+    const preflightDurationMs = Date.now() - preflightStartedAt;
+
+    const blockingResults = preflightResults.filter(result => hasBlockingAnalysisErrors(result));
+    if (blockingResults.length > 0) {
+      const details = formatBlockingAnalysisErrors(blockingResults);
+      throw new MlldError(
+        `Pre-flight validation failed:\n${details}`,
+        {
+          code: 'SCRIPT_VALIDATION_ERROR',
+          severity: ErrorSeverity.Fatal
+        }
+      );
+    }
+
+    if (!options.noWarn) {
+      const warningLines = collectPreflightWarnings(preflightResults);
+      if (warningLines.length > 0) {
+        console.log(chalk.yellow('Pre-flight warnings:'));
+        for (const line of warningLines) {
+          console.log(chalk.yellow(`  ${line}`));
+        }
+        console.log();
+      }
+    }
+
+    if (options.debug) {
+      console.error(chalk.gray(`Pre-flight validation: ${preflightDurationMs.toFixed(1)}ms`));
+    }
+
     console.log(chalk.gray(`Running ${path.relative(process.cwd(), scriptPath)}...\n`));
 
     try {
@@ -329,6 +450,7 @@ Options:
   -h, --help              Show this help message
   --timeout <duration>    Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
   --debug                 Show execution metrics (timing, cache hits, effects)
+  --no-warn               Suppress pre-flight warning output (errors still block execution)
   --checkpoint            Backward-compatible no-op (checkpointing auto-detects llm-labeled calls)
   --new                   Start a fresh checkpoint run (alias: --fresh)
   --fresh                 Rebuild checkpoint cache from scratch for this script
@@ -398,6 +520,8 @@ Creating Scripts:
         'timeout',
         'debug',
         'd',
+        'no-warn',
+        'noWarn',
         'inject',
         'payload',
         'checkpoint',
@@ -422,6 +546,7 @@ Creating Scripts:
       const checkpointEnabled = Boolean(flags.checkpoint);
       const fresh = Boolean(flags.fresh || flags.new);
       const resume = flags.resume === undefined ? undefined : flags.resume === true ? true : String(flags.resume);
+      const noWarn = Boolean(flags['no-warn'] || flags.noWarn);
       let fork: string | undefined;
       if (flags.fork !== undefined) {
         if (flags.fork === true) {
@@ -467,7 +592,8 @@ Creating Scripts:
         noCheckpoint,
         fresh,
         resume,
-        fork
+        fork,
+        noWarn
       };
 
       try {

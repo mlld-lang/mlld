@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { analyze, analyzeMultiple } from './analyze';
+import { analyze, analyzeDeep, analyzeMultiple } from './analyze';
 
 describe('analyze/validate warnings', () => {
   let tempDir: string;
@@ -551,5 +551,75 @@ describe('directory recursion', () => {
     // Only the .mld file should be analyzed
     const result = await analyze(path.join(tempDir, 'module.mld'));
     expect(result.valid).toBe(true);
+  });
+});
+
+describe('deep validation', () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-deep-validate-test-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  async function writeFile(filename: string, content: string): Promise<string> {
+    const dirPath = path.dirname(path.join(tempDir, filename));
+    await fs.mkdir(dirPath, { recursive: true });
+    const filePath = path.join(tempDir, filename);
+    await fs.writeFile(filePath, content, 'utf8');
+    return filePath;
+  }
+
+  it('follows imports and template references from the entry module', async () => {
+    const entryPath = await writeFile('run/index.mld', `/import { @worker } from "./worker.mld"
+/show @worker("Ada")
+`);
+
+    await writeFile('run/worker.mld', `/exe @worker(name) = template "./prompts/worker.att"
+/export { @worker }
+`);
+
+    const templatePath = await writeFile('run/prompts/worker.att', 'Hello @name!\n');
+
+    const deepResults = await analyzeDeep([entryPath], { checkVariables: true });
+    const analyzedPaths = deepResults.map(result => result.filepath);
+
+    expect(analyzedPaths).toContain(path.resolve(entryPath));
+    expect(analyzedPaths).toContain(path.resolve(path.join(tempDir, 'run/worker.mld')));
+    expect(analyzedPaths).toContain(path.resolve(templatePath));
+  });
+
+  it('promotes undefined template variables to errors in strict deep mode', async () => {
+    const entryPath = await writeFile('run/index.mld', `/import { @worker } from "./worker.mld"
+/show @worker("scenario")
+`);
+
+    await writeFile('run/worker.mld', `/exe @worker(scenarioName, scenarioDesc, specPath, evidenceRules) = template "./prompts/live-test.att"
+/export { @worker }
+`);
+
+    const templatePath = await writeFile(
+      'run/prompts/live-test.att',
+      'Scenario: @scenarioName\nExample literal: @fn("prefix")\n'
+    );
+
+    const deepResults = await analyzeDeep([entryPath], {
+      checkVariables: true,
+      strictTemplateVariables: true
+    });
+
+    const templateResult = deepResults.find(result => result.filepath === path.resolve(templatePath));
+    expect(templateResult).toBeDefined();
+    expect(templateResult!.valid).toBe(false);
+    expect(templateResult!.warnings ?? []).toHaveLength(0);
+
+    const messages = (templateResult!.errors ?? []).map(error => error.message).join('\n');
+    expect(messages).toContain('undefined variable @fn in template');
+    expect(messages).toContain('defined parameters: scenarioName, scenarioDesc, specPath, evidenceRules');
+    expect(messages).toContain('use @@fn or \\@fn for literal @ text');
+    expect(messages).toContain('use @@var or \\@var for literal @ text');
   });
 });
