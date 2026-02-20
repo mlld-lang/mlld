@@ -789,11 +789,12 @@ QuotedPath
       };
     }
 
-// Module reference: @namespace/path/to/module@hash
+// Module reference: @namespace/path/to/module@version
 ModuleReference
   = "@" id:ModuleIdentifier {
       const extension = id.extension ? `.${id.extension}` : '';
-      const rawModule = `@${id.namespace}${id.path.length > 0 ? '/' + id.path.join('/') : ''}/${id.name}${extension}${id.hash ? '@' + id.hash : ''}`;
+      const versionSuffix = id.version ? `@${id.version}` : '';
+      const rawModule = `@${id.namespace}${id.path.length > 0 ? '/' + id.path.join('/') : ''}/${id.name}${extension}${versionSuffix}`;
       return {
         type: 'module',
         subtype: 'moduleReference',
@@ -809,20 +810,20 @@ ModuleReference
           path: id.path,
           name: id.name,
           ...(id.extension ? { extension: `.${id.extension}` } : {}),
-          ...(id.hash ? { hash: id.hash } : {})
+          ...(id.version ? { version: id.version } : {})
         }
       };
     }
 
 // Module identifier with namespace, path, name, and optional hash
 ModuleIdentifier
-  = namespace:ModuleNamespace "/" pathAndName:ModulePathAndName hash:("@" h:ShortHash { return h; })? {
+  = namespace:ModuleNamespace "/" pathAndName:ModulePathAndName version:ModuleVersion? {
       return {
         namespace,
         path: pathAndName.path,
         name: pathAndName.name,
         ...(pathAndName.extension ? { extension: pathAndName.extension } : {}),
-        ...(hash ? { hash } : {})
+        ...(version ? { version } : {})
       };
     }
 
@@ -856,15 +857,43 @@ ModuleIdentifierPart "Module Identifier Part"
       return first + rest.join('');
     }
 
-// Version or hash specifier for module references
-// Supports:
-//   - Semver versions: 1.0.0, 1.2.3-beta.1, 2.0.0-rc.1
-//   - Short hashes: abcd1234 (4+ hex characters)
-ShortHash
-  = version:SemverVersion {
-      return version;
+ModuleVersion
+  = "@" spec:VersionSpecifier {
+      return spec;
     }
-  / chars:[a-f0-9]+ &{ return chars.length >= 4; } {
+
+VersionSpecifier
+  = comparator:VersionComparator version:SemverVersion {
+      return comparator + version;
+    }
+  / semver:SemverVersion {
+      return semver;
+    }
+  / tag:VersionTag {
+      return tag;
+    }
+  / hash:CommitHash {
+      return hash;
+    }
+
+VersionComparator
+  = ">="
+  / "<="
+  / ">"
+  / "<"
+  / "=="
+  / "!="
+  / "~="
+  / "~"
+  / "^"
+
+VersionTag
+  = chars:[a-z0-9-]+ {
+      return chars.join('');
+    }
+
+CommitHash
+  = chars:[a-f0-9]+ &{ return chars.length >= 4; } {
       return chars.join('');
     }
 

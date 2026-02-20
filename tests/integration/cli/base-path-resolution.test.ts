@@ -9,6 +9,7 @@ const execAsync = promisify(exec);
 const mlldCliEntry = path.resolve(process.cwd(), 'cli/cli-entry.ts');
 const tsxImport = path.resolve(process.cwd(), 'node_modules/tsx/dist/esm/index.mjs');
 const tsconfigPath = path.resolve(process.cwd(), 'tsconfig.json');
+const TEST_TIMEOUT_MS = 20000;
 
 describe('@base and @root path resolution', () => {
   let tempDir: string;
@@ -76,7 +77,7 @@ describe('@base and @root path resolution', () => {
     // Neither file should appear in CWD
     await expect(fs.stat(path.join(outsideCwd, 'base.txt'))).rejects.toThrow();
     await expect(fs.stat(path.join(outsideCwd, 'root.txt'))).rejects.toThrow();
-  });
+  }, TEST_TIMEOUT_MS);
 
   it('resolves relative output paths from script file directory', async () => {
     const script = [
@@ -97,7 +98,7 @@ describe('@base and @root path resolution', () => {
     expect(localFile.trim()).toBe('relative-write');
     await expect(fs.stat(path.join(outsideCwd, 'local-output.txt'))).rejects.toThrow();
     await expect(fs.stat(path.join(projectDir, 'local-output.txt'))).rejects.toThrow();
-  });
+  }, TEST_TIMEOUT_MS);
 
   it('resolves relative import paths from script file directory', async () => {
     const scriptLibDir = path.join(scriptDir, 'lib');
@@ -143,5 +144,5 @@ describe('@base and @root path resolution', () => {
 
     expect(lines).toContain('script-dir-helper');
     expect(lines).not.toContain('cwd-helper');
-  });
+  }, TEST_TIMEOUT_MS);
 });

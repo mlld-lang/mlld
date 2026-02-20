@@ -146,7 +146,10 @@ export async function evaluateGuardRuntime(
     'output',
     outputText as any,
     deps.guardInputSource,
-    { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) }
+    {
+      metadata: { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) },
+      internal: { isReserved: true }
+    }
   );
 
   guardEnv.setVariable('input', inputVariable);

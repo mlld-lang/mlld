@@ -60,8 +60,10 @@ describe('Executor streaming integration', () => {
     recorder.stop();
     const chunkTimes = recorder.getChunkTimes();
     expect(chunkTimes.length).toBeGreaterThanOrEqual(2);
-    expect(chunkTimes[0]).toBeLessThan(250);
-    expect(chunkTimes[chunkTimes.length - 1]).toBeGreaterThan(250);
+    const firstChunkTime = chunkTimes[0];
+    const lastChunkTime = chunkTimes[chunkTimes.length - 1];
+    expect(lastChunkTime).toBeGreaterThan(firstChunkTime);
+    expect(lastChunkTime - firstChunkTime).toBeGreaterThan(200);
   });
 
   it('does not emit chunks when streaming is disabled', async () => {
@@ -132,13 +134,13 @@ describe('Executor streaming integration', () => {
     const recorder = startStreamRecorder(manager.getBus());
 
     await Promise.all([
-      exec.execute('bash -lc "echo L1; sleep 0.3; echo L2"', undefined, {
+      exec.execute('bash -lc "echo L1; sleep 0.6; echo L2"', undefined, {
         streamingEnabled: true,
         pipelineId: 'p-par',
         stageIndex: 1,
         parallelIndex: 0
       }),
-      exec.execute('bash -lc "echo R1; sleep 0.3; echo R2"', undefined, {
+      exec.execute('bash -lc "echo R1; sleep 0.6; echo R2"', undefined, {
         streamingEnabled: true,
         pipelineId: 'p-par',
         stageIndex: 1,

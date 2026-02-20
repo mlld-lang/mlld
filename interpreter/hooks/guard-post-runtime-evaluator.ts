@@ -151,7 +151,10 @@ export async function evaluatePostGuardRuntime(
     'output',
     outputText as any,
     dependencies.guardInputSource,
-    { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) }
+    {
+      metadata: { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) },
+      internal: { isReserved: true }
+    }
   );
   guardEnv.setVariable('output', guardOutputVariable);
   if (options.inputHelper) {
