@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Testing modules - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">pre-release</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>⚠️ Docs</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/alternatives/" >Alternative Syntax and Escape Hatches</a></li>
+          
+        
+          
+            <li><a href="/docs/cli/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/content-and-data/" >Content and Data</a></li>
+          
+        
+          
+            <li><a href="/docs/flow-control/" >Control Flow</a></li>
+          
+        
+          
+            <li><a href="/docs/cookbook/" >Cookbook</a></li>
+          
+        
+          
+            <li><a href="/docs/markdown-mode/" >Markdown Mode</a></li>
+          
+        
+          
+            <li><a href="/docs/mcp/" >MCP Server Support</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/registry/" >mlld Registry</a></li>
+          
+        
+          
+            <li><a href="/docs/resolvers/" >mlld Resolvers</a></li>
+          
+        
+          
+            <li><a href="/docs/prose/" >Prose Execution</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >Security</a></li>
+          
+        
+          
+            <li><a href="/docs/streaming/" >Streaming</a></li>
+          
+        
+          
+            <li><a href="/docs/reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/" aria-current=&quot;page&quot;>Testing modules</a></li>
+          
+        
+          
+            <li><a href="/docs/large-variables/" >Working with Large Variables</a></li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>⚠️ mlld is pre-release</h1>
+    <p><a href="https://discord.gg/mlld">Join the discord</a> if you have questions. <a href="https://github.com/mlld-lang/mlld/issues">Report bugs on GitHub</a>.</p>
+    <h1 id="testing-modules" tabindex="-1">Testing modules</h1>
+<p>mlld provides a native test system designed for the unique needs of LLM orchestration and dynamic workflows.</p>
+<h2 id="quick-start" tabindex="-1">Quick Start</h2>
+<p>Create a <code>modulename.test.mld</code> file:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@data</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>apple<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>banana<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>cherry<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_array_has_items</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@data</span><span class="token field-access property">.length</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">></span> <span class="token number">0</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_includes_banana</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@data</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>banana<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_first_item</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@data</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>apple<span class="token punctuation">"</span></span>
+</code></pre>
+<p>Run tests:</p>
+<pre class="language-bash"><code class="language-bash">mlld <span class="token builtin class-name">test</span>                    <span class="token comment"># All tests</span>
+mlld <span class="token builtin class-name">test</span> utils/             <span class="token comment"># Tests in utils/</span>
+mlld <span class="token builtin class-name">test</span> parser.test.mld    <span class="token comment"># Specific file</span>
+</code></pre>
+<h2 id="test-structure" tabindex="-1">Test Structure</h2>
+<h3 id="test-discovery" tabindex="-1">Test Discovery</h3>
+<p>Tests are discovered automatically:</p>
+<ul>
+<li>Files ending in <code>.test.mld</code></li>
+<li>Variables are seen as tests</li>
+<li>Variables evaluated as true pass; false fails</li>
+</ul>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> This variable is a test</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_basic_math</span> <span class="token assignment-operator operator">=</span> <span class="token number">2</span> + <span class="token number">2</span> <span class="token comparison-operator operator">==</span> <span class="token number">4</span>
+
+<span class="token comment">>> This variable is not a test</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@helper_data</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">]</span>
+
+<span class="token comment">>> This is also a test</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_array_length</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@helper_data</span><span class="token field-access property">.length</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">3</span>
+</code></pre>
+<h3 id="test-results" tabindex="-1">Test Results</h3>
+<p>Tests pass when the variable evaluates to <code>true</code> (or truthy):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@test_passes</span> <span class="token assignment-operator operator">=</span> <span class="token boolean">true</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_also_passes</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span>  <span class="token comment">>> Truthy string</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_fails</span> <span class="token assignment-operator operator">=</span> <span class="token boolean">false</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_also_fails</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token punctuation">"</span></span>  <span class="token comment">>> Falsy string</span>
+</code></pre>
+<h2 id="writing-tests" tabindex="-1">Writing Tests</h2>
+<h3 id="basic-assertions" tabindex="-1">Basic Assertions</h3>
+<p>The test module provides these assertion functions that return booleans:</p>
+<h4 id="basic-assertions-1" tabindex="-1">Basic Assertions</h4>
+<ul>
+<li><code>@eq(a, b)</code> - Strict equality (===)</li>
+<li><code>@deepEq(a, b)</code> - Deep equality for objects/arrays</li>
+<li><code>@ok(value)</code> - Truthy check</li>
+<li><code>@notOk(value)</code> - Falsy check</li>
+</ul>
+<h4 id="comparison-assertions" tabindex="-1">Comparison Assertions</h4>
+<ul>
+<li><code>@gt(a, b)</code> - Greater than</li>
+<li><code>@gte(a, b)</code> - Greater than or equal</li>
+<li><code>@lt(a, b)</code> - Less than</li>
+<li><code>@lte(a, b)</code> - Less than or equal</li>
+</ul>
+<h4 id="container-assertions" tabindex="-1">Container Assertions</h4>
+<ul>
+<li><code>@includes(container, item)</code> - Check if string/array contains item</li>
+<li><code>@contains(haystack, needle)</code> - Alias for includes (better for strings)</li>
+<li><code>@len(value)</code> - Get length of string/array/object</li>
+</ul>
+<h3 id="testing-functions" tabindex="-1">Testing Functions</h3>
+<p>Test <code>exe</code> functions by calling them:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Hello, <span class="token variable">@name</span>!<span class="token punctuation">`</span></span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@double</span><span class="token punctuation">(</span>n<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return n<span class="token wildcard keyword"> *</span> <span class="token number">2</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_greet_works</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Alice<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Hello, Alice!<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_double_works</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@double</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">10</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_double_zero</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@double</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">0</span>
+</code></pre>
+<h3 id="testing-commands" tabindex="-1">Testing Commands</h3>
+<p>Test command execution by capturing output:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token punctuation">{</span>echo <span class="token string-interpolated"><span class="token punctuation">"</span>test<span class="token punctuation">"</span></span><span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_echo_works</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@result</span><span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>test<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> Test JavaScript execution</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@js_result</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return <span class="token string-interpolated"><span class="token punctuation">"</span>computed<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_js_execution</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@js_result</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>computed<span class="token punctuation">"</span></span>
+</code></pre>
+<h3 id="testing-with-file-operations" tabindex="-1">Testing with File Operations</h3>
+<p>Test file loading and processing:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Assuming test data files exist</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@config</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>test-config.json<span class="token punctuation">></span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@readme</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>test-readme.md<span class="token punctuation">></span></span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_config_loaded</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@config</span> <span class="token comparison-operator operator">!=</span> <span class="token null">null</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_has_title</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@config</span><span class="token field-access property">.title</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Test Config<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_readme_has_content</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@readme</span><span class="token field-access property">.length</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">></span> <span class="token number">0</span>
+</code></pre>
+<h3 id="testing-conditionals" tabindex="-1">Testing Conditionals</h3>
+<p>Test <code>when</code> logic by checking outcomes:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@user</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span><span class="token string-interpolated"><span class="token punctuation">"</span>role<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>admin<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>active<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span><span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@user</span><span class="token field-access property">.role</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>admin<span class="token punctuation">"</span></span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token variable variable">@user</span><span class="token field-access property">.active</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>admin-access<span class="token punctuation">"</span></span>
+  <span class="token variable variable">@user</span><span class="token field-access property">.role</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>user<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>user-access<span class="token punctuation">"</span></span>
+  <span class="token operator">none</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>no-access<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_admin_access</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@result</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>admin-access<span class="token punctuation">"</span></span>
+</code></pre>
+<h3 id="testing-loops-and-iteration" tabindex="-1">Testing Loops and Iteration</h3>
+<p>Test <code>for</code> loops and <code>foreach</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@numbers</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">,</span> <span class="token number">5</span><span class="token punctuation">]</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@square</span><span class="token punctuation">(</span>n<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return n<span class="token wildcard keyword"> *</span> n <span class="token punctuation">}</span>
+
+<span class="token comment">>> Test foreach transformation</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@squared</span> <span class="token assignment-operator operator">=</span> <span class="token operator">foreach</span> <span class="token variable variable">@square</span><span class="token punctuation">(</span><span class="token variable variable">@numbers</span><span class="token punctuation">)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_foreach_length</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@squared</span><span class="token field-access property">.length</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">5</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_first_square</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@squared</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token comparison-operator operator">==</span> <span class="token number">1</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_last_square</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@squared</span><span class="token punctuation">[</span><span class="token number">4</span><span class="token punctuation">]</span> <span class="token comparison-operator operator">==</span> <span class="token number">25</span>
+
+<span class="token comment">>> Test for loop collection</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@doubled</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">for</span> <span class="token variable variable">@n</span> <span class="token operator">in</span> <span class="token variable variable">@numbers</span> <span class="token arrow-operator operator">=></span> js <span class="token punctuation">{</span> return <span class="token variable variable">@n</span><span class="token wildcard keyword"> *</span> <span class="token number">2</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_doubled_sum</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@doubled</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> + <span class="token variable variable">@doubled</span><span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token comparison-operator operator">==</span> <span class="token number">6</span>  <span class="token comment">>> 2 + 4</span>
+</code></pre>
+<h2 id="running-tests" tabindex="-1">Running Tests</h2>
+<h3 id="basic-commands" tabindex="-1">Basic Commands</h3>
+<pre class="language-bash"><code class="language-bash"><span class="token comment"># Run all tests in project</span>
+mlld <span class="token builtin class-name">test</span>
+
+<span class="token comment"># Run tests matching pattern  </span>
+mlld <span class="token builtin class-name">test</span> auth                <span class="token comment"># Files/paths containing "auth"</span>
+mlld <span class="token builtin class-name">test</span> src/utils/          <span class="token comment"># All tests in directory</span>
+mlld <span class="token builtin class-name">test</span> validation.test.mld <span class="token comment"># Specific test file</span>
+</code></pre>
+<h3 id="test-output" tabindex="-1">Test Output</h3>
+<p>Tests show results as they run:</p>
+<pre><code>Running tests...
+
+src/utils
+  ✓ validation.test.mld (12ms)
+    ✓ user validation works
+    ✓ email format check
+    ✗ password strength
+
+modules/auth  
+  ✓ auth.test.mld (8ms)
+    ✓ login flow
+    ✓ logout clears session
+
+Tests: 4 passed, 1 failed (5 total)
+Time: 23ms
+</code></pre>
+<h3 id="environment-variables" tabindex="-1">Environment Variables</h3>
+<p>Load environment variables for tests:</p>
+<pre class="language-bash"><code class="language-bash"><span class="token comment"># Load specific env file</span>
+mlld <span class="token builtin class-name">test</span> <span class="token parameter variable">--env</span> .env.test
+
+<span class="token comment"># Auto-loads .env and .env.test from current directory</span>
+mlld <span class="token builtin class-name">test</span>
+</code></pre>
+<p>Test files can access allowed environment variables:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> MLLD_API_KEY<span class="token punctuation">,</span> MLLD_NODE_ENV <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token reserved-variable builtin">@input</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_has_api_key</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@MLLD_API_KEY</span> <span class="token comparison-operator operator">!=</span> <span class="token null">null</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_test_environment</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@MLLD_NODE_ENV</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>test<span class="token punctuation">"</span></span>
+</code></pre>
+<h2 id="best-practices" tabindex="-1">Best Practices</h2>
+<h3 id="test-naming" tabindex="-1">Test Naming</h3>
+<p>Use descriptive test names:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> ✅ Good - descriptive names</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_user_validation_requires_email</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@validateEmail</span><span class="token punctuation">(</span><span class="token variable variable">@user</span><span class="token field-access property">.email</span><span class="token punctuation">)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_password_must_be_8_characters</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@checkPasswordLength</span><span class="token punctuation">(</span><span class="token variable variable">@password</span><span class="token punctuation">)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_admin_can_delete_posts</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@canDelete</span><span class="token punctuation">(</span><span class="token variable variable">@user</span><span class="token punctuation">,</span> <span class="token variable variable">@post</span><span class="token punctuation">)</span>
+
+<span class="token comment">>> ❌ Bad - unclear names  </span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_validation</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@validate</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_user</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@check</span><span class="token punctuation">(</span><span class="token variable variable">@user</span><span class="token punctuation">)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_1</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@test</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre>
+<h3 id="keep-tests-focused" tabindex="-1">Keep Tests Focused</h3>
+<p>Write focused tests that check one thing:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> ✅ Good - one assertion per test</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_array_length</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@data</span><span class="token field-access property">.length</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">3</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_first_item</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@data</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>apple<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_includes_banana</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@data</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>banana<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+
+<span class="token comment">>> ❌ Bad - multiple assertions in one test</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_array_stuff</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@data</span><span class="token field-access property">.length</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">3</span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token variable variable">@data</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>apple<span class="token punctuation">"</span></span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token variable variable">@data</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>banana<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<h3 id="test-edge-cases" tabindex="-1">Test Edge Cases</h3>
+<p>Include boundary conditions and edge cases:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@calculateDiscount</span><span class="token punctuation">(</span>price<span class="token punctuation">,</span> percent<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@price</span> <span class="token comparison-operator operator">&lt;=</span> <span class="token number">0</span> <span class="token arrow-operator operator">=></span> <span class="token number">0</span>
+  <span class="token variable variable">@percent</span> <span class="token comparison-operator operator">&lt;</span> <span class="token number">0</span> <span class="token arrow-operator operator">=></span> <span class="token variable variable">@price</span>
+  <span class="token variable variable">@percent</span> <span class="token comparison-operator operator">></span> <span class="token number">100</span> <span class="token arrow-operator operator">=></span> <span class="token number">0</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> js <span class="token punctuation">{</span> return <span class="token variable variable">@price</span><span class="token wildcard keyword"> *</span> <span class="token punctuation">(</span><span class="token number">100</span> - <span class="token variable variable">@percent</span><span class="token punctuation">)</span> / <span class="token number">100</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+
+<span class="token comment">>> Test normal cases</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_normal_discount</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@calculateDiscount</span><span class="token punctuation">(</span><span class="token number">100</span><span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">90</span>
+
+<span class="token comment">>> Test edge cases</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_zero_price</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@calculateDiscount</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">0</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_negative_price</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@calculateDiscount</span><span class="token punctuation">(</span>-<span class="token number">50</span><span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">0</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_negative_percent</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@calculateDiscount</span><span class="token punctuation">(</span><span class="token number">100</span><span class="token punctuation">,</span> -<span class="token number">5</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">100</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_over_100_percent</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@calculateDiscount</span><span class="token punctuation">(</span><span class="token number">100</span><span class="token punctuation">,</span> <span class="token number">150</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token number">0</span>
+</code></pre>
+<h3 id="use-helper-functions" tabindex="-1">Use Helper Functions</h3>
+<p>Create reusable test helpers:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@assertEq</span><span class="token punctuation">(</span>actual<span class="token punctuation">,</span> expected<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return actual <span class="token comparison-operator operator">==</span><span class="token assignment-operator operator">=</span> expected <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@assertContains</span><span class="token punctuation">(</span>container<span class="token punctuation">,</span> item<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return container<span class="token field-access property">.includes</span><span class="token punctuation">(</span>item<span class="token punctuation">)</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@assertLength</span><span class="token punctuation">(</span>array<span class="token punctuation">,</span> len<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return array<span class="token field-access property">.length</span> <span class="token comparison-operator operator">==</span><span class="token assignment-operator operator">=</span> len <span class="token punctuation">}</span>
+
+<span class="token comment">>> Use helpers in tests</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@user</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">name</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Alice<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">tags</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>admin<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>user<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token object-key property">permissions</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_user_name</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@assertEq</span><span class="token punctuation">(</span><span class="token variable variable">@user</span><span class="token field-access property">.name</span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Alice<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_tags_include_admin</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@assertContains</span><span class="token punctuation">(</span><span class="token variable variable">@user</span><span class="token field-access property">.tags</span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>admin<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@test_permissions_count</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@assertLength</span><span class="token punctuation">(</span><span class="token variable variable">@user</span><span class="token field-access property">.permissions</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span>
+</code></pre>
+<h2 id="integration-with-ci%2Fcd" tabindex="-1">Integration with CI/CD</h2>
+<h3 id="github-actions" tabindex="-1">GitHub Actions</h3>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">name</span><span class="token punctuation">:</span> Test
+<span class="token key atrule">on</span><span class="token punctuation">:</span> <span class="token punctuation">[</span>push<span class="token punctuation">,</span> pull_request<span class="token punctuation">]</span>
+<span class="token key atrule">jobs</span><span class="token punctuation">:</span>
+  <span class="token key atrule">test</span><span class="token punctuation">:</span>
+    <span class="token key atrule">runs-on</span><span class="token punctuation">:</span> ubuntu<span class="token punctuation">-</span>latest
+    <span class="token key atrule">steps</span><span class="token punctuation">:</span>
+      <span class="token punctuation">-</span> <span class="token key atrule">uses</span><span class="token punctuation">:</span> actions/checkout@v3
+      <span class="token punctuation">-</span> <span class="token key atrule">uses</span><span class="token punctuation">:</span> actions/setup<span class="token punctuation">-</span>node@v3
+        <span class="token key atrule">with</span><span class="token punctuation">:</span>
+          <span class="token key atrule">node-version</span><span class="token punctuation">:</span> <span class="token string">'18'</span>
+      <span class="token punctuation">-</span> <span class="token key atrule">run</span><span class="token punctuation">:</span> npm install <span class="token punctuation">-</span>g @mlld/cli
+      <span class="token punctuation">-</span> <span class="token key atrule">run</span><span class="token punctuation">:</span> mlld test
+</code></pre>
+<h3 id="environment-setup" tabindex="-1">Environment Setup</h3>
+<p>Set up test environments in CI:</p>
+<pre class="language-bash"><code class="language-bash"><span class="token comment"># Install dependencies</span>
+<span class="token function">npm</span> <span class="token function">install</span> <span class="token parameter variable">-g</span> @mlld/cli
+
+<span class="token comment"># Set test environment variables</span>
+<span class="token builtin class-name">export</span> <span class="token assign-left variable">MLLD_NODE_ENV</span><span class="token operator">=</span>test
+<span class="token builtin class-name">export</span> <span class="token assign-left variable">MLLD_API_TIMEOUT</span><span class="token operator">=</span><span class="token number">5000</span>
+
+<span class="token comment"># Run tests with coverage</span>
+mlld <span class="token builtin class-name">test</span> <span class="token parameter variable">--env</span> .env.ci
+</code></pre>
+<h2 id="limitations" tabindex="-1">Limitations</h2>
+<p>The current test system has these limitations:</p>
+<ul>
+<li><strong>No mocking</strong>: External dependencies must be handled manually</li>
+<li><strong>Sequential execution</strong>: Tests run one file at a time</li>
+<li><strong>No setup/teardown</strong>: No built-in before/after hooks</li>
+<li><strong>Shared environment</strong>: All tests in a file share the same variable scope</li>
+<li><strong>No test isolation</strong>: Tests can affect each other within the same file</li>
+</ul>
+<p>For complex testing needs, consider:</p>
+<ul>
+<li>Splitting tests into multiple files for isolation</li>
+<li>Using separate test data files</li>
+<li>Creating dedicated test modules with helper functions</li>
+<li>Mocking external dependencies with conditional logic</li>
+</ul>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

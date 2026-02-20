@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mlld Documentation - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">pre-release</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>⚠️ Docs</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/alternatives/" >Alternative Syntax and Escape Hatches</a></li>
+          
+        
+          
+            <li><a href="/docs/cli/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/content-and-data/" >Content and Data</a></li>
+          
+        
+          
+            <li><a href="/docs/flow-control/" >Control Flow</a></li>
+          
+        
+          
+            <li><a href="/docs/cookbook/" >Cookbook</a></li>
+          
+        
+          
+            <li><a href="/docs/markdown-mode/" >Markdown Mode</a></li>
+          
+        
+          
+            <li><a href="/docs/mcp/" >MCP Server Support</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/registry/" >mlld Registry</a></li>
+          
+        
+          
+            <li><a href="/docs/resolvers/" >mlld Resolvers</a></li>
+          
+        
+          
+            <li><a href="/docs/prose/" >Prose Execution</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >Security</a></li>
+          
+        
+          
+            <li><a href="/docs/streaming/" >Streaming</a></li>
+          
+        
+          
+            <li><a href="/docs/reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/" >Testing modules</a></li>
+          
+        
+          
+            <li><a href="/docs/large-variables/" >Working with Large Variables</a></li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>⚠️ mlld is pre-release</h1>
+    <p><a href="https://discord.gg/mlld">Join the discord</a> if you have questions. <a href="https://github.com/mlld-lang/mlld/issues">Report bugs on GitHub</a>.</p>
+    <h1 id="mlld-documentation" tabindex="-1">mlld Documentation</h1>
+<p>mlld is a scripting language designed to make it delightful to work with LLMs in repeatable ways that would be onerous in a chat context.</p>
+<h2 id="docs" tabindex="-1">Docs</h2>
+<ul>
+<li><strong><a href="./introduction.md">Intro</a> - Best place to start</strong></li>
+<li><a href="./quickstart.md">Quickstart</a></li>
+<li><a href="./content-and-data.md">Content and data</a></li>
+<li><a href="./flow-control.md">Flow control</a></li>
+<li><a href="./prose.md">Prose execution</a></li>
+<li><a href="./cli.md">CLI usage</a></li>
+<li><a href="./sdk.md">SDK usage</a></li>
+<li><a href="./security.md">Security considerations</a></li>
+<li><a href="./reference.md">Syntax reference</a></li>
+<li><a href="https://github.com/mlld-lang/mlld/tree/main/docs/dev">Developer documentation</a></li>
+</ul>
+<h2 id="getting-started" tabindex="-1">Getting Started</h2>
+<p>If you're new to mlld, start with the <a href="./introduction.md">Introduction</a> to learn the basic concepts and understand why mlld exists and what it can help you do.</p>
+<p><a href="https://discord.gg/mlld">Join the Discord</a> and ask questions.</p>
+<p>If you encounter any confusing errors or clear bugs, <a href="https://github.com/mlld-lang/mlld/issues/new?template=bug_report.md">filing a clear and repeatable bug report</a> would be extremely appreciated.</p>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

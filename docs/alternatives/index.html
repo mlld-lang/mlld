@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alternative Syntax and Escape Hatches - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">pre-release</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>⚠️ Docs</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/alternatives/" aria-current=&quot;page&quot;>Alternative Syntax and Escape Hatches</a></li>
+          
+        
+          
+            <li><a href="/docs/cli/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/content-and-data/" >Content and Data</a></li>
+          
+        
+          
+            <li><a href="/docs/flow-control/" >Control Flow</a></li>
+          
+        
+          
+            <li><a href="/docs/cookbook/" >Cookbook</a></li>
+          
+        
+          
+            <li><a href="/docs/markdown-mode/" >Markdown Mode</a></li>
+          
+        
+          
+            <li><a href="/docs/mcp/" >MCP Server Support</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/registry/" >mlld Registry</a></li>
+          
+        
+          
+            <li><a href="/docs/resolvers/" >mlld Resolvers</a></li>
+          
+        
+          
+            <li><a href="/docs/prose/" >Prose Execution</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >Security</a></li>
+          
+        
+          
+            <li><a href="/docs/streaming/" >Streaming</a></li>
+          
+        
+          
+            <li><a href="/docs/reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/" >Testing modules</a></li>
+          
+        
+          
+            <li><a href="/docs/large-variables/" >Working with Large Variables</a></li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>⚠️ mlld is pre-release</h1>
+    <p><a href="https://discord.gg/mlld">Join the discord</a> if you have questions. <a href="https://github.com/mlld-lang/mlld/issues">Report bugs on GitHub</a>.</p>
+    <h1 id="alternative-syntax-and-escape-hatches" tabindex="-1">Alternative Syntax and Escape Hatches</h1>
+<p>This document covers alternative syntax forms for special cases. For most use cases, use the primary syntax described in the main documentation.</p>
+<h2 id="when-to-use-alternatives" tabindex="-1">When to Use Alternatives</h2>
+<p>The primary template syntax (<code>@var</code> interpolation, <code>::...::</code> templates, <code>.att</code> files) works for most cases. Use alternatives only when:</p>
+<ul>
+<li>Your content has many <code>@</code> symbols that would require escaping (e.g., Discord mentions, social media handles)</li>
+<li>You're working with existing mustache-style templates</li>
+</ul>
+<h2 id="triple-colon-templates-(%3A%3A%3A...%3A%3A%3A)" tabindex="-1">Triple-Colon Templates (<code>:::...:::</code>)</h2>
+<p>Use triple-colon syntax when your content has many <code>@</code> symbols that would conflict with variable interpolation:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Discord mentions with user IDs</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@alert</span> <span class="token assignment-operator operator">=</span> <span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>Alert <span class="token alligator"><span class="token punctuation">&lt;</span>@{{adminId}}<span class="token punctuation">></span></span><span class="token logical-operator operator">!</span> Reported by <span class="token alligator"><span class="token punctuation">&lt;</span>@{{userId}}<span class="token punctuation">></span></span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>
+
+<span class="token comment">>> Social media handles</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@tweet</span> <span class="token assignment-operator operator">=</span> <span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>Hey @<span class="token punctuation">{</span><span class="token punctuation">{</span>handle<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span> check this<span class="token logical-operator operator">!</span> <span class="token object-key property">cc</span><span class="token ternary-operator operator">:</span> @<span class="token punctuation">{</span><span class="token punctuation">{</span>team1<span class="token punctuation">}</span><span class="token punctuation">}</span> @<span class="token punctuation">{</span><span class="token punctuation">{</span>team2<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>
+</code></pre>
+<h3 id="key-differences-from-primary-syntax" tabindex="-1">Key Differences from Primary Syntax</h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Primary (<code>::@var::</code>)</th>
+<th>Triple-colon (<code>:::{{var}}:::</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Variable interpolation</td>
+<td><code>@var</code></td>
+<td><code>{{var}}</code></td>
+</tr>
+<tr>
+<td>File loading</td>
+<td><code>&lt;file.md&gt;</code></td>
+<td>Not supported</td>
+</tr>
+<tr>
+<td>Function calls</td>
+<td><code>@exe()</code></td>
+<td>Not supported</td>
+</tr>
+<tr>
+<td>Pipes</td>
+<td>Supported</td>
+<td>Not supported</td>
+</tr>
+<tr>
+<td>Loops</td>
+<td>Supported</td>
+<td>Not supported</td>
+</tr>
+</tbody>
+</table>
+<h3 id="when-not-to-use-triple-colon" tabindex="-1">When NOT to Use Triple-Colon</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Don't use ::: for normal templates</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@msg</span> <span class="token assignment-operator operator">=</span> <span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token object-key property">Status</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>status<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>  <span class="token comment">>> Loses all features</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@msg</span> <span class="token assignment-operator operator">=</span> <span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token object-key property">Status</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@status</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>       <span class="token comment">>> Use primary syntax</span>
+</code></pre>
+<h2 id="mtt-template-files-(.mtt)" tabindex="-1">MTT Template Files (<code>.mtt</code>)</h2>
+<p>For external templates with mustache-style interpolation:</p>
+<p><strong>templates/discord-alert.mtt:</strong></p>
+<pre><code>Alert &lt;@{{adminId}}&gt;!
+Reporter: &lt;@{{reporterId}}&gt;
+Severity: {{severity}}
+</code></pre>
+<p><strong>Usage:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@alert</span><span class="token punctuation">(</span>adminId<span class="token punctuation">,</span> reporterId<span class="token punctuation">,</span> severity<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> template <span class="token string-interpolated"><span class="token punctuation">"</span>./templates/discord-alert.mtt<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@alert</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>123<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>456<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>high<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<h3 id="key-differences-from-att-files" tabindex="-1">Key Differences from ATT Files</h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th><code>.att</code> (primary)</th>
+<th><code>.mtt</code> (alternative)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Variable interpolation</td>
+<td><code>@var</code></td>
+<td><code>{{var}}</code></td>
+</tr>
+<tr>
+<td>File loading</td>
+<td><code>&lt;file.md&gt;</code></td>
+<td>Not supported</td>
+</tr>
+<tr>
+<td>Function calls</td>
+<td><code>@exe()</code></td>
+<td>Not supported</td>
+</tr>
+<tr>
+<td>Pipes</td>
+<td>Supported (condensed `@var</td>
+<td>@pipe`)</td>
+</tr>
+<tr>
+<td>Loops (<code>/for</code>/<code>/end</code>)</td>
+<td>Supported</td>
+<td>Not supported</td>
+</tr>
+</tbody>
+</table>
+<h2 id="common-migration-patterns" tabindex="-1">Common Migration Patterns</h2>
+<h3 id="discord-bot" tabindex="-1">Discord Bot</h3>
+<p>If you're building a Discord bot with many user mentions:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Use .mtt for Discord message templates</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@mentionUser</span><span class="token punctuation">(</span>userId<span class="token punctuation">,</span> message<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> template <span class="token string-interpolated"><span class="token punctuation">"</span>./discord/mention.mtt<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> mention.mtt contents:</span>
+<span class="token comment">>> &lt;@{{userId}}> {{message}}</span>
+</code></pre>
+<h3 id="social-media-formatter" tabindex="-1">Social Media Formatter</h3>
+<p>For content with many @handles:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@formatTweet</span><span class="token punctuation">(</span>handle<span class="token punctuation">,</span> content<span class="token punctuation">,</span> mentions<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> template <span class="token string-interpolated"><span class="token punctuation">"</span>./social/tweet.mtt<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> tweet.mtt contents:</span>
+<span class="token comment">>> @{{handle}}: {{content}}</span>
+<span class="token comment">>> cc: {{mentions}}</span>
+</code></pre>
+<h2 id="best-practices" tabindex="-1">Best Practices</h2>
+<ol>
+<li><strong>Default to primary syntax</strong> - Use <code>::@var::</code> and <code>.att</code> unless you have a specific reason</li>
+<li><strong>Document your choice</strong> - If using alternatives, add a comment explaining why</li>
+<li><strong>Don't mix</strong> - Pick one style per template file</li>
+<li><strong>Consider escaping</strong> - For occasional <code>@</code> symbols, escaping (<code>\@</code>) may be simpler than switching syntax</li>
+</ol>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

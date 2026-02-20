@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDK Usage - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">pre-release</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>⚠️ Docs</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/alternatives/" >Alternative Syntax and Escape Hatches</a></li>
+          
+        
+          
+            <li><a href="/docs/cli/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/content-and-data/" >Content and Data</a></li>
+          
+        
+          
+            <li><a href="/docs/flow-control/" >Control Flow</a></li>
+          
+        
+          
+            <li><a href="/docs/cookbook/" >Cookbook</a></li>
+          
+        
+          
+            <li><a href="/docs/markdown-mode/" >Markdown Mode</a></li>
+          
+        
+          
+            <li><a href="/docs/mcp/" >MCP Server Support</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/registry/" >mlld Registry</a></li>
+          
+        
+          
+            <li><a href="/docs/resolvers/" >mlld Resolvers</a></li>
+          
+        
+          
+            <li><a href="/docs/prose/" >Prose Execution</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk/" aria-current=&quot;page&quot;>SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >Security</a></li>
+          
+        
+          
+            <li><a href="/docs/streaming/" >Streaming</a></li>
+          
+        
+          
+            <li><a href="/docs/reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/" >Testing modules</a></li>
+          
+        
+          
+            <li><a href="/docs/large-variables/" >Working with Large Variables</a></li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>⚠️ mlld is pre-release</h1>
+    <p><a href="https://discord.gg/mlld">Join the discord</a> if you have questions. <a href="https://github.com/mlld-lang/mlld/issues">Report bugs on GitHub</a>.</p>
+    <h1 id="sdk-usage" tabindex="-1">SDK Usage</h1>
+<h2 id="tldr" tabindex="-1">tldr</h2>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> processMlld <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">processMlld</span><span class="token punctuation">(</span><span class="token string">'/var @name = "World"\nHello, @name!'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// "Hello, World!"</span>
+</code></pre>
+<h2 id="basic-usage" tabindex="-1">Basic Usage</h2>
+<p>Process mlld content and get the output:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> processMlld <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> script <span class="token operator">=</span> <span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">
+/var @greeting = "Hello"
+/show @greeting
+</span><span class="token template-punctuation string">`</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> output <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">processMlld</span><span class="token punctuation">(</span>script<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>output<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// "Hello"</span>
+</code></pre>
+<p>With a file path for imports:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> output <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">processMlld</span><span class="token punctuation">(</span>script<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  filePath<span class="token operator">:</span> <span class="token string">'./scripts/my-script.mld'</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h2 id="execution-modes" tabindex="-1">Execution Modes</h2>
+<p>The SDK supports four execution modes for different use cases.</p>
+<h3 id="document-mode-(default)" tabindex="-1">Document Mode (Default)</h3>
+<p>Returns plain text output:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> output <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">processMlld</span><span class="token punctuation">(</span>script<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// Returns: string</span>
+</code></pre>
+<h3 id="structured-mode" tabindex="-1">Structured Mode</h3>
+<p>Returns output with effects, exports, and metadata:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> interpret <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld/interpreter'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">interpret</span><span class="token punctuation">(</span>script<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  mode<span class="token operator">:</span> <span class="token string">'structured'</span><span class="token punctuation">,</span>
+  fileSystem<span class="token punctuation">,</span>
+  pathService
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>output<span class="token punctuation">)</span><span class="token punctuation">;</span>     <span class="token comment">// Final text</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>effects<span class="token punctuation">)</span><span class="token punctuation">;</span>    <span class="token comment">// All effects with security metadata</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>exports<span class="token punctuation">)</span><span class="token punctuation">;</span>    <span class="token comment">// Exported variables</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>environment<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// Full environment</span>
+</code></pre>
+<p>Each effect includes security metadata:</p>
+<pre class="language-typescript"><code class="language-typescript">result<span class="token punctuation">.</span>effects<span class="token punctuation">.</span><span class="token function">forEach</span><span class="token punctuation">(</span>effect <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>effect<span class="token punctuation">.</span>type<span class="token punctuation">)</span><span class="token punctuation">;</span>              <span class="token comment">// 'doc', 'both', 'file'</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>effect<span class="token punctuation">.</span>security<span class="token operator">?.</span>labels<span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// Explicit labels: ['secret', 'pii']</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>effect<span class="token punctuation">.</span>security<span class="token operator">?.</span>taint<span class="token punctuation">)</span><span class="token punctuation">;</span>   <span class="token comment">// Accumulated: ['secret', 'pii', 'src:exec', 'src:file']</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>effect<span class="token punctuation">.</span>security<span class="token operator">?.</span>sources<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// Origin chain: ['file://...', 'resolver:registry']</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h3 id="stream-mode" tabindex="-1">Stream Mode</h3>
+<p>Returns a handle for real-time event consumption:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> interpret <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld/interpreter'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> handle <span class="token operator">=</span> <span class="token function">interpret</span><span class="token punctuation">(</span>script<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  mode<span class="token operator">:</span> <span class="token string">'stream'</span><span class="token punctuation">,</span>
+  fileSystem<span class="token punctuation">,</span>
+  pathService
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Attach handlers before execution completes</span>
+handle<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">'stream:chunk'</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+  process<span class="token punctuation">.</span>stdout<span class="token punctuation">.</span><span class="token function">write</span><span class="token punctuation">(</span>e<span class="token punctuation">.</span>event<span class="token punctuation">.</span>chunk<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+handle<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">'effect'</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>event<span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'Effect:'</span><span class="token punctuation">,</span> event<span class="token punctuation">.</span>effect<span class="token punctuation">.</span>type<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+handle<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">'execution:complete'</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>event<span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'Done'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Wait for completion</span>
+<span class="token keyword">await</span> handle<span class="token punctuation">.</span><span class="token function">done</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Or get the structured result</span>
+<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> handle<span class="token punctuation">.</span><span class="token function">result</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>Handle methods:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.on(type, handler)</code></td>
+<td>void</td>
+<td>Subscribe to events</td>
+</tr>
+<tr>
+<td><code>.off(type, handler)</code></td>
+<td>void</td>
+<td>Unsubscribe</td>
+</tr>
+<tr>
+<td><code>.once(type, handler)</code></td>
+<td>void</td>
+<td>One-time handler</td>
+</tr>
+<tr>
+<td><code>.done()</code></td>
+<td><code>Promise&lt;void&gt;</code></td>
+<td>Resolves on completion</td>
+</tr>
+<tr>
+<td><code>.result()</code></td>
+<td><code>Promise&lt;StructuredResult&gt;</code></td>
+<td>Get final result</td>
+</tr>
+<tr>
+<td><code>.isComplete()</code></td>
+<td>boolean</td>
+<td>Check if finished</td>
+</tr>
+<tr>
+<td><code>.abort()</code></td>
+<td>void</td>
+<td>Cancel execution</td>
+</tr>
+</tbody>
+</table>
+<p>Event types:</p>
+<ul>
+<li><code>stream:chunk</code> - Streaming output chunks</li>
+<li><code>stream:progress</code> - Pipeline progress updates</li>
+<li><code>command:start</code> / <code>command:complete</code> - Command execution</li>
+<li><code>effect</code> - Effect emissions</li>
+<li><code>execution:complete</code> - Script finished</li>
+</ul>
+<h3 id="debug-mode" tabindex="-1">Debug Mode</h3>
+<p>Returns full execution trace for debugging:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> interpret <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld/interpreter'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">interpret</span><span class="token punctuation">(</span>script<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  mode<span class="token operator">:</span> <span class="token string">'debug'</span><span class="token punctuation">,</span>
+  fileSystem<span class="token punctuation">,</span>
+  pathService
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>ast<span class="token punctuation">)</span><span class="token punctuation">;</span>        <span class="token comment">// Parsed AST</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>variables<span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// All variables (not just exports)</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>trace<span class="token punctuation">)</span><span class="token punctuation">;</span>      <span class="token comment">// Ordered event trace</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>durationMs<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// Execution time</span>
+</code></pre>
+<p>The trace includes every operation:</p>
+<pre class="language-typescript"><code class="language-typescript">result<span class="token punctuation">.</span>trace<span class="token punctuation">.</span><span class="token function">forEach</span><span class="token punctuation">(</span>event <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token keyword">switch</span> <span class="token punctuation">(</span>event<span class="token punctuation">.</span>type<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">case</span> <span class="token string">'debug:directive:start'</span><span class="token operator">:</span>
+      <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">Starting: </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>event<span class="token punctuation">.</span>directive<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token keyword">break</span><span class="token punctuation">;</span>
+    <span class="token keyword">case</span> <span class="token string">'debug:variable:create'</span><span class="token operator">:</span>
+      <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">Created: </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>event<span class="token punctuation">.</span>name<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token keyword">break</span><span class="token punctuation">;</span>
+    <span class="token keyword">case</span> <span class="token string">'debug:guard:before'</span><span class="token operator">:</span>
+      <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">Guard: </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>event<span class="token punctuation">.</span>guard<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string"> → </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>event<span class="token punctuation">.</span>decision<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token keyword">break</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h2 id="provenance-tracking" tabindex="-1">Provenance Tracking</h2>
+<p>Track where data comes from with the <code>provenance</code> option:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">interpret</span><span class="token punctuation">(</span>script<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  mode<span class="token operator">:</span> <span class="token string">'structured'</span><span class="token punctuation">,</span>
+  provenance<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+  fileSystem<span class="token punctuation">,</span>
+  pathService
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+result<span class="token punctuation">.</span>effects<span class="token punctuation">.</span><span class="token function">forEach</span><span class="token punctuation">(</span>effect <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>effect<span class="token punctuation">.</span>provenance<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// Origin chain</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>Debug mode includes provenance by default.</p>
+<h2 id="dynamic-modules" tabindex="-1">Dynamic Modules</h2>
+<p>Runtime module injection without filesystem I/O. Enables multi-tenant applications to inject per-user/project context from database.</p>
+<h3 id="string-modules" tabindex="-1">String Modules</h3>
+<p>Inject mlld source as strings:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">processMlld</span><span class="token punctuation">(</span>template<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  dynamicModules<span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token string-property property">'@user/context'</span><span class="token operator">:</span> <span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">/export { @userId, @userName }\n/var @userId = "123"\n/var @userName = "Alice"</span><span class="token template-punctuation string">`</span></span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h3 id="object-modules" tabindex="-1">Object Modules</h3>
+<p>Inject structured data directly (recommended):</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">processMlld</span><span class="token punctuation">(</span>template<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  dynamicModules<span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token string-property property">'@state'</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      count<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+      messages<span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">'Hello'</span><span class="token punctuation">,</span> <span class="token string">'World'</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+      preferences<span class="token operator">:</span> <span class="token punctuation">{</span> theme<span class="token operator">:</span> <span class="token string">'dark'</span> <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token string-property property">'@payload'</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      text<span class="token operator">:</span> userInput<span class="token punctuation">,</span>
+      userId<span class="token operator">:</span> session<span class="token punctuation">.</span>userId
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>In your script:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@count</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@state</span><span class="token field-access property">.count</span> + <span class="token number">1</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@theme</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@state</span><span class="token field-access property">.preferences</span><span class="token field-access property">.theme</span>
+<span class="token directive keyword">var</span> <span class="token reserved-variable builtin">@input</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@payload</span><span class="token field-access property">.text</span>
+</code></pre>
+<p>Notes:</p>
+<ul>
+<li><code>@payload</code> and <code>@state</code> object modules treat strings as literals (no interpolation).</li>
+<li><code>@state</code> is a live snapshot during a single run: <code>/output ... to &quot;state://path&quot;</code> updates the in-run <code>@state</code> so later reads/imports see the new value. Persist changes yourself via <code>stateWrites</code> between runs.</li>
+</ul>
+<h3 id="security" tabindex="-1">Security</h3>
+<p>All dynamic modules are automatically labeled <code>src:dynamic</code>:</p>
+<pre class="language-typescript"><code class="language-typescript">result<span class="token punctuation">.</span>effects<span class="token punctuation">.</span><span class="token function">forEach</span><span class="token punctuation">(</span>effect <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>effect<span class="token punctuation">.</span>security<span class="token operator">?.</span>taint<span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// ['src:dynamic', ...]</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>Guards can enforce policies on dynamic data:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.mx</span><span class="token field-access property">.taint</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-literal">'src:dynamic'</span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span>
+    <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Cannot use dynamic data as secrets<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h4 id="custom-source-labels" tabindex="-1">Custom Source Labels</h4>
+<p>Add an additional source label to distinguish between different types of dynamic modules:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">processMlld</span><span class="token punctuation">(</span>template<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  dynamicModules<span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token string-property property">'@upload'</span><span class="token operator">:</span> userUploadedFile
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  dynamicModuleSource<span class="token operator">:</span> <span class="token string">'user-upload'</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Modules now have both labels: ['src:dynamic', 'src:user-upload']</span>
+</code></pre>
+<p>This enables fine-grained guard policies:</p>
+<pre class="language-mlld"><code class="language-mlld">// Block user-uploaded data <span class="token operator">from</span> dangerous operations
+<span class="token directive keyword">guard</span> <span class="token operator">before</span> fileWrite <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.mx</span><span class="token field-access property">.labels</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-literal">'src:user-upload'</span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span>
+    <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>User uploads cannot be written to filesystem<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+// Allow trusted database content through
+<span class="token directive keyword">guard</span> <span class="token operator">before</span> apiCall <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.mx</span><span class="token field-access property">.labels</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-literal">'src:user-upload'</span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span>
+    <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>User data cannot call external APIs<span class="token punctuation">"</span></span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.mx</span><span class="token field-access property">.labels</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-literal">'src:dynamic'</span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span>
+    <span class="token operator">allow</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Common source labels:</p>
+<ul>
+<li><code>'user-upload'</code> - Data from user file uploads</li>
+<li><code>'user-input'</code> - Data from form submissions</li>
+<li><code>'database'</code> - Data from your database</li>
+<li><code>'external-api'</code> - Data from third-party APIs</li>
+<li><code>'cache'</code> - Data from cache layer</li>
+</ul>
+<h3 id="notes" tabindex="-1">Notes</h3>
+<ul>
+<li>Keys are exact matches (no extension inference or fuzzy matching)</li>
+<li>Dynamic modules override filesystem/registry modules (highest priority)</li>
+<li>Object modules serialize to per-key exports internally</li>
+<li>Content parsed at injection time (errors surface immediately)</li>
+</ul>
+<h2 id="state-management" tabindex="-1">State Management</h2>
+<p>Track state changes via the <code>state://</code> protocol instead of filesystem writes.</p>
+<ul>
+<li><code>@payload</code> and <code>@state</code> object modules treat strings as literals (no interpolation).</li>
+<li><code>@state</code> is a live snapshot during a single run: <code>/output ... to &quot;state://path&quot;</code> updates the in-run <code>@state</code> so later reads/imports see the new value. Persist changes yourself via <code>stateWrites</code> between runs.</li>
+</ul>
+<h3 id="state-write-protocol" tabindex="-1">State Write Protocol</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@count</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@state</span><span class="token field-access property">.count</span> + <span class="token number">1</span>
+<span class="token directive keyword">output</span> <span class="token variable variable">@count</span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>state://count<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@prefs</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">theme</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>dark<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">lang</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>en<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token directive keyword">output</span> <span class="token variable variable">@prefs</span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>state://preferences<span class="token punctuation">"</span></span>
+</code></pre>
+<p>State writes are captured in the result:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">interpret</span><span class="token punctuation">(</span>script<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  mode<span class="token operator">:</span> <span class="token string">'structured'</span><span class="token punctuation">,</span>
+  dynamicModules<span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token string-property property">'@state'</span><span class="token operator">:</span> <span class="token punctuation">{</span> count<span class="token operator">:</span> <span class="token number">0</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>stateWrites<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// [</span>
+<span class="token comment">//   {</span>
+<span class="token comment">//     path: 'count',</span>
+<span class="token comment">//     value: 1,</span>
+<span class="token comment">//     timestamp: '2025-01-27T...',</span>
+<span class="token comment">//     security: { labels: [], taint: ['src:dynamic'], ... }</span>
+<span class="token comment">//   }</span>
+<span class="token comment">// ]</span>
+</code></pre>
+<h3 id="persisting-state" tabindex="-1">Persisting State</h3>
+<p>Your application handles persistence:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">const</span> write <span class="token keyword">of</span> result<span class="token punctuation">.</span>stateWrites<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">await</span> database<span class="token punctuation">.</span><span class="token function">setState</span><span class="token punctuation">(</span>write<span class="token punctuation">.</span>path<span class="token punctuation">,</span> write<span class="token punctuation">.</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="nested-paths" tabindex="-1">Nested Paths</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">output</span> <span class="token string-interpolated"><span class="token punctuation">"</span>dark<span class="token punctuation">"</span></span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>state://prefs.theme<span class="token punctuation">"</span></span>
+</code></pre>
+<p>Captured as <code>{ path: 'prefs.theme', value: 'dark' }</code>.</p>
+<h3 id="security-1" tabindex="-1">Security</h3>
+<p>State writes include security metadata:</p>
+<pre class="language-typescript"><code class="language-typescript">write<span class="token punctuation">.</span>security<span class="token operator">?.</span>labels<span class="token punctuation">;</span>  <span class="token comment">// Explicit labels like 'secret', 'pii'</span>
+write<span class="token punctuation">.</span>security<span class="token operator">?.</span>taint<span class="token punctuation">;</span>   <span class="token comment">// Accumulated labels including automatic ones</span>
+</code></pre>
+<p>Use guards to prevent sensitive data in state:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">output</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.target</span><span class="token field-access property">.startsWith</span><span class="token punctuation">(</span><span class="token string-literal">'state://'</span><span class="token punctuation">)</span> <span class="token logical-operator operator">&amp;&amp;</span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.mx</span><span class="token field-access property">.labels</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-literal">'secret'</span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span>
+    <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Secrets cannot be persisted to state<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h2 id="file-based-execution" tabindex="-1">File-Based Execution</h2>
+<p>Execute mlld files with in-memory caching and state management.</p>
+<h3 id="basic-usage-1" tabindex="-1">Basic Usage</h3>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> execute <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">execute</span><span class="token punctuation">(</span><span class="token string">'./agent.mld'</span><span class="token punctuation">,</span>
+  <span class="token punctuation">{</span> text<span class="token operator">:</span> <span class="token string">'user input'</span><span class="token punctuation">,</span> userId<span class="token operator">:</span> <span class="token string">'123'</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">{</span>
+    state<span class="token operator">:</span> <span class="token punctuation">{</span> count<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span> messages<span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    timeout<span class="token operator">:</span> <span class="token number">30000</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>output<span class="token punctuation">)</span><span class="token punctuation">;</span>       <span class="token comment">// Execution output</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>stateWrites<span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// State updates</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>effects<span class="token punctuation">)</span><span class="token punctuation">;</span>      <span class="token comment">// All effects</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>metrics<span class="token punctuation">)</span><span class="token punctuation">;</span>      <span class="token comment">// Performance data</span>
+</code></pre>
+<h3 id="state-and-payload-access" tabindex="-1">State and Payload Access</h3>
+<p>Import fields from <code>@payload</code> and <code>@state</code> using destructuring syntax:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Import specific fields from payload</span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@text</span><span class="token punctuation">,</span> <span class="token variable variable">@userId</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@payload</span>
+
+<span class="token comment">>> Import specific fields from state</span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@count</span><span class="token punctuation">,</span> <span class="token variable variable">@messages</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@state</span>
+
+<span class="token comment">>> Use the imported variables</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@newCount</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@count</span> + <span class="token number">1</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@history</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@messages</span>
+<span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>User <span class="token variable">@userId</span> said: <span class="token variable">@text</span><span class="token punctuation">"</span></span>
+</code></pre>
+<p>For optional fields, use namespace import with ternary:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Namespace import for optional field access</span>
+<span class="token directive keyword">import</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@payload</span><span class="token punctuation">"</span></span> <span class="token operator">as</span> <span class="token variable variable">@payload</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@text</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@payload</span><span class="token field-access property">.text</span> <span class="token ternary-operator operator">?</span> <span class="token variable variable">@payload</span>.<span class="token object-key property">text</span> <span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>default<span class="token punctuation">"</span></span>
+</code></pre>
+<p>The SDK automatically provides <code>@payload</code> and <code>@state</code> as importable modules when you call <code>execute()</code> with payload and state arguments.</p>
+<h3 id="ast-caching" tabindex="-1">AST Caching</h3>
+<p>In-memory cache with mtime-based invalidation:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token comment">// First call parses the file</span>
+<span class="token keyword">await</span> <span class="token function">execute</span><span class="token punctuation">(</span><span class="token string">'./agent.mld'</span><span class="token punctuation">,</span> payload<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Second call uses cached AST (unless file changed)</span>
+<span class="token keyword">await</span> <span class="token function">execute</span><span class="token punctuation">(</span><span class="token string">'./agent.mld'</span><span class="token punctuation">,</span> payload<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>Cache invalidates automatically when file is modified.</p>
+<h3 id="timeout-and-cancellation" tabindex="-1">Timeout and Cancellation</h3>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> controller <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">AbortController</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> promise <span class="token operator">=</span> <span class="token function">execute</span><span class="token punctuation">(</span><span class="token string">'./agent.mld'</span><span class="token punctuation">,</span> payload<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  timeout<span class="token operator">:</span> <span class="token number">30000</span><span class="token punctuation">,</span>  <span class="token comment">// 30 second timeout</span>
+  signal<span class="token operator">:</span> controller<span class="token punctuation">.</span>signal
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Cancel if needed</span>
+controller<span class="token punctuation">.</span><span class="token function">abort</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>Timeout throws <code>TimeoutError</code> with partial results available.</p>
+<h3 id="metrics" tabindex="-1">Metrics</h3>
+<pre class="language-typescript"><code class="language-typescript"><span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span>metrics<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// {</span>
+<span class="token comment">//   totalMs: 1234,</span>
+<span class="token comment">//   parseMs: 5,</span>
+<span class="token comment">//   evaluateMs: 1229,</span>
+<span class="token comment">//   cacheHit: true,</span>
+<span class="token comment">//   effectCount: 10,</span>
+<span class="token comment">//   llmCallCount: 2,</span>
+<span class="token comment">//   llmTokensIn: 500,</span>
+<span class="token comment">//   llmTokensOut: 200,</span>
+<span class="token comment">//   guardEvaluations: 5</span>
+<span class="token comment">// }</span>
+</code></pre>
+<h3 id="multi-tenant-pattern" tabindex="-1">Multi-Tenant Pattern</h3>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">async</span> <span class="token keyword">function</span> <span class="token function">handleUserMessage</span><span class="token punctuation">(</span>userId<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">,</span> message<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token comment">// Load per-user state from database</span>
+  <span class="token keyword">const</span> state <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">loadUserState</span><span class="token punctuation">(</span>userId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token comment">// Execute with user context</span>
+  <span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">execute</span><span class="token punctuation">(</span><span class="token string">'./agents/chat.mld'</span><span class="token punctuation">,</span>
+    <span class="token punctuation">{</span> text<span class="token operator">:</span> message<span class="token punctuation">,</span> userId <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">{</span> state<span class="token punctuation">,</span> timeout<span class="token operator">:</span> <span class="token number">30000</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token comment">// Persist state updates</span>
+  <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">const</span> write <span class="token keyword">of</span> result<span class="token punctuation">.</span>stateWrites<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">await</span> <span class="token function">saveUserState</span><span class="token punctuation">(</span>userId<span class="token punctuation">,</span> write<span class="token punctuation">.</span>path<span class="token punctuation">,</span> write<span class="token punctuation">.</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+
+  <span class="token keyword">return</span> result<span class="token punctuation">.</span>output<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="dynamic-module-injection" tabindex="-1">Dynamic Module Injection</h3>
+<p>Inject additional runtime data beyond <code>@state</code> and <code>@payload</code>:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">execute</span><span class="token punctuation">(</span><span class="token string">'./process.mld'</span><span class="token punctuation">,</span>
+  <span class="token punctuation">{</span> text<span class="token operator">:</span> <span class="token string">'user input'</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">{</span>
+    state<span class="token operator">:</span> <span class="token punctuation">{</span> count<span class="token operator">:</span> <span class="token number">0</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    dynamicModules<span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token string-property property">'@config'</span><span class="token operator">:</span> appConfig<span class="token punctuation">,</span>
+      <span class="token string-property property">'@features'</span><span class="token operator">:</span> featureFlags
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>With custom source labels for security policies:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">execute</span><span class="token punctuation">(</span><span class="token string">'./upload-handler.mld'</span><span class="token punctuation">,</span>
+  userUploadedFile<span class="token punctuation">,</span>
+  <span class="token punctuation">{</span>
+    dynamicModules<span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token string-property property">'@upload'</span><span class="token operator">:</span> userUploadedFile
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    dynamicModuleSource<span class="token operator">:</span> <span class="token string">'user-upload'</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Module will have labels: ['src:dynamic', 'src:user-upload']</span>
+<span class="token comment">// Guards can enforce policies based on the source</span>
+</code></pre>
+<h2 id="static-analysis" tabindex="-1">Static Analysis</h2>
+<p>Extract metadata without execution using <code>analyzeModule</code>:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> analyzeModule <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> analysis <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">analyzeModule</span><span class="token punctuation">(</span><span class="token string">'./tools/github.mld'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Check validity</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>analysis<span class="token punctuation">.</span>valid<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Parse errors:'</span><span class="token punctuation">,</span> analysis<span class="token punctuation">.</span>errors<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// Discover exported functions</span>
+<span class="token keyword">const</span> exportedTools <span class="token operator">=</span> analysis<span class="token punctuation">.</span>executables
+  <span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span>e <span class="token operator">=></span> analysis<span class="token punctuation">.</span>exports<span class="token punctuation">.</span><span class="token function">includes</span><span class="token punctuation">(</span>e<span class="token punctuation">.</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'Tools:'</span><span class="token punctuation">,</span> exportedTools<span class="token punctuation">.</span><span class="token function">map</span><span class="token punctuation">(</span>e <span class="token operator">=></span> e<span class="token punctuation">.</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// ['createIssue', 'listPRs', 'mergePR']</span>
+
+<span class="token comment">// Check security labels</span>
+<span class="token keyword">const</span> networkFunctions <span class="token operator">=</span> analysis<span class="token punctuation">.</span>executables
+  <span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span>e <span class="token operator">=></span> e<span class="token punctuation">.</span>labels<span class="token punctuation">.</span><span class="token function">some</span><span class="token punctuation">(</span>l <span class="token operator">=></span> l<span class="token punctuation">.</span><span class="token function">startsWith</span><span class="token punctuation">(</span><span class="token string">'net:'</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'Network functions:'</span><span class="token punctuation">,</span> networkFunctions<span class="token punctuation">.</span><span class="token function">map</span><span class="token punctuation">(</span>e <span class="token operator">=></span> e<span class="token punctuation">.</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Get capabilities</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'Needs:'</span><span class="token punctuation">,</span> analysis<span class="token punctuation">.</span>needs<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// { cmd: ['git', 'gh'], node: ['@octokit/rest'] }</span>
+
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'Profiles:'</span><span class="token punctuation">,</span> analysis<span class="token punctuation">.</span>profiles<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// { full: { requires: { cmd: [...] } }, minimal: { requires: {} } }</span>
+
+<span class="token comment">// Get guards</span>
+<span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'Guards:'</span><span class="token punctuation">,</span> analysis<span class="token punctuation">.</span>guards<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// [{ name: 'preventSecretsInLogs', timing: 'before', label: 'secret' }]</span>
+</code></pre>
+<h3 id="use-cases" tabindex="-1">Use Cases</h3>
+<ul>
+<li><strong>MCP proxy</strong>: Discover tools from modules for tool registration</li>
+<li><strong>Module registry</strong>: Validate exports, check capability requirements</li>
+<li><strong>IDE/LSP</strong>: Autocomplete, go-to-definition, hover information</li>
+<li><strong>Security auditing</strong>: Find network functions without guards, check label coverage</li>
+<li><strong>Documentation</strong>: Generate API docs from executable signatures</li>
+</ul>
+<h3 id="analysis-result" tabindex="-1">Analysis Result</h3>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">interface</span> <span class="token class-name">ModuleAnalysis</span> <span class="token punctuation">{</span>
+  filepath<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">;</span>
+  valid<span class="token operator">:</span> <span class="token builtin">boolean</span><span class="token punctuation">;</span>
+  errors<span class="token operator">:</span> AnalysisError<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+  warnings<span class="token operator">:</span> AnalysisWarning<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+  <span class="token comment">// Metadata</span>
+  frontmatter<span class="token operator">?</span><span class="token operator">:</span> Record<span class="token operator">&lt;</span><span class="token builtin">string</span><span class="token punctuation">,</span> <span class="token builtin">unknown</span><span class="token operator">></span><span class="token punctuation">;</span>
+  needs<span class="token operator">?</span><span class="token operator">:</span> ModuleNeeds<span class="token punctuation">;</span>
+  profiles<span class="token operator">?</span><span class="token operator">:</span> ProfilesDeclaration<span class="token punctuation">;</span>
+
+  <span class="token comment">// Definitions</span>
+  executables<span class="token operator">:</span> ExecutableInfo<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+  guards<span class="token operator">:</span> GuardInfo<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+  variables<span class="token operator">:</span> VariableInfo<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+  imports<span class="token operator">:</span> ImportInfo<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+  exports<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+  <span class="token comment">// Stats</span>
+  stats<span class="token operator">:</span> ModuleStats<span class="token punctuation">;</span>
+
+  <span class="token comment">// AST (lazy-loaded)</span>
+  ast<span class="token operator">?</span><span class="token operator">:</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token constant">AST</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2 id="error-handling" tabindex="-1">Error Handling</h2>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> processMlld<span class="token punctuation">,</span> MlldError<span class="token punctuation">,</span> formatError <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">try</span> <span class="token punctuation">{</span>
+  <span class="token keyword">await</span> <span class="token function">processMlld</span><span class="token punctuation">(</span>script<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span>error<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span>error <span class="token keyword">instanceof</span> <span class="token class-name">MlldError</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">const</span> formatted <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">formatError</span><span class="token punctuation">(</span>error<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+      useSmartPaths<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+      basePath<span class="token operator">:</span> process<span class="token punctuation">.</span><span class="token function">cwd</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>formatted<span class="token punctuation">.</span>formatted<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// Human-readable</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>formatted<span class="token punctuation">.</span>json<span class="token punctuation">)</span><span class="token punctuation">;</span>      <span class="token comment">// Structured data</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2 id="options-reference" tabindex="-1">Options Reference</h2>
+<h3 id="processoptions" tabindex="-1">ProcessOptions</h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>format</code></td>
+<td><code>'markdown' | 'xml'</code></td>
+<td><code>'markdown'</code></td>
+<td>Output format</td>
+</tr>
+<tr>
+<td><code>filePath</code></td>
+<td>string</td>
+<td>-</td>
+<td>File path for import resolution</td>
+</tr>
+<tr>
+<td><code>pathContext</code></td>
+<td>PathContext</td>
+<td>-</td>
+<td>Explicit path context</td>
+</tr>
+<tr>
+<td><code>fileSystem</code></td>
+<td>IFileSystemService</td>
+<td>NodeFileSystem</td>
+<td>Custom filesystem</td>
+</tr>
+<tr>
+<td><code>pathService</code></td>
+<td>IPathService</td>
+<td>PathService</td>
+<td>Custom path service</td>
+</tr>
+<tr>
+<td><code>normalizeBlankLines</code></td>
+<td>boolean</td>
+<td>true</td>
+<td>Normalize blank lines</td>
+</tr>
+<tr>
+<td><code>useMarkdownFormatter</code></td>
+<td>boolean</td>
+<td>true</td>
+<td>Use prettier</td>
+</tr>
+<tr>
+<td><code>dynamicModules</code></td>
+<td>Record&lt;string, string | object&gt;</td>
+<td>-</td>
+<td>Runtime module injection (strings or structured objects)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="interpretoptions-(advanced)" tabindex="-1">InterpretOptions (Advanced)</h3>
+<p>For direct <code>interpret()</code> calls, additional options:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mode</code></td>
+<td><code>'document' | 'structured' | 'stream' | 'debug'</code></td>
+<td>Execution mode</td>
+</tr>
+<tr>
+<td><code>provenance</code></td>
+<td>boolean</td>
+<td>Include provenance chains</td>
+</tr>
+<tr>
+<td><code>streaming</code></td>
+<td>StreamingOptions</td>
+<td>Streaming configuration</td>
+</tr>
+<tr>
+<td><code>emitter</code></td>
+<td>ExecutionEmitter</td>
+<td>Custom event emitter</td>
+</tr>
+</tbody>
+</table>
+<h2 id="other-languages" tabindex="-1">Other Languages</h2>
+<p>Experimental SDK wrappers are available for Go, Python, Rust, and Ruby. These are thin wrappers around the mlld CLI that provide idiomatic APIs for each language.</p>
+<ul>
+<li><a href="https://github.com/mlld-lang/mlld/tree/main/sdk/go">Go SDK</a></li>
+<li><a href="https://github.com/mlld-lang/mlld/tree/main/sdk/python">Python SDK</a></li>
+<li><a href="https://github.com/mlld-lang/mlld/tree/main/sdk/rust">Rust SDK</a></li>
+<li><a href="https://github.com/mlld-lang/mlld/tree/main/sdk/ruby">Ruby SDK</a></li>
+</ul>
+<p>These wrappers require the mlld CLI to be installed (<code>npm install -g mlld</code>).</p>
+<h2 id="see-also" tabindex="-1">See Also</h2>
+<ul>
+<li><a href="cli.md">CLI Usage</a> - Command line interface</li>
+<li><a href="modules.md">Modules</a> - Import system</li>
+<li><a href="security.md">Security</a> - Guards and taint tracking</li>
+</ul>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

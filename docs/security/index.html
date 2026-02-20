@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">pre-release</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>⚠️ Docs</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/alternatives/" >Alternative Syntax and Escape Hatches</a></li>
+          
+        
+          
+            <li><a href="/docs/cli/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/content-and-data/" >Content and Data</a></li>
+          
+        
+          
+            <li><a href="/docs/flow-control/" >Control Flow</a></li>
+          
+        
+          
+            <li><a href="/docs/cookbook/" >Cookbook</a></li>
+          
+        
+          
+            <li><a href="/docs/markdown-mode/" >Markdown Mode</a></li>
+          
+        
+          
+            <li><a href="/docs/mcp/" >MCP Server Support</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/registry/" >mlld Registry</a></li>
+          
+        
+          
+            <li><a href="/docs/resolvers/" >mlld Resolvers</a></li>
+          
+        
+          
+            <li><a href="/docs/prose/" >Prose Execution</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" aria-current=&quot;page&quot;>Security</a></li>
+          
+        
+          
+            <li><a href="/docs/streaming/" >Streaming</a></li>
+          
+        
+          
+            <li><a href="/docs/reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/" >Testing modules</a></li>
+          
+        
+          
+            <li><a href="/docs/large-variables/" >Working with Large Variables</a></li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>⚠️ mlld is pre-release</h1>
+    <p><a href="https://discord.gg/mlld">Join the discord</a> if you have questions. <a href="https://github.com/mlld-lang/mlld/issues">Report bugs on GitHub</a>.</p>
+    <h1 id="security" tabindex="-1">Security</h1>
+<h2 id="tldr" tabindex="-1">tldr</h2>
+<p>Guards protect data and operations. Label sensitive data, define guards to control access:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> secret <span class="token variable variable">@apiKey</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-live-12345<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@noShellSecrets</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>run<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Secrets cannot appear in shell commands<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> echo <span class="token variable variable">@apiKey</span> <span class="token punctuation">}</span>  <span class="token comment">>> Blocked by guard</span>
+</code></pre>
+<p>Inline effects (<code>| output</code>, <code>| show</code>, <code>| append</code>, <code>| log</code>) use the same guard path as directives. Guard filters <code>op:output</code>/<code>op:show</code>/<code>op:append</code>/<code>op:log</code> cover both inline effects and directives.</p>
+<h2 id="guards-vs-hooks" tabindex="-1">Guards vs Hooks</h2>
+<p>Use guards for enforcement and hooks for instrumentation/observability:</p>
+<ul>
+<li>Guards can deny/retry and are part of policy enforcement.</li>
+<li>Hooks cannot deny operations; they can transform values and emit telemetry.</li>
+<li>Hook failures are isolated and surfaced in <code>@mx.hooks.errors</code> so the parent operation continues.</li>
+<li>Hook bodies can call normal directives/executables (<code>output</code>, <code>append</code>, <code>run</code>, <code>state://</code>, and function calls), but those failures stay inside hook error collection.</li>
+</ul>
+<p>Example pattern (telemetry + non-fatal sink failure):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">hook</span> <span class="token variable variable">@telemetry</span> <span class="token operator">after</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">output</span> <span class="token backtick-template"><span class="token punctuation">`</span>event:<span class="token variable">@mx</span>.op.name<span class="token punctuation">`</span></span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>state://telemetry<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">hook</span> <span class="token variable variable">@sinkFailure</span> <span class="token operator">after</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">append</span> <span class="token string-interpolated"><span class="token punctuation">"</span>not-json<span class="token punctuation">"</span></span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>telemetry.jsonl<span class="token punctuation">"</span></span>   <span class="token comment">>> intentionally fails</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">hook</span> <span class="token variable variable">@capture</span> <span class="token operator">after</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">append</span> <span class="token backtick-template"><span class="token punctuation">`</span>hook-errors:<span class="token variable">@mx</span>.hooks.errors.length<span class="token punctuation">`</span></span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>hook-errors.log<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h2 id="standard-policy-patterns" tabindex="-1">Standard Policy Patterns</h2>
+<p>These are conventional policy module names you can create for your project:</p>
+<ul>
+<li><code>@project/production</code> - strict defaults for production</li>
+<li><code>@project/development</code> - permissive defaults for development</li>
+<li><code>@project/sandbox</code> - maximum restriction defaults for untrusted code</li>
+</ul>
+<p>Define them in your project and use with <code>/import policy</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token directive keyword">policy</span> <span class="token variable variable">@prod</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./policies/production.mld<span class="token punctuation">"</span></span>
+</code></pre>
+<p>See &quot;Named Policies&quot; below for how to define these.</p>
+<h2 id="signing-and-verification" tabindex="-1">Signing and Verification</h2>
+<p>Use <code>sign</code> and <code>verify</code> to bind content to a signature:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@prompt</span> <span class="token assignment-operator operator">=</span> <span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>Review <span class="token reserved-variable builtin">@input</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>
+<span class="token directive keyword">sign</span> <span class="token variable variable">@prompt</span> by <span class="token string-interpolated"><span class="token punctuation">"</span>alice<span class="token punctuation">"</span></span> <span class="token operator">with</span> sha256
+<span class="token directive keyword">verify</span> <span class="token variable variable">@prompt</span>
+</code></pre>
+<p>Policy defaults can auto-sign templates or variables and auto-verify prompts passed to <code>llm</code>-labeled executables:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@policyConfig</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">autosign</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>templates<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">autoverify</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> union<span class="token punctuation">(</span><span class="token variable variable">@policyConfig</span><span class="token punctuation">)</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@auditPrompt</span> <span class="token assignment-operator operator">=</span> <span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>Review <span class="token reserved-variable builtin">@input</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@audit</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@auditPrompt</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+</code></pre>
+<p>Auto-sign variable name patterns with glob syntax:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@policyConfig</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">autosign</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">variables</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>@*Prompt<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>@*Instructions<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Auto-verify supports custom instructions:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@policyConfig</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">autoverify</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./verify.att<span class="token punctuation">"</span></span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>When autoverify is enabled and a signed prompt reaches an <code>llm</code> exe, mlld injects <code>MLLD_VERIFY_VARS</code> and prepends verification instructions to the prompt. <code>MLLD_VERIFY_VARS</code> lists variable names without the <code>@</code> sigil. Autoverify implicitly allows <code>cmd:mlld:verify</code>.</p>
+<h2 id="named-policies" tabindex="-1">Named Policies</h2>
+<p>Define a policy object and export it:</p>
+<pre class="language-mlld"><code class="language-mlld">/<span class="token directive keyword">policy</span> <span class="token variable variable">@production</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">rules</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>no-secret-exfil<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>no-sensitive-exfil<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">capabilities</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:git:*<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">danger</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@keychain</span><span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+/<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@production</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>Import it like any other policy module:</p>
+<pre class="language-mlld"><code class="language-mlld">/<span class="token directive keyword">import</span> <span class="token directive keyword">policy</span> <span class="token variable variable">@production</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./policies.mld<span class="token punctuation">"</span></span>
+</code></pre>
+<h2 id="policy-composition" tabindex="-1">Policy Composition</h2>
+<p>Multiple policies compose automatically when imported or declared:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Team policy allows echo and git</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@team</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">capabilities</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:echo:*<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>cmd:git:*<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p1</span> <span class="token assignment-operator operator">=</span> union<span class="token punctuation">(</span><span class="token variable variable">@team</span><span class="token punctuation">)</span>
+
+<span class="token comment">>> Project policy allows echo and node</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@project</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">capabilities</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:echo:*<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>cmd:node:*<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p2</span> <span class="token assignment-operator operator">=</span> union<span class="token punctuation">(</span><span class="token variable variable">@project</span><span class="token punctuation">)</span>
+
+<span class="token comment">>> Effective: only echo (intersection of both policies)</span>
+<span class="token directive keyword">run</span> <span class="token punctuation">{</span> echo <span class="token string-interpolated"><span class="token punctuation">"</span>allowed by both<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+</code></pre>
+<p>Composition rules:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Rule</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allow</code></td>
+<td>Intersection</td>
+<td>Must be allowed by ALL policies</td>
+</tr>
+<tr>
+<td><code>deny</code></td>
+<td>Union</td>
+<td>Denied by ANY policy</td>
+</tr>
+<tr>
+<td><code>danger</code></td>
+<td>Intersection</td>
+<td>Must be opted into by ALL</td>
+</tr>
+<tr>
+<td><code>limits</code></td>
+<td>Minimum</td>
+<td>Most restrictive wins</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Note:</strong> If allow lists have no overlap, the intersection is empty and all operations are blocked. Ensure shared baseline commands appear in all layers.</p>
+<p>Label deny rules and auth configs from all layers merge via union — a <code>deny</code> on <code>secret → op:cmd</code> from ANY layer blocks that flow in the merged policy.</p>
+<h2 id="checkpoint-cache-drift-and-guard-changes" tabindex="-1">Checkpoint Cache Drift and Guard Changes</h2>
+<p>Checkpointing is memoization for <code>llm</code>-labeled work. Cache validity is based on invocation key matching, not dynamic policy diffing.</p>
+<ul>
+<li>If guard/policy rules change and you want safety checks to re-run on previously cached paths, re-run with <code>--fresh</code>.</li>
+<li>If you keep checkpoint cache enabled without <code>--fresh</code>, existing cache hits may still be returned.</li>
+<li>Cache-hit path skips guard evaluation (both <code>before</code> and <code>after</code>); guard hooks run only on miss path.</li>
+<li>Use <code>--fresh</code> (or targeted resume invalidation) when you need updated guard/policy logic to re-evaluate prior <code>llm</code> calls.</li>
+<li>This behavior is intentional in early rollout phases; targeted guard/policy fingerprint invalidation is planned as a future enhancement.</li>
+</ul>
+<pre class="language-bash"><code class="language-bash"><span class="token comment"># Force miss path and rebuild cache after policy/guard changes</span>
+mlld run pipeline <span class="token parameter variable">--checkpoint</span> <span class="token parameter variable">--fresh</span>
+</code></pre>
+<h2 id="data-labels" tabindex="-1">Data Labels</h2>
+<p>Mark data as sensitive by adding labels to variable declarations:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> secret <span class="token variable variable">@apiKey</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-12345<span class="token punctuation">"</span></span>  <span class="token comment">>> Labeled 'secret'</span>
+<span class="token directive keyword">var</span> pii <span class="token variable variable">@email</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>user<span class="token variable">@example</span>.com<span class="token punctuation">"</span></span>  <span class="token comment">>> Labeled 'pii'</span>
+<span class="token directive keyword">var</span> secret<span class="token punctuation">,</span>pii <span class="token variable variable">@ssn</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>123-45-6789<span class="token punctuation">"</span></span>  <span class="token comment">>> Multiple labels (comma-separated, no spaces)</span>
+</code></pre>
+<p>Labels track through operations:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> secret <span class="token variable variable">@token</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-12345<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@trimmed</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@token</span><span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment">>> Still labeled 'secret'</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@partial</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@token</span><span class="token field-access property">.slice</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">5</span><span class="token punctuation">)</span>  <span class="token comment">>> Still labeled 'secret'</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@upper</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@token</span><span class="token field-access property">.toUpperCase</span><span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment">>> Still labeled 'secret'</span>
+</code></pre>
+<p>Check labels with <code>.mx.labels</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> secret <span class="token variable variable">@data</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sensitive<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@data</span><span class="token field-access property">.mx</span><span class="token field-access property">.labels</span>  <span class="token comment">>> ["secret"]</span>
+</code></pre>
+<h2 id="taint-tracking" tabindex="-1">Taint Tracking</h2>
+<p>Taint is the accumulated label set on a value. It includes explicit labels plus automatic source labels. Check it with <code>.mx.taint</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> secret <span class="token variable variable">@token</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-123<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@header</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Bearer <span class="token variable">@token</span><span class="token punctuation">`</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@header</span><span class="token field-access property">.mx</span><span class="token field-access property">.taint</span>  <span class="token comment">>> ["secret"]</span>
+</code></pre>
+<p>Automatic taint labels:</p>
+<ul>
+<li><code>src:exec</code> — outputs from <code>run</code> or <code>exe</code></li>
+<li><code>src:file</code> — loaded file content, plus <code>dir:/...</code> entries for every parent directory</li>
+<li><code>src:dynamic</code> — dynamic modules injected via <code>dynamicModules</code></li>
+<li><code>src:env:&lt;provider&gt;</code> — outputs from environment providers</li>
+</ul>
+<p>Use taint in guards to block risky sources:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@noUploads</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">run</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.any</span><span class="token field-access property">.mx</span><span class="token field-access property">.taint</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>dir:/tmp/uploads<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Cannot execute uploads<span class="token punctuation">"</span></span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.any</span><span class="token field-access property">.mx</span><span class="token field-access property">.taint</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>src:exec<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>No nesting command output<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h3 id="influenced-label" tabindex="-1">Influenced Label</h3>
+<p>The <code>influenced</code> label marks LLM outputs that processed untrusted data, defending against prompt injection:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@policyConfig</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">rules</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>untrusted-llms-get-influenced<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> union<span class="token punctuation">(</span><span class="token variable variable">@policyConfig</span><span class="token punctuation">)</span>
+
+<span class="token directive keyword">var</span> <span class="token operator">untrusted</span> <span class="token variable variable">@task</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Review this external input<span class="token punctuation">"</span></span>
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@process</span><span class="token punctuation">(</span>input<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token reserved-variable builtin">@input</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span><span class="token variable variable">@task</span><span class="token punctuation">)</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@result</span><span class="token field-access property">.mx</span><span class="token field-access property">.labels</span>  <span class="token comment">>> ["llm", "untrusted", "influenced"]</span>
+</code></pre>
+<p>The label is applied automatically when the <code>untrusted-llms-get-influenced</code> rule is enabled, the executable is labeled <code>llm</code>, and the input contains the <code>untrusted</code> label. The label propagates through interpolation.</p>
+<p>Restrict influenced outputs via policy:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token object-key property">labels</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">influenced</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>destructive<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>exfil<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2 id="guards" tabindex="-1">Guards</h2>
+<p>Guards enforce policies on labeled data or operations.</p>
+<h3 id="basic-guard-syntax" tabindex="-1">Basic Guard Syntax</h3>
+<pre><code>guard [@name] TIMING LABEL = when [
+  CONDITION =&gt; ACTION
+  * =&gt; allow
+]
+
+guard privileged [@name] TIMING LABEL = when [
+  CONDITION =&gt; ACTION
+  * =&gt; allow
+]
+</code></pre>
+<p>Where:</p>
+<ul>
+<li><code>@name</code> is optional guard name</li>
+<li><code>TIMING</code> is required: <code>before</code>, <code>after</code>, or <code>always</code></li>
+<li><code>LABEL</code> is a data label (<code>secret</code>, <code>pii</code>) or operation filter (<code>op:run</code>, <code>op:exe</code>)</li>
+<li><code>privileged</code> marks the guard as non-bypassable and enables privileged label operations</li>
+</ul>
+<p><strong>Syntactic sugar:</strong> <code>guard [@name] for LABEL = when [...]</code> is equivalent to <code>before</code> timing. Using explicit <code>before</code> is recommended for clarity.<br>
+Equivalent privileged form: <code>guard [@name] TIMING LABEL = when [...] with { privileged: true }</code>.</p>
+<p>Actions:</p>
+<ul>
+<li><code>allow</code> - Operation proceeds</li>
+<li><code>deny &quot;reason&quot;</code> - Operation blocked</li>
+<li><code>retry &quot;hint&quot;</code> - Retry operation (pipelines only)</li>
+<li><code>allow @value</code> - Transform and allow</li>
+<li><code>env @config</code> - Selects an execution environment</li>
+</ul>
+<h3 id="timing-comparison%3A-before-label-vs-before-op%3Atype" tabindex="-1">Timing Comparison: <code>before LABEL</code> vs <code>before op:TYPE</code></h3>
+<table>
+<thead>
+<tr>
+<th>Guard form</th>
+<th>Trigger moment</th>
+<th>Frequency</th>
+<th><code>denied</code> handler support</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>before LABEL</code> (or <code>for LABEL</code>)</td>
+<td>Labeled value creation</td>
+<td>Once per labeled value</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>before op:TYPE</code></td>
+<td>Operation execution</td>
+<td>Every operation attempt</td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
+<p>Use <code>before LABEL</code> for entry-time label policy and <code>before op:TYPE</code> for per-operation policy.</p>
+<h3 id="guard-on-data-labels" tabindex="-1">Guard on Data Labels</h3>
+<p>Block secrets from shell commands:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@noShellSecrets</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>run<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Secrets cannot appear in shell<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@key</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-12345<span class="token punctuation">"</span></span>
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> echo <span class="token variable variable">@key</span> <span class="token punctuation">}</span>  <span class="token comment">>> Blocked</span>
+</code></pre>
+<h3 id="guard-on-operations" tabindex="-1">Guard on Operations</h3>
+<p>Block all shell commands regardless of data:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@noShell</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">run</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Shell access disabled<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> ls <span class="token punctuation">}</span>  <span class="token comment">>> Blocked</span>
+</code></pre>
+<p>Filter by operation name:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@blockSend</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.name</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sendData<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Network calls blocked<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@sendData</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token punctuation">{</span> curl -d <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@value</span><span class="token punctuation">"</span></span> api<span class="token field-access property">.example</span><span class="token field-access property">.com</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@sendData</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>test<span class="token punctuation">"</span></span><span class="token punctuation">)</span>  <span class="token comment">>> Blocked</span>
+</code></pre>
+<h2 id="denied-handlers" tabindex="-1">Denied Handlers</h2>
+<p>Handle guard denials gracefully with <code>denied =&gt;</code> branches. Note: <code>deny</code> is a guard action that blocks an operation; <code>denied</code> is a when-condition that tests if we're in a denied context:</p>
+<ul>
+<li><code>denied</code> handlers catch operation-time denials (<code>before op:*</code> and <code>after op:*</code>).</li>
+<li><code>denied</code> handlers do not catch <code>before LABEL</code> denials because label-entry denials occur before operation context exists.</li>
+</ul>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@secretBlock</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>show<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Cannot display secrets<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@key</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-12345<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@display</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  denied <span class="token arrow-operator operator">=></span> <span class="token backtick-template"><span class="token punctuation">`</span>[REDACTED] - <span class="token variable">@mx</span>.guard.reason<span class="token punctuation">`</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token backtick-template"><span class="token punctuation">`</span>Value: <span class="token variable">@value</span><span class="token punctuation">`</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@display</span><span class="token punctuation">(</span><span class="token variable variable">@key</span><span class="token punctuation">)</span>  <span class="token comment">>> Shows: [REDACTED] - Cannot display secrets</span>
+</code></pre>
+<p>Access guard context in denied handlers:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@handler</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  denied <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Blocked: <span class="token variable">@mx</span>.guard.reason<span class="token punctuation">"</span></span>
+  denied <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Guard: <span class="token variable">@mx</span>.guard.name<span class="token punctuation">"</span></span>
+  denied <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Labels: <span class="token variable">@mx</span>.labels.join(', ')<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token variable variable">@value</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h2 id="before-guards-(input-validation)" tabindex="-1">Before Guards (Input Validation)</h2>
+<p>Before guards check inputs before operations execute:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@validateInput</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.any</span><span class="token field-access property">.text</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>&lt;script<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Potentially malicious input<span class="token punctuation">"</span></span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.any</span><span class="token field-access property">.text</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>sk-<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Potentially sensitive token<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token punctuation">{</span> echo <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@data</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>&lt;script>alert('xss')<span class="token alligator"><span class="token punctuation">&lt;</span><span class="token file-path">/script</span><span class="token punctuation">></span></span><span class="token punctuation">"</span></span><span class="token punctuation">)</span>  <span class="token comment">>> Blocked</span>
+</code></pre>
+<p>Transform inputs with <code>allow @value</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@sanitize</span> <span class="token operator">before</span> <span class="token operator">untrusted</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token field-access property">.slice</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">100</span><span class="token punctuation">)</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> <span class="token operator">untrusted</span> <span class="token variable variable">@userInput</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>  very long input...  <span class="token punctuation">"</span></span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Processed: <span class="token variable">@data</span><span class="token punctuation">`</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span><span class="token variable variable">@userInput</span><span class="token punctuation">)</span>  <span class="token comment">>> Input trimmed and truncated</span>
+</code></pre>
+<h2 id="after-guards-(output-validation)" tabindex="-1">After Guards (Output Validation)</h2>
+<p>After guards validate outputs after operations complete:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@validateOutput</span> <span class="token operator">after</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  @<span class="token directive keyword">output</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>ERROR<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Operation failed<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@query</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token punctuation">{</span> curl api<span class="token field-access property">.example</span><span class="token field-access property">.com</span>/status <span class="token punctuation">}</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@query</span><span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment">>> Blocked if output contains ERROR</span>
+</code></pre>
+<p>Sanitize outputs:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@redactSecrets</span> <span class="token operator">after</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  @<span class="token directive keyword">output</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>sk-<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> @<span class="token directive keyword">output</span><span class="token field-access property">.replace</span><span class="token punctuation">(</span>/sk-<span class="token punctuation">[</span>a-zA-Z0-<span class="token number">9</span><span class="token punctuation">]</span>+/g<span class="token punctuation">,</span> <span class="token string-literal">'[REDACTED]'</span><span class="token punctuation">)</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@getStatus</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token punctuation">{</span> echo <span class="token string-interpolated"><span class="token punctuation">"</span>Status: ok, key: sk-12345<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@getStatus</span><span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment">>> Output: Status: ok, key: [REDACTED]</span>
+</code></pre>
+<p>Check LLM output:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@validateJson</span> <span class="token operator">after</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@isValidJson</span><span class="token punctuation">(</span>@<span class="token directive keyword">output</span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>LLM did not return valid JSON<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@isValidJson</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> try <span class="token punctuation">{</span> JSON<span class="token field-access property">.parse</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span><span class="token punctuation">;</span> return <span class="token boolean">true</span><span class="token punctuation">;</span> <span class="token punctuation">}</span> catch <span class="token punctuation">{</span> return <span class="token boolean">false</span><span class="token punctuation">;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+</code></pre>
+<h2 id="guard-timing" tabindex="-1">Guard Timing</h2>
+<p>Guards can run before, after, or both:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@checkInput</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@checkOutput</span> <span class="token operator">after</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@checkBoth</span> <span class="token operator">always</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token variable variable">@tagValue</span><span class="token punctuation">(</span><span class="token variable variable">@mx</span>.<span class="token directive keyword">guard</span><span class="token field-access property">.timing</span><span class="token punctuation">,</span> @<span class="token directive keyword">output</span><span class="token punctuation">,</span> <span class="token reserved-variable builtin">@input</span><span class="token punctuation">)</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><code>always</code> timing runs in both phases. In each phase, guards execute top-to-bottom in declaration order. Use <code>@mx.guard.timing</code> to differentiate:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@tagValue</span><span class="token punctuation">(</span>timing<span class="token punctuation">,</span> out<span class="token punctuation">,</span> inp<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span>
+  const val <span class="token assignment-operator operator">=</span> out <span class="token ternary-operator operator">?</span><span class="token ternary-operator operator">?</span> inp <span class="token ternary-operator operator">?</span><span class="token ternary-operator operator">?</span> <span class="token string-literal">''</span><span class="token punctuation">;</span>
+  return <span class="token backtick-template"><span class="token punctuation">`</span>${timing}:${val}<span class="token punctuation">`</span></span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@emit</span><span class="token punctuation">(</span>v<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return v<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@emit</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>test<span class="token punctuation">"</span></span><span class="token punctuation">)</span>  <span class="token comment">>> after:before:test</span>
+</code></pre>
+<h2 id="guard-composition" tabindex="-1">Guard Composition</h2>
+<p>Composition rules:</p>
+<ul>
+<li>Guards execute top-to-bottom in declaration order.</li>
+<li>Decision precedence: <code>deny</code> &gt; <code>retry</code> &gt; <code>allow @value</code> &gt; <code>allow</code>.</li>
+<li>Before transforms use the last matching replacement as operation input.</li>
+<li>After transforms apply sequentially; each guard sees the previous guard's output.</li>
+<li><code>retry</code> applies only to retryable operation contexts (for example pipeline stages). In non-retryable contexts, <code>retry</code> resolves as a deny.</li>
+</ul>
+<p>Before transforms: last replacement wins for operation input.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@first</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token string-interpolated"><span class="token punctuation">"</span>first<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@second</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token string-interpolated"><span class="token punctuation">"</span>second<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@data</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>original<span class="token punctuation">"</span></span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@deliver</span><span class="token punctuation">(</span>v<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Result: <span class="token variable">@v</span><span class="token punctuation">`</span></span>
+
+<span class="token comment">>> Result: second</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@deliver</span><span class="token punctuation">(</span><span class="token variable variable">@data</span><span class="token punctuation">)</span>
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@retryGuard</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">retry</span> <span class="token string-interpolated"><span class="token punctuation">"</span>need retry<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@denyGuard</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>hard stop<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token comment">>> deny wins, but retry hint preserved in @mx.guard.hints</span>
+</code></pre>
+<h2 id="guard-transforms" tabindex="-1">Guard Transforms</h2>
+<p>Guards can transform data with <code>allow @value</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@redact</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return text<span class="token field-access property">.replace</span><span class="token punctuation">(</span>/./g<span class="token punctuation">,</span> <span class="token string-literal">'*'</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@redactSecrets</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>show<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token variable variable">@redact</span><span class="token punctuation">(</span><span class="token reserved-variable builtin">@input</span><span class="token punctuation">)</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@key</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-12345<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@key</span>  <span class="token comment">>> Output: *********</span>
+</code></pre>
+<p>For <code>before op:exe</code>, transform from <code>@input</code> (not <code>@output</code>) because executable output does not exist yet in the <code>before</code> phase.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@normalize</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return String<span class="token punctuation">(</span><span class="token variable variable">@value</span><span class="token punctuation">)</span><span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token field-access property">.toLowerCase</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@normalizeExeInput</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token variable variable">@normalize</span><span class="token punctuation">(</span><span class="token reserved-variable builtin">@input</span><span class="token punctuation">)</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>After transforms chain sequentially:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@stepOne</span> <span class="token operator">after</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token backtick-template"><span class="token punctuation">`</span>one:<span class="token variable">@output</span><span class="token punctuation">`</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@stepTwo</span> <span class="token operator">after</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token backtick-template"><span class="token punctuation">`</span>two:<span class="token variable">@output</span><span class="token punctuation">`</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@emit</span><span class="token punctuation">(</span>v<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return v<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@emit</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>base<span class="token punctuation">"</span></span><span class="token punctuation">)</span>  <span class="token comment">>> two:one:base</span>
+</code></pre>
+<h2 id="guard-context" tabindex="-1">Guard Context</h2>
+<p>Access guard evaluation context with <code>@mx.guard.*</code>:</p>
+<h3 id="in-guard-expressions" tabindex="-1">In Guard Expressions</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@retryOnce</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>pipeline-stage<span class="token punctuation">"</span></span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token variable variable">@mx</span>.<span class="token directive keyword">guard</span><span class="token field-access property">.try</span> <span class="token comparison-operator operator">==</span> <span class="token number">1</span> <span class="token arrow-operator operator">=></span> <span class="token operator">retry</span> <span class="token string-interpolated"><span class="token punctuation">"</span>first attempt failed<span class="token punctuation">"</span></span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>pipeline-stage<span class="token punctuation">"</span></span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token variable variable">@mx</span>.<span class="token directive keyword">guard</span><span class="token field-access property">.try</span> <span class="token comparison-operator operator">==</span> <span class="token number">2</span> <span class="token arrow-operator operator">=></span> <span class="token operator">retry</span> <span class="token string-interpolated"><span class="token punctuation">"</span>second attempt failed<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><code>retry</code> is pipeline-scope in practice. A non-pipeline operation that returns <code>retry</code> is denied with a retry-scope error.</p>
+<h3 id="in-denied-handlers" tabindex="-1">In Denied Handlers</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  denied <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Blocked by: <span class="token variable">@mx</span>.guard.name<span class="token punctuation">"</span></span>
+  denied <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Reason: <span class="token variable">@mx</span>.guard.reason<span class="token punctuation">"</span></span>
+  denied <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Decision: <span class="token variable">@mx</span>.guard.decision<span class="token punctuation">"</span></span>
+  denied <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>All reasons: <span class="token variable">@mx</span>.guard.reasons.join(', ')<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token variable variable">@value</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h3 id="common-properties" tabindex="-1">Common Properties</h3>
+<ul>
+<li><code>@mx.guard.try</code> - Current attempt number (1, 2, 3...)</li>
+<li><code>@mx.guard.max</code> - Max attempts allowed (default 3)</li>
+<li><code>@mx.guard.reason</code> - Primary denial/retry reason</li>
+<li><code>@mx.guard.reasons</code> - All reasons from guard chain</li>
+<li><code>@mx.guard.hints</code> - Retry hints from guards</li>
+<li><code>@mx.guard.trace</code> - Full guard evaluation trace</li>
+<li><code>@mx.guard.timing</code> - &quot;before&quot; or &quot;after&quot;</li>
+<li><code>@mx.guard.name</code> - Guard name</li>
+<li><code>@mx.labels</code> - Data labels on input</li>
+</ul>
+<p>See full reference in <code>@mx.guard</code> section below.</p>
+<h2 id="guard-overrides" tabindex="-1">Guard Overrides</h2>
+<p>Selectively control guards per operation:</p>
+<p>Disable all guards:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@block</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>blocked<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@data</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>test<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@data</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">guards</span><span class="token ternary-operator operator">:</span> <span class="token boolean">false</span> <span class="token punctuation">}</span>  <span class="token comment">>> Guards disabled (warning emitted)</span>
+</code></pre>
+<p>Skip specific guards:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@blocker</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>should skip<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@allowed</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@data</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>visible<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@data</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">guards</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">except</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@blocker</span><span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>  <span class="token comment">>> Only @allowed runs</span>
+</code></pre>
+<p>Run only specific guards:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">show</span> <span class="token variable variable">@data</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">guards</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">only</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@specific</span><span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+</code></pre>
+<h2 id="guard-import%2Fexport" tabindex="-1">Guard Import/Export</h2>
+<p>Define guards in modules:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> guards/secrets.mld</span>
+<span class="token directive keyword">guard</span> <span class="token variable variable">@secretProtection</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>run<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Secrets blocked from shell<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@secretProtection</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>Import and use:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@secretProtection</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./guards/secrets.mld<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@key</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-12345<span class="token punctuation">"</span></span>
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> echo <span class="token variable variable">@key</span> <span class="token punctuation">}</span>  <span class="token comment">>> Protected by imported guard</span>
+</code></pre>
+<h2 id="environment-isolation" tabindex="-1">Environment Isolation</h2>
+<p>Use <code>env</code> blocks to scope execution within a named environment configuration:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">env</span> <span class="token variable variable">@sandbox</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> echo <span class="token string-interpolated"><span class="token punctuation">"</span>inside sandbox<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>The environment is active only within the block and released on exit. Variables defined inside don't leak out, but the block can access parent scope variables.</p>
+<p>Return a value from a block with <code>=&gt;</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@config</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">env</span> <span class="token variable variable">@config</span> <span class="token punctuation">[</span>
+  <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>completed<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@result</span>
+</code></pre>
+<p>Derive a restricted environment inline with <code>with</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">env</span> <span class="token variable variable">@sandbox</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>
+  <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>read-only mode<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Child environments can only restrict parent capabilities, never extend them.</p>
+<h3 id="sandboxed-execution-with-the-env-directive" tabindex="-1">Sandboxed Execution with the env Directive</h3>
+<p>The full <code>env</code> directive supports provider-based isolation, credential management, and capability control:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">provider</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mlld</span>/env-docker<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+  <span class="token object-key property">fs</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">read</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>.:/app<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token object-key property">write</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>/tmp<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">net</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>none<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+  <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token object-key property">mcps</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">env</span> <span class="token variable variable">@sandbox</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token string-interpolated"><span class="token punctuation">"</span>Analyze the codebase<span class="token punctuation">"</span></span> <span class="token punctuation">}</span> using <span class="token object-key property">auth</span><span class="token ternary-operator operator">:</span>claude
+<span class="token punctuation">]</span>
+</code></pre>
+<p>The provider runs commands in a Docker container. <code>fs</code> restricts filesystem mounts, <code>net</code> blocks network access, <code>tools</code> limits runtime tool availability, and <code>mcps: []</code> blocks MCP servers. Credentials flow through sealed paths via <code>using auth:*</code> — never interpolated into command strings.</p>
+<p><strong>Config fields:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>provider</code></td>
+<td>Isolation provider (<code>&quot;@mlld/env-docker&quot;</code>, <code>&quot;@mlld/env-sprites&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>auth</code></td>
+<td>Authentication reference from policy</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td>Runtime tool allowlist</td>
+</tr>
+<tr>
+<td><code>mcps</code></td>
+<td>MCP server allowlist (<code>[]</code> blocks all)</td>
+</tr>
+<tr>
+<td><code>fs</code></td>
+<td>Filesystem access (passed to provider)</td>
+</tr>
+<tr>
+<td><code>net</code></td>
+<td>Network restrictions (passed to provider)</td>
+</tr>
+<tr>
+<td><code>limits</code></td>
+<td>Resource limits (passed to provider)</td>
+</tr>
+<tr>
+<td><code>profile</code></td>
+<td>Explicit profile selection</td>
+</tr>
+<tr>
+<td><code>profiles</code></td>
+<td>Profile definitions for policy-based selection</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Capability attenuation:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">provider</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mlld</span>/env-docker<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+  <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">env</span> <span class="token variable variable">@sandbox</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>
+  <span class="token comment">>> Only Read is available here</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token variable variable">@task</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h2 id="expression-tracking" tabindex="-1">Expression Tracking</h2>
+<p>Guards see labels through all transformations:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@secretBlock</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>show<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>No secrets<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@key</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>  sk-12345  <span class="token punctuation">"</span></span>
+
+<span class="token comment">>> All of these preserve 'secret' label:</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@key</span><span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment">>> Blocked</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@key</span><span class="token field-access property">.slice</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">5</span><span class="token punctuation">)</span>  <span class="token comment">>> Blocked</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@key</span><span class="token field-access property">.toUpperCase</span><span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment">>> Blocked</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@key</span><span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token field-access property">.slice</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token field-access property">.toUpperCase</span><span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment">>> Blocked</span>
+</code></pre>
+<p>Labels track through:</p>
+<ul>
+<li>Chained builtin methods (<code>.trim().slice()</code>)</li>
+<li>Template interpolation (<code>`text @secret`</code>)</li>
+<li>Field access (<code>@obj.secret.field</code>)</li>
+<li>Iterators (<code>for @item in @secrets</code>)</li>
+<li>Pipelines (all stages)</li>
+<li>Nested expressions</li>
+</ul>
+<h2 id="common-patterns" tabindex="-1">Common Patterns</h2>
+<h3 id="redact-secrets-for-display" tabindex="-1">Redact Secrets for Display</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@redact</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return text<span class="token field-access property">.slice</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">)</span> + <span class="token string-literal">'****'</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@redactSecrets</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>show<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token variable variable">@redact</span><span class="token punctuation">(</span><span class="token reserved-variable builtin">@input</span><span class="token punctuation">)</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@key</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-12345678<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@key</span>  <span class="token comment">>> Output: sk-1****</span>
+</code></pre>
+<h3 id="validate-llm-output" tabindex="-1">Validate LLM Output</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@isValidJson</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span>
+  try <span class="token punctuation">{</span> JSON<span class="token field-access property">.parse</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span><span class="token punctuation">;</span> return <span class="token boolean">true</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+  catch <span class="token punctuation">{</span> return <span class="token boolean">false</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@validateJson</span> <span class="token operator">after</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.name</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>llmCall<span class="token punctuation">"</span></span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token logical-operator operator">!</span><span class="token variable variable">@isValidJson</span><span class="token punctuation">(</span>@<span class="token directive keyword">output</span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Invalid JSON from LLM<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h3 id="block-network-access" tabindex="-1">Block Network Access</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@noNetwork</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">run</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.subtype</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sh<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Shell access blocked<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@noExecNetwork</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.any</span><span class="token field-access property">.mx</span><span class="token field-access property">.labels</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>network<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Network calls blocked<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h3 id="sanitize-untrusted-input" tabindex="-1">Sanitize Untrusted Input</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@sanitize</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span>
+  return text
+    <span class="token field-access property">.replace</span><span class="token punctuation">(</span>/<span class="token comparison-operator operator">&lt;</span>script<span class="token punctuation">[</span>^<span class="token comparison-operator operator">></span><span class="token punctuation">]</span>*<span class="token comparison-operator operator">></span>.*<span class="token ternary-operator operator">?</span><span class="token alligator"><span class="token punctuation">&lt;</span>\/script<span class="token punctuation">></span></span>/gi<span class="token punctuation">,</span> <span class="token string-literal">''</span><span class="token punctuation">)</span>
+    <span class="token field-access property">.replace</span><span class="token punctuation">(</span>/<span class="token object-key property">javascript</span><span class="token ternary-operator operator">:</span>/gi<span class="token punctuation">,</span> <span class="token string-literal">''</span><span class="token punctuation">)</span>
+    <span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@sanitizeUntrusted</span> <span class="token operator">before</span> <span class="token operator">untrusted</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token variable variable">@sanitize</span><span class="token punctuation">(</span><span class="token reserved-variable builtin">@input</span><span class="token punctuation">)</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> <span class="token operator">untrusted</span> <span class="token variable variable">@userInput</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>&lt;script>alert('xss')<span class="token alligator"><span class="token punctuation">&lt;</span><span class="token file-path">/script</span><span class="token punctuation">></span></span>Hello<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@userInput</span>  <span class="token comment">>> Output: Hello (sanitized)</span>
+</code></pre>
+<h3 id="operation-specific-guards" tabindex="-1">Operation-Specific Guards</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@fileWritePolicy</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>output<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Cannot write secrets to files<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@displayPolicy</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>show<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token variable variable">@redact</span><span class="token punctuation">(</span><span class="token reserved-variable builtin">@input</span><span class="token punctuation">)</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h2 id="%40mx.guard-reference" tabindex="-1">@mx.guard Reference</h2>
+<p>Properties available in guard expressions and denied handlers:</p>
+<h3 id="attempt-tracking" tabindex="-1">Attempt Tracking</h3>
+<ul>
+<li><code>@mx.guard.try</code> - Current attempt (1, 2, 3...)</li>
+<li><code>@mx.guard.max</code> - Max attempts (default 3)</li>
+<li><code>@mx.guard.tries</code> - Previous attempt history</li>
+</ul>
+<h3 id="guard-identity" tabindex="-1">Guard Identity</h3>
+<ul>
+<li><code>@mx.guard.name</code> - Guard name (or null for anonymous)</li>
+<li><code>@mx.guard.timing</code> - &quot;before&quot; or &quot;after&quot;</li>
+</ul>
+<h3 id="input%2Foutput" tabindex="-1">Input/Output</h3>
+<ul>
+<li><code>@input</code> - Input value being guarded (also <code>@mx.guard.input</code>)</li>
+<li><code>@output</code> - Output value (after guards only, also <code>@mx.guard.output</code>)</li>
+</ul>
+<h3 id="decision-info-(denied-handlers-only)" tabindex="-1">Decision Info (Denied Handlers Only)</h3>
+<ul>
+<li><code>@mx.guard.decision</code> - Final decision (&quot;allow&quot;, &quot;deny&quot;, &quot;retry&quot;)</li>
+<li><code>@mx.guard.reason</code> - Primary denial/retry reason</li>
+<li><code>@mx.guard.reasons</code> - All reasons from guard chain</li>
+<li><code>@mx.guard.hints</code> - Retry hints from guards</li>
+<li><code>@mx.guard.trace</code> - Full guard evaluation results</li>
+</ul>
+<h3 id="data-context" tabindex="-1">Data Context</h3>
+<ul>
+<li><code>@mx.labels</code> - Data labels on input</li>
+<li><code>@mx.sources</code> - Source provenance</li>
+</ul>
+<h2 id="guard-retry" tabindex="-1">Guard Retry</h2>
+<p>Guards can retry operations in pipeline contexts:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>pipeline-stage<span class="token punctuation">"</span></span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token variable variable">@mx</span>.<span class="token directive keyword">guard</span><span class="token field-access property">.try</span> <span class="token comparison-operator operator">==</span> <span class="token number">1</span> <span class="token arrow-operator operator">=></span> <span class="token operator">retry</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Try again<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@mask</span><span class="token punctuation">(</span>v<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return v<span class="token field-access property">.replace</span><span class="token punctuation">(</span>/.<span class="token punctuation">(</span><span class="token ternary-operator operator">?</span><span class="token assignment-operator operator">=</span>.<span class="token punctuation">{</span><span class="token number">4</span><span class="token punctuation">}</span><span class="token punctuation">)</span>/g<span class="token punctuation">,</span> <span class="token string-literal">'*'</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@key</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-12345<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@safe</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@key</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@mask</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@safe</span>  <span class="token comment">>> Retries once, then succeeds</span>
+</code></pre>
+<p>Retry budget is shared across guard chain (max 3 attempts).</p>
+<h2 id="signing-and-verification-1" tabindex="-1">Signing and Verification</h2>
+<p>Sign a prompt or template and verify it in another step:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@auditPrompt</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Review <span class="token reserved-variable builtin">@input</span> for policy issues.<span class="token punctuation">`</span></span>
+<span class="token directive keyword">sign</span> <span class="token variable variable">@auditPrompt</span>
+<span class="token directive keyword">verify</span> <span class="token variable variable">@auditPrompt</span>
+</code></pre>
+<p>Autosign supports template categories and variable patterns:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@policyConfig</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">autosign</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>templates<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> union<span class="token punctuation">(</span><span class="token variable variable">@policyConfig</span><span class="token punctuation">)</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@auditPrompt</span><span class="token punctuation">(</span>input<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> template <span class="token string-interpolated"><span class="token punctuation">"</span>./audit.att<span class="token punctuation">"</span></span>
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@policyConfig</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">autosign</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">variables</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>@*Prompt<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>@*Instructions<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> union<span class="token punctuation">(</span><span class="token variable variable">@policyConfig</span><span class="token punctuation">)</span>
+</code></pre>
+<p>Autoverify prepends verification instructions for signed variables passed to llm-labeled executables and sets <code>MLLD_VERIFY_VARS</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@policyConfig</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">autoverify</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> union<span class="token punctuation">(</span><span class="token variable variable">@policyConfig</span><span class="token punctuation">)</span>
+
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@audit</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@auditPrompt</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+</code></pre>
+<p>Custom instructions use a template path:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@policyConfig</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">autoverify</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./verify.att<span class="token punctuation">"</span></span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> union<span class="token punctuation">(</span><span class="token variable variable">@policyConfig</span><span class="token punctuation">)</span>
+</code></pre>
+<h2 id="best-practices" tabindex="-1">Best Practices</h2>
+<p><strong>Label sensitive data early:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> secret <span class="token variable variable">@apiKey</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>.env<span class="token punctuation">></span></span>
+<span class="token directive keyword">var</span> pii <span class="token variable variable">@userData</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>users.json<span class="token punctuation">></span></span>
+</code></pre>
+<p><strong>Use operation-level guards for broad policies:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@noShell</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">run</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Shell disabled in production<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>Use data-level guards for specific protections:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@secretProtection</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>run<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>No secrets in shell<span class="token punctuation">"</span></span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>output<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>No secrets to files<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>Always handle denials in production code:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@handler</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  denied <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Operation blocked: <span class="token variable">@mx</span>.guard.reason<span class="token punctuation">"</span></span>
+  denied <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>fallback-value<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token variable variable">@value</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>Transform instead of deny when possible:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@redactSecrets</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>show<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token variable variable">@redact</span><span class="token punctuation">(</span><span class="token reserved-variable builtin">@input</span><span class="token punctuation">)</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h2 id="guard-helpers" tabindex="-1">Guard Helpers</h2>
+<p>mlld provides helpers in guard contexts:</p>
+<h3 id="%40prefixwith(label%2C-value)" tabindex="-1">@prefixWith(label, value)</h3>
+<p>Add prefix to values:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@tag</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token variable variable">@prefixWith</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>tagged<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token reserved-variable builtin">@input</span><span class="token punctuation">)</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h3 id="%40tagvalue(timing%2C-output%2C-input)" tabindex="-1">@tagValue(timing, output, input)</h3>
+<p>Tag based on guard timing:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@tag</span> <span class="token operator">always</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span> <span class="token variable variable">@tagValue</span><span class="token punctuation">(</span><span class="token variable variable">@mx</span>.<span class="token directive keyword">guard</span><span class="token field-access property">.timing</span><span class="token punctuation">,</span> @<span class="token directive keyword">output</span><span class="token punctuation">,</span> <span class="token reserved-variable builtin">@input</span><span class="token punctuation">)</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h3 id="%40input.any-%2F-%40input.all-%2F-%40input.none" tabindex="-1">@input.any / @input.all / @input.none</h3>
+<p>Array quantifiers for per-operation guards:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@blockSecretsInRun</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">run</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.any</span><span class="token field-access property">.mx</span><span class="token field-access property">.labels</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>secret<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Shell cannot access secrets<span class="token punctuation">"</span></span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.any</span><span class="token field-access property">.text</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>sk-<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Shell input contains a token pattern<span class="token punctuation">"</span></span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.all</span><span class="token field-access property">.mx</span><span class="token field-access property">.tokens</span> <span class="token comparison-operator operator">&lt;</span> <span class="token number">1000</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.none</span><span class="token field-access property">.mx</span><span class="token field-access property">.labels</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>pii<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Input validation failed<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h2 id="security-model" tabindex="-1">Security Model</h2>
+<p>mlld's security is based on three pillars:</p>
+<p><strong>Data Labels</strong> - Tag sensitive data</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> secret <span class="token variable variable">@key</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sk-12345<span class="token punctuation">"</span></span>
+</code></pre>
+<p><strong>Guards</strong> - Enforce policies</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token operator">before</span> secret <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>run<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>No shell access<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>Context</strong> - Access metadata</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token variable variable">@mx</span><span class="token field-access property">.labels</span>  <span class="token comment">>> Data labels</span>
+<span class="token variable variable">@mx</span>.<span class="token directive keyword">guard</span><span class="token field-access property">.reason</span>  <span class="token comment">>> Guard decisions</span>
+<span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.type</span>  <span class="token comment">>> Operation type</span>
+</code></pre>
+<p>Guards are:</p>
+<ul>
+<li><strong>Non-reentrant</strong> - Don't fire during guard evaluation (prevents infinite loops)</li>
+<li><strong>Ordered</strong> - Execute top-to-bottom in file, imports flatten at position</li>
+<li><strong>Composable</strong> - All guards run, decisions aggregate with precedence</li>
+</ul>
+<p>Labels propagate through:</p>
+<ul>
+<li>Builtin methods, template interpolation, field access</li>
+<li>Pipelines, iterators, nested expressions</li>
+<li>Transform chains, guard evaluations</li>
+</ul>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

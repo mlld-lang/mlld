@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markdown Mode - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">pre-release</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>⚠️ Docs</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/alternatives/" >Alternative Syntax and Escape Hatches</a></li>
+          
+        
+          
+            <li><a href="/docs/cli/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/content-and-data/" >Content and Data</a></li>
+          
+        
+          
+            <li><a href="/docs/flow-control/" >Control Flow</a></li>
+          
+        
+          
+            <li><a href="/docs/cookbook/" >Cookbook</a></li>
+          
+        
+          
+            <li><a href="/docs/markdown-mode/" aria-current=&quot;page&quot;>Markdown Mode</a></li>
+          
+        
+          
+            <li><a href="/docs/mcp/" >MCP Server Support</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/registry/" >mlld Registry</a></li>
+          
+        
+          
+            <li><a href="/docs/resolvers/" >mlld Resolvers</a></li>
+          
+        
+          
+            <li><a href="/docs/prose/" >Prose Execution</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >Security</a></li>
+          
+        
+          
+            <li><a href="/docs/streaming/" >Streaming</a></li>
+          
+        
+          
+            <li><a href="/docs/reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/" >Testing modules</a></li>
+          
+        
+          
+            <li><a href="/docs/large-variables/" >Working with Large Variables</a></li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>⚠️ mlld is pre-release</h1>
+    <p><a href="https://discord.gg/mlld">Join the discord</a> if you have questions. <a href="https://github.com/mlld-lang/mlld/issues">Report bugs on GitHub</a>.</p>
+    <h1 id="markdown-mode" tabindex="-1">Markdown Mode</h1>
+<p>Markdown mode allows embedding mlld directives in markdown files. This is useful for executable documentation - files that render beautifully as markdown while also functioning as mlld scripts.</p>
+<h2 id="file-extensions" tabindex="-1">File Extensions</h2>
+<table>
+<thead>
+<tr>
+<th>Extension</th>
+<th>Mode</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.mld</code></td>
+<td>strict</td>
+<td>Every line is a directive or blank. Text lines error.</td>
+</tr>
+<tr>
+<td><code>.mld.md</code></td>
+<td>markdown</td>
+<td><code>/</code> required for directives. Text becomes content.</td>
+</tr>
+<tr>
+<td><code>.md</code></td>
+<td>markdown</td>
+<td>Same as <code>.mld.md</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="syntax" tabindex="-1">Syntax</h2>
+<p>In markdown mode, directives require a leading slash:</p>
+<pre class="language-mlld"><code class="language-mlld">/<span class="token directive keyword">var</span> <span class="token variable variable">@name</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Alice<span class="token punctuation">"</span></span>
+/<span class="token directive keyword">show</span> <span class="token backtick-template"><span class="token punctuation">`</span>Hello <span class="token variable">@name</span>!<span class="token punctuation">`</span></span>
+/<span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>final output<span class="token punctuation">"</span></span>
+</code></pre>
+<p>Plain text passes through as content:</p>
+<pre class="language-markdown"><code class="language-markdown"><span class="token title important"><span class="token punctuation">#</span> Welcome</span>
+
+This text becomes output.
+
+/var @greeting = "Hello"
+/show @greeting
+</code></pre>
+<h2 id="when-to-use-markdown-mode" tabindex="-1">When to Use Markdown Mode</h2>
+<p>Use markdown mode (<code>.mld.md</code>) when:</p>
+<ul>
+<li>Creating executable documentation that should render on GitHub</li>
+<li>Publishing modules to the registry (<code>.mld.md</code> is the recommended format)</li>
+<li>Writing scripts that include prose explanations</li>
+</ul>
+<h2 id="when-to-use-strict-mode" tabindex="-1">When to Use Strict Mode</h2>
+<p>Use strict mode (<code>.mld</code>) when:</p>
+<ul>
+<li>Writing utility scripts</li>
+<li>Building tools and automation</li>
+<li>Code where prose output would be noise</li>
+</ul>
+<p>Most day-to-day scripting uses strict mode.</p>
+<h2 id="example%3A-executable-documentation" tabindex="-1">Example: Executable Documentation</h2>
+<p><strong><a href="http://my-utils.mld.md">my-utils.mld.md</a>:</strong></p>
+<pre class="language-markdown"><code class="language-markdown"><span class="token front-matter-block"><span class="token punctuation">---</span>
+<span class="token front-matter yaml language-yaml"><span class="token key atrule">name</span><span class="token punctuation">:</span> my<span class="token punctuation">-</span>utils
+<span class="token key atrule">author</span><span class="token punctuation">:</span> alice
+<span class="token key atrule">about</span><span class="token punctuation">:</span> Utility functions for common tasks</span>
+<span class="token punctuation">---</span></span>
+
+<span class="token title important"><span class="token punctuation">#</span> My Utilities</span>
+
+A collection of useful mlld functions.
+
+<span class="token title important"><span class="token punctuation">##</span> String Formatting</span>
+
+/exe @titleCase(str) = js {
+  return str.replace(/\b\w/g, c => c.toUpperCase());
+}
+
+<span class="token title important"><span class="token punctuation">##</span> Number Utilities</span>
+
+/exe @clamp(n, min, max) = js {
+  return Math.min(Math.max(n, min), max);
+}
+
+/export { @titleCase, @clamp }
+</code></pre>
+<p>This file:</p>
+<ul>
+<li>Renders as readable documentation on GitHub</li>
+<li>Works as a module: <code>import { @titleCase } from @alice/my-utils</code></li>
+<li>Self-documents with prose explanations</li>
+</ul>
+<h2 id="publishing-modules" tabindex="-1">Publishing Modules</h2>
+<p>When publishing to the registry, <code>.mld.md</code> files are recommended:</p>
+<pre class="language-bash"><code class="language-bash">mlld init my-module.mld.md
+mlld add-needs my-module.mld.md
+mlld publish my-module.mld.md
+</code></pre>
+<p>See <a href="registry.md">registry.md</a> for full publishing documentation.</p>
+<h2 id="differences-from-strict-mode" tabindex="-1">Differences from Strict Mode</h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Strict (<code>.mld</code>)</th>
+<th>Markdown (<code>.mld.md</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Directive prefix</td>
+<td>None required</td>
+<td><code>/</code> required</td>
+</tr>
+<tr>
+<td>Plain text</td>
+<td>Error</td>
+<td>Becomes content</td>
+</tr>
+<tr>
+<td>Comments</td>
+<td><code>&gt;&gt; comment</code> or <code>value &lt;&lt; comment</code></td>
+<td>same</td>
+</tr>
+<tr>
+<td>GitHub rendering</td>
+<td>Code only</td>
+<td>Full markdown</td>
+</tr>
+</tbody>
+</table>
+<h2 id="best-practices" tabindex="-1">Best Practices</h2>
+<ol>
+<li><strong>Use <code>.mld.md</code> for modules</strong> - Better documentation, GitHub-friendly</li>
+<li><strong>Use <code>.mld</code> for scripts</strong> - Cleaner, no slash noise</li>
+<li><strong>Keep prose minimal</strong> - Markdown mode is for docs, not novels</li>
+<li><strong>Test both ways</strong> - Ensure your module works when imported</li>
+</ol>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

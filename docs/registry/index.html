@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mlld Registry - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">pre-release</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>⚠️ Docs</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/alternatives/" >Alternative Syntax and Escape Hatches</a></li>
+          
+        
+          
+            <li><a href="/docs/cli/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/content-and-data/" >Content and Data</a></li>
+          
+        
+          
+            <li><a href="/docs/flow-control/" >Control Flow</a></li>
+          
+        
+          
+            <li><a href="/docs/cookbook/" >Cookbook</a></li>
+          
+        
+          
+            <li><a href="/docs/markdown-mode/" >Markdown Mode</a></li>
+          
+        
+          
+            <li><a href="/docs/mcp/" >MCP Server Support</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/registry/" aria-current=&quot;page&quot;>mlld Registry</a></li>
+          
+        
+          
+            <li><a href="/docs/resolvers/" >mlld Resolvers</a></li>
+          
+        
+          
+            <li><a href="/docs/prose/" >Prose Execution</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >Security</a></li>
+          
+        
+          
+            <li><a href="/docs/streaming/" >Streaming</a></li>
+          
+        
+          
+            <li><a href="/docs/reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/" >Testing modules</a></li>
+          
+        
+          
+            <li><a href="/docs/large-variables/" >Working with Large Variables</a></li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>⚠️ mlld is pre-release</h1>
+    <p><a href="https://discord.gg/mlld">Join the discord</a> if you have questions. <a href="https://github.com/mlld-lang/mlld/issues">Report bugs on GitHub</a>.</p>
+    <h1 id="mlld-registry" tabindex="-1">mlld Registry</h1>
+<h2 id="tldr" tabindex="-1">tldr</h2>
+<p>Publish modules to the mlld registry with <code>mlld publish</code>. First-time modules go through PR review. Updates publish directly. Authenticate with GitHub, ensure CC0 license, include required metadata. Registry hosted at <a href="http://github.com/mlld-lang/registry">github.com/mlld-lang/registry</a>.</p>
+<h2 id="publishing-your-first-module" tabindex="-1">Publishing Your First Module</h2>
+<h3 id="prerequisites" tabindex="-1">Prerequisites</h3>
+<ol>
+<li><strong>GitHub account</strong> - You'll authenticate via GitHub</li>
+<li><strong>mlld CLI</strong> - Install via <code>npm install -g mlld</code></li>
+<li><strong>Module file</strong> - Your <code>.mld</code>/<code>.mld.md</code> file with frontmatter and <code>needs</code></li>
+</ol>
+<h3 id="required-metadata" tabindex="-1">Required Metadata</h3>
+<pre class="language-yaml"><code class="language-yaml"><span class="token punctuation">---</span>
+<span class="token key atrule">name</span><span class="token punctuation">:</span> my<span class="token punctuation">-</span>tool
+<span class="token key atrule">author</span><span class="token punctuation">:</span> yourname
+<span class="token key atrule">version</span><span class="token punctuation">:</span> 1.0.0
+<span class="token key atrule">about</span><span class="token punctuation">:</span> Brief description of what this does
+<span class="token key atrule">license</span><span class="token punctuation">:</span> CC0
+<span class="token punctuation">---</span>
+</code></pre>
+<p>All fields required. License must be CC0. Declare runtimes in the module body:</p>
+<pre class="language-mlld"><code class="language-mlld">/needs <span class="token punctuation">{</span>
+  <span class="token object-key property">node</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token object-key property">sh</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="publish-command" tabindex="-1">Publish Command</h3>
+<pre class="language-bash"><code class="language-bash">mlld publish my-tool.mld.md
+</code></pre>
+<p>First time publishing:</p>
+<ol>
+<li>Authenticates via GitHub</li>
+<li>Validates module</li>
+<li>Creates source (Gist or uses your repo)</li>
+<li>Opens PR to mlld-lang/registry</li>
+<li>Automated review posts feedback</li>
+<li>Merge approval gives you publish rights</li>
+</ol>
+<h3 id="authentication" tabindex="-1">Authentication</h3>
+<p>First time:</p>
+<pre class="language-bash"><code class="language-bash">mlld auth login
+</code></pre>
+<p>Opens GitHub OAuth flow. Grants:</p>
+<ul>
+<li><code>gist</code> scope - Create Gists for module source</li>
+<li><code>public_repo</code> scope - Create PRs to registry</li>
+</ul>
+<p>Check status:</p>
+<pre class="language-bash"><code class="language-bash">mlld auth status
+</code></pre>
+<p>Logout:</p>
+<pre class="language-bash"><code class="language-bash">mlld auth <span class="token builtin class-name">logout</span>
+</code></pre>
+<h2 id="module-validation" tabindex="-1">Module Validation</h2>
+<p>Your module must pass validation before publishing:</p>
+<h3 id="syntax-validation" tabindex="-1">Syntax Validation</h3>
+<ul>
+<li>No syntax errors</li>
+<li>No reserved word conflicts</li>
+<li>Valid mlld directives</li>
+</ul>
+<h3 id="export-validation" tabindex="-1">Export Validation</h3>
+<ul>
+<li><code>export</code> directive present (recommended)</li>
+<li>Exported names exist as variables</li>
+<li>No duplicate exports</li>
+</ul>
+<h3 id="import-validation" tabindex="-1">Import Validation</h3>
+<ul>
+<li>Imports reference valid modules</li>
+<li>No circular dependencies</li>
+<li>Local imports for dev only</li>
+</ul>
+<h3 id="metadata-validation" tabindex="-1">Metadata Validation</h3>
+<ul>
+<li>All required fields present</li>
+<li>Author matches GitHub username</li>
+<li>License is CC0</li>
+<li>Version follows semver</li>
+</ul>
+<p>Run validation locally:</p>
+<pre class="language-bash"><code class="language-bash">mlld publish --dry-run my-tool.mld.md
+</code></pre>
+<h2 id="publishing-workflow" tabindex="-1">Publishing Workflow</h2>
+<h3 id="first-time-module" tabindex="-1">First-Time Module</h3>
+<p>Creates a pull request:</p>
+<pre class="language-bash"><code class="language-bash">mlld publish my-tool.mld.md
+</code></pre>
+<ol>
+<li><strong>Validation</strong> - Checks syntax, exports, metadata</li>
+<li><strong>Source Creation</strong> - Creates Gist or references repo</li>
+<li><strong>PR Creation</strong> - Opens PR to mlld-lang/registry</li>
+<li><strong>Automated Review</strong> - LLM reviews for:
+<ul>
+<li>No hardcoded secrets</li>
+<li>Safe operations</li>
+<li>Real utility</li>
+<li>Proper licensing</li>
+</ul>
+</li>
+<li><strong>Manual Review</strong> (if needed) - Maintainer approval</li>
+<li><strong>Merge</strong> - Module becomes available</li>
+<li><strong>Publish Rights</strong> - You can update directly going forward</li>
+</ol>
+<h3 id="module-updates" tabindex="-1">Module Updates</h3>
+<p>After first module is merged:</p>
+<pre class="language-bash"><code class="language-bash">mlld publish my-tool.mld.md
+</code></pre>
+<ol>
+<li><strong>Version Bump</strong> - Prompts for patch/minor/major</li>
+<li><strong>Validation</strong> - Same checks as first-time</li>
+<li><strong>Direct Publish</strong> - No PR needed (if authenticated)</li>
+<li><strong>Registry Update</strong> - New version available immediately</li>
+</ol>
+<p>Version bump options:</p>
+<ul>
+<li><code>patch</code> - Bug fixes (1.0.0 → 1.0.1)</li>
+<li><code>minor</code> - New features (1.0.0 → 1.1.0)</li>
+<li><code>major</code> - Breaking changes (1.0.0 → 2.0.0)</li>
+<li><code>custom</code> - Specify exact version</li>
+</ul>
+<p>Force PR workflow:</p>
+<pre class="language-bash"><code class="language-bash">mlld publish <span class="token parameter variable">--pr</span> my-tool.mld.md
+</code></pre>
+<h3 id="existing-pr-detection" tabindex="-1">Existing PR Detection</h3>
+<p>If you have an open PR:</p>
+<pre class="language-bash"><code class="language-bash">mlld publish my-tool.mld.md
+</code></pre>
+<p>Options:</p>
+<ul>
+<li>Update existing PR</li>
+<li>Close and create new PR</li>
+<li>View PR in browser</li>
+</ul>
+<h3 id="direct-publish-via-api" tabindex="-1">Direct Publish via API</h3>
+<p>After your first module is merged, you can publish updates directly using the Registry API:</p>
+<pre class="language-bash"><code class="language-bash"><span class="token comment"># Via mlld CLI (recommended)</span>
+mlld publish my-tool.mld.md
+
+<span class="token comment"># Via API directly</span>
+<span class="token function">curl</span> <span class="token parameter variable">-X</span> POST https://registry-api.mlld.org/api/publish <span class="token punctuation">\</span>
+  <span class="token parameter variable">-H</span> <span class="token string">"Authorization: Bearer <span class="token variable">$TOKEN</span>"</span> <span class="token punctuation">\</span>
+  <span class="token parameter variable">-F</span> <span class="token string">"module=@my-tool.mld.md"</span>
+</code></pre>
+<p><strong>Authentication:</strong></p>
+<ul>
+<li>Requires GitHub authentication token</li>
+<li>Must be module owner or maintainer</li>
+<li>Token obtained via <code>mlld auth login</code></li>
+</ul>
+<p><strong>Behavior:</strong></p>
+<ul>
+<li>Skips PR workflow</li>
+<li>Publishes immediately</li>
+<li>Updates registry in real-time</li>
+<li>Records <code>publishedBy</code> field with your GitHub user ID</li>
+</ul>
+<p><strong>Use cases:</strong></p>
+<ul>
+<li>Quick bug fixes</li>
+<li>Patch releases</li>
+<li>Version bumps for existing modules</li>
+</ul>
+<p><strong>Force PR workflow:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld publish <span class="token parameter variable">--pr</span> my-tool.mld.md  <span class="token comment"># Creates PR even if you have direct publish rights</span>
+</code></pre>
+<h2 id="module-structure" tabindex="-1">Module Structure</h2>
+<h3 id="versioned-registry" tabindex="-1">Versioned Registry</h3>
+<p>Modules are stored with version history:</p>
+<pre><code>registry/
+└── modules/
+    └── alice/
+        └── my-tool/
+            ├── metadata.json      # Core info, owners
+            ├── 1.0.0.json         # Version 1.0.0
+            ├── 1.0.1.json         # Version 1.0.1
+            └── tags.json          # latest, stable, etc.
+</code></pre>
+<h3 id="metadata.json" tabindex="-1">metadata.json</h3>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"my-tool"</span><span class="token punctuation">,</span>
+  <span class="token property">"author"</span><span class="token operator">:</span> <span class="token string">"alice"</span><span class="token punctuation">,</span>
+  <span class="token property">"about"</span><span class="token operator">:</span> <span class="token string">"Brief description"</span><span class="token punctuation">,</span>
+  <span class="token property">"owners"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"alice"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"maintainers"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"created"</span><span class="token operator">:</span> <span class="token string">"2024-01-01T00:00:00Z"</span><span class="token punctuation">,</span>
+  <span class="token property">"createdBy"</span><span class="token operator">:</span> <span class="token number">12345</span><span class="token punctuation">,</span>
+  <span class="token property">"firstPublishPR"</span><span class="token operator">:</span> <span class="token number">123</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="%7Bversion%7D.json" tabindex="-1">{version}.json</h3>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"version"</span><span class="token operator">:</span> <span class="token string">"1.0.0"</span><span class="token punctuation">,</span>
+  <span class="token property">"needs"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"js"</span><span class="token punctuation">,</span> <span class="token string">"sh"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"license"</span><span class="token operator">:</span> <span class="token string">"CC0"</span><span class="token punctuation">,</span>
+  <span class="token property">"mlldVersion"</span><span class="token operator">:</span> <span class="token string">">=1.0.0"</span><span class="token punctuation">,</span>
+  <span class="token property">"source"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"github"</span><span class="token punctuation">,</span>
+    <span class="token property">"url"</span><span class="token operator">:</span> <span class="token string">"https://raw.githubusercontent.com/..."</span><span class="token punctuation">,</span>
+    <span class="token property">"contentHash"</span><span class="token operator">:</span> <span class="token string">"sha256:abc123..."</span><span class="token punctuation">,</span>
+    <span class="token property">"repository"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"git"</span><span class="token punctuation">,</span>
+      <span class="token property">"url"</span><span class="token operator">:</span> <span class="token string">"https://github.com/alice/repo"</span><span class="token punctuation">,</span>
+      <span class="token property">"commit"</span><span class="token operator">:</span> <span class="token string">"abc123"</span><span class="token punctuation">,</span>
+      <span class="token property">"path"</span><span class="token operator">:</span> <span class="token string">"my-tool.mld.md"</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"dependencies"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"js"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"packages"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"lodash"</span><span class="token punctuation">]</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"keywords"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"utility"</span><span class="token punctuation">,</span> <span class="token string">"automation"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"publishedAt"</span><span class="token operator">:</span> <span class="token string">"2024-01-01T00:00:00Z"</span><span class="token punctuation">,</span>
+  <span class="token property">"publishedBy"</span><span class="token operator">:</span> <span class="token number">12345</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Key Fields:</strong></p>
+<ul>
+<li><strong>publishedBy</strong> - GitHub user ID of the publisher (numeric ID, not username)</li>
+<li><strong>publishedAt</strong> - ISO timestamp when this version was published</li>
+<li><strong>source.type</strong> - Source type: <code>github</code>, <code>gist</code>, or <code>private-repo</code></li>
+<li><strong>source.contentHash</strong> - SHA256 hash for content verification</li>
+<li><strong>source.repository</strong> - Git repository metadata (for github/private-repo sources)</li>
+</ul>
+<h3 id="tags.json" tabindex="-1">tags.json</h3>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"latest"</span><span class="token operator">:</span> <span class="token string">"1.0.1"</span><span class="token punctuation">,</span>
+  <span class="token property">"stable"</span><span class="token operator">:</span> <span class="token string">"1.0.1"</span><span class="token punctuation">,</span>
+  <span class="token property">"beta"</span><span class="token operator">:</span> <span class="token string">"2.0.0-beta.1"</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2 id="module-source" tabindex="-1">Module Source</h2>
+<h3 id="github-repository" tabindex="-1">GitHub Repository</h3>
+<p>If your module is in a git repo:</p>
+<pre class="language-bash"><code class="language-bash">mlld publish my-tool.mld.md
+</code></pre>
+<p>Detects:</p>
+<ul>
+<li>Repository URL</li>
+<li>Current commit SHA</li>
+<li>Module file path</li>
+<li>Whether repo is clean</li>
+</ul>
+<p>Source references the commit SHA, ensuring immutability.</p>
+<h3 id="gist" tabindex="-1">Gist</h3>
+<p>If not in a repo:</p>
+<p>Creates a GitHub Gist automatically:</p>
+<ul>
+<li>Public Gist with module content</li>
+<li>Versioned via Gist revisions</li>
+<li>Content hash for integrity</li>
+</ul>
+<h3 id="private-modules" tabindex="-1">Private Modules</h3>
+<p>For private/internal modules, use local or custom resolvers. See <a href="resolvers.md">resolvers.md</a>.</p>
+<h2 id="dependency-declaration" tabindex="-1">Dependency Declaration</h2>
+<h3 id="runtime-dependencies" tabindex="-1">Runtime Dependencies</h3>
+<p>Declare runtimes with <code>needs</code>:</p>
+<pre class="language-mlld"><code class="language-mlld">/needs <span class="token punctuation">{</span>
+  <span class="token object-key property">node</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token object-key property">py</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token object-key property">sh</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Types:</p>
+<ul>
+<li><code>js</code> - Browser JavaScript</li>
+<li><code>node</code> - Node.js (fs, path, etc.)</li>
+<li><code>py</code> - Python</li>
+<li><code>sh</code> - Shell commands</li>
+</ul>
+<h3 id="package-dependencies" tabindex="-1">Package Dependencies</h3>
+<p>Include package requirements in <code>needs</code>:</p>
+<pre class="language-mlld"><code class="language-mlld">/needs <span class="token punctuation">{</span>
+  <span class="token object-key property">node</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span>lodash@^<span class="token number">4</span><span class="token punctuation">,</span> axios<span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token object-key property">py</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span>requests<span class="token comparison-operator operator">>=</span><span class="token number">2</span><span class="token field-access property">.31</span><span class="token field-access property">.0</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="command-dependencies" tabindex="-1">Command Dependencies</h3>
+<p>List required commands:</p>
+<pre class="language-mlld"><code class="language-mlld">/needs <span class="token punctuation">{</span>
+  <span class="token object-key property">sh</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+  <span class="token object-key property">cmd</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span>git<span class="token punctuation">,</span> curl<span class="token punctuation">,</span> jq<span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="mlld-module-dependencies" tabindex="-1">mlld Module Dependencies</h3>
+<pre class="language-yaml"><code class="language-yaml"><span class="token punctuation">---</span>
+<span class="token key atrule">dependencies</span><span class="token punctuation">:</span>
+  <span class="token key atrule">"@alice/utils"</span><span class="token punctuation">:</span> <span class="token string">"^1.0.0"</span>
+  <span class="token key atrule">"@company/auth"</span><span class="token punctuation">:</span> <span class="token string">"latest"</span>
+<span class="token punctuation">---</span>
+</code></pre>
+<h3 id="auto-detection" tabindex="-1">Auto-Detection</h3>
+<pre class="language-bash"><code class="language-bash">mlld add-needs my-tool.mld
+</code></pre>
+<p><code>mlld add-needs</code> analyzes your module and updates the <code>needs</code> block.</p>
+<p>Analyzes your module and updates frontmatter with detected dependencies.</p>
+<h2 id="version-management" tabindex="-1">Version Management</h2>
+<h3 id="semantic-versioning" tabindex="-1">Semantic Versioning</h3>
+<p>Follow semver (major.minor.patch):</p>
+<ul>
+<li><strong>1.0.0</strong> - Initial release</li>
+<li><strong>1.0.1</strong> - Bug fix (backward compatible)</li>
+<li><strong>1.1.0</strong> - New feature (backward compatible)</li>
+<li><strong>2.0.0</strong> - Breaking change</li>
+</ul>
+<h3 id="version-tags" tabindex="-1">Version Tags</h3>
+<p>Publish with tags:</p>
+<pre class="language-bash"><code class="language-bash">mlld publish <span class="token parameter variable">--tag</span> beta my-tool.mld.md
+</code></pre>
+<p>Users import via tag:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@helper</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@alice</span>/my-tool<span class="token variable variable">@beta</span>
+
+<span class="token comment">>> Namespace alias</span>
+<span class="token directive keyword">import</span> <span class="token variable variable">@corp</span>/utils <span class="token operator">as</span> <span class="token variable variable">@corp</span>
+
+<span class="token comment">>> Semver range</span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@helper</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@alice</span>/utils@^<span class="token number">1</span><span class="token field-access property">.0</span><span class="token field-access property">.0</span>
+</code></pre>
+<p>Common tags:</p>
+<ul>
+<li><code>latest</code> - Most recent stable (default)</li>
+<li><code>stable</code> - Recommended version</li>
+<li><code>beta</code> - Beta testing</li>
+<li><code>alpha</code> - Alpha testing</li>
+</ul>
+<h3 id="version-ranges" tabindex="-1">Version Ranges</h3>
+<p>Users specify ranges in <code>mlld-config.json</code>:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"dependencies"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"@alice/my-tool"</span><span class="token operator">:</span> <span class="token string">"^1.0.0"</span><span class="token punctuation">,</span>  <span class="token comment">// 1.x.x</span>
+    <span class="token property">"@bob/utils"</span><span class="token operator">:</span> <span class="token string">"~1.2.0"</span><span class="token punctuation">,</span>      <span class="token comment">// 1.2.x</span>
+    <span class="token property">"@eve/lib"</span><span class="token operator">:</span> <span class="token string">">=1.0.0 &lt;2.0.0"</span> <span class="token comment">// Range</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Lock file pins exact versions.</p>
+<h2 id="lock-file-(mlld-lock.json)" tabindex="-1">Lock File (mlld-lock.json)</h2>
+<p>When you install modules, mlld creates <code>mlld-lock.json</code> to ensure reproducible imports. This file tracks exact versions and content hashes.</p>
+<h3 id="lock-file-schema" tabindex="-1">Lock File Schema</h3>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"lockfileVersion"</span><span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
+  <span class="token property">"modules"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"@alice/utils"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"version"</span><span class="token operator">:</span> <span class="token string">"1.0.0"</span><span class="token punctuation">,</span>
+      <span class="token property">"resolved"</span><span class="token operator">:</span> <span class="token string">"abc123def456..."</span><span class="token punctuation">,</span>
+      <span class="token property">"source"</span><span class="token operator">:</span> <span class="token string">"@alice/utils"</span><span class="token punctuation">,</span>
+      <span class="token property">"sourceUrl"</span><span class="token operator">:</span> <span class="token string">"https://registry.mlld.org/modules/@alice/utils/1.0.0"</span><span class="token punctuation">,</span>
+      <span class="token property">"integrity"</span><span class="token operator">:</span> <span class="token string">"sha256:abc123..."</span><span class="token punctuation">,</span>
+      <span class="token property">"fetchedAt"</span><span class="token operator">:</span> <span class="token string">"2024-01-15T10:00:00Z"</span><span class="token punctuation">,</span>
+      <span class="token property">"registryVersion"</span><span class="token operator">:</span> <span class="token string">"1.0.0"</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="lock-entry-fields" tabindex="-1">Lock Entry Fields</h3>
+<p><strong>version</strong> - The exact version installed (from registry version.json)</p>
+<p><strong>resolved</strong> - Content hash used for cache lookup (SHA256)</p>
+<p><strong>source</strong> - Original module specifier from your imports</p>
+<p><strong>sourceUrl</strong> - URL where the module was fetched from</p>
+<p><strong>integrity</strong> - Content hash for verification (sha256:...)</p>
+<p><strong>fetchedAt</strong> - Timestamp when module was installed</p>
+<p><strong>registryVersion</strong> - Version from registry metadata (only for registry modules)</p>
+<h3 id="lock-file-behavior" tabindex="-1">Lock File Behavior</h3>
+<ul>
+<li><strong>Auto-generated</strong> - Created/updated by <code>mlld install</code></li>
+<li><strong>Version control</strong> - Commit to git for reproducible builds</li>
+<li><strong>Never edit manually</strong> - Use CLI commands to update</li>
+<li><strong>Registry-only validation</strong> - Lock file only enforces version matches for registry modules</li>
+<li><strong>Version pinning</strong> - <code>version: &quot;latest&quot;</code> updates to newest on <code>mlld update</code>; exact version (e.g. <code>&quot;1.2.0&quot;</code>) stays pinned until manually changed</li>
+</ul>
+<h3 id="commands" tabindex="-1">Commands</h3>
+<p><strong>Install from lock file:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld <span class="token function">install</span>  <span class="token comment"># Installs exact versions from lock file</span>
+</code></pre>
+<p><strong>List installed modules:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld <span class="token function">ls</span>  <span class="token comment"># Lists installed modules with versions</span>
+</code></pre>
+<p><strong>Update lock file:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld update @alice/utils  <span class="token comment"># Updates lock entry for specific module</span>
+mlld update               <span class="token comment"># Updates all modules in mlld-lock.json</span>
+</code></pre>
+<p><strong>Check module info:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld registry info @alice/utils  <span class="token comment"># Show module details from registry</span>
+</code></pre>
+<p><strong>Check lock file status:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld outdated  <span class="token comment"># Shows modules with newer versions available</span>
+</code></pre>
+<p><strong>Verify after updating:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld validate your-file.mld  <span class="token comment"># Check imports resolve</span>
+</code></pre>
+<h2 id="ownership-%26-permissions" tabindex="-1">Ownership &amp; Permissions</h2>
+<h3 id="module-owners" tabindex="-1">Module Owners</h3>
+<p>After first PR merges, you become module owner:</p>
+<ul>
+<li>Can publish updates directly</li>
+<li>Can add maintainers</li>
+<li>Module namespaced under your GitHub username</li>
+</ul>
+<h3 id="maintainers" tabindex="-1">Maintainers</h3>
+<p>Add collaborators to <code>metadata.json</code>:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"owners"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"alice"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"maintainers"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"bob"</span><span class="token punctuation">,</span> <span class="token string">"eve"</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Maintainers can also publish updates.</p>
+<h3 id="organization-modules" tabindex="-1">Organization Modules</h3>
+<p>Publish under org namespace:</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token punctuation">---</span>
+<span class="token key atrule">author</span><span class="token punctuation">:</span> company
+<span class="token key atrule">name</span><span class="token punctuation">:</span> auth<span class="token punctuation">-</span>tool
+<span class="token punctuation">---</span>
+</code></pre>
+<p>Requires write access to <code>@company</code> in registry.</p>
+<h2 id="review-process" tabindex="-1">Review Process</h2>
+<h3 id="automated-review" tabindex="-1">Automated Review</h3>
+<p>LLM reviews check for:</p>
+<ol>
+<li><strong>No secrets</strong> - API keys, tokens, passwords</li>
+<li><strong>Safe operations</strong> - No arbitrary code execution</li>
+<li><strong>Real utility</strong> - Solves actual problems</li>
+<li><strong>Proper licensing</strong> - Must be CC0</li>
+<li><strong>Accurate metadata</strong> - Matches functionality</li>
+</ol>
+<p>Review posts as PR comment with:</p>
+<ul>
+<li><strong>APPROVE</strong> - Ready to merge</li>
+<li><strong>REQUEST_CHANGES</strong> - Issues to fix</li>
+<li><strong>COMMENT</strong> - Needs human review</li>
+</ul>
+<h3 id="re-review-on-updates" tabindex="-1">Re-review on Updates</h3>
+<p>Push new commits to PR:</p>
+<ul>
+<li>Webhook triggers new review</li>
+<li>Shows previous review status</li>
+<li>Focuses on changes since last review</li>
+</ul>
+<h3 id="trusted-authors" tabindex="-1">Trusted Authors</h3>
+<p>Authors in allowlist skip LLM review:</p>
+<ul>
+<li>Module structure validated</li>
+<li>No security issues detected</li>
+<li>Auto-merges if CI passes</li>
+</ul>
+<h2 id="common-issues" tabindex="-1">Common Issues</h2>
+<h3 id="validation-errors" tabindex="-1">Validation Errors</h3>
+<p><strong>Missing required fields</strong>:<br>
+Add all required frontmatter fields.</p>
+<p><strong>Author mismatch</strong>:<br>
+Author field must match your GitHub username.</p>
+<p><strong>License not CC0</strong>:<br>
+Only CC0 license accepted for registry.</p>
+<p><strong>Export not found</strong>:<br>
+Ensure <code>export</code> lists match variable names.</p>
+<h3 id="publishing-errors" tabindex="-1">Publishing Errors</h3>
+<p><strong>Not authenticated</strong>:</p>
+<pre class="language-bash"><code class="language-bash">mlld auth login
+</code></pre>
+<p><strong>Version already exists</strong>:<br>
+Bump version or publish with new version number.</p>
+<p><strong>Import validation failed</strong>:<br>
+Fix import references before publishing.</p>
+<h3 id="pr-issues" tabindex="-1">PR Issues</h3>
+<p><strong>Review requested changes</strong>:<br>
+Address feedback and push new commit.</p>
+<p><strong>Conflicts with main</strong>:<br>
+Rebase or close and create new PR.</p>
+<p><strong>PR not found</strong>:<br>
+Check <a href="http://github.com/mlld-lang/registry/pulls">github.com/mlld-lang/registry/pulls</a>.</p>
+<h2 id="best-practices" tabindex="-1">Best Practices</h2>
+<p><strong>Test locally first</strong>:</p>
+<pre class="language-bash"><code class="language-bash">mlld my-tool.mld  <span class="token comment"># Run as script</span>
+mlld publish --dry-run my-tool.mld.md  <span class="token comment"># Validate</span>
+</code></pre>
+<p><strong>Use explicit exports</strong>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@publicAPI</span> <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Version appropriately</strong>:</p>
+<ul>
+<li>Patch for bugs</li>
+<li>Minor for features</li>
+<li>Major for breaking changes</li>
+</ul>
+<p><strong>Document well</strong>:</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token punctuation">---</span>
+<span class="token key atrule">about</span><span class="token punctuation">:</span> Clear<span class="token punctuation">,</span> concise description
+<span class="token key atrule">keywords</span><span class="token punctuation">:</span> <span class="token punctuation">[</span>relevant<span class="token punctuation">,</span> searchable<span class="token punctuation">,</span> tags<span class="token punctuation">]</span>
+<span class="token punctuation">---</span>
+</code></pre>
+<p><strong>Keep modules focused</strong>:<br>
+One module, one purpose. Split large modules into multiple packages.</p>
+<p><strong>Declare dependencies</strong>:</p>
+<pre class="language-bash"><code class="language-bash">mlld add-needs my-tool.mld
+</code></pre>
+<p><strong>Test across mlld versions</strong>:</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token punctuation">---</span>
+<span class="token key atrule">mlldVersion</span><span class="token punctuation">:</span> <span class="token string">">=1.0.0"</span>
+<span class="token punctuation">---</span>
+</code></pre>
+<h2 id="registry-api" tabindex="-1">Registry API</h2>
+<p>For advanced use cases, registry API available at <code>registry-api.mlld.org</code>:</p>
+<h3 id="resolve-version" tabindex="-1">Resolve Version</h3>
+<pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> https://registry-api.mlld.org/api/resolve?module<span class="token operator">=</span>@alice/my-tool
+</code></pre>
+<h3 id="direct-publish" tabindex="-1">Direct Publish</h3>
+<pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> <span class="token parameter variable">-X</span> POST https://registry-api.mlld.org/api/publish <span class="token punctuation">\</span>
+  <span class="token parameter variable">-H</span> <span class="token string">"Authorization: Bearer <span class="token variable">$TOKEN</span>"</span> <span class="token punctuation">\</span>
+  <span class="token parameter variable">-F</span> <span class="token string">"module=@my-tool.mld.md"</span>
+</code></pre>
+<p>See API docs for details.</p>
+<h2 id="migration-guide" tabindex="-1">Migration Guide</h2>
+<h3 id="from-local-to-registry" tabindex="-1">From Local to Registry</h3>
+<ol>
+<li>Add frontmatter with required fields</li>
+<li>Add <code>export</code> directive</li>
+<li>Run <code>mlld add-needs</code> to detect dependencies</li>
+<li>Test locally: <code>mlld my-tool.mld</code></li>
+<li>Publish: <code>mlld publish my-tool.mld.md</code></li>
+</ol>
+<h3 id="from-gist-to-repo" tabindex="-1">From Gist to Repo</h3>
+<ol>
+<li>Move module to git repo</li>
+<li>Commit and push</li>
+<li>Publish update:</li>
+</ol>
+<pre class="language-bash"><code class="language-bash">mlld publish my-tool.mld.md
+</code></pre>
+<p>Source automatically updates to repo reference.</p>
+<h2 id="support" tabindex="-1">Support</h2>
+<p><strong>Issues</strong>: <a href="https://github.com/mlld-lang/registry/issues">https://github.com/mlld-lang/registry/issues</a><br>
+<strong>Discussions</strong>: <a href="https://github.com/mlld-lang/mlld/discussions">https://github.com/mlld-lang/mlld/discussions</a><br>
+<strong>Examples</strong>: <a href="https://github.com/mlld-lang/registry/tree/main/modules">https://github.com/mlld-lang/registry/tree/main/modules</a></p>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

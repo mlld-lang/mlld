@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prose Execution - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">pre-release</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>⚠️ Docs</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/alternatives/" >Alternative Syntax and Escape Hatches</a></li>
+          
+        
+          
+            <li><a href="/docs/cli/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/content-and-data/" >Content and Data</a></li>
+          
+        
+          
+            <li><a href="/docs/flow-control/" >Control Flow</a></li>
+          
+        
+          
+            <li><a href="/docs/cookbook/" >Cookbook</a></li>
+          
+        
+          
+            <li><a href="/docs/markdown-mode/" >Markdown Mode</a></li>
+          
+        
+          
+            <li><a href="/docs/mcp/" >MCP Server Support</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/registry/" >mlld Registry</a></li>
+          
+        
+          
+            <li><a href="/docs/resolvers/" >mlld Resolvers</a></li>
+          
+        
+          
+            <li><a href="/docs/prose/" aria-current=&quot;page&quot;>Prose Execution</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >Security</a></li>
+          
+        
+          
+            <li><a href="/docs/streaming/" >Streaming</a></li>
+          
+        
+          
+            <li><a href="/docs/reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/" >Testing modules</a></li>
+          
+        
+          
+            <li><a href="/docs/large-variables/" >Working with Large Variables</a></li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>⚠️ mlld is pre-release</h1>
+    <p><a href="https://discord.gg/mlld">Join the discord</a> if you have questions. <a href="https://github.com/mlld-lang/mlld/issues">Report bugs on GitHub</a>.</p>
+    <h1 id="prose-execution" tabindex="-1">Prose Execution</h1>
+<p>mlld supports prose execution - the ability to define executable functions that invoke a prose interpreter (like OpenProse) via an LLM.</p>
+<h2 id="prerequisites" tabindex="-1">Prerequisites</h2>
+<p>Prose execution requires:</p>
+<ol>
+<li><strong>Claude Code</strong> - The model executor uses <code>claude -p</code> to run prompts</li>
+<li><strong>OpenProse plugin</strong> - Install in Claude Code:<pre><code>/plugin marketplace add git@github.com:openprose/prose.git
+/plugin install open-prose@prose
+</code></pre>
+</li>
+<li><strong>Restart Claude Code</strong> and boot OpenProse with <code>/prose-boot</code></li>
+<li><strong>Skill approval</strong> - Claude Code will prompt you to approve the OpenProse skills on first use</li>
+</ol>
+<h2 id="syntax" tabindex="-1">Syntax</h2>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@function</span><span class="token punctuation">(</span>params<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@config</span> <span class="token punctuation">{</span> inline prose content <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@function</span><span class="token punctuation">(</span>params<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@config</span> <span class="token string-interpolated"><span class="token punctuation">"</span>path/to/file.prose<span class="token punctuation">"</span></span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@function</span><span class="token punctuation">(</span>params<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@config</span> template <span class="token string-interpolated"><span class="token punctuation">"</span>path/to/file.prose.att<span class="token punctuation">"</span></span>
+</code></pre>
+<h2 id="quick-start" tabindex="-1">Quick Start</h2>
+<p>Use pre-built configs from <code>@mlld/prose</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@opus</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/prose
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@workflow</span><span class="token punctuation">(</span>ctx<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token punctuation">{</span>
+  session <span class="token string-interpolated"><span class="token punctuation">"</span>Process <span class="token variable">@ctx</span><span class="token punctuation">"</span></span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">run</span> <span class="token variable variable">@workflow</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>some context<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<p>OpenProse requires Opus - it's the only model that can reliably interpret the prose syntax.</p>
+<h2 id="configuration" tabindex="-1">Configuration</h2>
+<p>The config object specifies how prose is executed:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@claude</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/claude
+
+<span class="token comment">>> Create a model executor</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@opusModel</span><span class="token punctuation">(</span>prompt<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>opus<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token variable variable">@root</span><span class="token punctuation">)</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@config</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@opusModel</span><span class="token punctuation">,</span>
+  <span class="token object-key property">skills</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>open-prose:prose-boot<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>open-prose:prose-compile<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>open-prose:prose-run<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="config-options" tabindex="-1">Config Options</h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td>executable</td>
+<td>required</td>
+<td>Model executor (e.g., from <code>@mlld/claude</code>)</td>
+</tr>
+<tr>
+<td><code>skills</code></td>
+<td>array</td>
+<td>OpenProse skills</td>
+<td>Skills to invoke for prose execution</td>
+</tr>
+<tr>
+<td><code>skillPrompt</code></td>
+<td>string</td>
+<td>auto-generated</td>
+<td>Custom skill injection prompt</td>
+</tr>
+<tr>
+<td><code>skillPromptEnd</code></td>
+<td>string</td>
+<td>auto-generated</td>
+<td>Custom prompt suffix</td>
+</tr>
+</tbody>
+</table>
+<h3 id="default-skills" tabindex="-1">Default Skills</h3>
+<p>When <code>skills</code> is not specified, mlld defaults to the OpenProse plugin skills:</p>
+<pre><code>open-prose:prose-boot
+open-prose:prose-compile
+open-prose:prose-run
+</code></pre>
+<h2 id="custom-interpreters" tabindex="-1">Custom Interpreters</h2>
+<p>You can use any interpreter by specifying different skills:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@claude</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/claude
+
+<span class="token comment">>> Create a model executor</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@myModel</span><span class="token punctuation">(</span>prompt<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>opus<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token variable variable">@root</span><span class="token punctuation">)</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@myInterpreter</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@myModel</span><span class="token punctuation">,</span>
+  <span class="token object-key property">skills</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>my-dsl:boot<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>my-dsl:run<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@analyze</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@myInterpreter</span> <span class="token punctuation">{</span>
+  process <span class="token variable variable">@data</span>
+  <span class="token directive keyword">output</span> result
+<span class="token punctuation">}</span>
+</code></pre>
+<h2 id="content-sources" tabindex="-1">Content Sources</h2>
+<p>Interpolation rules by content source:</p>
+<ul>
+<li><code>prose:@config { inline }</code> — interpolates <code>@var</code> like templates</li>
+<li><code>&quot;file.prose&quot;</code> — no interpolation, raw content</li>
+<li><code>&quot;file.prose.att&quot;</code> — ATT interpolation (<code>@var</code>, <code>&lt;file.md&gt;</code> loading, <code>/for.../end</code> loops for arrays)</li>
+<li><code>&quot;file.prose.mtt&quot;</code> — MTT interpolation (<code>{{var}}</code>)</li>
+</ul>
+<h3 id="inline-content" tabindex="-1">Inline Content</h3>
+<p>Variables are interpolated using <code>@var</code> syntax:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@summarize</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@config</span> <span class="token punctuation">{</span>
+  session <span class="token string-interpolated"><span class="token punctuation">"</span>Summarize the following<span class="token punctuation">"</span></span>
+  input <span class="token variable variable">@text</span>
+  <span class="token directive keyword">output</span> summary
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="file-reference" tabindex="-1">File Reference</h3>
+<p>Plain <code>.prose</code> files are loaded as raw content (no interpolation):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@analyze</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@config</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./analysis.prose<span class="token punctuation">"</span></span>
+</code></pre>
+<h3 id="template-files" tabindex="-1">Template Files</h3>
+<p>Use <code>.prose.att</code> (ATT-style <code>@var</code>) or <code>.prose.mtt</code> (Mustache-style <code>{{var}}</code>):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@opus</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/prose
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@reviewAtt</span><span class="token punctuation">(</span>code<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./review.prose.att<span class="token punctuation">"</span></span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@reviewMtt</span><span class="token punctuation">(</span>code<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./review.prose.mtt<span class="token punctuation">"</span></span>
+</code></pre>
+<p><strong>review.prose.att:</strong></p>
+<pre><code>session &quot;Code Review&quot;
+input @code
+output review
+</code></pre>
+<p><strong>review.prose.mtt:</strong></p>
+<pre><code>session &quot;Code Review&quot;
+input {{code}}
+output review
+</code></pre>
+<h2 id="execution" tabindex="-1">Execution</h2>
+<p>Prose executables are invoked like any other mlld executable:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@opus</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/prose
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@summarize</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token punctuation">{</span> session <span class="token string-interpolated"><span class="token punctuation">"</span>Summarize: <span class="token variable">@text</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">run</span> <span class="token variable variable">@summarize</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Long text to summarize...<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<p>Prose executables can also be used in pipelines:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@opus</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/prose
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@summarize</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token punctuation">{</span> session <span class="token string-interpolated"><span class="token punctuation">"</span>Summarize: <span class="token variable">@text</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@document</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>This is a long document...<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@document</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@summarize</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre>
+<h2 id="error-handling" tabindex="-1">Error Handling</h2>
+<p>If the OpenProse skills are not available (not installed or not approved), mlld throws:</p>
+<pre><code>Prose execution failed: OpenProse skills not available.
+Skills must be installed AND approved.
+Required skills: open-prose:prose-boot, open-prose:prose-compile, open-prose:prose-run
+</code></pre>
+<p>To fix:</p>
+<ol>
+<li>Add the plugin: <code>/plugin marketplace add git@github.com:openprose/prose.git</code></li>
+<li>Install it: <code>/plugin install open-prose@prose</code></li>
+<li>Restart Claude Code and run <code>/prose-boot</code></li>
+<li>Approve the skills when prompted</li>
+</ol>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>
