@@ -1,5 +1,5 @@
 ---
-updated: 2026-02-19
+updated: 2026-02-20
 tags: #arch, #hooks, #security
 related-docs: docs/dev/DATA.md, docs/dev/INTERPRETER.md
 related-code: interpreter/hooks/*.ts, interpreter/eval/directive.ts, interpreter/eval/directive-inputs.ts
@@ -22,6 +22,8 @@ mlld's hook system enables pre-execution and post-execution extensions at evalua
 - User hook body failures are isolated and recorded in `@mx.hooks.errors` (operation continues)
 - Function hooks support optional first-arg prefix matching via `hook ... @fn("prefix")`
 - Non-reentrant per directive invocation (prevent infinite loops)
+- `op:loop` executes per `loop()` iteration boundary (not only at top-level `/loop` dispatch)
+- Guard-denied operations still run user `after` hooks with denied context before rethrowing
 - Hooks/checkpoint/resume rollout contract is tracked in `docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md` (Phase 0 decision lock before implementation phases).
 - Checkpoint short-circuit uses explicit `fulfill` hook decisions, with legacy metadata (`checkpointHit` + `cachedResult`) normalized centrally in `hook-decision-handler`.
 
@@ -193,6 +195,7 @@ Hooks run for directive, effect, and user-defined `/exe` boundaries. Built-in he
 **checkpoint-before / checkpoint-after** (`interpreter/hooks/checkpoint-pre-hook.ts`, `interpreter/hooks/checkpoint-post-hook.ts`)
 - Applies to `llm`-labeled `exe`/`run` operations and `effect` boundaries.
 - Pre-hook computes deterministic cache keys from operation name + normalized inputs and returns `action: "fulfill"` on cache hit.
+- Pre-hook read failures are isolated: `CheckpointManager.get()` errors log a warning and degrade to miss-path behavior.
 - Legacy metadata hit signals are normalized to `fulfill` by `hook-decision-handler` so hot paths use one protocol.
 - On hit:
   - execution short-circuits in directive/exec/effect call sites,
@@ -200,6 +203,8 @@ Hooks run for directive, effect, and user-defined `/exe` boundaries. Built-in he
   - built-in post-hooks and user `after` hooks still run,
   - `@mx.checkpoint.hit`/`@mx.checkpoint.key` are populated.
 - Post-hook writes cache entries only on miss (hit path is read-only).
+- Post-hook records miss-path timing as `durationMs` (start timestamp from pre-hook, duration computed in post-hook).
+- Post-hook write failures are isolated: `CheckpointManager.put()` errors log a warning and do not abort operation execution.
 
 ### OperationContext
 
@@ -219,17 +224,20 @@ interface OperationContext {
 
 ### Loop Operation Contexts
 
-Loop hooks now expose dedicated operation keys and `@mx.for` metadata for per-item and per-batch observability:
+Loop hooks now expose dedicated operation keys and loop metadata:
 
-| Hook filter | Boundary | `@mx.for` fields |
+| Hook filter | Boundary | Context fields |
 |---|---|---|
 | `op:for:iteration` | Each loop item | `index`, `total`, `key`, `parallel`, `batchIndex`, `batchSize` (parallel) |
 | `op:for:batch` | Parallel batch window start/end | `batchIndex`, `batchSize`, `parallel` |
+| `op:loop` | Each `loop()` iteration | `@mx.loop.iteration`, `@mx.loop.limit`, `@mx.loop.active` |
 
 Runtime notes:
 - `batchIndex` is 0-based.
 - `batchSize` is the actual item count in that window (last window may be partial).
 - `op:for:batch` wraps each parallel window boundary (`before` at window start, `after` after window completion).
+- `loop()` iteration boundaries emit `type: "loop"` operation contexts.
+- Top-level `/loop` directive dispatch uses `type: "loop:directive"` for lifecycle separation.
 
 ### Hook Lifecycle
 
@@ -243,6 +251,7 @@ Directive boundary
 6.   ├─ checkpointPreHook resolves cache hit/miss for eligible llm operations
 7.   ├─ guardPreHook evaluates guard definitions on miss path
 8.   └─ First non-continue (`abort`/`retry`/`fulfill`) exits pre-chain
+8.5  Guard-deny path runs user `after` hooks with denied context (`@mx.denied=true`, denial payload in `@output`) then rethrows `GuardError`
 9. → Evaluate directive (directive-specific evaluator) unless fulfilled from cache
 10. → Run post-hooks (HookManager.runPost)
 11.   ├─ guardPostHook (miss only)
@@ -259,6 +268,7 @@ Exe boundary
 6.   ├─ checkpointPreHook resolves cache hit/miss for eligible llm operations
 7.   ├─ guardPreHook evaluates guard definitions on miss path
 8.   └─ First non-continue (`abort`/`retry`/`fulfill`) exits pre-chain
+8.5  Guard-deny path runs user `after` hooks with denied context (`@mx.denied=true`, denial payload in `@output`) then rethrows `GuardError`
 9. → Execute user-defined /exe implementation unless fulfilled from cache
 10. → Run post-hooks (HookManager.runPost)
 11.   ├─ guardPostHook (miss only)
@@ -308,6 +318,7 @@ For /var directives, the variable is pre-computed via prepareVarAssignment and p
 - Hooks are non-reentrant - if a hook triggers directive evaluation, hooks don't re-run for nested directive/exe
 - Pre-hook first non-continue action stops chain (abort or retry)
 - Post-hooks ALL run sequentially - each can transform the result
+- Guard-denied operations still run user `after` hooks before the original denial is rethrown
 - Inputs can be any type (not just Variables) - check with isVariable()
 - Operation context is optional in hook signatures - may be undefined
 - HookInputHelpers only provided when ALL inputs are Variables (true for exe guard inputs that reference direct Variables)
