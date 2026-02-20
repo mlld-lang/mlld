@@ -9,6 +9,7 @@ import {
   isStructuredValue
 } from '@interpreter/utils/structured-value';
 import { isExeReturnControl } from '../exe-return';
+import { extractDescriptorsFromTemplateAst } from './security-descriptor';
 import {
   enforceToolSubset,
   isPlainObject,
@@ -75,6 +76,11 @@ export function createExecutionEvaluator(
   } = dependencies;
 
   const evaluateCommand = async (valueNode: any): Promise<unknown> => {
+    const commandTemplateDescriptor = extractDescriptorsFromTemplateAst(valueNode.command, env);
+    if (commandTemplateDescriptor) {
+      descriptorState.mergeResolvedDescriptor(commandTemplateDescriptor);
+    }
+
     const withClause = (directive.values?.withClause || directive.meta?.withClause) as any | undefined;
     const runWithClause =
       valueNode.using || withClause

@@ -395,8 +395,8 @@ describe('Security metadata propagation', () => {
     const resultDirective = parseSync('/run { printf "Token: @token" }')[0] as DirectiveNode;
     const result = await evaluateDirective(resultDirective, env);
     const structuredResult = result.value as any;
-    expect(structuredResult?.mx?.labels ?? []).toEqual([]);
-    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+    expect(structuredResult?.mx?.labels ?? []).toEqual(expect.arrayContaining(['secret']));
+    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['secret', 'src:exec']));
   });
 
   it('applies src:exec taint to direct run cmd syntax', async () => {
