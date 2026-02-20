@@ -2,4 +2,4 @@
 secret
 2
 secret
-src:exec
+src:cmd

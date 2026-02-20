@@ -181,7 +181,7 @@ function addCommandDescriptorTaint(
     return descriptor;
   }
 
-  const commandTaintDescriptor = makeSecurityDescriptor({ taint: ['src:exec'] });
+  const commandTaintDescriptor = makeSecurityDescriptor({ taint: ['src:cmd'] });
   return env.mergeSecurityDescriptors(descriptor, commandTaintDescriptor);
 }
 

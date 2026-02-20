@@ -20,6 +20,7 @@ import { applyWithClause } from './with-clause';
 import { MlldInterpreterError, MlldSecurityError, CircularReferenceError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import { deriveExecutableSourceTaintLabel } from '@core/security/taint';
 import {
   asText,
   isStructuredValue,
@@ -1425,6 +1426,13 @@ async function evaluateExecInvocationInternal(
       }
       if (mcpSecurityDescriptor) {
         descriptorPieces.push(mcpSecurityDescriptor);
+      }
+      const sourceTaintLabel = deriveExecutableSourceTaintLabel({
+        type: (definition as any).type,
+        language: (definition as any).language
+      });
+      if (sourceTaintLabel) {
+        descriptorPieces.push(makeSecurityDescriptor({ taint: [sourceTaintLabel] }));
       }
       if (descriptorPieces.length > 0) {
         const descriptorFromPieces =

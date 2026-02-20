@@ -201,12 +201,62 @@ export interface CommandTaintOptions {
   source?: string;
 }
 
+function normalizeLanguage(value: string | undefined): string {
+  return (value || '').trim().toLowerCase();
+}
+
+export function deriveCodeSourceTaintLabel(language: string | undefined): DataLabel | undefined {
+  const normalized = normalizeLanguage(language);
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (
+    normalized === 'js'
+    || normalized === 'javascript'
+    || normalized === 'node'
+    || normalized === 'nodejs'
+  ) {
+    return 'src:js';
+  }
+
+  if (normalized === 'sh' || normalized === 'bash' || normalized === 'shell') {
+    return 'src:sh';
+  }
+
+  if (normalized === 'py' || normalized === 'python') {
+    return 'src:py';
+  }
+
+  if (normalized.startsWith('mlld-')) {
+    return 'src:exe';
+  }
+
+  return undefined;
+}
+
+export function deriveExecutableSourceTaintLabel(options: {
+  type?: string;
+  language?: string;
+}): DataLabel | undefined {
+  if (options.type === 'command') {
+    return 'src:cmd';
+  }
+  if (options.type === 'template') {
+    return 'src:template';
+  }
+  if (options.type === 'code') {
+    return deriveCodeSourceTaintLabel(options.language);
+  }
+  return undefined;
+}
+
 export function deriveCommandTaint(options: CommandTaintOptions): TaintSnapshot {
   const baseCommand = options.command.trim().split(/\s+/)[0] ?? '';
   const sources = freezeArray<string>([
     options.source ? options.source : `command:${baseCommand}`
   ]);
-  const taint = freezeArray<DataLabel>(['src:exec']);
+  const taint = freezeArray<DataLabel>(['src:cmd']);
 
   return Object.freeze({
     sources,

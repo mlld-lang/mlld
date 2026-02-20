@@ -1,6 +1,8 @@
 import type { DirectiveNode, SourceLocation } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
+import { deriveCodeSourceTaintLabel } from '@core/security/taint';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
 import {
@@ -145,6 +147,12 @@ export function createExecutionEvaluator(
     if (node.type === 'code') {
       const { evaluateCodeExecution } = await import('../code-execution');
       const result = await evaluateCodeExecution(node, env, sourceLocation ?? undefined);
+      const sourceTaintLabel = deriveCodeSourceTaintLabel(node.language);
+      if (sourceTaintLabel) {
+        descriptorState.mergeResolvedDescriptor(
+          makeSecurityDescriptor({ taint: [sourceTaintLabel] })
+        );
+      }
       return { kind: 'resolved', value: result.value };
     }
 

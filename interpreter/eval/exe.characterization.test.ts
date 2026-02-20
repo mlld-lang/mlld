@@ -298,7 +298,7 @@ describe('exe evaluator characterization', () => {
 
     const variable = env.getVariable('secureCommand') as any;
     expect(variable?.mx?.labels ?? []).toEqual(expect.arrayContaining(['secret']));
-    expect(variable?.mx?.taint ?? []).toEqual(expect.arrayContaining(['secret', 'src:exec']));
+    expect(variable?.mx?.taint ?? []).toEqual(expect.arrayContaining(['secret', 'src:cmd']));
   });
 
   it('keeps executable source syntax tagging stable across subtype families', async () => {
@@ -408,7 +408,7 @@ describe('exe evaluator characterization', () => {
     expect(commandVar?.internal?.capturedShadowEnvs).toBeDefined();
     expect(commandVar?.internal?.capturedModuleEnv).toBeDefined();
     expect(commandVar?.mx?.labels ?? []).toEqual(expect.arrayContaining(['secret']));
-    expect(commandVar?.mx?.taint ?? []).toEqual(expect.arrayContaining(['secret', 'src:exec']));
+    expect(commandVar?.mx?.taint ?? []).toEqual(expect.arrayContaining(['secret', 'src:cmd']));
 
     const templateVar = env.getVariable('metaTemplate') as any;
     expect(templateVar?.mx?.labels ?? []).toEqual(expect.arrayContaining(['public']));

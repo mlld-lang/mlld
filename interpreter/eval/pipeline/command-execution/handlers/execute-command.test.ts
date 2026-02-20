@@ -108,7 +108,7 @@ describe('executeCommandHandler extraction parity', () => {
     expect(asText(result.value as any)).toBe('ok-from-command');
     expect(isStructuredValue(result.value)).toBe(true);
     expect((result.value as any).mx?.labels ?? []).toEqual(expect.arrayContaining(['policy-label']));
-    expect((result.value as any).mx?.taint ?? []).toEqual(expect.arrayContaining(['src:exec']));
+    expect((result.value as any).mx?.taint ?? []).toEqual(expect.arrayContaining(['src:cmd']));
   });
 
   it('executes provider command path and preserves direct/provider parity contract', async () => {

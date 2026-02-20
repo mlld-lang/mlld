@@ -105,11 +105,10 @@ export function buildEnvironmentOutputDescriptor(
 ): SecurityDescriptor {
   const commandTaint = deriveCommandTaint({ command });
   const taintLabels = new Set<string>();
+  taintLabels.add('src:cmd');
   const providerRef = config?.provider;
   if (providerRef) {
     taintLabels.add(deriveProviderLabel(providerRef));
-  } else {
-    taintLabels.add('src:exec');
   }
   if (Array.isArray(config?.taint)) {
     for (const label of config!.taint) {

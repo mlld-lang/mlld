@@ -234,6 +234,7 @@ export async function evaluateRun(
       policyEnforcer,
       policyChecksEnabled
     });
+    mergePendingDescriptor(codeResult.outputDescriptor);
     setOutput(codeResult.value);
     
   } else if (directive.subtype === 'runExec') {

@@ -396,16 +396,16 @@ describe('Security metadata propagation', () => {
     const result = await evaluateDirective(resultDirective, env);
     const structuredResult = result.value as any;
     expect(structuredResult?.mx?.labels ?? []).toEqual(expect.arrayContaining(['secret']));
-    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['secret', 'src:exec']));
+    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['secret', 'src:cmd']));
   });
 
-  it('applies src:exec taint to direct run cmd syntax', async () => {
+  it('applies src:cmd taint to direct run cmd syntax', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
     const runDirective = parseSync('/run cmd { printf "hi" }')[0] as DirectiveNode;
     const result = await evaluateDirective(runDirective, env);
 
     const structuredResult = result.value as any;
-    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:cmd']));
   });
 
   it('tags @input resolver variables with src:user taint', async () => {
@@ -416,7 +416,7 @@ describe('Security metadata propagation', () => {
     expect(resolverVar?.mx?.taint).toEqual(expect.arrayContaining(['src:user']));
   });
 
-  it('applies src:exec taint to /exe command output', async () => {
+  it('applies src:cmd taint to /exe command output', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
     const exeDirective = parseSync('/exe @echo(value) = run { printf "@value" }')[0] as DirectiveNode;
     await evaluateDirective(exeDirective, env);
@@ -425,7 +425,7 @@ describe('Security metadata propagation', () => {
     await evaluateDirective(varDirective, env);
 
     const resultVar = env.getVariable('result');
-    expect(resultVar?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+    expect(resultVar?.mx?.taint).toEqual(expect.arrayContaining(['src:cmd']));
   });
 
   it('applies src:file and directory labels to loaded file content', async () => {

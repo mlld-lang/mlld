@@ -562,7 +562,7 @@ describe('evaluateRun phase-0 characterization', () => {
     const pipelineContext = processSpy.mock.calls[0][0] as any;
     expect(Array.isArray(pipelineContext.pipeline)).toBe(true);
     expect(pipelineContext.descriptorHint).toBeDefined();
-    expect(pipelineContext.descriptorHint.taint).toEqual(expect.arrayContaining(['src:exec']));
+    expect(pipelineContext.descriptorHint.taint).toEqual(expect.arrayContaining(['src:cmd']));
   });
 
   it('keeps streaming streamFormat finalization and effect-emission gating stable', async () => {

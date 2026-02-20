@@ -14,6 +14,7 @@ import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 import { wrapExecResult } from '@interpreter/utils/structured-exec';
+import { deriveExecutableSourceTaintLabel } from '@core/security/taint';
 import {
   applySecurityDescriptorToStructuredValue,
   extractSecurityDescriptor,
@@ -215,6 +216,13 @@ async function handleCommandDefinition(
   } = ctx;
 
   const outputDescriptors: SecurityDescriptor[] = [];
+  const sourceTaintLabel = deriveExecutableSourceTaintLabel({
+    type: 'command'
+  });
+  appendDescriptor(
+    outputDescriptors,
+    sourceTaintLabel ? makeSecurityDescriptor({ taint: [sourceTaintLabel] }) : undefined
+  );
   const tempEnv = env.createChild();
   for (const [key, stringValue] of Object.entries(argValues)) {
     bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
@@ -531,6 +539,14 @@ async function handleCodeDefinition(
   } = ctx;
 
   const outputDescriptors: SecurityDescriptor[] = [];
+  const sourceTaintLabel = deriveExecutableSourceTaintLabel({
+    type: 'code',
+    language: (definition as any).language
+  });
+  appendDescriptor(
+    outputDescriptors,
+    sourceTaintLabel ? makeSecurityDescriptor({ taint: [sourceTaintLabel] }) : undefined
+  );
   const tempEnv = env.createChild();
   for (const [key, value] of Object.entries(argValues)) {
     tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
@@ -697,9 +713,12 @@ async function handleTemplateDefinition(
     InterpolationContext.Default,
     tempEnv
   );
+  const sourceTaintLabel = deriveExecutableSourceTaintLabel({ type: 'template' });
   return {
     value: templateOutput,
-    outputDescriptors: [],
+    outputDescriptors: sourceTaintLabel
+      ? [makeSecurityDescriptor({ taint: [sourceTaintLabel] })]
+      : [],
     callStack
   };
 }
