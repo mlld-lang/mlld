@@ -2,17 +2,6 @@
 
 This document describes the comprehensive testing approach for the Mlld project, including the fixture system, test organization, and different types of tests.
 
-## Test Organization
-
-### Recent Reorganization (December 2024)
-
-The test structure was flattened to make valid tests the default case. Previously, valid tests were nested under `tests/cases/valid/`. Now they live at the root level of `tests/cases/`, with only special cases (exceptions, warnings, invalid) in subdirectories.
-
-**Key changes:**
-- Valid tests moved from `tests/cases/valid/*` → `tests/cases/*`
-- Test fixture names now include variants (e.g., `slash/import/stdin-text` vs all being `slash/import/stdin`)
-- Skip system changed from hardcoded list to file-based `skip.md` files
-
 ### Fixture System
 
 The project uses an organized fixture system that automatically generates test fixtures from markdown examples. This approach ensures tests are maintainable and closely match real-world usage.
@@ -162,10 +151,6 @@ Located in `tests/cases/` (at root level, organized in subdirectories like `slas
 - Compare actual output against expected output
 - Fail if output doesn't match exactly
 - When a test exercises file effects (e.g., `/append`), read the generated files back via `<@root/...>` in the fixture so assertions cover both the output document and the filesystem side effects.
-- Security label-flow regressions for expression/template propagation are covered in:
-  - `tests/cases/security/exe-template-arg-label-propagation/`
-  - `tests/cases/security/exe-expression-arg-label-propagation/`
-  - `tests/cases/security/collection-expression-label-propagation/`
 
 #### 2. Documentation Tests
 Located in `tests/cases/docs/`. Automatically extracted from `docs/user/*.md`:
