@@ -317,6 +317,9 @@ function preparePostGuardEnvironment(
   guardEnv: Environment,
   guard: GuardDefinition
 ): void {
+  if (guard.capturedModuleEnv) {
+    guardEnv.setCapturedModuleEnv(guard.capturedModuleEnv);
+  }
   inheritParentVariables(sourceEnv, guardEnv);
   ensurePostPrefixHelper(sourceEnv, guardEnv);
   ensurePostTagHelper(sourceEnv, guardEnv);
@@ -330,6 +333,7 @@ function preparePostGuardEnvironment(
 
 function inheritParentVariables(parent: Environment, child: Environment): void {
   const aggregated = new Map<string, Variable>();
+  const capturedModuleEnv = child.getCapturedModuleEnv();
   const addVars = (env: Environment) => {
     for (const [name, variable] of env.getAllVariables()) {
       if (!aggregated.has(name)) {
@@ -345,6 +349,9 @@ function inheritParentVariables(parent: Environment, child: Environment): void {
   }
 
   for (const [name, variable] of aggregated) {
+    if (capturedModuleEnv?.has(name)) {
+      continue;
+    }
     if (!child.hasVariable(name)) {
       child.setVariable(name, variable);
     }

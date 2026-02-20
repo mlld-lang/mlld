@@ -6,6 +6,7 @@ import type {
   GuardTiming
 } from '@core/types/guard';
 import type { SourceLocation } from '@core/types';
+import type { Variable } from '@core/types/variable';
 
 export type PolicyConditionResult =
   | { decision: 'allow' }
@@ -42,6 +43,7 @@ export interface GuardDefinition {
   timing: GuardTiming;
   privileged?: boolean;
   policyCondition?: PolicyConditionFn;
+  capturedModuleEnv?: Map<string, Variable>;
 }
 
 export interface SerializedGuardDefinition {
@@ -55,6 +57,7 @@ export interface SerializedGuardDefinition {
   registrationOrder?: number;
   timing?: GuardTiming;
   privileged?: boolean;
+  capturedModuleEnv?: Map<string, Variable>;
 }
 
 export class GuardRegistry {
@@ -159,7 +162,13 @@ export class GuardRegistry {
   importSerialized(defs: SerializedGuardDefinition[]): void {
     for (const def of defs) {
       const guardName = def.name;
-      if (guardName && this.getByName(guardName)) {
+      const existing = this.findExistingImportedDefinition(def);
+      if (existing) {
+        this.mergeImportedDefinition(existing, def);
+        if (guardName) {
+          this.namedDefinitions.set(guardName, existing);
+          this.guardNames.add(guardName);
+        }
         continue;
       }
       const registrationOrder = this.allocateRegistrationOrder();
@@ -178,7 +187,8 @@ export class GuardRegistry {
         location: def.location,
         registrationOrder: def.registrationOrder ?? registrationOrder,
         timing: def.timing ?? 'before',
-        privileged: def.privileged
+        privileged: def.privileged,
+        capturedModuleEnv: def.capturedModuleEnv
       };
       this.registerDefinition(copy);
       if (guardName) {
@@ -246,8 +256,48 @@ export class GuardRegistry {
       location: def.location,
       registrationOrder: def.registrationOrder,
       timing: def.timing,
-      privileged: def.privileged
+      privileged: def.privileged,
+      capturedModuleEnv: def.capturedModuleEnv
     };
+  }
+
+  private mergeImportedDefinition(existing: GuardDefinition, incoming: SerializedGuardDefinition): void {
+    if (!incoming.capturedModuleEnv || existing.capturedModuleEnv) {
+      return;
+    }
+    if (!this.isSameImportedDefinition(existing, incoming)) {
+      return;
+    }
+    existing.capturedModuleEnv = incoming.capturedModuleEnv;
+  }
+
+  private isSameImportedDefinition(existing: GuardDefinition, incoming: SerializedGuardDefinition): boolean {
+    return (
+      existing.block === incoming.block &&
+      existing.filterKind === incoming.filterKind &&
+      existing.filterValue === incoming.filterValue &&
+      existing.scope === incoming.scope &&
+      existing.modifier === incoming.modifier &&
+      existing.timing === (incoming.timing ?? 'before') &&
+      existing.privileged === incoming.privileged
+    );
+  }
+
+  private findExistingImportedDefinition(incoming: SerializedGuardDefinition): GuardDefinition | undefined {
+    if (!incoming.name) {
+      return undefined;
+    }
+    const byName = this.getByName(incoming.name);
+    if (byName) {
+      return byName;
+    }
+    const expectedId = incoming.name;
+    for (const definition of this.getAllGuards()) {
+      if (definition.id === expectedId || definition.name === incoming.name) {
+        return definition;
+      }
+    }
+    return undefined;
   }
 
   private collectGuards(value: string, kind: GuardFilterKind): GuardDefinition[] {

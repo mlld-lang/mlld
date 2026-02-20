@@ -145,6 +145,70 @@ describe('Import orchestration parity', () => {
     expect(env.getPolicyContext()).toBeFalsy();
   });
 
+  it('keeps imported guard helper resolution scoped to defining module', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const pathContext = createPathContext();
+
+    await fileSystem.writeFile(
+      '/project/module.mld',
+      [
+        '/exe @helper(value) = `helper:@value`',
+        '/guard @moduleGuard for secret = when [',
+        '  * => allow @helper(@output)',
+        ']',
+        '/export { @moduleGuard }'
+      ].join('\n')
+    );
+
+    const source = [
+      '/import { @moduleGuard } from "./module.mld"',
+      '/var secret @token = "sk-123"',
+      '/show @token'
+    ].join('\n');
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect((output as string).trim()).toBe('helper:helper:sk-123');
+  });
+
+  it('keeps module imports idempotent when mixing guard and policy imports from same file', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const pathContext = createPathContext();
+
+    await fileSystem.writeFile(
+      '/project/module.mld',
+      [
+        '/guard @moduleGuard for secret = when [',
+        '  * => allow',
+        ']',
+        '/var @config = { allow: { cmd: ["echo"] } }',
+        '/export { @moduleGuard, @config }'
+      ].join('\n')
+    );
+
+    const source = [
+      '/import { @moduleGuard } from "./module.mld"',
+      '/import policy @policy from "./module.mld"',
+      '/show @policy.config.allow.cmd[0]'
+    ].join('\n');
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect((output as string).trim()).toBe('echo');
+  });
+
   it('keeps alias-resolution conflict behavior stable for mixed namespace imports', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();

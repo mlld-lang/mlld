@@ -5,6 +5,12 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc83]
+
+### Fixed
+- Imported guards now resolve internal executable dependencies in the module where the guard was defined; consumers do not need to import helper executables separately.
+- Re-importing the same module in one execution (for example, guard import plus policy import) reuses cached module evaluation and no longer re-registers guards.
+
 ## [2.0.0-rc82]
 
 ### Breaking

@@ -265,6 +265,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // Source cache for error reporting
   private sourceCache: Map<string, string> = new Map();
+  // Per-execution module processing cache for idempotent import evaluation
+  private moduleProcessingCache: Map<string, unknown>;
   
   // File interpolation circular detection
   private interpolationStack: Set<string> = new Set();
@@ -383,6 +385,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.registerBuiltinHooks();
     }
     this.pipelineGuardHistoryStore = parent ? parent.pipelineGuardHistoryStore : {};
+    this.moduleProcessingCache = parent ? parent.moduleProcessingCache : new Map();
     
     // Inherit reserved names from parent environment
     if (parent) {
@@ -700,6 +703,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // When a captured module env is set, this environment is module-isolated
     // This means it should NOT check the caller's scope for variable collisions
     this.moduleIsolated = env !== undefined;
+  }
+
+  getCapturedModuleEnv(): Map<string, Variable> | undefined {
+    return this.capturedModuleEnv;
   }
 
   isModuleIsolated(): boolean {
@@ -2193,6 +2200,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
     if (options.includeModuleIsolation) {
       child.moduleIsolated = this.moduleIsolated;
+      child.capturedModuleEnv = this.capturedModuleEnv;
     }
 
     if (options.includeTraceInheritance) {
@@ -2735,6 +2743,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return source;
     }
     return this.parent?.getSource(filePath);
+  }
+
+  getModuleProcessingCacheEntry<T = unknown>(key: string): T | undefined {
+    return this.moduleProcessingCache.get(key) as T | undefined;
+  }
+
+  setModuleProcessingCacheEntry(key: string, value: unknown): void {
+    this.moduleProcessingCache.set(key, value);
   }
 
   private ensureSecurityRuntime(): SecurityRuntimeState {
@@ -3402,6 +3418,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Clear any other resources that might keep event loop alive
     logger.debug('Clearing caches');
     this.cacheManager.clearAllCaches();
+    this.moduleProcessingCache.clear();
     this.commandExecutorFactory = undefined;
     
     // Clear import stack to prevent memory leaks (now handled by ImportResolver)

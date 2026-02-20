@@ -38,6 +38,9 @@ export async function evaluatePreHookGuard(
     defaultGuardMax: DEFAULT_GUARD_MAX,
     guardInputSource: GUARD_INPUT_SOURCE,
     prepareGuardEnvironment: (sourceEnv, guardEnv, guard) => {
+      if (guard.capturedModuleEnv) {
+        guardEnv.setCapturedModuleEnv(guard.capturedModuleEnv);
+      }
       inheritParentVariables(sourceEnv, guardEnv);
       logGuardHelperAvailability(sourceEnv, guardEnv, guard);
       ensurePrefixHelper(sourceEnv, guardEnv);
@@ -55,6 +58,7 @@ export async function evaluatePreHookGuard(
 
 export function inheritParentVariables(parent: Environment, child: Environment): void {
   const aggregated = new Map<string, Variable>();
+  const capturedModuleEnv = child.getCapturedModuleEnv();
   const addVars = (env: Environment) => {
     for (const [name, variable] of env.getAllVariables()) {
       if (!aggregated.has(name)) {
@@ -70,6 +74,9 @@ export function inheritParentVariables(parent: Environment, child: Environment):
   }
 
   for (const [name, variable] of aggregated) {
+    if (capturedModuleEnv?.has(name)) {
+      continue;
+    }
     if (!child.hasVariable(name)) {
       child.setVariable(name, variable);
     }
