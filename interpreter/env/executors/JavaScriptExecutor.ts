@@ -39,7 +39,15 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       `js: ${code.substring(0, 50)}...`,
       jsOptions,
       context,
-      () => this.executeJavaScript(code, params, metadata, jsOptions?.workingDirectory)
+      () =>
+        this.executeJavaScript(
+          code,
+          params,
+          metadata,
+          jsOptions?.workingDirectory,
+          context,
+          jsOptions?.env
+        )
     );
   }
 
@@ -47,7 +55,9 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
     code: string,
     params?: Record<string, any>,
     metadata?: Record<string, any>,
-    workingDirectory?: string
+    workingDirectory?: string,
+    context?: CommandExecutionContext,
+    envOverrides?: Record<string, string>
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
     const targetCwd = workingDirectory || process.cwd();
@@ -58,29 +68,27 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       process.chdir(targetCwd);
     }
 
+    const restoreEnv = applyProcessEnvOverrides(envOverrides);
+
     try {
       // Create a function that captures console.log output
       let consoleOutput = '';
       const originalLog = console.log;
+      const passthroughConsole = context?.directiveType !== 'run';
       console.log = (...args: any[]) => {
-        originalLog(...args);
+        if (passthroughConsole) {
+          originalLog(...args);
+        }
         consoleOutput += args.map(arg => 
           typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
         ).join(' ') + '\n';
       };
 
-      // NEW CODE: Extract and handle captured shadow environments
       const capturedEnvs = params?.__capturedShadowEnvs;
       if (params && '__capturedShadowEnvs' in params) {
         delete params.__capturedShadowEnvs;
       }
-      
-      
-      // OLD CODE TO REPLACE:
-      // const shadowEnv = this.shadowEnvironment.getShadowEnv('js') || 
-      //                  this.shadowEnvironment.getShadowEnv('javascript');
-      
-      // NEW CODE:
+
       const shadowEnv = resolveShadowEnvironment(
         'js', 
         capturedEnvs, 
@@ -209,9 +217,37 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       );
       throw codeError;
     } finally {
+      restoreEnv();
       if (shouldRestoreCwd) {
         process.chdir(previousCwd);
       }
     }
   }
+}
+
+function applyProcessEnvOverrides(overrides?: Record<string, string>): () => void {
+  if (!overrides) {
+    return () => {};
+  }
+  const keys = Object.keys(overrides);
+  if (keys.length === 0) {
+    return () => {};
+  }
+
+  const previous = new Map<string, string | undefined>();
+  for (const key of keys) {
+    previous.set(key, process.env[key]);
+    process.env[key] = overrides[key];
+  }
+
+  return () => {
+    for (const key of keys) {
+      const prior = previous.get(key);
+      if (prior === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = prior;
+      }
+    }
+  };
 }

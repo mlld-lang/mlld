@@ -4,12 +4,45 @@ import type { ErrorUtils } from '../ErrorUtils';
 import type { VariableProvider } from './BashExecutor';
 import { StreamBus } from '@interpreter/eval/pipeline/stream-bus';
 import * as child_process from 'child_process';
+import { EventEmitter } from 'events';
+
+/**
+ * Create a mock child process that captures stdin writes and emits stdout/close.
+ */
+function createMockChild(stdout = 'test output') {
+  const stdinChunks: string[] = [];
+  const stdinEmitter = new EventEmitter();
+  const stdin = Object.assign(stdinEmitter, {
+    write: vi.fn((data: string) => { stdinChunks.push(data); }),
+    end: vi.fn()
+  });
+  const stdoutEmitter = new EventEmitter();
+  const stderrEmitter = new EventEmitter();
+  const child = new EventEmitter() as any;
+  child.stdin = stdin;
+  child.stdout = stdoutEmitter;
+  child.stderr = stderrEmitter;
+  child.pid = 123;
+  child._stdinChunks = stdinChunks;
+
+  // After stdin.end(), emit stdout data then close
+  stdin.end.mockImplementation(() => {
+    process.nextTick(() => {
+      stdoutEmitter.emit('data', Buffer.from(stdout));
+      process.nextTick(() => {
+        child.emit('close', 0);
+      });
+    });
+  });
+
+  return child;
+}
 
 vi.mock('child_process', async (importOriginal) => {
   const original = await importOriginal<typeof import('child_process')>();
   return {
     ...original,
-    spawnSync: vi.fn(original.spawnSync)
+    spawn: vi.fn(original.spawn)
   };
 });
 
@@ -42,16 +75,8 @@ describe('BashExecutor - Heredoc Support', () => {
       const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
       const largeContent = 'x'.repeat(200); // Exceeds 100 bytes
 
-      // Spy on spawnSync to capture the actual script
-      const spawnSyncSpy = vi.mocked(child_process.spawnSync).mockReturnValue({
-        stdout: 'test output',
-        stderr: '',
-        status: 0,
-        signal: null,
-        pid: 123,
-        output: ['test output'],
-        error: undefined
-      } as any);
+      const mockChild = createMockChild('test output');
+      const spawnSpy = vi.mocked(child_process.spawn).mockReturnValue(mockChild);
 
       await executor.execute(
         'echo "Value: $testvar"',
@@ -60,13 +85,11 @@ describe('BashExecutor - Heredoc Support', () => {
         { testvar: largeContent }
       );
 
-      // Check that spawnSync was called with heredoc in the input
-      expect(spawnSyncSpy).toHaveBeenCalled();
-      const call = spawnSyncSpy.mock.calls[0];
-      const script = (call[2] as any).input as string;
+      expect(spawnSpy).toHaveBeenCalled();
+      const script = mockChild._stdinChunks.join('');
 
-      // Verify heredoc structure using cat heredoc
-      expect(script).toContain("testvar=$(cat <<'MLLD_EOF_");
+      // Verify heredoc structure using read heredoc
+      expect(script).toContain("IFS= read -r -d '' testvar <<'MLLD_EOF_");
       expect(script).toContain(largeContent);
       // Oversized vars are no longer exported; they remain local shell vars
       expect(script).not.toContain('export testvar');
@@ -80,15 +103,8 @@ describe('BashExecutor - Heredoc Support', () => {
       const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
       const largeContent = 'x'.repeat(200);
 
-      const spawnSyncSpy = vi.mocked(child_process.spawnSync).mockReturnValue({
-        stdout: 'test output',
-        stderr: '',
-        status: 0,
-        signal: null,
-        pid: 123,
-        output: ['test output'],
-        error: undefined
-      } as any);
+      const mockChild = createMockChild('test output');
+      const spawnSpy = vi.mocked(child_process.spawn).mockReturnValue(mockChild);
 
       await executor.execute(
         'echo "Value: $testvar"',
@@ -97,14 +113,13 @@ describe('BashExecutor - Heredoc Support', () => {
         { testvar: largeContent }
       );
 
-      const call = spawnSyncSpy.mock.calls[0];
-      const script = (call[2] as any).input as string;
-      const env = (call[2] as any).env;
+      const script = mockChild._stdinChunks.join('');
+      const spawnOptions = spawnSpy.mock.calls[0][2] as any;
 
       // Should not have heredoc in script
       expect(script).not.toContain('MLLD_EOF_');
       // Should have variable in environment
-      expect(env.testvar).toBe(largeContent);
+      expect(spawnOptions.env.testvar).toBe(largeContent);
     });
 
     it('should sanitize variable names with special characters', async () => {
@@ -114,15 +129,8 @@ describe('BashExecutor - Heredoc Support', () => {
       const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
       const largeContent = 'x'.repeat(200);
 
-      const spawnSyncSpy = vi.mocked(child_process.spawnSync).mockReturnValue({
-        stdout: 'test output',
-        stderr: '',
-        status: 0,
-        signal: null,
-        pid: 123,
-        output: ['test output'],
-        error: undefined
-      } as any);
+      const mockChild = createMockChild('test output');
+      vi.mocked(child_process.spawn).mockReturnValue(mockChild);
 
       await executor.execute(
         'echo "Value: $my_var_name"',
@@ -131,11 +139,10 @@ describe('BashExecutor - Heredoc Support', () => {
         { 'my-var-name': largeContent } // Note the dashes
       );
 
-      const call = spawnSyncSpy.mock.calls[0];
-      const script = (call[2] as any).input as string;
+      const script = mockChild._stdinChunks.join('');
 
       // Should use sanitized name
-      expect(script).toContain("my_var_name=$(cat <<'MLLD_EOF_");
+      expect(script).toContain("IFS= read -r -d '' my_var_name <<'MLLD_EOF_");
       // No export for oversized vars; alias should map original -> sanitized
       expect(script).toContain('my-var-name="$my_var_name"');
     });
@@ -149,15 +156,8 @@ describe('BashExecutor - Heredoc Support', () => {
       // Content that could collide with a marker
       const largeContent = 'x'.repeat(100) + '\nMLLD_EOF_test\n' + 'y'.repeat(100);
 
-      const spawnSyncSpy = vi.mocked(child_process.spawnSync).mockReturnValue({
-        stdout: 'test output',
-        stderr: '',
-        status: 0,
-        signal: null,
-        pid: 123,
-        output: ['test output'],
-        error: undefined
-      } as any);
+      const mockChild = createMockChild('test output');
+      vi.mocked(child_process.spawn).mockReturnValue(mockChild);
 
       await executor.execute(
         'echo "Done"',
@@ -166,11 +166,10 @@ describe('BashExecutor - Heredoc Support', () => {
         { testvar: largeContent }
       );
 
-      const call = spawnSyncSpy.mock.calls[0];
-      const script = (call[2] as any).input as string;
+      const script = mockChild._stdinChunks.join('');
 
       // Extract the actual marker used
-      const markerMatch = script.match(/testvar=\$\(cat <<'(MLLD_EOF_[^']+)'/);
+      const markerMatch = script.match(/IFS= read -r -d '' testvar <<'(MLLD_EOF_[^']+)'/);
       expect(markerMatch).toBeTruthy();
       const marker = markerMatch![1];
 
@@ -184,15 +183,8 @@ describe('BashExecutor - Heredoc Support', () => {
 
       const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
 
-      const spawnSyncSpy = vi.mocked(child_process.spawnSync).mockReturnValue({
-        stdout: 'test output',
-        stderr: '',
-        status: 0,
-        signal: null,
-        pid: 123,
-        output: ['test output'],
-        error: undefined
-      } as any);
+      const mockChild = createMockChild('test output');
+      const spawnSpy = vi.mocked(child_process.spawn).mockReturnValue(mockChild);
 
       await executor.execute(
         'echo "$var1 $var2"',
@@ -205,19 +197,18 @@ describe('BashExecutor - Heredoc Support', () => {
         }
       );
 
-      const call = spawnSyncSpy.mock.calls[0];
-      const script = (call[2] as any).input as string;
-      const env = (call[2] as any).env;
+      const script = mockChild._stdinChunks.join('');
+      const spawnOptions = spawnSpy.mock.calls[0][2] as any;
 
       // Should have two heredocs
-      expect(script).toContain("var1=$(cat <<'MLLD_EOF_");
-      expect(script).toContain("var2=$(cat <<'MLLD_EOF_");
+      expect(script).toContain("IFS= read -r -d '' var1 <<'MLLD_EOF_");
+      expect(script).toContain("IFS= read -r -d '' var2 <<'MLLD_EOF_");
       // No exports for oversized vars
       expect(script).not.toContain('export var1');
       expect(script).not.toContain('export var2');
 
       // Small variable should be in env
-      expect(env.small).toBe('tiny');
+      expect(spawnOptions.env.small).toBe('tiny');
     });
   });
 
@@ -242,15 +233,8 @@ describe('BashExecutor - Heredoc Support', () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
 
-      vi.mocked(child_process.spawnSync).mockReturnValue({
-        stdout: 'test output',
-        stderr: '',
-        status: 0,
-        signal: null,
-        pid: 123,
-        output: ['test output'],
-        error: undefined
-      } as any);
+      const mockChild = createMockChild('test output');
+      vi.mocked(child_process.spawn).mockReturnValue(mockChild);
 
       await executor.execute(
         'echo "test"',

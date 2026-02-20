@@ -1,0 +1,10 @@
+literal-start
+```mlld
+@call()
+```
+literal-end
+run-start
+```mlld-run
+CALLED
+```
+run-end

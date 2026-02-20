@@ -116,8 +116,9 @@ Not: "As discussed elsewhere..." or "See other documentation"
 - Every concept must have a runnable example
 - Include expected output for examples
 - Mark examples requiring external setup with prerequisites
-- Test all examples before committing
 - Use realistic scenarios, not `foo/bar`
+
+**Automated validation:** All ` ```mlld ` code blocks are extracted and syntax-validated during `npm run build:fixtures`. Test failures show source file + line number. See [DOCS.md](DOCS.md#automated-doc-testing) for details.
 
 ## Progressive Disclosure
 

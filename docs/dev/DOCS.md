@@ -66,6 +66,26 @@ cd website && npm run build
 mlld run llmstxt
 ```
 
+## Automated Doc Testing
+
+All mlld code blocks in `docs/user/*.md` are automatically extracted and syntax-validated during `npm run build:fixtures`.
+
+**How it works:**
+1. `scripts/extract-doc-tests.mjs` extracts code blocks tagged with ` ```mlld ` or ` ```mlld:md `
+2. Each block becomes a test case in `tests/cases/docs/<docname>/<block-number>/`
+3. Tests validate syntax (parse without errors) but don't execute
+4. Test errors show source file + line number for quick fixes
+
+**When tests fail:**
+```
+Source: From introduction.md line 436: Autonomous loops (strict mode)
+Fix the original documentation file, then run: npm run build:fixtures
+```
+
+Fix the original doc file, not the generated test. Then rebuild fixtures.
+
+**Skipping invalid examples:** Place a `skip.md` file in the test case directory for intentionally invalid syntax (educational examples showing errors).
+
 ## Principles (All Docs)
 
 - **Present tense only** - No "this used to..." or "will soon..."
@@ -106,3 +126,30 @@ docs/llm/                 # Generated output (don't edit directly)
 ```
 
 CLI: `mlld howto <topic> [subtopic]` shows atoms directly.
+
+## QA Testing (qa_tier)
+
+Atoms can be tagged for automated QA testing via the `qa_tier` frontmatter field:
+
+```yaml
+---
+id: variables-basics
+qa_tier: 1
+---
+```
+
+| Tier | Description | Count |
+|------|-------------|-------|
+| 1 | Core syntax - isolated, fast | ~15 |
+| 2 | Commands, control flow - needs context | ~22 |
+| 3 | Integration, patterns - complex setup | (future) |
+| absent | Skip - meta docs, SDK config, mistakes | - |
+
+**Run QA tests:**
+```bash
+mlld run qa --tier 1           # Core syntax only
+mlld run qa --tier 1,2         # Tier 1 and 2
+mlld run qa --topic variables  # Filter by prefix
+```
+
+**When adding new atoms:** Add `qa_tier: 1` or `qa_tier: 2` if the atom documents testable mlld syntax. Omit for meta/config docs.

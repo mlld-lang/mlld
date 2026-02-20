@@ -97,6 +97,10 @@ export class DynamicModuleResolver implements Resolver {
     return this.modules.has(ref);
   }
 
+  getSerializedModules(): Array<[string, string]> {
+    return Array.from(this.modules.entries());
+  }
+
   private normalizeModules(modules: Record<string, DynamicModuleValue>): Map<string, string> {
     const normalized = new Map<string, string>();
 

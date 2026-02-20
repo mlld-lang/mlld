@@ -1,0 +1,12 @@
+>> Security topic configuration
+
+var @config = {
+  name: "security",
+  spec: `@base/todo/spec-security-2026-v4.md`,
+  docs_dir: `@base/docs/src/atoms/security/`,
+  src_dirs: [`@base/src/`, `@base/grammar/`],
+  test_command: "npm test",
+  max_iterations: null
+}
+
+export { @config }

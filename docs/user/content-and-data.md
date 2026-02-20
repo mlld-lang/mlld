@@ -20,9 +20,10 @@ Loaded files and data are objects with three key parts:
 ```mlld
 var @file = <package.json>
 
-show @file.text  >> String content
-show @file.data  >> Parsed payload (JSON object)
+show @file.name  >> Parsed payload field (data-first access)
 show @file.mx  >> Metadata (filename, tokens, labels, etc.)
+show @file.mx.text  >> Wrapper text accessor
+show @file.mx.data  >> Wrapper data accessor (parsed payload)
 ```
 
 The `.mx` namespace is where all metadata lives:
@@ -34,13 +35,17 @@ show @file.mx.filename  >> "README.md"
 show @file.mx.tokens  >> Token count
 show @file.mx.labels  >> Security labels
 show @file.mx.absolute  >> Full path
+show @file.mx.path  >> Path alias (same as .mx.absolute)
 ```
+
+Plain dotted field access resolves through parsed data, so `@file.version` matches `@file.mx.data.version`.
+If user data includes an `mx` field, access it through `@file.mx.data.mx`.
 
 **Auto-unwrapping**: Display and templates automatically use `.text`:
 
 ```mlld
-show @file  >> Same as @file.text
-var @msg = `Content: @file`  >> Uses @file.text
+show @file  >> Same as @file.mx.text
+var @msg = `Content: @file`  >> Uses @file.mx.text
 ```
 
 **Explicit access** when you need metadata:
@@ -50,20 +55,21 @@ when @file.mx.tokest > 2000 => show "File is large"
 var @name = @file.mx.filename
 ```
 
-### `.keep` alligator metadata
+### `.keep` for JS/Node boundaries
 
-If you set a variable to the value of a single-file load like `<file.md>` it will lose the rich metadata like `<file.md>.mx.relative` when passing the value.
-
-Use `<file.md>.keep` when setting as the value of a variable to preserve the structure.
+Loaded files are StructuredValues with full metadata access. The `.keep` modifier is only needed when passing to JavaScript/Node stages where you need metadata access inside the JS code:
 
 ```mlld
-var @file = <file.md>
-show @file.mx.relative
->> No value here
+>> Metadata works directly - no .keep needed
+var @file = <config.json>
+show @file.mx.relative                 >> Works
+show @file.apiKey                      >> Works
 
-var @file = <file.md>.keep
-show @file.mx.relative
->> Returns a path
+>> Use .keep when passing to JS and you need .mx inside JS
+exe @process(file) = js {
+  return file.mx.filename + ": " + file.mx.tokens + " tokens";
+}
+run @process(@file.keep)               >> .keep preserves metadata for JS
 ```
 
 ### Object composition with spread
@@ -71,8 +77,8 @@ show @file.mx.relative
 Combine objects with left-to-right overrides using spread entries inside object literals:
 
 ```mlld
-var @base = { "name": "Ada", "role": "user" }
-var @admin = { ...@base, "role": "admin", "active": true }
+var @baseUser = { "name": "Ada", "role": "user" }
+var @admin = { ...@baseUser, "role": "admin", "active": true }
 
 show @admin.role  >> admin
 show @admin.active  >> true
@@ -100,7 +106,7 @@ show @filename  >> Shows "README.md"
 ```mlld
 >> Load different file types
 var @config = <package.json>            >> JSON file
-var @docs = <README.md>                 >> Markdown file  
+var @docs = <README.md>                 >> Markdown file
 var @script = <build.sh>                >> Shell script
 ```
 
@@ -115,7 +121,7 @@ var @docs = <docs/**/*.md>              >> All markdown in docs tree
 var @source = <src/**/*.ts>             >> All TypeScript in src
 
 >> Access individual files
-show @docs[0].text                       >> First file's content
+show @docs[0].mx.text                    >> First file's content
 show @docs[0].mx.filename               >> First file's name
 ```
 
@@ -127,7 +133,7 @@ Extract specific sections from markdown files:
 >> Extract single section
 var @install = <README.md # Installation>
 
->> Extract from multiple files  
+>> Extract from multiple files
 var @apis = <docs/*.md # API Reference>
 
 >> Rename sections with 'as'
@@ -271,26 +277,35 @@ Every loaded file exposes metadata through its `.mx` namespace:
 ```mlld
 var @file = <package.json>
 
->> Basic metadata
+>> Path metadata
 show @file.mx.filename                 >> "package.json"
-show @file.mx.relative                 >> "./package.json" 
+show @file.mx.relative                 >> "./package.json"
 show @file.mx.absolute                 >> Full path
+show @file.mx.path                     >> Path alias (same as .mx.absolute)
+
+>> Directory metadata
+show @file.mx.dirname                  >> Parent directory name
+show @file.mx.relativeDir              >> Relative path to directory
+show @file.mx.absoluteDir              >> Absolute path to directory
 
 >> Token counting
 show @file.mx.tokest                   >> Estimated tokens (fast)
 show @file.mx.tokens                   >> Exact tokens
 
 >> Content access
-show @file.content                      >> File contents (explicit)
+show @file.mx.text                      >> File contents (explicit)
 show @file                              >> Same as above (implicit)
 ```
 
 **Properties:**
-- `.text` - String content (used by display/templates)
-- `.data` - Parsed payload (JSON objects, arrays, etc.)
+- Direct dotted fields (for example `@file.name`) resolve through parsed payload
 - `.mx` - Metadata namespace (filename, tokens, labels, frontmatter, etc.)
+- `.mx.text` - Explicit wrapper text accessor
+- `.mx.data` - Explicit wrapper data accessor
 
 Always use `.mx` for metadata access - it's the canonical namespace.
+
+Missing fields return null by default. The optional suffix `?` is accepted for explicit optional access (for example, `@config.apiUrl?`).
 
 ### JSON File Metadata
 
@@ -300,11 +315,26 @@ JSON files are automatically parsed:
 var @config = <settings.json>
 
 >> Direct field access on parsed JSON
-show @config.json.apiUrl
-show @config.json.users[0].email
+show @config.apiUrl
+show @config.users[0].email
 
 >> Raw content still available
-show @config.content                    >> Raw JSON string
+show @config.mx.text                    >> Raw JSON string
+```
+
+Glob-loaded JSON files are also auto-parsed - each item behaves like a single file load:
+
+```mlld
+var @configs = <configs/*.json>
+var @first = @configs[0]
+
+>> Access parsed JSON directly
+show @first.apiUrl
+show @first.users[0].email
+
+>> File metadata still available via .mx
+show @first.mx.filename
+show @first.mx.relative
 ```
 
 ### Frontmatter Access
@@ -319,7 +349,7 @@ show @post.mx.fm.author                >> Author name
 show @post.mx.fm.tags                  >> Array of tags
 
 >> Conditional processing
-when @post.mx.fm.published => show @post.content
+when @post.mx.fm.published => show @post.mx.text
 ```
 
 ## URL Loading
@@ -336,7 +366,7 @@ show @page.mx.status                   >> HTTP status code
 show @page.mx.title                    >> Page title (if HTML)
 
 >> HTML is converted to markdown
-show @page.content                      >> Markdown version
+show @page.mx.text                      >> Markdown version
 show @page.mx.html                     >> Original HTML
 ```
 
@@ -390,6 +420,15 @@ Include content only when a variable is truthy. The `?` suffix checks the variab
 
 **Truthiness rules** (same as `when`): Falsy values are `null`, `undefined`, `""`, `"false"`, `"0"`, `0`, `NaN`, `[]`, `{}`.
 
+#### Variable Declaration with `?`
+
+Declare an optional variable that omits itself when falsy:
+
+```mlld
+var @subtitle = @item.subtitle
+show `Title: @item.title @subtitle?` >> subtitle only if present
+```
+
 #### In Commands and Templates
 
 Use `@var?`...`` to conditionally include a backtick template:
@@ -404,6 +443,20 @@ run cmd { echo @tools?`--tools "@tools"` @model?`--model "@model"` done }
 >> Output: --tools "json" done
 ```
 
+Use `@var?` to omit the variable itself in templates:
+
+```mlld
+var @title = "MyTitle"
+var @empty = ""
+
+var @msg1 = `DEBUG:@title?`
+var @msg2 = `DEBUG:@empty?`
+show @msg1
+show @msg2
+>> "DEBUG:MyTitle"
+>> "DEBUG:"
+```
+
 #### In Strings
 
 Use `@var?"..."` to conditionally include a quoted fragment:
@@ -416,6 +469,26 @@ var @greeting = "Hello @title?\"@title \"@name@nickname?\" (@nickname)\""
 show @greeting
 >> With @title="Dr." and @name="Ada": "Hello Dr. Ada"
 >> With @nickname="Ace": "Hello Ada (Ace)"
+```
+
+#### Null Coalescing
+
+Use `@var??"default"` (or single-quoted) for tight template interpolation fallback.
+In expression contexts (`var`, `let`, and conditions), use spaced nullish coalescing: `@a ?? @b`.
+Chaining works in expressions: `@a ?? @b ?? "fallback"`.
+
+```mlld
+var @title = ""
+var @primary = null
+var @secondary = "pal"
+var @fallback = @primary ?? @secondary ?? "fallback"
+
+show `Hello,@title??"friend"`
+show @fallback
+show `Hello,@missing??"friend"`
+>> "Hello,"
+>> "Hello,pal"
+>> "Hello,friend"
 ```
 
 #### In Arrays
@@ -479,7 +552,7 @@ show @items[1:-1]                       >> ["second", "third", "fourth"]
 
 ## Working with JSON in JavaScript Functions
 
-Use `.data` or `.json` to parse JSON strings before passing to functions. Use `.text` or `.content` to preserve strings.
+Parse JSON strings with a pipeline transform before passing them to JS functions. Use the bare variable for raw strings.
 
 ### JSON Parsing
 
@@ -497,8 +570,7 @@ run @filter1(@users)
 exe @filter2(users) = js {
   return users.filter(u => u.age > 25);
 }
-run @filter2(@users.data)   >> .data parses JSON
-run @filter2(@users.json)   >> .json is alias
+run @filter2(@users | @parse)
 ```
 
 ### String Preservation
@@ -511,26 +583,25 @@ exe @length(str) = js {
 }
 
 run @length(@jsonStr)          >> Default: string
-run @length(@jsonStr.text)     >> Explicit string
-run @length(@jsonStr.content)  >> Alias for .text
+run @length(@jsonStr)          >> Raw JSON string
 ```
 
 ### Common Use Cases
 
 ```mlld
 >> Filter JSON array from command
-var @json = run {./mkjson.sh}
+var @payload = run {./mkjson.sh}
 exe @filterHigh(entries) = js {
   return entries.filter(e => e.finding.startsWith("High"));
 }
-var @result = @filterHigh(@json.data)
+var @result = @filterHigh(@payload | @parse)
 
 >> Process API response
 var @response = run {curl -s api.example.com/data}
 exe @getActive(data) = js {
   return data.users.filter(u => u.active);
 }
-var @active = @getActive(@response.data)
+var @active = @getActive(@response | @parse)
 ```
 
 ### Accessor Reference
@@ -539,23 +610,24 @@ var @active = @getActive(@response.data)
 
 | Accessor | Returns |
 |----------|---------|
-| `.json` / `.data` | Parsed JSON object |
-| `.content` / `.text` | Raw string |
+| Direct fields (for example `.apiUrl`) | Parsed JSON fields |
+| `.mx.data` | Parsed payload object/array |
+| `.mx.text` | Raw string |
 
 **Variables** (e.g., `var @str = '{"status": "ok"}'`):
 
 | Accessor | Returns |
 |----------|---------|
-| `.data` / `.json` | Parsed JSON object |
-| `.text` / `.content` | Original string |
+| `| @parse` | Parsed JSON object/array |
 | (bare) | Original string (default) |
 
 **Command output** (e.g., `var @result = cmd {curl api.com/data}`):
 
 | Accessor | Returns |
 |----------|---------|
-| `.data` / `.json` | Parse as JSON |
-| `.text` / `.content` | Keep as string |
+| `| @parse` | Parsed JSON when stdout is valid JSON |
+| `.mx.text` | Raw stdout string |
+| `.mx` | Command metadata (`source`, `command`, `exitCode`, `duration`, `stderr`) |
 
 ## Built-in Methods
 
@@ -643,7 +715,7 @@ show @str.isDefined()       >> true
 Use type checks in conditionals:
 
 ```mlld
-exe @process(input) = when first [
+exe @process(input) = when [
   @input.isArray() => foreach @handle(@input)
   @input.isObject() => @handleObject(@input)
   @input.isString() => @handleString(@input)
@@ -663,11 +735,27 @@ when @exists("config.json") => show "Config found"
 when @exists(<*.md>) => show "Markdown files exist"
 
 >> Use in conditionals
-exe @loadConfig() = when first [
+exe @loadConfig() = when [
   @exists("config.local.json") => <config.local.json>
   @exists("config.json") => <config.json>
   * => {}
 ]
+```
+
+### @fileExists() Builtin
+
+Check if a file exists at a given path. Unlike `@exists()`, this always resolves its argument to a string path first, then checks the filesystem:
+
+```mlld
+var @configPath = "config.json"
+
+>> @exists(@configPath) checks if the VARIABLE is defined (always true here)
+>> @fileExists(@configPath) checks if the FILE "config.json" exists
+when @fileExists(@configPath) => show "Config found"
+
+>> Works with object fields and globs
+when @fileExists(@settings.configFile) => show "Settings loaded"
+when @fileExists(<*.md>) => show "Markdown files exist"
 ```
 
 ## Data Transformations
@@ -678,11 +766,11 @@ Transform data using the pipeline operator `|`:
 
 ```mlld
 >> Load and transform files
-var @config = <config.json> | @json
+var @config = <config.json> | @parse
 var @uppercase = <readme.txt> | @upper
 
 >> Chain transformations
-exe @first(text, n) = js { 
+exe @first(text, n) = js {
   return text.split('\n').slice(0, n).join('\n');
 }
 var @summary = <docs.md> | @first(3) | @upper
@@ -693,9 +781,9 @@ var @summary = <docs.md> | @first(3) | @upper
 mlld provides built-in transformers (both uppercase and lowercase work):
 
 ```mlld
->> Format JSON with indentation
+>> Load and parse CSV data
 var @data = <file.csv>
-var @tojson = @data | @json
+var @tojson = @data | @parse
 show @tojson
 
 >> Convert to XML (SCREAMING_SNAKE_CASE)
@@ -708,15 +796,17 @@ var @tocsv = @users | @CSV
 show @tocsv
 ```
 
-`@json` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@json.loose` when you want to be explicit, or `@json.strict` to require standard JSON and surface a clear error if the input is relaxed:
+`@parse` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@parse.loose` when you want to be explicit, or `@parse.strict` to require standard JSON and surface a clear error if the input is relaxed:
+
+`@json` remains available as a deprecated alias for `@parse`.
 
 ```mlld
 /var @loose = "{'name': 'Ada', /* comment */ age: 32,}"
-/var @parsedLoose = @loose | @json              >> Uses relaxed parsing
-/var @parsedStrict = @loose | @json.strict      >> Fails with hint to use @json.loose
+/var @parsedLoose = @loose | @parse              >> Uses relaxed parsing
+/var @parsedStrict = @loose | @parse.strict      >> Fails with hint to use @parse.loose
 ```
 
-For extracting JSON from LLM responses that may contain markdown code fences or surrounding prose, use `@json.llm`:
+For extracting JSON from LLM responses that may contain markdown code fences or surrounding prose, use `@parse.llm`:
 
 
 ````mlld
@@ -727,20 +817,19 @@ For extracting JSON from LLM responses that may contain markdown code fences or 
 ```
 ::
 
-/var @data = @llmResponse | @json.llm
+/var @data = @llmResponse | @parse.llm
 /show @data.name                                >> Alice
 
 >> Extract from inline prose
 /var @inline = `The result is {"count": 42} for this query.`
-/var @extracted = @inline | @json.llm
+/var @extracted = @inline | @parse.llm
 /show @extracted.count                          >> 42
 
 >> Returns false when no JSON found
 /var @text = `Just plain text, no JSON here.`
-/var @result = @text | @json.llm
+/var @result = @text | @parse.llm
 /show @result                                   >> false
 ````
-```
 
 ## Templates and Interpolation
 
@@ -775,12 +864,12 @@ Line 2: @other
 var @doc = ::Use `npm test` before @env::
 var @report = ::
 Status: @status
-Config: <@base/config.json>
-Data: @data|@json
+Config: <@root/config.json>
+Data: @data|@parse
 ::
 
 >> Double quotes (single-line only)
-var @path = "@base/files/@filename"
+var @path = "@root/files/@filename"
 run cmd {echo "Processing @file"}
 
 >> Single quotes (literal)
@@ -795,7 +884,7 @@ Keep reusable templates in standalone files and execute them as functions.
 ```
 Deployment: @env
 Status: @status
-Config: <@base/config/@env.json>
+Config: <@root/config/@env.json>
 ```
 
 **Usage:**
@@ -805,12 +894,14 @@ show @deploy("prod", "success")
 ```
 
 **Rules:**
-- `.att` uses `@var` and supports `<file.md>` references, pipes, and loops inside the template
+- `.att` uses `@var` and supports `<file.md>` references plus `/for ... /end` loops inside the template
+- In template content, use condensed pipes (`@value|@pipe`) to avoid ambiguity
+- Relative `<file>` paths inside template files resolve from the template file directory
 - These files are not imported as modules. Use the `exe ... = template "path"` form
 
 #### Template Loops
 
-Loops with `for` and `end` are supported in backticks, `::...::`, and `.att` files:
+Loops with `/for` and `/end` are supported in backticks, `::...::`, and `.att` files:
 
 ```mlld
 var @list = ::
@@ -838,7 +929,7 @@ import templates from "./templates" as @tpl(x, y)
 Load entire directories of templates that share a parameter signature. Currently supports local directories only (not registry modules).
 
 ```mlld
-import templates from "@base/agents" as @agents(message, context)
+import templates from "@root/agents" as @agents(message, context)
 
 >> All templates accept (message, context)
 show @agents["alice"](@msg, @mx)
@@ -901,8 +992,8 @@ Templates don't have to use all parameters, but can't reference any undeclared o
 **Different parameter needs = different collections:**
 
 ```mlld
-import templates from "@base/agents" as @agents(message, context)
-import templates from "@base/formatters" as @fmt(data)
+import templates from "@root/agents" as @agents(message, context)
+import templates from "@root/formatters" as @fmt(data)
 
 show @agents["alice"](@msg, @mx)    >> (message, context)
 show @fmt["json"](@result)           >> (data)
@@ -978,7 +1069,7 @@ Pipe data to mlld via stdin:
 # JSON input
 echo '{"version": "1.0.0", "author": "Alice"}' | mlld release.mld
 
-# Text input  
+# Text input
 echo "Hello World" | mlld process.mld
 ```
 
@@ -1053,7 +1144,7 @@ show `Total estimated tokens: @totalTokens`
 ```mlld
 >> Process API data
 var @users = run {curl -s api.example.com/users}
-var @parsed = @users | @json
+var @parsed = @users | @parse
 
 >> Define filter function for active users
 exe @filterActive(users) = js {
@@ -1090,8 +1181,8 @@ var @envConfig = <config/@env.json>
 var @config = js {
   return Object.assign(
     {},
-    @baseConfig.json,
-    @envConfig.json,
+    @baseConfig,
+    @envConfig,
     {
       environment: @env,
       timestamp: @now
@@ -1119,36 +1210,28 @@ Each append writes one compact JSON object followed by a newline. Use `.jsonl` w
 
 ## Gotchas
 
-### Metadata Access in Loops
+### Metadata in JS/Node Stages
 
-Auto-unwrapping in iterations drops direct `.mx` access:
-
-```mlld
-var @files = <docs/*.md>
-
->> ✗ This won't work - loop variable is unwrapped text
-for @file in @files => show @file.mx.filename  >> Error: .mx on string
-
->> ✓ Access via array index
-for @i in [0, 1, 2] => show @files[@i].mx.filename
-
->> ✓ Or use @keep helper to preserve structure
-for @file in @files.keep => show @file.mx.filename
-```
-
-### Metadata in Pipelines
-
-Pipeline stages receive string input by default:
+When passing files to JavaScript stages, use `.keep` if you need metadata access inside the JS code:
 
 ```mlld
 var @file = <config.json>
 
->> ✗ This loses metadata
-var @result = @file | @process  >> @process gets string, no .mx
+>> ✗ JS receives unwrapped data by default - no .mx
+exe @process(file) = js { return file.mx.filename }  >> Error
 
->> ✓ Keep structured form
-exe @process(file) = `Name: @file.mx.filename, Tokens: @file.mx.tokens`
-var @result = @file.keep | @process
+>> ✓ Use .keep to preserve metadata for JS
+exe @process(file) = js { return file.mx.filename }
+run @process(@file.keep)                              >> Works
+```
+
+Note: In mlld templates and directives, metadata works directly without `.keep`:
+
+```mlld
+var @files = <docs/*.md>
+for @file in @files => show @file.mx.filename        >> Works
+for @file in @files => show @file.mx.data.status     >> Works
+for @file in @files => show @file.mx.fm.title        >> Works
 ```
 
 ## Best Practices
@@ -1165,7 +1248,7 @@ var @result = @file.keep | @process
 
 **Templates:**
 - Default to backticks or `::...::` for inline, `.att` files for external (5+ lines)
-- Loops (`for`...`end`) work in backticks, `::...::`, and `.att` only
+- Loops (`/for`...`/end`) work in backticks, `::...::`, and `.att` only
 - Never import template files; use `exe @name(...) = template "path.att"` form
 - For Discord/social content with many `@` symbols, see [alternatives.md](alternatives.md)
 

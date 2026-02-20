@@ -1,0 +1,10 @@
+/exe @source() = "not-json"
+
+/exe @parseOrFallback(input) = when [
+  @input.startsWith("{") => @input | @parse
+  @mx.try < 2 => retry "expected JSON object"
+  * => { ok: false, error: "invalid-json", raw: @input }
+]
+
+/var @result = @source() | @parseOrFallback
+/show @result

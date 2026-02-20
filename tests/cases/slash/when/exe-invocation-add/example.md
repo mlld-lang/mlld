@@ -13,7 +13,7 @@ Test that @when actions can use @add with exec command invocations.
 /when @isTrue => show "Current version: "
 /when @isTrue => show @getVersion()
 
-/when @isTrue first: [
+/when @isTrue : [
   "dev" => show @formatHeader("Development Mode")
   "prod" => show @formatHeader("Production Mode")
   @isTrue => show @formatHeader("Default Mode")

@@ -134,9 +134,6 @@ export class DefaultEffectHandler implements EffectHandler {
 
   getDocument(): string {
     const raw = this.documentBuffer.join('');
-    if (process.env.DEBUG_NORMALIZER) {
-      console.error(`[EffectHandler.getDocument] buffer length=${raw.length}, content=${raw.substring(0, 100).replace(/\n/g, '\\n')}`);
-    }
     // Basic newline normalization
     return raw.replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive newlines
   }
@@ -209,6 +206,56 @@ export class TestEffectHandler implements EffectHandler {
     this.collected = [];
     this.documentBuffer = [];
     this.appendedFiles.clear();
+  }
+}
+
+/**
+ * Buffered effect handler that flushes to a parent handler on demand.
+ */
+export class BufferedEffectHandler implements EffectHandler {
+  private readonly parent: EffectHandler;
+  private buffered: Effect[] = [];
+  private documentBuffer: string[] = [];
+
+  constructor(parent: EffectHandler) {
+    this.parent = parent;
+  }
+
+  handleEffect(effect: Effect): void {
+    this.buffered.push(effect);
+    if (effect.type === 'doc' || effect.type === 'both') {
+      this.documentBuffer.push(effect.content);
+    }
+  }
+
+  flush(): void {
+    for (const effect of this.buffered) {
+      this.parent.handleEffect(effect);
+    }
+    this.clear();
+  }
+
+  discard(): void {
+    this.clear();
+  }
+
+  getDocument(): string {
+    return this.documentBuffer.join('').replace(/\n{3,}/g, '\n\n');
+  }
+
+  getEffects(): Effect[] {
+    return [...this.buffered];
+  }
+
+  isStreamingEnabled(): boolean {
+    return typeof this.parent.isStreamingEnabled === 'function'
+      ? this.parent.isStreamingEnabled()
+      : false;
+  }
+
+  private clear(): void {
+    this.buffered = [];
+    this.documentBuffer = [];
   }
 }
 

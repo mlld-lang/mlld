@@ -1,225 +1,103 @@
-# Output Rendering Architecture
+---
+updated: 2026-02-18
+tags: #arch, #output, #effects
+related-docs: docs/dev/STREAMING.md, docs/dev/INTERPRETER.md, docs/dev/DATA.md
+related-code: interpreter/output/intent.ts, interpreter/output/renderer.ts, interpreter/output/normalizer.ts, interpreter/env/EffectHandler.ts, interpreter/env/Environment.ts, interpreter/core/interpreter/traversal.ts, interpreter/core/interpreter/evaluator.ts, interpreter/index.ts, sdk/types.ts
+related-types: sdk/types { StructuredEffect }, interpreter/env/EffectHandler { Effect }
+---
 
-**Updated: 2025-12-02**
+# OUTPUT
 
-## Overview
+## tldr
 
-mlld uses a unified output rendering system based on **OutputIntent** abstractions that solve multiple issues:
-- Fixes extra blank lines (#396) through collapsible break normalization
-- Eliminates Prettier dependency and hanging bug (#281)
-- Removes magic display formatting (#246 - foundation for explicit control)
-- Establishes infrastructure for streaming format adapters
+- OUTPUT owns intent emission, effect routing, normalization, and final document assembly.
+- Effect routing types are `doc | both | stdout | stderr | file`.
+- `Environment` converts intents to effects (`intentToEffect`) and emits effects (`emitEffect`) with capability/security context.
+- Final markdown output is normalized by `normalizeOutput(...)` at interpretation end.
+- STREAMING transport (bus/sinks/adapters/events) is documented separately in `docs/dev/STREAMING.md`.
 
-## Core Components
+## Principles
 
-### OutputIntent (`interpreter/output/intent.ts`)
+- Keep document assembly deterministic: normalize once at the end of interpretation.
+- Keep output routing explicit: intent type maps to effect type; directives can still emit effects directly.
+- Keep security metadata attached to effects in structured/debug/stream result modes.
+- Keep streaming transport concerns out of OUTPUT ownership.
 
-Structured representation of output operations:
+## Details
 
-```typescript
-interface OutputIntent {
-  type: IntentType;           // 'content' | 'break' | 'progress' | 'error'
-  value: string;              // Content to output
-  source: IntentSource;       // 'text' | 'directive' | 'newline' | 'streaming'
-  visibility: IntentVisibility; // 'always' | 'optional' | 'never'
-  collapsible?: boolean;      // For breaks: can collapse with adjacent breaks
-}
-```
+### Intent Ownership
 
-**Intent Types:**
-- **content**: Document text, directive output
-- **break**: Whitespace/newlines (can be collapsible)
-- **progress**: CLI progress messages (stdout only, not in document)
-- **error**: Error output (stderr)
+- Non-directive text/newline/code-fence intent emission lives in:
+  - `interpreter/core/interpreter/traversal.ts`
+  - `interpreter/core/interpreter/evaluator.ts`
+- Intent buffering/collapse is handled by `OutputRenderer` in `interpreter/output/renderer.ts`.
+- Intent helpers/types live in `interpreter/output/intent.ts`.
 
-**Helper Functions:**
-- `contentIntent(value, source?, visibility?)` - Create content intent
-- `breakIntent(value?, collapsible?, source?)` - Create break intent
-- `progressIntent(value, visibility?)` - Create progress intent
-- `errorIntent(value, source?)` - Create error intent
+### Break Collapsing Semantics
 
-### OutputRenderer (`interpreter/output/renderer.ts`)
+Source of truth: `interpreter/output/renderer.ts` (`OutputRenderer.flushBreaks()`).
 
-Buffers intents and collapses adjacent breaks using **smart buffering**:
+- Pending collapsible breaks are emitted up to a max of 2:
+  - 1 -> 1
+  - 2 -> 2
+  - 3+ -> 2
+- Break collapsing does not reduce adjacent collapsible breaks to a single break.
 
-```typescript
-class OutputRenderer {
-  emit(intent: OutputIntent): void
-  render(): void  // Flush pending breaks
-  clear(): void   // Reset buffer
-}
-```
+### Intent-to-Effect Routing
 
-**Smart Buffering Strategy:**
-1. **Collapsible breaks**: Buffer for potential collapsing
-2. **Non-collapsible breaks**: Flush pending, emit immediately
-3. **Content/progress/error**: Flush pending breaks, emit immediately
+`Environment.intentToEffect(...)` maps intents to effects in `interpreter/env/Environment.ts`:
 
-This preserves real-time streaming while enabling break collapsing.
+- `content` -> `doc`
+- `break` -> `doc`
+- `progress` -> `stdout`
+- `error` -> `stderr`
 
-**Break Collapsing Algorithm:**
-```
-Input:  [break(coll), break(coll), content, break(coll)]
-Output: [break, content, break]  // Adjacent collapsible breaks → single break
-```
+`Environment.emitEffect(...)` then:
 
-### Normalizer (`interpreter/output/normalizer.ts`)
+- attaches capability/security snapshot context,
+- routes through the active `EffectHandler`,
+- emits SDK `effect` events when an emitter is present.
 
-Simple line-based normalization that replaces Prettier:
+### Effect Types and Handler Semantics
 
-```typescript
-function normalizeOutput(output: string): string
-```
+Source of truth: `interpreter/env/EffectHandler.ts`.
 
-**Rules:**
-1. Strip trailing whitespace per line
-2. Collapse 3+ newlines to max 2 (one blank line)
-3. Ensure single trailing newline
+- `doc`: document buffer only (no direct stdout streaming in `DefaultEffectHandler`).
+- `both`: stdout when streaming enabled + document buffer.
+- `stdout`: stdout only.
+- `stderr`: stderr only.
+- `file`: filesystem side effect.
+  - `mode: 'append'` is notification-only in handler (append already executed by evaluator paths).
+  - write mode (`mode: 'write'` or unset) performs file write in handler.
 
-**Benefits over Prettier:**
-- No hanging bug (~0ms vs ~50ms, no process.exit workaround needed)
-- No JSON protection hacks
-- Self-contained, predictable behavior
-- Works with any content type
+### Document Assembly Path
 
-## Integration Flow
+- `env.renderOutput()` flushes pending break intents.
+- `interpret()` reads the document via `effectHandler.getDocument()`.
+- Markdown normalization then runs through `normalizeOutput(...)` (`interpreter/index.ts`).
 
-### Document Assembly
+### Normalizer Rules (Current)
 
-```
-Interpreter → emitIntent() → OutputRenderer (buffer/collapse)
-                                   ↓
-                            intentToEffect() converter
-                                   ↓
-                              emitEffect() → EffectHandler
-                                   ↓
-                         stdout/stderr/document buffer
-```
+Source of truth: `interpreter/output/normalizer.ts`.
 
-### Effect Type Mapping
+- strips leading newlines before normalization
+- preserves frontmatter block boundaries
+- protects fenced code blocks and markdown tables from paragraph/header rewrites
+- strips trailing whitespace per line
+- enforces blank line before headers
+- enforces blank line after headers when followed by non-header text
+- inserts paragraph breaks with JSON/list guards
+- collapses 3+ newlines to max 2
+- enforces single trailing newline
 
-| Intent Type | Effect Type | Routing |
-|-------------|-------------|---------|
-| `content` | `doc` | Document only |
-| `break` | `doc` | Document only |
-| `progress` | `stdout` | CLI only (not in document) |
-| `error` | `stderr` | Error stream |
+### Structured Effects and Security Metadata
 
-**Note**: Directive evaluators (show, run, output) still use `emitEffect` directly with routing types ('both', 'file', etc.).
+- `sdk/types.ts` defines `StructuredEffect` with `security` and optional `provenance`.
+- `interpreter/index.ts` collects effects from `EffectHandler.getEffects()` and maps them into structured result output.
+- Non-document modes (`structured`, `stream`, `debug`) default to effect recording (`recordEffects`).
 
-## Usage Patterns
+## Gotchas
 
-### Emitting Intents (Interpreter)
-
-```typescript
-// Text node
-env.emitIntent({
-  type: 'content',
-  value: text,
-  source: 'text',
-  visibility: 'always',
-  collapsible: false
-});
-
-// Newline node (collapsible!)
-env.emitIntent({
-  type: 'break',
-  value: '\n',
-  source: 'newline',
-  visibility: 'always',
-  collapsible: true  // Enables automatic blank line normalization
-});
-
-// Or use helpers
-env.emitIntent(contentIntent(text));
-env.emitIntent(breakIntent());  // Collapsible by default
-```
-
-### Document Completion
-
-```typescript
-// At end of interpretation
-env.renderOutput();  // Flushes any pending breaks
-```
-
-## Streaming Compatibility
-
-**Smart buffering preserves streaming:**
-- Content intents emit immediately (no delay)
-- Progress intents emit immediately
-- Only breaks buffer briefly (for look-ahead collapsing)
-- Streaming chunks bypass OutputRenderer (go directly to StreamBus → TerminalSink)
-
-**Effect handler** remains separate:
-- OutputRenderer handles intent-to-effect conversion
-- EffectHandler routes to stdout/stderr/document buffer
-- Streaming events use separate StreamBus path
-
-## SDK Integration
-
-The OutputIntent system is internal to the interpreter. SDK consumers interact through:
-
-**Document mode**: Gets normalized final document
-**Structured mode**: Gets effects with security metadata
-**Stream mode**: Gets real-time events via StreamBus
-**Debug mode**: Gets detailed execution trace
-
-Future work: Expose intent stream in StructuredResult for custom rendering.
-
-## Testing
-
-**Unit Tests:**
-- `tests/interpreter/output/renderer.test.ts` - OutputRenderer behavior
-- `tests/interpreter/output/normalizer.test.ts` - Normalizer rules
-
-**Integration Tests:**
-- All fixture tests validate end-to-end output
-- Collapsible breaks prevent blank line accumulation
-- Normalization ensures consistent whitespace
-
-## Related Files
-
-- `interpreter/output/intent.ts` - Intent types and helpers
-- `interpreter/output/renderer.ts` - OutputRenderer and DocumentRenderer
-- `interpreter/output/normalizer.ts` - Normalizer utility
-- `interpreter/env/Environment.ts` - emitIntent(), intentToEffect()
-- `interpreter/core/interpreter.ts` - Text/newline intent emission
-- `interpreter/builtin/transformers.ts` - @md transformer uses normalizer
-
-## Migration Notes
-
-**Old System:**
-- Direct `emitEffect('doc', content)` calls
-- Prettier markdown formatting
-- Manual blank line normalization
-- Multiple normalization code paths
-
-**New System:**
-- Structured `emitIntent()` for document nodes
-- Simple line-based normalizer
-- Automatic collapsible break handling
-- Single normalization path
-
-**Breaking Changes:**
-- `@md` transformer now normalizes (doesn't reformat tables/spacing)
-- Empty documents get trailing `\n` (from normalizer)
-- Blank line behavior more consistent (collapsible breaks)
-
-## Future Work
-
-This establishes infrastructure for:
-- **Streaming format adapters** (text/term/json output modes)
-- **Universal ANSI support** (`%color%` codes)
-- **Visibility flags** (`--show-thinking`, etc.)
-- **Explicit formatting control** (addresses #246)
-
-See `todo/plan-streaming-format.md` for streaming adapter roadmap.
-
-## Issues Resolved
-
-- **#396**: Extra blank lines → Fixed by collapsible breaks
-- **#281**: JSON protection hack → Eliminated with Prettier
-- **#246**: Magic formatting → Foundation for explicit control (partial)
-- **Prettier hanging**: Eliminated by removing Prettier entirely
-
-**Labels**: `architecture`, `output-rendering`, `normalization`
+- Do not claim `doc` effects stream to stdout in current `DefaultEffectHandler`; they do not.
+- `append` file effects are not replayed by handler writes.
+- OUTPUT owns effect semantics and document assembly; STREAMING owns transport and adapter event surfaces.

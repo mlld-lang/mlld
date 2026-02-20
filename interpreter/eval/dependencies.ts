@@ -32,7 +32,8 @@ export class DefaultDependencyChecker implements DependencyChecker {
     }
     
     for (const [pkg, constraint] of Object.entries(packages)) {
-      const cacheKey = `node:${pkg}:${constraint}`;
+      const normalizedConstraint = normalizeConstraint(constraint);
+      const cacheKey = `node:${pkg}:${normalizedConstraint || '*'}`;
       
       // Check cache first
       if (this.cache.has(cacheKey)) {
@@ -73,21 +74,21 @@ export class DefaultDependencyChecker implements DependencyChecker {
         }
         
         if (!version) {
-          missing.push(`${pkg}@${constraint}`);
-        } else if (!satisfiesConstraint(version, constraint)) {
-          mismatched.push(`${pkg}@${version} (needs ${constraint})`);
+          missing.push(formatRequirement(pkg, normalizedConstraint, '@'));
+        } else if (!satisfiesConstraint(version, normalizedConstraint)) {
+          mismatched.push(`${pkg}@${version} (needs ${normalizedConstraint})`);
         }
         
       } catch (error) {
         // Error checking package
-        missing.push(`${pkg}@${constraint}`);
+        missing.push(formatRequirement(pkg, normalizedConstraint, '@'));
       }
       
       // Cache the result for this package
       const packageResult = {
-        satisfied: !missing.includes(`${pkg}@${constraint}`) && 
+        satisfied: !missing.includes(formatRequirement(pkg, normalizedConstraint, '@')) &&
                   !mismatched.some(m => m.startsWith(`${pkg}@`)),
-        missing: missing.filter(m => m.startsWith(`${pkg}@`)),
+        missing: missing.filter(m => m.startsWith(`${pkg}@`) || m === pkg),
         mismatched: mismatched.filter(m => m.startsWith(`${pkg}@`))
       };
       this.cache.set(cacheKey, packageResult);
@@ -114,7 +115,8 @@ export class DefaultDependencyChecker implements DependencyChecker {
     }
     
     for (const [pkg, constraint] of Object.entries(packages)) {
-      const cacheKey = `python:${pkg}:${constraint}`;
+      const normalizedConstraint = normalizeConstraint(constraint);
+      const cacheKey = `python:${pkg}:${normalizedConstraint || '*'}`;
       
       // Check cache first
       if (this.cache.has(cacheKey)) {
@@ -138,21 +140,21 @@ export class DefaultDependencyChecker implements DependencyChecker {
         const version = versionMatch ? versionMatch[1].trim() : null;
         
         if (!version) {
-          missing.push(`${pkg}${constraint}`);
-        } else if (!satisfiesConstraint(version, constraint)) {
-          mismatched.push(`${pkg}==${version} (needs ${constraint})`);
+          missing.push(formatRequirement(pkg, normalizedConstraint, ''));
+        } else if (!satisfiesConstraint(version, normalizedConstraint)) {
+          mismatched.push(`${pkg}==${version} (needs ${normalizedConstraint})`);
         }
         
       } catch {
         // Package not found
-        missing.push(`${pkg}${constraint}`);
+        missing.push(formatRequirement(pkg, normalizedConstraint, ''));
       }
       
       // Cache the result
       const packageResult = {
-        satisfied: !missing.includes(`${pkg}${constraint}`) && 
+        satisfied: !missing.includes(formatRequirement(pkg, normalizedConstraint, '')) &&
                   !mismatched.some(m => m.startsWith(`${pkg}==`)),
-        missing: missing.filter(m => m === `${pkg}${constraint}`),
+        missing: missing.filter(m => m === pkg || m.startsWith(`${pkg}`)),
         mismatched: mismatched.filter(m => m.startsWith(`${pkg}==`))
       };
       this.cache.set(cacheKey, packageResult);
@@ -166,13 +168,27 @@ export class DefaultDependencyChecker implements DependencyChecker {
   }
 }
 
+function normalizeConstraint(constraint: string): string {
+  if (!constraint) {
+    return '';
+  }
+  return constraint.trim();
+}
+
+function formatRequirement(name: string, constraint: string, separator: string): string {
+  if (!constraint || constraint === '*') {
+    return name;
+  }
+  return `${name}${separator}${constraint}`;
+}
+
 /**
  * Check if a version satisfies a constraint
  * This is a simplified version - in production, use a proper semver library
  */
 function satisfiesConstraint(version: string, constraint: string): boolean {
   // Handle wildcard - any version is acceptable
-  if (constraint === '*') {
+  if (!constraint || constraint === '*') {
     return true;
   }
   

@@ -1,0 +1,76 @@
+>> Research context management
+
+exe @tailFile(path, limit) = sh { tail -n "$limit" "$path" 2>/dev/null }
+exe @countDir(dir) = sh { ls -1 "$dir" 2>/dev/null | wc -l | tr -d ' ' }
+
+>> Log event to events.jsonl
+exe @logEvent(runDir, eventType, eventData) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  let @parsed = @eventData | @parse
+  let @event = { ts: @now, event: @eventType, ...@parsed }
+  append @event to "@eventsFile"
+]
+
+>> Load recent events from events.jsonl
+exe @loadRecentEvents(runDir, limit) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  when !@fileExists(@eventsFile) => [ => [] ]
+  let @lines = @tailFile(@eventsFile, @limit)
+  => for @line in @lines.split("\n") when @line.trim() => @line | @parse
+]
+
+>> Count iterations from events
+exe @countIterations(runDir) = [
+  let @events = @loadRecentEvents(@runDir, 1000)
+  let @iterations = for @e in @events when @e.event == "iteration" => @e
+  => @iterations.length
+]
+
+>> Load run state
+exe @loadRunState(runDir) = [
+  let @stateFile = `@runDir/run.json`
+  let @content = <@stateFile>?
+  when !@content => [ => { lastAction: null, lastError: null } ]
+  => @content | @parse
+]
+
+>> Save run state
+exe @saveRunState(runDir, run) = [
+  output @run to "@runDir/run.json"
+]
+
+>> Build context for decision agent
+exe @buildContext(runDir, sourceList) = [
+  let @run = @loadRunState(@runDir)
+  let @events = @loadRecentEvents(@runDir, 20)
+
+  >> Infer state from filesystem
+  let @inventoryExists = @fileExists(`@runDir/inventory.json`)
+  let @synthesisExists = @fileExists(`@runDir/synthesis.json`)
+
+  >> Count assessments and invalidations
+  let @assessmentCount = @countDir(`@runDir/assessments`) * 1
+  let @invalidationCount = @countDir(`@runDir/invalidations`) * 1
+
+  => {
+    state: {
+      sources: @sourceList.length,
+      inventoryExists: @inventoryExists,
+      assessmentCount: @assessmentCount,
+      synthesisExists: @synthesisExists,
+      invalidationCount: @invalidationCount,
+      lastAction: @run.lastAction
+    },
+    recentEvents: @events,
+    lastError: @run.lastError
+  }
+]
+
+export {
+  @logEvent,
+  @loadRecentEvents,
+  @countIterations,
+  @loadRunState,
+  @saveRunState,
+  @buildContext
+}

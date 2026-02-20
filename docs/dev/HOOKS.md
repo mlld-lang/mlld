@@ -1,5 +1,5 @@
 ---
-updated: 2025-11-13
+updated: 2026-02-20
 tags: #arch, #hooks, #security
 related-docs: docs/dev/DATA.md, docs/dev/INTERPRETER.md
 related-code: interpreter/hooks/*.ts, interpreter/eval/directive.ts, interpreter/eval/directive-inputs.ts
@@ -10,7 +10,7 @@ related-types: HookManager { PreHook, PostHook, HookDecision, HookInputHelpers }
 
 ## tldr
 
-mlld's hook system enables pre-execution and post-execution extensions at evaluation boundaries (directives and user-defined exe invocations). Pre-hooks inspect inputs and can abort operations (guard insertion point). Post-hooks transform results and propagate metadata (taint tracking). Hooks receive extracted inputs, operation context, and optional input helpers for analysis.
+mlld's hook system enables pre-execution and post-execution extensions at evaluation boundaries (directives, effects, and user-defined exe invocations). Built-in hooks enforce guard/taint behavior, while user `/hook` directives add ordered transforms and observability with isolated failures. Hooks receive extracted inputs, operation context, and optional input helpers for analysis.
 
 ## Principles
 
@@ -18,7 +18,14 @@ mlld's hook system enables pre-execution and post-execution extensions at evalua
 - Pre-hooks run in registration order, first non-continue action stops chain
 - Post-hooks run in registration order, transform results sequentially
 - Hooks receive extracted inputs (any type), operation context, and optional helpers
+- User `/hook` transforms chain in declaration order for both `before` and `after` timing
+- User hook body failures are isolated and recorded in `@mx.hooks.errors` (operation continues)
+- Function hooks support optional first-arg prefix matching via `hook ... @fn("prefix")`
 - Non-reentrant per directive invocation (prevent infinite loops)
+- `op:loop` executes per `loop()` iteration boundary (not only at top-level `/loop` dispatch)
+- Guard-denied operations still run user `after` hooks with denied context before rethrowing
+- Hooks/checkpoint/resume rollout contract is tracked in `docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md` (Phase 0 decision lock before implementation phases).
+- Checkpoint short-circuit uses explicit `fulfill` hook decisions, with legacy metadata (`checkpointHit` + `cachedResult`) normalized centrally in `hook-decision-handler`.
 
 ## Details
 
@@ -36,7 +43,7 @@ type PreHook = (
   helpers?: HookInputHelpers
 ) => Promise<HookDecision>;
 
-type HookDecisionAction = 'continue' | 'abort' | 'retry';
+type HookDecisionAction = 'continue' | 'abort' | 'retry' | 'deny' | 'fulfill';
 
 interface HookDecision {
   action: HookDecisionAction;
@@ -89,11 +96,18 @@ interface GuardInputHelper {
 - Builds HookInputHelpers when inputs are all Variables
 - Returns first non-continue decision for pre-hooks
 
+**HookRegistry** (`interpreter/hooks/HookRegistry.ts`)
+- Stores user-defined `/hook` directives as typed hook definitions
+- Indexes definitions by function name, operation type, and data label
+- Preserves registration order for deterministic retrieval
+- Shares definitions across parent/child environments through `Environment.getHookRegistry()`
+
 **ContextManager** (`interpreter/env/ContextManager.ts`)
 - Manages @mx namespace state (@mx.op, @mx.pipe, @mx.guard)
 - Push/pop context stacks for nested operations
 - Builds ambient @mx object with security and pipeline state
 - Provides guard context snapshots so denied handlers can access the guarded Variable via `@mx.guard.input` (alias `@mx.input`)
+- Exposes hook runtime errors at `@mx.hooks.errors` from operation metadata
 
 **extractDirectiveInputs** (`interpreter/eval/directive-inputs.ts`)
 - Extracts inputs from directives (Variables or other values)
@@ -140,7 +154,8 @@ return env.withOpContext(operationContext, async () => {
   return hookManager.runPost(node, result, guardInputs, env, operationContext);
 });
 ```
-Hooks run only for user-defined `/exe` functions. Built-in helpers and guard helper executables short-circuit before hook execution to avoid recursion.
+Hooks run for directive, effect, and user-defined `/exe` boundaries. Built-in helper executables still short-circuit hook execution to avoid recursion loops.
+`/hook` directives are registered into `HookRegistry` during directive evaluation, then executed by `interpreter/hooks/user-hook-runner.ts` at lifecycle boundaries.
 
 ### Built-in Hooks
 
@@ -153,6 +168,20 @@ Hooks run only for user-defined `/exe` functions. Built-in helpers and guard hel
 **guard-before / guard-after** (`interpreter/hooks/guard-pre-hook.ts`, `interpreter/hooks/guard-post-hook.ts`)
 - Implements `/guard ... before ...` and `/guard ... after ...` syntax; hook files keep pre/post names for lifecycle clarity.
 - Enforces registered guards before and after directive execution; resolves per-input and per-operation guard definitions, injects guard helpers, and can abort or request retries.
+- Guard pre-hook module ownership:
+  - `guard-pre-hook.ts` orchestrates candidate collection, retry state coordination, and hook decision assembly.
+  - `guard-pre-runtime.ts` configures runtime evaluation dependencies and guard child-environment preparation.
+  - `guard-pre-aggregation.ts` builds aggregate guard metadata and `@mx.guard` snapshots.
+  - `guard-pre-logging.ts` owns debug markers and guard decision logging.
+  - `guard-candidate-selection.ts`, `guard-materialization.ts`, `guard-retry-state.ts`, `guard-helper-injection.ts`, `guard-action-evaluator.ts`, and `guard-block-evaluator.ts` own focused collaborators consumed by the pre-hook entrypoint.
+- Guard post-hook module ownership:
+  - `guard-post-hook.ts` stays as the hook entrypoint and lifecycle gate.
+  - `guard-post-orchestrator.ts` composes selection, runtime evaluation, decision reduction, retry enforcement, and final signal emission.
+  - `guard-post-runtime-evaluator.ts` owns per-guard runtime context creation and decision shaping for after timing.
+  - `guard-post-runtime-actions.ts` owns guard block evaluation and replacement materialization.
+  - `guard-post-helper-injection.ts` owns after-guard helper creation/injection (`opIs`, `opHas*`, `inputHas`, `prefixWith`, `tagValue`) and guard input helper attachment.
+  - `guard-post-materialization.ts` owns post-guard clone/preview/value helpers used by runtime and error payload shaping.
+  - `guard-candidate-selection.ts`, `guard-post-descriptor.ts`, `guard-post-output-normalization.ts`, `guard-post-decision-engine.ts`, `guard-post-retry.ts`, `guard-post-signals.ts`, and `guard-shared-history.ts` remain shared post-hook collaborators.
 - Guard helpers are reserved in guard contexts: `@prefixWith` and `@tagValue` are injected into guard environments, and guard envs inherit all parent variables/executables so user helpers stay visible.
 - `PipelineExecutor.executeCommandVariable()` always passes `hookOptions.guard`, so every pipeline stage (including the synthetic `__source__`) runs through the guard hook path with an OperationContext seeded from the merged stage descriptor. Descriptor hints supplied to `processPipeline()` and the provenance assembled in `finalizeStageOutput()` flow into `@mx.op.labels`, giving guard rules the same label set that downstream stages receive even when Stage 0 started with a plain string.
 - Because interpolation, iterators, pipelines, heredoc `/run`, and JS/Node returns all attach provenance handles through `ExpressionProvenance`, `materializeGuardInputs()` always materializes real Variables (with descriptors) before guard evaluation. Guard fixtures that sanitize secrets, block heredocs, or retry pipeline stages rely on this hook to surface `.mx.labels` even when the user-facing value is a primitive string produced by chained helpers.
@@ -162,6 +191,20 @@ Hooks run only for user-defined `/exe` functions. Built-in helpers and guard hel
 - Retry shared budget: guard retries reuse the pipeline retry machinery; `@mx.guard.try` increments per attempt across the guard chain, and history is visible in `@p.guards` entries for each attempt. A retry on any guard in the chain causes the whole operation to be retried once; subsequent attempts see updated `@mx.guard.try` values.
 - Streaming compatibility: guard-post-hook denies when streaming is enabled and after-timed guards are registered. After-guards require non-streaming execution so the hook can validate a stable output; streamed effects are not retractable.
 - Effects: `runBuiltinEffect()` builds an `OperationContext` with the effect identifier as `type` (`output`/`show`/`append`/`log`) and `subtype: "effect"`, materializes the effect payload for guard inputs, and routes through guard pre/post hooks. `op:output`/`op:show`/`op:append`/`op:log` guard filters apply to both directives and inline effects. Guard retries on effects convert to a deny with a clear error because effect replay is not supported.
+
+**checkpoint-before / checkpoint-after** (`interpreter/hooks/checkpoint-pre-hook.ts`, `interpreter/hooks/checkpoint-post-hook.ts`)
+- Applies to `llm`-labeled `exe`/`run` operations and `effect` boundaries.
+- Pre-hook computes deterministic cache keys from operation name + normalized inputs and returns `action: "fulfill"` on cache hit.
+- Pre-hook read failures are isolated: `CheckpointManager.get()` errors log a warning and degrade to miss-path behavior.
+- Legacy metadata hit signals are normalized to `fulfill` by `hook-decision-handler` so hot paths use one protocol.
+- On hit:
+  - execution short-circuits in directive/exec/effect call sites,
+  - guard hooks are skipped,
+  - built-in post-hooks and user `after` hooks still run,
+  - `@mx.checkpoint.hit`/`@mx.checkpoint.key` are populated.
+- Post-hook writes cache entries only on miss (hit path is read-only).
+- Post-hook records miss-path timing as `durationMs` (start timestamp from pre-hook, duration computed in post-hook).
+- Post-hook write failures are isolated: `CheckpointManager.put()` errors log a warning and do not abort operation execution.
 
 ### OperationContext
 
@@ -179,6 +222,23 @@ interface OperationContext {
 }
 ```
 
+### Loop Operation Contexts
+
+Loop hooks now expose dedicated operation keys and loop metadata:
+
+| Hook filter | Boundary | Context fields |
+|---|---|---|
+| `op:for:iteration` | Each loop item | `index`, `total`, `key`, `parallel`, `batchIndex`, `batchSize` (parallel) |
+| `op:for:batch` | Parallel batch window start/end | `batchIndex`, `batchSize`, `parallel` |
+| `op:loop` | Each `loop()` iteration | `@mx.loop.iteration`, `@mx.loop.limit`, `@mx.loop.active` |
+
+Runtime notes:
+- `batchIndex` is 0-based.
+- `batchSize` is the actual item count in that window (last window may be partial).
+- `op:for:batch` wraps each parallel window boundary (`before` at window start, `after` after window completion).
+- `loop()` iteration boundaries emit `type: "loop"` operation contexts.
+- Top-level `/loop` directive dispatch uses `type: "loop:directive"` for lifecycle separation.
+
 ### Hook Lifecycle
 
 ```
@@ -186,24 +246,59 @@ Directive boundary
 1. evaluateDirective() called
 2. Build operation context (buildOperationContext)
 3. Extract inputs (extractDirectiveInputs or prepareVarAssignment)
-4. → Run pre-hooks (HookManager.runPre)
-5.   ├─ guardPreHook evaluates guard definitions
-6.   └─ First non-continue → abort or retry
-7. → Evaluate directive (directive-specific evaluator)
-8. → Run post-hooks (HookManager.runPost)
-9.   └─ taint-post-hook collects and merges security descriptors
+4. → Run user `before` hooks (HookRegistry)
+5. → Run pre-hooks (HookManager.runPre)
+6.   ├─ checkpointPreHook resolves cache hit/miss for eligible llm operations
+7.   ├─ guardPreHook evaluates guard definitions on miss path
+8.   └─ First non-continue (`abort`/`retry`/`fulfill`) exits pre-chain
+8.5  Guard-deny path runs user `after` hooks with denied context (`@mx.denied=true`, denial payload in `@output`) then rethrows `GuardError`
+9. → Evaluate directive (directive-specific evaluator) unless fulfilled from cache
+10. → Run post-hooks (HookManager.runPost)
+11.   ├─ guardPostHook (miss only)
+12.   ├─ taint-post-hook collects and merges security descriptors
+13.   └─ checkpointPostHook writes miss-path cache entries
+14. → Run user `after` hooks (HookRegistry)
 
 Exe boundary
 1. evaluateExecInvocation() called
 2. Collect original argument Variables (guardInputs)
 3. Build operation context `{ type: 'exe', ... }`
-4. → Run pre-hooks (HookManager.runPre)
-5.   ├─ guardPreHook evaluates guard definitions
-6.   └─ First non-continue → abort or retry
-7. → Execute user-defined /exe implementation
-8. → Run post-hooks (HookManager.runPost)
-9.   └─ taint-post-hook propagates taint to exe result
+4. → Run user `before` hooks (HookRegistry)
+5. → Run pre-hooks (HookManager.runPre)
+6.   ├─ checkpointPreHook resolves cache hit/miss for eligible llm operations
+7.   ├─ guardPreHook evaluates guard definitions on miss path
+8.   └─ First non-continue (`abort`/`retry`/`fulfill`) exits pre-chain
+8.5  Guard-deny path runs user `after` hooks with denied context (`@mx.denied=true`, denial payload in `@output`) then rethrows `GuardError`
+9. → Execute user-defined /exe implementation unless fulfilled from cache
+10. → Run post-hooks (HookManager.runPost)
+11.   ├─ guardPostHook (miss only)
+12.   ├─ taint-post-hook propagates taint to exe result
+13.   └─ checkpointPostHook writes miss-path cache entries
+14. → Run user `after` hooks (HookRegistry)
 ```
+
+### Suppression Matrix (Phase 3C Runtime)
+
+| Context | User hooks | Guard hooks | Contract |
+|---|---|---|---|
+| Normal execution | Enabled | Enabled | Baseline lifecycle |
+| Inside user hook body | Suppressed | Enabled | Prevent hook recursion, keep guard enforcement |
+| Inside guard evaluation | Suppressed | Suppressed | Preserve existing guard non-reentrancy behavior |
+
+Runtime behavior is enforced by `Environment.withHookSuppression()` + `Environment.shouldSuppressUserHooks()` and validated in lifecycle characterization tests.
+
+Lifecycle trace diagnostics helper (test-only):
+- `tests/helpers/hook-lifecycle-trace.ts`
+- `tests/interpreter/hooks/lifecycle-trace-helper.test.ts`
+
+Characterization baseline (Phase 2.5):
+- `tests/interpreter/hooks/lifecycle-characterization.test.ts` pins directive and exec lifecycle ordering around `HookManager.runPre/runPost`, plus current nested-guard suppression behavior.
+- Phase 3C extends the same suite to pin hook non-reentrancy: nested operations triggered by hooks skip user hooks but still execute guards.
+
+Checkpoint/resume integration fixture coverage (Phase 9):
+- `tests/interpreter/checkpoint/integration-fixtures.test.ts`
+- `tests/cases/integration/checkpoint/hooks-ordering-visibility/`
+- `tests/cases/integration/checkpoint/hooks-state-emission-nonfatal/`
 
 ### Input Extraction
 
@@ -223,6 +318,7 @@ For /var directives, the variable is pre-computed via prepareVarAssignment and p
 - Hooks are non-reentrant - if a hook triggers directive evaluation, hooks don't re-run for nested directive/exe
 - Pre-hook first non-continue action stops chain (abort or retry)
 - Post-hooks ALL run sequentially - each can transform the result
+- Guard-denied operations still run user `after` hooks before the original denial is rethrown
 - Inputs can be any type (not just Variables) - check with isVariable()
 - Operation context is optional in hook signatures - may be undefined
 - HookInputHelpers only provided when ALL inputs are Variables (true for exe guard inputs that reference direct Variables)

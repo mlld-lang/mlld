@@ -1,0 +1,19 @@
+# Project-level policy
+# Narrower scope with label rules
+
+/var @config = {
+  allow: {
+    cmd: ["node:*", "git:*", "echo"]
+  },
+  deny: {
+    cmd: ["curl:*"]
+  },
+  labels: {
+    secret: { deny: ["exfil"] }
+  },
+  limits: {
+    timeout: 15000
+  }
+}
+
+/export { @config }

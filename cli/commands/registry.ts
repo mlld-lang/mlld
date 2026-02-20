@@ -12,7 +12,7 @@ export async function registryCommand(args: string[]): Promise<void> {
       break;
       
     case 'update':
-      await manager.updateModule(args[1]);
+      await updateCommand(args.slice(1));
       break;
       
     case 'audit':

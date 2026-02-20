@@ -1,2 +1,2 @@
-/path @docsDir = "assignment-file.md"
+/var @docsDir = <assignment-file.md>
 /show @docsDir

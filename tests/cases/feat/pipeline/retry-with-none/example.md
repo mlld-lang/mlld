@@ -6,7 +6,7 @@
   return values[pipeline.try - 1] || 0.1;
 }
 
-/exe @validateQuality(score, pipeline) = when first [
+/exe @validateQuality(score, pipeline) = when [
   @score > 0.9 => `excellent: @score`
   @score > 0.8 => `good: @score`
   @pipeline.try < 5 => retry
@@ -24,19 +24,19 @@
 /show @good
 
 ## Multiple stage retry with none
-/exe @stage1(input, pipeline) = when first [
+/exe @stage1(input, pipeline) = when [
   @pipeline.try == 3 => "stage1-ok"
   @pipeline.try < 3 => retry
   none => "stage1-failed"
 ]
 
-/exe @stage2(input, pipeline) = when first [
+/exe @stage2(input, pipeline) = when [
   @input == "stage1-ok" && @pipeline.try == 2 => "stage2-ok"
   @input == "stage1-ok" && @pipeline.try < 2 => retry
   none => `stage2-failed: @input`
 ]
 
-/exe @stage3(input) = when first [
+/exe @stage3(input) = when [
   @input == "stage2-ok" => "pipeline complete!"
   none => `pipeline failed at: @input`
 ]

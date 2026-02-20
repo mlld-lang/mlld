@@ -3,12 +3,17 @@
 >>
 >> This script is called by the CLI with topic/subtopic passed via payload
 
->> Strip frontmatter from content
+>> Convert anchor links [Text](#anchor) to **Text** for terminal display
+exe @terminalLinks(text) = js {
+  return text.replace(/\[([^\]]+)\]\(#[^)]+\)/g, '**$1**');
+}
+
+>> Strip frontmatter from content and convert links for terminal
 exe @stripFrontmatter(text) = js {
   if (typeof text !== 'string') {
-    text = text && text.content ? text.content : String(text);
+    text = text && text.text ? text.text : String(text);
   }
-  return text.replace(/^---[\s\S]*?---\n*/, '').trim();
+  return text.replace(/^---[\s\S]*?---\n*/, '').replace(/\[([^\]]+)\]\(#[^)]+\)/g, '**$1**').trim();
 }
 
 >> Build tree display from all categories
@@ -18,7 +23,7 @@ exe @buildTree(allAtoms, introAtom) = js {
 
   // Show intro brief at top
   if (introAtom) {
-    const text = typeof introAtom === 'string' ? introAtom : (introAtom.content || '');
+    const text = typeof introAtom === 'string' ? introAtom : (introAtom.text || '');
     const match = text.match(/^---\n([\s\S]*?)\n---/);
     if (match) {
       const briefMatch = match[1].match(/^brief:\s*(.+)$/m);
@@ -41,17 +46,18 @@ exe @buildTree(allAtoms, introAtom) = js {
   ];
 
   for (const cat of categories) {
-    lines.push(cat.name + '/');
+    lines.push(cat.name + '                              (--all for full content)');
     for (const atom of cat.atoms) {
-      const text = typeof atom === 'string' ? atom : (atom.content || '');
+      const text = typeof atom === 'string' ? atom : (atom.text || '');
       const match = text.match(/^---\n([\s\S]*?)\n---/);
       if (match) {
         const idMatch = match[1].match(/^id:\s*(.+)$/m);
         const briefMatch = match[1].match(/^brief:\s*(.+)$/m);
         if (idMatch) {
           const id = idMatch[1].trim();
-          // Skip _index files
+          // Skip _index files (id starts with _ or id matches category name)
           if (id.startsWith('_')) continue;
+          if (id === cat.name) continue;
           const brief = briefMatch ? briefMatch[1].trim() : '';
           lines.push('  ' + id.padEnd(COL_WIDTH) + brief);
         }
@@ -60,8 +66,15 @@ exe @buildTree(allAtoms, introAtom) = js {
     lines.push('');
   }
 
-  lines.push('Use: mlld howto <topic> for details');
-  lines.push('Use: mlld howto grep <pattern> to search');
+  lines.push('Usage:');
+  lines.push('  mlld howto <section>           Show section index (e.g., howto syntax)');
+  lines.push('  mlld howto <section> --all     Show full section content');
+  lines.push('  mlld howto <topic>             Show specific topic (e.g., howto for-parallel)');
+  lines.push('  mlld howto <topic> --section   Find topic then show its entire section');
+  lines.push('  mlld howto grep <pattern>      Search all docs for pattern');
+  lines.push('');
+  lines.push('Tip: Use `mlld mcp-dev` to start an MCP server with language introspection tools');
+  lines.push('     (mlld_validate, mlld_analyze, mlld_ast) for editor/agent integration.');
   return lines.join('\n');
 }
 
@@ -74,22 +87,28 @@ exe @flattenAtoms(allAtoms) = js {
   return all;
 }
 
->> Filter atoms by topic (matches id, parent, or category)
+>> Filter atoms by topic (matches id, parent, category, or aliases)
 exe @filterByTopic(atoms, topicId) = js {
   if (!topicId) return [];
+  const lowerTopic = topicId.toLowerCase();
   return atoms.filter(atom => {
-    const text = typeof atom === 'string' ? atom : (atom.content || '');
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
     const match = text.match(/^---\n([\s\S]*?)\n---/);
     if (!match) return false;
     const idMatch = match[1].match(/^id:\s*(.+)$/m);
     const parentMatch = match[1].match(/^parent:\s*(.+)$/m);
     const categoryMatch = match[1].match(/^category:\s*(.+)$/m);
+    const aliasMatch = match[1].match(/^aliases:\s*\[([^\]]*)\]/m);
     const id = idMatch ? idMatch[1].trim() : '';
     const parent = parentMatch ? parentMatch[1].trim() : '';
     const category = categoryMatch ? categoryMatch[1].trim() : '';
+    // Parse aliases array from frontmatter
+    const aliases = aliasMatch
+      ? aliasMatch[1].split(',').map(a => a.trim().toLowerCase())
+      : [];
     // Skip index files
     if (id.startsWith('_')) return false;
-    return id === topicId || parent === topicId || category === topicId;
+    return id === topicId || parent === topicId || category === topicId || aliases.includes(lowerTopic);
   });
 }
 
@@ -97,7 +116,7 @@ exe @filterByTopic(atoms, topicId) = js {
 exe @filterById(atoms, id) = js {
   if (!id) return [];
   return atoms.filter(atom => {
-    const text = typeof atom === 'string' ? atom : (atom.content || '');
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
     const match = text.match(/^---\n([\s\S]*?)\n---/);
     if (!match) return false;
     const idMatch = match[1].match(/^id:\s*(.+)$/m);
@@ -105,18 +124,27 @@ exe @filterById(atoms, id) = js {
   });
 }
 
+>> Get category from an atom's frontmatter
+exe @getCategory(atom) = js {
+  const text = typeof atom === 'string' ? atom : (atom.text || '');
+  const match = text.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return '';
+  const catMatch = match[1].match(/^category:\s*(.+)$/m);
+  return catMatch ? catMatch[1].trim() : '';
+}
+
 >> Get content from atom (handles both string and object)
 exe @getContent(atom) = js {
   if (typeof atom === 'string') return atom;
-  if (atom && atom.content) return atom.content;
+  if (atom && atom.text) return atom.text;
   return '';
 }
 
 >> Join stripped atoms into single output
 exe @joinStripped(atoms) = js {
   return atoms.map(a => {
-    const text = typeof a === 'string' ? a : (a.content || '');
-    return text.replace(/^---[\s\S]*?---\n*/, '').trim();
+    const text = typeof a === 'string' ? a : (a.text || '');
+    return text.replace(/^---[\s\S]*?---\n*/, '').replace(/\[([^\]]+)\]\(#[^)]+\)/g, '**$1**').trim();
   }).join('\n\n');
 }
 
@@ -127,7 +155,7 @@ exe @grepAtoms(atoms, pattern) = js {
   const regex = new RegExp(pattern, 'gi');
 
   for (const atom of atoms) {
-    const text = typeof atom === 'string' ? atom : (atom.content || '');
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
     const fmMatch = text.match(/^---\n([\s\S]*?)\n---/);
     if (!fmMatch) continue;
 
@@ -160,17 +188,17 @@ exe @grepAtoms(atoms, pattern) = js {
 }
 
 >> Load intro atom (standalone at top level)
-var @introAtom = <@base/docs/src/atoms/intro.md>
+var @introAtom = <@root/docs/src/atoms/intro.md>
 
 >> Load atoms from all categories
-var @syntaxAtoms = <@base/docs/src/atoms/syntax/*.md>
-var @commandsAtoms = <@base/docs/src/atoms/commands/*.md>
-var @controlFlowAtoms = <@base/docs/src/atoms/control-flow/*.md>
-var @modulesAtoms = <@base/docs/src/atoms/modules/*.md>
-var @patternsAtoms = <@base/docs/src/atoms/patterns/*.md>
-var @configurationAtoms = <@base/docs/src/atoms/configuration/*.md>
-var @securityAtoms = <@base/docs/src/atoms/security/*.md>
-var @mistakesAtoms = <@base/docs/src/atoms/mistakes/*.md>
+var @syntaxAtoms = <@root/docs/src/atoms/syntax/*.md>
+var @commandsAtoms = <@root/docs/src/atoms/commands/*.md>
+var @controlFlowAtoms = <@root/docs/src/atoms/control-flow/*.md>
+var @modulesAtoms = <@root/docs/src/atoms/modules/*.md>
+var @patternsAtoms = <@root/docs/src/atoms/patterns/*.md>
+var @configurationAtoms = <@root/docs/src/atoms/configuration/*.md>
+var @securityAtoms = <@root/docs/src/atoms/security/*.md>
+var @mistakesAtoms = <@root/docs/src/atoms/mistakes/*.md>
 
 >> Bundle all atoms into object for tree display
 exe @bundleAtoms(syntax, commands, controlFlow, modules, patterns, configuration, security, mistakes) = js {
@@ -187,12 +215,18 @@ exe @addIntro(flatAtoms, introAtom) = js {
 var @allFlatAtoms = @addIntro(@flatAtoms, @introAtom)
 
 >> Get topic from payload (injected by SDK via dynamicModules)
-import { @topic, @subtopic } from @payload
+import { @topic, @subtopic, @section, @all } from @payload
 
 >> Build fullId for subtopic lookup
 exe @buildFullId(topic, subtopic) = js {
   if (!topic || !subtopic) return '';
   return topic + '-' + subtopic;
+}
+
+>> Check if topic is a section name
+exe @isSection(topic) = js {
+  const sections = ['syntax', 'commands', 'control-flow', 'modules', 'patterns', 'configuration', 'security', 'mistakes'];
+  return sections.includes(topic);
 }
 
 >> Compute values
@@ -201,22 +235,118 @@ var @hasTopic = @topic != ""
 var @hasSubtopic = @subtopic != ""
 var @isGrep = @topic == "grep"
 var @isIntro = @topic == "intro"
+var @wantSection = @section == true
+var @wantAll = @all == true
+var @isSectionTopic = @isSection(@topic)
 
 >> Get matches
 var @exactMatches = @filterById(@allFlatAtoms, @fullId)
 var @topicMatches = @filterByTopic(@allFlatAtoms, @topic)
+
+>> Get section matches when --section flag is used
+>> First, find the category of the matched atom
+exe @getSectionMatches(atoms, topicMatches, exactMatches, fullId, topic) = js {
+  // Try to find the category from exact match first, then topic matches
+  let targetAtom = null;
+  if (exactMatches && exactMatches.length > 0) {
+    targetAtom = exactMatches[0];
+  } else if (topicMatches && topicMatches.length > 0) {
+    targetAtom = topicMatches[0];
+  }
+
+  if (!targetAtom) return [];
+
+  const text = typeof targetAtom === 'string' ? targetAtom : (targetAtom.text || '');
+  const match = text.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return [];
+
+  const catMatch = match[1].match(/^category:\s*(.+)$/m);
+  if (!catMatch) return [];
+
+  const category = catMatch[1].trim();
+
+  // Filter all atoms by this category
+  return atoms.filter(atom => {
+    const t = typeof atom === 'string' ? atom : (atom.text || '');
+    const m = t.match(/^---\n([\s\S]*?)\n---/);
+    if (!m) return false;
+    const idMatch = m[1].match(/^id:\s*(.+)$/m);
+    const cMatch = m[1].match(/^category:\s*(.+)$/m);
+    // Skip index files
+    if (idMatch && idMatch[1].trim().startsWith('_')) return false;
+    return cMatch && cMatch[1].trim() === category;
+  });
+}
+
+var @sectionMatches = @getSectionMatches(@allFlatAtoms, @topicMatches, @exactMatches, @fullId, @topic)
 
 >> Build not-found message with tree
 exe @notFoundMsg(topic, tree) = js {
   return 'Topic "' + topic + '" not found.\n\n' + tree;
 }
 
->> Main output logic - use when first to ensure only one branch executes
-when first [
+>> Build section index (list of topics in a section)
+>> If a _index atom exists (id matches sectionName), show its content first
+exe @buildSectionIndex(atoms, sectionName) = js {
+  const COL_WIDTH = 36;
+  const lines = [];
+
+  // Find _index atom (id === sectionName) and show its content
+  let indexContent = null;
+  for (const atom of atoms) {
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
+    const match = text.match(/^---\n([\s\S]*?)\n---/);
+    if (match) {
+      const idMatch = match[1].match(/^id:\s*(.+)$/m);
+      if (idMatch && idMatch[1].trim() === sectionName) {
+        indexContent = text.replace(/^---[\s\S]*?---\n*/, '').replace(/\[([^\]]+)\]\(#[^)]+\)/g, '**$1**').trim();
+        break;
+      }
+    }
+  }
+
+  if (indexContent) {
+    lines.push(indexContent);
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  }
+
+  lines.push(sectionName.toUpperCase() + ' TOPICS');
+  lines.push('');
+
+  for (const atom of atoms) {
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
+    const match = text.match(/^---\n([\s\S]*?)\n---/);
+    if (match) {
+      const idMatch = match[1].match(/^id:\s*(.+)$/m);
+      const briefMatch = match[1].match(/^brief:\s*(.+)$/m);
+      if (idMatch) {
+        const id = idMatch[1].trim();
+        if (id.startsWith('_')) continue;
+        // Skip the _index atom itself from the listing
+        if (id === sectionName) continue;
+        const brief = briefMatch ? briefMatch[1].trim() : '';
+        lines.push('  ' + id.padEnd(COL_WIDTH) + brief);
+      }
+    }
+  }
+
+  lines.push('');
+  lines.push('Usage:');
+  lines.push('  mlld howto ' + sectionName + ' --all    Show full content');
+  lines.push('  mlld howto <topic>              Show specific topic');
+  return lines.join('\n');
+}
+
+>> Main output logic - use when to ensure only one branch executes
+when [
   @isGrep => show @grepAtoms(@allFlatAtoms, @subtopic)
   @isIntro => show @stripFrontmatter(@introAtom)
+  @wantSection && @sectionMatches.length > 0 => show @joinStripped(@sectionMatches)
   @hasSubtopic && @exactMatches.length > 0 => show @joinStripped(@exactMatches)
   @hasSubtopic => show `Subtopic "@fullId" not found.`
+  @isSectionTopic && !@wantAll && @topicMatches.length > 0 => show @buildSectionIndex(@topicMatches, @topic)
   @hasTopic && @topicMatches.length > 0 => show @joinStripped(@topicMatches)
   @hasTopic => show @notFoundMsg(@topic, @buildTree(@allAtoms, @introAtom))
   * => show @buildTree(@allAtoms, @introAtom)

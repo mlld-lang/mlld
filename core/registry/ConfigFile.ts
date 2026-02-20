@@ -15,6 +15,7 @@ export interface ConfigFileData {
   resolvers?: {
     prefixes?: PrefixConfig[];
   };
+  resolverPrefixes?: PrefixConfig[]; // legacy top-level shape
 
   // Security settings
   security?: {
@@ -23,11 +24,19 @@ export interface ConfigFileData {
     blockedPatterns?: string[];
     allowedEnvVars?: string[];
     allowAbsolutePaths?: boolean;
+    allowGuardBypass?: boolean;
+  };
+
+  // Validate command settings
+  validate?: {
+    suppressWarnings?: string[];
   };
 
   // Project settings
+  projectname?: string;
   scriptDir?: string;
   mode?: 'development' | 'production';
+  nodePackageManager?: string;
 
   // Development settings
   dev?: {
@@ -114,7 +123,13 @@ export class ConfigFile {
   // Resolver configuration
   getResolverPrefixes(): PrefixConfig[] {
     this.ensureLoaded();
-    return this.data!.resolvers?.prefixes || [];
+    if (this.data!.resolvers?.prefixes) {
+      return this.data!.resolvers.prefixes;
+    }
+    if (this.data!.resolverPrefixes) {
+      return this.data!.resolverPrefixes;
+    }
+    return [];
   }
 
   async setResolverPrefixes(prefixes: PrefixConfig[]): Promise<void> {
@@ -123,6 +138,9 @@ export class ConfigFile {
       this.data!.resolvers = {};
     }
     this.data!.resolvers.prefixes = prefixes;
+    if (this.data!.resolverPrefixes) {
+      delete this.data!.resolverPrefixes;
+    }
     this.isDirty = true;
     await this.save();
   }
@@ -181,7 +199,22 @@ export class ConfigFile {
     return this.data!.security?.allowAbsolutePaths === true;
   }
 
+  getAllowGuardBypass(): boolean {
+    this.ensureLoaded();
+    return this.data!.security?.allowGuardBypass !== false;
+  }
+
   // Project settings
+  getProjectName(): string | undefined {
+    this.ensureLoaded();
+    const name = this.data!.projectname;
+    if (typeof name !== 'string') {
+      return undefined;
+    }
+    const trimmed = name.trim();
+    return trimmed ? trimmed : undefined;
+  }
+
   getScriptDir(): string | undefined {
     this.ensureLoaded();
     return this.data!.scriptDir;
@@ -190,6 +223,22 @@ export class ConfigFile {
   async setScriptDir(scriptDir: string): Promise<void> {
     this.ensureLoaded();
     this.data!.scriptDir = scriptDir;
+    this.isDirty = true;
+    await this.save();
+  }
+
+  getNodePackageManager(): string | undefined {
+    this.ensureLoaded();
+    return this.data!.nodePackageManager;
+  }
+
+  async setNodePackageManager(manager?: string): Promise<void> {
+    this.ensureLoaded();
+    if (manager && manager.trim().length > 0) {
+      this.data!.nodePackageManager = manager;
+    } else {
+      delete this.data!.nodePackageManager;
+    }
     this.isDirty = true;
     await this.save();
   }

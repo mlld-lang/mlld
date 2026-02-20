@@ -1,4 +1,4 @@
-/var @access = when: [
+/var @access = when [
   (@role == "admin" || @role == "mod") && @active => "granted"
   @role == "user" && (@score > 100 || @premium) => "limited"
   !(@banned || @suspended) => "basic"
@@ -9,7 +9,6 @@
 @access --> variable[declaration]
 = --> operator
 when --> keyword
-: --> operator
 [ --> operator
 ( --> operator
 @role --> variable

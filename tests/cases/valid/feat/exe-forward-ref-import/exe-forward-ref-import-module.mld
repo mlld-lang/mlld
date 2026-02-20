@@ -1,0 +1,3 @@
+/exe @outer() = `Outer: @inner()`
+/exe @inner() = `inner`
+/export { @outer }

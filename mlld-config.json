@@ -23,6 +23,27 @@
         "config": {
           "basePath": "docs/user"
         }
+      },
+      {
+        "prefix": "@prompts/",
+        "resolver": "LOCAL",
+        "config": {
+          "basePath": "llm/prompts"
+        }
+      },
+      {
+        "prefix": "@lib/",
+        "resolver": "LOCAL",
+        "config": {
+          "basePath": "llm/lib"
+        }
+      },
+      {
+        "prefix": "@output/",
+        "resolver": "LOCAL",
+        "config": {
+          "basePath": "llm/output"
+        }
       }
     ]
   },

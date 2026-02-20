@@ -1,0 +1,25 @@
+>> Minimal test of j2bd template building
+
+>> Load same files as index.mld
+var @spec = <@base/todo/spec-security-2026-v4.md>
+var @atoms = <@base/docs/src/atoms/security/*.md>
+var @plan = <./plan.md>
+var @agentNotes = <./agent.md>
+var @jobs = <./jobs/*.md>
+var @eventsFile = "/tmp/test-events.jsonl"
+var @iterationId = "test-1"
+
+log `Spec tokens: @spec.mx.tokens`
+log `Atoms count: @atoms.length`
+log `Jobs count: @jobs.length`
+
+>> Same exe as index.mld
+exe @buildTask(spec, atoms, plan, agentNotes, jobs, eventsFile, iterationId) = template "./task.att"
+
+>> Build it
+var @task = @buildTask(@spec, @atoms, @plan, @agentNotes, @jobs, @eventsFile, @iterationId)
+
+log `Task type: @task.mx.type`
+log `Task length: @task.length`
+log `First 200 chars:`
+show @task.substring(0, 200)

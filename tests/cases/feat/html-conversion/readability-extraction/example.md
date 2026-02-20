@@ -11,4 +11,4 @@ This test verifies that Readability properly extracts article content while remo
 ## Verify metadata extraction
 /show `
 Metadata:
-- Title: @article.title`
+- Title: @article.mx.title`

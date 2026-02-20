@@ -1,2 +1,0 @@
-var @allDocs = <docs/*.md>
-var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"

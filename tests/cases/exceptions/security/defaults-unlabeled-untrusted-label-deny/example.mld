@@ -1,0 +1,14 @@
+var @policyConfig = {
+  defaults: { unlabeled: "untrusted" },
+  labels: {
+    untrusted: { deny: ["op:cmd"] }
+  },
+  operations: {
+    "op:cmd": "exfil"
+  }
+}
+policy @p = union(@policyConfig)
+
+var @data = <./defaults-unlabeled-label-deny-data.txt>
+exe @echo(input) = run cmd { echo "@input" }
+show @echo(@data)

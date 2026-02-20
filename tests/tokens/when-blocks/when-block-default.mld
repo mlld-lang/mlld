@@ -1,0 +1,60 @@
+/when [
+  @method == "GET" && @path == "/api/users" => @listUsers()
+  @method == "POST" && @path == "/api/users" => @createUser()
+  @method == "PUT" && @path == "/api/users/*" => @updateUser(@params.id)
+  @method == "DELETE" => show `Method not allowed`
+  true => show `Unknown request`
+]
+
+=== START TOKENS ===
+[ --> operator
+@method --> variable
+== --> operator
+"GET" --> string
+&& --> operator
+@path --> variable
+== --> operator
+"/api/users" --> string
+=> --> operator
+@listUsers --> variable
+( --> operator
+) --> operator
+@method --> variable
+== --> operator
+"POST" --> string
+&& --> operator
+@path --> variable
+== --> operator
+"/api/users" --> string
+=> --> operator
+@createUser --> variable
+( --> operator
+) --> operator
+@method --> variable
+== --> operator
+"PUT" --> string
+&& --> operator
+@path --> variable
+== --> operator
+"/api/users/*" --> string
+=> --> operator
+@updateUser --> variable
+( --> operator
+@params --> variable
+. --> operator
+id --> property
+) --> operator
+@method --> variable
+== --> operator
+"DELETE" --> string
+=> --> operator
+show --> keyword
+` --> operator
+`Method not allowed` --> string
+true --> keyword
+=> --> operator
+show --> keyword
+` --> operator
+`Unknown request` --> string
+] --> operator
+=== END TOKENS ===

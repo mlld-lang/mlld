@@ -1,0 +1,55 @@
+>>
+>> Audit Ledger: Taint Propagation Through File I/O
+>>
+>> Demonstrates that:
+>> 1. Labels persist through file write/read cycles
+>> 2. Write events record path, taint, and writer
+>> 3. The audit ledger provides queryable history
+>>
+
+>> ============================================================
+>> STEP 1: Create a secret-labeled variable
+>> ============================================================
+
+>> The 'secret' label marks this value as sensitive.
+>> This label will propagate through all transformations.
+var secret @token = "sk-live-123"
+
+>> ============================================================
+>> STEP 2: Write the secret to disk
+>> ============================================================
+
+>> output writes the value to a file.
+>> The audit ledger records the write event with path, taint, and writer.
+output @token to "@base/tmp/audit-ledger-demo.txt"
+
+>> ============================================================
+>> STEP 3: Read it back and confirm labels persist
+>> ============================================================
+
+>> File reads inherit taint from the latest write event.
+>> The secret label should survive the file I/O round-trip.
+var @loaded = <@base/tmp/audit-ledger-demo.txt>
+show @loaded.mx.labels
+
+>> ============================================================
+>> STEP 4: Query the audit ledger
+>> ============================================================
+
+>> The audit ledger at .mlld/sec/audit.jsonl records all security events.
+>> Each write event includes path, taint, and writer fields.
+var @audit = <@base/.mlld/sec/audit.jsonl>
+
+exe @findWrite(events) = js {
+  return events.find(event => event.event === "write" && event.path.endsWith("audit-ledger-demo.txt"));
+}
+
+exe @getTaint(event) = js {
+  return JSON.stringify(event.taint || []);
+}
+
+var @writeEvent = @findWrite(@audit)
+show `Write event: @writeEvent.event`
+show `  Path: @writeEvent.path`
+show `  Taint: @getTaint(@writeEvent)`
+show `  Writer: @writeEvent.writer`

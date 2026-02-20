@@ -1,0 +1,146 @@
+>>
+>> Built-in Rules Demo
+>>
+>> Demonstrates mlld's built-in security rules for common protection patterns.
+>> These rules block dangerous data flows without writing custom guards.
+>>
+>> RUN THIS SCRIPT to see the `no-secret-exfil` rule in action.
+>> The script will fail with a policy denial - this is the expected behavior.
+>>
+
+>> ============================================================
+>> POLICY CONFIGURATION
+>> ============================================================
+
+>> Enable built-in rules via defaults.rules
+var @policyConfig = {
+  defaults: {
+    rules: [
+      "no-secret-exfil",
+      "no-sensitive-exfil",
+      "no-untrusted-destructive",
+      "no-untrusted-privileged"
+    ]
+  }
+}
+policy @p = union(@policyConfig)
+
+show ::
+
+Built-in Rules Demo
+===================
+
+This script demonstrates how mlld's built-in rules protect against:
+1. Secret data flowing to exfil operations
+2. Untrusted data flowing to destructive operations
+
+Policy configured with rules:
+- no-secret-exfil
+- no-sensitive-exfil
+- no-untrusted-destructive
+- no-untrusted-privileged
+
+::
+
+>> ============================================================
+>> DEFINE LABELED DATA
+>> ============================================================
+
+>> Secret data - API keys, tokens, credentials
+var secret @apiKey = "sk-live-abc123xyz"
+
+>> Untrusted data - user input, external sources
+var untrusted @userInput = "user-provided-value"
+
+>> Normal data - no special labels
+var @normalData = "safe-trusted-value"
+
+show ::
+
+Data Definitions
+----------------
+- \@apiKey: labeled 'secret' (simulates API credential)
+- \@userInput: labeled 'untrusted' (simulates external input)
+- \@normalData: no labels (normal trusted data)
+
+::
+
+>> ============================================================
+>> DEFINE LABELED OPERATIONS
+>> ============================================================
+
+>> Exfil operation - sends data outside the system
+exe exfil @sendToServer(data) = run cmd { echo "Sending to server: @data" }
+
+>> Destructive operation - modifies system state
+exe destructive @deleteFile(path) = run cmd { echo "Deleting: @path" }
+
+>> Privileged operation - elevated access
+exe privileged @modifyConfig(setting) = run cmd { echo "Setting config: @setting" }
+
+show ::
+
+Operation Definitions
+---------------------
+- \@sendToServer: labeled 'exfil' (network egress)
+- \@deleteFile: labeled 'destructive' (state modification)
+- \@modifyConfig: labeled 'privileged' (elevated access)
+
+::
+
+>> ============================================================
+>> DEMONSTRATION: Normal data flows freely
+>> ============================================================
+
+show ::
+
+Test: Normal data flows through all operations
+----------------------------------------------
+Normal (unlabeled trusted) data is not blocked by these rules.
+
+::
+
+show `\@sendToServer(\@normalData):`
+var @result1 = @sendToServer(@normalData)
+show `  -> @result1`
+
+show `\@deleteFile(\@normalData):`
+var @result2 = @deleteFile(@normalData)
+show `  -> @result2`
+
+show `\@modifyConfig(\@normalData):`
+var @result3 = @modifyConfig(@normalData)
+show `  -> @result3`
+
+>> ============================================================
+>> DEMONSTRATION: Secret data blocked from exfil
+>> ============================================================
+
+show ::
+
+Test: Secret data to exfil operation
+------------------------------------
+Attempting: \@sendToServer(\@apiKey)
+Rule: no-secret-exfil (secret -> exfil = BLOCK)
+
+The next line will trigger a policy denial...
+
+::
+
+>> This will fail with: "Label 'secret' cannot flow to 'exfil'"
+var @blocked = @sendToServer(@apiKey)
+
+>> ============================================================
+>> NOTE: The script stops here due to policy denial.
+>>
+>> To see other rules in action, modify this script to test:
+>>
+>> no-untrusted-destructive:
+>>   @deleteFile(@userInput)
+>>   Error: "Label 'untrusted' cannot flow to 'destructive'"
+>>
+>> no-untrusted-privileged:
+>>   @modifyConfig(@userInput)
+>>   Error: "Label 'untrusted' cannot flow to 'privileged'"
+>>
+>> ============================================================

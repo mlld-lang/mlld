@@ -1,5 +1,6 @@
 import { GuardError } from '@core/errors/GuardError';
 import type { GuardErrorDetails } from '@core/errors/GuardError';
+import { MlldDenialError } from '@core/errors/denial';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { WhenExpressionNode } from '@core/types/when';
@@ -10,6 +11,36 @@ import type { Variable } from '@core/types/variable';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 import { materializeDisplayValue } from '../utils/display-materialization';
 
+function extractDenialInfo(error: unknown): {
+  reason: string;
+  guardContext: GuardContextSnapshot | undefined;
+  guardInput: unknown;
+  guardName: string | null;
+  guardFilter: string | null;
+} | null {
+  if (error instanceof GuardError && error.decision === 'deny') {
+    const details = (error.details ?? {}) as GuardErrorDetails;
+    return {
+      reason: error.reason ?? details.reason ?? error.message ?? 'Guard denied operation',
+      guardContext: details.guardContext as GuardContextSnapshot | undefined,
+      guardInput: details.guardInput,
+      guardName: details.guardName ?? null,
+      guardFilter: details.guardFilter ?? null
+    };
+  }
+  if (error instanceof MlldDenialError && error.context.code === 'POLICY_LABEL_FLOW_DENIED') {
+    const ctx = error.context;
+    return {
+      reason: ctx.reason,
+      guardContext: undefined,
+      guardInput: undefined,
+      guardName: ctx.blocker.name ?? null,
+      guardFilter: ctx.blocker.rule ?? null
+    };
+  }
+  return null;
+}
+
 export async function handleExecGuardDenial(
   error: unknown,
   options: {
@@ -18,19 +49,17 @@ export async function handleExecGuardDenial(
     whenExprNode: WhenExpressionNode;
   }
 ): Promise<EvalResult | null> {
-  if (!(error instanceof GuardError) || error.decision !== 'deny') {
+  const denialInfo = extractDenialInfo(error);
+  if (!denialInfo) {
     return null;
   }
 
-  const details = (error.details ?? {}) as GuardErrorDetails;
-  const reason = error.reason ?? details.reason ?? error.message ?? 'Guard denied operation';
-  const guardContext = details.guardContext as GuardContextSnapshot | undefined;
-  const guardInput = details.guardInput;
+  const { reason, guardContext, guardInput, guardName, guardFilter } = denialInfo;
   const deniedContext = {
     denied: true,
     reason,
-    guardName: details.guardName ?? null,
-    guardFilter: details.guardFilter ?? null
+    guardName,
+    guardFilter
   };
 
   const { evaluateWhenExpression } = await import('./when-expression');

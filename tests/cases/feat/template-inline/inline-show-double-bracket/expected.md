@@ -1,3 +1,3 @@
 # Inline /show in double-bracket template
 
-OK
+/show {echo "OK"}

@@ -16,9 +16,13 @@
   });
 }
 
-/show `Type: @file.type`
-/show `Text: @file.text.trim()`
-/show `Data: @file.data.trim()`
+/exe @chomp(value) = js {
+  return value.trim();
+}
+
+/show `Type: @file.mx.type`
+/show `Text: @chomp(@file.mx.text)`
+/show `Data: @chomp(@file.mx.data)`
 /show @jsDefault(@file)
 /show @jsKeep(@file.keep)
 /show `Ctx filename: @file.mx.filename`

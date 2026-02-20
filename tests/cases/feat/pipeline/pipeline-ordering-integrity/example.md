@@ -30,7 +30,7 @@
 
 >> Test 5: Template interpolation pipeline
 /var @prefix = "TPL"
-/var @test5 = `@prefix-BASE` | @append("M") | @append("N") | @append("O")
+/var @test5 = `@prefix\-BASE` | @append("M") | @append("N") | @append("O")
 /show @test5
 
 >> Test 6: Mixed data types through pipeline

@@ -5,6 +5,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { WhenSimpleNode, WhenBlockNode, LetAssignmentNode } from '@core/types/when';
 import { extractVariableValue } from '../utils/variable-resolution';
+import { isStructuredValue } from '../utils/structured-value';
 
 describe('evaluateWhen', () => {
   let env: Environment;
@@ -85,7 +86,7 @@ describe('evaluateWhen', () => {
     });
   });
   
-  describe('block form with first modifier', () => {
+  describe('block form default behavior', () => {
     it('should execute first matching condition', async () => {
       const node: WhenBlockNode = {
         type: 'Directive',
@@ -93,7 +94,6 @@ describe('evaluateWhen', () => {
         subtype: 'whenBlock',
         nodeId: 'test',
         values: {
-          modifier: [{ type: 'Text', content: 'first', nodeId: 'mod1' }],
           conditions: [
             {
               condition: [{ type: 'Text', content: 'false', nodeId: 'cond1' }],
@@ -110,7 +110,7 @@ describe('evaluateWhen', () => {
           ]
         },
         meta: {
-          modifier: 'first',
+          modifier: 'default',
           conditionCount: 3,
           hasVariable: false
         }
@@ -169,6 +169,22 @@ describe('evaluateWhen', () => {
       const result = await evaluateWhen(node, env);
       expect(result.value).toBe('');
     });
+
+    it('should treat "NaN" string as false', async () => {
+      const node: WhenSimpleNode = {
+        type: 'Directive',
+        kind: 'when',
+        subtype: 'whenSimple',
+        nodeId: 'test',
+        values: {
+          condition: [{ type: 'Text', content: 'NaN', nodeId: 'cond1' }],
+          action: [{ type: 'Text', content: 'Should not execute', nodeId: 'act1' }]
+        }
+      };
+
+      const result = await evaluateWhen(node, env);
+      expect(result.value).toBe('');
+    });
     
     it('should treat non-empty strings as true', async () => {
       const node: WhenSimpleNode = {
@@ -205,7 +221,13 @@ describe('evaluateWhen', () => {
       const variable = childEnv.getVariable('resp');
       expect(variable).toBeTruthy();
       const value = await extractVariableValue(variable!, childEnv);
-      expect(value).toBe('hello');
+      expect(isStructuredValue(value)).toBe(true);
+      if (isStructuredValue(value)) {
+        expect(value.text).toBe('hello');
+        expect(value.data).toBe('hello');
+        expect(value.mx.source).toBe('cmd');
+        expect(value.mx.command).toBe('echo hello');
+      }
     });
 
     it('executes sh code RHS', async () => {
@@ -226,7 +248,13 @@ describe('evaluateWhen', () => {
       const variable = childEnv.getVariable('resp');
       expect(variable).toBeTruthy();
       const value = await extractVariableValue(variable!, childEnv);
-      expect(value).toBe('shell-ok');
+      expect(isStructuredValue(value)).toBe(true);
+      if (isStructuredValue(value)) {
+        expect(value.text).toBe('shell-ok');
+        expect(value.data).toBe('shell-ok');
+        expect(value.mx.source).toBe('sh');
+        expect(value.mx.command).toBe('echo shell-ok');
+      }
     });
 
     it('executes js code RHS', async () => {

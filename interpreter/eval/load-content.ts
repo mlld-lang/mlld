@@ -132,12 +132,33 @@ export class LoadContentResultImpl implements LoadContentResult {
     return this.content;
   }
   
+  get absoluteDir(): string {
+    const lastSlash = this.absolute.lastIndexOf('/');
+    return lastSlash === 0 ? '/' : lastSlash > 0 ? this.absolute.substring(0, lastSlash) : this.absolute;
+  }
+
+  get relativeDir(): string {
+    const lastSlash = this.relative.lastIndexOf('/');
+    return lastSlash === 0 ? '/' : lastSlash > 0 ? this.relative.substring(0, lastSlash) : '.';
+  }
+
+  get dirname(): string {
+    const absDir = this.absoluteDir;
+    if (absDir === '/') return '/';
+    const lastSlash = absDir.lastIndexOf('/');
+    return lastSlash >= 0 ? absDir.substring(lastSlash + 1) : absDir;
+  }
+
   get mx() {
     const self = this;
     return {
       filename: this.filename,
       relative: this.relative,
       absolute: this.absolute,
+      path: this.path,
+      dirname: this.dirname,
+      relativeDir: this.relativeDir,
+      absoluteDir: this.absoluteDir,
       get tokest() { return self.tokest; },
       get tokens() { return self.tokens; },
       get fm() { return self.fm; },
@@ -161,6 +182,7 @@ export class LoadContentResultImpl implements LoadContentResult {
       filename: this.filename,
       relative: this.relative,
       absolute: this.absolute,
+      path: this.path,
       ext: this.ext,
       fm: this.fm,
       tokest: this.tokest

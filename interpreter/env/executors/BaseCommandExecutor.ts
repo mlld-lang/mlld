@@ -35,7 +35,7 @@ export interface ICommandExecutor {
  */
 export abstract class BaseCommandExecutor implements ICommandExecutor {
   protected outputOptions: CommandExecutionOptions = {
-    showProgress: true,
+    showProgress: false,
     maxOutputLines: undefined,
     errorBehavior: 'halt',
     collectErrors: false
@@ -94,16 +94,7 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
       
     } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      
-      // Optional debug logging for bash executor failures
-      if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1' && command.startsWith('bash')) {
-        try {
-          console.error('[BashExecutor][debug] executeWithCommonHandling error', error);
-        } catch {
-          // ignore logging errors
-        }
-      }
-      
+
       // If it's already an MlldCommandExecutionError, preserve it
       let commandError: MlldCommandExecutionError;
       if (error instanceof MlldCommandExecutionError) {
@@ -217,6 +208,28 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
       return null;
     }
 
+    // Fixture helper used by slash/run/command-bases npm tests
+    const npmTestEchoMatch = command.match(
+      /^npm\s+run(?:\s+-s)?\s+testecho(?:\s+--\s+(.+))?\s*$/
+    );
+    if (npmTestEchoMatch) {
+      const rawArg = (npmTestEchoMatch[1] || '').trim();
+      if (rawArg.length === 0) {
+        return '';
+      }
+
+      const quotedMatch = rawArg.match(/^(['"])([\s\S]*)\1$/);
+      if (quotedMatch) {
+        const [, quote, content] = quotedMatch;
+        if (quote === '"') {
+          return content.replace(/\\"/g, '"');
+        }
+        return content.replace(/\\'/g, "'");
+      }
+
+      return rawArg;
+    }
+
     // Common test mocks
     if (command === 'npm --version') {
       return '11.3.0';
@@ -227,10 +240,6 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
       if (command.includes('\'s/^/> /\'')) {
         // Read from stdin and prefix each line with "> "
         const input = options?.input || '';
-        // Debug logging
-        if (process.env.DEBUG_PIPELINE) {
-          console.log('SED MOCK: input=', JSON.stringify(input), 'options=', options);
-        }
         return input.split('\n').map(line => `> ${line}`).join('\n');
       }
     }

@@ -18,12 +18,12 @@ export default defineConfig({
     globals: true,
     include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     exclude: [
-      '**/node_modules/**', 
-      '**/dist/**', 
-      '**/.{idea,git,cache,output,temp}/**', 
-      '**/mlld-ast/**', 
-      '**/lib/**', 
-      '**/tests/ast-perf.test.ts', 
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      '**/mlld-ast/**',
+      '**/lib/**',
+      '**/tests/ast-perf.test.ts',
       '**/tests/ephemeral-mode.test.ts',
       // Exclude performance benchmarks from default test run
       'tests/performance/**',
@@ -31,7 +31,10 @@ export default defineConfig({
       'tests/tokens/**/*.test.ts',
       'services/lsp/semantic-tokens*.test.ts',
       'services/lsp/embedded-language-tokens.test.ts',
-      'services/lsp/as-modifier-tokens.test.ts'
+      'services/lsp/as-modifier-tokens.test.ts',
+      // Exclude heredoc e2e tests - they need low concurrency, run with npm run test:heredoc
+      'tests/heredoc.e2e.test.ts',
+      'tests/integration/heredoc-large-variable.test.ts'
     ],
     coverage: {
       reporter: ['text', 'json', 'html'],

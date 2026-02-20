@@ -1,9 +1,9 @@
-<MLLD_COMPLETE_GUIDE version="2.0.0-rc79">
+<MLLD_COMPLETE_GUIDE version="2.0.0-rc81-ab">
 
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-05T04:55:10.935Z
+Generated: 2026-02-06T20:38:19.303Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -121,12 +121,13 @@ exe @calc(x) = js { return x * 2 }
 </RULE_3_COMMANDS_NEED_BRACES>
 
 <RULE_4_OUTPUT_SOURCES>
-Only these produce output: `show`, `run`, `output`. Everything else mutates state.
+Only `show` and `output` produce output. `run` executes silently (use `show run cmd {...}` to display command output).
 
 ```mlld
 var @secret = "hidden"      >> no output
-show `Visible`
-run cmd {echo "Also visible"}
+show `Visible`              >> output
+run cmd {echo "silent"}     >> no output (executes but doesn't display)
+show run cmd {echo "loud"}  >> output
 ```
 </RULE_4_OUTPUT_SOURCES>
 
@@ -237,7 +238,7 @@ Module imports for code reuse. Namespace imports avoid collisions.
 
 ```mlld
 >> Registry modules
-import { @parallel, @retry } from @mlld/core
+import { @sortBy, @unique } from @mlld/array
 import @corp/utils as @corp
 
 >> Local files
@@ -256,25 +257,22 @@ show @agentRegistry.alice.tldr
 </RULE_9_IMPORTS>
 
 <RULE_10_WHEN_DECISIONS>
-`when` for conditionals. Use `first` for switch-style (stops at first match).
+`when` selects the first matching condition. Use `if` for imperative flow.
 
 ```mlld
 >> Simple condition
 when @isProd => show "Production mode"
 
 >> Switch-style (first match wins)
-when first [
+when [
   @role == "admin" => show "Admin"
   @role == "user"  => show "User"
   * => show "Guest"
 ]
 
->> Bare when (evaluates all matches)
-when [
-  @score > 90 => show "Excellent!"
-  @hasBonus => show "Bonus earned!"
-  none => show "No matches"
-]
+>> Multiple independent conditions (use `if`)
+if @score > 90 [ show "Excellent!" ]
+if @hasBonus [ show "Bonus earned!" ]
 ```
 </RULE_10_WHEN_DECISIONS>
 
@@ -347,6 +345,18 @@ execute(file, payload, { state: { count: 0 } });
 <VARIABLES>
 Create primitives, arrays, objects, or assign from command/code results.
 
+**var vs exe:** `var` creates values (no parameters). `exe` creates functions (takes parameters).
+
+```mlld
+var @name = "Alice"            >> value - no params
+exe @greet(who) = `Hi @who!`   >> function - takes params
+
+>> Use var for computed values, exe for reusable functions
+var @result = @greet(@name)    >> "Hi Alice!"
+```
+
+**Primitives, arrays, objects:**
+
 ```mlld
 var @n = 42
 var @price = 19.99
@@ -362,7 +372,8 @@ var @date = cmd {date}         >> command result
 var @readme = <README.md>      >> file contents
 ```
 
-**Conditional inclusion** (`@var?`): omit content when variable is falsy.
+**Conditional inclusion** (`@var?`): omit content when a variable is falsy.
+**Nullish fallback in templates** (`@var??"default"`): use the fallback when the value is null or undefined.
 
 ```mlld
 var @tools = "json"
@@ -371,6 +382,14 @@ var @empty = ""
 >> In commands: @var?`...`
 run cmd { echo @tools?`--tools "@tools"` @empty?`--empty` }
 >> Output: --tools "json" (--empty omitted)
+
+>> In templates: omit the variable itself
+var @title = "MyTitle"
+var @msg = `DEBUG:@title?`
+
+>> In templates: tight null coalescing
+var @missing = null
+var @hello = `Hello,@missing??"friend"`
 
 >> In arrays
 var @list = [@a, @b?, @c]   >> @b omitted if falsy
@@ -397,24 +416,95 @@ Data: @data|@json
 `
 ```
 
-**When-expressions in templates:**
+For templates longer than a simple paragraph, use `.att` files with the `exe ... = template` pattern:
 
 ```mlld
-var @status = when [ @score > 90 => "A" * => "F" ]
-var @arr = [ 1, when [ @flag => 2 ], 3 ]
+exe @welcome(name, role) = template "./prompts/welcome.att"
+exe @systemPrompt(context) = template "./prompts/system.att"
+
+>> Call like any other function
+show @welcome("Alice", "admin")
 ```
 
-**Loops in templates:**
+The `.att` file uses `@var` for interpolation and supports full mlld syntax inside:
 
-```mlld
-var @toc = `
-for @item in @items
-- @item.name
+```att
+>> prompts/welcome.att
+Hello @name!
+
+Your role: @role
+
+for @perm in @role.permissions
+- @perm
 end
-`
 ```
 
-Note: `for` and `end` must be at line start inside template body.
+**Key points:**
+
+- Parameters from `exe @func(params)` are automatically available as `@param` in the template
+- `.att` supports `<file.md>` references, pipes, and `for`/`when` blocks
+- Never load `.att` files with angle brackets - use `exe ... = template` instead
+
+**When to use external templates:**
+
+- Prompts longer than 2-3 lines
+- Templates with complex structure or loops
+- Reusable prompt components
+- Agent system prompts
+
+**Alternative syntax - .mtt files:**
+
+If `.att` syntax conflicts with your content, use `.mtt` files instead. Common case: prompts that include `@path/to/file` references for LLMs to interpret:
+
+```mlld
+exe @codeReview(files, instructions) = template "./prompts/review.mtt"
+```
+
+```mtt
+>> prompts/review.mtt - uses {{var}} syntax
+Review these files: {{files}}
+
+{{instructions}}
+
+Reference @src/utils.ts and @tests/utils.test.ts for context.
+```
+
+The `@src/utils.ts` stays literal - mlld won't try to interpolate it.
+
+| Extension | Variable syntax | File refs | Use when |
+|-----------|----------------|-----------|----------|
+| `.att` | `@var` | `<file.md>` | Default, mlld-style |
+| `.mtt` | `{{var}}` | None | Content has `@path` or `<tag>` meant for LLMs |
+
+
+
+**Template-embedded vs top-level:** Control flow inside templates uses `/for` and `/end` with slash prefix. Top-level directives are separate statements.
+
+```mlld
+>> TOP-LEVEL: for as a directive (produces output directly)
+for @item in @items => show `- @item.name`
+
+>> TEMPLATE-EMBEDDED: /for inside template body
+var @items = ["alpha", "beta", "gamma"]
+var @toc = ::
+/for @item in @items
+- @item
+/end
+::
+show @toc
+```
+
+**Key differences:**
+
+| Context | Syntax | Notes |
+|---------|--------|-------|
+| Top-level | `for @x in @y => action` | Directive on own line |
+| In template | `/for @x in @y` ... `/end` | Slash prefix required at line start |
+
+**Template-embedded rules:**
+- `/for` and `/end` must start at column 1 of their line inside the template
+- No `=>` arrow - the lines between `/for` and `/end` are the body
+- Only `/for` and `/end` are valid inside templates - no other directives
 </TEMPLATES>
 
 <FILE_LOADING>
@@ -430,6 +520,12 @@ var @author = <package.json>.author  >> field access
 var @docs = <docs/**/*.md>
 show @docs.length
 for @doc in @docs => show @doc.mx.filename
+
+>> JSON globs - each item is auto-parsed
+var @configs = <configs/*.json>
+var @first = @configs[0]
+show @first.data.name                >> access parsed JSON
+show @first.mx.filename              >> file metadata still available
 
 >> With "as" template
 var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
@@ -461,10 +557,22 @@ Type keywords: `fn`, `var`, `class`, `interface`, `type`, `enum`, `struct`
 
 ```mlld
 var @file = <README.md>
-show @file.mx.filename     >> "README.md"
-show @file.mx.relative     >> relative path
-show @file.mx.tokens       >> token count estimate
-show @file.mx.fm.title     >> frontmatter field
+show @file.mx.filename      >> "README.md"
+show @file.mx.relative      >> relative path from cwd
+show @file.mx.absolute      >> absolute path
+show @file.mx.dirname       >> parent directory name
+show @file.mx.relativeDir   >> relative path to directory
+show @file.mx.absoluteDir   >> absolute path to directory
+show @file.mx.tokens        >> token count estimate
+show @file.mx.fm.title      >> frontmatter field
+```
+
+**In loops** - metadata works directly:
+
+```mlld
+var @files = <docs/*.md>
+for @file in @files => show @file.mx.filename
+for @file in @files => show @file.json.status
 ```
 
 **JSON string accessors** (`.data` and `.text`):
@@ -574,6 +682,8 @@ show @x       >> also works here
 <RESERVED_VARIABLES>
 - `@now` - current timestamp
 - `@input` - stdin/env (must be allowed in config)
+- `@payload` - data passed via SDK or CLI (see payload atom)
+- `@state` - mutable state for SDK integrations
 - `@base` - project root path
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)
@@ -590,7 +700,8 @@ Execute shell commands or code. Language specifier determines execution context.
 **Decision tree:**
 - Single line + pipes only → `cmd { ... }` (safe, recommended)
 - Needs `&&`, `||`, control flow → `sh { ... }` (full shell)
-- JavaScript/Python code → `js { ... }` / `python { ... }`
+- JavaScript code → `js { ... }` (in-process) or `node { ... }` (VM-isolated)
+- Python code → `py { ... }` or `python { ... }` (subprocess)
 
 ```mlld
 >> cmd (pipes only, safe)
@@ -602,10 +713,30 @@ run sh {
   npm test && npm run build || echo "Build failed"
 }
 
->> js/python (code execution)
+>> JavaScript (in-process, fast)
 run js {console.log("hello")}
 var @result = js {return 42}
+
+>> Node.js (VM-isolated, full API)
+var @hash = node {
+  const crypto = require('crypto');
+  return crypto.createHash('md5').update('hello').digest('hex');
+}
+
+>> Python (subprocess)
+run py {print("hello from python")}
+var @sum = py {
+result = 2 + 2
+print(result)
+}
 ```
+
+**Language comparison:**
+| Language | Isolation | Use case |
+|----------|-----------|----------|
+| `js` | None (in-process) | Fast calculations, simple transforms |
+| `node` | VM context | Full Node.js API, require() |
+| `py`/`python` | Subprocess | Python libraries, data science |
 
 **Working directory override:**
 
@@ -628,11 +759,36 @@ run @data | { cat | jq '.[]' }
 **Parameter syntax by language:**
 - `cmd`: interpolate with `@param`
 - `sh`: use shell variables as `$param`
-- `js/python`: parameters passed as variables
+- `js`/`node`: parameters as JavaScript variables
+- `py`/`python`: parameters as Python variables (strings by default)
+
+```mlld
+>> JavaScript - parameters are typed values
+exe @process(items) = js { return items.map(x => x * 2) }
+var @result = @process([1, 2, 3])  >> [2, 4, 6]
+
+>> Python - parameters arrive as strings
+exe @add(a, b) = py { print(int(a) + int(b)) }
+var @sum = @add(5, 3)  >> 8
+
+>> Python with complex types (wrapped with metadata)
+exe @analyze(data) = py {
+import json
+parsed = json.loads(data) if isinstance(data, str) else data
+print(json.dumps(parsed))
+}
+```
+
+**Python variable helpers:**
+- `mlld.is_variable(x)` - check if value is a wrapped mlld Variable
+- Variables have `__mlld_type__` and `__mlld_metadata__` attributes
+- Arrays/lists and dicts pass through with metadata preserved
 </RUN_COMMAND>
 
 <EXE_EXECUTABLES>
 Define reusable commands, code, templates, or multi-statement blocks.
+
+**exe vs var:** `exe` defines functions (takes parameters). `var` creates values (no parameters). Use `exe` when you need to pass arguments; use `var` for computed values.
 
 **Simple forms:**
 
@@ -640,8 +796,21 @@ Define reusable commands, code, templates, or multi-statement blocks.
 >> Command
 exe @list(dir) = cmd {ls -la @dir | head -5}
 
->> JavaScript
+>> JavaScript (in-process)
 exe @add(a, b) = js { return a + b }
+
+>> Node.js (VM-isolated)
+exe @hash(text) = node {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+>> Python
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @calculate(x, y) = py {
+result = x ** 2 + y ** 2
+print(result)
+}
 
 >> Template
 exe @greet(name) = `Hello @name!`
@@ -653,21 +822,72 @@ exe @welcome(name, role) = template "./prompts/welcome.att"
 exe @analyze(data) = prose:@config { session "Analyze @data" }
 ```
 
-**Prose execution** (LLM skill invocation):
+**Python notes:**
+- Use `print()` to return values (captured as string output)
+- Parameters arrive as strings; use `int()`, `float()` for math
+- Standard library available: `import json`, `import math`, etc.
 
-Prose requires a config reference specifying the model and skill:
+Executables can include metadata for tooling and type safety.
+
+**Typed parameters:**
 
 ```mlld
-var @config = { model: "claude-3", skillName: "prose" }
+exe @greet(name: string, times: number) = js { return "Hello " + name; }
+exe @process(data: object, format: string) = js { return data; }
+exe @count(items: array) = js { return items.length; }
+```
+
+Type annotations use `: type` syntax after the parameter name. Supported types: `string`, `number`, `boolean`, `object`, `array`.
+
+**Description metadata:**
+
+```mlld
+exe @greet(name: string) = js { return "Hello " + name; } with { description: "Greet a user by name" }
+```
+
+The `with { description: "..." }` clause adds a description that appears in MCP tool listings.
+
+**Combined example:**
+
+```mlld
+exe @searchIssues(repo: string, query: string, limit: number) = cmd {
+  gh issue list -R @repo --search "@query" -L @limit --json number,title
+} with { description: "Search GitHub issues by query" }
+```
+
+**MCP integration:**
+
+When exported as tools, metadata generates proper JSON schemas:
+
+```mlld
+exe @listFiles(dir: string) = cmd { ls @dir } with { description: "List files in directory" }
+export { @listFiles }
+```
+
+This produces an MCP tool with:
+- Input schema with `dir` as required string parameter
+- Description in tool listing
+
+**Parameter types vs runtime:**
+
+Type annotations are metadata for tooling. At runtime, parameters arrive as their actual types from the caller. Use type annotations to:
+- Generate accurate MCP tool schemas
+- Document expected parameter types
+- Enable IDE/editor support
+
+**Prose execution** invokes LLM-interpreted DSL skills (OpenProse or custom):
+
+```mlld
+import { @opus } from @mlld/prose
 
 >> Inline (interpolates like templates)
-exe @summarize(text) = prose:@config { summarize @text }
+exe @summarize(text) = prose:@opus { summarize @text }
 
 >> File reference (.prose files do NOT interpolate)
-exe @review(code) = prose:@config "./review.prose"
+exe @review(code) = prose:@opus "./review.prose"
 
 >> Template files (.prose.att or .prose.mtt interpolate)
-exe @greet(name) = prose:@config "./greet.prose.att"
+exe @greet(name) = prose:@opus "./greet.prose.att"
 ```
 
 Interpolation rules:
@@ -676,7 +896,7 @@ Interpolation rules:
 - `"file.prose.att"` - ATT interpolation (`@var`)
 - `"file.prose.mtt"` - MTT interpolation (`{{var}}`)
 
-Default skill is `"prose"` (OpenProse). Custom interpreters via `skillName`.
+See `mlld howto prose` for setup, OpenProse syntax, and custom interpreters.
 
 **Block syntax** (multi-statement bodies):
 
@@ -703,37 +923,306 @@ Block rules:
 - `let @var += value` for accumulation (arrays/strings/objects)
 - `=> value` required as last statement for return
 
-**When-first in exe** (value-returning):
+**When in exe** (first match wins):
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
-  @score >= 70 => "C"
   * => "F"
-]
-
->> With blocks for side effects
-exe @handler(input) = when first [
-  @input.valid => [
-    show "Processing..."
-    let @result = @transform(@input)
-    => @result
-  ]
-  * => { error: "Invalid input" }
 ]
 ```
 
-**Shadow environments** (expose JS helpers):
+Use `if` for imperative flow where multiple branches can run.
+
+**Shadow environments** expose helpers to all code blocks of that language:
 
 ```mlld
+>> JavaScript shadow environment
 exe @double(n) = js { return n * 2 }
 exe @cap(s) = js { return s[0].toUpperCase() + s.slice(1) }
 exe js = { double, cap }  >> expose to all js blocks
 
 var @out = js { cap("hello") + ": " + double(5) }  >> "Hello: 10"
 ```
+
+```mlld
+>> Python shadow environment
+exe @square(x) = py {
+result = int(x) ** 2
+print(result)
+}
+exe @greet(name) = py {
+print(f"Hello, {name}!")
+}
+exe py = { square, greet }  >> expose to all py blocks
+
+run py {
+square(4)      >> prints 16
+greet("World") >> prints Hello, World!
+}
+```
+
+**Cross-function calls:** Shadow functions can call each other:
+
+```mlld
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @multiply(x, y) = py { print(int(x) * int(y)) }
+exe py = { add, multiply }
+
+exe @calculate(n) = py {
+sum_result = add(n, 10)   >> calls shadow function
+product = multiply(n, 2)  >> calls shadow function
+print(f"Sum: {sum_result}, Product: {product}")
+}
+exe py = { add, multiply, calculate }  >> update to include calculate
+```
+
+**Supported languages:** `js`, `node`, `py`/`python`
 </EXE_EXECUTABLES>
+
+<TOOLS_AND_ENVIRONMENTS>
+Define tool collections, scope tools, and manage execution environments.
+
+Tool collections define what an agent sees and how tools behave.
+
+```mlld
+/exe @readData() = js { return "ok"; }
+/exe @deleteData() = js { return "deleted"; }
+
+/var tools @agentTools = {
+  safeRead: { mlld: @readData },
+  dangerousDelete: {
+    mlld: @deleteData,
+    labels: ["destructive"],
+    description: "Deletes records"
+  }
+}
+```
+
+**Tool definition fields:**
+- `mlld` - executable reference
+- `labels` - guard/policy labels (`destructive`, `net:w`)
+- `bind` - pre-filled parameters
+- `expose` - visible parameter subset
+- `description` - override tool metadata
+
+**Environment scoping:**
+
+```mlld
+/env @agent with { tools: @agentTools } [
+  /run cmd { claude -p @task }
+]
+```
+
+**Import MCP tools:**
+
+```mlld
+/import tools { @echo } from mcp "@anthropic/filesystem"
+/import tools from mcp "@github/issues" as @github
+/show @github.createIssue("title", "body")
+```
+
+Reshape tool interfaces using `bind` and `expose` to control what parameters agents see.
+
+**bind - Pre-fill parameters:**
+
+```mlld
+exe @createIssue(owner: string, repo: string, title: string, body: string) = cmd {
+  gh issue create -R @owner/@repo -t "@title" -b "@body"
+}
+
+var tools @agentTools = {
+  createIssue: {
+    mlld: @createIssue,
+    bind: { owner: "mlld", repo: "infra" }
+  }
+}
+```
+
+The agent sees only `title` and `body`. The bound parameters `owner` and `repo` are fixed.
+
+**expose - Limit visible parameters:**
+
+```mlld
+var tools @agentTools = {
+  createIssue: {
+    mlld: @createIssue,
+    bind: { owner: "mlld", repo: "infra" },
+    expose: ["title", "body"]
+  }
+}
+```
+
+Explicitly list which parameters appear in the tool schema. Parameters not in `expose` are hidden from the agent.
+
+**Default behavior:**
+
+Without `expose`, all parameters except those in `bind` are visible. Adding `expose` overrides this - only listed parameters appear.
+
+**Variable binding:**
+
+Bound values can reference variables:
+
+```mlld
+var @org = "mlld"
+var @defaultRepo = "main"
+
+var tools @agentTools = {
+  createIssue: {
+    mlld: @createIssue,
+    bind: { owner: @org, repo: @defaultRepo }
+  }
+}
+```
+
+Variables are resolved when the tool collection is defined, not when called.
+
+**Nested objects in bind:**
+
+```mlld
+var tools @agentTools = {
+  configure: {
+    mlld: @configure,
+    bind: { config: { timeout: 30, retries: 3 } }
+  }
+}
+```
+
+**Complete example:**
+
+```mlld
+exe @searchDocs(index: string, query: string, limit: number, format: string) = cmd {
+  search-tool --index @index -q "@query" -n @limit --format @format
+}
+
+var tools @agentTools = {
+  searchDocs: {
+    mlld: @searchDocs,
+    bind: { index: "production", format: "json" },
+    expose: ["query", "limit"],
+    description: "Search documentation"
+  }
+}
+```
+
+The agent sees:
+- `query` (string, required)
+- `limit` (number, required)
+
+Hidden from agent:
+- `index` (always "production")
+- `format` (always "json")
+
+The `env` directive creates scoped execution contexts with controlled tool access.
+
+**Basic usage:**
+
+```mlld
+var @config = { tools: @agentTools }
+
+env @config [
+  run cmd { claude -p @task }
+]
+```
+
+Commands inside the block see only the tools specified in the config.
+
+**Tool scoping with { tools }:**
+
+```mlld
+exe @readData() = js { return "ok"; }
+exe @writeData(x) = js { return x; }
+
+var tools @allTools = {
+  read: { mlld: @readData },
+  write: { mlld: @writeData }
+}
+
+env @allTools with { tools: ["read"] } [
+  >> Only 'read' tool is available here
+  run cmd { claude -p @task }
+]
+```
+
+The `with { tools: [...] }` clause restricts which tools from the config are visible.
+
+**Tool scope formats:**
+
+```mlld
+>> Array of tool names
+env @config with { tools: ["read", "write"] } [...]
+
+>> Comma-separated string
+env @config with { tools: "read, write" } [...]
+
+>> Wildcard for all tools
+env @config with { tools: "*" } [...]
+
+>> Object keys as tool names
+var @subset = { read: @readTool, write: @writeTool }
+env @config with { tools: @subset } [...]
+```
+
+**Environment config object:**
+
+```mlld
+var @agentConfig = {
+  provider: "@local",
+  tools: @agentTools,
+  auth: "claude"
+}
+
+env @agentConfig [
+  run cmd { claude -p @task }
+]
+```
+
+Common config fields:
+- `tools` - Tool collection or list
+- `provider` - Environment provider (e.g., "@local", "@mlld/env-docker")
+- `auth` - Authentication reference
+
+**Inline tool scoping:**
+
+```mlld
+var tools @agentTools = {
+  read: { mlld: @readData },
+  write: { mlld: @writeData },
+  delete: { mlld: @deleteData, labels: ["destructive"] }
+}
+
+env @agentTools with { tools: ["read", "write"] } [
+  >> Agent cannot access 'delete' tool
+  run cmd { claude -p @task }
+]
+```
+
+**Return values:**
+
+Blocks can return values like exe blocks:
+
+```mlld
+var @result = env @config [
+  let @data = run cmd { fetch-data }
+  => @data
+]
+```
+
+**Scoped environment:**
+
+The env block creates a child environment. Variables defined inside don't leak out, but the block can access parent scope variables.
+
+```mlld
+var @input = "test"
+
+env @config [
+  >> Can read @input from parent
+  let @processed = @input | @transform
+  => @processed
+]
+```
+</TOOLS_AND_ENVIRONMENTS>
 
 <OUTPUT_DIRECTIVE>
 Write data to files or streams.
@@ -796,17 +1285,42 @@ Suppress: `--no-stream` flag or `MLLD_NO_STREAM=true`
 
 <MLLD_CONTROL_FLOW>
 
-<WHEN_DECISIONS>
-`when` handles conditionals. Three forms: simple, bare (all matches), first (switch-style).
+<IF_FLOW>
+`if` runs imperative branches. Use block form with optional `else`.
 
-**Simple form:**
+```mlld
+if @isProd [
+  show "Production mode"
+] else [
+  show "Local mode"
+]
+```
+
+`if` works at top level and inside `exe` blocks:
+
+```mlld
+exe @validate(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
+]
+```
+
+Use `=>` only inside `exe` blocks.
+</IF_FLOW>
+
+<WHEN_DECISIONS>
+`when` selects the first matching condition. Use `if` for imperative flow.
+
+**Inline form:**
 
 ```mlld
 when @isProd => show "Production mode"
 when @score > 90 => show "Excellent!"
 ```
 
-**Bare form** (evaluates all matching conditions):
+**When block** (first match wins):
 
 ```mlld
 when [
@@ -816,20 +1330,14 @@ when [
 ]
 ```
 
-**First form** (stops at first match, like switch):
+Use multiple `if` blocks when you need several actions to run.
 
-```mlld
-when first [
-  @role == "admin" => show "Admin panel"
-  @role == "user"  => show "User dashboard"
-  * => show "Guest view"           >> wildcard catches all
-]
-```
+Inline form uses `when @cond => action`.
 
 **Value-returning when** (in exe):
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   * => "F"
@@ -838,10 +1346,12 @@ exe @classify(score) = when first [
 var @grade = @classify(85)  >> "B"
 ```
 
+`when` returns the first matching branch. Use `if` for imperative flow.
+
 **Block actions** (side effects + return):
 
 ```mlld
-var @result = when first [
+var @result = when [
   @needsProcessing => [
     show "Processing..."
     let @processed = @transform(@data)
@@ -851,10 +1361,12 @@ var @result = when first [
 ]
 ```
 
+Conditions evaluate in order and the first match runs.
+
 **Local variables in when:**
 
 ```mlld
-when @mode: [
+when @mode [
   let @prefix = "Status:"
   "active" => show "@prefix Active"
   "pending" => show "@prefix Pending"
@@ -881,7 +1393,7 @@ exe @collect() = when [
 - Parentheses: `(@a || @b) && @c`
 
 ```mlld
-when first [
+when [
   @role == "admin" || @role == "mod" => show "Privileged"
   @active && @verified => show "Active user"
   !@banned => show "Allowed"
@@ -939,7 +1451,7 @@ var @filtered = for @x in @items => when [
 ]
 
 >> Equivalent to inline filter, but allows complex logic
-var @processed = for @item in @data => when first [
+var @processed = for @item in @data => when [
   @item.type == "a" => @transformA(@item)
   @item.type == "b" => @transformB(@item)
   * => skip         >> unknown types dropped
@@ -950,9 +1462,17 @@ var @processed = for @item in @data => when first [
 
 ```mlld
 var @cfg = {"host": "localhost", "port": 3000}
-for @v in @cfg => show `@v.mx.key: @v`
+for @k, @v in @cfg => show `@k: @v`
 >> Output: host: localhost, port: 3000
 ```
+
+**Value-only form:**
+
+```mlld
+for @v in @cfg => show `@v.mx.key: @v`
+```
+
+When you bind only the value, the key is available at `@v.mx.key` and `@v_key`. The key/value form does not bind `@v_key`.
 
 **Nested for:**
 
@@ -981,6 +1501,11 @@ for parallel(3) @task in @tasks => @runTask(@task)
 
 >> With pacing (delay between starts)
 for parallel(2, 1s) @x in @items => @process(@x)
+
+>> Variable cap and pacing
+var @cap = 2
+var @pace = "1s"
+for parallel(@cap, @pace) @x in @items => @process(@x)
 ```
 
 **Parallel blocks:**
@@ -1034,6 +1559,51 @@ show foreach @greet(@names) with { separator: " | " }
 ```
 </FOREACH>
 
+<LOOP_BLOCKS>
+Block-based iteration with explicit `done` and `continue`.
+
+```mlld
+var @result = loop(10) [
+  let @count = (@input ?? 0) + 1
+  when @count >= 3 => done @count
+  continue @count
+]
+```
+
+**Control keywords:**
+- `done @value` - Exit loop and return value
+- `done` - Exit loop and return null
+- `continue @value` - Next iteration with new `@input`
+- `continue` - Next iteration with unchanged `@input`
+
+`@input` starts as null and updates only via `continue @value`.
+
+**Loop context** (`@mx.loop`):
+- `iteration` - Current iteration (1-based)
+- `limit` - Configured cap or null for endless
+- `active` - true when inside loop
+
+**Until clause:**
+
+```mlld
+loop until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show `@next`
+  continue @next
+]
+```
+
+**With pacing:**
+
+```mlld
+loop(endless, 10ms) until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show "poll"
+  continue @next
+]
+```
+</LOOP_BLOCKS>
+
 <WHILE_LOOPS>
 Bounded iteration with `while`.
 
@@ -1065,7 +1635,7 @@ var @result = @initial | while(100, 1s) @processor  >> 1s between iterations
 </WHILE_LOOPS>
 
 <NO_EARLY_EXIT>
-mlld has no `return` or `exit`. Model outcomes with `when` and flags.
+mlld has no top-level `return` or `exit`. Model outcomes with `when` and flags.
 
 ```mlld
 >> Instead of early return, use conditional flow
@@ -1073,6 +1643,17 @@ var @check = @validate(@input)
 when [
   @check.valid => @process(@input)
   !@check.valid => show `Error: @check.message`
+]
+```
+
+Inside `exe` blocks, use `if` and `=>` for early return:
+
+```mlld
+exe @guard(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
 ]
 ```
 </NO_EARLY_EXIT>
@@ -1132,7 +1713,7 @@ Import from registry, local files, or URLs.
 **Registry modules:**
 
 ```mlld
-import { @parallel, @retry } from @mlld/core
+import { @sortBy, @unique } from @mlld/array
 import @corp/utils as @corp
 
 >> With version
@@ -1156,6 +1737,15 @@ import @bob/utils as @bob
 
 show @alice.format(@data)
 show @bob.format(@data)   >> no collision
+```
+
+**MCP tool imports:**
+
+```mlld
+import tools { @readFile } from mcp "@anthropic/filesystem"
+import tools from mcp "@github/issues" as @github
+
+show @github.createIssue("title", "body")
 ```
 
 **Directory imports:**
@@ -1192,16 +1782,41 @@ import cached(1h) <https://feed.xml> as @feed
 import local { @dev } from @alice/experimental
 ```
 
-**Template collections:**
+**Template collections** import an entire directory of `.att` files as a callable namespace:
 
 ```mlld
 import templates from "@base/agents" as @agents(message, context)
 
+>> Access templates by name (bracket or dot notation)
 show @agents["alice"](@msg, @ctx)           >> agents/alice.att
 show @agents.support["helper"](@msg, @ctx)  >> agents/support/helper.att
 ```
 
-Template collections require parameters. All templates in directory share the signature.
+**Directory structure example:**
+
+```
+agents/
+  alice.att          >> @agents["alice"](msg, ctx)
+  bob.att            >> @agents["bob"](msg, ctx)
+  support/
+    helper.att       >> @agents.support["helper"](msg, ctx)
+    escalate.att     >> @agents.support["escalate"](msg, ctx)
+```
+
+**Key rules:**
+
+- All templates in a collection share the same parameter signature
+- Filenames with hyphens become underscores: `json-pretty.att` → `@tpl["json_pretty"]`
+- Use dot notation for directories, brackets for template names
+- Collections require parameters in the `as @name(params)` clause
+
+**When to use collections:**
+
+- Multiple templates with the same interface (agent prompts, formatters)
+- Dynamic template selection based on runtime values
+- Organizing related templates by category
+
+For single templates, use `exe @func(params) = template "file.att"` instead.
 </IMPORT_TYPES>
 
 <EXPORTING>
@@ -1367,7 +1982,7 @@ Route execution based on conditions.
 import { @getPR, @commentOnPR } from @company/github
 
 var @pr = @getPR(@MLLD_PR_NUMBER)
-var @status = when first [
+var @status = when [
   @pr.mergeable => "ready"
   * => "blocked"
 ]
@@ -1402,7 +2017,7 @@ exe @router(message, handlers) = [
     score: @h.scorer(@message)
   }
   let @best = @scores | @sortBy("score") | @first
-  => when first [
+  => when [
     @best.score > 0.7 => @handlers[@best.handler].handle(@message)
     * => null
   ]
@@ -1416,7 +2031,7 @@ Validate or filter before proceeding.
 ```mlld
 exe @gate(response, config) = [
   let @check = @validate(@response)
-  => when first [
+  => when [
     !@config.required => { pass: true }
     @check.valid => { pass: true }
     * => { pass: false, reason: @check.error }
@@ -1494,6 +2109,210 @@ var @prompts = {
 export { @meta, @prompts, @systemPrompt }
 ```
 </AGENT_DEFINITION>
+
+<PROSE_EXECUTION>
+Execute LLM-interpreted DSL skills (OpenProse and custom).
+
+The `prose {}` syntax executes LLM-interpreted DSL skills. By default it uses **OpenProse**, but any custom interpreter can be configured.
+
+## What is Prose Execution?
+
+Prose execution invokes skills that an LLM interprets at runtime. Unlike `run js {}` which executes deterministically, `prose {}` sends content to an LLM with specific skills enabled. This enables complex multi-agent workflows defined in a domain-specific language.
+
+## Setup
+
+1. Install the OpenProse plugin in Claude Code:
+   ```
+   /plugin marketplace add git@github.com:openprose/prose.git
+   /plugin install open-prose@prose
+   ```
+
+2. Restart Claude Code and boot OpenProse:
+   ```
+   /prose-boot
+   ```
+
+3. Skills will prompt for approval on first use.
+
+## Basic Usage
+
+```mlld
+import { @opus } from @mlld/prose
+
+exe @research(topic) = prose:@opus {
+  session "Research @topic"
+  agent researcher { model: sonnet, skills: [web-search] }
+  researcher: find current information about @topic
+  output findings
+}
+
+run @research("quantum computing trends")
+```
+
+## Key Concepts
+
+**session** - Names the workflow for context
+
+**agent** - Defines an agent with model and skills
+
+**loop until** - Iterates with semantic exit conditions:
+```mlld
+exe @refine(draft) = prose:@opus {
+  session "Refine document"
+  loop until **the draft meets publication standards** {
+    critique @draft
+    revise based on critique
+  }
+}
+```
+
+**parallel** - Run tasks concurrently:
+```mlld
+exe @gather(topics) = prose:@opus {
+  session "Research multiple topics"
+  parallel for each topic in @topics {
+    research topic
+  }
+  combine results
+}
+```
+
+## Template Files
+
+For complex workflows, use external files:
+
+```mlld
+exe @workflow(ctx) = prose:@opus "./workflow.prose"
+exe @workflow(ctx) = prose:@opus "./workflow.prose.att"  >> ATT interpolation
+```
+
+## Custom Interpreters
+
+Use any LLM-interpreted DSL by configuring different skills:
+
+```mlld
+import { @claude } from @mlld/claude
+
+>> Create a custom model executor
+exe @myModel(prompt) = @claude(@prompt, "opus", @base)
+
+>> Configure with custom skills
+var @myDSL = {
+  model: @myModel,
+  skills: ["my-custom:boot", "my-custom:run"]
+}
+
+exe @process(data) = prose:@myDSL {
+  >> Your custom DSL syntax here
+  analyze @data
+  output result
+}
+```
+
+The skill determines how the LLM interprets the prose content. OpenProse is one implementation - you can create your own DSL skills or use other prose interpreters.
+
+## OpenProse Requirements
+
+For OpenProse specifically:
+- **Claude Code** with Opus (only model that reliably interprets OpenProse syntax)
+- **OpenProse skills** approved: `open-prose:prose-boot`, `open-prose:prose-compile`, `open-prose:prose-run`
+
+See `mlld howto exe-prose` for syntax details. OpenProse docs: https://prose.md
+</PROSE_EXECUTION>
+
+<RALPH_LOOP>
+Autonomous agent loop with dynamic context assembly.
+
+```mlld
+>> ralph.mld - autonomous coding agent loop
+>> Run once per iteration, or use loop for continuous execution
+
+import { @claude } from "@lib/claude.mld"
+
+>> Load fresh context each iteration
+var @plan = <fix_plan.md>
+var @specs = <specs/*.md>
+
+>> Classify the most important task
+exe @classifyTask(plan) = [
+  let @prompt = `Given this plan, identify the SINGLE most important next task:
+@plan
+Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }`
+  => @haiku(@prompt) | @json.llm
+]
+
+>> Build context for the task (load only what's relevant)
+exe @buildContext(task, specs) = [
+  let @relevant = for @spec in @specs
+    when @task.type in @spec.mx.relative => @spec
+  let @code = for @file in @task.files => <@file>
+  => { specs: @relevant, code: @code }
+]
+
+>> Execute the task
+exe @executeTask(task, context) = [
+  let @prompt = `
+# Task
+@task.task
+
+# Relevant Specs
+@context.specs.join("\n\n")
+
+# Current Code
+@context.code.join("\n\n")
+
+Implement this task. Search before assuming not implemented.
+After implementing, run tests for just this change.
+`
+  => @claude(@prompt, "sonnet", ".", "Read,Edit,Write,Bash,Grep,Glob")
+]
+
+>> Validate with tests
+exe @validate() = [
+  let @output = cmd { npm test 2>&1 }
+  => { pass: @output.exitCode == 0, output: @output }
+]
+
+>> Single iteration
+var @task = @classifyTask(@plan)
+var @context = @buildContext(@task, @specs)
+var @result = @executeTask(@task, @context)
+var @check = @validate()
+
+when @check.pass => [
+  run cmd { git add -A && git commit -m "@task.task" && git push }
+  show "committed"
+]
+```
+
+The Ralph pattern runs autonomous coding loops with dynamic context assembly. Each iteration:
+
+1. **Load fresh context** - Reload plan and specs from disk
+2. **Classify task** - Use a cheap model to pick the most important work
+3. **Build context** - Load only relevant specs and code (saves tokens)
+4. **Execute** - Run the task with full agent capabilities
+5. **Validate** - Run tests as backpressure
+6. **Commit on success** - Only persist passing changes
+
+**With continuous loop:**
+
+```mlld
+loop(endless) until @state.stop [
+  var @plan = <fix_plan.md>
+  when @plan.trim() == "" => done "complete"
+
+  let @task = @classifyTask(@plan)
+  let @context = @buildContext(@task, <specs/*.md>)
+  let @result = @executeTask(@task, @context)
+  let @check = @validate()
+
+  when @check.pass => run cmd { git commit -am "@task.task" && git push }
+  continue
+]
+```
+
+**SDK control** - External processes can stop the loop by setting `@state.stop = true`.
+</RALPH_LOOP>
 
 </MLLD_PATTERNS>
 
@@ -1969,6 +2788,28 @@ import templates from "./agents" as @agents(message, context)
 ```
 </MISTAKE_TEMPLATE_COLLECTION_IMPORT>
 
+<MISTAKE_ATT_ANGLE_BRACKET>
+Never load `.att` template files with angle brackets and manual interpolation.
+
+```mlld
+>> Wrong - loads raw text, no interpolation
+var @tpl = <prompts/welcome.att>
+var @result = @tpl.replace("@name", @userName)  >> manual, error-prone
+
+>> Correct - automatic interpolation with exe params
+exe @welcome(name) = template "./prompts/welcome.att"
+show @welcome(@userName)
+```
+
+The `exe ... = template` form:
+
+- Automatically makes function parameters available as `@param` in the template
+- Supports `/for`/`/end` blocks, pipes, and file references inside the template
+- Handles escaping and edge cases correctly
+
+Using angle brackets treats the `.att` file as plain text with no interpolation.
+</MISTAKE_ATT_ANGLE_BRACKET>
+
 <MISTAKE_VAR_IN_PARALLEL_BLOCK>
 Parallel blocks can't write to outer scope. Use `let`.
 
@@ -2022,7 +2863,7 @@ Move heavy logic to helpers or modules. Keep orchestration simple.
 
 ```mlld
 >> Wrong (too much logic inline)
-var @result = for @item in @items => when first [
+var @result = for @item in @items => when [
   @item.type == "a" && @item.status == "active" => [
     let @x = @item.value * 2
     let @y = @transform(@x)
@@ -2078,7 +2919,52 @@ guard [@name] TIMING LABEL = when [...]
 
 - `TIMING`: `before`, `after`, or `always`
 - Shorthand: `for` equals `before`
+
+**Security context in guards:**
+
+Guards have access to three complementary dimensions:
+
+- `@mx.labels` - semantic classification (what it is): `secret`, `pii`, `untrusted`
+- `@mx.taint` - provenance (where it came from): `src:mcp`, `src:exec`, `src:file`
+- `@mx.sources` - transformation trail (how it got here): `mcp:createIssue`, `command:curl`
+- `@mx.op.labels` - operation labels, including tool labels like `destructive` or `net:w`
+
+Use labels to classify data types, taint to track untrusted origins, and sources for audit trails:
+
+```mlld
+guard before op:run = when [
+  @mx.taint.includes("src:mcp") => deny "Cannot execute MCP data"
+  @mx.labels.includes("secret") => deny "Secrets blocked from shell"
+  * => allow
+]
+```
+
+Tool labels flow into guard context for executable operations:
+
+```mlld
+guard @blockDestructive before op:exe = when [
+  @mx.op.labels.includes("destructive") => deny "Blocked"
+  * => allow
+]
+```
 </GUARDS>
+
+<POLICIES>
+Define and import policy objects.
+
+```mlld
+policy @production = {
+  defaults: { unlabeled: "untrusted" },
+  capabilities: {
+    allow: ["cmd:git:*"],
+    danger: ["@keychain"]
+  }
+}
+export { @production }
+
+import policy @production from "./policies.mld"
+```
+</POLICIES>
 
 <BEFORE_GUARDS>
 Validate or transform input before operations.
@@ -2113,11 +2999,16 @@ guard @redact before secret = when [
 </TRANSFORM_WITH_ALLOW>
 
 <DENIED_HANDLERS>
-Handle denied operations gracefully.
+Handle denied operations gracefully. Note: `deny` is a guard action that blocks; `denied` is a when-condition that tests if we're in a denied context.
 
 ```mlld
-exe @handler(value) = when [
-  denied => `Blocked: @mx.guard.reason`
+guard before secret = when [
+  @mx.op.type == "run" => deny "No secrets in shell"
+  * => allow
+]
+
+exe @safe(value) = when [
+  denied => `[blocked] @mx.guard.reason`
   * => @value
 ]
 ```
@@ -2131,6 +3022,7 @@ System-assigned labels for tracking:
 | `src:exec` | Results from `/run` and `/exe` |
 | `src:file` | File loads |
 | `src:dynamic` | Dynamic module imports |
+| `src:env:<provider>` | Environment provider outputs |
 | `dir:/path` | File directories (all parents) |
 
 **Example directory guards:**
@@ -2153,6 +3045,195 @@ Labels flow through operations:
 - Iterators: each item inherits collection labels
 - Pipelines: labels flow through stages
 </LABEL_TRACKING>
+
+<LABEL_MODIFICATION>
+Modify security labels on return values:
+
+Label modification syntax applies security labels to return values.
+
+**Add labels:**
+
+```mlld
+exe @classify(data) = [
+  let @processed = @data | @transform
+  => pii @processed
+]
+
+exe @markMultiple(data) = [
+  => pii,internal @data
+]
+```
+
+Multiple labels separated by commas.
+
+**Trust modification:**
+
+```mlld
+>> Downgrade trust (always allowed)
+exe @taint(data) = [
+  => untrusted @data
+]
+
+>> Add trusted (warning if already untrusted)
+exe @suggest(data) = [
+  => trusted @data
+]
+```
+
+Adding `untrusted` replaces any existing `trusted` label. Adding `trusted` to already untrusted data triggers a warning (configurable via `policy.defaults.trustconflict`).
+
+**Privileged operations:**
+
+Privileged guards can remove protected labels. Currently, only policy-generated guards are privileged:
+
+```mlld
+policy @securityPolicy = {
+  deny: { labels: ["secret"] }
+}
+```
+
+Policy guards are automatically privileged and can enforce label removal that user-defined guards cannot.
+
+| Privileged action | Example | Effect |
+|-------------------|---------|--------|
+| Blessing | `=> trusted! @var` | Remove untrusted, add trusted |
+| Label removal | `=> !pii @var` | Remove specific label |
+| Clear labels | `=> clear! @var` | Remove all non-factual labels |
+
+**Trust label asymmetry:**
+
+| Syntax | Privilege? | Effect |
+|--------|------------|--------|
+| `=> untrusted @var` | No | Replaces trusted (taint flows down) |
+| `=> trusted @var` | No | Adds trusted; warning if conflict |
+| `=> trusted! @var` | Yes | Blessing: removes untrusted |
+| `=> !label @var` | Yes | Removes specific label |
+| `=> clear! @var` | Yes | Removes all non-factual labels |
+
+**Protected labels:**
+
+These labels require privilege to remove:
+- `secret` - Prevents self-blessing of sensitive data
+- `untrusted` - Tracks trust state
+- `src:mcp`, `src:exec`, `src:file`, `src:network` - Provenance tracking
+
+Attempting to remove protected labels without privilege throws `PROTECTED_LABEL_REMOVAL` error.
+
+**Factual labels:**
+
+Labels starting with `src:` are factual - they record provenance facts. `clear!` does not remove factual labels.
+
+**Guard context:**
+
+After guards receive `@output` with the operation result:
+
+```mlld
+guard @validateMcp after src:mcp = when [
+  @output.data?.valid => allow @output
+  * => deny "Invalid MCP response"
+]
+```
+
+The guard uses `after` timing to process output. Note: blessing (`trusted!`) and label removal (`!label`) require privileged guards (policy-generated).
+
+**Trust conflict behavior:**
+
+Controlled by `policy.defaults.trustconflict`:
+- `warn` (default) - Log warning, keep both labels, treat as untrusted
+- `error` - Throw error
+- `silent` - No warning, keep both labels
+</LABEL_MODIFICATION>
+
+<TOOL_CALL_TRACKING>
+Track tool usage with {"calls":[],"allowed":[],"denied":[]}:
+
+The `@mx.tools` namespace tracks tool call history and availability during execution.
+
+**@mx.tools.calls - Call history:**
+
+```mlld
+guard @limitCalls before op:exe = when [
+  @mx.tools.calls.length >= 3 => deny "Too many tool calls"
+  * => allow
+]
+```
+
+Array of tool names that have been called this session.
+
+**Check if specific tool was called:**
+
+```mlld
+guard @preventDuplicate before op:exe = when [
+  @mx.tools.calls.includes("deleteData") => deny "Delete already executed"
+  * => allow
+]
+```
+
+**@mx.tools.allowed - Available tools:**
+
+```mlld
+guard @checkAccess before op:exe = when [
+  @mx.tools.allowed.includes(@mx.op.name) => allow
+  * => deny "Tool not in allowed list"
+]
+```
+
+Array of tool names the current context is permitted to use.
+
+**@mx.tools.denied - Blocked tools:**
+
+```mlld
+guard @logDenied before op:exe = when [
+  @mx.tools.denied.includes(@mx.op.name) => [
+    log `Attempted blocked tool: @mx.op.name`
+    deny "Tool is blocked"
+  ]
+  * => allow
+]
+```
+
+Array of tool names explicitly denied in current context.
+
+**Rate limiting example:**
+
+```mlld
+guard @rateLimitExpensive before op:exe = when [
+  @mx.op.labels.includes("expensive") && @mx.tools.calls.length >= 5 => [
+    deny "Rate limit exceeded for expensive operations"
+  ]
+  * => allow
+]
+```
+
+**Prevent repeated tool calls:**
+
+```mlld
+guard @noRepeat before op:exe = when [
+  @mx.tools.calls.includes(@mx.op.name) => deny "Each tool can only be called once"
+  * => allow
+]
+```
+
+**Conditional behavior based on history:**
+
+```mlld
+exe @smartFetch(url) = when [
+  @mx.tools.calls.includes("cache_check") => @fetchCached(@url)
+  * => @fetchFresh(@url)
+]
+```
+
+**Tool call tracking scope:**
+
+Tool calls are tracked within the current execution context. When using `env` blocks, each block can have its own tracking scope based on the environment configuration.
+
+```mlld
+env @agent with { tools: @agentTools } [
+  >> @mx.tools.calls tracks calls within this env block
+  run cmd { claude -p @task }
+]
+```
+</TOOL_CALL_TRACKING>
 
 <GUARD_COMPOSITION>
 Multiple guards can apply. Resolution order:
@@ -2210,7 +3291,9 @@ Where interpolation applies:
 | `run` | Execute command | `run cmd {echo hi}` |
 | `exe` | Define executable | `exe @f(x) = ...` |
 | `when` | Conditional | `when @x => show "yes"` |
+| `if` | Imperative conditional | `if @x [ show "yes" ]` |
 | `for` | Iteration | `for @x in @arr => ...` |
+| `loop` | Block iteration | `loop(10) [ ... ]` |
 | `import` | Import module | `import { @f } from @m/m` |
 | `export` | Export items | `export { @f, @g }` |
 | `output` | Write to file | `output @x to "f.txt"` |
@@ -2357,7 +3440,7 @@ multiple features working together. All examples use strict mode (bare directive
 <RECIPE_1_LLM_LIBRARY>
 A clean utility module for calling Claude models. Demonstrates:
 - Simple executable definitions
-- when-first for conditional logic
+- when block for conditional logic
 - Pipeline + cmd with working directory
 - Clean exports
 
@@ -2374,14 +3457,14 @@ exe @opus(prompt) = @prompt | cmd { claude -p --model opus --tools "" }
 >> - tools="" => disable all tools (--tools "")
 >> - tools="Read,Grep,..." => specific tools (--allowedTools "...")
 >> - tools=null/omitted => use Claude defaults (no flag)
-exe @claude(prompt, model, dir, tools) = when first [
+exe @claude(prompt, model, dir, tools) = when [
   @tools == "" => @prompt | cmd:@dir { claude -p --model @model --tools "" }
   @tools => @prompt | cmd:@dir { claude -p --model @model --allowedTools "@tools" }
   * => @prompt | cmd:@dir { claude -p --model @model }
 ]
 
 >> With system prompt (appends to preserve tool guidance)
-exe @claudeWithSystem(prompt, system, model, dir, tools) = when first [
+exe @claudeWithSystem(prompt, system, model, dir, tools) = when [
   @tools == "" => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" --tools "" }
   @tools => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" --allowedTools "@tools" }
   * => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" }
@@ -2393,7 +3476,7 @@ export { @haiku, @sonnet, @opus, @claude, @claudeWithSystem }
 **Key patterns:**
 - `@prompt | cmd { ... }` - Pipeline input to command via stdin
 - `cmd:@dir { ... }` - Execute in specific working directory
-- `when first [ ... ]` - Switch-style matching for argument handling
+- `when [ ... ]` - Switch-style matching for argument handling
 - Clean function signature with sensible defaults
 </RECIPE_1_LLM_LIBRARY>
 
@@ -2435,7 +3518,7 @@ exe @gate(response, instruction, message) = [
   >> Required responses always pass
   let @isOptional = @instruction.promptKey == "optional"
 
-  => when first [
+  => when [
     !@isOptional => { pass: true }
     @hasSubstance(@response) => { pass: true }
     * => { pass: false, reason: "Response lacks substance" }
@@ -2516,7 +3599,7 @@ A router that scores and routes messages to agents. Demonstrates:
 - Complex scoring logic with block syntax
 - for with inline filtering
 - Object spread in results
-- when-first for classification
+- when block for classification
 - Nested executables for clean organization
 
 ```mlld
@@ -2549,7 +3632,7 @@ exe @getReplyPressure(agent, msg) = [
   let @idx = @msg.mentions.indexOf(@agent)
   let @startsAt = @msg.body.trim().startsWith("@")
 
-  => when first [
+  => when [
     @isOwnMessage => 0
     @startsWithAll => 0.8
     @hasAll => 0.2
@@ -2566,7 +3649,7 @@ exe @evaluateAgent(agentId, msg, turnPressure) = [
   let @turnP = @turnPressure[@agentId]
 
   >> Turn pressure only applies if agent has some reply pressure
-  let @effectiveTurnP = when first [
+  let @effectiveTurnP = when [
     @replyP > 0 => @turnP
     * => 0
   ]
@@ -2584,7 +3667,7 @@ exe @evaluateAgent(agentId, msg, turnPressure) = [
 exe @classifyForExecution(eval) = [
   let @score = @eval.responseRequired
 
-  => when first [
+  => when [
     @score >= @THRESHOLD_REQUIRED => { ...@eval, promptKey: "primary", variant: null }
     @score >= @THRESHOLD_OPTIONAL => { ...@eval, promptKey: "optional", variant: "readonly" }
     * => null
@@ -2619,7 +3702,7 @@ export { @router }
 - `{ ...@eval, promptKey: "primary" }` - Object spread in result
 - `@agentRegistry.mx.keys` - Get all keys from object
 - `@msg.body.trim().startsWith("@")` - Method chaining on fields
-- Nested when-first in block for decision trees
+- Nested when blocks for decision trees
 </RECIPE_4_ROUTER>
 
 <RECIPE_5_ORCHESTRATOR>
@@ -2627,7 +3710,7 @@ An orchestrator that routes and executes in parallel. Demonstrates:
 - Multiple imports from different sources
 - Parallel for blocks
 - Chained execution (route → invoke → gate → post)
-- when-first inside parallel iteration
+- when block inside parallel iteration
 
 ```mlld
 >> Orchestrator: executes what router tells it
@@ -2660,7 +3743,7 @@ for parallel(3) @instruction in @routing.toInvoke [
   let @result = @invokeAgent(@instruction, @message)
   let @check = @substanceGate(@result.response, @instruction, @message)
 
-  => when first [
+  => when [
     @check.pass => run cmd { mm post --as @result.agent "@result.response" }
     * => null
   ]
@@ -2733,7 +3816,7 @@ These six recipes cover the most common mlld patterns:
 
 | Recipe | Features Demonstrated |
 |--------|----------------------|
-| LLM Library | Pipelines, when-first, cmd:dir, exports |
+| LLM Library | Pipelines, when block, cmd:dir, exports |
 | Gate | Blocks, let/return, method chaining, structured returns |
 | Agent Definition | Frontmatter, templates, function objects |
 | Router | Complex scoring, for-filter, object spread, nested when |

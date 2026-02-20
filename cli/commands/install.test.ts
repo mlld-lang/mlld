@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { InstallCommand } from './install';
 import * as path from 'path';
 import * as fs from 'fs/promises';
@@ -55,5 +55,60 @@ describe('InstallCommand', () => {
         expect(parsed.moduleName).toBeTruthy();
       }).not.toThrow();
     }
+  });
+
+  it('shows cached install confirmation with import guidance for direct modules', async () => {
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((value?: unknown) => {
+      logs.push(value === undefined ? '' : String(value));
+    });
+
+    try {
+      await (installCommand as any).report(
+        [
+          {
+            module: '@mlld/claude-poll',
+            status: 'cached',
+            version: '1.2.0',
+            isDirect: true
+          }
+        ],
+        {},
+        []
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
+
+    expect(logs.some(line => line.includes('@mlld/claude-poll@1.2.0 installed (cached)'))).toBe(true);
+    expect(logs.some(line => line.includes('import "@mlld/claude-poll" as @cp'))).toBe(true);
+  });
+
+  it('shows fresh install confirmation with import guidance for direct modules', async () => {
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((value?: unknown) => {
+      logs.push(value === undefined ? '' : String(value));
+    });
+
+    try {
+      await (installCommand as any).report(
+        [
+          {
+            module: '@mlld/claude-poll',
+            status: 'installed',
+            version: '1.2.0',
+            isDirect: true
+          }
+        ],
+        {},
+        []
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
+
+    expect(logs.some(line => line.includes('@mlld/claude-poll@1.2.0 installed'))).toBe(true);
+    expect(logs.some(line => line.includes('(cached)'))).toBe(false);
+    expect(logs.some(line => line.includes('import "@mlld/claude-poll" as @cp'))).toBe(true);
   });
 });

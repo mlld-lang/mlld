@@ -19,7 +19,7 @@ var @filtered = for @x in @items => when [
 ]
 
 >> Equivalent to inline filter, but allows complex logic
-var @processed = for @item in @data => when first [
+var @processed = for @item in @data => when [
   @item.type == "a" => @transformA(@item)
   @item.type == "b" => @transformB(@item)
   * => skip         >> unknown types dropped

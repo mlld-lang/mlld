@@ -1,5 +1,5 @@
 /var @mode = "active"
-/var @result = when first [
+/var @result = when [
   @mode == "active" => [
     show "Status: Active"
     => "success"

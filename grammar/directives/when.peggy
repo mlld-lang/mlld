@@ -6,14 +6,11 @@
 
 The when directive provides conditional execution based on truthiness.
 It can be used in several forms:
-1. /when <condition> => <action>                    - Simple conditional
-2. /when <expression>: [conditions]                 - Match form (executes all matching conditions)
-3. /when <var> <modifier>: [conditions] => <action> - Block conditional with modifiers
+1. /when <condition> => <action>             - Inline conditional
+2. /when <expression> [conditions]           - Match form (first match wins)
+3. /when [conditions]                        - Bare block (boolean conditions)
 
-Modifiers:
-- first: Execute only the first truthy condition's action (switch behavior)
-
-For AND/OR logic, use && and || operators in conditions instead of deprecated any/all modifiers:
+For AND/OR logic, use && and || operators in conditions instead of any/all modifiers:
 - Use: /when (@cond1 && @cond2) => action  (instead of: /when all [@cond1 @cond2] => action)
 - Use: /when (@cond1 || @cond2) => action  (instead of: /when any [@cond1 @cond2] => action)
 */
@@ -32,19 +29,20 @@ WhenKeyword
 SlashWhen
   = WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
   / WhenSimpleForm
+  / WhenSimpleBlockForm  // Error recovery for deprecated 'when @cond [block]' form
   // Error recovery: deprecated 'any' modifier
   / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":"? _ "[" {
       helpers.mlldError(
         "The 'any' modifier has been removed from mlld. Use the || operator instead.\n\n" +
-        "Old syntax: /when any [@cond1 @cond2] => action\n" +
-        "New syntax: /when (@cond1 || @cond2) => action\n\n" +
+        "Old syntax: when any [@cond1 @cond2] => action\n" +
+        "New syntax: when (@cond1 || @cond2) => action\n\n" +
         "The || operator is more familiar and flexible.",
         "||",
         location()
       );
     }
-  / WhenBareBlockForm  // MUST come before WhenBlockForm to handle bare [...] syntax
-  // Bare block form with modifier: /when <modifier>: [...] => <action>
+  / WhenBareBlockForm  // MUST come before WhenBlockForm to handle block-only syntax
+  // Error recovery: /when <modifier>: [...] => <action>
   / DirectiveContext WhenKeyword _ modifier:WhenModifier _ ":"? _ block:WhenConditionBlock 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
@@ -86,20 +84,40 @@ SlashWhen
       );
     }
   / WhenBlockForm
-  // Error recovery: Missing => in simple form
-  / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ !"=>" {
-      helpers.mlldError("Invalid /when syntax. Expected '=>' after condition. Use: /when @condition => action", "=>", location());
+  // Error recovery: Missing => or [ in inline form
+  / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ !("=>" / "[") {
+      helpers.mlldError(
+        "Invalid when syntax: expected '=>' or '[' after the condition.\n\n" +
+        "if vs when:\n" +
+        "  if @cond [block]                 Run block if true\n" +
+        "  when @cond => action             Select first match\n" +
+        "  when [cond => val; * => default] First-match list\n" +
+        "  when @val [\"a\" => x; * => y]    Match value against patterns\n\n" +
+        "Fix: add '=>' for inline action or '[' to start conditions.",
+        "=> or [",
+        location()
+      );
     }
   // Error recovery: Missing action after =>
   / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ !. {
-      helpers.mlldError("Missing action in /when directive. Expected a directive after '=>'.", "directive", location());
+      helpers.mlldError(
+        "Missing action after '=>'.\n\n" +
+        "when runs actions, so the right side must be a directive:\n" +
+        "  when @cond => show \"ok\"\n" +
+        "  when @cond => run { ... }\n" +
+        "  when @cond => [show \"x\"; => @val]\n\n" +
+        "For value-returning expressions:\n" +
+        "  var @x = when [@cond => \"ok\"; * => \"no\"]",
+        "directive",
+        location()
+      );
     }
   // Error recovery: deprecated 'all' modifier
   / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":"? _ "[" {
       helpers.mlldError(
         "The 'all' modifier has been removed from mlld. Use the && operator instead.\n\n" +
-        "Old syntax: /when all [@cond1 @cond2] => action\n" +
-        "New syntax: /when (@cond1 && @cond2) => action\n\n" +
+        "Old syntax: when all [@cond1 @cond2] => action\n" +
+        "New syntax: when (@cond1 && @cond2) => action\n\n" +
         "The && operator is more familiar and flexible.",
         "&&",
         location()
@@ -125,37 +143,54 @@ SlashWhen
       }
       return depth > 0; // EOF reached without closing bracket
     } {
-      helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
+      helpers.mlldError("Unclosed brackets in when directive. Expected ']' to close the condition list.", "]", location());
     }
   // Error recovery: Invalid modifier - check it's not a valid modifier
   / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _
     modifier:BaseIdentifier &{ return modifier !== "first"; } _ ":"? _ "[" {
-      helpers.mlldError("Invalid /when modifier: '" + modifier + "'. The only valid modifier is 'first'.\n" +
+      helpers.mlldError("Invalid when modifier: '" + modifier + "'. Modifiers are not supported.\n" +
             "For AND/OR logic, use && and || operators instead.\n\n" +
             "Examples:\n" +
-            "  /when @var first [...] => action\n" +
-            "  /when (@cond1 && @cond2) => action  (instead of 'all')\n" +
-            "  /when (@cond1 || @cond2) => action  (instead of 'any')", "modifier", location());
+            "  when @var [...] => action\n" +
+            "  when (@cond1 && @cond2) => action  (instead of 'all')\n" +
+            "  when (@cond1 || @cond2) => action  (instead of 'any')", "modifier", location());
     }
   // Error recovery: Generic catch-all
   / DirectiveContext WhenKeyword {
-      helpers.mlldError("Invalid /when syntax. Valid forms:\\n" +
-            "  /when @condition => action          (simple form)\\n" +
-            "  /when @variable [...]              (switch form)\\n" +
-            "  /when @var first [...] => action   (block form with modifier)\\n" +
-            "  /when [...] => action               (bare block form)", "@", location());
+      helpers.mlldError(
+        "Invalid when syntax.\n\n" +
+        "if vs when:\n" +
+        "  if @cond [block]                 Run block if true\n" +
+        "  when @cond => action             Select first match\n" +
+        "  when @cond => [block]            First-match with block\n" +
+        "  when [cond => val; * => default] First-match list\n" +
+        "  when @val [\"a\" => x; * => y]    Match value against patterns",
+        "@",
+        location()
+      );
     }
 
 // -------------------------------------------------------------
-// SIMPLE FORM: /when <condition> => <action> (no brackets needed)
+// INLINE FORM: /when <condition> => <action> (no brackets needed)
 // -------------------------------------------------------------
 
 WhenSimpleForm
   = DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction comment:InlineComment? {
       helpers.debug('WhenSimpleForm matched', { condition, action, comment });
 
+      // Detect if action is a block (array of statements)
+      const isBlockForm = Array.isArray(action) && action.length > 0;
+
+      // Check for return statement in block (last element with type containing return pattern)
+      const hasReturn = isBlockForm && action.some(item =>
+        item && item.type === 'ReturnStatement' ||
+        (Array.isArray(item) && item[0]?.type === 'ReturnStatement')
+      );
+
       const meta = {
-        hasVariables: condition.some(n => n.type === NodeType.VariableReference)
+        hasVariables: condition.some(n => n.type === NodeType.VariableReference),
+        isBlockForm: isBlockForm,
+        hasReturn: hasReturn
       };
 
       if (comment) {
@@ -179,13 +214,48 @@ WhenSimpleForm
     }
 
 // -------------------------------------------------------------
-// MATCH FORM: /when <expression>: [value => action, ...]
+// ERROR: /when <condition> [block] - should use /if for imperative blocks
+// Error recovery for users trying to use when like if
+// -------------------------------------------------------------
+
+WhenSimpleBlockForm
+  = DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "[" {
+      // Extract condition text for error message
+      const conditionText = helpers.reconstructRawString(condition);
+      helpers.mlldError(
+        `when ${conditionText} [...] is ambiguous. Did you mean:\n\n` +
+        `  when ${conditionText} => [block]    Value-returning block (keeps when semantics)\n` +
+        `  if ${conditionText} [block]         Imperative flow (different return behavior!)\n\n` +
+        `Note: Inside exe/for, these have different return semantics.\n` +
+        `  when @cond => [=> @val]   returns @val from the when expression\n` +
+        `  if @cond [=> @val]        returns @val from the enclosing exe\n\n` +
+        `if vs when:\n` +
+        `  if @cond [block]                 Run block if true\n` +
+        `  when @cond => action             Select first match\n` +
+        `  when [cond => val; * => default] First-match list\n` +
+        `  when @val ["a" => x; * => y]    Match value against patterns`,
+        "=> or if",
+        location()
+      );
+    }
+
+// -------------------------------------------------------------
+// MATCH FORM: /when <expression> [value => action, ...]
+// Colon is optional: both `when @expr [...]` and `when @expr: [...]` work
 // -------------------------------------------------------------
 
 WhenMatchForm
-  = DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ ":" _ conditions:WhenConditionBlock {
-      helpers.debug('WhenMatchForm matched', { expression, conditions });
-      
+  // Colon form: when @expr: [patterns] — full error recovery via WhenConditionBlock
+  = DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ ":" _ conditions:WhenConditionBlock ending:CommentedDirectiveEnding {
+      helpers.debug('WhenMatchForm matched (colon)', { expression, conditions });
+      const meta = {
+        conditionCount: conditions.length
+      };
+
+      if (ending && ending.comment) {
+        meta.comment = ending.comment;
+      }
+
       return helpers.createStructuredDirective(
         'when',
         'whenMatch',
@@ -200,9 +270,37 @@ WhenMatchForm
             action: c.action ? helpers.reconstructRawString(c.action) : undefined
           }))
         },
+        meta,
+        location()
+      );
+    }
+  // Bare form: when @expr [patterns] — silently fails if block isn't valid conditions
+  // (falls through to WhenSimpleBlockForm for educational error)
+  / DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ "[" _ conditions:WhenConditionList _ "]" ending:CommentedDirectiveEnding {
+      helpers.debug('WhenMatchForm matched (bare)', { expression, conditions });
+      const meta = {
+        conditionCount: conditions.length
+      };
+
+      if (ending && ending.comment) {
+        meta.comment = ending.comment;
+      }
+
+      return helpers.createStructuredDirective(
+        'when',
+        'whenMatch',
         {
-          conditionCount: conditions.length
+          expression: expression,
+          conditions: conditions
         },
+        {
+          expression: helpers.reconstructRawString(expression),
+          conditions: conditions.map(c => ({
+            condition: helpers.reconstructRawString(c.condition),
+            action: c.action ? helpers.reconstructRawString(c.action) : undefined
+          }))
+        },
+        meta,
         location()
       );
     }
@@ -218,9 +316,9 @@ WhenBlockForm
       }, location()); 
     })? _ 
     modifier:WhenModifier? _ ":"? _ conditions:WhenConditionBlock 
-    _ action:("=>" _ a:WhenAction { return a; })? {
+    _ action:("=>" _ a:WhenAction { return a; })? ending:CommentedDirectiveEnding {
       
-      helpers.debug('WhenBlockForm matched', { variable, modifier, conditions, action });
+      helpers.debug('WhenBlockForm matched', { variable, modifier, conditions, action, ending });
       
       const values = {
         conditions: conditions
@@ -256,28 +354,34 @@ WhenBlockForm
         raw.action = helpers.reconstructRawString(action);
       }
       
+      const meta = {
+        modifier: modifier ? modifier.content : 'default',  // Use 'default' when no modifier specified
+        conditionCount: conditions.length,
+        hasVariable: !!variable
+      };
+
+      if (ending && ending.comment) {
+        meta.comment = ending.comment;
+      }
+
       return helpers.createStructuredDirective(
         'when',
         'whenBlock',
         values,
         raw,
-        {
-          modifier: modifier ? modifier.content : 'default',  // Use 'default' when no modifier specified
-          conditionCount: conditions.length,
-          hasVariable: !!variable
-        },
+        meta,
         location()
       );
     }
 
 // -------------------------------------------------------------
-// BARE BLOCK FORM: /when [...] - executes all matching conditions
+// BARE BLOCK FORM: /when [...] - executes first matching condition
 // -------------------------------------------------------------
 
 WhenBareBlockForm
-  = DirectiveContext WhenKeyword _ conditions:WhenConditionBlock {
+  = DirectiveContext WhenKeyword _ conditions:WhenConditionBlock ending:CommentedDirectiveEnding {
       
-      helpers.debug('WhenBareBlockForm matched', { conditions });
+      helpers.debug('WhenBareBlockForm matched', { conditions, ending });
       
       const values = {
         conditions: conditions
@@ -291,16 +395,22 @@ WhenBareBlockForm
         }))
       };
       
+      const meta = {
+        modifier: 'default',  // When blocks use default first-match behavior
+        conditionCount: conditions.length,
+        hasVariable: false
+      };
+
+      if (ending && ending.comment) {
+        meta.comment = ending.comment;
+      }
+
       return helpers.createStructuredDirective(
         'when',
         'whenBlock',
         values,
         raw,
-        {
-          modifier: 'default',  // Bare when has default behavior (execute all matching)
-          conditionCount: conditions.length,
-          hasVariable: false
-        },
+        meta,
         location()
       );
     }
@@ -311,17 +421,16 @@ WhenBareBlockForm
 
 WhenModifier
   = mod:("first") {
-      return helpers.createNode(NodeType.Text, {
-        content: mod,
-        location: location()
-      });
+      // 'first' is redundant — when already uses first-match semantics by default.
+      // Silently accept for backwards compatibility with existing modules.
+      return mod;
     }
 
 // -------------------------------------------------------------
 // CONDITION EXPRESSIONS
 // -------------------------------------------------------------
 
-// Simple condition for @when simple form - uses unified expressions
+// Inline condition for @when inline form - uses unified expressions
 WhenSimpleCondition
   = expr:WhenConditionAdapter {
       // Wrap in array for consistency with existing code
@@ -468,7 +577,7 @@ WhenConditionBlock
       }
       return depth > 0;
     } {
-      helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
+      helpers.mlldError("Unclosed brackets in when directive. Expected ']' to close the condition list.", "]", location());
     }
 
 WhenConditionList
@@ -503,13 +612,13 @@ WhenEntry
 WhenConditionSeparator
   = _ "," _ {
       helpers.mlldError(
-        'Comma separators are not allowed in /when conditions. ' +
+        'Comma separators are not allowed in when conditions. ' +
         'Separate conditions with whitespace or semicolons instead of commas.\n' +
         '💡 Remove the comma and use whitespace or semicolons:\n' +
-        '   /when expr: [value1 => action1, value2 => action2]  ❌\n' +
-        '   /when expr: [value1 => action1; value2 => action2]  ✅\n' +
-        '   /when expr: [value1 => action1  value2 => action2]  ✅\n' +
-        '   /when expr: [\n' +
+        '   when expr: [value1 => action1, value2 => action2]  ❌\n' +
+        '   when expr: [value1 => action1; value2 => action2]  ✅\n' +
+        '   when expr: [value1 => action1  value2 => action2]  ✅\n' +
+        '   when expr: [\n' +
         '     value1 => action1\n' +
         '     value2 => action2\n' +
         '   ]  ✅',
@@ -534,8 +643,26 @@ WhenConditionPair
 // Action (single directive or block of directives)
 WhenAction
   = WhenActionBlock
+  / WhenCheckpointAction
   / WhenImplicitAction   // NEW: Implicit actions without directive prefix
   / WhenActionDirective
+
+WhenCheckpointAction
+  = CheckpointKeyword __ name:CheckpointNameValue {
+      const values = { name };
+      const raw = { name };
+      const meta = { checkpointContext: 'top-level-when-direct' };
+
+      return [helpers.createStructuredDirective(
+        DirectiveKind.checkpoint,
+        'checkpoint',
+        values,
+        raw,
+        meta,
+        location(),
+        'directive'
+      )];
+    }
 
 // Block of directives as action: [directive1, directive2, ...]
 WhenActionBlock
@@ -581,16 +708,65 @@ WhenActionBlock
       );
     }
 
-WhenActionBlockContent
-  = leadingComments:LeadingBlockComment* _ first:WhenBlockAction rest:(BlockStatementSeparator d:WhenBlockAction { return d; })* trailing:BlockComments* {
-      const actions = [first, ...rest].flat();
-      // Attach leading comments to first action's meta (immutable update)
-      if (leadingComments.length > 0 && actions.length > 0) {
-        const firstAction = actions[0];
-        if (firstAction && typeof firstAction === 'object') {
-          const existingMeta = firstAction.meta || {};
-          actions[0] = {
-            ...firstAction,
+// Block body for when action blocks - supports full statement list like ForBlockBody
+WhenActionBlockBody "when action block body"
+  = statements:WhenActionBlockStatementList firstReturn:(
+      BlockStatementSeparator ret:WhenActionBlockReturnStatement { return ret; }
+    / _ ret:WhenActionBlockReturnStatement { return ret; }
+    )
+    extraReturn:(BlockStatementSeparator WhenActionBlockReturnStatement { return true; })?
+    trailing:(BlockStatementSeparator WhenActionBlockStatement { return true; })? {
+      if (extraReturn) {
+        helpers.mlldError(
+          'Multiple return statements in when block. Only one return allowed as last statement.',
+          'single return',
+          location()
+        );
+      }
+      if (trailing) {
+        helpers.mlldError(
+          'Return must be the last statement in a block.',
+          'end of block',
+          location()
+        );
+      }
+      return {
+        statements,
+        returnStmt: firstReturn
+      };
+    }
+  / statements:WhenActionBlockStatementList {
+      return {
+        statements,
+        returnStmt: null
+      };
+    }
+  / leadingComments:LeadingBlockComment* _ ret:WhenActionBlockReturnStatement {
+      return {
+        statements: [],
+        returnStmt: ret
+      };
+    }
+
+// Return statement for when action blocks
+WhenActionBlockReturnStatement "when block return statement"
+  = "=>" _ value:WhenRHSAction noise:BlockComments* {
+      const normalized = Array.isArray(value) ? value.flat() : [value];
+      return normalized;
+    }
+
+// Statement list for when action blocks
+WhenActionBlockStatementList "when action block statement list"
+  = leadingComments:LeadingBlockComment* _ first:WhenActionBlockStatement rest:(BlockStatementSeparator stmt:WhenActionBlockStatement { return stmt; })* trailing:BlockComments* {
+      const normalize = (stmt) => Array.isArray(stmt) ? stmt : [stmt];
+      const stmts = [...normalize(first), ...rest.flatMap(normalize)];
+      // Attach leading comments to first statement's meta (immutable update)
+      if (leadingComments.length > 0 && stmts.length > 0) {
+        const firstStmt = stmts[0];
+        if (firstStmt && typeof firstStmt === 'object') {
+          const existingMeta = firstStmt.meta || {};
+          stmts[0] = {
+            ...firstStmt,
             meta: {
               ...existingMeta,
               comment: existingMeta.comment || leadingComments[0],
@@ -599,9 +775,55 @@ WhenActionBlockContent
           };
         }
       }
-      return actions;
+      return stmts;
     }
   / BlockComments+ { return []; }
+
+// Single statement inside a when action block
+WhenActionBlockStatement "when action block statement"
+  = WhenVarInActionBlockError
+  / LetAssignment
+  / AugmentedAssignment
+  / WhenCheckpointActionInBlock
+  / WhenExpressionAny
+  / SlashIf
+  / SlashBail
+  / ForNestedDirective
+  / WhenBlockAction
+
+WhenCheckpointActionInBlock
+  = CheckpointKeyword __ name:CheckpointNameValue {
+      const values = { name };
+      const raw = { name };
+      const meta = { checkpointContext: 'when-action-block' };
+
+      return [helpers.createStructuredDirective(
+        DirectiveKind.checkpoint,
+        'checkpoint',
+        values,
+        raw,
+        meta,
+        location(),
+        'directive'
+      )];
+    }
+
+WhenVarInActionBlockError
+  = "var" _ {
+      helpers.mlldError(
+        '`var` cannot be used inside blocks — use `let` for block-scoped bindings',
+        'let',
+        location()
+      );
+    }
+
+WhenActionBlockContent
+  = body:WhenActionBlockBody {
+      const statements = body.statements || [];
+      const returnStmt = body.returnStmt;
+      const hasReturn = Array.isArray(returnStmt) ? returnStmt.length > 0 : !!returnStmt;
+      return hasReturn ? [...statements, ...returnStmt] : statements;
+    }
 
 // Single action within a when block - supports both implicit and explicit
 WhenBlockAction
@@ -743,19 +965,24 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
+  / "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
       // Support full range of var assignments in when actions
+      let tail = ending.tail;
+      const comment = ending.comment;
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
-      
+
       // Process the value based on its structure (simplified from var.peggy)
       let processedValue;
       let metaInfo = {};
-      
+
       // Handle template content (backtick, [[...]], quotes)
       if (value && value.content && value.wrapperType) {
         processedValue = value.content;
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle object literals
       else if (value && value.type === 'object') {
@@ -781,6 +1008,9 @@ WhenActionDirective
       else if (value && value.type === 'VariableReferenceWithTail') {
         processedValue = [value.variable];
         metaInfo.inferredType = 'reference';
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle nested directives
       else if (value && value.type === 'nestedDirective') {
@@ -816,9 +1046,9 @@ WhenActionDirective
       }
       // Handle string literals (backward compatibility)
       else if (typeof value === 'string') {
-        processedValue = [helpers.createNode(NodeType.Text, { 
-          content: value, 
-          location: location() 
+        processedValue = [helpers.createNode(NodeType.Text, {
+          content: value,
+          location: location()
         })];
         metaInfo.inferredType = 'text';
       }
@@ -827,11 +1057,16 @@ WhenActionDirective
         processedValue = Array.isArray(value) ? value : [value];
         metaInfo.inferredType = 'unknown';
       }
-      
-      return [helpers.createNode(NodeType.Directive, {
+
+      // Add comment to meta if present
+      if (comment) {
+        metaInfo.comment = comment;
+      }
+
+      const nodeInit = {
         kind: 'var',
         subtype: 'var',
-        values: { 
+        values: {
           identifier: [idNode],
           value: processedValue
         },
@@ -841,7 +1076,15 @@ WhenActionDirective
         },
         meta: metaInfo,
         location: location()
-      })];
+      };
+
+      // Add withClause if tail exists
+      if (tail) {
+        nodeInit.values.withClause = tail;
+        metaInfo.withClause = tail;
+      }
+
+      return [helpers.createNode(NodeType.Directive, nodeInit)];
     }
   / "run" _ invocation:UnifiedReferenceWithTail {
       // run with unified reference (exec invocation or variable)
@@ -974,6 +1217,15 @@ WhenOutputTarget
         raw: varname ? `env:${varname}` : 'env'
       };
     }
+  / "@" resolver:BaseIdentifier path:ResolverPath? {
+      // Variable or resolver target (e.g., @path or @resolver/subpath)
+      return {
+        type: 'resolver',
+        resolver: resolver,
+        path: path || [],
+        raw: `@${resolver}${path ? '/' + path.map(p => p.content || '').join('/') : ''}`
+      };
+    }
   / str:DataString {
       // File path as quoted string
       return {
@@ -991,6 +1243,7 @@ WhenOutputTarget
 // Implicit action patterns - these match the same syntax as explicit directives but without "/"
 WhenImplicitAction
   = WhenImplicitRetryAction
+  / WhenImplicitBailAction
   / WhenImplicitExplicitVarAssignment // var @x = value (outer-scope variable)
   / WhenImplicitVarAssignmentError    // Error: @x = value - use let or var instead
   / WhenImplicitFunctionCall
@@ -1053,11 +1306,11 @@ WhenImplicitVarAssignmentError
       helpers.mlldError(
         `Variable assignment \`@${id} = ...\` is not allowed in when actions.\n\n` +
         `Use \`let\` for local variables scoped to the when block:\n` +
-        `  /when [let @${id} = value ...]\n\n` +
+        `  when [let @${id} = value ...]\n\n` +
         `Or use \`var\` in actions to set outer-scope variables:\n` +
         `  "match" => var @${id} = "value"\n\n` +
         `Example:\n` +
-        `  /when @mode: [\n` +
+        `  when @mode [\n` +
         `    let @local = "scoped"      # Local to when block\n` +
         `    "match" => var @${id} = @local  # Sets outer-scope variable\n` +
         `  ]`,
@@ -1068,8 +1321,10 @@ WhenImplicitVarAssignmentError
 
 // Explicit var assignment in when action: var @x = "value" (sets outer-scope variable)
 WhenImplicitExplicitVarAssignment
-  = "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
+  = "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
       // Create the same structure as explicit /var but with implicit flag
+      let tail = ending.tail;
+      const comment = ending.comment;
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
 
       // Process the value using the same logic as explicit /var directive
@@ -1081,6 +1336,9 @@ WhenImplicitExplicitVarAssignment
         processedValue = value.content;
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle object literals
       else if (value && value.type === 'object') {
@@ -1106,6 +1364,9 @@ WhenImplicitExplicitVarAssignment
       else if (value && value.type === 'VariableReferenceWithTail') {
         processedValue = [value.variable];
         metaInfo.inferredType = 'reference';
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle nested directives
       else if (value && value.type === 'nestedDirective') {
@@ -1153,7 +1414,12 @@ WhenImplicitExplicitVarAssignment
         metaInfo.inferredType = 'unknown';
       }
 
-      return [helpers.createNode(NodeType.Directive, {
+      // Add comment to meta if present
+      if (comment) {
+        metaInfo.comment = comment;
+      }
+
+      const nodeInit = {
         kind: 'var',
         subtype: 'var',
         values: {
@@ -1166,7 +1432,15 @@ WhenImplicitExplicitVarAssignment
         },
         meta: metaInfo,
         location: location()
-      })];
+      };
+
+      // Add withClause if tail exists
+      if (tail) {
+        nodeInit.values.withClause = tail;
+        metaInfo.withClause = tail;
+      }
+
+      return [helpers.createNode(NodeType.Directive, nodeInit)];
     }
 
 // REMOVED: Implicit exec assignment is no longer supported in when RHS
@@ -1280,15 +1554,15 @@ WhenImplicitRichContent
 
 // Error recovery - catch implicit exe definitions and provide helpful error
 WhenImplicitExecDefinitionError
-  = "@" name:BaseIdentifier "(" args:CommandArgumentList? ")" _ "=" _ value:VarRHSContent {
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "=" _ value:VarRHSContent {
       helpers.mlldError(
-        `Implicit executable definitions are not allowed in /when actions.\n\n` +
+        `Implicit executable definitions are not allowed in when actions.\n\n` +
         `Instead of:\n` +
-        `  /when @condition => @${name}() = ...\n\n` +
-        `Use a separate /exe directive:\n` +
-        `  /exe @${name}() = when [@condition => ..., * => default]\n\n` +
+        `  when @condition => @${name}() = ...\n\n` +
+        `Use a separate exe directive:\n` +
+        `  exe @${name}() = when [@condition => ..., * => default]\n\n` +
         `This keeps executable definitions at the top level where they belong.`,
-        "/exe",
+        "exe",
         location()
       );
     }
@@ -1304,4 +1578,9 @@ WhenImplicitRetryAction
         return [retryNode, hint];
       }
       return [retryNode];
+    }
+
+WhenImplicitBailAction
+  = action:BailAction {
+      return action;
     }

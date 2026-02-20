@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "project-toolkit": {
+      "command": "npx",
+      "args": ["mlld", "mcp", "llm/mcp/toolkit.mld", "--tools-collection", "@toolkit"],
+      "env": { "MLLD_PROJECT_ROOT": "/path/to/project" }
+    },
+    "project-readonly": {
+      "command": "npx",
+      "args": ["mlld", "mcp", "llm/mcp/readonly.mld", "--tools-collection", "@readonlyTools"],
+      "env": { "MLLD_PROJECT_ROOT": "/path/to/project" }
+    }
+  }
+}

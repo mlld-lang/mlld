@@ -82,7 +82,7 @@ PathStartingWithVariableContext "Path starting with @variable context"
       
       // Match @identifier followed by / or . (path indicators)
       // This pattern identifies paths that start with variables
-      const pathPattern = /^@[a-zA-Z_][a-zA-Z0-9_]*[\/\.]/;
+      const pathPattern = /^@[a-zA-Z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*[\/\.]/;
       
       return pathPattern.test(remaining);
     }

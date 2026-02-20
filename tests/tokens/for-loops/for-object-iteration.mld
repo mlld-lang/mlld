@@ -1,5 +1,5 @@
 /var @config = {"host": "localhost", "port": 3000, "secure": true}
-/for @value in @config => /show `Setting: @value_key = @value`
+/for @value in @config => show `Setting: @value_key = @value`
 
 === START TOKENS ===
 @config --> variable[declaration]

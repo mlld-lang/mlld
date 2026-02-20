@@ -1,0 +1,3 @@
+for @item in [1] [
+  var @x = @item
+]

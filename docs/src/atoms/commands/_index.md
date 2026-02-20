@@ -6,4 +6,4 @@ category: commands
 updated: 2026-01-05
 ---
 
-`run` executes commands and code. `exe` defines reusable functions. `output`, `log`, `append`, and `stream` manage output.
+`run` executes commands and code. `exe` defines reusable functions. `show` writes document output, `log` writes stderr, and `=>` returns explicit script output.

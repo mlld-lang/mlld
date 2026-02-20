@@ -12,7 +12,15 @@ import { ImportType, DataLabel } from './security';
 /**
  * Base Import directive node
  */
-export interface ImportDirectiveNode extends TypedDirectiveNode<'import', 'importAll' | 'importSelected' | 'importNamespace' | 'importPolicy'> {
+export interface ImportDirectiveNode extends TypedDirectiveNode<
+  'import',
+  | 'importAll'
+  | 'importSelected'
+  | 'importNamespace'
+  | 'importPolicy'
+  | 'importMcpSelected'
+  | 'importMcpNamespace'
+> {
   values: ImportValues;
   raw: ImportRaw;
   meta: ImportMeta;
@@ -51,10 +59,42 @@ export interface ImportSelectedDirectiveNode extends ImportDirectiveNode {
 }
 
 /**
+ * Import MCP Selected directive - specific tools from MCP server
+ */
+export interface ImportMcpSelectedDirectiveNode extends ImportDirectiveNode {
+  subtype: 'importMcpSelected';
+  values: {
+    imports: ImportReferenceNode[]; // One or more items
+    namespace?: ImportValues['namespace'];
+    path: ImportValues['path'];
+    importType?: ImportType;
+    cachedDuration?: TimeDurationNode;
+    withClause?: WithClause;
+    securityLabels?: DataLabel[];
+  };
+}
+
+/**
  * Import Namespace directive - wildcard imports with alias
  */
 export interface ImportNamespaceDirectiveNode extends ImportDirectiveNode {
   subtype: 'importNamespace';
+  values: {
+    imports: [ImportWildcardNode]; // Always a single-item array with '*' and alias
+    namespace?: ImportValues['namespace'];
+    path: ImportValues['path'];
+    importType?: ImportType;
+    cachedDuration?: TimeDurationNode;
+    withClause?: WithClause;
+    securityLabels?: DataLabel[];
+  };
+}
+
+/**
+ * Import MCP Namespace directive - wildcard imports with alias
+ */
+export interface ImportMcpNamespaceDirectiveNode extends ImportDirectiveNode {
+  subtype: 'importMcpNamespace';
   values: {
     imports: [ImportWildcardNode]; // Always a single-item array with '*' and alias
     namespace?: ImportValues['namespace'];

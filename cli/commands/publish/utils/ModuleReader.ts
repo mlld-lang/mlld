@@ -14,8 +14,19 @@ import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { ModuleMetadata, ModuleData, GitInfo } from '../types/PublishingTypes';
 import { parseModuleMetadata } from '@core/registry/utils/ModuleMetadata';
 import { formatVersionSpecifier } from '@core/registry/utils/ModuleNeeds';
-import type { ModuleNeedsNormalized } from '@core/registry/types';
+import type { ModuleNeedsNormalized, ModuleManifest, ModuleType } from '@core/registry/types';
 import type { CommandNeeds } from '@core/policy/needs';
+
+export interface ModuleFile {
+  relativePath: string;
+  content: string;
+}
+
+export interface DirectoryModuleData {
+  manifest: ModuleManifest;
+  files: ModuleFile[];
+  entryContent: string;
+}
 
 export class ModuleReader {
   private authService: GitHubAuthService;
@@ -25,34 +36,204 @@ export class ModuleReader {
   }
 
   /**
+   * Detect and read a module manifest (module.yml, module.yaml, or module.json)
+   */
+  async detectManifest(dirPath: string): Promise<ModuleManifest | null> {
+    const manifestNames = ['module.yml', 'module.yaml', 'module.json'];
+
+    for (const name of manifestNames) {
+      const manifestPath = path.join(dirPath, name);
+      try {
+        const content = await fs.readFile(manifestPath, 'utf8');
+        const parsed = name.endsWith('.json')
+          ? JSON.parse(content)
+          : yaml.load(content) as Record<string, unknown>;
+
+        return this.validateManifest(parsed);
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Validate and normalize a manifest object
+   */
+  private validateManifest(parsed: Record<string, unknown>): ModuleManifest {
+    const validTypes: ModuleType[] = ['library', 'app', 'command', 'skill'];
+    const type = (parsed.type as string) || 'library';
+
+    if (!validTypes.includes(type as ModuleType)) {
+      throw new MlldError(`Invalid module type: ${type}. Must be one of: ${validTypes.join(', ')}`, {
+        code: 'INVALID_MODULE_TYPE',
+        severity: ErrorSeverity.Fatal
+      });
+    }
+
+    if (!parsed.name || typeof parsed.name !== 'string') {
+      throw new MlldError('Module manifest must have a "name" field', {
+        code: 'MISSING_MODULE_NAME',
+        severity: ErrorSeverity.Fatal
+      });
+    }
+
+    if (!parsed.author || typeof parsed.author !== 'string') {
+      throw new MlldError('Module manifest must have an "author" field', {
+        code: 'MISSING_MODULE_AUTHOR',
+        severity: ErrorSeverity.Fatal
+      });
+    }
+
+    if (!parsed.about || typeof parsed.about !== 'string') {
+      throw new MlldError('Module manifest must have an "about" field', {
+        code: 'MISSING_MODULE_ABOUT',
+        severity: ErrorSeverity.Fatal
+      });
+    }
+
+    return {
+      name: parsed.name as string,
+      author: parsed.author as string,
+      type: type as ModuleType,
+      about: parsed.about as string,
+      version: (parsed.version as string) || '1.0.0',
+      entry: (parsed.entry as string) || undefined,
+      needs: Array.isArray(parsed.needs) ? parsed.needs as string[] : undefined,
+      license: (parsed.license as string) || 'CC0',
+      mlldVersion: (parsed.mlldVersion as string) || undefined,
+      dependencies: parsed.dependencies as Record<string, string> | undefined,
+      devDependencies: parsed.devDependencies as Record<string, string> | undefined,
+    };
+  }
+
+  /**
+   * Read all files from a directory module
+   */
+  async readDirectoryModule(dirPath: string, manifest: ModuleManifest): Promise<DirectoryModuleData> {
+    const files: ModuleFile[] = [];
+    const rawEntryPoint = manifest.entry || 'index.mld';
+    // Normalize entry point: strip leading ./, normalize separators to /
+    const entryPoint = rawEntryPoint
+      .replace(/^\.\//, '')
+      .replace(/\\/g, '/');
+
+    const readDir = async (currentPath: string, relativePath: string = ''): Promise<void> => {
+      const entries = await fs.readdir(currentPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentPath, entry.name);
+        const relPath = relativePath ? path.join(relativePath, entry.name) : entry.name;
+
+        if (entry.isDirectory()) {
+          if (entry.name !== 'node_modules' && entry.name !== '.git') {
+            await readDir(fullPath, relPath);
+          }
+        } else {
+          const content = await fs.readFile(fullPath, 'utf8');
+          // Normalize path separators to / for consistent comparison
+          files.push({ relativePath: relPath.replace(/\\/g, '/'), content });
+        }
+      }
+    };
+
+    await readDir(dirPath);
+
+    const entryFile = files.find(f => f.relativePath === entryPoint);
+    if (!entryFile) {
+      throw new MlldError(`Entry point "${entryPoint}" not found in module directory`, {
+        code: 'MISSING_ENTRY_POINT',
+        severity: ErrorSeverity.Fatal
+      });
+    }
+
+    return {
+      manifest,
+      files,
+      entryContent: entryFile.content,
+    };
+  }
+
+  /**
    * Read and parse a module from file system
    */
-  async readModule(modulePath: string, options?: { verbose?: boolean }): Promise<{ 
-    content: string; 
-    metadata: ModuleMetadata; 
-    filename: string; 
+  async readModule(modulePath: string, options?: { verbose?: boolean }): Promise<{
+    content: string;
+    metadata: ModuleMetadata;
+    filename: string;
     filePath: string;
     ast: MlldNode[];
+    isDirectory?: boolean;
+    directoryData?: DirectoryModuleData;
   }> {
     // Check if path is a directory or file
     const stat = await fs.stat(modulePath);
     let filePath: string;
     let filename: string;
-    
+
     if (stat.isDirectory()) {
-      // Look for .mld files in directory
+      // Check for manifest first (directory module with module.yml/yaml/json)
+      const manifest = await this.detectManifest(modulePath);
+      if (manifest) {
+        const directoryData = await this.readDirectoryModule(modulePath, manifest);
+        const entryPoint = manifest.entry || 'index.mld';
+        filePath = path.join(modulePath, entryPoint);
+        filename = entryPoint;
+
+        // Parse entry point for AST
+        // Use strict mode for .mld files, markdown mode for .mld.md files
+        const parserMode = filename.endsWith('.mld.md') ? 'markdown' : 'strict';
+        let ast: MlldNode[];
+        try {
+          ast = parseSync(directoryData.entryContent, { mode: parserMode });
+        } catch (parseError: any) {
+          const errorMessage = parseError.message || 'Unknown parse error';
+          const location = parseError.location
+            ? ` at line ${parseError.location.start.line}, column ${parseError.location.start.column}`
+            : '';
+          throw new MlldError(
+            `Module contains invalid mlld syntax${location}:\n${errorMessage}\n\nPlease fix syntax errors before publishing.`,
+            { code: 'INVALID_SYNTAX', severity: ErrorSeverity.Fatal, sourceLocation: parseError.location }
+          );
+        }
+
+        // Build metadata from manifest
+        const metadata: ModuleMetadata = {
+          name: manifest.name,
+          author: manifest.author,
+          about: manifest.about,
+          version: manifest.version,
+          license: manifest.license || 'CC0',
+          needs: manifest.needs || [],
+          dependencies: manifest.dependencies,
+          devDependencies: manifest.devDependencies,
+          mlldVersion: manifest.mlldVersion,
+        };
+
+        return {
+          content: directoryData.entryContent,
+          metadata,
+          filename,
+          filePath,
+          ast,
+          isDirectory: true,
+          directoryData,
+        };
+      }
+
+      // Fallback: Look for .mld files in directory (single-file module)
       const files = await fs.readdir(modulePath);
       const mldFiles = files.filter(f =>
         f.endsWith('.mld.md') || f.endsWith('.mld') || f.endsWith('.mlld.md')
       );
-      
+
       if (mldFiles.length === 0) {
-        throw new MlldError('No .mld or .mld.md files found in the specified directory (legacy .mlld.md is also supported)', {
+        throw new MlldError('No .mld or .mld.md files found in the specified directory (legacy .mlld.md is also supported). For directory modules, add a module.yml manifest.', {
           code: 'NO_MLD_FILES',
           severity: ErrorSeverity.Fatal
         });
       }
-      
+
       // Prefer main.mld.md, main.mld, index.mld.md, or index.mld
       if (mldFiles.includes('main.mld.md')) {
         filename = 'main.mld.md';
@@ -69,7 +250,7 @@ export class ModuleReader {
         const mldFile = mldFiles.find(f => f.endsWith('.mld'));
         filename = mldMdFile || mldFile || mlldMdFile || mldFiles[0];
       }
-      
+
       filePath = path.join(modulePath, filename);
     } else {
       // Direct file path
@@ -103,9 +284,11 @@ export class ModuleReader {
     }
     
     // Parse and validate basic syntax early
+    // Use strict mode for .mld files, markdown mode for .mld.md files
+    const parserMode = filename.endsWith('.mld.md') || filename.endsWith('.mlld.md') ? 'markdown' : 'strict';
     let ast: MlldNode[];
     try {
-      ast = parseSync(content);
+      ast = parseSync(content, { mode: parserMode });
     } catch (parseError: any) {
       console.log(chalk.red('✘ Invalid mlld syntax'));
       
@@ -137,10 +320,10 @@ export class ModuleReader {
       author: '',
       about: '',
       license: 'CC0', // Default to CC0
-      wants: [],
+      profiles: [],
       needs: [],
       moduleNeeds: undefined,
-      moduleWants: undefined,
+      moduleProfiles: undefined,
     };
     
     // Module name comes from frontmatter 'name' field, NOT from filename
@@ -195,8 +378,8 @@ export class ModuleReader {
     
     const parsedNeeds = parseModuleMetadata(content);
     metadata.moduleNeeds = parsedNeeds.needs;
-    metadata.moduleWants = parsedNeeds.wants;
-    metadata.wants = parsedNeeds.wants.map(tier => tier.tier);
+    metadata.moduleProfiles = parsedNeeds.profiles;
+    metadata.profiles = Object.keys(parsedNeeds.profiles ?? {});
     this.applyModuleNeeds(metadata, parsedNeeds.needs);
     metadata.dependencies = parsedNeeds.dependencies;
     metadata.devDependencies = parsedNeeds.devDependencies;

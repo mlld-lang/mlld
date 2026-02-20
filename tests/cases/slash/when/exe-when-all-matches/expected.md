@@ -1,8 +1,8 @@
-# Bare When Expression - Evaluates All Matches
+# Bare When Expression - Executes First Match
 
-Testing that bare `when` (without `first`) evaluates ALL matching conditions.
+Default when stops at first match.
 
-## Bare when evaluates all conditions
+## Use if blocks to run multiple matching actions
 
 positive
 
@@ -10,13 +10,13 @@ greater than zero
 
 Result: final value
 
-## Contrast with when first
+## Default when stops at first match
 
 positive
 
 First result: positive
 
-## Multiple different conditions can match
+## Multiple different conditions can match (first match wins)
 
 Testing with value 6:
 
@@ -37,4 +37,3 @@ greater than 5
 greater than 7
 
 Final: always matches
-

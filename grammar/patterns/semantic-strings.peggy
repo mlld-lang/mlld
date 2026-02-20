@@ -46,6 +46,24 @@ ExpressionString "Expression Context String"
       // Return the same structure as TemplateStyleInterpolation for consistency
       return {
         content: parts,
-        wrapperType: 'doubleQuote'
+        wrapperType: 'doubleQuote',
+        hasInterpolation: true
+      };
+    }
+  / value:UnifiedBacktick {
+      // Keep plain backticks as literals, but preserve interpolated templates for runtime interpolation.
+      if (value &&
+          value.hasInterpolation === false &&
+          Array.isArray(value.content) &&
+          value.content.length === 1 &&
+          value.content[0] &&
+          value.content[0].type === 'Literal') {
+        return value.content[0];
+      }
+
+      return {
+        content: value.content || [],
+        wrapperType: 'backtick',
+        hasInterpolation: value.hasInterpolation === true
       };
     }

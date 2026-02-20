@@ -2,13 +2,20 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
-import { RunCommand } from './run';
+import { RunCommand, createRunCommand } from './run';
 import { MlldError } from '@core/errors/index';
+import { analyzeDeep } from './analyze';
 
 // Mock modules
 vi.mock('fs/promises');
 vi.mock('fs');
 vi.mock('@sdk/execute');
+vi.mock('./analyze', () => ({
+  analyzeDeep: vi.fn().mockResolvedValue([])
+}));
+vi.mock('../utils/inject-parser', () => ({
+  parseInjectOptions: vi.fn().mockResolvedValue({})
+}));
 
 // Create a shared mock function that can be controlled in tests
 const mockGetScriptDir = vi.fn().mockReturnValue(undefined);
@@ -36,6 +43,10 @@ describe('RunCommand', () => {
     // Ensure findProjectRoot is mocked before creating RunCommand
     const { findProjectRoot } = await import('@core/utils/findProjectRoot');
     vi.mocked(findProjectRoot).mockResolvedValue('/test/project');
+
+    // Default fs.stat mock - returns non-directory (overridden in specific tests)
+    vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false } as any);
+    vi.mocked(analyzeDeep).mockResolvedValue([]);
 
     runCommand = new RunCommand();
     vi.spyOn(process, 'cwd').mockReturnValue(mockCwd);
@@ -76,15 +87,36 @@ describe('RunCommand', () => {
     
     it('should list .mld files without extension', async () => {
       vi.mocked(existsSync).mockReturnValue(true);
+      // Return Dirent-like objects since readdir is called with withFileTypes: true
       vi.mocked(fs.readdir).mockResolvedValue([
-        'script1.mld',
-        'script2.mld',
-        'readme.txt',
-        'data.json'
+        { name: 'script1.mld', isFile: () => true, isDirectory: () => false },
+        { name: 'script2.mld', isFile: () => true, isDirectory: () => false },
+        { name: 'readme.txt', isFile: () => true, isDirectory: () => false },
+        { name: 'data.json', isFile: () => true, isDirectory: () => false }
       ] as any);
 
       const scripts = await runCommand.listScripts();
-      expect(scripts).toEqual(['script1', 'script2']);
+      expect(scripts).toContain('script1');
+      expect(scripts).toContain('script2');
+    });
+
+    it('should list directory scripts with index.mld', async () => {
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const pathStr = p.toString();
+        if (pathStr.includes('llm/run') && !pathStr.includes('.mlld')) return true;
+        if (pathStr.endsWith('myapp/index.mld')) return true;
+        return false;
+      });
+
+      // Return Dirent-like objects
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'script1.mld', isFile: () => true, isDirectory: () => false },
+        { name: 'myapp', isFile: () => false, isDirectory: () => true }
+      ] as any);
+
+      const scripts = await runCommand.listScripts();
+      expect(scripts).toContain('script1');
+      expect(scripts).toContain('myapp');
     });
   });
   
@@ -110,9 +142,70 @@ describe('RunCommand', () => {
     
     it('should return null when script not found', async () => {
       vi.mocked(existsSync).mockReturnValue(false);
-      
+
       const scriptPath = await runCommand.findScript('nonexistent');
       expect(scriptPath).toBeNull();
+    });
+
+    it('should find directory script with index.mld entry point', async () => {
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const pathStr = p.toString();
+        // Flat file doesn't exist, but directory does and has index.mld
+        if (pathStr.endsWith('myapp.mld')) return false;
+        if (pathStr.endsWith('myapp') && !pathStr.includes('.')) return true; // Directory exists
+        if (pathStr.endsWith('myapp/index.mld')) return true;
+        return false;
+      });
+
+      // Mock fs.stat to return directory for myapp
+      vi.mocked(fs.stat).mockImplementation(async (p) => {
+        const pathStr = p.toString();
+        return {
+          isDirectory: () => pathStr.endsWith('myapp')
+        } as any;
+      });
+
+      const scriptPath = await runCommand.findScript('myapp');
+      expect(scriptPath).not.toBeNull();
+      expect(scriptPath).toContain('myapp');
+      expect(scriptPath).toContain('index.mld');
+    });
+
+    it('should prefer flat file over directory script', async () => {
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const pathStr = p.toString();
+        // Flat file exists
+        if (pathStr.endsWith('myapp.mld')) return true;
+        return false;
+      });
+
+      const scriptPath = await runCommand.findScript('myapp');
+      // Should find the flat file first
+      expect(scriptPath).not.toBeNull();
+      expect(scriptPath).toContain('myapp.mld');
+    });
+
+    it('should find directory script with main.mld entry point', async () => {
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const pathStr = p.toString();
+        if (pathStr.endsWith('myapp.mld')) return false;
+        if (pathStr.endsWith('myapp') && !pathStr.includes('.')) return true; // Directory exists
+        if (pathStr.endsWith('myapp/index.mld')) return false;
+        if (pathStr.endsWith('myapp/main.mld')) return true;
+        return false;
+      });
+
+      vi.mocked(fs.stat).mockImplementation(async (p) => {
+        const pathStr = p.toString();
+        return {
+          isDirectory: () => pathStr.endsWith('myapp')
+        } as any;
+      });
+
+      const scriptPath = await runCommand.findScript('myapp');
+      expect(scriptPath).not.toBeNull();
+      expect(scriptPath).toContain('myapp');
+      expect(scriptPath).toContain('main.mld');
     });
   });
   
@@ -128,12 +221,17 @@ describe('RunCommand', () => {
     it('should throw error with available scripts list', async () => {
       vi.mocked(existsSync).mockImplementation((p) => {
         const pathStr = p.toString();
+        // Script directory exists but missing.mld doesn't
         if (pathStr.includes('llm/run') && !pathStr.includes('missing')) return true;
         return false;
       });
-      
-      vi.mocked(fs.readdir).mockResolvedValue(['available1.mld', 'available2.mld'] as any);
-      
+
+      // Use Dirent-like objects
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'available1.mld', isFile: () => true, isDirectory: () => false },
+        { name: 'available2.mld', isFile: () => true, isDirectory: () => false }
+      ] as any);
+
       try {
         await runCommand.run('missing');
         expect.fail('Should have thrown an error');
@@ -182,6 +280,7 @@ describe('RunCommand', () => {
       }
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Running'));
+      expect(analyzeDeep).toHaveBeenCalled();
       expect(execute).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith('Script output');
       expect(exitSpy).toHaveBeenCalledWith(0);
@@ -218,6 +317,7 @@ describe('RunCommand', () => {
         undefined,
         expect.objectContaining({ timeoutMs: 5000 })
       );
+      expect(analyzeDeep).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
       exitSpy.mockRestore();
@@ -262,6 +362,187 @@ describe('RunCommand', () => {
 
       consoleLogSpy.mockRestore();
       consoleErrorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('fails pre-flight validation before execute when deep analysis returns errors', async () => {
+      vi.mocked(analyzeDeep).mockResolvedValue([
+        {
+          filepath: '/test/project/llm/run/script.att',
+          valid: false,
+          errors: [{ message: 'undefined variable @fn in template', line: 15 }]
+        }
+      ] as any);
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('script.mld'));
+
+      await expect(runCommand.run('script')).rejects.toThrow(MlldError);
+      await expect(runCommand.run('script')).rejects.toThrow(/Pre-flight validation failed/);
+
+      const { execute } = await import('@sdk/execute');
+      expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('suppresses pre-flight warning output when noWarn is enabled', async () => {
+      vi.mocked(analyzeDeep).mockResolvedValue([
+        {
+          filepath: '/test/project/llm/run/script.mld',
+          valid: true,
+          warnings: [{ variable: 'missing', line: 8 }],
+        }
+      ] as any);
+
+      const { execute } = await import('@sdk/execute');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('script.mld'));
+
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`exit:${code}`);
+      });
+
+      try {
+        await runCommand.run('script', { noWarn: true });
+      } catch (error: any) {
+        if (!error.message.includes('exit:0')) throw error;
+      }
+
+      const renderedLog = consoleLogSpy.mock.calls.map(call => String(call[0] ?? '')).join('\n');
+      expect(renderedLog).not.toContain('Pre-flight warnings:');
+      expect(exitSpy).toHaveBeenCalledWith(0);
+
+      consoleLogSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+  });
+
+  describe('createRunCommand', () => {
+    it('forwards checkpoint flags and keeps them out of @payload injection', async () => {
+      const { execute } = await import('@sdk/execute');
+      const { parseInjectOptions } = await import('../utils/inject-parser');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+      vi.mocked(parseInjectOptions).mockResolvedValue({
+        '@payload': { topic: 'security' }
+      } as any);
+
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('pipeline.mld'));
+
+      const command = createRunCommand();
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as any);
+
+      await command.execute(['pipeline'], {
+        checkpoint: true,
+        fresh: true,
+        resume: '@processFiles',
+        fork: 'collect',
+        topic: 'security'
+      });
+
+      const injectArgs = vi.mocked(parseInjectOptions).mock.calls[0]?.[0] as string[];
+      expect(injectArgs).toContain('@payload={"topic":"security"}');
+      expect(injectArgs.join(' ')).not.toContain('checkpoint');
+      expect(injectArgs.join(' ')).not.toContain('fresh');
+      expect(injectArgs.join(' ')).not.toContain('resume');
+      expect(injectArgs.join(' ')).not.toContain('fork');
+
+      const executeOptions = vi.mocked(execute).mock.calls[0]?.[2] as Record<string, unknown>;
+      expect(executeOptions).toEqual(
+        expect.objectContaining({
+          checkpoint: true,
+          fresh: true,
+          resume: '@processFiles',
+          fork: 'collect',
+          checkpointScriptName: 'pipeline'
+        })
+      );
+      expect(exitSpy).toHaveBeenCalledWith(0);
+
+      consoleLogSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('maps --new to fresh and forwards --no-checkpoint', async () => {
+      const { execute } = await import('@sdk/execute');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('pipeline.mld'));
+
+      const command = createRunCommand();
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`exit:${code}`);
+      });
+
+      try {
+        await command.execute(['pipeline'], {
+          checkpoint: true,
+          new: true,
+          'no-checkpoint': true
+        });
+      } catch (error: any) {
+        if (!error.message.includes('exit:1')) throw error;
+      }
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('--no-checkpoint cannot be combined')
+      );
+      expect(execute).not.toHaveBeenCalled();
+      expect(exitSpy).toHaveBeenCalledWith(1);
+
+      consoleLogSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('supports --no-warn and excludes it from @payload injection', async () => {
+      const { execute } = await import('@sdk/execute');
+      const { parseInjectOptions } = await import('../utils/inject-parser');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('pipeline.mld'));
+
+      const command = createRunCommand();
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as any);
+
+      await command.execute(['pipeline'], {
+        'no-warn': true,
+        topic: 'security'
+      });
+
+      const injectArgs = vi.mocked(parseInjectOptions).mock.calls[0]?.[0] as string[];
+      expect(injectArgs).toContain('@payload={"topic":"security"}');
+      expect(injectArgs.join(' ')).not.toContain('no-warn');
+
+      expect(exitSpy).toHaveBeenCalledWith(0);
+
+      consoleLogSpy.mockRestore();
       exitSpy.mockRestore();
     });
   });

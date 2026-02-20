@@ -42,20 +42,104 @@ export const VARIABLE_PROXY_PROPS = {
   IS_VARIABLE: '__mlld_is_variable'
 } as const;
 
+function unwrapStructuredRecursively(
+  value: any,
+  seen: WeakMap<object, any> = new WeakMap()
+): any {
+  if (isStructuredValue(value)) {
+    return unwrapStructuredRecursively(asData(value), seen);
+  }
+
+  // Unwrap Variables (e.g. elements inside array literals like [@a, @b])
+  if (isVariable(value)) {
+    const inner = value.value;
+    if (isStructuredValue(inner) && !(inner.internal as any)?.keepStructured) {
+      return unwrapStructuredRecursively(asData(inner), seen);
+    }
+    return unwrapStructuredRecursively(inner, seen);
+  }
+
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  const existing = seen.get(value as object);
+  if (existing) {
+    return existing;
+  }
+
+  const descriptors = Object.getOwnPropertyDescriptors(value as object);
+  const hasAccessor = Object.values(descriptors).some(
+    descriptor => typeof descriptor.get === 'function' || typeof descriptor.set === 'function'
+  );
+  if (hasAccessor) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    let changed = false;
+    const normalized: any[] = new Array(value.length);
+    seen.set(value, normalized);
+    for (let i = 0; i < value.length; i++) {
+      const next = unwrapStructuredRecursively(value[i], seen);
+      normalized[i] = next;
+      if (next !== value[i]) {
+        changed = true;
+      }
+    }
+    if (!changed) {
+      seen.set(value, value);
+      return value;
+    }
+    return normalized;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return value;
+  }
+
+  let changed = false;
+  const record = value as Record<string, any>;
+  const normalized: Record<string, any> = {};
+  seen.set(value, normalized);
+  for (const [key, entry] of Object.entries(record)) {
+    const next = unwrapStructuredRecursively(entry, seen);
+    normalized[key] = next;
+    if (next !== entry) {
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    seen.set(value, value);
+    return value;
+  }
+
+  return normalized;
+}
+
 /**
  * Create a proxy for a Variable that allows transparent value access
  * while exposing type information through special properties
  */
 export function createVariableProxy(variable: Variable): any {
-  const value = variable.value;
-  
+  let value = variable.value;
+
+  // Unwrap StructuredValue to its .data so the proxy target is the native
+  // JS value (array/object). This ensures Array.isArray(), .flat(), .map()
+  // etc. all work correctly in js {} blocks.
+  // Respect .keep/.keepStructured — when set, preserve the wrapper for
+  // metadata access in JS.
+  if (isStructuredValue(value) && !(value.internal as any)?.keepStructured) {
+    value = unwrapStructuredRecursively(asData(value));
+  }
+
   // Can't proxy primitives (string, number, boolean, null)
   if (value === null || typeof value !== 'object') {
-    // For primitives, we'll need a different strategy
-    // Could wrap in an object but that changes behavior
     return value;
   }
-  
+
   // Create proxy for objects and arrays
   return new Proxy(value, {
     get(target, prop, receiver) {
@@ -97,8 +181,8 @@ export function createVariableProxy(variable: Variable): any {
           return Reflect.get(target, prop, receiver);
           
         default:
-          // Normal property access
-          return Reflect.get(target, prop, receiver);
+          // Resolve nested structured wrappers as properties are accessed.
+          return unwrapStructuredRecursively(Reflect.get(target, prop, receiver));
       }
     },
     
@@ -156,7 +240,18 @@ function recordPrimitiveMetadata(
 
 export function prepareValueForShadow(value: any, key?: string, target?: Record<string, any>): any {
   if (isVariable(value)) {
-    if (value.type === 'primitive' || value.type === 'simple-text' || value.type === 'interpolated-text') {
+    const rawVariableValue = value.value;
+    const isPrimitiveLikeValue =
+      rawVariableValue === null ||
+      typeof rawVariableValue === 'string' ||
+      typeof rawVariableValue === 'number' ||
+      typeof rawVariableValue === 'boolean';
+
+    // Fast-path true JS primitives for native JS semantics (typeof, arithmetic, etc).
+    if (
+      (value.type === 'primitive' || value.type === 'simple-text' || value.type === 'interpolated-text') &&
+      isPrimitiveLikeValue
+    ) {
       if (target && key) {
         recordPrimitiveMetadata(target, key, {
           isVariable: true,
@@ -166,7 +261,27 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
           internal: value.internal
         });
       }
-      return value.value;
+      return rawVariableValue;
+    }
+    // Handle imported variables with primitive values - return raw value for JS semantics
+    if (value.type === 'imported' && 'originalType' in value) {
+      const originalType = (value as any).originalType;
+      if (originalType === 'simple-text' || originalType === 'primitive') {
+        const rawValue = rawVariableValue;
+        // Return primitives directly so typeof works correctly in JS
+        if (typeof rawValue === 'number' || typeof rawValue === 'boolean' || typeof rawValue === 'string') {
+          if (target && key) {
+            recordPrimitiveMetadata(target, key, {
+              isVariable: true,
+              type: 'imported',
+              subtype: originalType,
+              mx: value.mx,
+              internal: value.internal
+            });
+          }
+          return rawValue;
+        }
+      }
     }
     return createVariableProxy(value);
   }
@@ -222,7 +337,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     }
 
     // For non-load-content structured values, extract data
-    const data = asData(value);
+    const data = unwrapStructuredRecursively(asData(value));
     if (target && key) {
       recordPrimitiveMetadata(target, key, {
         isVariable: false,
@@ -234,7 +349,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     }
     return data;
   }
-  return value;
+  return unwrapStructuredRecursively(value);
 }
 
 /**

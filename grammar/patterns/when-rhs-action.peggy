@@ -4,8 +4,12 @@
 // Generates regular directive nodes (same as when.peggy) that get evaluated through normal evaluate() chain
 // Used in both /when and /exe...when RHS contexts
 
-// Main pattern - try error recovery first, then side-effect actions, then pure values
+// Main pattern - parse standard actions first, then label modifications
 WhenRHSAction "when RHS action"
+  = WhenRHSActionBase
+  / LabelModificationAction
+
+WhenRHSActionBase "when RHS action base"
   = WhenRHSExeDefinitionError  // Error recovery FIRST - before ExecInvocationPattern can match
   / LetAssignment              // Allow let @x = value inside when actions
   / AugmentedAssignment        // Allow @x += (or let @x +=) inside when actions
@@ -13,12 +17,59 @@ WhenRHSAction "when RHS action"
   / WhenRHSVarAssignment
   / WhenRHSCommandAction
   / WhenRHSFunctionCall
+  / BailAction
   / DoneLiteral
   / ContinueLiteral
   / WhenRHSSkipAction
   / WhenRHSVariableReference  // Allow @var (optionally with pipelines) as value-returning action
   / WhenRHSRetryAction
+  / WhenRHSCheckpointAction
   / VarRHSContent  // Pure values (fallback)
+
+WhenRHSCheckpointAction
+  = CheckpointKeyword __ name:CheckpointNameValue {
+      const values = { name };
+      const raw = { name };
+      const meta = { checkpointContext: 'when-expression-action' };
+
+      return [helpers.createStructuredDirective(
+        DirectiveKind.checkpoint,
+        'checkpoint',
+        values,
+        raw,
+        meta,
+        location(),
+        'directive'
+      )];
+    }
+
+LabelModificationAction
+  = mods:ReturnLabelModifierList ws:[ \t]+ value:WhenRHSActionBase {
+      const normalized = Array.isArray(value) ? value.flat() : [value];
+      return helpers.createNode('LabelModification', {
+        modifiers: mods,
+        value: normalized,
+        raw: text(),
+        location: location()
+      });
+    }
+
+ReturnLabelModifierList
+  = first:ReturnLabelModifier rest:(HWS "," HWS mod:ReturnLabelModifier { return mod; })* {
+      return [first, ...rest];
+    }
+
+ReturnLabelModifier
+  = "clear!" ![a-zA-Z0-9_] { return { kind: 'clear' }; }
+  / "trusted!" ![a-zA-Z0-9_] { return { kind: 'bless' }; }
+  / "trusted" ![a-zA-Z0-9_] { return { kind: 'trusted' }; }
+  / "untrusted" ![a-zA-Z0-9_] { return { kind: 'untrusted' }; }
+  / "!" label:ReturnLabelIdentifier { return { kind: 'remove', label }; }
+  / label:ReturnLabelIdentifier { return { kind: 'add', label }; }
+
+ReturnLabelIdentifier
+  = label:DataLabelIdentifier { return label; }
+  / label:StringLiteral { return label; }
 
 // Command action - explicit cmd { ... } in when actions
 WhenRHSCommandAction
@@ -157,6 +208,13 @@ WhenRHSVarAssignment
 // Function call - just return the invocation directly (it gets evaluated normally)
 WhenRHSFunctionCall
   = ref:UnifiedReference &{
+      const remaining = input.slice(peg$currPos);
+      const nextToken = remaining.replace(/^[ \t]+/, '');
+      // Let VarRHSContent handle arithmetic/logical continuation after calls,
+      // e.g. @count() * 2, @count() + 1, @count() || @fallback().
+      if (/^(\*|\/|%|\+|-|==|!=|<=|>=|<|>|\?\?|&&|\|\||\?|:)/.test(nextToken)) {
+        return false;
+      }
       // Check if this is actually an executable reference
       return ref.type === 'ExecInvocation' ||
              ref.type === 'FieldAccessExec' ||
@@ -170,7 +228,7 @@ WhenRHSFunctionCall
 
 // Error recovery - catch exe definitions and provide helpful error
 WhenRHSExeDefinitionError
-  = "@" name:BaseIdentifier "(" args:CommandArgumentList? ")" _ "=" _ value:VarRHSContent {
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "=" _ value:VarRHSContent {
       helpers.mlldError(
         `Executable definitions are not allowed in when RHS contexts.\n\n` +
         `Instead of:\n` +

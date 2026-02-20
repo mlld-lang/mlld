@@ -16,7 +16,7 @@ var @varAtoms = [
 >> Template atoms
 var @templateAtoms = [
   <@base/docs/src/atoms/syntax/templates-basics.md>,
-  <@base/docs/src/atoms/syntax/templates-when-expr.md>,
+  <@base/docs/src/atoms/syntax/templates-external.md>,
   <@base/docs/src/atoms/syntax/templates-loops.md>
 ]
 
@@ -40,6 +40,7 @@ var @pipelineAtoms = [
 var @methods = <@base/docs/src/atoms/syntax/methods-builtin.md>
 var @comments = <@base/docs/src/atoms/syntax/comments.md>
 var @reservedVars = <@base/docs/src/atoms/syntax/reserved-variables.md>
+var @builtins = <@base/docs/src/atoms/syntax/builtins.md>
 
 >> Strip each atom group
 var @varStripped = for @a in @varAtoms => @strip(@a)
@@ -66,13 +67,14 @@ exe @buildMethodSection(content) = js {
 }
 var @methodSection = @buildMethodSection(@methods)
 exe @buildPipelineSection(items) = js {
-  const intro = "Chain stages with `|`. Built-ins: `@json`, `@xml`, `@csv`, `@md`.";
+  const intro = "Chain stages with `|`. Built-ins: `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`.";
   const body = intro + "\n\n" + items.join("\n\n");
   return `<PIPELINES>\n${body}\n</PIPELINES>`;
 }
 var @pipelineSection = @buildPipelineSection(@pipelineStripped)
 var @commentsSection = @wrapSection("COMMENTS", @strip(@comments))
 var @reservedSection = @wrapSection("RESERVED_VARIABLES", @strip(@reservedVars))
+var @builtinsSection = @wrapSection("BUILTINS", @strip(@builtins))
 
 var @allSections = [
   @varSection,
@@ -81,7 +83,8 @@ var @allSections = [
   @methodSection,
   @pipelineSection,
   @commentsSection,
-  @reservedSection
+  @reservedSection,
+  @builtinsSection
 ]
 
 var @body = @allSections.join("\n\n")

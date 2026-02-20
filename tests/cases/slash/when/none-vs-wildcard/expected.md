@@ -5,7 +5,6 @@ Wildcard always executes
 None: no conditions matched
 
 Matched: less than 10
-Wildcard: still executes
 
 Matched: less than 10
 

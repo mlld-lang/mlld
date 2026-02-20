@@ -2,8 +2,9 @@ import * as readline from 'readline';
 import { version } from '@core/version';
 import type { Environment } from '@interpreter/env/Environment';
 import type { ExecutableVariable } from '@core/types/variable';
+import type { ToolCollection } from '@core/types/tools';
 import { FunctionRouter } from './FunctionRouter';
-import { generateToolSchema } from './SchemaGenerator';
+import { generateToolSchema, mlldNameToMCPName } from './SchemaGenerator';
 import type {
   JSONRPCRequest,
   JSONRPCResponse,
@@ -22,18 +23,31 @@ const NOT_INITIALIZED_ERROR_CODE = -32002;
 export interface MCPServerOptions {
   environment: Environment;
   exportedFunctions: Map<string, ExecutableVariable>;
+  toolCollection?: ToolCollection;
 }
 
 export class MCPServer {
   private readonly environment: Environment;
   private readonly exportedFunctions: Map<string, ExecutableVariable>;
+  private readonly toolCollection?: ToolCollection;
+  private readonly toolMap?: Map<string, ExecutableVariable>;
+  private readonly toolNames: string[];
   private readonly router: FunctionRouter;
   private initialized = false;
 
   constructor(options: MCPServerOptions) {
     this.environment = options.environment;
     this.exportedFunctions = options.exportedFunctions;
-    this.router = new FunctionRouter({ environment: this.environment });
+    this.toolCollection = options.toolCollection;
+    this.toolMap = this.toolCollection ? this.buildToolMap(this.toolCollection) : undefined;
+    this.toolNames = this.toolCollection
+      ? Object.keys(this.toolCollection)
+      : Array.from(this.exportedFunctions.keys());
+    this.router = new FunctionRouter({
+      environment: this.environment,
+      toolCollection: this.toolCollection,
+      toolNames: this.toolNames
+    });
   }
 
   async start(): Promise<void> {
@@ -120,17 +134,54 @@ export class MCPServer {
 
   private handleToolsList(): ToolsListResult {
     this.ensureInitialized();
+    this.syncToolsContext();
 
     const tools: MCPToolSchema[] = [];
-    for (const [name, variable] of this.exportedFunctions.entries()) {
-      tools.push(generateToolSchema(name, variable));
+    if (this.toolCollection && this.toolMap) {
+      for (const [toolName, execVar] of this.toolMap.entries()) {
+        if (!this.isToolAllowed(toolName)) {
+          continue;
+        }
+        const toolDef = this.toolCollection[toolName];
+        const schema = generateToolSchema(toolName, execVar, toolDef);
+        if (toolDef?.description) {
+          schema.description = toolDef.description;
+        }
+        tools.push(schema);
+      }
+    } else {
+      for (const [name, variable] of this.exportedFunctions.entries()) {
+        if (!this.isToolAllowed(name)) {
+          continue;
+        }
+        tools.push(generateToolSchema(name, variable));
+      }
     }
 
     return { tools };
   }
 
+  private buildToolMap(toolCollection: ToolCollection): Map<string, ExecutableVariable> {
+    const map = new Map<string, ExecutableVariable>();
+
+    for (const [toolName, toolDef] of Object.entries(toolCollection)) {
+      const execName = toolDef?.mlld;
+      if (!execName) {
+        throw new Error(`Tool '${toolName}' is missing 'mlld' reference`);
+      }
+      const execVar = this.exportedFunctions.get(execName);
+      if (!execVar) {
+        throw new Error(`Tool '${toolName}' references unknown executable '@${execName}'`);
+      }
+      map.set(toolName, execVar);
+    }
+
+    return map;
+  }
+
   private async handleToolsCall(request: ToolsCallRequest): Promise<ToolsCallResult> {
     this.ensureInitialized();
+    this.syncToolsContext();
 
     const { name, arguments: args } = request.params;
 
@@ -175,6 +226,25 @@ export class MCPServer {
       code: MCPErrorCode.InternalError,
       message: error instanceof Error ? error.message : String(error),
     };
+  }
+
+  private isToolAllowed(toolName: string): boolean {
+    return this.environment.isToolAllowed(toolName, mlldNameToMCPName(toolName));
+  }
+
+  private syncToolsContext(): void {
+    const allTools = this.toolNames;
+    const allowed: string[] = [];
+    const denied: string[] = [];
+    for (const toolName of allTools) {
+      const mcpName = mlldNameToMCPName(toolName);
+      if (this.isToolAllowed(toolName)) {
+        allowed.push(mcpName);
+      } else {
+        denied.push(mcpName);
+      }
+    }
+    this.environment.setToolsAvailability(allowed, denied);
   }
 
   private isJSONRPCError(error: unknown): error is JSONRPCError {

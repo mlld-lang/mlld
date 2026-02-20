@@ -41,12 +41,14 @@ exe @calc(x) = js { return x * 2 }
 </RULE_3_COMMANDS_NEED_BRACES>
 
 <RULE_4_OUTPUT_SOURCES>
-Only these produce output: `show`, `run`, `output`. Everything else mutates state.
+Only `show` and `output` produce output. `run` executes silently; capture its result in a variable if you want to display it.
 
 ```mlld
 var @secret = "hidden"      >> no output
-show `Visible`
-run cmd {echo "Also visible"}
+show `Visible`              >> output
+run cmd {echo "silent"}     >> no output (executes but doesn't display)
+var @loud = run cmd {echo "loud"}
+show @loud                  >> output
 ```
 </RULE_4_OUTPUT_SOURCES>
 
@@ -69,7 +71,7 @@ var @msg = `Hello @name!`
 var @doc = ::Use `npm test` before @env::
 
 >> Double quotes (single-line)
-var @path = "@base/files/@filename"
+var @path = "@root/files/@filename"
 
 >> Single quotes (literal - no interpolation)
 var @literal = '@name stays literal'
@@ -157,12 +159,12 @@ Module imports for code reuse. Namespace imports avoid collisions.
 
 ```mlld
 >> Registry modules
-import { @parallel, @retry } from @mlld/core
+import { @sortBy, @unique } from @mlld/array
 import @corp/utils as @corp
 
 >> Local files
 import { @helper } from "./utils.mld"
-import { @config } from <@base/config.mld>
+import { @config } from <@root/config.mld>
 
 >> Import types
 import module { @api } from @corp/tools       >> cached
@@ -176,25 +178,22 @@ show @agentRegistry.alice.tldr
 </RULE_9_IMPORTS>
 
 <RULE_10_WHEN_DECISIONS>
-`when` for conditionals. Use `first` for switch-style (stops at first match).
+`when` selects the first matching condition. Use `if` for imperative flow.
 
 ```mlld
 >> Simple condition
 when @isProd => show "Production mode"
 
 >> Switch-style (first match wins)
-when first [
+when [
   @role == "admin" => show "Admin"
   @role == "user"  => show "User"
   * => show "Guest"
 ]
 
->> Bare when (evaluates all matches)
-when [
-  @score > 90 => show "Excellent!"
-  @hasBonus => show "Bonus earned!"
-  none => show "No matches"
-]
+>> Multiple independent conditions (use `if`)
+if @score > 90 [ show "Excellent!" ]
+if @hasBonus [ show "Bonus earned!" ]
 ```
 </RULE_10_WHEN_DECISIONS>
 

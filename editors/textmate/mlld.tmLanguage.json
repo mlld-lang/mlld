@@ -16,7 +16,7 @@
     },
     {
       "name": "variable.other.mlld",
-      "match": "@\\w+"
+      "match": "@[A-Za-z_][A-Za-z0-9_-]*"
     },
     {
       "name": "string.template.triple.mlld",
@@ -81,7 +81,7 @@
         },
         {
           "name": "variable.other.mlld",
-          "match": "@\\w+"
+          "match": "@[A-Za-z_][A-Za-z0-9_-]*"
         },
         {
           "name": "string.interpolated.alligator.mlld",
@@ -95,12 +95,12 @@
     },
     {
       "name": "meta.embedded.mlld",
-      "begin": "^(?=/(var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy)\\b)",
+      "begin": "^(?=/(var|show|stream|run|exe|import|when|if|output|append|for|loop|log|bail|checkpoint|guard|hook|export|policy|sign|verify|while|env)\\b)",
       "end": "$",
       "patterns": [
         {
           "name": "keyword.control.directive.mlld",
-          "match": "\\G/(var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy)\\b"
+          "match": "\\G/(var|show|stream|run|exe|import|when|if|output|append|for|loop|log|bail|checkpoint|guard|hook|export|policy|sign|verify|while|env)\\b"
         },
         {
           "name": "comment.line.double-slash.mlld",
@@ -209,7 +209,7 @@
             },
             {
               "name": "variable.other.mlld",
-              "match": "@\\w+"
+              "match": "@[A-Za-z_][A-Za-z0-9_-]*"
             },
             {
               "name": "string.interpolated.alligator.mlld",
@@ -259,7 +259,7 @@
             },
             {
               "name": "variable.other.mlld",
-              "match": "@\\w+"
+              "match": "@[A-Za-z_][A-Za-z0-9_-]*"
             }
           ]
         },
@@ -340,7 +340,7 @@
             },
             {
               "name": "variable.other.mlld",
-              "match": "@\\w+"
+              "match": "@[A-Za-z_][A-Za-z0-9_-]*"
             },
             {
               "name": "string.interpolated.alligator.mlld",
@@ -446,7 +446,7 @@
             },
             {
               "name": "variable.other.mlld",
-              "match": "@\\w+"
+              "match": "@[A-Za-z_][A-Za-z0-9_-]*"
             },
             {
               "name": "string.interpolated.alligator.mlld",
@@ -475,7 +475,7 @@
             },
             {
               "name": "variable.other.mlld",
-              "match": "@\\w+"
+              "match": "@[A-Za-z_][A-Za-z0-9_-]*"
             },
             {
               "name": "string.interpolated.alligator.mlld",
@@ -513,15 +513,15 @@
         },
         {
           "name": "variable.other.member.mlld",
-          "match": "\\.(\\w+|\\d+)"
+          "match": "\\.([A-Za-z_][A-Za-z0-9_-]*|\\d+)"
         },
         {
           "name": "keyword.operator.mlld",
-          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted)\\b"
+          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new)\\b"
         },
         {
           "name": "support.type.guard-filter.mlld",
-          "match": "\\bop:(run|exe|output|show|import)\\b"
+          "match": "\\bop:(var|run|exe|show|output|append|for(?::(iteration|batch))?|loop|import)\\b"
         },
         {
           "name": "keyword.operator.pipe.mlld",
@@ -545,7 +545,7 @@
         },
         {
           "name": "variable.other.mlld",
-          "match": "@\\w+"
+          "match": "@[A-Za-z_][A-Za-z0-9_-]*"
         }
       ]
     },

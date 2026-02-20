@@ -38,10 +38,10 @@ const exports = members.map((member) => {
       );
     }
   / DirectiveContext ExportKeyword _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing export list in /export directive. Expected: /export { name, other }", String.fromCharCode(123), location());
+      helpers.mlldError("Missing export list in export directive. Expected: export { name, other }", String.fromCharCode(123), location());
     }
   / DirectiveContext ExportKeyword {
-      helpers.mlldError("Invalid /export syntax. Expected: /export { name, other }", String.fromCharCode(123), location());
+      helpers.mlldError("Invalid export syntax. Expected: export { name, other }", String.fromCharCode(123), location());
     }
 
 ExportMemberList

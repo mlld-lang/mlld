@@ -5,6 +5,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { unwrapStructuredForTest } from './test-helpers';
 import type { StructuredValueMetadata } from '../utils/structured-value';
+import { Readability } from '@mozilla/readability';
 
 function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
   expect(metadata?.source).toBe('load-content');
@@ -57,6 +58,8 @@ describe('Content Loader URL Metadata', () => {
       expect(metadata?.description).toBe('Example description');
       expect(metadata?.headers).toEqual(mockResponse.headers);
       expectLoadContentMetadata(metadata);
+      expect(metadata?.taint).toEqual(expect.arrayContaining(['src:network']));
+      expect(metadata?.sources).toEqual(expect.arrayContaining(['https://example.com']));
     });
 
     it('should handle JSON URLs correctly', async () => {
@@ -138,12 +141,109 @@ describe('Content Loader URL Metadata', () => {
       };
 
       const rawResult = await processContentLoader(node, env);
-      const { data: result } = unwrapStructuredForTest<string>(rawResult);
+      const { data: result, mx } = unwrapStructuredForTest<string>(rawResult);
       
       // With section extraction, should return plain string
       expect(typeof result).toBe('string');
       expect(result).toContain('Install instructions');
       expect(result).not.toContain('Usage instructions');
+      expect(mx?.taint).toEqual(expect.arrayContaining(['src:network']));
+      expect(mx?.sources).toEqual(expect.arrayContaining(['https://example.com/docs.md']));
+    });
+
+    it('falls back to full-document conversion when Readability returns null', async () => {
+      const parseSpy = vi.spyOn(Readability.prototype, 'parse').mockReturnValue(null as any);
+      const mockResponse = {
+        content: '<!DOCTYPE html><html><head><title>Fallback Title</title></head><body><h2>Section</h2><p>Fallback body.</p></body></html>',
+        headers: {
+          'content-type': 'text/html'
+        },
+        status: 200
+      };
+
+      (env.fetchURLWithMetadata as any).mockResolvedValue(mockResponse);
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'url',
+          raw: 'https://example.com/fallback'
+        }
+      };
+
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest<string>(rawResult);
+
+      expect(typeof result).toBe('string');
+      expect(result).toContain('Fallback Title');
+      expect(result).toContain('Fallback body.');
+      parseSpy.mockRestore();
+    });
+
+    it('returns original HTML when conversion throws', async () => {
+      const parseSpy = vi.spyOn(Readability.prototype, 'parse').mockImplementation(() => {
+        throw new Error('forced conversion failure');
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const mockResponse = {
+        content: '<html><body><h1>Raw HTML</h1><p>Should remain raw.</p></body></html>',
+        headers: {
+          'content-type': 'text/html'
+        },
+        status: 200
+      };
+
+      (env.fetchURLWithMetadata as any).mockResolvedValue(mockResponse);
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'url',
+          raw: 'https://example.com/raw-html'
+        }
+      };
+
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest<string>(rawResult);
+
+      expect(typeof result).toBe('string');
+      expect(result).toContain('<h1>Raw HTML</h1>');
+      expect(warnSpy).toHaveBeenCalled();
+      parseSpy.mockRestore();
+      warnSpy.mockRestore();
+    });
+
+    it('lists URL sections for section-list selectors', async () => {
+      const mockResponse = {
+        content: '# Docs\n\n## Intro\n\nHello\n\n## Usage\n\nWorld',
+        headers: {
+          'content-type': 'text/markdown'
+        },
+        status: 200
+      };
+
+      (env.fetchURLWithMetadata as any).mockResolvedValue(mockResponse);
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'url',
+          raw: 'https://example.com/sections'
+        },
+        options: {
+          section: {
+            identifier: { type: 'section-list', level: 2 }
+          }
+        }
+      };
+
+      const rawResult = await processContentLoader(node, env);
+      const { data: result, metadata } = unwrapStructuredForTest<string[]>(rawResult);
+
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toEqual(['Intro', 'Usage']);
+      expect(metadata?.url).toBe('https://example.com/sections');
+      expect(metadata?.taint).toEqual(expect.arrayContaining(['src:network']));
     });
 
     it('should strip HTML correctly for text property', async () => {

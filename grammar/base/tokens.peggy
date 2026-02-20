@@ -14,9 +14,11 @@ building blocks for all higher-level grammar components.
 // -------------------------------------------------------------
 
 // Base identifier pattern - variable/directive names, keywords
+// Hyphens allowed between segments: foo-bar, max-retry-count
+// No trailing/double/leading hyphens: foo-, foo--bar, -foo are invalid
 BaseIdentifier "Identifier"
-  = first:[a-zA-Z_] rest:[a-zA-Z0-9_]* {
-      return first + rest.join('');
+  = first:[a-zA-Z_] rest:([a-zA-Z0-9_] / "-" [a-zA-Z0-9_])* {
+      return first + rest.map(r => Array.isArray(r) ? r.join('') : r).join('');
     }
 
 // Special path characters (.~) that act like identifiers in path contexts
@@ -63,9 +65,9 @@ BacktickSequence "Backtick Sequence"
 
 // Reserved directive names that cannot be used as variable names
 ReservedDirective "Reserved Directive Name"
-  = "/var" / "/show" / "/stream" / "/run" / "/exe" / "/path"
-  / "/import" / "/when" / "/output" / "/append" / "/for" / "/log"
-  / "/guard" / "/export" / "/policy"
+  = "/var" / "/show" / "/stream" / "/run" / "/exe"
+  / "/import" / "/when" / "/if" / "/output" / "/append" / "/for" / "/loop" / "/log" / "/bail" / "/checkpoint"
+  / "/guard" / "/hook" / "/export" / "/policy" / "/sign" / "/verify"
 
 // Streaming keyword for syntax sugar
 StreamKeyword "stream keyword"

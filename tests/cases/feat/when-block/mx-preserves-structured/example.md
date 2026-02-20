@@ -1,7 +1,7 @@
 # When-expression preserves structured file values
 
 /var @file = <when-block-mx-meta-test.txt>
-/var @out = when first [
+/var @out = when [
   * => @file
 ]
 /show @out.mx.filename

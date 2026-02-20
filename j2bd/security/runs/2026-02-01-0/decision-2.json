@@ -1,0 +1,7 @@
+{
+  "reasoning": "signing-overview (m-4bf6) completed successfully and was closed. Following the logical documentation order from the job spec: signing-overview → sign-verify → autosign-autoverify → labels-influenced → pattern-audit-guard. The sign-verify atom (m-e4d6) documents the actual sign/verify primitives - this must be written before autosign-autoverify since policy automation requires understanding the underlying primitives. This maintains proper dependency ordering for learners.",
+  "action": "work",
+  "ticket": "m-e4d6",
+  "task_type": "doc",
+  "guidance": "Create the sign-verify atom at docs/src/atoms/security/sign-verify.md. Document the sign and verify primitives: (1) sign directive syntax with signer and algorithm, (2) verify directive for checking signatures, (3) how signatures are stored as metadata, (4) what happens on verification failure, (5) the verification flow for audit patterns. Reference signing-overview.md for the 'why'. Use the /mlld skill for language knowledge and validate all examples with 'mlld validate'."
+}

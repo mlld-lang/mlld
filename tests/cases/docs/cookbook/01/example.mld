@@ -1,5 +1,0 @@
-exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku }
-exe @sonnet(prompt) = @prompt | cmd { claude -p --model sonnet }
-exe @opus(prompt) = @prompt | cmd { claude -p --model opus }
-
-show @haiku("Explain recursion in one sentence")

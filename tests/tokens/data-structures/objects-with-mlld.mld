@@ -11,9 +11,7 @@
 @template --> variable[declaration]
 = --> operator
 ` --> operator
-Hello  --> string
 @name --> variable
-! --> string
 ` --> operator
 @complex --> variable[declaration]
 = --> operator

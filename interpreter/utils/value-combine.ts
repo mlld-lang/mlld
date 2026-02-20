@@ -7,7 +7,7 @@
 
 import { MlldDirectiveError } from '@core/errors';
 import { asText, asData, isStructuredValue } from './structured-value';
-import { toNumber } from '../eval/expression';
+import { toNumber } from '../eval/expressions';
 
 /**
  * Check if a value is a plain object (not null, not array, not special type)
@@ -84,7 +84,7 @@ export function combineValues(
   const typeName = targetValue === null ? 'null' : typeof targetValue;
   throw new MlldDirectiveError(
     'let',
-    `+= requires array, string, or object target. ` +
+    `+= requires array, number, string, or object target. ` +
     `@${targetName} is ${typeName}.`
   );
 }

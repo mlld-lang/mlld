@@ -13,7 +13,7 @@ describe('Exec pipeline structured flow', () => {
 /exe @emit() = js { return '{"count": 5}' }
 /exe @parseJson(val) = js { return JSON.parse(val) }
 /var @result = @emit() with { pipeline: [@parseJson] }
-/show @result.text
+/show @result.mx.text
 /show @result
 `;
 
@@ -106,7 +106,7 @@ describe('Exec pipeline structured flow', () => {
     const input = `
 /exe @seed() = "s"
 
-/exe @retryer(input, pipeline) = when first [
+/exe @retryer(input, pipeline) = when [
   @pipeline.try < 3 => retry
   * => \`done @pipeline.try\`
 ]

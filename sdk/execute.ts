@@ -38,6 +38,13 @@ export interface ExecuteOptions {
   pathService?: IPathService;
   allowAbsolutePaths?: boolean;
   mode?: MlldMode;
+  checkpoint?: boolean;
+  noCheckpoint?: boolean;
+  fresh?: boolean;
+  resume?: string | true;
+  fork?: string;
+  checkpointScriptName?: string;
+  checkpointCacheRootDir?: string;
 }
 
 const astCache = new MemoryAstCache();
@@ -69,7 +76,14 @@ export async function execute(
     allowAbsolutePaths: options.allowAbsolutePaths,
     dynamicModules,
     dynamicModuleSource: options.dynamicModuleSource,
-    ast: cacheEntry.ast
+    ast: cacheEntry.ast,
+    checkpoint: options.checkpoint,
+    noCheckpoint: options.noCheckpoint,
+    fresh: options.fresh,
+    resume: options.resume,
+    fork: options.fork,
+    checkpointScriptName: options.checkpointScriptName,
+    checkpointCacheRootDir: options.checkpointCacheRootDir
   } as InterpretOptions;
 
   const metricsContext = {

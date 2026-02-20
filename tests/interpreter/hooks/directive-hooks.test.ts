@@ -6,6 +6,7 @@ import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
 import { createSimpleTextVariable } from '@core/types/variable';
+import { asText } from '@interpreter/utils/structured-value';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -211,6 +212,26 @@ describe('directive hook infrastructure', () => {
     const runDirective = parseSync('/run @emit()')[0] as DirectiveNode;
     await expect(evaluateDirective(runDirective, env)).rejects.toThrow(/skip run/);
     expect(capturedExecName).toBe('emit');
+  });
+
+  it('retries run exec directives when after guards request retry', async () => {
+    const env = createEnv();
+    const counterKey = '__mlldGuardAfterRunExecRetryCount';
+    (globalThis as Record<string, unknown>)[counterKey] = 0;
+
+    const execDirective = parseSync(
+      `/exe @emit() = js { globalThis.${counterKey} = (globalThis.${counterKey} ?? 0) + 1; return globalThis.${counterKey}; }`
+    )[0] as DirectiveNode;
+    await evaluateDirective(execDirective, env);
+
+    const guardDirective = parseSync(
+      '/guard after @retryOnce for op:run = when [ @mx.guard.try < 2 => retry "again" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const runDirective = parseSync('/run @emit()')[0] as DirectiveNode;
+    const result = await evaluateDirective(runDirective, env);
+    expect(asText(result.value)).toBe('2');
   });
 
   it('exposes /var assignments to pre-hooks without duplicate evaluation', async () => {

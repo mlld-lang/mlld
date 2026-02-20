@@ -1,0 +1,5 @@
+{
+  "env": {
+    "MLLD_TEST_AUTH_VALUE": "injected-secret"
+  }
+}

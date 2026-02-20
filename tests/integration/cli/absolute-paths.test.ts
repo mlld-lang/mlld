@@ -1,18 +1,32 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
+import { existsSync, statSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+const mlldBin = resolveMlldBin();
+
+function resolveMlldBin(): string {
+  const distPath = path.resolve(process.cwd(), 'dist/cli.cjs');
+  const sourcePath = path.resolve(process.cwd(), 'cli/cli-entry.ts');
+  const wrapperPath = path.resolve(process.cwd(), 'bin/mlld-wrapper.cjs');
+
+  if (!existsSync(distPath)) return wrapperPath;
+  if (!existsSync(sourcePath)) return distPath;
+  try {
+    return statSync(sourcePath).mtimeMs > statSync(distPath).mtimeMs ? wrapperPath : distPath;
+  } catch {
+    return distPath;
+  }
+}
 
 describe('Absolute Path Access with --allow-absolute flag', () => {
   let tempDir: string;
   let externalFile: string;
   let projectDir: string;
-  const mlldBin = path.resolve(process.cwd(), 'dist/cli.cjs');
-  
   beforeEach(async () => {
     // Create a temporary directory outside the project
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-abs-test-'));
@@ -53,7 +67,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
     // Access restrictions removed - now delegated to /policy directive
     it.skip('should deny path variable with absolute path by default', async () => {
       const scriptPath = path.join(projectDir, 'test.mld');
-      await fs.writeFile(scriptPath, `/path @f = "${externalFile}"
+      await fs.writeFile(scriptPath, `/var @f = "${externalFile}"
 /var @text = <@f>
 /show @text`, 'utf-8');
 
@@ -67,7 +81,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
     
     it('should allow path variable with absolute path with --allow-absolute flag', async () => {
       const scriptPath = path.join(projectDir, 'test.mld');
-      await fs.writeFile(scriptPath, `/path @f = "${externalFile}"
+      await fs.writeFile(scriptPath, `/var @f = "${externalFile}"
 /var @text = <@f>
 /show @text`, 'utf-8');
       
@@ -167,7 +181,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
       await fs.writeFile(parentFile, 'PARENT_CONTENT', 'utf-8');
       
       // Use absolute path instead of relative ..
-      await fs.writeFile(scriptPath, `/path @f = "${parentFile}"
+      await fs.writeFile(scriptPath, `/var @f = "${parentFile}"
 /var @text = <@f>
 /show @text`, 'utf-8');
       
@@ -190,7 +204,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
       
       const scriptPath = path.join(projectDir, 'test.mld');
       await fs.writeFile(scriptPath, `/var @internal = <./internal.txt>
-/path @externalPath = "${externalFile}"
+/var @externalPath = "${externalFile}"
 /var @externalContent = <@externalPath>
 /show @internal
 /show @externalContent`, 'utf-8');
@@ -231,7 +245,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
     it.skip('should not persist --allow-absolute setting across runs', async () => {
       const scriptPath = path.join(projectDir, 'test.mld');
       // Use path variable to avoid hanging
-      await fs.writeFile(scriptPath, `/path @f = "${externalFile}"
+      await fs.writeFile(scriptPath, `/var @f = "${externalFile}"
 /var @text = <@f>
 /show @text`, 'utf-8');
 

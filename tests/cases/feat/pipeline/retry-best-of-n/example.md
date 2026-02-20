@@ -29,7 +29,7 @@
   return `selected: ${best} from [${attempts.join(', ')}]`;
 }
 
-/exe @collectFiveAttempts(input) = when first [
+/exe @collectFiveAttempts(input) = when [
   @pipeline.try < 5 => retry
   * => @selectBest(@input, @p)
 ]

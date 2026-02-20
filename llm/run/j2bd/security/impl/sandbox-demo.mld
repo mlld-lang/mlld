@@ -1,0 +1,186 @@
+>>
+>> Sandbox Demo: Restricting Agent Capabilities
+>>
+>> Demonstrates environment-based sandboxing for AI agents:
+>> 1. Tool restrictions (Read/Write only, no Bash)
+>> 2. Filesystem access limits (specific directories only)
+>> 3. Network disabled
+>> 4. No MCP servers
+>> 5. Credential injection via sealed paths
+>>
+
+>> ============================================================
+>> STEP 1: Configure sandbox environment
+>> ============================================================
+
+>> Sandbox with Docker provider for process isolation.
+>> Tools scoped to Read and Write. Shell access blocked by policy deny:['sh'].
+>> tools field scopes MCP tool routing (see policy capabilities for command blocking)
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  tools: ["Read", "Write"],
+  fs: { read: [".:/app"], write: ["/tmp"] },
+  net: "none",
+  mcps: []
+}
+
+log "Sandbox config: tools=Read,Write fs.read=.:/app fs.write=/tmp net=none mcps=[]"
+
+>> ============================================================
+>> STEP 2: Alternative configs showing different restrictions
+>> ============================================================
+
+>> Local execution (no provider) with auth and tool scoping.
+>> Command restrictions use policy capabilities, not tools field.
+var @localRestricted = {
+  auth: "claude",
+  tools: ["Read", "Write"],
+  fs: { read: ["@base/**"], write: ["@base/tmp/**", "@base/workspace/**"] }
+}
+
+log "Local restricted config: tools=Read,Write fs.write=tmp,workspace"
+
+>> Read-only sandbox - agent can only observe, not modify.
+var @readOnly = @sandbox with { tools: ["Read"], fs: { read: [".:/app"], write: [] } }
+
+log "Read-only config derived from sandbox: tools=Read fs.write=[]"
+
+>> Workspace-limited sandbox - agent can only work in /workspace.
+var @workspaceSandbox = {
+  provider: "@mlld/env-docker",
+  tools: ["Read", "Write", "Bash"],
+  fs: { read: ["/workspace:/workspace"], write: ["/workspace:/workspace"] },
+  net: "none",
+  mcps: []
+}
+
+log "Workspace sandbox: tools=Read,Write,Bash limited to /workspace"
+
+>> ============================================================
+>> STEP 3: Policy with credential configuration
+>> ============================================================
+
+>> Define policy with auth credentials.
+>> Credentials flow through sealed paths - never exposed as strings.
+var @policyConfig = {
+  auth: {
+    claude: { from: "keychain:mlld-env-myproject/claude", as: "ANTHROPIC_API_KEY" },
+    openai: { from: "env:OPENAI_API_KEY", as: "OPENAI_API_KEY" }
+  },
+  capabilities: {
+    allow: ["cmd:git:*", "fs:r:**", "fs:w:@base/tmp/**"],
+    deny: ["sh"]
+  }
+}
+policy @p = union(@policyConfig)
+
+log "Policy configured with sealed auth paths"
+
+>> Secret protection guards
+>> Guard fires on secret-labeled data flowing to any operation.
+>> Blocks show, log, and exe calls that attempt to display secrets.
+guard @noShowSecrets before secret = when [
+  @mx.op.type == "show" => deny "Cannot display secret-labeled data"
+  @mx.op.type == "log" => deny "Cannot log secret-labeled data"
+  @mx.op.type == "exe" && @mx.op.name == "attemptShowSecret" => deny "Cannot display secret-labeled data"
+  * => allow
+]
+
+>> Block interpolation of secrets into commands
+guard @noSecretCmd before secret = when [
+  @mx.op.type == "run" => deny "Cannot interpolate secret into command"
+  * => allow
+]
+
+log "Secret protection guards registered"
+
+>> Demonstrate secret protection
+var secret @testKey = "sk-test-never-shown"
+
+>> exe with denied handler catches the guard denial gracefully
+exe @attemptShowSecret(value) = when [
+  denied => `BLOCKED: @mx.guard.reason`
+  * => show @value
+]
+
+var @showResult = @attemptShowSecret(@testKey)
+log "Secret protection test: @showResult"
+
+>> ============================================================
+>> STEP 4: Demonstrate environment block usage
+>> ============================================================
+
+>> The env block scopes tool routing for MCP providers.
+>> Command-level restrictions use policy capabilities.deny/allow.
+
+var @demoConfig = { tools: ["Read", "Write"] }
+
+var @envResult = env @demoConfig [
+  >> Inside env block, tools are restricted
+  log "Inside env block with tools: Read, Write"
+  => "env block completed"
+]
+
+show @envResult
+
+>> ============================================================
+>> STEP 5: Credential injection pattern
+>> ============================================================
+
+>> The 'using auth:name' syntax injects credentials as env vars.
+>> The secret flows directly from source to env var - never a string.
+>>
+>> run cmd { claude -p @task } using auth:claude
+>>
+>> This would inject ANTHROPIC_API_KEY from keychain.
+>> The agent cannot read the credential as a string variable.
+
+log "Credential injection uses 'using auth:name' syntax"
+log "Example: run cmd { tool } using auth:claude"
+
+>> For explicit variable injection (computed secrets):
+>> run cmd { tool } using @token as TOOL_KEY
+
+>> ============================================================
+>> SUMMARY
+>> ============================================================
+
+show ::
+
+Sandbox Demo Complete
+=====================
+
+This demonstrated environment-based agent sandboxing:
+
+1. TOOL RESTRICTIONS
+   - tools: ["Read", "Write"] scopes MCP tool routing
+   - capabilities.deny: ["sh"] blocks shell access via policy
+   - capabilities.allow list controls which commands can run
+
+2. FILESYSTEM LIMITS
+   - fs.read: [".:/app"] limits read access
+   - fs.write: ["/tmp"] limits write access
+   - Paths use host:container format for Docker
+
+3. NETWORK DISABLED
+   - net: "none" blocks all network access
+   - Options: "none", "host", or { allow: [...] }
+
+4. NO MCP SERVERS
+   - mcps: [] provides no external tool servers
+   - Agent operates with only specified tools
+
+5. CREDENTIAL PROTECTION
+   - policy.auth defines sealed credential paths
+   - 'using auth:name' injects as env var without exposing value
+   - Guards enforce secret label: block show, log, and cmd interpolation
+   - policy.labels.secret.deny can also block show/log/cmd declaratively
+   - Guards shown here cover custom exe calls and all operation types
+   - var secret labels propagate through all transformations
+
+Environment configs are composable values:
+- Use 'with' to derive restricted variants
+- Use 'new' for child environments
+- Policy controls overall capabilities
+
+::

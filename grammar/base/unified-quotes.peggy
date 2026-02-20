@@ -25,7 +25,16 @@ UnifiedQuote "Unified quote pattern"
 
 // Double quotes with @var and @func() interpolation
 UnifiedDoubleQuote "Double quoted string with interpolation"
-  = '"' parts:(ConditionalStringFragment / SpecialVariable / UnifiedInterpolationContent / UnifiedAtLiteral / UnifiedDoubleQuotedText)* '"' {
+  = '"' parts:(
+      ConditionalStringFragment
+      / NullCoalescingTight
+      / ConditionalVariableOmission
+      / SpecialVariable
+      / TemplateUnaryNegation
+      / UnifiedInterpolationContent
+      / UnifiedAtLiteral
+      / UnifiedDoubleQuotedText
+    )* '"' {
       helpers.debug('UnifiedQuote: DoubleQuote matched', { parts });
       
       // If it's a plain string (no interpolation), create a Literal node for directive contexts
@@ -114,7 +123,9 @@ UnifiedBacktick "Backtick string with interpolation"
 // Shared interpolation pattern for both double quotes and backticks
 // Supports @var, @func(args), and <file.md>
 UnifiedInterpolationContent "Shared interpolation content"
-  = ExecResultMethodCall         // @func(args).method(args)
+  = NullCoalescingTight          // @var??"default"
+  / ConditionalVariableOmission  // @var?
+  / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)
   / FileReferenceInterpolation   // <file.md> references with fields/pipes
@@ -122,7 +133,18 @@ UnifiedInterpolationContent "Shared interpolation content"
   / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
 
 ConditionalTemplateSnippet "conditional template snippet"
-  = condition:ConditionalVariableReference "`" content:UnifiedBacktickInterpolation* "`" {
+  = condition:ConditionalVariableReference "`" content:UnifiedBacktickInterpolation+ "`" {
+      return {
+        type: 'ConditionalTemplateSnippet',
+        condition: condition.variable,
+        content: content,
+        location: location()
+      };
+    }
+
+// Inline-only variant for backtick templates (no newlines)
+ConditionalTemplateSnippetInline "conditional template snippet inline"
+  = condition:ConditionalVariableReference "`" content:UnifiedBacktickInterpolationInline* "`" {
       return {
         type: 'ConditionalTemplateSnippet',
         condition: condition.variable,
@@ -151,14 +173,32 @@ ConditionalStringFragmentContent
 // Content inside backtick templates - supports @var and @func(args) and <file.md>
 UnifiedBacktickInterpolation "Backtick interpolation content"
   = TemplateSlashForBlockBacktick    // Inline for-block
-  / TemplateInlineShow               // Inline /show
-  / ConditionalTemplateSnippet
+  / ConditionalTemplateSnippetInline // @var?`...` (inline, no newlines)
+  / NullCoalescingTight
+  / ConditionalVariableOmission
+  / TemplateUnaryNegation            // !@var, !@func(), !@obj.method() - must come before text
   / UnifiedInterpolationContent      // Use shared interpolation
+  / "@@" {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "\\@" {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
   / AngleBracketLiteral              // USE ABSTRACTED PATTERN instead of inline rule
   / UnifiedBacktickTextSegment       // Plain text
+
+// Unary negation in template contexts - allows !@var, !@func(), !@obj.method()
+TemplateUnaryNegation "template unary negation"
+  = "!" inner:(ExecResultMethodCall / FieldAccessExec / UnifiedExecInvocation / TemplateVariableReference / UnifiedReferenceNoTail) {
+      return helpers.createNode('UnaryExpression', {
+        operator: '!',
+        operand: inner,
+        location: location()
+      });
+    }
 
 // -------------------------------------------------------------
 // SUPPORTING PATTERNS (from content.peggy)
@@ -189,10 +229,38 @@ UnifiedBacktickTextSegment
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
+// Inline backtick text segment (no newlines)
+UnifiedBacktickTextSegmentInline
+  = chars:UnifiedBacktickCharInline+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
+    }
+
 UnifiedBacktickChar
   = StringEscapeSequence  // Process string escapes first
   / EscapeSequence       // Then mlld syntax escapes
-  / !("`" / "@" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
+  / !("`" / "!@" / "@" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
+
+// Inline backtick char (no newlines)
+UnifiedBacktickCharInline
+  = StringEscapeSequence  // Process string escapes first
+  / EscapeSequence       // Then mlld syntax escapes
+  / !("`" / "!@" / "@" / "\n" / "\r" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
+
+// Inline backtick interpolation content (no newlines)
+UnifiedBacktickInterpolationInline
+  = TemplateUnaryNegation
+  / UnifiedInterpolationContent
+  / "@@" {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "\\@" {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "@" !BaseIdentifier char:. {
+      return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
+    }
+  / AngleBracketLiteral
+  / UnifiedBacktickTextSegmentInline
 
 // Literal @ when not followed by an identifier (e.g., "@" at end of string or "@:")
 // BUT not @@ which is an escape sequence
@@ -211,7 +279,7 @@ UnifiedDoubleQuotedText
 UnifiedDoubleQuotedChar
   = StringEscapeSequence  // Handle \n, \t, etc.
   / EscapeSequence       // Handle \@, \", etc.
-  / !["@\n\r] char:. { return char; }  // Allow < characters, rely on semantic lookahead
+  / !("!@" / ["@\n\r]) char:. { return char; }  // Allow < characters, rely on semantic lookahead
 
 // Backtick slash-style for block
 TemplateSlashForBlockBacktick "slash for-block (backtick)"
@@ -223,7 +291,6 @@ TemplateSlashForBlockBacktick "slash for-block (backtick)"
     }
     "/for" _ pattern:ForIterationPattern _ parts:(
       TemplateSlashForBlockBacktick
-      / TemplateInlineShow
       / UnifiedInterpolationContent
       / UnifiedBacktickTextSegment
     )* _ &{
@@ -232,13 +299,17 @@ TemplateSlashForBlockBacktick "slash for-block (backtick)"
       const prev = input[pos - 1];
       return prev === '\n' || prev === '\r';
     } "/end" {
-      return {
+      const node = {
         type: 'TemplateForBlock',
         variable: pattern.variable,
         source: pattern.source,
         body: parts,
         style: 'slash'
       };
+      if (pattern.key) {
+        node.keyVariable = pattern.key;
+      }
+      return node;
     }
 
 // -------------------------------------------------------------

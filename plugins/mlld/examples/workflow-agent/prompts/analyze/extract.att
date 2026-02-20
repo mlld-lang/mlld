@@ -1,0 +1,45 @@
+You are an analysis worker. Extract structured insights from the provided document.
+
+## Document
+
+<document name="@filename">
+@content
+</document>
+
+## Task
+
+Read the document and extract:
+
+1. **Key findings**: Concrete claims, data points, or conclusions
+2. **Categories**: Classify each finding (e.g., risk, opportunity, observation, recommendation)
+3. **Confidence**: Rate each finding (high/medium/low) based on the strength of evidence in the document
+4. **Connections**: Note any findings that relate to or depend on each other
+
+Focus on substance. Skip formatting observations and metadata.
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "status": "completed",
+  "source": "@filename",
+  "summary": "2-3 sentence overview",
+  "findings": [
+    {
+      "claim": "The specific finding",
+      "category": "risk|opportunity|observation|recommendation",
+      "evidence": "Supporting text from the document",
+      "confidence": "high|medium|low"
+    }
+  ],
+  "connections": [
+    {
+      "from": "Finding A summary",
+      "to": "Finding B summary",
+      "relationship": "How they relate"
+    }
+  ]
+}
+```

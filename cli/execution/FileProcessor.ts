@@ -17,6 +17,8 @@ import type { OptionProcessor } from '../parsers/OptionProcessor';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 import { URLLoader } from '../utils/url-loader';
 import { parseInjectOptions } from '../utils/inject-parser';
+import { parseDuration, formatDuration } from '@core/config/utils';
+import chalk from 'chalk';
 
 export interface ProcessingEnvironment {
   fileSystem: NodeFileSystem;
@@ -109,15 +111,16 @@ export class FileProcessor {
   }
 
   async processFileWithOptions(cliOptions: CLIOptions, apiOptions: any): Promise<void> {
-    // Check if input is a URL or stdin
+    // Check if input is a URL, stdin, or inline eval
     const isURL = URLLoader.isURL(cliOptions.input);
     const isStdinInput = cliOptions.input === '/dev/stdin' || cliOptions.input === '-';
+    const isEvalInput = cliOptions.eval !== undefined;
 
     // Set up environment based on input type
     let environment: ProcessingEnvironment;
     if (isURL) {
       environment = await this.setupEnvironmentForURL();
-    } else if (isStdinInput) {
+    } else if (isStdinInput || isEvalInput) {
       environment = await this.setupEnvironmentForStdin();
     } else {
       if (!existsSync(cliOptions.input)) {
@@ -129,12 +132,54 @@ export class FileProcessor {
     let interpretEnvironment: Environment | null = null;
     let detachLogging: (() => void) | undefined;
 
+    // Parse --timeout if provided
+    let timeoutMs: number | undefined;
+    if (cliOptions.timeout) {
+      try {
+        timeoutMs = parseDuration(cliOptions.timeout);
+        if (timeoutMs <= 0) {
+          throw new Error('--timeout must be a positive duration');
+        }
+      } catch {
+        throw new Error('--timeout must be a valid duration (e.g., 5m, 1h, 30s, or milliseconds)');
+      }
+    }
+
     try {
       // Read stdin if available, but NOT if input is /dev/stdin (or - alias) since
       // fs.readFile('/dev/stdin') will consume stdin directly
       const stdinContent = isStdinInput ? undefined : await this.readStdinIfAvailable();
 
-      const interpretation = await this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL, isStdinInput);
+      const startTime = cliOptions.metrics ? performance.now() : 0;
+
+      // Execute with optional timeout
+      let interpretPromise = this.executeInterpretation(
+        cliOptions,
+        apiOptions,
+        environment,
+        stdinContent,
+        isURL,
+        isStdinInput,
+        isEvalInput
+      );
+
+      if (timeoutMs) {
+        const timeout = timeoutMs;
+        interpretPromise = Promise.race([
+          interpretPromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Execution timed out after ${formatDuration(timeout)}`)), timeout)
+          )
+        ]);
+      }
+
+      const interpretation = await interpretPromise;
+
+      if (cliOptions.metrics) {
+        const elapsed = performance.now() - startTime;
+        console.error(chalk.gray(`\nTotal: ${elapsed.toFixed(1)}ms`));
+      }
+
       interpretEnvironment = interpretation.interpretEnvironment ?? null;
       detachLogging = interpretation.detachLogging;
 
@@ -170,9 +215,10 @@ export class FileProcessor {
         return;
       }
 
+      const outputOptions = isEvalInput ? { ...cliOptions, stdout: true } : cliOptions;
       await this.handleOutput(
         interpretation.result,
-        cliOptions,
+        outputOptions,
         environment,
         interpretation.hasExplicitOutput,
         interpretation.interpretEnvironment
@@ -285,7 +331,8 @@ export class FileProcessor {
     environment: ProcessingEnvironment,
     stdinContent?: string,
     isURL?: boolean,
-    isStdinInput?: boolean
+    isStdinInput?: boolean,
+    isEvalInput?: boolean
   ): Promise<
     | { kind: 'document'; result: string; hasExplicitOutput: boolean; interpretEnvironment?: Environment | null; detachLogging?: () => void }
     | { kind: 'stream'; handle: StreamExecution; interpretEnvironment?: Environment | null; detachLogging?: () => void }
@@ -305,6 +352,9 @@ export class FileProcessor {
       content = urlResult.content;
       // Use the URL as the effective path for error reporting
       effectivePath = urlResult.finalUrl;
+    } else if (isEvalInput) {
+      content = cliOptions.eval ?? '';
+      effectivePath = path.resolve(process.cwd(), '<eval>.mld');
     } else {
       // Read the input file
       content = await fs.readFile(cliOptions.input, 'utf8');
@@ -367,6 +417,11 @@ export class FileProcessor {
       captureErrors: cliOptions.captureErrors,
       ephemeral: cliOptions.ephemeral,
       allowAbsolutePaths: cliOptions.allowAbsolute,
+      checkpoint: cliOptions.checkpoint,
+      noCheckpoint: cliOptions.noCheckpoint,
+      fresh: cliOptions.fresh,
+      resume: cliOptions.resume,
+      fork: cliOptions.fork,
       captureEnvironment: env => {
         resultEnvironment = env;
       },

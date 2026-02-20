@@ -1,6 +1,0 @@
-import { @claude } from @mlld/claude
-
-var @config = {
-  model: @claude("prompt", "opus", @base),
-  skills: ["open-prose:prose-boot", "open-prose:prose-compile", "open-prose:prose-run"]
-}

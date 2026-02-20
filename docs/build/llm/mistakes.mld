@@ -16,6 +16,7 @@ var @fileVsString = <@base/docs/src/atoms/mistakes/file-vs-string.md>
 var @xmlVsFile = <@base/docs/src/atoms/mistakes/xml-vs-file-tags.md>
 var @nestedFunc = <@base/docs/src/atoms/mistakes/nested-func-in-shell.md>
 var @templateCollection = <@base/docs/src/atoms/mistakes/template-collection-import.md>
+var @attAngleBracket = <@base/docs/src/atoms/mistakes/att-angle-bracket.md>
 var @varParallel = <@base/docs/src/atoms/mistakes/var-in-parallel-block.md>
 var @returnStatement = <@base/docs/src/atoms/mistakes/return-statement.md>
 var @missingBraces = <@base/docs/src/atoms/mistakes/missing-braces.md>
@@ -35,6 +36,7 @@ var @fileVsStringSection = @wrapSection("MISTAKE_FILE_VS_STRING", @strip(@fileVs
 var @xmlVsFileSection = @wrapSection("MISTAKE_XML_VS_FILE_TAGS", @strip(@xmlVsFile))
 var @nestedFuncSection = @wrapSection("MISTAKE_NESTED_FUNC_IN_SHELL", @strip(@nestedFunc))
 var @templateCollectionSection = @wrapSection("MISTAKE_TEMPLATE_COLLECTION_IMPORT", @strip(@templateCollection))
+var @attAngleBracketSection = @wrapSection("MISTAKE_ATT_ANGLE_BRACKET", @strip(@attAngleBracket))
 var @varParallelSection = @wrapSection("MISTAKE_VAR_IN_PARALLEL_BLOCK", @strip(@varParallel))
 var @returnStatementSection = @wrapSection("MISTAKE_RETURN_STATEMENT", @strip(@returnStatement))
 var @missingBracesSection = @wrapSection("MISTAKE_MISSING_BRACES", @strip(@missingBraces))
@@ -50,6 +52,7 @@ var @allSections = [
   @xmlVsFileSection,
   @nestedFuncSection,
   @templateCollectionSection,
+  @attAngleBracketSection,
   @varParallelSection,
   @returnStatementSection,
   @missingBracesSection,

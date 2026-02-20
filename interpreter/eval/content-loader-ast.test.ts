@@ -4,10 +4,11 @@ import { Environment } from '../env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import * as path from 'path';
-import minimatch from 'minimatch';
+import { minimatch } from 'minimatch';
 import { glob } from 'tinyglobby';
 import { unwrapStructuredForTest } from './test-helpers';
 import type { StructuredValueMetadata } from '../utils/structured-value';
+import { createSimpleTextVariable, type VariableSource } from '@core/types/variable';
 
 function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
   expect(metadata?.source).toBe('load-content');
@@ -16,6 +17,13 @@ function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
 vi.mock('tinyglobby', () => ({
   glob: vi.fn()
 }));
+
+const VARIABLE_SOURCE: VariableSource = {
+  directive: 'var',
+  syntax: 'quoted',
+  hasInterpolation: false,
+  isMultiLine: false
+};
 
 describe('Content Loader AST patterns', () => {
   let env: Environment;
@@ -466,6 +474,95 @@ describe('Content Loader AST patterns', () => {
       .map(r => (r as any).file)
       .sort();
     expect(files).toEqual([fileA, fileB].sort());
+  });
+
+  it('rejects mixed content and name-list selectors', async () => {
+    const filePath = path.join(process.cwd(), 'mixed-selectors.ts');
+    await fileSystem.writeFile(filePath, 'export function createUser() { return 1; }');
+
+    const node = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [
+        { type: 'name-list', filter: 'fn' },
+        { type: 'definition', name: 'createUser' }
+      ]
+    };
+
+    await expect(processContentLoader(node as any, env)).rejects.toThrow(
+      'Cannot mix content selectors with name-list selectors'
+    );
+  });
+
+  it('fails when variable-backed AST filters are missing', async () => {
+    const filePath = path.join(process.cwd(), 'missing-ast-var.ts');
+    await fileSystem.writeFile(filePath, 'export function createUser() { return 1; }');
+
+    const node = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [{ type: 'name-list-var', identifier: 'missingFilter' }]
+    };
+
+    await expect(processContentLoader(node as any, env)).rejects.toThrow(
+      'Variable @missingFilter is not defined'
+    );
+  });
+
+  it('keeps single-file and glob name-list extraction shapes stable', async () => {
+    const dir = path.join(process.cwd(), 'ast-shape');
+    await fileSystem.mkdir(dir, { recursive: true });
+    await fileSystem.writeFile(path.join(dir, 'alpha.ts'), 'export function alpha() { return 1; }');
+    await fileSystem.writeFile(path.join(dir, 'beta.ts'), 'export function beta() { return 2; }');
+    env.setVariable(
+      'nameFilter',
+      createSimpleTextVariable('nameFilter', 'fn', VARIABLE_SOURCE)
+    );
+
+    const singleNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        raw: path.join('ast-shape', 'alpha.ts'),
+        segments: [{ type: 'Text', content: path.join('ast-shape', 'alpha.ts') }]
+      },
+      ast: [{ type: 'name-list-var', identifier: 'nameFilter' }]
+    };
+
+    const rawSingle = await processContentLoader(singleNode as any, env);
+    const { data: singleResults } = unwrapStructuredForTest<string[]>(rawSingle);
+    expect(Array.isArray(singleResults)).toBe(true);
+    expect(singleResults).toEqual(expect.arrayContaining(['alpha']));
+    expect(singleResults.every(item => typeof item === 'string')).toBe(true);
+
+    const globNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        raw: path.join('ast-shape', '*.ts'),
+        segments: [{ type: 'Text', content: path.join('ast-shape', '*.ts') }]
+      },
+      ast: [{ type: 'name-list-var', identifier: 'nameFilter' }]
+    };
+
+    const rawGlob = await processContentLoader(globNode as any, env);
+    const { data: globResults } = unwrapStructuredForTest<Array<any>>(rawGlob);
+
+    expect(Array.isArray(globResults)).toBe(true);
+    expect(globResults).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          file: 'alpha.ts',
+          relative: expect.stringContaining('ast-shape/alpha.ts'),
+          names: expect.arrayContaining(['alpha'])
+        }),
+        expect.objectContaining({
+          file: 'beta.ts',
+          relative: expect.stringContaining('ast-shape/beta.ts'),
+          names: expect.arrayContaining(['beta'])
+        })
+      ])
+    );
   });
 
   it('returns null entries for missing definitions', async () => {

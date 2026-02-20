@@ -1,0 +1,7 @@
+var @mode = "fast"
+when @mode == "fast" => [
+  if true [
+    => "when-return"
+  ]
+]
+=> "unreachable"

@@ -197,6 +197,10 @@ export class MemoryFileSystem implements IFileSystemService {
       }
     }
   }
+
+  async unlink(filePath: string): Promise<void> {
+    await this.rm(filePath);
+  }
   
   // Access method for compatibility
   async access(filePath: string): Promise<void> {

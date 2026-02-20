@@ -1,0 +1,61 @@
+>> Phase 0: Triage
+>> Decision agent picks topics intelligently based on context
+
+/needs { sh }
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
+import { @updatePhaseStatus } from "../lib/state.mld"
+
+exe @gitChangesSince(commit) = sh {
+  if [ -n "$commit" ]; then
+    git diff --name-only "$commit" HEAD 2>/dev/null || echo "(no prior commit)"
+  else
+    echo "(no prior run to compare)"
+  fi
+}
+
+exe @failureHistoryFrom(lastRunDir) = [
+  when !@lastRunDir => "(no prior run)"
+  let @results = <@lastRunDir/topics/**/results.json>
+  let @failing = for @r in @results when @r.status == "fail" || @r.status == "partial" => `@r.topic: @r.experiment (@r.status)`
+  => @failing.length > 0 ? @failing.join("\n") : "(no failures in last run)"
+]
+
+exe @currentTestStatus() = sh {
+  cd "$(git rev-parse --show-toplevel)" && npm test -- --reporter=dot 2>&1 | tail -20 || echo "(test status unavailable)"
+}
+
+>> Build triage prompt with context
+exe @triagePrompt(allTopics, gitChanges, failureHistory, testStatus, outputDir) = template "../prompts/phase0-triage.att"
+
+>> Run triage phase
+exe @runTriage(runDir, allTopics, lastRunDir) = [
+  @logPhaseStart(@runDir, "triage")
+  @updatePhaseStatus(@runDir, "triage", "in-progress")
+
+  let @lastCommit = @lastRunDir ? <@lastRunDir/run.json>?.config.git_commit : null
+  let @gitChanges = @gitChangesSince(@lastCommit)
+  let @failureHistory = @failureHistoryFrom(@lastRunDir)
+  let @testStatus = @currentTestStatus()
+
+  let @prompt = @triagePrompt(@allTopics, @gitChanges, @failureHistory, @testStatus, @runDir)
+  let @tools = "Read,Write,Glob,Grep"
+  let @markerFile = `@runDir/triage-decision.json`
+  let @fullPrompt = `@prompt\n\nIMPORTANT: When done, write your triage-decision.json to @markerFile using the Write tool. This file IS the marker.`
+
+  show `Starting triage agent...`
+  let @response = @claudePoll(@fullPrompt, "sonnet", @base, @tools, @markerFile) | log
+
+  let @decision = <@markerFile>?
+  let @selectedTopics = @decision ? @decision.selected_topics : @allTopics
+
+  show `Triage selected @selectedTopics.length of @allTopics.length topics`
+
+  @logPhaseComplete(@runDir, "triage", { selected: @selectedTopics.length, total: @allTopics.length })
+  @updatePhaseStatus(@runDir, "triage", "complete")
+
+  => @selectedTopics
+]
+
+/export { @runTriage }

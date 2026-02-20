@@ -50,23 +50,23 @@ Each atom is a markdown file with YAML frontmatter:
 
 ```markdown
 ---
-id: when-first
-title: When First (Switch-Style)
-brief: Stops at first matching condition
+id: when
+title: When
+brief: Select the first matching branch
 category: control-flow
-parent: when
+parent: control-flow
 tags: [conditionals, branching]
-related: [when-simple, when-bare]
+related: [when-inline, when]
 related-code: [interpreter/eval/when.ts]
 updated: 2026-01-05
 ---
 
-## When First
+## When
 
-`when first` stops at the first matching condition, like a switch statement.
+`when` stops at the first matching condition, like a switch statement.
 
 \```mlld
-when first [
+when [
   @role == "admin" => show "Admin panel"
   @role == "user"  => show "User dashboard"
   * => show "Guest view"
@@ -83,6 +83,7 @@ The `*` wildcard catches all unmatched cases.
 - **brief** (required): One-line summary
 - **category** (required): Top-level category
 - **parent** (optional): Parent topic ID for hierarchical grouping
+- **aliases** (optional): Array of alternate lookup names (e.g., `[sh, cmd]` for run-basics)
 - **tags** (optional): Array of tags for cross-referencing
 - **related** (optional): Array of related atom IDs
 - **related-code** (optional): Array of relevant source file paths
@@ -104,7 +105,7 @@ The entrypoint script at `llm/run/howto.mld`:
 
 ```mlld
 >> Load all atoms
-var @atoms = <@base/docs/src/atoms/**/*.md>
+var @atoms = <@root/docs/src/atoms/**/*.md>
 
 >> Get topic/subtopic from payload (injected by CLI)
 import { @topic, @subtopic } from @payload
@@ -113,7 +114,7 @@ import { @topic, @subtopic } from @payload
 var @matches = @filterByTopic(@atoms, @topic, @subtopic)
 
 >> Output the appropriate help
-when first [
+when [
   @subtopic => show @joinStripped(@exactMatches(@atoms, @fullId))
   @topic => show @joinStripped(@topicMatches(@atoms, @topic))
   * => show @buildTree(@atoms)
@@ -164,7 +165,7 @@ $ mlld howto
 MLLD HELP TOPICS
 
 control-flow/
-  when                     Conditionals (simple, bare, first)
+  when                     Conditionals (simple, bare, first-match)
   for                      Iteration (arrow, block, parallel)
   foreach                  Transform collections
   while                    Bounded loops
@@ -180,21 +181,21 @@ $ mlld howto when
 ## When Simple
 ...
 
-## When Bare
+## When List
 ...
 
-## When First
+## When (First-Match)
 ...
 ```
 
 ### Show specific subtopic
 
 ```bash
-$ mlld howto when first
+$ mlld howto when
 
-## When First (Switch-Style)
+## When
 
-`when first` stops at the first matching condition...
+`when` stops at the first matching condition...
 ```
 
 ## Building LLM Docs
@@ -205,15 +206,14 @@ Create build scripts that assemble atoms into llm docs:
 >> docs/build/llm/control-flow.mld
 
 var @whenAtoms = [
-  <@base/docs/src/atoms/control-flow/when-simple.md>,
-  <@base/docs/src/atoms/control-flow/when-bare.md>,
-  <@base/docs/src/atoms/control-flow/when-first.md>
+  <@root/docs/src/atoms/control-flow/when-inline.md>,
+  <@root/docs/src/atoms/control-flow/when.md>
 ]
 
 var @content = for @a in @whenAtoms => @strip(@a)
 
 show `<WHEN_DECISIONS>
-\`when\` handles conditionals. Three forms: simple, bare, first.
+\`when\` selects the first matching condition.
 
 @content.join("\n\n")
 </WHEN_DECISIONS>`
@@ -263,7 +263,7 @@ This ensures the howto system ships with your package.
 ## Related Patterns
 
 - **Fray notes**: Session-specific context curation
-- **Beads**: Issue tracking with dependencies
+- **tk**: Task management CLI
 - **PPP/QTTD**: Planning document formats
 
 The howto pattern complements these by providing **static, canonical documentation** that persists across sessions.
@@ -281,7 +281,7 @@ Now LLMs can run `mytool howto <feature>` to learn about your tool!
 
 ## Metadata Automation
 
-The mlld project includes a git pre-commit hook that automatically updates the `updated` field in atom frontmatter when atoms are modified and staged. The hook is integrated with the beads pre-commit hook at `.git/hooks/pre-commit`.
+The mlld project includes a git pre-commit hook that automatically updates the `updated` field in atom frontmatter when atoms are modified and staged. The hook is integrated with the pre-commit hook at `.git/hooks/pre-commit`.
 
 Key features:
 - Detects staged markdown files in `docs/src/atoms/`

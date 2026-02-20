@@ -245,7 +245,7 @@ describe('Performance Benchmarks', () => {
     
     it('should measure when expression evaluation', async () => {
       const mlld = `
-/exe @grade(score) = when first [
+/exe @grade(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   @score >= 70 => "C"

@@ -1,0 +1,77 @@
+>> Phase 2: Review
+>> Parallel self-review with session resume
+
+/needs { sh }
+
+import { @claudeResume } from "../lib/claude.mld"
+import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone } from "../lib/events.mld"
+import { @updatePhaseStatus } from "../lib/state.mld"
+
+exe @reviewPrompt(topic, outputDir) = template "../prompts/phase2-review.att"
+
+var @qaTools = "Read,Write,Glob,Grep,Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(find:*),Bash(grep:*),Bash(uuidgen),Bash(tr:*),Bash(mlld:*)"
+
+>> Check if a topic has failing experiments
+exe @hasFailingExperiments(topicDir) = [
+  let @results = <@topicDir/**/results.json>?
+  when !@results => false
+  let @failing = for @r in @results when @r.status == "fail" || @r.status == "partial" => @r
+  => @failing.length > 0
+]
+
+exe @runReview(runDir, topics) = [
+  @logPhaseStart(@runDir, "review")
+  @updatePhaseStatus(@runDir, "review", "in-progress")
+
+  >> Find all topics with sessions that completed phase 1
+  let @sessionFiles = <@runDir/topics/**/session.json>
+  let @needsReview = for @s in @sessionFiles when @s.phase1_complete && @topics.includes(@s.topic) => @s
+
+  let @withFailures = for @s in @needsReview when @hasFailingExperiments(`@runDir/topics/@s.topic`) => @s.topic
+  show `Found @needsReview.length topics to review (@withFailures.length with failures)`
+
+  if @needsReview.length == 0 [
+    show `No topics completed phase 1 yet.`
+    @logPhaseComplete(@runDir, "review", { reviewed: 0 })
+    @updatePhaseStatus(@runDir, "review", "complete")
+    => []
+  ]
+
+  let @results = for parallel(20) @s in @needsReview [
+    let @topicDir = `@runDir/topics/@s.topic`
+    @logItemStart(@runDir, @s.topic, "review")
+
+    let @prompt = @reviewPrompt(@s.topic, @runDir)
+    let @markerFile = `@topicDir/phase2-done.marker`
+    let @fullPrompt = `@prompt\n\nIMPORTANT: When you have completed ALL your work, as your very last action, write the text "done" to @markerFile using the Write tool.`
+    let @idx = @mx.for.index + 1
+    show `Starting self-review: @idx of @mx.for.total - @s.topic (resuming session: @s.session_id)`
+    let @response = @claudeResume(@fullPrompt, "sonnet", @qaTools, @markerFile, @s.session_id) | log
+    show `Phase 2 complete: @s.topic`
+
+    >> Check if agent reported being blocked
+    let @blockedFile = <@topicDir/blocked.json>?
+    if @blockedFile && @blockedFile.blocked [
+      show `BLOCKED (review): @s.topic - @blockedFile.blocked`
+      let @blockedSession = { topic: @s.topic, session_id: @s.session_id, phase1_started: @s.phase1_started, phase1_complete: @s.phase1_complete, phase1_finished: @s.phase1_finished, phase2_complete: false, phase2_blocked: true, phase2_blocked_reason: @blockedFile.blocked, phase2_finished: @now }
+      output @blockedSession to "@topicDir/session.json"
+      @logItemDone(@runDir, @s.topic, "blocked", null)
+      => @s.topic
+    ]
+
+    >> Update session info
+    let @updatedSession = { topic: @s.topic, session_id: @s.session_id, phase1_started: @s.phase1_started, phase1_complete: @s.phase1_complete, phase1_finished: @s.phase1_finished, phase2_complete: true, phase2_finished: @now }
+    output @updatedSession to "@topicDir/session.json"
+    @logItemDone(@runDir, @s.topic, "complete", null)
+
+    => @s.topic
+  ]
+
+  show `Phase 2 complete. Reviewed @results.length topics.`
+  @logPhaseComplete(@runDir, "review", { reviewed: @results.length })
+  @updatePhaseStatus(@runDir, "review", "complete")
+
+  => @results
+]
+
+/export { @runReview }

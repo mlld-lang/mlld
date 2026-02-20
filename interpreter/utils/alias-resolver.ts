@@ -25,12 +25,21 @@ export interface AliasResolutionResult {
  * @param command - The command to resolve
  * @returns Resolution result with the resolved command
  */
+const SHELL_BUILTINS = new Set([
+  'echo', 'cd', 'pwd', 'test', '[', 'true', 'false', 'exit',
+  'export', 'unset', 'set', 'source', '.', 'eval', 'exec',
+  'read', 'printf', 'kill', 'jobs', 'bg', 'fg', 'wait',
+  'type', 'hash', 'alias', 'unalias', 'history', 'fc',
+  'times', 'trap', 'ulimit', 'umask', 'getopts', 'shift',
+  'break', 'continue', 'return', 'local', 'declare', 'typeset'
+]);
+
 export function resolveAlias(command: string): AliasResolutionResult {
   const originalCommand = command;
-  
+
   // Extract just the command name (first word)
   const commandName = command.trim().split(/\s+/)[0];
-  
+
   if (!commandName) {
     return {
       wasAlias: false,
@@ -38,19 +47,8 @@ export function resolveAlias(command: string): AliasResolutionResult {
       originalCommand
     };
   }
-  
-  // Don't resolve shell built-in commands - they have specific shell behavior
-  // that differs from their external binary counterparts
-  const shellBuiltins = [
-    'echo', 'cd', 'pwd', 'test', '[', 'true', 'false', 'exit',
-    'export', 'unset', 'set', 'source', '.', 'eval', 'exec',
-    'read', 'printf', 'kill', 'jobs', 'bg', 'fg', 'wait',
-    'type', 'hash', 'alias', 'unalias', 'history', 'fc',
-    'times', 'trap', 'ulimit', 'umask', 'getopts', 'shift',
-    'break', 'continue', 'return', 'local', 'declare', 'typeset'
-  ];
-  
-  if (shellBuiltins.includes(commandName)) {
+
+  if (SHELL_BUILTINS.has(commandName)) {
     return {
       wasAlias: false,
       resolvedCommand: command,
@@ -59,9 +57,14 @@ export function resolveAlias(command: string): AliasResolutionResult {
   }
   
   try {
-    // Method 1: Try to get alias definition using bash -c
-    // This runs in an interactive-like context that loads aliases
-    const aliasResult = execSync(`bash -ic "alias ${commandName} 2>/dev/null || echo 'NOT_FOUND'"`, {
+    // Method 1: Try to get alias definition using the user's actual shell
+    // Use -l (login) to source profile/rc files for full PATH and aliases.
+    // DO NOT use -i (interactive) — interactive shells call tcsetpgrp() for
+    // job control, which sends SIGTTIN in non-foreground process groups
+    // (e.g. vitest workers), causing "zsh: suspended (tty input)".
+    // Using $SHELL ensures zsh users get their .zshrc PATH entries.
+    const userShell = process.env.SHELL || '/bin/bash';
+    const aliasResult = execSync(`${userShell} -lc "alias ${commandName} 2>/dev/null || echo 'NOT_FOUND'"`, {
       encoding: 'utf8',
       timeout: 2000,
       stdio: ['ignore', 'pipe', 'ignore']
@@ -87,8 +90,9 @@ export function resolveAlias(command: string): AliasResolutionResult {
   }
   
   try {
-    // Method 2: Try which command to see if it's in PATH
-    const whichResult = execSync(`which ${commandName}`, {
+    // Method 2: Try command -v in user's login shell to get full PATH
+    const userShell = process.env.SHELL || '/bin/bash';
+    const whichResult = execSync(`${userShell} -lc "command -v ${commandName}"`, {
       encoding: 'utf8',
       timeout: 1000,
       stdio: ['ignore', 'pipe', 'ignore']
@@ -212,4 +216,56 @@ export function resolveAliasWithCache(
  */
 export function clearAliasCache(): void {
   aliasCache.clear();
+}
+
+/**
+ * Extract command-position words from bash code.
+ * Splits on newlines and command separators, takes the first word of each
+ * segment, and filters out builtins, assignments, comments, and variables.
+ */
+export function extractCommandCandidates(code: string): string[] {
+  const candidates = new Set<string>();
+  for (const line of code.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    // Split on command separators: |, &&, ||, ;
+    for (const segment of trimmed.split(/\|{1,2}|&&|;/)) {
+      const word = segment.trim().split(/\s+/)[0];
+      if (
+        !word ||
+        word.startsWith('#') ||
+        word.startsWith('$') ||
+        word.startsWith('(') ||
+        word.includes('=') ||
+        SHELL_BUILTINS.has(word)
+      ) continue;
+      // Skip bash keywords
+      if (['if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'until',
+           'do', 'done', 'case', 'esac', 'in', 'function', '{', '}',
+           '!', 'select', 'coproc', 'time'].includes(word)) continue;
+      candidates.add(word);
+    }
+  }
+  return Array.from(candidates);
+}
+
+/**
+ * Build a bash preamble that enables alias expansion and defines aliases
+ * for any command candidates found in the code. Returns empty string if
+ * no aliases were resolved or if alias resolution is disabled.
+ */
+export function buildAliasPreamble(code: string): string {
+  if (process.env.MLLD_RESOLVE_ALIASES === 'false' || process.env.NODE_ENV === 'test') return '';
+  const candidates = extractCommandCandidates(code);
+  const aliases: string[] = [];
+  for (const cmd of candidates) {
+    const result = resolveAliasWithCache(cmd, { timeout: 2000, cache: true });
+    if (result.wasAlias) {
+      // Escape single quotes in the resolved path
+      const escaped = result.resolvedCommand.replace(/'/g, "'\\''");
+      aliases.push(`alias ${cmd}='${escaped}'`);
+    }
+  }
+  if (aliases.length === 0) return '';
+  return `shopt -s expand_aliases\n${aliases.join('\n')}\n`;
 }

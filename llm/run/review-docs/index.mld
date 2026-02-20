@@ -1,0 +1,353 @@
+>> Review Docs Orchestrator
+>> Usage: mlld run review-docs [--parallel 10] [--priority high] [--docs name1,name2] [--retries 3] [--new]
+>>
+>> Reviews docs/user/ and website/ against authoritative atom ground truth.
+>> Three phases: review (candidates) → verify (with codebase access) → revise (confirmed only).
+>> Then writes back revised docs to original locations for clean git diff.
+>> Audit archetype with verified invalidation and retry on failure.
+>> Default: resume latest run for today. --new forces a fresh run.
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logEvent, @fileExists, @flatName, @loadAtoms, @countMissingFiles } from "./lib/context.mld"
+import "@payload" as @p
+
+>> ─── Config ───
+
+var @parallelism = @p.parallel ? @p.parallel * 1 : 10
+var @priorityFilter = @p.priority ?? ""
+var @docsFilter = @p.docs ?? ""
+var @forceNew = @p.new ?? ""
+var @maxRetries = @p.retries ? @p.retries * 1 : 3
+var @maxAttempts = @maxRetries + 1
+var @reviewTools = "Read,Write,Glob,Grep"
+var @verifyTools = "Read,Write,Glob,Grep,Bash(mlld:*),Bash(ls:*),Bash(cat:*),Bash(find:*)"
+var @reviseTools = "Read,Write"
+
+>> ─── Prompt templates ───
+
+exe @reviewPrompt(targetPath, targetDoc, allAtoms) = template "./prompts/workers/review.att"
+exe @verifyPrompt(targetPath, targetDoc, review, allAtoms) = template "./prompts/workers/verify.att"
+exe @revisePrompt(targetPath, targetDoc, allAtoms, verifiedFindings) = template "./prompts/workers/revise.att"
+
+>> ─── Helpers ───
+
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+exe @copyFile(src, dest) = sh { cp "$src" "$dest" }
+exe @writeJson(data, path) = [
+  let @str = @data | @json
+  output @str to "@path"
+]
+exe @countConfirmed(text) = [
+  let @data = @text | @parse.llm
+  when [
+    @data.summary => @data.summary.confirmed ?? 0
+    @data.verified_findings => [
+      let @matched = for @f in @data.verified_findings when @f.classification == "confirmed" => @f
+      => @matched.length
+    ]
+    * => 0
+  ]
+]
+
+>> ─── Load manifest & filter targets ───
+
+var @manifest = <./manifest.json> | @json
+var @allDocs = for @d in @manifest.docs when @d.atoms.length > 0 => @d
+
+var @priorityFiltered = when @priorityFilter [
+  "" => @allDocs
+  * => for @d in @allDocs when @d.priority == @priorityFilter => @d
+]
+
+var @targets = when @docsFilter [
+  "" => @priorityFiltered
+  * => [
+    let @names = @docsFilter.split(",")
+    let @matched = for @d in @priorityFiltered [
+      let @hits = for @name in @names when @d.target.includes(@name.trim()) => 1
+      if @hits.length > 0 [ => @d ]
+      => null
+    ]
+    => for @m in @matched when @m => @m
+  ]
+]
+
+>> ─── Set up run directory ───
+
+var @today = @now.slice(0, 10)
+var @runsRoot = `@root/runs`
+exe @countExisting(dir, date) = sh { ls -1 "$dir" 2>/dev/null | grep "^review-docs-$date" | wc -l | tr -d ' ' }
+var @existingCount = @countExisting(@runsRoot, @today)
+exe @latestRun(dir, date) = sh { ls -1d "$dir"/review-docs-$date* 2>/dev/null | sort -r | head -1 }
+
+var @runDir = when @forceNew [
+  "" => when @existingCount [
+    "0" => `@runsRoot/review-docs-@today-0`
+    * => @latestRun(@runsRoot, @today)
+  ]
+  * => `@runsRoot/review-docs-@today-@existingCount`
+]
+
+run @mkdirp(@runDir)
+run @mkdirp(`@runDir/reviews`)
+run @mkdirp(`@runDir/verified`)
+run @mkdirp(`@runDir/finals`)
+
+show `═══════════════════════════════════════════════════════════════════`
+show `Review Docs: @targets.length targets`
+show `═══════════════════════════════════════════════════════════════════`
+show `Parallelism: @parallelism`
+show `Priority filter: @priorityFilter`
+show `Docs filter: @docsFilter`
+show `Max retries: @maxRetries`
+show `Run dir: @runDir`
+show `───────────────────────────────────────────────────────────────────`
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 1: Review — compare each doc against mapped atoms
+>> Produces candidate findings (unverified)
+>> Retries failed items up to @maxRetries times (idempotency skips completed)
+>> ═══════════════════════════════════════════════════════════════════
+
+show `\nPhase 1: Review (@targets.length docs, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+loop(@maxAttempts) [
+  let @batch = for parallel(@parallelism) @entry in @targets [
+    let @targetPath = @entry.target
+    let @flatTarget = @flatName(@targetPath)
+    let @outPath = `@runDir/reviews/@flatTarget\.json`
+
+    >> Idempotency
+    let @check = @fileExists(@outPath)
+    if @check == "yes" [
+      show `  [@mx.for.index] @targetPath: skipped`
+      => null
+    ]
+
+    show `  [@mx.for.index] @targetPath: reviewing...`
+    let @targetDoc = <@root/@targetPath>
+    let @allAtoms = @loadAtoms(@entry)
+
+    let @prompt = @reviewPrompt(@targetPath, @targetDoc, @allAtoms)
+    let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+    @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
+
+    let @result = <@outPath>?
+    if !@result [
+      show `  [@mx.for.index] @targetPath: FAILED`
+      let @evtData = { target: @targetPath, error: "no review output" }
+      @logEvent(@runDir, "review_failed", @evtData)
+      => null
+    ]
+
+    let @evtData = { target: @targetPath }
+    @logEvent(@runDir, "review_complete", @evtData)
+    show `  [@mx.for.index] @targetPath: done`
+    => null
+  ]
+
+  let @missing = @countMissingFiles(`@runDir/reviews`, @targets, ".json")
+  if @missing == 0 [ done ]
+  show `  Retrying @missing failed reviews...`
+  continue
+]
+
+>> Filter to docs that need changes
+var @needsChanges = for @entry in @targets [
+  let @flatTarget = @flatName(@entry.target)
+  let @reviewFile = <@runDir/reviews/@flatTarget\.json>?
+  if !@reviewFile [ => null ]
+
+  let @reviewData = @reviewFile | @parse.llm
+  let @verdict = @reviewData.verdict ?? "needs-changes"
+  if @verdict == "up-to-date" [ => null ]
+
+  => @entry
+]
+var @toVerify = for @e in @needsChanges when @e => @e
+
+show `\nPhase 1 complete: @toVerify.length docs need changes`
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 2: Verify — check each finding against the full codebase
+>> Workers get expanded tool access (Glob, Grep, Bash for mlld validate)
+>> ═══════════════════════════════════════════════════════════════════
+
+show `\nPhase 2: Verify (@toVerify.length docs, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+loop(@maxAttempts) [
+  let @batch = for parallel(@parallelism) @entry in @toVerify [
+    let @targetPath = @entry.target
+    let @flatTarget = @flatName(@targetPath)
+    let @outPath = `@runDir/verified/@flatTarget\.json`
+
+    >> Idempotency
+    let @check = @fileExists(@outPath)
+    if @check == "yes" [
+      show `  [@mx.for.index] @targetPath: skipped`
+      => null
+    ]
+
+    show `  [@mx.for.index] @targetPath: verifying...`
+    let @targetDoc = <@root/@targetPath>
+    let @allAtoms = @loadAtoms(@entry)
+    let @review = <@runDir/reviews/@flatTarget\.json>
+
+    let @prompt = @verifyPrompt(@targetPath, @targetDoc, @review, @allAtoms)
+    let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+    @claudePoll(@fullPrompt, "sonnet", "@root", @verifyTools, @outPath)
+
+    let @result = <@outPath>?
+    if !@result [
+      show `  [@mx.for.index] @targetPath: FAILED`
+      let @evtData = { target: @targetPath, error: "no verify output" }
+      @logEvent(@runDir, "verify_failed", @evtData)
+      => null
+    ]
+
+    let @evtData = { target: @targetPath }
+    @logEvent(@runDir, "verify_complete", @evtData)
+    show `  [@mx.for.index] @targetPath: done`
+    => null
+  ]
+
+  let @missing = @countMissingFiles(`@runDir/verified`, @toVerify, ".json")
+  if @missing == 0 [ done ]
+  show `  Retrying @missing failed verifications...`
+  continue
+]
+
+>> Filter to docs with confirmed findings
+var @toRevise = for @entry in @toVerify [
+  let @flatTarget = @flatName(@entry.target)
+  let @verifyFile = <@runDir/verified/@flatTarget\.json>?
+  if !@verifyFile [ => null ]
+
+  let @confirmed = @countConfirmed(@verifyFile)
+  if @confirmed == 0 [ => null ]
+
+  => @entry
+]
+var @reviseTargets = for @e in @toRevise when @e => @e
+
+show `\nPhase 2 complete: @reviseTargets.length docs have confirmed findings`
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 3: Revise — apply only confirmed findings
+>> ═══════════════════════════════════════════════════════════════════
+
+show `\nPhase 3: Revise (@reviseTargets.length docs, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+loop(@maxAttempts) [
+  let @batch = for parallel(@parallelism) @entry in @reviseTargets [
+    let @targetPath = @entry.target
+    let @flatTarget = @flatName(@targetPath)
+    let @outPath = `@runDir/finals/@flatTarget\.md`
+
+    >> Idempotency
+    let @check = @fileExists(@outPath)
+    if @check == "yes" [
+      show `  [@mx.for.index] @targetPath: skipped`
+      => null
+    ]
+
+    show `  [@mx.for.index] @targetPath: revising...`
+    let @targetDoc = <@root/@targetPath>
+    let @allAtoms = @loadAtoms(@entry)
+    let @verifiedFindings = <@runDir/verified/@flatTarget\.json>
+
+    let @prompt = @revisePrompt(@targetPath, @targetDoc, @allAtoms, @verifiedFindings)
+    let @fullPrompt = `@prompt
+
+IMPORTANT: Write the complete revised document to @outPath using the Write tool.`
+
+    @claudePoll(@fullPrompt, "sonnet", "@root", @reviseTools, @outPath)
+
+    let @result = <@outPath>?
+    if !@result [
+      show `  [@mx.for.index] @targetPath: FAILED`
+      let @evtData = { target: @targetPath, error: "no revision output" }
+      @logEvent(@runDir, "revise_failed", @evtData)
+      => null
+    ]
+
+    let @evtData = { target: @targetPath }
+    @logEvent(@runDir, "revise_complete", @evtData)
+    show `  [@mx.for.index] @targetPath: done`
+    => null
+  ]
+
+  let @missing = @countMissingFiles(`@runDir/finals`, @reviseTargets, ".md")
+  if @missing == 0 [ done ]
+  show `  Retrying @missing failed revisions...`
+  continue
+]
+
+>> ═══════════════════════════════════════════════════════════════════
+>> Phase 4: Write back — copy revised docs to original locations
+>> ═══════════════════════════════════════════════════════════════════
+
+show `\nPhase 4: Write back`
+show `───────────────────────────────────────────────────────────────────`
+
+var @writeBackResults = for @entry in @reviseTargets [
+  let @flatTarget = @flatName(@entry.target)
+  let @revisedPath = `@runDir/finals/@flatTarget\.md`
+  let @exists = @fileExists(@revisedPath)
+  if @exists != "yes" [
+    show `  @entry.target: skipped (no revision)`
+    => null
+  ]
+
+  let @dest = `@root/@entry.target`
+  run @copyFile(@revisedPath, @dest)
+  show `  @entry.target: updated`
+  => @entry.target
+]
+var @writtenBack = for @w in @writeBackResults when @w => @w
+
+show `\n  @writtenBack.length docs written to source`
+
+>> ─── Summary ───
+
+var @revisedCount = @writtenBack.length
+var @errorCount = @reviseTargets.length - @revisedCount
+
+show `\n═══════════════════════════════════════════════════════════════════`
+show `Review Docs Complete`
+show `═══════════════════════════════════════════════════════════════════`
+show `  Total targets: @targets.length`
+show `  Needed changes: @toVerify.length`
+show `  Confirmed findings: @reviseTargets.length`
+show `  Revised & written back: @revisedCount`
+show `  Errors: @errorCount`
+show `  Run dir: @runDir`
+show `═══════════════════════════════════════════════════════════════════`
+
+var @summary = {
+  runDate: @now,
+  total: @targets.length,
+  neededChanges: @toVerify.length,
+  confirmedFindings: @reviseTargets.length,
+  revised: @revisedCount,
+  errors: @errorCount
+}
+run @writeJson(@summary, `@runDir/summary\.json`)
+
+var @finalEvt = {
+  total: @targets.length,
+  needed_changes: @toVerify.length,
+  confirmed: @reviseTargets.length,
+  revised: @revisedCount,
+  errors: @errorCount
+}
+run @logEvent(@runDir, "run_complete", @finalEvt)

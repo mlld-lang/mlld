@@ -27,7 +27,7 @@
   return `best: ${best.attempt} (from ${attempts.length} attempts)`;
 }
 
-/exe @adaptiveRetry(input) = when first [
+/exe @adaptiveRetry(input) = when [
   @pipeline.try < 5 => retry
   * => @bestOfAttempts(@input, @pipeline.tries)
 ]

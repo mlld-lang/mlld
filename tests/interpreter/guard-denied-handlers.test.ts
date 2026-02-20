@@ -8,6 +8,7 @@ import { PathService } from '@services/fs/PathService';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { GuardError } from '@core/errors/GuardError';
 import { handleExecGuardDenial, formatGuardWarning } from '@interpreter/eval/guard-denial-handler';
+import { evaluateDirective } from '@interpreter/eval/directive';
 import { createSimpleTextVariable } from '@core/types/variable';
 import type { VariableSource } from '@core/types/variable';
 import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
@@ -40,8 +41,10 @@ describe('handleExecGuardDenial', () => {
     const { env, execEnv, effects } = createEnv();
     const whenExpr = parseWhenExpression(`
 /exe @process() = when [
-  denied => show "Operation blocked by policy"
-  denied => "Denied fallback"
+  denied => [
+    show "Operation blocked by policy"
+    => "Denied fallback"
+  ]
   * => show "Process"
 ]
     `);
@@ -53,7 +56,6 @@ describe('handleExecGuardDenial', () => {
     });
 
     const result = await handleExecGuardDenial(error, { execEnv, env, whenExprNode: whenExpr });
-    console.log('RESULT', result);
     expect(result).not.toBeNull();
     expect(result?.value).toBe('Denied fallback');
     expect(result?.internal?.deniedHandlerRan).toBe(true);
@@ -88,8 +90,10 @@ describe('handleExecGuardDenial', () => {
     const { env, execEnv, effects } = createEnv();
     const whenExpr = parseWhenExpression(`
 /exe @process() = when [
-  denied => show "first denied handler"
-  denied => show "second denied handler"
+  denied => [
+    show "first denied handler"
+    show "second denied handler"
+  ]
   * => show "Process"
 ]
     `);
@@ -117,9 +121,11 @@ describe('handleExecGuardDenial', () => {
     const { env, execEnv, effects } = createEnv();
     const whenExpr = parseWhenExpression(`
 /exe @process(value) = when [
-  denied => show "Guard input: @mx.guard.input"
-  denied => show "Guard output: @mx.guard.output"
-  denied => show "Param value: @value"
+  denied => [
+    show "Guard input: @mx.guard.input"
+    show "Guard output: @mx.guard.output"
+    show "Param value: @value"
+  ]
   * => show "Process"
 ]
     `);
@@ -212,5 +218,68 @@ describe('handleExecGuardDenial', () => {
       '[Guard Warning] Guard for op:show prevented operation due to policy violation'
     );
     expect(formatGuardWarning('Blocked', undefined, undefined)).toBe('[Guard Warning] Blocked');
+  });
+
+  it('keeps denied handler fallback values consistent inside for directives', async () => {
+    const { env, effects } = createEnv();
+    const directives = parseSync(`
+/guard @blockDelete before untrusted = when [
+  @mx.op.name == "deleteItem" => deny "blocked by guard"
+  * => allow
+]
+/exe @deleteItem(value) = when [
+  denied => "blocked"
+  * => "deleted"
+]
+/var untrusted @secret = "token"
+/var @secrets = [@secret]
+/show @deleteItem(@secret)
+/for @item in @secrets => @deleteItem(@item)
+    `).filter(node => (node as DirectiveNode)?.type === 'Directive') as DirectiveNode[];
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    const outputs = effects
+      .getAll()
+      .filter(effect => effect.type === 'both')
+      .map(effect => effect.content.trim())
+      .filter(content => content.length > 0);
+
+    expect(outputs).toContain('blocked');
+    expect(outputs.filter(content => content === 'blocked').length).toBeGreaterThanOrEqual(2);
+    expect(outputs).not.toContain('deleted');
+  });
+
+  it('handles compound @mx guard conditions with denied handlers', async () => {
+    const { env, effects } = createEnv();
+    const directives = parseSync(`
+/guard @compoundGuard before op:exe = when [
+  @mx.op.name == "deleteData" && @mx.tools.calls.includes("deleteData") => deny "Already deleted"
+  * => allow
+]
+/exe @deleteData() = "deleted"
+/exe @safeDelete() = when [
+  denied => "blocked"
+  * => @deleteData()
+]
+/var @first = @safeDelete()
+/var @second = @safeDelete()
+/show @second
+    `).filter(node => (node as DirectiveNode)?.type === 'Directive') as DirectiveNode[];
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    const outputs = effects
+      .getAll()
+      .filter(effect => effect.type === 'both')
+      .map(effect => effect.content.trim())
+      .filter(content => content.length > 0);
+
+    expect(outputs).toContain('blocked');
+    expect(effects.getErrors()).toContain('[Guard Warning] Already deleted');
   });
 });

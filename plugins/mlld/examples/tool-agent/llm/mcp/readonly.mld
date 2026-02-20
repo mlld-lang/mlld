@@ -1,0 +1,28 @@
+>> Read-Only Toolkit — Reshaped subset of the full toolkit
+>> Serve with: mlld mcp plugins/mlld/examples/tool-agent/llm/mcp/readonly.mld --tools-collection @readonlyTools
+
+import { @projectStatus, @searchFiles, @listNotes } from "./toolkit.mld"
+import { @projectRoot } from @input
+
+>> Reshaping: only expose read operations, bind the project root
+
+var tools @readonlyTools = {
+  projectStatus: {
+    mlld: @projectStatus,
+    bind: { root: @projectRoot },
+    description: "Project summary: scripts, MCP modules, config"
+  },
+  searchFiles: {
+    mlld: @searchFiles,
+    bind: { root: @projectRoot },
+    expose: ["query", "glob"],
+    description: "Search project files by content"
+  },
+  listNotes: {
+    mlld: @listNotes,
+    bind: { root: @projectRoot },
+    description: "List all project notes"
+  }
+}
+
+export { @readonlyTools }

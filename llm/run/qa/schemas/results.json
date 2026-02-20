@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QA Experiment Results",
+  "description": "Phase 1 output: per-experiment findings",
+  "type": "object",
+  "required": ["experiment", "topic", "status", "summary", "issues"],
+  "properties": {
+    "experiment": { "type": "string" },
+    "topic": { "type": "string" },
+    "status": { "type": "string", "enum": ["pass", "fail", "partial"] },
+    "summary": { "type": "string" },
+    "what_works": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category", "severity", "title"],
+        "properties": {
+          "category": { "type": "string", "enum": ["broken-promise", "unclear-error", "unclear-docs", "friction"] },
+          "severity": { "type": "string", "enum": ["major", "minor", "enhancement"] },
+          "title": { "type": "string" },
+          "input": { "type": "string" },
+          "expected": { "type": "string" },
+          "actual": { "type": "string" },
+          "workaround": { "type": "string" },
+          "recommendation": { "type": "string" },
+          "related_experiments": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "purpose": { "type": "string" },
+        "builds_on": { "type": "string" },
+        "blocks": { "type": "string" }
+      }
+    }
+  }
+}

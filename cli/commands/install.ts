@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { spawn } from 'child_process';
 import { ModuleInstaller, ModuleWorkspace, type ModuleSpecifier, type ModuleInstallResult, type ModuleInstallerEvent } from '@core/registry';
 import { renderDependencySummary } from '../utils/dependency-summary';
 import { ProgressIndicator } from '../utils/progress';
@@ -11,6 +12,7 @@ export interface InstallOptions {
   dryRun?: boolean;
   force?: boolean;
   basePath?: string;
+  global?: boolean;
 }
 
 export class InstallCommand {
@@ -90,6 +92,7 @@ export class InstallCommand {
       force: options.force,
       noCache: options.noCache,
       dryRun: options.dryRun,
+      global: options.global,
       context: 'import',
       onEvent: (event) => this.handleEvent(event, options)
     });
@@ -118,6 +121,9 @@ export class InstallCommand {
           this.progress.info(`${event.module} (cached)`);
         }
         break;
+      case 'directory-install':
+        this.progress.info(`Installed ${event.module} to ${event.targetDir} (${event.fileCount} files)`);
+        break;
       case 'error':
         this.progress.warn(`Failed to install ${event.module}: ${event.error.message}`);
         break;
@@ -125,11 +131,59 @@ export class InstallCommand {
         break;
     }
   }
+
+  private async maybeRunNodePackageManager(
+    results: ModuleInstallResult[],
+    options: InstallOptions
+  ): Promise<void> {
+    if (options.dryRun || options.global) {
+      return;
+    }
+    if (results.some(result => result.status === 'failed')) {
+      return;
+    }
+    const installed = results.some(result => result.status === 'installed');
+    if (!installed) {
+      return;
+    }
+    const manager = this.workspace.projectConfig.getNodePackageManager();
+    if (!manager) {
+      return;
+    }
+    const trimmed = manager.trim();
+    if (!trimmed) {
+      return;
+    }
+    const command = /\s/.test(trimmed) ? trimmed : `${trimmed} install`;
+    console.log(chalk.cyan(`Running ${command}`));
+    await this.runNodePackageManager(command);
+    console.log(chalk.green(`Finished ${command}`));
+  }
+
+  private async runNodePackageManager(command: string): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(command, {
+        cwd: this.workspace.projectRoot,
+        stdio: 'inherit',
+        shell: true
+      });
+      child.on('error', reject);
+      child.on('exit', code => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`Command failed with exit code ${code ?? 'unknown'}`));
+      });
+    });
+  }
   private async report(
     results: ModuleInstallResult[],
     options: InstallOptions,
     specs: ModuleSpecifier[]
   ): Promise<void> {
+    this.reportDirectInstallGuidance(results, options);
+
     const installed = results.filter(r => r.status === 'installed').length;
     const cached = results.filter(r => r.status === 'cached').length;
     const failed = results.filter(r => r.status === 'failed').length;
@@ -175,6 +229,57 @@ export class InstallCommand {
         }
       }
     }
+
+    await this.maybeRunNodePackageManager(results, options);
+  }
+
+  private reportDirectInstallGuidance(results: ModuleInstallResult[], options: InstallOptions): void {
+    if (options.dryRun) {
+      return;
+    }
+
+    const directInstalled = results.filter(
+      result =>
+        result.isDirect &&
+        (result.status === 'installed' || result.status === 'cached')
+    );
+    const seen = new Set<string>();
+
+    for (const result of directInstalled) {
+      if (seen.has(result.module)) {
+        continue;
+      }
+      seen.add(result.module);
+
+      const versionSuffix = result.version ? `@${result.version}` : '';
+      const cacheSuffix = result.status === 'cached' ? ' (cached)' : '';
+      console.log(chalk.green(`${result.module}${versionSuffix} installed${cacheSuffix}`));
+      console.log(chalk.gray(`  import "${result.module}" as @${this.suggestImportAlias(result.module)}`));
+    }
+  }
+
+  private suggestImportAlias(moduleName: string): string {
+    const localName = moduleName.replace(/^@[^/]+\//, '');
+    const parts = localName.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+
+    if (parts.length === 0) {
+      return 'module';
+    }
+
+    const normalizedParts = parts.map(part => part.toLowerCase());
+    let alias = normalizedParts.length > 1
+      ? normalizedParts.map(part => part[0]).join('')
+      : normalizedParts[0];
+
+    if (!alias || alias.length === 0) {
+      alias = 'module';
+    }
+
+    if (/^\d/.test(alias)) {
+      alias = `m${alias}`;
+    }
+
+    return alias;
   }
 }
 
@@ -191,12 +296,26 @@ export function createInstallCommand() {
     description: 'Install mlld modules',
 
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
+      const redirects: Record<string, string> = {
+        'plugin': 'mlld plugin install',
+        'skill': 'mlld skill install',
+        'skills': 'mlld skill install',
+      };
+      for (const arg of args) {
+        const redirect = redirects[arg.toLowerCase()];
+        if (redirect) {
+          console.log(chalk.yellow(`"${arg}" is not a module. Did you mean \`${redirect}\`?`));
+          return;
+        }
+      }
+
       const options: InstallOptions = {
         verbose: flags.verbose || flags.v,
         noCache: flags['no-cache'],
         dryRun: flags['dry-run'],
         force: flags.force || flags.f,
-        basePath: flags['base-path'] || process.cwd()
+        basePath: flags['base-path'] || process.cwd(),
+        global: flags.global || flags.g
       };
 
       try {

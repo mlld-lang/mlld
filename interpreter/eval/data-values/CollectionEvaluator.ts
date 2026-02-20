@@ -2,12 +2,13 @@ import * as fs from 'fs';
 import type { Environment } from '../../env/Environment';
 import type { DataValue, DataObjectValue, DataArrayValue } from '@core/types/var';
 import { interpolate } from '../../core/interpreter';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, isStructuredValue, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { accessFields } from '@interpreter/utils/field-access';
 import { FieldAccessError } from '@core/errors';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
+import { getExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 
 async function interpolateAndRecord(
   nodes: any,
@@ -151,37 +152,42 @@ export class CollectionEvaluator {
    */
   private async evaluateObject(value: DataObjectValue, env: Environment): Promise<Record<string, any>> {
     const evaluatedObj: Record<string, any> = {};
+    const descriptors: SecurityDescriptor[] = [];
 
     // Process each entry in order (pairs and spreads)
     if (Array.isArray((value as any).entries)) {
       for (const entry of (value as any).entries) {
         if (entry.type === 'pair') {
           // Regular key-value pair
-          try {
-            let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
-            if (isStructuredValue(evaluated)) {
-              evaluated = unwrapStructuredPrimitive(evaluated);
-            }
-            evaluatedObj[entry.key] = evaluated;
-          } catch (error) {
-            // Store error information but continue evaluating other properties
-            evaluatedObj[entry.key] = this.createPropertyError(entry.key, error);
+          let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
+          collectDescriptorFromValue(evaluated, descriptors);
+          // For primitive results, extract security from the source AST node
+          if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
+            collectDescriptorFromSource(entry.value, env, descriptors);
           }
+          if (isStructuredValue(evaluated)) {
+            evaluated = unwrapStructuredPrimitive(evaluated);
+          }
+          evaluatedObj[entry.key] = evaluated;
         } else if (entry.type === 'conditionalPair') {
           try {
             let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
             if (isStructuredValue(evaluated)) {
               evaluated = unwrapStructuredPrimitive(evaluated);
             }
-            const { isTruthy } = await import('../expression');
+            const { isTruthy } = await import('../expressions');
             if (isTruthy(evaluated)) {
+              collectDescriptorFromValue(evaluated, descriptors);
+              if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
+                collectDescriptorFromSource(entry.value, env, descriptors);
+              }
               evaluatedObj[entry.key] = evaluated;
             }
           } catch (error) {
             if (this.isConditionalOmissionError(error)) {
               continue;
             }
-            evaluatedObj[entry.key] = this.createPropertyError(entry.key, error);
+            throw error;
           }
         } else if (entry.type === 'spread') {
           // Spread entry: evaluate the variable and merge its properties
@@ -193,6 +199,9 @@ export class CollectionEvaluator {
             if (!spreadVariable) {
               throw new Error(`Cannot spread undefined variable: ${varName}`);
             }
+
+            // Collect security descriptor from spread variable
+            collectDescriptorFromValue(spreadVariable, descriptors);
 
             // Extract the actual value (handles Variable wrapper)
             let spreadValue = await extractVariableValue(spreadVariable, env);
@@ -226,21 +235,23 @@ export class CollectionEvaluator {
           }
         }
       }
+      this.recordCollectedDescriptors(descriptors, env);
       return evaluatedObj;
     }
 
     if ((value as any).properties && typeof (value as any).properties === 'object') {
       for (const [key, propValue] of Object.entries((value as any).properties)) {
-        try {
-          let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
-          if (isStructuredValue(evaluated)) {
-            evaluated = unwrapStructuredPrimitive(evaluated);
-          }
-          evaluatedObj[key] = evaluated;
-        } catch (error) {
-          evaluatedObj[key] = this.createPropertyError(key, error);
+        let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
+        collectDescriptorFromValue(evaluated, descriptors);
+        if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
+          collectDescriptorFromSource(propValue, env, descriptors);
         }
+        if (isStructuredValue(evaluated)) {
+          evaluated = unwrapStructuredPrimitive(evaluated);
+        }
+        evaluatedObj[key] = evaluated;
       }
+      this.recordCollectedDescriptors(descriptors, env);
       return evaluatedObj;
     }
 
@@ -252,6 +263,7 @@ export class CollectionEvaluator {
    */
   private async evaluateArray(value: DataArrayValue, env: Environment): Promise<any[]> {
     const evaluatedElements: any[] = [];
+    const descriptors: SecurityDescriptor[] = [];
 
     const items = (value as any).items ?? (value as any).elements ?? [];
     for (let i = 0; i < items.length; i++) {
@@ -266,6 +278,7 @@ export class CollectionEvaluator {
 
           if (shouldInclude) {
             let evaluatedValue = value;
+            collectDescriptorFromValue(evaluatedValue, descriptors);
             if (isStructuredValue(evaluatedValue)) {
               evaluatedValue = unwrapStructuredPrimitive(evaluatedValue);
             }
@@ -309,39 +322,21 @@ export class CollectionEvaluator {
         }
 
         let evaluatedItem = await this.evaluateDataValue(items[i], env, { suppressErrors: true });
+        collectDescriptorFromValue(evaluatedItem, descriptors);
+        if (evaluatedItem === null || evaluatedItem === undefined || typeof evaluatedItem !== 'object') {
+          collectDescriptorFromSource(items[i], env, descriptors);
+        }
         if (isStructuredValue(evaluatedItem)) {
           evaluatedItem = unwrapStructuredPrimitive(evaluatedItem);
         }
         evaluatedElements.push(evaluatedItem);
       } catch (error) {
-        // Store error information but continue evaluating other elements
-        evaluatedElements.push(this.createElementError(i, error));
+        throw error;
       }
     }
-    
+
+    this.recordCollectedDescriptors(descriptors, env);
     return evaluatedElements;
-  }
-
-  /**
-   * Creates error object for a failed property evaluation
-   */
-  private createPropertyError(key: string, error: unknown): object {
-    return {
-      __error: true,
-      __message: error instanceof Error ? error.message : String(error),
-      __property: key
-    };
-  }
-
-  /**
-   * Creates error object for a failed element evaluation
-   */
-  private createElementError(index: number, error: unknown): object {
-    return {
-      __error: true,
-      __message: error instanceof Error ? error.message : String(error),
-      __index: index
-    };
   }
 
   /**
@@ -349,26 +344,39 @@ export class CollectionEvaluator {
    */
   private async evaluatePlainObject(value: Record<string, any>, env: Environment): Promise<Record<string, any>> {
     const evaluatedObject: Record<string, any> = {};
-    
+    const descriptors: SecurityDescriptor[] = [];
+
     for (const [key, propValue] of Object.entries(value)) {
       // Skip internal properties that shouldn't be in the result
       if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
         continue;
       }
-      
-      try {
-        let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
-        if (isStructuredValue(evaluated)) {
-          evaluated = unwrapStructuredPrimitive(evaluated);
-        }
-        evaluatedObject[key] = evaluated;
-      } catch (error) {
-        // Include the error in the result but don't stop evaluation
-        evaluatedObject[key] = this.createPropertyError(key, error);
+
+      let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
+      collectDescriptorFromValue(evaluated, descriptors);
+      if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
+        collectDescriptorFromSource(propValue, env, descriptors);
       }
+      if (isStructuredValue(evaluated)) {
+        evaluated = unwrapStructuredPrimitive(evaluated);
+      }
+      evaluatedObject[key] = evaluated;
     }
-    
+
+    this.recordCollectedDescriptors(descriptors, env);
     return evaluatedObject;
+  }
+
+  /**
+   * Merges collected security descriptors and records the aggregate on the environment.
+   */
+  private recordCollectedDescriptors(descriptors: SecurityDescriptor[], env: Environment): void {
+    if (descriptors.length === 0) {
+      return;
+    }
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
   }
 
   private isConditionalOmissionError(error: unknown): boolean {
@@ -379,6 +387,52 @@ export class CollectionEvaluator {
       return error.message.includes('Variable not found');
     }
     return false;
+  }
+}
+
+/**
+ * Extracts a security descriptor from an evaluated value and appends it to the
+ * collector array. Handles StructuredValues, Variables with .mx, and values
+ * with expression provenance.
+ */
+function collectDescriptorFromValue(value: unknown, descriptors: SecurityDescriptor[]): void {
+  if (value === null || value === undefined) {
+    return;
+  }
+  if (typeof value === 'object') {
+    const descriptor = extractSecurityDescriptor(value, { recursive: false, normalize: true });
+    if (descriptor) {
+      descriptors.push(descriptor);
+      return;
+    }
+    const provenance = getExpressionProvenance(value);
+    if (provenance) {
+      descriptors.push(provenance);
+    }
+  }
+}
+
+/**
+ * Extracts a security descriptor from the source AST node. When the AST node
+ * is a VariableReference, looks up the variable in the environment and extracts
+ * its security descriptor. This handles the case where evaluateDataValue returns
+ * a primitive (e.g. a string) and the security metadata from the variable's .mx
+ * would otherwise be lost.
+ */
+function collectDescriptorFromSource(
+  sourceNode: unknown,
+  env: Environment,
+  descriptors: SecurityDescriptor[]
+): void {
+  if (!sourceNode || typeof sourceNode !== 'object') {
+    return;
+  }
+  const node = sourceNode as { type?: string; identifier?: string };
+  if (node.type === 'VariableReference' && node.identifier) {
+    const variable = env.getVariable(node.identifier);
+    if (variable) {
+      collectDescriptorFromValue(variable, descriptors);
+    }
   }
 }
 

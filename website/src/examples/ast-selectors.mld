@@ -1,2 +1,3 @@
 var @handlers = <src/**/*.ts { handle* }>
-for @h in @handlers => show "@h.name in @h.mx.relative"
+for @h in @handlers => show "@h.name in @h.file"
+

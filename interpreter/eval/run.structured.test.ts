@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect } from 'vitest';
+import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 import { Environment } from '../env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
@@ -119,6 +119,163 @@ describe('evaluateRun (structured)', () => {
     }
   });
 
+  it('runs /run cmd with :@var working directory', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-wd-cmd-var-'));
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const localEnv = new Environment(fileSystem, pathService, '/');
+
+    try {
+      const source = `/var @myPath = "${tmpDir}"\n/run cmd:@myPath {pwd}`;
+      const { ast } = await parse(source);
+      const directives = Array.isArray(ast) ? ast : [];
+      const varDirective = directives.find((node: any) => node.type === 'Directive' && node.kind === 'var');
+      const runDirective = directives.find((node: any) => node.type === 'Directive' && node.kind === 'run');
+
+      expect(varDirective).toBeDefined();
+      expect(runDirective).toBeDefined();
+
+      await evaluate(varDirective, localEnv);
+
+      const runNode: any = {
+        ...runDirective,
+        location: runDirective.location || { line: 1, column: 1 },
+        meta: runDirective.meta || {}
+      };
+
+      const result = await evaluateRun(runNode, localEnv);
+      const output = isStructuredValue(result.value) ? asText(result.value) : String(result.value);
+      const normalizedOutput = fs.realpathSync(output.trim());
+      const normalizedExpected = fs.realpathSync(tmpDir);
+      expect(normalizedOutput).toBe(normalizedExpected);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('runs /run cmd with :~ working directory', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const localEnv = new Environment(fileSystem, pathService, '/');
+    const homeDir = os.homedir();
+
+    const source = '/run cmd:~ {pwd}';
+    const { ast } = await parse(source);
+    const [runDirective] = getDirectiveNodes(ast, 'run');
+    const runNode: any = {
+      ...runDirective,
+      location: runDirective.location || { line: 1, column: 1 },
+      meta: runDirective.meta || {}
+    };
+
+    const result = await evaluateRun(runNode, localEnv);
+    const output = isStructuredValue(result.value) ? asText(result.value) : String(result.value);
+    const normalizedOutput = fs.realpathSync(output.trim());
+    const normalizedExpected = fs.realpathSync(homeDir);
+    expect(normalizedOutput).toBe(normalizedExpected);
+  });
+
+  it('runs var-assigned run cmd with :path working directory', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-wd-var-cmd-'));
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const localEnv = new Environment(fileSystem, pathService, '/');
+
+    try {
+      const source = `/var @wd = run cmd:${tmpDir} {pwd}`;
+      const { ast } = await parse(source);
+      const directives = Array.isArray(ast)
+        ? ast
+        : Array.isArray((ast as any)?.body)
+          ? (ast as any).body
+          : [];
+      for (const directive of directives) {
+        await evaluate(directive, localEnv);
+      }
+      const wdVar = localEnv.getVariable('wd');
+
+      expect(wdVar).toBeDefined();
+      const output = isStructuredValue(wdVar?.value) ? asText(wdVar?.value) : String(wdVar?.value ?? '');
+      const normalizedOutput = fs.realpathSync(output.trim());
+      const normalizedExpected = fs.realpathSync(tmpDir);
+      expect(normalizedOutput).toBe(normalizedExpected);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('runs /run cmd with args and :path working directory', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-wd-cmd-args-'));
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const localEnv = new Environment(fileSystem, pathService, '/');
+
+    try {
+      const source = `
+/var @name = "mlld"
+/run cmd(@name):${tmpDir} {bash -lc 'echo "$name"; pwd'}
+`;
+      const { ast } = await parse(source);
+      const directives = Array.isArray(ast) ? ast : [];
+      const varDirective = directives.find((node: any) => node.type === 'Directive' && node.kind === 'var');
+      const runDirective = directives.find((node: any) => node.type === 'Directive' && node.kind === 'run');
+
+      expect(varDirective).toBeDefined();
+      expect(runDirective).toBeDefined();
+
+      await evaluate(varDirective, localEnv);
+
+      const runNode: any = {
+        ...runDirective,
+        location: runDirective.location || { line: 1, column: 1 },
+        meta: runDirective.meta || {}
+      };
+
+      const result = await evaluateRun(runNode, localEnv);
+      const output = isStructuredValue(result.value) ? asText(result.value) : String(result.value);
+      const lines = output.split('\n').map(line => line.trim()).filter(Boolean);
+      expect(lines).toContain('mlld');
+      const normalizedOutput = fs.realpathSync(lines[lines.length - 1]);
+      const normalizedExpected = fs.realpathSync(tmpDir);
+      expect(normalizedOutput).toBe(normalizedExpected);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('enforces command policy for var-assigned run cmd before execution', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const localEnv = new Environment(fileSystem, pathService, '/');
+    const executeSpy = vi.spyOn(localEnv, 'executeCommand').mockResolvedValue('should-not-run');
+
+    const source = [
+      '/var @policyConfig = {',
+      '  capabilities: {',
+      '    allow: ["cmd:echo:*"],',
+      '    deny: ["cmd:echo:blocked"]',
+      '  }',
+      '}',
+      '/policy @p = union(@policyConfig)',
+      '/var @out = run cmd {echo blocked}'
+    ].join('\n');
+
+    const executeAll = async () => {
+      const { ast } = await parse(source);
+      const directives = Array.isArray(ast)
+        ? ast
+        : Array.isArray((ast as any)?.body)
+          ? (ast as any).body
+          : [];
+      for (const directive of directives) {
+        await evaluate(directive, localEnv);
+      }
+    };
+
+    await expect(executeAll()).rejects.toThrow("Command 'echo' denied by policy");
+    expect(executeSpy).not.toHaveBeenCalled();
+  });
+
   it('runs /run js with :path working directory', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-wd-js-'));
     const fileSystem = new NodeFileSystem();
@@ -138,6 +295,48 @@ describe('evaluateRun (structured)', () => {
       const result = await evaluateRun(runNode, localEnv);
       const output = isStructuredValue(result.value) ? asText(result.value) : String(result.value);
       const normalizedOutput = fs.realpathSync(output);
+      const normalizedExpected = fs.realpathSync(tmpDir);
+      expect(normalizedOutput).toBe(normalizedExpected);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('runs /run sh with args and :path working directory', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-wd-sh-args-'));
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const localEnv = new Environment(fileSystem, pathService, '/');
+
+    try {
+      const source = `
+/var @name = "mlld"
+/run sh(@name):${tmpDir} {
+  echo "$name"
+  pwd
+}
+`;
+      const { ast } = await parse(source);
+      const directives = Array.isArray(ast) ? ast : [];
+      const varDirective = directives.find((node: any) => node.type === 'Directive' && node.kind === 'var');
+      const runDirective = directives.find((node: any) => node.type === 'Directive' && node.kind === 'run');
+
+      expect(varDirective).toBeDefined();
+      expect(runDirective).toBeDefined();
+
+      await evaluate(varDirective, localEnv);
+
+      const runNode: any = {
+        ...runDirective,
+        location: runDirective.location || { line: 1, column: 1 },
+        meta: runDirective.meta || {}
+      };
+
+      const result = await evaluateRun(runNode, localEnv);
+      const output = isStructuredValue(result.value) ? asText(result.value) : String(result.value);
+      const lines = output.split('\n').map(line => line.trim()).filter(Boolean);
+      expect(lines).toContain('mlld');
+      const normalizedOutput = fs.realpathSync(lines[lines.length - 1]);
       const normalizedExpected = fs.realpathSync(tmpDir);
       expect(normalizedOutput).toBe(normalizedExpected);
     } finally {

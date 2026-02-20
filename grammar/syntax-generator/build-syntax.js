@@ -16,11 +16,11 @@ class MlldSyntaxGenerator {
     // Define token patterns
     this.patterns = {
       directive: `(${this.directives.join('|')})\\b`,
-      variable: '@\\w+',
+      variable: '@[A-Za-z_][A-Za-z0-9_-]*',
       reservedVariable: '@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b',
       projectPathShort: '@\\.',
       negationOperator: '!@',
-      fieldAccess: '\\.(\\w+|\\d+)',
+      fieldAccess: '\\.([A-Za-z_][A-Za-z0-9_-]*|\\d+)',
       templateBlock: '::[^:]+::',  // Double-colon template syntax
       tripleColonTemplate: ':::[^:]+:::',  // Triple-colon template syntax
       templateVar: '\\{\\{[^}]+\\}\\}',
@@ -48,15 +48,15 @@ class MlldSyntaxGenerator {
       whenKeyword: 'when\\s*:',
       whenArrow: '=>',
       // Enhanced operators list
-      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted)\\b',
+      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new)\\b',
       // Block keywords (inside [...] blocks)
-      blockKeywords: '\\b(let|done|continue|skip)\\b',
+      blockKeywords: '\\b(let|done|continue|skip|bail)\\b',
       // Wildcard in when blocks
       wildcard: '(?:^|\\s)\\*(?=\\s|$|=>)',
       // Object keys in literals: key:
       objectKey: '(?<=^|[{,\\s])[\\w]+(?=\\s*:(?!:))',
-      // Guard filter syntax
-      guardFilter: '\\bop:(run|exe|output|show|import)\\b',
+      // Guard/hook operation filter syntax
+      guardFilter: '\\bop:(var|run|exe|show|output|append|for(?::(iteration|batch))?|loop|import)\\b',
       // Type-checking builtin methods
       typeCheckMethods: '\\.(isArray|isObject|isString|isNumber|isBoolean|isNull|isDefined)\\s*\\(',
       // AST selector patterns inside { }
@@ -72,10 +72,10 @@ class MlldSyntaxGenerator {
       // Assignment operator
       assignmentOperator: '=',
       // Implicit assignment (for when blocks)
-      implicitAssignment: '@\\w+\\s*=(?!=)',
+      implicitAssignment: '@[A-Za-z_][A-Za-z0-9_-]*\\s*=(?!=)',
       // Condensed pipes
-      condensedPipe: '@\\w+(\\|@\\w+)+',
-      filePipe: '<[^>]+>(\\|@\\w+)+',
+      condensedPipe: '@[A-Za-z_][A-Za-z0-9_-]*(\\|@[A-Za-z_][A-Za-z0-9_-]*)+',
+      filePipe: '<[^>]+>(\\|@[A-Za-z_][A-Za-z0-9_-]*)+',
       codeBlockDelimiter: '```\\w*',
       number: '\\b\\d+(\\.\\d+)?\\b',
       boolean: '\\b(true|false)\\b',
@@ -91,12 +91,12 @@ class MlldSyntaxGenerator {
       // Look for ReservedDirective rule
       const reservedMatch = grammar.match(/ReservedDirective[^=]*=([^$]+?)$/s);
       if (reservedMatch) {
-        const directiveMatches = reservedMatch[1].match(/"\/(\w+)"/g);
+        const directiveMatches = reservedMatch[1].match(/"\/([A-Za-z_][A-Za-z0-9_-]*)"/g);
         if (directiveMatches) {
           // Extract directive names without the / prefix
           const directives = directiveMatches.map(d => d.replace(/["\/]/g, ''));
           // Ensure newer directives are present even if grammar scan misses them
-          ['for', 'log', 'guard', 'export', 'stream', 'append'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
+          ['for', 'loop', 'log', 'guard', 'hook', 'export', 'stream', 'append', 'checkpoint', 'if', 'while', 'policy', 'sign', 'verify', 'env', 'bail'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
           return directives;
         }
       }
@@ -106,7 +106,7 @@ class MlldSyntaxGenerator {
     }
     
     // Fallback to known list (v2 directives)
-    return ['var', 'show', 'stream', 'run', 'exe', 'path', 'import', 'when', 'output', 'append', 'for', 'log', 'guard', 'export'];
+    return ['var', 'show', 'stream', 'run', 'exe', 'checkpoint', 'path', 'import', 'when', 'if', 'for', 'loop', 'while', 'output', 'append', 'log', 'guard', 'hook', 'export', 'policy', 'sign', 'verify', 'env', 'bail'];
   }
 
   generatePrism() {
@@ -247,7 +247,7 @@ Prism.languages.mlld = {
     pattern: /${this.patterns.singleQuoteString}/,
     greedy: true
   },
-  // Block keywords (let, done, continue, skip)
+  // Block keywords (let, done, continue, skip, bail)
   'block-keyword': {
     pattern: /${this.patterns.blockKeywords}/,
     alias: 'keyword'

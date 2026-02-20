@@ -73,8 +73,9 @@ export function attachBuiltinEffects(pipeline: PipelineStage[]): {
     }
 
     const cmd: PipelineStageEntry = { ...(stage as any) };
+    // Attach pending leading effects as pre-effects (run before stage, not after)
     if (pendingLeadingEffects.length > 0) {
-      (cmd as any).effects = [...((cmd as any).effects || []), ...pendingLeadingEffects];
+      (cmd as any).preEffects = [...((cmd as any).preEffects || []), ...pendingLeadingEffects];
       pendingLeadingEffects.length = 0;
     }
     functional.push(cmd as PipelineStage);

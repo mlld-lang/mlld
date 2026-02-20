@@ -24,15 +24,17 @@ No ambiguity with arrays or strings.
 */
 
 // Main alligator expression
+// Optional ? postfix after > makes loading soft-fail (returns null/[] instead of error)
 AlligatorExpression "alligator expression"
-  = "<" !"!" _ source:AlligatorSource ast:AlligatorAstPatterns? options:AlligatorOptions? _ ">" pipes:SpacedOrCondensedPipeChain? {
-      helpers.debug('AlligatorExpression matched', { source, ast, options, pipes });
+  = "<" !"!" _ source:AlligatorSource ast:AlligatorAstPatterns? options:AlligatorOptions? _ ">" optional:"?"? pipes:SpacedOrCondensedPipeChain? {
+      helpers.debug('AlligatorExpression matched', { source, ast, options, pipes, optional });
       return {
         type: 'load-content',
         source: source,
         ...(ast ? { ast } : {}),
         ...(options ? { options } : {}),
         ...(pipes && pipes.length > 0 ? { pipes } : {}),
+        ...(optional ? { optional: true } : {}),
         location: location()
       };
     }

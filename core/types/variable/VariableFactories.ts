@@ -1027,7 +1027,7 @@ export class VariableFactory {
       errors.push('Variable name must be a non-empty string');
     }
 
-    if (name && !name.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/)) {
+    if (name && !name.match(/^[a-zA-Z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*$/)) {
       errors.push('Variable name must be a valid identifier');
     }
 

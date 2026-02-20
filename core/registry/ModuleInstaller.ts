@@ -1,4 +1,6 @@
 import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs/promises';
 import { ModuleCache } from './ModuleCache';
 import { LockFile, type ModuleLockEntry, type LockFileOptions } from './LockFile';
 import { ProjectConfig } from './ProjectConfig';
@@ -10,6 +12,7 @@ import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { parseSemVer, compareSemVer } from '@core/utils/version-checker';
 import { splitModuleNameVersion, normalizeModuleName as normalizeModuleNameUtil } from './utils/moduleNames';
+import { MODULE_TYPE_PATHS, type ModuleType } from './types';
 
 import type { DependencyResolution } from './types';
 
@@ -53,12 +56,14 @@ export type ModuleInstallerEvent =
   | { type: 'skip'; module: string; reason: 'cached' | 'dry-run' }
   | { type: 'fetch'; module: string }
   | { type: 'success'; module: string; status: 'installed' | 'cached'; hash?: string; version?: string }
+  | { type: 'directory-install'; module: string; targetDir: string; fileCount: number }
   | { type: 'error'; module: string; error: Error };
 
 export interface InstallOptions {
   force?: boolean;
   noCache?: boolean;
   dryRun?: boolean;
+  global?: boolean;
   context?: ResolverOptions['context'];
   onEvent?: (event: ModuleInstallerEvent) => void;
 }
@@ -364,6 +369,53 @@ export class ModuleInstaller {
       resolvedVersion = metadata.version ?? metadata.registryVersion ?? requestedVersion;
       source = metadata.source ?? reference;
       sourceUrl = metadata.sourceUrl ?? metadata.source;
+
+      // Handle directory module installation
+      if (metadata.isDirectory && metadata.directoryFiles) {
+        // Validate moduleType against known types, fall back to 'library'
+        const validTypes: ModuleType[] = ['library', 'app', 'command', 'skill', 'environment'];
+        const rawType = metadata.moduleType as string;
+        const moduleType: ModuleType = validTypes.includes(rawType as ModuleType)
+          ? (rawType as ModuleType)
+          : 'library';
+        const simpleName = moduleName.replace(/^@[^/]+\//, '');
+
+        // Determine target directory based on type and global flag
+        const typePaths = MODULE_TYPE_PATHS[moduleType];
+        const baseDir = options.global
+          ? path.join(os.homedir(), typePaths.global)
+          : path.join(this.workspace.projectRoot, typePaths.local);
+        const targetDir = path.resolve(baseDir, simpleName);
+
+        if (!options.dryRun) {
+          // Create target directory
+          await fs.mkdir(targetDir, { recursive: true });
+
+          // Write all files with path sanitization to prevent directory traversal
+          const files = metadata.directoryFiles as Record<string, string>;
+          for (const [filePath, content] of Object.entries(files)) {
+            // Normalize and resolve the path
+            const normalizedPath = path.normalize(filePath).replace(/^(\.\.[\/\\])+/, '');
+            const fullPath = path.resolve(targetDir, normalizedPath);
+
+            // Security check: ensure the resolved path is within targetDir
+            if (!fullPath.startsWith(targetDir + path.sep) && fullPath !== targetDir) {
+              throw new Error(`Security error: path "${filePath}" attempts to escape target directory`);
+            }
+
+            const fileDir = path.dirname(fullPath);
+            await fs.mkdir(fileDir, { recursive: true });
+            await fs.writeFile(fullPath, content, 'utf-8');
+          }
+        }
+
+        emit?.({
+          type: 'directory-install',
+          module: moduleName,
+          targetDir,
+          fileCount: Object.keys(metadata.directoryFiles).length
+        });
+      }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       emit?.({ type: 'error', module: moduleName, error: err });
@@ -441,7 +493,18 @@ export class ModuleInstaller {
         continue;
       }
 
-      const installResult = await this.installSingle({ name: moduleName, version: spec.version }, {
+      // Skip non-registry entries (local files, @base/, @input, etc.)
+      if (!this.isRegistryEntry(previousEntry)) {
+        results.push({
+          module: moduleName,
+          previousVersion: previousEntry.registryVersion || previousEntry.version,
+          status: 'unchanged'
+        });
+        continue;
+      }
+
+      // Don't pass version — let the resolver fetch the latest from the registry
+      const installResult = await this.installSingle({ name: moduleName }, {
         ...options,
         force: true
       });
@@ -566,11 +629,12 @@ export class ModuleInstaller {
       const resolver = new RegistryResolver();
       const parsed = splitModuleNameVersion(spec.name);
       const name = this.workspace.normalizeModuleName(parsed.name);
-      const version = spec.version ?? parsed.version;
-      const resolution = await resolver.resolve(this.workspace.buildReference({ name, version }));
-      const metadata = resolution.content.metadata ?? {};
+      // Don't pass a version — let the resolver find the latest
+      const reference = this.workspace.buildReference({ name });
+      const resolution = await resolver.resolve(reference);
+      const metadata = resolution.metadata ?? {};
       return {
-        version: metadata.version ?? metadata.registryVersion ?? version,
+        version: metadata.version ?? metadata.registryVersion,
         hash: metadata.hash,
         source: metadata.source ?? metadata.sourceUrl
       };
@@ -580,8 +644,9 @@ export class ModuleInstaller {
   }
 
   private isRegistryEntry(entry: ModuleLockEntry): boolean {
-    const source = entry.sourceUrl ?? entry.source ?? '';
-    return source.startsWith('registry://') || source.includes('gist.githubusercontent.com') || source.includes('github.com');
+    const source = entry.source ?? '';
+    const sourceUrl = entry.sourceUrl ?? '';
+    return source.startsWith('registry://') || sourceUrl.includes('githubusercontent.com') || sourceUrl.includes('github.com');
   }
 
   async resolveDependencies(

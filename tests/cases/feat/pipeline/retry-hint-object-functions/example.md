@@ -3,12 +3,12 @@
 /exe @calcCode() = 503
 /exe @mkDetail(n) = js { return `try-${n}-detail` }
 
-/exe @source() = when first [
+/exe @source() = when [
   @mx.try == 1 => "draft"
   * => "final"
 ]
 
-/exe @validator() = when first [
+/exe @validator() = when [
   @mx.input == "draft" => retry { code: @calcCode(), detail: @mkDetail(@mx.try) }
   * => "Hint: code=@mx.hint.code, detail=@mx.hint.detail"
 ]

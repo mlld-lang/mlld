@@ -1,0 +1,9 @@
+var @spec = "spec content"
+var @plan = "plan content"
+
+exe @buildTask(spec, plan) = template "./test-task-bad.att"
+var @task = @buildTask(@spec, @plan)
+
+log `Task type: @task.mx.type`
+log `Task length: @task.length`
+show @task

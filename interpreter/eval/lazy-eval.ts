@@ -6,6 +6,7 @@ import { evaluate } from '../core/interpreter';
 import { logger } from '@core/utils/logger';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../core/interpolation-context';
+import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 
 // Simple cache to prevent double evaluation of the same directive
 const evaluationCache = new WeakMap<DirectiveNode, any>();
@@ -115,7 +116,7 @@ export async function evaluateDataValue(
       pathNode: value
     });
     // Read the file content
-    const content = await env.fileSystem.readFile(resolvedPath);
+    const content = await readFileWithPolicy(env, resolvedPath);
     return content;
   }
   

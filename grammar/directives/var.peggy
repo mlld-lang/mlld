@@ -6,12 +6,13 @@ VarKeyword
   = "/"? "var"
 
 SlashVar "var directive"
-  = DirectiveContext VarKeyword labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
-      helpers.debug('AtVar matched', { id, value, ending });
+  = DirectiveContext VarKeyword toolsSegment:(HWS "tools")? labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier optionalMarker:("?" { return true; })? _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
+      helpers.debug('AtVar matched', { id, optionalMarker: !!optionalMarker, value, ending });
       
       // Extract ending components
       let tail = ending.tail;
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
+      const isToolsCollection = !!toolsSegment;
       const comment = ending.comment;
       
       // Create variable reference node for identifier
@@ -32,23 +33,14 @@ SlashVar "var directive"
         
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
+        metaInfo.rawTemplate = value.raw || helpers.reconstructRawString(processedValue);
         
-        // Check if template has a pipeline attached (only condensed pipes immediately after template)
+        // Check if template has a pipeline attached
         if (value.withClause) {
           tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
         }
-
-        // Condensed-only inside backtick/double-colon/triple-colon templates.
-        // Allow tail pipelines for simple quotes; ignore only for template wrappers.
-        if (!value.withClause && tail && tail.pipeline) {
-          const wrapper = value.wrapperType;
-          const isTemplateWrapper = wrapper === 'backtick' || wrapper === 'doubleColon' || wrapper === 'tripleColon';
-          if (isTemplateWrapper) {
-            const filteredTail = { ...tail };
-            delete filteredTail.pipeline;
-            tail = filteredTail;
-          }
-        }
+        // Note: Pipeline is preserved for all wrapper types (backtick, doubleColon, tripleColon)
+        // to allow `var @x = \`template\` | log` syntax to work consistently
       }
       // Handle object literals (already typed by DataObjectLiteral)
       else if (value && value.type === 'object') {
@@ -97,25 +89,57 @@ SlashVar "var directive"
         metaInfo.inferredType = 'computed';
         metaInfo.isDataValue = true;
       }
+      // Handle structured directive nodes (e.g., env expressions)
+      else if (value && value.type === 'Directive') {
+        processedValue = [value];
+        metaInfo.inferredType = 'computed';
+        metaInfo.directiveKind = value.kind;
+      }
       // Handle code execution (both 'run' keyword and shorthand)
       else if (value && value.type === 'code') {
-        processedValue = [{
+        const codeNode = {
           type: 'code',
           language: value.language,
           code: value.code
-        }];
+        };
+        if (value.workingDir) {
+          codeNode.workingDir = value.workingDir;
+        }
+        processedValue = [codeNode];
         metaInfo.inferredType = 'computed';
         metaInfo.language = value.language;
         metaInfo.hasRunKeyword = value.hasRunKeyword;
+        if (value.meta?.hasWorkingDir) {
+          metaInfo.hasWorkingDir = true;
+        }
       }
       // Handle command execution (run {command})
       else if (value && value.type === 'command') {
-        processedValue = [{
+        const commandNode = {
           type: 'command',
           command: value.command
-        }];
+        };
+        if (value.commandBases) {
+          commandNode.commandBases = value.commandBases;
+        }
+        if (value.workingDir) {
+          commandNode.workingDir = value.workingDir;
+        }
+        if (value.workingDirMeta) {
+          commandNode.workingDirMeta = value.workingDirMeta;
+        }
+        if (value.using) {
+          commandNode.using = value.using;
+        }
+        if (value.meta) {
+          commandNode.meta = value.meta;
+        }
+        processedValue = [commandNode];
         metaInfo.inferredType = 'computed';
         metaInfo.hasRunKeyword = value.hasRunKeyword;
+        if (value.workingDir) {
+          metaInfo.hasWorkingDir = true;
+        }
       }
       // Handle foreach expressions
       else if (value && value.type === 'foreach-command') {
@@ -158,6 +182,14 @@ SlashVar "var directive"
         metaInfo.securityLabels = labelInfo.labels;
         values.securityLabels = labelInfo.labels;
       }
+
+      if (isToolsCollection) {
+        metaInfo.isToolsCollection = true;
+      }
+
+      if (optionalMarker) {
+        metaInfo.optionalAssignment = true;
+      }
       
       // Add comment to meta if present
       if (comment) {
@@ -167,6 +199,9 @@ SlashVar "var directive"
       const raw = {}; // raw object
       if (labelInfo) {
         raw.securityLabels = labelInfo.raw;
+      }
+      if (optionalMarker) {
+        raw.optionalAssignment = '?';
       }
 
       // Create directive with 'var' kind and single subtype
@@ -183,7 +218,7 @@ SlashVar "var directive"
   // Error: Augmented assignment inside /var
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "@" augId:BaseIdentifier _ "+=" _ {
       helpers.mlldError(
-        `Augmented assignment is not valid in /var directive. Use let @${augId} += value inside a block.`,
+        `Augmented assignment is not valid in var directive. Use let @${augId} += value inside a block.`,
         "+=",
         location()
       );
@@ -195,57 +230,67 @@ SlashVar "var directive"
       // So we pass the current position which is correct
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed array in /var directive. Expected ']' to close the array.", "]", location());
+      const reason = helpers.parserState.lastUnclosedReason;
+      if (reason === 'commentInside') {
+        helpers.mlldError("Comments (>>) are not allowed inside array literals. Place comments before the array or on a separate line.", ">>", location());
+      } else {
+        helpers.mlldError("Unclosed array in var directive. Expected ']' to close the array.", "]", location());
+      }
     }
-    
+
   // Error: Unclosed object literal
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "{" &{
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed object in /var directive. Expected closing brace to close the object.", String.fromCharCode(125), location());
+      const reason = helpers.parserState.lastUnclosedReason;
+      if (reason === 'commentInside') {
+        helpers.mlldError("Comments (>>) are not allowed inside object literals. Place comments before the object or on a separate line.", ">>", location());
+      } else {
+        helpers.mlldError("Unclosed object in var directive. Expected closing brace to close the object.", String.fromCharCode(125), location());
+      }
     }
     
   // Error: Unclosed string (double quotes)
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ '"' &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
-      helpers.mlldError("Unclosed string in /var directive. Expected closing double quote (\").", "\"", location());
+      helpers.mlldError("Unclosed string in var directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed string (single quotes)
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "'" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, "'");
     } {
-      helpers.mlldError("Unclosed string in /var directive. Expected closing single quote.", "'", location());
+      helpers.mlldError("Unclosed string in var directive. Expected closing single quote.", "'", location());
     }
     
   // Error: Unclosed template
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "::" &{
       return helpers.isUnclosedTemplate(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed template in /var directive. Expected closing '::' delimiter.", "::", location());
+      helpers.mlldError("Unclosed template in var directive. Expected closing '::' delimiter.", "::", location());
     }
     
   // Error: Missing value after =
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing value in /var directive. Expected a value after '=' for variable '@" + id + "'.", "value", location());
+      helpers.mlldError("Missing value in var directive. Expected a value after '=' for variable '@" + id + "'.", "value", location());
     }
-    
+
   // Error: Missing = after variable name
-  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ &{
+  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier ("?" { return true; })? _ &{
       // Look ahead to see if there's content but no =
       const rest = input.substring(peg$currPos).trim();
       return rest.length > 0 && rest[0] !== '=';
     } {
-      helpers.mlldError("Invalid /var syntax. Expected '=' after variable name '@" + id + "'.", "=", location());
+      helpers.mlldError("Invalid var syntax. Expected '=' after variable name '@" + id + "'.", "=", location());
     }
-    
+
   // Error: Missing @ before variable name
   / DirectiveContext VarKeyword _ id:BaseIdentifier _ "=" {
       const varLoc = location(); // Use built-in location() function
-      helpers.mlldError("Missing '@' before variable name in /var directive. Use: /var @" + id + " = value", "@", varLoc);
+      helpers.mlldError("Missing '@' before variable name in var directive. Use: var @" + id + " = value", "@", varLoc);
     }
-    
+
   // Error: Missing variable name after @
   / DirectiveContext VarKeyword _ "@" _ &{
       // Check if next character is not a valid identifier start
@@ -253,10 +298,10 @@ SlashVar "var directive"
       return !/[a-zA-Z_]/.test(nextChar);
     } {
       const atLoc = location(); // Use built-in location() function
-      helpers.mlldError("Invalid variable name in /var directive. Variable names must start with a letter or underscore.", "identifier", atLoc);
+      helpers.mlldError("Invalid variable name in var directive. Variable names must start with a letter or underscore.", "identifier", atLoc);
     }
-    
-  // Error: Generic /var syntax error
+
+  // Error: Generic var syntax error
   / DirectiveContext VarKeyword {
-      helpers.mlldError("Invalid /var syntax. Expected: /var @name = value", "@", location());
+      helpers.mlldError("Invalid var syntax. Expected: var @name = value", "@", location());
     }

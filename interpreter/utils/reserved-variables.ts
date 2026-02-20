@@ -22,11 +22,8 @@ export function getTimeValue(): string {
 }
 
 /**
- * Get the project path value for @base variable
- * This is a placeholder that gets replaced with actual project path later
+ * Get the project path value for @base variable.
  */
 export function getProjectPathValue(basePath: string): string {
-  // For now, return basePath. The actual project path discovery
-  // happens asynchronously and updates this value
   return basePath;
 }

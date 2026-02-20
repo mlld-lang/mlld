@@ -7,7 +7,8 @@ export interface ShadowEnvironmentCapture {
   javascript?: Map<string, any>;
   node?: Map<string, any>;
   nodejs?: Map<string, any>;
-  // Future: python?, sh?, etc.
+  python?: Map<string, any>;
+  py?: Map<string, any>;
 }
 
 /**

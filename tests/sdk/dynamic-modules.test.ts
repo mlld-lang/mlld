@@ -83,3 +83,104 @@ describe('dynamic module imports', () => {
     expect(result.trim()).toBe('42');
   });
 });
+
+describe('@payload optional field access', () => {
+  it('ternary returns default when field missing from namespace import', async () => {
+    const script = `/import "@payload" as @payload
+/var @topic = @payload.topic ? @payload.topic : "default"
+/show @topic`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': {}
+      }
+    });
+
+    expect(result.trim()).toBe('default');
+  });
+
+  it('ternary returns value when field exists in namespace import', async () => {
+    const script = `/import "@payload" as @payload
+/var @topic = @payload.topic ? @payload.topic : "default"
+/show @topic`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { topic: 'foo' }
+      }
+    });
+
+    expect(result.trim()).toBe('foo');
+  });
+
+  it('handles multiple optional fields with defaults', async () => {
+    const script = `/import "@payload" as @payload
+/var @topic = @payload.topic ? @payload.topic : "default-topic"
+/var @count = @payload.count ? @payload.count : 0
+/show \`@topic:@count\``;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { topic: 'test' }
+      }
+    });
+
+    expect(result.trim()).toBe('test:0');
+  });
+
+  it('destructuring import sets null for missing optional fields', async () => {
+    const script = `/import { @topic } from @payload
+/var @isNull = @topic == null
+/show @isNull`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': {}
+      }
+    });
+
+    expect(result.trim()).toBe('true');
+  });
+
+  it('destructuring import uses ternary default for missing fields', async () => {
+    const script = `/import { @topic, @tier } from @payload
+/var @safeTopic = @topic ? @topic : "default-topic"
+/show @safeTopic
+/show @tier`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { tier: 1 }
+      }
+    });
+
+    expect(result.trim()).toBe('default-topic\n\n1');
+  });
+
+  it('destructuring import succeeds for present fields', async () => {
+    const script = `/import { @topic, @count } from @payload
+/show \`@topic:@count\``;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { topic: 'hello', count: 42 }
+      }
+    });
+
+    expect(result.trim()).toBe('hello:42');
+  });
+
+  it('@state destructuring also allows missing fields', async () => {
+    const script = `/import { @count, @name } from @state
+/var @safeName = @name ? @name : "unknown"
+/show \`@safeName:@count\``;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@state': { count: 5 }
+      }
+    });
+
+    expect(result.trim()).toBe('unknown:5');
+  });
+});

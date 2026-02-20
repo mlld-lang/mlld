@@ -1,6 +1,7 @@
 import { MlldInterpreterError } from '@core/errors';
 import type { PackageRequirement, PackageRequirementMap } from '@core/registry/types';
 import { parseVersionSpecifier } from '@core/registry/utils/ModuleNeeds';
+import type { PolicyConfig } from '@core/policy/union';
 
 const PACKAGE_ECOSYSTEM_ALIASES: Record<string, string> = {
   node: 'node',
@@ -43,11 +44,12 @@ export interface NeedsDeclaration {
   filesystem?: boolean;
 }
 
-export interface WantsTier {
-  tier: string;
-  why?: string;
-  needs: NeedsDeclaration;
+export interface ProfileDefinition {
+  requires: NeedsDeclaration;
+  description?: string;
 }
+
+export type ProfilesDeclaration = Record<string, ProfileDefinition>;
 
 export interface PolicyCapabilities {
   allowAll?: boolean;
@@ -132,57 +134,51 @@ export function normalizeNeedsDeclaration(raw: unknown, context: string = 'needs
   return result;
 }
 
-export function normalizeWantsDeclaration(raw: unknown): WantsTier[] {
+export function normalizeProfilesDeclaration(raw: unknown): ProfilesDeclaration {
   if (raw === undefined || raw === null) {
-    return [];
+    return {};
   }
 
-  if (!Array.isArray(raw)) {
-    throw new MlldInterpreterError('/wants expects an array of tier objects', {
-      code: 'INVALID_WANTS_DECLARATION'
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new MlldInterpreterError('/profiles expects an object of profiles', {
+      code: 'INVALID_PROFILES_DECLARATION'
     });
   }
 
-  return raw.map((entry, index) => {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-      throw new MlldInterpreterError(`/wants tier at index ${index} is not an object`, {
-        code: 'INVALID_WANTS_TIER'
+  const result: ProfilesDeclaration = {};
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new MlldInterpreterError(`/profiles entry '${name}' is not an object`, {
+        code: 'INVALID_PROFILE_ENTRY'
       });
     }
 
-    const tierObj = entry as Record<string, unknown>;
-    const tierValue = tierObj.tier;
-    if (typeof tierValue !== 'string' || tierValue.trim().length === 0) {
-      throw new MlldInterpreterError(`/wants tier at index ${index} is missing required 'tier'`, {
-        code: 'INVALID_WANTS_TIER'
+    const profileObj = value as Record<string, unknown>;
+    const requiresRaw = profileObj.requires ?? {};
+    const requires = normalizeNeedsDeclaration(requiresRaw, 'profiles');
+    const description = profileObj.description;
+    if (description !== undefined && typeof description !== 'string') {
+      throw new MlldInterpreterError(`/profiles entry '${name}' description must be a string`, {
+        code: 'INVALID_PROFILE_DESCRIPTION'
       });
     }
 
-    const { tier, why, ...rest } = tierObj as Record<string, unknown>;
-
-    const needs = normalizeNeedsDeclaration(rest, 'wants');
-    const allowedKeys = new Set([
-      'tier',
-      'why',
-      'cmd',
-      '__commands',
-      ...Object.keys(PACKAGE_ECOSYSTEM_ALIASES),
-      ...Object.keys(BOOLEAN_CAPABILITY_ALIASES)
-    ]);
-    for (const key of Object.keys(tierObj)) {
+    const allowedKeys = new Set(['requires', 'description']);
+    for (const key of Object.keys(profileObj)) {
       if (!allowedKeys.has(key)) {
-        throw new MlldInterpreterError(`/wants tier '${tierValue}' contains unsupported key '${key}'`, {
-          code: 'INVALID_WANTS_KEY'
+        throw new MlldInterpreterError(`/profiles entry '${name}' contains unsupported key '${key}'`, {
+          code: 'INVALID_PROFILE_KEY'
         });
       }
     }
 
-    return {
-      tier: tierValue,
-      why: typeof why === 'string' ? why : undefined,
-      needs
+    result[name] = {
+      requires,
+      ...(description ? { description } : {})
     };
-  });
+  }
+
+  return result;
 }
 
 export function policySatisfiesNeeds(needs: NeedsDeclaration, policy: PolicyCapabilities): boolean {
@@ -213,14 +209,66 @@ export function policySatisfiesNeeds(needs: NeedsDeclaration, policy: PolicyCapa
   return true;
 }
 
-export function selectWantsTier(
-  wants: WantsTier[],
-  policy: PolicyCapabilities
-): { tier: string; granted: NeedsDeclaration } | null {
-  for (const tier of wants) {
-    if (policySatisfiesNeeds(tier.needs, policy)) {
-      return { tier: tier.tier, granted: tier.needs };
+function isDenied(
+  capability: string,
+  deny: PolicyConfig['deny']
+): boolean {
+  if (deny === true) return true;
+  if (!deny || typeof deny !== 'object' || Array.isArray(deny)) {
+    return false;
+  }
+  const denyValue = deny[capability];
+  if (denyValue === true) return true;
+  if (Array.isArray(denyValue)) {
+    return denyValue.includes('*');
+  }
+  if (denyValue && typeof denyValue === 'object' && !Array.isArray(denyValue)) {
+    const entries = Object.values(denyValue as Record<string, unknown>);
+    for (const entry of entries) {
+      if (entry === true) {
+        return true;
+      }
+      if (Array.isArray(entry) && entry.includes('*')) {
+        return true;
+      }
     }
+  }
+  return false;
+}
+
+export function policyConfigPermitsNeeds(
+  needs: NeedsDeclaration,
+  policyConfig: PolicyConfig | undefined
+): boolean {
+  if (!policyConfig) return true;
+
+  if (policyConfig.deny) {
+    if (policyConfig.deny === true) return false;
+
+    if (needs.sh && isDenied('sh', policyConfig.deny)) return false;
+    if (needs.network && isDenied('network', policyConfig.deny)) return false;
+    if (needs.filesystem && isDenied('filesystem', policyConfig.deny)) return false;
+
+    if (needs.cmd) {
+      if (isDenied('cmd', policyConfig.deny)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+export function selectProfile(
+  profiles: ProfilesDeclaration,
+  policy: PolicyCapabilities,
+  policyConfig?: PolicyConfig
+): { name: string; profile: ProfileDefinition } | null {
+  for (const [name, profile] of Object.entries(profiles)) {
+    if (!profile) continue;
+    if (!policySatisfiesNeeds(profile.requires, policy)) continue;
+    if (!policyConfigPermitsNeeds(profile.requires, policyConfig)) continue;
+    return { name, profile };
   }
   return null;
 }

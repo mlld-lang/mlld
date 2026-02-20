@@ -265,9 +265,9 @@ All error cases are implemented with specific recovery rules:
    → Error: Unclosed code block in /run js. Expected '}' to close the code block.
    ```
 
-### `/path` - Path Assignment (NOT IMPLEMENTED)
+### `/path` - Removed Directive
 
-The `/path` directive exists but does not have error recovery rules implemented yet.
+The `/path` directive is not part of mlld syntax. Use `/var` assignments for path strings and `<...>` alligator content loading.
 
 ## Implementation Details
 

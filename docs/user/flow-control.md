@@ -2,9 +2,32 @@
 
 ## tldr
 
-mlld provides three control flow mechanisms: **conditionals** (`when`), **iteration** (`for` and `foreach`), and **pipelines** (`|`). Use `when` for decisions, `for` for actions per item, `foreach` for transforming collections, and pipelines for chaining transformations with retry logic.
+mlld provides three control flow mechanisms: **conditionals** (`if` and `when`), **iteration** (`for` and `foreach`), and **pipelines** (`|`). Use `if` for imperative flow, `when` for value selection, `for` for actions per item, `foreach` for transforming collections, and pipelines for chaining transformations with retry logic.
 
 ## Conditionals
+
+### Basic If
+
+Use `if` for imperative control flow:
+
+```mlld
+var @score = 85
+if @score > 80 [
+  show "Excellent work!"
+]
+```
+
+Use block form with `else` for multi-statement branches:
+
+```mlld
+exe @classify(score) = [
+  if @score >= 90 [
+    => "A"
+  ] else [
+    => "B"
+  ]
+]
+```
 
 ### Basic When
 
@@ -15,13 +38,17 @@ var @score = 85
 when @score > 80 => show "Excellent work!"
 ```
 
-### When First (Switch-Style)
+Inline `when` is single-expression shorthand (`when @condition => action`).
+It uses the same first-match semantics as `when [ ... ]` entries.
+Use `when [ ... ]` when you need multiple branches or multi-statement actions.
 
-Use `when first` to stop at the first matching condition:
+### When Lists (First-Match)
+
+Use `when` to stop at the first matching condition:
 
 ```mlld
 var @role = "admin"
-when first [
+when [
   @role == "admin" => show "✓ Admin access granted"
   @role == "user" => show "User access granted"
   * => show "Access denied"
@@ -32,31 +59,22 @@ The `*` wildcard matches anything (catch-all). Use `none` when no conditions mat
 
 ```mlld
 var @status = "unknown"
-when first [
+when [
   @status == "active" => show "Service running"
   @status == "inactive" => show "Service stopped"
   none => show "Unknown status"
 ]
 ```
 
-### When All (Bare Form)
+### Multiple Independent Conditions
 
-Without `first`, all matching conditions execute:
+Use multiple `if` statements when you need several conditions to run:
 
 ```mlld
 var @score = 95
-when [
-  @score > 90 => show "Excellent!"
-  @score > 80 => show "Above average!"
-  @score == 95 => show "Perfect score!"
-]
-```
-
-Output:
-```
-Excellent!
-Above average!
-Perfect score!
+if @score > 90 [ show "Excellent!" ]
+if @score > 80 [ show "Above average!" ]
+if @score == 95 [ show "Perfect score!" ]
 ```
 
 ### Executable When Patterns
@@ -64,7 +82,7 @@ Perfect score!
 Use `/exe...when` to create value-returning conditional functions:
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   @score >= 70 => "C"
@@ -98,7 +116,7 @@ Use `let` to declare local variables scoped to a when block:
 
 ```mlld
 var @mode = "active"
-when @mode: [
+when @mode [
   let @prefix = "Status:"
   "active" => show "@prefix Active"
   * => show "@prefix Unknown"
@@ -131,11 +149,22 @@ Hello World!
 
 ```mlld
 var @status = "ok"
-when @status: [
+when @status [
   let @msg = "Completed"
   "ok" => show @msg
 ]
 >> @msg is not accessible here
+```
+
+Use `+=` for augmented assignment in when blocks — works with arrays (concat), strings (append), and objects (merge):
+
+```mlld
+exe @collect() = when [
+  let @items = []
+  @items += "a"
+  @items += "b"
+  * => @items  >> ["a", "b"]
+]
 ```
 
 ### Exe Block Syntax
@@ -157,7 +186,7 @@ Output:
 Hello World!
 ```
 
-Exe blocks require an explicit return with `=>` as the last statement:
+Exe blocks return values with an explicit `=>`:
 
 ```mlld
 exe @combine(a, b) = [
@@ -172,6 +201,41 @@ Output:
 ```
 hello-world
 ```
+
+### Script Return
+
+Use `=>` at top level to return a final script value and stop execution:
+
+```mlld
+show "Processing..."
+=> { status: "ok" }
+show "unreachable"
+```
+
+With script returns, final output is explicit:
+
+- `show` writes side-effect output
+- `log` writes side-effect diagnostics to stderr
+- `=> @value` returns final script output and terminates execution
+- No `=>` means no implicit final return output
+
+Imported `.mld` modules expose script return values through `default`:
+
+```mlld
+>> module.mld
+var @status = "active"
+=> { code: 200, status: @status }
+var @unreachable = "never runs"
+```
+
+```mlld
+>> main.mld
+import { default as @result, status as @s } from "./module.mld"
+show @result.code     >> 200
+show @s               >> "active"
+```
+
+Scripts without `=>` do not emit implicit final return output. Use `=>` explicitly when module consumers need a default export value.
 
 Use `let @var += value` for accumulation within blocks:
 
@@ -210,12 +274,60 @@ Fruit: banana
 Fruit: cherry
 ```
 
+`for` loops always iterate all items — there is no `break` or `continue`. Use conditional logic and accumulation instead (`loop` and `while` do have `done` and `continue` — see below):
+
+```mlld
+exe @filter(items) = [
+  let @results = []
+  for @item in @items [
+    when @item.valid => [
+      let @results += [@item]
+    ]
+  ]
+  => @results
+]
+```
+
+### For Loop Context
+
+Access loop state with `@mx.for` inside any iteration body:
+
+```mlld
+var @items = [10, 20, 30]
+for @n in @items => show `Index: @mx.for.index, Value: @n`
+```
+
+Output:
+```
+Index: 0, Value: 10
+Index: 1, Value: 20
+Index: 2, Value: 30
+```
+
+Available `@mx.for` fields:
+- `@mx.for.index` - Current 0-based iteration index
+- `@mx.for.total` - Total number of items in collection
+- `@mx.for.key` - Key for objects, stringified index for arrays
+- `@mx.for.parallel` - Boolean indicating parallel execution
+
+Array-bound variables also expose `@item.mx.index`:
+
+```mlld
+for @item in @items => show `Item @item.mx.index: @item`
+```
+
 ### Object Iteration with Keys
 
-When iterating objects, access keys with `_key`:
+When iterating objects, bind a key variable or use `_key` in the value-only form:
 
 ```mlld
 var @config = {"host": "localhost", "port": 3000}
+for @key, @value in @config => show `@key: @value`
+```
+
+Value-only form:
+
+```mlld
 for @value in @config => show `@value_key: @value`
 ```
 
@@ -295,6 +407,15 @@ Output:
 [2, 4, 6, 8]
 ```
 
+### Inline Filter
+
+Filter items during iteration with an inline `when` clause:
+
+```mlld
+var @valid = for @x in @items when @x != null => @x
+var @admins = for @u in @users when @u.role == "admin" => @u.name
+```
+
 ### Parallel /for
 
 Run iterations in parallel with an optional per-loop cap and pacing between starts. Use the directive form for side effects (order may vary) or the collection form for ordered results.
@@ -307,6 +428,11 @@ for parallel @x in ["a","b","c","d"] => show @x
 
 >> Cap override and pacing between task starts
 for parallel(2, 1s) @n in [1,2,3,4] => show `Item: @n`
+
+>> Variable cap and pacing
+var @cap = 2
+var @pace = "1s"
+for parallel(@cap, @pace) @n in [1,2,3,4] => show `Item: @n`
 
 >> Collection form (preserves input order)
 var @res = for parallel(2) @x in ["x","y","z"] => @upper(@x)
@@ -329,6 +455,27 @@ show `errors:@mx.errors.length`
 - Directive form keeps streaming effects as iterations finish (order may vary).
 - Expression form preserves input order; failed iterations add error markers `{ index, key?, message, error, value }` in the results array.
 - `@mx.errors` resets at the start of each parallel loop and records any failures; outer-scope variables cannot be mutated inside a parallel block body.
+- `@mx.for.parallel` is `true` inside parallel loops; `@mx.for.index` preserves original array position even when iterations complete out of order.
+
+**Hook telemetry for loop progress and batches:**
+
+```mlld
+hook @iter after op:for:iteration = [
+  output `iter:@mx.for.index/@mx.for.total key=@mx.for.key batch=@mx.for.batchIndex:@mx.for.batchSize` to "state://loop-events"
+]
+
+hook @batchBefore before op:for:batch = [
+  output `batch-start:@mx.for.batchIndex size=@mx.for.batchSize` to "state://loop-events"
+]
+
+hook @batchAfter after op:for:batch = [
+  output `batch-end:@mx.for.batchIndex size=@mx.for.batchSize` to "state://loop-events"
+]
+
+var @res = for parallel(2) @x in ["a", "b", "c", "d", "e"] => @x
+```
+
+`op:for:iteration` fires once per item. `op:for:batch` fires once per parallel window (`before` + `after`).
 
 **Error handling with repair pattern:**
 
@@ -527,6 +674,33 @@ Notes:
 - Loops are supported in backticks and `::…::` templates.
 - Alternative template syntaxes (`:::…:::`, `[[…]]`) do not support loops.
 
+## Resume and Fork
+
+Checkpointed resumes are useful when parallel `llm` work is expensive and you only want to re-run part of a flow.
+
+```bash
+# Baseline cache
+mlld run pipeline --checkpoint
+
+# Resume with cache reuse (no invalidation target)
+mlld run pipeline --resume
+
+# Invalidate one function's cached calls
+mlld run pipeline --resume @processFiles
+
+# Invalidate one invocation site (0-based among same function name)
+mlld run pipeline --resume @processFiles:0
+
+# Fuzzy cursor by first-argument prefix
+mlld run pipeline --resume '@processFiles("tests/cases/docs")'
+
+# Fork from another script's cache
+mlld run analyze --fork collect
+```
+
+`--resume` implies checkpoint behavior. `--fork` reads from the source cache as a seed (read-only) and writes new misses only into the current script cache.
+In forked runs, changed prompt/model arguments miss locally while unchanged invocations can still hit from the source cache.
+
 ## Pipelines
 
 ### Basic Pipelines
@@ -534,7 +708,7 @@ Notes:
 Chain operations with `|`:
 
 ```mlld
-var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @json
+var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @parse
 show @data.users[0].name
 ```
 
@@ -543,12 +717,59 @@ Output:
 Alice
 ```
 
+Built-in transformers you can use directly in pipelines:
+- `@trim`
+- `@upper`
+- `@lower`
+- `@pretty`
+- `@sort`
+
+```mlld
+var @msg = "  hello pipeline  "
+var @shout = @msg | @trim | @upper
+show @shout
+
+var @record = `{"z":2,"a":1}`
+var @normalized = @record | @sort | @pretty
+show @normalized
+```
+
+Stages receive whole values. They do not auto-map over arrays:
+
+```mlld
+var @items = ["  beta  ", " alpha "]
+
+>> One stage receives the whole array value
+var @whole = @items | @trim
+
+>> Per-item transform requires explicit iteration
+var @each = for @item in @items => @item | @trim | @upper
+
+show @whole
+show @each
+```
+
+For error handling, let a stage validate input and choose retry or fallback:
+
+```mlld
+exe @source() = "not-json"
+
+exe @parseOrFallback(input) = when [
+  @input.startsWith("{") => @input | @parse
+  @mx.try < 2 => retry "expected JSON object"
+  * => { ok: false, error: "invalid-json", raw: @input }
+]
+
+var @result = @source() | @parseOrFallback
+show @result
+```
+
 ### Pipeline Context
 
 Access pipeline context with `@mx` and pipeline history with `@p` (alias for `@pipeline`):
 
 ```mlld
-exe @validator(input) = when first [
+exe @validator(input) = when [
   @input.valid => @input.value
   @mx.try < 3 => retry "validation failed"
   none => "fallback value"
@@ -570,7 +791,7 @@ Context object (`@mx`) contains:
 Pipeline array (`@p`) contains:
 - `@p[0]` - original/base input to the pipeline
 - `@p[1]` … `@p[n]` - outputs of completed visible stages
-- `@p[-1]` - previous stage output; `@p[-2]` two stages back, etc.
+- `@p[-1]` - previous stage output (same value as current stage input); `@p[-2]` two stages back, etc.
 - `@p.retries.all` - all attempt outputs from all retry contexts (for best-of-N patterns)
 - Pipeline stage outputs are `StructuredValue` wrappers with `.text` (string view) and `.data` (structured payload) properties. Templates and display automatically use `.text`; use `.data` when you need structured information.
 
@@ -584,12 +805,12 @@ Gotchas:
 Use `retry` with hints to guide subsequent attempts:
 
 ```mlld
-exe @source() = when first [
+exe @source() = when [
   @mx.try == 1 => "draft"
   * => "final"
 ]
 
-exe @validator() = when first [
+exe @validator() = when [
   @mx.input == "draft" => retry "missing title"
   * => `Used hint: @mx.hint`
 ]
@@ -653,6 +874,52 @@ The delay is applied BETWEEN iterations (not before first or after last).
 
 Note: Use `continue` instead of `retry` in while processors. Retry is for pipeline retries, not loop iteration.
 
+### Loop Blocks (Block Iteration)
+
+Use `loop` for block-based iteration with explicit control flow:
+
+```mlld
+var @result = loop(10) [
+  let @count = (@input ?? 0) + 1
+  when @count >= 3 => done @count
+  continue @count
+]
+show @result
+```
+
+Control keywords:
+- `done @value` - Exit loop and return the value
+- `done` - Exit loop and return null
+- `continue @value` - Next iteration with new `@input`
+- `continue` - Next iteration with unchanged `@input`
+
+`@input` is null on the first iteration.
+
+Use `until` to stop before running the body:
+
+```mlld
+loop until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show `@next`
+  continue @next
+]
+```
+
+Context variables (`@mx.loop`):
+- `@mx.loop.iteration` - Current iteration (1-based)
+- `@mx.loop.limit` - Configured cap or null for endless
+- `@mx.loop.active` - true when inside loop
+
+Pacing with `loop(limit, delay)` or `loop(endless, delay)`:
+
+```mlld
+loop(endless, 10ms) until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show "poll"
+  continue @next
+]
+```
+
 ### Parallel Pipelines
 
 Run multiple transforms concurrently within a single pipeline stage using `||`.
@@ -700,7 +967,7 @@ Notes:
 - Concurrency is capped by `MLLD_PARALLEL_LIMIT` (default `4`).
 - Leading `||` syntax avoids ambiguity with boolean OR expressions.
 - Use `(n, wait)` after the pipeline to override concurrency cap and add pacing between starts.
-- Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non‑parallel) stage if needed.
+- Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non-parallel) stage if needed.
 - Errors inside a parallel group are collected as `{ index, key?, message, error, value }` elements and exposed via `@mx.errors`; the pipeline continues so downstream stages can repair or decide whether to retry.
 - Inline effects attached to grouped commands run after each command completes.
 
@@ -730,7 +997,7 @@ exe @randomQuality(input) = js {
   return values[mx.try - 1] || 0.1;
 }
 
-exe @validateQuality(score) = when first [
+exe @validateQuality(score) = when [
   @score > 0.9 => `excellent: @score`
   @score > 0.8 => `good: @score`
   @mx.try < 5 => retry
@@ -743,7 +1010,30 @@ show @result
 
 ## Error Handling
 
-mlld has no early exit (`return`/`exit`). Model different outcomes with `when` and state:
+Use `if` for early exits inside exe blocks. `=>` inside an `if` block returns from the enclosing exe:
+
+```mlld
+exe @validate(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
+]
+```
+
+`when` statements inside `exe` blocks also return from the enclosing exe when a matched action yields a value.
+Use block-form return to make that behavior explicit:
+
+```mlld
+exe @guard(input) = [
+  when !@input => [
+    => "missing"
+  ]
+  => "ok"
+]
+```
+
+Use `when` or flags for simple conditional actions:
 
 ```mlld
 var @validation = @validate(@input)
@@ -763,6 +1053,46 @@ when [
 ]
 ```
 
+### Bail
+
+Use `bail` to terminate the entire script immediately with exit code 1:
+
+```mlld
+>> Explicit message
+bail "config file missing"
+
+>> With variable interpolation
+var @missing = "database"
+bail `Missing: @missing`
+
+>> Bare bail (uses default message)
+bail
+```
+
+`bail` works from any context including nested blocks, loops, and imported modules:
+
+```mlld
+>> From if blocks
+if @checkFailed [
+  bail "validation failed"
+]
+
+>> From when expressions
+when [
+  !@ready => bail "not ready"
+  * => @process()
+]
+
+>> From for loops
+for @item in @items [
+  if !@item.valid [
+    bail `Invalid item: @item.id`
+  ]
+]
+```
+
+When an imported module calls `bail`, the entire script terminates, not just the module.
+
 ## Common Patterns
 
 ### Guarded Execution
@@ -779,7 +1109,7 @@ when [
 
 ```mlld
 exe @isProduction() = sh {test "$NODE_ENV" = "production" && echo "true"}
-when first [
+when [
   @isProduction() && @testsPass => run {npm run deploy:prod}
   @testsPass => run {npm run deploy:staging}
   * => show "Cannot deploy: tests failing"
@@ -790,7 +1120,7 @@ when first [
 
 ```mlld
 var @files = ["config.json", "data.json", "users.json"]
-exe @processFile(file) = when first [
+exe @processFile(file) = when [
   @file.endsWith(".json") => `Processed: @file`
   * => `Skipped: @file`
 ]

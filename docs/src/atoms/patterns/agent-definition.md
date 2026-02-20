@@ -5,7 +5,7 @@ brief: Define agent configuration modules
 category: patterns
 parent: patterns
 tags: [patterns, agents, configuration, modules]
-related: [modules-creating, frontmatter-access]
+related: [modules-creating, modules-frontmatter-access]
 related-code: []
 updated: 2026-01-05
 ---

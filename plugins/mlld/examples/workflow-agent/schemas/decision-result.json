@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Decision Result",
+  "type": "object",
+  "required": ["status", "chosen", "reasoning"],
+  "properties": {
+    "status": { "type": "string", "enum": ["completed", "partial", "failed"] },
+    "evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "score"],
+        "properties": {
+          "id": { "type": "string" },
+          "assumptions_valid": { "type": "boolean" },
+          "strengths": { "type": "string" },
+          "weaknesses": { "type": "string" },
+          "score": { "type": "string", "enum": ["strong", "viable", "weak"] }
+        }
+      }
+    },
+    "chosen": { "type": "string" },
+    "reasoning": { "type": "string" },
+    "rejected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "reason"],
+        "properties": {
+          "id": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  }
+}

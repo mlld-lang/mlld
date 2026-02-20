@@ -7,16 +7,50 @@
 
 // DOT NOTATION FIELD ACCESS
 // Example: obj.property, var.field
+FieldDotSeparator "field dot separator"
+  = dot:DotSeparator {
+      return dot;
+    }
+  / [ \t]* LineTerminator [ \t]* dotStart:("" { return peg$currPos; }) "." {
+      const dotLocation = peg$computeLocation(dotStart, dotStart + 1);
+      return helpers.createNode(NodeType.DotSeparator, {
+        value: '.',
+        location: dotLocation
+      });
+    }
+
 FieldAccess
-  = DotSeparator fieldStart:("" { return peg$currPos; }) field:BaseIdentifier {
+  = dot:FieldDotSeparator fieldStart:("" { return peg$currPos; }) field:BaseIdentifier {
       return { 
         type: 'field', 
         value: field,
         location: {
           start: {
             offset: fieldStart,
-            line: location().start.line,
-            column: location().start.column + 1
+            line: dot.location.start.line,
+            column: dot.location.start.column + 1
+          },
+          end: location().end
+        }
+      };
+    }
+
+// Optional suffix for field access
+OptionalFieldAccessSuffix
+  = "?" &{ return helpers.isOptionalFieldAccessBoundary(input, offset()); }
+
+// DOT NOTATION FIELD ACCESS WITH OPTIONAL SUFFIX
+FieldAccessOptional
+  = dot:FieldDotSeparator fieldStart:("" { return peg$currPos; }) field:BaseIdentifier opt:OptionalFieldAccessSuffix? {
+      return { 
+        type: 'field', 
+        value: field,
+        optional: !!opt,
+        location: {
+          start: {
+            offset: fieldStart,
+            line: dot.location.start.line,
+            column: dot.location.start.column + 1
           },
           end: location().end
         }
@@ -27,15 +61,33 @@ FieldAccess
 // Example: obj.123, var.456 
 // Allows direct property access with numeric indices
 NumericFieldAccess
-  = DotSeparator fieldStart:("" { return peg$currPos; }) index:NumberLiteral {
+  = dot:FieldDotSeparator fieldStart:("" { return peg$currPos; }) index:NumberLiteral {
       return { 
         type: 'numericField', 
         value: index,
         location: {
           start: {
             offset: fieldStart,
-            line: location().start.line,
-            column: location().start.column + 1
+            line: dot.location.start.line,
+            column: dot.location.start.column + 1
+          },
+          end: location().end
+        }
+      };
+    }
+
+// NUMERIC FIELD ACCESS WITH OPTIONAL SUFFIX
+NumericFieldAccessOptional
+  = dot:FieldDotSeparator fieldStart:("" { return peg$currPos; }) index:NumberLiteral opt:OptionalFieldAccessSuffix? {
+      return { 
+        type: 'numericField', 
+        value: index,
+        optional: !!opt,
+        location: {
+          start: {
+            offset: fieldStart,
+            line: dot.location.start.line,
+            column: dot.location.start.column + 1
           },
           end: location().end
         }
@@ -66,7 +118,7 @@ SliceIndex
   = sign:"-"? num:NumberLiteral {
       return sign ? -num : num;
     }
-  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
+  / "@" id:BaseIdentifier fields:AnyFieldAccessOptional* {
       // Variable reference as slice index
       const normalizedId = helpers.normalizePathVar(id);
       return helpers.createVariableReferenceNode('varIdentifier', {
@@ -114,8 +166,8 @@ FilterComparisonOp
   / "!=" { return '!='; }
   / "<=" { return '<='; }
   / ">=" { return '>='; }
-  / "<" !"=" { return '<'; }
-  / ">" !"=" { return '>'; }
+  / "<" !("=" / "<") { return '<'; }
+  / ">" !("=" / ">") { return '>'; }
 
 // Filter values can be literals, durations, or variable references
 FilterValue
@@ -144,7 +196,7 @@ ExistingArrayIndex
         location: location()
       };
     }
-  / "[" _ "@" index:BaseIdentifier fields:AnyFieldAccess* _ "]" {
+  / "[" _ "@" index:BaseIdentifier fields:AnyFieldAccessOptional* _ "]" {
       return { 
         type: 'variableIndex', 
         value: helpers.createVariableReferenceNode('varIdentifier', {
@@ -162,6 +214,20 @@ ExistingArrayIndex
       };
     }
 
+ArrayAccessOptional
+  = base:SliceOperation opt:OptionalFieldAccessSuffix? {
+      if (!opt) return base;
+      return { ...base, optional: true, location: location() };
+    }
+  / base:FilterOperation opt:OptionalFieldAccessSuffix? {
+      if (!opt) return base;
+      return { ...base, optional: true, location: location() };
+    }
+  / base:ExistingArrayIndex opt:OptionalFieldAccessSuffix? {
+      if (!opt) return base;
+      return { ...base, optional: true, location: location() };
+    }
+
 // COMBINED FIELD ACCESS
 // Represents any type of field access (to be used in combined patterns)
 AnyFieldAccess
@@ -169,9 +235,14 @@ AnyFieldAccess
   / NumericFieldAccess
   / ArrayAccess
 
+AnyFieldAccessOptional
+  = FieldAccessOptional
+  / NumericFieldAccessOptional
+  / ArrayAccessOptional
+
 // Extended field access for trailing method calls (e.g., .slice(0, 4))
 MethodCallAccess
-  = DotSeparator methodStart:("" { return peg$currPos; }) method:BaseIdentifier "(" args:CommandArgumentList? _ ")" {
+  = dot:FieldDotSeparator methodStart:("" { return peg$currPos; }) method:BaseIdentifier "(" args:CommandArgumentList? _ ")" {
       return {
         type: 'methodCall',
         name: method,
@@ -179,8 +250,8 @@ MethodCallAccess
         location: {
           start: {
             offset: methodStart,
-            line: location().start.line,
-            column: location().start.column + 1
+            line: dot.location.start.line,
+            column: dot.location.start.column + 1
           },
           end: location().end
         }
@@ -189,4 +260,4 @@ MethodCallAccess
 
 PostFieldAccess
   = MethodCallAccess
-  / AnyFieldAccess
+  / AnyFieldAccessOptional

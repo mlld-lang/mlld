@@ -1,0 +1,126 @@
+>>
+>> File Taint Demo
+>>
+>> Demonstrates how mlld's audit ledger tracks file writes and how taint
+>> (security labels) are inherited when files are read back.
+>>
+>> This script shows:
+>> 1. Writing labeled data to a file
+>> 2. Reading the file and seeing preserved labels
+>> 3. Querying the audit ledger for write events
+>>
+
+>> ============================================================
+>> STEP 1: Create a labeled value
+>> ============================================================
+>>
+>> The 'secret' label marks this as sensitive data that should not
+>> be exfiltrated. The label will propagate through all operations.
+>>
+
+var secret @token = "sk-live-demo-123"
+
+show ::
+
+File Taint Demo
+===============
+
+Step 1: Created labeled value
+-----------------------------
+@token has the 'secret' label applied.
+
+::
+
+>> ============================================================
+>> STEP 2: Write labeled data to a file
+>> ============================================================
+>>
+>> When mlld writes labeled data to disk, it records a 'write' event
+>> in the audit ledger (.mlld/sec/audit.jsonl) containing:
+>>   - path: the file written
+>>   - taint: the labels on the data
+>>   - writer: provenance information
+>>
+
+output @token to "@base/tmp/secret-data.txt"
+
+show ::
+
+Step 2: Wrote labeled data to file
+----------------------------------
+Wrote @token to @base/tmp/secret-data.txt.
+The audit ledger now has a 'write' event for this file.
+
+::
+
+>> ============================================================
+>> STEP 3: Read the file back
+>> ============================================================
+>>
+>> When mlld reads a file, it consults the audit ledger to find
+>> any prior 'write' events for that path. The labels recorded
+>> in the most recent write event are restored on the loaded value.
+>>
+>> This ensures taint propagation persists across file I/O.
+>>
+
+var @loaded = <@base/tmp/secret-data.txt>
+
+show ::
+
+Step 3: Read file back
+----------------------
+Loaded: @loaded
+Labels: @loaded.mx.labels
+
+The 'secret' label was inherited from the original write.
+
+::
+
+>> ============================================================
+>> STEP 4: Query the audit ledger
+>> ============================================================
+>>
+>> The audit ledger is at .mlld/sec/audit.jsonl (JSONL format).
+>> Each line is a JSON object with event type and metadata.
+>>
+>> We can query it using jq to find the write event for our file.
+>>
+
+var @writeEvent = run cmd { jq -s '[.[] | select(.event=="write") | select(.path | endswith("secret-data.txt"))] | last' @base/.mlld/sec/audit.jsonl }
+
+show ::
+
+Step 4: Audit ledger query
+--------------------------
+Write event (from jq):
+@writeEvent
+
+This shows the audit entry with:
+- event: "write" - the type of security event
+- path: the file that was written
+- taint: ["secret"] - the labels on the data at write time
+- writer: provenance info about what wrote the file
+
+::
+
+>> ============================================================
+>> SUMMARY
+>> ============================================================
+
+show ::
+
+Summary
+=======
+
+The audit ledger provides:
+1. A durable record of all security-relevant events
+2. Taint inheritance for file I/O (labels survive disk round-trips)
+3. Provenance tracking (who wrote what, when)
+
+This enables:
+- Forensic analysis: "Where did this sensitive data come from?"
+- Policy enforcement: Files read from disk still carry their labels
+- Compliance: Audit trail for data handling
+
+::

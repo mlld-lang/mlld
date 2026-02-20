@@ -5,6 +5,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { parse } from '@grammar/parser';
 import { evaluate } from '@interpreter/core/interpreter';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -61,5 +62,40 @@ describe('For expression - load-content metadata', () => {
       `./${path.join('docs', 'b.md')}`
     ];
     expect(files).toEqual(expected);
+  });
+
+  it('preserves file metadata when mapping load-content results', async () => {
+    const src = '/var @files = <docs/*.md>\n/var @mapped = for @f in @files => @f';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const mappedVar = env.getVariable('mapped');
+    expect(mappedVar).toBeDefined();
+    const value = await extractVariableValue(mappedVar!, env);
+    expect(Array.isArray(value)).toBe(true);
+    const items = value as unknown[];
+    expect(items.length).toBe(2);
+    expect(items.every(item => isStructuredValue(item))).toBe(true);
+    const filenames = items
+      .map(item => (item as any).mx?.filename)
+      .filter(Boolean)
+      .sort();
+    expect(filenames).toEqual(['a.md', 'b.md']);
+  });
+
+  it('preserves file metadata when filtering load-content results', async () => {
+    const src = '/var @files = <docs/*.md>\n/var @filtered = for @f in @files when @f.mx.filename == \"a.md\" => @f';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const filteredVar = env.getVariable('filtered');
+    expect(filteredVar).toBeDefined();
+    const value = await extractVariableValue(filteredVar!, env);
+    expect(Array.isArray(value)).toBe(true);
+    const items = value as unknown[];
+    expect(items.length).toBe(1);
+    const item = items[0];
+    expect(isStructuredValue(item)).toBe(true);
+    expect((item as any).mx?.filename).toBe('a.md');
   });
 });

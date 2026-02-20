@@ -1,0 +1,13 @@
+>> Doc audit helpers
+
+exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+
+>> Log event to events.jsonl
+exe @logEvent(runDir, eventType, data) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  let @parsed = @data | @json
+  let @event = { ts: @now, event: @eventType, ...@parsed }
+  append @event to "@eventsFile"
+]
+
+export { @fileExists, @logEvent }

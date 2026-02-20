@@ -119,6 +119,24 @@ export const DATA_LABELS: readonly DataLabel[] = [
   'network'
 ] as const;
 
+export const PROTECTED_LABELS: readonly DataLabel[] = [
+  'secret',
+  'untrusted',
+  'src:mcp',
+  'src:exec',
+  'src:env',
+  'src:file',
+  'src:network',
+  'src:node',
+  'src:user',
+  'src:jail',
+  'src:dynamic'
+] as const;
+
+export function isProtectedLabel(label: string): boolean {
+  return PROTECTED_LABELS.includes(label) || label.startsWith('src:');
+}
+
 function freezeArray<T>(values: Iterable<T> | undefined): readonly T[] {
   if (!values) {
     return Object.freeze([]) as readonly T[];

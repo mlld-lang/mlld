@@ -1,6 +1,6 @@
 # mlld Go SDK
 
-Go wrapper for the mlld CLI.
+Go wrapper for mlld using a persistent NDJSON RPC transport over `mlld live --stdio`.
 
 ## Installation
 
@@ -8,7 +8,11 @@ Go wrapper for the mlld CLI.
 go get github.com/mlld-lang/mlld/sdk/go
 ```
 
-**Requires**: Node.js and mlld CLI installed (`npm install -g mlld`)
+## Requirements
+
+- Go 1.21+
+- Node.js runtime
+- mlld CLI available by command path
 
 ## Quick Start
 
@@ -16,63 +20,116 @@ go get github.com/mlld-lang/mlld/sdk/go
 package main
 
 import (
-    "fmt"
-    mlld "github.com/mlld-lang/mlld/sdk/go"
+  "fmt"
+  "time"
+
+  mlld "github.com/mlld-lang/mlld/sdk/go"
 )
 
 func main() {
-    client := mlld.New()
+  client := mlld.New()
 
-    // Process a script
-    output, err := client.Process(`show "Hello World"`, nil)
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(output) // Hello World
+  // Optional command override (local repo build example)
+  // client.Command = "node"
+  // client.CommandArgs = []string{"./dist/cli.cjs"}
 
-    // Execute a file with payload
-    result, err := client.Execute("./agent.mld", map[string]any{
-        "text": "hello",
-    }, nil)
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(result.Output)
+  output, err := client.Process(`show "Hello World"`, nil)
+  if err != nil {
+    panic(err)
+  }
+  fmt.Println(output)
 
-    // Static analysis
-    analysis, err := client.Analyze("./module.mld")
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(analysis.Exports)
+  result, err := client.Execute(
+    "./agent.mld",
+    map[string]any{"text": "hello"},
+    &mlld.ExecuteOptions{
+      State: map[string]any{"count": 0},
+      DynamicModules: map[string]any{
+        "@config": map[string]any{"mode": "demo"},
+      },
+      Timeout: 10 * time.Second,
+    },
+  )
+  if err != nil {
+    panic(err)
+  }
+  fmt.Println(result.Output)
+
+  _ = client.Close()
 }
+```
+
+## In-Flight State Updates
+
+```go
+handle, err := client.ProcessAsync(
+  "loop(99999, 50ms) until @state.exit [\n  continue\n]\nshow \"done\"",
+  &mlld.ProcessOptions{
+    State: map[string]any{"exit": false},
+    Mode: "strict",
+    Timeout: 10 * time.Second,
+  },
+)
+if err != nil {
+  panic(err)
+}
+
+time.Sleep(120 * time.Millisecond)
+if err := handle.UpdateState("exit", true); err != nil {
+  panic(err)
+}
+
+output, err := handle.Result()
+if err != nil {
+  panic(err)
+}
+fmt.Println(output)
 ```
 
 ## API
 
 ### Client
 
-- `New()` - Create a new client with defaults
-- `Process(script string, opts *ProcessOptions)` - Execute a script string
-- `Execute(filepath string, payload any, opts *ExecuteOptions)` - Run a file
-- `Analyze(filepath string)` - Static analysis without execution
+- `New()`
+- `(*Client).Process(script string, opts *ProcessOptions) (string, error)`
+- `(*Client).ProcessAsync(script string, opts *ProcessOptions) (*ProcessHandle, error)`
+- `(*Client).Execute(filepath string, payload any, opts *ExecuteOptions) (*ExecuteResult, error)`
+- `(*Client).ExecuteAsync(filepath string, payload any, opts *ExecuteOptions) (*ExecuteHandle, error)`
+- `(*Client).Analyze(filepath string) (*AnalyzeResult, error)`
+- `(*Client).Close() error`
 
-### Configuration
+### Handle Methods
 
-```go
-client := mlld.New()
-client.Command = "mlld"           // CLI command (default: "mlld")
-client.Timeout = 30 * time.Second // Default timeout
-client.WorkingDir = "/path/to"    // Working directory
-```
+`ProcessHandle` and `ExecuteHandle` both provide:
 
-## Requirements
+- `RequestID() uint64`
+- `Cancel()`
+- `UpdateState(path string, value any) error`
+- `Wait()`
+- `Result()`
 
-- Go 1.21+
-- Node.js runtime
-- mlld CLI (`npm install -g mlld`)
+### ProcessOptions
 
-## Documentation
+- `FilePath`
+- `Payload`
+- `State`
+- `DynamicModules`
+- `DynamicModuleSource`
+- `Mode`
+- `AllowAbsolutePaths`
+- `Timeout`
 
-- [mlld Documentation](https://mlld.dev)
-- [GitHub Repository](https://github.com/mlld-lang/mlld)
+### ExecuteOptions
+
+- `State`
+- `DynamicModules`
+- `DynamicModuleSource`
+- `Mode`
+- `AllowAbsolutePaths`
+- `Timeout`
+
+## Notes
+
+- Each `Client` keeps one live RPC subprocess for repeated calls.
+- `ExecuteResult.StateWrites` merges final-result writes and streamed `state:write` events.
+- Sync methods remain as wrappers around async handle methods.

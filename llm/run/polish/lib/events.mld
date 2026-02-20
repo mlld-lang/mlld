@@ -1,0 +1,129 @@
+>> Events Library
+>> Handles JSONL event logging for parallel-safe progress tracking
+
+>> Append an event to the events log
+exe @logEvent(runDir, event) = [
+  let @eventLog = `@runDir/events.jsonl`
+  let @eventWithTs = { ts: @now, ...@event }
+  let @_ = @eventWithTs | append "@eventLog"
+  => @eventWithTs
+]
+
+>> Log phase start
+exe @logPhaseStart(runDir, phase) = [
+  => @logEvent(@runDir, { event: "phase_start", phase: @phase })
+]
+
+>> Log phase complete (with optional extra data)
+exe @logPhaseComplete(runDir, phase, extra) = [
+  let @baseEvent = { event: "phase_complete", phase: @phase }
+  let @fullEvent = @extra ? { ...@baseEvent, ...@extra } : @baseEvent
+  => @logEvent(@runDir, @fullEvent)
+]
+
+>> Log batch start
+exe @logBatchStart(runDir, count) = [
+  => @logEvent(@runDir, { event: "batch_start", count: @count })
+]
+
+>> Log batch complete
+exe @logBatchDone(runDir, count) = [
+  => @logEvent(@runDir, { event: "batch_done", count: @count })
+]
+
+>> Log item start
+exe @logItemStart(runDir, id, itemType) = [
+  => @logEvent(@runDir, { event: "item_start", id: @id, type: @itemType })
+]
+
+>> Log item complete (with optional extra data)
+>> Note: Parameter renamed from @result to @status to avoid shadowing caller's @result variable
+exe @logItemDone(runDir, id, status, extra) = [
+  let @baseEvent = { event: "item_done", id: @id, result: @status }
+  let @fullEvent = @extra ? { ...@baseEvent, ...@extra } : @baseEvent
+  => @logEvent(@runDir, @fullEvent)
+]
+
+>> Load all events from log
+exe @loadEvents(runDir) = [
+  let @eventLog = `@runDir/events.jsonl`
+  let @content = <@eventLog>?
+  >> JSONL files are auto-parsed into arrays by mlld
+  => @content ? @content : []
+]
+
+>> Get completed items from events (any phase)
+exe @getCompletedItems(events) = [
+  let @doneEvents = for @e in @events when @e.event == "item_done" => @e
+  => for @e in @doneEvents => @e.id
+]
+
+>> Get items completed by execute phase (not enriched)
+>> These statuses indicate real execute phase completion (dry-run doesn't count)
+exe @getExecuteCompletedItems(events) = [
+  let @executeStatuses = ["completed", "needs-review", "apply-failed", "fix-failed"]
+  let @doneEvents = for @e in @events when @e.event == "item_done" && @executeStatuses.includes(@e.result) => @e
+  => for @e in @doneEvents => @e.id
+]
+
+>> Get verified items that haven't been merged yet
+>> Returns items with item_done + verified + worktree_branch but no merge_done event
+exe @getVerifiedNotMerged(events) = [
+  >> Find all verified items with worktrees
+  let @verifiedEvents = for @e in @events when @e.event == "item_done" && @e.verified && @e.worktree_branch => @e
+
+  >> Find all merged item IDs
+  let @mergedIds = for @e in @events when @e.event == "merge_done" => @e.id
+
+  >> Filter to only unmerged items
+  let @unmergedWithNulls = for @v in @verifiedEvents [
+    let @isMerged = @mergedIds.includes(@v.id)
+    when !@isMerged => { ticket_id: @v.id, worktree_branch: @v.worktree_branch, commit_sha: @v.commit_sha }
+  ]
+  >> Remove nulls
+  => for @item in @unmergedWithNulls when @item => @item
+]
+
+>> Log successful merge of an item
+exe @logMergeDone(runDir, ticketId, commitSha) = [
+  => @logEvent(@runDir, { event: "merge_done", id: @ticketId, commit_sha: @commitSha })
+]
+
+>> Log failed merge of an item
+exe @logMergeFailed(runDir, ticketId, error) = [
+  => @logEvent(@runDir, { event: "merge_failed", id: @ticketId, error: @error })
+]
+
+>> Log item requiring manual review to a prominent file in project root
+>> File: <run-id>-manual-review-reqd.jsonl in @base/
+exe @logManualReview(runDir, ticketId, phase, reason, details) = [
+  >> Extract run ID from runDir path (last segment)
+  let @runId = @runDir.split("/").pop()
+  let @reviewFile = `@base/@runId-manual-review-reqd.jsonl`
+  let @entry = {
+    ts: @now,
+    ticket_id: @ticketId,
+    phase: @phase,
+    reason: @reason,
+    details: @details
+  }
+  let @_ = @entry | append "@reviewFile"
+  => @entry
+]
+
+/export {
+  @logEvent,
+  @logPhaseStart,
+  @logPhaseComplete,
+  @logBatchStart,
+  @logBatchDone,
+  @logItemStart,
+  @logItemDone,
+  @loadEvents,
+  @getCompletedItems,
+  @getExecuteCompletedItems,
+  @getVerifiedNotMerged,
+  @logMergeDone,
+  @logMergeFailed,
+  @logManualReview
+}

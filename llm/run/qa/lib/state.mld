@@ -1,0 +1,129 @@
+>> State Management Library
+>> Run creation, loading, saving, and phase tracking for QA orchestrator
+
+/needs { sh }
+
+var @qaRoot = "@base/qa/runs"
+
+exe @today() = [
+  let @d = sh {date +%Y-%m-%d}
+  => @d.trim()
+]
+
+exe @countRunsForDate(dir, date) = sh {ls -1 "$dir" 2>/dev/null | grep "^$date" | wc -l | tr -d ' '}
+exe @getLatestRun(dir) = sh {ls -1 "$dir" 2>/dev/null | grep '^20' | sort -r | head -1}
+exe @mkRunDirs(runDir) = sh {mkdir -p "$runDir/topics"}
+
+>> Generate next run ID (YYYY-MM-DD-N format)
+exe @nextRunId() = [
+  let @date = @today()
+  let @existing = @countRunsForDate(@qaRoot, @date)
+  let @count = @existing * 1
+  => `@date-@count`
+]
+
+exe @latestRunId() = [
+  let @id = @getLatestRun(@qaRoot)
+  => @id.trim()
+]
+
+>> Create a new run
+exe @createRun(config) = [
+  let @runId = @nextRunId()
+  let @runDir = `@qaRoot/@runId`
+  @mkRunDirs(@runDir)
+
+  let @run = {
+    id: @runId,
+    created: @now,
+    status: "in-progress",
+    config: @config ? @config : {},
+    phases: {
+      triage: { status: "pending" },
+      flail: { status: "pending" },
+      review: { status: "pending" },
+      trends: { status: "pending" },
+      strategy: { status: "pending" }
+    }
+  }
+
+  output @run to "@runDir/run.json"
+  => @runDir
+]
+
+>> Load run state from a run directory
+exe @loadRun(runDir) = [
+  let @runFile = <@runDir/run.json>?
+  => @runFile
+]
+
+>> Save run state
+exe @saveRun(runDir, run) = [
+  output @run to "@runDir/run.json"
+  => @run
+]
+
+>> Update a specific phase's status
+exe @updatePhaseStatus(runDir, phase, status) = [
+  let @run = @loadRun(@runDir)
+  let @phaseData = @run.phases[@phase]
+  let @updated = { ...@phaseData, status: @status, updated_at: @now }
+  when @status == "complete" => let @updated = { ...@updated, completed_at: @now }
+
+  let @phases = {
+    triage: @phase == "triage" ? @updated : @run.phases.triage,
+    flail: @phase == "flail" ? @updated : @run.phases.flail,
+    review: @phase == "review" ? @updated : @run.phases.review,
+    trends: @phase == "trends" ? @updated : @run.phases.trends,
+    strategy: @phase == "strategy" ? @updated : @run.phases.strategy
+  }
+
+  let @newRun = { ...@run, phases: @phases }
+  => @saveRun(@runDir, @newRun)
+]
+
+>> Update overall run status
+exe @updateRunStatus(runDir, status) = [
+  let @run = @loadRun(@runDir)
+  let @newRun = { ...@run, status: @status, completed_at: @now }
+  => @saveRun(@runDir, @newRun)
+]
+
+>> Resolve run directory: explicit ID, or latest existing, or create new
+exe @resolveRunDir(runId, needsNewRun) = [
+  => when [
+    @runId => `@qaRoot/@runId`
+    @needsNewRun => @createRun(null)
+    * => [
+      let @latest = @latestRunId()
+      => @latest ? `@qaRoot/@latest` : null
+    ]
+  ]
+]
+
+>> Check if phase should run based on --phase flag
+exe @shouldRunPhase(phase, phaseFlag) = [
+  => when [
+    @phaseFlag == "all" => true
+    @phaseFlag == "both" => @phase == "flail" || @phase == "review"
+    @phaseFlag == "0" => @phase == "triage"
+    @phaseFlag == "1" => @phase == "flail"
+    @phaseFlag == "2" => @phase == "review"
+    @phaseFlag == "3" => @phase == "trends"
+    @phaseFlag == "4" => @phase == "strategy"
+    * => false
+  ]
+]
+
+/export {
+  @qaRoot,
+  @nextRunId,
+  @latestRunId,
+  @createRun,
+  @loadRun,
+  @saveRun,
+  @updatePhaseStatus,
+  @updateRunStatus,
+  @resolveRunDir,
+  @shouldRunPhase
+}

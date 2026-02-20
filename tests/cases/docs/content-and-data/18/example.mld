@@ -1,8 +1,0 @@
->> Find functions that use specific symbols
-var @callers = <api.ts { (validateEmail) }>
-
->> Find functions that use any wildcard-matched symbol
-var @serviceUsers = <api.ts { (*Service) }>
-
->> Find functions that use any function
-var @functionCallers = <api.ts { (*fn) }>

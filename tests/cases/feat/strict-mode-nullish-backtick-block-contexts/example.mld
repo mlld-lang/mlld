@@ -1,0 +1,23 @@
+var @suffix = "ok"
+var @none = null
+var @isOn = true
+
+for @item in [{"id":"A"}, {}] [
+  let @x = @item.id ?? `for-@suffix`
+  show @x
+]
+
+for parallel(2) @item in [{}] [
+  let @x = @item.id ?? `forp-@suffix`
+  show @x
+]
+
+loop(1) [
+  let @x = @none ?? `loop-@suffix`
+  show @x
+]
+
+if @isOn [
+  let @x = @none ?? `if-@suffix`
+  show @x
+]

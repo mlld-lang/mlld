@@ -9,6 +9,33 @@ import {
 import { DataValueEvaluator } from './data-values/DataValueEvaluator';
 import { logger } from '@core/utils/logger';
 
+const EXPRESSION_NODE_TYPES = new Set([
+  'BinaryExpression',
+  'TernaryExpression',
+  'UnaryExpression',
+  'ArrayFilterExpression',
+  'ArraySliceExpression'
+]);
+
+function isExpressionNode(value: unknown): value is { type: string } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    EXPRESSION_NODE_TYPES.has((value as { type: string }).type)
+  );
+}
+
+function isVariableReferenceNode(value: unknown): value is { type: string } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    ((value as { type: string }).type === 'VariableReference' ||
+      (value as { type: string }).type === 'VariableReferenceWithTail')
+  );
+}
+
 /**
  * Singleton instance of the main data value evaluator coordinator
  */
@@ -50,6 +77,14 @@ export function isFullyEvaluated(value: DataValue): boolean {
   if (isPrimitiveValue(value)) {
     return true;
   }
+
+  if (isExpressionNode(value)) {
+    return false;
+  }
+
+  if (isVariableReferenceNode(value)) {
+    return false;
+  }
   
   if (isDirectiveValue(value)) {
     const stateManager = dataValueEvaluator.getStateManager();
@@ -62,7 +97,18 @@ export function isFullyEvaluated(value: DataValue): boolean {
   }
   
   if (value?.type === 'object') {
-    return Object.values(value.properties).every(isFullyEvaluated);
+    const entries = (value as any).entries;
+    if (Array.isArray(entries)) {
+      return entries.every(entry => {
+        if (entry.type === 'pair') {
+          return isFullyEvaluated(entry.value);
+        }
+        return false;
+      });
+    }
+    if ('properties' in value) {
+      return Object.values(value.properties).every(isFullyEvaluated);
+    }
   }
   
   if (value?.type === 'array') {
@@ -78,6 +124,14 @@ export function isFullyEvaluated(value: DataValue): boolean {
 export function hasUnevaluatedDirectives(value: DataValue): boolean {
   if (isPrimitiveValue(value)) {
     return false;
+  }
+
+  if (isExpressionNode(value)) {
+    return true;
+  }
+
+  if (isVariableReferenceNode(value)) {
+    return true;
   }
   
   if (value?.type === 'Directive') {
@@ -112,8 +166,19 @@ export function hasUnevaluatedDirectives(value: DataValue): boolean {
     return value.items.some(hasUnevaluatedDirectives);
   }
   
-  if (value?.type === 'object' && 'properties' in value) {
-    return Object.values(value.properties).some(hasUnevaluatedDirectives);
+  if (value?.type === 'object') {
+    const entries = (value as any).entries;
+    if (Array.isArray(entries)) {
+      return entries.some(entry => {
+        if (entry.type === 'pair') {
+          return hasUnevaluatedDirectives(entry.value);
+        }
+        return true;
+      });
+    }
+    if ('properties' in value) {
+      return Object.values(value.properties).some(hasUnevaluatedDirectives);
+    }
   }
   
   if (typeof value === 'object' && value !== null && !value.type) {

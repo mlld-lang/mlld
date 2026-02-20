@@ -3,7 +3,7 @@
 /import module { @gImported } from "./guard-import-order.mld"
 
 /guard @gLocal for secret = when [
-  * => allow `@input-local`
+  * => allow `@input\-local`
 ]
 
 /var secret @value = "seed"

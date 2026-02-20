@@ -1,0 +1,88 @@
+## Analyze Issue: @ticketId
+
+You are analyzing an issue to understand the problem and propose a fix.
+
+## Ticket Details
+
+**Ticket ID**: @ticketId
+**Type**: @ticketType
+**Priority**: @ticketPriority
+
+### Ticket Content
+
+```markdown
+@ticketContent
+```
+
+## QA Context (if available)
+
+Topics: @topics
+Strategy: @strategyContext
+
+## Your Task
+
+1. **Understand the issue**: Read the ticket and any linked QA data
+2. **Investigate the codebase**: Find the relevant code
+3. **Identify root cause**: Pinpoint exactly what's wrong or missing
+4. **Propose fix(es)**: Concrete implementation approach
+
+## Investigation Steps
+
+1. Read relevant mlld documentation:
+   ```bash
+   mlld howto <relevant-topic>
+   ```
+
+2. Search the codebase for relevant code:
+   ```bash
+   grep -r "pattern" interpreter/ grammar/ src/
+   ```
+
+3. Read specific files to understand current behavior
+
+4. Examine tests for expected behavior:
+   ```bash
+   ls tests/cases/<relevant>/
+   ```
+
+<@prompts/chestertons-fence.md>
+
+If you suspect intentional design, set `auto_approve: false` and add a `design_question`.
+
+<@prompts/design-philosophy.md>
+
+## Output Format
+
+Write your analysis to `@outputPath`:
+
+```json
+{
+  "ticket_id": "@ticketId",
+  "investigation": {
+    "root_cause": "Clear description of the problem",
+    "root_cause_location": "path/to/file.ts:123",
+    "files_examined": ["file1.ts", "file2.ts"]
+  },
+  "proposed_fix": {
+    "description": "What the fix does",
+    "approach": "How to implement it",
+    "files_to_modify": ["path/to/file.ts"],
+    "estimated_complexity": "low|medium|high"
+  },
+  "recommendation": {
+    "confidence": 0.8,
+    "design_fit": "high|medium|low",
+    "auto_approve": true,
+    "design_question": null
+  }
+}
+```
+
+Set `auto_approve: true` only if:
+- Confidence >= 0.8
+- Design fit is high or medium
+- The fix is straightforward and low-risk
+- No design questions (Chesterton's Fence passed)
+
+Set `design_question` to a string if you suspect this might be intentional design. Example:
+`"design_question": "The strict validation here might prevent ambiguous inputs. Is relaxing it safe?"`

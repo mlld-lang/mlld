@@ -1,8 +1,8 @@
-## Test 1: Simple conditional
+## Test 1: Inline conditional
 
 This should appear
 
-## Test 2: Block with first modifier
+## Test 2: Match form
 
 Development mode
 
@@ -10,9 +10,6 @@ Development mode
 
 Package manager found
 
-## Test 4: bare when block with individual actions
+## Test 4: when block with individual actions (first match)
 
 Node.js installed
-
-npm installed
-

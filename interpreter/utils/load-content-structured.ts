@@ -1,11 +1,13 @@
+import JSON5 from 'json5';
+
 import {
   isLoadContentResult,
   type LoadContentResult,
   type LoadContentResultHTML,
   type LoadContentResultURL
 } from '@core/types/load-content';
-import { MlldError } from '@core/errors';
-import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import { MlldError, ErrorSeverity } from '@core/errors';
+import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import {
   getVariableMetadata,
@@ -42,7 +44,11 @@ function tryParseJson(text: string): { success: boolean; value?: unknown } {
   try {
     return { success: true, value: JSON.parse(trimmed) };
   } catch {
-    return { success: false };
+    try {
+      return { success: true, value: JSON5.parse(trimmed) };
+    } catch {
+      return { success: false };
+    }
   }
 }
 
@@ -50,8 +56,16 @@ function parseJsonWithContext(text: string, sourceLabel: string): unknown {
   try {
     return JSON.parse(text);
   } catch (error: any) {
-    const message = error?.message ? ` (${error.message})` : '';
-    throw new MlldError(`Failed to parse JSON from ${sourceLabel}${message}`);
+    try {
+      return JSON5.parse(text);
+    } catch {
+      const message = error?.message ? ` (${error.message})` : '';
+      throw new MlldError(`Failed to parse JSON from ${sourceLabel}${message}`, {
+        code: 'JSON_PARSE_ERROR',
+        severity: ErrorSeverity.Fatal,
+        details: { sourceLabel }
+      });
+    }
   }
 }
 
@@ -64,11 +78,20 @@ function parseJsonLines(text: string, sourceLabel: string): unknown[] {
     try {
       results.push(JSON.parse(line));
     } catch (error: any) {
-      const message = error?.message ? ` (${error.message})` : '';
-      throw new MlldError(`Failed to parse JSONL from ${sourceLabel} at line ${i + 1}${message}`, {
-        line: i + 1,
-        offendingLine: line
-      });
+      try {
+        results.push(JSON5.parse(line));
+      } catch {
+        const message = error?.message ? ` (${error.message})` : '';
+        throw new MlldError(`Failed to parse JSONL from ${sourceLabel} at line ${i + 1}${message}`, {
+          code: 'JSONL_PARSE_ERROR',
+          severity: ErrorSeverity.Fatal,
+          details: {
+            sourceLabel,
+            line: i + 1,
+            offendingLine: line
+          }
+        });
+      }
     }
   }
   return results;
@@ -79,14 +102,23 @@ function isProbablyURL(input: string): boolean {
 }
 
 function buildLoadSecurityDescriptor(result: LoadContentResult) {
-  if (!result.absolute || isProbablyURL(result.absolute)) {
-    return undefined;
+  const override = (result as { __security?: SecurityDescriptor }).__security;
+  if (!result.absolute) {
+    return override;
+  }
+  if (isProbablyURL(result.absolute)) {
+    const derived = makeSecurityDescriptor({
+      taint: ['src:network'],
+      sources: [result.absolute]
+    });
+    return override ? mergeDescriptors(derived, override) : derived;
   }
   const dirLabels = labelsForPath(result.absolute);
-  return makeSecurityDescriptor({
+  const derived = makeSecurityDescriptor({
     taint: ['src:file', ...dirLabels],
     sources: [result.absolute]
   });
+  return override ? mergeDescriptors(derived, override) : derived;
 }
 
 function buildMetadata(base?: StructuredValueMetadata, extra?: StructuredValueMetadata): StructuredValueMetadata | undefined {
@@ -100,11 +132,31 @@ function buildMetadata(base?: StructuredValueMetadata, extra?: StructuredValueMe
 }
 
 function extractLoadContentMetadata(result: LoadContentResult): StructuredValueMetadata {
+  // Extract directory paths
+  const absLastSlash = result.absolute.lastIndexOf('/');
+  const absoluteDir = absLastSlash === 0 ? '/' : absLastSlash > 0 ? result.absolute.substring(0, absLastSlash) : result.absolute;
+
+  const relLastSlash = result.relative.lastIndexOf('/');
+  const relativeDir = relLastSlash === 0 ? '/' : relLastSlash > 0 ? result.relative.substring(0, relLastSlash) : '.';
+
+  // dirname is just the immediate parent folder name
+  let dirname: string;
+  if (absoluteDir === '/') {
+    dirname = '/';
+  } else {
+    const dirLastSlash = absoluteDir.lastIndexOf('/');
+    dirname = dirLastSlash >= 0 ? absoluteDir.substring(dirLastSlash + 1) : absoluteDir;
+  }
+
   const metadata: StructuredValueMetadata = {
     source: 'load-content',
     filename: result.filename,
     relative: result.relative,
     absolute: result.absolute,
+    path: result.path ?? result.absolute,
+    dirname,
+    relativeDir,
+    absoluteDir,
     tokest: result.tokest,
     tokens: result.tokens,
     fm: result.fm,
@@ -151,6 +203,11 @@ function deriveArrayText(value: any[]): string {
   // For arrays of LoadContentResult items (glob results), concatenate file contents
   if (value.length > 0 && isLoadContentResult(value[0])) {
     return value.map(item => item.content ?? '').join('\n\n');
+  }
+
+  // For arrays of StructuredValue items (processed glob results), use .text
+  if (value.length > 0 && isStructuredValue(value[0])) {
+    return value.map(item => item.text ?? '').join('\n\n');
   }
 
   try {
@@ -209,7 +266,7 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     // Preserve original variable metadata if tagged
     const variableMetadata = hasVariableMetadata(value) ? getVariableMetadata(value) : undefined;
 
-    // Aggregate security descriptors from LoadContentResult items
+    // Aggregate security descriptors from LoadContentResult items (before processing)
     const aggregatedSecurity = value.length > 0 && isLoadContentResult(value[0])
       ? value
           .map(item => buildLoadSecurityDescriptor(item))
@@ -219,6 +276,25 @@ export function wrapLoadContentValue(value: any): StructuredValue {
       : [];
     const mergedSecurity =
       aggregatedSecurity.length > 0 ? mergeDescriptors(...aggregatedSecurity) : undefined;
+
+    // Process each LoadContentResult item to ensure JSON parsing consistency
+    // This makes glob results behave the same as single file loads
+    const processedItems = value.map(item => {
+      if (isLoadContentResult(item)) {
+        try {
+          return wrapLoadContentValue(item);
+        } catch (error: any) {
+          // Per-item resilience: degrade to text instead of failing the whole array
+          const contentText = typeof item.content === 'string' ? item.content : String(item.content ?? '');
+          const baseMetadata = extractLoadContentMetadata(item);
+          const metadata = buildMetadata(baseMetadata, {
+            parseError: error?.message ?? 'Unknown parse error'
+          });
+          return wrapStructured(contentText, 'text', contentText, metadata);
+        }
+      }
+      return item;
+    });
 
     const metadata = buildMetadata(
       baseMetadata,
@@ -230,7 +306,7 @@ export function wrapLoadContentValue(value: any): StructuredValue {
       ? buildMetadata(metadata, { security: mergedSecurity })
       : metadata;
 
-    return wrapStructured(value, 'array', deriveArrayText(value), finalMetadata);
+    return wrapStructured(processedItems, 'array', deriveArrayText(processedItems), finalMetadata);
   }
 
   const fallbackText =

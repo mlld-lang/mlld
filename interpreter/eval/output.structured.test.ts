@@ -56,4 +56,39 @@ describe('evaluateOutput (structured boundaries)', () => {
     const written = await fs.readFile('/result.json');
     expect(written).toBe(expectedText);
   });
+
+  it('writes structured arrays without wrapper metadata', async () => {
+    const item = wrapStructured(
+      { ticket_id: 'm-452a', status: 'needs-review' },
+      'object'
+    );
+    const structured = wrapStructured([item], 'array');
+    const sourceInfo = {
+      directive: 'var' as const,
+      syntax: 'object' as const,
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    const variable = createStructuredValueVariable('results', structured, sourceInfo);
+    env.setVariable('results', variable);
+
+    const source = `
+/output @results to "structured-results.json"
+`;
+    const { ast } = await parse(source);
+    const [outputDirective] = getDirectiveNodes(ast, 'output');
+    expect(outputDirective).toBeDefined();
+    const outputNode: any = {
+      ...outputDirective,
+      location: outputDirective.location || { line: 1, column: 1 },
+      meta: outputDirective.meta || {}
+    };
+
+    await evaluateOutput(outputNode, env);
+    const written = await fs.readFile('/structured-results.json');
+    expect(JSON.parse(written)).toEqual([{ ticket_id: 'm-452a', status: 'needs-review' }]);
+    expect(written).not.toContain('"data"');
+    expect(written).not.toContain('"text"');
+    expect(written).not.toContain('"type"');
+  });
 });

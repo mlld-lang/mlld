@@ -43,17 +43,20 @@ export class CommandUtils {
           };
           
           const description = operatorDescriptions[operator] || `operator (${operator})`;
-          
+
           // Build a detailed error message
           const errorMessage = [
-            `Shell ${description} is not allowed in /run commands`,
+            `Shell ${description} is not allowed in cmd { } commands`,
             '',
             'Command rejected:',
             `  ${command}`,
             '',
-            `The ${description} character is not allowed in the /run context.`,
-            'Use a full shell command with /run sh { ... } for less restrictive execution,',
-            'or split into separate /run commands.'
+            'Use sh { } for shell scripts that need operators:',
+            `  sh { ${command} }`,
+            '',
+            'Important: Unlike cmd, sh blocks don\'t interpolate @variables.',
+            'Pass them as parameters — they become shell variables:',
+            '  sh(@myVar) { echo "$myVar" && ... }'
           ].join('\n');
           
           throw new Error(errorMessage);

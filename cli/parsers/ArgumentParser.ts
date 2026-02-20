@@ -11,10 +11,12 @@ export interface ParsedCLIArguments {
 export class ArgumentParser {
   private readonly commandsWithSubcommands = [
     'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'docs',
-    'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps',
-    'setup', 'alias', 'env', 'dev', 'test', 'run', 'error-test', 'clean',
-    'mcp', 'serve', 'language-server', 'lsp', 'nvim-setup', 'nvim', 'nvim-doctor',
-    'howto', 'ht', 'qs', 'quickstart', 'validate', 'analyze'
+    'publish', 'init', 'module', 'mod', 'add-needs', 'needs', 'deps',
+    'setup', 'alias', 'keychain', 'vars', 'env', 'dev', 'test', 'run', 'error-test', 'clean',
+    'checkpoint',
+    'mcp', 'serve', 'live', 'language-server', 'lsp', 'nvim-setup', 'nvim', 'nvim-doctor', 'verify',
+    'howto', 'ht', 'qs', 'quickstart', 'validate', 'analyze',
+    'update', 'outdated', 'plugin', 'skill'
   ];
 
   parseArgs(args: string[]): CLIOptions {
@@ -32,6 +34,7 @@ export class ArgumentParser {
 
     // Store remaining args after command
     options._ = [];
+    const payloadFlags: Record<string, unknown> = {};
     
     // Flag to stop parsing when we hit a command with subcommands
     let stopParsing = false;
@@ -63,6 +66,15 @@ export class ArgumentParser {
         case '--mode':
           options.mode = this.normalizeMode(args[++i]);
           break;
+        case '-e':
+        case '--eval': {
+          const inlineCode = args[++i];
+          if (inlineCode === undefined) {
+            throw new Error('--eval requires a code string');
+          }
+          options.eval = inlineCode;
+          break;
+        }
         case '--stdout':
           options.stdout = true;
           break;
@@ -168,6 +180,43 @@ export class ArgumentParser {
             throw new Error('--command-timeout must be a positive number (milliseconds)');
           }
           break;
+        case '--timeout': {
+          const timeoutVal = args[++i];
+          if (!timeoutVal) throw new Error('--timeout requires a duration value (e.g., 5m, 1h, 30s)');
+          options.timeout = timeoutVal;
+          break;
+        }
+        case '--checkpoint':
+          options.checkpoint = true;
+          break;
+        case '--no-checkpoint':
+          options.noCheckpoint = true;
+          break;
+        case '--fresh':
+        case '--new':
+          options.fresh = true;
+          break;
+        case '--resume': {
+          const candidate = args[i + 1];
+          if (candidate && !candidate.startsWith('-')) {
+            options.resume = candidate;
+            i++;
+          } else {
+            options.resume = true;
+          }
+          break;
+        }
+        case '--fork': {
+          const forkScript = args[++i];
+          if (!forkScript || forkScript.startsWith('-')) {
+            throw new Error('--fork requires a script name');
+          }
+          options.fork = forkScript;
+          break;
+        }
+        case '--metrics':
+          options.metrics = true;
+          break;
         // Import approval bypass options
         case '--risky-approve-all':
           options.riskyApproveAll = true;
@@ -271,12 +320,22 @@ export class ArgumentParser {
             options._ = args.slice(i);
             stopParsing = true;
             break;
+          } else if (arg.startsWith('-') && options.input && !this.commandsWithSubcommands.includes(options.input)) {
+            const parsed = this.parseCustomFlag(arg, args[i + 1]);
+            if (!parsed) {
+              throw new Error(`Unknown option: ${arg}`);
+            }
+            payloadFlags[parsed.key] = parsed.value;
+            if (parsed.consumed) {
+              i++;
+            }
           } else {
             throw new Error(`Unknown option: ${arg}`);
           }
       }
     }
 
+    this.attachPayloadInject(options, payloadFlags);
     this.validateOptions(options);
     return options;
   }
@@ -356,8 +415,12 @@ export class ArgumentParser {
 
   validateOptions(options: CLIOptions): void {
     // Version and help can be used without an input file
-    if (!options.input && !options.version && !options.help) {
+    if (!options.input && options.eval === undefined && !options.version && !options.help) {
       throw new Error('No input file specified');
+    }
+
+    if (options.input && options.eval !== undefined) {
+      throw new Error('Cannot specify both an input file and --eval');
     }
   }
 
@@ -393,6 +456,42 @@ export class ArgumentParser {
 
   supportsSubcommands(command: string): boolean {
     return this.commandsWithSubcommands.includes(command);
+  }
+
+  private parseCustomFlag(
+    arg: string,
+    nextArg?: string
+  ): { key: string; value: unknown; consumed: boolean } | null {
+    if (!arg.startsWith('-')) return null;
+    const rawKey = arg.startsWith('--') ? arg.slice(2) : arg.slice(1);
+    if (!rawKey) return null;
+    // Keep raw hyphenated key as primary (e.g., --dry-run -> dry-run)
+    const key = rawKey;
+    if (nextArg !== undefined && !nextArg.startsWith('-')) {
+      return { key, value: nextArg, consumed: true };
+    }
+    return { key, value: true, consumed: false };
+  }
+
+  private attachPayloadInject(options: CLIOptions, payloadFlags: Record<string, unknown>): void {
+    if (!options.input) return;
+    if (this.commandsWithSubcommands.includes(options.input)) return;
+    // Always inject @payload (even when empty) so scripts can safely reference @payload
+    // This matches `mlld run` behavior where @payload={} is always available
+
+    // Add camelCase aliases for hyphenated keys (deprecated, for backward compat)
+    const withAliases: Record<string, unknown> = { ...payloadFlags };
+    for (const [key, value] of Object.entries(payloadFlags)) {
+      if (key.includes('-')) {
+        const camelKey = key.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+        if (!(camelKey in withAliases)) {
+          withAliases[camelKey] = value;
+        }
+      }
+    }
+
+    if (!options.inject) options.inject = [];
+    options.inject.push(`@payload=${JSON.stringify(withAliases)}`);
   }
 
 }

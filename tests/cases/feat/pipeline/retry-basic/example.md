@@ -3,7 +3,7 @@
 # Test basic retry mechanism
 /exe @getInput() = "success"
 
-/exe @testRetry(input) = when first [
+/exe @testRetry(input) = when [
   @pipeline.try < 3 => retry
   * => @pipeline.try
 ]

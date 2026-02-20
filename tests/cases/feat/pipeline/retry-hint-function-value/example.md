@@ -2,12 +2,12 @@
 
 /exe @buildHint(n) = "attempt-@n is insufficient"
 
-/exe @source() = when first [
+/exe @source() = when [
   @mx.try == 1 => "draft"
   * => "final"
 ]
 
-/exe @validator() = when first [
+/exe @validator() = when [
   @mx.input == "draft" => retry @buildHint(@mx.try)
   * => "Hint: @mx.hint"
 ]

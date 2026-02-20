@@ -1,0 +1,19 @@
+# Team-level policy
+# Broad permissions for development commands
+
+/var @config = {
+  defaults: {
+    unlabeled: "untrusted"
+  },
+  allow: {
+    cmd: ["git:*", "npm:*", "echo"]
+  },
+  deny: {
+    cmd: ["rm:*"]
+  },
+  limits: {
+    timeout: 30000
+  }
+}
+
+/export { @config }

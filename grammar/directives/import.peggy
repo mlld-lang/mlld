@@ -22,7 +22,8 @@ ImportKeyword
 
 // Primary /import directive
 SlashImport
-  = SlashImportPolicy
+  = SlashImportMcpTools
+  / SlashImportPolicy
   / SlashImportShorthand
   / SlashImportFull
   
@@ -42,50 +43,50 @@ SlashImport
       }
       return depth > 0;
     } {
-      helpers.mlldError("Unclosed import list in /import directive. Expected closing brace for import list.", String.fromCharCode(125), location());
+      helpers.mlldError("Unclosed import list in import directive. Expected closing brace for import list.", String.fromCharCode(125), location());
     }
     
   // Error: Missing 'from' keyword
   / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ &{
       return helpers.isMissingFromKeyword(input, peg$currPos);
     } {
-      helpers.mlldError("Missing 'from' keyword in /import directive. Expected: /import { items } from \"path\"", "from", location());
+      helpers.mlldError("Missing 'from' keyword in import directive. Expected: import { items } from \"path\"", "from", location());
     }
     
   // Error: Missing path after 'from'
   / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing path in /import directive. Expected a path after 'from' keyword.", "path", location());
+      helpers.mlldError("Missing path in import directive. Expected a path after 'from' keyword.", "path", location());
     }
     
   // Error: Unclosed quoted path
   / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ "\"" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
-      helpers.mlldError("Unclosed quoted path in /import directive. Expected closing double quote (\").", "\"", location());
+      helpers.mlldError("Unclosed quoted path in import directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed single quoted path
   / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ "'" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, "'");
     } {
-      helpers.mlldError("Unclosed quoted path in /import directive. Expected closing single quote.", "'", location());
+      helpers.mlldError("Unclosed quoted path in import directive. Expected closing single quote.", "'", location());
     }
     
   // Error: Unclosed bracket path
   / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed path bracket in /import directive. Expected closing bracket for path.", "]", location());
+      helpers.mlldError("Unclosed path bracket in import directive. Expected closing bracket for path.", "]", location());
     }
     
   // Error: Invalid wildcard syntax (missing alias)
   / DirectiveContext ImportKeyword _ "{" _ "*" _ "}" {
-      helpers.mlldError("Wildcard imports must have an alias. Use: /import { * as @name } from \"path\"", "as", location());
+      helpers.mlldError("Wildcard imports must have an alias. Use: import { * as @name } from \"path\"", "as", location());
     }
     
   // Error: Missing content after /import
   / DirectiveContext ImportKeyword _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing content in /import directive. Expected import list or path.", String.fromCharCode(123), location());
+      helpers.mlldError("Missing content in import directive. Expected import list or path.", String.fromCharCode(123), location());
     }
     
   // Error: Invalid @ usage in shorthand
@@ -105,12 +106,142 @@ SlashImport
   / DirectiveContext ImportKeyword _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed path bracket in /import shorthand. Expected closing bracket.", "]", location());
+      helpers.mlldError("Unclosed path bracket in import shorthand. Expected closing bracket.", "]", location());
     }
-    
-  // Error: Generic /import syntax error (catch-all)
+
+  // Error: Generic import syntax error (catch-all)
   / DirectiveContext ImportKeyword {
-      helpers.mlldError("Invalid /import syntax. Expected: /import \"path\", /import @module, or /import { items } from \"path\"", "\"", location());
+      helpers.mlldError("Invalid import syntax. Expected: import \"path\", import @module, or import { items } from \"path\"", "\"", location());
+    }
+
+// MCP tools import
+SlashImportMcpTools
+  = DirectiveContext ImportKeyword _ "tools" _ "{" _ imports:ImportsList _ "}" _ "from" _ "mcp" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportMcpTools matched', { imports, path, tail });
+
+      const importsRaw = imports.map(item => {
+        if (typeof item === 'string') {
+          return item;
+        } else if (item.original) {
+          const originalRaw = item.rawOriginal || item.original;
+          return `${originalRaw} as @${item.alias}`;
+        }
+        return item.rawName || item.name;
+      }).join(", " );
+
+      let subtype = 'importMcpSelected';
+      if (imports.length === 1 && typeof imports[0] === 'object' && imports[0].original === '*' && imports[0].alias) {
+        subtype = 'importMcpNamespace';
+      }
+
+      const values = {
+        imports: imports.map(item => {
+          if (typeof item === 'string') {
+            return helpers.createVariableReferenceNode('import', {
+              identifier: item
+            }, location());
+          } else if (item.original) {
+            return helpers.createVariableReferenceNode('import', {
+              identifier: item.original,
+              alias: item.alias
+            }, item.location || location());
+          }
+          return helpers.createVariableReferenceNode('import', {
+            identifier: item.name
+          }, item.location || location());
+        }),
+        path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path)
+      };
+
+      if (subtype === 'importMcpNamespace') {
+        const alias = imports[0] && imports[0].alias;
+        if (alias) {
+          values.namespace = [helpers.createVariableReferenceNode('importAlias', { identifier: alias }, location())];
+        }
+      }
+
+      if (tail) {
+        values.withClause = tail;
+      }
+
+      const raw = {
+        imports: importsRaw,
+        path: path.raw?.path || path.raw?.module || path.raw?.url || path
+      };
+
+      const meta = {
+        path: path.meta || {
+          isSpecial: typeof path === 'string',
+          pathSubtype: path.subtype
+        }
+      };
+      if (comment) {
+        meta.comment = comment;
+      }
+
+      return helpers.createStructuredDirective(
+        'import',
+        subtype,
+        values,
+        raw,
+        meta,
+        location(),
+        'path'
+      );
+    }
+  / DirectiveContext ImportKeyword _ "tools" _ "from" _ "mcp" _ path:ImportPath _ "as" _ alias:ImportAliasIdentifier tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportMcpTools namespace matched', { alias, path, tail });
+
+      const values = {
+        namespace: [helpers.createVariableReferenceNode('importAlias', { identifier: alias }, location())],
+        imports: [
+          helpers.createVariableReferenceNode('import', { identifier: '*', alias }, location())
+        ],
+        path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path)
+      };
+
+      if (tail) {
+        values.withClause = tail;
+      }
+
+      const raw = {
+        imports: `* as @${alias}`,
+        path: path.raw?.path || path.raw?.module || path.raw?.url || path
+      };
+
+      const meta = {
+        path: path.meta || {
+          isSpecial: typeof path === 'string',
+          pathSubtype: path.subtype
+        }
+      };
+      if (comment) {
+        meta.comment = comment;
+      }
+
+      return helpers.createStructuredDirective(
+        'import',
+        'importMcpNamespace',
+        values,
+        raw,
+        meta,
+        location(),
+        'path'
+      );
+    }
+  / DirectiveContext ImportKeyword _ "tools" _ "from" _ "mcp" _ path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
+      helpers.mlldError(
+        `Import aliases must include '@'. Use 'as @${invalidAlias}'`,
+        '@',
+        location()
+      );
+    }
+  / DirectiveContext ImportKeyword _ "tools" _ "from" _ "mcp" _ path:ImportPath {
+      helpers.mlldError(
+        "MCP tool imports require an alias. Use: import tools from mcp \"server\" as @name",
+        "as",
+        location()
+      );
     }
 
 // Shorthand import alias must include @ prefix when provided
@@ -135,7 +266,7 @@ SlashImportShorthand
       let namespace = aliasSegment?.alias;
       const templateParams = aliasSegment?.params || [];
       if (typeInfo?.type === 'templates' && !namespace) {
-        helpers.mlldError("Templates import requires an alias with parameters. Use: /import templates from \"dir\" as @name(param1, param2)", "@", location());
+        helpers.mlldError("Templates import requires an alias with parameters. Use: import templates from \"dir\" as @name(param1, param2)", "@", location());
       }
       if (!namespace) {
         // Extract namespace from path
@@ -156,7 +287,7 @@ SlashImportShorthand
       
       // Create values object with namespace import structure
       const values = {
-        namespace: [helpers.createNode(NodeType.Text, { content: namespace, location: location() })],  // Store namespace as array for consistency
+        namespace: [helpers.createVariableReferenceNode('importAlias', { identifier: namespace }, location())],
         templateParams,
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
@@ -223,7 +354,7 @@ SlashImportPolicy
   = DirectiveContext ImportKeyword _ "policy" _ alias:ImportAliasIdentifier _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashImportPolicy matched', { alias, path, tail });
 
-      const namespace = [helpers.createNode(NodeType.Text, { content: alias, location: location() })];
+      const namespace = [helpers.createVariableReferenceNode('importAlias', { identifier: alias }, location())];
       const values = {
         namespace,
         path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path),
@@ -414,14 +545,15 @@ CachedImportType
 
 // Import path - handles special @input source, module references, and regular paths
 ImportPath
-  = "@payload"i {
+  = NodeImportPath
+  / "@payload"i {
       helpers.debug('ImportPath matched @payload');
       const matched = text();
       return {
         type: 'path',
         subtype: 'payloadPath',
         values: {
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'payload', originalForm: matched }, location())]
         },
         raw: {
           path: matched
@@ -439,7 +571,7 @@ ImportPath
         type: 'path',
         subtype: 'statePath',
         values: {
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'state', originalForm: matched }, location())]
         },
         raw: {
           path: matched
@@ -457,7 +589,7 @@ ImportPath
         type: 'path',
         subtype: 'inputPath',
         values: {
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'INPUT', originalForm: matched }, location())]
         },
         raw: {
           path: matched
@@ -474,10 +606,10 @@ ImportPath
       return {
         type: 'path',
         subtype: 'nowPath',
-        values: { 
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        values: {
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'NOW', originalForm: matched }, location())]
         },
-        raw: { 
+        raw: {
           path: matched
         },
         meta: {
@@ -492,10 +624,10 @@ ImportPath
       return {
         type: 'path',
         subtype: 'timePath',
-        values: { 
-          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        values: {
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'TIME', originalForm: matched }, location())]
         },
-        raw: { 
+        raw: {
           path: matched
         },
         meta: {
@@ -509,10 +641,10 @@ ImportPath
       return {
         type: 'path',
         subtype: 'inputPath',
-        values: { 
-          path: [helpers.createNode(NodeType.Text, { content: '@stdin', location: location() })]
+        values: {
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'stdin', originalForm: '@stdin' }, location())]
         },
-        raw: { 
+        raw: {
           path: '@stdin'
         },
         meta: {
@@ -522,11 +654,59 @@ ImportPath
         }
       };
     }
+  / "@keychain"i {
+      helpers.debug('ImportPath matched @keychain');
+      const matched = text();
+      return {
+        type: 'path',
+        subtype: 'resolverPath',
+        values: {
+          path: [helpers.createVariableReferenceNode('specialResolver', { identifier: 'keychain', originalForm: matched }, location())]
+        },
+        raw: {
+          path: matched
+        },
+        meta: {
+          isSpecial: true,
+          source: 'keychain'
+        }
+      };
+    }
   / SpecialVariablePath
   / ModuleReference
   / QuotedPath
   / ImportAlligatorAdapter
   // REMOVED: PathExpression - bracket syntax no longer supported
+
+NodeImportPath "node import"
+  = "node" _ spec:NodePackageSpec {
+      helpers.debug('NodeImportPath matched', { spec });
+      const rawPath = spec.raw;
+      const pathNode = helpers.createNode(NodeType.Text, { content: rawPath, location: location() });
+      return {
+        type: 'path',
+        subtype: 'nodePath',
+        values: {
+          path: [pathNode]
+        },
+        raw: {
+          path: rawPath
+        },
+        meta: {
+          isNodeImport: true,
+          package: rawPath
+        }
+      };
+    }
+
+NodePackageSpec "node package specifier"
+  = "@" name:NodePackageName rest:("/" part:NodePackageName { return part; })* {
+      const parts = [name, ...rest];
+      return { raw: `@${parts.join('/')}`, parts };
+    }
+
+NodePackageName
+  = $([a-zA-Z0-9][a-zA-Z0-9._-]*)
 
 // Adapter to use AlligatorExpression for imports
 ImportAlligatorAdapter
@@ -535,7 +715,7 @@ ImportAlligatorAdapter
       
       // Alligators in imports just load the file
       if (content.options && content.options.section) {
-        helpers.mlldError("Section extraction is not supported in import paths. Use: /import { items } from <path>", ">", location());
+        helpers.mlldError("Section extraction is not supported in import paths. Use: import { items } from <path>", ">", location());
       }
       
       // Convert alligator source to import path format
@@ -609,11 +789,12 @@ QuotedPath
       };
     }
 
-// Module reference: @namespace/path/to/module@hash
+// Module reference: @namespace/path/to/module@version
 ModuleReference
   = "@" id:ModuleIdentifier {
       const extension = id.extension ? `.${id.extension}` : '';
-      const rawModule = `@${id.namespace}${id.path.length > 0 ? '/' + id.path.join('/') : ''}/${id.name}${extension}${id.hash ? '@' + id.hash : ''}`;
+      const versionSuffix = id.version ? `@${id.version}` : '';
+      const rawModule = `@${id.namespace}${id.path.length > 0 ? '/' + id.path.join('/') : ''}/${id.name}${extension}${versionSuffix}`;
       return {
         type: 'module',
         subtype: 'moduleReference',
@@ -629,20 +810,20 @@ ModuleReference
           path: id.path,
           name: id.name,
           ...(id.extension ? { extension: `.${id.extension}` } : {}),
-          ...(id.hash ? { hash: id.hash } : {})
+          ...(id.version ? { version: id.version } : {})
         }
       };
     }
 
 // Module identifier with namespace, path, name, and optional hash
 ModuleIdentifier
-  = namespace:ModuleNamespace "/" pathAndName:ModulePathAndName hash:("@" h:ShortHash { return h; })? {
+  = namespace:ModuleNamespace "/" pathAndName:ModulePathAndName version:ModuleVersion? {
       return {
         namespace,
         path: pathAndName.path,
         name: pathAndName.name,
         ...(pathAndName.extension ? { extension: pathAndName.extension } : {}),
-        ...(hash ? { hash } : {})
+        ...(version ? { version } : {})
       };
     }
 
@@ -676,15 +857,43 @@ ModuleIdentifierPart "Module Identifier Part"
       return first + rest.join('');
     }
 
-// Version or hash specifier for module references
-// Supports:
-//   - Semver versions: 1.0.0, 1.2.3-beta.1, 2.0.0-rc.1
-//   - Short hashes: abcd1234 (4+ hex characters)
-ShortHash
-  = version:SemverVersion {
-      return version;
+ModuleVersion
+  = "@" spec:VersionSpecifier {
+      return spec;
     }
-  / chars:[a-f0-9]+ &{ return chars.length >= 4; } {
+
+VersionSpecifier
+  = comparator:VersionComparator version:SemverVersion {
+      return comparator + version;
+    }
+  / semver:SemverVersion {
+      return semver;
+    }
+  / tag:VersionTag {
+      return tag;
+    }
+  / hash:CommitHash {
+      return hash;
+    }
+
+VersionComparator
+  = ">="
+  / "<="
+  / ">"
+  / "<"
+  / "=="
+  / "!="
+  / "~="
+  / "~"
+  / "^"
+
+VersionTag
+  = chars:[a-z0-9-]+ {
+      return chars.join('');
+    }
+
+CommitHash
+  = chars:[a-f0-9]+ &{ return chars.length >= 4; } {
       return chars.join('');
     }
 
@@ -723,7 +932,7 @@ ImportsList
     }
   / "*" _ &{ return input[peg$currPos] === String.fromCharCode(125); } {
       // Provide helpful error for wildcard imports without alias
-      helpers.mlldError(`Wildcard imports must have an alias. Use '/import { * as @name }' or the shorthand '/import "path/to/file.mld" as @name'`, "as", location());
+      helpers.mlldError(`Wildcard imports must have an alias. Use 'import { * as @name }' or the shorthand 'import "path/to/file.mld" as @name'`, "as", location());
     }
   / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {
       return [first, ...rest];

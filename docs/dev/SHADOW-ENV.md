@@ -7,10 +7,10 @@ Shadow environments in mlld provide a bridge between mlld's declarative syntax a
 **Currently Implemented**:
 - ✅ **JavaScript** (`js`): In-process execution with function injection
 - ✅ **Node.js** (`node`): VM-isolated execution with function injection
+- ✅ **Python** (`py`/`python`): Subprocess execution with function injection
 
 **Not Implemented**:
 - ❌ **Bash** (`bash`): Only supports variable injection, no function calls
-- ❌ **Python** (`python`): No shadow environment support
 - ❌ **Shell** (`sh`): No shadow environment support
 
 ## Overview
@@ -54,6 +54,16 @@ const mergedParams = { ...Object.fromEntries(shadowEnv || []), ...params };
 - **Isolation**: Full VM context isolation
 - **Performance**: Slightly slower due to VM overhead
 
+### Python Shadow Environment
+
+**Location**: `interpreter/env/PythonShadowEnvironment.ts`, wired via `Environment` python shadow provider
+
+**Architecture**:
+- **Storage**: Dedicated `PythonShadowEnvironment` class storing function code and param names
+- **Execution**: Subprocess execution with function definitions injected
+- **Isolation**: Full process isolation via subprocess
+- **Performance**: Slowest due to subprocess overhead, but supports streaming output
+
 **Key implementation details**:
 ```typescript
 export class NodeShadowEnvironment {
@@ -83,6 +93,50 @@ export class NodeShadowEnvironment {
     return await script.runInContext(execContext);
   }
 }
+```
+
+**Python key implementation details**:
+```typescript
+export class PythonShadowEnvironment {
+  private shadowFunctions: Map<string, { code: string; paramNames: string[] }> = new Map();
+
+  async addFunction(name: string, code: string, paramNames: string[] = []): Promise<void> {
+    this.shadowFunctions.set(name, { code, paramNames });
+  }
+
+  generateFunctionDefinitions(): string {
+    let definitions = '';
+    for (const [name, { code, paramNames }] of this.shadowFunctions) {
+      const paramStr = paramNames.join(', ');
+      const indentedCode = code.split('\n')
+        .map(line => line.trim() ? '    ' + line : '')
+        .join('\n');
+      definitions += `def ${name}(${paramStr}):\n${indentedCode}\n\n`;
+    }
+    return definitions;
+  }
+
+  async execute(code: string, params?: Record<string, any>): Promise<string> {
+    // Inject function definitions + params + user code
+    // Execute via subprocess: python3 tmpfile.py
+  }
+}
+```
+
+**Python execution with streaming**:
+```typescript
+// In PythonExecutor - streaming output support
+const child = spawn('python3', [tmpFile], {
+  cwd: workingDirectory,
+  env: { ...process.env },
+  stdio: ['pipe', 'pipe', 'pipe']
+});
+
+child.stdout.on('data', (data: Buffer) => {
+  const text = stdoutDecoder.write(data);
+  stdoutBuffer += text;
+  emitChunk(text, 'stdout');  // Emit to StreamBus
+});
 ```
 
 ## Implementation Flow
@@ -250,6 +304,11 @@ if (nodeShadowEnv) {
   const crypto = require('crypto');
   return crypto.createHash('sha256').update(text).digest('hex');
 }
+
+>> Python function
+/exe @add(a, b) = py {
+return int(a) + int(b)
+}
 ```
 
 ### Environment Declaration
@@ -260,6 +319,9 @@ if (nodeShadowEnv) {
 
 >> Node.js environment
 /exe @node = { hash, readFile, fetchUrl }
+
+>> Python environment
+/exe @py = { add, multiply, calculate }
 ```
 
 ### Cross-Function Calls
@@ -794,10 +856,10 @@ if (error && typeof error === 'object') {
 
 This fix affects **language executors with shadow environment support**:
 - ✅ **NodeExecutor**: Error messages now properly captured in subprocess stderr
-- ✅ **JavaScriptExecutor**: Stack traces preserved in error details  
+- ✅ **JavaScriptExecutor**: Stack traces preserved in error details
+- ✅ **PythonExecutor**: Shadow environment support with streaming output
 - ❌ **BashExecutor**: No shadow environment support (only variable injection)
 - ✅ **ShellCommandExecutor**: Command execution errors preserved
-- ⚠️ **PythonExecutor**: Uses different pattern (delegates to shell), not affected
 
 #### Testing
 

@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Worker Result",
+  "type": "object",
+  "required": ["status", "standup"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["completed", "partial", "blocked", "verified", "failures_found"],
+      "description": "Outcome of the work"
+    },
+    "work_done": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "files_written": { "type": "array", "items": { "type": "string" } },
+        "commit_hash": { "type": "string" },
+        "commit_message": { "type": "string" }
+      }
+    },
+    "tests": {
+      "type": "array",
+      "description": "Adversarial test results (invalidation workers only)",
+      "items": {
+        "type": "object",
+        "required": ["claim", "result"],
+        "properties": {
+          "claim": { "type": "string" },
+          "command": { "type": "string" },
+          "expected": { "type": "string" },
+          "actual": { "type": "string" },
+          "result": { "type": "string", "enum": ["PASS", "FAIL"] }
+        }
+      }
+    },
+    "rating": {
+      "type": "string",
+      "enum": ["solid", "adequate", "narrow", "broken"],
+      "description": "Review rating (review workers only)"
+    },
+    "standup": {
+      "type": "object",
+      "required": ["progress"],
+      "properties": {
+        "progress": { "type": "string" },
+        "blockers": { "type": "string" },
+        "next": { "type": "string" }
+      }
+    }
+  }
+}

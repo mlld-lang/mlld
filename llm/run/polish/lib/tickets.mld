@@ -1,0 +1,209 @@
+>> Tickets Library
+>> Handles ticket operations via tk CLI
+
+/needs { sh }
+
+>> Tickets directory
+var @ticketsDir = "@base/.tickets"
+
+>> Shell helpers (sh blocks need $var via exe params)
+exe @shTkCreate(title, type, priority, tagsArg, descArg) = sh {tk create "$title" -t "$type" -p "$priority" $tagsArg $descArg}
+exe @shTkTag(id, tags) = sh {tk tag "$id" $tags 2>/dev/null || echo "FALLBACK"}
+
+>> Query open tickets
+exe @getOpenTickets() = [
+  let @ticketData = sh {tk query '.status == "open"' | jq -s '.'}
+  => @ticketData
+]
+
+>> Get ticket by ID (returns null if not found)
+exe @getTicket(id) = [
+  let @ext = ".md"
+  let @path = `@ticketsDir/@id@ext`
+  => <@path>?
+]
+
+>> Create a ticket
+exe @createTicket(title, type, priority, tags, description) = [
+  let @tagsArg = @tags ? `--tags "@tags"` : ""
+  let @descArg = @description ? `-d "@description"` : ""
+  let @result = @shTkCreate(@title, @type, @priority, @tagsArg, @descArg)
+  => @result.trim()
+]
+
+>> Add tags to a ticket (simple approach using tk CLI)
+exe @addTags(id, tags) = [
+  >> Use tk tag command if available, otherwise update file directly
+  let @result = @shTkTag(@id, @tags)
+
+  => when [
+    @result.trim() != "FALLBACK" => @id
+    * => @_addTagsFallback(@id, @tags)
+  ]
+]
+
+>> Fallback: update file directly when tk tag not available
+exe @_addTagsFallback(id, tags) = [
+  let @ext = ".md"
+  let @path = `@ticketsDir/@id@ext`
+  let @ticket = <@path>?
+
+  => when [
+    !@ticket => null
+    * => @_doAddTags(@id, @path, @ticket, @tags)
+  ]
+]
+
+>> Actually add tags to ticket file
+exe @_doAddTags(id, path, ticket, tags) = [
+  >> Parse existing tags line
+  let @match = @ticket.match(/^tags:\s*\[(.*)\]/m)
+  let @existingStr = @match ? @match[1] : ""
+
+  >> Build new tags string (simple concat - may have dupes but that's ok)
+  let @newTagsStr = @existingStr ? `@existingStr, @tags` : @tags
+  let @tagsYaml = `[@newTagsStr]`
+
+  >> Update file
+  let @hasTags = @ticket.includes("tags:")
+  let @updated = when [
+    @hasTags => @ticket.replace(/^tags:.*$/m, `tags: @tagsYaml`)
+    * => @ticket.replace(/^(priority:.*)$/m, `$1\ntags: @tagsYaml`)
+  ]
+
+  output @updated to "@path"
+  => @id
+]
+
+>> Check if ticket has a specific tag prefix
+>> Expects built object with .tags field (from enrich.mld lines 145-151)
+>> Note: Using @_tag to avoid variable collision with caller's loop variables
+exe @hasTagPrefix(ticket, prefix) = [
+  let @tags = @ticket.tags ? @ticket.tags : []
+  let @matching = for @_tag in @tags when @_tag.startsWith(@prefix) => @_tag
+  => @matching.length > 0
+]
+
+>> Get tag value by prefix
+>> Expects built object with .tags field
+exe @getTagValue(ticket, prefix) = [
+  let @tags = @ticket.tags ? @ticket.tags : []
+  let @matching = for @_t in @tags when @_t.startsWith(@prefix) => @_t
+  => when [
+    @matching.length == 0 => null
+    * => @matching[0].replace(@prefix, "")
+  ]
+]
+
+>> Check if ticket is stale (stale-check > 3)
+exe @isStale(ticket) = [
+  let @value = @getTagValue(@ticket, "stale-check-")
+  => when [
+    !@value => false
+    * => @value * 1 > 3
+  ]
+]
+
+>> Check if ticket has impl-done tag
+exe @isImplDone(ticket) = [
+  let @tags = @ticket.tags ? @ticket.tags : []
+  let @done = for @t in @tags when @t == "impl-done" => @t
+  => @done.length > 0
+]
+
+>> Check if ticket needs human design review
+exe @needsHumanDesign(ticket) = [
+  let @tags = @ticket.tags ? @ticket.tags : []
+  let @matched = for @t in @tags when @t == "needs-human-design" => @t
+  => @matched.length > 0
+]
+
+>> Get size estimate
+exe @getSize(ticket) = [
+  let @val = @getTagValue(@ticket, "size-")
+  => @val ? @val : "unscoped"
+]
+
+>> Get complexity estimate
+exe @getComplexity(ticket) = [
+  let @val = @getTagValue(@ticket, "complexity-")
+  => @val ? @val : "unscoped"
+]
+
+>> Get risk estimate
+exe @getRisk(ticket) = [
+  let @val = @getTagValue(@ticket, "risk-")
+  => @val ? @val : "unscoped"
+]
+
+>> Get impl status
+exe @getImplStatus(ticket) = [
+  let @tags = @ticket.tags ? @ticket.tags : []
+  let @implTags = for @_t in @tags when @_t.startsWith("impl-") => @_t
+  => when [
+    @implTags.length == 0 => "unchecked"
+    * => @implTags[0]
+  ]
+]
+
+>> Shell helper for adding notes
+exe @shTkAddNote(id, note) = sh {tk add-note "$id" "$note" 2>/dev/null || echo "FAILED"}
+
+>> Add enrich review note with timestamp
+exe @addEnrichNote(id) = [
+  let @note = `Enrich reviewed: @now`
+  let @result = @shTkAddNote(@id, @note)
+  let @trimmed = @result.trim()
+  => when [
+    @trimmed == "FAILED" => false
+    * => true
+  ]
+]
+
+>> Check if ticket was enriched recently (within hours threshold)
+>> Parses ticket content for "Enrich reviewed: <timestamp>" notes
+exe @wasRecentlyEnriched(id, hoursThreshold) = [
+  let @ticket = @getTicket(@id)
+  => when [
+    !@ticket => false
+    * => @_checkEnrichTimestamp(@ticket, @hoursThreshold)
+  ]
+]
+
+>> Helper to check enrich timestamp (separate to isolate potential errors)
+exe @_checkEnrichTimestamp(ticket, hoursThreshold) = [
+  >> Coerce to string for regex matching
+  let @content = `@ticket`
+  let @match = @content.match(/Enrich reviewed: (\d{4}-\d{2}-\d{2}T[\d:.]+Z)/)
+  => when [
+    !@match => false
+    * => [
+      let @lastEnrich = @match[1]
+      let @lastEnrichMs = js { return new Date(lastEnrich).getTime(); }
+      let @nowMs = js { return Date.now(); }
+      let @ageHours = (@nowMs - @lastEnrichMs) / (1000 * 60 * 60)
+      => @ageHours < @hoursThreshold
+    ]
+  ]
+]
+
+/export {
+  @ticketsDir,
+  @getOpenTickets,
+  @getTicket,
+  @createTicket,
+  @addTags,
+  @_addTagsFallback,
+  @_doAddTags,
+  @hasTagPrefix,
+  @getTagValue,
+  @isStale,
+  @isImplDone,
+  @needsHumanDesign,
+  @getSize,
+  @getComplexity,
+  @getRisk,
+  @getImplStatus,
+  @addEnrichNote,
+  @wasRecentlyEnriched
+}

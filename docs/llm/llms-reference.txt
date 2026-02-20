@@ -22,7 +22,9 @@ Where interpolation applies:
 | `run` | Execute command | `run cmd {echo hi}` |
 | `exe` | Define executable | `exe @f(x) = ...` |
 | `when` | Conditional | `when @x => show "yes"` |
+| `if` | Imperative conditional | `if @x [ show "yes" ]` |
 | `for` | Iteration | `for @x in @arr => ...` |
+| `loop` | Block iteration | `loop(10) [ ... ]` |
 | `import` | Import module | `import { @f } from @m/m` |
 | `export` | Export items | `export { @f, @g }` |
 | `output` | Write to file | `output @x to "f.txt"` |
@@ -59,10 +61,11 @@ Where interpolation applies:
 
 | Transform | Purpose |
 |-----------|---------|
-| `@json` | Parse JSON (loose mode) |
-| `@json.strict` | Parse strict JSON |
-| `@json.loose` | Parse JSON5 |
-| `@json.llm` | Extract JSON from LLM response |
+| `@parse` | Parse JSON (loose mode) |
+| `@parse.strict` | Parse strict JSON |
+| `@parse.loose` | Parse JSON5 |
+| `@parse.llm` | Extract JSON from LLM response |
+| `@json` | Deprecated alias for `@parse` |
 | `@xml` | Format as XML |
 | `@csv` | Format as CSV |
 | `@md` | Format as Markdown |

@@ -1,0 +1,128 @@
+>> Doc Audit Orchestrator
+>> Usage: mlld run doc-audit [--parallel 10] [--output doc-audit-results.json]
+>>
+>> Parallel review of docs/dev/ files to identify outdated documentation.
+>> Each doc gets its own LLM session with codebase access to verify claims.
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logEvent, @fileExists } from "./lib/context.mld"
+import "@payload" as @p
+
+>> Config
+var @parallelism = @p.parallel ? @p.parallel * 1 : 10
+var @outputPath = @p.output ?? "doc-audit-results.json"
+var @reviewTools = "Read,Write,Glob,Grep"
+
+>> Prompt template
+exe @reviewPrompt(docPath, docContent) = template "./prompts/review.att"
+
+>> Helpers
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => (a.data || a).findings || []) }
+
+>> Set up run directory
+var @today = @now.slice(0, 10)
+var @runDir = `@root/runs/doc-audit-@today`
+run @mkdirp(@runDir)
+run @mkdirp(`@runDir/reviews`)
+
+show `═══════════════════════════════════════════════════════════════════`
+show `Doc Audit: docs/dev/`
+show `═══════════════════════════════════════════════════════════════════`
+show `Parallelism: @parallelism`
+show `Output: @outputPath`
+show `Run dir: @runDir`
+show `───────────────────────────────────────────────────────────────────`
+
+>> Glob all dev docs
+var @docs = <@root/docs/dev/*.md>
+
+show `Found @docs.length docs to audit`
+show ``
+
+>> Parallel review: one LLM call per doc
+show `Phase: Review (@docs.length docs, parallel @parallelism)`
+show `───────────────────────────────────────────────────────────────────`
+
+var @reviewResults = for parallel(@parallelism) @doc in @docs [
+  let @filename = @doc.mx.filename
+  let @outPath = `@runDir/reviews/@filename\.json`
+
+  >> Idempotency: skip if already reviewed
+  let @check = @fileExists(@outPath)
+  if @check == "yes" [
+    show `  @filename: skipped (exists)`
+    => <@outPath> | @json
+  ]
+
+  >> Build prompt with full doc content
+  let @prompt = @reviewPrompt(@doc.mx.relative, @doc)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema above.`
+
+  >> Call reviewer
+  @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
+  let @result = <@outPath>?
+
+  if !@result [
+    show `  @filename: review failed (no output)`
+    let @evtData = { file: @filename }
+    @logEvent(@runDir, "review_failed", @evtData)
+    => null
+  ]
+
+  let @findingCount = @result.findings.length
+  let @status = @result.status
+  show `  @filename: @status (@findingCount findings)`
+  let @evtData = { file: @filename, status: @status, findings: @findingCount }
+  @logEvent(@runDir, "review_complete", @evtData)
+  => @result | @json
+]
+
+>> Collect results
+var @allFindings = @flatMap(@reviewResults)
+var @validResults = for @r in @reviewResults when @r => @r
+
+>> Summary
+show ``
+show `═══════════════════════════════════════════════════════════════════`
+show `Results: @allFindings.length findings across @validResults.length docs`
+show `═══════════════════════════════════════════════════════════════════`
+
+>> Categorize
+exe @countByStatus(results, status) = js {
+  return results.filter(r => r && (r.data || r).status === status).length;
+}
+
+var @outdatedCount = @countByStatus(@validResults, "outdated")
+var @mostlyCount = @countByStatus(@validResults, "mostly-current")
+var @currentCount = @countByStatus(@validResults, "current")
+
+show `  Outdated: @outdatedCount`
+show `  Mostly current: @mostlyCount`
+show `  Current: @currentCount`
+show ``
+
+>> Output full results
+var @summary = {
+  runDate: @now,
+  docsReviewed: @validResults.length,
+  totalFindings: @allFindings.length,
+  byStatus: {
+    outdated: @outdatedCount,
+    mostlyCurrent: @mostlyCount,
+    current: @currentCount
+  },
+  results: @validResults
+}
+output @summary to "@outputPath"
+
+var @finalEvt = {
+  docs_reviewed: @validResults.length,
+  total_findings: @allFindings.length,
+  outdated: @outdatedCount
+}
+run @logEvent(@runDir, "audit_complete", @finalEvt)
+
+show `Written to @outputPath`

@@ -5,7 +5,7 @@ brief: Strict mode uses bare directives, not slashes
 category: mistakes
 parent: mistakes
 tags: [mistakes, strict-mode, directives]
-related: [variables-basics, when-simple]
+related: [variables-basics, when-inline]
 related-code: []
 updated: 2026-01-05
 ---

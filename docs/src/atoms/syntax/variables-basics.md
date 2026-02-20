@@ -4,11 +4,25 @@ title: Variables Basics
 brief: Create primitives, arrays, objects, or assign from command/code results
 category: syntax
 parent: variables
+aliases: [var, variable]
 tags: [variables, primitives, arrays, objects]
-related: [variables-conditional, templates-basics]
+related: [variables-conditional, templates-basics, exe-simple]
 related-code: [interpreter/eval/var.ts, grammar/patterns/var.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
+
+**var vs exe:** `var` creates values (no parameters). `exe` creates functions (takes parameters).
+
+```mlld
+var @name = "Alice"            >> value - no params
+exe @greet(who) = `Hi @who!`   >> function - takes params
+
+>> Use var for computed values, exe for reusable functions
+var @result = @greet(@name)    >> "Hi Alice!"
+```
+
+**Primitives, arrays, objects:**
 
 ```mlld
 var @n = 42

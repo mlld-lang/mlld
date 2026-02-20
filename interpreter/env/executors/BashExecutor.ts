@@ -8,6 +8,7 @@ import { isTextLike, type Variable } from '@core/types/variable';
 import { adaptVariablesForBash } from '../bash-variable-adapter';
 import { StringDecoder } from 'string_decoder';
 import { randomUUID } from 'crypto';
+import { buildAliasPreamble } from '@interpreter/utils/alias-resolver';
 
 export interface VariableProvider {
   /**
@@ -88,49 +89,6 @@ export class BashExecutor extends BaseCommandExecutor {
     return unique;
   }
 
-  /**
-   * Execute bash code synchronously with graceful fallbacks if a binary is missing.
-   */
-  private runBashSync(
-    enhancedCode: string,
-    envVars: Record<string, string>,
-    workingDirectory: string
-  ): { execResult: any; usedPath: string } {
-    const candidates = this.getCandidateBashPaths();
-    let lastError: unknown;
-
-    for (const candidate of candidates) {
-      try {
-        const execResult = child_process.spawnSync(candidate, [], {
-          input: enhancedCode,
-          encoding: 'utf8',
-          env: { ...process.env, ...envVars },
-          cwd: workingDirectory,
-          stdio: ['pipe', 'pipe', 'pipe']
-        });
-
-        if (execResult.error && (execResult.error as any).code === 'ENOENT') {
-          lastError = execResult.error;
-          continue;
-        }
-
-        // Update the preferred path to the one that succeeded
-        this.bashPath = candidate;
-        return { execResult, usedPath: candidate };
-      } catch (err: any) {
-        if (err?.code === 'ENOENT') {
-          lastError = err;
-          continue;
-        }
-        throw err;
-      }
-    }
-
-    if (lastError) {
-      throw lastError;
-    }
-    throw new Error('No bash-compatible shell available');
-  }
 
   private async executeBashCode(
     code: string,
@@ -164,6 +122,10 @@ export class BashExecutor extends BaseCommandExecutor {
         }
       }
 
+      if (options?.env && Object.keys(options.env).length > 0) {
+        envVars = { ...envVars, ...options.env };
+      }
+
       // Check for test mocks first
       const isMocking = process.env.MOCK_BASH === 'true';
       const mockResult = this.handleBashTestMocks(code, envVars);
@@ -187,7 +149,7 @@ export class BashExecutor extends BaseCommandExecutor {
       if (useHeredoc) {
         const MAX_SIZE = (() => {
           const v = process.env.MLLD_MAX_BASH_ENV_VAR_SIZE;
-          if (!v) return 128 * 1024; // 128KB default
+          if (!v) return 64 * 1024; // 64KB default
           const n = Number(v);
           return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
         })();
@@ -214,11 +176,14 @@ export class BashExecutor extends BaseCommandExecutor {
               marker = `MLLD_EOF_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}_${counter}`;
             }
             
-            // Build heredoc using command substitution (portable in bash)
-            lines.push(`${safeName}=$(cat <<'${marker}'`);
+            // Build heredoc using read to avoid command substitution size limits
+            lines.push(`IFS= read -r -d '' ${safeName} <<'${marker}' || true`);
             lines.push(v);
             lines.push(`${marker}`);
-            lines.push(`)`);
+            lines.push(
+              `while [[ $${safeName} == *$'\\n' ]]; do ${safeName}="` +
+              '${' + safeName + `%$'\\n'}` + '"; done'
+            );
             if (safeName !== k) {
               // Provide original name as alias for user code
               lines.push(`${k}="$${safeName}"`);
@@ -247,12 +212,15 @@ export class BashExecutor extends BaseCommandExecutor {
         if (lines.length > 0) prelude = lines.join('\n') + '\n';
       }
 
+      // Resolve shell aliases so sh {} blocks can find alias-only commands
+      const aliasPreamble = buildAliasPreamble(code);
+
       // Don't inject helpers for bash - we just pass string values
       // IMPORTANT: When using heredoc prelude, do NOT enhance user code to avoid
       // altering variable expansion/command substitution semantics around large vars.
       const enhancedCode = prelude
-        ? (prelude + code)
-        : CommandUtils.enhanceShellCodeForCommandSubstitution(code);
+        ? (aliasPreamble + prelude + code)
+        : (aliasPreamble + CommandUtils.enhanceShellCodeForCommandSubstitution(code));
       
       // Optional debug: dump the constructed bash script (prelude + user code)
       if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1') {
@@ -265,54 +233,8 @@ export class BashExecutor extends BaseCommandExecutor {
         } catch {}
       }
 
-      // Non-streaming path: preserve legacy sync behavior for fixtures/tests
-      if (!context?.streamingEnabled) {
-        const { execResult, usedPath } = this.runBashSync(enhancedCode, envVars, workingDirectory);
-
-        if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1') {
-          try {
-            process.stdout.write(
-              JSON.stringify({
-                tag: 'BashExecutor[non-stream]',
-                status: execResult.status,
-                error: execResult.error ? String(execResult.error) : null,
-                stdout: execResult.stdout,
-                stderr: execResult.stderr,
-                envKeys: Object.keys(envVars).slice(0, 20),
-                enhancedCode,
-                usedPath
-              }) + '\n'
-            );
-          } catch {
-            // ignore logging errors
-          }
-        }
-
-        if (execResult.error) {
-          throw execResult.error;
-        }
-
-        if (execResult.status !== 0) {
-          const error: any = new Error(`Command failed with exit code ${execResult.status}`);
-          error.status = execResult.status;
-          error.stderr = execResult.stderr;
-          error.stdout = execResult.stdout;
-          throw error;
-        }
-
-        const stdout = execResult.stdout || '';
-        const stderr = execResult.stderr || '';
-        const hasTTYCheck = enhancedCode.includes('[ -t ') || enhancedCode.includes('>&2');
-        const resultText = hasTTYCheck && stderr && !stdout ? stderr : stdout;
-        const duration = Date.now() - startTime;
-
-        return {
-          output: resultText.toString().replace(/\n+$/, ''),
-          duration,
-          exitCode: 0
-        };
-      }
-
+      // Always use async spawn() — enables parallelism in for-parallel loops.
+      // spawnSync() blocked the event loop, preventing concurrent sh {} execution.
       const bus = context?.bus ?? this.getBus();
       const pipelineId = context?.pipelineId || 'pipeline';
       const stageIndex = context?.stageIndex ?? 0;
@@ -343,9 +265,6 @@ export class BashExecutor extends BaseCommandExecutor {
         });
       };
 
-      child.stdin.write(enhancedCode);
-      child.stdin.end();
-
       child.stdout.on('data', (data: Buffer) => {
         const text = stdoutDecoder.write(data);
         stdoutBuffer += text;
@@ -360,6 +279,56 @@ export class BashExecutor extends BaseCommandExecutor {
 
       const result: CommandExecutionResult = await new Promise((resolve, reject) => {
         let settled = false;
+
+        const debugExecIo = (process.env.MLLD_DEBUG_EXEC_IO || '').toLowerCase();
+        const logStdinError = (err: NodeJS.ErrnoException, phase: 'write' | 'end') => {
+          if (debugExecIo !== '1' && debugExecIo !== 'true') return;
+          try {
+            console.error('[mlld][exec-io] bash stdin', {
+              phase,
+              code: err.code,
+              message: err.message
+            });
+          } catch {}
+        };
+
+        child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+          if (err?.code === 'EPIPE') {
+            logStdinError(err, 'write');
+            return;
+          }
+          if (settled) return;
+          settled = true;
+          reject(err);
+        });
+
+        try {
+          child.stdin.write(enhancedCode);
+        } catch (err) {
+          const ioErr = err as NodeJS.ErrnoException;
+          if (ioErr?.code !== 'EPIPE') {
+            if (!settled) {
+              settled = true;
+              reject(ioErr);
+            }
+            return;
+          }
+          logStdinError(ioErr, 'write');
+        }
+        try {
+          child.stdin.end();
+        } catch (err) {
+          const ioErr = err as NodeJS.ErrnoException;
+          if (ioErr?.code !== 'EPIPE') {
+            if (!settled) {
+              settled = true;
+              reject(ioErr);
+            }
+            return;
+          }
+          logStdinError(ioErr, 'end');
+        }
+
         child.on('error', (err) => {
           if (settled) return;
           settled = true;

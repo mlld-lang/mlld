@@ -2,8 +2,8 @@
 
 Testing when expressions as values in exe assignments.
 
-## Basic exe when expression with when first
-/exe @greet(name) = when first [
+## Basic exe when expression
+/exe @greet(name) = when [
   @name == "World" => "Hello, World!"
   @name == "Friend" => "Hey there, Friend!"
   * => "Welcome!"
@@ -14,8 +14,8 @@ Greetings:
 /show @greet("Friend")
 /show @greet("Alice")
 
-## Exe when first with none fallback
-/exe @statusHandler(code) = when first [
+## Exe when with none fallback
+/exe @statusHandler(code) = when [
   @code == 200 => "Success"
   @code == 404 => "Not Found"
   @code == 500 => "Server Error"
@@ -30,7 +30,7 @@ Testing status codes:
 
 ## Exe with language/env conditions
 /var @lang = "es"
-/exe @getMessage(type) = when first [
+/exe @getMessage(type) = when [
   @lang == "es" && @type == "greeting" => "¡Hola!"
   @lang == "es" && @type == "farewell" => "¡Adiós!"
   @lang == "fr" && @type == "greeting" => "Bonjour!"
@@ -45,7 +45,7 @@ Messages:
 /show @getMessage("farewell")
 /show @getMessage("other")
 
-## Exe with bare when (evaluates all, returns last match)
+## Exe with when block (first match)
 /exe @classifyNumber(n) = when [
   @n < 0 => "negative"
   @n == 0 => "zero"
@@ -55,7 +55,7 @@ Messages:
   none => "not a number"
 ]
 
->> Last matching value is returned for bare when
+>> First matching value is returned for when block
 /show @classifyNumber(5)
 /show @classifyNumber(50)
 /show @classifyNumber(-10)
@@ -68,7 +68,7 @@ Define arithmetic operations as separate functions:
 /exe @multiply(a, b) = js { return a * b }
 /exe @divide(a, b) = js { return a / b }
 
-/exe @calculate(op, a, b) = when first [
+/exe @calculate(op, a, b) = when [
   @op == "add" => @add(@a, @b)
   @op == "multiply" => @multiply(@a, @b)
   @op == "divide" && @b != 0 => @divide(@a, @b)
@@ -84,7 +84,7 @@ Calculations:
 /show @calculate("subtract", 10, 3)
 
 ## Exe with pipeline modifiers
-/exe @format(type, data) = when first [
+/exe @format(type, data) = when [
   @type == "json" => @data | @json
   @type == "pretty" => @data | @json
   true => @data

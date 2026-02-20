@@ -1,0 +1,41 @@
+>> Synthesis Job — Combine multiple inputs into a summary
+>> Usage: mlld plugins/mlld/examples/workflow-agent/jobs/summarize.mld --inputs "results/*.json" --output summary.json
+>>
+>> Stateless: loads all input files, calls LLM, writes combined output, exits.
+
+import { @claudePoll } from @mlld/claude-poll
+import "@payload" as @p
+
+var @inputGlob = @p.inputs ?? "results/*.json"
+var @outputPath = @p.output ?? "summary.json"
+
+>> Prompt template
+exe @combinePrompt(inputs) = template "./prompts/summarize/combine.att"
+
+>> Shared output conventions
+var @outputFormat = <./prompts/shared/output-format.md>
+
+>> Load all inputs
+var @files = <@inputGlob>
+var @inputs = for @f in @files => @f | @parse
+
+if @inputs.length == 0 [
+  show `No inputs matched: @inputGlob`
+] else [
+  let @prompt = @combinePrompt(@inputs)
+  let @fullPrompt = `@prompt
+
+@outputFormat
+
+IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
+
+  show `Synthesizing @inputs.length inputs...`
+  @claudePoll(@fullPrompt, "opus", "@root", "Read,Write", @outputPath)
+  let @result = <@outputPath>?
+
+  if @result [
+    show `Summary: @result.themes.length themes, @result.conclusions.length conclusions`
+  ] else [
+    show `Synthesis failed: no output`
+  ]
+]

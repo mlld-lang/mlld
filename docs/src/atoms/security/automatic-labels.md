@@ -8,6 +8,7 @@ tags: [security, labels, automatic, tracking]
 related: [security-guards-basics, security-label-tracking]
 related-code: [core/security/LabelTracker.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 | Label | Applied To |
@@ -15,6 +16,7 @@ updated: 2026-01-05
 | `src:exec` | Results from `/run` and `/exe` |
 | `src:file` | File loads |
 | `src:dynamic` | Dynamic module imports |
+| `src:env:<provider>` | Environment provider outputs |
 | `dir:/path` | File directories (all parents) |
 
 **Example directory guards:**

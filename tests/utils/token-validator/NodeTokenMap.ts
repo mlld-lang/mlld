@@ -49,6 +49,12 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
     requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
+  'IfDirective': {
+    expectedTokenTypes: ['keyword'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'DirectiveVisitor'
+  },
   'ForDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
@@ -168,6 +174,50 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
     },
     mustBeCovered: false,
     visitor: 'TemplateVisitor'
+  },
+
+  // =============================================================================
+  // CONDITIONAL INCLUSION
+  // =============================================================================
+  'ConditionalTemplateSnippet': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'ConditionalVisitor'
+  },
+  'ConditionalStringFragment': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'ConditionalVisitor'
+  },
+  'ConditionalVarOmission': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'ConditionalVisitor'
+  },
+  'ConditionalArrayElement': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'ConditionalVisitor'
+  },
+  'NullCoalescingTight': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'ConditionalVisitor'
+  },
+
+  // =============================================================================
+  // LABEL MODIFICATIONS
+  // =============================================================================
+  'LabelModification': {
+    expectedTokenTypes: ['keyword'],
+    mustBeCovered: true,
+    requireExactType: true,
+    visitor: 'LabelVisitor'
   },
 
   // =============================================================================

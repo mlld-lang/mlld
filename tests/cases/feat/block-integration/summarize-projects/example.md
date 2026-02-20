@@ -3,17 +3,16 @@
   let @errors = []
 
   for @project in @projects [
-    let @rowsResult = for @task in @project.tasks => when [
+    let @rows = for @task in @project.tasks => when [
       (@task.state == "done") => { id: @task.id, pts: @task.points }
       none => skip
     ]
-    let @rows = @rowsResult.value
 
-    let @projectErrorsResult = for @task in @project.tasks => when [
+    let @projectErrors = for @task in @project.tasks => when [
       (@task.state == "blocked") => { id: @task.id, reason: @task.blocker }
       none => skip
     ]
-    let @errors += @projectErrorsResult.value
+    let @errors += @projectErrors
 
     let @out += {
       name: @project.name,

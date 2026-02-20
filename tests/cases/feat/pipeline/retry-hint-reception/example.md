@@ -1,11 +1,11 @@
 # Retry Hint Reception Test
 
-/exe @source() = when first [
+/exe @source() = when [
   @mx.try == 1 => "draft"
   * => "final"
 ]
 
-/exe @validator() = when first [
+/exe @validator() = when [
   @mx.input == "draft" => retry "missing title"
   * => "Used hint: @mx.hint"
 ]

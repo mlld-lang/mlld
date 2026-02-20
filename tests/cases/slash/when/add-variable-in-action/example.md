@@ -18,10 +18,10 @@ This test verifies that simple variable references work correctly inside /when a
 /when @isTrue => show @template
 /when @isTrue => show @config
 
-## Test 3: Inside /when first: actions
+## Test 3: Inside /when: actions
 /var @testValue = "false"
 
-/when @testValue first: [
+/when @testValue : [
 "true" => show "Won't show"
 "false" => show @greeting
 ]

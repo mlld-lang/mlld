@@ -70,7 +70,6 @@ UnifiedTripleColon "Triple colon template"
 UnifiedDoubleColon "Double colon template"
   = '::' !":" parts:(
       TemplateSlashForBlockDouble
-      / TemplateInlineShow
       / UnifiedAtInterpolation
     )* '::' {
       helpers.debug('UnifiedDoubleColon matched ::...::', { parts });
@@ -116,8 +115,7 @@ UnifiedDoubleColon "Double colon template"
 // Double brackets with {{var}} interpolation
 UnifiedDoubleBracket "Double bracket template"
   = '[[' parts:(
-      TemplateInlineShow
-      / UnifiedBraceInterpolation
+      UnifiedBraceInterpolation
       / FileReferenceInterpolation
       / UnifiedBracketTextSegment
     )* ']]' {
@@ -141,6 +139,8 @@ UnifiedBraceInterpolation "Brace interpolation"
 // @var style interpolation for double colons
 UnifiedAtInterpolation "At-sign interpolation"
   = ConditionalTemplateSnippet   // @var?`...`
+  / NullCoalescingTight          // @var??"default"
+  / ConditionalVariableOmission  // @var?
   / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)
@@ -215,7 +215,6 @@ TemplateSlashForBlockDouble "slash for-block (double-colon)"
     }
     "/for" _ pattern:ForIterationPattern _ parts:(
       TemplateSlashForBlockDouble
-      / TemplateInlineShow
       / UnifiedAtInterpolation
       / FileReferenceInterpolation
       / UnifiedDoubleColonTextSegment
@@ -225,40 +224,24 @@ TemplateSlashForBlockDouble "slash for-block (double-colon)"
       const prev = input[pos - 1];
       return prev === '\n' || prev === '\r';
     } "/end" {
-      return {
+      const node = {
         type: 'TemplateForBlock',
         variable: pattern.variable,
         source: pattern.source,
         body: parts,
         style: 'slash'
       };
+      if (pattern.key) {
+        node.keyVariable = pattern.key;
+      }
+      return node;
     }
 
 // No for-blocks in triple-colon (::: … :::) or double-bracket ([[ … ]]) templates
 
 // Inline /show inside template contexts
 TemplateInlineShow "inline show (template)"
-  = "/show" _ content:UnifiedCommandBrackets tail:TailModifiers? {
-      return {
-        type: 'TemplateInlineShow',
-        showKind: 'command',
-        content,
-        tail: tail || null
-      };
-    }
-  / "/show" _ lang:RunCodeLanguage _ code:UnifiedCodeBrackets tail:TailModifiers? {
-      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
-      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
-      return {
-        type: 'TemplateInlineShow',
-        showKind: 'code',
-        lang: [langNode],
-        code: [codeNode],
-        meta: { isMultiLine: code.isMultiLine, language: lang },
-        tail: tail || null
-      };
-    }
-  / "/show" _ template:TemplateCore tail:TailModifiers? {
+  = "/show" _ template:TemplateCore tail:TailModifiers? {
       return {
         type: 'TemplateInlineShow',
         showKind: 'template',
@@ -286,12 +269,11 @@ TemplateInlineShow "inline show (template)"
 // TEMPLATE BODY START RULES (for .att/.mtt files)
 // -------------------------------------------------------------
 
-// ATT-style templates (@var interpolation, slash blocks, inline show)
+// ATT-style templates (@var interpolation, slash blocks)
 // Uses UnifiedAttTextSegment which allows :: as literal text (unlike double-colon templates)
 TemplateBodyAtt "template body for .att files"
   = parts:(
       TemplateSlashForBlockDouble
-      / TemplateInlineShow
       / UnifiedAtInterpolation
       / FileReferenceInterpolation
       / UnifiedAttTextSegment
@@ -304,12 +286,10 @@ UnifiedAttTextSegment "ATT text segment"
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
-// MTT-style templates ({{var}} interpolation, inline show)
+// MTT-style templates ({{var}} interpolation)
 TemplateBodyMtt "template body for .mtt files"
   = parts:(
-      TemplateInlineShow
-      / UnifiedBraceInterpolation
-      / FileReferenceInterpolation
+      UnifiedBraceInterpolation
       / UnifiedTemplateTextSegment
     )* { return parts; }
 

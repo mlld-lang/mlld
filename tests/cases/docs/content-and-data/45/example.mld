@@ -1,6 +1,0 @@
->> Importing template files (use exe = template instead)
-import { @tpl } from "./file.att"    >> Error
-exe @tpl(x) = template "./file.att"  >> Correct
-
->> For template directories:
-import templates from "./templates" as @tpl(x, y)

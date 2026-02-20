@@ -1,5 +1,5 @@
 /**
- * Central export point for Mlld error types.
+ * Central export point for mlld error types.
  */
 
 // Export all error types from the errors directory
@@ -19,6 +19,8 @@ export { MlldCommandExecutionError } from './MlldCommandExecutionError';
 export type { CommandExecutionDetails } from './MlldCommandExecutionError';
 export { MlldDependencyError } from './MlldDependencyError';
 export { MlldConditionError } from './MlldConditionError';
+export { MlldDenialError } from './denial';
+export type { DenialContext, DenialCode } from './denial';
 export { ResolverError, ResolverErrorCode } from './ResolverError';
 export type { ResolverErrorDetails } from './ResolverError';
 export { MlldWhenExpressionError } from './MlldWhenExpressionError';
@@ -26,8 +28,10 @@ export type { WhenExpressionErrorDetails } from './MlldWhenExpressionError';
 export { DeprecationError } from './DeprecationError';
 export { GuardError } from './GuardError';
 export { GuardRetrySignal } from './GuardRetrySignal';
+export { MlldSecurityError } from './MlldSecurityError';
 export { CircularReferenceError } from './CircularReferenceError';
 export type { CircularReferenceErrorContext } from './CircularReferenceError';
+export { MlldBailError, BAIL_EXIT_CODE, isBailError } from './MlldBailError';
 
 // Export error message collections
 export * from './messages/index'; 

@@ -9,7 +9,7 @@ for loops are combined with pipeline retry logic.
 
 /exe @mock_api(name) = when [
   * => show "Calling API for @name..."
-  * => "@name-response"
+  * => "@name\-response"
 ]
 
 /exe @check_response(response, name, p) = when [

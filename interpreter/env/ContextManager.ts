@@ -9,8 +9,12 @@ export interface OperationContext {
   type: string;
   /** Optional subtype (e.g., "runExec") */
   subtype?: string;
-  /** Operation labels declared on the directive (data labels, op labels, etc.) */
+  /** Data labels declared on the directive */
   labels?: readonly string[];
+  /** Operation labels used for policy/guard matching */
+  opLabels?: readonly string[];
+  /** Operation provenance recorded on outputs */
+  sources?: readonly string[];
   /** Friendly name or identifier associated with the directive */
   name?: string;
   /** Command string (for /run) when statically known */
@@ -48,6 +52,7 @@ export interface GuardContextSnapshot {
   output?: unknown;
   labels?: readonly DataLabel[];
   sources?: readonly string[];
+  taint?: readonly string[];
   inputPreview?: string | null;
   outputPreview?: string | null;
   timing?: 'before' | 'after';
@@ -84,6 +89,20 @@ export interface GuardHistoryEntry {
   reasons: ReadonlyArray<string>;
 }
 
+export interface ToolCallRecord {
+  name: string;
+  arguments?: Record<string, unknown>;
+  timestamp: number;
+  ok: boolean;
+  error?: string | null;
+}
+
+export interface ToolsContextSnapshot {
+  calls: ReadonlyArray<string>;
+  allowed: ReadonlyArray<string>;
+  denied: ReadonlyArray<string>;
+}
+
 interface BuildContextOptions {
   pipelineContext?: PipelineContextSnapshot;
   securitySnapshot?: SecuritySnapshotLike;
@@ -101,9 +120,21 @@ export class ContextManager {
   private readonly deniedStack: DeniedContextSnapshot[] = [];
   private readonly genericContexts: Map<string, unknown[]> = new Map();
   private latestErrors: unknown[] = [];
+  private profile: string | null = null;
+  private toolCalls: ToolCallRecord[] = [];
+  private toolAllowed: string[] = [];
+  private toolDenied: string[] = [];
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
+  }
+
+  updateOperation(update: Partial<OperationContext>): void {
+    if (this.opStack.length === 0) {
+      return;
+    }
+    const current = this.opStack[this.opStack.length - 1];
+    this.opStack[this.opStack.length - 1] = Object.freeze({ ...current, ...update });
   }
 
   popOperation(): OperationContext | undefined {
@@ -115,6 +146,16 @@ export class ContextManager {
       return undefined;
     }
     return this.opStack[this.opStack.length - 1];
+  }
+
+  getEnclosingExeLabels(): readonly string[] {
+    for (let i = this.opStack.length - 1; i >= 0; i--) {
+      const ctx = this.opStack[i];
+      if (ctx.type === 'exe' && ctx.labels && ctx.labels.length > 0) {
+        return ctx.labels;
+      }
+    }
+    return [];
   }
 
   async withOperation<T>(context: OperationContext, fn: () => Promise<T> | T): Promise<T> {
@@ -209,6 +250,35 @@ export class ContextManager {
     }
   }
 
+  setProfile(profile: string | null): void {
+    this.profile = profile ?? null;
+  }
+
+  getProfile(): string | null {
+    return this.profile;
+  }
+
+  setToolAvailability(allowed?: readonly string[] | null, denied?: readonly string[] | null): void {
+    this.toolAllowed = this.normalizeToolList(allowed);
+    this.toolDenied = this.normalizeToolList(denied);
+  }
+
+  recordToolCall(call: ToolCallRecord): void {
+    this.toolCalls.push(Object.freeze({ ...call }));
+  }
+
+  resetToolCalls(): void {
+    this.toolCalls = [];
+  }
+
+  getToolsSnapshot(): ToolsContextSnapshot {
+    return {
+      calls: this.toolCalls.map(call => call.name),
+      allowed: [...this.toolAllowed],
+      denied: [...this.toolDenied]
+    };
+  }
+
   buildAmbientContext(options: BuildContextOptions = {}): Record<string, unknown> {
     if (options.testOverride !== undefined) {
       return options.testOverride as Record<string, unknown>;
@@ -217,10 +287,15 @@ export class ContextManager {
     const pipeline = options.pipelineContext ?? this.peekPipelineContext();
     const security = options.securitySnapshot;
     const currentOperation = this.peekOperation() ?? security?.operation;
+    const normalizedOperation =
+      currentOperation && typeof currentOperation === 'object'
+        ? this.normalizeOperationContext(currentOperation as Readonly<Record<string, unknown>>)
+        : null;
     const pipelineFields = this.buildPipelineFields(pipeline);
     const guardContext = this.peekGuardContext();
     const deniedContext = this.peekDeniedContext();
     const whileContext = this.peekGenericContext('while');
+    const loopContext = this.peekGenericContext('loop');
     const forContext = this.peekGenericContext('for');
     const parallelContext = this.peekGenericContext('parallel');
     const errorsContext = (() => {
@@ -237,6 +312,15 @@ export class ContextManager {
       errorsContext && typeof errorsContext === 'object' && Array.isArray((errorsContext as any).errors)
         ? (errorsContext as any).errors
         : this.latestErrors;
+    const hookErrors =
+      normalizedOperation &&
+      typeof normalizedOperation === 'object' &&
+      normalizedOperation !== null &&
+      typeof (normalizedOperation as any).metadata === 'object' &&
+      Array.isArray((normalizedOperation as any).metadata.userHookErrors)
+        ? (((normalizedOperation as any).metadata.userHookErrors as unknown[]) ?? [])
+        : [];
+    const checkpointContext = this.buildCheckpointContext(normalizedOperation);
 
     const mxValue: Record<string, unknown> = {
       ...pipelineFields.root,
@@ -250,13 +334,24 @@ export class ContextManager {
         : security
           ? Array.from(security.sources)
           : [],
-      taint: security?.taint ? Array.from(security.taint) : [],
+      taint: guardContext?.taint
+        ? Array.from(guardContext.taint)
+        : security?.taint
+          ? Array.from(security.taint)
+          : [],
       policy: security?.policy ?? null,
-      operation: currentOperation ?? null,
-      op: currentOperation ?? null,
-      guard: guardContext ?? (deniedContext ? {} : null),
+      profile: this.profile ?? null,
+      operation: normalizedOperation,
+      op: normalizedOperation,
       ...(whileContext ? { while: whileContext } : {}),
-      errors: Array.isArray(resolvedErrors) ? resolvedErrors : []
+      ...(loopContext ? { loop: loopContext } : {}),
+      ...(forContext ? { for: forContext } : {}),
+      errors: Array.isArray(resolvedErrors) ? resolvedErrors : [],
+      hooks: {
+        errors: Array.isArray(hookErrors) ? [...hookErrors] : []
+      },
+      tools: this.getToolsSnapshot(),
+      ...(checkpointContext ? { checkpoint: checkpointContext } : {})
     };
 
     if (deniedContext) {
@@ -272,10 +367,8 @@ export class ContextManager {
       mxValue.output = guardContext.output;
     }
 
-    if (mxValue.guard) {
+    if (guardContext || deniedContext) {
       mxValue.guard = this.normalizeGuardContext(guardContext, deniedContext);
-    } else if (deniedContext) {
-      mxValue.guard = this.normalizeGuardContext(undefined, deniedContext);
     }
 
     if (pipelineFields.pipe) {
@@ -283,6 +376,69 @@ export class ContextManager {
     }
 
     return mxValue;
+  }
+
+  private normalizeToolList(list?: readonly string[] | null): string[] {
+    if (!list || list.length === 0) {
+      return [];
+    }
+    const normalized: string[] = [];
+    const seen = new Set<string>();
+    for (const entry of list) {
+      if (typeof entry !== 'string') {
+        continue;
+      }
+      const trimmed = entry.trim();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      normalized.push(trimmed);
+    }
+    return normalized;
+  }
+
+  private normalizeOperationContext(
+    operation: Readonly<Record<string, unknown>>
+  ): Record<string, unknown> {
+    const labels = this.normalizeToolList(operation.labels as readonly string[] | undefined);
+    const opLabels = this.normalizeToolList(operation.opLabels as readonly string[] | undefined);
+    const mergedLabels = this.normalizeToolList([...labels, ...opLabels]);
+    return {
+      ...operation,
+      labels: mergedLabels,
+      opLabels
+    };
+  }
+
+  private buildCheckpointContext(
+    operation: Record<string, unknown> | null
+  ): Record<string, unknown> | null {
+    if (!operation) {
+      return null;
+    }
+
+    const metadata = operation.metadata;
+    if (!metadata || typeof metadata !== 'object') {
+      return null;
+    }
+
+    const metadataRecord = metadata as Record<string, unknown>;
+    const explicitCheckpoint = metadataRecord.checkpoint;
+    if (explicitCheckpoint && typeof explicitCheckpoint === 'object') {
+      const checkpointRecord = explicitCheckpoint as Record<string, unknown>;
+      const hit = checkpointRecord.hit === true;
+      const key = typeof checkpointRecord.key === 'string' ? checkpointRecord.key : null;
+      return { hit, key };
+    }
+
+    const hit = metadataRecord.checkpointHit === true;
+    const key = typeof metadataRecord.checkpointKey === 'string' ? metadataRecord.checkpointKey : null;
+    if (!hit && key === null) {
+      return null;
+    }
+
+    return { hit, key };
   }
 
   pushGenericContext(type: string, context: unknown): void {

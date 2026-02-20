@@ -1,5 +1,15 @@
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
+import type { SourceLocation } from '@core/types';
+
+interface InlineComment {
+  location: SourceLocation;
+  marker: string;
+}
+
+interface CommentNode {
+  location?: SourceLocation;
+}
 
 /**
  * Helper class for consistent comment tokenization across visitors.
@@ -15,7 +25,7 @@ export class CommentTokenHelper {
    * Tokenize an end-of-line comment attached to a directive
    * @param comment Comment object with location and marker info
    */
-  tokenizeEndOfLineComment(comment: any): void {
+  tokenizeEndOfLineComment(comment: InlineComment): void {
     if (!comment.location) return;
 
     const sourceText = this.document.getText();
@@ -77,7 +87,7 @@ export class CommentTokenHelper {
    * Tokenize a standalone comment node (full line comment)
    * @param node Comment AST node
    */
-  tokenizeStandaloneComment(node: any): void {
+  tokenizeStandaloneComment(node: CommentNode): void {
     if (!node.location) return;
     
     // For standalone comments, the location includes the marker
@@ -128,6 +138,46 @@ export class CommentTokenHelper {
     }
     
     return positions;
+  }
+
+  /**
+   * Tokenize standalone comment lines in a range with optional filters
+   * @param startOffset Start of range to search
+   * @param endOffset End of range to search
+   * @param options Optional filters for comment detection
+   */
+  tokenizeStandaloneCommentsInRange(
+    startOffset: number,
+    endOffset: number,
+    options: { skipRanges?: Array<{ start: number; end: number }>; requireLineStart?: boolean } = {}
+  ): void {
+    const sourceText = this.document.getText();
+    const rangeText = sourceText.substring(startOffset, endOffset);
+    const requireLineStart = options.requireLineStart ?? false;
+    const commentRegex = requireLineStart ? /^[ \t]*(>>|<<).*$/gm : /(>>|<<).*$/gm;
+    let match;
+
+    while ((match = commentRegex.exec(rangeText)) !== null) {
+      const marker = match[1];
+      const markerIndex = match[0].indexOf(marker);
+      const absoluteOffset = startOffset + match.index + markerIndex;
+
+      if (options.skipRanges && options.skipRanges.some(range => absoluteOffset >= range.start && absoluteOffset < range.end)) {
+        continue;
+      }
+
+      const lineEnd = rangeText.indexOf('\n', match.index);
+      const length = (lineEnd !== -1 ? lineEnd : rangeText.length) - (match.index + markerIndex);
+      const position = this.document.positionAt(absoluteOffset);
+
+      this.tokenBuilder.addToken({
+        line: position.line,
+        char: position.character,
+        length,
+        tokenType: 'comment',
+        modifiers: []
+      });
+    }
   }
 
   /**

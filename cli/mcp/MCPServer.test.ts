@@ -81,7 +81,7 @@ describe('MCPServer', () => {
 
   it('lists exported tools after initialization', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
-      /exe @greet(name) = js { return 'Hello ' + name; }
+      /exe @greet(name: string, times: number) = js { return 'Hello ' + name; } with { description: "Greet a user by name" }
       /exe @getData() = js { return { ok: true }; }
       /export { @greet, @getData }
     `, ['greet', 'getData']);
@@ -110,13 +110,14 @@ describe('MCPServer', () => {
     expect(tools).toEqual([
       {
         name: 'greet',
-        description: '',
+        description: 'Greet a user by name',
         inputSchema: {
           type: 'object',
           properties: {
             name: { type: 'string' },
+            times: { type: 'number' },
           },
-          required: ['name'],
+          required: ['name', 'times'],
         },
       },
       {
@@ -167,6 +168,616 @@ describe('MCPServer', () => {
         },
       ],
     });
+  });
+
+  it('surfaces tool labels in guard context', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /guard @blockDestructive before op:exe = when [
+        @mx.op.labels[0] == "destructive" => deny "Destructive tool blocked"
+        * => allow
+      ]
+      /exe @destroy(id: string) = js { return 'deleted ' + id; }
+      /var tools @agentTools = {
+        destroy: { mlld: @destroy, labels: ["destructive"] }
+      }
+      /export { @destroy }
+    `, ['destroy']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const response = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'destroy',
+        arguments: { id: '123' },
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(response.result).toMatchObject({ isError: true });
+    const text = (response.result as any)?.content?.[0]?.text ?? '';
+    expect(text).toContain('Destructive tool blocked');
+  });
+
+  it('enforces tool labels in guards and policy', async () => {
+    const guardSetup = await createEnvironmentWithExports(`
+      /exe @readData() = js { return 'safe'; }
+      /exe @deleteData() = js { return 'deleted'; }
+      /var tools @testTools = {
+        safeRead: { mlld: @readData },
+        dangerousDelete: { mlld: @deleteData, labels: ["destructive"] }
+      }
+      /guard @blockDestructive before op:exe = when [
+        @mx.op.labels && @mx.op.labels.includes("destructive") => deny "Blocked"
+        * => allow
+      ]
+      /export { @readData, @deleteData }
+    `, ['readData', 'deleteData']);
+
+    const guardToolsVar = guardSetup.environment.getVariable('testTools');
+    const guardToolCollection = guardToolsVar?.internal?.toolCollection;
+    if (!guardToolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const guardServer = new MCPServer({
+      environment: guardSetup.environment,
+      exportedFunctions: guardSetup.exports,
+      toolCollection: guardToolCollection
+    });
+    await guardServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const safeResponse = await guardServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'safe_read',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(safeResponse.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: 'safe',
+        },
+      ],
+    });
+
+    const blockedResponse = await guardServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'dangerous_delete',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(blockedResponse.result).toMatchObject({ isError: true });
+    const blockedText = (blockedResponse.result as any)?.content?.[0]?.text ?? '';
+    expect(blockedText).toContain('Blocked');
+
+    const policySetup = await createEnvironmentWithExports(`
+      /exe @deleteData() = js { return 'deleted'; }
+      /var tools @testTools = {
+        dangerousDelete: { mlld: @deleteData, labels: ["destructive"] }
+      }
+      /policy @policy = {
+        labels: {
+          "src:mcp": { deny: ["destructive"] }
+        }
+      }
+      /export { @deleteData }
+    `, ['deleteData']);
+
+    const policyToolsVar = policySetup.environment.getVariable('testTools');
+    const policyToolCollection = policyToolsVar?.internal?.toolCollection;
+    if (!policyToolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const policyServer = new MCPServer({
+      environment: policySetup.environment,
+      exportedFunctions: policySetup.exports,
+      toolCollection: policyToolCollection
+    });
+    await policyServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const policyResponse = await policyServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: {
+        name: 'dangerous_delete',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(policyResponse.result).toMatchObject({ isError: true });
+    const policyText = (policyResponse.result as any)?.content?.[0]?.text ?? '';
+    expect(policyText).toContain('policy.labels.src:mcp.deny');
+  });
+
+  it('binds and exposes tool parameters', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @createIssue(owner: string, repo: string, title: string, body: string) = js {
+        return owner + "/" + repo + ": " + title + " - " + body;
+      }
+      /var tools @agentTools = {
+        createIssue: {
+          mlld: @createIssue,
+          bind: { owner: "mlld", repo: "infra" },
+          expose: ["title", "body"]
+        }
+      }
+      /export { @createIssue }
+    `, ['createIssue']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const listResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    expect((listResponse.result as any).tools).toEqual([
+      {
+        name: 'create_issue',
+        description: '',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            body: { type: 'string' },
+          },
+          required: ['title', 'body'],
+        },
+      },
+    ]);
+
+    const callResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'create_issue',
+        arguments: { title: 'Bug', body: 'Fix it' },
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(callResponse.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: 'mlld/infra: Bug - Fix it',
+        },
+      ],
+    });
+  });
+
+  it('resolves bound variables to raw values', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /var @org = "mlld"
+      /exe @createIssue(owner: string, config: object) = js {
+        return owner + ":" + config.owner;
+      }
+      /var tools @agentTools = {
+        createIssue: {
+          mlld: @createIssue,
+          bind: { owner: @org, config: { owner: @org } }
+        }
+      }
+      /export { @createIssue }
+    `, ['createIssue']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const callResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'create_issue',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(callResponse.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: 'mlld:mlld',
+        },
+      ],
+    });
+  });
+
+  it('supports non-camelCase tool collection keys', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @alpha() = js { return 'alpha'; }
+      /exe @beta() = js { return 'beta'; }
+      /exe @gamma() = js { return 'gamma'; }
+      /var tools @agentTools = {
+        create_issue: { mlld: @alpha },
+        "delete-item": { mlld: @beta },
+        "123_tool": { mlld: @gamma }
+      }
+      /export { @alpha, @beta, @gamma }
+    `, ['alpha', 'beta', 'gamma']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const listResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    expect((listResponse.result as any).tools.map((tool: any) => tool.name)).toEqual([
+      'create_issue',
+      'delete_item',
+      '123_tool'
+    ]);
+
+    const callCreate = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'create_issue',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+    expect(callCreate.result).toMatchObject({
+      content: [{ type: 'text', text: 'alpha' }],
+    });
+
+    const callDelete = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'tools/call',
+      params: {
+        name: 'delete_item',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+    expect(callDelete.result).toMatchObject({
+      content: [{ type: 'text', text: 'beta' }],
+    });
+
+    const callNumeric = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: {
+        name: '123_tool',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+    expect(callNumeric.result).toMatchObject({
+      content: [{ type: 'text', text: 'gamma' }],
+    });
+  });
+
+  it('scopes tools based on environment allowances', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @alpha() = js { return 'a'; }
+      /exe @beta() = js { return 'b'; }
+      /export { @alpha, @beta }
+    `, ['alpha', 'beta']);
+
+    environment.setAllowedTools(['alpha']);
+
+    const server = new MCPServer({ environment, exportedFunctions: exports });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const listResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    expect((listResponse.result as any).tools).toEqual([
+      {
+        name: 'alpha',
+        description: '',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+    ]);
+
+    const callResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'beta',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(callResponse.result).toMatchObject({ isError: true });
+    const text = (callResponse.result as any)?.content?.[0]?.text ?? '';
+    expect(text).toContain('not available');
+  });
+
+  it('exposes tool availability in @mx.tools', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @alpha() = js { return 'a'; }
+      /exe @beta() = js { return 'b'; }
+      /export { @alpha, @beta }
+    `, ['alpha', 'beta']);
+
+    environment.setAllowedTools(['alpha']);
+
+    const server = new MCPServer({ environment, exportedFunctions: exports });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1.5,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    const toolsSnapshot = environment.getContextManager().getToolsSnapshot();
+    expect(toolsSnapshot.allowed).toEqual(['alpha']);
+    expect(toolsSnapshot.denied).toEqual(['beta']);
+
+    const mxVar = environment.getVariable('mx') as any;
+    expect(mxVar?.value?.tools?.allowed).toEqual(['alpha']);
+
+
+    const callResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'alpha',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(callResponse.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: 'a',
+        },
+      ],
+    });
+  });
+
+  it('tracks tool calls in @mx.tools.calls for guard checks', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /guard @limitCalls before op:exe = when [
+        @mx.tools.calls.includes("alpha") => deny "Tool already called"
+        * => allow
+      ]
+      /exe @alpha() = js { return 'a'; }
+      /export { @alpha }
+    `, ['alpha']);
+
+    const server = new MCPServer({ environment, exportedFunctions: exports });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const firstCall = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'alpha',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(firstCall.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: 'a',
+        },
+      ],
+    });
+
+    const secondCall = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'alpha',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(secondCall.result).toMatchObject({ isError: true });
+    const text = (secondCall.result as any)?.content?.[0]?.text ?? '';
+    expect(text).toContain('Tool already called');
+  });
+
+  it('filters tools when tool collection is provided', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @alpha() = js { return 'a'; }
+      /exe @beta() = js { return 'b'; }
+      /var tools @agentTools = {
+        alphaTool: { mlld: @alpha }
+      }
+      /export { @alpha, @beta }
+    `, ['alpha', 'beta']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const response = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    expect((response.result as any).tools).toEqual([
+      {
+        name: 'alpha_tool',
+        description: '',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+    ]);
+  });
+
+  it('rejects tool collections that reference unknown executables', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @alpha() = js { return 'a'; }
+      /var tools @agentTools = {
+        alphaTool: { mlld: @alpha }
+      }
+      /export { @alpha }
+    `, ['alpha']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const filteredExports = new Map<string, ExecutableVariable>();
+
+    expect(() => {
+      new MCPServer({ environment, exportedFunctions: filteredExports, toolCollection });
+    }).toThrow(/unknown executable/i);
   });
 
   it('returns error when not initialized', async () => {

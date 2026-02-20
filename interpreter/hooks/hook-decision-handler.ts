@@ -1,5 +1,5 @@
 import { GuardError } from '@core/errors/GuardError';
-import type { HookDecision } from './HookManager';
+import type { HookDecision, HookDecisionAction } from './HookManager';
 import type { HookableNode } from '@core/types/hooks';
 import { isDirectiveHookTarget } from '@core/types/hooks';
 import type { GuardHint, GuardResult, GuardScope } from '@core/types/guard';
@@ -14,7 +14,6 @@ import { isVariable } from '../utils/variable-resolution';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
 
 const DEFAULT_GUARD_MAX = 3;
-const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
 
 interface GuardDecisionInfo {
   guardName: string | null;
@@ -27,17 +26,189 @@ interface GuardDecisionInfo {
   guardInput?: Variable | readonly Variable[] | null | unknown;
 }
 
+const CHECKPOINT_HIT_KEY = 'checkpointHit';
+const CHECKPOINT_KEY_KEY = 'checkpointKey';
+const CHECKPOINT_CACHED_RESULT_KEY = 'cachedResult';
+const CHECKPOINT_INVOCATION_SITE_KEY = 'checkpointInvocationSite';
+const CHECKPOINT_INVOCATION_INDEX_KEY = 'checkpointInvocationIndex';
+const CHECKPOINT_INVOCATION_ORDINAL_KEY = 'checkpointInvocationOrdinal';
+const CHECKPOINT_EXECUTION_ORDER_KEY = 'checkpointExecutionOrder';
+const CHECKPOINT_START_TIME_MS_KEY = 'checkpointStartTimeMs';
+
+export interface CheckpointDecisionState {
+  hit: boolean;
+  key?: string;
+  hasCachedResult: boolean;
+  cachedResult?: unknown;
+  invocationSite?: string;
+  invocationIndex?: number;
+  invocationOrdinal?: number;
+  executionOrder?: number;
+  startTimeMs?: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function normalizeHookDecision(decision: HookDecision): HookDecision {
+  if (decision.action !== 'continue') {
+    return decision;
+  }
+
+  const metadata = decision.metadata;
+  if (!isRecord(metadata)) {
+    return decision;
+  }
+
+  const checkpointHit = metadata[CHECKPOINT_HIT_KEY];
+  const hasCachedResult = Object.prototype.hasOwnProperty.call(metadata, CHECKPOINT_CACHED_RESULT_KEY);
+  if (checkpointHit === true && hasCachedResult) {
+    return {
+      action: 'fulfill',
+      metadata
+    };
+  }
+
+  return decision;
+}
+
+export function getNormalizedHookDecisionAction(decision: HookDecision): HookDecisionAction {
+  return normalizeHookDecision(decision).action;
+}
+
+export function getCheckpointDecisionState(decision?: HookDecision): CheckpointDecisionState | null {
+  if (!decision) {
+    return null;
+  }
+
+  const normalizedDecision = normalizeHookDecision(decision);
+  const metadata = isRecord(normalizedDecision.metadata) ? normalizedDecision.metadata : null;
+  if (!metadata) {
+    return null;
+  }
+
+  const hasCachedResult = Object.prototype.hasOwnProperty.call(metadata, CHECKPOINT_CACHED_RESULT_KEY);
+  const hit = normalizedDecision.action === 'fulfill' || metadata[CHECKPOINT_HIT_KEY] === true;
+  const key = typeof metadata[CHECKPOINT_KEY_KEY] === 'string' ? (metadata[CHECKPOINT_KEY_KEY] as string) : undefined;
+  const invocationSite =
+    typeof metadata[CHECKPOINT_INVOCATION_SITE_KEY] === 'string'
+      ? (metadata[CHECKPOINT_INVOCATION_SITE_KEY] as string)
+      : undefined;
+  const invocationIndex =
+    typeof metadata[CHECKPOINT_INVOCATION_INDEX_KEY] === 'number' &&
+    Number.isInteger(metadata[CHECKPOINT_INVOCATION_INDEX_KEY] as number) &&
+    (metadata[CHECKPOINT_INVOCATION_INDEX_KEY] as number) >= 0
+      ? (metadata[CHECKPOINT_INVOCATION_INDEX_KEY] as number)
+      : undefined;
+  const invocationOrdinal =
+    typeof metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] === 'number' &&
+    Number.isInteger(metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] as number) &&
+    (metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] as number) >= 0
+      ? (metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] as number)
+      : undefined;
+  const executionOrder =
+    typeof metadata[CHECKPOINT_EXECUTION_ORDER_KEY] === 'number' &&
+    Number.isInteger(metadata[CHECKPOINT_EXECUTION_ORDER_KEY] as number) &&
+    (metadata[CHECKPOINT_EXECUTION_ORDER_KEY] as number) >= 0
+      ? (metadata[CHECKPOINT_EXECUTION_ORDER_KEY] as number)
+      : undefined;
+  const startTimeMs =
+    typeof metadata[CHECKPOINT_START_TIME_MS_KEY] === 'number' &&
+    Number.isFinite(metadata[CHECKPOINT_START_TIME_MS_KEY] as number) &&
+    (metadata[CHECKPOINT_START_TIME_MS_KEY] as number) >= 0
+      ? (metadata[CHECKPOINT_START_TIME_MS_KEY] as number)
+      : undefined;
+  if (!hit && !key && !hasCachedResult) {
+    return null;
+  }
+
+  return {
+    hit,
+    key,
+    hasCachedResult,
+    ...(hasCachedResult ? { cachedResult: metadata[CHECKPOINT_CACHED_RESULT_KEY] } : {}),
+    ...(invocationSite ? { invocationSite } : {}),
+    ...(invocationIndex !== undefined ? { invocationIndex } : {}),
+    ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {}),
+    ...(executionOrder !== undefined ? { executionOrder } : {}),
+    ...(startTimeMs !== undefined ? { startTimeMs } : {})
+  };
+}
+
+export function applyCheckpointDecisionToOperation(
+  operationContext: OperationContext,
+  checkpointState: CheckpointDecisionState | null
+): void {
+  if (!checkpointState) {
+    return;
+  }
+
+  const operationRef = operationContext as OperationContext & {
+    metadata?: Record<string, unknown>;
+  };
+  if (!operationRef.metadata || typeof operationRef.metadata !== 'object') {
+    operationRef.metadata = {};
+  }
+  const metadata = operationRef.metadata as Record<string, unknown>;
+  metadata[CHECKPOINT_HIT_KEY] = checkpointState.hit;
+  if (checkpointState.key) {
+    metadata[CHECKPOINT_KEY_KEY] = checkpointState.key;
+  } else {
+    delete metadata[CHECKPOINT_KEY_KEY];
+  }
+  if (checkpointState.invocationSite) {
+    metadata[CHECKPOINT_INVOCATION_SITE_KEY] = checkpointState.invocationSite;
+  } else {
+    delete metadata[CHECKPOINT_INVOCATION_SITE_KEY];
+  }
+  if (checkpointState.invocationIndex !== undefined) {
+    metadata[CHECKPOINT_INVOCATION_INDEX_KEY] = checkpointState.invocationIndex;
+  } else {
+    delete metadata[CHECKPOINT_INVOCATION_INDEX_KEY];
+  }
+  if (checkpointState.invocationOrdinal !== undefined) {
+    metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY] = checkpointState.invocationOrdinal;
+  } else {
+    delete metadata[CHECKPOINT_INVOCATION_ORDINAL_KEY];
+  }
+  if (checkpointState.executionOrder !== undefined) {
+    metadata[CHECKPOINT_EXECUTION_ORDER_KEY] = checkpointState.executionOrder;
+  } else {
+    delete metadata[CHECKPOINT_EXECUTION_ORDER_KEY];
+  }
+  if (checkpointState.startTimeMs !== undefined) {
+    metadata[CHECKPOINT_START_TIME_MS_KEY] = checkpointState.startTimeMs;
+  } else {
+    delete metadata[CHECKPOINT_START_TIME_MS_KEY];
+  }
+  metadata.checkpoint = {
+    hit: checkpointState.hit,
+    key: checkpointState.key ?? null,
+    invocationSite: checkpointState.invocationSite ?? null,
+    invocationIndex: checkpointState.invocationIndex ?? null,
+    invocationOrdinal: checkpointState.invocationOrdinal ?? null,
+    executionOrder: checkpointState.executionOrder ?? null,
+    startTimeMs: checkpointState.startTimeMs ?? null
+  };
+}
+
 export async function handleGuardDecision(
   decision: HookDecision,
   node: HookableNode,
   env: Environment,
   operationContext: OperationContext
 ): Promise<void> {
-  if (!decision || decision.action === 'continue') {
+  if (!decision) {
     return;
   }
 
-  const metadata = decision.metadata ?? {};
+  const normalizedDecision = normalizeHookDecision(decision);
+  if (normalizedDecision.action === 'continue' || normalizedDecision.action === 'fulfill') {
+    return;
+  }
+
+  const metadata = normalizedDecision.metadata ?? {};
   const guardName =
     typeof metadata.guardName === 'string' || metadata.guardName === null
       ? (metadata.guardName as string | null)
@@ -71,7 +242,7 @@ export async function handleGuardDecision(
     baseMessage:
       primaryReason && primaryReason.length > 0
         ? primaryReason
-        : decision.action === 'abort' || decision.action === 'deny'
+        : normalizedDecision.action === 'abort' || normalizedDecision.action === 'deny'
           ? 'Operation aborted by guard'
           : 'Guard requested retry'
     ,
@@ -79,7 +250,13 @@ export async function handleGuardDecision(
     guardInput: metadata.guardInput as Variable | readonly Variable[] | null | undefined
   };
 
-  if (decision.action === 'abort' || decision.action === 'deny') {
+  const policyName = typeof (metadata as any).policyName === 'string' ? (metadata as any).policyName : null;
+  const policyRule = typeof (metadata as any).policyRule === 'string' ? (metadata as any).policyRule : null;
+  const policySuggestions = Array.isArray((metadata as any).policySuggestions)
+    ? ((metadata as any).policySuggestions as string[])
+    : undefined;
+
+  if (normalizedDecision.action === 'abort' || normalizedDecision.action === 'deny') {
     throw new GuardError({
       decision: 'deny',
       guardName: info.guardName,
@@ -95,11 +272,14 @@ export async function handleGuardDecision(
       guardResults,
       hints,
       sourceLocation: extractNodeLocation(node),
-      env
+      env,
+      policyName,
+      policyRule,
+      policySuggestions
     });
   }
 
-  if (decision.action === 'retry') {
+  if (normalizedDecision.action === 'retry') {
     enforcePipelineGuardRetry(info, env, operationContext, node, {
       reasons: reasonsArray,
       guardResults,
@@ -165,22 +345,6 @@ function enforcePipelineGuardRetry(
   }
 
   if (!canRetryWithinPipeline(pipelineContext)) {
-    if (afterRetryDebugEnabled) {
-      try {
-        console.error('[after-guard-retry] pipeline retry denied (non-retryable source)', {
-          guardName: info.guardName,
-          guardFilter: info.guardFilter,
-          operation: {
-            type: operationContext.type,
-            subtype: operationContext.subtype,
-            name: operationContext.name
-          },
-          retryHint: info.retryHint
-        });
-      } catch {
-        // ignore debug failures
-      }
-    }
     throw new GuardError({
       decision: 'deny',
       guardName: info.guardName,

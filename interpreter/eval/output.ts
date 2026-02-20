@@ -17,13 +17,19 @@ import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
-import { materializeDisplayValue, resolveNestedValue } from '../utils/display-materialization';
+import { asText, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
+import { materializeDisplayValue } from '../utils/display-materialization';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, type DataLabel, type SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../core/interpolation-context';
 import { resolveDirectiveExecInvocation } from './directive-replay';
+import { getOperationLabels } from '@core/policy/operation-labels';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
+import { logFileWriteEvent } from '../utils/audit-log';
+import yaml from 'js-yaml';
 
 function mergeInterpolatedDescriptors(
   env: Environment,
@@ -152,7 +158,6 @@ export async function evaluateOutput(
     if (materializedContent.descriptor) {
       env.recordSecurityDescriptor(materializedContent.descriptor);
     }
-    const resolvedValue = resolveNestedValue(descriptorSource ?? content, { preserveProvenance: true });
     const snapshot = env.getSecuritySnapshot();
     const securityDescriptor = materializedContent.descriptor ??
       (snapshot
@@ -163,6 +168,35 @@ export async function evaluateOutput(
             policyContext: snapshot.policy
           })
         : undefined);
+
+    const policyDescriptor =
+      hasSource
+        ? materializedContent.descriptor
+        : materializedContent.descriptor ?? (snapshot
+          ? makeSecurityDescriptor({
+              labels: snapshot.labels,
+              taint: snapshot.taint,
+              sources: snapshot.sources,
+              policyContext: snapshot.policy
+            })
+          : undefined);
+    if (!context?.policyChecked) {
+      const inputTaint = descriptorToInputTaint(policyDescriptor);
+      if (inputTaint.length > 0) {
+        const opLabels =
+          context?.operationContext?.opLabels ?? getOperationLabels({ type: 'output' });
+        const enforcer = new PolicyEnforcer(env.getPolicySummary());
+        enforcer.checkLabelFlow(
+          {
+            inputTaint,
+            opLabels,
+            exeLabels: Array.from(env.getEnclosingExeLabels()),
+            flowChannel: 'arg'
+          },
+          { env, sourceLocation: directive.location }
+        );
+      }
+    }
     
     // Handle the target
     // Check if this is a simplified structure from @when actions (has values.path instead of values.target)
@@ -200,7 +234,7 @@ export async function evaluateOutput(
         });
       } else {
         // File output
-        await outputToFile(target as OutputTargetFile, content, env, directive, resolvedValue, securityDescriptor);
+        await outputToFile(target as OutputTargetFile, content, env, directive, securityDescriptor);
       }
     } else if (targetType === 'stream') {
       // Stream output (stdout/stderr)
@@ -557,10 +591,10 @@ async function evaluateSimpleVariableSource(
     return { rawValue: value, text };
   } else if (typeof value === 'object') {
     // For objects/arrays, convert to JSON
-    const text = JSON.stringify(value, null, 2);
+    const text = stringifyStructured(value, 2);
     return { rawValue, text };
   } else {
-    const text = String(value || '');
+    const text = String(value ?? '');
     return { rawValue, text };
   }
 }
@@ -671,7 +705,8 @@ async function outputToFile(
   target: OutputTargetFile,
   content: string,
   env: Environment,
-  directive: DirectiveNode
+  directive: DirectiveNode,
+  descriptor?: SecurityDescriptor
 ): Promise<void> {
   
   
@@ -683,18 +718,18 @@ async function outputToFile(
   // TODO: This is a hack to handle @base/@root in quoted output paths
   // The proper fix requires rethinking how @identifier resolution works
   // across variables, resolvers, and paths in a unified way
-  if (targetPath.startsWith('@base/')) {
+  if (targetPath.startsWith('@base/') || targetPath.startsWith('@root/')) {
     const projectRoot = env.getProjectRoot();
-    targetPath = path.join(projectRoot, targetPath.substring(6));
-  } else if (targetPath.startsWith('@root/')) {
-    const projectRoot = env.getProjectRoot();
-    targetPath = path.join(projectRoot, targetPath.substring(6));
+    const prefixLen = targetPath.startsWith('@base/') ? 6 : 6;
+    targetPath = path.join(projectRoot, targetPath.substring(prefixLen));
   }
-  
-  // Resolve relative paths from the base path
+
+  // Resolve relative paths from the script file directory
   if (!path.isAbsolute(targetPath)) {
-    targetPath = path.resolve(env.getBasePath(), targetPath);
+    targetPath = path.resolve(env.getFileDirectory(), targetPath);
   }
+
+  enforceFilesystemAccess(env, 'write', targetPath, directive.location ?? undefined);
   
   // Write the file using the environment's file system
   const fileSystem = (env as any).fileSystem;
@@ -716,6 +751,7 @@ async function outputToFile(
   
   // Write the file
   await fileSystem.writeFile(targetPath, content);
+  await logFileWriteEvent(env, targetPath, descriptor);
   
   // Also emit a file effect for tracking/logging purposes
   env.emitEffect('file', content, { 
@@ -797,10 +833,10 @@ async function outputToResolver(
   // Heuristic: if resolver name matches a defined variable, user likely meant a variable in the path (needs quotes)
   const looksLikeVariable = !!env.getVariable(target.resolver);
   if (looksLikeVariable) {
-    const hintQuoted = `/output @<source> to "@${target.resolver}/${target.path.map(p => p.content).join('/')}"`;
+    const hintQuoted = `output @<source> to "@${target.resolver}/${target.path.map(p => p.content).join('/')}"`;
     const hintExplain = `The target '@${target.resolver}/...' is interpreted as a resolver name, not a variable. Quote the path to interpolate variables.`;
     throw new MlldOutputError(
-      `Unquoted variable in /output target: '@${target.resolver}' is interpreted as a resolver name` +
+      `Unquoted variable in output target: '@${target.resolver}' is interpreted as a resolver name` +
         `\nHint: ${hintExplain}\nExample: ${hintQuoted}`,
       'unknown',
       { sourceLocation: directive.location, env, context: { resolverPath } }
@@ -835,9 +871,14 @@ async function applyOutputFormat(
       }
       
     case 'yaml':
-      // TODO: Implement YAML formatting
-      // For now, return as-is
-      return content;
+      // Parse as JSON and serialize to YAML
+      try {
+        const parsed = JSON.parse(content);
+        return yaml.dump(parsed);
+      } catch {
+        // If not valid JSON, return as-is
+        return content;
+      }
       
     case 'text':
       // Plain text - strip any formatting

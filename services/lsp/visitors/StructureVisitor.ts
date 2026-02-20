@@ -1,52 +1,70 @@
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
+import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
+import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
+import { LspAstNode, asLspAstNode } from '@services/lsp/visitors/base/LspAstNode';
+
+type AstNode = LspAstNode;
+
+interface AstNodeWithLocation extends AstNode {
+  location: NonNullable<AstNode['location']>;
+}
+
+interface ObjectEntry {
+  type: string;
+  key: string;
+  value: AstNode | unknown;
+}
 
 export class StructureVisitor extends BaseVisitor {
-  private mainVisitor: any;
+  private mainVisitor!: INodeVisitor;
   private operatorHelper: OperatorTokenHelper;
-  
-  constructor(document: any, tokenBuilder: any) {
+
+  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
   }
-  
-  setMainVisitor(visitor: any): void {
+
+  setMainVisitor(visitor: INodeVisitor): void {
     this.mainVisitor = visitor;
   }
-  
-  canHandle(node: any): boolean {
-    return node.type === 'ObjectExpression' || 
-           node.type === 'object' ||
-           node.type === 'ArrayExpression' ||
-           node.type === 'array' ||
-           node.type === 'Property' ||
-           node.type === 'MemberExpression';
+
+  canHandle(node: unknown): boolean {
+    const astNode = asLspAstNode(node);
+    return astNode.type === 'ObjectExpression' ||
+           astNode.type === 'object' ||
+           astNode.type === 'ArrayExpression' ||
+           astNode.type === 'array' ||
+           astNode.type === 'Property' ||
+           astNode.type === 'MemberExpression';
   }
-  
-  visitNode(node: any, context: VisitorContext): void {
-    if (!node.location) return;
+
+  visitNode(node: unknown, context: VisitorContext): void {
+    const astNode = asLspAstNode(node);
+    if (!astNode.location) return;
     
-    switch (node.type) {
+    switch (astNode.type) {
       case 'ObjectExpression':
       case 'object':
-        this.visitObjectExpression(node, context);
+        this.visitObjectExpression(astNode as AstNodeWithLocation, context);
         break;
       case 'ArrayExpression':
       case 'array':
-        this.visitArrayExpression(node, context);
+        this.visitArrayExpression(astNode as AstNodeWithLocation, context);
         break;
       case 'Property':
-        this.visitProperty(node, context);
+        this.visitProperty(astNode as AstNodeWithLocation, context);
         break;
       case 'MemberExpression':
-        this.visitMemberExpression(node, context);
+        this.visitMemberExpression(astNode as AstNodeWithLocation, context);
         break;
     }
   }
   
-  private visitObjectExpression(node: any, context: VisitorContext): void {
+  private visitObjectExpression(node: AstNodeWithLocation, context: VisitorContext): void {
     const sourceText = this.document.getText();
     const objectText = sourceText.substring(node.location.start.offset, node.location.end.offset);
 
@@ -59,9 +77,9 @@ export class StructureVisitor extends BaseVisitor {
 
     if (entries.length > 0) {
       // Check if this is a plain object (all values are primitives) or has mlld constructs
-      const hasASTNodes = entries.some((entry: any) => {
+      const hasASTNodes = entries.some((entry: ObjectEntry) => {
         const value = entry.value;
-        return typeof value === 'object' && value !== null && value.type;
+        return typeof value === 'object' && value !== null && (value as AstNode).type;
       });
 
       if (!hasASTNodes) {
@@ -69,6 +87,12 @@ export class StructureVisitor extends BaseVisitor {
         this.tokenizePlainObject(node, objectText);
         return; // Don't add braces manually
       } else {
+        const findColonIndex = (startIndex: number): number => {
+          let idx = startIndex;
+          while (idx < objectText.length && objectText[idx] !== ':') idx++;
+          return idx < objectText.length ? idx : -1;
+        };
+
         // Add opening brace for objects with mlld constructs
         this.operatorHelper.addOperatorToken(node.location.start.offset, 1);
         // Object with mlld constructs - process AST nodes
@@ -76,6 +100,43 @@ export class StructureVisitor extends BaseVisitor {
 
         for (let i = 0; i < entries.length; i++) {
           const entry = entries[i];
+          if (entry.type === 'spread') {
+            const spreadValues = Array.isArray(entry.value) ? entry.value : [];
+
+            if (spreadValues.length > 0) {
+              const firstSpread = spreadValues[0];
+              const lastSpread = spreadValues[spreadValues.length - 1];
+
+              if (firstSpread?.location) {
+                const searchStart = Math.max(0, firstSpread.location.start.offset - 5);
+                const searchText = sourceText.substring(searchStart, firstSpread.location.start.offset);
+                const spreadIndex = searchText.lastIndexOf('...');
+                if (spreadIndex !== -1) {
+                  this.operatorHelper.addOperatorToken(searchStart + spreadIndex, 3);
+                }
+              }
+
+              for (const spreadValue of spreadValues) {
+                if (spreadValue && typeof spreadValue === 'object' && spreadValue.type) {
+                  this.mainVisitor.visitNode(spreadValue, context);
+                }
+              }
+
+              if (lastSpread?.location) {
+                lastPropertyEndOffset = lastSpread.location.end.offset;
+              }
+            }
+
+            if (i < entries.length - 1) {
+              this.operatorHelper.tokenizeOperatorBetween(
+                lastPropertyEndOffset,
+                node.location.end.offset,
+                ','
+              );
+            }
+            continue;
+          }
+
           const key = entry.key;
           const value = entry.value;
 
@@ -89,6 +150,15 @@ export class StructureVisitor extends BaseVisitor {
 
           const keyMatch = quotedMatch || unquotedMatch; // For use in subsequent code
           const keyMatchIndex = quotedMatch?.index ?? unquotedMatch?.index;
+          const colonIndex = (() => {
+            if (quotedMatch && quotedMatch.index !== undefined) {
+              return findColonIndex(quotedMatch.index + quotedMatch[0].length);
+            }
+            if (unquotedMatch && unquotedMatch.index !== undefined) {
+              return findColonIndex(unquotedMatch.index + key.length);
+            }
+            return -1;
+          })();
 
           if (quotedMatch && quotedMatch.index !== undefined) {
             // Quoted key
@@ -135,7 +205,6 @@ export class StructureVisitor extends BaseVisitor {
             if (value.type) {
               // Special-case: inline run inside object (e.g., "dynamic": run "echo test")
               if (value.type === 'command' && (value.hasRunKeyword || value.hasRun)) {
-                const colonIndex = objectText.indexOf(':', keyMatch?.index !== undefined ? keyMatch.index + (keyMatch[0]?.length || 0) : 0);
                 if (colonIndex !== -1) {
                   const absAfterColon = node.location.start.offset + colonIndex + 1;
                   const scannedLen = this.scanAndTokenizePrimitive(objectText, colonIndex + 1, node.location.start.offset);
@@ -164,7 +233,6 @@ export class StructureVisitor extends BaseVisitor {
               }
             } else {
               // Non-AST object value (unlikely). Fall back to textual scan below
-              const colonIndex = objectText.indexOf(':', keyMatch?.index !== undefined ? keyMatch.index + (keyMatch[0]?.length || 0) : 0);
               if (colonIndex !== -1) {
                 const absAfterColon = node.location.start.offset + colonIndex + 1;
                 const scannedLen = this.scanAndTokenizePrimitive(objectText, colonIndex + 1, node.location.start.offset);
@@ -175,7 +243,6 @@ export class StructureVisitor extends BaseVisitor {
             }
           } else {
             // Primitive value (string/number/boolean/null) – scan text to tokenize
-            const colonIndex = objectText.indexOf(':', keyMatch?.index !== undefined ? keyMatch.index + (keyMatch[0]?.length || 0) : 0);
             if (colonIndex !== -1) {
               const absAfterColon = node.location.start.offset + colonIndex + 1;
               const scannedLen = this.scanAndTokenizePrimitive(objectText, colonIndex + 1, node.location.start.offset);
@@ -268,7 +335,7 @@ export class StructureVisitor extends BaseVisitor {
     return 0;
   }
   
-  private tokenizePlainObject(node: any, objectText: string): void {
+  private tokenizePlainObject(node: AstNodeWithLocation, objectText: string): void {
     // Always use embedded language service for JSON tokenization
     embeddedLanguageService.ensureInitialized();
     
@@ -286,29 +353,22 @@ export class StructureVisitor extends BaseVisitor {
     }
   }
   
-  private visitArrayExpression(node: any, context: VisitorContext): void {
+  private visitArrayExpression(node: AstNodeWithLocation, context: VisitorContext): void {
     const sourceText = this.document.getText();
     const arrayText = sourceText.substring(node.location.start.offset, node.location.end.offset);
     
     if (node.items && Array.isArray(node.items)) {
       // Check if this is a plain array (all values are primitives) or has mlld constructs
-      const hasASTNodes = node.items.some((item: any) => {
+      const hasASTNodes = node.items.some((item: AstNode | unknown) => {
         if (typeof item !== 'object' || item === null) return false;
-        if (item.type) return true;
-        if (Array.isArray(item.content)) {
-          return item.content.some((part: any) => typeof part === 'object' && part !== null && part.type);
+        const n = item as AstNode;
+        if (n.type) return true;
+        if (Array.isArray(n.content)) {
+          return n.content.some((part: AstNode | unknown) => typeof part === 'object' && part !== null && (part as AstNode).type);
         }
         return false;
       });
-      
-      if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
-        console.log('[ARRAY]', {
-          hasASTNodes,
-          items: node.items,
-          arrayText
-        });
-      }
-      
+
       if (!hasASTNodes) {
         // Plain array - let embedded service handle all tokens including brackets
         this.tokenizePlainArray(node, arrayText);
@@ -333,16 +393,17 @@ export class StructureVisitor extends BaseVisitor {
                 this.mainVisitor.visitNode(part, context);
               }
             }
-            const lastPartWithLocation = [...item.content].reverse().find((p: any) => p?.location);
+            const lastPartWithLocation = [...item.content].reverse().find((p: AstNode | unknown) => (p as AstNode)?.location);
             if (lastPartWithLocation?.location) {
               lastItemEndOffset = lastPartWithLocation.location.end.offset;
             }
           } else {
             // Primitive value - scan and tokenize
-            const itemStart = lastItemEndOffset;
-            const scannedLen = this.scanAndTokenizePrimitive(arrayText, itemStart - node.location.start.offset, node.location.start.offset);
+            let relStart = lastItemEndOffset - node.location.start.offset;
+            while (relStart < arrayText.length && /[\s,]/.test(arrayText[relStart])) relStart++;
+            const scannedLen = this.scanAndTokenizePrimitive(arrayText, relStart, node.location.start.offset);
             if (scannedLen > 0) {
-              lastItemEndOffset = itemStart + scannedLen;
+              lastItemEndOffset = node.location.start.offset + relStart + scannedLen;
             }
           }
 
@@ -353,7 +414,7 @@ export class StructureVisitor extends BaseVisitor {
             const nextItemContent = Array.isArray(nextItem?.content) ? nextItem.content : [];
             const nextItemStart =
               (nextItem?.location?.start?.offset) ??
-              (nextItemContent.find((p: any) => p?.location)?.location?.start?.offset) ??
+              ((nextItemContent.find((p: AstNode | unknown) => (p as AstNode)?.location) as AstNode | undefined)?.location?.start?.offset) ??
               node.location.end.offset;
             this.operatorHelper.tokenizeOperatorBetween(
               lastItemEndOffset,
@@ -369,7 +430,7 @@ export class StructureVisitor extends BaseVisitor {
     this.operatorHelper.addOperatorToken(node.location.end.offset - 1, 1);
   }
   
-  private tokenizePlainArray(node: any, arrayText: string): void {
+  private tokenizePlainArray(node: AstNodeWithLocation, arrayText: string): void {
     // Always use embedded language service for JSON tokenization
     embeddedLanguageService.ensureInitialized();
     
@@ -387,7 +448,7 @@ export class StructureVisitor extends BaseVisitor {
     }
   }
   
-  private visitMemberExpression(node: any, context: VisitorContext): void {
+  private visitMemberExpression(node: AstNodeWithLocation, context: VisitorContext): void {
     if (node.object) {
       this.mainVisitor.visitNode(node.object, context);
     }
@@ -418,7 +479,7 @@ export class StructureVisitor extends BaseVisitor {
     }
   }
   
-  private visitProperty(node: any, context: VisitorContext): void {
+  private visitProperty(node: AstNodeWithLocation, context: VisitorContext): void {
     if (node.key) {
       if (node.key.type === 'Literal' || node.key.type === 'StringLiteral') {
         this.mainVisitor.visitNode(node.key, context);

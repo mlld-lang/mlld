@@ -5,9 +5,10 @@ brief: Comparison and logical operators
 category: control-flow
 parent: when
 tags: [conditionals, operators]
-related: [when-first, when-bare]
+related: [when, when-inline]
 related-code: [grammar/patterns/operators.peggy]
-updated: 2026-01-05
+updated: 2026-01-31
+qa_tier: 2
 ---
 
 **Operators in conditions:**
@@ -16,7 +17,7 @@ updated: 2026-01-05
 - Parentheses: `(@a || @b) && @c`
 
 ```mlld
-when first [
+when [
   @role == "admin" || @role == "mod" => show "Privileged"
   @active && @verified => show "Active user"
   !@banned => show "Allowed"

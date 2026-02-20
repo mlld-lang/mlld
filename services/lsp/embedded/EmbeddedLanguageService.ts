@@ -202,14 +202,10 @@ export class EmbeddedLanguageService {
     
     await Parser.init();
     
-    // Load commonly used language parsers
-    // Note: Currently only JavaScript has a pre-built WASM file
-    // Python and Bash would need their WASM files built separately
+    // Load supported embedded language parsers (best-effort per language).
     await this.loadLanguage('javascript');
-    
-    // TODO: Build WASM files for these languages
-    // await this.loadLanguage('python');
-    // await this.loadLanguage('bash');
+    await this.loadLanguage('python');
+    await this.loadLanguage('bash');
     
     this.initialized = true;
   }
@@ -269,10 +265,6 @@ export class EmbeddedLanguageService {
       
       this.parsers.set(name, parser);
       this.languages.set(name, language);
-      
-      if (process.env.DEBUG_LSP) {
-        console.log(`Loaded tree-sitter-${name} from ${loadedPath}`);
-      }
     } catch (error) {
       console.warn(`Failed to load tree-sitter parser for ${name}:`, error);
     }

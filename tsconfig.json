@@ -47,8 +47,7 @@
     "grammar/**/*",
     "grammar/core/**/*.ts",
     "types/**/*",
-    "*.ts",
-    "_dev/issues/active/audit/test-audit-script.ts"
+    "*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -1,5 +1,5 @@
 /var @x = true
-/var @result = when first [
+/var @result = when [
   @x => [
     let @y = "hello"
     => @y

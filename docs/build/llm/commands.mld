@@ -17,10 +17,18 @@ var @runAtoms = [
 >> Exe atoms (order matters)
 var @exeAtoms = [
   <@base/docs/src/atoms/commands/exe-simple.md>,
+  <@base/docs/src/atoms/commands/exe-metadata.md>,
   <@base/docs/src/atoms/commands/exe-prose.md>,
   <@base/docs/src/atoms/commands/exe-blocks.md>,
-  <@base/docs/src/atoms/commands/exe-when-first.md>,
+  <@base/docs/src/atoms/commands/exe-when.md>,
   <@base/docs/src/atoms/commands/exe-shadow.md>
+]
+
+>> Tool atoms
+var @toolAtoms = [
+  <@base/docs/src/atoms/commands/mcp-tools.md>,
+  <@base/docs/src/atoms/commands/tool-reshaping.md>,
+  <@base/docs/src/atoms/commands/env-directive.md>
 ]
 
 >> Standalone atoms
@@ -32,6 +40,7 @@ var @stream = <@base/docs/src/atoms/commands/stream.md>
 >> Strip each atom group
 var @runStripped = for @a in @runAtoms => @strip(@a)
 var @exeStripped = for @a in @exeAtoms => @strip(@a)
+var @toolStripped = for @a in @toolAtoms => @strip(@a)
 
 >> Build sections
 exe @buildSection(tag, intro, items) = js {
@@ -45,6 +54,7 @@ exe @wrapSection(tag, intro, content) = js {
 
 var @runSection = @buildSection("RUN_COMMAND", "Execute shell commands or code. Language specifier determines execution context.", @runStripped)
 var @exeSection = @buildSection("EXE_EXECUTABLES", "Define reusable commands, code, templates, or multi-statement blocks.", @exeStripped)
+var @toolSection = @buildSection("TOOLS_AND_ENVIRONMENTS", "Define tool collections, scope tools, and manage execution environments.", @toolStripped)
 var @outputSection = @wrapSection("OUTPUT_DIRECTIVE", "Write data to files or streams.", @strip(@output))
 var @logSection = @wrapSection("LOG_DIRECTIVE", "Syntactic sugar for `output to stdout`. Works in action contexts.", @strip(@log))
 var @appendSection = @wrapSection("APPEND_DIRECTIVE", "Append newline-delimited records.", @strip(@append))
@@ -53,6 +63,7 @@ var @streamSection = @wrapSection("STREAMING", "Stream output during execution."
 var @allSections = [
   @runSection,
   @exeSection,
+  @toolSection,
   @outputSection,
   @logSection,
   @appendSection,

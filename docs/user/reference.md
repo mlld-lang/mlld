@@ -14,6 +14,7 @@ var @age = 25
 var @active = true
 var @items = ["apple", "banana", "cherry"]
 var @user = {"name": "Alice", "role": "admin"}
+var @merged = { ...@user, "role": "superadmin" }    >> object spread
 ```
 
 Access object properties and array elements:
@@ -21,6 +22,13 @@ Access object properties and array elements:
 ```mlld
 var @userName = @user.name  >> "Alice"
 var @firstItem = @items[0]  >> "apple"
+```
+
+Optional variables (omit if falsy):
+
+```mlld
+var @subtitle = @item.subtitle
+show `Title: @item.title @subtitle?` >> subtitle only if present
 ```
 
 Array slicing:
@@ -50,36 +58,43 @@ Execute shell commands:
 run cmd {echo "Hello World"}
 run cmd {ls -la}
 run @data | { cat | jq '.[]' }       >> stdin via pipe
+run cmd { cat | jq '.[]' } with { stdin: @data }  >> explicit stdin form
+```
+
+In strict mode (`.mld` files), you can call executables directly without `run`:
+
+```mlld
+@task()        >> same as: run @task()
 ```
 
 Multi-line commands with `run sh`:
 
 ```mlld
-run sh {
+run sh(@project):/tmp {
   npm test && npm run build
-  echo "Build completed"
+  echo "$project"
 }
 ```
 
 ### Working directory (`:path`)
 
 ```mlld
-run cmd:/ {pwd}
+run cmd(@root):/ {echo "$root"}
 ```
 
 Output:
 ```
-/
+<project root path>
 ```
 
-Paths must be absolute (for example `/tmp`, `/var/log`, `/`). Relative paths, `~`, or Windows-style paths fail. Executables accept the same suffix when you need to parameterize it:
+Paths can be absolute (for example `/tmp`, `/var/log`, `/`) or use `~` for home directory expansion. Relative paths or Windows-style paths fail. Executables accept the same suffix when you need to parameterize it:
 
 ```mlld
 exe @list(dir) = cmd:@dir {pwd}
 run @list("/")
 ```
 
-`sh`, `bash`, `js`, `node`, and `python` accept the same `:/abs/path` suffix. JavaScript and Node switch `process.cwd()` to the provided directory before running code.
+`sh`, `bash`, `js`, `node`, and `python` accept the same `:/abs/path` suffix (and `~`). JavaScript and Node switch `process.cwd()` to the provided directory before running code.
 
 ### Executables (`exe`)
 
@@ -94,17 +109,30 @@ exe @deploy() = sh {
   ./deploy.sh
 }
 
->> JavaScript functions
+>> JavaScript (in-process, fast)
 exe @add(a, b) = js { return a + b }
 exe @processData(data) = js {
   return data.map(item => item.value * 2)
 }
 
+>> Node.js (VM-isolated, full Node.js API)
+exe @hash(text) = node {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+>> Python (subprocess, print() returns values)
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @calculate(x, y) = py {
+result = x ** 2 + y ** 2
+print(result)
+}
+
 >> Prose execution (requires config, see docs/user/prose.md)
-var @llm = { model: "claude-3", skillName: "prose" }
-exe @summarize(text) = prose:@llm { summarize @text }      << inline interpolates
-exe @review(code) = prose:@llm "./review.prose"            << .prose = no interpolation
-exe @greet(name) = prose:@llm "./greet.prose.att"          << .prose.att/.mtt interpolate
+import { @opus } from @mlld/prose
+exe @summarize(text) = prose:@opus { summarize @text }      << inline interpolates
+exe @review(code) = prose:@opus "./review.prose"            << .prose = no interpolation
+exe @greet(name) = prose:@opus "./greet.prose.att"          << .prose.att/.mtt interpolate
 
 >> Templates
 exe @welcome(name, role) = ::Welcome @name! Role: @role::
@@ -132,28 +160,39 @@ exe @greet(name) = [
 show @greet("World")  >> => Hello World!
 ```
 
-### Conditionals (`when`)
+Typed parameters (for tooling and MCP integration):
 
-Simple conditions:
+```mlld
+exe @greet(name: string, times: number) = js { return "Hello " + name; }
+exe @process(data: object, format: string) = js { return data; }
+exe @count(items: array) = js { return items.length; }
+
+>> With description for MCP tool listings
+exe @searchIssues(repo: string, query: string, limit: number) = cmd {
+  gh issue list -R @repo --search "@query" -L @limit --json number,title
+} with { description: "Search GitHub issues by query" }
+```
+
+Supported parameter types: `string`, `number`, `boolean`, `object`, `array`.
+
+### Conditionals (`if` and `when`)
+
+Imperative conditions:
+
+```mlld
+if @active [ show "User is active" ]
+```
+
+Value selection:
 
 ```mlld
 when @active => show "User is active"
 ```
 
-Multiple conditions (all matching execute):
+List form (first match wins):
 
 ```mlld
 when [
-  @score > 90 => show "Excellent!"
-  @bonus => show "Bonus applied!"
-  none => show "No conditions matched"
-]
-```
-
-Switch-style (first match only):
-
-```mlld
-when first [
   @role == "admin" => show "Admin access"
   @role == "user" => show "User access"
   * => show "Guest access"
@@ -170,7 +209,7 @@ when (@role == "admin" || @role == "mod") && @active => show "Privileged"
 Value-returning `/exe...when` patterns:
 
 ```mlld
-exe @getAccess(user) = when first [
+exe @getAccess(user) = when [
   @user.role == "admin" => "full"
   @user.verified && @user.premium => "premium"
   @user.verified => "standard"
@@ -200,6 +239,12 @@ Object iteration with keys:
 
 ```mlld
 var @config = {"host": "localhost", "port": 3000}
+for @key, @value in @config => show `@key: @value`
+```
+
+Value-only form:
+
+```mlld
 for @value in @config => show `@value_key: @value`
 ```
 
@@ -241,7 +286,6 @@ var @filtered = for @x in @xs => when [
   @x != null => @x
   none => skip
 ]
-```
 ```
 
 ### Template loops (backticks and ::)
@@ -293,7 +337,7 @@ var @tokens = <large-file.md>.mx.tokens
 var @frontmatter = <doc.md>.mx.fm.title
 ```
 
-Aliases like `<doc.md>.filename` still resolve to `.mx.filename`, but `.mx` is the preferred namespace.
+Use `.mx` for metadata paths. Top-level metadata aliases like `<doc.md>.filename` are not available.
 
 Glob patterns:
 
@@ -302,12 +346,53 @@ var @allDocs = <docs/*.md>
 var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 ```
 
+AST selection (extract code definitions from source files):
+
+```mlld
+>> Exact names
+var @handler = <src/api.ts { createUser }>
+
+>> Wildcards
+var @handlers = <api.ts { handle* }>         >> prefix match
+var @validators = <api.ts { *Validator }>    >> suffix match
+
+>> Type filters
+var @funcs = <service.ts { *fn }>            >> all functions
+var @classes = <service.ts { *class }>       >> all classes
+
+>> Name listing (returns string arrays)
+var @names = <api.ts { ?? }>                 >> all definition names
+var @funcNames = <api.ts { fn?? }>           >> function names only
+```
+
+Supported languages: `.js`, `.ts`, `.jsx`, `.tsx`, `.py`, `.go`, `.rs`, `.java`, `.rb`
+Type keywords: `fn`, `var`, `class`, `interface`, `type`, `enum`, `struct`
+
+File existence checking:
+
+```mlld
+>> Optional load: returns null if file doesn't exist (no error)
+var @cfg = <config.json>?
+if @cfg [ show "config loaded" ]
+
+>> Pipeline check: pipe a path through @fileExists
+var @path = "/tmp/output.txt"
+var @found = @path | @fileExists
+if @found [ show "file exists" ]
+
+>> Shell recipe for yes/no string result
+exe @checkFile(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+if @checkFile("/tmp/output.txt") == "yes" [ show "exists" ]
+```
+
+The `<path>?` operator is the simplest approach — it attempts to load the file and returns null on failure. The `@fileExists` transformer checks whether a path points to an existing file. For more complex checks (directories, permissions), use a shell recipe.
+
 ### Imports (`import`)
 
 Import from modules (modules should declare `export { ... }` to list public bindings; the auto-export fallback for modules without manifests is still supported for now):
 
 ```mlld
-import { @parallel, @retry } from @mlld/core
+import { @sortBy, @unique } from @mlld/array
 import @company/utils as @utils
 ```
 
@@ -315,7 +400,7 @@ Import from files:
 
 ```mlld
 import { @helper } from "./utils.mld"
-import { @config } from "@base/config.mld"
+import { @config } from "@root/config.mld"
 ```
 
 Import types help declare how a source is resolved. You can prefix the directive with a keyword, or rely on inference:
@@ -329,7 +414,7 @@ import local { @helper } from @local/dev-tools
 import templates from "./templates" as @tpl(message, context)
 ```
 
-When omitted, mlld infers the safest option: registry references behave as `module`, files as `static`, URLs as `cached`, `@input` as `live`, `@base`/`@project` as `static`, and `@local` as `local`. The identifier after `as` uses an `@` prefix in source code; mlld strips the prefix internally when referring to the namespace. If the keyword and source disagree (for example, `cached` on a relative path), the interpreter raises an error before evaluation.
+When omitted, mlld infers the safest option: registry references behave as `module`, files as `static`, URLs as `cached`, `@input` as `live`, `@root`/`@project` as `static` (`@base` is also supported), and `@local` as `local`. The identifier after `as` uses an `@` prefix in source code; mlld strips the prefix internally when referring to the namespace. If the keyword and source disagree (for example, `cached` on a relative path), the interpreter raises an error before evaluation.
 
 Directory imports load each immediate subdirectory `index.mld` and return an object keyed by sanitized directory names. Directories matching `_*` or `.*` are skipped by default.
 
@@ -369,6 +454,58 @@ append "raw text entry" to "events.log"
 ### Log (`log`)
 
 Syntactic sugar for `output ... to stderr`
+
+### Script return (`=>`)
+
+Return a final script value and terminate execution:
+
+```mlld
+=> @result
+```
+
+Strict-mode final output is explicit:
+- `show` emits side-effect output
+- `log` emits side-effect diagnostics to stderr
+- `=> @value` emits final script output and stops execution
+- No `=>` means no implicit final return output
+
+Imported `.mld` modules expose the script return value through the `default` binding:
+
+```mlld
+>> module.mld
+var @status = "active"
+=> { code: 200, status: @status }
+```
+
+```mlld
+>> main.mld
+import { default as @result } from "./module.mld"
+show @result.code     >> 200
+```
+
+### `bail` - Terminate on Error
+
+Terminate the entire script immediately with exit code 1:
+
+```mlld
+bail "config file missing"
+bail `Missing: @required`
+bail                        >> uses default message
+```
+
+Works from any context including nested blocks, loops, and imported modules:
+
+```mlld
+if @checkFailed [
+  bail "validation failed"
+]
+
+for @item in @items [
+  if !@item.valid [
+    bail `Invalid item: @item.id`
+  ]
+]
+```
 
 ### `stream` - Stream Output
 
@@ -411,6 +548,93 @@ show @results  >> => ["L","R"]
 - Env: `MLLD_NO_STREAM=true`
 - API: `interpret(..., { streaming: { enabled: false } })`
 
+### Hooks (`hook`)
+
+Register user lifecycle hooks with required timing (`before` or `after`):
+
+| Syntax | Filter Type | Notes |
+|---|---|---|
+| `hook before @fn = [ ... ]` | Function | Matches executable name |
+| `hook before @fn("prefix") = [ ... ]` | Function + arg prefix | Matches first argument string prefix |
+| `hook after op:exe = when [ ... ]` | Operation | Matches operation type |
+| `hook before untrusted = [ ... ]` | Data label | Matches label-filtered inputs |
+
+Supported operation filters: `op:var`, `op:run`, `op:exe`, `op:show`, `op:output`, `op:append`, `op:for`, `op:for:iteration`, `op:for:batch`, `op:loop`, `op:import`.
+
+Hook bodies accept either a block (`[ ... ]`) or a `when [...]` expression.
+
+Behavior notes:
+- Matching hooks run in declaration order.
+- `before` and `after` hook return values chain. A later hook receives the previous transformed value.
+- Hook body errors do not abort the parent operation; they are collected in `@mx.hooks.errors`.
+- Function filter arg-prefix matching (`@fn("prefix")`) uses `startsWith` against the first argument string form.
+- Observability pattern: emit telemetry from hooks with `output ... to "state://telemetry"` and read errors from `@mx.hooks.errors`.
+
+Hook body context variables:
+
+| Variable | Availability | Description |
+|---|---|---|
+| `@input` | `before`, `after` | Current operation inputs. Function hooks expose the function args for `before`; non-function hooks expose the current operation input payload. |
+| `@output` | `after` | Current operation result value (or guard-denial payload when an operation is denied before execution). |
+| `@mx.op.name` | `before`, `after` | Operation/executable name for the active hook target. |
+| `@mx.op.type` | `before`, `after` | Operation type string (for example: `exe`, `run`, `show`, `for:iteration`, `loop`). |
+| `@mx.op.labels` | `before`, `after` | Merged input + operation labels on the active operation context. |
+| `@mx.for.index` | `op:for:iteration`, `op:for:batch` | Zero-based iteration index (or batch index for batch hooks). |
+| `@mx.for.total` | `op:for:iteration`, `op:for:batch` | Total number of iterable items in the parent `for` run. |
+| `@mx.for.key` | `op:for:iteration` | Current key for object/map iteration (or `null` for array iteration). |
+| `@mx.for.parallel` | `op:for:iteration`, `op:for:batch` | `true` when the parent `for` is running in parallel mode. |
+| `@mx.for.batchIndex` | `op:for:iteration`, `op:for:batch` | Zero-based parallel batch window index. |
+| `@mx.for.batchSize` | `op:for:iteration`, `op:for:batch` | Number of items in the current parallel batch window. |
+| `@mx.hooks.errors` | `before`, `after` | Array of isolated hook body errors (`hookName`, `timing`, `filterKind`, `message`). |
+| `@mx.checkpoint.hit` | `before`, `after` | `true` when the current operation was served from checkpoint cache, otherwise `false`. |
+| `@mx.checkpoint.key` | `before`, `after` | Checkpoint cache key for the current operation (when checkpointing is active). |
+
+### `env` - Scoped Execution
+
+Create scoped execution contexts with isolation, credential management, and capability control:
+
+```mlld
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  fs: { read: [".:/app"], write: ["/tmp"] },
+  net: "none",
+  tools: ["Read", "Bash"],
+  mcps: []
+}
+
+env @sandbox [
+  run cmd { claude -p "Analyze the codebase" } using auth:claude
+]
+```
+
+Local execution with different auth (no provider = local):
+
+```mlld
+var @cfg = { auth: "claude-alt" }
+
+env @cfg [
+  run cmd { claude -p @task } using auth:claude_alt
+]
+```
+
+Capability attenuation with `with`:
+
+```mlld
+env @sandbox with { tools: ["Read"] } [
+  >> Only Read is available here
+  run cmd { claude -p @task }
+]
+```
+
+Return values from env blocks:
+
+```mlld
+var @result = env @config [
+  let @data = run cmd { fetch-data }
+  => @data
+]
+```
+
 ## Advanced Features
 
 ### Templates
@@ -436,28 +660,70 @@ Interpolation rules:
 
 ### Builtin Methods
 
+Common methods (work on both arrays and strings):
+
+```mlld
+var @fruits = ["apple", "banana", "cherry"]
+show @fruits.length()           >> 3
+show @fruits.includes("banana") >> true
+show @fruits.indexOf("cherry")  >> 2
+show @fruits.slice(0, 2)        >> ["apple", "banana"]
+
+var @text = "Hello World"
+show @text.length()              >> 11
+show @text.includes("World")     >> true
+show @text.indexOf("W")          >> 6
+show @text.slice(0, 5)           >> "Hello"
+```
+
 Array methods:
 
 ```mlld
 var @fruits = ["apple", "banana", "cherry"]
-show @fruits.includes("banana")  >> true
-show @fruits.indexOf("cherry")  >> 2
-show @fruits.length()  >> 3
-show @fruits.join(", ")  >> "apple, banana, cherry"
+show @fruits.join(", ")          >> "apple, banana, cherry"
+show @fruits.concat(["date"])    >> ["apple", "banana", "cherry", "date"]
+show @fruits.reverse()           >> ["cherry", "banana", "apple"]
+show @fruits.sort()              >> ["apple", "banana", "cherry"]
 ```
 
 String methods:
 
 ```mlld
 var @text = "Hello World"
-show @text.includes("World")  >> true
-show @text.indexOf("W")  >> 6
-show @text.toLowerCase()  >> "hello world"
-show @text.toUpperCase()  >> "HELLO WORLD"
-show @text.trim()  >> removes whitespace
-show @text.startsWith("Hello")  >> true
-show @text.endsWith("World")  >> true
-show @text.split(" ")  >> ["Hello", "World"]
+show @text.toLowerCase()         >> "hello world"
+show @text.toUpperCase()         >> "HELLO WORLD"
+show @text.trim()                >> removes whitespace
+show @text.startsWith("Hello")   >> true
+show @text.endsWith("World")     >> true
+show @text.split(" ")            >> ["Hello", "World"]
+show @text.replace("World", "mlld")  >> "Hello mlld"
+show @text.replaceAll("l", "L")  >> "HeLLo WorLd"
+show @text.substring(6)          >> "World"
+show @text.padStart(15, "-")     >> "----Hello World"
+show @text.padEnd(15, "!")       >> "Hello World!!!!"
+show @text.repeat(2)             >> "Hello WorldHello World"
+```
+
+Pattern matching:
+
+```mlld
+var @text = "error: line 42"
+var @matched = @text.match("[0-9]+")  >> ["42"]
+```
+
+Type checking methods:
+
+```mlld
+var @items = ["a", "b"]
+var @config = {"key": "value"}
+var @name = "Alice"
+show @items.isArray()    >> true
+show @config.isObject()  >> true
+show @name.isString()    >> true
+show @name.isNumber()    >> false
+show @name.isBoolean()   >> false
+show @name.isNull()      >> false
+show @name.isDefined()   >> true
 ```
 
 ### Pipelines
@@ -465,12 +731,13 @@ show @text.split(" ")  >> ["Hello", "World"]
 Chain operations with `|`:
 
 ```mlld
-var @result = run {cat data.json} | @json | @csv
+var @result = run {cat data.json} | @parse | @csv
 var @processed = @data | @validate | @transform
 ```
 
 Built-in transformers:
-- `@json`: parse/format JSON, accepting relaxed JSON syntax (single quotes, trailing commas, comments). Use `@json.strict` to require standard JSON, `@json.loose` to be explicit about relaxed parsing, or `@json.llm` to extract JSON from LLM responses (code fences, prose). Returns `false` if no JSON found.
+- `@parse`: parse/format JSON, accepting relaxed JSON syntax (single quotes, trailing commas, comments). Use `@parse.strict` to require standard JSON, `@parse.loose` to be explicit about relaxed parsing, or `@parse.llm` to extract JSON from LLM responses (code fences, prose). Returns `null` if no JSON found.
+- `@json`: deprecated alias for `@parse`
 - `@xml`: parse/format XML
 - `@csv`: parse/format CSV
 - `@md`: format as Markdown
@@ -479,11 +746,23 @@ Pipeline context variables:
 - `@mx.try`: current attempt number
 - `@mx.stage`: current pipeline stage
 - `@mx.errors`: array of errors from parallel operations (for loops or pipeline groups); error markers: `{ index, key?, message, error, value }`
+- `@mx.checkpoint.hit`: `true` when an eligible `llm` operation was fulfilled from checkpoint cache; `false` on miss path
+- `@mx.checkpoint.key`: cache key used for the current eligible checkpointed operation
 - `@p[0]`: pipeline input (original/base value)
 - `@p[1]` … `@p[n]`: outputs from completed stages (as `StructuredValue` wrappers)
-- `@p[-1]`: previous stage output; `@p[-2]` two stages back
+- `@p[-1]`: previous stage output (same value as current stage input); `@p[-2]` two stages back
 - `@p.retries.all`: history of retry attempts across contexts
-- Pipeline outputs have `.text` (string) and `.data` (structured) properties. Display uses `.text` automatically.
+- Pipeline outputs expose wrapper access through `.mx.text` (string) and `.mx.data` (structured). Plain dotted access resolves through parsed data.
+
+Checkpoint run flags:
+- `mlld run <script> --checkpoint`: enable checkpoint cache reads/writes for eligible `llm` operations.
+- `mlld run <script> --fresh`: clear that script cache before execution.
+- `mlld run <script> --resume [target]`: enables checkpointed resume flow; target forms are:
+  - `@function` (invalidate that function's checkpoint entries)
+  - `@function:index` (invalidate only one invocation site, 0-based)
+  - `@function("prefix")` (fuzzy cursor invalidation by args preview prefix)
+- `mlld run <script> --fork <script>`: read checkpoint hits from another script cache as seed state (read-only); fork misses write only to the current script cache.
+- `mlld checkpoint list|inspect|clean <script>`: inspect or clear stored checkpoint files.
 
 Retry with hints:
 
@@ -542,9 +821,35 @@ Special built-in variables:
 ```mlld
 @now  >> current timestamp
 @input  >> environment variables (must be allowed)
-@base  >> project root path
+@root  >> project root path (preferred)
+@base  >> project root path (alias for @root)
 @debug  >> debug information
 ```
+
+### Truthiness
+
+Conditions evaluate to false for: `null`, `undefined`, `""`, `"false"`, `"0"`, `0`, `NaN`, `[]`, `{}`
+
+All other values — including non-empty strings, non-zero numbers, and non-empty arrays/objects — are truthy.
+
+### Undefined Variables
+
+Behavior depends on context:
+
+| Context | Behavior |
+|---|---|
+| Template interpolation (`` `@var` ``, `::@var::`) | Preserves literal text `@varName` in output |
+| Conditional omission (`@var?`) | Omits silently (empty string) |
+| Null coalescing (`@var ?? default`) | Uses fallback value |
+| Conditions (`if`, `when`, expressions) | Evaluates as `undefined` (falsy) — no error |
+| `show @var` | Error: `Variable not found: @var` |
+| `var @x = @undefined` | Error: `Variable not found: @undefined` |
+| Function arguments `@fn(@undefined)` | Error: `Undefined variable '@x' passed to function @fn` |
+| Object/array literal values | Error: `Variable not found: @var` |
+| Pipeline function | Error: `Pipeline function '@name' is not defined` |
+| Function call `@undefined()` | Error: `Command not found: undefined` |
+
+In templates, undefined variables pass through as literal text. This means `@exists(@outPath)` in a template doesn't call a function — it produces the string `@exists(@outPath)`, which is truthy. Use `@val | @exists` (pipeline) or `@val.isDefined()` (method) to test whether a value exists.
 
 ### Data Structures
 
@@ -564,15 +869,115 @@ show @config.database.ports[0]  >> 5432
 show @config.features[1]  >> "api"
 ```
 
+Object spread:
+
+```mlld
+var @base = {"host": "localhost", "port": 3000}
+var @prod = { ...@base, "port": 443 }    >> override port
+```
+
+## Code Execution Languages
+
+mlld supports multiple languages for code execution, each with different isolation levels and capabilities.
+
+### Language Comparison
+
+| Language | Syntax | Isolation | Use Case |
+|----------|--------|-----------|----------|
+| `cmd` | `cmd { echo hello }` | Subprocess | Single-line shell commands with pipes |
+| `sh` | `sh { ... }` | Subprocess | Multi-line scripts with control flow |
+| `bash` | `bash { ... }` | Subprocess | Bash-specific features |
+| `js` | `js { return x + 1 }` | None (in-process) | Fast calculations, no require() |
+| `node` | `node { require('fs')... }` | VM context | Full Node.js API, isolated |
+| `py`/`python` | `py { print(x) }` | Subprocess | Python libraries, data science |
+
+### JavaScript vs Node.js
+
+```mlld
+>> JavaScript (in-process, fast, no require())
+exe @double(n) = js { return n * 2 }
+exe @upper(s) = js { return s.toUpperCase() }
+
+>> Node.js (VM-isolated, full API)
+exe @readFile(path) = node {
+  const fs = require('fs');
+  return fs.readFileSync(path, 'utf8');
+}
+exe @hash(text) = node {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+```
+
+### Python Execution
+
+Python code runs in a subprocess via `python3`. Use `print()` to return values.
+
+```mlld
+>> Basic Python
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @square(x) = py {
+result = int(x) ** 2
+print(result)
+}
+
+>> Standard library access
+exe @parseJson(data) = py {
+import json
+obj = json.loads(data)
+print(json.dumps(obj, indent=2))
+}
+
+>> Multi-line with variables
+var @numbers = [1, 2, 3, 4, 5]
+exe @sumList(items) = py {
+import json
+nums = json.loads(items)
+print(sum(nums))
+}
+show @sumList(@numbers)  >> 15
+```
+
+### Shadow Environments
+
+Expose helper functions to all code blocks of a language:
+
+```mlld
+>> Define helpers
+exe @double(n) = js { return n * 2 }
+exe @triple(n) = js { return n * 3 }
+
+>> Expose to all js blocks
+exe js = { double, triple }
+
+>> Now all js blocks can use them
+var @result = js { double(5) + triple(3) }  >> 19
+```
+
+Shadow environments work with `js`, `node`, and `py`/`python`:
+
+```mlld
+>> Python shadow environment
+exe @greet(name) = py { print(f"Hello, {name}!") }
+exe @shout(text) = py { print(text.upper()) }
+exe py = { greet, shout }
+
+run py {
+greet("World")
+shout("mlld rocks")
+}
+```
+
 ## Module System
 
 Create modules with frontmatter:
 
 ```yaml
 ---
-module: @myorg/helpers
-description: Utility functions
+name: my-helpers
+author: myorg
 version: 1.0.0
+about: Utility functions
 ---
 ```
 
@@ -600,17 +1005,51 @@ Where interpolation applies:
 
 ### Built-in Transformers
 
-- `@json`: JSON parse/stringify
+Data formats:
+- `@parse`: JSON parse (relaxed JSON5 syntax by default)
+- `@parse.strict`: JSON parse (strict syntax only)
+- `@parse.loose`: JSON parse (explicit relaxed JSON5)
+- `@parse.llm`: extract JSON from LLM responses (code fences, prose); returns `null` if no JSON found
+- `@parse.fromlist`: convert plain text list (one item per line) to JSON array
+- `@json`: deprecated alias for `@parse`
 - `@xml`: XML parse/format
-- `@csv`: CSV parse/format  
+- `@csv`: CSV parse/format
 - `@md`: Markdown formatting
+
+Text transforms:
+- `@upper`: convert text to uppercase
+- `@lower`: convert text to lowercase
+- `@trim`: remove leading and trailing whitespace
+- `@pretty`: pretty-print JSON with indentation
+- `@sort`: sort array elements, object keys, or text lines alphabetically
+
+Inspection:
+- `@typeof`: get type information (`"simple-text"`, `"array (3 items)"`, `"object (2 properties)"`, `"primitive (boolean)"`, etc.)
+
+Existence checks:
+- `@exists(target)`: returns true when the expression evaluates without error
+  - `@exists(@var)` — checks if variable is defined
+  - `@exists(@obj.field)` — checks if field access succeeds
+  - `@exists(<path>)` — checks if file path is accessible
+  - `@exists(<glob>)` — checks if glob matches at least one file
+  - Pipeline form: `@var | @exists`
+- `@fileExists(path)`: resolves argument to a path string, then checks filesystem
+  - `@fileExists(@var)` — resolves variable value, checks if that *file* exists
+  - `@fileExists("path/to/file")` — checks literal path
+  - Pipeline form: `@path | @fileExists`
+
+**`@exists` vs `@fileExists`**: `@exists(@configPath)` checks if the *variable* `@configPath` is defined — not whether the file exists. `@fileExists(@configPath)` resolves the variable to a path and checks the *filesystem*. For file checks, use `@fileExists` or the optional load operator `<path>?`.
+
+Helpers:
+- `@keep(obj, [...keys])`: keep only specified keys from an object
+- `@keepStructured(obj, schema)`: keep keys matching a schema structure
 
 ### File Metadata Fields
 
 - `content`: file contents (default)
 - `filename`: filename only
 - `relative`: relative path
-- `absolute`: absolute path  
+- `absolute`: absolute path
 - `tokens`: approximate token count
 - `fm`: frontmatter object
 - `json`: parsed JSON (for .json files)

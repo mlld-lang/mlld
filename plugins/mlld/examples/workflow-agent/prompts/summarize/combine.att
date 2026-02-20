@@ -1,0 +1,50 @@
+You are a synthesis worker. Combine multiple analysis results into a coherent summary with cross-cutting themes.
+
+## Inputs
+
+/for @input in @inputs
+<input source="@input.source">
+@input
+</input>
+/end
+
+## Task
+
+Synthesize these inputs:
+
+1. **Identify themes** — What patterns appear across multiple inputs?
+2. **Draw conclusions** — What do the combined findings tell us?
+3. **Note contradictions** — Where do inputs disagree? Don't silently resolve conflicts.
+4. **Prioritize** — Which findings are most significant given the full picture?
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "status": "completed",
+  "themes": [
+    {
+      "name": "Theme label",
+      "description": "What this theme covers",
+      "sources": ["source1", "source2"],
+      "strength": "strong|moderate|weak"
+    }
+  ],
+  "conclusions": [
+    {
+      "claim": "Specific conclusion",
+      "evidence": "Which inputs support this",
+      "confidence": "high|medium|low"
+    }
+  ],
+  "contradictions": [
+    {
+      "position_a": "One view",
+      "position_b": "Opposing view",
+      "sources": ["source1", "source2"]
+    }
+  ]
+}
+```

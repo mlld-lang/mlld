@@ -1,7 +1,0 @@
-import { @opus } from @mlld/prose
-
-exe @workflow(ctx) = prose:@opus {
-  session "Process @ctx"
-}
-
-run @workflow("some context")

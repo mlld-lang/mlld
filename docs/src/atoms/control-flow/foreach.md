@@ -7,6 +7,7 @@ tags: [iteration, transformation, arrays]
 related: [for-arrow, for-collection]
 related-code: [interpreter/eval/foreach.ts]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 `foreach` applies a function to each element, returning transformed array.

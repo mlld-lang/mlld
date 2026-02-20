@@ -329,7 +329,7 @@ function checkFixtures(lastBuildTime, dirtyFiles) {
   }
 
   try {
-    const fixtureFiles = glob.sync(`${fixturesDir}/**/*.generated-fixture.json`);
+    const fixtureFiles = globSync(`${fixturesDir}/**/*.generated-fixture.json`);
     if (fixtureFiles.length === 0) {
       console.log(`${cyan}  Fixtures:${reset} ${fixturesDir} is empty`);
       return true;
@@ -361,10 +361,11 @@ function runBuildStep(name, command) {
 
   try {
     // Silence tsup output to avoid noisy SWC warnings
+    // Use ['ignore', 'inherit', 'inherit'] to prevent TTY suspension
     if (command.includes('tsup')) {
       execSync(command, { stdio: 'ignore' });
     } else {
-      execSync(command, { stdio: 'inherit' });
+      execSync(command, { stdio: ['ignore', 'inherit', 'inherit'] });
     }
     console.log(`${green}✓${reset} ${name} complete\n`);
   } catch (error) {
@@ -443,7 +444,7 @@ async function main() {
     }
 
     if (needsRebuild.typescript) {
-      runBuildStep('TypeScript', 'npx tsup');
+      runBuildStep('TypeScript', 'tsup');
     }
 
     if (needsRebuild.python) {

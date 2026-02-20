@@ -16,11 +16,11 @@
   none => show "None: no conditions matched"
 ]
 
->> When a condition matches, wildcard still executes but none doesn't
+>> When a condition matches, wildcard does not execute after the first match
 /var @match = 5
 /when [
   @match < 10 => show "Matched: less than 10"
-  * => show "Wildcard: still executes"
+  * => show "Wildcard: should not execute"
 ]
 
 /when [
@@ -29,13 +29,13 @@
 ]
 
 >> In exe context with first modifier
-/exe @classify(val) = when first [
+/exe @classify(val) = when [
   @val < 0 => "negative"
   @val == 0 => "zero"
   * => "wildcard catches all"
 ]
 
-/exe @classify2(val) = when first [
+/exe @classify2(val) = when [
   @val < 0 => "negative"
   @val == 0 => "zero"
   none => "none: no match"

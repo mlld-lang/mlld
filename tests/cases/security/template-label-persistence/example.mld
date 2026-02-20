@@ -1,0 +1,3 @@
+var secret @secret = "sensitive-data"
+var @message = :::Message contains: {{secret}}:::
+show @message.mx.labels

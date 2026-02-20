@@ -1,0 +1,9 @@
+>> XML/HTML tags in templates should remain literal when they have attributes
+/var @ver = "2.0"
+/var @test1 = ::<MLLD_GUIDE version="1.0.0">::
+/var @test2 = ::<CustomTag data-value="test@example.com">::
+/var @test3 = ::<input type="text" name="field.name">::
+
+/show @test1
+/show @test2
+/show @test3

@@ -10,15 +10,20 @@ import { VariableContext, VariableInternal } from './index';
 import type { PipelineStage } from './run';
 import type { DataValue } from './var';
 import type { PathMeta } from './meta';
+import type { CommandReference, ExecInvocation } from './primitives';
 
 /**
  * Base executable definition that can be invoked with parameters
  */
 export interface BaseExecutable {
   /** The type of executable */
-  type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver' | 'pipeline' | 'prose';
+  type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver' | 'pipeline' | 'data' | 'prose' | 'nodeFunction' | 'nodeClass' | 'partial';
   /** Parameter names expected by this executable */
   paramNames: string[];
+  /** Parameter types keyed by name */
+  paramTypes?: Record<string, string>;
+  /** Human-readable summary for tool metadata */
+  description?: string;
   /** Original directive type this came from (exec or text) */
   sourceDirective: 'exec' | 'text';
 }
@@ -42,6 +47,7 @@ export interface CommandRefExecutable extends BaseExecutable {
   type: 'commandRef';
   commandRef: string;
   commandArgs?: MlldNode[];
+  commandRefAst?: CommandReference | ExecInvocation;
   withClause?: any; // Pipeline information from the original directive
   sourceDirective: 'exec';
 }
@@ -64,6 +70,8 @@ export interface CodeExecutable extends BaseExecutable {
 export interface TemplateExecutable extends BaseExecutable {
   type: 'template';
   template: MlldNode[];
+  /** Directory of the backing template file when loaded via template "path". */
+  templateFileDirectory?: string;
   sourceDirective: 'text' | 'exec';
 }
 
@@ -127,6 +135,39 @@ export interface ProseExecutable extends BaseExecutable {
 }
 
 /**
+ * Node function executable - wraps a JS function for mlld invocation
+ */
+export interface NodeFunctionExecutable extends BaseExecutable {
+  type: 'nodeFunction';
+  name: string;
+  fn: (...args: unknown[]) => unknown;
+  thisArg?: unknown;
+  moduleName?: string;
+  sourceDirective: 'exec';
+}
+
+/**
+ * Node class executable - wraps a JS constructor for constructor expressions
+ */
+export interface NodeClassExecutable extends BaseExecutable {
+  type: 'nodeClass';
+  name: string;
+  constructorFn: new (...args: unknown[]) => unknown;
+  moduleName?: string;
+  sourceDirective: 'exec';
+}
+
+/**
+ * Partial executable - pre-binds arguments for a base executable
+ */
+export interface PartialExecutable extends BaseExecutable {
+  type: 'partial';
+  base: ExecutableDefinition;
+  boundArgs: unknown[];
+  sourceDirective: 'exec';
+}
+
+/**
  * Unified executable type
  */
 export type ExecutableDefinition =
@@ -138,7 +179,10 @@ export type ExecutableDefinition =
   | ResolverExecutable
   | PipelineExecutable
   | DataExecutable
-  | ProseExecutable;
+  | ProseExecutable
+  | NodeFunctionExecutable
+  | NodeClassExecutable
+  | PartialExecutable;
 
 /**
  * Variable that stores an executable definition
@@ -147,6 +191,8 @@ export interface ExecutableVariable {
   type: 'executable';
   name: string;
   value: ExecutableDefinition;
+  paramTypes?: Record<string, string>;
+  description?: string;
   mx: VariableContext;
   internal?: VariableInternal;
 }
@@ -188,6 +234,18 @@ export function isDataExecutable(def: ExecutableDefinition): def is DataExecutab
 
 export function isProseExecutable(def: ExecutableDefinition): def is ProseExecutable {
   return def.type === 'prose';
+}
+
+export function isNodeFunctionExecutable(def: ExecutableDefinition): def is NodeFunctionExecutable {
+  return def.type === 'nodeFunction';
+}
+
+export function isNodeClassExecutable(def: ExecutableDefinition): def is NodeClassExecutable {
+  return def.type === 'nodeClass';
+}
+
+export function isPartialExecutable(def: ExecutableDefinition): def is PartialExecutable {
+  return def.type === 'partial';
 }
 
 /**

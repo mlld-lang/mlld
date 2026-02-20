@@ -1,0 +1,32 @@
+---
+name: claude-dev
+author: examples
+version: 1.0.0
+about: Reusable environment module for Claude Code
+---
+
+/needs { cmd: [claude] }
+
+/profiles {
+  full: {
+    requires: { sh, network },
+    description: "Full dev access"
+  },
+  readonly: {
+    requires: { },
+    description: "Read-only"
+  }
+}
+
+/var @policyConfig = {
+  auth: {
+    claude: { from: "keychain:mlld-env-{projectname}/claude-dev", as: "CLAUDE_CODE_OAUTH_TOKEN" }
+  }
+}
+/policy @p = union(@policyConfig)
+
+/exe @spawn(prompt) = run cmd { claude -p "@prompt" } using auth:claude
+
+/exe @shell() = run cmd { claude } using auth:claude
+
+/export { @spawn, @shell }

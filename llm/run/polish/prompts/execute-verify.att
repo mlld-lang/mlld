@@ -1,0 +1,109 @@
+## Verify Merged Fixes
+
+You are verifying that merged fixes don't break the main branch, then finalizing tickets.
+
+## Context
+
+**Base branch**: @baseBranch
+**Merged count**: @mergedCount
+**Run directory**: @runDir
+
+## Merged Items
+
+```json
+@mergedItemsJson
+```
+
+## Instructions
+
+### 1. Ensure on Base Branch
+
+```bash
+git branch --show-current
+```
+
+Must be `@baseBranch`. If not, switch to it.
+
+### 2. Run Full Test Suite
+
+```bash
+npm run build
+npm test
+```
+
+### 3. Handle Results
+
+#### If Tests PASS
+
+For each merged item:
+
+1. **Close the ticket:**
+```bash
+tk close <ticket_id>
+```
+
+2. **Remove the worktree:**
+```bash
+wt remove <worktree_branch> -y
+```
+
+#### If Tests FAIL
+
+1. **Identify the likely cause** by:
+   - Looking at the test output
+   - Checking which files were changed in recent merges
+   - Cross-referencing with the merged items above
+
+2. **Tag the likely cause ticket:**
+```bash
+tk tag <ticket_id> verify-failed
+```
+
+3. **Add a note to the ticket:**
+```bash
+tk add-note <ticket_id> "Verify failed: <brief summary of test failure>. Worktree preserved: <worktree_branch>"
+```
+
+4. **Do NOT remove any worktrees** - they're needed for investigation
+
+5. **Do NOT close any tickets** - they need to be re-triaged
+
+## Output
+
+Write to `@outputPath`:
+
+**Success:**
+```json
+{
+  "status": "pass",
+  "base_branch": "@baseBranch",
+  "verified_count": @mergedCount,
+  "test_summary": "All tests pass",
+  "tickets_closed": ["<ticket_id>", ...],
+  "worktrees_removed": ["<worktree_branch>", ...],
+  "verified_at": "<timestamp>"
+}
+```
+
+**Failure:**
+```json
+{
+  "status": "fail",
+  "base_branch": "@baseBranch",
+  "test_output": "<relevant test failure output>",
+  "likely_cause": {
+    "ticket_id": "<ticket_id>",
+    "worktree_branch": "<worktree_branch>",
+    "reason": "Why this fix likely caused the failure"
+  },
+  "tickets_tagged": ["<ticket_id>"],
+  "recommendation": "revert|investigate|manual",
+  "verified_at": "<timestamp>"
+}
+```
+
+## Important
+
+- Do NOT attempt to fix failures - just report them
+- Do NOT revert automatically - report for human review
+- If tests fail, this blocks further polish runs until resolved

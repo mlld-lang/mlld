@@ -3,7 +3,7 @@
   @x > 10 => show "High"
   * => show "Default"
 ]
-/exe @handler() = when: [
+/exe @handler() = when [
   @valid => @value
   * => "fallback"
 ]

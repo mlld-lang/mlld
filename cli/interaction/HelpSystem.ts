@@ -36,6 +36,11 @@ export class HelpSystem {
       this.displayEnvHelp();
       return;
     }
+
+    if (command === 'keychain') {
+      this.displayKeychainHelp();
+      return;
+    }
     
     if (command === 'debug-resolution') {
       this.displayDebugResolutionHelp();
@@ -74,6 +79,16 @@ export class HelpSystem {
 
     if (command === 'mcp' || command === 'serve') {
       this.displayMcpHelp();
+      return;
+    }
+
+    if (command === 'live') {
+      this.displayLiveHelp();
+      return;
+    }
+
+    if (command === 'mcp-dev') {
+      this.displayMcpDevHelp();
       return;
     }
 
@@ -134,23 +149,30 @@ Related:
 
   private displayValidateHelp(): void {
     console.log(`
-Usage: mlld validate <filepath> [options]
+Usage: mlld validate <filepath|directory> [options]
 
-Validate mlld syntax and analyze module structure without executing.
-Returns validation status, exports, imports, guards, executables, and runtime needs.
+Validate mlld syntax and analyze module/template structure without executing.
+Supports .mld, .mld.md, .att (@ templates), and .mtt (mustache templates).
+When given a directory, recursively validates all mlld files.
+Includes anti-pattern warnings such as generic exe parameter shadowing.
+Intentional anti-pattern warnings can be suppressed in mlld-config.json via validate.suppressWarnings.
 
 Options:
-  --format <format>  Output format: json or text (default: text)
-  --ast              Include the parsed AST in output (requires --format json)
-  -h, --help         Show this help message
+  --format <format>     Output format: json or text (default: text)
+  --ast                 Include the parsed AST in output (requires --format json)
+  --no-check-variables  Skip undefined variable checking
+  --error-on-warnings   Exit with code 1 if warnings are found
+  -h, --help            Show this help message
 
 Examples:
-  mlld validate module.mld                # Validate with text output
-  mlld validate module.mld --format json  # Validate with JSON output
-  mlld validate module.mld --ast --format json  # Include AST
+  mlld validate module.mld                     # Validate a module
+  mlld validate template.att                   # Validate a template
+  mlld validate ./my-project/                  # Validate all files recursively
+  mlld validate module.mld --format json       # JSON output
+  mlld validate module.mld --error-on-warnings # Fail on warnings
 
 Aliases:
-  mlld analyze                            # Same as validate
+  mlld analyze                                 # Same as validate
     `);
   }
 
@@ -177,6 +199,61 @@ Behavior:
   - Applies config module filtering and CLI allow-lists
   - Accepts environment overrides (MLLD_* only) before executing tools
   - Streams JSON-RPC responses to stdout for MCP clients
+    `);
+  }
+
+  private displayLiveHelp(): void {
+    console.log(`
+Usage: mlld live --stdio
+
+Start a long-running NDJSON RPC server over stdio.
+
+Protocol:
+  Request:  {"method":"process|execute|analyze|cancel","id":1,"params":{...}}
+  Event:    {"event":{"id":1,"type":"stream:chunk",...}}
+  Result:   {"result":{"id":1,...}}
+
+Methods:
+  process   Execute script text (params.script)
+  execute   Run file (params.filepath + optional payload/state/dynamicModules)
+  analyze   Static analysis only (params.filepath)
+  cancel    Abort active request by id
+
+Notes:
+  - Each request runs with a fresh interpreter environment
+  - Execute-path AST caching persists for process lifetime
+  - Server exits on stdin EOF, SIGINT, or SIGTERM
+    `);
+  }
+
+  private displayMcpDevHelp(): void {
+    console.log(`
+Usage: mlld mcp-dev
+
+Start an MCP server with language introspection tools for development.
+
+Tools provided:
+  mlld_validate   Validate syntax, return errors/warnings
+  mlld_analyze    Full module/template analysis (exports, executables, imports, guards)
+  mlld_ast        Get parsed AST for debugging
+
+Tool arguments:
+  file            Path to .mld, .mld.md, .att, or .mtt file
+  code            Inline mlld code (alternative to file)
+  mode            Parsing mode: "strict" or "markdown"
+  includeAst      Include AST in analyze response (boolean)
+
+Configuration (claude_desktop_config.json):
+  {
+    "mcpServers": {
+      "mlld-dev": {
+        "command": "mlld",
+        "args": ["mcp-dev"]
+      }
+    }
+  }
+
+Note: This is separate from 'mlld mcp' which serves user-defined tools.
     `);
   }
 
@@ -352,11 +429,34 @@ allowed. The allowed list is stored in mlld-config.json.
     `);
   }
 
+  private displayKeychainHelp(): void {
+    console.log(`
+Usage: mlld keychain <command> [options]
+
+Manage project keychain entries under mlld-env-{projectname}.
+
+Commands:
+  add <name>               Add or update a keychain entry (prompts for value)
+  add <name> --value <v>   Add or update with explicit value
+  rm <name>                Remove a keychain entry
+  list                     List entry names
+  get <name>               Print entry value
+  import <file.env>        Import entries from a .env file
+
+Examples:
+  mlld keychain add ANTHROPIC_API_KEY
+  mlld keychain add ANTHROPIC_API_KEY --value sk-...
+  mlld keychain list
+  mlld keychain get ANTHROPIC_API_KEY
+  mlld keychain import .env
+    `);
+  }
+
   private displayDebugResolutionHelp(): void {
     console.log(`
 Usage: mlld debug-resolution [options] <input-file>
 
-Debug variable resolution in a Mlld file.
+Debug variable resolution in a mlld file.
 
 Options:
   --var, --variable <n>     Filter to a specific variable
@@ -477,36 +577,45 @@ Examples:
   private displayMainHelp(command?: string, context?: HelpContext): void {
     console.log(`
 Usage: mlld [command] [options] <input-file-or-url>
+       mlld -e '<code>' [options]
 
 Commands:
   init                    Create a new mlld module
   add-needs, needs, deps  Analyze and update module dependencies
   alias                   Create path aliases for module imports
+  keychain                Manage project keychain entries
   dev                     Inspect local module discovery
   docs                    Show module documentation (# tldr + # docs)
   env                     Manage environment variables allowed in @INPUT
   install, i              Install mlld modules
+  update                  Update installed modules to latest versions
+  outdated                List modules with available updates
   ls, list               List installed modules
   info, show             Show module details (includes # tldr)
   auth                    Manage GitHub authentication
   publish                 Publish module to mlld registry
   registry                Manage mlld module registry
   run                     Run mlld scripts from script directory
+  checkpoint              Inspect and clean checkpoint caches
+  verify                  Verify signed variables from MLLD_VERIFY_VARS
   setup                   Configure mlld project with interactive wizard
   test                    Run mlld tests
   serve                   Expose mlld functions as MCP tools over stdio
+  live                    Start persistent NDJSON RPC server over stdio
+  mcp-dev                 Start MCP server with language introspection tools
   language-server, lsp    Start the mlld language server for editor integration
   nvim-setup, nvim        Set up mlld Language Server for Neovim
   nvim-doctor             Diagnose and fix mlld Neovim LSP configuration
-  validate, analyze       Validate mlld syntax and show module structure
+  validate, analyze       Validate mlld syntax and show module/template structure
   debug-resolution        Debug variable resolution in a mlld file
   debug-transform         Debug node transformations through the pipeline
 
 Options:
   -f, --format <format>   Output format: md, markdown, xml, llm [default: llm]
-  --mode <mode>           Parser mode: strict or markdown (default: .mld strict, .mld.md/.md markdown, stdin strict)
+  --mode <mode>           Parser mode: strict or markdown (default: .mld strict, .mld.md/.md markdown, stdin/eval strict)
   --loose, --markdown, --md
                           Set parser mode to markdown (aliases for --mode markdown)
+  -e, --eval <code>       Execute inline mlld code
   -o, --output <path>     Output file path
   --stdout                Print to stdout instead of file
   --strict                Enable strict mode (fail on all errors)
@@ -517,6 +626,8 @@ Options:
   -d, --debug             Stream execution with progress logs to stderr
   --json                  With --debug, emit DebugResult JSON to stdout (no streaming)
   --structured            Output JSON with effects, exports, and security metadata
+  --timeout <duration>    Overall execution timeout (e.g., 5m, 1h, 30s)
+  --metrics               Show execution timing on stderr
   --inject, --payload KEY=VALUE
                           Inject dynamic module (can use multiple times)
                           VALUE formats: JSON object, @file.json, or mlld source
@@ -553,20 +664,31 @@ Output Formatting Options:
 Security Options:
   --allow-absolute            Allow absolute paths outside project root (use with caution!)
 
+Payload Injection:
+  Unknown flags become @payload fields (always available, even when empty):
+  mlld script.mld --topic foo         # @payload = {"topic":"foo"}
+  mlld script.mld                     # @payload = {}
+  Reserved checkpoint flags (--checkpoint, --new, --fresh, --no-checkpoint, --resume, --fork) are not added to @payload.
+
 Examples:
   mlld script.mld                     # Run a local file
   mlld script.mld --stdout            # Output to stdout
   mlld script.mld -o output.md        # Output to file
+  mlld -e 'show @now'                 # Execute inline code
+  mlld -e 'var @x = "test" | @json; show @x'
   
   # Run scripts directly from URLs
   mlld https://example.com/script.mld
   npx mlld@latest https://raw.githubusercontent.com/mlld-lang/registry/main/llm/scripts/review-pr.mld
 
 Configuration:
-  Mlld looks for configuration in:
+  mlld looks for configuration in:
   1. ~/.config/mlld/mlld-config.json (global/user config)
   2. mlld-config.json (project config)
   3. mlld-lock.json (project module lockfile)
+
+  Config keys:
+  - nodePackageManager: command to run after mlld install (e.g., npm, pnpm, yarn, bun, or "pnpm install")
 
   CLI options override configuration file settings.
 
@@ -598,6 +720,7 @@ Built-in docs and examples available via 'mlld howto'.
       case 'add-needs':
       case 'env':
       case 'dev':
+      case 'live':
       case 'docs':
       case 'debug-resolution':
       case 'debug-transform':

@@ -54,6 +54,65 @@ Declare what your module needs with `needs`:
 
 `js`/`node`/`py` entries declare runtime packages. `sh` requests shell access; `cmd` lists required commands.
 
+### Module Structure
+
+Modules are directories with an entry point, manifest, and optional supporting files:
+
+```
+myapp/
+├── index.mld          # Entry point
+├── module.yml         # Manifest
+├── README.md          # Documentation
+└── lib/               # Supporting files
+    └── helpers.mld
+```
+
+**module.yml format:**
+```yaml
+name: myapp
+author: alice
+type: app               # library | app | command | skill
+about: "Description"
+version: 1.0.0
+license: CC0
+entry: index.mld        # Optional, defaults to index.mld
+```
+
+### Frontmatter vs module.yml
+
+Directory modules use two metadata layers:
+
+| Source | Lives in | Used for |
+|--------|----------|----------|
+| Frontmatter (`--- ... ---`) | Entry `.mld` file | Runtime metadata (`@fm`, imported namespace `.__meta__`) |
+| `module.yml` | Module directory root | Packaging metadata (type, publish/install metadata, directory entry selection) |
+
+If fields differ, runtime metadata comes from entry-file frontmatter, while packaging metadata comes from `module.yml`.
+Keep shared identity fields (`name`, `author`, `version`, `about`) aligned in both files.
+
+**Module types and their install locations:**
+
+| Type | Local | Global |
+|------|-------|--------|
+| `library` | `llm/lib/` | `~/.mlld/lib/` |
+| `app` | `llm/run/` | `~/.mlld/run/` |
+| `command` | `.claude/commands/` | `~/.claude/commands/` |
+| `skill` | `.claude/skills/` | `~/.claude/skills/` |
+
+**Create directory modules:**
+```bash
+mlld module app myapp              # → llm/run/myapp/
+mlld module library utils          # → llm/lib/utils/
+mlld module command review         # → .claude/commands/review/
+mlld module skill helper           # → .claude/skills/helper/
+mlld module app myapp --global     # → ~/.mlld/run/myapp/
+```
+
+**Run directory apps:**
+```bash
+mlld run myapp                     # Runs llm/run/myapp/index.mld
+```
+
 ## Importing Modules
 
 ### Registry Modules
@@ -71,8 +130,29 @@ mlld install @alice/utils
 ### Local Files
 
 ```mlld
-import { @config } from <./config.mld>
+import { @config } from "./config.mld"
+import "./helpers.mld" as @helpers
+import "./agents" as @agents
 show @config.apiKey
+show @helpers.format("ok")
+show @agents.support.reply("hello")
+```
+
+Relative `./` and `../` paths resolve from the importing file's directory, not your shell cwd.
+
+If you run:
+
+```bash
+cd /tmp
+mlld /home/user/project/scripts/main.mld
+```
+
+Then `import "./config.mld"` resolves to `/home/user/project/scripts/config.mld`.
+
+Use `@root` for project-root imports:
+
+```mlld
+import { @shared } from <@root/lib/shared.mld>
 ```
 
 ### URL Imports
@@ -90,7 +170,10 @@ Control when and how imports resolve:
 >> Registry module (offline after install)
 import module { @api } from @company/tools
 
->> Embedded at parse time
+>> Embedded at parse time (named import)
+import static { @prompt } from "./prompt.md"
+
+>> Embedded at parse time (namespace import)
 import static <./prompts/system.md> as @systemPrompt
 
 >> Always fetch fresh
@@ -103,7 +186,29 @@ import cached(30m) <https://feed.xml> as @feed
 import local { @helper } from @alice/dev-module
 ```
 
+| Type | Behavior | Use Case |
+|------|----------|----------|
+| `module` | Content-addressed cache | Registry modules (default) |
+| `static` | Embedded at parse time | Prompts, templates |
+| `live` | Always fresh | Status APIs |
+| `cached(TTL)` | Time-based cache | Feeds, configs |
+| `local` | Dev modules (llm/modules/) | Development |
+| `templates` | Directory of .att files | Template collections |
+
 ### Import Patterns
+
+| Goal | Syntax |
+|------|--------|
+| Selected exports from one module file | `import { @helper } from "./utils.mld"` |
+| Namespace import from one module file | `import "./utils.mld" as @utils` |
+| Namespace import from a directory | `import "./agents" as @agents` |
+| Namespace import from registry module | `import @alice/utils as @utils` |
+
+Directory imports are namespace-only. To import selected exports from a directory module, target its entry file:
+
+```mlld
+import { @helper } from "./agents/index.mld"
+```
 
 **Selected imports**:
 ```mlld
@@ -240,17 +345,24 @@ mlld install @alice/utils       # Install specific module
 mlld install @alice/utils@1.2.0 # Install specific version
 ```
 
+### List Installed Modules
+```bash
+mlld ls                         # List all installed modules with versions
+```
+
 ### Update Modules
 ```bash
 mlld update                     # Update all modules
 mlld update @alice/utils        # Update specific module
 mlld outdated                   # Check for newer versions
+mlld registry info @alice/utils # Show module details from registry
 ```
 
 ### Publishing
 ```bash
 mlld publish my-module.mld      # Publish to registry
 mlld publish --pr               # Force PR workflow
+mlld publish --tag beta my-tool.mld.md  # Publish with tag
 ```
 
 See [registry.md](registry.md) for publishing details.
@@ -279,6 +391,8 @@ export { @publicAPI, @helper }
 ```mlld
 exe @_internal(name) = "opaque"  >> Not in export list
 ```
+
+Unexported values are not accessible through namespace imports, including executable internal capture metadata.
 
 **Document exports**:
 ```mlld

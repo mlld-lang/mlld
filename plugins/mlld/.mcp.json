@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mlld-dev": {
+      "command": "mlld",
+      "args": ["mcp-dev"]
+    }
+  }
+}

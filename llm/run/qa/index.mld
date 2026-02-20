@@ -1,0 +1,216 @@
+>> QA Testing Orchestrator v2 (Five-Phase)
+>> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>] [--phase 0|1|2|3|4|both|all] [--run <id>]
+>>
+>> Phase 0 (Triage): Decision agent picks topics intelligently
+>> Phase 1 (Flail): Agents test with limited access (mlld howto only)
+>> Phase 2 (Self-Review): Agents resume and check their work against tests/cookbook
+>> Phase 3 (Trends): Single agent analyzes all results for cross-cutting patterns
+>> Phase 4 (Strategy): Generates strategy-questions.md from trend report for human review
+>>
+>> Each run is stored in: qa/runs/YYYY-MM-DD-N/
+>> Use --run to resume a specific run, or omit to auto-detect
+>>
+>> Examples:
+>>   mlld run qa --tier 1                           # Phases 1+2, new dated run
+>>   mlld run qa --tier 1 --phase 0                 # Triage only
+>>   mlld run qa --tier 1 --phase 1                 # Flail phase only, new dated run
+>>   mlld run qa --tier 1 --phase 2                 # Self-review only (resumes latest run)
+>>   mlld run qa --tier 1 --phase 3                 # Trend analysis only (resumes latest run)
+>>   mlld run qa --tier 1 --phase 4                 # Strategy questions only (resumes latest run)
+>>   mlld run qa --tier 1 --phase all               # All five phases, new dated run
+>>   mlld run qa --topic variables                  # Test variables-* topics
+>>   mlld run qa --topics when-inline,for-arrow     # Test specific list
+>>   mlld run qa --tier 2 --run 2026-01-25-0        # Resume a specific prior run
+
+/needs { sh }
+
+import { @loadTopics, @filterTopics } from "./lib/topics.mld"
+import { @resolveRunDir, @loadRun, @createRun, @shouldRunPhase, @updateRunStatus, @qaRoot, @latestRunId } from "./lib/state.mld"
+import { @logEvent } from "./lib/events.mld"
+import { @loadAllResults, @loadAllReviews, @buildRunSummary, @buildDocClarityReport } from "./lib/aggregate.mld"
+import { @runTriage } from "./phases/triage.mld"
+import { @runFlail } from "./phases/flail.mld"
+import { @runReview } from "./phases/review.mld"
+import { @runTrends } from "./phases/trends.mld"
+import { @runStrategy } from "./phases/strategy.mld"
+
+>> Parse CLI options
+import "@payload" as @p
+var @topic = @p.topic ? @p.topic : ""
+var @topics = @p.topics ? @p.topics : ""
+var @tier = @p.tier ? @p.tier : ""
+var @phase = @p.phase ? @p.phase : "both"
+var @runId = @p.run ? @p.run : ""
+
+>> Determine which phases to run
+var @runPhase1 = @shouldRunPhase("flail", @phase)
+var @needsNewRun = @runPhase1 || @phase == "all" || @phase == "0"
+
+>> Resolve or create run directory
+var @runDir = @resolveRunDir(@runId, @needsNewRun)
+when !@runDir => show `No existing QA run found. Use --tier to start a new run.`
+
+>> Store git commit for future triage diffing
+exe @currentCommit() = cmd {git rev-parse HEAD}
+exe @storeGitCommit(runDir, run) = [
+  when !@run || @run.config.git_commit => null
+  let @commit = @currentCommit()
+  let @updatedConfig = { ...@run.config, git_commit: @commit.trim(), tier: @tier }
+  let @updatedRun = { ...@run, config: @updatedConfig }
+  output @updatedRun to "@runDir/run.json"
+  => @updatedRun
+]
+
+var @run = @loadRun(@runDir)
+var @_0 = @storeGitCommit(@runDir, @run)
+
+>> Load and filter topics
+var @allTopics = @loadTopics(@tier)
+var @hasExplicitTopics = @topic || @topics
+
+show `=== QA Run: @runDir ===`
+show ``
+
+when @allTopics.length == 0 => show `No topics match tier filter: @tier`
+
+>> ========== PHASE 0: TRIAGE ==========
+exe @doTriage(runDir, allTopics, run) = [
+  when !@shouldRunPhase("triage", @phase) || @hasExplicitTopics => @allTopics
+  show `=== PHASE 0: TRIAGE ===`
+  let @lastRunId = @latestRunId()
+  let @lastRunDir = @lastRunId && @lastRunId != @run.id ? `@qaRoot/@lastRunId` : null
+  let @selected = @runTriage(@runDir, @allTopics, @lastRunDir)
+  show ``
+  => @selected
+]
+
+var @triageTopics = @doTriage(@runDir, @allTopics, @run)
+
+>> Apply explicit filters (bypass triage)
+var @activeTopics = @filterTopics(@triageTopics, @topic, @topics)
+
+show `Topics: @activeTopics.length`
+show ``
+
+when @activeTopics.length == 0 => show `No topics match filter: @topic @topics\nAvailable: @allTopics.join(", ")`
+
+>> Log run start
+var @_1 = @logEvent(@runDir, { event: "run_start", phase: @phase, topics: @activeTopics.length })
+
+>> ========== PHASE 1: FLAIL ==========
+when @shouldRunPhase("flail", @phase) => [
+  show `=== PHASE 1: FLAIL ===`
+  run @runFlail(@runDir, @activeTopics)
+  show ``
+]
+
+>> ========== PHASE 2: SELF-REVIEW ==========
+when @shouldRunPhase("review", @phase) => [
+  show `=== PHASE 2: SELF-REVIEW ===`
+  run @runReview(@runDir, @activeTopics)
+  show ``
+]
+
+>> ========== SUMMARY ==========
+show `=== QA SUMMARY ===`
+
+>> Aggregate results for display (per-file loading repairs malformed agent JSON)
+var @allResultsList = @loadAllResults(@runDir)
+var @allReviewsList = @loadAllReviews(@runDir)
+var @allSessions = <@runDir/topics/**/session.json>?
+var @allSessionsList = @allSessions ? @allSessions : []
+var @passing = for @r in @allResultsList when @r.status == "pass" => @r
+var @failing = for @r in @allResultsList when @r.status == "fail" => @r
+var @partial = for @r in @allResultsList when @r.status == "partial" => @r
+var @blockedPhase1 = for @s in @allSessionsList when @s.phase1_blocked => @s
+var @blockedPhase2 = for @s in @allSessionsList when @s.phase2_blocked => @s
+
+show `Experiments: @allResultsList.length total`
+show `  Passing: @passing.length`
+show `  Failing: @failing.length`
+show `  Partial: @partial.length`
+show `Self-reviews: @allReviewsList.length`
+when @blockedPhase1.length > 0 => [
+  show `  Blocked (phase 1): @blockedPhase1.length`
+  for @b in @blockedPhase1 => show `    - @b.topic: @b.phase1_blocked_reason`
+]
+when @blockedPhase2.length > 0 => [
+  show `  Blocked (phase 2): @blockedPhase2.length`
+  for @b in @blockedPhase2 => show `    - @b.topic: @b.phase2_blocked_reason`
+]
+show ``
+
+>> Doc clarity report
+var @docClarity = @buildDocClarityReport(@runDir)
+when @docClarity.summary.docs_could_be_clearer > 0 || @docClarity.summary.docs_genuinely_misleading > 0 => [
+  show `=== DOC CLARITY INSIGHTS ===`
+  show `QA needed more exploration: @docClarity.summary.qa_insufficient_exploration`
+  show `Docs could be clearer: @docClarity.summary.docs_could_be_clearer`
+  show `Docs genuinely misleading: @docClarity.summary.docs_genuinely_misleading`
+  output @docClarity to "@runDir/doc-clarity-report.json"
+  show `Report: @runDir/doc-clarity-report.json`
+  show ``
+]
+
+>> ========== PHASE 3: TRENDS ==========
+>> Auto-trigger when phases 1+2 complete, or explicit --phase 3/all
+var @runPhase3Explicit = @shouldRunPhase("trends", @phase)
+
+>> Check auto-trigger: all active topics finished phases 1+2
+var @freshSessions = <@runDir/topics/**/session.json>?
+var @freshSessionsList = @freshSessions ? @freshSessions : []
+var @phase2Done = for @s in @freshSessionsList when @activeTopics.includes(@s.topic) && @s.phase2_complete => @s.topic
+var @phase1OnlyAllPassing = for @s in @freshSessionsList when @activeTopics.includes(@s.topic) && @s.phase1_complete && !@s.phase2_complete => @s.topic
+var @totalDone = @phase2Done.length + @phase1OnlyAllPassing.length
+var @autoPhase3 = @phase == "both" && @totalDone >= @activeTopics.length && @activeTopics.length > 0
+var @doPhase3 = @runPhase3Explicit || @autoPhase3
+
+when @autoPhase3 && !@runPhase3Explicit => show `All @activeTopics.length topics completed phases 1+2. Auto-triggering trend analysis.`
+
+when @doPhase3 => [
+  show `=== PHASE 3: TRENDS ===`
+  run @runTrends(@runDir, @activeTopics)
+  show ``
+]
+
+>> ========== PHASE 4: STRATEGY ==========
+var @runPhase4Explicit = @shouldRunPhase("strategy", @phase)
+var @doPhase4 = @runPhase4Explicit || @doPhase3
+
+when @doPhase4 => [
+  show `=== PHASE 4: STRATEGY ===`
+  run @runStrategy(@runDir)
+  show ``
+]
+
+>> ========== RUN SUMMARY ==========
+var @topicSummaries = @buildRunSummary(@runDir, @activeTopics)
+
+var @runSummary = {
+  run: @run ? @run.id : "unknown",
+  date: @now,
+  tier: @tier,
+  topic_count: @activeTopics.length,
+  experiment_count: @allResultsList.length,
+  passing: @passing.length,
+  failing: @failing.length,
+  partial: @partial.length,
+  topics: @topicSummaries
+}
+
+output @runSummary to "@runDir/run-summary.json"
+show `Run summary: @runDir/run-summary.json`
+
+>> Cross-run progress tracking
+var @allRunSummaries = <@qaRoot/*/run-summary.json>?
+var @allRunSummariesList = @allRunSummaries ? @allRunSummaries : []
+var @progress = {
+  generated_at: @now,
+  total_runs: @allRunSummariesList.length,
+  runs: @allRunSummariesList
+}
+output @progress to "@qaRoot/progress.json"
+show `Progress tracker: @qaRoot/progress.json (@allRunSummariesList.length runs)`
+
+>> Log completion
+var @_2 = @logEvent(@runDir, { event: "run_complete", topics: @activeTopics.length, experiments: @allResultsList.length })

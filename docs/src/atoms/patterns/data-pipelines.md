@@ -23,6 +23,6 @@ show `Processed @report.count users`
 
 ```mlld
 var @data = cmd {curl -s https://api.example.com/data}
-var @processed = @data | @json | @validate | @transform | @csv
+var @processed = @data | @parse | @validate | @transform | @csv
 output @processed to "report.csv"
 ```

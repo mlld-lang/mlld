@@ -1,1 +1,1 @@
-Commands in /run must be wrapped in braces or quotes
+Commands in run must be wrapped in braces or quotes

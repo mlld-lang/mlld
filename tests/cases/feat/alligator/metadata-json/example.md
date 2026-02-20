@@ -12,4 +12,4 @@ This test verifies JSON parsing in loaded files.
 
 ## Access filename
 
-/show `Filename: @package.filename`
+/show `Filename: @package.mx.filename`

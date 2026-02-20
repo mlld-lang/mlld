@@ -1,6 +1,6 @@
-import * as fs from 'fs';
 import type { Variable, ExecutableVariable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
+import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
 
 /**
  * Handles complex object variable reference resolution for imported modules
@@ -28,13 +28,6 @@ export class ObjectReferenceResolver {
     
     // Check if this is a VariableReference AST node
     if (typeof value === 'object' && value.type === 'VariableReference' && value.identifier) {
-      if (process.env.MLLD_DEBUG_FIX === 'true') {
-        console.error('[ObjectReferenceResolver] Found VariableReference AST node:', {
-          identifier: value.identifier,
-          hasFields: !!(value as any).fields,
-          fields: (value as any).fields
-        });
-      }
       return this.resolveVariableReference(value.identifier, variableMap, (value as any).fields);
     }
     
@@ -93,8 +86,8 @@ export class ObjectReferenceResolver {
             if (result && typeof result === 'object' && field.value in result) {
               result = result[field.value];
             } else {
-              // Field not found - return undefined to match normal field access behavior
-              return undefined;
+              // Field not found - return null to match normal field access behavior
+              return null;
             }
           } else if (field.type === 'bracketAccess') {
             const key = field.value;
@@ -103,7 +96,7 @@ export class ObjectReferenceResolver {
             } else if (Array.isArray(result) && typeof key === 'number') {
               result = result[key];
             } else {
-              return undefined;
+              return null;
             }
           }
         }
@@ -138,7 +131,7 @@ export class ObjectReferenceResolver {
       if (execVar.internal?.capturedShadowEnvs) {
         serializedInternal = {
           ...serializedInternal,
-          capturedShadowEnvs: this.serializeShadowEnvs(execVar.internal.capturedShadowEnvs)
+          capturedShadowEnvs: serializeShadowEnvironmentMaps(execVar.internal.capturedShadowEnvs)
         };
       }
       // Serialize module environment if present
@@ -159,42 +152,12 @@ export class ObjectReferenceResolver {
       };
       return result;
     } else {
-      if (referencedVar.type === 'array') {
-        return {
-          __arraySnapshot: true,
-          value: referencedVar.value,
-          mx: referencedVar.mx,
-          internal: referencedVar.internal,
-          isComplex: (referencedVar as any).isComplex === true,
-          name: referencedVar.name
-        };
-      }
-      // For other variable types, return the value directly
+      // For all other variable types (including arrays), return the value directly
+      // This ensures object properties contain raw values, not Variable wrappers
       return referencedVar.value;
     }
   }
   
-  /**
-   * Serialize shadow environments for export (Maps to objects)
-   * WHY: Maps don't serialize to JSON, so we convert them to plain objects
-   */
-  private serializeShadowEnvs(envs: any): any {
-    const result: any = {};
-    
-    for (const [lang, shadowMap] of Object.entries(envs)) {
-      if (shadowMap instanceof Map && shadowMap.size > 0) {
-        // Convert Map to object
-        const obj: Record<string, any> = {};
-        for (const [name, func] of shadowMap) {
-          obj[name] = func;
-        }
-        result[lang] = obj;
-      }
-    }
-    
-    return result;
-  }
-
   /**
    * Serialize module environment for export (Map to object)
    * WHY: Maps don't serialize to JSON, so we need to convert to exportable format
@@ -212,7 +175,7 @@ export class ObjectReferenceResolver {
         if (serializedInternal.capturedShadowEnvs) {
           serializedInternal = {
             ...serializedInternal,
-            capturedShadowEnvs: this.serializeShadowEnvs(serializedInternal.capturedShadowEnvs)
+            capturedShadowEnvs: serializeShadowEnvironmentMaps(serializedInternal.capturedShadowEnvs)
           };
         }
         // Skip capturedModuleEnv only for items IN the module env to avoid recursion
@@ -256,22 +219,6 @@ export class ObjectReferenceResolver {
           }
         }
       }
-      if (process.env.MLLD_DEBUG_FIX === 'true') {
-        console.error('[ObjectReferenceResolver] resolved entries object', {
-          keys: Object.keys(resolved),
-          hasEntries: true
-        });
-        try {
-          fs.appendFileSync(
-            '/tmp/mlld-debug.log',
-            JSON.stringify({
-              source: 'ObjectReferenceResolver',
-              keys: Object.keys(resolved),
-              hasEntries: true
-            }) + '\n'
-          );
-        } catch {}
-      }
       return resolved;
     }
 
@@ -279,22 +226,6 @@ export class ObjectReferenceResolver {
     if (value.properties) {
       for (const [key, val] of Object.entries(value.properties)) {
         resolved[key] = this.resolveObjectReferences(val, variableMap, options);
-      }
-      if (process.env.MLLD_DEBUG_FIX === 'true') {
-        console.error('[ObjectReferenceResolver] resolved properties object', {
-          keys: Object.keys(resolved),
-          hasProperties: true
-        });
-        try {
-          fs.appendFileSync(
-            '/tmp/mlld-debug.log',
-            JSON.stringify({
-              source: 'ObjectReferenceResolver',
-              keys: Object.keys(resolved),
-              hasProperties: true
-            }) + '\n'
-          );
-        } catch {}
       }
       return resolved;
     }

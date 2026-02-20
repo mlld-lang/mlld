@@ -129,12 +129,15 @@ const allowedStartRules = [
   'Start',
   'ExeBlockBody',
   'ForBlockBody',
+  'LoopBlockBody',
   'ForBlockStatementList',
   'WhenConditionList',
   'WhenExpressionConditionList',
   'WhenBoundExpressionConditionList',
+  'IfActionBlockBody',
   'GuardRuleList',
   'WhenActionBlockContent',
+  'WhenActionBlockBody',
   'TemplateBodyAtt',
   'TemplateBodyMtt'
 ];

@@ -16,8 +16,6 @@ This tests that inline comments at the end of directives are properly handled.
 
 /run {echo "@greeting"} >> Output the greeting
 
-/path @docs = "./documentation" << Path to docs folder
-
 /show @greeting >> Show variable with >> comment
 /show @config << Show with << comment
 /show <inline-test-README.md> >> Include the readme file

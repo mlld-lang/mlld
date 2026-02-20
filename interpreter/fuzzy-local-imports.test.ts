@@ -143,25 +143,39 @@ describe('Fuzzy Local File Imports', () => {
       
       // Both files match with case-insensitive matching
       const source = '/import { a } from "./TEST-FILE"';
-      
+
       await expect(interpret(source, {
         fileSystem,
         pathService,
         basePath: '/'
-      })).rejects.toThrow(/Did you mean.*Test-File\.mld.*test-file\.mld/s);
+      })).rejects.toThrow(/Ambiguous file match/);
+      await expect(interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      })).rejects.toThrow(/Test-File\.mld/);
+      await expect(interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      })).rejects.toThrow(/test-file\.mld/);
     });
   });
 
   describe('Configuration', () => {
     it('should respect disabled fuzzy matching', async () => {
       const source = '/import { greeting } from "./my-utils"';
-      
-      await expect(interpret(source, {
+
+      const promise = interpret(source, {
         fileSystem,
         pathService,
         basePath: '/',
         localFileFuzzyMatch: false
-      })).rejects.toThrow(/Failed to read imported file/);
+      });
+
+      await expect(promise).rejects.toThrow(/File not found: \.\/my-utils/);
+      await expect(promise).rejects.toThrow(/Did you mean:[\s\S]*@base\/my-utils/);
+      await expect(promise).rejects.toThrow(/Paths resolve relative to the current mlld file directory/);
     });
 
     it('should respect case-sensitive configuration', async () => {
@@ -239,9 +253,9 @@ describe('Fuzzy Local File Imports', () => {
     });
   });
 
-  describe('Integration with @path directive', () => {
-    it('should fuzzy match files in @path assignments', async () => {
-      const source = '/path @doc = "./my-important-file"\n/show <@doc>';
+  describe('Integration with path variables', () => {
+    it('should fuzzy match files in path-like assignments', async () => {
+      const source = '/var @doc = "./my-important-file"\n/show <@doc>';
       
       const result = await interpret(source, {
         fileSystem,
@@ -252,11 +266,11 @@ describe('Fuzzy Local File Imports', () => {
       expect(result.trim()).toBe('# Important Content');
     });
     
-    it('should fuzzy match directories in @path assignments', async () => {
+    it('should fuzzy match directories in path-like assignments', async () => {
       // TODO: This test is failing with a parse error. The fuzzy matching
       // for paths used in variable interpolation within brackets may not be
       // working correctly. Needs investigation.
-      const source = '/path @folder = "./my_projects"\n/show <@folder/README.md>';
+      const source = '/var @folder = "./my_projects"\n/show <@folder/README.md>';
       
       const result = await interpret(source, {
         fileSystem,

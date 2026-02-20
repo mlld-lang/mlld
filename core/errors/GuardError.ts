@@ -3,7 +3,8 @@ import type { OperationContext, GuardContextSnapshot } from '@interpreter/env/Co
 import type { GuardScope } from '@core/types/guard';
 import type { Environment } from '@interpreter/env/Environment';
 import type { GuardHint, GuardResult } from '@core/types/guard';
-import { MlldError, ErrorSeverity, type BaseErrorDetails } from './MlldError';
+import { ErrorSeverity, type BaseErrorDetails } from './MlldError';
+import { MlldDenialError, type DenialContext } from './denial';
 
 export interface GuardErrorDetails extends BaseErrorDetails {
   guardName?: string | null;
@@ -42,22 +43,35 @@ export interface GuardErrorOptions {
   hints?: GuardHint[];
   outputPreview?: string | null;
   timing?: 'before' | 'after';
+  policyName?: string | null;
+  policyRule?: string | null;
+  policySuggestions?: string[];
 }
 
-export class GuardError extends MlldError {
+export class GuardError extends MlldDenialError {
   public readonly decision: 'deny' | 'retry';
   public readonly retryHint?: string | null;
   public readonly reason?: string | null;
 
   constructor(options: GuardErrorOptions) {
     const resolvedReason = options.reason ?? defaultReasonForDecision(options.decision);
-    const resolvedMessage = options.message ?? formatGuardMessage({
-      ...options,
-      reason: resolvedReason
-    });
+    const displayName = normalizeGuardDisplayName(options.guardName);
+    const isPolicyDenial = Boolean(options.policyName);
+
+    const denialContext = isPolicyDenial
+      ? buildPolicyDenialContext(options, resolvedReason)
+      : buildGuardDenialContext({ ...options, guardName: displayName }, resolvedReason);
+
+    const resolvedMessage = isPolicyDenial
+      ? undefined
+      : (options.message ?? formatGuardMessage({
+          ...options,
+          guardName: displayName,
+          reason: resolvedReason
+        }));
 
     const details: GuardErrorDetails = {
-      guardName: options.guardName ?? null,
+      guardName: displayName,
       guardFilter: options.guardFilter,
       scope: options.scope,
       operation: options.operation,
@@ -74,8 +88,8 @@ export class GuardError extends MlldError {
       hints: options.hints
     };
 
-    super(resolvedMessage, {
-      code: 'GUARD_ERROR',
+    super(denialContext, {
+      message: resolvedMessage,
       severity: ErrorSeverity.Fatal,
       details,
       sourceLocation: options.sourceLocation ?? undefined,
@@ -86,6 +100,11 @@ export class GuardError extends MlldError {
     this.retryHint = options.retryHint ?? null;
     this.reason = resolvedReason ?? null;
   }
+}
+
+function normalizeGuardDisplayName(name?: string | null): string | null {
+  if (!name) return null;
+  return name.startsWith('@') ? name : `@${name}`;
 }
 
 function defaultReasonForDecision(decision: 'deny' | 'retry'): string {
@@ -142,4 +161,60 @@ function formatOperationLabel(operation?: OperationContext): string | null {
   const base = operation.type.startsWith('/') ? operation.type : `/${operation.type}`;
   const subtype = operation.subtype ? ` (${operation.subtype})` : '';
   return `${base}${subtype}`;
+}
+
+function buildPolicyDenialContext(options: GuardErrorOptions, reason: string): DenialContext {
+  const operationType = options.operation?.type ?? 'operation';
+  const description =
+    options.operation?.command ??
+    options.operation?.target ??
+    options.operation?.name ??
+    '';
+
+  return {
+    code: 'POLICY_CAPABILITY_DENIED',
+    operation: {
+      type: operationType,
+      description: description
+    },
+    blocker: {
+      type: 'policy',
+      name: options.policyName ?? 'policy',
+      rule: options.policyRule ?? undefined
+    },
+    reason,
+    suggestions: options.policySuggestions
+  };
+}
+
+function buildGuardDenialContext(options: GuardErrorOptions, reason: string): DenialContext {
+  const operationType = options.operation?.type ?? 'operation';
+  const description =
+    options.operation?.command ??
+    options.operation?.target ??
+    options.operation?.name ??
+    '';
+  const labels = {
+    input: Array.isArray(options.operation?.labels)
+      ? options.operation!.labels.map(label => String(label))
+      : [],
+    operation: Array.isArray(options.operation?.opLabels)
+      ? options.operation!.opLabels.map(label => String(label))
+      : []
+  };
+  const hasLabels = labels.input.length > 0 || labels.operation.length > 0;
+
+  return {
+    code: 'GUARD_DENIED',
+    operation: {
+      type: operationType,
+      description: description
+    },
+    blocker: {
+      type: 'guard',
+      name: formatGuardLabel(options.guardName ?? null, options.guardFilter)
+    },
+    ...(hasLabels ? { labels } : {}),
+    reason
+  };
 }

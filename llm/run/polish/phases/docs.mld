@@ -1,0 +1,173 @@
+>> Phase 5: Docs
+>> Processes documentation improvements from execute results and doc-fix tickets
+>>
+>> Input: pipeline/<run>/execute/results.json, doc-tagged tickets
+>> Output: pipeline/<run>/docs/results.json
+
+import { @claudePoll } from @mlld/claude-poll
+import { @updatePhaseStatus } from "../lib/state.mld"
+import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone, @loadEvents, @getCompletedItems } from "../lib/events.mld"
+import { @getOpenTickets, @addTags, @getTicket } from "../lib/tickets.mld"
+import { @debuglog, @dbg } from "../lib/debug.mld"
+
+/needs { sh }
+
+>> Tool permissions for doc fix agents
+var @docTools = "Read,Write,Edit,Glob,Grep,Bash(mlld:*),Bash(cat:*),Bash(ls:*)"
+
+>> Build prompt from template
+exe @buildDocFixPrompt(ticketId, ticketDescription, outputPath) = template "../prompts/docs-fix.att"
+
+>> Process a single doc fix ticket
+exe @processDocFix(runDir, ticketId) = [
+  >> Check if already completed
+  let @events = @loadEvents(@runDir)
+  let @completedIds = @getCompletedItems(@events)
+  let @alreadyCompleted = @completedIds.includes(@ticketId)
+
+  when @alreadyCompleted => show `      Skipping @ticketId (already completed)`
+
+  => when [
+    @alreadyCompleted => { ticket_id: @ticketId, skipped: true }
+    * => @_doProcessDocFix(@runDir, @ticketId)
+  ]
+]
+
+>> Internal function to process doc fix
+exe @_doProcessDocFix(runDir, ticketId) = [
+  >> Log item start
+  @logItemStart(@runDir, @ticketId, "doc-fix")
+
+  >> Get ticket details
+  let @ticketPath = `@base/.tickets/@ticketId.md`
+  let @ticketContent = <@ticketPath>?
+
+  => when [
+    !@ticketContent => [
+      @logItemDone(@runDir, @ticketId, "error", { error: "ticket not found" })
+      => { ticket_id: @ticketId, error: "ticket not found" }
+    ]
+    * => @_executeDocFix(@runDir, @ticketId, @ticketContent)
+  ]
+]
+
+>> Execute the doc fix after validation
+exe @_executeDocFix(runDir, ticketId, ticketContent) = [
+  >> Extract title/description from ticket
+  let @titleMatch = @ticketContent.match(/^#\s+(.+)$/m)
+  let @ticketDescription = @titleMatch ? @titleMatch[1] : @ticketId
+
+  show `      Processing doc fix: @ticketDescription`
+
+  >> Build and run prompt
+  let @outputPath = `@runDir/docs/@ticketId-result.json`
+  let @prompt = @buildDocFixPrompt(@ticketId, @ticketDescription, @outputPath)
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON result to @outputPath using the Write tool.`
+
+  let @response = @claudePoll(@fullPrompt, "sonnet", @base, @docTools, @outputPath)
+
+  let @result = <@outputPath>?
+  when @result => show `      [doc fix] success for @ticketId`
+  when !@result => show `      [doc fix] failed for @ticketId`
+
+  => when [
+    !@result => [
+      @logItemDone(@runDir, @ticketId, "failed", { error: "no result file" })
+      => { ticket_id: @ticketId, error: "doc fix failed" }
+    ]
+    * => @_finishDocFix(@runDir, @ticketId, @result)
+  ]
+]
+
+>> Finish doc fix and tag ticket
+exe @_finishDocFix(runDir, ticketId, result) = [
+  >> Log completion and tag ticket
+  let @status = @result.verified ? "completed" : "needs-review"
+  @logItemDone(@runDir, @ticketId, @status, @result)
+
+  when @result.verified => [
+    @addTags(@ticketId, "impl-done")
+    show `        Doc fix verified`
+  ]
+
+  => @result
+]
+
+>> Main docs function
+exe @runDocs(runDir, pl, pt) = [
+  >> Check for existing output (don't skip - may have partial progress)
+  let @outputPath = `@runDir/docs/results.json`
+
+  >> Find doc-fix tickets
+  >> Look for tickets tagged with "doc" or "docs" or type "docs"
+  let @allTickets = @getOpenTickets()
+  let @docTickets = for @tkt in @allTickets when @tkt.type == "docs" => @tkt
+
+  >> Also check work plan for doc-related items
+  let @workPlanPath = `@runDir/rank/work-plan.json`
+  let @workPlan = <@workPlanPath>?
+  let @workPlanItems = @workPlan && @workPlan.ranked_items ? @workPlan.ranked_items : []
+
+  >> Filter work plan for doc tickets (singles only - clusters have epic_id not ticket_id)
+  let @docFromWorkPlan = for @item in @workPlanItems when @item.area && @item.area.includes("doc") && @item.ticket_id => @item
+
+  >> Combine sources (simple concat - may have dupes but ok for now)
+  let @docTicketIds = for @tkt in @docTickets => @tkt.id
+  let @workPlanDocIds = for @item in @docFromWorkPlan => @item.ticket_id
+  let @uniqueDocIds = @docTicketIds.concat(@workPlanDocIds)
+
+  >> Debug: show what we found
+  show `  [docs] @docTickets.length tickets from tk, @docFromWorkPlan.length from work plan`
+
+  when @uniqueDocIds.length == 0 => show `  No doc fix tickets found`
+
+  => when [
+    @uniqueDocIds.length == 0 => [
+      let @emptyResults = { created: @now, results: [] }
+      output @emptyResults to "@outputPath"
+      => @emptyResults
+    ]
+    * => @_doDocs(@runDir, @outputPath, @uniqueDocIds, @pl, @pt)
+  ]
+]
+
+>> Internal function to do the actual docs work
+exe @_doDocs(runDir, outputPath, uniqueDocIds, pl, pt) = [
+  >> Log phase start
+  @logPhaseStart(@runDir, "docs")
+
+  show `  Processing @uniqueDocIds.length doc fix tickets (parallel: @pl, pacing: @pt)...`
+
+  >> Process doc fixes (can run in parallel - no worktrees)
+  let @results = for parallel(@pl, @pt) @ticketId in @uniqueDocIds [
+    let @idx = @mx.for.index + 1
+    show `  [@idx/@uniqueDocIds.length] Doc fix: @ticketId`
+    => @processDocFix(@runDir, @ticketId)
+  ]
+
+  >> Build final results
+  let @docsResults = {
+    created: @now,
+    total_tickets: @uniqueDocIds.length,
+    results: @results
+  }
+
+  output @docsResults to "@outputPath"
+
+  >> Log completion
+  let @completed = for @r in @results when @r.verified => @r
+  let @failed = for @r in @results when @r.error => @r
+  let @skipped = for @r in @results when @r.skipped => @r
+
+  @logPhaseComplete(@runDir, "docs", { processed: @results.length, completed: @completed.length })
+
+  show `  Docs phase complete:`
+  show `    Total: @results.length`
+  show `    Completed: @completed.length`
+  show `    Failed: @failed.length`
+  show `    Skipped: @skipped.length`
+
+  => @docsResults
+]
+
+/export { @runDocs, @processDocFix, @_doDocs, @_doProcessDocFix, @_executeDocFix, @_finishDocFix }

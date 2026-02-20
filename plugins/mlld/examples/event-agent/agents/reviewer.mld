@@ -1,0 +1,15 @@
+>> @meta.id = reviewer
+>> @meta.name = Reviewer Agent
+>> @meta.capabilities = Reviews and critiques work products: code, documents, proposals
+
+import { @claudePoll } from @mlld/claude-poll
+
+exe @taskPrompt(task) = template "./prompts/agents/review.att"
+
+var @meta = {
+  id: "reviewer",
+  name: "Reviewer Agent",
+  capabilities: "Reviews and critiques work products: code, documents, proposals"
+}
+
+export { @meta, @taskPrompt }

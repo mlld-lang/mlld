@@ -1,0 +1,6 @@
+>> Test early return from for block using when
+var @results = for @i in [1, 2, 3] [
+  when @i == 2 => `early-@i`
+  => `normal-@i`
+]
+show @results | @json

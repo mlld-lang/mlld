@@ -7,8 +7,13 @@ mlld supports prose execution - the ability to define executable functions that 
 Prose execution requires:
 
 1. **Claude Code** - The model executor uses `claude -p` to run prompts
-2. **OpenProse plugin** - Install with `/plugin install open-prose@prose` in Claude Code
-3. **Skill approval** - The first time you run prose, Claude Code will prompt you to approve the OpenProse skills
+2. **OpenProse plugin** - Install in Claude Code:
+   ```
+   /plugin marketplace add git@github.com:openprose/prose.git
+   /plugin install open-prose@prose
+   ```
+3. **Restart Claude Code** and boot OpenProse with `/prose-boot`
+4. **Skill approval** - Claude Code will prompt you to approve the OpenProse skills on first use
 
 ## Syntax
 
@@ -41,8 +46,11 @@ The config object specifies how prose is executed:
 ```mlld
 import { @claude } from @mlld/claude
 
+>> Create a model executor
+exe @opusModel(prompt) = @claude(@prompt, "opus", @root)
+
 var @config = {
-  model: @claude("prompt", "opus", @base),
+  model: @opusModel,
   skills: ["open-prose:prose-boot", "open-prose:prose-compile", "open-prose:prose-run"]
 }
 ```
@@ -71,10 +79,13 @@ open-prose:prose-run
 You can use any interpreter by specifying different skills:
 
 ```mlld
-import { @opus } from @mlld/claude
+import { @claude } from @mlld/claude
+
+>> Create a model executor
+exe @myModel(prompt) = @claude(@prompt, "opus", @root)
 
 var @myInterpreter = {
-  model: @opus,
+  model: @myModel,
   skills: ["my-dsl:boot", "my-dsl:run"]
 }
 
@@ -85,6 +96,13 @@ exe @analyze(data) = prose:@myInterpreter {
 ```
 
 ## Content Sources
+
+Interpolation rules by content source:
+
+- `prose:@config { inline }` — interpolates `@var` like templates
+- `"file.prose"` — no interpolation, raw content
+- `"file.prose.att"` — ATT interpolation (`@var`, `<file.md>` loading, `/for.../end` loops for arrays)
+- `"file.prose.mtt"` — MTT interpolation (`{{var}}`)
 
 ### Inline Content
 
@@ -100,7 +118,7 @@ exe @summarize(text) = prose:@config {
 
 ### File Reference
 
-Plain `.prose` files are loaded and interpolated:
+Plain `.prose` files are loaded as raw content (no interpolation):
 
 ```mlld
 exe @analyze(data) = prose:@config "./analysis.prose"
@@ -165,6 +183,8 @@ Required skills: open-prose:prose-boot, open-prose:prose-compile, open-prose:pro
 ```
 
 To fix:
-1. Install the plugin: `/plugin install open-prose@prose` in Claude Code
-2. Run a prose script - Claude Code will prompt for skill approval
-3. Approve the skills when prompted
+1. Add the plugin: `/plugin marketplace add git@github.com:openprose/prose.git`
+2. Install it: `/plugin install open-prose@prose`
+3. Restart Claude Code and run `/prose-boot`
+4. Approve the skills when prompted
+

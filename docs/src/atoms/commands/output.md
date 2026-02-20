@@ -8,6 +8,7 @@ tags: [output, files, streams, io]
 related: [log, append]
 related-code: [interpreter/eval/output.ts, grammar/patterns/output.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 ```mlld

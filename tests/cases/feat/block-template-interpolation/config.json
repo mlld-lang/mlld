@@ -1,0 +1,4 @@
+{
+  "mode": "strict",
+  "description": "Regression test for template interpolation in block let statements"
+}

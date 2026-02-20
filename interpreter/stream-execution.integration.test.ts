@@ -53,4 +53,29 @@ describe('StreamExecution integration (chunk ordering)', () => {
     // Completion should happen after the last chunk timestamp
     expect(latestChunkTs).toBeLessThanOrEqual(Date.now());
   });
+
+  it('stops loop execution via in-flight handle.updateState without cancel', async () => {
+    const script = [
+      'loop(99999, 50ms) until @state.exit [',
+      '  continue',
+      ']',
+      'show "loop-stopped"'
+    ].join('\n');
+
+    const handle = (await interpret(script, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'stream',
+      streaming: { enabled: false },
+      dynamicModules: {
+        '@state': { exit: false }
+      }
+    })) as StreamHandle;
+    await handle.updateState?.('exit', true);
+
+    const result = await handle.result();
+    expect(result.output).toContain('loop-stopped');
+    expect(result.stateWrites).toHaveLength(0);
+  });
 });

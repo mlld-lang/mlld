@@ -50,7 +50,7 @@ Import from registry, local files, or URLs.
 **Registry modules:**
 
 ```mlld
-import { @parallel, @retry } from @mlld/core
+import { @sortBy, @unique } from @mlld/array
 import @corp/utils as @corp
 
 >> With version
@@ -62,7 +62,7 @@ import { @helper } from @alice/utils@^1.0.0   >> semver range
 
 ```mlld
 import { @helper } from "./utils.mld"
-import { @config } from <@base/config.mld>
+import { @config } from <@root/config.mld>
 import { @prompt } from "../prompts/main.mld"
 ```
 
@@ -74,6 +74,15 @@ import @bob/utils as @bob
 
 show @alice.format(@data)
 show @bob.format(@data)   >> no collision
+```
+
+**MCP tool imports:**
+
+```mlld
+import tools { @readFile } from mcp "@anthropic/filesystem"
+import tools from mcp "@github/issues" as @github
+
+show @github.createIssue("title", "body")
 ```
 
 **Directory imports:**
@@ -110,16 +119,41 @@ import cached(1h) <https://feed.xml> as @feed
 import local { @dev } from @alice/experimental
 ```
 
-**Template collections:**
+**Template collections** import an entire directory of `.att` files as a callable namespace:
 
 ```mlld
-import templates from "@base/agents" as @agents(message, context)
+import templates from "@root/agents" as @agents(message, context)
 
+>> Access templates by name (bracket or dot notation)
 show @agents["alice"](@msg, @ctx)           >> agents/alice.att
 show @agents.support["helper"](@msg, @ctx)  >> agents/support/helper.att
 ```
 
-Template collections require parameters. All templates in directory share the signature.
+**Directory structure example:**
+
+```
+agents/
+  alice.att          >> @agents["alice"](msg, ctx)
+  bob.att            >> @agents["bob"](msg, ctx)
+  support/
+    helper.att       >> @agents.support["helper"](msg, ctx)
+    escalate.att     >> @agents.support["escalate"](msg, ctx)
+```
+
+**Key rules:**
+
+- All templates in a collection share the same parameter signature
+- Filenames with hyphens become underscores: `json-pretty.att` → `@tpl["json_pretty"]`
+- Use dot notation for directories, brackets for template names
+- Collections require parameters in the `as @name(params)` clause
+
+**When to use collections:**
+
+- Multiple templates with the same interface (agent prompts, formatters)
+- Dynamic template selection based on runtime values
+- Organizing related templates by category
+
+For single templates, use `exe @func(params) = template "file.att"` instead.
 </IMPORT_TYPES>
 
 <EXPORTING>
@@ -202,7 +236,7 @@ Prefixes map `@` references to content sources.
 
 **Built-in:**
 - `@author/module` → Registry
-- `@base/file` → Project root
+- `@root/file` → Project root
 - `./file.mld` → Local (with fuzzy extension matching)
 
 **Custom prefixes** (mlld-config.json):

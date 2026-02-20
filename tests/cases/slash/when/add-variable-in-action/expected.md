@@ -16,9 +16,10 @@ Hello from a template with Hello from a text variable
 
 {"message": "Hello from data"}
 
-## Test 3: Inside /when first: actions
+## Test 3: Inside /when: actions
 
 Hello from a text variable
+
 ## Test 4: Mixed with exec invocations
 
 Hello, Alice!

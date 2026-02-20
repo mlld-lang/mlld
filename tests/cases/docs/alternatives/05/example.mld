@@ -1,5 +1,0 @@
-exe @formatTweet(handle, content, mentions) = template "./social/tweet.mtt"
-
->> tweet.mtt contents:
->> @{{handle}}: {{content}}
->> cc: {{mentions}}

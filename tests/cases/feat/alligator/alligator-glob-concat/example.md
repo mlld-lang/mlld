@@ -11,15 +11,15 @@ This test verifies that glob patterns concatenate content by default, consistent
 ## Glob Pattern Behavior
 
 /var @files = <glob-concat-file*.md>
-/show @files.content
-/show `All files concatenated via .content`
+/show @files.mx.text
+/show `All files concatenated via .mx.text`
 
 ## Field Access on Glob
 
 /var @allFiles = <glob-concat-file*.md>
-/show @allFiles.content
+/show @allFiles.mx.text
 /show `First file title: @allFiles[0].mx.fm.title`
-/show @allFiles[0].content
+/show @allFiles[0].mx.text
 
 ## Template Interpolation
 

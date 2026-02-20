@@ -1,0 +1,5 @@
+/import { @a } from "./import-circular-modules-a.mld"
+
+/var @b = "from B"
+
+/export { @b }

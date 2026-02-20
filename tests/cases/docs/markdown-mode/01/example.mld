@@ -1,2 +1,0 @@
-/var @name = "Alice"
-/show `Hello @name!`

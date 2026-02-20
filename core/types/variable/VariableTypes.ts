@@ -14,6 +14,7 @@ import type { CapabilityContext, SecurityDescriptor, DataLabel } from '../securi
 import type { TokenMetricSource } from '@core/utils/token-metrics';
 import type { QuantifierHelper } from './ArrayHelpers';
 import type { ExecutableDefinition } from '../executable';
+import type { ToolCollection } from '../tools';
 
 // =========================================================================
 // BASE TYPES
@@ -120,6 +121,7 @@ export interface VariableContext {
   filename?: string;
   relative?: string;
   absolute?: string;
+  path?: string;
   url?: string;
   domain?: string;
   title?: string;
@@ -134,6 +136,8 @@ export type VariableContextSnapshot = VariableContext;
 
 export interface VariableInternalMetadata extends Record<string, unknown> {
   executableDef?: ExecutableDefinition;
+  toolCollection?: ToolCollection;
+  isToolsCollection?: boolean;
   transformerImplementation?: (...args: unknown[]) => unknown;
   transformerVariants?: Record<string, unknown>;
   isBuiltinTransformer?: boolean;
@@ -159,6 +163,7 @@ export interface VariableInternalMetadata extends Record<string, unknown> {
     template: string;
   };
   templateAst?: any[];
+  templateRaw?: string;
   configType?: string;
   itemType?: string;
   wasEvaluated?: boolean;
@@ -166,6 +171,10 @@ export interface VariableInternalMetadata extends Record<string, unknown> {
   fromGlobPattern?: boolean;
   globPattern?: string;
   fileCount?: number;
+  mcpTool?: {
+    name: string;
+    argumentMode?: 'object';
+  };
 }
 
 // =========================================================================
@@ -358,6 +367,8 @@ export interface ExecutableVariable extends BaseVariable {
     language?: 'js' | 'node' | 'python' | 'sh' | 'bash';
   };
   paramNames: string[];
+  paramTypes?: Record<string, string>;
+  description?: string;
   metadata?: VariableMetadata;
 }
 

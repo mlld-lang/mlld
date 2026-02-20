@@ -17,6 +17,164 @@ run cmd { echo @apiKey }  >> Blocked by guard
 
 Inline effects (`| output`, `| show`, `| append`, `| log`) use the same guard path as directives. Guard filters `op:output`/`op:show`/`op:append`/`op:log` cover both inline effects and directives.
 
+## Guards vs Hooks
+
+Use guards for enforcement and hooks for instrumentation/observability:
+
+- Guards can deny/retry and are part of policy enforcement.
+- Hooks cannot deny operations; they can transform values and emit telemetry.
+- Hook failures are isolated and surfaced in `@mx.hooks.errors` so the parent operation continues.
+- Hook bodies can call normal directives/executables (`output`, `append`, `run`, `state://`, and function calls), but those failures stay inside hook error collection.
+
+Example pattern (telemetry + non-fatal sink failure):
+
+```mlld
+hook @telemetry after op:exe = [
+  output `event:@mx.op.name` to "state://telemetry"
+]
+
+hook @sinkFailure after op:exe = [
+  append "not-json" to "telemetry.jsonl"   >> intentionally fails
+]
+
+hook @capture after op:exe = [
+  append `hook-errors:@mx.hooks.errors.length` to "hook-errors.log"
+]
+```
+
+## Standard Policy Patterns
+
+These are conventional policy module names you can create for your project:
+
+- `@project/production` - strict defaults for production
+- `@project/development` - permissive defaults for development
+- `@project/sandbox` - maximum restriction defaults for untrusted code
+
+Define them in your project and use with `/import policy`:
+
+```mlld
+import policy @prod from "./policies/production.mld"
+```
+
+See "Named Policies" below for how to define these.
+
+## Signing and Verification
+
+Use `sign` and `verify` to bind content to a signature:
+
+```mlld
+var @prompt = ::Review @input::
+sign @prompt by "alice" with sha256
+verify @prompt
+```
+
+Policy defaults can auto-sign templates or variables and auto-verify prompts passed to `llm`-labeled executables:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    autosign: ["templates"],
+    autoverify: true
+  }
+}
+policy @p = union(@policyConfig)
+
+var @auditPrompt = ::Review @input::
+exe llm @audit() = run cmd { claude -p "@auditPrompt" }
+```
+
+Auto-sign variable name patterns with glob syntax:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    autosign: { variables: ["@*Prompt", "@*Instructions"] }
+  }
+}
+```
+
+Auto-verify supports custom instructions:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    autoverify: "./verify.att"
+  }
+}
+```
+
+When autoverify is enabled and a signed prompt reaches an `llm` exe, mlld injects `MLLD_VERIFY_VARS` and prepends verification instructions to the prompt. `MLLD_VERIFY_VARS` lists variable names without the `@` sigil. Autoverify implicitly allows `cmd:mlld:verify`.
+
+## Named Policies
+
+Define a policy object and export it:
+
+```mlld
+/policy @production = {
+  defaults: { rules: ["no-secret-exfil", "no-sensitive-exfil"] },
+  capabilities: {
+    allow: ["cmd:git:*"],
+    danger: ["@keychain"]
+  }
+}
+/export { @production }
+```
+
+Import it like any other policy module:
+
+```mlld
+/import policy @production from "./policies.mld"
+```
+
+## Policy Composition
+
+Multiple policies compose automatically when imported or declared:
+
+```mlld
+>> Team policy allows echo and git
+var @team = {
+  capabilities: { allow: ["cmd:echo:*", "cmd:git:*"] }
+}
+policy @p1 = union(@team)
+
+>> Project policy allows echo and node
+var @project = {
+  capabilities: { allow: ["cmd:echo:*", "cmd:node:*"] }
+}
+policy @p2 = union(@project)
+
+>> Effective: only echo (intersection of both policies)
+run { echo "allowed by both" }
+```
+
+Composition rules:
+
+| Field | Rule | Effect |
+|-------|------|--------|
+| `allow` | Intersection | Must be allowed by ALL policies |
+| `deny` | Union | Denied by ANY policy |
+| `danger` | Intersection | Must be opted into by ALL |
+| `limits` | Minimum | Most restrictive wins |
+
+**Note:** If allow lists have no overlap, the intersection is empty and all operations are blocked. Ensure shared baseline commands appear in all layers.
+
+Label deny rules and auth configs from all layers merge via union — a `deny` on `secret → op:cmd` from ANY layer blocks that flow in the merged policy.
+
+## Checkpoint Cache Drift and Guard Changes
+
+Checkpointing is memoization for `llm`-labeled work. Cache validity is based on invocation key matching, not dynamic policy diffing.
+
+- If guard/policy rules change and you want safety checks to re-run on previously cached paths, re-run with `--fresh`.
+- If you keep checkpoint cache enabled without `--fresh`, existing cache hits may still be returned.
+- Cache-hit path skips guard evaluation (both `before` and `after`); guard hooks run only on miss path.
+- Use `--fresh` (or targeted resume invalidation) when you need updated guard/policy logic to re-evaluate prior `llm` calls.
+- This behavior is intentional in early rollout phases; targeted guard/policy fingerprint invalidation is planned as a future enhancement.
+
+```bash
+# Force miss path and rebuild cache after policy/guard changes
+mlld run pipeline --checkpoint --fresh
+```
+
 ## Data Labels
 
 Mark data as sensitive by adding labels to variable declarations:
@@ -57,6 +215,7 @@ Automatic taint labels:
 - `src:exec` — outputs from `run` or `exe`
 - `src:file` — loaded file content, plus `dir:/...` entries for every parent directory
 - `src:dynamic` — dynamic modules injected via `dynamicModules`
+- `src:env:<provider>` — outputs from environment providers
 
 Use taint in guards to block risky sources:
 
@@ -68,6 +227,37 @@ guard @noUploads before op:run = when [
 ]
 ```
 
+### Influenced Label
+
+The `influenced` label marks LLM outputs that processed untrusted data, defending against prompt injection:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    rules: ["untrusted-llms-get-influenced"]
+  }
+}
+policy @p = union(@policyConfig)
+
+var untrusted @task = "Review this external input"
+exe llm @process(input) = run cmd { claude -p "@input" }
+
+var @result = @process(@task)
+show @result.mx.labels  >> ["llm", "untrusted", "influenced"]
+```
+
+The label is applied automatically when the `untrusted-llms-get-influenced` rule is enabled, the executable is labeled `llm`, and the input contains the `untrusted` label. The label propagates through interpolation.
+
+Restrict influenced outputs via policy:
+
+```mlld
+labels: {
+  influenced: {
+    deny: ["destructive", "exfil"]
+  }
+}
+```
+
 ## Guards
 
 Guards enforce policies on labeled data or operations.
@@ -75,7 +265,12 @@ Guards enforce policies on labeled data or operations.
 ### Basic Guard Syntax
 
 ```
-/guard [@name] TIMING LABEL = when [
+guard [@name] TIMING LABEL = when [
+  CONDITION => ACTION
+  * => allow
+]
+
+guard privileged [@name] TIMING LABEL = when [
   CONDITION => ACTION
   * => allow
 ]
@@ -85,14 +280,26 @@ Where:
 - `@name` is optional guard name
 - `TIMING` is required: `before`, `after`, or `always`
 - `LABEL` is a data label (`secret`, `pii`) or operation filter (`op:run`, `op:exe`)
+- `privileged` marks the guard as non-bypassable and enables privileged label operations
 
-**Syntactic sugar:** `/guard [@name] for LABEL = when [...]` is equivalent to `before` timing. Using explicit `before` is recommended for clarity.
+**Syntactic sugar:** `guard [@name] for LABEL = when [...]` is equivalent to `before` timing. Using explicit `before` is recommended for clarity.
+Equivalent privileged form: `guard [@name] TIMING LABEL = when [...] with { privileged: true }`.
 
 Actions:
 - `allow` - Operation proceeds
 - `deny "reason"` - Operation blocked
 - `retry "hint"` - Retry operation (pipelines only)
 - `allow @value` - Transform and allow
+- `env @config` - Selects an execution environment
+
+### Timing Comparison: `before LABEL` vs `before op:TYPE`
+
+| Guard form | Trigger moment | Frequency | `denied` handler support |
+|---|---|---|---|
+| `before LABEL` (or `for LABEL`) | Labeled value creation | Once per labeled value | No |
+| `before op:TYPE` | Operation execution | Every operation attempt | Yes |
+
+Use `before LABEL` for entry-time label policy and `before op:TYPE` for per-operation policy.
 
 ### Guard on Data Labels
 
@@ -134,7 +341,10 @@ show @sendData("test")  >> Blocked
 
 ## Denied Handlers
 
-Handle guard denials gracefully with `denied =>` branches:
+Handle guard denials gracefully with `denied =>` branches. Note: `deny` is a guard action that blocks an operation; `denied` is a when-condition that tests if we're in a denied context:
+
+- `denied` handlers catch operation-time denials (`before op:*` and `after op:*`).
+- `denied` handlers do not catch `before LABEL` denials because label-entry denials occur before operation context exists.
 
 ```mlld
 guard @secretBlock before secret = when [
@@ -169,8 +379,8 @@ Before guards check inputs before operations execute:
 
 ```mlld
 guard @validateInput before op:exe = when [
-  @input.length > 1000 => deny "Input too large"
-  @input.includes("<script") => deny "Potentially malicious input"
+  @input.any.text.includes("<script") => deny "Potentially malicious input"
+  @input.any.text.includes("sk-") => deny "Potentially sensitive token"
   * => allow
 ]
 
@@ -245,7 +455,7 @@ guard @checkBoth always op:exe = when [
 ]
 ```
 
-Use `@mx.guard.timing` to differentiate:
+`always` timing runs in both phases. In each phase, guards execute top-to-bottom in declaration order. Use `@mx.guard.timing` to differentiate:
 
 ```mlld
 exe @tagValue(timing, out, inp) = js {
@@ -254,30 +464,36 @@ exe @tagValue(timing, out, inp) = js {
 }
 
 exe @emit(v) = js { return v; }
-show @emit("test")
+show @emit("test")  >> after:before:test
 ```
 
 ## Guard Composition
 
-Multiple guards execute in order (top-to-bottom in file):
+Composition rules:
+
+- Guards execute top-to-bottom in declaration order.
+- Decision precedence: `deny` > `retry` > `allow @value` > `allow`.
+- Before transforms use the last matching replacement as operation input.
+- After transforms apply sequentially; each guard sees the previous guard's output.
+- `retry` applies only to retryable operation contexts (for example pipeline stages). In non-retryable contexts, `retry` resolves as a deny.
+
+Before transforms: last replacement wins for operation input.
 
 ```mlld
 guard @first before secret = when [
-  * => allow @input.trim()
+  * => allow "first"
 ]
 
 guard @second before secret = when [
-  * => allow `safe:@input`
+  * => allow "second"
 ]
 
-var secret @data = "  hello  "
+var secret @data = "original"
 exe @deliver(v) = `Result: @v`
 
->> Result: safe:hello
+>> Result: second
 show @deliver(@data)
 ```
-
-Decision precedence: deny > retry > allow @value > allow
 
 ```mlld
 guard @retryGuard before secret = when [
@@ -307,19 +523,29 @@ var secret @key = "sk-12345"
 show @key  >> Output: *********
 ```
 
-Transforms chain across multiple guards:
+For `before op:exe`, transform from `@input` (not `@output`) because executable output does not exist yet in the `before` phase.
 
 ```mlld
-guard @trim before secret = when [
-  * => allow @input.trim()
+exe @normalize(value) = js { return String(@value).trim().toLowerCase(); }
+
+guard @normalizeExeInput before op:exe = when [
+  * => allow @normalize(@input)
+]
+```
+
+After transforms chain sequentially:
+
+```mlld
+guard @stepOne after op:exe = when [
+  * => allow `one:@output`
 ]
 
-guard @wrap before secret = when [
-  * => allow `[REDACTED: @input]`
+guard @stepTwo after op:exe = when [
+  * => allow `two:@output`
 ]
 
-var secret @key = "  sk-12345  "
-show @key  >> Output: [REDACTED: sk-12345]
+exe @emit(v) = js { return v; }
+show @emit("base")  >> two:one:base
 ```
 
 ## Guard Context
@@ -330,11 +556,13 @@ Access guard evaluation context with `@mx.guard.*`:
 
 ```mlld
 guard @retryOnce before op:exe = when [
-  @mx.guard.try == 1 => retry "first attempt failed"
-  @mx.guard.try == 2 => retry "second attempt failed"
+  @mx.op.type == "pipeline-stage" && @mx.guard.try == 1 => retry "first attempt failed"
+  @mx.op.type == "pipeline-stage" && @mx.guard.try == 2 => retry "second attempt failed"
   * => allow
 ]
 ```
+
+`retry` is pipeline-scope in practice. A non-pipeline operation that returns `retry` is denied with a retry-scope error.
 
 ### In Denied Handlers
 
@@ -419,6 +647,92 @@ import { @secretProtection } from "./guards/secrets.mld"
 
 var secret @key = "sk-12345"
 run cmd { echo @key }  >> Protected by imported guard
+```
+
+## Environment Isolation
+
+Use `env` blocks to scope execution within a named environment configuration:
+
+```mlld
+var @sandbox = { tools: ["Read", "Write", "Bash"] }
+
+env @sandbox [
+  run cmd { echo "inside sandbox" }
+]
+```
+
+The environment is active only within the block and released on exit. Variables defined inside don't leak out, but the block can access parent scope variables.
+
+Return a value from a block with `=>`:
+
+```mlld
+var @config = { tools: ["Read", "Write"] }
+
+var @result = env @config [
+  => "completed"
+]
+
+show @result
+```
+
+Derive a restricted environment inline with `with`:
+
+```mlld
+var @sandbox = { tools: ["Read", "Write", "Bash"] }
+
+var @result = env @sandbox with { tools: ["Read"] } [
+  => "read-only mode"
+]
+```
+
+Child environments can only restrict parent capabilities, never extend them.
+
+### Sandboxed Execution with the env Directive
+
+The full `env` directive supports provider-based isolation, credential management, and capability control:
+
+```mlld
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  fs: { read: [".:/app"], write: ["/tmp"] },
+  net: "none",
+  tools: ["Read", "Bash"],
+  mcps: []
+}
+
+env @sandbox [
+  run cmd { claude -p "Analyze the codebase" } using auth:claude
+]
+```
+
+The provider runs commands in a Docker container. `fs` restricts filesystem mounts, `net` blocks network access, `tools` limits runtime tool availability, and `mcps: []` blocks MCP servers. Credentials flow through sealed paths via `using auth:*` — never interpolated into command strings.
+
+**Config fields:**
+
+| Field | Purpose |
+|-------|---------|
+| `provider` | Isolation provider (`"@mlld/env-docker"`, `"@mlld/env-sprites"`) |
+| `auth` | Authentication reference from policy |
+| `tools` | Runtime tool allowlist |
+| `mcps` | MCP server allowlist (`[]` blocks all) |
+| `fs` | Filesystem access (passed to provider) |
+| `net` | Network restrictions (passed to provider) |
+| `limits` | Resource limits (passed to provider) |
+| `profile` | Explicit profile selection |
+| `profiles` | Profile definitions for policy-based selection |
+
+**Capability attenuation:**
+
+```mlld
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  tools: ["Read", "Write", "Bash"]
+}
+
+env @sandbox with { tools: ["Read"] } [
+  >> Only Read is available here
+  run cmd { claude -p @task }
+]
 ```
 
 ## Expression Tracking
@@ -571,6 +885,46 @@ show @safe  >> Retries once, then succeeds
 
 Retry budget is shared across guard chain (max 3 attempts).
 
+## Signing and Verification
+
+Sign a prompt or template and verify it in another step:
+
+```mlld
+var @auditPrompt = `Review @input for policy issues.`
+sign @auditPrompt
+verify @auditPrompt
+```
+
+Autosign supports template categories and variable patterns:
+
+```mlld
+var @policyConfig = { defaults: { autosign: ["templates"] } }
+policy @p = union(@policyConfig)
+
+exe @auditPrompt(input) = template "./audit.att"
+```
+
+```mlld
+var @policyConfig = { defaults: { autosign: { variables: ["@*Prompt", "@*Instructions"] } } }
+policy @p = union(@policyConfig)
+```
+
+Autoverify prepends verification instructions for signed variables passed to llm-labeled executables and sets `MLLD_VERIFY_VARS`:
+
+```mlld
+var @policyConfig = { defaults: { autoverify: true } }
+policy @p = union(@policyConfig)
+
+exe llm @audit() = run cmd { claude -p "@auditPrompt" }
+```
+
+Custom instructions use a template path:
+
+```mlld
+var @policyConfig = { defaults: { autoverify: "./verify.att" } }
+policy @p = union(@policyConfig)
+```
+
 ## Best Practices
 
 **Label sensitive data early:**
@@ -640,7 +994,8 @@ Array quantifiers for per-operation guards:
 ```mlld
 guard @blockSecretsInRun before op:run = when [
   @input.any.mx.labels.includes("secret") => deny "Shell cannot access secrets"
-  @input.all.mx.tokest < 1000 => allow
+  @input.any.text.includes("sk-") => deny "Shell input contains a token pattern"
+  @input.all.mx.tokens < 1000 => allow
   @input.none.mx.labels.includes("pii") => allow
   * => deny "Input validation failed"
 ]

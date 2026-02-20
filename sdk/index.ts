@@ -1,7 +1,7 @@
 /**
- * Mlld API Entry Point
- * 
- * Provides the main API for processing Mlld documents programmatically.
+ * mlld API Entry Point
+ *
+ * Provides the main API for processing mlld documents programmatically.
  */
 /// <reference types="node" />
 import { MlldError } from '@core/errors/MlldError';
@@ -36,11 +36,12 @@ export type {
   GuardInfo,
   ImportInfo,
   VariableInfo,
-  WantsTier,
   ModuleStats,
   AnalysisError,
   AnalysisWarning
 } from './analyze';
+
+export type { ProfilesDeclaration } from '@core/policy/needs';
 
 // Export types
 export type { Location, Position } from '@core/types/index';
@@ -54,6 +55,7 @@ export type {
   SDKCommandEvent,
   SDKStreamEvent,
   SDKExecutionEvent,
+  SDKStateWriteEvent,
   SDKDebugEvent,
   SDKStreamingEvent,
   SDKStreamingThinkingEvent,

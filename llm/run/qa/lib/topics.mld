@@ -1,0 +1,21 @@
+>> Topics Library
+>> Topic discovery from atom frontmatter and filtering
+
+>> Load all topics from atoms filtered by qa_tier
+exe @loadTopics(tier) = [
+  let @atomFiles = <@base/docs/src/atoms/**/*.md>
+  let @tiers = @tier ? @tier.split(",") : []
+  => for @f in @atomFiles when @f.mx.fm.qa_tier && @f.mx.fm.id && !@f.mx.fm.id.startsWith("_") && (@tiers.length == 0 || @tiers.includes(`@f.mx.fm.qa_tier`)) => @f.mx.fm.id
+]
+
+>> Filter topics by --topic (prefix) or --topics (comma list)
+exe @filterTopics(all, filter, list) = when [
+  @list => for @t in @all when @list.split(",").includes(@t) => @t
+  @filter => for @t in @all when @t == @filter || @t.startsWith(@filter) => @t
+  * => @all
+]
+
+/export {
+  @loadTopics,
+  @filterTopics
+}

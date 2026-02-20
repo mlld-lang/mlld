@@ -9,7 +9,7 @@ import {
   type GuardInputHelper
 } from '@core/types/variable/ArrayHelpers';
 
-export type HookDecisionAction = 'continue' | 'abort' | 'retry' | 'deny';
+export type HookDecisionAction = 'continue' | 'abort' | 'retry' | 'deny' | 'fulfill';
 
 export interface HookDecision {
   action: HookDecisionAction;

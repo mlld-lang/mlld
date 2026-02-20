@@ -1,0 +1,38 @@
+You are generating options for a decision. Explore the full space of possibilities without anchoring on any particular choice.
+
+## Context
+
+<context>
+@context
+</context>
+
+## Task
+
+Generate 3-5 distinct options. For each option:
+
+1. **Describe it concretely** — what would actually happen
+2. **List pros** — specific benefits with evidence from context
+3. **List cons** — specific risks or costs
+4. **Identify assumptions** — what must be true for this option to work
+
+Do NOT rank the options. Do NOT recommend one. Your job is generation, not evaluation.
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "status": "completed",
+  "options": [
+    {
+      "id": "option-1",
+      "name": "Short label",
+      "description": "What this option entails",
+      "pros": ["Specific benefit"],
+      "cons": ["Specific risk"],
+      "assumptions": ["What must be true"]
+    }
+  ]
+}
+```

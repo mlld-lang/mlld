@@ -1,29 +1,39 @@
 #!/usr/bin/env node
 
 import { execSync } from 'child_process';
-import { readdirSync, statSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
-function findFixtures(basePath, prefix = '') {
+function findFixtures(basePath) {
   const fixtures = [];
-  try {
-    const entries = readdirSync(basePath, { withFileTypes: true });
 
-    for (const entry of entries) {
-      const fullPath = join(basePath, entry.name);
-      const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+  function walk(dir) {
+    try {
+      const entries = readdirSync(dir, { withFileTypes: true });
 
-      if (entry.isDirectory() && entry.name !== 'index.ts') {
-        fixtures.push(...findFixtures(fullPath, relativePath));
-      } else if (entry.name.endsWith('.generated-fixture.json')) {
-        const fixtureName = relativePath.replace('.generated-fixture.json', '');
-        fixtures.push(fixtureName);
+      for (const entry of entries) {
+        const fullPath = join(dir, entry.name);
+
+        if (entry.isDirectory() && entry.name !== 'index.ts') {
+          walk(fullPath);
+        } else if (entry.name.endsWith('.generated-fixture.json')) {
+          // Read the JSON to get the actual fixture name
+          try {
+            const content = JSON.parse(readFileSync(fullPath, 'utf8'));
+            if (content.name) {
+              fixtures.push(content.name);
+            }
+          } catch {
+            // Skip files we can't parse
+          }
+        }
       }
+    } catch {
+      // Directory doesn't exist, skip
     }
-  } catch (error) {
-    // Directory doesn't exist, return empty
   }
 
+  walk(basePath);
   return fixtures;
 }
 
@@ -104,7 +114,8 @@ function main() {
 
   try {
     const cmd = `NODE_ENV=test MLLD_NO_STREAMING=true vitest run interpreter/interpreter.fixture.test.ts -t "${combinedPattern}"`;
-    execSync(cmd, { stdio: 'inherit' });
+    // Use ['ignore', 'inherit', 'inherit'] to prevent TTY suspension
+    execSync(cmd, { stdio: ['ignore', 'inherit', 'inherit'] });
   } catch (error) {
     process.exit(error.status || 1);
   }

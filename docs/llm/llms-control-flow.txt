@@ -1,16 +1,41 @@
 <MLLD_CONTROL_FLOW>
 
-<WHEN_DECISIONS>
-`when` handles conditionals. Three forms: simple, bare (all matches), first (switch-style).
+<IF_FLOW>
+`if` runs imperative branches. Use block form with optional `else`.
 
-**Simple form:**
+```mlld
+if @isProd [
+  show "Production mode"
+] else [
+  show "Local mode"
+]
+```
+
+`if` works at top level and inside `exe` blocks:
+
+```mlld
+exe @validate(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
+]
+```
+
+Use `=>` only inside `exe` blocks.
+</IF_FLOW>
+
+<WHEN_DECISIONS>
+`when` selects the first matching condition. Use `if` for imperative flow.
+
+**Inline form:**
 
 ```mlld
 when @isProd => show "Production mode"
 when @score > 90 => show "Excellent!"
 ```
 
-**Bare form** (evaluates all matching conditions):
+**When block** (first match wins):
 
 ```mlld
 when [
@@ -20,20 +45,14 @@ when [
 ]
 ```
 
-**First form** (stops at first match, like switch):
+Use multiple `if` blocks when you need several actions to run.
 
-```mlld
-when first [
-  @role == "admin" => show "Admin panel"
-  @role == "user"  => show "User dashboard"
-  * => show "Guest view"           >> wildcard catches all
-]
-```
+Inline form uses `when @cond => action`.
 
 **Value-returning when** (in exe):
 
 ```mlld
-exe @classify(score) = when first [
+exe @classify(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   * => "F"
@@ -42,10 +61,12 @@ exe @classify(score) = when first [
 var @grade = @classify(85)  >> "B"
 ```
 
+`when` returns the first matching branch. Use `if` for imperative flow.
+
 **Block actions** (side effects + return):
 
 ```mlld
-var @result = when first [
+var @result = when [
   @needsProcessing => [
     show "Processing..."
     let @processed = @transform(@data)
@@ -55,10 +76,12 @@ var @result = when first [
 ]
 ```
 
+Conditions evaluate in order and the first match runs.
+
 **Local variables in when:**
 
 ```mlld
-when @mode: [
+when @mode [
   let @prefix = "Status:"
   "active" => show "@prefix Active"
   "pending" => show "@prefix Pending"
@@ -85,7 +108,7 @@ exe @collect() = when [
 - Parentheses: `(@a || @b) && @c`
 
 ```mlld
-when first [
+when [
   @role == "admin" || @role == "mod" => show "Privileged"
   @active && @verified => show "Active user"
   !@banned => show "Allowed"
@@ -143,7 +166,7 @@ var @filtered = for @x in @items => when [
 ]
 
 >> Equivalent to inline filter, but allows complex logic
-var @processed = for @item in @data => when first [
+var @processed = for @item in @data => when [
   @item.type == "a" => @transformA(@item)
   @item.type == "b" => @transformB(@item)
   * => skip         >> unknown types dropped
@@ -154,9 +177,17 @@ var @processed = for @item in @data => when first [
 
 ```mlld
 var @cfg = {"host": "localhost", "port": 3000}
-for @v in @cfg => show `@v.mx.key: @v`
+for @k, @v in @cfg => show `@k: @v`
 >> Output: host: localhost, port: 3000
 ```
+
+**Value-only form:**
+
+```mlld
+for @v in @cfg => show `@v.mx.key: @v`
+```
+
+When you bind only the value, the key is available at `@v.mx.key` and `@v_key`. The key/value form does not bind `@v_key`.
 
 **Nested for:**
 
@@ -185,6 +216,11 @@ for parallel(3) @task in @tasks => @runTask(@task)
 
 >> With pacing (delay between starts)
 for parallel(2, 1s) @x in @items => @process(@x)
+
+>> Variable cap and pacing
+var @cap = 2
+var @pace = "1s"
+for parallel(@cap, @pace) @x in @items => @process(@x)
 ```
 
 **Parallel blocks:**
@@ -238,6 +274,51 @@ show foreach @greet(@names) with { separator: " | " }
 ```
 </FOREACH>
 
+<LOOP_BLOCKS>
+Block-based iteration with explicit `done` and `continue`.
+
+```mlld
+var @result = loop(10) [
+  let @count = (@input ?? 0) + 1
+  when @count >= 3 => done @count
+  continue @count
+]
+```
+
+**Control keywords:**
+- `done @value` - Exit loop and return value
+- `done` - Exit loop and return null
+- `continue @value` - Next iteration with new `@input`
+- `continue` - Next iteration with unchanged `@input`
+
+`@input` starts as null and updates only via `continue @value`.
+
+**Loop context** (`@mx.loop`):
+- `iteration` - Current iteration (1-based)
+- `limit` - Configured cap or null for endless
+- `active` - true when inside loop
+
+**Until clause:**
+
+```mlld
+loop until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show `@next`
+  continue @next
+]
+```
+
+**With pacing:**
+
+```mlld
+loop(endless, 10ms) until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show "poll"
+  continue @next
+]
+```
+</LOOP_BLOCKS>
+
 <WHILE_LOOPS>
 Bounded iteration with `while`.
 
@@ -269,7 +350,7 @@ var @result = @initial | while(100, 1s) @processor  >> 1s between iterations
 </WHILE_LOOPS>
 
 <NO_EARLY_EXIT>
-mlld has no `return` or `exit`. Model outcomes with `when` and flags.
+mlld has no top-level `return` or `exit`. Model outcomes with `when` and flags.
 
 ```mlld
 >> Instead of early return, use conditional flow
@@ -277,6 +358,17 @@ var @check = @validate(@input)
 when [
   @check.valid => @process(@input)
   !@check.valid => show `Error: @check.message`
+]
+```
+
+Inside `exe` blocks, use `if` and `=>` for early return:
+
+```mlld
+exe @guard(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
 ]
 ```
 </NO_EARLY_EXIT>

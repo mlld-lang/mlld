@@ -11,9 +11,9 @@ export interface ContinueLiteralNode extends LiteralNode {
 }
 
 export function isDoneLiteral(node: BaseMlldNode): node is DoneLiteralNode {
-  return node.type === 'Literal' && (node as any).valueType === 'done';
+  return node != null && node.type === 'Literal' && (node as any).valueType === 'done';
 }
 
 export function isContinueLiteral(node: BaseMlldNode): node is ContinueLiteralNode {
-  return node.type === 'Literal' && (node as any).valueType === 'continue';
+  return node != null && node.type === 'Literal' && (node as any).valueType === 'continue';
 }

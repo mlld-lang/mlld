@@ -11,9 +11,7 @@ This is    a paragraph with     irregular spacing.
 - Nested item
 
 | Col1|Col2 |Col3|
-
 |---|---|---|
-
 |A|B|C|
 
 ## Using uppercase alias

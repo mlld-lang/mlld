@@ -3,6 +3,7 @@ import { interpret } from '@interpreter/index';
 import { Environment } from '@interpreter/env/Environment';
 import type { ImportDirectiveNode } from '@core/types';
 import { ImportDirectiveEvaluator } from './ImportDirectiveEvaluator';
+import { resolveImportType } from './ImportTypePolicy';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { PathContext } from '@core/services/PathContextService';
@@ -127,6 +128,57 @@ describe('Import type handling', () => {
     expect((output as string).trim()).toBe('inferred static');
   });
 
+  it('rejects namespace access to unexported members when module defines explicit exports', async () => {
+    await fileSystem.writeFile(
+      '/project/import-types-exported-only.mld',
+      '/export { greet }\n/var @greet = "hello"\n/var @_internal = "secret"'
+    );
+
+    const source = `/import "./import-types-exported-only.mld" as @utils\n/show @utils._internal`;
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow('Field "_internal" not found in object');
+  });
+
+  it('blocks namespace access to captured module internals on exported executables', async () => {
+    await fileSystem.writeFile(
+      '/project/import-types-exported-exec.mld',
+      '/export { greet }\n/var @_internal = "secret"\n/exe @greet(name) = `Hello, @name!`'
+    );
+
+    const source = '/import "./import-types-exported-exec.mld" as @utils\n/show @utils.greet.internal.capturedModuleEnv._internal';
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow('Field "internal" not found in object');
+  });
+
+  it('blocks selected import access to captured module internals on exported executables', async () => {
+    await fileSystem.writeFile(
+      '/project/import-types-exported-exec-selected.mld',
+      '/export { greet }\n/var @_internal = "secret"\n/exe @greet(name) = `Hello, @name!`'
+    );
+
+    const source = '/import { greet } from "./import-types-exported-exec-selected.mld"\n/show @greet.internal.capturedModuleEnv._internal';
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow('Field "internal" not found in object');
+  });
+
   it('supports explicit live imports from @input', async () => {
     const source = `/import live { value } from @input\n/show @value`;
     const output = await interpret(source, {
@@ -142,10 +194,8 @@ describe('Import type handling', () => {
 
 
   it('infers local import type for @local resolver', async () => {
-    const env = new Environment(fileSystem, pathService, PROJECT_ROOT);
-    const evaluator: any = new ImportDirectiveEvaluator(env);
     const importDirective = { values: {} } as ImportDirectiveNode;
-    const inferred = evaluator.resolveImportType(importDirective, {
+    const inferred = resolveImportType(importDirective, {
       type: 'resolver',
       resolvedPath: '@local/tools',
       resolverName: 'local'
@@ -154,10 +204,8 @@ describe('Import type handling', () => {
   });
 
   it('infers static import type for @base resolver', async () => {
-    const env = new Environment(fileSystem, pathService, PROJECT_ROOT);
-    const evaluator: any = new ImportDirectiveEvaluator(env);
     const importDirective = { values: {} } as ImportDirectiveNode;
-    const inferred = evaluator.resolveImportType(importDirective, {
+    const inferred = resolveImportType(importDirective, {
       type: 'resolver',
       resolvedPath: '@base/templates',
       resolverName: 'base'
@@ -243,14 +291,13 @@ describe('Import type handling', () => {
 
     const missingSource = `/import "./agents" as @agents
 /show @agents._private.who`;
-    await expect(
-      interpret(missingSource, {
-        fileSystem,
-        pathService,
-        pathContext,
-        approveAllImports: true
-      })
-    ).rejects.toThrow(/_private/);
+    const missingOutput = await interpret(missingSource, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+    expect((missingOutput as string).trim()).toBe('');
   });
 
   it('allows overriding directory skip patterns via with { skipDirs: [] }', async () => {
@@ -271,6 +318,42 @@ describe('Import type handling', () => {
 
     const lines = (output as string).trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
     expect(lines).toEqual(['party', 'private', 'hidden']);
+  });
+
+  it('keeps empty-directory failure behavior for directory imports without index modules', async () => {
+    await fileSystem.writeFile('/project/agents-empty/party/readme.md', 'notes');
+    await fileSystem.writeFile('/project/agents-empty/mllddev/README.txt', 'notes');
+
+    const source = '/import "./agents-empty" as @agents';
+
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow(/No index\.mld modules found under \/project\/agents-empty/);
+  });
+
+  it('keeps mixed file/directory path behavior for similarly named sources', async () => {
+    await fileSystem.writeFile('/project/agents.mld', '/var @kind = "file"');
+    await fileSystem.writeFile('/project/agents/party/index.mld', '/var @who = "party"');
+
+    const source = `/import "./agents.mld" as @fileAgents
+/import "./agents" as @dirAgents
+/show @fileAgents.kind
+/show @dirAgents.party.who`;
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = (output as string).trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    expect(lines).toEqual(['file', 'party']);
   });
 
   it('rejects template collection imports with undeclared variables', async () => {

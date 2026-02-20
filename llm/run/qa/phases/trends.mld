@@ -1,0 +1,39 @@
+>> Phase 3: Trends
+>> Single-agent cross-cutting analysis of all results
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
+import { @updatePhaseStatus } from "../lib/state.mld"
+import { @aggregateForTrends } from "../lib/aggregate.mld"
+
+exe @trendsPrompt(topicCount, outputDir) = template "../prompts/phase3-trends.att"
+
+exe @runTrends(runDir, topics) = [
+  @logPhaseStart(@runDir, "trends")
+  @updatePhaseStatus(@runDir, "trends", "in-progress")
+
+  show `Analyzing trends across @topics.length topics...`
+
+  >> Pre-aggregate data for the trend analysis agent
+  let @phase3Input = @aggregateForTrends(@runDir, @topics)
+
+  >> Single agent call for holistic trend analysis
+  let @prompt = @trendsPrompt(@topics.length, @runDir)
+  let @tools = "Read,Write,Glob,Grep,Bash(ls *)"
+  let @markerFile = `@runDir/phase3-done.marker`
+  let @fullPrompt = `@prompt\n\nIMPORTANT: When you have completed ALL your work, as your very last action, write the text "done" to @markerFile using the Write tool.`
+
+  show `Starting trend analysis agent...`
+  let @response = @claudePoll(@fullPrompt, "opus", @base, @tools, @markerFile) | log
+
+  show `Phase 3 complete.`
+  show `  Trend report: @runDir/trend-report.json`
+  show `  Narrative: @runDir/trend-report.md`
+
+  @logPhaseComplete(@runDir, "trends", { topics: @topics.length })
+  @updatePhaseStatus(@runDir, "trends", "complete")
+
+  => { trend_report: `@runDir/trend-report.json`, narrative: `@runDir/trend-report.md` }
+]
+
+/export { @runTrends }

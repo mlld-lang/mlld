@@ -1,0 +1,69 @@
+>> Claude Session Helpers
+>> Session-aware claude invocation with poll-based completion detection
+>> Extends @mlld/claude-poll with --session-id and --resume support
+
+/needs { sh }
+
+>> Poll-based session creation: starts a new session with --session-id
+exe @claudeSession(prompt, model, tools, markerFile, sessionId) = sh {
+  PROMPT_FILE=$(mktemp)
+  printf '%s' "$prompt" > "$PROMPT_FILE"
+
+  claude -p --model "$model" --session-id "$sessionId" --allowedTools "$tools" < "$PROMPT_FILE" > /dev/null 2>&1 &
+  CLAUDE_PID=$!
+
+  while ! test -f "$markerFile"; do
+    sleep 5
+    if ! kill -0 $CLAUDE_PID 2>/dev/null; then break; fi
+  done
+
+  sleep 15
+  kill $CLAUDE_PID 2>/dev/null
+  wait $CLAUDE_PID 2>/dev/null
+  rm -f "$PROMPT_FILE"
+  cat "$markerFile" 2>/dev/null
+}
+
+>> Poll-based session resume: continues an existing session with --resume
+exe @claudeResume(prompt, model, tools, markerFile, sessionId) = sh {
+  PROMPT_FILE=$(mktemp)
+  printf '%s' "$prompt" > "$PROMPT_FILE"
+
+  claude -p --model "$model" --resume "$sessionId" --allowedTools "$tools" < "$PROMPT_FILE" > /dev/null 2>&1 &
+  CLAUDE_PID=$!
+
+  while ! test -f "$markerFile"; do
+    sleep 5
+    if ! kill -0 $CLAUDE_PID 2>/dev/null; then break; fi
+  done
+
+  sleep 15
+  kill $CLAUDE_PID 2>/dev/null
+  wait $CLAUDE_PID 2>/dev/null
+  rm -f "$PROMPT_FILE"
+  cat "$markerFile" 2>/dev/null
+}
+
+>> PTY wrapper variant (experimental)
+>> Wraps claude -p in a pseudo-terminal so it exits cleanly — no marker file needed
+exe @claudePty(prompt, model, tools, sessionId) = sh {
+  PROMPT_FILE=$(mktemp)
+  printf '%s' "$prompt" > "$PROMPT_FILE"
+
+  SESSION_FLAG=""
+  if [ -n "$sessionId" ]; then
+    SESSION_FLAG="--session-id $sessionId"
+  fi
+
+  script -qefc "claude -p --model $model $SESSION_FLAG --allowedTools \"$tools\" < \"$PROMPT_FILE\"" /dev/null 2>&1 \
+    | sed $'s/\r$//' \
+    | sed 's/\x1b\[[^a-zA-Z]*[a-zA-Z]//g; s/\x1b\][^\x07]*\x07//g; /^$/d'
+
+  rm -f "$PROMPT_FILE"
+}
+
+/export {
+  @claudeSession,
+  @claudeResume,
+  @claudePty
+}

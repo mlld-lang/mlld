@@ -1,0 +1,182 @@
+>> Phase 4: Execute
+>> Orchestrates the three execute stages: apply, merge, verify
+>>
+>> Stages:
+>>   4a. Apply   - Analyze + apply fixes in worktrees (parallel)
+>>   4b. Merge   - Merge verified worktrees to main (sequential)
+>>   4c. Verify  - Run tests on main after merges
+>>
+>> Input: pipeline/<run>/rank/work-plan.json
+>> Output: pipeline/<run>/execute/results.json
+
+import { @processTicket, @processCluster } from "./execute/apply.mld"
+import { @mergeVerified } from "./execute/merge.mld"
+import { @verifyMain } from "./execute/verify.mld"
+import { @logPhaseStart, @logPhaseComplete, @logBatchStart, @logBatchDone, @loadEvents, @getExecuteCompletedItems } from "../lib/events.mld"
+
+/needs { sh }
+
+>> Main execute function
+>> Config: { batch, parallel, timeout, dryRun }
+>> Returns: { results, remaining } - remaining count for loop mode
+exe @runExecute(runDir, config) = [
+  let @outputPath = `@runDir/execute/results.json`
+
+  >> Load work plan
+  let @workPlanPath = `@runDir/rank/work-plan.json`
+  let @workPlan = <@workPlanPath>?
+
+  let @allItems = @workPlan && @workPlan.ranked_items ? @workPlan.ranked_items : []
+
+  >> Filter out already-completed items
+  let @events = @loadEvents(@runDir)
+  let @completedIds = @getExecuteCompletedItems(@events)
+  let @itemsWithNulls = for @item in @allItems [
+    let @itemId = @item.ticket_id ? @item.ticket_id : @item.epic_id
+    let @isCompleted = @completedIds.includes(@itemId)
+    when !@isCompleted => @item
+  ]
+  >> Remove nulls (completed items return null from when block)
+  let @items = for @i in @itemsWithNulls when @i => @i
+
+  >> Show status messages
+  when !@workPlan => [
+    show `  No work-plan.json found`
+    show `  Run rank phase first`
+  ]
+  when @workPlan && @allItems.length == 0 => show `  No items to execute`
+  when @items.length == 0 && @allItems.length > 0 => show `  All @allItems.length items already processed`
+
+  >> Use when for proper early returns
+  => when [
+    !@workPlan => { remaining: 0 }
+    @allItems.length == 0 => [
+      let @emptyResults = { created: @now, results: [], remaining: 0 }
+      output @emptyResults to "@outputPath"
+      => @emptyResults
+    ]
+    @items.length == 0 => { created: @now, results: [], remaining: 0, all_complete: true }
+    * => @_doExecute(@runDir, @outputPath, @items, @config)
+  ]
+]
+
+>> Internal function to do the actual execute work
+>> Config: { batch, parallel, timeout, dryRun }
+exe @_doExecute(runDir, outputPath, items, config) = [
+  >> Extract config
+  let @batchSize = @config.batch ? @config.batch : 5
+  let @parallelLimit = @config.parallel ? @config.parallel : 10
+  let @parallelTimeout = @config.timeout ? @config.timeout : "10s"
+  let @dryRun = @config.dryRun ? true : false
+
+  >> Log phase start
+  @logPhaseStart(@runDir, "execute")
+
+  >> Get base branch
+  let @baseBranch = sh {git branch --show-current}
+  let @baseBranchTrimmed = @baseBranch.trim()
+
+  show `  Executing @items.length ranked items...`
+  show `  Base branch: @baseBranchTrimmed`
+  when @dryRun => show `  [DRY RUN MODE] Using haiku, skipping actual changes`
+
+  >> Apply batch limit (dry-run forces batch of 2)
+  let @effectiveBatchSize = @dryRun ? 2 : (@batchSize ? @batchSize * 1 : @items.length)
+  let @batch = @items.slice(0, @effectiveBatchSize)
+
+  show `  Processing batch of @batch.length items`
+  @logBatchStart(@runDir, @batch.length)
+
+  >> === STAGE 4a: APPLY (parallel) ===
+  show ``
+  show `  --- Stage 4a: Apply (parallel: @parallelLimit, timeout: @parallelTimeout) ---`
+
+  >> Process items in parallel - each gets its own worktree
+  let @results = for parallel(@parallelLimit, @parallelTimeout) @item in @batch [
+    let @itemId = @item.ticket_id ? @item.ticket_id : @item.epic_id
+    log `  [start] @item.type: @itemId`
+
+    let @itemResult = when [
+      @item.type == "cluster" => @processCluster(@runDir, @item, @baseBranchTrimmed, @dryRun)
+      * => @processTicket(@runDir, @item.ticket_id, @baseBranchTrimmed, @dryRun)
+    ]
+
+    log `  [done] @itemId`
+    => @itemResult
+  ]
+
+  @logBatchDone(@runDir, @results.length)
+
+  >> === STAGE 4b: MERGE ===
+  show ``
+  show `  --- Stage 4b: Merge ---`
+
+  let @batchNum = 1
+  let @mergeResult = @mergeVerified(@runDir, @results, @baseBranchTrimmed, @batchNum, @dryRun)
+
+  >> Show merge failures if any
+  let @mergeFailed = when [@mergeResult.failed_count => @mergeResult.failed_count; * => 0]
+  when @mergeFailed > 0 => [
+    show `  WARNING: @mergeFailed merge(s) failed!`
+    let @mergeResultsList = when [@mergeResult.results => @mergeResult.results; * => []]
+    let @failedResults = for @r in @mergeResultsList when !@r.merged && @r.error => @r
+    for @f in @failedResults [
+      show `    @f.ticket_id: @f.error`
+    ]
+    show ``
+  ]
+
+  >> === STAGE 4c: VERIFY ===
+  show ``
+  show `  --- Stage 4c: Verify ---`
+
+  let @verifyResult = @verifyMain(@runDir, @mergeResult, @baseBranchTrimmed, @dryRun)
+
+  >> Check verification status
+  when @verifyResult.status == "fail" => [
+    show `  WARNING: Verification failed after merge!`
+    show ``
+    show `  Test output:`
+    show `    @verifyResult.test_output`
+    show ``
+    when @verifyResult.likely_cause => [
+      show `  Likely cause: @verifyResult.likely_cause.ticket_id`
+      show `    @verifyResult.likely_cause.reason`
+    ]
+    when @verifyResult.note => show `  Note: @verifyResult.note`
+    show `  Recommendation: @verifyResult.recommendation`
+    show ``
+  ]
+
+  >> Build final results
+  let @mergedCount = @mergeResult.merged_count ? @mergeResult.merged_count : 0
+  let @isDryRun = when [@dryRun => true; * => false]
+  let @remaining = @items.length - @batch.length
+  let @executeResults = { created: @now, base_branch: @baseBranchTrimmed, batch_size: @batch.length, total_items: @items.length, remaining: @remaining, dry_run: @isDryRun, results: @results, merge: @mergeResult, verification: @verifyResult }
+
+  output @executeResults to "@outputPath"
+
+  >> Log completion
+  let @completed = for @r in @results when @r.verified => @r
+  @logPhaseComplete(@runDir, "execute", { processed: @results.length, completed: @completed.length, merged: @mergedCount, verified: @verifyResult.status })
+
+  >> Summary
+  let @singles = for @r in @results when @r.ticket_id && !@r.epic_id => @r
+  let @clusters = for @r in @results when @r.epic_id => @r
+  let @verified = for @r in @singles when @r.verified => @r
+  let @needsReview = for @r in @singles when @r.status == "needs-review" => @r
+  let @failed = for @r in @singles when @r.error => @r
+  let @skipped = for @r in @singles when @r.skipped => @r
+
+  show ``
+  show `  Execute complete:`
+  show `    Apply:  @singles.length singles (@verified.length verified, @needsReview.length needs-review, @failed.length failed, @skipped.length skipped)`
+  show `            @clusters.length clusters processed`
+  show `    Merge:  @mergedCount merged`
+  show `    Verify: @verifyResult.status`
+  when @remaining > 0 => show `    Remaining: @remaining items`
+
+  => @executeResults
+]
+
+/export { @runExecute }

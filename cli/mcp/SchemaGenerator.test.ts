@@ -20,12 +20,13 @@ describe('SchemaGenerator', () => {
       source,
       undefined
     );
+    execVar.description = 'List issues for a repository';
 
     const schema = generateToolSchema('listIssues', execVar);
 
     expect(schema).toEqual({
       name: 'list_issues',
-      description: '',
+      description: 'List issues for a repository',
       inputSchema: {
         type: 'object',
         properties: {
@@ -37,6 +38,57 @@ describe('SchemaGenerator', () => {
     });
   });
 
+  it('maps parameter types to JSON schema types', () => {
+    const execVar = createExecutableVariable(
+      'searchIssues',
+      'code',
+      'return [];',
+      ['query', 'limit', 'includeClosed', 'labels', 'filters'],
+      'node',
+      source,
+      undefined
+    );
+    execVar.paramTypes = {
+      limit: 'number',
+      includeClosed: 'boolean',
+      labels: 'array',
+      filters: 'object'
+    };
+
+    const schema = generateToolSchema('searchIssues', execVar);
+
+    expect(schema.inputSchema.properties).toEqual({
+      query: { type: 'string' },
+      limit: { type: 'number' },
+      includeClosed: { type: 'boolean' },
+      labels: { type: 'array' },
+      filters: { type: 'object' }
+    });
+  });
+
+  it('applies tool exposure and bindings to schema', () => {
+    const execVar = createExecutableVariable(
+      'createIssue',
+      'code',
+      'return {};',
+      ['owner', 'repo', 'title', 'body'],
+      'node',
+      source,
+      undefined
+    );
+
+    const schema = generateToolSchema('createIssue', execVar, {
+      bind: { owner: 'mlld', repo: 'infra' },
+      expose: ['title', 'body']
+    });
+
+    expect(schema.inputSchema.properties).toEqual({
+      title: { type: 'string' },
+      body: { type: 'string' }
+    });
+    expect(schema.inputSchema.required).toEqual(['title', 'body']);
+  });
+
   it('converts mlld names to MCP snake_case', () => {
     expect(mlldNameToMCPName('listIssues')).toBe('list_issues');
     expect(mlldNameToMCPName('createIssue')).toBe('create_issue');
@@ -46,5 +98,7 @@ describe('SchemaGenerator', () => {
   it('converts MCP names back to mlld camelCase', () => {
     expect(mcpNameToMlldName('list_issues')).toBe('listIssues');
     expect(mcpNameToMlldName('create_issue')).toBe('createIssue');
+    expect(mcpNameToMlldName('delete-item')).toBe('deleteItem');
+    expect(mcpNameToMlldName('123_tool')).toBe('_123Tool');
   });
 });

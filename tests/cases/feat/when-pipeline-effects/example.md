@@ -18,7 +18,7 @@
 
 /var @usePrimary = false
 
-/exe @doubleLog(usePrimary) = when first [
+/exe @doubleLog(usePrimary) = when [
   @usePrimary => @value | log
   @value => @value | log
   * => null

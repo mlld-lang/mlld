@@ -1,5 +1,0 @@
->> Discord mentions with user IDs
-var @alert = :::Alert <@{{adminId}}>! Reported by <@{{userId}}>:::
-
->> Social media handles
-var @tweet = :::Hey @{{handle}}, check this! cc: @{{team1}} @{{team2}}:::

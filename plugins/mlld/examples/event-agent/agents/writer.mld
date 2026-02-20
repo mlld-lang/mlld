@@ -1,0 +1,15 @@
+>> @meta.id = writer
+>> @meta.name = Writer Agent
+>> @meta.capabilities = Generates written content: summaries, reports, responses, documentation
+
+import { @claudePoll } from @mlld/claude-poll
+
+exe @taskPrompt(task) = template "./prompts/agents/write.att"
+
+var @meta = {
+  id: "writer",
+  name: "Writer Agent",
+  capabilities: "Generates written content: summaries, reports, responses, documentation"
+}
+
+export { @meta, @taskPrompt }

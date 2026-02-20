@@ -10,6 +10,16 @@
  */
 const BUILTIN_TRANSFORMERS = new Set([
   // Format converters
+  'parse',
+  'parse.loose',
+  'parse.strict',
+  'parse.llm',
+  'parse.fromlist',
+  'PARSE',
+  'PARSE_LOOSE',
+  'PARSE_STRICT',
+  'PARSE_LLM',
+  'PARSE_FROMLIST',
   'json',
   'json.loose',
   'json.strict',

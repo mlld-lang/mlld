@@ -1,0 +1,10 @@
+exe @echo_name(name) = cmd {echo "Hello, @name!"}
+exe @contains_ada(text) = js { return text.includes("Ada"); }
+var @checks = { contains_ada: @contains_ada }
+
+@echo_name("Ada")
+@checks.contains_ada("Ada Lovelace")
+run @echo_name("Grace")
+show @echo_name("Linus")
+var @captured = @echo_name("Margaret")
+show @captured

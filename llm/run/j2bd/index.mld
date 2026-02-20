@@ -1,0 +1,415 @@
+>> J2BD V3 Orchestrator
+>> Usage: mlld run j2bd --topic <topic> [--job <job>] [--new] [--run <run-id>] [--max <n>] [--polish <level>]
+>>
+>> LLM-first orchestration: decision agent makes all choices, orchestrator executes
+>> Workers commit directly to the current branch (no worktrees)
+>>
+>> Examples:
+>>   mlld run j2bd --topic security                       # Resume most recent run (or create first)
+>>   mlld run j2bd --topic security --new                # Start a new run
+>>   mlld run j2bd --topic security --run 2026-01-31-2   # Resume specific run
+>>   mlld run j2bd --topic security --job prevent-exfil  # Specific job only
+>>   mlld run j2bd --topic security --max 10             # Limit iterations
+>>   mlld run j2bd --topic security --polish med         # Set quality bar (false|med|high)
+
+>> Imports
+import { @claudePoll } from @mlld/claude-poll
+import { @buildContext, @loadRunState, @saveRunState, @countIterations, @loadTickets, @buildReferenceMaterial, @extractJobSections } from "./lib/context.mld"
+import { @writeQuestionsFile, @logEvent } from "./lib/questions.mld"
+import "@payload" as @p
+
+>> Tool permissions for agents
+var @decisionTools = "Read,Write,Glob,Grep"
+var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(tk:*)"
+
+>> Parse arguments (--topic is required)
+var @topic = @p.topic
+var @jobFilter = @p.job ?? null
+var @runId = @p.run ?? null
+var @newRun = @p.new ?? false
+var @maxIterations = @p.max ? @p.max * 1 : null
+var @polishArg = @p.polish ?? "false"
+
+>> Validate and normalize polish level
+var @polishValid = @polishArg == "false" || @polishArg == "med" || @polishArg == "medium" || @polishArg == "high"
+if !@polishValid [
+  show `Invalid --polish value: @polishArg (must be: false, med, high)`
+  done
+]
+var @polish = when @polishArg [ "medium" => "med"; * => @polishArg ]
+
+>> Load topic config
+var @configPath = `@base/j2bd/@topic/config.mld`
+import { @config } from "@configPath"
+
+>> Shell helpers
+exe @countRunsForDate(dir, date) = sh { ls "$dir" 2>/dev/null | grep "^$date" | wc -l | tr -d ' ' }
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+exe @getCurrentBranch() = sh { git branch --show-current }
+
+>> Resolve or create run directory
+var @today = @now.slice(0, 10)
+var @j2bdRoot = `@base/j2bd/@topic/runs`
+
+exe @nextRunId(root, today) = [
+  let @existing = @countRunsForDate(@root, @today)
+  let @count = @existing * 1
+  => `@today-@count`
+]
+
+>> Find most recent run directory (by name, which sorts chronologically)
+exe @mostRecentRun(root) = sh { ls -1d "$root"/*/ 2>/dev/null | xargs -n1 basename | sort -r | head -1 | tr -d '\n' }
+
+>> Capture current branch at startup
+var @currentBranch = @getCurrentBranch()
+
+>> Resolve run ID: --run <id> > --new > resume most recent > create first
+exe @resolveRunId(root, today, runId, newRun) = when [
+  @runId => @runId
+  @newRun => @nextRunId(@root, @today)
+  * => [
+    let @recent = @mostRecentRun(@root)
+    if @recent.length > 0 [
+      => @recent
+    ]
+    => @nextRunId(@root, @today)
+  ]
+]
+
+var @resolvedRunId = @resolveRunId(@j2bdRoot, @today, @runId, @newRun)
+var @runDir = `@j2bdRoot/@resolvedRunId`
+
+>> Ensure run directory exists
+run @mkdirp(@runDir)
+
+>> Load or initialize run state
+var @run = @loadRunState(@runDir)
+
+if !@run.id [
+  let @newRunState = {
+    id: @resolvedRunId,
+    topic: @topic,
+    branch: @currentBranch,
+    created: @now,
+    polish: @polish
+  }
+  @saveRunState(@runDir, @newRunState)
+  @logEvent(@runDir, "run_start", { topic: @topic, branch: @currentBranch, polish: @polish })
+]
+
+>> Use polish from run state if resuming, otherwise use CLI arg
+var @effectivePolish = @run.polish ?? @polish
+
+>> Load jobs
+var @jobs = <@base/j2bd/@topic/jobs/*.md>
+
+if @jobs.length == 0 [
+  show `No jobs found for topic @topic`
+  done
+]
+
+>> Filter to specific job if requested, otherwise use first
+var @jobFilterMd = `@jobFilter\.md`
+var @matchingJobs = when [
+  @jobFilter => for @j in @jobs when @j.mx.filename == @jobFilter || @j.mx.filename == @jobFilterMd => @j
+  * => @jobs
+]
+var @job = @matchingJobs[0]
+
+if !@job [
+  show `Job not found: @jobFilter`
+  done
+]
+
+>> Shared prompt snippets
+var @onboarding = <@base/llm/prompts/mlld-onboarding.md>
+var @chestertonsFence = <@base/llm/prompts/chestertons-fence.md>
+
+>> Decision prompt modules
+var @phaseGuidance = <@base/llm/run/j2bd/prompts/decision/phases/impl.md>
+var @qualityDefault = <@base/llm/run/j2bd/prompts/decision/quality/default.md>
+var @qualityMed = <@base/llm/run/j2bd/prompts/decision/quality/med.md>?
+var @qualityHigh = <@base/llm/run/j2bd/prompts/decision/quality/high.md>?
+
+>> Build quality bar based on polish level (additive)
+var @qualityBar = when @effectivePolish [
+  "false" => @qualityDefault
+  "med" => `@qualityDefault\n\n@qualityMed`
+  "high" => `@qualityDefault\n\n@qualityMed\n\n@qualityHigh`
+  * => @qualityDefault
+]
+
+>> Prompt templates
+exe @decisionPrompt(jobSections, referenceMaterial, tickets, recentEvents, lastWorkerResult, testResults, lastError, humanAnswers, chestertonsFence, phaseGuidance, qualityBar) = template "./prompts/decision/core.att"
+exe @docWorkerPrompt(ticket, guidance, spec, existingAtoms, relatedCode, onboarding, chestertonsFence) = template "./prompts/workers/doc.att"
+exe @implWorkerPrompt(ticket, guidance, spec, job, relevantCode, testFiles, onboarding, chestertonsFence) = template "./prompts/workers/impl.att"
+exe @frictionWorkerPrompt(ticket, guidance, parentTicket, spec, relevantCode, relevantDocs, onboarding, chestertonsFence) = template "./prompts/workers/friction.att"
+exe @adversarialWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/workers/adversarial.att"
+exe @finalReviewWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/workers/final-review.att"
+exe @excellenceWorkerPrompt(ticket, guidance, spec, job, onboarding, chestertonsFence) = template "./prompts/workers/excellence.att"
+
+>> Build worker prompt based on task type
+exe @buildWorkerPrompt(taskType, ticket, guidance, config, job, onboarding, chestertonsFence) = [
+  >> Scope spec and atoms to job-relevant sections instead of full dump
+  let @ref = @buildReferenceMaterial(@config, @job)
+  let @specParts = for @s in @ref.specSections => `## @s.name\n\n@s.content`
+  let @spec = @specParts.join("\n\n---\n\n")
+  let @atomParts = for @a in @ref.atoms => @a.content
+  let @existingAtoms = @atomParts.join("\n\n---\n\n")
+  let @prompt = when @taskType [
+    "doc" => @docWorkerPrompt(@ticket, @guidance, @spec, @existingAtoms, "", @onboarding, @chestertonsFence)
+    "impl" => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
+    "improvement" => @implWorkerPrompt(@ticket, @guidance, @spec, @job, "", "", @onboarding, @chestertonsFence)
+    "friction" => @frictionWorkerPrompt(@ticket, @guidance, "", @spec, "", "", @onboarding, @chestertonsFence)
+    "adversarial" => @adversarialWorkerPrompt(@ticket, @guidance, @spec, @job, @onboarding, @chestertonsFence)
+    "final_review" => @finalReviewWorkerPrompt(@ticket, @guidance, @spec, @job, @onboarding, @chestertonsFence)
+    "excellence" => @excellenceWorkerPrompt(@ticket, @guidance, @spec, @job, @onboarding, @chestertonsFence)
+    * => `ERROR: Unknown task type: @taskType`
+  ]
+  => @prompt
+]
+
+>> Main loop
+show `═══════════════════════════════════════════════════════════════════`
+show `J2BD @topic - Run @resolvedRunId`
+show `═══════════════════════════════════════════════════════════════════`
+show `Job: @job.mx.filename`
+show `Branch: @currentBranch`
+show `Polish: @effectivePolish`
+show `Run dir: @runDir`
+show `───────────────────────────────────────────────────────────────────`
+
+loop(endless) [
+  >> Check max iterations (hard guard)
+  let @iterationCount = @countIterations(@runDir)
+  if @maxIterations && @iterationCount >= @maxIterations [
+    @logEvent(@runDir, "run_stopped", { reason: "max_iterations", count: @iterationCount })
+    show `Max iterations (@maxIterations) reached. Stopping.`
+    done
+  ]
+
+  >> 1. Gather context
+  let @context = @buildContext(@config, @runDir, @topic, @run)
+
+  >> 2. Build structured job context
+  let @jobSections = @extractJobSections(@job)
+  let @referenceMaterial = @buildReferenceMaterial(@config, @job)
+
+  >> 3. Call decision agent
+  let @decisionPromptText = @decisionPrompt(
+    @jobSections,
+    @referenceMaterial,
+    @context.tickets ?? [],
+    @context.recentEvents ?? [],
+    @context.lastWorkerResult,
+    @context.testResults,
+    @context.lastError,
+    @context.humanAnswers,
+    @chestertonsFence,
+    @phaseGuidance,
+    @qualityBar
+  )
+
+  let @decisionOutputPath = `@runDir/decision-@iterationCount\.json`
+  let @decisionFullPrompt = `@decisionPromptText
+
+IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool. Write ONLY valid JSON.`
+  @logEvent(@runDir, "decision_prompt", {
+    length: @decisionPromptText.length,
+    output_path: @decisionOutputPath,
+    model: "opus",
+    tools: @decisionTools
+  })
+  @claudePoll(@decisionFullPrompt, "opus", "@base", @decisionTools, @decisionOutputPath)
+  let @decision = <@decisionOutputPath>?
+
+  if !@decision [
+    show `Decision agent failed: no output at @decisionOutputPath`
+    @logEvent(@runDir, "error", { type: "decision_agent", error: "no output" })
+    continue
+  ]
+
+  show `Decision: @decision.action - @decision.reasoning`
+
+  >> Log iteration
+  @logEvent(@runDir, "iteration", {
+    decision: @decision.action,
+    ticket: @decision.ticket,
+    reasoning: @decision.reasoning
+  })
+
+  >> 3. Execute action
+  when @decision.action [
+    "work" => [
+      show `Working on ticket @decision.ticket (@decision.task_type)`
+
+      >> Get ticket content
+      let @ticket = cmd { tk show @decision.ticket --json }
+
+      >> Build and run worker
+      let @workerPrompt = @buildWorkerPrompt(@decision.task_type, @ticket, @decision.guidance, @config, @job, @onboarding, @chestertonsFence)
+      let @workerOutputPath = `@runDir/worker-@decision.ticket-@iterationCount\.json`
+      let @workerPromptPath = `@runDir/worker-@decision.ticket-@iterationCount\.prompt.md`
+
+      >> Debug: check if prompt was built
+      let @promptLength = @workerPrompt.length
+      show `  Prompt built: @promptLength chars`
+      if @promptLength < 100 [
+        show `  WARNING: Prompt suspiciously short!`
+        show `  Prompt content: @workerPrompt`
+      ]
+
+      let @workerFullPrompt = `@workerPrompt
+
+IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. Write ONLY valid JSON.`
+
+      >> Save prompt for debugging
+      output @workerFullPrompt to "@workerPromptPath"
+      show `  Prompt saved: @workerPromptPath`
+      show `  Output expected: @workerOutputPath`
+      show `  Tools: @workerTools`
+      @logEvent(@runDir, "worker_prompt", {
+        ticket: @decision.ticket,
+        task_type: @decision.task_type,
+        length: @promptLength,
+        prompt_path: @workerPromptPath,
+        output_path: @workerOutputPath,
+        model: "opus",
+        tools: @workerTools
+      })
+
+      >> Run worker in repo root
+      let @pollResult = @claudePoll(@workerFullPrompt, "opus", "@base", @workerTools, @workerOutputPath)
+      show `  Poll result: @pollResult`
+
+      >> Try to read output
+      let @result = <@workerOutputPath>?
+
+      if !@result [
+        show `Worker failed: no output at @workerOutputPath`
+        let @rawContent = <@workerOutputPath>? ?? "[file not found or empty]"
+        show `  Raw file content: @rawContent`
+        @logEvent(@runDir, "error", {
+          type: "worker",
+          ticket: @decision.ticket,
+          error: "no output",
+          poll_result: @pollResult,
+          raw_content: @rawContent,
+          prompt_path: @workerPromptPath
+        })
+        >> Persist error state
+        let @run = {
+          ...@run,
+          lastError: `Worker failed: no output for @decision.ticket`,
+          lastWorkerResult: null
+        }
+        @saveRunState(@runDir, @run)
+        continue
+      ]
+
+      >> Workers write files and commit themselves, then report what they did
+      @logEvent(@runDir, "worker_result", {
+        ticket: @decision.ticket,
+        status: @result.status,
+        work_done: @result.work_done,
+        standup: @result.standup
+      })
+
+      >> Log friction points for decision agent to see
+      if @result.friction_points && @result.friction_points.length > 0 [
+        @logEvent(@runDir, "friction_reported", { ticket: @decision.ticket, points: @result.friction_points })
+      ]
+
+      show `Worker status: @result.status`
+      if @result.work_done && @result.work_done.commit_hash [
+        show `Committed: @result.work_done.commit_hash - @result.work_done.commit_message`
+      ]
+
+      >> Persist worker result state
+      let @run = {
+        ...@run,
+        lastWorkerResult: @result,
+        lastError: null
+      }
+      @saveRunState(@runDir, @run)
+    ]
+
+    "create_ticket" => [
+      show `Creating ticket: @decision.title`
+      let @ticketId = cmd { tk create --dir "j2bd-@topic" "@decision.title" -d "@decision.body" }
+      >> Add tags if present
+      if @decision.tags [
+        for @tag in @decision.tags [
+          cmd { tk tag @ticketId @tag }
+        ]
+      ]
+      @logEvent(@runDir, "ticket_created", {
+        id: @ticketId,
+        type: @decision.type,
+        title: @decision.title,
+        parent: @decision.parent_ticket
+      })
+    ]
+
+    "close_ticket" => [
+      show `Closing ticket: @decision.ticket - @decision.reason`
+      if @decision.note [
+        cmd { tk add-note @decision.ticket "@decision.note" }
+      ]
+      cmd { tk close @decision.ticket "@decision.reason" }
+      @logEvent(@runDir, "ticket_closed", { ticket: @decision.ticket, reason: @decision.reason })
+    ]
+
+    "update_ticket" => [
+      show `Updating ticket: @decision.ticket`
+      if @decision.add_note [
+        cmd { tk add-note @decision.ticket "@decision.add_note" }
+      ]
+      if @decision.add_tags [
+        for @tag in @decision.add_tags [
+          cmd { tk tag @decision.ticket @tag }
+        ]
+      ]
+      @logEvent(@runDir, "ticket_updated", { ticket: @decision.ticket })
+    ]
+
+    "blocked" => [
+      show `Blocked - writing questions.md`
+      @writeQuestionsFile(@runDir, @decision.blocking_tickets, @decision.questions, @topic, @resolvedRunId)
+      @logEvent(@runDir, "run_paused", { reason: "needs_human", tickets: @decision.blocking_tickets })
+      show `Human input needed. See: @runDir/questions.md`
+      show `Resume with: mlld run j2bd @topic --run @resolvedRunId`
+      done
+    ]
+
+    "complete" => [
+      >> Hard guards before completion
+      let @openTickets = @loadTickets(`j2bd-@topic`)
+      let @openList = for @t in @openTickets when @t.status != "closed" => @t
+      let @openCount = @openList.length
+      if @openCount > 0 [
+        show `Cannot complete: @openCount open tickets remain`
+        @logEvent(@runDir, "error", { type: "complete_blocked", reason: "open_tickets", count: @openCount })
+        >> Persist error state so decision agent sees it
+        let @run = {
+          ...@run,
+          lastError: `Cannot complete: @openCount open tickets remain`
+        }
+        @saveRunState(@runDir, @run)
+        continue
+      ]
+
+      show `Job complete: @decision.summary`
+      @logEvent(@runDir, "job_complete", { summary: @decision.summary })
+      done
+    ]
+
+    * => [
+      show `Unknown action: @decision.action`
+      @logEvent(@runDir, "error", { type: "unknown_action", action: @decision.action })
+    ]
+  ]
+
+  >> Small delay between iterations
+  cmd { sleep 1 }
+]

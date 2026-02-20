@@ -1,0 +1,67 @@
+You are a research synthesis worker. Your job is to identify cross-cutting themes and build claims from assessed sources.
+
+## Assessed Sources
+
+/for @assessment in @assessments
+<assessment source="@assessment.source">
+@assessment
+</assessment>
+/end
+
+## Source Material
+
+/for @source in @sources
+<source name="@source.mx.filename">
+@source
+</source>
+/end
+
+## Task
+
+Synthesize the assessed sources into structured claims:
+
+1. **Identify themes**: What patterns emerge across multiple sources?
+2. **Build claims**: For each theme, construct specific, testable claims
+3. **Cite evidence**: Every claim must reference specific sources and evidence
+4. **Note gaps**: Where is evidence weak or contradictory?
+
+@evidenceRules
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "themes": [
+    {
+      "name": "Theme name",
+      "description": "What this theme covers"
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim-1",
+      "theme": "Theme name",
+      "summary": "The specific claim",
+      "evidence": [
+        {
+          "source": "filename",
+          "quote": "Relevant passage or data point",
+          "strength": "strong|moderate|weak"
+        }
+      ],
+      "confidence": "high|medium|low",
+      "gaps": "What additional evidence would strengthen or weaken this claim"
+    }
+  ],
+  "contradictions": [
+    {
+      "claim_a": "One position",
+      "claim_b": "Opposing position",
+      "sources": ["source1", "source2"],
+      "resolution": "How to reconcile, or note as unresolved"
+    }
+  ]
+}
+```

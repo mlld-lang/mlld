@@ -1,0 +1,6 @@
+Use 'let' inside blocks
+
+`var` declares a module-level variable (global) and is not allowed inside ${BLOCK} blocks.
+Use `let` for block-scoped values:
+  ✗ var @${VARNAME} = ...
+  ✓ let @${VARNAME} = ...

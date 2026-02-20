@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
-describe('Heredoc large-variable handling (e2e)', () => {
+// These tests require low concurrency to avoid resource contention with parallel tests.
+// Run with: npm run test:heredoc
+describe.sequential('Heredoc large-variable handling (e2e)', () => {
   it('runs scripts/test-heredoc.cjs without failures', { timeout: 60000 }, () => {
     const script = join(__dirname, '..', 'scripts', 'test-heredoc.cjs');
     const result = spawnSync(process.execPath, [script], {

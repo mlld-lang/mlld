@@ -1,0 +1,9 @@
+var @policyConfig = {
+  defaults: { rules: ["no-secret-exfil"] },
+  labels: { secret: { allow: ["exfil"] } }
+}
+policy @p = union(@policyConfig)
+
+var secret @token = "sk-123"
+exe exfil @send(data) = run cmd { echo "@data" }
+show @send(@token)

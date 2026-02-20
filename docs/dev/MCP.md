@@ -33,7 +33,7 @@ MCP Client ── JSON-RPC over stdio ── MCPServer ── FunctionRouter ─
 ## Testing
 
 - Unit tests cover schema generation, function routing, MCP protocol handling, and CLI wiring (`cli/mcp/*.test.ts`, `cli/commands/mcp.test.ts`).
-- Integration fixtures sit under `tests/fixtures/mcp/` (add new examples alongside the GitHub sample).
+- MCP test servers sit under `tests/support/mcp/` (not `tests/fixtures/` which gets wiped during fixture rebuilds).
 - Use `npx vitest run cli/mcp --runInBand` during development to minimize stdout interference.
 
 ## Debugging

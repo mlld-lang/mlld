@@ -35,7 +35,7 @@ describe('Guard directive', () => {
   });
 
   test('parses named operation guard', async () => {
-    const content = `/guard @shellRestrictions for op:run = when first [
+    const content = `/guard @shellRestrictions for op:run = when [
       @input.any.mx.labels.includes("secret") => deny "No secrets in run directives"
       * => allow
     ]`;
@@ -54,7 +54,7 @@ describe('Guard directive', () => {
     expect(guard.values.filter[0].filterKind).toBe('operation');
     expect(guard.values.filter[0].value).toBe('run');
     expect(guard.meta.scope).toBe('perOperation');
-    expect(guard.meta.modifier).toBe('first');
+    expect(guard.meta.modifier).toBe('default');
     expect(guard.meta.ruleCount).toBe(2);
     expect(guard.meta.timing).toBe('before');
   });
@@ -75,5 +75,23 @@ describe('Guard directive', () => {
     const alwaysResult = await parse(alwaysContent);
     const alwaysGuard = alwaysResult.ast[0] as GuardDirectiveNode;
     expect(alwaysGuard.meta.timing).toBe('always');
+  });
+
+  test('parses guard with privileged with-clause', async () => {
+    const content = '/guard @privGuard before op:run = when [ * => deny "blocked" ] with { privileged: true }';
+    const parseResult = await parse(content);
+    const guard = parseResult.ast[0] as GuardDirectiveNode;
+
+    expect(guard.meta.privileged).toBe(true);
+    expect(guard.raw.privileged).toBe(true);
+  });
+
+  test('parses guard privileged prefix sugar', async () => {
+    const content = '/guard privileged @privGuard before op:run = when [ * => deny "blocked" ]';
+    const parseResult = await parse(content);
+    const guard = parseResult.ast[0] as GuardDirectiveNode;
+
+    expect(guard.meta.privileged).toBe(true);
+    expect(guard.raw.privileged).toBe(true);
   });
 });

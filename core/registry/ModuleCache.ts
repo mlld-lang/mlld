@@ -163,7 +163,7 @@ export class ModuleCache {
         }
       };
     } catch (error) {
-      if (error.code === 'ENOENT') {
+      if (error instanceof Error && 'code' in error && (error as any).code === 'ENOENT') {
         return null;
       }
       throw error;

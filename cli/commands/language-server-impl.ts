@@ -984,11 +984,11 @@ export async function startLanguageServer(): Promise<void> {
       completions.push(...getWithClauseCompletions());
     } else if (line.match(/\|\s*@?$/)) {
       // After a pipe - suggest common transformers
-      const transforms = ['@json', '@JSON', '@csv', '@CSV', '@xml', '@XML', '@md', '@MD'];
+      const transforms = ['@parse', '@PARSE', '@json', '@JSON', '@csv', '@CSV', '@xml', '@XML', '@md', '@MD'];
       transforms.forEach(t => completions.push({ label: t, kind: CompletionItemKind.Function, detail: 'Pipeline transformer', insertText: t }));
     } else if (line.match(/with\s*\{[^}]*pipeline\s*:\s*\[[^\]]*$/)) {
       // Inside with { pipeline: [ ... } - suggest transformers
-      const transforms = ['@json', '@JSON', '@csv', '@CSV', '@xml', '@XML', '@md', '@MD'];
+      const transforms = ['@parse', '@PARSE', '@json', '@JSON', '@csv', '@CSV', '@xml', '@XML', '@md', '@MD'];
       transforms.forEach(t => completions.push({ label: t, kind: CompletionItemKind.Function, detail: 'Pipeline transformer', insertText: t }));
     } else if (line.match(/foreach\s+@\w*$/)) {
       // After 'foreach @' - suggest parameterized exec/text commands
@@ -1041,10 +1041,26 @@ export async function startLanguageServer(): Promise<void> {
       { name: 'path', desc: 'Define a file path' },
       { name: 'run', desc: 'Execute a command' },
       { name: 'exe', desc: 'Define a reusable command (replaces @exec)' },
+      { name: 'checkpoint', desc: 'Define a named resume checkpoint marker' },
       { name: 'import', desc: 'Import from files or modules' },
+      { name: 'export', desc: 'Export values from a module' },
       { name: 'when', desc: 'Conditional execution' },
+      { name: 'if', desc: 'Conditional execution with else blocks' },
+      { name: 'for', desc: 'Iterate over collections' },
+      { name: 'loop', desc: 'Block iteration' },
+      { name: 'while', desc: 'Bounded pipeline iteration' },
       { name: 'output', desc: 'Define output target' },
-      { name: 'log', desc: 'Log to stdout; alias of output to stdout' }
+      { name: 'append', desc: 'Append output to target' },
+      { name: 'log', desc: 'Log to stdout; alias of output to stdout' },
+      { name: 'guard', desc: 'Define security guard' },
+      { name: 'hook', desc: 'Define lifecycle hook' },
+      { name: 'stream', desc: 'Stream output' },
+      { name: 'env', desc: 'Scoped environment block' },
+      { name: 'needs', desc: 'Declare dependencies' },
+      { name: 'profiles', desc: 'Declare capability profiles' },
+      { name: 'policy', desc: 'Define policy object' },
+      { name: 'sign', desc: 'Sign values' },
+      { name: 'verify', desc: 'Verify signed values' }
     ];
 
     const prefix = mode === 'strict' ? '' : '/';
@@ -1060,10 +1076,13 @@ export async function startLanguageServer(): Promise<void> {
 
   function getLanguageCompletions(): CompletionItem[] {
     const languages = [
+      { name: 'javascript', desc: 'JavaScript code execution' },
       { name: 'js', desc: 'JavaScript code execution' },
       { name: 'sh', desc: 'Shell script with full bash features' },
+      { name: 'bash', desc: 'Bash script execution' },
       { name: 'node', desc: 'Node.js execution' },
-      { name: 'python', desc: 'Python code execution' }
+      { name: 'python', desc: 'Python code execution' },
+      { name: 'py', desc: 'Python code execution' }
     ];
 
     return languages.map(lang => ({
@@ -1284,6 +1303,13 @@ export async function startLanguageServer(): Promise<void> {
         insertText: 'pipeline: [@$1]'
       },
       {
+        label: 'tools',
+        kind: CompletionItemKind.Property,
+        detail: 'Filter available tools',
+        insertText: 'tools: [$1]',
+        insertTextFormat: 2
+      },
+      {
         label: 'needs',
         kind: CompletionItemKind.Property,
         detail: 'Validate dependencies',
@@ -1294,6 +1320,67 @@ export async function startLanguageServer(): Promise<void> {
         kind: CompletionItemKind.Property,
         detail: 'Guide parsing for pipeline stages',
         insertText: 'format: "$1"',
+        insertTextFormat: 2
+      },
+      {
+        label: 'stream',
+        kind: CompletionItemKind.Property,
+        detail: 'Enable streaming output',
+        insertText: 'stream: true'
+      },
+      {
+        label: 'streamFormat',
+        kind: CompletionItemKind.Property,
+        detail: 'Streaming adapter configuration',
+        insertText: 'streamFormat: "$1"',
+        insertTextFormat: 2
+      },
+      {
+        label: 'auth',
+        kind: CompletionItemKind.Property,
+        detail: 'Inject auth from policy',
+        insertText: 'auth: "$1"',
+        insertTextFormat: 2
+      },
+      {
+        label: 'using',
+        kind: CompletionItemKind.Property,
+        detail: 'Bind auth to env var',
+        insertText: 'using: { var: "@$1", as: "$2" }',
+        insertTextFormat: 2
+      },
+      {
+        label: 'guards',
+        kind: CompletionItemKind.Property,
+        detail: 'Override guard routing',
+        insertText: 'guards: { $1 }'
+      },
+      {
+        label: 'parallel',
+        kind: CompletionItemKind.Property,
+        detail: 'Parallelism cap',
+        insertText: 'parallel: $1',
+        insertTextFormat: 2
+      },
+      {
+        label: 'delayMs',
+        kind: CompletionItemKind.Property,
+        detail: 'Delay/pacing in ms',
+        insertText: 'delayMs: $1',
+        insertTextFormat: 2
+      },
+      {
+        label: 'trust',
+        kind: CompletionItemKind.Property,
+        detail: 'Trust level',
+        insertText: 'trust: "$1"',
+        insertTextFormat: 2
+      },
+      {
+        label: 'stdin',
+        kind: CompletionItemKind.Property,
+        detail: 'Stdin mapping',
+        insertText: 'stdin: $1',
         insertTextFormat: 2
       },
       { label: 'json', kind: CompletionItemKind.Enum, detail: 'format value', insertText: 'json' },

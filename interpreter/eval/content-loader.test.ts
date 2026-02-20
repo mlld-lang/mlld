@@ -6,10 +6,11 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import * as path from 'path';
-import minimatch from 'minimatch';
+import { minimatch } from 'minimatch';
 import { glob } from 'tinyglobby';
 import { unwrapStructuredForTest } from './test-helpers';
-import type { StructuredValueMetadata } from '../utils/structured-value';
+import { isStructuredValue, type StructuredValueMetadata } from '../utils/structured-value';
+import { llmxmlInstance } from '../utils/llmxml-instance';
 
 function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
   expect(metadata?.source).toBe('load-content');
@@ -157,10 +158,180 @@ describe('Content Loader with Glob Support', () => {
       expect(metadata?.filename).toBe('README.md');
       expectLoadContentMetadata(metadata);
     });
+
+    it('extracts sections with parentheses in the header', async () => {
+      await fileSystem.writeFile(
+        path.join(process.cwd(), 'README.md'),
+        [
+          '# Test README',
+          '',
+          '## Part 1: Labels (The Foundation)',
+          '',
+          'Content for part 1.',
+          '',
+          '## Part 2: Next Steps',
+          '',
+          'Content for part 2.'
+        ].join('\n')
+      );
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: 'README.md' }],
+          raw: 'README.md'
+        },
+        options: {
+          section: {
+            identifier: { type: 'Text', content: 'Part 1: Labels (The Foundation)' }
+          }
+        }
+      };
+
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
+
+      expect(typeof result).toBe('string');
+      expect(result as string).toContain('## Part 1: Labels (The Foundation)');
+      expect(result as string).toContain('Content for part 1.');
+      expect(result as string).not.toContain('Content for part 2.');
+    });
+
+    it('lists headings at the requested level for section-list selectors', async () => {
+      await fileSystem.writeFile(
+        path.join(process.cwd(), 'sections.md'),
+        [
+          '# Root',
+          '',
+          '## Intro',
+          '',
+          '### Deep Intro',
+          '',
+          '## Usage',
+          '',
+          '### Deep Usage'
+        ].join('\n')
+      );
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: 'sections.md' }],
+          raw: 'sections.md'
+        },
+        options: {
+          section: {
+            identifier: { type: 'section-list', level: 2 }
+          }
+        }
+      };
+
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest<string[]>(rawResult);
+
+      expect(result).toEqual(['Intro', 'Usage']);
+    });
+
+    it('applies rename templates when extraction falls back to heading matching', async () => {
+      const getSectionSpy = vi.spyOn(llmxmlInstance, 'getSection').mockResolvedValueOnce(null as any);
+
+      try {
+        await fileSystem.writeFile(
+          path.join(process.cwd(), 'fallback.md'),
+          [
+            '---',
+            'name: fallback-doc',
+            '---',
+            '',
+            '## Overview',
+            '',
+            'Fallback content.'
+          ].join('\n')
+        );
+
+        const node = {
+          type: 'load-content',
+          source: {
+            type: 'path',
+            segments: [{ type: 'Text', content: 'fallback.md' }],
+            raw: 'fallback.md'
+          },
+          options: {
+            section: {
+              identifier: { type: 'Text', content: 'Overview' },
+              renamed: {
+                type: 'rename-template',
+                parts: [
+                  { type: 'Text', content: '### ' },
+                  {
+                    type: 'FileReference',
+                    source: { type: 'placeholder' },
+                    fields: [{ type: 'field', value: 'fm' }, { type: 'field', value: 'name' }]
+                  }
+                ]
+              }
+            }
+          }
+        };
+
+        const rawResult = await processContentLoader(node, env);
+        const { data: result } = unwrapStructuredForTest<string>(rawResult);
+
+        expect(getSectionSpy).toHaveBeenCalled();
+        expect(result).toContain('### fallback-doc');
+        expect(result).toContain('Fallback content.');
+      } finally {
+        getSectionSpy.mockRestore();
+      }
+    });
+
+    it('keeps missing-section diagnostics stable', async () => {
+      await fileSystem.writeFile(
+        path.join(process.cwd(), 'missing.md'),
+        '# Missing\n\n## Present\n\nOnly this section exists.'
+      );
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: 'missing.md' }],
+          raw: 'missing.md'
+        },
+        options: {
+          section: {
+            identifier: { type: 'Text', content: 'NotHere' }
+          }
+        }
+      };
+
+      await expect(processContentLoader(node, env)).rejects.toThrow('Failed to load content: missing.md');
+    });
+
+    it('includes JSON parse details when loading invalid JSON', async () => {
+      await fileSystem.writeFile(
+        path.join(process.cwd(), 'invalid-json.json'),
+        '{ invalid json here'
+      );
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: 'invalid-json.json' }],
+          raw: 'invalid-json.json'
+        }
+      };
+
+      await expect(processContentLoader(node, env)).rejects.toThrow('Failed to load content: invalid-json.json');
+      await expect(processContentLoader(node, env)).rejects.toThrow('Failed to parse JSON from invalid-json.json');
+    });
   });
 
   describe('Relative path resolution', () => {
-    it('uses inferred project root for @base single file metadata', async () => {
+    it('uses project root for @base single file metadata', async () => {
       const projectRoot = '/project';
       const scriptPath = path.join(projectRoot, 'scripts', 'main.mld');
       await fileSystem.writeFile(path.join(projectRoot, 'mlld-config.json'), '{}');
@@ -185,7 +356,7 @@ describe('Content Loader with Glob Support', () => {
       expect(metadata?.relative).toBe('./todo/spec-security.md');
     });
 
-    it('uses inferred project root for @base glob metadata', async () => {
+    it('uses project root for @base glob metadata', async () => {
       const projectRoot = '/project';
       const scriptPath = path.join(projectRoot, 'scripts', 'main.mld');
       await fileSystem.writeFile(path.join(projectRoot, 'mlld-config.json'), '{}');
@@ -218,8 +389,9 @@ describe('Content Loader with Glob Support', () => {
 
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBeGreaterThan(0);
-      expect(isLoadContentResult(result[0])).toBe(true);
-      expect(result.map(item => item.relative).sort()).toEqual([
+      // Glob results are now StructuredValues with file metadata in .mx
+      expect(isStructuredValue(result[0])).toBe(true);
+      expect(result.map(item => item.mx?.relative ?? item.relative).sort()).toEqual([
         './todo/spec-a.md',
         './todo/spec-b.md'
       ]);

@@ -1,0 +1,22 @@
+Security Policy for Automated Tool Calls
+
+ALLOWED operations:
+- Read files within the project directory
+- Run tests (npm test, pytest, etc.)
+- Git operations: status, log, diff, add, commit
+- Build operations: npm run build, make
+
+DENIED operations:
+- Sending data to external URLs or endpoints
+- Deleting files outside /tmp
+- Git push, especially force push
+- Accessing credentials or SSH keys
+- Modifying system configuration files
+- Executing arbitrary shell commands
+- Installing packages from untrusted sources
+- Accessing environment variables containing secrets
+
+ESCALATION REQUIRED:
+- Any operation not explicitly listed above
+- Operations affecting multiple repositories
+- Operations requiring elevated permissions

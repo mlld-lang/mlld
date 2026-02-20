@@ -1,7 +1,0 @@
-var @title = "Dr."
-var @nickname = ""
-
-var @greeting = "Hello @title?\"@title \"@name@nickname?\" (@nickname)\""
-show @greeting
->> With @title="Dr." and @name="Ada": "Hello Dr. Ada"
->> With @nickname="Ace": "Hello Ada (Ace)"

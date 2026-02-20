@@ -40,6 +40,7 @@ export class FixSuggestionGenerator {
       'RunDirective': 'visitRunDirective()',
       'ExeDirective': 'visitExeDirective()',
       'WhenDirective': 'visitWhenDirective()',
+      'IfDirective': 'visitIfDirective()',
       'ForDirective': 'visitForDirective()',
       'ImportDirective': 'visitImportDirective()',
       'ExportDirective': 'visitExportDirective()',

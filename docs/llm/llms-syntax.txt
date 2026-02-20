@@ -3,6 +3,18 @@
 <VARIABLES>
 Create primitives, arrays, objects, or assign from command/code results.
 
+**var vs exe:** `var` creates values (no parameters). `exe` creates functions (takes parameters).
+
+```mlld
+var @name = "Alice"            >> value - no params
+exe @greet(who) = `Hi @who!`   >> function - takes params
+
+>> Use var for computed values, exe for reusable functions
+var @result = @greet(@name)    >> "Hi Alice!"
+```
+
+**Primitives, arrays, objects:**
+
 ```mlld
 var @n = 42
 var @price = 19.99
@@ -18,7 +30,8 @@ var @date = cmd {date}         >> command result
 var @readme = <README.md>      >> file contents
 ```
 
-**Conditional inclusion** (`@var?`): omit content when variable is falsy.
+**Conditional inclusion** (`@var?`): omit content when a variable is falsy.
+**Nullish fallback in templates** (`@var??"default"`): use the fallback when the value is null or undefined.
 
 ```mlld
 var @tools = "json"
@@ -27,6 +40,14 @@ var @empty = ""
 >> In commands: @var?`...`
 run cmd { echo @tools?`--tools "@tools"` @empty?`--empty` }
 >> Output: --tools "json" (--empty omitted)
+
+>> In templates: omit the variable itself
+var @title = "MyTitle"
+var @msg = `DEBUG:@title?`
+
+>> In templates: tight null coalescing
+var @missing = null
+var @hello = `Hello,@missing??"friend"`
 
 >> In arrays
 var @list = [@a, @b?, @c]   >> @b omitted if falsy
@@ -48,29 +69,108 @@ var @doc = ::Use `mlld` to orchestrate::
 >> Multi-line
 var @report = `
 Status: @status
-Config: <@base/config.json>
-Data: @data|@json
+Config: <@root/config.json>
+Data: @data|@parse
 `
 ```
 
-**When-expressions in templates:**
+For templates longer than a simple paragraph, use `.att` files with the `exe ... = template` pattern:
 
 ```mlld
-var @status = when [ @score > 90 => "A" * => "F" ]
-var @arr = [ 1, when [ @flag => 2 ], 3 ]
+exe @welcome(name, role) = template "./prompts/welcome.att"
+exe @systemPrompt(context) = template "./prompts/system.att"
+
+>> Call like any other function
+show @welcome("Alice", "admin")
 ```
 
-**Loops in templates:**
+The `.att` file uses `@var` for interpolation and supports full mlld syntax inside:
 
-```mlld
-var @toc = `
-for @item in @items
-- @item.name
+```att
+>> prompts/welcome.att
+Hello @name!
+
+Your role: @role
+
+for @perm in @role.permissions
+- @perm
 end
-`
 ```
 
-Note: `for` and `end` must be at line start inside template body.
+**Key points:**
+
+- Parameters from `exe @func(params)` are automatically available as `@param` in the template
+- `.att` supports `<file.md>` references, pipes, and `for`/`when` blocks
+- Relative `<file>` paths inside a template file resolve from that template file's directory
+- Use `@@` or `\@` to output a literal `@` symbol (e.g., `user@@example.com`)
+- Never load `.att` files with angle brackets - use `exe ... = template` instead
+
+**When to use external templates:**
+
+- Prompts longer than 2-3 lines
+- Templates with complex structure or loops
+- Reusable prompt components
+- Agent system prompts
+
+**Alternative syntax - .mtt files:**
+
+If `.att` syntax conflicts with your content, use `.mtt` files instead. Common case: prompts that include `@path/to/file` references for LLMs to interpret:
+
+```mlld
+exe @codeReview(files, instructions) = template "./prompts/review.mtt"
+```
+
+```mtt
+>> prompts/review.mtt - uses {{var}} syntax
+Review these files: {{files}}
+
+{{instructions}}
+
+Reference @src/utils.ts and @tests/utils.test.ts for context.
+```
+
+The `@src/utils.ts` stays literal - mlld won't try to interpolate it.
+
+| Extension | Variable syntax | File refs | Use when |
+|-----------|----------------|-----------|----------|
+| `.att` | `@var` | `<file.md>` | Default, mlld-style |
+| `.mtt` | `{{var}}` | None | Content has `@path` or `<tag>` meant for LLMs |
+
+**Template-embedded vs top-level:** Control flow inside templates uses `/for` and `/end` with slash prefix. Top-level directives are separate statements.
+
+```mlld
+>> TOP-LEVEL: for as a directive (produces output directly)
+for @item in @items => show `- @item.name`
+
+>> TEMPLATE-EMBEDDED: /for inside template body
+var @items = ["alpha", "beta", "gamma"]
+var @toc = ::
+/for @item in @items
+- @item
+/end
+::
+show @toc
+```
+
+**Key/value form in templates:**
+
+```mlld
+/for @k, @v in @items
+- @k: @v
+/end
+```
+
+**Key differences:**
+
+| Context | Syntax | Notes |
+|---------|--------|-------|
+| Top-level | `for @x in @y => action` | Directive on own line |
+| In template | `/for @x in @y` ... `/end` | Slash prefix required at line start |
+
+**Template-embedded rules:**
+- `/for` and `/end` must start at column 1 of their line inside the template
+- No `=>` arrow - the lines between `/for` and `/end` are the body
+- Only `/for` and `/end` are valid inside templates - no other directives
 </TEMPLATES>
 
 <FILE_LOADING>
@@ -86,6 +186,12 @@ var @author = <package.json>.author  >> field access
 var @docs = <docs/**/*.md>
 show @docs.length
 for @doc in @docs => show @doc.mx.filename
+
+>> JSON globs - each item is auto-parsed
+var @configs = <configs/*.json>
+var @first = @configs[0]
+show @first.name                     >> access parsed JSON
+show @first.mx.filename              >> file metadata still available
 
 >> With "as" template
 var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
@@ -117,28 +223,41 @@ Type keywords: `fn`, `var`, `class`, `interface`, `type`, `enum`, `struct`
 
 ```mlld
 var @file = <README.md>
-show @file.mx.filename     >> "README.md"
-show @file.mx.relative     >> relative path
-show @file.mx.tokens       >> token count estimate
-show @file.mx.fm.title     >> frontmatter field
+show @file.mx.filename      >> "README.md"
+show @file.mx.relative      >> relative path from cwd
+show @file.mx.absolute      >> absolute path
+show @file.mx.path          >> alias for absolute path
+show @file.mx.dirname       >> parent directory name
+show @file.mx.relativeDir   >> relative path to directory
+show @file.mx.absoluteDir   >> absolute path to directory
+show @file.mx.tokens        >> token count estimate
+show @file.mx.fm.title      >> frontmatter field
 ```
 
-**JSON string accessors** (`.data` and `.text`):
+**In loops** - metadata works directly:
+
+```mlld
+var @files = <docs/*.md>
+for @file in @files => show @file.mx.filename
+for @file in @files => show @file.mx.data.status
+```
+
+**Parse JSON explicitly with transforms:**
 
 ```mlld
 >> When you have a JSON string and need to parse it
 var @jsonStr = '[{"name":"Alice"},{"name":"Bob"}]'
-var @parsed = @jsonStr.data          >> parses JSON string to array/object
+var @parsed = @jsonStr | @parse
 show @parsed.0.name                  >> "Alice"
 
 >> When you have an object and need the JSON string
 var @obj = {"name": "Alice"}
-var @str = @obj.text                 >> stringified JSON
+var @str = @obj | @parse
 show @str                            >> '{"name":"Alice"}'
 
 >> Common in pipelines with LLM responses
-var @response = @llm("return JSON") | @json.llm
-var @items = @response.data          >> if response is JSON string
+var @response = @llm("return JSON") | @parse.llm
+var @items = @response
 ```
 </FILE_LOADING>
 
@@ -175,19 +294,19 @@ show @message.trim().toLowerCase().startsWith("hello")  >> true
 </BUILTIN_METHODS>
 
 <PIPELINES>
-Chain stages with `|`. Built-ins: `@json`, `@xml`, `@csv`, `@md`.
+Chain stages with `|`. Built-ins: `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`.
 
 ```mlld
-var @users = cmd {cat users.json} | @json | @csv
+var @users = cmd {cat users.json} | @parse | @csv
 
 >> Custom functions in pipelines
 exe @double(n) = js { return n * 2 }
 var @x = cmd {echo "5"} | @double
 
 >> JSON parsing modes
-var @relaxed = @input | @json.loose   >> single quotes, trailing commas
-var @strict = @input | @json.strict   >> strict JSON only
-var @extracted = @llmResponse | @json.llm  >> extract from LLM response
+var @relaxed = @input | @parse.loose   >> single quotes, trailing commas
+var @strict = @input | @parse.strict   >> strict JSON only
+var @extracted = @llmResponse | @parse.llm  >> extract from LLM response
 ```
 
 **Pipeline context:**
@@ -230,9 +349,20 @@ show @x       >> also works here
 <RESERVED_VARIABLES>
 - `@now` - current timestamp
 - `@input` - stdin/env (must be allowed in config)
-- `@base` - project root path
+- `@payload` - data passed via SDK or CLI (see payload atom)
+- `@state` - mutable state for SDK integrations
+- `@root` - project root path (preferred)
+- `@base` - project root path (alias for @root)
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)
+
+Built-in transformer/helper names are available for `var`/`let` declarations and are shadowable per scope:
+- `@exists`, `@fileExists`, `@typeof`
+- `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`
+- `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+- `@keep`, `@keepStructured`
+
+`mlld validate` reports builtin shadowing as informational output.
 </RESERVED_VARIABLES>
 
 </MLLD_SYNTAX>

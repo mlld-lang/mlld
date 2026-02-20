@@ -1,12 +1,12 @@
 ---
-description: /var assignment with bound-value when (all matching)
+description: /var assignment with when (first match semantics)
 ---
 
 /var @x = 5
-/var @res = when @x [
-  >= 0 => "A"
-  >= 3 => "B"
-  < 10 => "C"
+/var @res = when [
+  @x >= 0 => "A"
+  @x >= 3 => "B"
+  @x < 10 => "C"
 ]
 
 /show @res

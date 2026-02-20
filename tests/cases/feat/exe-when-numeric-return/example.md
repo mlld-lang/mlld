@@ -1,4 +1,4 @@
-/exe @getScore(x) = when first [
+/exe @getScore(x) = when [
   @x > 10 => 1.5
   @x > 5 => 0.6
   * => 0.5

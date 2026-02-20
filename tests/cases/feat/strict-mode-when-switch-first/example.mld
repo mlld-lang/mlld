@@ -1,6 +1,6 @@
 var @configKey = "ANTHROPIC_API_KEY"
 
-when first [
+when [
   @configKey == "ANTHROPIC_API_KEY" => show "✓ API key configured"
   @configKey == "" => show "ERROR: Missing API key"
   * => show "Unknown key"
@@ -8,20 +8,20 @@ when first [
 
 var @unknownKey = "UNKNOWN_KEY"
 
-when first [
+when [
   @unknownKey == "ANTHROPIC_API_KEY" => show "✓ API key configured"
   @unknownKey == "" => show "ERROR: Missing API key"
   none => show "ERROR: Unknown configuration key"
 ]
 
 var @key2 = "ANTHROPIC_API_KEY"
-when first [
+when [
   @key2 == "ANTHROPIC_API_KEY" => show "Found API key"
   none => show "No API key found"
 ]
 
 var @key3 = ""
-when first [
+when [
   @key3 == "ANTHROPIC_API_KEY" => show "Has key"
   @key3 == "" => show "Empty key"
   none => show "Should not execute"

@@ -1,0 +1,9 @@
+/import { URL } from node @url
+/var @site = new @URL("https://example.com")
+
+=== START PARTIAL TOKENS ===
+node --> keyword
+@url --> variable
+new --> keyword
+@URL --> variable
+=== END PARTIAL TOKENS ===

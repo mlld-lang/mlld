@@ -1,6 +1,6 @@
 /exe @seed() = "s"
 
-/exe @retryer(input, pipeline) = when first [
+/exe @retryer(input, pipeline) = when [
   @pipeline.try < 3 => retry
   * => `done @pipeline.try`
 ]

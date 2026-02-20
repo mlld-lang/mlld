@@ -70,6 +70,7 @@ export class NodeExecutor extends BaseCommandExecutor {
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
     const workingDirectory = options?.workingDirectory || this.workingDirectory;
+    const envOverrides = options?.env;
     const resolvedWorkingDirectory = workingDirectory && fs.existsSync(workingDirectory)
       ? workingDirectory
       : process.cwd();
@@ -85,7 +86,8 @@ export class NodeExecutor extends BaseCommandExecutor {
           metadata,
           startTime,
           context,
-          resolvedWorkingDirectory
+          resolvedWorkingDirectory,
+          envOverrides
         );
       }
 
@@ -95,7 +97,8 @@ export class NodeExecutor extends BaseCommandExecutor {
         metadata,
         startTime,
         context,
-        resolvedWorkingDirectory
+        resolvedWorkingDirectory,
+        envOverrides
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -143,7 +146,8 @@ export class NodeExecutor extends BaseCommandExecutor {
     metadata: Record<string, any> | undefined,
     startTime: number,
     context?: CommandExecutionContext,
-    workingDirectory?: string
+    workingDirectory?: string,
+    envOverrides?: Record<string, string>
   ): Promise<CommandExecutionResult> {
     const previousCwd = process.cwd();
     const targetCwd = workingDirectory || previousCwd;
@@ -152,6 +156,8 @@ export class NodeExecutor extends BaseCommandExecutor {
     if (shouldRestoreCwd) {
       process.chdir(targetCwd);
     }
+
+    const restoreEnv = applyProcessEnvOverrides(envOverrides);
 
     try {
       // Always use shadow environment for Node.js execution
@@ -193,7 +199,9 @@ export class NodeExecutor extends BaseCommandExecutor {
       }
 
       // Use shadow environment with VM
-      const result = await nodeShadowEnv.execute(code, shadowParams);
+      const result = await nodeShadowEnv.execute(code, shadowParams, {
+        passthroughConsole: context?.directiveType !== 'run'
+      });
 
       // Format result (same as subprocess version)
       let output = '';
@@ -212,6 +220,7 @@ export class NodeExecutor extends BaseCommandExecutor {
         exitCode: 0
       };
     } finally {
+      restoreEnv();
       if (shouldRestoreCwd) {
         process.chdir(previousCwd);
       }
@@ -224,7 +233,8 @@ export class NodeExecutor extends BaseCommandExecutor {
     metadata: Record<string, any> | undefined,
     startTime: number,
     context?: CommandExecutionContext,
-    workingDirectory?: string
+    workingDirectory?: string,
+    envOverrides?: Record<string, string>
   ): Promise<CommandExecutionResult> {
     const bus = context?.bus ?? this.getBus();
     const pipelineId = context?.pipelineId || 'pipeline';
@@ -281,7 +291,7 @@ ${code}
 
       const child = spawn('node', [tmpFile], {
         cwd: workingDirectory || this.workingDirectory,
-        env: { ...process.env },
+        env: { ...process.env, ...(envOverrides || {}) },
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
@@ -372,4 +382,31 @@ ${code}
   }
 
   // executeNodeSubprocess removed in favor of streaming spawn path
+}
+
+function applyProcessEnvOverrides(overrides?: Record<string, string>): () => void {
+  if (!overrides) {
+    return () => {};
+  }
+  const keys = Object.keys(overrides);
+  if (keys.length === 0) {
+    return () => {};
+  }
+
+  const previous = new Map<string, string | undefined>();
+  for (const key of keys) {
+    previous.set(key, process.env[key]);
+    process.env[key] = overrides[key];
+  }
+
+  return () => {
+    for (const key of keys) {
+      const prior = previous.get(key);
+      if (prior === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = prior;
+      }
+    }
+  };
 }

@@ -29,6 +29,10 @@ type StructuredValueLoadResult = Partial<LoadContentResult> & {
 
 export interface StructuredValueMetadata {
   source?: string;
+  command?: string;
+  exitCode?: number;
+  duration?: number;
+  stderr?: string;
   retries?: number;
   security?: SecurityDescriptor;
   loadResult?: StructuredValueLoadResult;
@@ -39,6 +43,10 @@ export interface StructuredValueMetadata {
   filename?: string;
   relative?: string;
   absolute?: string;
+  path?: string;
+  dirname?: string;
+  relativeDir?: string;
+  absoluteDir?: string;
   url?: string;
   domain?: string;
   title?: string;
@@ -59,7 +67,6 @@ export interface StructuredValueInternal extends Record<string, unknown> {}
 export interface StructuredValue<T = unknown> {
   type: StructuredValueType;
   text: string;
-  content?: string;
   data: T;
   metadata?: StructuredValueMetadata;
   internal?: StructuredValueInternal;
@@ -75,12 +82,18 @@ export interface StructuredValueContext {
   taint: readonly DataLabel[];
   sources: readonly string[];
   policy: Readonly<Record<string, unknown>> | null;
+  text?: string;
+  data?: unknown;
   keys?: readonly string[];
   values?: readonly unknown[];
   entries?: readonly (readonly [string, unknown])[];
   filename?: string;
   relative?: string;
   absolute?: string;
+  path?: string;
+  dirname?: string;
+  relativeDir?: string;
+  absoluteDir?: string;
   url?: string;
   domain?: string;
   title?: string;
@@ -89,6 +102,10 @@ export interface StructuredValueContext {
   headers?: Record<string, unknown>;
   html?: string;
   source?: string;
+  command?: string;
+  exitCode?: number;
+  duration?: number;
+  stderr?: string;
   retries?: number;
   tokest?: number;
   tokens?: number;
@@ -121,6 +138,17 @@ export function isStructuredValue<T = unknown>(value: unknown): value is Structu
       typeof (value as Record<string, unknown>).text === 'string' &&
       typeof (value as Record<string, unknown>).type === 'string'
   );
+}
+
+export function stringifyStructured(value: unknown, space?: number): string {
+  return JSON.stringify(value, structuredValueJsonReplacer, space);
+}
+
+function structuredValueJsonReplacer(_key: string, val: unknown): unknown {
+  if (isStructuredValue(val)) {
+    return val.data;
+  }
+  return val;
 }
 
 export function asText(value: unknown): string {
@@ -327,13 +355,6 @@ function createStructuredValue<T>(
     }
   } as StructuredValue<T>;
 
-  // Backward-compatible .content alias
-  Object.defineProperty(structuredValue, 'content', {
-    get() { return structuredValue.text; },
-    enumerable: false,
-    configurable: true
-  });
-
   defineStructuredCtx(structuredValue, resolvedMetadata, type);
   defineStructuredInternal(structuredValue, {});
   markStructuredValueInitialized(structuredValue);
@@ -362,7 +383,7 @@ function deriveText(value: unknown): string {
   }
 
   try {
-    return JSON.stringify(value);
+    return stringifyStructured(value);
   } catch {
     return String(value);
   }
@@ -372,6 +393,7 @@ export const structuredValueUtils = {
   STRUCTURED_VALUE_SYMBOL,
   asText,
   asData,
+  stringifyStructured,
   looksLikeJsonString,
   parseAndWrapJson,
   wrapStructured,
@@ -499,6 +521,10 @@ function buildVarMxFromMetadata(
   const flattenedFilename = metadata?.filename as string | undefined;
   const flattenedRelative = metadata?.relative as string | undefined;
   const flattenedAbsolute = metadata?.absolute as string | undefined;
+  const flattenedPath = metadata?.path as string | undefined;
+  const flattenedDirname = metadata?.dirname as string | undefined;
+  const flattenedRelativeDir = metadata?.relativeDir as string | undefined;
+  const flattenedAbsoluteDir = metadata?.absoluteDir as string | undefined;
   const flattenedUrl = metadata?.url as string | undefined;
   const flattenedDomain = metadata?.domain as string | undefined;
   const flattenedTitle = metadata?.title as string | undefined;
@@ -524,6 +550,10 @@ function buildVarMxFromMetadata(
     filename: flattenedFilename ?? loadResult?.filename,
     relative: flattenedRelative ?? loadResult?.relative,
     absolute: flattenedAbsolute ?? loadResult?.absolute,
+    path: flattenedPath ?? (loadResult?.path as string | undefined) ?? flattenedAbsolute ?? loadResult?.absolute,
+    dirname: flattenedDirname,
+    relativeDir: flattenedRelativeDir,
+    absoluteDir: flattenedAbsoluteDir,
     url: flattenedUrl ?? loadResult?.url,
     domain: flattenedDomain ?? loadResult?.domain,
     title: flattenedTitle ?? loadResult?.title,
@@ -532,6 +562,10 @@ function buildVarMxFromMetadata(
     headers: flattenedHeaders,
     html: flattenedHtml,
     source: metadata?.source,
+    command: metadata?.command,
+    exitCode: metadata?.exitCode,
+    duration: metadata?.duration,
+    stderr: metadata?.stderr,
     retries: metadata?.retries,
     tokest: flattenedTokest ?? loadResult?.tokest,
     tokens: flattenedTokens,

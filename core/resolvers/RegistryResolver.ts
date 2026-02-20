@@ -45,6 +45,41 @@ interface ModuleReference {
 }
 
 /**
+ * Single-file module source (gist, github, url)
+ */
+interface SingleFileSource {
+  type: 'github' | 'gist' | 'url' | 'private-repo';
+  url: string;
+  contentHash: string;
+  repository?: {
+    type: string;
+    url: string;
+    commit: string;
+    path: string;
+  };
+  gistId?: string;
+}
+
+/**
+ * Directory module source
+ */
+interface DirectorySource {
+  type: 'directory';
+  baseUrl: string;
+  files: string[];
+  entryPoint: string;
+  contentHash: string;
+  repository?: {
+    type: string;
+    url: string;
+    commit: string;
+    path: string;
+  };
+}
+
+type ModuleSource = SingleFileSource | DirectorySource;
+
+/**
  * Registry format from centralized modules.json file
  */
 interface RegistryFile {
@@ -55,6 +90,7 @@ interface RegistryFile {
     author: string;
     version?: string;
     about: string;
+    type?: 'library' | 'app' | 'command' | 'skill';
     needs: string[];
     repo?: string;
     keywords?: string[];
@@ -63,18 +99,7 @@ interface RegistryFile {
     license: string;
     mlldVersion?: string;
     ownerGithubUserIds?: number[];
-    source: {
-      type: string;
-      url: string;
-      contentHash: string;
-      repository?: {
-        type: string;
-        url: string;
-        commit: string;
-        path: string;
-      };
-      gistId?: string;
-    };
+    source: ModuleSource;
     dependencies?: Record<string, any>;
     publishedAt: string;
     publishedBy?: number;
@@ -120,7 +145,8 @@ export class RegistryResolver implements Resolver {
     const match = ref.match(/^@([^/]+)\/([^@]+)(?:@(.+))?$/);
     if (!match) {
       throw new MlldResolutionError(
-        `Invalid module reference format. Expected @user/module or @user/module@version, got: ${ref}`
+        `Invalid module reference format. Expected @user/module or @user/module@version, got: ${ref}`,
+        { code: 'E_INVALID_REFERENCE' }
       );
     }
     
@@ -195,7 +221,8 @@ export class RegistryResolver implements Resolver {
     
     if (!response.ok) {
       throw new MlldResolutionError(
-        `Failed to fetch version data for @${author}/${module}@${version}: ${response.status}`
+        `Failed to fetch version data for @${author}/${module}@${version}: ${response.status}`,
+        { code: 'E_FETCH_FAILED' }
       );
     }
     
@@ -232,14 +259,28 @@ export class RegistryResolver implements Resolver {
       
       if (!moduleEntry) {
         throw new MlldResolutionError(
-          `Module '${module}' not found in ${author}'s registry`
+          `Module '${module}' not found in ${author}'s registry`,
+          { code: 'E_MODULE_NOT_FOUND' }
         );
       }
       
       // Resolve version
-      let resolvedVersion = moduleEntry.version; // Default to latest
+      let resolvedVersion = moduleEntry.version; // Default to top-level version field
       let versionData = moduleEntry; // Use registry data by default
-      
+
+      // When no version specified, prefer tags.latest or highest availableVersion
+      // as a safety net against stale top-level version field
+      if (!version) {
+        if (moduleEntry.tags?.latest) {
+          resolvedVersion = moduleEntry.tags.latest;
+        } else if (moduleEntry.availableVersions?.length) {
+          const latest = this.resolveVersion(moduleEntry.availableVersions, '*');
+          if (latest) {
+            resolvedVersion = latest;
+          }
+        }
+      }
+
       if (version) {
         if (isTag && moduleEntry.tags?.[version]) {
           // Resolve tag to version
@@ -253,14 +294,16 @@ export class RegistryResolver implements Resolver {
           );
           if (!resolved) {
             throw new MlldResolutionError(
-              `No version matching '${version}' for ${moduleKey}\nAvailable versions: ${moduleEntry.availableVersions.join(', ')}`
+              `No version matching '${version}' for ${moduleKey}\nAvailable versions: ${moduleEntry.availableVersions.join(', ')}`,
+              { code: 'E_VERSION_NOT_FOUND' }
             );
           }
           resolvedVersion = resolved;
         } else if (version !== moduleEntry.version) {
           // Backward compat: only one version available
           throw new MlldResolutionError(
-            `Version ${version} not found for ${moduleKey}. Only version ${moduleEntry.version} is available.`
+            `Version ${version} not found for ${moduleKey}. Only version ${moduleEntry.version} is available.`,
+            { code: 'E_VERSION_NOT_FOUND' }
           );
         }
       }
@@ -274,43 +317,51 @@ export class RegistryResolver implements Resolver {
         );
       }
       
-      // Get the source URL
-      const sourceUrl = versionData.source.url;
-      
+      // Handle directory vs single-file modules
+      const source = versionData.source;
+
+      if (source.type === 'directory') {
+        return this.resolveDirectoryModule(
+          moduleKey,
+          resolvedVersion,
+          moduleEntry,
+          source as DirectorySource
+        );
+      }
+
+      // Single-file module
+      const sourceUrl = (source as SingleFileSource).url;
+
       logger.debug(`Resolved ${ref} to ${moduleKey}@${resolvedVersion} at ${sourceUrl}`);
 
       // Fetch the actual module content from the source URL
       logger.debug(`Fetching module content from: ${sourceUrl}`);
-      
+
       const response = await fetch(sourceUrl);
       if (!response.ok) {
         // Check for 404 specifically
         if (response.status === 404) {
           throw new MlldResolutionError(
-            `Module content not found at ${sourceUrl}. The module may have been moved or deleted.`
+            `Module content not found at ${sourceUrl}. The module may have been moved or deleted.`,
+            { code: 'E_MODULE_NOT_FOUND' }
           );
         }
         throw new MlldResolutionError(
-          `Failed to fetch module content from ${sourceUrl}: ${response.status} ${response.statusText}`
+          `Failed to fetch module content from ${sourceUrl}: ${response.status} ${response.statusText}`,
+          { code: 'E_FETCH_FAILED' }
         );
       }
-      
+
       const content = await response.text();
-      
+
       // Validate we got actual content, not an error page
       if (!content || content.length === 0) {
         throw new MlldResolutionError(
-          `Module content is empty at ${sourceUrl}`
+          `Module content is empty at ${sourceUrl}`,
+          { code: 'E_EMPTY_CONTENT' }
         );
       }
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log(`[RegistryResolver] Resolved to version: ${resolvedVersion}`);
-        console.log(`[RegistryResolver] Fetched content from ${sourceUrl}`);
-        console.log(`[RegistryResolver] Fetched content length: ${content.length}`);
-        console.log(`[RegistryResolver] First 200 chars:`, content.substring(0, 200));
-      }
-      
+
       return {
         content,
         contentType: 'module',
@@ -320,7 +371,7 @@ export class RegistryResolver implements Resolver {
           taint: [],
           author: moduleEntry.author,
           mimeType: 'text/x-mlld-module',
-          hash: versionData.source.contentHash,
+          hash: source.contentHash,
           sourceUrl,
           version: resolvedVersion
         }
@@ -331,7 +382,8 @@ export class RegistryResolver implements Resolver {
       }
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new MlldResolutionError(
-        `Failed to resolve ${ref} from registry: ${errorMessage}`
+        `Failed to resolve ${ref} from registry: ${errorMessage}`,
+        { code: 'E_RESOLVE_FAIL' }
       );
     }
   }
@@ -374,6 +426,82 @@ export class RegistryResolver implements Resolver {
   }
 
   /**
+   * Resolve a directory module by fetching all files
+   */
+  private async resolveDirectoryModule(
+    moduleKey: string,
+    resolvedVersion: string,
+    moduleEntry: RegistryFile['modules'][string],
+    source: DirectorySource
+  ): Promise<ResolverContent> {
+    const { baseUrl, files, entryPoint, contentHash } = source;
+
+    logger.debug(`Resolving directory module ${moduleKey}@${resolvedVersion}`);
+    logger.debug(`  Base URL: ${baseUrl}`);
+    logger.debug(`  Files: ${files.join(', ')}`);
+    logger.debug(`  Entry point: ${entryPoint}`);
+
+    // Fetch all files in parallel
+    const fileContents: Record<string, string> = {};
+    const fetchPromises = files.map(async (filePath) => {
+      const fileUrl = `${baseUrl}/${filePath}`;
+      logger.debug(`  Fetching: ${fileUrl}`);
+
+      const response = await fetch(fileUrl);
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new MlldResolutionError(
+            `Directory module file not found: ${filePath} at ${fileUrl}`,
+            { code: 'E_MODULE_NOT_FOUND' }
+          );
+        }
+        throw new MlldResolutionError(
+          `Failed to fetch directory module file ${filePath}: ${response.status} ${response.statusText}`,
+          { code: 'E_FETCH_FAILED' }
+        );
+      }
+
+      const content = await response.text();
+      return { filePath, content };
+    });
+
+    const results = await Promise.all(fetchPromises);
+    for (const { filePath, content } of results) {
+      fileContents[filePath] = content;
+    }
+
+    // Get entry point content
+    const entryContent = fileContents[entryPoint];
+    if (!entryContent) {
+      throw new MlldResolutionError(
+        `Entry point '${entryPoint}' not found in directory module files: ${files.join(', ')}`,
+        { code: 'E_MODULE_NOT_FOUND' }
+      );
+    }
+
+    return {
+      content: entryContent,
+      contentType: 'module',
+      metadata: {
+        source: `registry://${moduleKey}@${resolvedVersion}`,
+        timestamp: new Date(),
+        taint: [],
+        author: moduleEntry.author,
+        mimeType: 'text/x-mlld-module',
+        hash: contentHash,
+        sourceUrl: `${baseUrl}/${entryPoint}`,
+        version: resolvedVersion,
+        // Directory-specific metadata
+        isDirectory: true,
+        moduleType: moduleEntry.type,
+        directoryFiles: fileContents,
+        entryPoint,
+        baseUrl
+      }
+    };
+  }
+
+  /**
    * Fetch the centralized registry file from GitHub
    */
   private async fetchRegistry(
@@ -391,14 +519,16 @@ export class RegistryResolver implements Resolver {
     }
 
     // Construct GitHub raw URL - use centralized modules.json
-    const registryUrl = `https://raw.githubusercontent.com/${registryRepo}/${branch}/modules.json`;
+    // Append cache-busting query param to bypass GitHub CDN staleness
+    const registryUrl = `https://raw.githubusercontent.com/${registryRepo}/${branch}/modules.json?v=${Date.now()}`;
     
     logger.debug(`Fetching registry from: ${registryUrl}`);
 
-    // Fetch from GitHub
+    // Fetch from GitHub with cache-busting to avoid stale CDN responses
     const headers: HeadersInit = {
       'Accept': 'application/json',
-      'User-Agent': 'mlld-registry-resolver'
+      'User-Agent': 'mlld-registry-resolver',
+      'Cache-Control': 'no-cache'
     };
 
     if (config?.token) {
@@ -411,7 +541,7 @@ export class RegistryResolver implements Resolver {
       if (response.status === 404) {
         throw new MlldResolutionError(
           `Registry not found at ${registryUrl}. The registry may be unavailable.`,
-          { registryUrl }
+          { code: 'E_REGISTRY_UNAVAILABLE' }
         );
       }
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
@@ -491,8 +621,23 @@ export class RegistryResolver implements Resolver {
         throw new Error(`Module '${moduleName}' missing or invalid source field`);
       }
 
-      if (!module.source.url || typeof module.source.url !== 'string') {
-        throw new Error(`Module '${moduleName}' missing or invalid source.url field`);
+      // Validate source based on type
+      if (module.source.type === 'directory') {
+        // Directory module validation
+        if (!module.source.baseUrl || typeof module.source.baseUrl !== 'string') {
+          throw new Error(`Module '${moduleName}' missing or invalid source.baseUrl field`);
+        }
+        if (!Array.isArray(module.source.files) || module.source.files.length === 0) {
+          throw new Error(`Module '${moduleName}' missing or invalid source.files field`);
+        }
+        if (!module.source.entryPoint || typeof module.source.entryPoint !== 'string') {
+          throw new Error(`Module '${moduleName}' missing or invalid source.entryPoint field`);
+        }
+      } else {
+        // Single-file module validation
+        if (!module.source.url || typeof module.source.url !== 'string') {
+          throw new Error(`Module '${moduleName}' missing or invalid source.url field`);
+        }
       }
 
       if (!module.source.contentHash || typeof module.source.contentHash !== 'string') {

@@ -35,6 +35,7 @@ export interface LoadContentResult {
   filename: string;             // "README.md"
   relative: string;             // "./docs/README.md"
   absolute: string;             // "/Users/adam/project/docs/README.md"
+  readonly path?: string;       // Alias for absolute
   // StructuredValue surface (content-first)
   readonly type?: 'text' | 'object' | 'array' | 'html' | (string & {});
   readonly text?: string;
@@ -43,6 +44,10 @@ export interface LoadContentResult {
     filename?: string;
     relative?: string;
     absolute?: string;
+    path?: string;
+    dirname?: string;
+    relativeDir?: string;
+    absoluteDir?: string;
     url?: string;
     domain?: string;
     title?: string;

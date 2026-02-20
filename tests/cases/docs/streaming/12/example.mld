@@ -1,3 +1,0 @@
-exe @build() = stream sh {npm run build}
-
-show @build()  >> See build output live

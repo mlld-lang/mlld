@@ -118,11 +118,22 @@ export interface ImportTaintOptions {
   source?: string;
   labels?: readonly DataLabel[];  // From resolver mx
   resolvedPath?: string;
-  sourceType?: 'file' | 'url' | 'module' | 'resolver' | 'input';
+  sourceType?: 'file' | 'url' | 'module' | 'resolver' | 'input' | 'node';
 }
 
 function isUrlLike(value: string): boolean {
   return /^https?:\/\//i.test(value);
+}
+
+function isNetworkResolver(resolverName?: string): boolean {
+  if (!resolverName) {
+    return false;
+  }
+  const normalized = resolverName.toLowerCase();
+  return normalized === 'http' ||
+    normalized === 'https' ||
+    normalized === 'github' ||
+    normalized === 'registry';
 }
 
 function shouldTreatAsFile(options: ImportTaintOptions, resolvedPath?: string): boolean {
@@ -133,6 +144,9 @@ function shouldTreatAsFile(options: ImportTaintOptions, resolvedPath?: string): 
     return false;
   }
   if (options.sourceType === 'module' || options.sourceType === 'input') {
+    return false;
+  }
+  if (options.sourceType === 'node') {
     return false;
   }
   if (isUrlLike(resolvedPath)) {
@@ -147,6 +161,14 @@ function shouldTreatAsFile(options: ImportTaintOptions, resolvedPath?: string): 
 export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
   const resolverName = options.resolverName?.toLowerCase();
   const resolvedPath = options.resolvedPath ?? options.source;
+  const source = options.source ?? '';
+  const isNodeSource = options.sourceType === 'node';
+  const isNetworkSource =
+    options.sourceType === 'url' ||
+    (resolvedPath ? isUrlLike(resolvedPath) : false) ||
+    (source ? isUrlLike(source) : false) ||
+    isNetworkResolver(resolverName);
+  const isUserSource = options.sourceType === 'input' || resolverName === 'input';
   const dirLabels =
     resolvedPath && shouldTreatAsFile(options, resolvedPath)
       ? labelsForPath(resolvedPath)
@@ -161,7 +183,10 @@ export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
   const taint = freezeArray<DataLabel>([
     ...explicitLabels,
     ...(resolverName === 'dynamic' ? ['src:dynamic'] : []),
-    ...(dirLabels.length > 0 ? ['src:file', ...dirLabels] : [])
+    ...(dirLabels.length > 0 ? ['src:file', ...dirLabels] : []),
+    ...(isNetworkSource ? ['src:network'] : []),
+    ...(isNodeSource ? ['src:node'] : []),
+    ...(isUserSource ? ['src:user'] : [])
   ]);
 
   return Object.freeze({

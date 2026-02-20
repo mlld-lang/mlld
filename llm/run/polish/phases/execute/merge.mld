@@ -1,0 +1,102 @@
+>> Stage 4b: Merge
+>> Merges verified worktrees into the main branch
+>>
+>> Input: Results from apply stage (items with verified=true and worktree_branch)
+>> Output: merge-batch-N.json with merge results
+>>
+>> Runs sequentially - merge conflicts need ordered resolution
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logEvent, @loadEvents, @getVerifiedNotMerged, @logMergeDone, @logMergeFailed } from "../../lib/events.mld"
+import { @debuglog } from "../../lib/debug.mld"
+
+/needs { sh }
+
+>> Tool permissions for merge agents
+var @mergeTools = "Read,Write,Glob,Grep,Bash(git:*),Bash(wt:*),Bash(cat:*),Bash(pwd)"
+
+>> Note: Worktree cleanup moved to verify phase (after tests pass)
+
+>> Build merge prompt from template
+exe @buildMergePrompt(baseBranch, runDir, batchNum, mergeItemsJson, outputPath) = template "../../prompts/execute-merge.att"
+
+>> Merge verified worktrees into main branch
+>> Now reads from events.jsonl to find ALL verified-but-unmerged items, not just current batch
+exe @mergeVerified(runDir, results, baseBranch, batchNum, dryRun) = [
+  >> Load events and find all verified items that haven't been merged yet
+  let @events = @loadEvents(@runDir)
+  let @verifiedItems = @getVerifiedNotMerged(@events)
+
+  when @verifiedItems.length == 0 => show `    No verified items to merge`
+
+  => when [
+    @verifiedItems.length == 0 => { merged_count: 0, skipped_count: 0, failed_count: 0 }
+    @dryRun => [
+      show `    [DRY RUN] Would merge @verifiedItems.length worktrees`
+      => { merged_count: 0, skipped_count: @verifiedItems.length, failed_count: 0, dry_run: true }
+    ]
+    * => @_doMerge(@runDir, @verifiedItems, @baseBranch, @batchNum)
+  ]
+]
+
+>> Internal function to do the actual merge
+exe @_doMerge(runDir, verifiedItems, baseBranch, batchNum) = [
+  show `    Merging @verifiedItems.length verified worktrees...`
+
+  >> Build and run merge prompt
+  let @mergeItemsJson = @verifiedItems | @json.llm
+  let @outputPath = `@runDir/execute/merge-batch-@batchNum\.json`
+  let @prompt = @buildMergePrompt(@baseBranch, @runDir, @batchNum, @mergeItemsJson, @outputPath)
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON result to @outputPath using the Write tool.`
+
+  let @response = @claudePoll(@fullPrompt, "opus", @base, @mergeTools, @outputPath)
+
+  let @mergeResult = <@outputPath>?
+  when @mergeResult => [
+    show `    [merge] success for batch @batchNum`
+    >> Append merge_batch_done event to events.jsonl
+    @logEvent(@runDir, { event: "merge_batch_done", id: `batch-@batchNum`, ...@mergeResult })
+  ]
+  when !@mergeResult => show `    [merge] failed for batch @batchNum`
+
+  => when [
+    !@mergeResult => { merged_count: 0, error: "merge failed - no result" }
+    * => [
+      >> Log individual merge events (cleanup happens in verify phase)
+      @logMergeResults(@runDir, @mergeResult)
+      => @mergeResult
+    ]
+  ]
+]
+
+>> Log merge events for each item
+>> Worktree cleanup and ticket closing now happens in verify phase
+exe @logMergeResults(runDir, mergeResult) = [
+  let @results = @mergeResult.results ? @mergeResult.results : []
+  let @merged = for @r in @results when @r.merged && @r.worktree_branch => @r
+  let @failed = for @r in @results when !@r.merged && @r.error => @r
+
+  >> Log merge_done events
+  for @item in @merged [
+    let @ticketId = @item.ticket_id
+    let @commitSha = @item.commit_sha ? @item.commit_sha : ""
+    @logMergeDone(@runDir, @ticketId, @commitSha)
+    show `      Merged: @ticketId`
+  ]
+
+  >> Log merge_failed events
+  for @item in @failed [
+    let @ticketId = @item.ticket_id
+    let @error = @item.error ? @item.error : "unknown error"
+    @logMergeFailed(@runDir, @ticketId, @error)
+    show `      Merge failed: @ticketId - @error`
+  ]
+
+  => @merged.length
+]
+
+/export {
+  @mergeVerified,
+  @_doMerge,
+  @logMergeResults
+}

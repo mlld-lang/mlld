@@ -81,7 +81,7 @@ _(not available unless passed via @INPUT)_
 
 ### Pipeline Context:
 - Current stage: 2 of 3
-- Current command: @json
+- Current command: @parse
 - Input type: string
 - Input length: 45
 - Input value: "{"name": "example", "data": [1, 2, 3]}"
@@ -107,7 +107,7 @@ _(not available unless passed via @INPUT)_
 ### 2. Global Variables
 - Shows all reserved variables (except @DEBUG itself)
 - Includes @NOW, @PROJECTPATH, @INPUT
-- Shows built-in transformers (@JSON, @XML, etc.)
+- Shows built-in transformers (@PARSE, @XML, etc.)
 
 ### 3. User Variables
 - All variables defined by the user

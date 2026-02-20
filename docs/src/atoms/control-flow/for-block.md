@@ -8,6 +8,7 @@ tags: [iteration, loops, blocks]
 related: [for-arrow, for-collection]
 related-code: [interpreter/eval/for.ts, interpreter/eval/block.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Block form:**

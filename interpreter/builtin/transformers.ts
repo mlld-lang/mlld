@@ -14,8 +14,6 @@ export interface TransformerDefinition {
   description: string;
   implementation: (input: any) => Promise<any> | any;
   variants?: TransformerVariant[];
-  /** If true, the name is reserved and cannot be overridden by user code */
-  isReserved?: boolean;
 }
 
 export interface TransformerVariant {
@@ -29,13 +27,13 @@ function makeJsonTransformer(mode: 'loose' | 'strict' | 'llm') {
     if (mode === 'llm') {
       const extracted = extractJsonFromLLMResponse(input);
       if (!extracted) {
-        return false;
+        return null;
       }
 
       try {
         return JSON5.parse(extracted);
       } catch {
-        return false;
+        return null;
       }
     }
 
@@ -47,9 +45,9 @@ function makeJsonTransformer(mode: 'loose' | 'strict' | 'llm') {
         // Check if input looks like markdown-fenced JSON
         const trimmed = input.trim();
         if (trimmed.startsWith('```json') || trimmed.startsWith('```\n{') || trimmed.startsWith('```\n[')) {
-          throw new Error(`Strict JSON parsing failed - input appears to be wrapped in markdown code fences. Use @json.llm to extract JSON from LLM responses.\n\n${details}`);
+          throw new Error(`Strict JSON parsing failed - input appears to be wrapped in markdown code fences. Use @parse.llm to extract JSON from LLM responses.\n\n${details}`);
         }
-        throw new Error(`Strict JSON parsing failed (use @json.loose for relaxed syntax)\n\n${details}`);
+        throw new Error(`Strict JSON parsing failed (use @parse.loose for relaxed syntax)\n\n${details}`);
       }
     }
 
@@ -61,9 +59,9 @@ function makeJsonTransformer(mode: 'loose' | 'strict' | 'llm') {
         // Check if input looks like markdown-fenced JSON
         const trimmed = input.trim();
         if (trimmed.startsWith('```json') || trimmed.startsWith('```\n{') || trimmed.startsWith('```\n[')) {
-          throw new Error(`JSON parsing failed - input appears to be wrapped in markdown code fences. Use @json.llm to extract JSON from LLM responses.\n\n${details}`);
+          throw new Error(`JSON parsing failed - input appears to be wrapped in markdown code fences. Use @parse.llm to extract JSON from LLM responses.\n\n${details}`);
         }
-        throw new Error(`JSON parsing failed (use @json.llm for LLM responses with code fences)\n\n${details}`);
+        throw new Error(`JSON parsing failed (use @parse.llm for LLM responses with code fences)\n\n${details}`);
       }
     }
 
@@ -137,7 +135,6 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'typeof',
     uppercase: 'TYPEOF',
     description: 'Get type information for a variable',
-    isReserved: true,
     implementation: async (input: string) => {
       // The input will be a special marker when we have a Variable object
       // Otherwise it's just the string value
@@ -153,7 +150,14 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'exists',
     uppercase: 'EXISTS',
     description: 'Return true when an expression evaluates without error',
-    isReserved: true,
+    implementation: async (input: string) => {
+      return input.trim().length > 0;
+    }
+  },
+  {
+    name: 'fileExists',
+    uppercase: 'FILEEXISTS',
+    description: 'Check if a file path exists on the filesystem',
     implementation: async (input: string) => {
       return input.trim().length > 0;
     }
@@ -162,7 +166,6 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'xml',
     uppercase: 'XML',
     description: 'Convert content to SCREAMING_SNAKE_CASE XML',
-    isReserved: true,
     implementation: async (input: string) => {
       try {
         // Try to parse as JSON first
@@ -184,10 +187,9 @@ export const builtinTransformers: TransformerDefinition[] = [
     }
   },
   {
-    name: 'json',
-    uppercase: 'JSON',
+    name: 'parse',
+    uppercase: 'PARSE',
     description: 'Parse JSON (supports loose JSON5 syntax)',
-    isReserved: true,
     implementation: makeJsonTransformer('loose'),
     variants: [
       {
@@ -202,7 +204,7 @@ export const builtinTransformers: TransformerDefinition[] = [
       },
       {
         field: 'llm',
-        description: 'Extract JSON from LLM responses (code fences, prose). Returns false if no JSON found.',
+        description: 'Extract JSON from LLM responses (code fences, prose). Returns null if no JSON found.',
         implementation: makeJsonTransformer('llm')
       },
       {
@@ -218,10 +220,42 @@ export const builtinTransformers: TransformerDefinition[] = [
     ]
   },
   {
+    name: 'json',
+    uppercase: 'JSON',
+    description: 'Deprecated alias for @parse (JSON parser with loose JSON5 syntax)',
+    implementation: makeJsonTransformer('loose'),
+    variants: [
+      {
+        field: 'loose',
+        description: 'Deprecated alias for @parse.loose (parse relaxed JSON syntax)',
+        implementation: makeJsonTransformer('loose')
+      },
+      {
+        field: 'strict',
+        description: 'Deprecated alias for @parse.strict (parse strict JSON syntax)',
+        implementation: makeJsonTransformer('strict')
+      },
+      {
+        field: 'llm',
+        description: 'Deprecated alias for @parse.llm (extract JSON from LLM responses)',
+        implementation: makeJsonTransformer('llm')
+      },
+      {
+        field: 'fromlist',
+        description: 'Deprecated alias for @parse.fromlist (convert plain text list to JSON array)',
+        implementation: (input: string) => {
+          return input
+            .split('\n')
+            .map(line => line.trimEnd())
+            .filter(line => line.length > 0);
+        }
+      }
+    ]
+  },
+  {
     name: 'csv',
     uppercase: 'CSV',
     description: 'Convert to CSV format',
-    isReserved: true,
     implementation: (input: string) => {
       return convertToCSV(input);
     }
@@ -230,7 +264,6 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'md',
     uppercase: 'MD',
     description: 'Normalize markdown output',
-    isReserved: true,
     implementation: async (input: string) => {
       return normalizeOutput(input);
     }

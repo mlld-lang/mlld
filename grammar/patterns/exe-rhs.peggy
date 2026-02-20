@@ -3,7 +3,8 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 ExeRHSContent "exe assignment value"
-  = ExeProsePattern               // prose:@config {...} or prose:@config "file.prose"
+  = ExeNewExpression              // new @Class(...) constructor expression
+  / ExeProsePattern               // prose:@config {...} or prose:@config "file.prose"
   / leading:LeadingParallelPipeline {
       const pipeline = leading.withClause.pipeline || [];
       const pipelineSummary = pipeline.map(stage => {
@@ -31,6 +32,7 @@ ExeRHSContent "exe assignment value"
     }
   / WhenExpression              // when: [...] expressions for conditional execution
   / ForExpressionExe            // for @var in @collection => action (exe-specific with directive support)
+  / LoopExpressionExe           // loop(...) [ ... ]
   / ExeForeachPattern           // foreach @command(@arrays) as executable body
   / ExeRunCommandWithStdin      // run {command} with { stdin: @var } - explicit run with stdin
   / ExeRunCommandPipeStdin      // run @var | {command} - pipe sugar stdin syntax
@@ -47,6 +49,23 @@ ExeRHSContent "exe assignment value"
   / ExeResolverPattern          // @resolver/path - resolver patterns
   / ExeUnifiedReference         // @func(args) and @otherCmd - unified reference with pipeline support
 
+ExeNewExpression "exe new expression"
+  = expr:NewExpression {
+      return {
+        subtype: 'exeValue',
+        source: 'expression',
+        values: {
+          value: expr
+        },
+        raw: {
+          value: text()
+        },
+        meta: {
+          isNewExpression: true
+        }
+      };
+    }
+
 // -------------------------------------------------------------
 // EXE-SPECIFIC RHS PATTERNS
 // -------------------------------------------------------------
@@ -61,6 +80,7 @@ ExeUnifiedReference "exe unified reference"
         return {
           type: 'exeExecInvocation',
           values: {
+            execInvocation: invocation,
             commandRef: invocation.commandRef,
             args: invocation.commandRef.args || [],
             ...(invocation.withClause ? { withClause: invocation.withClause } : {})
@@ -135,22 +155,23 @@ ExeUnifiedReference "exe unified reference"
 // Run command with stdin pattern for exe context
 // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandWithStdin "exe run command with stdin"
-  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) _ withClause:WithClause {
+  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? _ withClause:WithClause {
       // Only allow with clauses that have stdin
       if (!withClause || !('stdin' in withClause)) {
         return null; // Let other patterns handle this
       }
+      const mergedWithClause = using ? { ...using, ...withClause } : withClause;
 
       return {
         subtype: 'exeCommand',
         source: 'command',
         values: {
           ...content.values,
-          withClause: withClause
+          withClause: mergedWithClause
         },
         raw: {
           ...content.raw,
-          withClause: withClause
+          withClause: mergedWithClause
         },
         meta: {
           ...content.meta,
@@ -162,8 +183,11 @@ ExeRunCommandWithStdin "exe run command with stdin"
 // Run command pipe stdin pattern for exe context
 // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandPipeStdin "exe run command pipe stdin"
-  = "run" _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
+  = "run" _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? tail:TailModifiers? {
       const withClause = { stdin: stdinExpr };
+      if (using) {
+        Object.assign(withClause, using);
+      }
       if (tail) {
         Object.assign(withClause, tail);
       }
@@ -190,8 +214,11 @@ ExeRunCommandPipeStdin "exe run command pipe stdin"
 
 // Streaming command pattern for exe context - handles "stream cmd {command}" syntax
 ExeStreamCommandPattern "exe stream command pattern"
-  = "stream" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
+  = "stream" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? tail:TailModifiers? {
       const withClause = { stream: true };
+      if (using) {
+        Object.assign(withClause, using);
+      }
       if (tail) {
         Object.assign(withClause, tail);
       }
@@ -218,17 +245,19 @@ ExeStreamCommandPattern "exe stream command pattern"
 // Run command pattern for exe context
 // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandPattern "exe run command pattern"
-  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
+  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? {
       return {
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          ...content.values
+          ...content.values,
+          ...(using ? { withClause: using } : {})
         },
         raw: {
-          ...content.raw
+          ...content.raw,
+          ...(using ? { withClause: using } : {})
         },
-        meta: content.meta
+        meta: using ? { ...content.meta, withClause: using } : content.meta
       };
     }
 
@@ -419,6 +448,8 @@ ProseContentParts "prose content parts"
 // This ensures ProseTextSegment handles plain text and stops at }
 ProseAtInterpolation "prose @ interpolation"
   = ConditionalTemplateSnippet   // @var?`...`
+  / NullCoalescingTight          // @var??"default"
+  / ConditionalVariableOmission  // @var?
   / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)
@@ -655,6 +686,9 @@ ExeBlockStatement
   / AugmentedAssignment
   / WhenExpressionAny
   / ForNestedDirective
+  / SlashIf
+  / SlashBail
+  / SlashCheckpoint
   / ExeBlockAction
 
 ExeBlockAction
@@ -668,6 +702,7 @@ ExeBlockAction
   / WhenRHSVariableReference
   / DoneLiteral
   / ContinueLiteral
+  / BailAction
   / ExeForeachPattern
   / ExeDataPattern
 
@@ -726,7 +761,7 @@ ExecAsNewTitle
 // Purpose: Allow when: [...] expressions that return values based on first matching condition
 
 WhenExpression "when expression"
-  // Bound-value: when <expr> [patterns] or when <expr> first [patterns]
+  // Bound-value: when <expr> [patterns]
   = "when" _ boundValue:Expression _ modifier:WhenExprModifier? _ "[" _ entries:WhenBoundExpressionConditionList _ "]" tail:TailModifiers? {
       const boundOffset =
         boundValue && typeof boundValue === 'object' && boundValue.location && boundValue.location.start
@@ -765,7 +800,7 @@ WhenExpression "when expression"
         mode: options.mode
       });
     }
-  // Standard: when [ ... ] or when first [ ... ]
+  // Standard: when [ ... ] (first-match)
   / "when" _ modifier:WhenExprModifier? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
       helpers.debug('WhenExpression matched', { 
         conditionCount: conditions.length,
@@ -789,21 +824,10 @@ WhenExpression "when expression"
         mode: options.mode
       });
     }
-  // Error recovery: Missing bracket after when
-  / "when" _ Expression _ WhenExprModifier? _ !"[" {
-      helpers.mlldError(
-        `Missing condition list in when expression. Expected: when @value [pattern => value, ...]`,
-        "[",
-        location()
-      );
-    }
-  / "when" _ WhenExprModifier? _ !"[" {
-      helpers.mlldError(
-        `Missing condition list in when expression. Expected: when [condition => value, ...]`,
-        "[",
-        location()
-      );
-    }
+  // Error recovery patterns removed - they were overly aggressive and prevented
+  // WhenExpressionInline from matching. The inline form (when @condition => action)
+  // handles the main use case, and specific error messages are less important than
+  // correct parsing behavior.
   // Error recovery: Unclosed bracket
   / "when" _ WhenExprModifier? _ "[" _ &{
       // Safer unclosed check for when-expressions: allow newlines; only error if EOF reached without ']'
@@ -857,6 +881,7 @@ WhenBoundExpressionEntry
   = LetAssignment
   / AugmentedAssignment
   / WhenBoundExpressionConditionPair
+  / ExeBlockAction
 
 WhenBoundExpressionConditionPair
   = pattern:WhenBoundPatternExpression _ "=>" _ action:WhenExpressionAction {
@@ -882,11 +907,15 @@ WhenBoundPatternAnd
 WhenBoundPatternAtom
   = "(" _ inner:WhenBoundPatternExpression _ ")" { return inner; }
   / wc:WildcardLiteral { return { kind: 'wildcard', node: wc, location: location() }; }
-  / op:UnifiedComparisonOp _ right:Expression { return { kind: 'compare', op, right, location: location() }; }
-  / value:Expression { return { kind: 'equals', value, location: location() }; }
+  / op:UnifiedComparisonOp _ right:UnifiedComparison { return { kind: 'compare', op, right, location: location() }; }
+  / value:UnifiedComparison { return { kind: 'equals', value, location: location() }; }
 
-// Optional modifier for when-expression in /exe RHS (currently supports 'first')
-WhenExprModifier = mod:("first") { return mod; }
+// Optional modifier for when-expression in /exe RHS (rejected)
+WhenExprModifier = mod:("first") {
+      // 'first' is redundant — when already uses first-match semantics by default.
+      // Silently accept for backwards compatibility with existing modules.
+      return mod;
+    }
 
 // Value-oriented condition list for when expressions
 // Reuses WhenConditionSeparator from when.peggy (shared abstraction)
@@ -911,11 +940,12 @@ WhenExpressionConditionList
     }
   / BlockComments+ { return []; }
 
-// Single entry in a when expression - let assignment, augmented assignment, or condition pair
+// Single entry in a when expression - let assignment, augmented assignment, action, or condition pair
 WhenExpressionEntry
   = LetAssignment               // let @x = value (local variable)
   / AugmentedAssignment         // @x += value (augmented assignment)
   / WhenExpressionConditionPair // condition => action
+  / ExeBlockAction              // show, log, run, etc. - imperative actions
 
 // Single condition => value pair for expressions
 WhenExpressionConditionPair
@@ -926,11 +956,16 @@ WhenExpressionConditionPair
     }
 
 // Actions in when expressions - for /exe context, supports both side effects and return values
+// Note: ArrayLiteral must come before ExeStatementBlock since both start with '['
+// Empty arrays [] would otherwise be parsed as empty blocks
 WhenExpressionAction
-  = block:ExeStatementBlock { return block; }
+  = ArrayLiteral           // Array literals (including empty [])
+  / DataObjectLiteral      // Object literals { key: value }
+  / block:ExeStatementBlock { return block; }
   / WhenRHSAction  // Use the unified pattern that supports show, output, var assignment, and values
 
-// Inline single-condition when expression (no brackets)
+// Inline single-condition when expression: when @condition => action
+// Block form is handled by WhenExpressionInlineBlock
 WhenExpressionInline
   = "when" _ condition:WhenConditionExpression _ "=>" _ action:WhenExpressionAction {
       const act = Array.isArray(action) ? action : [action];
@@ -939,9 +974,35 @@ WhenExpressionInline
     }
 
 // Alias to allow both inline and bracketed when expressions
+// WhenExpressionInlineBlock handles `when @condition [statements]` where block starts with statement keywords
+// This must come BEFORE WhenExpression to prevent WhenExpression from incorrectly parsing statement blocks
 WhenExpressionAny
-  = WhenExpressionInline
+  = WhenExpressionInlineBlock
   / WhenExpression
+  / WhenExpressionInline
+
+// Error recovery: when @condition [block] where block starts with statement keywords
+// The match form when @expr [patterns] already handles condition-like blocks above.
+// This catches imperative blocks (show, let, for, etc.) that don't look like match patterns.
+WhenExpressionInlineBlock
+  = "when" _ condition:WhenConditionExpression _ &("[" _ ("let" / "show" / "for" / "when" / "log" / "output" / "run" / "var" / "=>" )) "[" {
+      const conditionText = helpers.reconstructRawString(condition);
+      helpers.mlldError(
+        `when ${conditionText} [...] is ambiguous. Did you mean:\n\n` +
+        `  when ${conditionText} => [block]    Value-returning block (keeps when semantics)\n` +
+        `  if ${conditionText} [block]         Imperative flow (different return behavior!)\n\n` +
+        `Note: Inside exe/for, these have different return semantics.\n` +
+        `  when @cond => [=> @val]   returns @val from the when expression\n` +
+        `  if @cond [=> @val]        returns @val from the enclosing exe\n\n` +
+        `if vs when:\n` +
+        `  if @cond [block]                 Run block if true\n` +
+        `  when @cond => action             Select first match\n` +
+        `  when [cond => val; * => default] First-match list\n` +
+        `  when @val ["a" => x; * => y]    Match value against patterns`,
+        "=> or if",
+        location()
+      );
+    }
 
 // -------------------------------------------------------------
 // FOR EXPRESSION - Iteration with directive action support for executable assignments
@@ -951,7 +1012,50 @@ WhenExpressionAny
 // Used by: ExeRHSContent
 // Purpose: Allow for @var in @collection => action where action can be a directive
 ForExpressionExe "for expression with actions"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ whenExpr:WhenExpressionAny batchPipe:ForBatchPipeline? {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "when" _ condition:WhenConditionExpression _ block:ForBlockAction batchPipe:ForBatchPipeline? {
+      const action = Array.isArray(block.statements) ? block.statements : [block.statements];
+      const initialWhen = helpers.createWhenExpression(
+        [{ condition: [condition], action }],
+        null,
+        location(),
+        null
+      );
+
+      const loc = initialWhen.location || location();
+      const noneLiteral = helpers.createNode(NodeType.Literal, {
+        value: 'none',
+        valueType: 'none',
+        location: loc
+      });
+      const skipLiteral = helpers.createNode(NodeType.Literal, {
+        value: 'skip',
+        valueType: 'skip',
+        location: loc
+      });
+      const conditions = [...initialWhen.conditions, { condition: [noneLiteral], action: [skipLiteral] }];
+      const normalizedWhen = helpers.createWhenExpression(
+        conditions,
+        initialWhen.withClause || null,
+        loc,
+        initialWhen.meta?.modifier || null
+      );
+
+      helpers.debug('ForExpressionExe when-guard block matched', {
+        pattern,
+        statementCount: action.length
+      });
+
+      return helpers.createForExpression(
+        pattern.variable,
+        pattern.source,
+        [normalizedWhen],
+        location(),
+        opts || null,
+        batchPipe || null,
+        pattern.key || null
+      );
+    }
+  / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ whenExpr:WhenExpressionAny batchPipe:ForBatchPipeline? {
       const hasNoneCondition = Array.isArray(whenExpr.conditions) && whenExpr.conditions.some((entry) => {
         const condition = entry && entry.condition;
         return Array.isArray(condition) &&
@@ -990,7 +1094,8 @@ ForExpressionExe "for expression with actions"
         [normalizedWhen],  // Accepts directive actions or block statements
         location(),
         opts || null,
-        batchPipe || null
+        batchPipe || null,
+        pattern.key || null
       );
     }
   / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionExeBody batchPipe:ForBatchPipeline? {
@@ -1002,7 +1107,8 @@ ForExpressionExe "for expression with actions"
         action,  // Accepts directive actions or block statements
         location(),
         opts || null,
-        batchPipe || null
+        batchPipe || null,
+        pattern.key || null
       );
     }
   // Error recovery
@@ -1018,4 +1124,48 @@ ForExpressionExe "for expression with actions"
 
 ForExpressionExeBody
   = "=>" _ action:ForExpressionAction { return action; }
-  / block:ForBlockAction { return block.statements; }
+
+// LOOP EXPRESSION - loop(...) [ ... ]
+LoopExpressionExe "loop expression"
+  = "loop" _ header:LoopHeader? untilClause:LoopUntilClause? _ block:LoopBlockAction {
+      const limit = header ? header.limit : null;
+      const rateMs = header ? header.rateMs : null;
+      const until = untilClause || null;
+      const statements = block.statements || [];
+
+      return helpers.createLoopExpression(
+        limit,
+        rateMs,
+        until,
+        statements,
+        location()
+      );
+    }
+  / "loop" _ "(" _ ")" {
+      helpers.mlldError(
+        'loop() requires a limit or endless. Expected: loop(<cap>[, <rate>]) [ ... ]',
+        'loop(10)',
+        location()
+      );
+    }
+  / "loop" _ limit:LoopLimit _ {
+      helpers.mlldError(
+        'Missing \'(\' after loop keyword. Expected: loop(<cap>[, <rate>]) [ ... ]',
+        '(',
+        location()
+      );
+    }
+  / "loop" _ "until" _ !WhenConditionExpression {
+      helpers.mlldError(
+        'loop until requires a condition. Expected: loop until @condition [ ... ]',
+        '@condition',
+        location()
+      );
+    }
+  / "loop" _ header:LoopHeader? untilClause:LoopUntilClause? _ !("[" / "until") {
+      helpers.mlldError(
+        'loop requires a block. Expected: loop [ ... ]',
+        '[',
+        location()
+      );
+    }

@@ -1,6 +1,6 @@
 import type { Environment } from '../env/Environment';
 import type { MlldNode } from '@core/types';
-import { isTruthy } from './expression';
+import { isTruthy } from './expressions';
 
 export async function evaluateConditionalInclusion(
   conditionNode: MlldNode,

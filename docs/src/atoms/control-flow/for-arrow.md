@@ -8,6 +8,7 @@ tags: [iteration, loops]
 related: [for-block, for-collection]
 related-code: [interpreter/eval/for.ts, grammar/patterns/for.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 **Arrow form:**

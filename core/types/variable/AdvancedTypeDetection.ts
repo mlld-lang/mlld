@@ -246,7 +246,7 @@ export class AdvancedTypeDetection {
       case 'interpolated-text':
         // Extract variable names from interpolation points
         variable.interpolationPoints.forEach(point => {
-          const matches = point.expression.match(/@([a-zA-Z_][a-zA-Z0-9_]*)/g);
+          const matches = point.expression.match(/@([a-zA-Z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*)/g);
           if (matches) {
             dependencies.push(...matches.map(m => m.substring(1)));
           }
@@ -275,7 +275,7 @@ export class AdvancedTypeDetection {
       default:
         // For other types, check source interpolation flag
         if (variable.source.hasInterpolation && typeof variable.value === 'string') {
-          const matches = variable.value.match(/@([a-zA-Z_][a-zA-Z0-9_]*)/g);
+          const matches = variable.value.match(/@([a-zA-Z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*)/g);
           if (matches) {
             dependencies.push(...matches.map(m => m.substring(1)));
           }

@@ -1,0 +1,54 @@
+## Work Ranking
+
+You are ranking work assignments to determine execution order.
+
+## Assignments to Rank
+
+```json
+@assignmentsJson
+```
+
+## Item Details
+
+```json
+@itemDetailsJson
+```
+
+## Ranking Criteria (in priority order)
+
+1. **Priority**: p0 (critical) > p1 (high) > p2 (medium) > p3 (low). For clusters, use the highest priority among members.
+2. **Risk**: High-risk items (risk-l, risk-xl) should be addressed early to derisk.
+3. **Implementation status**: `impl-partial` items are cheaper to complete — prefer finishing started work.
+4. **Bug vs feature**: Bugs generally rank above features at the same priority level.
+5. **Dependencies**: Items that unblock other work rank higher. Blocked items rank lower.
+6. **Points efficiency**: At equal priority, smaller assignments that unblock more work are preferred.
+
+## Output Format
+
+Write ONLY a JSON array (no markdown code fences). Return assignments in ranked order (index 0 = highest priority):
+
+[
+  {
+    "rank": 1,
+    "type": "single",
+    "ticket_id": "mlld-abc",
+    "points": 5,
+    "area": "interpreter",
+    "rationale": "P0 bug blocking template features"
+  },
+  {
+    "rank": 2,
+    "type": "cluster",
+    "epic_id": "mlld-epic-grammar",
+    "tickets": ["mlld-x", "mlld-y"],
+    "points": 2.5,
+    "area": "grammar",
+    "rationale": "P1 grammar fixes, partially implemented"
+  }
+]
+
+For clusters, include:
+- `epic_id`: The epic ticket ID (will be created if needed)
+- `tickets`: Array of child ticket IDs
+
+Every assignment must appear exactly once.

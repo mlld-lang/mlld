@@ -62,8 +62,8 @@ editors/
 Syntax files are generated from `grammar/syntax-generator/`:
 
 ```bash
-npm run build:syntax        # Only if files missing
-npm run build:syntax:force  # Force regenerate
+npm run build:grammar:syntax                     # Skip if no syntax changes
+FORCE_SYNTAX_BUILD=true npm run build:grammar:syntax  # Force regenerate
 ```
 
 ## Editor-Specific Guides

@@ -2,13 +2,13 @@
 
 Testing when expressions as values in exe assignments.
 
-## Basic exe when expression with when first
+## Basic exe when expression
 
 Greetings:
 Hello, World!
 Hey there, Friend!
 Welcome!
-## Exe when first with none fallback
+## Exe when with none fallback
 
 Testing status codes:
 Success
@@ -21,7 +21,8 @@ Messages:
 ¡Hola!
 ¡Adiós!
 Unknown message type
-## Exe with bare when (evaluates all, returns last match)
+## Exe with when block (first match)
+
 small positive
 medium positive
 negative

@@ -170,30 +170,21 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       return this.fetchURL(pathOrUrl);
     }
     const resolvedPath = await this.resolvePath(pathOrUrl);
-    if (process.env.MLLD_DEBUG === 'true') {
-      // eslint-disable-next-line no-console
-      console.error('[ImportResolver.readFile] path=', pathOrUrl, 'resolved=', resolvedPath);
-    }
     const content = await this.dependencies.fileSystem.readFile(resolvedPath);
-    if (process.env.MLLD_DEBUG === 'true') {
-      // eslint-disable-next-line no-console
-      console.error('[ImportResolver.readFile] len=', content?.length ?? 0);
-    }
     return content;
   }
   
   async resolvePath(inputPath: string): Promise<string> {
+    const originalInputPath = inputPath;
+
     // Handle special path variables
     if (inputPath.startsWith('@PROJECTPATH')) {
       inputPath = inputPath.replace('@PROJECTPATH', await this.getProjectPath());
     }
-    if (inputPath.startsWith('@base/')) {
+    if (inputPath.startsWith('@base/') || inputPath.startsWith('@root/')) {
       const projectRoot = await this.getProjectPath();
-      inputPath = path.join(projectRoot, inputPath.substring(6));
-    }
-    if (inputPath.startsWith('@root/')) {
-      const projectRoot = await this.getProjectPath();
-      inputPath = path.join(projectRoot, inputPath.substring(6));
+      const prefixLen = inputPath.startsWith('@base/') ? 6 : 6;
+      inputPath = path.join(projectRoot, inputPath.substring(prefixLen));
     }
     
     // Handle URL-relative resolution when current file is a URL
@@ -208,24 +199,15 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
         console.warn(`Failed to resolve relative URL ${inputPath} against ${currentFile}:`, error);
       }
     }
-    
-    // Use the path module that's already imported
-    if (path.isAbsolute(inputPath)) {
-      return path.resolve(inputPath);
-    }
-    
+
     // Check if fuzzy matching is enabled for local files
     const localFileFuzzyMatch = this.dependencies.getLocalFileFuzzyMatch();
-    const fuzzyEnabled = typeof localFileFuzzyMatch === 'boolean' 
-      ? localFileFuzzyMatch 
+    const fuzzyEnabled = typeof localFileFuzzyMatch === 'boolean'
+      ? localFileFuzzyMatch
       : localFileFuzzyMatch.enabled !== false;
-    
-    // Debug log
-    if (process.env.DEBUG_FUZZY) {
-      console.log(`resolvePath called with: ${inputPath}, fuzzyEnabled: ${fuzzyEnabled}`);
-    }
-    
-    if (fuzzyEnabled && this.pathMatcher) {
+    const collectedSuggestions: string[] = [];
+
+    if (!path.isAbsolute(inputPath) && fuzzyEnabled && this.pathMatcher) {
       // Try fuzzy matching for local files
       const matchResult = await this.pathMatcher.findMatch(
         inputPath,
@@ -234,17 +216,17 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       );
       
       if (matchResult.path) {
-        if (process.env.DEBUG_FUZZY) {
-          console.log(`Fuzzy match found: ${matchResult.path}`);
-        }
         return matchResult.path;
       }
-      
+
+      if (matchResult.suggestions?.length) {
+        collectedSuggestions.push(...matchResult.suggestions);
+      }
+
       // If no match found with fuzzy matching, check with extensions
       if (!path.extname(inputPath)) {
         const extensions = ['.mld.md', '.mld', '.md', '.mlld.md'];
-        const allSuggestions: string[] = [];
-        
+
         for (const ext of extensions) {
           const pathWithExt = inputPath + ext;
           const extMatchResult = await this.pathMatcher.findMatch(
@@ -256,34 +238,14 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
           if (extMatchResult.path) {
             return extMatchResult.path;
           }
-          
+
           // Collect suggestions from each extension attempt
           if (extMatchResult.suggestions) {
-            allSuggestions.push(...extMatchResult.suggestions);
+            collectedSuggestions.push(...extMatchResult.suggestions);
           }
         }
-        
-        // If we collected any suggestions, throw error with them
-        if (allSuggestions.length > 0) {
-          // Remove duplicates and take top 3
-          const uniqueSuggestions = [...new Set(allSuggestions)].slice(0, 3);
-          const suggestions = uniqueSuggestions
-            .map(s => `  - ${s}`)
-            .join('\n');
-          throw new Error(`File not found: ${inputPath}\n\nDid you mean:\n${suggestions}`);
-        }
       }
-      
-      // If still no match and we have suggestions, throw error here
-      // This ensures fuzzy matching suggestions are included
-      if (matchResult.suggestions && matchResult.suggestions.length > 0) {
-        const suggestions = matchResult.suggestions
-          .slice(0, 3)
-          .map(s => `  - ${s}`)
-          .join('\n');
-        throw new Error(`File not found: ${inputPath}\n\nDid you mean:\n${suggestions}`);
-      }
-      
+
       // If we have candidates (ambiguous matches), throw error
       if (matchResult.candidates && matchResult.candidates.length > 1) {
         const candidates = matchResult.candidates
@@ -292,19 +254,105 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
         throw new Error(`Ambiguous file match for: ${inputPath}\n\nMultiple files match:\n${candidates}`);
       }
     }
-    
-    // Fall back to standard path resolution
-    const resolvedPath = path.resolve(this.dependencies.pathContext.fileDirectory, inputPath);
 
-    // If fuzzy matching is enabled but didn't find anything, check if the file exists
-    // If not, throw an error with better messaging
-    if (fuzzyEnabled && !await this.dependencies.fileSystem.exists(resolvedPath)) {
-      throw new Error(`File not found: ${inputPath}`);
+    // Fall back to standard path resolution
+    const resolvedPath = path.isAbsolute(inputPath)
+      ? path.resolve(inputPath)
+      : path.resolve(this.dependencies.pathContext.fileDirectory, inputPath);
+
+    if (!await this.dependencies.fileSystem.exists(resolvedPath)) {
+      throw await this.createFileNotFoundError(originalInputPath, collectedSuggestions);
     }
-    
+
     return resolvedPath;
   }
-  
+
+  private async createFileNotFoundError(inputPath: string, suggestions: string[] = []): Promise<Error> {
+    const didYouMean = await this.buildPathSuggestions(inputPath, suggestions);
+    const lines = [`File not found: ${inputPath}`];
+
+    if (didYouMean.length > 0) {
+      lines.push('', 'Did you mean:', ...didYouMean.map(suggestion => `  - ${suggestion}`));
+    }
+
+    lines.push(
+      '',
+      'Paths resolve relative to the current mlld file directory. Use @base/... to resolve from the project root.'
+    );
+
+    return new Error(lines.join('\n'));
+  }
+
+  private async buildPathSuggestions(inputPath: string, suggestions: string[]): Promise<string[]> {
+    const unique = new Set<string>();
+
+    for (const suggestion of suggestions) {
+      const normalized = suggestion.replace(/^\s*-\s*/, '').trim();
+      if (normalized.length > 0) {
+        unique.add(normalized);
+      }
+    }
+
+    const commonSuggestions = await this.collectCommonLocationSuggestions(inputPath);
+    for (const suggestion of commonSuggestions) {
+      unique.add(suggestion);
+    }
+
+    return Array.from(unique).slice(0, 3);
+  }
+
+  private async collectCommonLocationSuggestions(inputPath: string): Promise<string[]> {
+    if (this.isURL(inputPath) || path.isAbsolute(inputPath) || inputPath.includes('..')) {
+      return [];
+    }
+
+    const isBasePath = inputPath.startsWith('@base/') || inputPath.startsWith('@root/');
+    const isDotRelative = inputPath.startsWith('./');
+    const isExplicitRelative = isDotRelative || inputPath.startsWith('../');
+    const normalizedPath = isBasePath
+      ? inputPath.replace(/^@(base|root)\//, '')
+      : inputPath.replace(/^\.\//, '');
+
+    if (normalizedPath.length === 0) {
+      return [];
+    }
+
+    const projectRoot = await this.getProjectPath();
+    const fileDirectory = this.dependencies.pathContext.fileDirectory;
+
+    const relativeSuggestion = `./${normalizedPath}`;
+    const baseSuggestion = `@base/${normalizedPath}`;
+    const relativeExists = await this.dependencies.fileSystem.exists(path.resolve(fileDirectory, normalizedPath));
+    const baseExists = await this.dependencies.fileSystem.exists(path.join(projectRoot, normalizedPath));
+
+    if (!isBasePath && !isExplicitRelative) {
+      const suggestions: string[] = [];
+
+      if (relativeExists) {
+        suggestions.push(relativeSuggestion);
+      }
+      if (baseExists) {
+        suggestions.push(baseSuggestion);
+      }
+
+      if (suggestions.length === 0) {
+        suggestions.push(relativeSuggestion, baseSuggestion);
+      }
+
+      return suggestions;
+    }
+
+    if (isDotRelative) {
+      return [baseSuggestion];
+    }
+
+    if (isBasePath) {
+      return [relativeSuggestion];
+    }
+
+    return [];
+  }
+
   async getProjectPath(): Promise<string> {
     // Use project root from PathContext
     return this.dependencies.pathContext.projectRoot;
@@ -534,7 +582,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
   beginImport(path: string): void {
     this.importStack.add(path);
   }
-  
+
   endImport(path: string): void {
     this.importStack.delete(path);
   }
@@ -570,11 +618,11 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       getParent: () => this,
       getAllowAbsolutePaths: getAllowAbsolutePaths || this.dependencies.getAllowAbsolutePaths
     };
-    
+
     const child = new ImportResolver(childDependencies);
     // Share import stack with parent to detect circular imports across scopes
     child.importStack = this.importStack;
-    
+
     return child;
   }
 }

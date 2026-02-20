@@ -1,0 +1,117 @@
+>> Doc Writer Orchestrator
+>> Usage: mlld run doc-writer [--parallel <N>] [--model <model>] [--filter <pattern>]
+>>
+>> Fan-out atom writing from a JSONL manifest. Each entry gets a Claude agent
+>> that researches the implementation, writes/updates the atom, and does a
+>> structural self-check.
+>>
+>> Examples:
+>>   mlld run doc-writer                         # Full run, default settings
+>>   mlld run doc-writer --parallel 2            # Limit concurrency
+>>   mlld run doc-writer --model opus            # Use opus for writers
+>>   mlld run doc-writer --filter bail           # Only entries matching "bail"
+
+import { @claudePoll } from @mlld/claude-poll
+import "@payload" as @p
+
+var @parallel = @p.parallel ?? "4"
+var @model = @p.model ?? "sonnet"
+var @filter = @p.filter ?? ""
+
+>> Load manifest (.jsonl auto-parses to array of objects)
+var @manifestPath = "@base/llm/run/doc-writer/manifest.jsonl"
+var @allEntries = <@manifestPath>
+
+>> Filter entries if --filter specified
+exe @matchesFilter(entry, filter) = when [
+  !@filter => true
+  @entry.atom.includes(@filter) => true
+  @entry.changelog.includes(@filter) => true
+  * => false
+]
+var @entries = for @e in @allEntries when @matchesFilter(@e, @filter) => @e
+
+>> Atoms go directly to docs/src/atoms/; markers track completion in tmp/
+var @atomsDir = "@base/docs/src/atoms"
+var @markerDir = "@base/tmp/doc-writer/markers"
+
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+run @mkdirp(@markerDir)
+
+show `=== Doc Writer ===`
+show `Entries: @entries.length of @allEntries.length`
+show `Model: @model | Parallel: @parallel`
+show ``
+
+>> Load style reference (shared across all agents)
+var @styleRef = <./prompts/style-ref.md>
+
+>> Prompt template
+exe @buildPrompt(action, atom, category, changelog, hints, styleRef, existingContent, outputPath) = template "./prompts/writer.att"
+
+>> Agent tools: code exploration + write output + validate syntax
+var @writerTools = "Read,Write,Glob,Grep,Bash(npm:run ast*),Bash(cat:*),Task"
+
+>> Fan-out: parallel atom writing
+var @results = for parallel(@parallel) @entry in @entries [
+  >> Write directly to docs/src/atoms/
+  let @outputPath = `@atomsDir/@entry.atom`
+  let @markerFile = `@markerDir/@entry.atom\.done`
+
+  >> Ensure marker subdirectory exists
+  let @category = @entry.atom.split("/")[0]
+  run @mkdirp(`@markerDir/@category`)
+
+  >> Skip if already done
+  let @existing = <@markerFile>?
+  if @existing [
+    show `  Skipping (exists): @entry.atom`
+    => { atom: @entry.atom, status: "skipped" }
+  ]
+
+  >> Load existing atom content if updating
+  let @existingContent = when [
+    @entry.action == "update" => <docs/src/atoms/@entry.atom>?
+    * => "(not applicable — creating new atom)"
+  ]
+
+  >> Stringify hints for the prompt
+  let @hintsStr = @entry.hints.join(", ")
+
+  >> Build the prompt
+  let @prompt = @buildPrompt(
+    @entry.action,
+    @entry.atom,
+    @category,
+    @entry.changelog,
+    @hintsStr,
+    @styleRef,
+    @existingContent ?? "(file not found)",
+    @outputPath
+  )
+
+  let @fullPrompt = `@prompt
+
+When you have finished writing the atom, write "done" to @markerFile as your final action.`
+
+  let @idx = @mx.for.index + 1
+  show `  Starting (@idx of @mx.for.total): @entry.atom [@entry.action]`
+  let @response = @claudePoll(@fullPrompt, @model, @base, @writerTools, @markerFile) | log
+  show `  Complete: @entry.atom`
+
+  => { atom: @entry.atom, status: "done" }
+]
+
+>> Summary
+show ``
+show `=== Doc Writer Complete ===`
+
+var @completed = for @r in @results when @r.status == "done" => @r
+var @skipped = for @r in @results when @r.status == "skipped" => @r
+
+show `Completed: @completed.length`
+show `Skipped: @skipped.length`
+show ``
+show `Review: git diff docs/src/atoms/`
+show `Validate: node scripts/extract-doc-tests.mjs && npm run build:fixtures`
+show `Revert: git checkout docs/src/atoms/`

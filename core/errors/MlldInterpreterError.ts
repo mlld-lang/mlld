@@ -40,7 +40,7 @@ export interface MlldInterpreterErrorOptions {
 }
 
 /**
- * Error thrown during interpretation of Mlld content
+ * Error thrown during interpretation of mlld content
  */
 export class MlldInterpreterError extends MlldError {
   public readonly nodeType: string;

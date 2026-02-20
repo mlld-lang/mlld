@@ -1,18 +1,30 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { execute, MemoryAstCache } from './execute';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { ExecuteError } from './types';
+import { mkdtemp, rm } from 'fs/promises';
+import os from 'os';
+import path from 'path';
 
 describe('execute', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
   const routePath = '/routes/route.mlld';
+  const cleanupDirs: string[] = [];
+  const cleanupGlobals: string[] = [];
 
   beforeEach(() => {
     fileSystem = new MemoryFileSystem();
     pathService = new PathService();
     MemoryAstCache.clear();
+  });
+
+  afterEach(async () => {
+    await Promise.all(cleanupDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })));
+    for (const key of cleanupGlobals.splice(0)) {
+      delete (globalThis as Record<string, unknown>)[key];
+    }
   });
 
   it('returns structured result with metrics and state writes', async () => {
@@ -135,5 +147,44 @@ describe('execute', () => {
 
     expect(payloadModule?.content).toContain("@text = 'hello'");
     expect(stateModule?.content).toContain("@greeting = 'hi'");
+  });
+
+  it('applies checkpoint options through SDK execute into interpreter runtime', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'sdk-execute-checkpoint-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__sdkExecuteCheckpointCounter';
+    cleanupGlobals.push(counterKey);
+    (globalThis as Record<string, unknown>)[counterKey] = 0;
+
+    await fileSystem.writeFile(
+      routePath,
+      `
+/exe llm @review(prompt, model) = js {
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  return "review:" + globalThis.${counterKey} + ":" + prompt + ":" + model;
+}
+/var @result = @review("src/a.ts", "sonnet")
+/show @result
+      `.trim()
+    );
+
+    const first = await execute(routePath, undefined, {
+      fileSystem,
+      pathService,
+      checkpoint: true,
+      checkpointScriptName: 'sdk-route',
+      checkpointCacheRootDir: checkpointRoot
+    });
+    const second = await execute(routePath, undefined, {
+      fileSystem,
+      pathService,
+      checkpoint: true,
+      checkpointScriptName: 'sdk-route',
+      checkpointCacheRootDir: checkpointRoot
+    });
+
+    expect(first.output).toContain('review:1:src/a.ts:sonnet');
+    expect(second.output).toContain('review:1:src/a.ts:sonnet');
+    expect((globalThis as Record<string, unknown>)[counterKey]).toBe(1);
   });
 });

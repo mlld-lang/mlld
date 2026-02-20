@@ -97,6 +97,27 @@ describe('Run directive', () => {
       // Type guard
       expect(isRunCommandDirective(directiveNode)).toBe(true);
     });
+
+    test('cmd command with args and working directory', async () => {
+      const content = '/run cmd(@payload):/tmp {echo "$payload"}';
+      const parseResult = await parse(content);
+
+      expect(parseResult.ast).toHaveLength(1);
+
+      const directiveNode = parseResult.ast[0];
+      expect(directiveNode.type).toBe('Directive');
+      expect(directiveNode.kind).toBe('run');
+      expect(directiveNode.subtype).toBe('runCommand');
+      expect(directiveNode.values.args).toHaveLength(1);
+      expect(directiveNode.values.args[0].type).toBe('VariableReference');
+      expect(directiveNode.values.args[0].identifier).toBe('payload');
+      expect(directiveNode.raw.args).toEqual(['@payload']);
+      expect(directiveNode.raw.workingDir).toBe('/tmp');
+      expect(directiveNode.meta.argumentCount).toBe(1);
+      expect(directiveNode.meta.hasWorkingDir).toBe(true);
+
+      expect(isRunCommandDirective(directiveNode)).toBe(true);
+    });
   });
   
   describe('runCode subtype', () => {
@@ -148,6 +169,28 @@ describe('Run directive', () => {
       expect(directiveNode.raw.args).toEqual(['@data', '@format']);
       
       // Type guard
+      expect(isRunCodeDirective(directiveNode)).toBe(true);
+    });
+
+    test('sh code with args and working directory', async () => {
+      const content = '/run sh(@data):/tmp { echo "$data" }';
+      const parseResult = await parse(content);
+
+      expect(parseResult.ast).toHaveLength(1);
+
+      const directiveNode = parseResult.ast[0];
+      expect(directiveNode.type).toBe('Directive');
+      expect(directiveNode.kind).toBe('run');
+      expect(directiveNode.subtype).toBe('runCode');
+      expect(directiveNode.values.lang[0].content).toBe('sh');
+      expect(directiveNode.values.args).toHaveLength(1);
+      expect(directiveNode.values.args[0].type).toBe('VariableReference');
+      expect(directiveNode.values.args[0].identifier).toBe('data');
+      expect(directiveNode.raw.args).toEqual(['@data']);
+      expect(directiveNode.raw.workingDir).toBe('/tmp');
+      expect(directiveNode.meta.language).toBe('sh');
+      expect(directiveNode.meta.hasWorkingDir).toBe(true);
+
       expect(isRunCodeDirective(directiveNode)).toBe(true);
     });
     

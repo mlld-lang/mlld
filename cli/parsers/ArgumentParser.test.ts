@@ -7,7 +7,7 @@ describe('ArgumentParser --payload alias', () => {
     const parser = new ArgumentParser();
     const options = parser.parseArgs(['script.mld', '--payload', '@data={"name":"test"}']);
 
-    expect(options.inject).toEqual(['@data={"name":"test"}']);
+    expect(options.inject).toEqual(['@data={"name":"test"}', '@payload={}']);
   });
 
   it('allows mixing --inject and --payload', () => {
@@ -18,7 +18,7 @@ describe('ArgumentParser --payload alias', () => {
       '--payload', '@data={"b":2}'
     ]);
 
-    expect(options.inject).toEqual(['@config={"a":1}', '@data={"b":2}']);
+    expect(options.inject).toEqual(['@config={"a":1}', '@data={"b":2}', '@payload={}']);
   });
 
   it('supports multiple --payload flags', () => {
@@ -29,7 +29,109 @@ describe('ArgumentParser --payload alias', () => {
       '--payload', '@b=2'
     ]);
 
-    expect(options.inject).toEqual(['@a=1', '@b=2']);
+    expect(options.inject).toEqual(['@a=1', '@b=2', '@payload={}']);
+  });
+});
+
+describe('ArgumentParser custom payload flags', () => {
+  it('collects unknown flags as @payload for file input', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--topic', 'vars', '--count', '5']);
+
+    expect(options.inject).toEqual(['@payload={"topic":"vars","count":"5"}']);
+  });
+
+  it('treats custom flag without value as boolean true', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--dry-run']);
+
+    expect(options.inject).toEqual(['@payload={"dry-run":true,"dryRun":true}']);
+  });
+
+  it('keeps hyphenated flags with camelCase alias in payload', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--output-format', 'json', '--max-retries', '3']);
+
+    expect(options.inject).toEqual(['@payload={"output-format":"json","max-retries":"3","outputFormat":"json","maxRetries":"3"}']);
+  });
+
+  it('merges --inject with custom payload flags', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs([
+      'script.mld',
+      '--inject', '@config={"a":1}',
+      '--topic', 'mlld'
+    ]);
+
+    expect(options.inject).toEqual(['@config={"a":1}', '@payload={"topic":"mlld"}']);
+  });
+
+  it('excludes checkpoint lifecycle flags from @payload while preserving unknown flags', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs([
+      'script.mld',
+      '--checkpoint',
+      '--new',
+      '--resume',
+      '@processFiles',
+      '--fork',
+      'collect',
+      '--topic',
+      'security'
+    ]);
+
+    expect(options.checkpoint).toBe(true);
+    expect(options.fresh).toBe(true);
+    expect(options.resume).toBe('@processFiles');
+    expect(options.fork).toBe('collect');
+    expect(options.inject).toEqual(['@payload={"topic":"security"}']);
+  });
+
+  it('parses --no-checkpoint and excludes it from @payload', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--no-checkpoint', '--topic', 'security']);
+
+    expect(options.noCheckpoint).toBe(true);
+    expect(options.inject).toEqual(['@payload={"topic":"security"}']);
+  });
+
+  it('parses --resume without target as boolean true', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--resume']);
+
+    expect(options.resume).toBe(true);
+    expect(options.inject).toEqual(['@payload={}']);
+  });
+});
+
+describe('ArgumentParser eval mode', () => {
+  it('parses -e/--eval inline code', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['-e', 'show @now']);
+
+    expect(options.eval).toBe('show @now');
+    expect(options.input).toBe('');
+  });
+
+  it('accepts empty eval string', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['--eval', '']);
+
+    expect(options.eval).toBe('');
+  });
+
+  it('throws when --eval has no argument', () => {
+    const parser = new ArgumentParser();
+
+    expect(() => parser.parseArgs(['-e'])).toThrow('--eval requires a code string');
+  });
+
+  it('throws when both input file and --eval are provided', () => {
+    const parser = new ArgumentParser();
+
+    expect(() => parser.parseArgs(['script.mld', '--eval', 'show @now'])).toThrow(
+      'Cannot specify both an input file and --eval'
+    );
   });
 });
 
@@ -178,5 +280,15 @@ describe('OptionProcessor streaming mapping', () => {
       },
       format: 'text'
     });
+  });
+});
+
+describe('ArgumentParser live command', () => {
+  it('treats live as subcommand-style command and preserves --stdio in remaining args', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['live', '--stdio']);
+
+    expect(options.input).toBe('live');
+    expect(options._).toEqual(['--stdio']);
   });
 });

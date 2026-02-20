@@ -23,6 +23,198 @@ import { ExecutionEmitter } from '@sdk/execution-emitter';
 import { StreamExecution } from '@sdk/stream-execution';
 import { evaluateDirective } from './eval/directive';
 import type { DirectiveNode } from '@core/types';
+import { isExeReturnControl } from './eval/exe-return';
+import { materializeDisplayValue } from './utils/display-materialization';
+import { CheckpointManager } from './checkpoint/CheckpointManager';
+
+function stripCheckpointScriptSuffix(baseName: string): string {
+  if (baseName.endsWith('.mld.md')) {
+    return baseName.slice(0, -'.mld.md'.length);
+  }
+  if (baseName.endsWith('.mld')) {
+    return baseName.slice(0, -'.mld'.length);
+  }
+  return baseName;
+}
+
+function resolveCheckpointScriptName(
+  filePath?: string,
+  explicitName?: string
+): string | undefined {
+  if (typeof explicitName === 'string' && explicitName.trim().length > 0) {
+    return explicitName.trim();
+  }
+  if (!filePath || typeof filePath !== 'string') {
+    return undefined;
+  }
+
+  const parsed = path.parse(filePath);
+  const normalizedBase = parsed.base.toLowerCase();
+  if (normalizedBase === 'index.mld' || normalizedBase === 'main.mld' || normalizedBase === 'index.mld.md' || normalizedBase === 'main.mld.md') {
+    const dirName = path.basename(parsed.dir);
+    if (dirName && dirName !== path.sep) {
+      return dirName;
+    }
+  }
+
+  const candidate = stripCheckpointScriptSuffix(parsed.base).trim();
+  return candidate.length > 0 ? candidate : undefined;
+}
+
+function validateCheckpointOptions(options: InterpretOptions): void {
+  if (options.noCheckpoint !== true) {
+    return;
+  }
+
+  if (options.fresh || options.resume !== undefined || typeof options.fork === 'string') {
+    throw new Error(
+      'Cannot combine --no-checkpoint with --new/--fresh, --resume, or --fork.'
+    );
+  }
+}
+
+type ParsedResumeTarget =
+  | { kind: 'function'; functionName: string }
+  | { kind: 'function-index'; functionName: string; invocationIndex: number }
+  | { kind: 'function-prefix'; functionName: string; prefix: string; invocationIndex?: number }
+  | { kind: 'named-checkpoint'; checkpointName: string };
+
+function parseResumePrefix(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed.length < 2) {
+    return null;
+  }
+
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return typeof parsed === 'string' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1).replace(/\\'/g, "'");
+  }
+
+  if (trimmed.startsWith('`') && trimmed.endsWith('`')) {
+    return trimmed.slice(1, -1).replace(/\\`/g, '`');
+  }
+
+  return null;
+}
+
+function parseResumeTarget(target: string): ParsedResumeTarget | null {
+  const trimmed = target.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parseFunctionTarget = (
+    rawTarget: string,
+    opts: { requireAtPrefix: boolean; allowBareFunction: boolean }
+  ): ParsedResumeTarget | null => {
+    const prefix = opts.requireAtPrefix ? '@' : '';
+    const fuzzyMatch = rawTarget.match(new RegExp(`^${prefix}([^\\s:()]+)(?::(\\d+))?\\((.*)\\)$`));
+    if (fuzzyMatch) {
+      const functionName = fuzzyMatch[1];
+      const invocationIndex =
+        fuzzyMatch[2] !== undefined ? Number.parseInt(fuzzyMatch[2], 10) : undefined;
+      const parsedPrefix = parseResumePrefix(fuzzyMatch[3]);
+      if (!functionName || parsedPrefix === null) {
+        return null;
+      }
+      if (invocationIndex !== undefined && !Number.isInteger(invocationIndex)) {
+        return null;
+      }
+      return {
+        kind: 'function-prefix',
+        functionName,
+        prefix: parsedPrefix,
+        ...(invocationIndex === undefined ? {} : { invocationIndex })
+      };
+    }
+
+    const indexedMatch = rawTarget.match(new RegExp(`^${prefix}([^\\s:()]+):(\\d+)$`));
+    if (indexedMatch) {
+      const functionName = indexedMatch[1];
+      const invocationIndex = Number.parseInt(indexedMatch[2], 10);
+      if (!functionName || !Number.isInteger(invocationIndex)) {
+        return null;
+      }
+      return { kind: 'function-index', functionName, invocationIndex };
+    }
+
+    const functionMatch = rawTarget.match(new RegExp(`^${prefix}([^\\s:()]+)$`));
+    if (opts.allowBareFunction && functionMatch) {
+      const functionName = functionMatch[1];
+      if (!functionName) {
+        return null;
+      }
+      return { kind: 'function', functionName };
+    }
+
+    return null;
+  };
+
+  if (trimmed.startsWith('@')) {
+    return parseFunctionTarget(trimmed, { requireAtPrefix: true, allowBareFunction: true });
+  }
+
+  // Backward compatibility: legacy unprefixed function target forms.
+  const legacyFunctionTarget = parseFunctionTarget(trimmed, {
+    requireAtPrefix: false,
+    allowBareFunction: false
+  });
+  if (legacyFunctionTarget) {
+    return legacyFunctionTarget;
+  }
+
+  const namedCheckpoint = parseResumePrefix(trimmed);
+  if (namedCheckpoint !== null) {
+    return { kind: 'named-checkpoint', checkpointName: namedCheckpoint };
+  }
+
+  return { kind: 'named-checkpoint', checkpointName: trimmed };
+}
+
+async function applyResumeTargetInvalidation(
+  checkpointManager: CheckpointManager,
+  resume: string | true | undefined
+): Promise<void> {
+  if (resume === undefined || resume === true) {
+    return;
+  }
+
+  const parsed = parseResumeTarget(resume);
+  if (!parsed) {
+    throw new Error(
+      `Invalid --resume target "${resume}". Expected checkpoint-name, @function, @function:index, or @function("prefix").`
+    );
+  }
+
+  if (parsed.kind === 'named-checkpoint') {
+    await checkpointManager.invalidateFromNamedCheckpoint(parsed.checkpointName);
+    return;
+  }
+
+  if (parsed.kind === 'function') {
+    await checkpointManager.invalidateFunction(parsed.functionName);
+    return;
+  }
+
+  if (parsed.kind === 'function-index') {
+    await checkpointManager.invalidateFunctionSite(parsed.functionName, parsed.invocationIndex);
+    return;
+  }
+
+  await checkpointManager.invalidateFunctionFrom(
+    parsed.functionName,
+    parsed.prefix,
+    parsed.invocationIndex
+  );
+}
 
 /**
  * Main entry point for the Mlld interpreter.
@@ -34,6 +226,7 @@ export async function interpret(
 ): Promise<InterpretResult> {
   // Initialize error patterns on first use
   await initializePatterns();
+  validateCheckpointOptions(options);
 
   const languageMode = resolveMlldMode(
     options.mlldMode,
@@ -77,13 +270,6 @@ export async function interpret(
           source: options.filePath || 'stdin',
           text: source
         }]);
-        
-        // Debug: Log what Peggy's format returns
-        if (process.env.DEBUG_PEGGY) {
-          console.log('Peggy formatted output:');
-          console.log(peggyFormatted);
-          console.log('---');
-        }
       } catch (e) {
         // Fallback - format not available or failed
       }
@@ -209,6 +395,43 @@ export async function interpret(
   env.setStreamingManager(options.streamingManager ?? new StreamingManager());
   env.setProvenanceEnabled(provenanceEnabled);
 
+  const checkpointScriptName = resolveCheckpointScriptName(
+    options.filePath,
+    options.checkpointScriptName
+  );
+  if (options.noCheckpoint !== true && checkpointScriptName) {
+    env.setCheckpointManagerFactory(async () => {
+      const checkpointManager = new CheckpointManager(checkpointScriptName, {
+        scriptPath: options.filePath,
+        ...(typeof options.fork === 'string' && options.fork.length > 0
+          ? { forkScriptName: options.fork }
+          : {}),
+        ...(typeof options.checkpointCacheRootDir === 'string' &&
+        options.checkpointCacheRootDir.length > 0
+          ? { cacheRootDir: options.checkpointCacheRootDir }
+          : {})
+      });
+      await checkpointManager.load();
+      if (options.fresh) {
+        await checkpointManager.clear();
+      }
+      await applyResumeTargetInvalidation(checkpointManager, options.resume);
+      checkpointManager.beginRun();
+      return checkpointManager;
+    });
+
+    const shouldEagerInitializeCheckpoint =
+      options.fresh === true ||
+      options.resume !== undefined ||
+      (typeof options.fork === 'string' && options.fork.length > 0);
+
+    if (shouldEagerInitializeCheckpoint) {
+      await env.ensureCheckpointManager();
+    }
+  } else {
+    env.setCheckpointManagerFactory(undefined);
+  }
+
   if (options.emitter) {
     env.enableSDKEvents(options.emitter);
   }
@@ -326,7 +549,23 @@ export async function interpret(
   
   // Evaluate the AST
   const runExecution = async (): Promise<string> => {
-    await evaluate(ast, env);
+    const evaluationResult = await env.withExecutionContext(
+      'exe',
+      { allowReturn: true, scope: 'script', hasFunctionBoundary: false },
+      async () => evaluate(ast, env)
+    );
+
+    // Script-level return is explicit final output. Non-return final values are ignored.
+    if (isExeReturnControl(evaluationResult.value)) {
+      const materialized = materializeDisplayValue(
+        evaluationResult.value.value,
+        undefined,
+        evaluationResult.value.value
+      );
+      if (materialized.text.length > 0) {
+        env.emitEffect('both', materialized.text);
+      }
+    }
 
     // Flush any pending breaks before getting final output
     env.renderOutput();
@@ -353,14 +592,7 @@ export async function interpret(
     } else {
       // Fallback to old node-based system if effect handler doesn't have getDocument
       const nodes = env.getNodes();
-      
-      if (process.env.DEBUG_WHEN) {
-        console.log('Final nodes count:', nodes.length);
-        nodes.forEach((node, i) => {
-          console.log(`Node ${i}:`, node.type, node.type === 'Text' ? node.content : '');
-        });
-      }
-      
+
       // Format the output
       output = await formatOutput(nodes, {
         format: options.format || 'markdown',
@@ -383,6 +615,9 @@ export async function interpret(
     const streamExecution = new StreamExecution(emitter, {
       abort: () => {
         env.cleanup();
+      },
+      updateState: async (path: string, value: unknown) => {
+        env.applyExternalStateUpdate(path, value);
       }
     });
     env.enableSDKEvents(emitter);
@@ -414,6 +649,7 @@ export async function interpret(
       'stream:chunk',
       'stream:progress',
       'execution:complete',
+      'state:write',
       'debug:directive:start',
       'debug:directive:complete',
       'debug:variable:create',

@@ -72,7 +72,7 @@ SlashRun
         'pipeline'
       );
     }
-  / DirectiveContext RunKeyword _ "\"" command:$([^\"]*) "\"" tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ "\"" command:$([^\"]*) "\"" using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched quoted command', { command, tail });
 
       const commandLocation = location();
@@ -107,10 +107,11 @@ SlashRun
         ...(comment ? { comment } : {})
       };
 
-      if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+      const mergedWithClause = using || tail ? { ...(using || {}), ...(tail || {}) } : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
       }
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -140,7 +141,7 @@ SlashRun
         'command'
       );
     }
-  / DirectiveContext RunKeyword _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched command', { content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -158,10 +159,11 @@ SlashRun
         meta.securityLabels = labelInfo.labels;
       }
 
-      if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+      const mergedWithClause = using || tail ? { ...(using || {}), ...(tail || {}) } : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
       }
 
       const endingInfo = {
@@ -184,7 +186,7 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext RunKeyword _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched stdin pipe sugar', { stdinExpr, content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -198,6 +200,7 @@ SlashRun
 
       const withClause = {
         stdin: stdinExpr,
+        ...(using || {}),
         ...(tail || {})
       };
 
@@ -250,9 +253,13 @@ SlashRun
       }
 
       if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+        const baseWithClause = values.withClause || raw.withClause || meta.withClause;
+        const mergedWithClause = baseWithClause
+          ? { ...baseWithClause, ...tail }
+          : tail;
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
       }
 
       const endingInfo = {
@@ -275,7 +282,7 @@ SlashRun
         'code'
       );
     }
-  / DirectiveContext RunKeyword _ commandRef:UnifiedReferenceWithTail labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ commandRef:UnifiedReference using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched unified command reference', { commandRef });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -357,6 +364,19 @@ SlashRun
         };
       }
 
+      const baseWithClause =
+        commandRef.type === 'ExecInvocation' || commandRef.type === 'VariableReferenceWithTail'
+          ? commandRef.withClause
+          : undefined;
+      const mergedWithClause = baseWithClause || using || tail
+        ? { ...(baseWithClause || {}), ...(using || {}), ...(tail || {}) }
+        : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
+      }
+
       if (labelInfo) {
         values.securityLabels = labelInfo.labels;
         raw.securityLabels = labelInfo.raw;
@@ -367,13 +387,90 @@ SlashRun
         ? 'runExecInvocation'
         : 'runExec';
 
+      const pipelineTail = tail && tail.pipeline
+        ? { pipeline: tail.pipeline }
+        : baseWithClause && baseWithClause.pipeline
+          ? { pipeline: baseWithClause.pipeline }
+          : null;
       const endingInfo = {
-        tail: null,
+        tail: pipelineTail,
         parallel: null,
         comment: comment || null
       };
 
       helpers.processPipelineEnding(values, raw, meta, endingInfo);
+
+      return helpers.createStructuredDirective(
+        'run',
+        subtype,
+        values,
+        raw,
+        meta,
+        location(),
+        'exec'
+      );
+    }
+
+// Bare exec invocation statement sugar.
+// - strict mode: @fn()
+// - markdown mode: /@fn()
+SlashBareRunInvocation
+  = DirectiveContext slash:"/"? &"@" invocation:UnifiedReferenceWithTail
+    &{
+      const isStrictMode = options?.mode === 'strict';
+      const hasSlash = slash === '/';
+      return invocation?.type === 'ExecInvocation' && (isStrictMode || hasSlash);
+    }
+    comment:InlineComment? {
+      const commandRef = invocation;
+      const isExecResultMethod = Boolean(commandRef.commandRef && commandRef.commandRef.objectSource);
+
+      let values;
+      if (isExecResultMethod) {
+        values = {
+          execInvocation: commandRef
+        };
+      } else {
+        values = {
+          identifier: commandRef.commandRef.identifier,
+          args: commandRef.commandRef.args || []
+        };
+      }
+
+      let rawIdentifier = commandRef.commandRef.name;
+      if (commandRef.commandRef.identifier && commandRef.commandRef.identifier.length > 0) {
+        const varRef = commandRef.commandRef.identifier[0];
+        if (varRef.type === NodeType.VariableReference) {
+          rawIdentifier = varRef.identifier;
+          if (varRef.fields && varRef.fields.length > 0) {
+            rawIdentifier += varRef.fields.map(f => '.' + f.value).join('');
+          }
+        }
+      }
+
+      const raw = {
+        identifier: rawIdentifier,
+        args: commandRef.commandRef.args
+          ? commandRef.commandRef.args.map(arg =>
+            arg.type === NodeType.Text ? arg.content :
+            arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
+          )
+          : []
+      };
+
+      const meta = {
+        argumentCount: commandRef.commandRef.args ? commandRef.commandRef.args.length : 0,
+        isBareInvocation: true,
+        ...(comment ? { comment } : {})
+      };
+
+      if (commandRef.withClause) {
+        values.withClause = commandRef.withClause;
+        raw.withClause = commandRef.withClause;
+        meta.withClause = commandRef.withClause;
+      }
+
+      const subtype = isExecResultMethod ? 'runExecInvocation' : 'runExec';
 
       return helpers.createStructuredDirective(
         'run',
@@ -392,14 +489,14 @@ SlashRun
   / DirectiveContext RunKeyword _ "\"" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
-      helpers.mlldError("Unclosed quoted command in /run directive. Expected closing double quote (\").", "\"", location());
+      helpers.mlldError("Unclosed quoted command in run directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed bracket command
   / DirectiveContext RunKeyword _ "{" &{
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed command brackets in /run directive. Expected closing brace for command.", String.fromCharCode(125), location());
+      helpers.mlldError("Unclosed command brackets in run directive. Expected closing brace for command.", String.fromCharCode(125), location());
     }
     
   // Error: Invalid syntax after language identifier - must check for NOT { or (
@@ -408,7 +505,7 @@ SlashRun
       const validLangs = ['js', 'javascript', 'node', 'python', 'py', 'bash', 'sh'];
       return validLangs.includes(lang.toLowerCase());
     } {
-      helpers.mlldError("Invalid code syntax in /run directive. Expected code block or arguments after language identifier: " + lang, String.fromCharCode(123), location());
+      helpers.mlldError("Invalid code syntax in run directive. Expected code block or arguments after language identifier: " + lang, String.fromCharCode(123), location());
     }
     
   // Error: Missing code block after language
@@ -416,7 +513,7 @@ SlashRun
       const validLangs = ['js', 'javascript', 'node', 'python', 'py', 'bash', 'sh'];
       return validLangs.includes(lang.toLowerCase());
     } {
-      helpers.mlldError("Missing code block in /run directive. Expected code block after language: " + lang, String.fromCharCode(123), location());
+      helpers.mlldError("Missing code block in run directive. Expected code block after language: " + lang, String.fromCharCode(123), location());
     }
     
   // Error: Invalid @ usage (not followed by valid identifier)
@@ -424,12 +521,12 @@ SlashRun
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
-      helpers.mlldError("Invalid exec reference in /run directive. Variable names must start with a letter or underscore.", "identifier", location());
+      helpers.mlldError("Invalid exec reference in run directive. Variable names must start with a letter or underscore.", "identifier", location());
     }
     
   // Error: Missing content after /run
   / DirectiveContext RunKeyword _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing content in /run directive. Expected command, code block, or exec reference.", String.fromCharCode(123), location());
+      helpers.mlldError("Missing content in run directive. Expected command, code block, or exec reference.", String.fromCharCode(123), location());
     }
     
   // Error: Unclosed code block
@@ -437,7 +534,7 @@ SlashRun
       // Check if we have an unclosed code block after language (args)
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed code block in /run directive. Expected closing brace for " + lang + " code.", String.fromCharCode(125), location());
+      helpers.mlldError("Unclosed code block in run directive. Expected closing brace for " + lang + " code.", String.fromCharCode(125), location());
     }
     
   // Error: Unclosed code block without args
@@ -445,12 +542,12 @@ SlashRun
       // Check if we have an unclosed code block after language
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed code block in /run directive. Expected closing brace for " + lang + " code.", String.fromCharCode(125), location());
+      helpers.mlldError("Unclosed code block in run directive. Expected closing brace for " + lang + " code.", String.fromCharCode(125), location());
     }
-    
-  // Error: Generic /run syntax error (catch-all)
+
+  // Error: Generic run syntax error (catch-all)
   / DirectiveContext RunKeyword {
-      helpers.mlldError("Invalid /run syntax. Expected: /run cmd {command}, /run language {code}, or /run @exec", String.fromCharCode(123));
+      helpers.mlldError("Invalid run syntax. Expected: run cmd {command}, run language {code}, or run @exec", String.fromCharCode(123));
     }
 
 // -------------------------------------------------------------
@@ -483,7 +580,7 @@ RunDirectiveRef
         'code'
       );
     }
-  / commandRef:UnifiedReferenceNoTail {
+  / commandRef:UnifiedReferenceNoTail using:UsingClause? {
       // @ detected -> Command reference (exec) in RHS
       helpers.debug('RunDirectiveRef matched unified exec reference in RHS', { commandRef });
       
@@ -534,6 +631,17 @@ RunDirectiveRef
           isRHSRef: true
         };
       }
+
+      const baseWithClause =
+        commandRef.type === 'ExecInvocation' ? commandRef.withClause : undefined;
+      const mergedWithClause = baseWithClause || using
+        ? { ...(baseWithClause || {}), ...(using || {}) }
+        : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
+      }
       
       return helpers.createStructuredDirective(
         'run',
@@ -545,17 +653,24 @@ RunDirectiveRef
         'exec'
       );
     }
-  / content:(CmdCommandBrackets / UnifiedCommandBrackets) {
+  / content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? {
       helpers.debug('RunDirectiveRef matched command in RHS', { content });
 
       return helpers.createStructuredDirective(
         'run',
         content.subtype,
-        content.values,
-        content.raw,
+        {
+          ...content.values,
+          ...(using ? { withClause: using } : {})
+        },
+        {
+          ...content.raw,
+          ...(using ? { withClause: using } : {})
+        },
         {
           ...content.meta,
-          isRHSRef: true
+          isRHSRef: true,
+          ...(using ? { withClause: using } : {})
         },
         location()
       );

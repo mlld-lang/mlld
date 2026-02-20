@@ -1,7 +1,7 @@
 # When Expression None with Variable Assignments
 
-This tests that the `none` condition executes when no value-producing actions match,
-even when conditions with variable assignments have matched.
+This tests that the `none` condition executes when no conditions match,
+even when the matched branch includes local assignments.
 
 rejected: test data
 

@@ -1,0 +1,16 @@
+{
+  "status": "completed",
+  "work_done": {
+    "description": "Created signing-overview atom explaining why we sign templates and how signing protects against prompt injection attacks",
+    "files": {
+      "docs/src/atoms/security/signing-overview.md": "Complete atom covering: threat model (LLM auditors can be manipulated), why signing solves it (cryptographic integrity), verification flow (orchestrator signs, auditor verifies), sign templates not data principle, defense in depth integration with labels/policy/guards, and practical examples including an auditor pattern. All code examples validated with mlld validate."
+    },
+    "commit_message": "Add signing-overview security documentation atom"
+  },
+  "friction_points": [],
+  "standup": {
+    "progress": "Successfully created the signing-overview atom at docs/src/atoms/security/signing-overview.md. The atom explains: (1) The threat model - how prompt injection can manipulate LLM auditors, (2) Why signing solves this - cryptographic signatures can't be forged by prompt injection, (3) The verification flow - sign templates before interpolation, verify at runtime to detect tampering, (4) Sign templates not data - templates are control plane (trusted instructions), variables are data plane (potentially tainted), (5) Defense in depth - how signing complements labels/policy/guards. All mlld code examples have been validated with mlld validate and pass successfully.",
+    "blockers": "None",
+    "next": "Atom is complete and ready for review. All examples validated successfully."
+  }
+}

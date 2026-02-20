@@ -1,0 +1,166 @@
+## Self-Review: @topic
+
+You've just completed initial QA testing for `@topic`. Now it's time to check your own work.
+
+## What Just Happened
+
+You tested mlld's `@topic` feature with limited resources (only `mlld howto`). Some of your experiments may have hit friction or failures. **This is valuable data** - your confusion represents what real users experience.
+
+## Your Task Now
+
+Review your own results and determine:
+1. Were your assumptions correct, or did you misunderstand something?
+2. Was the information available but you missed it, or is there a genuine gap?
+3. What would have helped you avoid the confusion?
+
+## Expanded Access
+
+You now have access to additional resources:
+
+1. **Cookbook** - `docs/llm/llms-cookbook.txt`
+   Real-world patterns showing features in context
+
+2. **Test cases** - `tests/cases/`
+   Working examples that define expected behavior
+
+3. **Test fixtures** - `tests/fixtures/`
+   Input/output examples for various scenarios
+
+**Preferred tools** - Use built-in tools first (faster and more reliable):
+- **Glob** for finding files by pattern (instead of `find`)
+- **Grep** for searching file contents (instead of `grep`)
+- **Read** for reading file contents (instead of `cat`)
+
+Fall back to bash equivalents (`find`, `grep`, `head`) only if the built-in tools don't support what you need.
+
+## For Each Experiment with Issues
+
+Review each experiment in `@outputDir/topics/@topic/` that has `status: "fail"` or `status: "partial"`:
+
+1. **Re-examine your assumption**: What did you think should happen?
+
+2. **Check the test cases**: Search for relevant patterns
+   - Use **Glob** to find test files: `tests/cases/**/*@topic*` or `tests/cases/**/*.mld`
+   - Use **Grep** to search content: pattern `<keyword>` in path `tests/cases/`
+
+3. **Check the cookbook**: Does it show how this feature actually works?
+   - Use **Grep** to search: pattern `<keyword>` in path `docs/llm/llms-cookbook.txt`
+
+4. **Apply Chesterton's Fence** (before classifying as a bug):
+
+<@prompts/chestertons-fence.md>
+
+   If unsure, flag as `needs-human-design` rather than `genuine-bug`.
+
+5. **Classify the issue**:
+   - `qa-insufficient-exploration`: You could have found the answer with more searching
+   - `docs-could-be-clearer`: Docs are correct but the misunderstanding is understandable
+   - `docs-genuinely-misleading`: Docs actively suggest wrong behavior
+   - `needs-human-design`: Behavior seems off but might be intentional (flag for human)
+   - `genuine-bug`: The behavior really is wrong (test cases confirm your expectation)
+
+## Output
+
+For each experiment directory with issues, create or update `self_review.json`:
+
+```json
+{
+  "experiment": "01-L-basic-usage",
+  "topic": "@topic",
+  "original_status": "fail|partial",
+  "reviewed": true,
+
+  "issues_reviewed": [
+    {
+      "original_issue": "Brief description from results.json",
+      "what_i_thought": "My original assumption",
+      "what_i_found": "What the test cases/cookbook revealed",
+      "evidence": "File path or grep result that clarified this",
+
+      "chestertons_fence": {
+        "considered": true,
+        "why_might_this_be_intentional": "Possible reasons for current behavior",
+        "design_question": null
+      },
+
+      "empirical_verification": {
+        "attempted": true,
+        "what_i_corrected": "Description of syntax/approach changes tried",
+        "corrected_file": "experiment-corrected.mld | null if no correction possible",
+        "result": "works | still-fails | not-applicable",
+        "output": "Actual output or error from corrected run (or explanation why not applicable)"
+      },
+
+      "doc_clarity": {
+        "issue": "qa-syntax-error | qa-insufficient-exploration | docs-could-be-clearer | docs-genuinely-misleading | needs-human-design | genuine-bug",
+        "explanation": "Why I chose this classification",
+        "suggestion": "What would have helped (if docs issue)",
+        "affected_doc": "Which doc file/topic needs improvement"
+      },
+
+      "revised_verdict": "qa-syntax-error | not-a-bug | doc-improvement-needed | needs-human-design | genuine-bug",
+      "revised_severity": "none | minor | major | blocker"
+    }
+  ],
+
+  "learnings": "What I learned from this self-review",
+  "doc_improvements": ["List of specific doc improvements that would help"]
+}
+```
+
+## CRITICAL: Empirical Verification Required
+
+**Before classifying anything as "genuine-bug" or "docs-genuinely-misleading", you MUST empirically verify with corrected syntax:**
+
+1. **Find the correct syntax** from test cases or cookbook
+2. **Create a corrected experiment** - Write to `experiment-corrected.mld` in the same directory
+3. **Run the corrected version**: `mlld <path>/experiment-corrected.mld`
+4. **Document what you tried**:
+   ```json
+   "empirical_verification": {
+     "attempted": true,
+     "what_i_corrected": "Changed allow trusted! to => trusted!",
+     "corrected_file": "experiment-corrected.mld",
+     "result": "works | still-fails",
+     "output": "Actual output or error from corrected run"
+   }
+   ```
+5. **Reclassify based on results**:
+   - If corrected version works: `"qa-syntax-error"` (you had wrong syntax)
+   - If still fails: `"genuine-bug"` (feature is actually broken)
+
+**This step is MANDATORY for any "fail" or "major" classification.** Do not skip it. Intellectual review is not sufficient.
+
+## Guidelines
+
+**Be honest about your mistakes**: The goal is to improve the system, not to defend your original assessment. If you misunderstood, say so.
+
+**Be specific about doc improvements**: "Docs should be clearer" is not helpful. "The `for-block` doc should show that `let` only works inside blocks, not at top-level" is actionable.
+
+**Distinguish carefully**:
+- `qa-syntax-error`: Your test code had wrong syntax (empirical verification caught this)
+- `qa-insufficient-exploration`: The answer WAS in the docs, you just didn't find it
+- `docs-could-be-clearer`: A reasonable person following the docs could make this mistake
+- `docs-genuinely-misleading`: The docs say X but the behavior is Y
+- `genuine-bug`: Test cases confirm the behavior is wrong AND empirical verification still fails
+
+## If You Get Blocked by Permissions
+
+If you attempt a tool and it is denied (permission error, not in allowedTools), do NOT retry repeatedly or wait. Instead:
+
+1. **Write a `blocked.json` file** in the topic directory:
+   ```json
+   {
+     "blocked": "Brief description of what you cannot do",
+     "attempted_tools": ["Bash(example command)"],
+     "partial_work": "Description of what you accomplished before getting blocked"
+   }
+   ```
+
+2. **Continue with any remaining work you CAN do**, then exit normally.
+
+## Begin
+
+1. List all experiment directories in `@outputDir/topics/@topic/`
+2. For each with `status != "pass"`, perform the self-review
+3. Write `self_review.json` in each reviewed experiment directory

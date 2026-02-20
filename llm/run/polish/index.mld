@@ -1,0 +1,286 @@
+>> Polish Pipeline v2
+>> Usage: mlld run polish [options]
+>>
+>> Options:
+>>   --batch N           Process N items per run (default: 5)
+>>   --parallel N        Concurrent Claude calls in apply stage (default: 10)
+>>   --timeout Ns        Timeout per parallel item, e.g. 60s (default: 1s)
+>>   --phase <name>      Run only a specific phase
+>>   --from <name>       Start from a specific phase
+>>   --to <name>         Stop after a specific phase
+>>   --run <id>          Resume a specific run
+>>   --loop              Keep processing until all items complete
+>>   --skipEnrich        Skip enrich phase (use existing enriched-items.json)
+>>   --docs-only         Only process doc fixes
+>>   --qa                Include QA signals (requires prior mlld run qa + answered strategy-questions.md)
+>>   --retry-failed      Re-attempt escalated items
+>>   --dryRun true       Test mode: haiku model, batch of 2, skip actual changes
+>>
+>> Phases (default: tickets only, skips interpret):
+>>   0. interpret   - Parse human answers from strategy-questions.md (--qa only)
+>>   1. reconcile   - Merge QA signals with existing tickets (or tickets only)
+>>   2. enrich      - Assess stale/scope/impl status
+>>   3. rank        - Prioritize and cluster work items
+>>   4. execute     - Implement fixes in worktrees
+>>   5. docs        - Process documentation fixes
+
+import { @createRun, @loadRun, @updatePhaseStatus, @updateRunStatus, @nextPhase, @shouldRunPhase } from "./lib/state.mld"
+import { @logEvent } from "./lib/events.mld"
+import { @runInterpret } from "./phases/interpret.mld"
+import { @runReconcile } from "./phases/reconcile.mld"
+import { @runEnrich } from "./phases/enrich.mld"
+import { @runRank } from "./phases/rank.mld"
+import { @runExecute } from "./phases/execute.mld"
+import { @runDocs } from "./phases/docs.mld"
+
+/needs { sh }
+
+>> Shell helpers (sh blocks need params, not mlld interpolation)
+exe @readCurrentLink(pipelineRoot) = sh {readlink "$pipelineRoot/current" 2>/dev/null || echo ""}
+exe @countRunsForDate(dir, date) = sh {ls "$dir" 2>/dev/null | grep "^$date" | wc -l | tr -d ' '}
+exe @getLatestQaRun(qaRoot) = sh {ls "$qaRoot" 2>/dev/null | grep '^20' | sort -r | head -1}
+exe @createSymlink(dir, target) = sh {cd "$dir" && rm -f current && ln -s "$target" current}
+
+>> Parse payload options
+import "@payload" as @p
+
+var @batchSize = @p.batch ? @p.batch * 1 : 5
+var @pl = @p.parallel ? @p.parallel * 1 : 10
+var @pt = @p.timeout ? @p.timeout : "1s"
+var @phaseOnly = @p.phase ? @p.phase : null
+var @fromPhase = @p.from ? @p.from : null
+var @toPhase = @p.to ? @p.to : null
+var @runId = @p.run ? @p.run : null
+var @loopMode = @p.loop ? true : false
+var @skipEnrich = @p.skipEnrich ? true : false
+var @docsOnly = @p.docsOnly ? true : false
+var @useQa = @p.qa ? true : false
+var @retryFailed = @p.retryFailed ? true : false
+var @dryRun = @p.dryRun ? true : false
+
+>> Pipeline root directory
+var @pipelineRoot = `@base/pipeline`
+
+>> Phase order for sequencing
+var @phases = ["interpret", "reconcile", "enrich", "rank", "execute", "docs"]
+
+>> Find or create run directory
+exe @resolveRunDir() = [
+  >> Check for explicit --run flag first
+  let @explicitRun = @runId ? @_checkExplicitRun(@runId) : null
+
+  >> Check for current symlink if no explicit run
+  let @currentRun = !@explicitRun && !@runId ? @_checkCurrentRun() : null
+
+  >> Use when for proper early returns
+  => when [
+    @explicitRun => @explicitRun
+    @currentRun => @currentRun
+    * => @_createNewRun()
+  ]
+]
+
+>> Check if explicit run ID exists
+exe @_checkExplicitRun(id) = [
+  let @runDir = `@pipelineRoot/@id`
+  let @hasRun = <@runDir/run.json>?
+  when !@hasRun => show `ERROR: Run @id not found`
+  => @hasRun ? @runDir : null
+]
+
+>> Check current symlink for incomplete run
+exe @_checkCurrentRun() = [
+  let @currentLink = @readCurrentLink(@pipelineRoot)
+  let @currentLinkTrimmed = @currentLink.trim()
+  when !@currentLinkTrimmed => null
+
+  let @runDir = `@pipelineRoot/@currentLinkTrimmed`
+  let @run = @loadRun(@runDir)
+  let @canResume = @run && @run.status != "complete"
+
+  when @canResume => show `Resuming run: @currentLinkTrimmed`
+
+  => @canResume ? @runDir : null
+]
+
+>> Create a new run
+exe @_createNewRun() = [
+  let @today = sh {date +%Y-%m-%d}
+  let @todayTrimmed = @today.trim()
+
+  >> Find next run number for today
+  let @existingRuns = @countRunsForDate(@pipelineRoot, @todayTrimmed)
+  let @runNum = (@existingRuns * 1) + 1
+  let @newRunId = `@todayTrimmed-@runNum`
+
+  >> Find latest QA run
+  let @qaRoot = `@base/qa`
+  let @latestQa = @getLatestQaRun(@qaRoot)
+  let @latestQaTrimmed = @latestQa.trim()
+  let @qaRun = @latestQaTrimmed ? `@qaRoot/@latestQaTrimmed` : null
+
+  >> Create the run
+  let @config = {
+    batch_size: @batchSize,
+    docs_only: @docsOnly,
+    no_qa: @noQa,
+    dry_run: @dryRun,
+    qa_run: @qaRun
+  }
+
+  let @runDir = @createRun(@pipelineRoot, @newRunId, @config)
+  show `Created new run: @newRunId`
+
+  >> Update current symlink
+  let @linkResult = @createSymlink(@pipelineRoot, @newRunId)
+
+  => @runDir
+]
+
+>> Main entry point
+show `=== Polish Pipeline v2 ===`
+show ``
+show `Config:`
+show `  Batch size: @batchSize`
+show `  Parallel: @pl concurrent, @pt timeout`
+when @loopMode => show `  Loop mode: run until all items complete`
+when @skipEnrich => show `  Skip enrich: requires existing enriched-items.json`
+when @phaseOnly => show `  Phase only: @phaseOnly`
+when @fromPhase => show `  From phase: @fromPhase`
+when @toPhase => show `  To phase: @toPhase`
+when @docsOnly => show `  Docs only: true`
+when @useQa => show `  QA mode: including QA signals`
+when @dryRun => show `  DRY RUN: haiku model, batch 2, no actual changes`
+show ``
+
+>> Resolve run directory
+var @runDir = @resolveRunDir()
+when !@runDir => [
+  show `ERROR: Could not resolve or create run directory`
+  => null
+]
+
+show `Run directory: @runDir`
+show ``
+
+>> Load or initialize run state
+var @run = @loadRun(@runDir)
+
+>> Log run start
+var @_1 = @logEvent(@runDir, { event: "run_start", run_id: @run.id })
+
+>> Execute phases
+var @phaseResults = {}
+
+>> Phase 0: Interpret (only with --qa flag)
+when @shouldRunPhase("interpret", @phaseOnly, @fromPhase, @toPhase) && @useQa && !@docsOnly => [
+  show `=== Phase 0: Interpret ===`
+  let @result = @runInterpret(@runDir, @run.config.qa_run)
+  @phaseResults += { interpret: @result }
+  show ``
+]
+
+>> Phase 1: Reconcile
+when @shouldRunPhase("reconcile", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => [
+  show `=== Phase 1: Reconcile ===`
+  let @skipQa = !@useQa || !@run.config.qa_run
+  let @result = @runReconcile(@runDir, @skipQa)
+  @phaseResults += { reconcile: @result }
+  show ``
+]
+
+>> Phase 2: Enrich
+when @shouldRunPhase("enrich", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly && !@skipEnrich => [
+  show `=== Phase 2: Enrich ===`
+  let @result = @runEnrich(@runDir, @pl, @pt)
+  @phaseResults += { enrich: @result }
+  show ``
+]
+
+>> Phase 3: Rank
+when @shouldRunPhase("rank", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => [
+  show `=== Phase 3: Rank ===`
+  let @result = @runRank(@runDir)
+  @phaseResults += { rank: @result }
+  show ``
+]
+
+>> Phase 4: Execute
+when @shouldRunPhase("execute", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => [
+  let @execConfig = { batch: @batchSize, parallel: @pl, timeout: @pt, dryRun: @dryRun }
+
+  when @loopMode => [
+    >> Loop mode: keep processing until all items complete
+    show `=== Phase 4: Execute (loop mode) ===`
+    let @loopResult = loop [
+      let @iteration = @mx.loop.iteration
+      let @prevRemaining = @input ? @input.remaining : null
+      show `--- Batch @iteration ---`
+      let @result = @runExecute(@runDir, @execConfig)
+      let @remaining = @result.remaining ? @result.remaining : 0
+
+      >> Exit when no items remaining
+      when @remaining == 0 => done { remaining: 0, last_result: @result }
+
+      >> Continue if more items
+      show `  @remaining items remaining, continuing...`
+      continue { remaining: @remaining, last_result: @result }
+    ]
+    @phaseResults += { execute: @loopResult.last_result }
+    show ``
+  ]
+
+  when !@loopMode => [
+    >> Single batch mode
+    show `=== Phase 4: Execute ===`
+    let @result = @runExecute(@runDir, @execConfig)
+    @phaseResults += { execute: @result }
+    show ``
+  ]
+]
+
+>> Phase 5: Docs
+when @shouldRunPhase("docs", @phaseOnly, @fromPhase, @toPhase) => [
+  show `=== Phase 5: Docs ===`
+  let @result = @runDocs(@runDir, @pl, @pt)
+  @phaseResults += { docs: @result }
+  show ``
+]
+
+>> Log run completion
+var @_2 = @logEvent(@runDir, { event: "run_complete", phases: @phaseResults })
+
+>> Update run status to complete
+var @_3 = @updateRunStatus(@runDir, "complete")
+
+>> Summary
+show `=== Polish Complete ===`
+show `Run: @run.id`
+show `Output: @runDir`
+
+>> Show phase summaries
+when @phaseResults.reconcile => [
+  let @items = @phaseResults.reconcile.items ? @phaseResults.reconcile.items : []
+  show `  Reconciled: @items.length items`
+]
+when @phaseResults.enrich => [
+  let @items = @phaseResults.enrich.items ? @phaseResults.enrich.items : []
+  show `  Enriched: @items.length items`
+]
+when @phaseResults.rank => [
+  let @items = @phaseResults.rank.ranked_items ? @phaseResults.rank.ranked_items : []
+  show `  Ranked: @items.length items`
+]
+when @phaseResults.execute => [
+  let @results = @phaseResults.execute.results ? @phaseResults.execute.results : []
+  show `  Executed: @results.length items`
+]
+when @phaseResults.docs => [
+  let @results = @phaseResults.docs.results ? @phaseResults.docs.results : []
+  show `  Docs: @results.length fixes`
+]
+
+show ``
+show `Next steps:`
+show `  Review results: @runDir/`
+show `  Re-run with more: mlld run polish --batch @batchSize`

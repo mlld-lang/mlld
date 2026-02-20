@@ -5,9 +5,11 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as os from 'os';
 import { existsSync } from 'fs';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors/index';
+import { parseDuration, formatDuration } from '@core/config/utils';
 import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -15,10 +17,106 @@ import { execute, TimeoutError } from '@sdk/execute';
 import { ExecuteError, type StructuredResult } from '@sdk/types';
 import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
+import { parseInjectOptions, type DynamicModuleMap } from '../utils/inject-parser';
+import { analyzeDeep, type AnalyzeResult } from './analyze';
+
+const ENTRY_POINTS = ['index.mld', 'main.mld', 'index.mld.md', 'main.mld.md'];
 
 export interface RunOptions {
   timeoutMs?: number;
   debug?: boolean;
+  inject?: string[];
+  checkpoint?: boolean;
+  noCheckpoint?: boolean;
+  fresh?: boolean;
+  resume?: string | true;
+  fork?: string;
+  noWarn?: boolean;
+}
+
+function hasBlockingAnalysisErrors(result: AnalyzeResult): boolean {
+  if (!result.valid) return true;
+  const hardRedefinitions = (result.redefinitions ?? []).filter(
+    redef => redef.reason !== 'builtin-conflict' && redef.reason !== 'soft-reserved-conflict'
+  );
+  return hardRedefinitions.length > 0;
+}
+
+function formatRelativePath(filePath: string): string {
+  const relative = path.relative(process.cwd(), filePath);
+  return relative && !relative.startsWith('..') ? relative : filePath;
+}
+
+function formatLocation(filePath: string, line?: number, column?: number): string {
+  const base = formatRelativePath(filePath);
+  if (line === undefined) {
+    return base;
+  }
+  if (column === undefined) {
+    return `${base}:${line}`;
+  }
+  return `${base}:${line}:${column}`;
+}
+
+function formatBlockingAnalysisErrors(results: AnalyzeResult[]): string {
+  const lines: string[] = [];
+
+  for (const result of results) {
+    if (!result.errors || result.errors.length === 0) {
+      continue;
+    }
+
+    for (const error of result.errors) {
+      const location = formatLocation(result.filepath, error.line, error.column);
+      const messageLines = String(error.message ?? 'Unknown validation error').split('\n');
+      lines.push(`error: ${location} - ${messageLines[0]}`);
+      for (const extraLine of messageLines.slice(1)) {
+        lines.push(`  ${extraLine}`);
+      }
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function collectPreflightWarnings(results: AnalyzeResult[]): string[] {
+  const lines: string[] = [];
+
+  for (const result of results) {
+    const filepath = result.filepath;
+
+    for (const warning of result.warnings ?? []) {
+      const location = formatLocation(filepath, warning.line, warning.column);
+      lines.push(`warning: ${location} - @${warning.variable} undefined variable`);
+      if (warning.suggestion) {
+        lines.push(`  hint: ${warning.suggestion}`);
+      }
+    }
+
+    for (const warning of result.antiPatterns ?? []) {
+      const location = formatLocation(filepath, warning.line, warning.column);
+      lines.push(`warning: ${location} - ${warning.message}`);
+      if (warning.suggestion) {
+        lines.push(`  hint: ${warning.suggestion}`);
+      }
+    }
+
+    for (const redef of result.redefinitions ?? []) {
+      if (redef.reason !== 'builtin-conflict' && redef.reason !== 'soft-reserved-conflict') {
+        continue;
+      }
+      const location = formatLocation(filepath, redef.line, redef.column);
+      const description = redef.reason === 'soft-reserved-conflict'
+        ? 'shadows a conventionally reserved name'
+        : 'shadows a built-in transform';
+      lines.push(`warning: ${location} - @${redef.variable} ${description}`);
+      if (redef.suggestion) {
+        lines.push(`  hint: ${redef.suggestion}`);
+      }
+    }
+  }
+
+  return lines;
 }
 
 export class RunCommand {
@@ -45,40 +143,103 @@ export class RunCommand {
     return path.join(projectRoot, this.scriptDir);
   }
 
-  async listScripts(): Promise<string[]> {
-    const scriptDir = await this.getScriptDirectory();
-    
-    if (!existsSync(scriptDir)) {
-      return [];
-    }
-    
+  private getGlobalScriptDirectory(): string {
+    return path.join(os.homedir(), '.mlld', 'run');
+  }
+
+  private async collectScriptsFromDir(dir: string, scripts: Set<string>): Promise<void> {
+    if (!existsSync(dir)) return;
+
     try {
-      const files = await fs.readdir(scriptDir);
-      // Filter for .mld files and remove extension
-      return files
-        .filter(file => file.endsWith('.mld'))
-        .map(file => path.basename(file, '.mld'));
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.endsWith('.mld')) {
+          scripts.add(path.basename(entry.name, '.mld'));
+        } else if (entry.isDirectory()) {
+          // Check if directory has an entry point
+          for (const entryPoint of ENTRY_POINTS) {
+            if (existsSync(path.join(dir, entry.name, entryPoint))) {
+              scripts.add(entry.name);
+              break;
+            }
+          }
+        }
+      }
     } catch (error: any) {
-      cliLogger.error('Failed to list scripts', { error: error?.message || error });
-      return [];
+      cliLogger.error('Failed to list scripts from directory', { dir, error: error?.message || error });
     }
+  }
+
+  async listScripts(): Promise<string[]> {
+    const scripts = new Set<string>();
+
+    // Local scripts
+    const localDir = await this.getScriptDirectory();
+    await this.collectScriptsFromDir(localDir, scripts);
+
+    // Global scripts
+    const globalDir = this.getGlobalScriptDirectory();
+    await this.collectScriptsFromDir(globalDir, scripts);
+
+    return Array.from(scripts).sort();
+  }
+
+  private findEntryPointInDir(dirPath: string): string | null {
+    for (const entryPoint of ENTRY_POINTS) {
+      const entryPath = path.join(dirPath, entryPoint);
+      if (existsSync(entryPath)) {
+        return entryPath;
+      }
+    }
+    return null;
   }
 
   async findScript(scriptName: string): Promise<string | null> {
     const scriptDir = await this.getScriptDirectory();
-    
-    // Try with .mld extension
-    const scriptPath = path.join(scriptDir, `${scriptName}.mld`);
-    if (existsSync(scriptPath)) {
-      return scriptPath;
+    const globalDir = this.getGlobalScriptDirectory();
+
+    // 1. Try local flat file (.mld)
+    const localFlatPath = path.join(scriptDir, `${scriptName}.mld`);
+    if (existsSync(localFlatPath)) {
+      return localFlatPath;
     }
-    
-    // Try exact name (in case they included extension)
+
+    // 2. Try local directory with entry point
+    const localDirPath = path.join(scriptDir, scriptName);
+    if (existsSync(localDirPath)) {
+      const stat = await fs.stat(localDirPath);
+      if (stat.isDirectory()) {
+        const entryPath = this.findEntryPointInDir(localDirPath);
+        if (entryPath) return entryPath;
+      }
+    }
+
+    // 3. Try exact name with extension (in case they included it)
     const exactPath = path.join(scriptDir, scriptName);
-    if (existsSync(exactPath) && exactPath.endsWith('.mld')) {
+    if (existsSync(exactPath) && scriptName.endsWith('.mld')) {
       return exactPath;
     }
-    
+
+    // 4. Try global flat file
+    const globalFlatPath = path.join(globalDir, `${scriptName}.mld`);
+    if (existsSync(globalFlatPath)) {
+      return globalFlatPath;
+    }
+
+    // 5. Try global directory with entry point
+    const globalDirPath = path.join(globalDir, scriptName);
+    if (existsSync(globalDirPath)) {
+      try {
+        const stat = await fs.stat(globalDirPath);
+        if (stat.isDirectory()) {
+          const entryPath = this.findEntryPointInDir(globalDirPath);
+          if (entryPath) return entryPath;
+        }
+      } catch {
+        // Directory doesn't exist or can't be accessed
+      }
+    }
+
     return null;
   }
 
@@ -108,18 +269,75 @@ export class RunCommand {
       );
     }
 
+    const preflightStartedAt = Date.now();
+    const preflightResults = await analyzeDeep([scriptPath], {
+      checkVariables: true,
+      strictTemplateVariables: true
+    });
+    const preflightDurationMs = Date.now() - preflightStartedAt;
+
+    const blockingResults = preflightResults.filter(result => hasBlockingAnalysisErrors(result));
+    if (blockingResults.length > 0) {
+      const details = formatBlockingAnalysisErrors(blockingResults);
+      throw new MlldError(
+        `Pre-flight validation failed:\n${details}`,
+        {
+          code: 'SCRIPT_VALIDATION_ERROR',
+          severity: ErrorSeverity.Fatal
+        }
+      );
+    }
+
+    if (!options.noWarn) {
+      const warningLines = collectPreflightWarnings(preflightResults);
+      if (warningLines.length > 0) {
+        console.log(chalk.yellow('Pre-flight warnings:'));
+        for (const line of warningLines) {
+          console.log(chalk.yellow(`  ${line}`));
+        }
+        console.log();
+      }
+    }
+
+    if (options.debug) {
+      console.error(chalk.gray(`Pre-flight validation: ${preflightDurationMs.toFixed(1)}ms`));
+    }
+
     console.log(chalk.gray(`Running ${path.relative(process.cwd(), scriptPath)}...\n`));
 
     try {
+      // Parse inject options into dynamic modules
+      let dynamicModules: DynamicModuleMap | undefined;
+      if (options.inject && options.inject.length > 0) {
+        dynamicModules = await parseInjectOptions(
+          options.inject,
+          this.fileSystem,
+          path.dirname(scriptPath)
+        );
+      }
+
       // Use execute for AST caching and metrics
       const result = await execute(scriptPath, undefined, {
         fileSystem: this.fileSystem,
         pathService: new PathService(),
-        timeoutMs: options.timeoutMs ?? 300000, // 5 minute default
+        timeoutMs: options.timeoutMs, // undefined = no timeout
+        dynamicModules,
+        checkpoint: options.checkpoint,
+        noCheckpoint: options.noCheckpoint,
+        fresh: options.fresh,
+        resume: options.resume,
+        fork: options.fork,
+        checkpointScriptName: scriptName
       }) as StructuredResult;
 
-      // Output the result
-      console.log(result.output);
+      // Check if streaming was enabled - if so, skip final output since it was already streamed
+      const effectHandler = result.environment?.getEffectHandler?.();
+      const isStreaming = effectHandler?.isStreamingEnabled?.() ?? false;
+
+      // Output the result (skip if streaming already output everything)
+      if (!isStreaming) {
+        console.log(result.output);
+      }
 
       // Show metrics in debug mode
       if (options.debug && result.metrics) {
@@ -143,7 +361,7 @@ export class RunCommand {
     } catch (error) {
       if (error instanceof TimeoutError) {
         throw new MlldError(
-          `Script timed out after ${error.timeoutMs}ms`,
+          `Script timed out after ${formatDuration(error.timeoutMs)}`,
           {
             code: 'SCRIPT_TIMEOUT',
             severity: ErrorSeverity.Fatal,
@@ -229,47 +447,153 @@ Arguments:
   script-name    Name of the script to run (without .mld extension)
 
 Options:
-  -h, --help       Show this help message
-  --timeout <ms>   Script timeout in milliseconds (default: 300000 / 5 minutes)
-  --debug          Show execution metrics (timing, cache hits, effects)
+  -h, --help              Show this help message
+  --timeout <duration>    Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
+  --debug                 Show execution metrics (timing, cache hits, effects)
+  --no-warn               Suppress pre-flight warning output (errors still block execution)
+  --checkpoint            Backward-compatible no-op (checkpointing auto-detects llm-labeled calls)
+  --new                   Start a fresh checkpoint run (alias: --fresh)
+  --fresh                 Rebuild checkpoint cache from scratch for this script
+  --no-checkpoint         Disable checkpoint reads/writes for this run
+  --resume [target]       Resume from checkpoint name/prefix or function target (@fn, @fn:index, @fn("prefix"))
+  --fork <script>         Read checkpoints from another script as seed cache
+  --<name> <value>        Any other flag becomes payload (see below)
 
-Script Directory:
-  Scripts are loaded from the directory configured in mlld-config.json.
-  Default: llm/run/
+Script Locations (checked in order):
+  1. Local flat file:     llm/run/<name>.mld
+  2. Local directory:     llm/run/<name>/index.mld
+  3. Global flat file:    ~/.mlld/run/<name>.mld
+  4. Global directory:    ~/.mlld/run/<name>/index.mld
 
-  Configure with: mlld setup
+  Configure local directory with: mlld setup
+
+Directory Scripts:
+  Scripts can be organized as directories with an entry point:
+    llm/run/my-app/
+    ├── index.mld      # Entry point (or main.mld)
+    ├── lib/           # Supporting files
+    └── prompts/       # Templates, etc.
+
+  Run with: mlld run my-app
 
 Examples:
-  mlld run                        # List available scripts
-  mlld run hello                  # Run llm/run/hello.mld
-  mlld run slow-script --timeout 60000  # 60 second timeout
-  mlld run hello --debug          # Show execution metrics
+  mlld run                           # List available scripts
+  mlld run hello                     # Run llm/run/hello.mld
+  mlld run my-app                    # Run llm/run/my-app/index.mld
+  mlld run hello --debug             # Show execution metrics
+  mlld run qa --topic variables      # Pass --topic as payload
+
+Payload:
+  Unknown flags are passed to the script as @payload:
+    mlld run qa --topic foo --count 5
+  In script:
+    import { topic, count } from @payload
+    show @topic    >> "foo"
+    show @count    >> "5"
 
 Creating Scripts:
-  1. Create a .mld file in your script directory
-  2. Write mlld code to perform tasks
-  3. Run with: mlld run <script-name>
-
-Example script (llm/run/hello.mld):
-  /var @greeting = "Hello from mlld script!"
-  /show @greeting
+  Single file:    Create llm/run/hello.mld
+  Directory app:  mlld init app hello
         `);
         return;
       }
 
-      // Parse timeout flag
+      // Parse timeout flag (supports durations like 5m, 1h, 30s)
       let timeoutMs: number | undefined;
       if (flags.timeout !== undefined) {
-        timeoutMs = parseInt(String(flags.timeout), 10);
-        if (isNaN(timeoutMs) || timeoutMs <= 0) {
-          console.error(chalk.red('Error: --timeout must be a positive number'));
+        try {
+          timeoutMs = parseDuration(String(flags.timeout));
+          if (timeoutMs <= 0) {
+            console.error(chalk.red('Error: --timeout must be a positive duration'));
+            process.exit(1);
+          }
+        } catch {
+          console.error(chalk.red('Error: --timeout must be a valid duration (e.g., 5m, 1h, 30s, or milliseconds)'));
           process.exit(1);
         }
       }
 
+      // Known flags that are NOT payload
+      const knownFlags = new Set([
+        'help',
+        'h',
+        'timeout',
+        'debug',
+        'd',
+        'no-warn',
+        'noWarn',
+        'inject',
+        'payload',
+        'checkpoint',
+        'no-checkpoint',
+        'noCheckpoint',
+        'new',
+        'fresh',
+        'resume',
+        'fork',
+        '_'
+      ]);
+
+      // Collect inject/payload flags (explicit format: @key=value)
+      const inject: string[] = [];
+      if (flags.inject) {
+        inject.push(...(Array.isArray(flags.inject) ? flags.inject : [flags.inject]));
+      }
+      if (flags.payload) {
+        inject.push(...(Array.isArray(flags.payload) ? flags.payload : [flags.payload]));
+      }
+      const noCheckpoint = Boolean(flags['no-checkpoint'] || flags.noCheckpoint);
+      const checkpointEnabled = Boolean(flags.checkpoint);
+      const fresh = Boolean(flags.fresh || flags.new);
+      const resume = flags.resume === undefined ? undefined : flags.resume === true ? true : String(flags.resume);
+      const noWarn = Boolean(flags['no-warn'] || flags.noWarn);
+      let fork: string | undefined;
+      if (flags.fork !== undefined) {
+        if (flags.fork === true) {
+          console.error(chalk.red('Error: --fork requires a script name'));
+          process.exit(1);
+        }
+        fork = String(flags.fork);
+      }
+      if (noCheckpoint && (fresh || resume !== undefined || fork !== undefined)) {
+        console.error(
+          chalk.red('Error: --no-checkpoint cannot be combined with --new/--fresh, --resume, or --fork')
+        );
+        process.exit(1);
+      }
+
+      // Build @payload object from unknown flags: --topic foo --count 5 => @payload={"topic":"foo","count":"5"}
+      const payloadObj: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(flags)) {
+        if (!knownFlags.has(key) && value !== undefined) {
+          payloadObj[key] = value;
+          // Add camelCase alias for hyphenated keys (deprecated, for backward compat)
+          if (key.includes('-')) {
+            const camelKey = key.replace(/-([a-z])/g, (_, char: string) => char.toUpperCase());
+            if (!(camelKey in payloadObj)) {
+              payloadObj[camelKey] = value;
+            }
+          }
+        }
+      }
+      const isDebug = Boolean(flags.debug || flags.d);
+      // Always inject @payload (empty {} if no flags) so scripts can safely reference @payload.field
+      const payloadStr = `@payload=${JSON.stringify(payloadObj)}`;
+      if (isDebug && Object.keys(payloadObj).length > 0) {
+        console.error(chalk.gray(`Payload: ${payloadStr}`));
+      }
+      inject.push(payloadStr);
+
       const options: RunOptions = {
         timeoutMs,
-        debug: Boolean(flags.debug || flags.d)
+        debug: isDebug,
+        inject: inject.length > 0 ? inject : undefined,
+        checkpoint: checkpointEnabled,
+        noCheckpoint,
+        fresh,
+        resume,
+        fork,
+        noWarn
       };
 
       try {

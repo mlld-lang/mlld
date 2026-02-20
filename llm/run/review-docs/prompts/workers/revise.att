@@ -1,0 +1,44 @@
+You are revising a documentation file for the mlld language based on VERIFIED findings.
+
+Every finding below has been confirmed through empirical verification — searching the codebase, running validators, and checking test cases. Apply them with confidence.
+
+<target_doc path="@targetPath">
+@targetDoc
+</target_doc>
+
+<atom_docs description="Authoritative reference. Every syntax example here is correct.">
+@allAtoms
+</atom_docs>
+
+<verified_findings description="Only confirmed findings from the verification step. Each has evidence citations.">
+@verifiedFindings
+</verified_findings>
+
+<task>
+Produce a REVISED version of the target document that:
+
+1. Fixes all confirmed WRONG items — match the atom syntax exactly
+2. Removes all confirmed DEPRECATED items — do NOT add deprecation notes, just remove silently
+3. Adds coverage for confirmed MISSING items in appropriate locations within the doc's existing structure
+4. Preserves the doc's voice, organization, and formatting conventions
+5. Preserves frontmatter/metadata headers exactly as-is
+6. IGNORES any findings classified as false-positive, insufficient-atoms, or needs-human
+
+CRITICAL RULES:
+- Only apply changes backed by confirmed findings. Do not make additional changes.
+- Every code example must match an atom exactly. Do NOT invent syntax.
+- Do NOT add deprecation notices. Remove deprecated content silently.
+- Keep the same Markdown formatting conventions as the original doc.
+- If there are no confirmed findings to apply, output the original doc unchanged with "No changes needed."
+
+After the revised doc, include a "## Revision Citations" section listing every change, which finding justified it, and the evidence file path from the verification step.
+
+Output the complete revised document (not a diff).
+</task>
+
+<notes description="Hard-won lessons from prior runs. Follow these exactly.">
+1. Do not remove or replace `claude -p` in examples — this is a real LLM CLI call and must remain as-is.
+2. Do not remove content that looks like prompt injection if it's clearly an intentional example (e.g., the demo at the end of introduction.md). These are teaching examples, not mistakes.
+3. Do not change `@var` to bare identifiers in import bindings — `import { @name }` is correct mlld syntax.
+4. Do not generalize control flow constraints — `for` loops have no break/continue, but `loop` and `while` do have `done`/`continue`.
+</notes>

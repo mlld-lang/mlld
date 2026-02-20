@@ -29,6 +29,10 @@ const VISITOR_MAP: Record<string, VisitorInfo> = {
     class: 'DirectiveVisitor',
     file: 'services/lsp/visitors/DirectiveVisitor.ts'
   },
+  'IfDirective': {
+    class: 'DirectiveVisitor',
+    file: 'services/lsp/visitors/DirectiveVisitor.ts'
+  },
   'ForDirective': {
     class: 'DirectiveVisitor',
     file: 'services/lsp/visitors/DirectiveVisitor.ts'
@@ -100,6 +104,40 @@ const VISITOR_MAP: Record<string, VisitorInfo> = {
   'Text': {
     class: 'TemplateVisitor',
     file: 'services/lsp/visitors/TemplateVisitor.ts'
+  },
+
+  // Conditional inclusion
+  'ConditionalTemplateSnippet': {
+    class: 'ConditionalVisitor',
+    file: 'services/lsp/visitors/ConditionalVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+  'ConditionalStringFragment': {
+    class: 'ConditionalVisitor',
+    file: 'services/lsp/visitors/ConditionalVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+  'ConditionalVarOmission': {
+    class: 'ConditionalVisitor',
+    file: 'services/lsp/visitors/ConditionalVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+  'ConditionalArrayElement': {
+    class: 'ConditionalVisitor',
+    file: 'services/lsp/visitors/ConditionalVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+  'NullCoalescingTight': {
+    class: 'ConditionalVisitor',
+    file: 'services/lsp/visitors/ConditionalVisitor.ts',
+    helper: 'OperatorTokenHelper'
+  },
+
+  // Label modifications
+  'LabelModification': {
+    class: 'LabelVisitor',
+    file: 'services/lsp/visitors/LabelVisitor.ts',
+    helper: 'OperatorTokenHelper'
   },
 
   // Field Access

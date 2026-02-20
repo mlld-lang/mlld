@@ -80,14 +80,14 @@ export const HIGHLIGHTING_RULES: HighlightingRules = {
   },
   
   directives: {
-    current: ['var', 'show', 'run', 'exe', 'import', 'when', 'output', 'path'],
+    current: ['var', 'show', 'stream', 'run', 'exe', 'checkpoint', 'path', 'import', 'when', 'if', 'for', 'loop', 'while', 'output', 'append', 'log', 'guard', 'hook', 'export', 'policy', 'sign', 'verify', 'env', 'bail'],
     deprecated: ['text', 'data', 'add', 'exec']
   },
   
   keywords: {
     commands: ['run', 'sh'],
     languages: ['js', 'node', 'python', 'bash'],
-    special: ['when', 'first', 'all', 'any', 'foreach', 'from', 'as', 'to', 'with']
+    special: ['when', 'if', 'else', 'first', 'all', 'any', 'foreach', 'from', 'as', 'to', 'with', 'new', 'node']
   }
 } as const;
 
@@ -179,6 +179,7 @@ export function getSemanticTokenType(
     'FileReference': context.templateType === 'tripleColon' ? 'xmlTag' : 'alligator',
     'BinaryExpression': 'operator',
     'UnaryExpression': 'operator',
+    'NewExpression': 'keyword',
     'Literal': 'literal'
   };
   

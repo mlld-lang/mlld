@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QA Trend Report",
+  "description": "Phase 3 output: cross-cutting trend analysis",
+  "type": "object",
+  "required": ["generated_at", "topics_analyzed", "experiments_analyzed", "trends", "feature_health", "actionable_items"],
+  "properties": {
+    "generated_at": { "type": "string" },
+    "topics_analyzed": { "type": "number" },
+    "experiments_analyzed": { "type": "number" },
+    "trends": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "title", "frequency", "description", "recommendation", "priority"],
+        "properties": {
+          "id": { "type": "string" },
+          "category": { "type": "string", "enum": ["qa-process", "documentation", "feature-health", "onboarding"] },
+          "title": { "type": "string" },
+          "frequency": { "type": "string", "enum": ["very-common", "common", "occasional"] },
+          "description": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "topic": { "type": "string" },
+                "detail": { "type": "string" }
+              }
+            }
+          },
+          "recommendation": { "type": "string" },
+          "priority": { "type": "string", "enum": ["P0", "P1", "P2"] }
+        }
+      }
+    },
+    "feature_health": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["topic", "status", "genuine_bugs", "doc_issues", "summary"],
+        "properties": {
+          "topic": { "type": "string" },
+          "status": { "type": "string", "enum": ["solid", "minor-issues", "needs-work", "blocked"] },
+          "genuine_bugs": { "type": "number" },
+          "doc_issues": { "type": "number" },
+          "summary": { "type": "string" }
+        }
+      }
+    },
+    "actionable_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["priority", "category", "action"],
+        "properties": {
+          "priority": { "type": "string", "enum": ["P0", "P1", "P2"] },
+          "category": { "type": "string", "enum": ["qa-prompt", "docs", "code", "tooling"] },
+          "action": { "type": "string" },
+          "supporting_trends": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "affected_topics": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "effort": { "type": "string", "enum": ["small", "medium", "large"] }
+        }
+      }
+    }
+  }
+}

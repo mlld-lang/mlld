@@ -73,6 +73,9 @@ describe('guard input helper', () => {
     expect(helper.any.mx.labels.includes('secret')).toBe(true);
     expect(helper.all.mx.labels.includes('secret')).toBe(false);
     expect(helper.none.mx.labels.includes('public')).toBe(true);
+    expect(helper.any.text.includes('secret')).toBe(true);
+    expect(helper.all.text.includes('text')).toBe(true);
+    expect(helper.none.text.includes('<script')).toBe(true);
   });
 
   it('prefers exact token counts when available', () => {

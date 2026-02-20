@@ -1,0 +1,77 @@
+>> Event-Driven Task Handler
+>> Usage: mlld plugins/mlld/examples/event-agent/index.mld --task tasks/pending/task-001.json --output tasks/done/task-001.json
+>>
+>> Called by the TypeScript event loop for each incoming task.
+>> Routes the task to the right agent, dispatches, and gates output quality.
+
+import { @claudePoll } from @mlld/claude-poll
+import { @routeTask } from "./lib/router.mld"
+import { @checkOutput } from "./lib/gate.mld"
+import { @meta as @classifierMeta } from "./agents/classifier.mld"
+import { @meta as @writerMeta } from "./agents/writer.mld"
+import { @meta as @reviewerMeta } from "./agents/reviewer.mld"
+import "@payload" as @p
+
+var @taskPath = @p.task
+var @outputPath = @p.output
+
+>> Load task
+var @task = <@taskPath> | @parse
+
+>> Agent registry
+exe @buildRegistry(c, w, r) = js {
+  return [c, w, r];
+}
+var @agents = @buildRegistry(@classifierMeta, @writerMeta, @reviewerMeta)
+
+>> Prompt templates — one per agent
+exe @classifyPrompt(task) = template "./prompts/agents/classify.att"
+exe @writePrompt(task) = template "./prompts/agents/write.att"
+exe @reviewPrompt(task) = template "./prompts/agents/review.att"
+
+show `Task: @task.type — @task.description`
+
+>> Step 1: Route — which agent handles this task?
+var @routing = @routeTask(@task, @agents)
+show `Router: @routing.agent (@routing.confidence) — @routing.reasoning`
+
+>> Step 2: Build prompt from routing
+var @prompt = when @routing.agent [
+  "classifier" => @classifyPrompt(@task)
+  "writer" => @writePrompt(@task)
+  "reviewer" => @reviewPrompt(@task)
+  * => @classifyPrompt(@task)
+]
+var @agentOutputPath = `@outputPath\.agent.json`
+
+>> Step 3: Dispatch + gate via pipeline (retries up to 2x with gate feedback)
+exe @callAgent() = [
+  let @feedback = @mx.hint ? `\n\nPrevious attempt was rejected: @mx.hint\n\nAddress the feedback and try again.` : ""
+  if @mx.try > 1 [ show `  Retrying with gate feedback (attempt @mx.try)` ]
+  let @fullPrompt = `@prompt@feedback
+
+IMPORTANT: Write your JSON response to @agentOutputPath using the Write tool.`
+  @claudePoll(@fullPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @agentOutputPath)
+  => <@agentOutputPath>?
+]
+
+exe @qualityGate() = [
+  if !@mx.input [
+    show `Agent @routing.agent failed: no output`
+    => { status: "failed", agent: @routing.agent, task: @task.id }
+  ]
+  let @gate = @checkOutput(@task, @mx.input)
+  if @gate.pass [
+    show `Gate: passed`
+    => @mx.input
+  ]
+  if @mx.try < 3 [
+    show `Gate: failed — @gate.feedback`
+    => retry @gate.feedback
+  ]
+  show `Gate: failed after @mx.try attempts — giving up`
+  => { status: "failed", agent: @routing.agent, reason: "gate_retry_failed" }
+]
+
+var @result = @callAgent() | @qualityGate
+output @result to "@outputPath"

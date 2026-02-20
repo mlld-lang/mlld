@@ -43,12 +43,26 @@ describe('template-interpolator', () => {
     it('should handle escape sequences', () => {
       const data = { value: 'test' };
       expect(interpolateTemplate('Email: user@@example.com', data)).toBe('Email: user@example.com');
+      expect(interpolateTemplate('Email: user\\@example.com', data)).toBe('Email: user@example.com');
       expect(interpolateTemplate('100%% complete', data)).toBe('100% complete');
     });
 
     it('should not replace escaped @@evt', () => {
       const data = { value: 'test' };
       expect(interpolateTemplate('Use @@evt.field for variables', data)).toBe('Use @evt.field for variables');
+    });
+
+    it('should not replace escaped \\@evt', () => {
+      const data = { value: 'test' };
+      expect(interpolateTemplate('Use \\@evt.field for variables', data)).toBe('Use @evt.field for variables');
+    });
+
+    it('handles escapes at start and after interpolation', () => {
+      const data = { user: 'alice' };
+      expect(interpolateTemplate('@@literal', data)).toBe('@literal');
+      expect(interpolateTemplate('\\@literal', data)).toBe('@literal');
+      expect(interpolateTemplate('@evt.user@@domain', data)).toBe('alice@domain');
+      expect(interpolateTemplate('@evt.user\\@domain', data)).toBe('alice@domain');
     });
   });
 
@@ -169,6 +183,7 @@ describe('template-interpolator', () => {
 
     it('should not detect escaped variables', () => {
       expect(hasTemplateVariables('@@evt.field')).toBe(false);
+      expect(hasTemplateVariables('\\@evt.field')).toBe(false);
     });
 
     it('should not detect regular text', () => {
@@ -197,6 +212,7 @@ describe('template-interpolator', () => {
 
     it('should not extract escaped paths', () => {
       expect(extractVariablePaths('@@evt.field')).toEqual([]);
+      expect(extractVariablePaths('\\@evt.field')).toEqual([]);
     });
   });
 

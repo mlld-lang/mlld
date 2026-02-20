@@ -2,6 +2,10 @@
  * Utilities for normalizing inline code blocks so single expressions
  * behave like implicit returns across JavaScript and Node executors.
  */
+import { parse } from 'acorn';
+
+const WRAPPER_PREFIX = 'async function __mlldImplicitReturn__(){\n';
+const WRAPPER_SUFFIX = '\n}';
 
 /**
  * Add an implicit return to expression-style code snippets when no explicit
@@ -14,19 +18,48 @@ export function addImplicitReturn(code: string): string {
     return code;
   }
 
-  // Preserve existing explicit returns – behaviour matches legacy logic that
-  // short-circuited on any "return" token.
-  if (code.includes('return')) {
-    return code;
-  }
+  try {
+    const wrapped = `${WRAPPER_PREFIX}${code}${WRAPPER_SUFFIX}`;
+    const ast = parse(wrapped, { ecmaVersion: 'latest' as const }) as any;
+    const fnBody = ast?.body?.[0]?.body?.body;
+    if (!Array.isArray(fnBody) || fnBody.length === 0) {
+      return fallbackImplicitReturn(code, trimmed);
+    }
 
-  // Handle parenthesized expressions (e.g., object/array literals) even when
-  // formatted across multiple lines.
+    if (containsReturnStatement(fnBody)) {
+      return code;
+    }
+
+    if (fnBody.length === 1) {
+      return fallbackImplicitReturn(code, trimmed);
+    }
+
+    const lastStatement = fnBody[fnBody.length - 1];
+    if (!lastStatement || lastStatement.type !== 'ExpressionStatement') {
+      return fallbackImplicitReturn(code, trimmed);
+    }
+
+    const offset = WRAPPER_PREFIX.length;
+    const statementStart = Math.max(0, lastStatement.start - offset);
+    const statementEnd = Math.max(statementStart, lastStatement.end - offset);
+    const expressionStart = Math.max(0, lastStatement.expression.start - offset);
+    const expressionEnd = Math.max(expressionStart, lastStatement.expression.end - offset);
+    const expressionText = code.slice(expressionStart, expressionEnd).trim();
+    if (!expressionText) {
+      return fallbackImplicitReturn(code, trimmed);
+    }
+
+    return `${code.slice(0, statementStart)}return (${expressionText});${code.slice(statementEnd)}`;
+  } catch {
+    return fallbackImplicitReturn(code, trimmed);
+  }
+}
+
+function fallbackImplicitReturn(code: string, trimmed: string): string {
   if (isWrappedExpression(trimmed)) {
     return `return ${code}`;
   }
 
-  // Preserve legacy single-line implicit return behaviour for simple helpers.
   const isSingleLine = !code.includes('\n');
   const looksLikeStatement =
     code.includes(';') ||
@@ -38,6 +71,33 @@ export function addImplicitReturn(code: string): string {
   }
 
   return code;
+}
+
+function containsReturnStatement(node: unknown): boolean {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+
+  if ((node as { type?: string }).type === 'ReturnStatement') {
+    return true;
+  }
+
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      if (containsReturnStatement(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  for (const value of Object.values(node as Record<string, unknown>)) {
+    if (containsReturnStatement(value)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

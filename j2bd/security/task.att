@@ -1,0 +1,105 @@
+You are iterating on mlld security documentation.
+
+## Your Context
+
+### Spec (source of truth)
+<spec>
+@spec
+</spec>
+
+### Current Atoms
+<atoms>
+@atoms
+</atoms>
+
+### Plan (what's done, what's next)
+<plan>
+@plan
+</plan>
+
+### Agent Notes (learnings, how-tos)
+<agent>
+@agentNotes
+</agent>
+
+### Jobs (what users want to accomplish)
+<jobs>
+@jobs
+</jobs>
+
+## Your Task
+
+Do ONE thing from the plan. Pick the highest priority incomplete item.
+
+Options:
+1. **Write a new atom** - Create docs/src/atoms/security/<id>.md with frontmatter + content + working examples
+2. **Fix an atom** - Update an existing atom if examples don't work or content is wrong
+3. **Note an impl gap** - If the spec describes something that doesn't work, add to plan.md Blocked section
+4. **Update the plan** - Mark items complete, add learnings, adjust priorities
+
+## Requirements for Atoms
+
+- Frontmatter with id, title, brief, category, parent, tags, related, updated
+- Clear explanation of the concept
+- Working ```mlld examples (they will be validated)
+- Note implementation status if feature is partial/planned
+
+## Workflow
+
+### 1. Log what you're doing
+```bash
+echo '{"event": "work_started", "id": "@iterationId", "task": "<what you are doing>"}' >> @eventsFile
+```
+
+### 2. Do the work
+- Write or update atoms
+- Update plan.md to reflect what you did
+- Add any learnings to agent.md
+
+### 3. Validate your work
+Run validation on any atoms you created or modified:
+```bash
+mlld validate docs/src/atoms/security/<atom-name>.md
+```
+
+Log the result:
+```bash
+echo '{"event": "validation_run", "id": "@iterationId", "passed": true}' >> @eventsFile
+```
+
+If validation fails, fix the issue before proceeding.
+
+### 4. Commit your changes
+Stage and commit with a normal descriptive message (no special prefixes):
+```bash
+git add docs/src/atoms/security/ j2bd/security/plan.md j2bd/security/agent.md
+git commit -m "<what you did>"
+```
+
+Examples of good commit messages:
+- "Add labels-overview security documentation"
+- "Fix guard-composition examples to use correct syntax"
+- "Update security plan: mark labels-overview complete"
+
+Log the commit:
+```bash
+HASH=$(git rev-parse --short HEAD)
+echo "{\"event\": \"commit_made\", \"id\": \"@iterationId\", \"hash\": \"$HASH\", \"message\": \"<your commit message>\"}" >> @eventsFile
+```
+
+### 5. Signal completion
+```bash
+echo '{"event": "iteration_done", "id": "@iterationId", "action": "<summary of what you did>"}' >> @eventsFile
+```
+
+The orchestrator is polling for this event. If you don't write it, the iteration will hang forever.
+
+## Important
+
+- ONE thing per iteration. Don't try to do everything.
+- Examples must actually work. If they don't, either fix the example or note it's blocked.
+- Keep atoms focused. One concept per atom.
+- Use strict mode (bare directives) in examples, not markdown mode.
+- ALWAYS validate before committing.
+- ALWAYS commit your work before signaling completion.
+- ALWAYS write the iteration_done event when finished.

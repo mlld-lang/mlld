@@ -29,7 +29,7 @@ describe('Import runtime validation', () => {
         pathContext,
         approveAllImports: true
       })
-    ).rejects.toThrow(/needs not satisfied/i);
+    ).rejects.toThrow(/requires capabilities not available/i);
   });
 
   it('rejects imports when requested export is missing', async () => {
@@ -46,5 +46,43 @@ describe('Import runtime validation', () => {
         approveAllImports: true
       })
     ).rejects.toThrow(/does not export 'missing'|Import 'missing' not found/i);
+  });
+
+  it('keeps package availability enforcement behavior for selected imports', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile(
+      '/project/needs-mixed.mld',
+      '/needs { node: [__missing_pkg__] }\n/var @value = "hello"\n/export { value }'
+    );
+
+    const source = '/import { value } from "./needs-mixed.mld"\n/show @value';
+
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow(/Missing packages: __missing_pkg__/i);
+  });
+
+  it('keeps package availability enforcement behavior for namespace imports', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile(
+      '/project/needs-mixed.mld',
+      '/needs { node: [__missing_pkg__] }\n/var @value = "hello"'
+    );
+
+    const source = '/import "./needs-mixed.mld" as @needs\n/show @needs.value';
+
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow(/Missing packages: __missing_pkg__/i);
   });
 });

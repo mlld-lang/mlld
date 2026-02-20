@@ -1,0 +1,164 @@
+>>
+>> Defaults Rules Demo: Built-in Security Without Custom Guards
+>>
+>> Demonstrates the two-step pattern:
+>>   1. Label operations semantically (what they DO)
+>>   2. Map semantic labels to risk categories in policy
+>>   3. Enable built-in rules that block dangerous flows
+>>
+
+>> ============================================================
+>> STEP 1: Configure policy with rules and operation mappings
+>> ============================================================
+
+>> The two-step pattern separates semantic meaning from risk classification.
+>> Semantic labels (net:w, fs:w) describe WHAT the operation does.
+>> Risk categories (exfil, destructive, privileged) describe the RISK.
+>> Policy bridges the two -- the same exe definition works under different policies.
+
+var @policyConfig = {
+  defaults: {
+    rules: [
+      "no-secret-exfil",
+      "no-sensitive-exfil",
+      "no-untrusted-destructive",
+      "no-untrusted-privileged"
+    ]
+  },
+  operations: {
+    "net:w": "exfil",
+    "fs:w": "destructive",
+    "sys:admin": "privileged"
+  }
+}
+policy @p = union(@policyConfig)
+
+log "Policy active: 4 built-in rules, 3 operation classifications"
+
+>> ============================================================
+>> STEP 2: Define operations with semantic labels
+>> ============================================================
+
+>> Each exe gets a semantic label describing what it does.
+>> The policy (above) maps these to risk categories automatically.
+>> The denied => handler catches policy denials gracefully.
+
+>> net:w = network write => classified as "exfil" by policy
+exe net:w @postToServer(data) = when [
+  denied => `BLOCKED: @mx.guard.reason`
+  * => `OK: POST https://example.com/collect -> @data`
+]
+
+>> fs:w = filesystem write => classified as "destructive" by policy
+exe fs:w @deleteFile(path) = when [
+  denied => `BLOCKED: @mx.guard.reason`
+  * => `OK: rm -rf @path`
+]
+
+>> sys:admin = system administration => classified as "privileged" by policy
+exe sys:admin @updateSystemConfig(value) = when [
+  denied => `BLOCKED: @mx.guard.reason`
+  * => `OK: echo @value > /etc/myapp.conf`
+]
+
+log "Operations defined: postToServer(net:w), deleteFile(fs:w), updateSystemConfig(sys:admin)"
+
+>> ============================================================
+>> STEP 3: Test -- secret data to exfil operation (BLOCKED)
+>> ============================================================
+
+>> Secret data must never leave the system. The no-secret-exfil rule
+>> blocks secret-labeled data from flowing to exfil-classified operations.
+
+var secret @apiToken = "sk-live-secret-key-abc123"
+
+log "Test: secret -> exfil"
+show @postToServer(@apiToken)
+
+>> ============================================================
+>> STEP 4: Test -- sensitive data to exfil operation (BLOCKED)
+>> ============================================================
+
+>> Sensitive business data should not leave the system either.
+>> The no-sensitive-exfil rule blocks sensitive-labeled data from exfil operations.
+
+var sensitive @businessData = "Q4 revenue: $10.2M, margin: 23%"
+
+log "Test: sensitive -> exfil"
+show @postToServer(@businessData)
+
+>> ============================================================
+>> STEP 5: Test -- untrusted data to destructive operation (BLOCKED)
+>> ============================================================
+
+>> Untrusted input must never reach destructive operations.
+>> A malicious path traversal could wipe important files.
+
+var untrusted @userInput = "../../etc/important-data"
+
+log "Test: untrusted -> destructive"
+show @deleteFile(@userInput)
+
+>> ============================================================
+>> STEP 6: Test -- untrusted data to privileged operation (BLOCKED)
+>> ============================================================
+
+>> Untrusted input must never reach privileged operations.
+>> An attacker could modify system configuration.
+
+log "Test: untrusted -> privileged"
+show @updateSystemConfig(@userInput)
+
+>> ============================================================
+>> STEP 7: Test -- normal data flows freely (ALLOWED)
+>> ============================================================
+
+>> Unlabeled data has no restrictions. All operations succeed.
+
+var @safeData = "hello-world"
+var @safePath = "/tmp/test-file.txt"
+var @safeConfig = "log_level=info"
+
+log "Test: normal data -> exfil"
+show @postToServer(@safeData)
+
+log "Test: normal data -> destructive"
+show @deleteFile(@safePath)
+
+log "Test: normal data -> privileged"
+show @updateSystemConfig(@safeConfig)
+
+>> ============================================================
+>> SUMMARY
+>> ============================================================
+
+show ::
+
+Defaults Rules Demo Complete
+=============================
+
+The two-step pattern provides built-in security with minimal config:
+
+  STEP 1 - Label operations semantically
+    exe net:w  \@postToServer()       -- what it does: network write
+    exe fs:w   \@deleteFile()         -- what it does: filesystem write
+    exe sys:admin \@updateSystemConfig() -- what it does: system admin
+
+  STEP 2 - Map semantic labels to risk categories in policy
+    operations: { "net:w": "exfil", "fs:w": "destructive", "sys:admin": "privileged" }
+
+  RESULT - Built-in rules enforce automatically
+    no-secret-exfil:          secret    -> exfil(net:w)          BLOCKED
+    no-sensitive-exfil:       sensitive -> exfil(net:w)          BLOCKED
+    no-untrusted-destructive: untrusted -> destructive(fs:w)     BLOCKED
+    no-untrusted-privileged:  untrusted -> privileged(sys:admin) BLOCKED
+
+  Normal (unlabeled) data flows to all operations without restriction.
+
+Why two steps?
+  - Reusable: "net:w" means the same thing everywhere
+  - Flexible: dev policy might allow net:w; prod classifies it as exfil
+  - Composable: different policies, same exe definitions
+  - Clear: code says what, policy says risk
+
+::

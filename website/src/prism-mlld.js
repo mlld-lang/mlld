@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2026-01-04T19:35:55.750Z
+// Generated from grammar at 2026-02-19T22:20:35.265Z
 
 const Prism = require('prismjs');
 
@@ -10,7 +10,7 @@ Prism.languages.mlld = {
     greedy: true
   },
   'directive': {
-    pattern: /\b(var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy)\b/,
+    pattern: /\b(var|show|stream|run|exe|import|when|if|output|append|for|loop|log|bail|checkpoint|guard|hook|export|policy|sign|verify|while|env)\b/,
     alias: 'keyword'
   },
   'when-keyword': {
@@ -75,7 +75,7 @@ Prism.languages.mlld = {
         alias: 'builtin'
       },
       'variable': {
-        pattern: /@\w+/
+        pattern: /@[A-Za-z_][A-Za-z0-9_-]*/
       },
       'alligator': {
         pattern: /<[^>]*[\.\/\*@][^>]*>/,
@@ -96,7 +96,7 @@ Prism.languages.mlld = {
         alias: 'builtin'
       },
       'variable': {
-        pattern: /@\w+/
+        pattern: /@[A-Za-z_][A-Za-z0-9_-]*/
       },
       'alligator': {
         pattern: /<[^>]*[\.\/\*@][^>]*>/,
@@ -118,7 +118,7 @@ Prism.languages.mlld = {
         alias: 'builtin'
       },
       'variable': {
-        pattern: /@\w+/
+        pattern: /@[A-Za-z_][A-Za-z0-9_-]*/
       },
       'alligator': {
         pattern: /<[^>]*[\.\/\*@][^>]*>/,
@@ -135,9 +135,9 @@ Prism.languages.mlld = {
     pattern: /'[^']*'/,
     greedy: true
   },
-  // Block keywords (let, done, continue, skip)
+  // Block keywords (let, done, continue, skip, bail)
   'block-keyword': {
-    pattern: /\b(let|done|continue|skip)\b/,
+    pattern: /\b(let|done|continue|skip|bail)\b/,
     alias: 'keyword'
   },
   // Wildcard in when blocks
@@ -156,14 +156,14 @@ Prism.languages.mlld = {
     alias: 'builtin'
   },
   'variable': {
-    pattern: /@\w+/,
+    pattern: /@[A-Za-z_][A-Za-z0-9_-]*/,
     alias: 'variable'
   },
   'field-access': {
-    pattern: /\.(\w+|\d+)/,
+    pattern: /\.([A-Za-z_][A-Za-z0-9_-]*|\d+)/,
     alias: 'property'
   },
-  'operator': /\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted)\b/,
+  'operator': /\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new)\b/,
   'pipe-operator': {
     pattern: /\|/,
     alias: 'operator'

@@ -1,0 +1,162 @@
+>> J2BD Context Gathering
+>> Provides executables for gathering context for decision agent
+
+>> Shell helpers (exe params become $param in sh blocks)
+exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+exe @tailFile(path, limit) = sh { tail -n "$limit" "$path" 2>/dev/null }
+
+>> Load recent events from events.jsonl
+exe @loadRecentEvents(runDir, limit) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  let @fileCheck = @fileExists(@eventsFile)
+  when @fileCheck == "no" => []
+  let @lines = @tailFile(@eventsFile, @limit)
+  => for @line in @lines.split("\n") when @line.trim() => @line | @json
+]
+
+>> Count iterations from events
+exe @countIterations(runDir) = [
+  let @events = @loadRecentEvents(@runDir, 1000)
+  let @iterations = for @e in @events when @e.event == "iteration" => @e
+  => @iterations.length
+]
+
+>> Load run state from run.json
+exe @loadRunState(runDir) = [
+  let @stateFile = `@runDir/run.json`
+  let @content = <@stateFile>?
+  when !@content => {
+    lastWorkerResult: null,
+    lastTestResults: null,
+    lastError: null
+  }
+  => @content | @json
+]
+
+>> Save run state to run.json
+exe @saveRunState(runDir, run) = [
+  let @stateFile = `@runDir/run.json`
+  let @jsonContent = @run | @json
+  output @jsonContent to "@stateFile"
+]
+
+>> Load tickets for topic (ready = open/in-progress with deps resolved)
+exe @loadTickets(ticketDir) = [
+  let @result = cmd { tk ready --dir "@ticketDir" --json } with { ok: true }
+  when !@result => []
+  => @result | @json
+]
+
+>> Load human answers from questions.md
+exe @loadAnswers(runDir) = [
+  let @questionsFile = `@runDir/questions.md`
+  let @fileCheck = @fileExists(@questionsFile)
+  when @fileCheck == "no" => null
+  => <@questionsFile>?
+]
+
+>> Extract a markdown section from content (## Header through next ## or EOF)
+exe @extractSection(content, header) = [
+  let @pattern = `## @header`
+  let @startIdx = @content.indexOf(@pattern)
+  when @startIdx == -1 => null
+  let @afterHeader = @content.slice(@startIdx)
+  let @nextSection = @afterHeader.slice(3).indexOf("\n## ")
+  when @nextSection == -1 => @afterHeader
+  => @afterHeader.slice(0, @nextSection + 3)
+]
+
+>> Parse bullet list items from a section (- item or * item)
+exe @parseBulletList(section) = [
+  when !@section => []
+  let @lines = @section.split("\n")
+  let @bullets = for @line in @lines when @line.trim().startsWith("- ") || @line.trim().startsWith("* ") => @line.trim().slice(2).trim()
+  => @bullets
+]
+
+>> Load a specific section from the spec file
+exe @loadSpecSection(specPath, sectionName) = [
+  let @content = <@specPath # @sectionName>?
+  => @content ?? ""
+]
+
+>> Check if an atom file exists
+exe @atomExists(atomsDir, atomName) = [
+  let @atomPath = `@atomsDir/@atomName\.md`
+  let @atomFound = @fileExists(@atomPath)
+  => @atomFound == "yes"
+]
+
+>> Load an atom file if it exists
+exe @loadAtom(atomsDir, atomName) = [
+  let @atomPath = `@atomsDir/@atomName\.md`
+  let @atomFound = @fileExists(@atomPath)
+  when @atomFound == "no" => null
+  => <@atomPath>?
+]
+
+>> Build reference material from job requirements
+>> Returns { atoms: [...], specSections: [...], missingAtoms: [...] }
+exe @buildReferenceMaterial(config, jobContent) = [
+  >> Extract Key Atoms Needed section
+  let @atomsSection = @extractSection(@jobContent, "Key Atoms Needed")
+  let @atomNames = @parseBulletList(@atomsSection)
+
+  >> Strip parenthetical descriptions from atom names
+  let @cleanAtomNames = for @name in @atomNames => @name.split(" (")[0].trim()
+
+  >> Load atoms that exist
+  let @existingAtoms = for @name in @cleanAtomNames [
+    let @content = @loadAtom(@config.docs_dir, @name)
+    when @content => { name: @name, content: @content }
+  ]
+
+  >> Extract Relevant Spec Sections
+  let @specSection = @extractSection(@jobContent, "Relevant Spec Sections")
+  let @sectionNames = @parseBulletList(@specSection)
+
+  >> Load spec sections
+  let @specContents = for @name in @sectionNames [
+    let @content = @loadSpecSection(@config.spec, @name)
+    when @content => { name: @name, content: @content }
+  ]
+
+  >> Build result object
+  let @missing = for @name in @cleanAtomNames when !@atomExists(@config.docs_dir, @name) => @name
+  let @result = {
+    atoms: @existingAtoms,
+    specSections: @specContents,
+    missingAtoms: @missing
+  }
+  => @result
+]
+
+>> Extract job sections for structured prompt
+exe @extractJobSections(jobContent) = {
+  scenario: @extractSection(@jobContent, "Scenario"),
+  successCriteria: @extractSection(@jobContent, "Success Criteria"),
+  keyAtoms: @extractSection(@jobContent, "Key Atoms Needed"),
+  exampleCode: @extractSection(@jobContent, "Example Code (Target)")
+}
+
+>> Build full context for decision agent (without spec - uses reference material instead)
+exe @buildContext(config, runDir, topic, run) = {
+  tickets: @loadTickets(`j2bd-@topic`),
+  recentEvents: @loadRecentEvents(@runDir, 20),
+  lastWorkerResult: @run.lastWorkerResult,
+  testResults: @run.lastTestResults,
+  lastError: @run.lastError,
+  humanAnswers: @loadAnswers(@runDir)
+}
+
+export {
+  @loadRecentEvents,
+  @countIterations,
+  @loadRunState,
+  @saveRunState,
+  @loadTickets,
+  @loadAnswers,
+  @buildContext,
+  @buildReferenceMaterial,
+  @extractJobSections
+}

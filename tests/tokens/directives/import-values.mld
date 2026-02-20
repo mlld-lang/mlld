@@ -24,16 +24,14 @@ from --> keyword
 @parseJSON --> variable
 } --> operator
 from --> keyword
-@corp/utils --> variable[defaultLibrary]
-@corp/utils --> variable[defaultLibrary]
-@corp/utils --> variable[defaultLibrary]
+@corp/utils --> variable
+@corp/utils --> variable
+@corp/utils --> variable
 as --> keyword
 @corpUtils --> variable
 { --> operator
-API_KEY --> variable
 , --> operator
-NODE_ENV --> variable
 } --> operator
 from --> keyword
-@input --> keyword
+@input --> variable[readonly]
 === END PARTIAL TOKENS ===

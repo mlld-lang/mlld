@@ -1,11 +1,10 @@
 /when [
   @x == "implicit assignment" => @process()
-  @y == "hello" => /var @y = "explicit assignment"
-  @z == "bye" => @transform() = @applyFilter(@data)
+  @y == "hello" => var @y = "explicit assignment"
+  @z == "bye" => @applyFilter(@data)
 ]
 
 === START TOKENS ===
-/when --> keyword
 [ --> operator
 @x --> variable
 == --> operator
@@ -18,7 +17,7 @@
 == --> operator
 "hello" --> string
 => --> operator
-/var --> keyword
+var --> keyword
 @y --> variable[declaration]
 = --> operator
 "explicit assignment" --> string
@@ -26,10 +25,6 @@
 == --> operator
 "bye" --> string
 => --> operator
-@transform --> variable[declaration]
-( --> operator
-) --> operator
-= --> operator
 @applyFilter --> variable
 ( --> operator
 @data --> variable

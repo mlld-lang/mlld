@@ -1,0 +1,117 @@
+## QA Trend Analysis
+
+You are analyzing results from a complete QA round for the mlld language project.
+
+## Context
+
+In this QA round, @topicCount topics were tested:
+- **Phase 1 (Flail)**: Agents tested features using only `mlld howto` documentation (no source code). Their confusion represents genuine new-user friction.
+- **Phase 2 (Self-Review)**: Agents re-examined failures with access to test cases and cookbook, reclassifying each issue.
+
+Your job: identify **cross-cutting trends** and produce actionable recommendations.
+
+## Data
+
+### Pre-aggregated summary (START HERE)
+
+Read `@outputDir/phase3-input.json` first. It contains:
+- List of topics tested
+- Per-topic experiment counts (pass/fail/partial)
+- All Phase 1 issues (category, severity, title) per topic/experiment
+- All Phase 2 self-review reclassifications (revised_verdict, doc_clarity assessments)
+
+### Per-topic detail (READ AS NEEDED)
+
+For evidence and context, read files in `@outputDir/topics/<topic>/`:
+- `blocked.md` - Why testing was blocked
+- `complete.md` - Coverage assessment
+- `<NN>-<level>-<name>/results.json` - Individual experiment findings
+- `<NN>-<level>-<name>/self_review.json` - Self-review reclassifications
+
+## Analysis Framework
+
+### 1. QA Process Patterns
+What systematic mistakes do agents make? (insufficient exploration, severity inflation, syntax assumptions from other languages, premature blocker declarations, etc.)
+What would improve Phase 1 success rate?
+
+### 2. Documentation Patterns
+What doc issues span multiple topics? (missing cross-references, .mld/.mld.md confusion, misleading examples, documented-but-unimplemented features, etc.)
+
+### 3. Feature Health
+Which features are solid vs have genuine bugs vs have only doc issues?
+
+### 4. Onboarding Friction
+What trips up new users most? What are the highest-impact improvements?
+
+## Output
+
+Create two files:
+
+### `@outputDir/trend-report.json`
+
+```json
+{
+  "generated_at": "<current timestamp>",
+  "topics_analyzed": N,
+  "experiments_analyzed": N,
+  "trends": [
+    {
+      "id": "trend-N",
+      "category": "qa-process | documentation | feature-health | onboarding",
+      "title": "Brief title",
+      "frequency": "very-common | common | occasional",
+      "description": "What the pattern is and why it matters",
+      "evidence": [
+        { "topic": "<topic>", "detail": "Brief evidence from this topic" }
+      ],
+      "recommendation": "Specific actionable fix",
+      "priority": "P0 | P1 | P2"
+    }
+  ],
+  "feature_health": [
+    {
+      "topic": "<topic>",
+      "status": "solid | minor-issues | needs-work | blocked",
+      "genuine_bugs": N,
+      "doc_issues": N,
+      "summary": "One-line assessment"
+    }
+  ],
+  "actionable_items": [
+    {
+      "priority": "P0 | P1 | P2",
+      "category": "qa-prompt | docs | code | tooling",
+      "action": "Specific action to take",
+      "supporting_trends": ["trend-N"],
+      "affected_topics": ["<topic>"],
+      "effort": "small | medium | large"
+    }
+  ]
+}
+```
+
+### `@outputDir/trend-report.md`
+
+Narrative report:
+- Executive summary (3-5 sentences)
+- Top trends with evidence and recommendations
+- Feature health overview table
+- Prioritized action items
+
+## Guidelines
+
+- **Cross-cutting patterns only**: Don't summarize individual topics. Identify patterns that span multiple topics.
+- **Be specific**: "Add See Also sections linking when-blocks, when-operators, and when howtos" beats "improve documentation."
+- **Cite evidence**: Name specific topics/experiments for each trend.
+- **Prioritize**: P0 = blocks users or breaks features. P1 = significant friction. P2 = quality improvement.
+- **Critique the QA process**: If Phase 1 agents make systematic errors, recommend prompt improvements.
+- **Look at severity drift**: Compare Phase 1 severity ratings to Phase 2 revised ratings for inflation patterns.
+- **Identify the 80/20**: What 20% of improvements would address 80% of the friction?
+
+## Begin
+
+1. Read `@outputDir/phase3-input.json`
+2. Scan for blocked.md and complete.md files across topics
+3. Read narrative summaries for notable topics
+4. Identify cross-cutting patterns
+5. Write both output files

@@ -1,6 +1,12 @@
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { isVariable } from '../utils/variable-resolution';
 import { asData, isStructuredValue } from '../utils/structured-value';
+import type { Variable } from '@core/types';
+
+export type ForSourceKind = 'array' | 'object';
+export type ForSourceIterable = Iterable<[string | null, unknown]> & {
+  __mlldForSourceKind?: ForSourceKind;
+};
 
 function attachProvenance(target: unknown, source: unknown): void {
   if (!target || typeof target !== 'object') {
@@ -10,48 +16,59 @@ function attachProvenance(target: unknown, source: unknown): void {
 }
 
 export function normalizeIterableValue(value: unknown): unknown {
+  // Shallow unwrapping: extract the iterable from Variables and StructuredValues
+  // without recursively deep-copying children. Inner for-expressions handle
+  // their own source normalization when they iterate.
+  // See: .tickets/m-3b4c.md for why recursive normalization caused OOM.
+
   if (isVariable(value)) {
     if ((value as Variable).type === 'executable') {
       return value;
     }
-    const normalized = normalizeIterableValue(value.value);
-    attachProvenance(normalized, value);
-    return normalized;
+    const unwrapped = normalizeIterableValue(value.value);
+    attachProvenance(unwrapped, value);
+    return unwrapped;
   }
 
   if (isStructuredValue(value)) {
-    const normalized = normalizeIterableValue(asData(value));
-    attachProvenance(normalized, value);
-    return normalized;
-  }
+    const data = asData(value);
 
-  if (Array.isArray(value)) {
-    const normalizedArray = value.map(item => normalizeIterableValue(item));
-    attachProvenance(normalizedArray, value);
-    return normalizedArray;
-  }
-
-  if (value && typeof value === 'object') {
-    const normalizedObject: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      normalizedObject[key] = normalizeIterableValue(entry);
+    // For arrays inside StructuredValues, extract the array as-is
+    // This handles JSON files where the root is an array
+    if (Array.isArray(data)) {
+      attachProvenance(data, value);
+      return data;
     }
-    attachProvenance(normalizedObject, value);
-    return normalizedObject;
+
+    // Preserve StructuredValue for file-loaded items to keep .mx metadata accessible
+    // This ensures @f.mx.relative etc. works when iterating over glob results
+    if (value.mx?.filename || value.mx?.relative || value.mx?.absolute) {
+      return value;
+    }
+
+    attachProvenance(data, value);
+    return data;
   }
+
+  // Arrays, objects, and primitives pass through as-is
+  // LoadContentResult objects are preserved to keep lazy getters (.json, .fm) functional
 
   return value;
 }
 
-export function toIterable(value: unknown): Iterable<[string | null, unknown]> | null {
+export function toIterable(value: unknown): ForSourceIterable | null {
   const normalized = normalizeIterableValue(value);
 
   if (Array.isArray(normalized)) {
-    return normalized.map((item, index) => [String(index), item]);
+    const entries = normalized.map((item, index) => [String(index), item]) as ForSourceIterable;
+    entries.__mlldForSourceKind = 'array';
+    return entries;
   }
 
   if (normalized && typeof normalized === 'object') {
-    return Object.entries(normalized as Record<string, unknown>);
+    const entries = Object.entries(normalized as Record<string, unknown>) as ForSourceIterable;
+    entries.__mlldForSourceKind = 'object';
+    return entries;
   }
 
   return null;

@@ -29,7 +29,82 @@ guard [@name] TIMING LABEL = when [...]
 
 - `TIMING`: `before`, `after`, or `always`
 - Shorthand: `for` equals `before`
+
+**Security context in guards:**
+
+Guards have access to three complementary dimensions:
+
+- `@mx.labels` - semantic classification (what it is): `secret`, `pii`, `untrusted`
+- `@mx.taint` - provenance (where it came from): `src:mcp`, `src:exec`, `src:file`
+- `@mx.sources` - transformation trail (how it got here): `mcp:createIssue`, `command:curl`
+- `@mx.op.labels` - operation labels, including tool labels like `destructive` or `net:w`
+
+Use labels to classify data types, taint to track untrusted origins, and sources for audit trails:
+
+```mlld
+guard before op:run = when [
+  @mx.taint.includes("src:mcp") => deny "Cannot execute MCP data"
+  @mx.labels.includes("secret") => deny "Secrets blocked from shell"
+  * => allow
+]
+```
+
+Tool labels flow into guard context for executable operations:
+
+```mlld
+guard @blockDestructive before op:exe = when [
+  @mx.op.labels.includes("destructive") => deny "Blocked"
+  * => allow
+]
+```
 </GUARDS>
+
+<POLICIES>
+Define and import policy objects.
+
+A policy object combines all security configuration into a single declaration.
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    unlabeled: "untrusted",
+    rules: [
+      "no-secret-exfil",
+      "no-sensitive-exfil",
+      "no-untrusted-destructive",
+      "no-untrusted-privileged"
+    ]
+  },
+  operations: {
+    "net:w": "exfil",
+    "fs:w": "destructive",
+    "sys:admin": "privileged"
+  },
+  capabilities: {
+    allow: ["cmd:git:*"],
+    danger: ["@keychain"]
+  }
+}
+policy @p = union(@policyConfig)
+```
+
+**`defaults`** sets baseline behavior. `unlabeled` auto-labels all unlabeled data (here as `untrusted`). `rules` enables built-in security rules that block dangerous label-to-operation flows.
+
+**`operations`** maps semantic exe labels to risk categories. You label functions with what they DO (`net:w`, `fs:w`), and policy classifies those as risk types (`exfil`, `destructive`). This is the two-step pattern -- see `policy-operations`.
+
+**`capabilities`** controls what operations are allowed at all. `allow` whitelists command patterns. `danger` marks capabilities that require explicit opt-in.
+
+**Export/import:** Share policies across scripts:
+
+```mlld
+export { @p }
+
+>> In another file
+import policy @p from "./policies.mld"
+```
+
+Policies compose with `union()` -- combine multiple config objects into one policy. The most restrictive rules win.
+</POLICIES>
 
 <BEFORE_GUARDS>
 Validate or transform input before operations.
@@ -66,10 +141,41 @@ guard @redact before secret = when [
 <DENIED_HANDLERS>
 Handle denied operations gracefully.
 
+The `denied` keyword is a when-condition that tests if we're in a denied context. Use it to handle guard denials gracefully.
+
+**`deny` vs `denied`:**
+
+- `deny "reason"` - Guard action that blocks an operation
+- `denied` - When condition that matches inside a denied handler
+
+```mlld
+guard before secret = when [
+  @mx.op.type == "run" => deny "Secrets blocked from shell"
+  * => allow
+]
+
+exe @safe(value) = when [
+  denied => `[blocked] @mx.guard.reason`
+  * => @value
+]
+```
+
+**Accessing guard context:**
+
 ```mlld
 exe @handler(value) = when [
-  denied => `Blocked: @mx.guard.reason`
-  * => @value
+  denied => show "Blocked: @mx.guard.reason"
+  denied => show "Guard: @mx.guard.name"
+  denied => show "Labels: @mx.labels.join(', ')"
+  * => show @value
+]
+```
+
+**Negating denied:**
+
+```mlld
+exe @successOnly(value) = when [
+  !denied => @value
 ]
 ```
 </DENIED_HANDLERS>
@@ -82,6 +188,7 @@ System-assigned labels for tracking:
 | `src:exec` | Results from `/run` and `/exe` |
 | `src:file` | File loads |
 | `src:dynamic` | Dynamic module imports |
+| `src:env:<provider>` | Environment provider outputs |
 | `dir:/path` | File directories (all parents) |
 
 **Example directory guards:**
@@ -98,12 +205,242 @@ guard before op:run = when [
 <LABEL_TRACKING>
 Labels flow through operations:
 
-- Method calls: `@secret.trim()` preserves labels
-- Templates: interpolated values carry labels
-- Field access: `@user.email` inherits from `@user`
-- Iterators: each item inherits collection labels
-- Pipelines: labels flow through stages
+Labels propagate through all transformations automatically.
+
+```mlld
+>> Method calls preserve labels
+var secret @key = "sk-123"
+var @trimmed = @key.trim()
+show @trimmed.mx.labels    // ["secret"]
+```
+
+**Templates:** Interpolated values carry labels to the result.
+
+```mlld
+var secret @token = "abc"
+var @msg = `Token: @token`
+show @msg.mx.labels        // ["secret"]
+```
+
+**Collections:** Items retain labels; collection has union.
+
+```mlld
+var secret @key = "sk-123"
+var @arr = [@key, "public"]
+show @arr.mx.labels        // ["secret"]
+```
+
+**Pipelines:** Labels accumulate through stages.
+
+```mlld
+var secret @seed = "data"
+var @result = @seed | @transform | @process
+show @result.mx.labels     // ["secret"]
+```
+
+**File I/O:** When labeled data is written to disk, the audit log records the taint. Reading the file restores it.
+
+```mlld
+var secret @token = "sk-live-123"
+output @token to "@root/tmp/demo.txt"
+
+var @loaded = <@root/tmp/demo.txt>
+show @loaded.mx.labels     // ["secret"]
+```
+
+The audit log stores a `write` event with the taint set. On subsequent reads, mlld consults the log and applies the recorded labels. See [audit-log](audit-log.md) for the ledger format.
+
+**Note:** If `@loaded.mx.labels` shows `[]`, check that you declared the sensitivity label on the original variable (e.g., `var secret @token`). Labels are not inferred from content—they must be declared explicitly.
 </LABEL_TRACKING>
+
+<LABEL_MODIFICATION>
+Modify security labels on return values:
+
+Label modification syntax applies security labels to return values.
+
+**Add labels:**
+
+```mlld
+exe @classify(data) = [
+  let @processed = @data | @transform
+  => pii @processed
+]
+
+exe @markMultiple(data) = [
+  => pii,internal @data
+]
+```
+
+Multiple labels separated by commas.
+
+**Trust modification:**
+
+```mlld
+>> Downgrade trust (always allowed)
+exe @taint(data) = [
+  => untrusted @data
+]
+
+>> Add trusted (warning if already untrusted)
+exe @suggest(data) = [
+  => trusted @data
+]
+```
+
+Adding `untrusted` replaces any existing `trusted` label. Adding `trusted` to already untrusted data triggers a warning (configurable via `policy.defaults.trustconflict`).
+
+**Privileged operations:**
+
+Privileged guards can remove protected labels:
+
+```mlld
+guard privileged @bless after secret = when [
+  * => allow with { removeLabels: ["secret"] }
+]
+```
+
+Policy guards are automatically privileged. User-defined guards are privileged when declared with the `privileged` prefix or `with { privileged: true }`.
+
+| Privileged action | Example | Effect |
+|-------------------|---------|--------|
+| Blessing | `=> trusted! @var` | Remove untrusted, add trusted |
+| Label removal | `=> !pii @var` | Remove specific label |
+| Clear labels | `=> clear! @var` | Remove all non-factual labels |
+
+**Trust label asymmetry:**
+
+| Syntax | Privilege? | Effect |
+|--------|------------|--------|
+| `=> untrusted @var` | No | Replaces trusted (taint flows down) |
+| `=> trusted @var` | No | Adds trusted; warning if conflict |
+| `=> trusted! @var` | Yes | Blessing: removes untrusted |
+| `=> !label @var` | Yes | Removes specific label |
+| `=> clear! @var` | Yes | Removes all non-factual labels |
+
+**Protected labels:**
+
+These labels require privilege to remove:
+- `secret` - Prevents self-blessing of sensitive data
+- `untrusted` - Tracks trust state
+- `src:mcp`, `src:exec`, `src:file`, `src:network` - Provenance tracking
+
+Attempting to remove protected labels without privilege throws `PROTECTED_LABEL_REMOVAL` error.
+
+**Factual labels:**
+
+Labels starting with `src:` are factual - they record provenance facts. `clear!` does not remove factual labels.
+
+**Guard context:**
+
+After guards receive `@output` with the operation result:
+
+```mlld
+guard @validateMcp after src:mcp = when [
+  @output.data?.valid => allow @output
+  * => deny "Invalid MCP response"
+]
+```
+
+The guard uses `after` timing to process output. Blessing (`trusted!`) and label removal (`!label`) require privileged guards.
+
+**Trust conflict behavior:**
+
+Controlled by `policy.defaults.trustconflict`:
+- `warn` (default) - Log warning, keep both labels, treat as untrusted
+- `error` - Throw error
+- `silent` - No warning, keep both labels
+</LABEL_MODIFICATION>
+
+<TOOL_CALL_TRACKING>
+Track tool usage with {"calls":[],"allowed":[],"denied":[]}:
+
+The `@mx.tools` namespace tracks tool call history and availability during MCP execution. See `mcp` for setup.
+
+**@mx.tools.calls - Call history:**
+
+```mlld
+guard @limitCalls before op:exe = when [
+  @mx.tools.calls.length >= 3 => deny "Too many tool calls"
+  * => allow
+]
+```
+
+Array of tool names that have been called this session.
+
+**Check if specific tool was called:**
+
+```mlld
+guard @preventDuplicate before op:exe = when [
+  @mx.tools.calls.includes("deleteData") => deny "Delete already executed"
+  * => allow
+]
+```
+
+**@mx.tools.allowed - Available tools:**
+
+```mlld
+guard @checkAccess before op:exe = when [
+  @mx.tools.allowed.includes(@mx.op.name) => allow
+  * => deny "Tool not in allowed list"
+]
+```
+
+Array of tool names the current context is permitted to use.
+
+**@mx.tools.denied - Blocked tools:**
+
+```mlld
+guard @logDenied before op:exe = when [
+  @mx.tools.denied.includes(@mx.op.name) => [
+    log `Attempted blocked tool: @mx.op.name`
+    deny "Tool is blocked"
+  ]
+  * => allow
+]
+```
+
+Array of tool names explicitly denied in current context.
+
+**Rate limiting example:**
+
+```mlld
+guard @rateLimitExpensive before op:exe = when [
+  @mx.op.labels.includes("expensive") && @mx.tools.calls.length >= 5 => [
+    deny "Rate limit exceeded for expensive operations"
+  ]
+  * => allow
+]
+```
+
+**Prevent repeated tool calls:**
+
+```mlld
+guard @noRepeat before op:exe = when [
+  @mx.tools.calls.includes(@mx.op.name) => deny "Each tool can only be called once"
+  * => allow
+]
+```
+
+**Conditional behavior based on history:**
+
+```mlld
+exe @smartFetch(url) = when [
+  @mx.tools.calls.includes("cache_check") => @fetchCached(@url)
+  * => @fetchFresh(@url)
+]
+```
+
+**Tool call tracking scope:**
+
+Tool calls are tracked within the current execution context. When using `env` blocks, each block can have its own tracking scope based on the environment configuration.
+
+```mlld
+env @agent with { tools: @agentTools } [
+  >> @mx.tools.calls tracks calls within this env block
+  run cmd { claude -p @task }
+]
+```
+</TOOL_CALL_TRACKING>
 
 <GUARD_COMPOSITION>
 Multiple guards can apply. Resolution order:

@@ -1,0 +1,28 @@
+/needs { cmd: [claude] }
+
+/profiles {
+  full: {
+    requires: { sh, network },
+    description: "Full dev access"
+  },
+  readonly: {
+    requires: { },
+    description: "Read-only"
+  }
+}
+
+/policy @config = {
+  auth: {
+    claude: { from: "keychain:mlld-env-myproject/claude", as: "CLAUDE_CODE_OAUTH_TOKEN" }
+  }
+}
+
+/exe @spawn(prompt) = run { \
+  claude -p "@prompt"
+} using auth:claude
+
+/exe @shell() = run { \
+  claude
+} using auth:claude
+
+/export { @spawn, @shell }

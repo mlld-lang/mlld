@@ -18,6 +18,7 @@ import type {
   BinaryExpression,
   TernaryExpression,
   UnaryExpression,
+  NewExpression,
   FieldAccessNode,
   ArraySliceNode,
   ArrayFilterNode,
@@ -28,7 +29,13 @@ import type {
 import type { MlldNode } from './index';
 
 // Import existing directive types
-import { ImportDirectiveNode, ImportAllDirectiveNode, ImportSelectedDirectiveNode } from './import';
+import {
+  ImportDirectiveNode,
+  ImportAllDirectiveNode,
+  ImportSelectedDirectiveNode,
+  ImportMcpSelectedDirectiveNode,
+  ImportMcpNamespaceDirectiveNode
+} from './import';
 import {
   DataValue,
   DataObjectValue,
@@ -46,6 +53,7 @@ import {
 import { ImportWildcardNode } from './values';
 import { WithClause } from './run';
 import type { GuardDirectiveNode } from './guard';
+import type { HookDirectiveNode } from './hook';
 import type { CapabilityContext, CapabilityKind } from './security';
 
 // Define InterpolatableValue for the guard function
@@ -118,12 +126,24 @@ export function isImportSelectedDirective(node: DirectiveNode): node is ImportSe
   return node.kind === 'import' && node.subtype === 'importSelected';
 }
 
+export function isImportMcpSelectedDirective(node: DirectiveNode): node is ImportMcpSelectedDirectiveNode {
+  return node.kind === 'import' && node.subtype === 'importMcpSelected';
+}
+
+export function isImportMcpNamespaceDirective(node: DirectiveNode): node is ImportMcpNamespaceDirectiveNode {
+  return node.kind === 'import' && node.subtype === 'importMcpNamespace';
+}
+
 export function isWildcardImport(node: VariableReferenceNode): node is ImportWildcardNode {
   return node.valueType === 'import' && node.identifier === '*';
 }
 
 export function isGuardDirective(node: DirectiveNode): node is GuardDirectiveNode {
   return node.kind === 'guard';
+}
+
+export function isHookDirective(node: DirectiveNode): node is HookDirectiveNode {
+  return node.kind === 'hook';
 }
 
 /**
@@ -158,6 +178,10 @@ export function isTernaryExpression(node: any): node is TernaryExpression {
 
 export function isUnaryExpression(node: any): node is UnaryExpression {
   return node?.type === 'UnaryExpression';
+}
+
+export function isNewExpression(node: any): node is NewExpression {
+  return node?.type === 'NewExpression';
 }
 
 /**

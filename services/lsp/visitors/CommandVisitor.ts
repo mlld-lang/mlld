@@ -1,21 +1,24 @@
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
+import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
+import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 
 export class CommandVisitor extends BaseVisitor {
-  private mainVisitor: any;
+  private mainVisitor!: INodeVisitor;
   private operatorHelper: OperatorTokenHelper;
-  
-  constructor(document: any, tokenBuilder: any) {
+
+  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
   }
-  
-  setMainVisitor(visitor: any): void {
+
+  setMainVisitor(visitor: INodeVisitor): void {
     this.mainVisitor = visitor;
   }
-  
-  canHandle(node: any): boolean {
+
+  canHandle(node: unknown): boolean {
     return node.type === 'CommandBase' ||
            node.type === 'command' ||
            node.type === 'code' ||
@@ -23,17 +26,7 @@ export class CommandVisitor extends BaseVisitor {
            node.type === 'CommandReference';
   }
   
-  visitNode(node: any, context: VisitorContext): void {
-    if (process.env.DEBUG_LSP === 'true' && node.type === 'ExecInvocation') {
-      console.log('[EXEC-NODE]', {
-        type: node.type,
-        location: node.location,
-        locationType: typeof node.location,
-        isNone: node.location === 'none',
-        commandRef: !!node.commandRef
-      });
-    }
-    
+  visitNode(node: unknown, context: VisitorContext): void {
     if (!node.location || node.location === 'none') {
       // For ExecInvocation with location 'none', try to process it anyway
       if (node.type === 'ExecInvocation' && node.commandRef) {
@@ -69,7 +62,7 @@ export class CommandVisitor extends BaseVisitor {
     }
   }
   
-  private visitCommand(node: any, context: VisitorContext): void {
+  private visitCommand(node: unknown, context: VisitorContext): void {
     // Handle command nodes without location (common in nested contexts)
     let effectiveLocation = node.location;
     if (!effectiveLocation || effectiveLocation === 'none') {
@@ -82,15 +75,6 @@ export class CommandVisitor extends BaseVisitor {
         const searchEnd = firstChild.location.start.offset;
         const searchText = sourceText.substring(searchStart, searchEnd);
         const runIndex = searchText.lastIndexOf('run');
-
-        if (process.env.DEBUG_LSP === 'true') {
-          console.log('[COMMAND-LOC]', {
-            hasRunKeyword: node.hasRunKeyword,
-            firstChild: firstChild.location,
-            searchText,
-            runIndex
-          });
-        }
 
         if (runIndex !== -1 && node.hasRunKeyword) {
           // Find the end of the command block (closing brace or last child)
@@ -116,15 +100,6 @@ export class CommandVisitor extends BaseVisitor {
       const sourceText = this.document.getText();
       const nodeText = sourceText.substring(effectiveLocation.start.offset, effectiveLocation.end.offset);
       const runMatch = nodeText.match(/^\s*run\b/);
-
-      if (process.env.DEBUG_LSP === 'true') {
-        console.log('[RUN-TOKENIZE]', {
-          hasRunKeyword: node.hasRunKeyword,
-          effectiveLocation,
-          nodeText,
-          runMatch: !!runMatch
-        });
-      }
 
       if (runMatch) {
         const runOffset = effectiveLocation.start.offset + runMatch.index! + runMatch[0].indexOf('run');
@@ -291,16 +266,8 @@ export class CommandVisitor extends BaseVisitor {
     }
   }
 
-  private visitCodeNode(node: any, context: VisitorContext): void {
+  private visitCodeNode(node: unknown, context: VisitorContext): void {
     // Handle code nodes (run js/node/py/sh blocks)
-    if (process.env.DEBUG_LSP === 'true') {
-      console.log('[CODE-NODE]', {
-        language: node.language,
-        hasRunKeyword: node.hasRunKeyword,
-        code: node.code?.substring(0, 20)
-      });
-    }
-
     if (!node.language) return;
 
     // Reconstruct location from code content or use hasRunKeyword
@@ -398,32 +365,12 @@ export class CommandVisitor extends BaseVisitor {
     }
   }
 
-  private visitExecInvocation(node: any, context: VisitorContext): void {
-    if (process.env.DEBUG) {
-      console.log('[EXEC-INVOCATION-VISITOR]', {
-        hasCommandRef: !!node.commandRef,
-        name: node.commandRef?.name,
-        location: node.location
-      });
-    }
-
+  private visitExecInvocation(node: unknown, context: VisitorContext): void {
     if (node.commandRef && node.commandRef.name) {
       const name = node.commandRef.name;
       
       // Handle case where location is 'none' or undefined - use identifier location
       if (node.location === 'none' || !node.location) {
-        if (process.env.DEBUG) {
-          console.log('[EXEC-INV] Using identifier location path');
-        }
-        if (process.env.DEBUG_LSP === 'true') {
-          console.log('[EXEC-INVOCATION]', {
-            name: node.commandRef.name,
-            hasIdentifier: !!node.commandRef.identifier,
-            identifierLength: node.commandRef.identifier?.length,
-            firstIdentifier: node.commandRef.identifier?.[0]
-          });
-        }
-        
         if (!node.commandRef.identifier?.[0]?.location) {
           // Can't process without location info
           return;
@@ -466,10 +413,6 @@ export class CommandVisitor extends BaseVisitor {
         } else {
           // Location is correct - use it directly
           const atCharPos = identifierLoc.start.column - 1;
-
-          if (process.env.DEBUG) {
-            console.log('[EXEC-INV-NOLOC]', { name, atCharPos, includesAt });
-          }
 
           // Tokenize @functionName as a single token for consistent coloring
           if (name && typeof name === 'string' && name.length > 0 && atCharPos >= 0) {
@@ -539,13 +482,6 @@ export class CommandVisitor extends BaseVisitor {
               }
             } else {
               // Regular AST node
-              if (process.env.DEBUG_LSP === 'true') {
-                console.log('[CMD-ARG]', {
-                  argType: arg.type,
-                  argIdentifier: arg.identifier,
-                  hasFields: !!arg.fields
-                });
-              }
               this.mainVisitor.visitNode(arg, newContext);
             }
             
@@ -641,16 +577,9 @@ export class CommandVisitor extends BaseVisitor {
         }
         return;
       }
-      
-      // Original code for when location is available
-      if (process.env.DEBUG) {
-        console.log('[EXEC-INV] Using node location path');
-      }
 
+      // Original code for when location is available
       if (!node.location || typeof node.location !== 'object') {
-        if (process.env.DEBUG) {
-          console.log('[EXEC-INV] Returning early - bad location', { location: node.location });
-        }
         return;
       }
       const source = this.document.getText();
@@ -658,14 +587,6 @@ export class CommandVisitor extends BaseVisitor {
 
       // Check if this is a method call (has objectReference) vs simple function call
       const isMethodCall = !!node.commandRef.objectReference;
-
-      if (process.env.DEBUG) {
-        console.log('[EXEC-INV] Tokenizing exec invocation', {
-          name,
-          isMethodCall,
-          hasObjectRef: !!node.commandRef.objectReference
-        });
-      }
 
       let methodEndOffset: number;
 
@@ -782,6 +703,164 @@ export class CommandVisitor extends BaseVisitor {
                 }
               }
               
+              // Find and tokenize closing paren
+              const lastArg = node.commandRef.args[node.commandRef.args.length - 1];
+              if (lastArg?.location) {
+                const closeParenOffset = source.indexOf(')', lastArg.location.end.offset);
+                if (closeParenOffset !== -1) {
+                  const closeParenPos = this.document.positionAt(closeParenOffset);
+                  this.tokenBuilder.addToken({
+                    line: closeParenPos.line,
+                    char: closeParenPos.character,
+                    length: 1,
+                    tokenType: 'operator',
+                    modifiers: []
+                  });
+                }
+              }
+            }
+          } else if (lastField?.type === 'bracketAccess' || lastField?.type === 'stringIndex') {
+            // COMPUTED STRING PROPERTY CALL: @obj["key"](args)
+            this.mainVisitor.visitNode(node.commandRef.objectReference, context);
+
+            if (lastField.location) {
+              const sourceText = this.document.getText();
+              const openOffset = lastField.location.start.offset;
+              const closeOffset = lastField.location.end.offset - (lastField.optional ? 2 : 1);
+              const segment = sourceText.substring(openOffset, closeOffset + 1);
+
+              // Tokenize opening bracket
+              const openPos = this.document.positionAt(openOffset);
+              this.tokenBuilder.addToken({
+                line: openPos.line,
+                char: openPos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+
+              const doubleQuoteIndex = segment.indexOf('"');
+              const singleQuoteIndex = segment.indexOf('\'');
+              let quoteIndex = -1;
+              let quoteChar = '';
+
+              if (doubleQuoteIndex !== -1 && singleQuoteIndex !== -1) {
+                if (doubleQuoteIndex < singleQuoteIndex) {
+                  quoteIndex = doubleQuoteIndex;
+                  quoteChar = '"';
+                } else {
+                  quoteIndex = singleQuoteIndex;
+                  quoteChar = '\'';
+                }
+              } else if (doubleQuoteIndex !== -1) {
+                quoteIndex = doubleQuoteIndex;
+                quoteChar = '"';
+              } else if (singleQuoteIndex !== -1) {
+                quoteIndex = singleQuoteIndex;
+                quoteChar = '\'';
+              }
+
+              if (quoteIndex !== -1) {
+                const lastQuoteIndex = segment.lastIndexOf(quoteChar);
+                if (lastQuoteIndex > quoteIndex + 1) {
+                  const nameOffset = openOffset + quoteIndex + 1;
+                  const namePos = this.document.positionAt(nameOffset);
+                  this.tokenBuilder.addToken({
+                    line: namePos.line,
+                    char: namePos.character,
+                    length: lastQuoteIndex - quoteIndex - 1,
+                    tokenType: 'function',
+                    modifiers: ['reference']
+                  });
+                }
+              } else if (lastField.value !== undefined) {
+                const valueText = String(lastField.value);
+                const valueIndex = segment.indexOf(valueText);
+                if (valueIndex !== -1) {
+                  const nameOffset = openOffset + valueIndex;
+                  const namePos = this.document.positionAt(nameOffset);
+                  this.tokenBuilder.addToken({
+                    line: namePos.line,
+                    char: namePos.character,
+                    length: valueText.length,
+                    tokenType: 'function',
+                    modifiers: ['reference']
+                  });
+                }
+              }
+
+              // Tokenize closing bracket
+              const closePos = this.document.positionAt(closeOffset);
+              this.tokenBuilder.addToken({
+                line: closePos.line,
+                char: closePos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+
+              if (lastField.optional) {
+                const optionalOffset = lastField.location.end.offset - 1;
+                if (sourceText[optionalOffset] === '?') {
+                  const optionalPos = this.document.positionAt(optionalOffset);
+                  this.tokenBuilder.addToken({
+                    line: optionalPos.line,
+                    char: optionalPos.character,
+                    length: 1,
+                    tokenType: 'operator',
+                    modifiers: []
+                  });
+                }
+              }
+
+              methodEndOffset = lastField.location.end.offset;
+            }
+
+            // Handle args for computed property calls
+            if (node.commandRef.args && Array.isArray(node.commandRef.args)) {
+              // Find and tokenize opening paren
+              const openParenOffset = source.indexOf('(', methodEndOffset);
+              if (openParenOffset !== -1) {
+                const openParenPos = this.document.positionAt(openParenOffset);
+                this.tokenBuilder.addToken({
+                  line: openParenPos.line,
+                  char: openParenPos.character,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+
+              const newContext = {
+                ...context,
+                inCommand: true,
+                interpolationAllowed: true,
+                variableStyle: '@var' as const,
+                inFunctionArgs: true
+              };
+
+              // Visit each argument
+              for (let i = 0; i < node.commandRef.args.length; i++) {
+                const arg = node.commandRef.args[i];
+                if (typeof arg === 'object' && arg !== null && arg.type) {
+                  this.mainVisitor.visitNode(arg, newContext);
+                }
+
+                // Add comma between args
+                if (i < node.commandRef.args.length - 1) {
+                  if (arg.location && typeof arg === 'object' && arg.type) {
+                    const nextArg = node.commandRef.args[i + 1];
+                    if (nextArg.location && typeof nextArg === 'object' && nextArg.type) {
+                      this.operatorHelper.tokenizeOperatorBetween(
+                        arg.location.end.offset,
+                        nextArg.location.start.offset,
+                        ','
+                      );
+                    }
+                  }
+                }
+              }
+
               // Find and tokenize closing paren
               const lastArg = node.commandRef.args[node.commandRef.args.length - 1];
               if (lastArg?.location) {
@@ -942,18 +1021,7 @@ export class CommandVisitor extends BaseVisitor {
             // We need to use the actual span from the AST
             const tokenStart = arg.location.start.column - 1; // Convert 1-based to 0-based
             const tokenLength = arg.location.end.column - arg.location.start.column;
-            
-            if (process.env.DEBUG_LSP === 'true') {
-              console.log('[STRING-ARG]', {
-                content: arg.content,
-                start: arg.location.start,
-                end: arg.location.end,
-                tokenStart,
-                tokenLength,
-                calc: `${arg.location.end.column} - ${arg.location.start.column} = ${tokenLength}`
-              });
-            }
-            
+
             this.tokenBuilder.addToken({
               line: arg.location.start.line - 1,
               char: tokenStart,
@@ -1121,12 +1189,9 @@ export class CommandVisitor extends BaseVisitor {
     }
   }
 
-  private visitCommandReference(node: any, context: VisitorContext): void {
+  private visitCommandReference(node: unknown, context: VisitorContext): void {
     // Check for invalid location
     if (!node.location || node.location.start.column <= 0) {
-      if (process.env.DEBUG) {
-        console.log('[CMD-REF] Invalid location', { location: node.location, name: node.name });
-      }
       return;
     }
 
@@ -1142,8 +1207,6 @@ export class CommandVisitor extends BaseVisitor {
         tokenType: 'variableRef',
         modifiers: ['reference']
       });
-    } else if (process.env.DEBUG) {
-      console.log('[CMD-REF] Skipping invalid token', { char, length, name: node.name, column: node.location.start.column });
     }
   }
 }

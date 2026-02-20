@@ -8,7 +8,7 @@
 import type { Environment } from '@interpreter/env/Environment';
 import type { Variable } from '@core/types/variable';
 import { MlldDirectiveError } from '@core/errors';
-import { detectPipeline, debugPipelineDetection, type DetectedPipeline } from './detector';
+import { detectPipeline, type DetectedPipeline } from './detector';
 import type { PipelineStage, PipelineCommand, WhilePipelineStage } from '@core/types';
 import { PipelineExecutor } from './executor';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
@@ -113,11 +113,6 @@ export async function processPipeline(
   }
   if (pipelineDescriptor) {
     env.recordSecurityDescriptor(pipelineDescriptor);
-  }
-  
-  // Debug detection
-  if (identifier && process.env.MLLD_DEBUG === 'true') {
-    debugPipelineDetection(identifier, node, directive);
   }
   
   // Detect pipeline from various sources
@@ -278,9 +273,31 @@ let executionResult: StructuredValue;
   }
 
   if (pipelineDescriptor && isStructuredValue(executionResult)) {
+    const outputDescriptor = extractSecurityDescriptor(executionResult, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const labelSet = new Set<string>(pipelineDescriptor.labels ?? []);
+    if (outputDescriptor?.labels) {
+      for (const label of outputDescriptor.labels) {
+        labelSet.add(String(label));
+      }
+    }
+    const mergedPolicyContext = {
+      ...(pipelineDescriptor.policyContext ?? {}),
+      ...(outputDescriptor?.policyContext ?? {})
+    };
+    const mergedDescriptor = makeSecurityDescriptor({
+      labels: labelSet,
+      taint: pipelineDescriptor.taint ?? [],
+      sources: pipelineDescriptor.sources ?? [],
+      capability: outputDescriptor?.capability ?? pipelineDescriptor.capability,
+      policyContext:
+        Object.keys(mergedPolicyContext).length > 0 ? mergedPolicyContext : undefined
+    });
     const metadata: StructuredValueMetadata = {
       ...(executionResult.metadata || {}),
-      security: pipelineDescriptor
+      security: mergedDescriptor
     };
     return wrapStructured(executionResult, undefined, undefined, metadata);
   }
@@ -329,28 +346,27 @@ async function validatePipeline(
     }
     const funcName = stage.rawIdentifier;
     
-    // Check if it's a built-in transformer
+    // Resolve scoped variables first so user declarations shadow builtins.
+    const variable = env.getVariable(funcName);
+    if (variable) {
+      if (variable.type !== 'executable' && variable.type !== 'computed') {
+        throw new MlldDirectiveError(
+          `'@${funcName}' is not a function, it's a ${variable.type} variable${identifier ? ` (in @${identifier})` : ''}`,
+          'pipeline'
+        );
+      }
+      continue;
+    }
+
     if (isBuiltinTransformer(funcName)) {
       continue;
     }
-    
-    // Check if it's a defined executable
-    const variable = env.getVariable(funcName);
-    if (!variable) {
-      throw new MlldDirectiveError(
-        `Pipeline function '@${funcName}' is not defined${identifier ? ` (in @${identifier})` : ''}. ` +
-        `Available functions: ${getAvailableFunctions(env).join(', ')}`,
-        'pipeline'
-      );
-    }
-    
-    // Check if it's actually executable
-    if (variable.type !== 'executable' && variable.type !== 'computed') {
-      throw new MlldDirectiveError(
-        `'@${funcName}' is not a function, it's a ${variable.type} variable${identifier ? ` (in @${identifier})` : ''}`,
-        'pipeline'
-      );
-    }
+
+    throw new MlldDirectiveError(
+      `Pipeline function '@${funcName}' is not defined${identifier ? ` (in @${identifier})` : ''}. ` +
+      `Available functions: ${getAvailableFunctions(env).join(', ')}`,
+      'pipeline'
+    );
   }
 }
 
@@ -457,19 +473,20 @@ async function prepareStructuredInput(
     );
   }
 
+  // Check for Variables that need proper resolution (including auto-execution of executables)
+  // Must come before the generic "has value/mx/internal" check to ensure resolveValue is used
+  if (value && typeof value === 'object' && 'type' in value && 'value' in value && 'name' in value) {
+    const { resolveValue, ResolutionContext } = await import('../../utils/variable-resolution');
+    const resolved = await resolveValue(value, env, ResolutionContext.PipelineInput);
+    const nested = await prepareStructuredInput(resolved, env, incomingMetadata, providedDescriptor);
+    return finalizeWrapper(nested);
+  }
+
+  // Generic wrapper objects with value/mx/internal but not full Variables (lacks 'name')
   if (value && typeof value === 'object' && 'value' in value && ('mx' in value || 'internal' in value)) {
     const metadata = mergedMetadata(undefined);
     const nested = await prepareStructuredInput(value.value, env, metadata, providedDescriptor);
     return finalizeWrapper(nested);
-  }
-
-  if (value && typeof value === 'object') {
-    const { resolveValue, ResolutionContext } = await import('../../utils/variable-resolution');
-    if ('type' in value && 'value' in value && 'name' in value) {
-      const resolved = await resolveValue(value, env, ResolutionContext.PipelineInput);
-      const nested = await prepareStructuredInput(resolved, env, incomingMetadata, providedDescriptor);
-      return finalizeWrapper(nested);
-    }
   }
 
   if (typeof value === 'string') {

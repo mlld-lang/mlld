@@ -1,0 +1,8 @@
+policy @p = {
+  auth: {
+    testkey: { from: "env:MLLD_TEST_AUTH_VALUE", as: "KEY" }
+  }
+}
+
+var @result = run cmd { echo "$KEY" } using auth:testkey
+show @result

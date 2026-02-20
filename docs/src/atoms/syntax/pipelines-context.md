@@ -8,9 +8,10 @@ tags: [pipelines, metadata, context]
 related: [pipelines-basics, pipelines-retry]
 related-code: [interpreter/eval/pipeline.ts, interpreter/env/PipelineContext.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Pipeline context:**
 - `@mx.try` - current attempt number
 - `@mx.stage` - current stage name
-- `@p[-1]` - previous stage output
+- `@p[-1]` - previous stage output (same value as current stage input)

@@ -102,6 +102,36 @@ describe('FunctionRouter', () => {
     await expect(router.executeFunction('greet', { name: 'Charlie' })).resolves.toBe('Hello Charlie');
   });
 
+  it('preserves object arguments', async () => {
+    const environment = await createEnvironment(`
+      /exe @inspect(value) = js {
+        return { kind: typeof value, foo: value.foo };
+      }
+
+      /export { @inspect }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    const result = await router.executeFunction('inspect', { value: { foo: 'bar' } });
+
+    expect(JSON.parse(result)).toEqual({ kind: 'object', foo: 'bar' });
+  });
+
+  it('preserves array arguments', async () => {
+    const environment = await createEnvironment(`
+      /exe @inspect(value) = js {
+        return { isArray: Array.isArray(value), size: value.length };
+      }
+
+      /export { @inspect }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    const result = await router.executeFunction('inspect', { value: [1, 2, 3] });
+
+    expect(JSON.parse(result)).toEqual({ isArray: true, size: 3 });
+  });
+
   it('throws when function is not found', async () => {
     const environment = await createEnvironment('/export { }');
     const router = new FunctionRouter({ environment });
@@ -134,5 +164,78 @@ describe('FunctionRouter', () => {
     expect(result).toBe('Value: from-env');
 
     delete process.env.MLLD_TEST_VAR;
+  });
+
+  it('applies src:mcp taint to function result', async () => {
+    const environment = await createEnvironment(`
+      /exe @storeResult(value) = js {
+        return { result: value, processed: true };
+      }
+
+      /export { @storeResult }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    await router.executeFunction('store_result', { value: 'test-data' });
+
+    const securitySnapshot = environment.getSecuritySnapshot();
+    expect(securitySnapshot).toBeDefined();
+    expect(securitySnapshot?.taint).toContain('src:mcp');
+    expect(securitySnapshot?.sources).toContain('mcp:storeResult');
+  });
+
+  it('applies src:mcp taint even for zero-arg functions', async () => {
+    const environment = await createEnvironment(`
+      /exe @getTime() = js {
+        return new Date().toISOString();
+      }
+
+      /export { @getTime }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    await router.executeFunction('get_time', {});
+
+    const securitySnapshot = environment.getSecuritySnapshot();
+    expect(securitySnapshot).toBeDefined();
+    expect(securitySnapshot?.taint).toContain('src:mcp');
+    expect(securitySnapshot?.sources).toContain('mcp:getTime');
+  });
+
+  it('exposes MCP taint to guards for zero-arg functions', async () => {
+    const environment = await createEnvironment(`
+      /guard @blockMcp before op:exe = when [
+        @mx.taint.includes("src:mcp") && @mx.sources.includes("mcp:getTime") => deny "MCP blocked"
+        * => allow
+      ]
+
+      /exe @getTime() = js {
+        return new Date().toISOString();
+      }
+
+      /export { @getTime }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    await expect(router.executeFunction('get_time', {})).rejects.toThrow('MCP blocked');
+  });
+
+  it('tracks tool calls in @mx.tools.calls', async () => {
+    const environment = await createEnvironment(`
+      /guard @limitCalls before op:exe = when [
+        @mx.tools.calls.length >= 1 => deny "Too many calls"
+        * => allow
+      ]
+
+      /exe @greet(name) = js {
+        return 'Hello ' + name;
+      }
+
+      /export { @greet }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    await expect(router.executeFunction('greet', { name: 'Ada' })).resolves.toBe('Hello Ada');
+    await expect(router.executeFunction('greet', { name: 'Grace' })).rejects.toThrow('Too many calls');
   });
 });

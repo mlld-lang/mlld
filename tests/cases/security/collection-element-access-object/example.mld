@@ -1,0 +1,4 @@
+var secret @key = "sk-123"
+var @obj = { text: @key }
+var @val = @obj.text
+show @val.mx.labels

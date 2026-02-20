@@ -95,7 +95,7 @@ LanguageCodeCore
 // This is the base abstraction for language + code patterns
 // Used by exec.peggy where parameters are already parsed
 RunLanguageCodeCore
-  = streamPrefix:StreamKeyword? _ language:RunCodeLanguage workingDir:WorkingDirPath? _ code:UnifiedCodeBrackets {
+  = streamPrefix:StreamKeyword? _ language:RunCodeLanguage workingDir:WorkingDirPath? _ code:UnifiedCodeBrackets using:UsingClause? {
       helpers.debug('RunLanguageCodeCore matched', { language, code });
       
       // Create language node
@@ -132,7 +132,10 @@ RunLanguageCodeCore
         meta.hasWorkingDir = true;
       }
       
-      const withClause = streamPrefix ? { stream: true } : undefined;
+      let withClause = streamPrefix ? { stream: true } : undefined;
+      if (using) {
+        withClause = withClause ? { ...withClause, ...using } : using;
+      }
 
       // Return a structured result that can be used by both directives
       return {
@@ -146,7 +149,7 @@ RunLanguageCodeCore
 
 // This pattern is used by run.peggy where arguments can appear after the language
 RunLanguageCodeWithArgs
-  = streamPrefix:StreamKeyword? _ language:RunCodeLanguage workingDir:WorkingDirPath? _ argList:UnifiedArgumentList _ code:UnifiedCodeBrackets {
+  = streamPrefix:StreamKeyword? _ language:RunCodeLanguage _ argList:UnifiedArgumentList workingDir:WorkingDirPath? _ code:UnifiedCodeBrackets using:UsingClause? {
       helpers.debug('RunLanguageCodeWithArgs matched', { language, argList, code });
       
       // Extract arguments from unified argument list
@@ -196,7 +199,10 @@ RunLanguageCodeWithArgs
         meta.hasWorkingDir = true;
       }
       
-      const withClause = streamPrefix ? { stream: true } : undefined;
+      let withClause = streamPrefix ? { stream: true } : undefined;
+      if (using) {
+        withClause = withClause ? { ...withClause, ...using } : using;
+      }
 
       // Return a structured result that can be used by both directives
       return {

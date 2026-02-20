@@ -1,0 +1,4 @@
+if true [
+  => "if-return"
+]
+show "unreachable"

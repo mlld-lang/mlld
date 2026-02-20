@@ -6,8 +6,10 @@ contain for loops, not buffered until the for loop completes.
 ## Basic exe-for function
 
 /exe @show_processing(item) = when [
-  * => show "Processing: @item"
-  * => "Processing: @item"
+  * => [
+    show "Processing: @item"
+    => "Processing: @item"
+  ]
 ]
 
 /exe @process_items(items) = for @item in @items => @show_processing(@item)
@@ -19,13 +21,17 @@ contain for loops, not buffered until the for loop completes.
 ## Exe-for with pipeline
 
 /exe @step1(x) = when [
-  * => show "Step1: @x"
-  * => "processed-@x"
+  * => [
+    show "Step1: @x"
+    => "processed-@x"
+  ]
 ]
 
 /exe @step2(x) = when [
-  * => show "Step2: @x"
-  * => "final-@x"
+  * => [
+    show "Step2: @x"
+    => "final-@x"
+  ]
 ]
 
 /exe @process_with_pipeline(items) = for @item in @items => @step1(@item) | @step2

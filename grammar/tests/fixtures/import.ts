@@ -129,6 +129,41 @@ export const importFixtures: DirectiveFixture[] = [
         }
       }
     }
+  },
+  {
+    name: 'import-node-path',
+    description: 'Import directive with node package source',
+    input: '/import { join } from node @path',
+    expected: {
+      kind: 'import',
+      subtype: 'importSelected',
+      values: {
+        imports: [
+          {
+            type: 'VariableReference',
+            identifier: 'join',
+            valueType: 'import',
+            isVariableReference: true
+          }
+        ],
+        path: [
+          {
+            type: 'Text',
+            content: '@path'
+          }
+        ]
+      },
+      raw: {
+        imports: 'join',
+        path: '@path'
+      },
+      meta: {
+        path: {
+          isNodeImport: true,
+          package: '@path'
+        }
+      }
+    }
   }
 ];
 

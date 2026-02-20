@@ -1,6 +1,0 @@
-exe @process(input) = when first [
-  @input.isArray() => foreach @handle(@input)
-  @input.isObject() => @handleObject(@input)
-  @input.isString() => @handleString(@input)
-  * => "unknown type"
-]

@@ -227,9 +227,10 @@ export class VariableManager implements IVariableManager {
         const existingIsLegitimate = this.isLegitimateVariableType(existing);
 
         // Only throw collision errors if both variables are legitimate mlld types
-        // AND the new variable is not a let binding (let bindings can shadow parent scope)
-        const isLetBinding = variable.mx?.importPath === 'let';
-        if (isLegitimateVariable && existingIsLegitimate && !isLetBinding) {
+        // AND the new variable is not a block-scoped binding that can shadow parent scope
+        const importPath = variable.mx?.importPath;
+        const isBlockScoped = importPath === 'let' || importPath === 'exe-param';
+        if (isLegitimateVariable && existingIsLegitimate && !isBlockScoped) {
           const isExistingImported = existing.mx?.isImported || false;
           const importPath = existing.mx?.importPath;
 
@@ -282,7 +283,7 @@ export class VariableManager implements IVariableManager {
     // Ambient, read-only @mx support (calculated on access)
     if (name === 'mx') {
       // Allow tests to override via @test_mx
-      const testCtxVar = this.variables.get('test_mx') || this.deps.getParent()?.getVariable('test_mx');
+      const testCtxVar = this.variables.get('test_mx');
       if (testCtxVar) {
         return createObjectVariable('mx', testCtxVar.value, false, undefined, {
           mx: {
@@ -565,7 +566,7 @@ export class VariableManager implements IVariableManager {
     // Direct assignment for reserved variables during initialization
     this.variables.set('debug', debugVar);
     
-    // Initialize @base with project path
+    // Initialize @base and @root with the project root path
     const baseSource: VariableSource = {
       directive: 'var',
       syntax: 'quoted',
@@ -573,24 +574,26 @@ export class VariableManager implements IVariableManager {
       isMultiLine: false
     };
     const basePath = getProjectPathValue(this.deps.getBasePath());
-    const baseVar = createPathVariable(
-      'base',
-      basePath,
-      basePath,
-      false, // Not a URL
-      true, // Is absolute
-      baseSource,
-      {
-        mx: {
-          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-        },
-        internal: {
-          isReserved: true
+    const createProjectRootVar = (name: 'base' | 'root'): Variable =>
+      createPathVariable(
+        name,
+        basePath,
+        basePath,
+        false, // Not a URL
+        true, // Is absolute
+        baseSource,
+        {
+          mx: {
+            definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+          },
+          internal: {
+            isReserved: true
+          }
         }
-      }
-    );
+      );
     // Direct assignment for reserved variables during initialization
-    this.variables.set('base', baseVar);
+    this.variables.set('base', createProjectRootVar('base'));
+    this.variables.set('root', createProjectRootVar('root'));
     
     // Built-in transformers are initialized separately in Environment.initializeBuiltinTransformers()
   }

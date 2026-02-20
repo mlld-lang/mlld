@@ -1,4 +1,4 @@
-# CLI Usage 
+# CLI Usage
 
 The mlld CLI provides commands for processing mlld files, managing modules, and configuring your mlld environment.
 
@@ -8,13 +8,7 @@ Install globally to use the CLI:
 
 ```bash
 npm install -g mlld
-```
-
-Or use it from a local installation:
-
-```bash
-npm install mlld
-npx mlld <command>
+mlld <command>
 ```
 
 ## Core Commands
@@ -282,15 +276,19 @@ mlld run
 mlld run my-script
 
 # Run with timeout
-mlld run long-task --timeout 60000
+mlld run long-task --timeout 10m
 
 # Show execution metrics
 mlld run my-script --debug
 ```
 
 **Options:**
-- `--timeout <ms>` - Script timeout in milliseconds (default: 300000 / 5 minutes)
+- `--timeout <duration>` - Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
 - `--debug` - Show execution metrics (timing, cache hits, effects, state writes)
+- `--checkpoint` - Enable checkpoint reuse for `llm`-labeled operations
+- `--fresh` - Clear the script checkpoint cache before running
+- `--resume [target]` - Resume with checkpoint reuse (`@fn`, `@fn:index`, `@fn("prefix")`)
+- `--fork <script>` - Seed reads from another script's checkpoint cache
 - `-h, --help` - Show help message
 
 **Script Directory:**
@@ -300,11 +298,43 @@ Scripts are loaded from the directory configured in `mlld-config.json` (default:
 - AST caching: Scripts are cached after first parse (mtime-based invalidation)
 - Timeout support: Automatically aborts long-running scripts
 - Metrics: Debug mode shows parse time, evaluation time, cache hits, effect counts
+- `--resume` implies checkpoint behavior. Without a target, it re-runs with cache reuse only.
+- `--fork` keeps source cache read-only; changed model/prompt arguments miss locally and are written to the current script cache.
+- Payload injection: Unknown flags become `@payload` fields (`mlld run my-script --topic foo`). Import `@payload` in your script to access them.
+  Known checkpoint flags (`--checkpoint`, `--fresh`, `--resume`, `--fork`) are excluded from `@payload`.
+
+**Example script with payload** (`llm/run/build.mld`):
+```mlld
+import "@payload" as @payload
+var @env = @payload.env ? @payload.env : "dev"
+var @fast = @payload.fast ? @payload.fast : false
+```
 
 **Example script** (`llm/run/hello.mld`):
 ```mlld
 var @greeting = "Hello from mlld script!"
 show @greeting
+```
+
+### `mlld checkpoint <list|inspect|clean> <script>`
+
+Inspect and manage checkpoint cache files for a script.
+
+```bash
+# List cached call keys/previews
+mlld checkpoint list pipeline
+
+# Inspect manifest + records as JSON
+mlld checkpoint inspect pipeline
+
+# Remove a script cache
+mlld checkpoint clean pipeline
+
+# Resume target forms
+mlld run pipeline --resume
+mlld run pipeline --resume @processFiles
+mlld run pipeline --resume @processFiles:0
+mlld run pipeline --resume '@processFiles("tests/cases/docs")'
 ```
 
 ### `mlld test [patterns...]`
@@ -340,6 +370,119 @@ mlld test --env .env.staging
 - Multiple test files run in separate processes automatically
 - Prevents shadow environment contamination between tests
 - Each test gets a clean environment state
+
+### `mlld validate`
+
+Detect common mistakes with static analysis before runtime.
+
+```bash
+mlld validate module.mld
+mlld validate module.mld --error-on-warnings
+mlld validate module.mld --format json
+```
+
+**Options:**
+- `--error-on-warnings` - Exit 1 if any warnings are present
+- `--format <format>` - Output format: `text` (default), `json`
+
+**What it detects:**
+- Undefined variables (typos like `@nmae` instead of `@name`)
+- Variable redefinition in nested scopes (mlld variables are immutable)
+- Reserved name conflicts (`@now`, `@base`, `@mx`, `@p`, `@env`, `@payload`, `@state`)
+- Builtin shadowing (`@parse`, `@exists`, `@upper`, `@lower`, etc.)
+- Exe parameter shadowing (generic names like `result`, `output`, `data` that risk collision)
+
+**Suppressing warnings:**
+
+Add to `mlld-config.json` to suppress intentional patterns:
+
+```json
+{
+  "validate": {
+    "suppressWarnings": ["exe-parameter-shadowing"]
+  }
+}
+```
+
+Suppressible codes: `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`.
+
+**Exit codes:**
+- Exit 0: valid syntax, no errors
+- Exit 1: parse errors or hard validation errors
+- Exit 1 with `--error-on-warnings`: any warnings present
+
+**JSON output** returns structured data: `executables`, `exports`, `imports`, `guards`, `needs`, `warnings`, `redefinitions`, `antiPatterns`.
+
+### `mlld mcp-dev`
+
+Start an MCP server that provides language introspection tools for development. Use with Claude Code or other MCP clients to validate syntax, analyze modules, and inspect ASTs.
+
+```bash
+mlld mcp-dev
+```
+
+Configure in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "mlld-dev": {
+      "command": "mlld",
+      "args": ["mcp-dev"]
+    }
+  }
+}
+```
+
+**Tools provided:**
+- `mlld_validate` — Validate syntax, return errors and warnings
+- `mlld_analyze` — Full module analysis: exports, executables, imports, guards, statistics
+- `mlld_ast` — Get the raw parsed AST
+
+All tools accept either `file` (path to `.mld` file) or `code` (inline string). Mode is inferred from file extension; override with `"mode": "strict"` or `"mode": "markdown"`.
+
+### `mlld live --stdio`
+
+Persistent NDJSON RPC server for long-running SDK operations.
+
+```bash
+mlld live --stdio
+```
+
+**Protocol format:**
+
+```json
+>> Request
+{"method":"process","id":1,"params":{"script":"show 'hello'"}}
+
+>> Event stream (during execution)
+{"event":{"id":1,"type":"stream:chunk","content":"hello"}}
+
+>> Result
+{"result":{"id":1,"output":"hello","exports":[]}}
+```
+
+**Methods:**
+- `process` — Execute script text via `params.script`
+- `execute` — Run file via `params.filepath` with optional payload/state/dynamicModules
+- `analyze` — Static analysis via `params.filepath`
+- `state:update` — Update in-flight `@state` for `params.requestId`
+- `cancel` — Abort active request by id
+
+**SDK integration:**
+
+Go, Python, Rust, and Ruby SDKs maintain persistent `mlld live --stdio` subprocesses:
+
+```python
+handle = client.execute_async("./script.mld", payload)
+handle.update_state("flag", True)  # In-flight state mutation
+result = handle.wait()
+```
+
+**Lifecycle:**
+- Server runs until stdin EOF, SIGINT, or SIGTERM
+- Each request uses fresh interpreter environment
+- AST caching persists across requests (mtime-based invalidation)
 
 ## CI/CD and Ephemeral Execution
 
@@ -456,19 +599,19 @@ mlld auth logout
 - `logout` - Remove stored credentials
 - `status` - Check authentication status
 
-### `mlld env`
+### `mlld vars`
 
 Manage environment variable permissions.
 
 ```bash
 # Allow environment variables
-mlld env allow GITHUB_TOKEN NODE_ENV API_KEY
+mlld vars allow GITHUB_TOKEN NODE_ENV API_KEY
 
 # List allowed variables
-mlld env list
+mlld vars list
 
 # Remove access
-mlld env remove API_KEY
+mlld vars remove API_KEY
 ```
 
 **Subcommands:**
@@ -480,6 +623,176 @@ mlld env remove API_KEY
 ```mlld
 import { GITHUB_TOKEN, NODE_ENV } from @input
 ```
+
+### `mlld plugin`
+
+Install the mlld Claude Code plugin for orchestrator authoring skills, language server integration, and MCP dev tools.
+
+```bash
+mlld plugin install                  # Install for current user
+mlld plugin install --scope project  # Install for current project only
+mlld plugin status                   # Check if installed
+mlld plugin uninstall                # Remove the plugin
+mlld skill install                   # Install skills for codex, opencode, pi 
+```
+
+Requires the `claude` CLI to be installed. Restart Claude Code after installing to activate the plugin.
+
+**What's included:**
+
+| Component | Description |
+|-----------|-------------|
+| Orchestrator skill | Patterns for audit, research, and development pipelines |
+| Agent skill | Tool agents, event-driven agents, workflow agents |
+| `/mlld:scaffold` | Generate starter orchestrator projects |
+| Language server | `.mld` syntax highlighting and diagnostics |
+| MCP dev tools | `mlld mcp-dev` for development |
+
+
+## Environment Commands
+
+### `mlld env`
+
+Manage AI agent environment modules. Environments package credentials, configuration, MCP tools, and security policies for spawning AI agents.
+
+```bash
+# List available environments
+mlld env list
+
+# Create environment from Claude config
+mlld env capture my-claude
+
+# Run agent with prompt
+mlld env spawn my-claude -- "Fix the bug"
+
+# Start interactive session
+mlld env shell my-claude
+```
+
+#### `mlld env list`
+
+List available environment modules.
+
+**Aliases:** `mlld env ls`
+
+```bash
+# Human-readable list
+mlld env list
+
+# JSON output for scripts
+mlld env list --json
+```
+
+Shows environments from:
+- `.mlld/env/` (project-local)
+- `~/.mlld/env/` (global)
+
+**Options:**
+- `--json` - Output as JSON
+
+#### `mlld env capture <name>`
+
+Create an environment module from your current Claude configuration.
+
+```bash
+# Create project-local environment
+mlld env capture my-claude
+
+# Create global environment
+mlld env capture my-claude --global
+```
+
+**What it does:**
+1. Extracts OAuth token from `~/.claude/.credentials.json`
+2. Stores token securely in macOS Keychain
+3. Copies `settings.json`, `CLAUDE.md`, `hooks.json`
+4. Generates `module.yml` and `index.mld`
+
+**Options:**
+- `--global` - Create in `~/.mlld/env/` instead of `.mlld/env/`
+
+**Output structure:**
+```
+.mlld/env/my-claude/
+├── module.yml          # Module manifest (type: environment)
+├── index.mld           # Entry point with @spawn, @shell exports
+└── .claude/            # Copied config files
+    ├── settings.json
+    ├── CLAUDE.md
+    └── hooks.json
+```
+
+#### `mlld env spawn <name> -- <prompt>`
+
+Run an agent with a prompt using the environment's credentials and configuration.
+
+```bash
+# Basic usage
+mlld env spawn my-claude -- "Fix the authentication bug"
+
+# Equivalent to running claude -p with the environment's config
+mlld env spawn my-claude -- claude -p "Refactor the tests"
+```
+
+The environment module's `@spawn` export is invoked with the prompt. Credentials are injected from the keychain.
+
+#### `mlld env shell <name>`
+
+Start an interactive agent session.
+
+```bash
+mlld env shell my-claude
+```
+
+Invokes the environment module's `@shell` export, which typically starts an interactive Claude session with the captured configuration.
+
+#### Environment Module Structure
+
+Environment modules use `type: environment` in their manifest:
+
+```yaml
+# module.yml
+name: my-claude
+type: environment
+about: "Development Claude environment"
+version: 1.0.0
+entry: index.mld
+```
+
+Required exports:
+- `@spawn(prompt)` - Run agent with prompt
+- `@shell()` - Start interactive session
+
+Optional exports:
+- `@mcpConfig()` - Return MCP server configuration
+
+**Example index.mld:**
+```mlld
+/needs { cmd: [claude] }
+/policy @env = {
+  auth: {
+    claude: { from: "keychain:mlld-env/my-claude", as: "CLAUDE_CODE_OAUTH_TOKEN" }
+  }
+}
+
+/exe @spawn(prompt) = run { \
+  CLAUDE_CONFIG_DIR=@fm.dir/.claude \
+  claude -p @prompt
+} using auth:claude
+
+/exe @shell() = run { \
+  CLAUDE_CONFIG_DIR=@fm.dir/.claude \
+  claude
+} using auth:claude
+
+/export { @spawn, @shell }
+```
+
+#### Security
+
+- Tokens are stored in the system keychain (macOS Keychain or libsecret via secret-tool), not in files
+- Credentials are injected at runtime via `using auth:*` syntax
+- Config files (settings, hooks) are copied, not credentials
 
 ## Registry Commands
 
@@ -506,50 +819,66 @@ mlld registry update
 
 ## Configuration Files
 
-### mlld.lock.json
+mlld uses two configuration files:
+- `mlld-config.json` — Your project settings (edit manually)
+- `mlld-lock.json` — Auto-generated locks (do not edit)
 
-Project configuration and module lock file. Created by `mlld setup` or when installing modules.
+### mlld-config.json
+
+Your project settings. Edit manually to configure resolvers, validation options, and script directories.
 
 **Location:** Project root
 
 **Example:**
 ```json
 {
-  "version": "1.0",
-  "config": {
-    "resolvers": {
-      "registries": [
-        {
-          "prefix": "@local/",
-          "resolver": "LOCAL",
-          "type": "input",
-          "config": {
-            "basePath": "./llm/modules"
-          }
-        },
-        {
-          "prefix": "@myorg/",
-          "resolver": "GITHUB",
-          "type": "input",
-          "config": {
-            "repository": "myorg/private-modules",
-            "branch": "main",
-            "basePath": "modules"
-          }
+  "resolvers": {
+    "prefixes": [
+      {
+        "prefix": "@local/",
+        "resolver": "LOCAL",
+        "type": "input",
+        "config": {
+          "basePath": "./llm/modules"
         }
-      ]
-    }
+      },
+      {
+        "prefix": "@myorg/",
+        "resolver": "GITHUB",
+        "type": "input",
+        "config": {
+          "repository": "myorg/private-modules",
+          "branch": "main",
+          "basePath": "modules"
+        }
+      }
+    ]
   },
+  "validate": {
+    "suppressWarnings": ["exe-parameter-shadowing"]
+  }
+}
+```
+
+### mlld-lock.json
+
+Auto-generated lock file. Do not edit manually. Created by `mlld setup` or when installing modules.
+
+**Location:** Project root
+
+**Example:**
+```json
+{
   "modules": {},
   "security": {
-    "allowedEnv": ["NODE_ENV", "API_KEY"]
+    "allowedEnv": ["MLLD_NODE_ENV", "MLLD_API_KEY"]
   }
 }
 ```
 
 ### Global Configuration
 
-**Location:** `~/.config/mlld/mlld.lock.json`
+**Location:** `~/.config/mlld/mlld-config.json`
 
 Used for global aliases and user-wide settings. Created by `mlld alias --global`.
 
@@ -563,9 +892,9 @@ Used for global aliases and user-wide settings. Created by `mlld alias --global`
 
 ### Custom Variables
 
-Must be allowed in mlld.lock.json:
+All custom environment variables must be prefixed with `MLLD_`. Allow them in `mlld-lock.json`:
 ```bash
-mlld env allow MY_API_KEY
+mlld vars allow MY_API_KEY
 ```
 
 Then use in mlld files:
@@ -579,8 +908,8 @@ mlld supports several file extensions:
 
 - `.mld` - Standard mlld files
 - `.mld.md` - mlld files with Markdown (recommended for modules)
-- `.mll` - Alternative extension
-- `.mll.md` - Alternative Markdown extension
+- `.mlld` - Alternative extension
+- `.mlld.md` - Alternative Markdown extension
 
 ## Common Workflows
 
@@ -625,7 +954,7 @@ cd myproject
 mlld install
 
 # 3. Set up environment
-mlld env allow GITHUB_TOKEN API_KEY
+mlld vars allow GITHUB_TOKEN API_KEY
 
 # 4. Run mlld files
 mlld main.mld
@@ -661,10 +990,10 @@ mlld setup --check
 
 ```bash
 # Check allowed environment variables
-mlld env list
+mlld vars list
 
 # Add required variables
-mlld env allow NEEDED_VAR
+mlld vars allow NEEDED_VAR
 ```
 
 ## Exit Codes

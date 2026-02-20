@@ -6,13 +6,24 @@ import { materializeDisplayValue } from '../../utils/display-materialization';
 import { asText } from '../../utils/structured-value';
 import type { OperationContext } from '../../env/ContextManager';
 import { materializeGuardInputs } from '../../utils/guard-inputs';
-import { getGuardTransformedInputs, handleGuardDecision } from '../../hooks/hook-decision-handler';
+import {
+  applyCheckpointDecisionToOperation,
+  getCheckpointDecisionState,
+  getGuardTransformedInputs,
+  handleGuardDecision
+} from '../../hooks/hook-decision-handler';
+import { runUserAfterHooksOnGuardDenial } from '../../hooks/guard-denial-after-hooks';
+import { runUserAfterHooks, runUserBeforeHooks } from '../../hooks/user-hook-runner';
+import { getOperationLabels, getOperationSources } from '@core/policy/operation-labels';
 import type { EffectHookNode } from '@core/types/hooks';
 import type { Variable } from '@core/types/variable';
 import { extractVariableValue, isVariable } from '../../utils/variable-resolution';
 import { GuardError, type GuardErrorDetails } from '@core/errors/GuardError';
 import { isGuardRetrySignal } from '@core/errors/GuardRetrySignal';
 import type { EvalResult } from '../../core/interpreter';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { collectInputDescriptor, descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { logFileWriteEvent } from '../../utils/audit-log';
 
 // Minimal builtin effects support for pipelines. These are inline effects that
 // do not create stages and run after the owning stage succeeds.
@@ -76,12 +87,20 @@ function buildEffectOperationContext(effect: PipelineCommand): OperationContext 
   const labels = Array.isArray((effect.meta as any)?.securityLabels)
     ? ((effect.meta as any).securityLabels as string[])
     : undefined;
+  const opLabels = getOperationLabels({
+    type: type as 'show' | 'output' | 'log' | 'append'
+  });
+  const sources = getOperationSources({
+    type: type as 'show' | 'output' | 'log' | 'append'
+  });
 
   return {
     type,
     subtype: 'effect',
     name: effect.rawIdentifier,
     labels,
+    opLabels,
+    sources,
     location: (effect as any)?.location ?? (effect.meta as any)?.location ?? null,
     metadata: {
       trace: `effect:${effect.rawIdentifier ?? type}`,
@@ -144,13 +163,40 @@ async function resolveEffectPayload(
   }
 }
 
+function collectEffectArgVariables(
+  effect: PipelineCommand,
+  env: Environment
+): Variable[] {
+  const args = effect.args ?? [];
+  const variables: Variable[] = [];
+  for (const arg of args) {
+    const nodes = Array.isArray(arg) ? arg : [arg];
+    for (const node of nodes) {
+      if (
+        node && typeof node === 'object' &&
+        node.type === 'VariableReference' &&
+        typeof node.identifier === 'string' &&
+        !node.fields?.length
+      ) {
+        const variable = env.getVariable(node.identifier);
+        if (variable) {
+          variables.push(variable);
+        }
+      }
+    }
+  }
+  return variables;
+}
+
 async function extractEffectGuardInputs(
   effect: PipelineCommand,
   stageOutput: unknown,
   env: Environment
 ): Promise<{ guardInputs: Variable[]; payload: unknown }> {
   const payload = await resolveEffectPayload(effect, stageOutput, env);
-  const guardInputs = materializeGuardInputs([payload], { nameHint: '__effect_input__' });
+  const argVariables = collectEffectArgVariables(effect, env);
+  const candidates = argVariables.length > 0 ? argVariables : [payload];
+  const guardInputs = materializeGuardInputs(candidates, { nameHint: '__effect_input__' });
   return { guardInputs, payload };
 }
 
@@ -194,6 +240,7 @@ export async function runBuiltinEffect(
   env: Environment
 ): Promise<void> {
   const hookManager = env.getHookManager();
+  const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
   const operationContext = buildEffectOperationContext(effect);
   const hookNode = createEffectHookNode(effect);
 
@@ -203,21 +250,68 @@ export async function runBuiltinEffect(
       ? guardInputs
       : materializeGuardInputs([stageOutput ?? ''], { nameHint: '__effect_input__' });
 
+  const inputDescriptor = collectInputDescriptor(
+    guardInputs.length > 0 ? guardInputs : [payload]
+  );
+  const inputTaint = descriptorToInputTaint(inputDescriptor);
+  if (inputTaint.length > 0) {
+    policyEnforcer.checkLabelFlow(
+      {
+        inputTaint,
+        opLabels: operationContext.opLabels ?? [],
+        exeLabels: Array.from(env.getEnclosingExeLabels()),
+        flowChannel: 'arg'
+      },
+      { env, sourceLocation: operationContext.location ?? undefined }
+    );
+  }
+
   await env.withOpContext(operationContext, async () => {
-    const preDecision = await hookManager.runPre(hookNode, inputs, env, operationContext);
-    const transformedInputs = getGuardTransformedInputs(preDecision, inputs);
-    const resolvedInputs = transformedInputs ?? inputs;
+    const userHookInputs = await runUserBeforeHooks(hookNode, inputs, env, operationContext);
+    const preHookInputs =
+      userHookInputs === inputs
+        ? inputs
+        : materializeGuardInputs(userHookInputs, { nameHint: '__effect_input__' });
+    const preDecision = await hookManager.runPre(hookNode, preHookInputs, env, operationContext);
+    const checkpointDecision = getCheckpointDecisionState(preDecision);
+    applyCheckpointDecisionToOperation(operationContext, checkpointDecision);
+    const transformedInputs = getGuardTransformedInputs(preDecision, preHookInputs);
+    const resolvedInputs = transformedInputs ?? preHookInputs;
+
+    if (checkpointDecision?.hit && checkpointDecision.hasCachedResult) {
+      let cachedResult: EvalResult = {
+        value: checkpointDecision.cachedResult,
+        env
+      };
+      try {
+        cachedResult = await hookManager.runPost(hookNode, cachedResult, resolvedInputs, env, operationContext);
+        await runUserAfterHooks(hookNode, cachedResult, resolvedInputs, env, operationContext);
+        return;
+      } catch (error) {
+        if (isGuardRetrySignal(error)) {
+          throw convertEffectRetryToDeny(error as GuardError, operationContext, env);
+        }
+        throw error;
+      }
+    }
 
     try {
       await handleGuardDecision(preDecision, hookNode, env, operationContext);
     } catch (error) {
-      if (isGuardRetrySignal(error)) {
-        throw convertEffectRetryToDeny(error as GuardError, operationContext, env);
-      }
-      throw error;
+      const normalizedError = isGuardRetrySignal(error)
+        ? convertEffectRetryToDeny(error as GuardError, operationContext, env)
+        : error;
+      await runUserAfterHooksOnGuardDenial({
+        node: hookNode,
+        env,
+        operationContext,
+        inputs: resolvedInputs,
+        error: normalizedError
+      });
+      throw normalizedError;
     }
 
-    const primaryInput = resolvedInputs[0] ?? inputs[0];
+    const primaryInput = resolvedInputs[0] ?? preHookInputs[0];
     const payloadVariable = isVariable(primaryInput) ? primaryInput : undefined;
     const payloadValue =
       payloadVariable !== undefined ? await extractVariableValue(payloadVariable, env) : payload;
@@ -225,7 +319,8 @@ export async function runBuiltinEffect(
     const effectResult = await executeEffect(effect, payloadValue, payloadVariable, env);
 
     try {
-      await hookManager.runPost(hookNode, effectResult, resolvedInputs, env, operationContext);
+      const guardedResult = await hookManager.runPost(hookNode, effectResult, resolvedInputs, env, operationContext);
+      await runUserAfterHooks(hookNode, guardedResult, resolvedInputs, env, operationContext);
     } catch (error) {
       if (isGuardRetrySignal(error)) {
         throw convertEffectRetryToDeny(error as GuardError, operationContext, env);
@@ -338,17 +433,16 @@ async function executeEffect(
             throw new Error('output file target requires a non-empty path');
           }
 
-          if (resolvedPath.startsWith('@base/')) {
+          if (resolvedPath.startsWith('@base/') || resolvedPath.startsWith('@root/')) {
             const projectRoot = (env as any).getProjectRoot ? (env as any).getProjectRoot() : '/';
-            resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
-          } else if (resolvedPath.startsWith('@root/')) {
-            const projectRoot = (env as any).getProjectRoot ? (env as any).getProjectRoot() : '/';
-            resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
+            const prefixLen = resolvedPath.startsWith('@base/') ? 6 : 6;
+            resolvedPath = path.join(projectRoot, resolvedPath.substring(prefixLen));
           }
 
+          // Resolve relative paths from the script file directory
           if (!path.isAbsolute(resolvedPath)) {
-            const base = (env as any).getBasePath ? (env as any).getBasePath() : '/';
-            resolvedPath = path.resolve(base, resolvedPath);
+            const fileDir = (env as any).getFileDirectory ? (env as any).getFileDirectory() : '/';
+            resolvedPath = path.resolve(fileDir, resolvedPath);
           }
 
           if (process.env.MLLD_DEBUG === 'true') {
@@ -366,6 +460,7 @@ async function executeEffect(
             // Directory may already exist; ignore
           }
           await fileSystem.writeFile(resolvedPath, content);
+          await logFileWriteEvent(env, resolvedPath, materializedContent.descriptor);
 
           env.emitEffect('file', content, { path: resolvedPath });
           return { value: payloadVariable ?? materializedContent.text, env };
@@ -420,7 +515,10 @@ async function executeEffect(
         env.recordSecurityDescriptor(materializedPayload.descriptor);
       }
 
-      await appendContentToFile(target, finalPayload, env, { directiveKind: 'append' });
+      await appendContentToFile(target, finalPayload, env, {
+        directiveKind: 'append',
+        descriptor: materializedPayload.descriptor
+      });
       return { value: payloadVariable ?? finalPayload, env };
     }
 

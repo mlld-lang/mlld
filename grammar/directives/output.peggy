@@ -8,7 +8,7 @@
 // - /output @variable "path.txt" (variable output with quoted path)
 // - /output @variable to "path.txt" (enhanced syntax with quoted path)
 
-// Main /output directive - supports multiple forms:
+// Main output directive - supports multiple forms:
 // Legacy syntax (backward compatible):
 // /output [file.md]                              <- outputs full document
 // /output @variable [file.md]                    <- outputs variable content
@@ -70,10 +70,10 @@ SlashAppend
       const rest = input.substring(peg$currPos).trim();
       return rest.length === 0 || rest.startsWith('\n');
     } {
-      helpers.mlldError('Missing "to" keyword in /append directive. Use /append @var to "path".', 'to', location());
+      helpers.mlldError('Missing "to" keyword in append directive. Use: append @var to "path".', 'to', location());
     }
   / DirectiveContext AppendKeyword {
-      helpers.mlldError('/append syntax error. Expected: /append @source to "path".', '@', location());
+      helpers.mlldError('append syntax error. Expected: append @source to "path".', '@', location());
     }
 
 SlashOutput
@@ -248,31 +248,31 @@ SlashOutput
       return rest.startsWith('stdout') || 
              rest.startsWith('stderr') || rest.startsWith('env') || rest.startsWith('@');
     } {
-      helpers.mlldError("Missing 'to' keyword in /output directive. Expected: /output @variable to \"path\"", "to", location());
+      helpers.mlldError("Missing 'to' keyword in output directive. Expected: output @variable to \"path\"", "to", location());
     }
     
   // Error: Missing target after 'to'
   / DirectiveContext OutputKeyword _ OutputSource _ "to" _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing target in /output directive. Expected path, stdout, stderr, or env after 'to'.", "path", location());
+      helpers.mlldError("Missing target in output directive. Expected path, stdout, stderr, or env after 'to'.", "path", location());
     }
     
   // Error: Missing target after 'to' (without source)
   / DirectiveContext OutputKeyword _ "to" _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing target in /output directive. Expected path, stdout, stderr, or env after 'to'.", "path", location());
+      helpers.mlldError("Missing target in output directive. Expected path, stdout, stderr, or env after 'to'.", "path", location());
     }
     
   // Error: Unclosed quoted path
   / DirectiveContext OutputKeyword _ OutputSource _ "to" _ "\"" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
-      helpers.mlldError("Unclosed quoted path in /output directive. Expected closing double quote (\").", "\"", location());
+      helpers.mlldError("Unclosed quoted path in output directive. Expected closing double quote (\").", "\"", location());
     }
     
   // REMOVED: Bracket syntax error handling - brackets no longer supported
     
   // Error: Invalid format specification
   / DirectiveContext OutputKeyword _ OutputSource _ "to" _ OutputTarget _ "as" _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing format in /output directive. Expected format type after 'as' (e.g., json, xml, csv).", "format", location());
+      helpers.mlldError("Missing format in output directive. Expected format type after 'as' (e.g., json, xml, csv).", "format", location());
     }
     
   // Error: Invalid @ usage
@@ -280,12 +280,12 @@ SlashOutput
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
-      helpers.mlldError("Invalid variable reference in /output directive. Variable names must start with a letter or underscore.", "identifier", location());
+      helpers.mlldError("Invalid variable reference in output directive. Variable names must start with a letter or underscore.", "identifier", location());
     }
     
   // Error: Missing content after /output
   / DirectiveContext OutputKeyword _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing content in /output directive. Expected source or target specification.", "@", location());
+      helpers.mlldError("Missing content in output directive. Expected source or target specification.", "@", location());
     }
     
   // Error: Invalid environment variable syntax
@@ -294,12 +294,12 @@ SlashOutput
       const rest = input.substring(peg$currPos).trim();
       return rest.length === 0 || /[^A-Z0-9_]/.test(rest[0]);
     } {
-      helpers.mlldError("Invalid environment variable name in /output directive. Expected: env:VARIABLE_NAME", "VARIABLE_NAME", location());
+      helpers.mlldError("Invalid environment variable name in output directive. Expected: env:VARIABLE_NAME", "VARIABLE_NAME", location());
     }
-    
-  // Error: Generic /output syntax error (catch-all)
+
+  // Error: Generic output syntax error (catch-all)
   / DirectiveContext OutputKeyword {
-      helpers.mlldError("Invalid /output syntax. Expected: /output @variable to \"path\", /output \"path\", or /output @variable to stdout/stderr/env. Note: String literals cannot be used as output sources. To output text content, first assign it to a variable: /var @content = \"your text\", then use: /output @content to \"file.txt\"", "@", location());
+      helpers.mlldError("Invalid output syntax. Expected: output @variable to \"path\", output \"path\", or output @variable to stdout/stderr/env. Note: String literals cannot be used as output sources. To output text content, first assign it to a variable: var @content = \"your text\", then use: output @content to \"file.txt\"", "@", location());
     }
 
 // -------------------------------------------------------------
@@ -394,7 +394,7 @@ SlashLog
   
   // Error: Missing content after /log
   / DirectiveContext LogKeyword _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing content in /log directive. Expected variable or content to log.", "@", location());
+      helpers.mlldError("Missing content in log directive. Expected variable or content to log.", "@", location());
     }
     
   // Error: Invalid @ usage
@@ -402,12 +402,12 @@ SlashLog
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
-      helpers.mlldError("Invalid variable reference in /log directive. Variable names must start with a letter or underscore.", "identifier", location());
+      helpers.mlldError("Invalid variable reference in log directive. Variable names must start with a letter or underscore.", "identifier", location());
     }
-    
-  // Error: Generic /log syntax error (catch-all)
+
+  // Error: Generic log syntax error (catch-all)
   / DirectiveContext LogKeyword {
-      helpers.mlldError("Invalid /log syntax. Expected: /log @variable or /log (for document output). /log is syntactic sugar for /output to stdout.", "@", location());
+      helpers.mlldError("Invalid log syntax. Expected: log @variable or log (for document output). log is syntactic sugar for output to stdout.", "@", location());
     }
 
 // Output source types

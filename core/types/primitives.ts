@@ -50,6 +50,9 @@ export interface FieldAccessNode {
   
   // Operation-specific fields for filter operations
   condition?: FilterCondition;
+
+  // Optional access marker (e.g., @obj.field?)
+  optional?: boolean;
   
   location?: SourceLocation;
 }
@@ -171,11 +174,13 @@ export interface SectionMarkerNode extends BaseMlldNode {
 export interface ParameterNode extends BaseMlldNode {
   type: 'Parameter';
   name: string;
+  paramType?: string;
 }
 
 // Template for-block node used inside template interpolation contexts
 export interface TemplateForBlockNode extends BaseMlldNode {
   type: 'TemplateForBlock';
+  keyVariable?: VariableReferenceNode;
   variable: VariableReferenceNode;
   source: BaseMlldNode[];
   body: BaseMlldNode[];
@@ -185,11 +190,8 @@ export interface TemplateForBlockNode extends BaseMlldNode {
 // Inline /show node used inside template interpolation contexts
 export interface TemplateInlineShowNode extends BaseMlldNode {
   type: 'TemplateInlineShow';
-  showKind: 'command' | 'code' | 'template' | 'load' | 'reference';
+  showKind: 'template' | 'load' | 'reference';
   // Payloads for different kinds
-  content?: any;           // UnifiedCommandBrackets result for command
-  lang?: BaseMlldNode[];   // Language for code
-  code?: BaseMlldNode[];   // Code nodes for code
   template?: BaseMlldNode; // TemplateCore node for template variant
   loadContent?: BaseMlldNode; // AlligatorExpression node
   reference?: BaseMlldNode;   // UnifiedReferenceWithTail node
@@ -207,6 +209,17 @@ export interface ConditionalStringFragmentNode extends BaseMlldNode {
   type: 'ConditionalStringFragment';
   condition: VariableReferenceNode;
   content: BaseMlldNode[];
+}
+
+export interface ConditionalVarOmissionNode extends BaseMlldNode {
+  type: 'ConditionalVarOmission';
+  variable: VariableReferenceNode;
+}
+
+export interface NullCoalescingTightNode extends BaseMlldNode {
+  type: 'NullCoalescingTight';
+  variable: VariableReferenceNode;
+  default: { type: 'string'; quote: 'single' | 'double'; value: string };
 }
 
 export interface ConditionalArrayElementNode extends BaseMlldNode {
@@ -234,21 +247,29 @@ export type DirectiveKind =
   | 'var'
   | 'show'
   | 'exe'
+  | 'checkpoint'
+  | 'env'
   | 'path'
   | 'output'
   | 'append'
+  | 'if'
   | 'when'
   | 'guard'
+  | 'hook'
   | 'stream'
   | 'needs'
-  | 'wants'
+  | 'profiles'
   | 'policy'
   | 'while'
-  | 'for';
+  | 'for'
+  | 'loop'
+  | 'bail'
+  | 'sign'
+  | 'verify';
 
 export type DirectiveSubtype =
   // Import subtypes
-  | 'importAll' | 'importSelected' | 'importNamespace' | 'importPolicy'
+  | 'importAll' | 'importSelected' | 'importNamespace' | 'importPolicy' | 'importMcpSelected' | 'importMcpNamespace'
   // Export subtype
   | 'exportSelected'
   // Unified var subtype
@@ -256,8 +277,10 @@ export type DirectiveSubtype =
   // Unified show subtypes
   | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
   // Unified exe subtypes
-  | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeTemplate' | 'exeTemplateFile'
-  | 'exeSection' | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeResolver' | 'exeBlock'
+  | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeValue' | 'exeTemplate' | 'exeTemplateFile'
+  | 'exeSection' | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeLoop' | 'exeResolver' | 'exeBlock'
+  // Checkpoint subtype
+  | 'checkpoint'
   // Path subtypes
   | 'pathAssignment'
   // Run subtypes
@@ -268,17 +291,30 @@ export type DirectiveSubtype =
   | 'appendFile'
   // When subtypes
   | 'whenSimple' | 'whenBlock' | 'whenMatch'
+  // If subtype
+  | 'ifBlock'
   // Guard subtype
   | 'guard'
+  // Hook subtype
+  | 'hook'
   // For subtype
   | 'for'
   // While subtype
   | 'while'
+  // Loop subtype
+  | 'loop'
+  // Bail subtype
+  | 'bail'
   // Needs/Wants subtypes
   | 'needs'
-  | 'wants'
+  | 'profiles'
   // Policy subtype
-  | 'policy';
+  | 'policy'
+  // Signing subtypes
+  | 'sign'
+  | 'verify'
+  // Env subtype
+  | 'env';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 
@@ -362,11 +398,18 @@ export interface UnaryExpression extends BaseMlldNode {
   operand: Expression;
 }
 
+export interface NewExpression extends BaseMlldNode {
+  type: 'NewExpression';
+  target: VariableReferenceNode;
+  args: BaseMlldNode[];
+}
+
 // Union type for all expression nodes
 export type Expression =
   | BinaryExpression
   | TernaryExpression
   | UnaryExpression
+  | NewExpression
   | VariableReferenceNode
   | VariableReferenceWithTailNode
   | LiteralNode

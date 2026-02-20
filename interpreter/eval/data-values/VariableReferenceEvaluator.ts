@@ -18,6 +18,7 @@ import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionPr
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
+import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 
 async function interpolateAndRecord(
   nodes: any,
@@ -81,6 +82,10 @@ export class VariableReferenceEvaluator {
     if (value && typeof value === 'object' && value.type === 'ExecInvocation') {
       return true;
     }
+
+    if (value && typeof value === 'object' && value.type === 'NewExpression') {
+      return true;
+    }
     
     // Handle runExec nodes (run @command() in object context)
     if (value && typeof value === 'object' && value.type === 'runExec' && 'invocation' in value) {
@@ -114,6 +119,11 @@ export class VariableReferenceEvaluator {
     // Handle raw VariableReference nodes (not wrapped in array)
     if (value && typeof value === 'object' && value.type === 'VariableReference') {
       return await this.evaluateRawVariableReference(value, env);
+    }
+
+    if (value && typeof value === 'object' && value.type === 'NewExpression') {
+      const { evaluateNewExpression } = await import('../new-expression');
+      return evaluateNewExpression(value as any, env);
     }
     
     // Handle variable references with tail modifiers (pipelines, etc.)
@@ -213,10 +223,10 @@ export class VariableReferenceEvaluator {
           });
           result = (fieldResult as any).value;
         } else {
-          const fieldResult = await accessField(result, field, { 
+          const fieldResult = await accessField(result, field, {
             preserveContext: true,
             env,
-            sourceLocation: (value as any)?.location 
+            sourceLocation: (value as any)?.location
           });
           result = (fieldResult as any).value;
 
@@ -291,17 +301,6 @@ export class VariableReferenceEvaluator {
     this.attachProvenance(result, variable as Variable);
 
     if (varRef.fields && varRef.fields.length > 0) {
-      // DEBUG: Log what we're about to access  
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log('🔍 BEFORE FIELD ACCESS (VariableReferenceWithTail):', {
-          variableIdentifier: varRef.identifier,
-          fields: varRef.fields,
-          resultType: typeof result,
-          resultKeys: typeof result === 'object' && result !== null ? Object.keys(result) : 'N/A',
-          resultValue: result
-        });
-      }
-      
       const { accessFields } = await import('../../utils/field-access');
       const fieldResult = await accessFields(result, varRef.fields, { 
         preserveContext: true,
@@ -322,18 +321,7 @@ export class VariableReferenceEvaluator {
         descriptorHint: variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
       });
     }
-    
-    // Debug logging
-    if (process.env.MLLD_DEBUG === 'true') {
-      logger.debug('VariableReferenceWithTail final result:', {
-        variableIdentifier: varRef.identifier,
-        resultValue: result,
-        resultType: typeof result,
-        resultIsNull: result === null,
-        resultIsUndefined: result === undefined
-      });
-    }
-    
+
     return result;
   }
 
@@ -362,18 +350,7 @@ export class VariableReferenceEvaluator {
       result = await this.extractVariableValue(variable, env);
     }
     this.attachProvenance(result, variable);
-    
-    // DEBUG: Log what we extracted
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('🔍 EXTRACTED VARIABLE VALUE:', {
-        variableIdentifier: value.identifier,
-        variableType: variable.type,
-        resultType: typeof result,
-        resultKeys: typeof result === 'object' && result !== null ? Object.keys(result) : 'N/A',
-        resultValue: result
-      });
-    }
-    
+
     // Apply field access if present
     if (hasFieldAccess) {
       // Apply each field access in sequence
@@ -396,16 +373,16 @@ export class VariableReferenceEvaluator {
           });
           result = (fieldResult as any).value;
         } else {
-          const fieldResult = await accessField(result, field, { 
+          const fieldResult = await accessField(result, field, {
             preserveContext: true,
             env,
-            sourceLocation: (value as any)?.location 
+            sourceLocation: (value as any)?.location
           });
           result = (fieldResult as any).value;
         }
       }
     }
-    
+
     return result;
   }
 
@@ -434,16 +411,7 @@ export class VariableReferenceEvaluator {
         node: value,
         identifier: value.identifier
       });
-      
-      // Debug logging
-      if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('ExecInvocation pipeline result:', {
-          pipelineResult,
-          pipelineResultType: typeof pipelineResult,
-          isPipelineInput: !!(pipelineResult && typeof pipelineResult === 'object' && 'text' in pipelineResult)
-        });
-      }
-      
+
       // Try to parse the pipeline result back to maintain type consistency
       try {
         const parsed = JSON.parse(pipelineResult);
@@ -511,7 +479,7 @@ export class VariableReferenceEvaluator {
   private async evaluatePathNode(value: any, env: Environment): Promise<any> {
     // Resolve path segments and read file
     const resolvedPath = await interpolateAndRecord(value.segments || [], env);
-    const content = await env.fileSystem.readFile(resolvedPath);
+    const content = await readFileWithPolicy(env, resolvedPath);
     return content;
   }
 

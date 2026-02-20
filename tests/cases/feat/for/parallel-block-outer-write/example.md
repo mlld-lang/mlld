@@ -3,7 +3,9 @@
 /var @shared = 0
 
 /for parallel @item in [1, 2] [
-  let @shared += @item
+  if @item > 1 [
+    let @shared += @item
+  ]
 ]
 
 /show `shared:@shared`

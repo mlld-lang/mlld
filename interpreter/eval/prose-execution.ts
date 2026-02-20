@@ -19,8 +19,15 @@ import { InterpolationContext } from '../core/interpolation-context';
 import { createSimpleTextVariable, isExecutableVariable } from '@core/types/variable';
 import type { Variable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
+import { MlldSecurityError } from '@core/errors';
 import { evaluateExecInvocation } from './exec-invocation';
 import type { ExecInvocation, CommandReference } from '@core/types';
+import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
+import {
+  maskPlainMlldTemplateFences,
+  restorePlainMlldTemplateFenceText,
+  restorePlainMlldTemplateFences
+} from '@interpreter/eval/template-fence-literals';
 
 /**
  * Build the skill injection prompt for a given skill name
@@ -53,14 +60,6 @@ export async function executeProseExecutable(
   args: Record<string, string>,
   env: Environment
 ): Promise<string> {
-  if (process.env.DEBUG_EXEC) {
-    logger.debug('Executing prose executable:', {
-      contentType: definition.contentType,
-      hasConfig: !!definition.configRef,
-      paramNames: definition.paramNames
-    });
-  }
-
   // 1. Resolve the config reference
   const configRef = definition.configRef;
   if (!configRef || configRef.length === 0) {
@@ -118,8 +117,11 @@ export async function executeProseExecutable(
 
     let fileContent: string;
     try {
-      fileContent = await env.readFile(filePath);
+      fileContent = await readFileWithPolicy(env, filePath);
     } catch (err: any) {
+      if (err instanceof MlldSecurityError) {
+        throw err;
+      }
       throw new Error(
         `Failed to read prose file "${filePath}": ${err.message || err}`
       );
@@ -150,8 +152,11 @@ export async function executeProseExecutable(
 
     let fileContent: string;
     try {
-      fileContent = await env.readFile(filePath);
+      fileContent = await readFileWithPolicy(env, filePath);
     } catch (err: any) {
+      if (err instanceof MlldSecurityError) {
+        throw err;
+      }
       throw new Error(
         `Failed to read prose template "${filePath}": ${err.message || err}`
       );
@@ -179,15 +184,6 @@ export async function executeProseExecutable(
   const skillPrompt = config.skillPrompt || buildSkillInjectionPrompt(config.skills);
   const skillPromptEnd = config.skillPromptEnd || buildSkillInjectionEnd(config.skills);
   const fullPrompt = skillPrompt + proseContent + skillPromptEnd;
-
-  if (process.env.DEBUG_EXEC) {
-    logger.debug('Prose prompt constructed:', {
-      contentLength: proseContent.length,
-      fullPromptLength: fullPrompt.length,
-      modelName: config.modelName,
-      skills: config.skills
-    });
-  }
 
   // 6. Execute via model executor
   const result = await invokeModelExecutor(fullPrompt, config, env);
@@ -334,27 +330,27 @@ async function parseAndInterpolateTemplate(
   style: 'att' | 'mtt',
   env: Environment
 ): Promise<string> {
+  const { maskedContent, literalBlocks } = maskPlainMlldTemplateFences(templateContent);
   const { parseSync } = await import('@grammar/parser');
   const startRule = style === 'mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
 
   let templateNodes: any[];
   try {
-    templateNodes = parseSync(templateContent, { startRule });
+    templateNodes = parseSync(maskedContent, { startRule });
   } catch (parseErr: any) {
     // Fallback to simple interpolation if parser fails
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('Template parse failed, using fallback:', parseErr.message);
-    }
-
     if (style === 'mtt') {
       // Normalize {{var}} to @var for fallback interpolation
-      const normalized = templateContent.replace(/{{\s*([A-Za-z_][\w.]*)\s*}}/g, '@$1');
-      return interpolateProseTemplate(normalized, env);
+      const normalized = maskedContent.replace(/{{\s*([A-Za-z_][\w.]*)\s*}}/g, '@$1');
+      const interpolated = await interpolateProseTemplate(normalized, env);
+      return restorePlainMlldTemplateFenceText(interpolated, literalBlocks);
     }
-    return interpolateProseTemplate(templateContent, env);
+    const interpolated = await interpolateProseTemplate(maskedContent, env);
+    return restorePlainMlldTemplateFenceText(interpolated, literalBlocks);
   }
 
   // Interpolate the parsed template nodes
+  templateNodes = restorePlainMlldTemplateFences(templateNodes, literalBlocks);
   return interpolate(templateNodes, env, InterpolationContext.Default);
 }
 

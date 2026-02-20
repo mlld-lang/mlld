@@ -1,0 +1,64 @@
+You are reviewing a documentation file for the mlld language to identify areas that may need updating for the 2.0 release.
+
+<target_doc path="@targetPath">
+@targetDoc
+</target_doc>
+
+<atom_docs description="Authoritative, up-to-date reference atoms for mlld 2.0. Every syntax example and feature description in these atoms is correct and current.">
+@allAtoms
+</atom_docs>
+
+<task>
+Compare the target doc against the atom reference material. Produce CANDIDATE findings — these will be verified in a separate step with broader codebase access, so do not worry about false positives at this stage. Be thorough.
+
+For each potential issue, categorize it:
+
+1. **WRONG**: Syntax examples or descriptions that appear to contradict the atoms. Quote the doc line and the atom line.
+
+2. **DEPRECATED**: Patterns or features in the doc that don't appear in any of the provided atoms. These MIGHT be deprecated, or they might be covered by atoms you weren't given. Flag them as candidates.
+
+3. **MISSING**: Features or concepts in the atoms that the doc should cover but doesn't.
+
+4. **CORRECT**: Sections already consistent with the atoms. (Brief list.)
+
+Output as JSON:
+
+```json
+{
+  "target": "@targetPath",
+  "verdict": "needs-changes|up-to-date",
+  "summary": "One-line assessment",
+  "wrong": [
+    {
+      "section": "Section heading or line where the issue appears",
+      "docQuote": "Exact text from the doc",
+      "atomQuote": "Correct text from the atom",
+      "atom": "filename.md",
+      "confidence": "high|medium|low"
+    }
+  ],
+  "deprecated": [
+    {
+      "section": "Section where the content appears",
+      "content": "The syntax/feature that might be deprecated",
+      "reason": "Why you think it's deprecated (not in provided atoms)",
+      "confidence": "high|medium|low"
+    }
+  ],
+  "missing": [
+    {
+      "atom": "filename.md",
+      "concept": "What's missing from the doc",
+      "suggestedLocation": "Where in the doc it should go"
+    }
+  ],
+  "correct": ["Brief list of sections consistent with atoms"]
+}
+```
+
+IMPORTANT:
+- Quote specific lines. Vague findings are useless.
+- For DEPRECATED items, note that you only have a SUBSET of atoms. Features not in your set may still be valid — the verification step will check.
+- Set confidence to "low" when you're unsure whether something is genuinely wrong or just covered by atoms you weren't given.
+- Set verdict to "up-to-date" only if there are zero wrong, deprecated, or missing items.
+</task>

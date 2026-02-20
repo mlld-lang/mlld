@@ -22,6 +22,20 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { evaluateShow } from '@interpreter/eval/show';
 import { createSimpleTextVariable } from '@core/types/variable';
 import { getAllDirsInPath } from '@core/security/paths';
+import { MlldSecurityError } from '@core/errors';
+
+async function readAuditEvents(
+  fileSystem: MemoryFileSystem,
+  projectRoot: string
+): Promise<Record<string, unknown>[]> {
+  const auditPath = path.join(projectRoot, '.mlld', 'sec', 'audit.jsonl');
+  const contents = await fileSystem.readFile(auditPath);
+  return contents
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as Record<string, unknown>);
+}
 
 describe('Security metadata propagation', () => {
   it('attaches descriptors when evaluating /var directives', async () => {
@@ -182,6 +196,114 @@ describe('Security metadata propagation', () => {
     expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
+  it('applies return label modifications with trust asymmetry', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const sourceDirective = parseSync('/var trusted @data = "ok"')[0] as DirectiveNode;
+    await evaluateVar(sourceDirective, env);
+
+    const exeDirective = parseSync('/exe @tag() = [ => untrusted @data ]')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocation = parseSync('/var @result = @tag()')[0] as DirectiveNode;
+    await evaluateVar(invocation, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx.labels).toContain('untrusted');
+    expect(resultVar?.mx.labels).not.toContain('trusted');
+
+    const dataVar = env.getVariable('data');
+    expect(dataVar?.mx.labels).toContain('trusted');
+    expect(dataVar?.mx.labels).not.toContain('untrusted');
+  });
+
+  it('keeps both trust labels on conflict', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
+    const sourceDirective = parseSync('/var untrusted @data = "ok"')[0] as DirectiveNode;
+    await evaluateVar(sourceDirective, env);
+
+    const exeDirective = parseSync('/exe @tag() = [ => trusted @data ]')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocation = parseSync('/var @result = @tag()')[0] as DirectiveNode;
+    await evaluateVar(invocation, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['untrusted', 'trusted']));
+
+    const events = await readAuditEvents(fileSystem, projectRoot);
+    const conflict = events.find(event => event.event === 'conflict');
+    expect(conflict).toMatchObject({
+      event: 'conflict',
+      var: '@data',
+      labels: ['trusted', 'untrusted'],
+      resolved: 'untrusted'
+    });
+  });
+
+  it('throws on trust conflict in error mode', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
+    env.recordPolicyConfig('test', { defaults: { trustconflict: 'error' } });
+
+    const sourceDirective = parseSync('/var untrusted @data = "ok"')[0] as DirectiveNode;
+    await evaluateVar(sourceDirective, env);
+
+    const exeDirective = parseSync('/exe @tag() = [ => trusted @data ]')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocation = parseSync('/var @result = @tag()')[0] as DirectiveNode;
+    await expect(evaluateVar(invocation, env)).rejects.toMatchObject({ code: 'TRUST_CONFLICT' });
+
+    const events = await readAuditEvents(fileSystem, projectRoot);
+    const conflict = events.find(event => event.event === 'conflict');
+    expect(conflict).toMatchObject({
+      event: 'conflict',
+      var: '@data',
+      labels: ['trusted', 'untrusted'],
+      resolved: 'untrusted'
+    });
+  });
+
+  it('keeps both trust labels in silent mode', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
+    env.recordPolicyConfig('test', { defaults: { trustconflict: 'silent' } });
+
+    const sourceDirective = parseSync('/var untrusted @data = "ok"')[0] as DirectiveNode;
+    await evaluateVar(sourceDirective, env);
+
+    const exeDirective = parseSync('/exe @tag() = [ => trusted @data ]')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocation = parseSync('/var @result = @tag()')[0] as DirectiveNode;
+    await evaluateVar(invocation, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['untrusted', 'trusted']));
+
+    const events = await readAuditEvents(fileSystem, projectRoot);
+    const conflict = events.find(event => event.event === 'conflict');
+    expect(conflict).toMatchObject({
+      event: 'conflict',
+      var: '@data',
+      labels: ['trusted', 'untrusted'],
+      resolved: 'untrusted'
+    });
+  });
+
+  it('blocks unprivileged return label removal', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const exeDirective = parseSync('/exe @strip() = [ => !pii "value" ]')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocation = parseSync('/var @result = @strip()')[0] as DirectiveNode;
+    await expect(evaluateVar(invocation, env)).rejects.toBeInstanceOf(MlldSecurityError);
+  });
+
   it('merges descriptors during template interpolation', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
     const secretDirective = parseSync('/var secret @token = "shh"')[0] as DirectiveNode;
@@ -217,6 +339,35 @@ describe('Security metadata propagation', () => {
     const structuredResult = result.value as any;
     expect(structuredResult?.mx?.labels ?? []).toEqual([]);
     expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+  });
+
+  it('applies src:exec taint to direct run cmd syntax', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const runDirective = parseSync('/run cmd { printf "hi" }')[0] as DirectiveNode;
+    const result = await evaluateDirective(runDirective, env);
+
+    const structuredResult = result.value as any;
+    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+  });
+
+  it('tags @input resolver variables with src:user taint', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    await env.registerBuiltinResolvers();
+
+    const resolverVar = await env.getResolverVariable('input');
+    expect(resolverVar?.mx?.taint).toEqual(expect.arrayContaining(['src:user']));
+  });
+
+  it('applies src:exec taint to /exe command output', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const exeDirective = parseSync('/exe @echo(value) = run { printf "@value" }')[0] as DirectiveNode;
+    await evaluateDirective(exeDirective, env);
+
+    const varDirective = parseSync('/var @result = @echo("hi")')[0] as DirectiveNode;
+    await evaluateDirective(varDirective, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
   });
 
   it('applies src:file and directory labels to loaded file content', async () => {

@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QA Triage Decision",
+  "description": "Phase 0 output: topic selection by triage agent",
+  "type": "object",
+  "required": ["reasoning", "selected_topics", "coverage_rationale"],
+  "properties": {
+    "reasoning": {
+      "type": "string",
+      "description": "Why these topics were selected"
+    },
+    "selected_topics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Topic IDs to test in this run"
+    },
+    "coverage_rationale": {
+      "type": "object",
+      "properties": {
+        "changed_areas": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Topics covering recently changed code"
+        },
+        "regression_targets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Topics that failed in previous runs"
+        },
+        "critical_path": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "High-priority topics regardless of changes"
+        }
+      }
+    }
+  }
+}

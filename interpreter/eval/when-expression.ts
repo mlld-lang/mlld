@@ -6,21 +6,40 @@
  */
 
 import type { WhenExpressionNode, WhenConditionPair, WhenEntry } from '@core/types/when';
-import { isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
-import type { BaseMlldNode } from '@core/types';
+import { isLetAssignment, isAugmentedAssignment, isConditionPair, isDirectAction } from '@core/types/when';
+import { astLocationToSourceLocation, type BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
-import { MlldWhenExpressionError } from '@core/errors';
+import { isBailError, MlldWhenExpressionError } from '@core/errors';
 import { evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { evaluateCondition, conditionTargetsDenied } from './when';
+import { evaluateCondition, conditionTargetsDenied, evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 import { logger } from '@core/utils/logger';
-import { asText, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
+import { asText, isStructuredValue, ensureStructuredValue, extractSecurityDescriptor } from '../utils/structured-value';
 import { VariableImporter } from './import/VariableImporter';
-import { combineValues } from '../utils/value-combine';
-import { extractVariableValue } from '../utils/variable-resolution';
+import { extractVariableValue, isVariable } from '../utils/variable-resolution';
 import { isContinueLiteral, isDoneLiteral, type ContinueLiteralNode, type DoneLiteralNode } from '@core/types/control';
-import { evaluateUnifiedExpression } from './expressions';
+import { isExeReturnControl } from './exe-return';
+import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+
+/**
+ * Re-attach a security descriptor to a value after normalization has stripped it.
+ * For objects, uses the ExpressionProvenance WeakMap.
+ * For strings (primitives that can't be WeakMap keys), wraps as StructuredValue.
+ */
+function reattachSecurityDescriptor(value: unknown, descriptor: SecurityDescriptor | undefined): unknown {
+  if (!descriptor) return value;
+  if (descriptor.labels.length === 0 && descriptor.taint.length === 0 && descriptor.sources.length === 0) return value;
+  if (value && typeof value === 'object') {
+    setExpressionProvenance(value, descriptor);
+    return value;
+  }
+  if (typeof value === 'string') {
+    return ensureStructuredValue(value, 'text', value, { security: descriptor });
+  }
+  return value;
+}
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
@@ -35,6 +54,144 @@ async function getInterpolateFn(): Promise<InterpolateFn> {
     cachedInterpolateFn = module.interpolate;
   }
   return cachedInterpolateFn;
+}
+
+function getWhenExpressionSource(env: Environment): { filePath: string; source?: string } {
+  const filePath =
+    env.getCurrentFilePath() ??
+    env.getPathContext?.()?.filePath ??
+    '<stdin>';
+  const source = env.getSource(filePath) ?? (filePath !== '<stdin>' ? env.getSource('<stdin>') : undefined);
+  return { filePath, source };
+}
+
+function getConditionLocation(
+  condition: BaseMlldNode[],
+  filePath: string
+): ReturnType<typeof astLocationToSourceLocation> {
+  const first = condition[0] as any;
+  if (!first?.location) return undefined;
+  return astLocationToSourceLocation(first.location, filePath);
+}
+
+function normalizeConditionText(text?: string, maxLength = 160): string | undefined {
+  if (!text) return undefined;
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return undefined;
+  return normalized.length > maxLength ? normalized.slice(0, maxLength) + '...' : normalized;
+}
+
+function getNodeOffsetRange(node: unknown): { start?: number; end?: number } {
+  if (!node || typeof node !== 'object') {
+    return {};
+  }
+
+  let start: number | undefined;
+  let end: number | undefined;
+  const stack: unknown[] = [node];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== 'object') {
+      continue;
+    }
+
+    const location = (current as any).location;
+    const locStart = location?.start?.offset;
+    const locEnd = location?.end?.offset ?? location?.start?.offset;
+    if (typeof locStart === 'number') {
+      start = typeof start === 'number' ? Math.min(start, locStart) : locStart;
+    }
+    if (typeof locEnd === 'number') {
+      end = typeof end === 'number' ? Math.max(end, locEnd) : locEnd;
+    }
+
+    for (const value of Object.values(current as Record<string, unknown>)) {
+      if (!value || typeof value !== 'object') {
+        continue;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          stack.push(item);
+        }
+      } else {
+        stack.push(value);
+      }
+    }
+  }
+
+  return { start, end };
+}
+
+function getConditionText(condition: BaseMlldNode[], source?: string): string | undefined {
+  if (!source || condition.length === 0) return undefined;
+  const first = condition[0] as any;
+  const last = condition[condition.length - 1] as any;
+  const start = first?.location?.start?.offset;
+  const end = last?.location?.end?.offset ?? last?.location?.start?.offset;
+  if (typeof start !== 'number' || typeof end !== 'number' || end <= start) return undefined;
+  return normalizeConditionText(source.slice(start, end));
+}
+
+function getConditionPairText(pair: WhenConditionPair, source?: string): string | undefined {
+  if (!source || !Array.isArray(pair.condition) || pair.condition.length === 0) {
+    return undefined;
+  }
+
+  const firstCondition = pair.condition[0];
+  const lastCondition = pair.condition[pair.condition.length - 1];
+  const lastAction =
+    Array.isArray(pair.action) && pair.action.length > 0
+      ? pair.action[pair.action.length - 1]
+      : undefined;
+  const startRange = getNodeOffsetRange(firstCondition);
+  const actionRange = getNodeOffsetRange(lastAction);
+  const conditionRange = getNodeOffsetRange(lastCondition);
+
+  const start = startRange.start;
+  const end = actionRange.end ?? conditionRange.end;
+  if (typeof start !== 'number' || typeof end !== 'number' || end <= start) {
+    return undefined;
+  }
+
+  return normalizeConditionText(source.slice(start, end));
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+async function evaluateActionNodes(
+  nodes: BaseMlldNode[],
+  env: Environment,
+  context?: EvaluationContext
+): Promise<EvalResult> {
+  let currentEnv = env;
+  let lastResult: EvalResult = { value: undefined, env: currentEnv };
+
+  for (const node of nodes) {
+    if (isLetAssignment(node)) {
+      currentEnv = await evaluateLetAssignment(node, currentEnv);
+      lastResult = { value: undefined, env: currentEnv };
+      continue;
+    }
+    if (isAugmentedAssignment(node)) {
+      currentEnv = await evaluateAugmentedAssignment(node, currentEnv);
+      lastResult = { value: undefined, env: currentEnv };
+      continue;
+    }
+
+    const result = await evaluate(node as any, currentEnv, context);
+    currentEnv = result.env || currentEnv;
+    lastResult = result;
+
+    if (isExeReturnControl(result.value)) {
+      return { value: result.value, env: currentEnv };
+    }
+  }
+
+  return { value: lastResult.value, env: currentEnv };
 }
 
 /**
@@ -97,10 +254,16 @@ async function evaluateControlLiteral(
   if (Array.isArray(val)) {
     const target = val.length === 1 ? val[0] : val;
     if (target && typeof target === 'object' && 'type' in (target as Record<string, unknown>)) {
-      const evaluated = await evaluateUnifiedExpression(target as any, env);
+      const evaluated = await evaluate(target as any, env, { isExpression: true });
+      if (isVariable(evaluated.value)) {
+        return extractVariableValue(evaluated.value, env);
+      }
       return evaluated.value;
     }
     const evaluated = await evaluate(val as any, env, { isExpression: true });
+    if (isVariable(evaluated.value)) {
+      return extractVariableValue(evaluated.value, env);
+    }
     return evaluated.value;
   }
   if (val === 'done' || val === 'continue') {
@@ -113,7 +276,11 @@ async function evaluateControlLiteral(
  * Validate that 'none' conditions are placed correctly in a when block
  * Only checks condition pairs, not let assignments
  */
-function validateNonePlacement(entries: WhenEntry[]): void {
+function validateNonePlacement(
+  entries: WhenEntry[],
+  sourceInfo: { filePath: string; source?: string },
+  env: Environment
+): void {
   // Filter to only condition pairs for validation
   const conditionPairs = entries.filter(isConditionPair);
 
@@ -134,14 +301,24 @@ function validateNonePlacement(entries: WhenEntry[]): void {
     } else if (foundNone) {
       throw new MlldWhenExpressionError(
         'The "none" keyword can only appear as the last condition(s) in a when block',
-        condition[0]?.location
+        astLocationToSourceLocation(condition[0]?.location, sourceInfo.filePath),
+        {
+          filePath: sourceInfo.filePath,
+          sourceContent: sourceInfo.source
+        },
+        { env }
       );
     }
 
     if (foundWildcard && condition.length === 1 && isNoneCondition(condition[0])) {
       throw new MlldWhenExpressionError(
         'The "none" keyword cannot appear after "*" (wildcard) as it would never be reached',
-        condition[0].location
+        astLocationToSourceLocation(condition[0].location, sourceInfo.filePath),
+        {
+          filePath: sourceInfo.filePath,
+          sourceContent: sourceInfo.source
+        },
+        { env }
       );
     }
   }
@@ -162,25 +339,44 @@ export async function evaluateWhenExpression(
   context?: EvaluationContext,
   options?: WhenExpressionOptions
 ): Promise<EvalResult> {
-  // console.error('🚨 WHEN-EXPRESSION EVALUATOR CALLED');
-  
+  return env.withExecutionContext('when-expression', { allowLetShadowing: true }, async () =>
+    evaluateWhenExpressionInternal(node, env, context, options)
+  );
+}
+
+async function evaluateWhenExpressionInternal(
+  node: WhenExpressionNode,
+  env: Environment,
+  context?: EvaluationContext,
+  options?: WhenExpressionOptions
+): Promise<EvalResult> {
+  const sourceInfo = getWhenExpressionSource(env);
+
   // Validate none placement
-  validateNonePlacement(node.conditions);
+  validateNonePlacement(node.conditions, sourceInfo, env);
   
-  const errors: Error[] = [];
+  const errors: MlldWhenExpressionError[] = [];
   const denyMode = Boolean(options?.denyMode);
   let deniedHandlerRan = false;
   
-  // Check if we have a "first" modifier (stop after first match)
-  const isFirstMode = node.meta?.modifier === 'first';
-
   const boundIdentifier = (node as any).boundIdentifier || node.meta?.boundIdentifier;
   const hasBoundValue = Boolean((node as any).boundValue && typeof boundIdentifier === 'string' && boundIdentifier.length > 0);
   let boundValue: unknown;
+  let boundValueDescriptor: SecurityDescriptor | undefined;
 
   if (hasBoundValue) {
     const boundResult = await evaluate((node as any).boundValue, env, context);
     boundValue = boundResult.value;
+    // Extract security descriptor from the bound value (e.g., secret @key's labels)
+    // This taint must flow through to the when-expression result
+    boundValueDescriptor = extractSecurityDescriptor(boundValue);
+    if (!boundValueDescriptor && isVariable(boundValue)) {
+      const varMx = (boundValue as any).mx;
+      if (varMx) {
+        const { varMxToSecurityDescriptor } = await import('@core/types/variable/VarMxHelpers');
+        boundValueDescriptor = varMxToSecurityDescriptor(varMx);
+      }
+    }
   }
 
   const setBoundValue = (targetEnv: Environment) => {
@@ -196,12 +392,7 @@ export async function evaluateWhenExpression(
     targetEnv.setVariable(boundIdentifier, variable);
   };
   
-  // Track results from all matching conditions (for bare when)
-  let lastMatchValue: any = null;
-  let hasMatch = false;
-  let hasNonNoneMatch = false;
-  let hasValueProducingMatch = false;  // Track if any condition produced an actual return value (not just side effects)
-  let lastNoneValue: any = null;
+  // Track results from matching conditions
   let accumulatedEnv = env;
   const buildResult = (value: unknown, environment: Environment): EvalResult => ({
     value,
@@ -213,13 +404,40 @@ export async function evaluateWhenExpression(
   if (node.conditions.length === 0) {
     return buildResult(null, env);
   }
-  
+
   // Check if any condition pair has an action (filter out let assignments)
   const conditionPairs = node.conditions.filter(isConditionPair);
   const hasAnyAction = conditionPairs.some(c => c.action && c.action.length > 0);
-  if (!hasAnyAction) {
+
+  // Check if we have direct actions (show, log, etc. without condition)
+  const hasDirectActions = node.conditions.some(e => isDirectAction(e));
+
+  // Check if this is a "when (condition) [block]" syntax
+  // In this case, there are no condition pairs, only let/augmented assignments and/or direct actions
+  // The boundValue holds the condition to check
+  const hasOnlyAssignmentsOrDirectActions = !hasAnyAction && node.conditions.some(e =>
+    isLetAssignment(e) || isAugmentedAssignment(e) || isDirectAction(e)
+  );
+
+  if (!hasAnyAction && !hasOnlyAssignmentsOrDirectActions) {
     logger.warn('WhenExpression has no actions defined');
     return buildResult(null, env);
+  }
+
+  // For "when (condition) [block]" syntax, check if the bound condition is truthy
+  // If falsy, skip the block entirely
+  let boundConditionIsTruthy = true;
+  if (hasBoundValue && hasOnlyAssignmentsOrDirectActions) {
+    // Use evaluateCondition to properly check truthiness
+    const boundValueNode = (node as any).boundValue;
+    if (boundValueNode) {
+      boundConditionIsTruthy = await evaluateCondition([boundValueNode], env);
+    }
+
+    if (!boundConditionIsTruthy) {
+      // Condition is falsy, skip the entire block
+      return buildResult(null, accumulatedEnv);
+    }
   }
 
   // Check all actions for code blocks upfront (only condition pairs, not let assignments)
@@ -235,105 +453,67 @@ export async function evaluateWhenExpression(
       });
 
       if (hasCodeExecution) {
+        const conditionText = getConditionText(pair.condition, sourceInfo.source);
         throw new MlldWhenExpressionError(
-          'Code blocks are not supported in when expressions. Define your logic in a separate /exe function and call it instead.',
-          node.location,
-          { conditionIndex: i, phase: 'action', type: 'code-block-not-supported' }
+          'Code blocks are not supported in when expressions. Define your logic in a separate exe function and call it instead.',
+          astLocationToSourceLocation(node.location, sourceInfo.filePath),
+          {
+            conditionIndex: i,
+            phase: 'action',
+            type: 'code-block-not-supported',
+            conditionText,
+            filePath: sourceInfo.filePath,
+            sourceContent: sourceInfo.source
+          },
+          { env }
         );
       }
     }
   }
   
-  // First pass: Evaluate entries in order (let assignments and non-none conditions)
+  // First pass: Evaluate entries in order (let assignments, direct actions, and non-none conditions)
   for (let i = 0; i < node.conditions.length; i++) {
     const entry = node.conditions[i];
 
-    // Handle let assignments - evaluate and store in accumulated environment
-    if (isLetAssignment(entry)) {
-      let value: unknown;
-      // Check if value is a raw primitive (number, boolean, null, string) or contains nodes
-      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
-      const isRawPrimitive = firstValue === null ||
-        typeof firstValue === 'number' ||
-        typeof firstValue === 'boolean' ||
-        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
+    // Unwrap array-wrapped entries (grammar sometimes wraps actions in arrays)
+    const unwrappedEntry = Array.isArray(entry) && entry.length === 1 ? entry[0] : entry;
 
-      if (isRawPrimitive) {
-        // For raw primitives, use the value directly
-        value = entry.value.length === 1 ? firstValue : entry.value;
-      } else {
-        // For nodes, evaluate them
-        const valueResult = await evaluate(entry.value, accumulatedEnv, {
-          ...(context || {}),
-          isExpression: true
-        });
-        value = valueResult.value;
-      }
-
-      const importer = new VariableImporter();
-      const variable = importer.createVariableFromValue(
-        entry.identifier,
-        value,
-        'let',
-        undefined,
-        { env: accumulatedEnv }
-      );
-      accumulatedEnv = accumulatedEnv.createChild();
-      accumulatedEnv.setVariable(entry.identifier, variable);
+    // Handle let assignments - use evaluateLetAssignment for consistent behavior
+    if (isLetAssignment(unwrappedEntry)) {
+      accumulatedEnv = await evaluateLetAssignment(unwrappedEntry, accumulatedEnv);
       continue;
     }
 
-    // Handle augmented assignments - modify existing local variable
-    if (isAugmentedAssignment(entry)) {
-      // Get existing variable - must exist and be a let binding
-      const existing = accumulatedEnv.getVariable(entry.identifier);
-      if (!existing) {
-        throw new MlldWhenExpressionError(
-          `Cannot use += on undefined variable @${entry.identifier}. ` +
-          `Use "let @${entry.identifier} = ..." first.`,
-          entry.location
-        );
-      }
-
-      // Evaluate the RHS value
-      let rhsValue: unknown;
-      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
-      const isRawPrimitive = firstValue === null ||
-        typeof firstValue === 'number' ||
-        typeof firstValue === 'boolean' ||
-        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
-
-      if (isRawPrimitive) {
-        rhsValue = entry.value.length === 1 ? firstValue : entry.value;
-      } else {
-        const rhsResult = await evaluate(entry.value, accumulatedEnv, {
-          ...(context || {}),
-          isExpression: true
-        });
-        rhsValue = rhsResult.value;
-      }
-
-      // Get current value of the variable
-      const existingValue = await extractVariableValue(existing, accumulatedEnv);
-
-      // Combine values using the += semantics
-      const combined = combineValues(existingValue, rhsValue, entry.identifier);
-
-      // Update variable in local scope (use updateVariable to bypass redefinition check)
-      const importer = new VariableImporter();
-      const updatedVar = importer.createVariableFromValue(
-        entry.identifier,
-        combined,
-        'let',
-        undefined,
-        { env: accumulatedEnv }
-      );
-      accumulatedEnv.updateVariable(entry.identifier, updatedVar);
+    // Handle augmented assignments - use evaluateAugmentedAssignment for proper scope handling
+    if (isAugmentedAssignment(unwrappedEntry)) {
+      accumulatedEnv = await evaluateAugmentedAssignment(unwrappedEntry, accumulatedEnv);
       continue;
     }
 
-    // From here on, entry is a condition pair
-    const pair = entry as WhenConditionPair;
+    // Handle direct actions (show, log, etc. without condition)
+    // These are only executed if we're in a bound-value context where the condition passed
+    if (isDirectAction(unwrappedEntry)) {
+      // Direct actions only make sense in bound-value when blocks
+      // The boundConditionIsTruthy check above ensures we only get here if condition passed
+      if (hasBoundValue && boundConditionIsTruthy) {
+        const actionEnv = accumulatedEnv.createChild();
+        setBoundValue(actionEnv);
+        // Pass the unwrapped entry (not wrapped in another array)
+        const toEvaluate = Array.isArray(entry) ? entry : [unwrappedEntry];
+        const actionResult = await evaluateActionNodes(toEvaluate as BaseMlldNode[], actionEnv, context);
+        const resultEnv = actionResult.env || actionEnv;
+        if (isExeReturnControl(actionResult.value)) {
+          accumulatedEnv.mergeChild(resultEnv);
+          return buildResult(actionResult.value, accumulatedEnv);
+        }
+        accumulatedEnv.mergeChild(resultEnv);
+        // Direct actions are side effects, don't update the return value
+      }
+      continue;
+    }
+
+    // From here on, entry is a condition pair (use unwrapped entry)
+    const pair = unwrappedEntry as WhenConditionPair;
 
     // Check if this is a none condition
     if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
@@ -351,18 +531,8 @@ export async function evaluateWhenExpression(
       if (hasBoundValue) setBoundValue(conditionEnv);
       const conditionResult = await evaluateCondition(pair.condition, conditionEnv);
 
-      if (process.env.DEBUG_WHEN) {
-        logger.debug('WhenExpression condition result:', { 
-          index: i, 
-          conditionResult,
-          hasAction: !!(pair.action && pair.action.length > 0)
-        });
-      }
-      
       if (conditionResult) {
         // Condition matched - evaluate the action
-        hasMatch = true;
-        hasNonNoneMatch = true;
         const matchedDeniedCondition = conditionTargetsDenied(pair.condition);
         if (matchedDeniedCondition) {
           deniedHandlerRan = true;
@@ -414,27 +584,11 @@ export async function evaluateWhenExpression(
                   value = 'retry';
                 }
               }
-              // In "first" mode, return immediately after first match
-              if (isFirstMode) {
-                return buildResult(value, accumulatedEnv);
-              }
-              lastMatchValue = value;
-              hasMatch = true;
-              hasValueProducingMatch = true;  // action produces a value
-              continue;
+              // Return immediately after the first match
+              return buildResult(value, accumulatedEnv);
             }
           }
 
-          // Debug: What are we trying to evaluate?
-          if (Array.isArray(pair.action) && pair.action[0]) {
-            const firstAction = pair.action[0];
-            logger.debug('WhenExpression evaluating action:', {
-              actionType: firstAction.type,
-              actionKind: firstAction.kind,
-              actionSubtype: firstAction.subtype
-            });
-          }
-          
           // Evaluate the action to get its value
           // IMPORTANT SCOPING RULE:
           // - /when (directive) uses global scope semantics (handled elsewhere)
@@ -459,16 +613,48 @@ export async function evaluateWhenExpression(
           if (wrapperCandidate) {
             const interpolateFn = await getInterpolateFn();
             value = await interpolateFn(wrapperCandidate.content, actionEnv, InterpolationContext.Template);
+          } else if (node.meta?.isBlockForm && Array.isArray(pair.action) && pair.action.length > 1) {
+            // Block form: when @condition [statements; => value]
+            // Execute each statement sequentially, accumulating environment changes
+            let blockEnv = actionEnv;
+            let lastValue: unknown = undefined;
+            let blockResult: EvalResult | null = null;
+            for (const actionNode of pair.action) {
+              if (isLetAssignment(actionNode)) {
+                blockEnv = await evaluateLetAssignment(actionNode as any, blockEnv);
+              } else if (isAugmentedAssignment(actionNode)) {
+                blockEnv = await evaluateAugmentedAssignment(actionNode as any, blockEnv);
+              } else {
+                const result = await evaluate(actionNode, blockEnv, context);
+                if (result.env) {
+                  blockEnv = result.env;
+                }
+                lastValue = result.value;
+                if (isExeReturnControl(result.value)) {
+                  blockResult = result;
+                  break;
+                }
+              }
+            }
+            if (blockResult) {
+              actionResult = blockResult;
+              value = blockResult.value;
+            } else {
+              actionResult = { value: lastValue, env: blockEnv };
+              value = lastValue;
+            }
           } else {
-            // FIXED: Suppress side effects in when expressions used in /exe functions
-            // Side effects should be handled by the calling context (e.g., /show @func())
-            // Evaluate the action in normal directive context so effects stream.
-            // We avoid forcing isExpression here to preserve effect emission.
-            actionResult = await evaluate(pair.action, actionEnv, context);
+            actionResult = await evaluateActionNodes(pair.action, actionEnv, context);
             value = actionResult.value;
           }
-          value = await normalizeActionValue(value, actionEnv);
           const executionEnv = actionResult?.env ?? actionEnv;
+          if (actionResult && isExeReturnControl(actionResult.value)) {
+            accumulatedEnv.mergeChild(executionEnv);
+            return buildResult(reattachSecurityDescriptor(actionResult.value, boundValueDescriptor), accumulatedEnv);
+          }
+          // Extract security descriptor before normalizeActionValue strips it
+          const preNormDescriptor = extractSecurityDescriptor(value) ?? extractSecurityDescriptor(actionResult?.value);
+          value = await normalizeActionValue(value, actionEnv);
           if (isDoneLiteral(value as any)) {
             const resolved = await evaluateControlLiteral(value as any, executionEnv);
             value = { __whileControl: 'done', value: resolved };
@@ -527,7 +713,16 @@ export async function evaluateWhenExpression(
           if (node.withClause && node.withClause.pipes) {
             value = await applyTailModifiers(value, node.withClause.pipes, executionEnv);
           }
-          
+
+          // Propagate security descriptors from bound value and action result
+          // This prevents taint stripping through when-expressions
+          const resultDescriptor = preNormDescriptor && boundValueDescriptor
+            ? mergeDescriptors(preNormDescriptor, boundValueDescriptor)
+            : preNormDescriptor ?? boundValueDescriptor;
+          if (resultDescriptor && value !== null && value !== undefined) {
+            value = reattachSecurityDescriptor(value, resultDescriptor);
+          }
+
           // Merge variable assignments from this action back into the
           // accumulated environment so subsequent actions can see them.
           // We use mergeChild to merge variables; since actions are evaluated
@@ -538,60 +733,102 @@ export async function evaluateWhenExpression(
             return buildResult(value, accumulatedEnv);
           }
 
-          // In "first" mode, return immediately after first match
-          if (isFirstMode) {
-            return buildResult(value, accumulatedEnv);
+          // Return immediately after the first match
+          return buildResult(value, accumulatedEnv);
+        } catch (actionError) {
+          if (isBailError(actionError)) {
+            throw actionError;
           }
 
-          // For bare when, save the value and continue evaluating
-          lastMatchValue = value;
-          
-          // Check if this is a variable assignment (which shouldn't count as value-producing)
-          if (Array.isArray(pair.action) && pair.action.length === 1) {
-            const singleAction = pair.action[0];
-            if (singleAction && typeof singleAction === 'object' && 
-                singleAction.type === 'Directive' && singleAction.kind === 'var') {
-              // Variable assignment - don't mark as value-producing
-              // The value is just for internal chaining, not a return value
-            } else {
-              hasValueProducingMatch = true;  // This action produced a real value
+          if (!denyMode) {
+            const { handleExecGuardDenial } = await import('./guard-denial-handler');
+            const handled = await handleExecGuardDenial(actionError, {
+              execEnv: accumulatedEnv,
+              env,
+              whenExprNode: node
+            });
+            if (handled) {
+              return {
+                ...handled,
+                env: handled.env ?? accumulatedEnv,
+                internal: {
+                  ...(handled.internal ?? {}),
+                  deniedHandlerRan: true
+                }
+              };
             }
-          } else {
-            hasValueProducingMatch = true;  // Multi-action or non-directive action produced a value
           }
-          
-          // Continue to evaluate other matching conditions
-        } catch (actionError) {
+          const conditionText = getConditionPairText(pair, sourceInfo.source)
+            ?? getConditionText(pair.condition, sourceInfo.source);
+          const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
+          const actionMessage = getErrorMessage(actionError);
           throw new MlldWhenExpressionError(
-            `Error evaluating action for condition ${i + 1}: ${actionError.message}`,
-            node.location,
-            { conditionIndex: i, phase: 'action', originalError: actionError }
+            `Error evaluating action for condition ${i + 1}${conditionText ? ` (${conditionText})` : ''}: ${actionMessage}`,
+            conditionLocation ?? astLocationToSourceLocation(node.location, sourceInfo.filePath),
+            {
+              conditionIndex: i,
+              phase: 'action',
+              originalError: actionError as Error,
+              conditionText,
+              conditionLocation,
+              filePath: sourceInfo.filePath,
+              sourceContent: sourceInfo.source
+            },
+            { env }
           );
         }
       }
     } catch (conditionError) {
+      if (isBailError(conditionError)) {
+        throw conditionError;
+      }
+      if (conditionError instanceof MlldWhenExpressionError && conditionError.details?.phase === 'action') {
+        errors.push(conditionError);
+        continue;
+      }
+
       // Let the error propagate - it's expected in retry scenarios
       
       // Collect condition errors but continue evaluating
+      const conditionText = getConditionText(pair.condition, sourceInfo.source);
+      const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
+      const conditionMessage = getErrorMessage(conditionError);
       errors.push(new MlldWhenExpressionError(
-        `Error evaluating condition ${i + 1}: ${conditionError.message}`,
-        node.location,
-        { conditionIndex: i, phase: 'condition', originalError: conditionError }
+        `Error evaluating condition ${i + 1}${conditionText ? ` (${conditionText})` : ''}: ${conditionMessage}`,
+        conditionLocation ?? astLocationToSourceLocation(node.location, sourceInfo.filePath),
+        {
+          conditionIndex: i,
+          phase: 'condition',
+          originalError: conditionError as Error,
+          conditionText,
+          conditionLocation,
+          filePath: sourceInfo.filePath,
+          sourceContent: sourceInfo.source
+        },
+        { env }
       ));
     }
   }
   
-  // Second pass: Evaluate none conditions if no value-producing conditions matched
-  if (!hasValueProducingMatch && !denyMode) {
+  // Second pass: Evaluate none conditions after scanning non-none conditions
+  if (!denyMode) {
     for (let i = 0; i < node.conditions.length; i++) {
       const entry = node.conditions[i];
 
-      // Skip let assignments in second pass (already processed)
-      if (isLetAssignment(entry)) {
+      // Unwrap array-wrapped entries
+      const unwrappedEntry = Array.isArray(entry) && entry.length === 1 ? entry[0] : entry;
+
+      // Skip let and augmented assignments in second pass (already processed)
+      if (isLetAssignment(unwrappedEntry) || isAugmentedAssignment(unwrappedEntry)) {
         continue;
       }
 
-      const pair = entry;
+      // Skip direct actions in second pass (already processed)
+      if (isDirectAction(unwrappedEntry)) {
+        continue;
+      }
+
+      const pair = unwrappedEntry as WhenConditionPair;
 
       // Only process none conditions in second pass
       if (!(pair.condition.length === 1 && isNoneCondition(pair.condition[0]))) {
@@ -608,53 +845,85 @@ export async function evaluateWhenExpression(
         const actionEnv = accumulatedEnv.createChild();
         // FIXED: Suppress side effects in when expressions used in /exe functions
         // Side effects should be handled by the calling context (e.g., /show @func())
-        const actionResult = await evaluate(pair.action, actionEnv, context);
-        
+        const actionResult = await evaluateActionNodes(pair.action, actionEnv, context);
+        if (isExeReturnControl(actionResult.value)) {
+          accumulatedEnv.mergeChild(actionResult.env || actionEnv);
+          return buildResult(reattachSecurityDescriptor(actionResult.value, boundValueDescriptor), accumulatedEnv);
+        }
+
         let value = actionResult.value;
+        // Extract security descriptor before normalizeActionValue strips it
+        const nonePreNormDescriptor = extractSecurityDescriptor(value) ?? extractSecurityDescriptor(actionResult.value);
         value = await normalizeActionValue(value, actionEnv);
-        
+
         // Apply tail modifiers if present
         if (node.withClause && node.withClause.pipes) {
           value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
         }
-        
+
+        // Propagate security descriptors from bound value and action result
+        const noneResultDescriptor = nonePreNormDescriptor && boundValueDescriptor
+          ? mergeDescriptors(nonePreNormDescriptor, boundValueDescriptor)
+          : nonePreNormDescriptor ?? boundValueDescriptor;
+        if (noneResultDescriptor && value !== null && value !== undefined) {
+          value = reattachSecurityDescriptor(value, noneResultDescriptor);
+        }
+
         // Merge variable assignments from this none-action into accumulator
         accumulatedEnv.mergeChild(actionEnv);
 
-        // In "first" mode, return immediately after first none match
-          if (isFirstMode) {
-            return buildResult(value, accumulatedEnv);
-          }
-
-        // For bare when, save the none value and continue
-        lastNoneValue = value;
-        hasMatch = true;
+        // Return immediately after the first none match
+        return buildResult(value, accumulatedEnv);
       } catch (actionError) {
+        if (isBailError(actionError)) {
+          throw actionError;
+        }
+        const conditionText = getConditionText(pair.condition, sourceInfo.source);
+        const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
+        const actionMessage = getErrorMessage(actionError);
         throw new MlldWhenExpressionError(
-          `Error evaluating none action for condition ${i + 1}: ${actionError.message}`,
-          node.location,
-          { conditionIndex: i, phase: 'action', originalError: actionError }
+          `Error evaluating none action for condition ${i + 1}${conditionText ? ` (${conditionText})` : ''}: ${actionMessage}`,
+          conditionLocation ?? astLocationToSourceLocation(node.location, sourceInfo.filePath),
+          {
+            conditionIndex: i,
+            phase: 'action',
+            originalError: actionError as Error,
+            conditionText,
+            conditionLocation,
+            filePath: sourceInfo.filePath,
+            sourceContent: sourceInfo.source
+          },
+          { env }
         );
       }
     }
-    
-    // If we had none matches, use the last none value
-    if (lastNoneValue !== null) {
-      lastMatchValue = lastNoneValue;
-    }
   }
-  
-  // If we had any matches, return the last match value with accumulated environment
-  if (hasMatch) {
-    return buildResult(lastMatchValue, accumulatedEnv);
-  }
+
   
   // If we collected errors and no condition matched, report them
   if (errors.length > 0) {
+    const errorSummaries = errors.map((error, index) => {
+      const details = error.details;
+      const conditionIndex = typeof details?.conditionIndex === 'number' ? details.conditionIndex + 1 : index + 1;
+      const conditionText = details?.conditionText ? ` (${details.conditionText})` : '';
+      const message = details?.originalError ? getErrorMessage(details.originalError) : error.message;
+      const location = details?.conditionLocation;
+      const locationText = location
+        ? ` at line ${location.line}, column ${location.column}${location.filePath ? ` in ${location.filePath}` : ''}`
+        : '';
+      return `Condition ${conditionIndex}${conditionText} failed${locationText}: ${message}`;
+    });
+    const conditionErrors = errorSummaries.join('\n  ');
     throw new MlldWhenExpressionError(
       `When expression evaluation failed with ${errors.length} condition errors`,
-      node.location,
-      { errors }
+      astLocationToSourceLocation(node.location, sourceInfo.filePath),
+      {
+        errors: errorSummaries,
+        conditionErrors,
+        filePath: sourceInfo.filePath,
+        sourceContent: sourceInfo.source
+      },
+      { env }
     );
   }
   
@@ -709,12 +978,13 @@ export async function peekWhenExpressionType(
   const actionTypes = new Set<import('@core/types/variable').VariableTypeDiscriminator>();
   
   for (const entry of node.conditions) {
-    // Skip let assignments - they don't produce action types
-    if (isLetAssignment(entry)) {
+    // Skip let assignments and direct actions - they don't produce action types
+    if (isLetAssignment(entry) || isAugmentedAssignment(entry) || isDirectAction(entry)) {
       continue;
     }
 
-    const pair = entry;
+    // Entry is a condition pair
+    const pair = entry as WhenConditionPair;
     if (pair.action && pair.action.length > 0) {
       // Simple heuristic based on first node type
       const firstNode = pair.action[0];

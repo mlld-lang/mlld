@@ -5,16 +5,16 @@ brief: Route execution based on conditions
 category: patterns
 parent: patterns
 tags: [patterns, conditionals, workflows, routing]
-related: [when-first, when-simple]
+related: [when, if]
 related-code: []
-updated: 2026-01-05
+updated: 2026-01-31
 ---
 
 ```mlld
 import { @getPR, @commentOnPR } from @company/github
 
 var @pr = @getPR(@MLLD_PR_NUMBER)
-var @status = when first [
+var @status = when [
   @pr.mergeable => "ready"
   * => "blocked"
 ]

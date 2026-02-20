@@ -1,0 +1,11 @@
+>> Audit context helpers
+
+>> Log event to events.jsonl
+exe @logEvent(runDir, eventType, eventData) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  let @parsed = @eventData | @parse
+  let @event = { ts: @now, event: @eventType, ...@parsed }
+  append @event to "@eventsFile"
+]
+
+export { @logEvent }

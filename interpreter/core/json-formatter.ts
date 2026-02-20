@@ -1,4 +1,9 @@
 import { createASTAwareJSONReplacer } from '../utils/ast-evaluation';
+import {
+  formatNamespaceExecutable,
+  isNamespaceInternalField,
+  resolveNamespaceFrontmatter
+} from './interpreter/namespace-shared';
 
 export interface JSONFormatOptions {
   pretty?: boolean;
@@ -88,27 +93,20 @@ export class JSONFormatter {
     };
     
     // Add frontmatter if present
-    const fm = namespaceObject.fm || namespaceObject.frontmatter || namespaceObject.__meta__;
-    if (fm && Object.keys(fm).length > 0) {
-      cleaned.frontmatter = fm;
+    const frontmatter = resolveNamespaceFrontmatter(namespaceObject);
+    if (frontmatter) {
+      cleaned.frontmatter = frontmatter;
     }
     
     // Separate variables and executables
-    const internalFields = ['fm', 'frontmatter', '__meta__'];
     let hasExports = false;
     
     for (const [key, value] of Object.entries(namespaceObject)) {
-      if (!internalFields.includes(key)) {
+      if (!isNamespaceInternalField(key)) {
         hasExports = true;
-        // Check if it's an executable
-        if (value && typeof value === 'object' && (value as any).__executable) {
-          const params = (value as any).paramNames || [];
-          cleaned.exports.executables[key] = `<function(${params.join(', ')})>`;
-        } else if (value && typeof value === 'object' && value.type === 'executable') {
-          // Handle variable-stored executables
-          const def = value.value || value.definition || {};
-          const params = def.paramNames || [];
-          cleaned.exports.executables[key] = `<function(${params.join(', ')})>`;
+        const executableDisplay = formatNamespaceExecutable(value);
+        if (executableDisplay) {
+          cleaned.exports.executables[key] = executableDisplay;
         } else {
           cleaned.exports.variables[key] = value;
         }

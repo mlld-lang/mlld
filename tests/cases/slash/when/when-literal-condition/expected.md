@@ -1,6 +1,6 @@
 # When Directive with Literal Condition
 
-The @when directive can accept literal values for simple conditional checks.
+The @when directive can accept literal values for inline conditional checks.
 
 ## Using literal true
 
@@ -17,4 +17,3 @@ Non-empty strings are truthy
 ## Using a variable
 
 Variables work too
-

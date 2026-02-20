@@ -1,6 +1,0 @@
-exe @analyze(text) = stream cmd {claude "Analyze: @text"}
-exe @summarize(analysis) = stream cmd {claude "Summarize: @analysis"}
-
-var @input = <large-file.md>
-var @result = @input | @analyze | @summarize
-show @result  >> Both stages stream

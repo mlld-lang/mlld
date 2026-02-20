@@ -12,8 +12,25 @@ import { isVariable } from '@interpreter/utils/variable-resolution';
  * Generate Python code that defines mlld helper functions
  * @param primitiveMetadata - Optional metadata for primitive values
  */
+function toPythonValue(value: any): string {
+  if (value === null) return 'None';
+  if (value === undefined) return 'None';
+  if (typeof value === 'function') return 'None';
+  if (typeof value === 'boolean') return value ? 'True' : 'False';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return '[' + value.map(toPythonValue).join(', ') + ']';
+  if (typeof value === 'object') {
+    const pairs = Object.entries(value).map(([k, v]) => `${JSON.stringify(k)}: ${toPythonValue(v)}`);
+    return '{' + pairs.join(', ') + '}';
+  }
+  // Fallback: safely return 'None' for any other type that JSON.stringify can't handle
+  const jsonResult = JSON.stringify(value);
+  return jsonResult !== undefined ? jsonResult : 'None';
+}
+
 export function generatePythonMlldHelpers(primitiveMetadata?: Record<string, any>): string {
-  const metadataJson = primitiveMetadata ? JSON.stringify(primitiveMetadata) : '{}';
+  const metadataJson = primitiveMetadata ? toPythonValue(primitiveMetadata) : '{}';
   
   return `
 # mlld helper functions
@@ -71,9 +88,9 @@ export function convertToPythonValue(value: any, varName: string): string {
     const variable = value as Variable;
     return generatePythonVariable(variable, varName);
   }
-  
-  // Regular value - just JSON stringify
-  return `${varName} = ${JSON.stringify(value)}`;
+
+  // Regular value - convert to Python syntax
+  return `${varName} = ${toPythonValue(value)}`;
 }
 
 /**
@@ -100,20 +117,20 @@ function generatePythonVariable(variable: Variable, varName: string): string {
  */
 function generatePythonArrayVariable(variable: Variable, varName: string): string {
   const value = variable.value as any[];
-  
+
   return `
 class ${varName}_MlldArray(list):
     def __init__(self, items):
         super().__init__(items)
-        self.__mlld_type__ = ${JSON.stringify(variable.type)}
-        self.__mlld_subtype__ = ${JSON.stringify(variable.subtype || null)}
-        self.__mlld_metadata__ = ${JSON.stringify({
+        self.__mlld_type__ = ${toPythonValue(variable.type)}
+        self.__mlld_subtype__ = ${toPythonValue(variable.subtype || null)}
+        self.__mlld_metadata__ = ${toPythonValue({
             mx: variable.mx,
             internal: variable.internal
           })}
         self.__mlld_is_variable__ = True
 
-${varName} = ${varName}_MlldArray(${JSON.stringify(value)})
+${varName} = ${varName}_MlldArray(${toPythonValue(value)})
 `;
 }
 
@@ -122,23 +139,23 @@ ${varName} = ${varName}_MlldArray(${JSON.stringify(value)})
  */
 function generatePythonObjectVariable(variable: Variable, varName: string): string {
   const value = variable.value as Record<string, any>;
-  
+
   return `
 class ${varName}_MlldObject(dict):
     def __init__(self, items):
         super().__init__(items)
-        self.__mlld_type__ = ${JSON.stringify(variable.type)}
-        self.__mlld_subtype__ = ${JSON.stringify(variable.subtype || null)}
-        self.__mlld_metadata__ = ${JSON.stringify({
+        self.__mlld_type__ = ${toPythonValue(variable.type)}
+        self.__mlld_subtype__ = ${toPythonValue(variable.subtype || null)}
+        self.__mlld_metadata__ = ${toPythonValue({
             mx: variable.mx,
             internal: variable.internal
           })}
         self.__mlld_is_variable__ = True
-    
+
     def __getattr__(self, key):
         return self.get(key)
 
-${varName} = ${varName}_MlldObject(${JSON.stringify(value)})
+${varName} = ${varName}_MlldObject(${toPythonValue(value)})
 `;
 }
 
@@ -147,41 +164,8 @@ ${varName} = ${varName}_MlldObject(${JSON.stringify(value)})
  */
 function generatePythonPrimitiveVariable(variable: Variable, varName: string): string {
   const value = variable.value;
-  
-  // For primitives, we create a wrapper class
-  return `
-class ${varName}_MlldValue:
-    def __init__(self, value):
-        self.value = value
-        self.__mlld_type__ = ${JSON.stringify(variable.type)}
-        self.__mlld_subtype__ = ${JSON.stringify(variable.subtype || null)}
-        self.__mlld_metadata__ = ${JSON.stringify({
-            mx: variable.mx,
-            internal: variable.internal
-          })}
-        self.__mlld_is_variable__ = True
-    
-    def __str__(self):
-        return str(self.value)
-    
-    def __repr__(self):
-        return repr(self.value)
-    
-    # Delegate numeric operations to the value
-    def __add__(self, other):
-        return self.value + other
-    def __sub__(self, other):
-        return self.value - other
-    def __mul__(self, other):
-        return self.value * other
-    def __truediv__(self, other):
-        return self.value / other
-    def __eq__(self, other):
-        return self.value == other
 
-${varName}_wrapper = ${varName}_MlldValue(${JSON.stringify(value)})
-${varName} = ${varName}_wrapper.value  # Use the raw value by default
-# But keep the wrapper available for type introspection
-${varName}.__mlld_wrapper__ = ${varName}_wrapper
-`;
+  // For primitives, just assign the raw value directly
+  // The metadata is available via mlld.get_metadata() using the _primitive_metadata dict
+  return `${varName} = ${toPythonValue(value)}`;
 }

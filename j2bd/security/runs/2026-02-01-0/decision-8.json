@@ -1,0 +1,7 @@
+{
+  "reasoning": "All 4 prerequisite documentation atoms are complete and closed: signing-overview (m-4bf6), sign-verify (m-e4d6), autosign-autoverify (m-6c50), and labels-influenced (m-7505). The only remaining atom from the job spec is pattern-audit-guard (m-aa7e) - the capstone pattern that demonstrates the full multi-agent audit pipeline with signed instructions. This is the culmination of all the previous work, showing how signing, verification, and influenced labels work together to secure an audit guard. Assigning this final documentation task.",
+  "action": "work",
+  "ticket": "m-aa7e",
+  "task_type": "doc",
+  "guidance": "Create the pattern-audit-guard atom at docs/src/atoms/security/pattern-audit-guard.md. This is the capstone pattern that ties together all the security concepts documented in the previous atoms (signing-overview, sign-verify, autosign-autoverify, labels-influenced). The atom should demonstrate: (1) First agent processing untrusted MCP data and acquiring the 'influenced' label, (2) Signing audit criteria templates at authoring time, (3) Second agent (auditor) with autoverify checking its own instructions via mlld verify, (4) The auditor comparing verified template against context to detect injection, (5) Conditional action based on audit approval, (6) Detection and handling of instruction tampering. Follow the job spec's example code structure closely. Reference the previously written security atoms. All examples must pass mlld validate."
+}

@@ -1,0 +1,7 @@
+{
+  "reasoning": "Decision-8 assigned m-aa7e (pattern-audit-guard atom) to a doc worker, and a prompt file was created (worker-m-aa7e-8.prompt.md). However, no worker result file exists and the pattern-audit-guard.md file was never created. This indicates the worker crashed or was interrupted before completing. Re-assigning the same ticket to continue the work. This is the capstone documentation atom that demonstrates the full multi-agent audit pipeline with signed instructions, tying together signing-overview, sign-verify, autosign-autoverify, and labels-influenced.",
+  "action": "work",
+  "ticket": "m-aa7e",
+  "task_type": "doc",
+  "guidance": "Create the pattern-audit-guard atom at docs/src/atoms/security/pattern-audit-guard.md. This is the capstone pattern tying together all previous security atoms. Demonstrate: (1) First agent processing untrusted MCP data and acquiring the 'influenced' label, (2) Signing audit criteria templates at authoring time, (3) Second agent (auditor) with autoverify checking its own instructions via mlld verify, (4) The auditor comparing verified template against context to detect injection, (5) Conditional action based on audit approval, (6) Detection and handling of instruction tampering. Follow the job spec's example code structure. Reference the existing security atoms: signing-overview, sign-verify, autosign-autoverify, labels-influenced. All examples must pass mlld validate. IMPORTANT: Previous worker crashed - the prompt file exists but no result was generated. Start fresh."
+}

@@ -37,6 +37,22 @@ describe('Block for grammar', () => {
     expect(hasNode(exe, (node) => node.type === 'WhenExpression')).toBe(true);
   });
 
+  it('parses nested for guards with block returns', () => {
+    const ast = parseSync(
+      `/exe @demo(results) = [\n` +
+        `  for @r in @results when @r.gaps.length > 0 [\n` +
+        `    let @gapList = for @g in @r.gaps => \`  - @g\`\n` +
+        `    => \`### @r.file\\n@r.notes\\n@gapList\\n\`\n` +
+        `  ]\n` +
+        `  => "ok"\n` +
+        `]`
+    );
+    const exe = ast[0];
+
+    expect(hasNode(exe, (node) => node.kind === 'for' && node.meta?.isNested)).toBe(true);
+    expect(hasNode(exe, (node) => node.type === 'WhenExpression')).toBe(true);
+  });
+
   it('parses for expression block form without arrow', () => {
     const ast = parseSync(`/var @out = for @x in @xs [\n  @x\n]`);
 

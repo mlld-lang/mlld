@@ -18,10 +18,10 @@ The pattern `@prompt | cmd { ... }` pipes input to the command via stdin.
 
 ### With Options
 
-Handle optional parameters with `when first`:
+Handle optional parameters with `when`:
 
 ```mlld
-exe @claude(prompt, model, tools) = when first [
+exe @claude(prompt, model, tools) = when [
   @tools == "" => @prompt | cmd { claude -p --model @model --tools "" }
   @tools => @prompt | cmd { claude -p --model @model --allowedTools "@tools" }
   * => @prompt | cmd { claude -p --model @model }
@@ -53,7 +53,7 @@ exe @isValid(response) = [
   => @check.trim().toLowerCase().startsWith("yes")
 ]
 
-exe @gate(response) = when first [
+exe @gate(response) = when [
   @isValid(@response) => { pass: true, value: @response }
   * => { pass: false, reason: "Failed validation" }
 ]
@@ -73,12 +73,12 @@ show @result.pass
 Compose multiple checks:
 
 ```mlld
-exe @checkLength(text) = when first [
+exe @checkLength(text) = when [
   @text.length() > 10 => { pass: true }
   * => { pass: false, reason: "Too short" }
 ]
 
-exe @checkFormat(text) = when first [
+exe @checkFormat(text) = when [
   @text.startsWith("Answer:") => { pass: true }
   * => { pass: false, reason: "Wrong format" }
 ]
@@ -86,13 +86,28 @@ exe @checkFormat(text) = when first [
 exe @validate(text) = [
   let @len = @checkLength(@text)
   let @fmt = @checkFormat(@text)
-  => when first [
+  => when [
     !@len.pass => @len
     !@fmt.pass => @fmt
     * => { pass: true, value: @text }
   ]
 ]
 ```
+
+### Pipeline Guard
+
+For sequential validation stages, pipe them directly and check the result:
+
+```mlld
+var @processed = @data | @validate | @normalize | @analyze
+
+when [
+  @processed.ok => @emitReport(@processed)
+  !@processed.ok => show "Validation failed"
+]
+```
+
+Each stage passes its output to the next. A failed stage can return a value with `.ok: false` to short-circuit downstream checks.
 
 ## Recipe 3: Configuration Modules
 
@@ -140,21 +155,21 @@ exe @score(input) = [
   let @length = @input.length()
   let @hasQuestion = @input.includes("?")
 
-  let @base = when first [
+  let @scoreBase = when [
     @length > 100 => 0.5
     @length > 50 => 0.3
     * => 0.1
   ]
 
-  => when first [
-    @hasQuestion => @base + 0.3
-    * => @base
+  => when [
+    @hasQuestion => @scoreBase + 0.3
+    * => @scoreBase
   ]
 ]
 
 exe @route(input) = [
   let @s = @score(@input)
-  => when first [
+  => when [
     @s >= @THRESHOLD => { handler: "detailed", score: @s }
     @s >= 0.3 => { handler: "quick", score: @s }
     * => { handler: "ignore", score: @s }
@@ -164,6 +179,26 @@ exe @route(input) = [
 var @decision = @route("What's the weather like today?")
 show `Handler: @decision.handler (score: @decision.score)`
 ```
+
+### Handler Dispatch
+
+Use the scored result to select and invoke the actual handler from a map:
+
+```mlld
+exe @router(message, handlers) = [
+  let @scores = for @h in @handlers => {
+    handler: @h.name,
+    score: @h.scorer(@message)
+  }
+  let @best = @scores | @sortBy("score") | @first
+  => when [
+    @best.score > 0.7 => @handlers[@best.handler].handle(@message)
+    * => null
+  ]
+]
+```
+
+`@handlers[@best.handler]` retrieves the handler by its scored key at runtime, then calls `.handle(@message)` to dispatch.
 
 ## Recipe 5: Parallel Processing
 
@@ -183,6 +218,17 @@ show @results
 ```
 
 The `parallel(3)` runs up to 3 at once. Results preserve input order.
+
+### Function Mapping
+
+For the common case of applying one function to every item in a collection, use `foreach`:
+
+```mlld
+exe @runQA(area) = cmd { echo "Testing @area.name" | cat }
+var @results = foreach @runQA(@areas)
+```
+
+`foreach @fn(@collection)` is shorthand for mapping `@fn` over each element and collecting results.
 
 ### With Error Handling
 
@@ -230,8 +276,8 @@ var @reviews = for parallel(5) @f in @files => [
   => { file: @f.mx.relative, review: @review }
 ]
 
-var @json = @reviews | @json
-output @json to "reviews.json"
+var @reviewsJson = @reviews | @parse
+output @reviewsJson to "reviews.json"
 ```
 
 **Key patterns:**
@@ -244,12 +290,12 @@ output @json to "reviews.json"
 Pass context between retry attempts:
 
 ```mlld
-exe @generate() = when first [
+exe @generate() = when [
   @mx.try == 1 => @haiku("Write a haiku about code")
   * => @haiku("Write a haiku about code. Hint: @mx.hint")
 ]
 
-exe @validate(text) = when first [
+exe @validate(text) = when [
   @text.includes("code") => @text
   @mx.try < 3 => retry "Must mention 'code'"
   * => "Failed after 3 tries"
@@ -307,6 +353,64 @@ for @r in @reviews [
 - `@prompt | cmd { claude -p }` - Pipe to Claude CLI via stdin
 - `for parallel(5)` - Process up to 5 files concurrently
 
+## Recipe 9: Ralph Loop (Autonomous Agent)
+
+The "Ralph" pattern runs an autonomous coding loop that loads fresh context each iteration, classifies the next task, executes it, and commits on success:
+
+```mlld
+import { @claude, @haiku } from "@lib/claude.mld"
+
+>> Classify the most important task from a plan file
+exe @classifyTask(plan) = [
+  let @prompt = `Identify the SINGLE most important next task:
+@plan
+Return JSON: { "task": "...", "type": "implement|fix|test" }`
+  => @haiku(@prompt) | @parse.llm
+]
+
+>> Build context (collect all specs)
+exe @buildContext(task, specs) = [
+  => { task: @task, specs: @specs }
+]
+
+>> Execute the task with full agent
+exe @executeTask(task, context) = @claude(`
+# Task: @task.task
+# Specs: @context.specs.join("\n")
+Implement this. Search before assuming not implemented.
+`, "sonnet", ".", "Read,Edit,Write,Bash,Grep,Glob")
+
+>> Validate with tests (returns exit code)
+exe @validate() = cmd { npm test }
+
+>> The loop
+loop(endless) until @state.stop [
+  let @plan = <fix_plan.md>
+  when @plan.trim() == "" => done "complete"
+
+  let @task = @classifyTask(@plan)
+  let @context = @buildContext(@task, <specs/*.md>)
+  let @result = @executeTask(@task, @context)
+  let @check = @validate()
+
+  when @check.exitCode == 0 => run cmd { git commit -am "fix" }
+  continue
+]
+```
+
+**Key patterns:**
+- `loop(endless) until @state.stop` - Infinite loop with external stop signal
+- `var @plan = <fix_plan.md>` - Reload fresh context each iteration
+- `@haiku(@prompt) | @parse.llm` - Cheap model for classification
+- `@claude(..., "sonnet", ".", "Read,Edit,...")` - Full agent with tools
+- `@state.stop` - SDK can inject state to signal graceful shutdown
+
+**Why it works:**
+- Fresh context each iteration (no stale state)
+- Dynamic context assembly (only load relevant specs)
+- Tests as backpressure (only commit passing code)
+- Deterministic logic, dynamic content
+
 ## Common Patterns Summary
 
 | Pattern | Use Case |
@@ -314,9 +418,11 @@ for @r in @reviews [
 | `@input \| cmd { ... }` | Pipe to shell command |
 | `cmd:@dir { ... }` | Run in directory |
 | `exe @f(x) = [...]` | Multi-statement function |
-| `when first [...]` | Switch/match logic |
+| `when [...]` | Switch/match logic |
+| `foreach @fn(@items)` | Map function over collection |
 | `for parallel(n) ...` | Concurrent processing |
 | `\|\| @a \|\| @b` | Parallel pipeline group |
 | `retry "hint"` | Retry with context |
 | `{ ...@obj, key: val }` | Object spread |
 | `@obj.mx.keys` | Get object keys |
+| `loop(endless) until @state.stop` | Autonomous agent loop |

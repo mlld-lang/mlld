@@ -1,0 +1,7 @@
+Test with bad syntax:
+<spec>
+{{spec}}
+</spec>
+<plan>
+{{plan}}
+</plan>

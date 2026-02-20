@@ -5,13 +5,16 @@
 VarRHSContent "var assignment value"
   = LeadingParallelPipeline     // Leading || for parallel pipeline execution
   / ExpressionWithOperator      // Try expressions FIRST but only if operators present
-  / WhenExpression              // Allow value-returning when-expressions
+  / WhenExpressionAny           // Allow value-returning when-expressions (inline or bracketed)
   / ForExpression               // for @var in @collection => expression
+  / LoopExpression              // loop(...) [ ... ]
   / ForeachCommandExpression    // foreach @command(@arrays)
   / ExecResultMethodCall        // @func(args).method(args) on exec result
+  / NewExpression               // new @Class(...) constructor expression
   / ExecInvocationWithFields    // Exec invocations followed by field/index access (must come before FieldAccessExecPattern)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
+  / EnvExpression               // env @config [...] - scoped environment with return value
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateWithPipeline        // Template content with pipeline support - MUST come before PrimitiveValue
   / VarBlock                    // Statement block for var evaluation
@@ -61,12 +64,12 @@ VarBlock "var block"
 ExpressionWithOperator
   = &{
       // Look ahead to see if there's an operator somewhere IN THE CURRENT DIRECTIVE
-      // Stop at: newline, next directive (/), or comment (>>)
+      // Stop at: newline, next directive (/), or comment marker (>> or <<)
       const rest = input.substring(peg$currPos);
       // Only look within the current line/directive context
-      const endOfContext = rest.search(/[\n\r]|(?:^|\s)\/\w+|(?:^|\s)>>/);
+      const endOfContext = rest.search(/[\n\r]|(?:^|\s)\/\w+|(?:^|\s)(?:>>|<<)/);
       const contextToSearch = endOfContext === -1 ? rest : rest.substring(0, endOfContext);
-      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?|!|[-+*/%]))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
+      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?\?|!|[-+*/%]))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
     }
     expr:Expression {
       return expr;
@@ -87,7 +90,7 @@ ExecInvocationWithFields "exec invocation with post fields"
 // ALLIGATOR WITH FIELDS - Handles <file.md>.field syntax for direct assignment
 // This pattern allows field access after file references outside of template contexts
 AlligatorWithFields "alligator with field access"
-  = base:AlligatorExpression fields:AnyFieldAccess+ pipes:SpacedOrCondensedPipeChain? {
+  = base:AlligatorExpression fields:AnyFieldAccessOptional+ pipes:SpacedOrCondensedPipeChain? {
       helpers.debug('AlligatorWithFields matched', { 
         source: base.source,
         fieldCount: fields.length,
@@ -156,7 +159,7 @@ AlligatorWithPostPipes "alligator with external pipe chain"
 // VARIABLE WITH PIPES (outside template contexts)
 // Optional whitespace form that accepts full CommandArgumentList for args
 VariableWithSpacedPipes "variable with flexible pipe syntax"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* firstPipe:(_ pipeStart:("" { return peg$currPos; }) "|" _ command:PipeCommand { return { command, pipeStart }; })? restPipes:SpacedOrCondensedPipe* {
+  = "@" id:BaseIdentifier fields:AnyFieldAccessOptional* firstPipe:(_ pipeStart:("" { return peg$currPos; }) "|" _ command:PipeCommand { return { command, pipeStart }; })? restPipes:SpacedOrCondensedPipe* {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -236,7 +239,7 @@ SpacedOrCondensedPipeChain "flexible pipe chain"
 
 // FIELD ACCESS EXEC PATTERN - Matches @obj.field() with nested field access
 FieldAccessExecPattern "field access exec invocation"
-  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
+  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccessOptional+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
       // Extract the last field as the method name
       const lastField = fields[fields.length - 1];
       const methodName = lastField.value;
@@ -359,10 +362,10 @@ RunCommandValue
         }
       };
     }
-  / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
+  / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? {
       // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
       // In standalone contexts: bare {...} requires explicit cmd prefix
-      return {
+      const result = {
         type: 'command',
         command: content.values.command,  // Parsed command nodes
         commandBases: content.values.commandBases,
@@ -371,6 +374,10 @@ RunCommandValue
         hasRunKeyword: true,
         meta: content.meta
       };
+      if (using) {
+        result.using = using;
+      }
+      return result;
     }
   / "run" _ "@" invocation:UnifiedReferenceWithTail {
       // Handle run @command() syntax with unified patterns
@@ -433,18 +440,23 @@ CommandContent
 
 // Code execution patterns (language + code without @run prefix)
 CodeExecution "code execution"
-  = "run" _ lang:VarCodeLanguage _ "{" _ content:CodeBlockContent _ "}" {
-      // Language-specific code execution (js, python, etc.)
-      return {
+  = "run" _ lang:VarCodeLanguage workingDir:WorkingDirPath? _ "{" _ content:CodeBlockContent _ "}" {
+      // Language-specific code execution (js, python, etc.) with optional working directory
+      const result = {
         type: 'code',
         language: lang,
         code: content,
         hasRunKeyword: true
       };
+      if (workingDir) {
+        result.workingDir = workingDir.parts;
+        result.meta = { workingDirMeta: workingDir.meta, hasWorkingDir: true };
+      }
+      return result;
     }
-  / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
+  / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? {
       // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
-      return {
+      const result = {
         type: 'command',
         command: content.values.command,  // Parsed command nodes
         commandBases: content.values.commandBases,
@@ -453,15 +465,24 @@ CodeExecution "code execution"
         hasRunKeyword: true,
         meta: content.meta
       };
+      if (using) {
+        result.using = using;
+      }
+      return result;
     }
-  / lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
-      // Shorthand: language + code without 'run' keyword
-      return {
+  / lang:VarCodeLanguage workingDir:WorkingDirPath? _ "{" _ code:CodeBlockContent _ "}" {
+      // Shorthand: language + code without 'run' keyword, with optional working directory
+      const result = {
         type: 'code',
         language: lang,
         code: code,
         hasRunKeyword: false
       };
+      if (workingDir) {
+        result.workingDir = workingDir.parts;
+        result.meta = { workingDirMeta: workingDir.meta, hasWorkingDir: true };
+      }
+      return result;
     }
   / content:CmdCommandBrackets {
       // Shorthand: cmd {...} without 'run' keyword
@@ -476,9 +497,44 @@ CodeExecution "code execution"
       };
     }
 
+// ENV EXPRESSION - env @config [...] for scoped environment with return value
+// Used in /var assignments to execute code in a scoped environment and return the result
+EnvExpression "env expression"
+  = "env" _ config:EnvConfigExpression withClause:WithClause? _ block:ExeStatementBlock {
+      const values = {
+        config: [config],
+        block,
+        ...(withClause ? { withClause } : {})
+      };
+
+      const raw = {
+        config: helpers.reconstructRawString([config])
+      };
+
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true
+      };
+
+      if (withClause) {
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
+
+      return helpers.createStructuredDirective(
+        'env',
+        'env',
+        values,
+        raw,
+        meta,
+        location(),
+        'env'
+      );
+    }
+
 // Language keywords for var code execution
 VarCodeLanguage "code language"
-  = "js" / "javascript" / "node" / "python" / "bash" / "sh"
+  = "js" / "javascript" / "node" / "python" / "py" / "bash" / "sh"
 
 // Code block content - preserve everything literally
 CodeBlockContent "code block content"
@@ -500,7 +556,50 @@ CodeChar
 // FOR EXPRESSION - for @var in @collection => expression or block
 // Used in /var and /exe assignments to collect results
 ForExpression "for expression"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ whenExpr:WhenExpressionAny batchPipe:ForBatchPipeline? {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "when" _ condition:WhenConditionExpression _ block:ForBlockAction batchPipe:ForBatchPipeline? {
+      const action = Array.isArray(block.statements) ? block.statements : [block.statements];
+      const initialWhen = helpers.createWhenExpression(
+        [{ condition: [condition], action }],
+        null,
+        location(),
+        null
+      );
+
+      const loc = initialWhen.location || location();
+      const noneLiteral = helpers.createNode(NodeType.Literal, {
+        value: 'none',
+        valueType: 'none',
+        location: loc
+      });
+      const skipLiteral = helpers.createNode(NodeType.Literal, {
+        value: 'skip',
+        valueType: 'skip',
+        location: loc
+      });
+      const conditions = [...initialWhen.conditions, { condition: [noneLiteral], action: [skipLiteral] }];
+      const normalizedWhen = helpers.createWhenExpression(
+        conditions,
+        initialWhen.withClause || null,
+        loc,
+        initialWhen.meta?.modifier || null
+      );
+
+      helpers.debug('ForExpression when-guard block matched', {
+        pattern,
+        statementCount: action.length
+      });
+
+      return helpers.createForExpression(
+        pattern.variable,
+        pattern.source,
+        [normalizedWhen],
+        location(),
+        opts || null,
+        batchPipe || null,
+        pattern.key || null
+      );
+    }
+  / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ whenExpr:WhenExpressionAny batchPipe:ForBatchPipeline? {
       const hasNoneCondition = Array.isArray(whenExpr.conditions) && whenExpr.conditions.some((entry) => {
         const condition = entry && entry.condition;
         return Array.isArray(condition) &&
@@ -539,7 +638,8 @@ ForExpression "for expression"
         [normalizedWhen],
         location(),
         opts || null,
-        batchPipe || null
+        batchPipe || null,
+        pattern.key || null
       );
     }
   / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionBody batchPipe:ForBatchPipeline? {
@@ -551,7 +651,8 @@ ForExpression "for expression"
         action,
         location(),
         opts || null,
-        batchPipe || null
+        batchPipe || null,
+        pattern.key || null
       );
     }
   // Error recovery
@@ -568,6 +669,51 @@ ForExpression "for expression"
 ForExpressionBody
   = "=>" _ expr:VarRHSContent { return expr; }
   / block:ForBlockAction { return block.statements; }
+
+// LOOP EXPRESSION - loop(...) [ ... ]
+LoopExpression "loop expression"
+  = "loop" _ header:LoopHeader? untilClause:LoopUntilClause? _ block:LoopBlockAction {
+      const limit = header ? header.limit : null;
+      const rateMs = header ? header.rateMs : null;
+      const until = untilClause || null;
+      const statements = block.statements || [];
+
+      return helpers.createLoopExpression(
+        limit,
+        rateMs,
+        until,
+        statements,
+        location()
+      );
+    }
+  / "loop" _ "(" _ ")" {
+      helpers.mlldError(
+        'loop() requires a limit or endless. Expected: loop(<cap>[, <rate>]) [ ... ]',
+        'loop(10)',
+        location()
+      );
+    }
+  / "loop" _ limit:LoopLimit _ {
+      helpers.mlldError(
+        'Missing \'(\' after loop keyword. Expected: loop(<cap>[, <rate>]) [ ... ]',
+        '(',
+        location()
+      );
+    }
+  / "loop" _ "until" _ !WhenConditionExpression {
+      helpers.mlldError(
+        'loop until requires a condition. Expected: loop until @condition [ ... ]',
+        '@condition',
+        location()
+      );
+    }
+  / "loop" _ header:LoopHeader? untilClause:LoopUntilClause? _ !("[" / "until") {
+      helpers.mlldError(
+        'loop requires a block. Expected: loop [ ... ]',
+        '[',
+        location()
+      );
+    }
 
 ForBatchPipeline "for batch pipeline"
   = _ "=>" _ "||" _ firstParallel:ParallelSequence rest:PipelineRest* caps:PipelineParallelSpec? {

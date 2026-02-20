@@ -76,3 +76,56 @@ export interface DependencyResolution {
   aggregatedNeeds: AggregatedModuleNeeds;
   conflicts: DependencyConflict[];
 }
+
+export type ModuleType = 'library' | 'app' | 'command' | 'skill' | 'environment';
+
+export interface ModuleManifest {
+  name: string;
+  author: string;
+  type: ModuleType;
+  about: string;
+  version: string;
+  entry?: string;
+  needs?: string[];
+  license?: string;
+  mlldVersion?: string;
+  dependencies?: ModuleDependencyMap;
+  devDependencies?: ModuleDependencyMap;
+}
+
+export interface DirectoryModuleSource {
+  type: 'directory';
+  baseUrl: string;
+  files: string[];
+  entryPoint: string;
+  contentHash: string;
+  repository?: {
+    type: string;
+    url: string;
+    commit: string;
+    path: string;
+  };
+}
+
+export interface SingleFileModuleSource {
+  type: 'github' | 'gist' | 'url';
+  url: string;
+  contentHash: string;
+  repository?: {
+    type: string;
+    url: string;
+    commit: string;
+    path: string;
+  };
+  gistId?: string;
+}
+
+export type ModuleSource = DirectoryModuleSource | SingleFileModuleSource;
+
+export const MODULE_TYPE_PATHS: Record<ModuleType, { local: string; global: string }> = {
+  library: { local: 'llm/lib', global: '.mlld/lib' },
+  app: { local: 'llm/run', global: '.mlld/run' },
+  command: { local: '.claude/commands', global: '.claude/commands' },
+  skill: { local: '.claude/skills', global: '.claude/skills' },
+  environment: { local: '.mlld/env', global: '.mlld/env' },
+};

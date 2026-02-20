@@ -70,6 +70,13 @@ export interface InterpretOptions {
   dynamicModuleMode?: MlldMode;
   ast?: any;
   streamingManager?: any;
+  checkpoint?: boolean;
+  noCheckpoint?: boolean;
+  fresh?: boolean;
+  resume?: string | true;
+  fork?: string;
+  checkpointScriptName?: string;
+  checkpointCacheRootDir?: string;
 }
 
 export interface StructuredEffect extends Effect {
@@ -169,6 +176,12 @@ export type SDKStreamEvent =
 export type SDKExecutionEvent = {
   type: 'execution:complete';
   result?: StructuredResult;
+  timestamp: number;
+};
+
+export type SDKStateWriteEvent = {
+  type: 'state:write';
+  write: StateWrite;
   timestamp: number;
 };
 
@@ -337,7 +350,14 @@ export interface StreamingResult {
   events?: SDKStreamingEvent[];
 }
 
-export type SDKEvent = SDKEffectEvent | SDKCommandEvent | SDKStreamEvent | SDKExecutionEvent | SDKDebugEvent | SDKStreamingEvent;
+export type SDKEvent =
+  | SDKEffectEvent
+  | SDKCommandEvent
+  | SDKStreamEvent
+  | SDKExecutionEvent
+  | SDKStateWriteEvent
+  | SDKDebugEvent
+  | SDKStreamingEvent;
 
 export type SDKEventHandler<T extends SDKEvent = SDKEvent> = (event: T) => void;
 
@@ -349,6 +369,7 @@ export interface StreamExecution extends AsyncIterable<SDKEvent> {
   result: () => Promise<StructuredResult>;
   isComplete: () => boolean;
   abort?: () => void;
+  updateState?: (path: string, value: unknown) => Promise<void>;
 }
 
 export interface DebugResult extends StructuredResult {

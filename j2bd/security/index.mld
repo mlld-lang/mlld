@@ -1,0 +1,133 @@
+>> j2bd/security/index.mld
+>> Iterate on security docs + features until plan is complete
+
+import { @claudePollEvent } from @mlld/claude-poll
+
+>> Run directory for this session
+var @runDir = `@base/j2bd/security/runs/@now.split("T")[0]`
+run cmd { mkdir -p "@runDir" } with { ok: true }
+var @eventsFile = `@runDir/events.jsonl`
+
+log `=== J2BD Security Loop ===`
+log `Run directory: @runDir`
+log `Events file: @eventsFile`
+
+>> The spec is the destination
+var @spec = <@base/todo/spec-security-2026-v4.md>
+log `Loaded spec: @spec.length chars, @spec.mx.tokens tokens`
+
+>> Agent notes capture learnings across iterations
+var @agentNotes = <./agent.md>
+log `Loaded agent notes: @agentNotes.length chars`
+
+>> Jobs define what we're trying to accomplish
+var @jobs = <./jobs/*.md>
+log `Loaded @jobs.length jobs`
+for @job in @jobs => log `  - @job.mx.filename: @job.length chars`
+
+>> Task builder (template requires exe)
+exe @buildTask(spec, atoms, plan, agentNotes, jobs, eventsFile, iterationId) = template "./task.att"
+
+>> Log an event
+exe @logEvent(eventsFile, event) = [
+  let @eventWithTs = { ts: @now, ...@event }
+  let @_ = @eventWithTs | append "@eventsFile"
+  => @eventWithTs
+]
+
+log `Starting loop...`
+
+>> TEST MODE: Set to number for testing, null for production
+>> Set @dryRun = true to skip agent spawn (just validate task builds)
+var @maxIterations = 1
+var @dryRun = false
+
+>> Main loop
+loop(endless) [
+  >> Test mode exit (check at start of each iteration)
+  when @maxIterations && @mx.loop.iteration > @maxIterations => [
+    log `TEST MODE: Completed @maxIterations iteration(s)`
+    => done
+  ]
+  >> Validate prerequisites (check each iteration in case files changed)
+  when @spec.length < 100 => done `FATAL: Spec file too short (@spec.length chars)`
+
+  >> Fresh state each iteration
+  var @atoms = <@base/docs/src/atoms/security/*.md>
+  var @plan = <./plan.md>
+
+  log ``
+  log `=== Iteration @mx.loop.iteration ===`
+  log `Current atoms: @atoms.length`
+
+  >> Check if we're done
+  when @plan.match(/## Status: Complete/) => done "Security docs complete"
+
+  >> Generate unique iteration ID (includes timestamp to avoid matching stale events)
+  var @runTs = @now.split("T")[1].split(".")[0].replace(/:/g, "")
+  var @iterationId = `iter-@mx.loop.iteration-@runTs`
+
+  >> Log iteration start
+  @logEvent(@eventsFile, { event: "iteration_start", id: @iterationId })
+  log `Started: @iterationId`
+
+  >> Build task from template
+  log `Building task from template...`
+  log `  spec: @spec.length chars, @spec.mx.tokens tokens`
+  log `  atoms: @atoms.length files`
+  log `  plan: @plan.length chars`
+  log `  agentNotes: @agentNotes.length chars`
+  log `  jobs: @jobs.length files`
+
+  var @task = @buildTask(@spec, @atoms, @plan, @agentNotes, @jobs, @eventsFile, @iterationId)
+
+  >> CRITICAL: Validate task was built correctly
+  >> If @buildTask fails silently, @task will be undefined or literal "@task"
+  var @taskLen = @task.length ?? 0
+  log `Task built: @taskLen chars`
+
+  >> FATAL: Exit loop if task is too short
+  when @taskLen < 1000 => [
+    log `FATAL: Task too short (@taskLen chars) - template likely failed`
+    @logEvent(@eventsFile, {
+      event: "fatal_error",
+      id: @iterationId,
+      error: "task_build_failed",
+      taskLength: @taskLen
+    })
+    => done `FATAL: Task build failed - got @taskLen chars, expected 1000+`
+  ]
+
+  var @taskPreview = @task.slice(0, 200)
+  log `Task preview: @taskPreview...`
+
+  >> Agent spawn - skip if dry run
+  if !@dryRun [
+    log `Spawning agent...`
+    @logEvent(@eventsFile, { event: "agent_spawned", id: @iterationId, taskLen: @taskLen })
+    let @result = @claudePollEvent(@task, "opus", @base, "Read,Write,Edit,Glob,Grep,Bash", @eventsFile, "iteration_done", @iterationId) | log
+    log `Agent completed: @iterationId`
+    @logEvent(@eventsFile, { event: "agent_completed", id: @iterationId })
+  ]
+
+  if @dryRun [
+    log `DRY RUN: Would spawn agent with @taskLen char task`
+    @logEvent(@eventsFile, { event: "dry_run_skip", id: @iterationId, taskLen: @taskLen })
+    log `DRY RUN: Skipping validation and commit`
+  ]
+
+  >> Post-agent summary (atoms are docs, not mlld modules - agent validates its own examples)
+  if !@dryRun [
+    >> Re-read atoms to get count after agent work
+    let @currentAtoms = <@base/docs/src/atoms/security/*.md>
+    log `Atoms: @currentAtoms.length files`
+
+    >> Show recent events from this iteration for visibility
+    log `Events from this iteration:`
+    let @events = run cmd { grep "@iterationId" "@eventsFile" | tail -5 } with { ok: true }
+    log @events.stdout
+  ]
+
+  log `--- Iteration @mx.loop.iteration complete ---`
+  continue
+]

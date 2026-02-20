@@ -237,7 +237,9 @@ DoubleColonContent "Content with @var interpolation"
 
 // NEW: Interpolation pattern for :: syntax (now @var interpolation)
 DoubleColonInterpolation
-  = ExecResultMethodCall         // @func(args).method(args)
+  = NullCoalescingTight          // @var??"default"
+  / ConditionalVariableOmission  // @var?
+  / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)
   / FileReferenceInterpolation   // <file.md>

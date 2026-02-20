@@ -1,0 +1,157 @@
+>> Audit Orchestrator (Verified Invalidation)
+>> Usage: mlld plugins/mlld/examples/audit/index.mld --glob "src/**/*.ts" [--parallel 20] [--output findings.json]
+>>
+>> Parallel fan-out codebase review with verified invalidation.
+>> 1. Glob source files
+>> 2. Fan out: each file reviewed by LLM with limited tools (file content only)
+>> 3. Collect findings
+>> 4. Verification pass: verifier gets expanded tools to check codebase context
+>> 5. Output classified findings (confirmed, false-positive, insufficient-context, needs-human)
+>>
+>> Resilience: exe llm labels + checkpoint directives. Crash recovery is automatic.
+>>   mlld run audit                       # auto-resumes via cache
+>>   mlld run audit --resume "verify"     # skip to verification phase
+>>   mlld run audit --new                 # fresh run
+
+import { @claudePoll } from @mlld/claude-poll
+import "@payload" as @p
+
+>> Parse arguments
+var @glob = @p.glob ?? "src/**/*.ts"
+var @parallelism = @p.parallel ? @p.parallel * 1 : 20
+var @outputPath = @p.output ?? "findings.json"
+
+>> Tool permissions — escalation between phases
+>> Phase 1: reviewer sees only the file (Read to load, Write for output)
+var @reviewTools = "Read,Write"
+>> Phase 2: verifier can explore the codebase for surrounding context
+var @verifyTools = "Read,Write,Glob,Grep"
+
+>> Prompt templates
+exe @reviewPrompt(file, fileContent) = template "./prompts/review.att"
+exe @verifyPrompt(finding, fileContent) = template "./prompts/verify.att"
+
+>> LLM call wrappers — llm label enables automatic caching
+exe llm @callReview(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+exe llm @callVerify(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+
+>> Array helpers
+exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => (a.data || a).findings || []) }
+exe @filterByVerdict(results, verdict) = js { return results.filter(r => { r = r.data || r; return r && r.verdict === verdict }) }
+
+>> Shell helpers
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+
+>> Output directory for debugging artifacts
+var @outDir = `@root/runs/audit`
+run @mkdirp(@outDir)
+run @mkdirp(`@outDir/reviews`)
+run @mkdirp(`@outDir/verifications`)
+
+show `Audit: @glob`
+show `Parallelism: @parallelism`
+show `Output: @outputPath`
+
+>> 1. Glob source files
+var @files = <@glob>
+show `Found @files.length files to review`
+
+>> 2. Fan out: parallel review (limited tools — reviewer sees only the file)
+show `\nPhase 1: Review (@files.length files, parallel @parallelism)`
+show `  Tools: @reviewTools`
+
+checkpoint "review"
+
+var @reviewResults = for parallel(@parallelism) @file in @files [
+  let @filename = @file.mx.filename
+  let @outPath = `@outDir/reviews/@filename\.json`
+
+  >> Build review prompt
+  let @prompt = @reviewPrompt(@file, @file)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema in the prompt.`
+
+  >> Call reviewer (limited tools) — cache handles idempotency
+  @callReview(@fullPrompt, @reviewTools, @outPath)
+  let @result = <@outPath>?
+
+  if !@result [
+    show `  @filename: review failed (no output)`
+    => null
+  ]
+
+  show `  @filename: @result.findings.length findings`
+  => @result | @parse
+]
+
+>> Collect all findings from review results
+var @allFindings = @flatMap(@reviewResults)
+show `\nTotal findings: @allFindings.length`
+
+>> 3. Verification pass (expanded tools — verifier can explore codebase)
+show `\nPhase 2: Verification (@allFindings.length findings, parallel @parallelism)`
+show `  Tools: @verifyTools`
+
+checkpoint "verify"
+
+var @verificationResults = for parallel(@parallelism) @finding in @allFindings [
+  let @findingId = `@finding.file-@finding.line`
+  let @outPath = `@outDir/verifications/@findingId\.json`
+
+  >> Load the source file for the verifier
+  let @sourceFile = <@finding.file>?
+  let @prompt = @verifyPrompt(@finding, @sourceFile)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+  >> Call verifier (expanded tools) — cache handles idempotency
+  @callVerify(@fullPrompt, @verifyTools, @outPath)
+  let @result = <@outPath>?
+
+  if !@result [
+    show `  @findingId: verification failed (no output) — keeping as confirmed`
+    => { finding: @finding, verdict: "confirmed", reasoning: "verification failed" }
+  ]
+
+  let @status = when @result.verdict [
+    "confirmed" => "CONFIRMED"
+    "false-positive" => "FALSE POSITIVE"
+    "insufficient-context" => "NEEDS CONTEXT"
+    "needs-human" => "NEEDS HUMAN"
+    * => "CONFIRMED"
+  ]
+  show `  @findingId [@finding.severity]: @status — @result.reasoning`
+  => @result
+]
+
+>> 4. Classify results by verdict
+var @confirmed = @filterByVerdict(@verificationResults, "confirmed")
+var @falsePositives = @filterByVerdict(@verificationResults, "false-positive")
+var @needsContext = @filterByVerdict(@verificationResults, "insufficient-context")
+var @needsHuman = @filterByVerdict(@verificationResults, "needs-human")
+
+>> 5. Output results
+show `\nResults: @allFindings.length total findings`
+show `  Confirmed:            @confirmed.length`
+show `  False positives:      @falsePositives.length`
+show `  Insufficient context: @needsContext.length`
+show `  Needs human review:   @needsHuman.length`
+
+var @output = {
+  summary: {
+    total_findings: @allFindings.length,
+    confirmed: @confirmed.length,
+    false_positives: @falsePositives.length,
+    insufficient_context: @needsContext.length,
+    needs_human: @needsHuman.length
+  },
+  confirmed: @confirmed,
+  needs_human: @needsHuman,
+  insufficient_context: @needsContext,
+  false_positives: @falsePositives
+}
+
+output @output to "@outputPath"
+show `Written to @outputPath`

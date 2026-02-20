@@ -158,20 +158,14 @@ export class ImportSecurityValidator {
    * Marks the beginning of an import for circular detection
    */
   beginImport(resolvedPath: string): void {
-    const isURL = this.env.isURL(resolvedPath);
-    if (isURL) {
-      this.env.beginImport(resolvedPath);
-    }
+    this.env.beginImport(resolvedPath);
   }
 
   /**
    * Marks the end of an import for circular detection
    */
   endImport(resolvedPath: string): void {
-    const isURL = this.env.isURL(resolvedPath);
-    if (isURL) {
-      this.env.endImport(resolvedPath);
-    }
+    this.env.endImport(resolvedPath);
   }
 
   /**

@@ -1,4 +1,0 @@
-exe @llm(prompt) = cmd {claude "@prompt"}
-
-when @isInteractive => stream @llm("Hello")
-when !@isInteractive => show @llm("Hello")

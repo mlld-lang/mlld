@@ -1,34 +1,40 @@
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
+import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
+import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
+import { asLspAstNode } from '@services/lsp/visitors/base/LspAstNode';
 
 export class ForeachVisitor extends BaseVisitor {
-  private mainVisitor: any;
+  private mainVisitor: INodeVisitor;
   private operatorHelper: OperatorTokenHelper;
-  
-  constructor(document: any, tokenBuilder: any) {
+
+  constructor(document: TextDocument, tokenBuilder: TokenBuilder) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
   }
-  
-  setMainVisitor(visitor: any): void {
+
+  setMainVisitor(visitor: INodeVisitor): void {
     this.mainVisitor = visitor;
   }
   
-  canHandle(node: any): boolean {
-    return node.type === 'foreach' || node.type === 'foreach-command';
+  canHandle(node: unknown): boolean {
+    const astNode = asLspAstNode(node);
+    return astNode.type === 'foreach' || astNode.type === 'foreach-command';
   }
   
-  visitNode(node: any, context: VisitorContext): void {
+  visitNode(node: unknown, context: VisitorContext): void {
+    const astNode = asLspAstNode(node);
     // Foreach nodes may not have location info, but their execInvocation does
     // We need to find the 'foreach' keyword in the source text
     
     let startOffset: number;
     
-    if (node.execInvocation?.location) {
+    if (asLspAstNode(astNode.execInvocation).location) {
       // The exec invocation starts after 'foreach '
       // So we search backwards from that position
-      startOffset = node.execInvocation.location.start.offset;
+      startOffset = asLspAstNode(astNode.execInvocation).location!.start.offset;
       
       // Search for 'foreach' before the exec invocation
       const sourceText = this.document.getText();
@@ -55,16 +61,16 @@ export class ForeachVisitor extends BaseVisitor {
     }
     
     // Handle exec invocation - let CommandVisitor handle the details
-    if (node.execInvocation) {
-      this.mainVisitor.visitNode(node.execInvocation, context);
+    if (astNode.execInvocation) {
+      this.mainVisitor.visitNode(astNode.execInvocation, context);
     }
     
     // Handle with clause if present
-    if (node.withClause || node.with) {
-      const withClause = node.withClause || node.with;
+    if (astNode.withClause || astNode.with) {
+      const withClause = astNode.withClause || astNode.with;
       // Find and tokenize 'with' keyword
       const withOffset = this.operatorHelper.findOperatorNear(
-        node.execInvocation?.location?.end?.offset || node.location.start.offset + 7,
+        asLspAstNode(astNode.execInvocation).location?.end?.offset || (astNode.location?.start.offset ?? 0) + 7,
         'with',
         50,
         'forward'
@@ -109,7 +115,7 @@ export class ForeachVisitor extends BaseVisitor {
             // Find the property key in the source
             const keyPattern = new RegExp(`"?${key}"?\\s*:`);
             const searchStart = openBraceOffset + 1;
-            const searchEnd = node.location?.end?.offset || searchStart + 100;
+            const searchEnd = astNode.location?.end?.offset || searchStart + 100;
             const searchText = sourceText.substring(searchStart, searchEnd);
             const keyMatch = searchText.match(keyPattern);
             

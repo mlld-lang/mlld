@@ -160,7 +160,7 @@ Located in `tests/cases/` (at root level, organized in subdirectories like `slas
 - Should execute without runtime errors
 - Compare actual output against expected output
 - Fail if output doesn't match exactly
-- When a test exercises file effects (e.g., `/append`), read the generated files back via `<@base/...>` in the fixture so assertions cover both the output document and the filesystem side effects.
+- When a test exercises file effects (e.g., `/append`), read the generated files back via `<@root/...>` in the fixture so assertions cover both the output document and the filesystem side effects.
 
 #### 2. Documentation Tests
 Located in `tests/cases/docs/`. Automatically extracted from `docs/user/*.md`:
@@ -182,6 +182,7 @@ Located in `tests/cases/exceptions/`. These tests:
 - May parse successfully
 - Should fail during execution with specific error messages
 - Include `error.md` file describing expected error
+- Python exception fixtures under `tests/cases/exceptions/python/` require `python3`; the fixture runner skips them when `python3` is unavailable.
 
 #### 4. Warning Tests
 Located in `tests/cases/warnings/`. These tests:
@@ -193,6 +194,17 @@ Located in `tests/cases/warnings/`. These tests:
 Located in `tests/cases/invalid/`. These tests:
 - Should fail to parse
 - Test grammar edge cases and error conditions
+
+#### 6. Checkpoint/Resume Coverage Strategy
+- Keep low-level checkpoint correctness in focused unit tests under `tests/interpreter/checkpoint/` (`CheckpointManager` persistence, deterministic keys, corruption tolerance, invalidation, and fork overlay reads).
+- Keep scenario-level behavior in fixture/integration cases under `tests/cases/integration/checkpoint/` for:
+  - hooks + checkpoint lifecycle visibility (`hooks-ordering-visibility`)
+  - checkpoint + guard bypass semantics (`miss-hit-semantics`)
+  - resume + parallel fuzzy targeting (`resume-fuzzy-targeting`)
+  - fork hit/miss overlays with changed model/prompt args (`fork-hit-miss-overlay`)
+  - hook observability emissions (`output`/`append`/`run`) with non-fatal hook-side failures (`hooks-state-emission-nonfatal`)
+- Execute multi-run checkpoint fixture scenarios in `tests/interpreter/checkpoint/integration-fixtures.test.ts`.
+- For docs-published checkpoint/resume examples, generated syntax smoke fixtures are expected artifacts and should be committed with phase updates when regenerated.
 
 ## Fixture Generation
 
@@ -239,14 +251,14 @@ npm run test:coverage
 # Watch mode for development
 npm run test:watch
 
-# Run examples (includes long-running LLM calls)
-npm run test:examples
+# Run fixture tests including examples
+INCLUDE_EXAMPLES=true npm test interpreter/interpreter.fixture.test.ts
 
 # Run semantic token precision tests
-npm test tests/tokens/
+npm run test:tokens
 ```
 
-**Note**: Examples are excluded from the default test run because they can include long-running LLM calls via `oneshot` commands. Use `npm run test:examples` to test examples specifically.
+**Note**: Examples are excluded from the default test run because they can include long-running LLM calls via `oneshot` commands. Set `INCLUDE_EXAMPLES=true` when running the fixture suite if you want those included.
 
 ### Test Structure
 
@@ -323,7 +335,7 @@ MLLD_TOKEN_COVERAGE=1 npm test
 
 # Example failure output:
 Error: Semantic token coverage issues in when-exe-when-expressions:
-  - UncoveredText at 6:18-6:28 " = when: ["
+  - UncoveredText at 6:18-6:27 " = when ["
   - UncoveredText at 7:1-7:38 "  @name == \"World\" => \"Hello, World!\""
 ```
 

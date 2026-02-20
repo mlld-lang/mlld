@@ -30,7 +30,7 @@ show `Processed @report.count users`
 
 ```mlld
 var @data = cmd {curl -s https://api.example.com/data}
-var @processed = @data | @json | @validate | @transform | @csv
+var @processed = @data | @parse | @validate | @transform | @csv
 output @processed to "report.csv"
 ```
 </DATA_PIPELINES>
@@ -42,7 +42,7 @@ Route execution based on conditions.
 import { @getPR, @commentOnPR } from @company/github
 
 var @pr = @getPR(@MLLD_PR_NUMBER)
-var @status = when first [
+var @status = when [
   @pr.mergeable => "ready"
   * => "blocked"
 ]
@@ -77,7 +77,7 @@ exe @router(message, handlers) = [
     score: @h.scorer(@message)
   }
   let @best = @scores | @sortBy("score") | @first
-  => when first [
+  => when [
     @best.score > 0.7 => @handlers[@best.handler].handle(@message)
     * => null
   ]
@@ -91,7 +91,7 @@ Validate or filter before proceeding.
 ```mlld
 exe @gate(response, config) = [
   let @check = @validate(@response)
-  => when first [
+  => when [
     !@config.required => { pass: true }
     @check.valid => { pass: true }
     * => { pass: false, reason: @check.error }
@@ -137,9 +137,9 @@ exe @classify(text) = [
 ]
 
 exe @analyze(data) = [
-  let @prompt = `Analyze this data and return JSON: @data|@json`
+  let @prompt = `Analyze this data and return JSON: @data|@parse`
   let @response = @sonnet(@prompt)
-  => @response | @json.llm
+  => @response | @parse.llm
 ]
 ```
 </LLM_INTEGRATION>
@@ -169,5 +169,209 @@ var @prompts = {
 export { @meta, @prompts, @systemPrompt }
 ```
 </AGENT_DEFINITION>
+
+<PROSE_EXECUTION>
+Execute LLM-interpreted DSL skills (OpenProse and custom).
+
+The `prose {}` syntax executes LLM-interpreted DSL skills. By default it uses **OpenProse**, but any custom interpreter can be configured.
+
+## What is Prose Execution?
+
+Prose execution invokes skills that an LLM interprets at runtime. Unlike `run js {}` which executes deterministically, `prose {}` sends content to an LLM with specific skills enabled. This enables complex multi-agent workflows defined in a domain-specific language.
+
+## Setup
+
+1. Install the OpenProse plugin in Claude Code:
+   ```
+   /plugin marketplace add git@github.com:openprose/prose.git
+   /plugin install open-prose@prose
+   ```
+
+2. Restart Claude Code and boot OpenProse:
+   ```
+   /prose-boot
+   ```
+
+3. Skills will prompt for approval on first use.
+
+## Basic Usage
+
+```mlld
+import { @opus } from @mlld/prose
+
+exe @research(topic) = prose:@opus {
+  session "Research @topic"
+  agent researcher { model: sonnet, skills: [web-search] }
+  researcher: find current information about @topic
+  output findings
+}
+
+run @research("quantum computing trends")
+```
+
+## Key Concepts
+
+**session** - Names the workflow for context
+
+**agent** - Defines an agent with model and skills
+
+**loop until** - Iterates with semantic exit conditions:
+```mlld
+exe @refine(draft) = prose:@opus {
+  session "Refine document"
+  loop until **the draft meets publication standards** {
+    critique @draft
+    revise based on critique
+  }
+}
+```
+
+**parallel** - Run tasks concurrently:
+```mlld
+exe @gather(topics) = prose:@opus {
+  session "Research multiple topics"
+  parallel for each topic in @topics {
+    research topic
+  }
+  combine results
+}
+```
+
+## Template Files
+
+For complex workflows, use external files:
+
+```mlld
+exe @workflow(ctx) = prose:@opus "./workflow.prose"
+exe @workflow(ctx) = prose:@opus "./workflow.prose.att"  >> ATT interpolation
+```
+
+## Custom Interpreters
+
+Use any LLM-interpreted DSL by configuring different skills:
+
+```mlld
+import { @claude } from @mlld/claude
+
+>> Create a custom model executor
+exe @myModel(prompt) = @claude(@prompt, "opus", @root)
+
+>> Configure with custom skills
+var @myDSL = {
+  model: @myModel,
+  skills: ["my-custom:boot", "my-custom:run"]
+}
+
+exe @process(data) = prose:@myDSL {
+  >> Your custom DSL syntax here
+  analyze @data
+  output result
+}
+```
+
+The skill determines how the LLM interprets the prose content. OpenProse is one implementation - you can create your own DSL skills or use other prose interpreters.
+
+## OpenProse Requirements
+
+For OpenProse specifically:
+- **Claude Code** with Opus (only model that reliably interprets OpenProse syntax)
+- **OpenProse skills** approved: `open-prose:prose-boot`, `open-prose:prose-compile`, `open-prose:prose-run`
+
+See `mlld howto exe-prose` for syntax details. OpenProse docs: https://prose.md
+</PROSE_EXECUTION>
+
+<RALPH_LOOP>
+Autonomous agent loop with dynamic context assembly.
+
+```mlld
+>> ralph.mld - autonomous coding agent loop
+>> Run once per iteration, or use loop for continuous execution
+
+import { @claude } from "@lib/claude.mld"
+
+>> Load fresh context each iteration
+var @plan = <fix_plan.md>
+var @specs = <specs/*.md>
+
+>> Classify the most important task
+exe @classifyTask(plan) = [
+  let @prompt = `Given this plan, identify the SINGLE most important next task:
+@plan
+Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }`
+  => @haiku(@prompt) | @parse.llm
+]
+
+>> Build context for the task (load only what's relevant)
+exe @buildContext(task, specs) = [
+  let @relevant = for @spec in @specs
+    when @task.type in @spec.mx.relative => @spec
+  let @code = for @file in @task.files => <@file>
+  => { specs: @relevant, code: @code }
+]
+
+>> Execute the task
+exe @executeTask(task, context) = [
+  let @prompt = `
+# Task
+@task.task
+
+# Relevant Specs
+@context.specs.join("\n\n")
+
+# Current Code
+@context.code.join("\n\n")
+
+Implement this task. Search before assuming not implemented.
+After implementing, run tests for just this change.
+`
+  => @claude(@prompt, "sonnet", ".", "Read,Edit,Write,Bash,Grep,Glob")
+]
+
+>> Validate with tests
+exe @validate() = [
+  let @output = cmd { npm test 2>&1 }
+  => { pass: @output.exitCode == 0, output: @output }
+]
+
+>> Single iteration
+var @task = @classifyTask(@plan)
+var @context = @buildContext(@task, @specs)
+var @result = @executeTask(@task, @context)
+var @check = @validate()
+
+when @check.pass => [
+  run cmd { git add -A && git commit -m "@task.task" && git push }
+  show "committed"
+]
+```
+
+The Ralph pattern runs autonomous coding loops with dynamic context assembly. Each iteration:
+
+1. **Load fresh context** - Reload plan and specs from disk
+2. **Classify task** - Use a cheap model to pick the most important work
+3. **Build context** - Load only relevant specs and code (saves tokens)
+4. **Execute** - Run the task with full agent capabilities
+5. **Validate** - Run tests as backpressure
+6. **Commit on success** - Only persist passing changes
+
+**With continuous loop:**
+
+```mlld
+loop(endless) until @state.stop [
+  var @plan = <fix_plan.md>
+  when @plan.trim() == "" => done "complete"
+
+  let @task = @classifyTask(@plan)
+  let @context = @buildContext(@task, <specs/*.md>)
+  let @result = @executeTask(@task, @context)
+  let @check = @validate()
+
+  when @check.pass => run cmd { git commit -am "@task.task" && git push }
+  continue
+]
+```
+
+**SDK control** - External processes can stop the loop by setting `@state.stop = true`.
+</RALPH_LOOP>
 
 </MLLD_PATTERNS>

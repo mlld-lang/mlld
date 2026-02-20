@@ -5,14 +5,18 @@ import { createInfoCommand } from '../commands/info';
 import { createDocsCommand } from '../commands/docs';
 import { createAuthCommand } from '../commands/auth';
 import { createPublishCommand } from '../commands/publish';
+import { createInitCommand } from '../commands/init';
 import { createInitModuleCommand } from '../commands/init-module';
 import { createAddNeedsCommand } from '../commands/add-needs';
 import { createSetupCommand } from '../commands/setup';
 import { createAliasCommand } from '../commands/alias';
+import { createKeychainCommand } from '../commands/keychain';
+import { varsCommand } from '../commands/vars';
 import { envCommand } from '../commands/env';
 import { languageServerCommand } from '../commands/language-server';
 import { testCommand } from '../commands/test';
 import { createRunCommand } from '../commands/run';
+import { createCheckpointCommand } from '../commands/checkpoint';
 import { errorTestCommand } from '../commands/error-test';
 import { createDevCommand } from '../commands/dev';
 import { createCleanCommand } from '../commands/clean';
@@ -21,8 +25,13 @@ import { createNvimDoctorCommand } from '../commands/nvim-doctor';
 import { createUpdateCommand } from '../commands/update';
 import { createOutdatedCommand } from '../commands/outdated';
 import { createMcpCommand } from '../commands/mcp';
+import { createLiveCommand } from '../commands/live';
+import { mcpDevCommand } from '../commands/mcp-dev';
 import { createHowtoCommand, createQuickstartCommand } from '../commands/howto';
 import { createValidateCommand } from '../commands/analyze';
+import { createVerifyCommand } from '../commands/verify';
+import { createPluginCommand } from '../commands/plugin';
+import { createSkillCommand } from '../commands/skill';
 import type { CLIOptions } from '../index';
 
 export class CommandDispatcher {
@@ -44,18 +53,22 @@ export class CommandDispatcher {
     this.commandMap.set('docs', createDocsCommand());
     this.commandMap.set('auth', createAuthCommand());
     this.commandMap.set('publish', createPublishCommand());
-    this.commandMap.set('init', createInitModuleCommand());
-    this.commandMap.set('init-module', createInitModuleCommand());
+    this.commandMap.set('init', createInitCommand());
+    this.commandMap.set('module', createInitModuleCommand());
+    this.commandMap.set('mod', createInitModuleCommand()); // Alias
     this.commandMap.set('add-needs', createAddNeedsCommand());
     this.commandMap.set('needs', createAddNeedsCommand()); // Alias
     this.commandMap.set('deps', createAddNeedsCommand()); // Alias
     this.commandMap.set('setup', createSetupCommand());
     this.commandMap.set('alias', createAliasCommand());
+    this.commandMap.set('keychain', createKeychainCommand());
+    this.commandMap.set('vars', varsCommand);
     this.commandMap.set('env', envCommand);
     this.commandMap.set('language-server', languageServerCommand);
     this.commandMap.set('lsp', languageServerCommand); // Alias for language-server
     this.commandMap.set('test', testCommand);
     this.commandMap.set('run', createRunCommand());
+    this.commandMap.set('checkpoint', createCheckpointCommand());
     this.commandMap.set('error-test', errorTestCommand);
     this.commandMap.set('dev', createDevCommand());
     this.commandMap.set('clean', createCleanCommand());
@@ -64,6 +77,8 @@ export class CommandDispatcher {
     const mcpCommand = createMcpCommand();
     this.commandMap.set('mcp', mcpCommand);
     this.commandMap.set('serve', mcpCommand); // Alias for backward compatibility
+    this.commandMap.set('live', createLiveCommand());
+    this.commandMap.set('mcp-dev', mcpDevCommand);
     this.commandMap.set('nvim-setup', createNvimSetupCommand());
     this.commandMap.set('nvim', createNvimSetupCommand()); // Alias
     this.commandMap.set('nvim-doctor', createNvimDoctorCommand());
@@ -73,6 +88,9 @@ export class CommandDispatcher {
     this.commandMap.set('quickstart', createQuickstartCommand()); // Alias
     this.commandMap.set('validate', createValidateCommand());
     this.commandMap.set('analyze', createValidateCommand()); // Alias
+    this.commandMap.set('verify', createVerifyCommand());
+    this.commandMap.set('plugin', createPluginCommand());
+    this.commandMap.set('skill', createSkillCommand());
   }
 
   async executeCommand(
@@ -89,10 +107,10 @@ export class CommandDispatcher {
     // Handle different command types
     if (typeof handler === 'function') {
       // Direct function (like registryCommand, envCommand, etc.)
-      if (handler.name === 'registryCommand' || handler.name === 'testCommand' || handler.name === 'errorTestCommand' || handler.name === 'languageServerCommand') {
+      if (handler.name === 'registryCommand' || handler.name === 'testCommand' || handler.name === 'errorTestCommand' || handler.name === 'languageServerCommand' || handler.name === 'mcpDevCommand') {
         await handler(subcommands);
-      } else if (handler.name === 'envCommand') {
-        // envCommand expects an options object with _ property
+      } else if (handler.name === 'varsCommand' || handler.name === 'envCommand') {
+        // varsCommand and envCommand expect an options object with _ property
         await handler({ _: subcommands });
       } else {
         // Command object with execute method
@@ -181,7 +199,6 @@ export class CommandDispatcher {
   }
 
   getCommandDescription(command: string): string {
-    // Future enhancement: return command descriptions
     const descriptions: Record<string, string> = {
       'registry': 'Manage mlld module registry',
       'install': 'Install mlld modules',
@@ -190,23 +207,36 @@ export class CommandDispatcher {
       'docs': 'Show module documentation',
       'auth': 'Manage GitHub authentication',
       'publish': 'Publish module to registry',
-      'init': 'Create a new mlld module',
+      'init': 'Initialize mlld project with defaults',
+      'module': 'Create a new mlld module',
+      'mod': 'Create a new mlld module',
       'add-needs': 'Analyze and update module dependencies',
-      'setup': 'Configure mlld project',
+      'setup': 'Interactive project configuration wizard',
       'alias': 'Create path aliases',
-      'env': 'Manage environment variables',
+      'keychain': 'Manage project keychain entries',
+      'vars': 'Manage environment variable permissions',
+      'env': 'Manage AI agent environments',
       'dev': 'Inspect local module discovery',
+      'live': 'Start persistent live RPC server over stdio',
       'language-server': 'Start language server',
       'test': 'Run mlld tests',
       'run': 'Run mlld scripts',
+      'checkpoint': 'Manage script checkpoint caches',
+      'verify': 'Verify signed variables from MLLD_VERIFY_VARS',
       'error-test': 'Test error handling',
       'clean': 'Remove modules from lock file and cache',
       'update': 'Update installed modules to latest versions',
       'outdated': 'List modules with available updates',
       'validate': 'Validate mlld syntax and show module structure',
-      'analyze': 'Validate mlld syntax and show module structure'
+      'analyze': 'Validate mlld syntax and show module structure',
+      'howto': 'Get help on mlld topics',
+      'ht': 'Get help on mlld topics',
+      'qs': 'Quick start guide',
+      'quickstart': 'Quick start guide',
+      'plugin': 'Manage Claude Code plugin',
+      'skill': 'Manage coding tool skills'
     };
-    
+
     return descriptions[command] || 'No description available';
   }
 }

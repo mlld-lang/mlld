@@ -1,0 +1,3 @@
+import { default as @captured, before as @beforeValue } from "./top-level-return-import-capture-module.mld"
+show @captured
+show @beforeValue

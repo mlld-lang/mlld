@@ -54,4 +54,49 @@ describe('GuardError', () => {
     expect(error.message).toContain('Operation: /run (cmd)');
     expect(error.message).toContain('Hint: Mask sensitive data');
   });
+
+  it('formats policy capability denials using structured MlldDenial format', () => {
+    const error = new GuardError({
+      decision: 'deny',
+      guardName: '__policy_cmd_access',
+      operation: {
+        type: 'run',
+        subtype: 'cmd',
+        command: 'npm install'
+      },
+      reason: "Command 'npm' denied by policy",
+      policyName: '@p',
+      policyRule: 'capabilities.allow',
+      policySuggestions: [
+        "Add 'cmd:npm:*' to capabilities.allow",
+        'Review active policies with @mx.policy.activePolicies'
+      ]
+    });
+
+    expect(error.message).toContain('Operation denied');
+    expect(error.message).toContain('Blocked by: Policy @p');
+    expect(error.message).toContain('Rule: capabilities.allow');
+    expect(error.message).toContain("Command 'npm' denied by policy");
+    expect(error.message).toContain("Add 'cmd:npm:*' to capabilities.allow");
+    expect(error.message).not.toContain('Guard blocked operation');
+    expect(error.context.code).toBe('POLICY_CAPABILITY_DENIED');
+    expect(error.context.blocker.type).toBe('policy');
+  });
+
+  it('falls back to guard format when policyName is not provided', () => {
+    const error = new GuardError({
+      decision: 'deny',
+      guardName: '__policy_cmd_access',
+      operation: {
+        type: 'run',
+        subtype: 'cmd',
+        command: 'npm install'
+      },
+      reason: "Command 'npm' denied by policy"
+    });
+
+    expect(error.message).toContain('Guard blocked operation');
+    expect(error.context.code).toBe('GUARD_DENIED');
+    expect(error.context.blocker.type).toBe('guard');
+  });
 });

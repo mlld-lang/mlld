@@ -1,0 +1,15 @@
+>> @meta.id = classifier
+>> @meta.name = Classifier Agent
+>> @meta.capabilities = Categorizes and tags tasks by type, urgency, and domain
+
+import { @claudePoll } from @mlld/claude-poll
+
+exe @taskPrompt(task) = template "./prompts/agents/classify.att"
+
+var @meta = {
+  id: "classifier",
+  name: "Classifier Agent",
+  capabilities: "Categorizes and tags tasks by type, urgency, and domain"
+}
+
+export { @meta, @taskPrompt }

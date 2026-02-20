@@ -13,9 +13,8 @@ import { createRequire } from 'module';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
 
-// Only include languages we actually have WASM files for
-// Note: bash/python packages may not ship WASM in all environments
-const languages = ['javascript'];
+// Include all embedded languages we support in the LSP.
+const languages = ['javascript', 'python', 'bash'];
 const require = createRequire(import.meta.url);
 const sourceDir = path.join(projectRoot, 'node_modules');
 const targetDir = path.join(projectRoot, 'dist', 'wasm');

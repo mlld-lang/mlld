@@ -1,5 +1,0 @@
-for parallel(3) @task in @tasks [
-  let @result = @process(@task)
-  show `Done: @task.id`
-]
-show `Errors: @mx.errors.length`

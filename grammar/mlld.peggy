@@ -71,7 +71,6 @@
 Start
   = frontmatter:Frontmatter? nodes:(
       LineStartComment           /* <— Comments get highest priority! */
-    / Comment                    /* <— Any other comments */
     / MlldRunFence               /* <— Special mlld-run blocks that are interpreted */
     / CodeFence                  /* <— Regular code blocks that are NOT interpreted */
     / Directive                  /* <— Directives come after comments */
@@ -126,7 +125,7 @@ LineStartComment
       const pos = offset();
       const isAtLineStart = helpers.isLogicalLineStart(input, pos);
       return isAtLineStart;
-    } marker:CommentMarker _ content:CommentContent {
+    } marker:CommentMarker HWS content:CommentContent {
     return helpers.createNode(NodeType.Comment, { 
       content: content.trim(), 
       marker: marker,
@@ -135,7 +134,7 @@ LineStartComment
   }
 
 Comment
-  = marker:CommentMarker _ content:CommentContent {
+  = marker:CommentMarker HWS content:CommentContent {
     return helpers.createNode(NodeType.Comment, { 
       content: content.trim(), 
       marker: marker,
@@ -155,7 +154,12 @@ CommentContent
 
 // Inline comment pattern - for use after directive content
 InlineComment
-  = _ marker:CommentMarker _ content:CommentContent {
+  = [ \t\r\u200B\u200C\u200D]* &{
+      const pos = offset();
+      if (pos <= 0) return false;
+      const prev = input[pos - 1];
+      return prev === ' ' || prev === '\t' || prev === '\r' || prev === '\u200B' || prev === '\u200C' || prev === '\u200D';
+    } marker:CommentMarker HWS content:CommentContent {
     return {
       type: 'Comment',
       marker: marker,
@@ -228,26 +232,38 @@ Directive
     }
     [ \t]*                        // allow leading tabs/spaces
     dir:(
-      SlashVar      // NEW: Var directives (unified variable assignment)
+      SlashExeReturn
+    / SlashVar      // NEW: Var directives (unified variable assignment)
     / SlashShow     // NEW: Show directives (content display) - replaces AtAdd
     / SlashLog      // NEW: Log directives (syntactic sugar for /output to stdout)
     / SlashExe      // NEW: Exe directives (define commands/code) - replaces AtExec
+    / SlashEnv      // Env directives (scoped environments)
     / SlashFor      // For directives (iteration)
     / SlashWhile    // While directives (bounded iteration)
+    / SlashLoop     // Loop directives (block iteration)
+    / SlashBail     // Bail directives (terminate execution)
+    / SlashCheckpoint // Named runtime checkpoint markers
     / SlashRun      // Run directives (commands, code)
-    / SlashPath     // Path directives (path variables)
+    / SlashBareRunInvocation // Bare exec invocation sugar (@fn() / /@fn())
     / SlashImport   // Import directives (from other files)
     / SlashExport   // Export directives (explicit exports)
     / SlashOutput   // Output directives (output routing)
     / SlashAppend   // Append directives (incremental file writing)
+    / SlashIf       // If directives (conditional blocks)
     / SlashWhen     // When directives (conditional execution)
+    / SlashHook     // Hook directives (user lifecycle hooks)
     / SlashGuard    // Guard directives (security policies)
     / SlashPolicy   // Policy composition directives
+    / SlashSign     // Sign directives (signature storage)
+    / SlashVerify   // Verify directives (signature checks)
     / SlashNeeds    // Needs directives (capability declarations)
-    / SlashWants    // Wants directives (capability tiers)
+    / SlashProfiles // Profiles directives (capability tiers)
     / SlashStream   // Stream directives
     // NO AtText, AtData, AtAdd, AtExec - deleted!
     ) { return dir; }
+
+SlashExeReturn
+  = "/"? ret:ExeReturnStatement { return ret; }
 
 // -------------------------------------------------------------------------
 // STRICT MODE LINE HANDLING
@@ -345,6 +361,5 @@ CodeFenceLangID
 // - AtExe from directives/exe.peggy (/exe) - NEW: replaces exec
 // - AtRun from directives/run.peggy (/run)
 // - AtImport from directives/import.peggy (/import)
-// - AtPath from directives/path.peggy (/path)
 // - AtOutput from directives/output.peggy (/output)
 // - AtWhen from directives/when.peggy (/when)

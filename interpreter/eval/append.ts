@@ -9,11 +9,17 @@ import { formatJSONL } from './output-shared';
 import { MlldDirectiveError } from '@core/errors';
 import * as path from 'path';
 import type { SecurityDescriptor } from '@core/types/security';
+import { getOperationLabels } from '@core/policy/operation-labels';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
+import { logFileWriteEvent } from '../utils/audit-log';
 
 interface AppendOptions {
   location?: SourceLocation;
   directiveKind?: string;
   format?: string;
+  descriptor?: SecurityDescriptor;
 }
 
 /**
@@ -31,7 +37,7 @@ export async function evaluateAppend(
 
   if (!directive.meta?.hasSource) {
     throw new MlldDirectiveError(
-      '/append requires source content before the target',
+      'append requires source content before the target',
       'append',
       { location: directive.location }
     );
@@ -49,7 +55,7 @@ export async function evaluateAppend(
   const target = directive.values?.target as OutputTargetFile | undefined;
   if (!target || target.type !== 'file') {
     throw new MlldDirectiveError(
-      '/append supports file targets only',
+      'append supports file targets only',
       'append',
       { location: directive.location }
     );
@@ -68,11 +74,30 @@ export async function evaluateAppend(
   if (materialized.descriptor) {
     env.recordSecurityDescriptor(materialized.descriptor);
   }
+
+  if (!context?.policyChecked) {
+    const inputTaint = descriptorToInputTaint(materialized.descriptor);
+    if (inputTaint.length > 0) {
+      const opLabels =
+        context?.operationContext?.opLabels ?? getOperationLabels({ type: 'append' });
+      const enforcer = new PolicyEnforcer(env.getPolicySummary());
+      enforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels: Array.from(env.getEnclosingExeLabels()),
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation: directive.location }
+      );
+    }
+  }
   const format = typeof directive.meta?.format === 'string' ? directive.meta?.format : undefined;
   await appendContentToFile(target, content, env, {
     location: directive.location,
     directiveKind: 'append',
-    format
+    format,
+    descriptor: materialized.descriptor
   });
 
   (env as any).hasExplicitOutput = true;
@@ -86,6 +111,7 @@ export async function appendContentToFile(
   options: AppendOptions
 ): Promise<void> {
   const resolvedPath = await resolveAppendPath(target, env);
+  enforceFilesystemAccess(env, 'write', resolvedPath, options.location ?? undefined);
   const directiveKind = options.directiveKind ?? 'append';
   const { payload, format } = formatAppendPayload(resolvedPath, content, {
     location: options.location,
@@ -103,6 +129,7 @@ export async function appendContentToFile(
   }
 
   await fileSystem.appendFile(resolvedPath, payload);
+  await logFileWriteEvent(env, resolvedPath, options.descriptor);
 
   env.emitEffect('file', payload, {
     path: resolvedPath,
@@ -142,16 +169,15 @@ async function resolveAppendPath(
     );
   }
 
-  if (resolvedPath.startsWith('@base/')) {
+  if (resolvedPath.startsWith('@base/') || resolvedPath.startsWith('@root/')) {
     const projectRoot = env.getProjectRoot();
-    resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
-  } else if (resolvedPath.startsWith('@root/')) {
-    const projectRoot = env.getProjectRoot();
-    resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
+    const prefixLen = resolvedPath.startsWith('@base/') ? 6 : 6;
+    resolvedPath = path.join(projectRoot, resolvedPath.substring(prefixLen));
   }
 
+  // Resolve relative paths from the script file directory
   if (!path.isAbsolute(resolvedPath)) {
-    resolvedPath = path.resolve(env.getBasePath(), resolvedPath);
+    resolvedPath = path.resolve(env.getFileDirectory(), resolvedPath);
   }
 
   return resolvedPath;
@@ -176,7 +202,7 @@ function formatAppendPayload(
 
   if (explicitFormat && explicitFormat !== 'jsonl' && explicitFormat !== 'text') {
     throw new MlldDirectiveError(
-      `Unsupported /append format "${explicitFormat}". Allowed formats: jsonl, text.`,
+      `Unsupported append format "${explicitFormat}". Allowed formats: jsonl, text.`,
       directiveKind,
       { location: options.location }
     );

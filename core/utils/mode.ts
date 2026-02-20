@@ -1,4 +1,21 @@
 import type { MlldMode } from '@core/types/mode';
+export type { MlldMode } from '@core/types/mode';
+
+export type StartRule = 'Start' | 'TemplateBodyAtt' | 'TemplateBodyMtt';
+
+export function inferStartRule(filepath?: string): StartRule {
+  if (!filepath) return 'Start';
+  const normalized = filepath.toLowerCase();
+  if (normalized.endsWith('.att')) return 'TemplateBodyAtt';
+  if (normalized.endsWith('.mtt')) return 'TemplateBodyMtt';
+  return 'Start';
+}
+
+export function isTemplateFile(filepath?: string): boolean {
+  if (!filepath) return false;
+  const normalized = filepath.toLowerCase();
+  return normalized.endsWith('.att') || normalized.endsWith('.mtt');
+}
 
 const DEFAULT_FALLBACK_MODE: MlldMode = 'markdown';
 

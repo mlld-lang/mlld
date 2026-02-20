@@ -1,6 +1,4 @@
-Syntax error in /output: missing 'to' keyword
-
-Line: ${LINE}
+Syntax error in output: missing 'to' keyword
 
 Hint: ${TIP}
 

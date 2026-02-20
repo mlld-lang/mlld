@@ -1,209 +1,171 @@
 ---
-updated: 2025-12-02
+updated: 2026-02-18
 tags: #arch, #streaming, #sdk
-related-docs: docs/dev/PIPELINE.md, docs/dev/EFFECTS.md
-related-code: interpreter/streaming/streaming-manager.ts, interpreter/eval/pipeline/stream-bus.ts, interpreter/streaming/adapters/*.ts, sdk/execution-emitter.ts
+related-docs: docs/dev/OUTPUT.md, docs/dev/PIPELINE.md, docs/dev/INTERPRETER.md
+related-code: interpreter/streaming/streaming-manager.ts, interpreter/streaming/adapter-registry.ts, interpreter/streaming/jsonpath.ts, interpreter/streaming/template-interpolator.ts, interpreter/streaming/accumulator.ts, interpreter/eval/pipeline/stream-bus.ts, interpreter/eval/pipeline/executor/streaming-lifecycle.ts, interpreter/eval/pipeline/stream-sinks/*.ts, interpreter/streaming/adapters/*.ts, interpreter/eval/run.ts, interpreter/eval/exec/streaming.ts, interpreter/hooks/guard-post-orchestrator.ts, sdk/types.ts, sdk/execution-emitter.ts, sdk/stream-execution.ts, interpreter/env/Environment.ts, tests/helpers/stream-recorder.ts, interpreter/env/executors/streaming.integration.test.ts
+related-types: sdk/types { SDKStreamingEvent, StreamingResult, StreamExecution }, interpreter/streaming/adapters/base.ts { StreamAdapter, ParsedEvent, EventTemplate }
 ---
 
 # STREAMING
 
 ## tldr
 
-Streaming emits chunks during execution instead of buffering. Executors spawn async processes, emit CHUNK events to StreamBus. Format adapters parse NDJSON chunks into structured events (text, tool use, etc.) and emit to SDK via ExecutionEmitter. Scripts opt-in via `stream` keyword; SDK consumers choose consumption mode (`document`, `structured`, `stream`, `debug`). After-guards incompatible with streaming; before-guards work normally.
+- STREAMING owns transport lifecycle: StreamBus, sinks, adapters, and SDK streaming event surfaces.
+- `StreamingManager` uses terminal + progress sinks when no adapter is configured.
+- Adapter path is active when an adapter is configured (`streamFormat` path; exec-invocation setup may default to `ndjson`).
+- Built-in adapter registry names include `claude-code`, `claude-agent-sdk`, `@mlld/claude-agent-sdk`, `anthropic`, and `ndjson`.
+- After-guards are denied during streaming by guard post orchestration; `/run` has an additional pre-check.
+- `StructuredResult.streaming` is `StreamingResult` (flat optional fields), not a nested `{ accumulated, events }` wrapper.
 
 ## Principles
 
-- Explicit opt-in (no auto-detection or magic)
-- Progress to stderr (stdout stays clean for piping)
-- Chunks emit during execution (not after buffering)
-- Parallel results buffer for ordered output
-- Script controls execution mode, API controls consumption
+- Explicit opt-in: streaming is enabled only when execution requests it and streaming options allow it.
+- Keep event transport separate from output/effect assembly concerns.
+- Keep adapter contracts strict and typed (`ndjson | sse | text`, resettable adapters, parsed event templates).
+- Keep guard timing safe: after-guards cannot run against live streamed output.
 
 ## Details
 
-**Entry points**: `StreamingManager.configure()` attaches sinks for a run/exec, `PipelineExecutor` emits pipeline events, executors stream chunks via the injected bus, `executeParallelExecInvocations()` handles parallel exec stages.
+### Lifecycle Ownership
 
-**Event Flow**:
-- Executors emit via the StreamingManager-provided `StreamBus`: `PIPELINE_START|COMPLETE|ABORT`, `STAGE_START|SUCCESS|FAILURE`, `CHUNK`
-- Events include: `pipelineId`, `stageIndex`, `parallelIndex?`, `source`, `timestamp`, `metadata?`
-- StreamingManager configures sinks based on options:
-  - With `streamFormat`: `FormatAdapterSink` parses NDJSON, extracts structured data, emits SDK events
-  - Without `streamFormat`: Default `ndjson` adapter handles generic NDJSON parsing
-  - `TerminalSink`: Routes raw CHUNK text to stdout/stderr (used when no adapter)
-  - `ProgressOnlySink`: Token counts to stderr (TTY-aware, carriage-return or newline)
-- FormatAdapterSink and TerminalSink are mutually exclusive (adapter replaces terminal sink)
-- Effect handler stays separate (document assembly, not streaming)
+- Core manager: `interpreter/streaming/streaming-manager.ts`.
+- Pipeline lifecycle bridge: `interpreter/eval/pipeline/executor/streaming-lifecycle.ts`.
+- StreamBus event source: `interpreter/eval/pipeline/stream-bus.ts`.
 
-**Executors**:
-- ShellCommandExecutor, BashExecutor, NodeExecutor: spawn child processes, emit CHUNK on stdout/stderr data events
-- Decoders flush with `.end()` on close (preserves trailing multi-byte UTF-8)
-- Context flag `streamingEnabled` triggers spawn-based execution vs buffered
-- PythonExecutor delegates to ShellCommandExecutor (inherits streaming)
-- JavaScriptExecutor in-process (no streaming)
+Configuration entry paths:
 
-**Parallel Execution**:
-- `@a() || @b()` for ExecInvocations routes to `executeParallelExecInvocations()` helper
-- Converts to parallel pipeline stage, runs via PipelineExecutor
-- Chunks from both branches emit concurrently with distinct `parallelIndex`
-- Results buffer until all branches complete, then aggregate to array
+- `/run` path (`interpreter/eval/run.ts`):
+  - configures streaming when `with { stream: true }` is active,
+  - only attaches adapter when `streamFormat` is explicitly provided,
+  - otherwise leaves default sink path (terminal + progress).
+- exec-invocation path (`interpreter/eval/exec/streaming.ts`):
+  - configures adapter for explicit `streamFormat`,
+  - otherwise falls back to `ndjson` adapter.
 
-**Suppression**:
-- CLI: `--no-stream` or env `MLLD_NO_STREAM=true` disables sinks
-- API: `interpret(..., { streaming: { enabled: false } })`
-- Streaming disabled = no CHUNK events, no progress display, still buffers correctly
+### Sink Behavior
 
-**Guards**:
-- Before-guards: Work normally with streaming
-- After-guards: Error when `streamingEnabled=true` (need complete output to validate)
-- Error message suggests: remove `after`, use `with { stream: false }`, or buffer-then-validate pattern
-- Implementation: `guard-post-hook.ts` checks `operation.metadata.streaming`
+`StreamingManager.configure(...)` behavior:
 
-**Testing**:
-- Integration: `streaming.integration.test.ts` validates timing (chunks at different times), all executors, parallel overlap
-- Fixtures: `tests/cases/feat/streaming/` validate syntax and final output (not timing)
-- Helper: `stream-recorder.ts` captures events with timestamps for timing assertions
+- Adapter provided:
+  - attaches `FormatAdapterSink`, emits structured SDK streaming events.
+- No adapter:
+  - attaches `ProgressOnlySink` (stderr progress) and `TerminalSink` (chunk forwarding).
 
-## Format Adapters
+### Adapter Contracts (Current Types)
 
-Format adapters parse NDJSON streaming output into structured events. All streaming uses the adapter path.
+Source of truth: `interpreter/streaming/adapters/base.ts`.
 
-**Architecture**:
-```
-CHUNK events → FormatAdapterSink → Adapter.processChunk() → ParsedEvent[]
-                                                         → env.emitSDKEvent()
-                                                         → Accumulator (text, toolCalls)
-```
+- `StreamAdapter.format`: `'ndjson' | 'sse' | 'text'`
+- `StreamAdapter` methods:
+  - `processChunk(chunk)`
+  - `flush()`
+  - `reset()`
+- `ParsedEvent`:
+  - `raw?: unknown`
+  - `timestamp?: number`
+  - `templates?: EventTemplate`
+- `EventTemplate` shape:
+  - `text?: string`
+  - `ansi?: string`
+  - `json?: string`
 
-**Key Components**:
-- `StreamingManager` (`interpreter/streaming/streaming-manager.ts`): Owns StreamBus and sink lifecycle
-- `FormatAdapterSink` (`interpreter/eval/pipeline/stream-sinks/format-adapter.ts`): Subscribes to bus, delegates to adapter
-- `adapter-registry.ts`: Lazy-loads adapters by name (`claude-code`, `ndjson`, `@mlld/claude-agent-sdk`)
-- Adapters (`interpreter/streaming/adapters/*.ts`): Define schemas for parsing specific NDJSON formats
-- `stream-format.ts`: Resolves `streamFormat` values (names or AdapterConfig objects) into adapters
+### Adapter Registry and Built-ins
 
-**Adapter Interface**:
-```typescript
-interface StreamAdapter {
-  name: string;
-  format: 'ndjson' | 'sse' | 'custom';
-  processChunk(chunk: string): ParsedEvent[];
-  flush(): ParsedEvent[];
-}
+Source of truth: `interpreter/streaming/adapter-registry.ts`.
 
-interface ParsedEvent {
-  kind: 'message' | 'thinking' | 'tool-use' | 'tool-result' | 'error' | 'metadata' | 'unknown';
-  data: Record<string, unknown>;
-  raw: unknown;
-  timestamp: number;
-  templates?: Record<string, string>;
-}
-```
+Built-in adapter names:
 
-**Built-in Adapters**:
-| Name | Aliases | Purpose |
-|------|---------|---------|
-| `claude-code` | `claude-agent-sdk`, `@mlld/claude-agent-sdk` | Claude SDK NDJSON format |
-| `ndjson` | - | Generic NDJSON (default when streaming enabled) |
+- `claude-code`
+- `claude-agent-sdk`
+- `@mlld/claude-agent-sdk`
+- `anthropic`
+- `ndjson`
 
-**Schema Matching**: Adapters define schemas with `matchPath` and `matchValue` to identify event types:
-```typescript
-{
-  kind: 'message',
-  matchPath: 'type',        // JSONPath to check
-  matchValue: 'text',       // Expected value
-  extract: { chunk: ['text', 'content'] },  // Fields to extract (with fallbacks)
-  visibility: 'always'      // 'always' | 'optional' | 'hidden'
-}
-```
+Alias behavior:
 
-**Usage**:
-- Name lookup:
-  ```mlld
-  /run stream @cmd() with { streamFormat: "claude-code" }
-  ```
-- Adapter config object (AdapterConfig shape: `{ name, format: 'ndjson', schemas, defaultSchema? }`):
-  ```mlld
-  /import { @claudeAgentSdkAdapter } from @mlld/stream-claude-agent-sdk
-  /run stream @cmd() with { streamFormat: @claudeAgentSdkAdapter }
-  ```
-  `@claudeAgentSdkAdapter` matches the built-in `claude-code` schema but ships via module install.
+- `claude-agent-sdk`, `@mlld/claude-agent-sdk`, and `anthropic` currently map to the Claude Code adapter factory.
+- `ndjson` resolves to a minimal generic NDJSON adapter schema.
 
-**SDK Events from Adapters**: FormatAdapterSink emits SDK events for each parsed event:
-- `streaming:message` - Text content chunks
-- `streaming:thinking` - Thinking/reasoning blocks
-- `streaming:tool_use` - Tool invocations
-- `streaming:tool_result` - Tool outputs
-- `streaming:error` - Error events
-- `streaming:metadata` - Usage stats, stop reasons
+### Adapter Extraction and Template Boundaries
 
-**Accumulated Results**: After streaming completes, `StreamingManager.finalizeResults()` returns accumulated data which populates `StructuredResult.streaming`:
-```typescript
-interface StructuredResult {
-  output: string;
-  effects: StructuredEffect[];
-  exports: ExportMap;
-  streaming?: {
-    accumulated: { text?: string; toolCalls?: any[]; thinking?: string };
-    events: ParsedEvent[];
-  };
-}
-```
+JSONPath extraction (`interpreter/streaming/jsonpath.ts`):
 
-## SDK Execution Modes
+- Dot paths (`a.b.c`)
+- Array index (`items[0]`)
+- Array iteration (`items[].name`)
+- Fallback paths (`['primary', 'fallback']`)
 
-SDK v2 introduces execution modes that control how consumers receive output:
+Template interpolation (`interpreter/streaming/template-interpolator.ts`):
 
-| Mode | Returns | Real-time Events | Use Case |
-|------|---------|------------------|----------|
-| `document` | `string` | No | Default CLI behavior |
-| `structured` | `{ output, effects, exports, environment }` | No | Extract data programmatically |
-| `stream` | `StreamExecution` handle | Yes | Real-time UIs, progress |
-| `debug` | `DebugResult` with trace | Yes | Development, debugging |
+- `@evt.path` variable interpolation into adapter outputs.
+- Escapes: `@@`, `\\@`, `%%`.
+- Template formats: `text`, `ansi`, `json`.
 
-**Key principle**: Script controls execution (`stream` keyword), SDK controls consumption (mode selection).
+### FormatAdapterSink Accumulation Boundaries
 
-### Stream Mode Handle
+Source of truth: `interpreter/eval/pipeline/stream-sinks/format-adapter.ts`.
 
-`StreamExecution` handle returned by `interpret(mode:'stream')`:
+- Parsed events are converted to SDK events in `toSDKEvent(...)` with hyphenated event names.
+- Accumulation defaults to enabled and writes into `StreamingResult` fields (`text`, `thinking`, `toolCalls`, `usage`, `errors`).
+- Raw `StreamingResult.events` are retained only when `keepRawEvents` is true.
+- `stop()` flushes adapter buffers and calls `adapter.reset()`.
 
-- `.on(type, handler)` / `.off(type, handler)` - Event subscription
-- `.once(type, handler)` - One-time handler
-- `.done()` - Promise that resolves on completion
-- `.result()` - Promise that resolves to StructuredResult
-- `.isComplete()` - Check if execution finished
-- `.abort()` - Cancel execution (triggers cleanup)
-- Async iterable: `for await (const event of streamHandle) { ... }` yields the same SDK events as `.on(...)`
+### SDK Streaming Events and Result Shape
 
-### ExecutionEmitter Bridge
+Source of truth: `sdk/types.ts`.
 
-`ExecutionEmitter` bridges StreamBus events to SDK events:
-- `CHUNK` → `stream:chunk`
-- `PIPELINE_*` / `STAGE_*` → `stream:progress`, `command:start`, `command:complete`
+Hyphenated streaming event names:
 
-FormatAdapterSink emits additional SDK events for parsed streaming content:
-- `streaming:message` - Text chunks extracted from NDJSON
-- `streaming:thinking` - Reasoning/thinking blocks
-- `streaming:tool_use` - Tool invocation events
-- `streaming:tool_result` - Tool output events
-- `streaming:error` - Error events from stream
-- `streaming:metadata` - Usage stats, model info
+- `streaming:message`
+- `streaming:thinking`
+- `streaming:tool-use`
+- `streaming:tool-result`
+- `streaming:error`
+- `streaming:metadata`
 
-Environment owns the emitter and propagates it to child environments. Effects emit SDK events with security metadata when an emitter is attached.
+`StructuredResult.streaming` uses `StreamingResult` with optional fields:
 
-## CLI Flags
+- `text`
+- `thinking`
+- `toolCalls`
+- `usage`
+- `errors`
+- `events`
 
-- `mlld script.mld` → mode `document`, streams to stdout
-- `mlld script.mld --debug` → mode `stream`, progress to stderr
-- `mlld script.mld --debug --json` → mode `debug`, JSON to stdout
-- `mlld script.mld --no-stream` → mode `document`, streaming disabled
+`events` are retained only when `keepRawEvents: true` (FormatAdapterSink path).
 
-Single stdout writer enforced: document text OR JSON, never both.
+### SDK Emitter Bridge Ownership
+
+- `ExecutionEmitter` (`sdk/execution-emitter.ts`) is pub/sub only (`on/off/once/emit`).
+- StreamBus -> SDK event mapping is owned by `Environment`:
+  - public entry: `enableSDKEvents(...)`
+  - internal bridge: `enableSdkEmitter(...)` + `emitMappedSdkEvents(...)`
+  - source file: `interpreter/env/Environment.ts`
+- Adapter-formatted `streaming:*` events are emitted through `env.emitSDKEvent(...)` from `FormatAdapterSink`.
+
+### Guard Constraints
+
+- Post-guard streaming denial is enforced in `interpreter/hooks/guard-post-orchestrator.ts`.
+- `/run` adds a direct after-guard pre-check in `interpreter/eval/run.ts` before command execution.
+- `interpreter/hooks/guard-post-hook.ts` is the hook wrapper/delegator; it does not own denial logic.
+
+### Stream Handle Semantics
+
+`StreamExecution` (`sdk/stream-execution.ts`) exposes:
+
+- `on/off/once`
+- `done()`
+- `result()`
+- `isComplete()`
+- `abort()`
+
+Async iterator note:
+
+- The iterator subscribes to a fixed subset of SDK event types (`effect`, `command:*`, `stream:*`, `execution:complete`, `state:write`, debug events).
+- It does not subscribe to all `streaming:*` adapter-formatted events.
 
 ## Gotchas
 
-- After-guards incompatible with streaming (validation needs complete output)
-- Fixture tests can't validate incremental behavior (only check final output)
-- JavaScriptExecutor in-process (synchronous, can't stream like spawn-based executors)
-- Parallel groups return first result only without the fix in `parallel-exec.ts`
-- StreamingManager scopes a StreamBus per interpretation and tears down sinks after execution
-- Stream mode returns handle immediately; execution runs async in background
+- Keep output/effect architecture in `docs/dev/OUTPUT.md`; do not duplicate effect-routing ownership here.
+- Do not use underscore event names (`streaming:tool_use`, `streaming:tool_result`); current surface is hyphenated.
+- Do not document obsolete adapter format `custom`; current `StreamAdapter.format` union is `ndjson | sse | text`.

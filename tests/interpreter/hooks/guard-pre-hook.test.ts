@@ -14,6 +14,8 @@ import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { guardPreHook } from '@interpreter/hooks/guard-pre-hook';
+import type { OperationContext } from '@interpreter/env/ContextManager';
 
 function createEnv(): Environment {
   const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -82,6 +84,46 @@ describe('guard pre-hook integration', () => {
     await expect(evaluateDirective(directive, env)).rejects.toMatchObject({
       details: {
         reasons: ['first deny', 'second deny']
+      }
+    });
+  });
+
+  it('evaluates per-input guards before per-operation guards in registration order', async () => {
+    const env = createEnv();
+    const perInputOne = parseSync(
+      '/guard @inputOne for secret = when [ * => deny "input-one" ]'
+    )[0] as DirectiveNode;
+    const perInputTwo = parseSync(
+      '/guard @inputTwo for secret = when [ * => deny "input-two" ]'
+    )[0] as DirectiveNode;
+    const perOperation = parseSync(
+      '/guard @operationOne for op:show = when [ * => deny "operation-one" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(perInputOne, env);
+    await evaluateDirective(perInputTwo, env);
+    await evaluateDirective(perOperation, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'hi',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'], sources: ['test'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toMatchObject({
+      details: {
+        reasons: ['input-one', 'input-two', 'operation-one']
       }
     });
   });
@@ -250,6 +292,72 @@ describe('guard pre-hook integration', () => {
     await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
   });
 
+  it('applies guard-except overrides to skip listed guards', async () => {
+    const env = createEnv();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    const guardAllow = parseSync('/guard @ga for secret = when [ * => allow ]')[0] as DirectiveNode;
+    const guardDeny = parseSync(
+      '/guard @gb for secret = when [ * => deny "blocked by gb" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardAllow, env);
+    await evaluateDirective(guardDeny, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'secret-value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'] })
+        }
+      )
+    );
+
+    const directive = parseSync(
+      '/show @secretVar with { guards: { except: [@gb] } }'
+    )[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    expect(effects.getOutput().trim()).toBe('secret-value');
+  });
+
+  it('parses guard override names without quotes', async () => {
+    const env = createEnv();
+    const guardAllow = parseSync('/guard @ga for secret = when [ * => allow ]')[0] as DirectiveNode;
+    const guardDeny = parseSync(
+      '/guard @gb for secret = when [ * => deny "blocked by gb" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardAllow, env);
+    await evaluateDirective(guardDeny, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'secret-value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'] })
+        }
+      )
+    );
+
+    const directive = parseSync(
+      '/show @secretVar with { guards: { only: [@ga] } }'
+    )[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+  });
+
   it('throws when guard override sets both only and except', async () => {
     const env = createEnv();
     env.setVariable(
@@ -302,6 +410,100 @@ describe('guard pre-hook integration', () => {
 
     const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/secret output blocked/);
+  });
+
+  it('treats missing @mx.op.labels.includes checks as false', async () => {
+    const env = createEnv();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    const guardDirective = parseSync(
+      '/guard for op:show = when [ @mx.op.labels.includes("destructive") => deny "Blocked" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'value',
+      createSimpleTextVariable(
+        'value',
+        'safe-output',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor()
+        }
+      )
+    );
+
+    const directive = parseSync('/show @value')[0] as DirectiveNode;
+    await evaluateDirective(directive, env);
+    expect(effects.getOutput().trim()).toBe('safe-output');
+  });
+
+  it('supports opHas/opHasAny/opHasAll with prefixWith and tagValue helpers', async () => {
+    const env = createEnv();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    const guardDirective = parseSync(
+      '/guard for secret = when [ @opHas("op:show") && @opHasAny("op:show") && @opHasAll("op:show") && @inputHas("secret") => allow @prefixWith("wrapped", @tagValue("before", @output, @input)) \n * => deny "helper contract failed" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+    await evaluateDirective(directive, env);
+    expect(effects.getOutput().trim()).toBe('wrapped:before:value');
+  });
+
+  it('keeps before op:show guard transforms as plain text output', async () => {
+    const env = createEnv();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    const guardDirective = parseSync(
+      '/guard before @rewrite for op:show = when [ * => allow @prefixWith("show", @input) ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'value',
+      createSimpleTextVariable(
+        'value',
+        'base',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor()
+        }
+      )
+    );
+
+    const directive = parseSync('/show @value')[0] as DirectiveNode;
+    await evaluateDirective(directive, env);
+    const output = effects.getOutput().trim();
+
+    expect(output).toBe('show:base');
+    expect(output).not.toContain('"type":"');
+    expect(output).not.toContain('"name":"guard_');
   });
 
   it('rejects guard retry outside pipeline context', async () => {
@@ -397,7 +599,153 @@ describe('guard pre-hook integration', () => {
     });
   });
 
-  it('sets @mx.guard to null when no guards fire', async () => {
+  it('isolates retry attempt tracking by input identity', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard @inputRetries for secret = when [ @mx.guard.try < 2 => retry "retry-once" \n * => deny "done" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'secretA',
+      createSimpleTextVariable(
+        'secretA',
+        'alpha',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'] })
+        }
+      )
+    );
+    env.setVariable(
+      'secretB',
+      createSimpleTextVariable(
+        'secretB',
+        'beta',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'] })
+        }
+      )
+    );
+
+    const pipelineSnapshot: PipelineContextSnapshot = {
+      stage: 1,
+      totalStages: 1,
+      currentCommand: 'stage-1',
+      input: 'value',
+      previousOutputs: [],
+      format: undefined,
+      attemptCount: 1,
+      attemptHistory: [],
+      hint: null,
+      hintHistory: [],
+      sourceRetryable: true
+    };
+
+    const showA = parseSync('/show @secretA')[0] as DirectiveNode;
+    const showB = parseSync('/show @secretB')[0] as DirectiveNode;
+
+    await expect(
+      env.withPipeContext(pipelineSnapshot, async () => evaluateDirective(showA, env))
+    ).rejects.toMatchObject({ decision: 'retry' });
+
+    await expect(
+      env.withPipeContext(pipelineSnapshot, async () => evaluateDirective(showB, env))
+    ).rejects.toMatchObject({ decision: 'retry' });
+
+    await expect(
+      env.withPipeContext(pipelineSnapshot, async () => evaluateDirective(showA, env))
+    ).rejects.toMatchObject({ decision: 'deny' });
+  });
+
+  it('isolates retry attempt tracking between per-input and per-operation scopes', async () => {
+    const env = createEnv();
+    const perInputGuard = parseSync(
+      '/guard @inputRetries for secret = when [ @mx.guard.try < 2 => retry "retry-input" \n * => deny "input-stop" ]'
+    )[0] as DirectiveNode;
+    const perOperationGuard = parseSync(
+      '/guard @operationRetries for op:show = when [ @mx.guard.try < 2 => retry "retry-op" \n * => deny "op-stop" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(perInputGuard, env);
+    await evaluateDirective(perOperationGuard, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'] })
+        }
+      )
+    );
+
+    const mxManager = env.getContextManager();
+    const retriesByGuard = new Map<string, number[]>();
+    const originalWithGuardContext = mxManager.withGuardContext.bind(mxManager);
+    const guardCtxSpy = vi
+      .spyOn(mxManager, 'withGuardContext')
+      .mockImplementation(async (context, fn) => {
+        return await originalWithGuardContext(context, async () => {
+          const snapshot = mxManager.buildAmbientContext();
+          const guardState = snapshot.guard as any;
+          const guardName = typeof guardState?.name === 'string' ? guardState.name : 'unknown';
+          const guardTry = typeof guardState?.try === 'number' ? guardState.try : null;
+          if (guardTry !== null) {
+            const existing = retriesByGuard.get(guardName) ?? [];
+            existing.push(guardTry);
+            retriesByGuard.set(guardName, existing);
+          }
+          return await fn();
+        });
+      });
+
+    const pipelineSnapshot: PipelineContextSnapshot = {
+      stage: 1,
+      totalStages: 1,
+      currentCommand: 'stage-1',
+      input: 'value',
+      previousOutputs: [],
+      format: undefined,
+      attemptCount: 1,
+      attemptHistory: [],
+      hint: null,
+      hintHistory: [],
+      sourceRetryable: true
+    };
+
+    const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+
+    await expect(
+      env.withPipeContext(pipelineSnapshot, async () => evaluateDirective(directive, env))
+    ).rejects.toMatchObject({ decision: 'retry' });
+    await expect(
+      env.withPipeContext(pipelineSnapshot, async () => evaluateDirective(directive, env))
+    ).rejects.toMatchObject({ decision: 'deny' });
+
+    guardCtxSpy.mockRestore();
+    expect(retriesByGuard.get('inputRetries')).toEqual([1, 2]);
+    expect(retriesByGuard.get('operationRetries')).toEqual([1, 2]);
+  });
+
+  it('omits @mx.guard when no guards fire', async () => {
     const env = createEnv();
     env.setVariable(
       'plainVar',
@@ -419,7 +767,7 @@ describe('guard pre-hook integration', () => {
     const directive = parseSync('/show @plainVar')[0] as DirectiveNode;
     await evaluateDirective(directive, env);
     const mx = env.getContextManager().buildAmbientContext();
-    expect(mx.guard).toBeNull();
+    expect(mx).not.toHaveProperty('guard');
   });
 
 it('denies /run commands that interpolate expression-derived secrets', async () => {
@@ -661,7 +1009,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     const directive = parseSync('/show @renderSecret(@plain)')[0] as DirectiveNode;
     await evaluateDirective(directive, env);
     const mx = env.getContextManager().buildAmbientContext();
-    expect(mx.guard).toBeNull();
+    expect(mx).not.toHaveProperty('guard');
   });
 
   it('sets @mx.denied when guard denial is handled inside exec when-blocks', async () => {
@@ -691,6 +1039,42 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
 
     expect(handled).not.toBeNull();
     expect((handled as any)?.internal?.deniedHandlerRan).toBe(true);
+  });
+
+  it('surfaces env decision metadata from pre-hook evaluation', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard @envPicker for op:run = when [ * => env "sandbox-profile" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const runDirective = parseSync('/run {echo test}')[0] as DirectiveNode;
+    const inputVariable = createSimpleTextVariable(
+      'input',
+      'echo test',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor()
+      }
+    );
+
+    const operation: OperationContext = {
+      type: 'run',
+      subtype: 'runCommand',
+      opLabels: ['op:cmd'],
+      metadata: { runSubtype: 'runCommand' }
+    };
+    const decision = await guardPreHook(runDirective, [inputVariable], env, operation);
+
+    expect(decision.action).toBe('continue');
+    expect(decision.metadata?.envGuard).toBe('envPicker');
+    expect(decision.metadata?.envConfig).toBe('sandbox-profile');
+    expect((decision.metadata?.guardResults as any[])[0]?.decision).toBe('env');
   });
 });
 
@@ -809,4 +1193,350 @@ it('feeds guard-transformed values into exec invocation parameters', async () =>
   const result = await evaluateExecInvocation(invocation, env);
   const value = isStructuredValue(result.value) ? result.value.text : result.value;
   expect(String(value)).toContain('scrubbed');
+});
+
+it('keeps combined before guards on op:exe resolved to plain values', async () => {
+  const env = createEnv();
+  const labelGuard = parseSync(
+    '/guard before @labelFirst for secret = when [ * => allow @prefixWith("label", @input) ]'
+  )[0] as DirectiveNode;
+  const opGuard = parseSync(
+    '/guard before @opSecond for op:exe = when [ * => allow @prefixWith("op", @input) ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(labelGuard, env);
+  await evaluateDirective(opGuard, env);
+
+  const helperDirective = parseSync(
+    '/exe @prefixWith(tag, value) = js { return `${tag}:${value}`; }'
+  )[0] as DirectiveNode;
+  const exeDirective = parseSync('/exe @emit(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(helperDirective, env);
+  await evaluateDirective(exeDirective, env);
+
+  env.setVariable(
+    'secretVar',
+    createSimpleTextVariable(
+      'secretVar',
+      'raw-secret',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'secretVar' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  expect(String(value)).toBe('op:label:raw-secret');
+  expect(String(value)).not.toContain('guard_');
+  expect(String(value)).not.toContain('"type":"');
+});
+
+it('fires bare-label before guards for exe labels without op: prefix', async () => {
+  const env = createEnv();
+  const labelGuard = parseSync(
+    '/guard before @byLabel for exfil = when [ * => allow @prefixWith("guard", @input) ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(labelGuard, env);
+
+  const helperDirective = parseSync(
+    '/exe @prefixWith(tag, value) = js { return `${tag}:${value}`; }'
+  )[0] as DirectiveNode;
+  const exeDirective = parseSync('/exe exfil @emit(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(helperDirective, env);
+  await evaluateDirective(exeDirective, env);
+
+  env.setVariable(
+    'plainVar',
+    createSimpleTextVariable(
+      'plainVar',
+      'raw',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor()
+      }
+    )
+  );
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'plainVar' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  expect(String(value)).toBe('guard:raw');
+});
+
+it('does not double-fire bare-label guards when input and exe share a label', async () => {
+  const env = createEnv();
+  const labelGuard = parseSync(
+    '/guard before @byLabel for secret = when [ * => allow @prefixWith("guard", @input) ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(labelGuard, env);
+
+  const helperDirective = parseSync(
+    '/exe @prefixWith(tag, value) = js { return `${tag}:${value}`; }'
+  )[0] as DirectiveNode;
+  const exeDirective = parseSync('/exe secret @emit(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(helperDirective, env);
+  await evaluateDirective(exeDirective, env);
+
+  env.setVariable(
+    'secretVar',
+    createSimpleTextVariable(
+      'secretVar',
+      'raw-secret',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'secretVar' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  const text = String(value);
+  expect(text).toBe('guard:raw-secret');
+  expect(text.match(/guard:/g)?.length ?? 0).toBe(1);
+});
+
+it('does not run bare-label operation matching for zero-input exe calls', async () => {
+  const env = createEnv();
+  const labelGuard = parseSync(
+    '/guard before @retryableCheck for retryable = when [ @mx.op.type == "exe" => deny "should not run" \n * => allow ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(labelGuard, env);
+
+  const exeDirective = parseSync('/exe retryable @seed() = "ok"')[0] as DirectiveNode;
+  await evaluateDirective(exeDirective, env);
+
+  const directive = parseSync('/show @seed()')[0] as DirectiveNode;
+  await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+});
+
+it('composes multiple before label transforms in guard registration order', async () => {
+  const env = createEnv();
+  const firstGuard = parseSync(
+    '/guard before @first for secret = when [ * => allow `A-@input` ]'
+  )[0] as DirectiveNode;
+  const secondGuard = parseSync(
+    '/guard before @second for secret = when [ * => allow `B-@input` ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(firstGuard, env);
+  await evaluateDirective(secondGuard, env);
+
+  env.setVariable(
+    'secretVar',
+    createSimpleTextVariable(
+      'secretVar',
+      'test',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+  await evaluateDirective(directive, env);
+
+  const effects = env.getEffectHandler() as TestEffectHandler;
+  expect(effects.getOutput().trim()).toBe('B-A-test');
+});
+
+it('applies conditional before label transforms using the latest transformed input', async () => {
+  const env = createEnv();
+  const firstGuard = parseSync(
+    '/guard before @first for secret = when [ * => allow `A-@input` ]'
+  )[0] as DirectiveNode;
+  const conditionalGuard = parseSync(
+    '/guard before @second for secret = when [ !@input.startsWith("A-") => allow `B-@input` \n * => allow ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(firstGuard, env);
+  await evaluateDirective(conditionalGuard, env);
+
+  env.setVariable(
+    'secretVar',
+    createSimpleTextVariable(
+      'secretVar',
+      'test',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+  await evaluateDirective(directive, env);
+
+  const effects = env.getEffectHandler() as TestEffectHandler;
+  expect(effects.getOutput().trim()).toBe('A-test');
+});
+
+it('applies op:exe guards to bare run-exec statements and var-assigned exec calls', async () => {
+  const env = createEnv();
+  const guardDirective = parseSync(
+    '/guard @blockExec for secret = when [ * => deny "blocked exec" ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(guardDirective, env);
+
+  const exeDirective = parseSync('/exe @handler(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(exeDirective, env);
+
+  env.setVariable(
+    'key',
+    createSimpleTextVariable(
+      'key',
+      'secret-value',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const bareInvocation = parseSync('/@handler(@key)')[0] as DirectiveNode;
+  await expect(evaluateDirective(bareInvocation, env)).rejects.toThrow(/blocked exec/);
+
+  const assignedInvocation = parseSync('/var @result = @handler(@key)')[0] as DirectiveNode;
+  await expect(evaluateDirective(assignedInvocation, env)).rejects.toThrow(/blocked exec/);
+});
+
+describe('secret redaction in guard error messages', () => {
+  it('redacts secret variable values in inputPreview, guardInput, and guardContext', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard @noSecret for secret = when [ * => deny "blocked" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const secretValue = 'sk-super-secret-key-12345';
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        secretValue,
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'], sources: ['test'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+    let error: unknown;
+    try {
+      await evaluateDirective(directive, env);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(GuardError);
+    const guardError = error as GuardError;
+
+    // Serialize the entire error to check for secret leakage
+    const errorJson = JSON.stringify(guardError.toJSON());
+    expect(errorJson).not.toContain(secretValue);
+    expect(errorJson).toContain('[REDACTED]');
+
+    // Verify specific fields are redacted
+    expect(guardError.details.inputPreview).toBe('[REDACTED]');
+    const guardCtx = guardError.details.guardContext as any;
+    expect(guardCtx.inputPreview).toBe('[REDACTED]');
+    expect(guardCtx.outputPreview).toBe('[REDACTED]');
+  });
+
+  it('redacts sensitive variable values in error messages', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard @noSensitive for sensitive = when [ * => deny "blocked sensitive" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const sensitiveValue = 'user@private-email.com';
+    env.setVariable(
+      'sensitiveVar',
+      createSimpleTextVariable(
+        'sensitiveVar',
+        sensitiveValue,
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['sensitive'], sources: ['test'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @sensitiveVar')[0] as DirectiveNode;
+    let error: unknown;
+    try {
+      await evaluateDirective(directive, env);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(GuardError);
+
+    const errorJson = JSON.stringify((error as GuardError).toJSON());
+    expect(errorJson).not.toContain(sensitiveValue);
+    expect(errorJson).toContain('[REDACTED]');
+  });
 });

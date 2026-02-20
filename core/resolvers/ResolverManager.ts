@@ -344,15 +344,59 @@ export class ResolverManager {
     return undefined;
   }
 
+  private getMissingResolverMessage(ref: string): string {
+    const normalized = ref.trim().toLowerCase();
+    if (normalized === '@payload' || normalized === 'payload') {
+      return '@payload is only available when running via \'mlld run <name>\'. To pass arguments, use: mlld run <script-name> --arg value. See: mlld run --help';
+    }
+    return `No resolver found for reference: ${ref}`;
+  }
+
   /**
    * Resolve a module reference
    */
   async resolve(ref: string, options?: ResolverOptions): Promise<ResolutionResult> {
     const startTime = Date.now();
 
-    // 1. Check if we have a hash for this module in lock file (skip for local files)
-    const isLocal = ref.startsWith('@local/') || ref.startsWith('local://');
-    if (this.lockFile && this.moduleCache && !isLocal) {
+    // 1. Find matching prefix by prefix
+    const { resolver, prefixConfig } = await this.findResolver(ref, options?.context);
+
+    if (!resolver) {
+      throw new MlldResolutionError(
+        this.getMissingResolverMessage(ref),
+        { code: 'E_NO_RESOLVER' }
+      );
+    }
+
+    // Check if resolver supports the requested context
+    if (options?.context && !this.canResolveInContext(resolver, options.context)) {
+      throw new MlldResolutionError(
+        `Resolver '${resolver.name}' does not support ${options.context} operations`,
+        { code: 'E_INVALID_CONTEXT' }
+      );
+    }
+
+    // Check if resolver supports input operations
+    if (resolver.type === 'output') {
+      throw new MlldResolutionError(
+        `Resolver '${resolver.name}' does not support input operations`,
+        { code: 'E_INVALID_CONTEXT' }
+      );
+    }
+
+    const supportedContentTypes = Array.isArray(resolver.capabilities?.supportedContentTypes)
+      ? resolver.capabilities.supportedContentTypes
+      : [];
+    const legacyResourceType = (resolver.capabilities as { resourceType?: string } | undefined)?.resourceType;
+    const supportsModuleContent =
+      supportedContentTypes.includes('module') || legacyResourceType === 'module';
+    const isLocal = ref.startsWith('@local/') || ref.startsWith('local://') || resolver.name === 'LOCAL';
+    const isDynamic = resolver.name.toLowerCase() === 'dynamic';
+    const cacheEligible = supportsModuleContent && this.lockFile && this.moduleCache && !isLocal && !isDynamic;
+    const shouldRequireCache = supportsModuleContent && !isLocal && !isDynamic;
+
+    // 2. Check if we have a hash for this module in lock file (skip for local files)
+    if (cacheEligible) {
       // Convert reference to module name format
       const moduleName = this.refToModuleName(ref);
       const lockEntry = this.lockFile.getModule(moduleName);
@@ -399,7 +443,7 @@ export class ResolverManager {
             // In offline mode, fail if not in cache
             throw new MlldResolutionError(
               `Module '${ref}' not available in offline mode`,
-              { reference: ref, hash }
+              { code: 'E_OFFLINE_UNAVAILABLE' }
             );
           }
         }
@@ -407,40 +451,14 @@ export class ResolverManager {
         // In offline mode with no lock entry, fail immediately
         throw new MlldResolutionError(
           `Module '${ref}' not available in offline mode`,
-          { reference: ref }
+          { code: 'E_OFFLINE_UNAVAILABLE' }
         );
       }
-    } else if (this.offlineMode && (!this.lockFile || !this.moduleCache)) {
+    } else if (this.offlineMode && shouldRequireCache && (!this.lockFile || !this.moduleCache)) {
       // Offline mode requires both lock file and cache
       throw new MlldResolutionError(
         'Offline mode requires lock file and cache to be configured',
-        { reference: ref }
-      );
-    }
-
-    // 2. Find matching prefix by prefix
-    const { resolver, prefixConfig } = await this.findResolver(ref, options?.context);
-
-    if (!resolver) {
-      throw new MlldResolutionError(
-        `No resolver found for reference: ${ref}`,
-        { reference: ref, context: options?.context }
-      );
-    }
-
-    // Check if resolver supports the requested context
-    if (options?.context && !this.canResolveInContext(resolver, options.context)) {
-      throw new MlldResolutionError(
-        `Resolver '${resolver.name}' does not support ${options.context} operations`,
-        { reference: ref, resolverName: resolver.name, context: options.context }
-      );
-    }
-
-    // Check if resolver supports input operations
-    if (resolver.type === 'output') {
-      throw new MlldResolutionError(
-        `Resolver '${resolver.name}' does not support input operations`,
-        { reference: ref, resolverName: resolver.name }
+        { code: 'E_OFFLINE_UNAVAILABLE' }
       );
     }
 
@@ -456,7 +474,7 @@ export class ResolverManager {
       if (!hasAccess) {
         throw new MlldResolutionError(
           `Access denied for reference: ${ref}`,
-          { reference: ref, resolverName: resolver.name }
+          { code: 'E_ACCESS_DENIED' }
         );
       }
     }
@@ -480,6 +498,7 @@ export class ResolverManager {
       // 4. Cache the content if cache is available (but skip local files)
       if (
         this.moduleCache &&
+        supportsModuleContent &&
         content.content &&
         resolver.name !== 'LOCAL' &&
         resolver.name.toLowerCase() !== 'dynamic'
@@ -518,7 +537,7 @@ export class ResolverManager {
           logger.debug(`Cached ${ref} with hash ${cacheEntry.hash}`);
         } catch (cacheError) {
           // Log but don't fail resolution if caching fails
-          logger.warn(`Failed to cache ${ref}: ${cacheError.message}`);
+          logger.warn(`Failed to cache ${ref}: ${cacheError instanceof Error ? cacheError.message : String(cacheError)}`);
         }
       }
 
@@ -580,12 +599,8 @@ export class ResolverManager {
         throw error;
       }
       throw new MlldResolutionError(
-        `Failed to resolve '${ref}' using ${resolver.name}: ${error.message}`,
-        { 
-          reference: ref, 
-          resolverName: resolver.name,
-          originalError: error
-        }
+        `Failed to resolve '${ref}' using ${resolver.name}: ${error instanceof Error ? error.message : String(error)}`,
+        { code: 'E_RESOLVE_FAIL' }
       );
     }
   }
@@ -597,7 +612,7 @@ export class ResolverManager {
     if (!this.securityPolicy.allowOutputs) {
       throw new MlldResolutionError(
         'Output operations are not allowed by security policy',
-        { reference: ref }
+        { code: 'E_OUTPUT_DENIED' }
       );
     }
 
@@ -606,7 +621,7 @@ export class ResolverManager {
     if (!resolver) {
       throw new MlldResolutionError(
         `No resolver found for reference: ${ref}`,
-        { reference: ref }
+        { code: 'E_NO_RESOLVER' }
       );
     }
 
@@ -614,7 +629,7 @@ export class ResolverManager {
     if (resolver.type === 'input' || !resolver.write) {
       throw new MlldResolutionError(
         `Resolver '${resolver.name}' does not support output operations`,
-        { reference: ref, resolverName: resolver.name }
+        { code: 'E_INVALID_CONTEXT' }
       );
     }
 
@@ -630,7 +645,7 @@ export class ResolverManager {
       if (!hasAccess) {
         throw new MlldResolutionError(
           `Write access denied for reference: ${ref}`,
-          { reference: ref, resolverName: resolver.name }
+          { code: 'E_ACCESS_DENIED' }
         );
       }
     }
@@ -639,12 +654,8 @@ export class ResolverManager {
       await resolver.write(resolverRef, content, prefixConfig?.config);
     } catch (error) {
       throw new MlldResolutionError(
-        `Failed to write '${ref}' using ${resolver.name}: ${error.message}`,
-        { 
-          reference: ref, 
-          resolverName: resolver.name,
-          originalError: error
-        }
+        `Failed to write '${ref}' using ${resolver.name}: ${error instanceof Error ? error.message : String(error)}`,
+        { code: 'E_WRITE_FAILED' }
       );
     }
   }
@@ -781,11 +792,7 @@ export class ResolverManager {
             `Resolver '${prefixConfig.resolver}' not found. ` +
             `Prefix '${prefixConfig.prefix}' is configured to use '${prefixConfig.resolver}' resolver, ` +
             `but only these resolvers are registered: ${availableResolvers.join(', ')}`,
-            { 
-              prefix: prefixConfig.prefix,
-              expectedResolver: prefixConfig.resolver,
-              availableResolvers 
-            }
+            { code: 'E_RESOLVER_NOT_FOUND' }
           );
         }
         // Strip prefix from reference before checking canResolve

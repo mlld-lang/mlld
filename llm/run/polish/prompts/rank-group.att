@@ -1,0 +1,56 @@
+## Work Grouping
+
+You are organizing enriched items into work assignments.
+
+## Items to Organize
+
+```json
+@itemsJson
+```
+
+## Grouping Rules
+
+### Size weights
+- **xs** = 0.5 points
+- **s** = 1 point
+- **m** = 3 points
+- **l** = 5 points (always standalone)
+- **xl** = 8 points (always standalone)
+- **unscoped** = treat as m (3 points)
+
+### Constraints
+1. **L and XL items** are always standalone assignments.
+2. **XS, S, and M items** should be grouped by feature area or adjacency.
+3. **No group may exceed 5 points total.**
+4. **Prefer meaningful clusters over arbitrary grouping.** A single m-sized item is fine standalone.
+5. **Respect dependencies.** If A depends on B, they should be in the same group or B ranked earlier.
+
+### What makes items "adjacent"
+- Same subsystem (grammar, interpreter, CLI, docs, etc.)
+- Same feature area (templates, for-loops, imports, etc.)
+- Fix the same root cause
+- Touch the same files
+
+## Output Format
+
+Write ONLY a JSON array (no markdown code fences):
+
+[
+  {
+    "type": "single",
+    "ticket_id": "mlld-abc",
+    "size": "xl",
+    "points": 8,
+    "area": "interpreter",
+    "rationale": "Large standalone refactor"
+  },
+  {
+    "type": "cluster",
+    "area": "grammar-templates",
+    "tickets": ["mlld-x", "mlld-y", "mlld-z"],
+    "points": 2.5,
+    "rationale": "Three related template parsing fixes"
+  }
+]
+
+Every item must appear exactly once.

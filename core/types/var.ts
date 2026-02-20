@@ -7,7 +7,7 @@
 
 import { TypedDirectiveNode } from './base';
 import { ContentNodeArray, VariableNodeArray } from './values';
-import { DirectiveNode, ExecInvocation, ConditionalArrayElementNode } from './nodes';
+import { DirectiveNode, ExecInvocation, ConditionalArrayElementNode, NewExpression, Expression } from './nodes';
 import type { ExeBlockNode } from './exe';
 import type { PipelineStage } from './run';
 import type { DataLabel } from './security';
@@ -92,8 +92,10 @@ export type DataValue =
   | ContentNodeArray // String literals, numbers, booleans
   | DataObjectValue
   | DataArrayValue
+  | Expression
   | DirectiveNode // Nested directive
   | ExecInvocation // Exec invocation
+  | NewExpression
   | ConditionalArrayElementNode
   | ForeachCommandExpression
   | ForeachSectionExpression;
@@ -114,6 +116,7 @@ export interface VarRaw {
 export interface VarMeta {
   inferredType?: 'text' | 'data' | 'path' | 'exec';
   securityLabels?: DataLabel[];
+  isToolsCollection?: boolean;
   [key: string]: unknown;
 }
 
@@ -136,6 +139,7 @@ export type VarValue =
   | DataArrayValue // Arrays
   | DirectiveNode // Nested directives (@run, @add, etc.)
   | ExecInvocation // Exec invocations
+  | NewExpression
   | ExeBlockNode // Block expressions
   | ForeachCommandExpression // Foreach command expressions
   | ForeachSectionExpression // Foreach section expressions
@@ -282,7 +286,9 @@ export function isTemplateValue(value: unknown): value is ContentNodeArray {
     (node.type === 'Text' ||
       node.type === 'VariableReference' ||
       node.type === 'ConditionalTemplateSnippet' ||
-      node.type === 'ConditionalStringFragment')
+      node.type === 'ConditionalStringFragment' ||
+      node.type === 'ConditionalVarOmission' ||
+      node.type === 'NullCoalescingTight')
   );
 }
 

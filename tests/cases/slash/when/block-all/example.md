@@ -4,7 +4,7 @@
 /var @hasPayments = "true"
 /var @hasChat = ""
 
-# Using bare when to execute all matching conditions
+# Using when block to execute the first matching condition
 /when [
   @hasAuth => show "Authentication enabled"
   @hasPayments => show "Payments enabled"

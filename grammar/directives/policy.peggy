@@ -1,5 +1,6 @@
 // POLICY DIRECTIVE
 // /policy @name = union(@a, @b)
+// /policy @name = { ... }
 
 PolicyKeyword
   = "/"? "policy"
@@ -25,6 +26,10 @@ SlashPolicy
 
 PolicyExpression
   = UnionCall
+  / PolicyObjectLiteral
+
+PolicyObjectLiteral
+  = obj:DataObjectLiteral { return obj; }
 
 UnionCall
   = "union" _ "(" _ args:UnionArgs? _ ")" {

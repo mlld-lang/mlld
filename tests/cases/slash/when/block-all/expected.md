@@ -1,3 +1,2 @@
-# Using bare when to execute all matching conditions
+# Using when block to execute the first matching condition
 Authentication enabled
-Payments enabled

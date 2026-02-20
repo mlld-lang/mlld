@@ -43,13 +43,12 @@ Test comprehensive truthiness behavior in @when directives.
 
 /when !@zero => show "Not zero"
 
-## 3. Variable Comparison (NOT a switch - bare when)
+## 3. Variable Comparison (match form)
 
 /var @mode = "true"
 
 >> With /when @variable: [...], the variable's value is compared to each condition
->> Only matching conditions fire their actions
->> This is NOT a switch - ALL matching conditions fire
+>> The first matching condition fires its action
 /when @mode: [
 "true" => show "Matched as boolean true"
 "false" => show "Matched as boolean false"
@@ -146,14 +145,14 @@ Test comprehensive truthiness behavior in @when directives.
 
 /when (@check1 && @check2 && @check3) => show "FAIL: Not all truthy but triggered"
 
-## 9. @when first: with Truthiness
+## 9. @when: with Truthiness
 
 /var @firstStatus = ""
 /var @firstFallback = ""
 /var @firstDefault = "active"
 
 >> Should find first truthy
-/when first: [
+/when [
   @firstStatus => show "Status: {{firstStatus}}"
   @firstFallback => show "Fallback: {{firstFallback}}"
   @firstDefault => show "Default: {{firstDefault}}"

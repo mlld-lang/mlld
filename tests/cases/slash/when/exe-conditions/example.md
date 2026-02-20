@@ -1,19 +1,17 @@
 /exe @is_true() = cmd {echo "true"}
 /exe @is_false() = cmd {echo ""}
 
-## Test 1: Simple conditional
+## Test 1: Inline conditional
 /when @is_true() => show "This should appear"
 /when @is_false() => show "This should NOT appear"
 
-## Test 2: Block with first modifier
-/var @env = "development"
-/exe @is_dev() = cmd {echo "true"}
-/exe @is_prod() = cmd {echo ""}
+## Test 2: Match form
+/var @mode = "development"
 
-/when @mode first: [
-  @is_prod() => show "Production mode"
-  @is_dev() => show "Development mode"
-  "true" => show "Unknown mode"
+/when @mode : [
+  "production" => show "Production mode"
+  "development" => show "Development mode"
+  true => show "Unknown mode"
 ]
 
 ## Test 3: || operator (replacing any modifier)
@@ -23,7 +21,7 @@
 
 /when (@has_node() || @has_npm() || @has_yarn()) => show "Package manager found"
 
-## Test 4: bare when block with individual actions
+## Test 4: when block with individual actions (first match)
 /when [
   @has_node() => show "Node.js installed"
   @has_npm() => show "npm installed"

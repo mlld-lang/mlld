@@ -30,11 +30,7 @@ export class CommandExecutor {
   ): Promise<string> {
     const startTime = Date.now();
     const { workingDirectory, showProgress = false } = options;
-    
-    if (showProgress) {
-      console.log(`⚡ Running: ${command}`);
-    }
-    
+
     try {
       const result = execSync(command, {
         encoding: 'utf8',
@@ -44,20 +40,12 @@ export class CommandExecutor {
       });
       
       const duration = Date.now() - startTime;
-      
-      if (showProgress) {
-        console.log(`✅ Completed in ${duration}ms`);
-      }
-      
+
       return this.processOutput(result, options.maxOutputLines);
       
     } catch (error: any) {
       const duration = Date.now() - startTime;
-      
-      if (showProgress) {
-        console.log(`❌ Failed in ${duration}ms`);
-      }
-      
+
       // Create rich error with context
       if (context) {
         throw MlldCommandExecutionError.create(

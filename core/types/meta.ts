@@ -21,6 +21,9 @@ export interface PathMeta {
   isAbsolute: boolean;
   hasExtension: boolean;
   extension: string | null;
+  sourceType?: 'file' | 'url' | 'module' | 'resolver' | 'input' | 'node';
+  isNodeImport?: boolean;
+  package?: string;
 }
 
 /**

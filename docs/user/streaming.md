@@ -42,7 +42,7 @@ Suppress streaming globally:
 ```bash
 mlld script.mld --no-stream
 # or
-MLLD_NO_STREAM=1 mlld script.mld
+MLLD_NO_STREAM=true mlld script.mld
 ```
 
 ## Streaming Executors
@@ -72,7 +72,7 @@ show @llm("Write a haiku")
 >> Parses NDJSON, shows message text as it streams
 ```
 
-By default, a generic NDJSON adapter extracts text from common paths like `text`, `content`, `delta.text`, and `message`.
+By default, a generic NDJSON adapter extracts text from common paths like `text`, `content`, `message`, and `data`.
 
 ## Stream Format Adapters
 
@@ -240,7 +240,9 @@ for @question in @questions => @chat(@question)
 ```mlld
 exe @llm(prompt) = cmd {claude "@prompt"}
 
-when @isInteractive => stream @llm("Hello")
+exe @llmStream(prompt) = stream @llm(prompt)
+
+when @isInteractive => @llmStream("Hello")
 when !@isInteractive => show @llm("Hello")
 ```
 
@@ -303,6 +305,7 @@ show @llm2("test")  >> Works
 **SDK Access**: When using mlld programmatically, streaming results are available via `StructuredResult.streaming`:
 ```typescript
 const result = await interpret(script, { mode: 'structured' });
-console.log(result.streaming?.accumulated?.text);  // Accumulated text
-console.log(result.streaming?.events);              // All parsed events
+console.log(result.streaming?.text);    // Accumulated text
+console.log(result.streaming?.events);  // All parsed events
 ```
+

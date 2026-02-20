@@ -1,259 +1,366 @@
-import type { ForDirective, ForExpression, Environment, ArrayVariable, Variable, FieldAccessNode, SourceLocation } from '@core/types';
-import { evaluate, type EvalResult } from '../core/interpreter';
-import { FieldAccessError, MlldDirectiveError } from '@core/errors';
-import { toIterable } from './for-utils';
-import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
-import { RateLimitRetry, isRateLimitError } from '../eval/pipeline/rate-limit-retry';
-import { createArrayVariable, createObjectVariable, createPrimitiveVariable, createSimpleTextVariable } from '@core/types/variable';
-import { isVariable, extractVariableValue } from '../utils/variable-resolution';
-import { VariableImporter } from './import/VariableImporter';
-import { logger } from '@core/utils/logger';
-import { DebugUtils } from '../env/DebugUtils';
-import { isLoadContentResult } from '@core/types/load-content';
+import type {
+  ForDirective,
+  ForExpression,
+  Environment,
+  ArrayVariable,
+  BaseMlldNode
+} from '@core/types';
+import type { EvalResult } from '../core/interpreter';
+import type { HookableNode } from '@core/types/hooks';
+import type { OperationContext } from '@interpreter/env/ContextManager';
+import {
+  getParallelLimit,
+  runWithConcurrency,
+  type ParallelBatchInfo
+} from '@interpreter/utils/parallel';
 import {
   asData,
-  asText,
-  isStructuredValue,
-  looksLikeJsonString,
-  normalizeWhenShowEffect
+  isStructuredValue
 } from '../utils/structured-value';
-import { materializeDisplayValue } from '../utils/display-materialization';
-import { accessFields } from '../utils/field-access';
-import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
-import { evaluateWhenExpression } from './when-expression';
-import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
-import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
+import {
+  getGuardTransformedInputs,
+  handleGuardDecision
+} from '@interpreter/hooks/hook-decision-handler';
+import {
+  runUserAfterHooks,
+  runUserBeforeHooks
+} from '@interpreter/hooks/user-hook-runner';
+import { isExeReturnControl } from './exe-return';
+import { resolveParallelOptions, type ForParallelOptions } from './for/parallel-options';
+import { executeDirectiveActions } from './for/directive-action-runner';
+import { evaluateForExpressionIteration } from './for/expression-runner';
+import { applyForExpressionBatchPipeline } from './for/batch-pipeline';
+import {
+  createForIterationError,
+  publishForErrorsContext,
+  recordParallelExpressionIterationError
+} from './for/error-reporting';
+import {
+  evaluateForDirectiveSource,
+  evaluateForExpressionSource
+} from './for/source-evaluator';
+import { createForExpressionResultVariable } from './for/result-variable';
+import {
+  assertKeyVariableHasNoFields,
+  formatFieldPath
+} from './for/binding-utils';
+import {
+  popExpressionIterationContexts,
+  popForIterationContext,
+  pushExpressionIterationContext,
+  setupIterationContext
+} from './for/iteration-runner';
+import type {
+  ForControlKindResolver,
+  ForIterationError
+} from './for/types';
+import { isBailError } from '@core/errors';
+import { isConditionPair } from '@core/types/when';
+import { evaluateCondition } from './when';
 
-interface ForIterationError {
+function extractControlKind(value: unknown): ReturnType<ForControlKindResolver> {
+  const v = isStructuredValue(value) ? asData(value) : value;
+  if (v && typeof v === 'object' && '__whileControl' in (v as any)) {
+    return (v as any).__whileControl === 'done' ? 'done' : 'continue';
+  }
+  if (v && typeof v === 'object' && 'valueType' in (v as any)) {
+    const vt = (v as any).valueType;
+    if (vt === 'done') return 'done';
+    if (vt === 'continue') return 'continue';
+  }
+  if (v === 'done') return 'done';
+  if (v === 'continue') return 'continue';
+  return null;
+}
+
+type ForTask = {
+  entry: [any, any];
   index: number;
-  key?: string | number | null;
-  message: string;
-  error: string;
-  value?: unknown;
+};
+
+type ForLoopNode = ForDirective | ForExpression;
+
+type ForOperationBatch = {
+  batchIndex?: number;
+  batchSize?: number;
+};
+
+type ForBatchWindow = {
+  batch: ParallelBatchInfo;
+  tasks: ForTask[];
+};
+
+function toHookNode(node: ForLoopNode): HookableNode {
+  return node as unknown as HookableNode;
 }
 
-// Check if an object looks like file content data (e.g., from glob iteration)
-function looksLikeFileData(value: unknown): value is Record<string, unknown> & { content: string; filename?: string; relative?: string; absolute?: string } {
-  if (!value || typeof value !== 'object') return false;
-  const obj = value as Record<string, unknown>;
-  // Must have content (the file's text content)
-  if (typeof obj.content !== 'string') return false;
-  // Should have at least one file path property
-  return typeof obj.filename === 'string' || typeof obj.relative === 'string' || typeof obj.absolute === 'string';
+function resolveIterationInputValue(input: unknown): unknown {
+  return input;
 }
 
-// Helper to ensure a value is wrapped as a Variable
-function ensureVariable(name: string, value: unknown, env: Environment): Variable {
-  // If already a Variable, return as-is
-  if (isVariable(value)) {
-    return value;
-  }
-
-  // Special handling for LoadContentResult objects and StructuredValue arrays
-  // These need to be preserved as objects with their special metadata
-  if (isLoadContentResult(value)) {
-    const variable = createObjectVariable(
-      name,
-      value,
-      false, // Not complex - it's already evaluated
-      {
-        directive: 'var',
-        syntax: 'object',
-        hasInterpolation: false,
-        isMultiLine: false
-      },
-      {
-        isLoadContentResult: true,
-        source: 'for-loop'
-      }
-    );
-    // Preserve file metadata in .mx so @f.mx.relative etc. works
-    variable.mx = {
-      ...(variable.mx ?? {}),
-      filename: value.filename,
-      relative: value.relative,
-      absolute: value.absolute,
-      ext: (value as any).ext ?? (value as any)._extension,
-      tokest: (value as any).tokest ?? (value as any)._metrics?.tokest,
-      tokens: (value as any).tokens ?? (value as any)._metrics?.tokens
-    };
-    return variable;
-  }
-
-  if (isStructuredValue(value)) {
-    // For StructuredValue items (both arrays and individual items like glob file entries),
-    // preserve the .mx metadata from the StructuredValue
-    const variable = createObjectVariable(
-      name,
-      value,
-      false, // Not complex - it's already evaluated
-      {
-        directive: 'var',
-        syntax: 'object',
-        hasInterpolation: false,
-        isMultiLine: false
-      },
-      {
-        arrayType: value.type === 'array' ? 'structured-value-array' : undefined,
-        source: 'for-loop'
-      }
-    );
-    // Preserve the StructuredValue's .mx metadata on the Variable
-    // This ensures file metadata (relative, absolute, filename, etc.) is accessible
-    if (value.mx) {
-      variable.mx = { ...value.mx };
-    }
-    return variable;
-  }
-
-  // Check if this looks like file data (from normalizeIterableValue stripping StructuredValue wrapper)
-  // If so, copy file metadata properties to .mx so @f.mx.relative etc. works
-  if (looksLikeFileData(value)) {
-    const importer = new VariableImporter();
-    const variable = importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
-    // Copy file metadata to .mx
-    variable.mx = {
-      ...(variable.mx ?? {}),
-      filename: value.filename,
-      relative: value.relative,
-      absolute: value.absolute,
-      ext: (value as any).ext,
-      tokest: (value as any).tokest,
-      tokens: (value as any).tokens
-    };
-    return variable;
-  }
-
-  // Otherwise, create a Variable from the value
-  const importer = new VariableImporter();
-  return importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
-}
-
-function formatFieldPath(fields?: FieldAccessNode[]): string | null {
-  if (!fields || fields.length === 0) {
-    return null;
-  }
-  const parts: string[] = [];
-  for (const field of fields) {
-    const value = field.value;
-    switch (field.type) {
-      case 'field':
-      case 'stringIndex':
-      case 'bracketAccess':
-      case 'numericField':
-        parts.push(typeof value === 'number' ? String(value) : String(value ?? ''));
-        break;
-      case 'arrayIndex':
-      case 'variableIndex':
-        parts.push(`[${typeof value === 'number' ? value : String(value ?? '')}]`);
-        break;
-      case 'arraySlice':
-        parts.push(`[${field.start ?? ''}:${field.end ?? ''}]`);
-        break;
-      case 'arrayFilter':
-        parts.push('[?]');
-        break;
-      default:
-        parts.push(String(value ?? ''));
-        break;
-    }
-  }
-
-  return parts
-    .map((part, index) => (part.startsWith('[') || index === 0 ? part : `.${part}`))
-    .join('');
-}
-
-function enhanceFieldAccessError(
-  error: unknown,
-  options: { fieldPath?: string | null; varName: string; index: number; key: string | null; sourceLocation?: SourceLocation }
-): unknown {
-  if (!(error instanceof FieldAccessError)) {
-    return error;
-  }
-  const pathSuffix = options.fieldPath ? `.${options.fieldPath}` : '';
-  const contextParts: string[] = [];
-  if (options.key !== null && options.key !== undefined) {
-    contextParts.push(`key ${String(options.key)}`);
-  } else if (options.index >= 0) {
-    contextParts.push(`index ${options.index}`);
-  }
-  const context = contextParts.length > 0 ? ` (${contextParts.join(', ')})` : '';
-  const message = `${error.message} in for binding @${options.varName}${pathSuffix}${context}`;
-  const enhancedDetails = {
-    ...(error.details || {}),
-    iterationIndex: options.index,
-    iterationKey: options.key
+function buildForIterationContext(
+  entry: [any, any],
+  index: number,
+  total: number,
+  parallel: boolean,
+  batch?: ForOperationBatch
+): Record<string, unknown> {
+  return {
+    index,
+    total,
+    key: entry[0] ?? null,
+    parallel,
+    ...(typeof batch?.batchIndex === 'number' ? { batchIndex: batch.batchIndex } : {}),
+    ...(typeof batch?.batchSize === 'number' ? { batchSize: batch.batchSize } : {})
   };
-  return new FieldAccessError(message, enhancedDetails, {
-    cause: error,
-    sourceLocation: (error as any).sourceLocation ?? options.sourceLocation
+}
+
+function buildForBatchContext(
+  batch: ParallelBatchInfo
+): Record<string, unknown> {
+  return {
+    index: batch.batchIndex,
+    total: batch.totalItems,
+    key: null,
+    parallel: true,
+    batchIndex: batch.batchIndex,
+    batchSize: batch.batchSize
+  };
+}
+
+function buildForIterationOperationContext(
+  options: {
+    node: ForLoopNode;
+    varName: string;
+    labels?: readonly string[];
+    entry: [any, any];
+    index: number;
+    total: number;
+    parallel: boolean;
+    batch?: ForOperationBatch;
+  }
+): OperationContext {
+  return {
+    type: 'for:iteration',
+    name: options.varName,
+    labels: options.labels,
+    location: options.node.location ?? null,
+    metadata: {
+      index: options.index,
+      total: options.total,
+      key: options.entry[0] ?? null,
+      parallel: options.parallel,
+      ...(typeof options.batch?.batchIndex === 'number' ? { batchIndex: options.batch.batchIndex } : {}),
+      ...(typeof options.batch?.batchSize === 'number' ? { batchSize: options.batch.batchSize } : {})
+    }
+  };
+}
+
+function buildForBatchOperationContext(
+  options: {
+    node: ForLoopNode;
+    varName: string;
+    labels?: readonly string[];
+    batch: ParallelBatchInfo;
+  }
+): OperationContext {
+  return {
+    type: 'for:batch',
+    name: options.varName,
+    labels: options.labels,
+    location: options.node.location ?? null,
+    metadata: {
+      batchIndex: options.batch.batchIndex,
+      batchSize: options.batch.batchSize,
+      parallel: true
+    }
+  };
+}
+
+async function runForOperationBoundary<T>(
+  options: {
+    env: Environment;
+    node: ForLoopNode;
+    operationContext: OperationContext;
+    inputs: readonly unknown[];
+    execute: (resolvedInputs: readonly unknown[]) => Promise<T>;
+  }
+): Promise<T> {
+  const { env, node, operationContext, inputs, execute } = options;
+  const hookNode = toHookNode(node);
+  const hookManager = env.getHookManager();
+
+  return env.withOpContext(operationContext, async () => {
+    const hookEnv = env.createChild();
+    const userHookInputs = await runUserBeforeHooks(hookNode, inputs, hookEnv, operationContext);
+    const preDecision = await hookManager.runPre(hookNode, userHookInputs, hookEnv, operationContext);
+    const resolvedInputs = getGuardTransformedInputs(preDecision, userHookInputs) ?? userHookInputs;
+    await handleGuardDecision(preDecision, hookNode, hookEnv, operationContext);
+
+    const value = await execute(resolvedInputs);
+    let result: EvalResult = { value, env };
+    result = await hookManager.runPost(hookNode, result, resolvedInputs, hookEnv, operationContext);
+    result = await runUserAfterHooks(hookNode, result, resolvedInputs, hookEnv, operationContext);
+    return result.value as T;
   });
 }
 
-function withIterationMxKey(variable: Variable, key: unknown): Variable {
-  if (key === null || typeof key === 'undefined') {
-    return variable;
-  }
-  if (typeof key !== 'string' && typeof key !== 'number') {
-    return variable;
-  }
+function resolveBatchInfoForTask(
+  taskIndex: number,
+  totalItems: number,
+  cap: number
+): ParallelBatchInfo {
+  const safeCap = Math.max(1, cap);
+  const batchIndex = Math.floor(taskIndex / safeCap);
+  const batchStart = batchIndex * safeCap;
+  const batchSize = Math.min(safeCap, Math.max(0, totalItems - batchStart));
   return {
-    ...variable,
-    mx: { ...(variable.mx ?? {}), key }
+    batchIndex,
+    batchSize,
+    totalItems
   };
 }
 
-function formatIterationError(error: unknown): string {
-  if (error instanceof Error) {
-    let message = error.message;
-    // Strip directive wrapper noise for user-facing markers
-    if (message.startsWith('Directive error (')) {
-      const prefixEnd = message.indexOf(': ');
-      if (prefixEnd >= 0) {
-        message = message.slice(prefixEnd + 2);
+function toOperationBatch(batch: ParallelBatchInfo): ForOperationBatch {
+  return {
+    batchIndex: batch.batchIndex,
+    batchSize: batch.batchSize
+  };
+}
+
+function buildBatchWindows(
+  tasks: readonly ForTask[],
+  totalItems: number,
+  cap: number
+): ForBatchWindow[] {
+  const windows = new Map<number, ForBatchWindow>();
+  for (const task of tasks) {
+    const batch = resolveBatchInfoForTask(task.index, totalItems, cap);
+    const existing = windows.get(batch.batchIndex);
+    if (existing) {
+      existing.tasks.push(task);
+      continue;
+    }
+    windows.set(batch.batchIndex, {
+      batch,
+      tasks: [task]
+    });
+  }
+
+  return Array.from(windows.values()).sort((a, b) => a.batch.batchIndex - b.batch.batchIndex);
+}
+
+function isLiteralValueType(node: unknown, valueType: string): boolean {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    (node as any).type === 'Literal' &&
+    (node as any).valueType === valueType
+  );
+}
+
+function isSkipLiteralAction(action: unknown): boolean {
+  if (!Array.isArray(action) || action.length !== 1) {
+    return false;
+  }
+  return isLiteralValueType(action[0], 'skip');
+}
+
+function getDirectiveWhenFilterCondition(directive: ForDirective): BaseMlldNode[] | null {
+  if (directive.meta?.actionType !== 'single' || directive.values.action.length !== 1) {
+    return null;
+  }
+
+  const action = directive.values.action[0] as any;
+  if (!action || action.type !== 'WhenExpression' || !Array.isArray(action.conditions)) {
+    return null;
+  }
+  if (action.conditions.length !== 1) {
+    return null;
+  }
+
+  const first = action.conditions[0];
+  if (!isConditionPair(first) || !Array.isArray(first.condition) || first.condition.length === 0) {
+    return null;
+  }
+  if (first.condition.length === 1) {
+    const single = first.condition[0];
+    if (isLiteralValueType(single, 'none') || isLiteralValueType(single, 'wildcard')) {
+      return null;
+    }
+  }
+
+  return first.condition as BaseMlldNode[];
+}
+
+function getExpressionWhenFilterNode(expr: ForExpression): any | null {
+  if (!Array.isArray(expr.expression) || expr.expression.length !== 1) {
+    return null;
+  }
+
+  const action = expr.expression[0] as any;
+  if (!action || action.type !== 'WhenExpression' || !Array.isArray(action.conditions)) {
+    return null;
+  }
+
+  const hasNoneSkip = action.conditions.some((entry: unknown) => {
+    if (!isConditionPair(entry as any) || !Array.isArray((entry as any).condition)) {
+      return false;
+    }
+    const condition = (entry as any).condition;
+    return condition.length === 1 && isLiteralValueType(condition[0], 'none') && isSkipLiteralAction((entry as any).action);
+  });
+
+  return hasNoneSkip ? action : null;
+}
+
+async function evaluateWhenFilterMatch(whenExpr: any, env: Environment): Promise<boolean> {
+  if (!whenExpr || !Array.isArray(whenExpr.conditions)) {
+    return true;
+  }
+
+  for (const entry of whenExpr.conditions) {
+    if (!isConditionPair(entry) || !Array.isArray(entry.condition) || entry.condition.length === 0) {
+      continue;
+    }
+
+    if (entry.condition.length === 1) {
+      const single = entry.condition[0];
+      if (isLiteralValueType(single, 'none')) {
+        return false;
       }
-      const lineIndex = message.indexOf(' at line ');
-      if (lineIndex >= 0) {
-        message = message.slice(0, lineIndex);
+      if (isLiteralValueType(single, 'wildcard')) {
+        return true;
       }
     }
-    return message;
-  }
-  if (typeof error === 'string') return error;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
 
-function resetForErrorsContext(env: Environment, errors: ForIterationError[]): void {
-  const mxManager = env.getContextManager?.();
-  if (!mxManager) return;
-  while (mxManager.popGenericContext('for')) {
-    // clear previous loop context
+    const matched = await evaluateCondition(entry.condition, env);
+    if (matched) {
+      return true;
+    }
   }
-  mxManager.pushGenericContext('for', { errors, timestamp: Date.now() });
-  mxManager.setLatestErrors(errors);
-}
 
-function findVariableOwner(env: Environment, name: string): Environment | undefined {
-  let current: Environment | undefined = env;
-  while (current) {
-    if (current.getCurrentVariables().has(name)) return current;
-    current = current.getParent();
-  }
-  return undefined;
-}
-
-function isDescendantEnvironment(env: Environment, ancestor: Environment): boolean {
-  let current: Environment | undefined = env;
-  while (current) {
-    if (current === ancestor) return true;
-    current = current.getParent();
-  }
   return false;
+}
+
+async function findCanaryTask(
+  tasks: ForTask[],
+  qualifies?: (task: ForTask) => Promise<boolean>
+): Promise<ForTask | null> {
+  if (tasks.length === 0) {
+    return null;
+  }
+  if (!qualifies) {
+    return tasks[0];
+  }
+
+  for (const task of tasks) {
+    if (await qualifies(task)) {
+      return task;
+    }
+  }
+
+  return null;
 }
 
 export async function evaluateForDirective(
@@ -261,191 +368,288 @@ export async function evaluateForDirective(
   env: Environment
 ): Promise<EvalResult> {
   const varNode = directive.values.variable[0];
+  const keyNode = directive.values.key?.[0];
+  assertKeyVariableHasNoFields(keyNode, directive.location);
   const varName = varNode.identifier;
+  const keyVarName = keyNode?.identifier;
   const varFields = varNode.fields;
   const fieldPathString = formatFieldPath(varFields);
-  
-  // Debug support
-  const debugEnabled = process.env.DEBUG_FOR === '1' || process.env.DEBUG_FOR === 'true' || process.env.MLLD_DEBUG === 'true';
 
   // Trace support
   env.pushDirective('/for', `@${varName} in ...`, directive.location);
 
   try {
-    // Evaluate source collection
-    // The source is an array containing the actual source node
-    const sourceNode = Array.isArray(directive.values.source) 
-      ? directive.values.source[0] 
-      : directive.values.source;
-    
-    const sourceResult = await evaluate(sourceNode, env);
-    const sourceValue = sourceResult.value;
-    const iterable = toIterable(sourceValue);
-
-    if (!iterable) {
-      const receivedType = typeof sourceValue;
-      const preview = (() => {
-        try {
-          if (receivedType === 'object') return JSON.stringify(sourceValue)?.slice(0, 120);
-          return String(sourceValue)?.slice(0, 120);
-        } catch { return String(sourceValue); }
-      })();
-      throw new MlldDirectiveError(
-        `Type mismatch: /for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
-        'for',
-        { location: directive.location, context: { expected: 'array', receivedType } }
-      );
-    }
+    const { iterable, sourceDescriptor } = await evaluateForDirectiveSource(directive, env);
+    const sourceKind = iterable.__mlldForSourceKind;
 
     // Determine parallel options (directive-specified or inherited from parent scope)
-    const specified = (directive.values as any).forOptions as { parallel?: boolean; cap?: number; rateMs?: number } | undefined;
-    const inherited = (env as any).__forOptions as typeof specified | undefined;
-    const effective = specified ?? inherited;
+    const specified = (directive.values as any).forOptions as ForParallelOptions | undefined;
+    const inherited = (env as any).__forOptions as ForParallelOptions | undefined;
+    const effective = await resolveParallelOptions(specified ?? inherited, env, directive.location);
+    const hookRegistry = env.getHookRegistry();
+    const guardRegistry = env.getGuardRegistry();
+    const iterationLifecycleEnabled =
+      hookRegistry.getOperationHooks('for:iteration', 'before').length > 0 ||
+      hookRegistry.getOperationHooks('for:iteration', 'after').length > 0 ||
+      guardRegistry.getOperationGuards('for:iteration').length > 0;
+    const batchLifecycleEnabled =
+      hookRegistry.getOperationHooks('for:batch', 'before').length > 0 ||
+      hookRegistry.getOperationHooks('for:batch', 'after').length > 0 ||
+      guardRegistry.getOperationGuards('for:batch').length > 0;
 
     const iterableArray = Array.from(iterable);
+    const tasks: ForTask[] = iterableArray.map((entry, index) => ({
+      entry: entry as [any, any],
+      index
+    }));
     const forErrors = effective?.parallel ? ([] as ForIterationError[]) : null;
     if (forErrors) {
-      resetForErrorsContext(env, forErrors);
+      publishForErrorsContext(env, forErrors);
     }
+    const whenFilterCondition = getDirectiveWhenFilterCondition(directive);
 
-    const runOne = async (entry: [any, any], idx: number) => {
-      const [key, value] = entry;
-      const iterationRoot = env.createChildEnvironment();
-      if (effective?.parallel) {
-        (iterationRoot as any).__parallelIsolationRoot = iterationRoot;
-      }
-      let childEnv = iterationRoot;
-      // Inherit forOptions for nested loops if set
-      if (effective) (childEnv as any).__forOptions = effective;
-      let derivedValue: unknown;
-      if (varFields && varFields.length > 0) {
-        try {
-          const accessed = await accessFields(value, varFields, {
-            env: childEnv,
-            preserveContext: true,
-            sourceLocation: varNode.location
-          });
-          derivedValue = (accessed as any)?.value ?? accessed;
-          inheritExpressionProvenance(derivedValue, value);
-        } catch (error) {
-          throw enhanceFieldAccessError(error, {
-            fieldPath: fieldPathString,
-            varName,
-            index: idx,
-            key: key ?? null,
-            sourceLocation: varNode.location
-          }) as Error;
-        }
-      }
-      const iterationVar = ensureVariable(varName, value, env);
-      childEnv.setVariable(varName, withIterationMxKey(iterationVar, key));
-      if (typeof derivedValue !== 'undefined' && fieldPathString) {
-        const derivedVar = ensureVariable(`${varName}.${fieldPathString}`, derivedValue, env);
-        childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
-      }
-      if (key !== null && typeof key === 'string') {
-        const keyVar = ensureVariable(`${varName}_key`, key, env);
-        childEnv.setVariable(`${varName}_key`, keyVar);
-      }
+    const executeDirectiveIteration = async (
+      entry: [any, any],
+      idx: number,
+      options?: { failFast?: boolean },
+      batch?: ForOperationBatch
+    ) => {
+      const setup = await setupIterationContext({
+        rootEnv: env,
+        entry,
+        index: idx,
+        total: iterableArray.length,
+        effective,
+        sourceKind,
+        varName,
+        keyVarName,
+        varFields,
+        fieldPathString,
+        sourceLocation: varNode.location,
+        sourceDescriptor,
+        batchIndex: batch?.batchIndex,
+        batchSize: batch?.batchSize
+      });
+      const { iterationRoot, key, value } = setup;
+      let childEnv = setup.childEnv;
+      let returnControl: unknown = null;
 
-      const actionNodes = directive.values.action;
-      const retry = new RateLimitRetry();
-      while (true) {
-        try {
-          if (directive.meta?.actionType === 'block') {
-            let blockEnv = childEnv;
-            for (const actionNode of actionNodes) {
-              if (isLetAssignment(actionNode)) {
-                blockEnv = await evaluateLetAssignment(actionNode, blockEnv);
-              } else if (isAugmentedAssignment(actionNode)) {
-                if (effective?.parallel) {
-                  const owner = findVariableOwner(blockEnv, actionNode.identifier);
-                  if (!owner || !isDescendantEnvironment(owner, iterationRoot)) {
-                    throw new MlldDirectiveError(
-                      `Parallel for block cannot mutate outer variable @${actionNode.identifier}.`,
-                      'for',
-                      { location: actionNode.location }
-                    );
-                  }
-                }
-                blockEnv = await evaluateAugmentedAssignment(actionNode, blockEnv);
-              } else if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
-                const nodeWithFirst = {
-                  ...actionNode,
-                  meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
-                };
-                const actionResult = await evaluateWhenExpression(nodeWithFirst as any, blockEnv);
-                blockEnv = actionResult.env || blockEnv;
-              } else {
-                const actionResult = await evaluate(actionNode, blockEnv);
-                blockEnv = actionResult.env || blockEnv;
-              }
-            }
-            childEnv = blockEnv;
-          } else {
-            let actionResult: any = { value: undefined, env: childEnv };
-            for (const actionNode of actionNodes) {
-              if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
-                const nodeWithFirst = {
-                  ...actionNode,
-                  meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
-                };
-                actionResult = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
-              } else {
-                actionResult = await evaluate(actionNode, childEnv);
-              }
-              if (actionResult.env) childEnv = actionResult.env;
-            }
-            // Emit bare exec output as effect (legacy behavior)
-            if (
-              directive.values.action.length === 1 &&
-              directive.values.action[0].type === 'ExecInvocation' &&
-              actionResult.value !== undefined && actionResult.value !== null
-            ) {
-              const materialized = materializeDisplayValue(
-                actionResult.value,
-                undefined,
-                actionResult.value
-              );
-              let outputContent = materialized.text;
-              if (!outputContent.endsWith('\n')) {
-                outputContent += '\n';
-              }
-              if (materialized.descriptor) {
-                env.recordSecurityDescriptor(materialized.descriptor);
-              }
-              env.emitEffect('both', outputContent, { source: directive.values.action[0].location });
-            }
-          }
-          retry.reset();
-          break;
-        } catch (err: any) {
-          if (isRateLimitError(err)) {
-            const again = await retry.wait();
-            if (again) continue;
-          }
-          if (forErrors) {
-            forErrors.push({
-              index: idx,
-              key: key ?? null,
-              message: formatIterationError(err),
-              error: formatIterationError(err),
-              value
-            });
-            return;
-          }
+      try {
+        const actionResult = await executeDirectiveActions({
+          directive,
+          env,
+          childEnv,
+          iterationRoot,
+          effective,
+          extractControlKind
+        });
+        childEnv = actionResult.childEnv;
+        returnControl = actionResult.returnControl;
+      } catch (err: any) {
+        if (isBailError(err)) {
           throw err;
         }
+        if (forErrors && !options?.failFast) {
+          forErrors.push(createForIterationError({
+            index: idx,
+            key: key ?? null,
+            error: err,
+            value
+          }));
+          return undefined;
+        }
+        throw err;
+      } finally {
+        popForIterationContext(childEnv);
       }
-      return;
+
+      return returnControl;
     };
 
-    if (effective?.parallel) {
-      const cap = Math.min(effective.cap ?? getParallelLimit(), iterableArray.length);
-      await runWithConcurrency(iterableArray, cap, runOne, { ordered: false, paceMs: effective.rateMs });
-    } else {
+    const runOne = async (
+      entry: [any, any],
+      idx: number,
+      options?: { failFast?: boolean },
+      batch?: ForOperationBatch
+    ) => {
+      if (!iterationLifecycleEnabled) {
+        return executeDirectiveIteration(entry, idx, options, batch);
+      }
+
+      const iterationContext = buildForIterationContext(
+        entry,
+        idx,
+        iterableArray.length,
+        !!effective?.parallel,
+        batch
+      );
+      const iterationOperation = buildForIterationOperationContext({
+        node: directive,
+        varName,
+        labels: sourceDescriptor?.labels,
+        entry,
+        index: idx,
+        total: iterableArray.length,
+        parallel: !!effective?.parallel,
+        batch
+      });
+
+      const boundaryEnv = env.createChild();
+      return boundaryEnv.withExecutionContext('for', iterationContext, async () =>
+        runForOperationBoundary({
+          env: boundaryEnv,
+          node: directive,
+          operationContext: iterationOperation,
+          inputs: [entry[1]],
+          execute: async (resolvedInputs) => {
+            const nextValue = resolvedInputs.length > 0
+              ? resolveIterationInputValue(resolvedInputs[0])
+              : entry[1];
+            return executeDirectiveIteration(
+              [entry[0], nextValue],
+              idx,
+              options,
+              batch
+            );
+          }
+        })
+      );
+    };
+
+	    if (effective?.parallel) {
+	      const canaryTask = await findCanaryTask(tasks, whenFilterCondition
+        ? async (task: ForTask) => {
+            const setup = await setupIterationContext({
+              rootEnv: env,
+              entry: task.entry,
+              index: task.index,
+              total: iterableArray.length,
+              effective,
+              sourceKind,
+              varName,
+              keyVarName,
+              varFields,
+              fieldPathString,
+              sourceLocation: varNode.location,
+              sourceDescriptor
+            });
+            const childEnv = setup.childEnv;
+            try {
+              return await evaluateCondition(whenFilterCondition, childEnv);
+            } finally {
+              popForIterationContext(childEnv);
+            }
+          }
+	        : undefined);
+
+	      const configuredCap = effective.cap ?? getParallelLimit();
+	      const batchCap = Math.max(1, Math.min(configuredCap, Math.max(tasks.length, 1)));
+
+	      if (batchLifecycleEnabled) {
+	        const batchWindows = buildBatchWindows(tasks, iterableArray.length, batchCap);
+	        for (const window of batchWindows) {
+	          const operationBatch = toOperationBatch(window.batch);
+	          const canaryInWindow = !!canaryTask && window.tasks.some(task => task.index === canaryTask.index);
+	          const windowTasks = canaryInWindow && canaryTask
+	            ? window.tasks.filter(task => task.index !== canaryTask.index)
+	            : window.tasks;
+
+	          const runBatchWindow = async () => {
+	            const windowResults: unknown[] = [];
+	            if (canaryInWindow && canaryTask) {
+	              const canaryResult = await runOne(
+	                canaryTask.entry,
+	                canaryTask.index,
+	                { failFast: true },
+	                operationBatch
+	              );
+	              windowResults.push(canaryResult);
+	              if (isExeReturnControl(canaryResult)) {
+	                return windowResults;
+	              }
+	            }
+
+	            if (windowTasks.length > 0) {
+	              const parallelWindowResults = await runWithConcurrency(
+	                windowTasks,
+	                windowTasks.length,
+	                task => runOne(task.entry, task.index, undefined, operationBatch),
+	                { ordered: false, paceMs: effective.rateMs }
+	              );
+	              windowResults.push(...parallelWindowResults);
+	            }
+	            return windowResults;
+	          };
+
+	          const batchEnv = env.createChild();
+	          const batchResults = await batchEnv.withExecutionContext('for', buildForBatchContext(window.batch), async () =>
+	            runForOperationBoundary({
+	              env: batchEnv,
+	              node: directive,
+	              operationContext: buildForBatchOperationContext({
+	                node: directive,
+	                varName,
+	                labels: sourceDescriptor?.labels,
+	                batch: window.batch
+	              }),
+	              inputs: [],
+	              execute: runBatchWindow
+	            })
+	          );
+	          const returnControl = Array.isArray(batchResults)
+	            ? batchResults.find(result => isExeReturnControl(result))
+	            : undefined;
+	          if (returnControl) {
+	            return { value: returnControl, env };
+	          }
+	        }
+	      } else {
+	        const canaryBatch = canaryTask && iterationLifecycleEnabled
+	          ? toOperationBatch(resolveBatchInfoForTask(canaryTask.index, iterableArray.length, batchCap))
+	          : undefined;
+	        if (canaryTask) {
+	          const canaryResult = await runOne(
+	            canaryTask.entry,
+	            canaryTask.index,
+	            { failFast: true },
+	            canaryBatch
+	          );
+	          if (isExeReturnControl(canaryResult)) {
+	            return { value: canaryResult, env };
+	          }
+	        }
+
+	        const remainingTasks = canaryTask
+	          ? tasks.filter(task => task.index !== canaryTask.index)
+	          : (whenFilterCondition ? [] : tasks);
+	        const cap = Math.min(configuredCap, remainingTasks.length);
+	        const results = await runWithConcurrency(
+	          remainingTasks,
+	          cap,
+	          task => runOne(
+	            task.entry,
+	            task.index,
+	            undefined,
+	            iterationLifecycleEnabled
+	              ? toOperationBatch(resolveBatchInfoForTask(task.index, iterableArray.length, batchCap))
+	              : undefined
+	          ),
+	          { ordered: false, paceMs: effective.rateMs }
+	        );
+	        const returnControl = results.find(result => isExeReturnControl(result));
+	        if (returnControl) {
+	          return { value: returnControl, env };
+	        }
+	      }
+	    } else {
       for (let i = 0; i < iterableArray.length; i++) {
-        await runOne(iterableArray[i], i);
+        const result = await runOne(iterableArray[i], i);
+        if (isExeReturnControl(result)) {
+          return { value: result, env };
+        }
+        if (result && typeof result === 'object' && (result as any).__forDone) {
+          break;
+        }
       }
     }
     
@@ -461,319 +665,306 @@ export async function evaluateForExpression(
   expr: ForExpression,
   env: Environment
 ): Promise<ArrayVariable> {
+  const keyNode = expr.keyVariable;
+  assertKeyVariableHasNoFields(keyNode, expr.location);
+  const keyVarName = keyNode?.identifier;
   const varName = expr.variable.identifier;
   const varFields = expr.variable.fields;
   const fieldPathString = formatFieldPath(varFields);
 
-  // Evaluate source collection
-  const sourceResult = await evaluate(expr.source, env, { isExpression: true });
-  const sourceValue = sourceResult.value;
-  const iterable = toIterable(sourceValue);
-
-  if (!iterable) {
-    const receivedType = typeof sourceValue;
-    const preview = (() => {
-      try {
-        if (receivedType === 'object') return JSON.stringify(sourceValue)?.slice(0, 120);
-        return String(sourceValue)?.slice(0, 120);
-      } catch { return String(sourceValue); }
-    })();
-    throw new MlldDirectiveError(
-      `Type mismatch: /for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
-      'for',
-      { location: expr.location, context: { expected: 'array', receivedType } }
-    );
-  }
+  const { iterable, sourceDescriptor } = await evaluateForExpressionSource(expr, env);
+  const sourceKind = iterable.__mlldForSourceKind;
 
   const results: unknown[] = [];
   const errors: ForIterationError[] = [];
 
-  const specified = (expr.meta as any)?.forOptions as { parallel?: boolean; cap?: number; rateMs?: number } | undefined;
-  const inherited = (env as any).__forOptions as typeof specified | undefined;
-  const effective = specified ?? inherited;
+  const specified = (expr.meta as any)?.forOptions as ForParallelOptions | undefined;
+  const inherited = (env as any).__forOptions as ForParallelOptions | undefined;
+  const effective = await resolveParallelOptions(specified ?? inherited, env, expr.location);
+  const hookRegistry = env.getHookRegistry();
+  const guardRegistry = env.getGuardRegistry();
+  const iterationLifecycleEnabled =
+    hookRegistry.getOperationHooks('for:iteration', 'before').length > 0 ||
+    hookRegistry.getOperationHooks('for:iteration', 'after').length > 0 ||
+    guardRegistry.getOperationGuards('for:iteration').length > 0;
+  const batchLifecycleEnabled =
+    hookRegistry.getOperationHooks('for:batch', 'before').length > 0 ||
+    hookRegistry.getOperationHooks('for:batch', 'after').length > 0 ||
+    guardRegistry.getOperationGuards('for:batch').length > 0;
   if (effective?.parallel) {
-    resetForErrorsContext(env, errors);
+    publishForErrorsContext(env, errors);
   }
 
   const iterableArray = Array.from(iterable);
+  const tasks: ForTask[] = iterableArray.map((entry, index) => ({
+    entry: entry as [any, any],
+    index
+  }));
+  const expressionWhenFilter = getExpressionWhenFilterNode(expr);
 
   const SKIP = Symbol('skip');
-  const runOne = async (entry: [any, any], idx: number) => {
-    const [key, value] = entry;
-    const iterationRoot = env.createChildEnvironment();
-    if (effective?.parallel) {
-      (iterationRoot as any).__parallelIsolationRoot = iterationRoot;
-    }
-    let childEnv = iterationRoot;
-    if (effective) (childEnv as any).__forOptions = effective;
-    let derivedValue: unknown;
-    if (varFields && varFields.length > 0) {
-      try {
-        const accessed = await accessFields(value, varFields, {
-          env: childEnv,
-          preserveContext: true,
-          sourceLocation: expr.variable.location
-        });
-        derivedValue = (accessed as any)?.value ?? accessed;
-        inheritExpressionProvenance(derivedValue, value);
-      } catch (error) {
-        throw enhanceFieldAccessError(error, {
-          fieldPath: fieldPathString,
-          varName,
-          index: idx,
-          key: key ?? null,
-          sourceLocation: expr.variable.location
-        }) as Error;
-      }
-    }
-    const iterationVar = ensureVariable(varName, value, env);
-    childEnv.setVariable(varName, withIterationMxKey(iterationVar, key));
-    if (typeof derivedValue !== 'undefined' && fieldPathString) {
-      const derivedVar = ensureVariable(`${varName}.${fieldPathString}`, derivedValue, env);
-      childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
-    }
-    if (key !== null && typeof key === 'string') {
-      const keyVar = ensureVariable(`${varName}_key`, key, env);
-      childEnv.setVariable(`${varName}_key`, keyVar);
-    }
+  const DONE = Symbol('done');
+  const executeExpressionIteration = async (
+    entry: [any, any],
+    idx: number,
+    options?: { failFast?: boolean },
+    batch?: ForOperationBatch
+  ) => {
+    const setup = await setupIterationContext({
+      rootEnv: env,
+      entry,
+      index: idx,
+      total: iterableArray.length,
+      effective,
+      sourceKind,
+      varName,
+      keyVarName,
+      varFields,
+      fieldPathString,
+      sourceLocation: expr.variable.location,
+      sourceDescriptor,
+      batchIndex: batch?.batchIndex,
+      batchSize: batch?.batchSize
+    });
+    let childEnv = setup.childEnv;
+    const { key, value } = setup;
+    // Push exe context so if/when blocks inside for-expression blocks can use => returns
+    pushExpressionIterationContext(childEnv);
+
     try {
-      let exprResult: unknown = null;
-      if (Array.isArray(expr.expression) && expr.expression.length > 0) {
-        let nodesToEvaluate = expr.expression;
-        if (
-          expr.expression.length === 1 &&
-          (expr.expression[0] as any).content &&
-          (expr.expression[0] as any).wrapperType &&
-          !(expr.expression[0] as any).hasInterpolation
-        ) {
-          nodesToEvaluate = (expr.expression[0] as any).content;
-        }
-
-        const evaluateSequence = async (nodes: unknown[], startEnv: Environment): Promise<EvalResult> => {
-          let currentEnv = startEnv;
-          let lastResult: EvalResult = { value: undefined, env: currentEnv };
-
-          for (const node of nodes) {
-            if (isLetAssignment(node as any)) {
-              currentEnv = await evaluateLetAssignment(node as any, currentEnv);
-              lastResult = { value: undefined, env: currentEnv };
-              continue;
-            }
-
-            if (isAugmentedAssignment(node as any)) {
-              currentEnv = await evaluateAugmentedAssignment(node as any, currentEnv);
-              lastResult = { value: undefined, env: currentEnv };
-              continue;
-            }
-
-            if ((node as any)?.type === 'WhenExpression' && (node as any).meta?.modifier !== 'first') {
-              const nodeWithFirst = {
-                ...(node as any),
-                meta: { ...(((node as any).meta || {}) as Record<string, unknown>), modifier: 'first' as const }
-              };
-              lastResult = await evaluateWhenExpression(nodeWithFirst as any, currentEnv);
-              currentEnv = lastResult.env || currentEnv;
-              continue;
-            }
-
-            lastResult = await evaluate(node as any, currentEnv, { isExpression: true });
-            currentEnv = lastResult.env || currentEnv;
-          }
-
-          return { value: lastResult.value, env: currentEnv };
-        };
-
-        const result = await evaluateSequence(nodesToEvaluate, childEnv);
-
-        if (result.env) childEnv = result.env;
-        let branchValue = result?.value;
-        if (isStructuredValue(branchValue)) {
-          try {
-            branchValue = asData(branchValue);
-          } catch {
-            branchValue = asText(branchValue);
-          }
-        }
-        if (branchValue === 'skip') {
-          return SKIP as any;
-        }
-        if (isVariable(branchValue)) {
-          exprResult = await extractVariableValue(branchValue, childEnv);
-        } else {
-          exprResult = branchValue;
-        }
-
-        // Preserve directive-produced text (e.g., show/run) when they tag side effects
-        exprResult = normalizeWhenShowEffect(exprResult).normalized;
-
-        if (typeof exprResult === 'string' && looksLikeJsonString(exprResult)) {
-          try {
-            exprResult = JSON.parse(exprResult.trim());
-          } catch {
-            // keep original string if parsing fails
-          }
-        }
+      const iterationResult = await evaluateForExpressionIteration({
+        expr,
+        childEnv,
+        value,
+        sourceDescriptor,
+        extractControlKind
+      });
+      childEnv = iterationResult.childEnv;
+      if (iterationResult.outcome === 'skip') {
+        return SKIP as any;
       }
-      return exprResult as any;
+      if (iterationResult.outcome === 'done') {
+        return DONE as any;
+      }
+      return iterationResult.value as any;
     } catch (error) {
-      const message = formatIterationError(error);
-      const marker: ForIterationError = {
+      if (isBailError(error)) {
+        throw error;
+      }
+      if (!effective?.parallel || options?.failFast) {
+        throw error;
+      }
+      const marker = recordParallelExpressionIterationError({
+        env,
+        errors,
         index: idx,
         key: key ?? null,
-        message,
-        error: message,
-        value
-      };
-      errors.push(marker);
-      if (effective?.parallel) {
-        return marker as any;
-      }
-      return null as any;
+        error,
+        value,
+        sourceLocation: expr.location
+      });
+      return marker as any;
+    } finally {
+      popExpressionIterationContexts(childEnv);
     }
   };
 
+  const runOne = async (
+    entry: [any, any],
+    idx: number,
+    options?: { failFast?: boolean },
+    batch?: ForOperationBatch
+  ) => {
+    if (!iterationLifecycleEnabled) {
+      return executeExpressionIteration(entry, idx, options, batch);
+    }
+
+    const iterationContext = buildForIterationContext(
+      entry,
+      idx,
+      iterableArray.length,
+      !!effective?.parallel,
+      batch
+    );
+    const iterationOperation = buildForIterationOperationContext({
+      node: expr,
+      varName,
+      labels: sourceDescriptor?.labels,
+      entry,
+      index: idx,
+      total: iterableArray.length,
+      parallel: !!effective?.parallel,
+      batch
+    });
+
+    const boundaryEnv = env.createChild();
+    return boundaryEnv.withExecutionContext('for', iterationContext, async () =>
+      runForOperationBoundary({
+        env: boundaryEnv,
+        node: expr,
+        operationContext: iterationOperation,
+        inputs: [entry[1]],
+        execute: async (resolvedInputs) => {
+          const nextValue = resolvedInputs.length > 0
+            ? resolveIterationInputValue(resolvedInputs[0])
+            : entry[1];
+          return executeExpressionIteration(
+            [entry[0], nextValue],
+            idx,
+            options,
+            batch
+          );
+        }
+      })
+    );
+  };
+
   if (effective?.parallel) {
-    const cap = Math.min(effective.cap ?? getParallelLimit(), iterableArray.length);
-    const orderedResults = await runWithConcurrency(iterableArray, cap, runOne, { ordered: true, paceMs: effective.rateMs });
-    for (const r of orderedResults) if (r !== SKIP) results.push(r);
+    const canaryTask = await findCanaryTask(tasks, expressionWhenFilter
+      ? async (task: ForTask) => {
+          const setup = await setupIterationContext({
+            rootEnv: env,
+            entry: task.entry,
+            index: task.index,
+            total: iterableArray.length,
+            effective,
+            sourceKind,
+            varName,
+            keyVarName,
+            varFields,
+            fieldPathString,
+            sourceLocation: expr.variable.location,
+            sourceDescriptor
+          });
+          const childEnv = setup.childEnv;
+          try {
+            return await evaluateWhenFilterMatch(expressionWhenFilter, childEnv);
+          } finally {
+            popForIterationContext(childEnv);
+          }
+        }
+      : undefined);
+
+	    const orderedResults: unknown[] = new Array(iterableArray.length).fill(SKIP);
+
+	    const configuredCap = effective.cap ?? getParallelLimit();
+	    const batchCap = Math.max(1, Math.min(configuredCap, Math.max(tasks.length, 1)));
+	    const parallelResults: Array<{ index: number; value: unknown }> = [];
+
+	    if (batchLifecycleEnabled) {
+	      const batchWindows = buildBatchWindows(tasks, iterableArray.length, batchCap);
+	      for (const window of batchWindows) {
+	        const operationBatch = toOperationBatch(window.batch);
+	        const canaryInWindow = !!canaryTask && window.tasks.some(task => task.index === canaryTask.index);
+	        const windowTasks = canaryInWindow && canaryTask
+	          ? window.tasks.filter(task => task.index !== canaryTask.index)
+	          : window.tasks;
+
+	        const runBatchWindow = async () => {
+	          const windowResults: Array<{ index: number; value: unknown }> = [];
+	          if (canaryInWindow && canaryTask) {
+	            const canaryResult = await runOne(
+	              canaryTask.entry,
+	              canaryTask.index,
+	              { failFast: true },
+	              operationBatch
+	            );
+	            windowResults.push({ index: canaryTask.index, value: canaryResult });
+	          }
+
+	          if (windowTasks.length > 0) {
+	            const parallelWindowResults = await runWithConcurrency(
+	              windowTasks,
+	              windowTasks.length,
+	              async task => ({
+	                index: task.index,
+	                value: await runOne(task.entry, task.index, undefined, operationBatch)
+	              }),
+	              { ordered: false, paceMs: effective.rateMs }
+	            );
+	            windowResults.push(...parallelWindowResults);
+	          }
+
+	          return windowResults;
+	        };
+
+	        const batchEnv = env.createChild();
+	        const batchResults = await batchEnv.withExecutionContext('for', buildForBatchContext(window.batch), async () =>
+	          runForOperationBoundary({
+	            env: batchEnv,
+	            node: expr,
+	            operationContext: buildForBatchOperationContext({
+	              node: expr,
+	              varName,
+	              labels: sourceDescriptor?.labels,
+	              batch: window.batch
+	            }),
+	            inputs: [],
+	            execute: runBatchWindow
+	          })
+	        );
+	        if (Array.isArray(batchResults)) {
+	          parallelResults.push(...batchResults);
+	        }
+	      }
+	    } else {
+	      const canaryBatch = canaryTask && iterationLifecycleEnabled
+	        ? toOperationBatch(resolveBatchInfoForTask(canaryTask.index, iterableArray.length, batchCap))
+	        : undefined;
+	      if (canaryTask) {
+	        orderedResults[canaryTask.index] = await runOne(
+	          canaryTask.entry,
+	          canaryTask.index,
+	          { failFast: true },
+	          canaryBatch
+	        );
+	      }
+
+	      const remainingTasks = canaryTask
+	        ? tasks.filter(task => task.index !== canaryTask.index)
+	        : (expressionWhenFilter ? [] : tasks);
+	      const cap = Math.min(configuredCap, remainingTasks.length);
+	      const concurrentResults = await runWithConcurrency(
+	        remainingTasks,
+	        cap,
+	        async task => ({
+	          index: task.index,
+	          value: await runOne(
+	            task.entry,
+	            task.index,
+	            undefined,
+	            iterationLifecycleEnabled
+	              ? toOperationBatch(resolveBatchInfoForTask(task.index, iterableArray.length, batchCap))
+	              : undefined
+	          )
+	        }),
+	        { ordered: false, paceMs: effective.rateMs }
+	      );
+	      parallelResults.push(...concurrentResults);
+	    }
+	    for (const item of parallelResults) {
+	      orderedResults[item.index] = item.value;
+	    }
+    for (const r of orderedResults) if (r !== SKIP && r !== DONE) results.push(r);
   } else {
     for (let i = 0; i < iterableArray.length; i++) {
       const r = await runOne(iterableArray[i], i);
+      if (r === DONE) break;
       if (r !== SKIP) results.push(r);
     }
   }
 
-  let finalResults: unknown = results;
-  const batchPipelineConfig = expr.meta?.batchPipeline;
-  const batchStages = Array.isArray(batchPipelineConfig)
-    ? batchPipelineConfig
-    : batchPipelineConfig?.pipeline;
-
-  if (batchStages && batchStages.length > 0) {
-    const { processPipeline } = await import('./pipeline/unified-processor');
-    const batchInput = createArrayVariable(
-      'for-batch-input',
-      results,
-      false,
-      {
-        directive: 'for',
-        syntax: 'expression',
-        hasInterpolation: false,
-        isMultiLine: false
-      },
-      { isBatchInput: true }
-    );
-
-    try {
-      const pipelineResult = await processPipeline({
-        value: batchInput,
-        env,
-        pipeline: batchStages,
-        identifier: `for-batch-${expr.variable.identifier}`,
-        location: expr.location,
-        isRetryable: false
-      });
-
-      if (isStructuredValue(pipelineResult)) {
-        finalResults = asData(pipelineResult);
-      } else if (isVariable(pipelineResult)) {
-        finalResults = await extractVariableValue(pipelineResult, env);
-      } else {
-        finalResults = pipelineResult;
-      }
-    } catch (error) {
-      logger.warn(
-        `Batch pipeline failed for for-expression: ${error instanceof Error ? error.message : String(error)}`
-      );
-      errors.push({
-        index: -1,
-        error: error as Error,
-        value: results
-      });
-      finalResults = results;
-    }
-  }
-
-  const variableSource = {
-    directive: 'for',
-    syntax: 'expression',
-    hasInterpolation: false,
-    isMultiLine: false
-  };
-
-  const metadata: Record<string, unknown> = {
-    sourceExpression: expr.expression,
-    iterationVariable: expr.variable.identifier
-  };
-
-  if (batchStages && batchStages.length > 0) {
-    metadata.hadBatchPipeline = true;
-  }
-
-  if (errors.length > 0) {
-    metadata.forErrors = errors;
-  }
-
-  if (Array.isArray(finalResults)) {
-    return createArrayVariable(
-      'for-result',
-      finalResults,
-      false,
-      variableSource,
-      {
-        metadata,
-        internal: {
-          arrayType: 'for-expression-result'
-        }
-      }
-    );
-  }
-
-  if (finalResults === undefined) {
-    return createPrimitiveVariable(
-      'for-result',
-      null,
-      variableSource,
-      { mx: metadata }
-    );
-  }
-
-  if (
-    finalResults === null ||
-    typeof finalResults === 'number' ||
-    typeof finalResults === 'boolean'
-  ) {
-    return createPrimitiveVariable(
-      'for-result',
-      finalResults as number | boolean | null,
-      variableSource,
-      { mx: metadata }
-    );
-  }
-
-  if (typeof finalResults === 'string') {
-    return createSimpleTextVariable(
-      'for-result',
-      finalResults,
-      variableSource,
-      { mx: metadata }
-    );
-  }
-
-  if (typeof finalResults === 'object') {
-    return createObjectVariable(
-      'for-result',
-      finalResults,
-      false,
-      variableSource,
-      { mx: metadata }
-    );
-  }
-
-  return createSimpleTextVariable(
-    'for-result',
-    String(finalResults),
-    variableSource,
-    { mx: metadata }
-  );
+  const batchPipelineResult = await applyForExpressionBatchPipeline({
+    expr,
+    env,
+    results,
+    errors
+  });
+  return createForExpressionResultVariable({
+    expr,
+    finalResults: batchPipelineResult.finalResults,
+    errors,
+    sourceDescriptor,
+    hadBatchPipeline: batchPipelineResult.hadBatchPipeline
+  });
 }

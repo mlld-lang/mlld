@@ -1,8 +1,6 @@
-# Shared guard from module
-
-/guard @moduleSecretShield for secret = when [
+guard @moduleSecretShield for secret = when [
   @mx.op.type == "show" => deny "Module guard blocks display"
   * => allow
 ]
 
-/export guard @moduleSecretShield
+export { @moduleSecretShield }

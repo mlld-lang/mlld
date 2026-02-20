@@ -67,8 +67,11 @@ describe('Embedded Language Tokens', () => {
       const tokenTypes = tokens.map(t => t.tokenType);
       expect(tokenTypes).toContain('keyword');  // '/run' directive
       expect(tokenTypes).toContain('label');    // 'sh' embedded language
-      // Bash not yet supported - will fail until WASM files are built
-      expect(tokenTypes).toContain('operator'); // At least braces should be tokenized
+      expect(tokenTypes).toContain('variable'); // command/variable tokens from Bash parser
+      expect(tokenTypes).toContain('string');   // string literal from Bash parser
+
+      const echoToken = tokens.find(t => t.text === 'echo');
+      expect(echoToken?.tokenType).toBe('variable');
     });
     
     it('should tokenize multi-line Bash script', async () => {
@@ -82,23 +85,42 @@ describe('Embedded Language Tokens', () => {
       const tokenTypes = tokens.map(t => t.tokenType);
       expect(tokenTypes).toContain('keyword');  // '/run' directive
       expect(tokenTypes).toContain('label');    // 'sh' embedded language
-      // Bash not yet supported - will fail until WASM files are built
-      expect(tokenTypes).toContain('operator'); // At least braces should be tokenized
+      expect(tokenTypes.filter(t => t === 'keyword').length).toBeGreaterThan(1); // /run + Bash keywords
+      expect(tokenTypes).toContain('variable'); // command tokens from Bash parser
+      expect(tokenTypes).toContain('string');   // "file.txt"
+    });
+  });
+
+  describe('Python', () => {
+    it('should tokenize multi-line Python code', async () => {
+      const code = `/run python {
+  if value > 0:
+    print("Hello")
+}`;
+      const tokens = await getSemanticTokens(code);
+
+      const tokenTypes = tokens.map(t => t.tokenType);
+      expect(tokenTypes).toContain('keyword');  // '/run' + Python keyword(s)
+      expect(tokenTypes).toContain('label');    // 'python' embedded language
+      expect(tokenTypes).toContain('variable'); // identifiers
+      expect(tokenTypes).toContain('number');   // 0
+      expect(tokenTypes).toContain('string');   // "Hello"
+      expect(tokenTypes.filter(t => t === 'keyword').length).toBeGreaterThan(1); // /run + if
     });
   });
   
   describe('Error Handling', () => {
     it('should handle unsupported languages gracefully', async () => {
-      // Test with a language mlld supports syntactically but we don't have tree-sitter for
-      const code = '/run python { print("Hello") }';
+      // Test with a language mlld supports syntactically but we don't have tree-sitter for.
+      const code = '/run cmd { echo @name }';
       const tokens = await getSemanticTokens(code);
       
-      // Should still tokenize mlld parts but not the Python code
+      // Should still tokenize mlld parts with fallback string/@variable tokenization.
       const tokenTypes = tokens.map(t => t.tokenType);
       expect(tokenTypes).toContain('keyword');  // '/run' directive
-      expect(tokenTypes).toContain('label');     // 'python' identifier
-      expect(tokenTypes).toContain('operator');  // braces
-      // But no actual Python tokens since we don't have the parser
+      expect(tokenTypes).toContain('label');    // 'cmd' identifier
+      expect(tokenTypes).toContain('string');   // fallback code tokenization
+      expect(tokenTypes).toContain('variable'); // @name interpolation in fallback
     });
     
     it('should handle syntax errors in embedded code', async () => {

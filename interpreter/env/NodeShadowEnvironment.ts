@@ -23,7 +23,7 @@ export class NodeShadowEnvironment {
     this.shadowFunctions = new Map();
     
     // Create custom require function with proper module resolution
-    const customRequire = this.createCustomRequire();
+    const { require: customRequire, module: shadowModule, exports: shadowExports } = this.createCustomRequire();
     
     // Create wrapped timer functions that track active timers
     const wrappedSetTimeout = (callback: Function, delay?: number, ...args: any[]) => {
@@ -59,8 +59,8 @@ export class NodeShadowEnvironment {
       
       // Module system with custom require
       require: customRequire,
-      module,
-      exports,
+      module: typeof module !== 'undefined' ? module : shadowModule,
+      exports: typeof exports !== 'undefined' ? exports : shadowExports,
       
       // Path information
       __dirname: currentFile ? path.dirname(currentFile) : basePath,
@@ -122,7 +122,11 @@ export class NodeShadowEnvironment {
   /**
    * Execute code in the shadow environment with optional parameters
    */
-  async execute(code: string, params?: Record<string, any>): Promise<any> {
+  async execute(
+    code: string,
+    params?: Record<string, any>,
+    options?: { passthroughConsole?: boolean }
+  ): Promise<any> {
     // Check if cleanup has been called
     if (this.isCleaningUp) {
       throw new Error('Node shadow environment error: Cannot execute after cleanup');
@@ -131,13 +135,13 @@ export class NodeShadowEnvironment {
     // Track console.log output (same approach as JavaScriptExecutor)
     let consoleOutput = '';
     const originalLog = this.context.console.log;
+    const passthroughConsole = options?.passthroughConsole ?? true;
     
-    // Override console.log to always output to stdout and capture for potential return
+    // Override console.log to capture output for potential return values.
     this.context.console.log = (...args: any[]) => {
-      // Always call original console.log for visibility
-      originalLog.apply(this.context.console, args);
-      
-      // Also capture the output
+      if (passthroughConsole) {
+        originalLog.apply(this.context.console, args);
+      }
       consoleOutput += args.map(arg => 
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
       ).join(' ') + '\n';
@@ -265,7 +269,7 @@ export class NodeShadowEnvironment {
   /**
    * Create a custom require function that includes mlld's dependencies
    */
-  private createCustomRequire(): NodeRequire {
+  private createCustomRequire(): { require: NodeRequire; module: Module; exports: any } {
     const currentDir = this.currentFile ? path.dirname(this.currentFile) : this.basePath;
     
     // Build module paths including mlld's node_modules
@@ -276,8 +280,12 @@ export class NodeShadowEnvironment {
     dummyModule.filename = this.currentFile || path.join(currentDir, 'mlld-shadow-env.js');
     dummyModule.paths = modulePaths;
     
-    // Return the require function bound to this module
-    return dummyModule.require.bind(dummyModule);
+    // Return the module and require function bound to this module
+    return {
+      require: dummyModule.require.bind(dummyModule),
+      module: dummyModule,
+      exports: dummyModule.exports
+    };
   }
   
   /**
@@ -302,19 +310,9 @@ export class NodeShadowEnvironment {
     const devNodeModulesExists = fs.existsSync(devNodeModules);
     const devPackageJsonExists = fs.existsSync(devPackageJson);
 
-    const debugShadow = process.env.DEBUG_NODE_SHADOW || process.env.CI;
-    if (debugShadow) {
-      console.error('[NodeShadowEnv] cwd:', process.cwd());
-      console.error('[NodeShadowEnv] devNodeModules:', devNodeModules, 'exists:', devNodeModulesExists);
-      console.error('[NodeShadowEnv] devPackageJson:', devPackageJson, 'exists:', devPackageJsonExists);
-    }
-
     if (devNodeModulesExists && devPackageJsonExists) {
       try {
         const packageJson = JSON.parse(fs.readFileSync(devPackageJson, 'utf8'));
-        if (debugShadow) {
-          console.error('[NodeShadowEnv] package.json name:', packageJson.name);
-        }
         if (packageJson.name === 'mlld') {
           mlldNodeModules = devNodeModules;
         }
@@ -341,9 +339,6 @@ export class NodeShadowEnvironment {
               const pkg = JSON.parse(fs.readFileSync(candidatePackageJson, 'utf8'));
               if (pkg.name === 'mlld') {
                 mlldNodeModules = candidateNodeModules;
-                if (debugShadow) {
-                  console.error('[NodeShadowEnv] Found mlld via import.meta.url:', mlldNodeModules);
-                }
                 break;
               }
             } catch {
@@ -406,11 +401,6 @@ export class NodeShadowEnvironment {
           paths.push(p);
         }
       }
-    }
-
-    if (process.env.DEBUG_NODE_SHADOW || process.env.CI) {
-      console.error('[NodeShadowEnv] Final module paths:', paths);
-      console.error('[NodeShadowEnv] mlldNodeModules:', mlldNodeModules);
     }
 
     return paths;

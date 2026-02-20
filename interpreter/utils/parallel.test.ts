@@ -36,4 +36,24 @@ describe('parallel utils', () => {
     const elapsed = Date.now() - t0;
     expect(elapsed).toBeGreaterThanOrEqual((items.length - 1) * paceMs - 10);
   });
+
+  it('emits batch boundary callbacks with invocation metadata', async () => {
+    const items = [0, 1, 2, 3, 4];
+    const starts: Array<{ batchIndex: number; batchSize: number; totalItems: number }> = [];
+    const ends: Array<{ batchIndex: number; batchSize: number; totalItems: number }> = [];
+
+    const results = await runWithConcurrency(items, 2, async (n) => n * 10, {
+      ordered: true,
+      onBatchStart: batch => {
+        starts.push(batch);
+      },
+      onBatchEnd: batch => {
+        ends.push(batch);
+      }
+    });
+
+    expect(results).toEqual([0, 10, 20, 30, 40]);
+    expect(starts).toEqual([{ batchIndex: 0, batchSize: 5, totalItems: 5 }]);
+    expect(ends).toEqual(starts);
+  });
 });

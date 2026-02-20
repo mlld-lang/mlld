@@ -1,0 +1,100 @@
+## Merge Verified Fixes: Batch @batchNum
+
+You are merging verified fixes from worktrees into the main branch.
+
+## Context
+
+**Base branch**: @baseBranch
+**Run directory**: @runDir
+
+## Worktrees to Merge
+
+```json
+@mergeItemsJson
+```
+
+## Instructions
+
+For each item where `verified == true`, merge it into @baseBranch.
+
+Process them **in order** to minimize conflicts.
+
+### For Each Fix
+
+#### 1. Switch to Worktree and Review
+
+```bash
+wt switch <worktree_branch>
+git log --oneline -3
+git diff @baseBranch...HEAD --stat
+```
+
+Verify:
+- Code changes look correct for the fix
+- No unintended files changed
+
+#### 2. Switch Back and Merge
+
+```bash
+wt switch @baseBranch
+wt merge <worktree_branch>
+```
+
+If there are merge conflicts:
+- Resolve them carefully
+- For code conflicts: prefer the worktree's fix changes
+- For CHANGELOG conflicts: include BOTH entries
+- After resolving: `git add . && git commit`
+
+#### 3. Record Merge Result
+
+Get the merge commit SHA:
+```bash
+git rev-parse HEAD
+```
+
+#### 4. Do NOT Remove Worktree
+
+Worktree cleanup happens after verification. Leave the worktree intact.
+
+### Skip Conditions
+
+Skip merging an item if:
+- `verified == false` (tests didn't pass)
+- `merged == true` (already merged)
+- The worktree branch no longer exists
+
+### Handling Failures
+
+If a merge fails and cannot be resolved:
+1. Abort the merge: `git merge --abort`
+2. Record the error
+3. Continue with remaining items
+
+## Output
+
+Write to `@outputPath`:
+
+```json
+{
+  "batch": @batchNum,
+  "base_branch": "@baseBranch",
+  "results": [
+    {
+      "ticket_id": "m-xxx",
+      "worktree_branch": "polish/m-xxx",
+      "merged": true,
+      "merge_commit": "<sha>"
+    },
+    {
+      "ticket_id": "m-yyy",
+      "worktree_branch": "polish/m-yyy",
+      "merged": false,
+      "skip_reason": "tests failed"
+    }
+  ],
+  "merged_count": 1,
+  "skipped_count": 1,
+  "failed_count": 0
+}
+```

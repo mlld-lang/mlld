@@ -119,11 +119,6 @@ export class PathMatcher {
         confidence: 1
       };
     }
-    
-    // Debug log
-    if (process.env.DEBUG_FUZZY) {
-      console.log(`No exact match for ${exactPath}, trying fuzzy...`);
-    }
 
     if (segments.length === 0) {
       return { exact: false, confidence: 0 };
@@ -170,11 +165,6 @@ export class PathMatcher {
     config: Required<FuzzyMatchConfig>,
     depth: number = 0
   ): Promise<PathMatchResult> {
-    // Debug log
-    if (process.env.DEBUG_FUZZY) {
-      console.log(`matchSegments: segments=${segments.join('/')}, currentPath=${currentPath}, depth=${depth}`);
-    }
-    
     // Base case: no more segments
     if (segments.length === 0) {
       return {
@@ -189,14 +179,7 @@ export class PathMatcher {
     // Get directory entries (with caching)
     const entries = await this.getCachedDirectoryEntries(currentPath);
     if (!entries) {
-      if (process.env.DEBUG_FUZZY) {
-        console.log(`No entries found in directory: ${currentPath}`);
-      }
       return { exact: false, confidence: 0 };
-    }
-    
-    if (process.env.DEBUG_FUZZY) {
-      console.log(`Directory entries: ${entries.join(', ')}`);
     }
 
     // Find matching entries for current segment
@@ -210,11 +193,6 @@ export class PathMatcher {
     if (matches.length === 0) {
       // No matches found - generate suggestions
       const suggestions = this.generateSuggestions(currentSegment, entries, config);
-      
-      if (process.env.DEBUG_FUZZY) {
-        console.log(`No matches for segment '${currentSegment}', generated ${suggestions.length} suggestions`);
-      }
-      
       return {
         exact: false,
         confidence: 0,
@@ -428,18 +406,9 @@ export class PathMatcher {
     config: Required<FuzzyMatchConfig>
   ): string[] {
     const suggestions: Array<{ entry: string, score: number }> = [];
-    
-    if (process.env.DEBUG_FUZZY) {
-      console.log(`Generating suggestions for '${segment}' from entries:`, entries);
-    }
-    
+
     for (const entry of entries) {
       const score = this.calculateSimilarity(segment, entry, config);
-      
-      if (process.env.DEBUG_FUZZY) {
-        console.log(`  ${entry}: score=${score}, threshold=${config.suggestionThreshold}`);
-      }
-      
       if (score >= config.suggestionThreshold) {
         suggestions.push({ entry, score });
       }

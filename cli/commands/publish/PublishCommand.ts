@@ -290,14 +290,17 @@ export class PublishCommand {
   }
 
   private async readModule(modulePath: string): Promise<ModuleData> {
-    const { content, metadata, filePath, ast } = await this.moduleReader.readModule(modulePath);
-    
+    const result = await this.moduleReader.readModule(modulePath);
+
     return {
-      metadata,
-      content,
-      filePath,
-      ast,
-      gitInfo: { isGitRepo: false } // Will be populated by detectGitInfo
+      metadata: result.metadata,
+      content: result.content,
+      filePath: result.filePath,
+      ast: result.ast,
+      gitInfo: { isGitRepo: false }, // Will be populated by detectGitInfo
+      isDirectory: result.isDirectory,
+      directoryData: result.directoryData,
+      moduleType: result.directoryData?.manifest.type,
     };
   }
 

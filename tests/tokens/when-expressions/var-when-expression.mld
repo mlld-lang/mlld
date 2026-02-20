@@ -1,4 +1,4 @@
-/var @status = when: [
+/var @status = when [
   @score > 90 => "Excellent"
   @score >= 80 => "Good"
   @score >= 70 => "Fair"
@@ -9,7 +9,6 @@
 @status --> variable[declaration]
 = --> operator
 when --> keyword
-: --> operator
 [ --> operator
 @score --> variable
 > --> operator

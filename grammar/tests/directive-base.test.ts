@@ -12,7 +12,6 @@ describe('Directive Base Structure', () => {
     '/show "path/to/file.md"',
     '/var @myvar = "some text"',
     '/var @myvar = { "key": "value" }',
-    '/path @myvar = "/path/to/file"',
     '/run {echo "hello world"}',
     '/exe @mycommand (param) = cmd {echo "hello"}'
   ];

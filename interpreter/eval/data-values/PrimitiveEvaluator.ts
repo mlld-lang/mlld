@@ -3,8 +3,25 @@ import type { DataValue } from '@core/types/var';
 import { isDirectiveValue, isPrimitiveValue } from '@core/types/var';
 import { evaluate } from '../../core/interpreter';
 import { EvaluationStateManager } from './EvaluationStateManager';
-import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
+import { interpolateAndRecordSecurity } from '../../core/interpreter/interpolation-security';
+
+const EXPRESSION_NODE_TYPES = new Set([
+  'BinaryExpression',
+  'TernaryExpression',
+  'UnaryExpression',
+  'ArrayFilterExpression',
+  'ArraySliceExpression'
+]);
+
+function isExpressionNode(value: unknown): value is { type: string } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    EXPRESSION_NODE_TYPES.has((value as { type: string }).type)
+  );
+}
 
 async function interpolateAndRecord(
   nodes: any,
@@ -12,20 +29,12 @@ async function interpolateAndRecord(
   context: InterpolationContext = InterpolationContext.Default
 ): Promise<string> {
   const { interpolate } = await import('../../core/interpreter');
-  const descriptors: SecurityDescriptor[] = [];
-  const text = await interpolate(nodes, env, context, {
-    collectSecurityDescriptor: descriptor => {
-      if (descriptor) {
-        descriptors.push(descriptor);
-      }
-    }
+  return interpolateAndRecordSecurity({
+    interpolate,
+    nodes,
+    env,
+    context
   });
-  if (descriptors.length > 0) {
-    const merged =
-      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
-    env.recordSecurityDescriptor(merged);
-  }
-  return text;
 }
 
 /**
@@ -59,6 +68,10 @@ export class PrimitiveEvaluator {
     }
 
     if (value && typeof value === 'object' && value.type === 'RegexLiteral') {
+      return true;
+    }
+
+    if (isExpressionNode(value)) {
       return true;
     }
     
@@ -109,6 +122,12 @@ export class PrimitiveEvaluator {
       const pattern = (value as any).pattern || '';
       const flags = (value as any).flags || '';
       return new RegExp(pattern, flags);
+    }
+
+    if (isExpressionNode(value)) {
+      const { evaluateUnifiedExpression } = await import('../expressions');
+      const result = await evaluateUnifiedExpression(value as any, env, { isExpression: true });
+      return result.value;
     }
     
     // Handle wrapped string values (quotes, backticks, or brackets)

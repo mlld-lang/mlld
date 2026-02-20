@@ -18,7 +18,7 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check values
       expect(result.values.path).toBeDefined();
-      expect(result.values.namespace[0].content).toBe('file'); // Auto-derived from filename
+      expect(result.values.namespace[0].identifier).toBe('file'); // Auto-derived from filename
       
       // Check raw
       expect(result.raw.path).toBeDefined();
@@ -40,7 +40,7 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check values
       expect(result.values.path).toBeDefined();
-      expect(result.values.namespace[0].content).toBe('myModule'); // Explicit alias (stored without prefix)
+      expect(result.values.namespace[0].identifier).toBe('myModule'); // Explicit alias (stored without prefix)
       
       // Check raw
       expect(result.raw.path).toBeDefined();
@@ -63,7 +63,7 @@ describe('Import Directive Syntax Tests', () => {
       // Check path has a variable
       expect(result.values.path).toHaveLength(1);
       expect(result.values.path[0].type).toBe('VariableReference');
-      expect(result.values.namespace[0].content).toBe('config'); // Explicit alias required for variable paths
+      expect(result.values.namespace[0].identifier).toBe('config'); // Explicit alias required for variable paths
       
       // Check meta
       expect(result.meta.path.hasVariables).toBe(true);
@@ -76,7 +76,7 @@ describe('Import Directive Syntax Tests', () => {
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('import');
       expect(result.subtype).toBe('importNamespace');
-      expect(result.values.namespace[0].content).toBe('mx');
+      expect(result.values.namespace[0].identifier).toBe('mx');
       expect(result.raw.path).toBe('@context/agents.mld');
       expect(result.meta?.path?.extension).toBe('.mld');
       expect(result.meta?.path?.name).toBe('agents');
@@ -116,6 +116,57 @@ describe('Import Directive Syntax Tests', () => {
       expect(isImportSelectedDirective(result)).toBe(true);
     });
 
+    it('should parse selected imports across multiple lines', async () => {
+      const input = `/import {
+  @first,
+  second as @secondAlias,
+  third
+} from "./file.mld"`;
+      const result = await parse(input);
+      expect(result.success).toBe(true);
+
+      const directive = result.ast[0];
+      expect(directive.type).toBe('Directive');
+      expect(directive.kind).toBe('import');
+      expect(directive.subtype).toBe('importSelected');
+      expect(directive.values.imports).toHaveLength(3);
+      expect(directive.values.imports[0].identifier).toBe('first');
+      expect(directive.values.imports[1].identifier).toBe('second');
+      expect(directive.values.imports[1].alias).toBe('secondAlias');
+      expect(directive.values.imports[2].identifier).toBe('third');
+    });
+
+    it('should report malformed multi-line import errors at the import line', async () => {
+      const input = `/import {
+  @first
+  @second
+} from "./file.mld"
+/for @x in [1,2] => @x`;
+      const result = await parse(input);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('Unclosed import list in import directive');
+
+      const parseError = result.error as Error & {
+        mlldErrorLocation?: { start: { line: number; column: number } };
+      };
+      expect(parseError.mlldErrorLocation?.start.line).toBe(1);
+      expect(parseError.mlldErrorLocation?.start.column).toBe(1);
+    });
+
+    it('should parse a node import source', async () => {
+      const input = '/import { join } from node @path';
+      const result = (await parse(input)).ast[0];
+
+      expect(result.type).toBe('Directive');
+      expect(result.kind).toBe('import');
+      expect(result.subtype).toBe('importSelected');
+      expect(result.source).toBe('path');
+      expect(result.values.path[0].content).toBe('@path');
+      expect(result.raw.path).toBe('@path');
+      expect(result.meta.path.isNodeImport).toBe(true);
+      expect(result.meta.path.package).toBe('@path');
+    });
+
     it('should support @-prefixed selected imports', async () => {
       const input = '/import {@this, @that} from @author/module';
       const result = (await parse(input)).ast[0];
@@ -151,6 +202,36 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check type guard
       expect(isImportSelectedDirective(result)).toBe(true);
+    });
+  });
+
+  describe('Import MCP tools', () => {
+    it('should parse MCP tool selected imports', async () => {
+      const input = '/import tools { @echo } from mcp "@anthropic/filesystem"';
+      const result = (await parse(input)).ast[0];
+
+      expect(result.type).toBe('Directive');
+      expect(result.kind).toBe('import');
+      expect(result.subtype).toBe('importMcpSelected');
+      expect(result.values.imports).toHaveLength(1);
+      expect(result.values.imports[0].identifier).toBe('echo');
+    });
+
+    it('should parse MCP tool namespace imports', async () => {
+      const input = '/import tools from mcp "@github/issues" as @github';
+      const result = (await parse(input)).ast[0];
+
+      expect(result.type).toBe('Directive');
+      expect(result.kind).toBe('import');
+      expect(result.subtype).toBe('importMcpNamespace');
+      expect(result.values.namespace[0].identifier).toBe('github');
+    });
+
+    it('should reject MCP namespace imports without alias', async () => {
+      const input = '/import tools from mcp "@github/issues"';
+      const result = await parse(input);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('MCP tool imports require an alias');
     });
   });
 });

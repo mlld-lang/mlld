@@ -47,11 +47,26 @@ WithProperty
   / "format" _ ":" _ format:DataString {
       return ["format", format];
     }
+  / "description" _ ":" _ description:DataString {
+      return ["description", description];
+    }
+  / "tools" _ ":" _ tools:Expression {
+      return ["tools", tools];
+    }
+  / "profile" _ ":" _ profile:Expression {
+      return ["profile", profile];
+    }
   / "asSection" _ ":" _ title:AsSectionRenameString {
       return ["asSection", title];
     }
   / "policy" _ ":" _ policy:DataObjectLiteral {
       return ["policy", policy];
+    }
+  / "auth" _ ":" _ name:AuthName {
+      return ["auth", name];
+    }
+  / "using" _ ":" _ using:UsingObject {
+      return ["using", using];
     }
   / "parallel" _ ":" _ cap:NumberLiteral {
       return ["parallel", Number(cap)];
@@ -65,6 +80,45 @@ WithProperty
     }
   / "streamFormat" _ ":" _ format:Expression {
       return ["streamFormat", format];
+    }
+
+AuthName
+  = chars:$([a-zA-Z0-9_.-]+) { return chars; }
+  / name:BaseIdentifier { return name; }
+  / name:StringLiteral { return name; }
+
+UsingEnvName
+  = name:BaseIdentifier { return name; }
+  / name:StringLiteral { return name; }
+
+UsingVarRef
+  = "@" id:BaseIdentifier {
+      return helpers.normalizePathVar(id);
+    }
+
+UsingVarName
+  = UsingVarRef
+  / name:StringLiteral { return name; }
+
+UsingObject
+  = "{" _ "var" _ ":" _ varName:UsingVarName _ "," _ "as" _ ":" _ envName:UsingEnvName _ "}" {
+      return { var: varName, as: envName };
+    }
+  / "{" _ "as" _ ":" _ envName:UsingEnvName _ "," _ "var" _ ":" _ varName:UsingVarName _ "}" {
+      return { var: varName, as: envName };
+    }
+
+UsingClause
+  = __ "using" _ credential:UsingCredential {
+      return credential;
+    }
+
+UsingCredential
+  = "auth" _ ":" _ name:AuthName {
+      return { auth: name };
+    }
+  / varName:UsingVarRef _ "as" _ envName:UsingEnvName {
+      return { using: { var: varName, as: envName } };
     }
 
 // -------------------------------------------------------------
@@ -146,8 +200,14 @@ GuardOverrideNames
     }
 
 GuardOverrideName
-  = GuardOverrideSingleQuoted
+  = GuardOverrideVarRef
+  / GuardOverrideSingleQuoted
   / GuardOverrideDoubleQuoted
+
+GuardOverrideVarRef
+  = "@" id:BaseIdentifier {
+      return `@${helpers.normalizePathVar(id)}`;
+    }
 
 GuardOverrideSingleQuoted
   = "'" content:EscapedSingleStringContent "'" {

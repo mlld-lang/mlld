@@ -34,19 +34,27 @@ export const DirectiveKind = {
   show: 'show',   // NEW: Replaces add
   stream: 'stream',
   exe: 'exe',     // NEW: Replaces exec
+  checkpoint: 'checkpoint',
+  env: 'env',
   for: 'for',     // For loops
   path: 'path',
   import: 'import',
   export: 'export',
   output: 'output',
   append: 'append',
+  if: 'if',
   when: 'when',
   guard: 'guard',
+  hook: 'hook',
   // NO deprecated entries - clean break!
   needs: 'needs',
-  wants: 'wants',
+  profiles: 'profiles',
   policy: 'policy',
-  while: 'while'
+  while: 'while',
+  loop: 'loop',
+  bail: 'bail',
+  sign: 'sign',
+  verify: 'verify'
 } as const;
 export type DirectiveKindKey = keyof typeof DirectiveKind;
 
@@ -73,7 +81,6 @@ export interface BlockReparseOptions {
 
 export const helpers = {
   debug(msg: string, ...args: unknown[]) {
-    if (process.env.DEBUG_MLLD_GRAMMAR) console.log('[DEBUG GRAMMAR]', msg, ...args);
   },
 
   warn(message: string, suggestion?: string, loc?: any, code?: string): GrammarWarning {
@@ -165,6 +172,11 @@ export const helpers = {
     let cursor = pos;
     if (input[cursor] === '/') cursor++;
 
+    // Return directives are recognized at line start.
+    if (input[cursor] === '=' && input[cursor + 1] === '>') {
+      return true;
+    }
+
     const directiveKeywords = [...Object.keys(DirectiveKind), 'log'];
 
     for (const keyword of directiveKeywords) {
@@ -178,6 +190,17 @@ export const helpers = {
 
       const nextChar = input[end];
       if (' \t\r\n'.includes(nextChar)) return true;
+      if (!/[a-zA-Z0-9_]/.test(nextChar)) return true;
+    }
+
+    // Bare exec invocation statements (strict mode: @fn(), markdown mode: /@fn()).
+    // This only recognizes statement starts with explicit invocation syntax so
+    // plain @var references are never treated as directives.
+    if (input[cursor] === '@') {
+      const remainder = input.substring(cursor);
+      if (/^@[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\s*\(/.test(remainder)) {
+        return true;
+      }
     }
 
     return false;
@@ -208,6 +231,38 @@ export const helpers = {
     // This assumes that @ is either:
     // - Not at line start, or
     // - At line start but not followed by directive keyword
+    return true;
+  },
+
+  // Checks if a trailing ? belongs to a field access suffix
+  isOptionalFieldAccessBoundary(input: string, pos: number): boolean {
+    let i = pos;
+    while (i < input.length) {
+      const ch = input[i];
+      if (ch === '\n' || ch === '\r') return true;
+      if (ch === ' ' || ch === '\t' || ch === '\u200B' || ch === '\u200C' || ch === '\u200D') {
+        i += 1;
+        continue;
+      }
+
+      const rest = input.substring(i);
+      const hasKeywordBoundary = (keyword: string) => {
+        if (!rest.startsWith(keyword)) return false;
+        const next = rest[keyword.length];
+        return !next || !/[A-Za-z0-9_]/.test(next);
+      };
+
+      if (hasKeywordBoundary('with') || hasKeywordBoundary('pipeline') || hasKeywordBoundary('as')) {
+        return true;
+      }
+      if (rest.startsWith('||')) return true;
+      if (ch === '|') return true;
+      if (rest.startsWith('!=')) return true;
+      if (ch === '#') return true;
+      if (ch === ',' || ch === ')' || ch === ']' || ch === '}') return true;
+      if ('=<>*/%&~'.includes(ch)) return true;
+      return false;
+    }
     return true;
   },
   
@@ -243,14 +298,6 @@ export const helpers = {
   },
 
   createNode<T extends object>(type: NodeTypeKey, props: T & { location?: any }) {
-    // Add development-time validation for missing locations
-    if (!props.location && process.env.DEBUG_MLLD_GRAMMAR) {
-      console.warn(`WARNING: Creating ${type} node without location data`);
-      if (process.env.DEBUG_MLLD_GRAMMAR_TRACE) {
-        console.trace();
-      }
-    }
-    
     return Object.freeze({
       type,
       nodeId: randomUUID(),
@@ -319,7 +366,6 @@ export const helpers = {
       ...finalFlags
     };
 
-    this.debug('PATH', 'validatePath final result:', JSON.stringify(result, null, 2));
     return result;
   },
 
@@ -353,10 +399,25 @@ export const helpers = {
           // Build the field access path
           let fieldPath = '';
           for (const field of fields) {
+            const optionalSuffix = field.optional ? '?' : '';
             if (field.type === 'field' || field.type === 'dot') {
-              fieldPath += `.${field.name || field.value}`;
-            } else if (field.type === 'array') {
-              fieldPath += `[${field.index}]`;
+              fieldPath += `.${field.name || field.value}${optionalSuffix}`;
+            } else if (field.type === 'numericField') {
+              fieldPath += `.${field.value ?? ''}${optionalSuffix}`;
+            } else if (field.type === 'array' || field.type === 'arrayIndex') {
+              const indexValue = field.index ?? field.value ?? '';
+              fieldPath += `[${indexValue}]${optionalSuffix}`;
+            } else if (field.type === 'stringIndex' || field.type === 'bracketAccess') {
+              fieldPath += `[${JSON.stringify(field.value ?? '')}]${optionalSuffix}`;
+            } else if (field.type === 'variableIndex') {
+              const ref = field.value;
+              fieldPath += `[${this.reconstructRawString(ref)}]${optionalSuffix}`;
+            } else if (field.type === 'arraySlice') {
+              const start = field.start ?? '';
+              const end = field.end ?? '';
+              fieldPath += `[${start}:${end}]${optionalSuffix}`;
+            } else if (field.type === 'arrayFilter') {
+              fieldPath += `[?${field.condition ?? ''}]${optionalSuffix}`;
             }
           }
           
@@ -381,6 +442,16 @@ export const helpers = {
           const conditionRaw = this.reconstructRawString(nodes.condition);
           const contentRaw = this.reconstructRawString(nodes.content || []);
           return `${conditionRaw}?\`${contentRaw}\``;
+        }
+        if (nodes.type === 'ConditionalVarOmission') {
+          const variableRaw = this.reconstructRawString(nodes.variable);
+          return `${variableRaw}?`;
+        }
+        if (nodes.type === 'NullCoalescingTight') {
+          const variableRaw = this.reconstructRawString(nodes.variable);
+          const fallback = nodes.default || { quote: 'double', value: '' };
+          const quote = fallback.quote === 'single' ? '\'' : '"';
+          return `${variableRaw}??${quote}${fallback.value || ''}${quote}`;
         }
       }
       return String(nodes || ''); // Fallback
@@ -432,6 +503,14 @@ export const helpers = {
         const conditionRaw = this.reconstructRawString(node.condition);
         const contentRaw = this.reconstructRawString(node.content || []);
         raw += `${conditionRaw}?\`${contentRaw}\``;
+      } else if (node.type === 'ConditionalVarOmission') {
+        const variableRaw = this.reconstructRawString(node.variable);
+        raw += `${variableRaw}?`;
+      } else if (node.type === 'NullCoalescingTight') {
+        const variableRaw = this.reconstructRawString(node.variable);
+        const fallback = node.default || { quote: 'double', value: '' };
+        const quote = fallback.quote === 'single' ? '\'' : '"';
+        raw += `${variableRaw}??${quote}${fallback.value || ''}${quote}`;
       } else if (typeof node === 'string') {
         // Handle potential raw string segments passed directly
         raw += node;
@@ -466,7 +545,9 @@ export const helpers = {
           p.type === NodeType.VariableReference ||
           p.type === NodeType.ExecInvocation ||
           p.type === 'ConditionalTemplateSnippet' ||
-          p.type === 'ConditionalStringFragment'
+          p.type === 'ConditionalStringFragment' ||
+          p.type === 'ConditionalVarOmission' ||
+          p.type === 'NullCoalescingTight'
         )
       ),
       isTemplateContent: wrapperType === 'doubleBracket'
@@ -564,7 +645,6 @@ export const helpers = {
     
     // If no base location provided, we can't calculate proper locations
     if (!baseLocation) {
-      console.warn('parseCommandContent called without baseLocation');
       // Fallback behavior for backward compatibility
       return this.parseCommandContentLegacy(content);
     }
@@ -927,57 +1007,70 @@ export const helpers = {
   
   /**
    * Checks if an array is unclosed by scanning ahead
-   * Returns true if we hit a newline before finding the closing bracket
+   * Returns true if unclosed, stores reason in parserState.lastUnclosedReason
    */
   isUnclosedArray(input: string, pos: number): boolean {
     let depth = 1;
     let i = pos;
     let hasHash = false;
-    
-    this.debug('isUnclosedArray starting at pos', pos, 'first 50 chars:', input.substring(pos, pos + 50));
-    
+    let hasCommentMarker = false;
+    let firstNewlinePos = -1;
+
+    // First pass: scan until end of line or closing bracket to determine if this is
+    // a multi-line section syntax (has #) or a single-line array
     while (i < input.length && depth > 0) {
       const char = input[i];
-      
+
+      // Check for >> comment marker
+      if (char === '>' && i + 1 < input.length && input[i + 1] === '>') {
+        hasCommentMarker = true;
+      }
+
       if (char === '[') {
         depth++;
-        this.debug('Found [ at', i, 'depth now', depth);
       } else if (char === ']') {
         depth--;
-        this.debug('Found ] at', i, 'depth now', depth);
       } else if (char === '#' && depth === 1) {
         hasHash = true; // Section syntax detected
-        this.debug('Found # at', i, 'in brackets - this is section syntax');
       } else if (char === '\n' && depth > 0) {
-        // Only return true if genuinely unclosed
-        // Section syntax can span lines, so check if we have # 
-        if (!hasHash) {
-          this.debug('Found newline at', i, 'without # - unclosed array');
-          return true; // Unclosed array on newline
+        // Record first newline position but continue scanning to find any >> markers
+        if (firstNewlinePos === -1) {
+          firstNewlinePos = i;
         }
-        this.debug('Found newline at', i, 'but has # - continuing scan');
+        // If section syntax (has #), continue scanning
+        if (!hasHash) {
+          // For non-section arrays, scan ahead to look for >> before giving up
+          // Continue until we hit another newline or end of content
+        }
       }
       i++;
     }
-    
-    const result = depth > 0;
-    this.debug('isUnclosedArray finished: result=', result, 'hasHash=', hasHash, 'depth=', depth, 'scanned to pos', i);
-    return result;
+
+    // Determine if unclosed: if we exited with depth > 0, it's unclosed
+    // Or if we hit a newline in a non-section array
+    const isUnclosed = depth > 0 || (firstNewlinePos !== -1 && !hasHash);
+
+    if (isUnclosed) {
+      this.parserState.lastUnclosedReason = hasCommentMarker ? 'commentInside' : 'generic';
+    }
+    return isUnclosed;
   },
   
   /**
    * Checks if an object is unclosed by scanning ahead
-   * Returns true if we hit a newline before finding the closing brace
+   * Returns true if unclosed, stores reason in parserState.lastUnclosedReason
    */
   isUnclosedObject(input: string, pos: number): boolean {
     let depth = 1;
     let i = pos;
     let inString = false;
     let stringChar: string | null = null;
-    
+    let hasCommentMarker = false;
+    let firstNewlinePos = -1;
+
     while (i < input.length && depth > 0) {
       const char = input[i];
-      
+
       // Handle string context to avoid counting braces inside strings
       if ((char === '"' || char === '\'') && (i === 0 || input[i - 1] !== '\\')) {
         if (!inString) {
@@ -988,16 +1081,33 @@ export const helpers = {
           stringChar = null;
         }
       }
-      
-      // Only count braces outside of strings
+
+      // Only count braces and comments outside of strings
       if (!inString) {
+        // Check for >> comment marker
+        if (char === '>' && i + 1 < input.length && input[i + 1] === '>') {
+          hasCommentMarker = true;
+        }
+
         if (char === '{') depth++;
         else if (char === '}') depth--;
-        else if (char === '\n' && depth > 0) return true; // Unclosed on newline
+        else if (char === '\n' && depth > 0) {
+          // Record first newline but continue scanning to find any >> markers
+          if (firstNewlinePos === -1) {
+            firstNewlinePos = i;
+          }
+        }
       }
       i++;
     }
-    return depth > 0; // Still unclosed at end of input
+
+    // Unclosed if: we hit a newline with depth > 0, or reached end with depth > 0
+    const isUnclosed = depth > 0 || firstNewlinePos !== -1;
+
+    if (isUnclosed) {
+      this.parserState.lastUnclosedReason = hasCommentMarker ? 'commentInside' : 'generic';
+    }
+    return isUnclosed;
   },
   
   /**
@@ -1196,7 +1306,8 @@ export const helpers = {
     stringChar: null as string | null,
     lastDirectiveEndPos: -1,
     functionCount: 0,
-    maxNestingDepth: 20
+    maxNestingDepth: 20,
+    lastUnclosedReason: null as 'commentInside' | 'generic' | null
   },
   
   /**
@@ -1209,10 +1320,6 @@ export const helpers = {
     this.parserState.stringChar = null;
     // Keep track of function count and position for debugging
     this.parserState.functionCount++;
-    this.debug('Parser state reset', {
-      functionCount: this.parserState.functionCount,
-      lastEndPos: this.parserState.lastDirectiveEndPos
-    });
   },
   
   /**
@@ -1238,11 +1345,6 @@ export const helpers = {
   decrementBraceDepth(): void {
     this.parserState.braceDepth--;
     if (this.parserState.braceDepth < 0) {
-      // This indicates parser state corruption
-      this.debug('WARNING: Brace depth underflow detected', {
-        depth: this.parserState.braceDepth,
-        functionCount: this.parserState.functionCount
-      });
       // Reset to prevent cascading errors
       this.parserState.braceDepth = 0;
     }
@@ -1253,17 +1355,9 @@ export const helpers = {
    * Returns true if state is valid, false if corrupted
    */
   validateParserState(): boolean {
-    const isValid = this.parserState.braceDepth >= 0 && 
+    const isValid = this.parserState.braceDepth >= 0 &&
                    this.parserState.braceDepth <= this.parserState.maxNestingDepth;
-    
-    if (!isValid) {
-      this.debug('Parser state validation failed', {
-        braceDepth: this.parserState.braceDepth,
-        inString: this.parserState.inString,
-        functionCount: this.parserState.functionCount
-      });
-    }
-    
+
     return isValid;
   },
   
@@ -1346,7 +1440,14 @@ export const helpers = {
         return this.createBinaryExpression(first, rest, p.location);
       }
 
-      if (p.kind === 'wildcard') return p.node;
+      if (p.kind === 'wildcard') {
+        if (p.node && typeof p.node === 'object') return p.node;
+        return this.createNode('Literal', {
+          value: '*',
+          valueType: 'wildcard',
+          location: p.location
+        });
+      }
 
       if (p.kind === 'compare') {
         return this.createNode('BinaryExpression' as NodeTypeKey, {
@@ -1394,7 +1495,8 @@ export const helpers = {
     withClause: any,
     location: any,
     modifier: string | null = null,
-    bound: { boundIdentifier: string; boundValue: any } | null = null
+    bound: { boundIdentifier: string; boundValue: any } | null = null,
+    extraMeta: Record<string, any> | null = null
   ) {
     return this.createNode(NodeType.WhenExpression, {
       conditions: conditions,
@@ -1409,7 +1511,8 @@ export const helpers = {
         hasTailModifiers: !!withClause,
         modifier: modifier,
         hasBoundValue: !!bound,
-        ...(bound ? { boundIdentifier: bound.boundIdentifier } : {})
+        ...(bound ? { boundIdentifier: bound.boundIdentifier } : {}),
+        ...(extraMeta || {})
       },
       location
     });
@@ -1418,7 +1521,15 @@ export const helpers = {
   /**
    * Creates a ForExpression node for for...in expressions in /var assignments
    */
-  createForExpression(variable: any, source: any, expression: any, location: any, opts?: any, batchPipeline?: any | null) {
+  createForExpression(
+    variable: any,
+    source: any,
+    expression: any,
+    location: any,
+    opts?: any,
+    batchPipeline?: any | null,
+    keyVariable?: any | null
+  ) {
     const meta: any = {
       isForExpression: true
     };
@@ -1431,13 +1542,40 @@ export const helpers = {
       meta.batchPipeline = batchPipeline;
     }
 
-    return {
+    const node: any = {
       type: 'ForExpression',
       nodeId: randomUUID(),
       variable: variable,
       source: source,
       expression: Array.isArray(expression) ? expression : [expression],
       location: location,
+      meta
+    };
+    if (keyVariable) {
+      node.keyVariable = keyVariable;
+    }
+    return node;
+  },
+
+  /**
+   * Creates a LoopExpression node for loop expressions in /var and /exe assignments
+   */
+  createLoopExpression(limit: any, rateMs: number | null, until: any, body: any, location: any) {
+    const meta: any = {
+      isLoopExpression: true,
+      hasLimit: limit !== null && limit !== undefined,
+      hasRate: rateMs !== null && rateMs !== undefined,
+      hasUntil: Array.isArray(until) && until.length > 0
+    };
+
+    return {
+      type: 'LoopExpression',
+      nodeId: randomUUID(),
+      limit,
+      rateMs: rateMs ?? null,
+      until: Array.isArray(until) ? until : null,
+      block: Array.isArray(body) ? body : [body],
+      location,
       meta
     };
   },

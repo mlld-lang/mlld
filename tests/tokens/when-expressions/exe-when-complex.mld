@@ -1,4 +1,4 @@
-/exe @processRequest(method, path, auth) = when: [
+/exe @processRequest(method, path, auth) = when [
   @method == "GET" && @path == "/users" => @listUsers()
   @method == "POST" && @path == "/users" => @createUser(@auth)
   @method == "DELETE" || @method == "PUT" => "Method not allowed"
@@ -9,15 +9,14 @@
 === START TOKENS ===
 @processRequest --> variable[declaration]
 ( --> operator
-method --> parameter
+method, --> parameter
 , --> operator
-path --> parameter
+path, --> parameter
 , --> operator
-auth --> parameter
+auth) --> parameter
 ) --> operator
 = --> operator
 when --> keyword
-: --> operator
 [ --> operator
 @method --> variable
 == --> operator

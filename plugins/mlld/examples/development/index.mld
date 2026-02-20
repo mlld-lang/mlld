@@ -1,0 +1,220 @@
+>> Development Orchestrator
+>> Usage: mlld plugins/mlld/examples/development/index.mld --goal goal.md [--repo .] [--max 100]
+>>
+>> Issue-driven project execution with adversarial invalidation.
+>> Decision agent manages GitHub Issues, dispatches workers, runs invalidation.
+>>
+>> Workflow:
+>>   Decision agent reads goal + state → creates/assigns issues
+>>   Workers implement changes, commit, test
+>>   Invalidation worker tries to break the implementation
+>>   Only "complete" when adversary can't find failures
+>>
+>> Resilience: exe llm labels handle crash recovery automatically.
+>>   mlld run development                 # auto-resumes via cache
+>>   mlld run development --resume @callWorker  # re-run all worker calls
+>>   mlld run development --new           # fresh run
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logEvent, @loadRunState, @saveRunState, @buildContext } from "./lib/context.mld"
+import { @writeQuestionsFile } from "./lib/questions.mld"
+import "@payload" as @p
+
+>> Parse arguments
+var @goalPath = @p.goal ?? "goal.md"
+var @repoDir = @p.repo ?? "."
+var @maxIterations = @p.max ? @p.max * 1 : 100
+
+>> Tool permissions
+var @decisionTools = "Read,Write,Glob,Grep"
+var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(gh:*)"
+
+>> Prompt templates
+exe @decisionPrompt(goal, issues, recentEvents, lastWorkerResult, lastError, humanAnswers) = template "./prompts/decision/core.att"
+exe @implementPrompt(issue, guidance, goal, statusFormat) = template "./prompts/workers/implement.att"
+exe @invalidatePrompt(issue, guidance, goal, evidenceRules) = template "./prompts/workers/invalidate.att"
+exe @reviewPrompt(issue, guidance, goal, evidenceRules) = template "./prompts/workers/review.att"
+
+>> LLM call wrappers — llm label enables automatic caching
+exe llm @callWorker(prompt, model, dir, tools, outPath) = @claudePoll(@prompt, @model, @dir, @tools, @outPath)
+
+>> Load shared prompt fragments
+var @evidenceRules = <./prompts/shared/evidence-rules.md>
+var @statusFormat = <./prompts/shared/status-format.md>
+
+>> Run directory for decision context (event logs, run state)
+var @runDir = `@base/runs/development`
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+run @mkdirp(@runDir)
+
+>> Load goal
+var @goal = <@goalPath>?
+if !@goal [
+  show `Goal file not found: @goalPath`
+] else [
+
+>> Load or initialize run state
+let @runState = @loadRunState(@runDir)
+if !@runState.id [
+  let @newState = { id: "development", created: @now, goal: @goalPath }
+  @saveRunState(@runDir, @newState)
+  @logEvent(@runDir, "run_start", { goal: @goalPath })
+]
+
+show `Development: @goalPath`
+show `Repo: @repoDir`
+show `Max iterations: @maxIterations`
+
+>> Main decision loop — loop(N) replaces manual iteration counting
+loop(@maxIterations) [
+  >> Gather context (includes recent events for decision agent)
+  let @context = @buildContext(@runDir)
+
+  >> Load open issues
+  let @issues = cmd { gh issue list --json number,title,body,state,labels,assignees --limit 50 } with { ok: true }
+  let @issueList = when @issues [
+    "" => []
+    * => @issues | @parse
+  ]
+
+  >> Check for human answers
+  let @humanAnswers = <@runDir/questions.md>?
+
+  >> Call decision agent
+  let @decisionOutputPath = `@runDir/decision.json`
+  let @prompt = @decisionPrompt(
+    @goal,
+    @issueList,
+    @context.recentEvents,
+    @context.lastWorkerResult,
+    @context.lastError,
+    @humanAnswers
+  )
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool. Write ONLY valid JSON.`
+
+  @logEvent(@runDir, "decision_call", {})
+  @claudePoll(@fullPrompt, "opus", "@root", @decisionTools, @decisionOutputPath)
+  let @decision = <@decisionOutputPath>?
+
+  if !@decision [
+    show `Decision agent failed: no output`
+    @logEvent(@runDir, "error", { type: "decision_agent", error: "no output" })
+    continue
+  ]
+
+  show `Decision: @decision.action - @decision.reasoning`
+  @logEvent(@runDir, "iteration", { decision: @decision.action, reasoning: @decision.reasoning })
+
+  >> Execute action
+  when @decision.action [
+    "work" => [
+      >> Get issue details
+      let @issueNum = @decision.issue
+      let @taskType = @decision.task_type ?? "implement"
+      show `  Working on #@issueNum (@taskType)`
+
+      let @issueDetail = cmd { gh issue view @issueNum --json number,title,body,labels,comments } with { ok: true }
+
+      >> Select worker prompt based on task type
+      let @workerPrompt = when @taskType [
+        "implement" => @implementPrompt(@issueDetail, @decision.guidance, @goal, @statusFormat)
+        "invalidate" => @invalidatePrompt(@issueDetail, @decision.guidance, @goal, @evidenceRules)
+        "review" => @reviewPrompt(@issueDetail, @decision.guidance, @goal, @evidenceRules)
+        * => @implementPrompt(@issueDetail, @decision.guidance, @goal, @statusFormat)
+      ]
+
+      >> Select model based on task type
+      let @model = when @taskType [
+        "invalidate" => "opus"
+        "review" => "opus"
+        * => "sonnet"
+      ]
+
+      let @workerOutputPath = `@runDir/worker-@issueNum\.json`
+      let @workerPromptPath = `@runDir/worker-@issueNum\.prompt.md`
+
+      let @workerFullPrompt = `@workerPrompt
+
+IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. Write ONLY valid JSON.`
+
+      >> Save prompt for debugging
+      output @workerFullPrompt to "@workerPromptPath"
+
+      @logEvent(@runDir, "worker_dispatch", {
+        issue: @issueNum,
+        task_type: @taskType,
+        model: @model,
+        prompt_path: @workerPromptPath
+      })
+
+      @callWorker(@workerFullPrompt, @model, "@repoDir", @workerTools, @workerOutputPath)
+      let @result = <@workerOutputPath>?
+
+      if !@result [
+        show `  Worker failed: no output`
+        @logEvent(@runDir, "error", { type: "worker", issue: @issueNum, error: "no output" })
+        let @errState = { ...@runState, lastError: `Worker failed for #@issueNum`, lastWorkerResult: null }
+        @saveRunState(@runDir, @errState)
+        continue
+      ]
+
+      show `  Worker status: @result.status`
+      if @result.work_done && @result.work_done.commit_hash [
+        show `  Committed: @result.work_done.commit_hash`
+      ]
+
+      @logEvent(@runDir, "worker_result", {
+        issue: @issueNum,
+        status: @result.status,
+        work_done: @result.work_done
+      })
+
+      let @workState = { ...@runState, lastWorkerResult: @result, lastError: null }
+      @saveRunState(@runDir, @workState)
+    ]
+
+    "create_issue" => [
+      show `  Creating issue: @decision.title`
+      let @labels = @decision.labels ?? []
+      let @labelArgs = for @l in @labels => `--label "@l"`
+      let @labelStr = @labelArgs.join(" ")
+      let @issueUrl = cmd { gh issue create --title "@decision.title" --body "@decision.body" @labelStr }
+      show `  Created: @issueUrl`
+      @logEvent(@runDir, "issue_created", { title: @decision.title, url: @issueUrl })
+    ]
+
+    "close_issue" => [
+      show `  Closing issue #@decision.issue: @decision.reason`
+      if @decision.comment [
+        cmd { gh issue comment @decision.issue --body "@decision.comment" }
+      ]
+      cmd { gh issue close @decision.issue --reason completed }
+      @logEvent(@runDir, "issue_closed", { issue: @decision.issue, reason: @decision.reason })
+    ]
+
+    "blocked" => [
+      show `  Blocked — writing questions`
+      @writeQuestionsFile(@runDir, @decision.questions)
+      @logEvent(@runDir, "run_paused", { reason: "needs_human" })
+      show `Resume: mlld run development --goal @goalPath`
+      done
+    ]
+
+    "complete" => [
+      show `\nComplete: @decision.summary`
+      @logEvent(@runDir, "project_complete", { summary: @decision.summary })
+      done
+    ]
+
+    * => [
+      show `  Unknown action: @decision.action`
+      @logEvent(@runDir, "error", { type: "unknown_action", action: @decision.action })
+    ]
+  ]
+
+  cmd { sleep 1 }
+]
+
+]

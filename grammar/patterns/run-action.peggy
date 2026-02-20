@@ -50,7 +50,7 @@ RunBlockAction "run block action"
         'pipeline'
       );
     }
-  / RunKeyword __ "\"" command:$([^\"]*) "\"" tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / RunKeyword __ "\"" command:$([^\"]*) "\"" using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('RunBlockAction matched quoted command', { command, tail });
 
       const commandLocation = location();
@@ -85,10 +85,11 @@ RunBlockAction "run block action"
         ...(comment ? { comment } : {})
       };
 
-      if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+      const mergedWithClause = using || tail ? { ...(using || {}), ...(tail || {}) } : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
       }
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -118,7 +119,7 @@ RunBlockAction "run block action"
         'command'
       );
     }
-  / RunKeyword __ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / RunKeyword __ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('RunBlockAction matched command', { content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -136,10 +137,11 @@ RunBlockAction "run block action"
         meta.securityLabels = labelInfo.labels;
       }
 
-      if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+      const mergedWithClause = using || tail ? { ...(using || {}), ...(tail || {}) } : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
       }
 
       const endingInfo = {
@@ -162,7 +164,7 @@ RunBlockAction "run block action"
         content.type
       );
     }
-  / RunKeyword __ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / RunKeyword __ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('RunBlockAction matched stdin pipe sugar', { stdinExpr, content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -176,6 +178,7 @@ RunBlockAction "run block action"
 
       const withClause = {
         stdin: stdinExpr,
+        ...(using || {}),
         ...(tail || {})
       };
 
@@ -228,9 +231,13 @@ RunBlockAction "run block action"
       }
 
       if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+        const baseWithClause = values.withClause || raw.withClause || meta.withClause;
+        const mergedWithClause = baseWithClause
+          ? { ...baseWithClause, ...tail }
+          : tail;
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
       }
 
       const endingInfo = {
@@ -253,7 +260,7 @@ RunBlockAction "run block action"
         'code'
       );
     }
-  / RunKeyword __ commandRef:UnifiedReferenceWithTail labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / RunKeyword __ commandRef:UnifiedReference using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('RunBlockAction matched unified command reference', { commandRef });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -335,6 +342,19 @@ RunBlockAction "run block action"
         };
       }
 
+      const baseWithClause =
+        commandRef.type === 'ExecInvocation' || commandRef.type === 'VariableReferenceWithTail'
+          ? commandRef.withClause
+          : undefined;
+      const mergedWithClause = baseWithClause || using || tail
+        ? { ...(baseWithClause || {}), ...(using || {}), ...(tail || {}) }
+        : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
+      }
+
       if (labelInfo) {
         values.securityLabels = labelInfo.labels;
         raw.securityLabels = labelInfo.raw;
@@ -345,8 +365,13 @@ RunBlockAction "run block action"
         ? 'runExecInvocation'
         : 'runExec';
 
+      const pipelineTail = tail && tail.pipeline
+        ? { pipeline: tail.pipeline }
+        : baseWithClause && baseWithClause.pipeline
+          ? { pipeline: baseWithClause.pipeline }
+          : null;
       const endingInfo = {
-        tail: null,
+        tail: pipelineTail,
         parallel: null,
         comment: comment || null
       };

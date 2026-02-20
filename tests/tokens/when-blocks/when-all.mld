@@ -1,22 +1,16 @@
-/when @user all: [
-  @isAuthenticated
-  @hasPermission("write")
-  !@isBanned
-] => @grantAccess()
+/when (@isAuthenticated && @hasPermission("write") && !@isBanned) => @grantAccess()
 
 === START TOKENS ===
-@user --> variable
-all --> keyword
-: --> operator
-[ --> operator
+( --> operator
 @isAuthenticated --> variable
+&& --> operator
 @hasPermission --> variable
 ( --> operator
 "write" --> string
 ) --> operator
+) --> operator
 ! --> operator
 @isBanned --> variable
-] --> operator
 => --> operator
 @grantAccess --> variable
 ( --> operator

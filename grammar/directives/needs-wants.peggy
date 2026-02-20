@@ -1,11 +1,11 @@
-// NEEDS AND WANTS DIRECTIVES
-// Implements /needs and /wants parsing with structured capability objects
+// NEEDS AND PROFILES DIRECTIVES
+// Implements /needs and /profiles parsing with structured capability objects
 
 NeedsKeyword
   = "/"? "needs"
 
-WantsKeyword
-  = "/"? "wants"
+ProfilesKeyword
+  = "/"? "profiles"
 
 SlashNeeds
   = DirectiveContext NeedsKeyword _ object:NeedsObject ending:StandardDirectiveEnding? {
@@ -30,21 +30,21 @@ SlashNeeds
       );
     }
 
-SlashWants
-  = DirectiveContext WantsKeyword _ tiers:WantsArray ending:StandardDirectiveEnding? {
+SlashProfiles
+  = DirectiveContext ProfilesKeyword _ profiles:ProfilesObject ending:StandardDirectiveEnding? {
       const meta = {
-        tierCount: tiers.length,
+        profileCount: Object.keys(profiles || {}).length,
         ...(ending?.comment ? { comment: ending.comment } : {})
       };
 
       return helpers.createStructuredDirective(
-        DirectiveKind.wants,
-        'wants',
-        { wants: tiers },
-        { wants: tiers },
+        DirectiveKind.profiles,
+        'profiles',
+        { profiles },
+        { profiles },
         meta,
         location(),
-        'wants'
+        'profiles'
       );
     }
 
@@ -187,50 +187,60 @@ NeedsBooleanKey
   / "net"
   / "filesystem"
   / "fs"
+  / "keychain"
 
 CapabilityName
   = name:DataString { return name; }
   / name:BaseIdentifier &{
       const lowered = String(name).toLowerCase();
-      return !['cmd', 'node', 'js', 'python', 'py', 'ruby', 'rb', 'go', 'rust', 'sh', 'bash', 'network', 'net', 'filesystem', 'fs', 'tier', 'why'].includes(lowered);
+      return !['cmd', 'node', 'js', 'python', 'py', 'ruby', 'rb', 'go', 'rust', 'sh', 'bash', 'network', 'net', 'filesystem', 'fs', 'keychain', 'tier', 'why'].includes(lowered);
     } { return name; }
 
 // -------------------------------------------------------------
-// WANTS SUPPORT
+// PROFILES SUPPORT
 // -------------------------------------------------------------
 
-WantsArray
-  = "[" _ tiers:WantsTierList? _ "]" {
-      return tiers || [];
-    }
-
-WantsTierList
-  = first:WantsTierObject rest:(CommaSpace tier:WantsTierObject { return tier; })* {
-      return [first, ...rest];
-    }
-
-WantsTierObject
-  = "{" _ entries:WantsProperties? _ "}" {
+ProfilesObject
+  = "{" _ entries:ProfilesEntryList? _ "}" {
       const result = {};
       if (entries) {
         for (const [key, value] of entries) {
-          if (key === '__commands') {
-            const bucket = (result.__commands || (result.__commands = []));
-            bucket.push(value);
-            continue;
-          }
           result[key] = value;
         }
       }
       return result;
     }
 
-WantsProperties
-  = first:WantsProperty rest:(CommaSpace prop:WantsProperty { return prop; })* {
+ProfilesEntryList
+  = first:ProfilesEntry rest:(CommaSpace entry:ProfilesEntry { return entry; })* {
       return [first, ...rest];
     }
 
-WantsProperty
-  = "tier" _ ":" _ value:DataString { return ['tier', value]; }
-  / "why" _ ":" _ value:DataString { return ['why', value]; }
-  / prop:NeedsEntry { return prop; }
+ProfilesEntry
+  = name:ProfileKey _ ":" _ profile:ProfileBody {
+      return [name, profile];
+    }
+
+ProfileKey
+  = name:DataString { return name; }
+  / name:BaseIdentifier { return name; }
+
+ProfileBody
+  = "{" _ entries:ProfileProperties? _ "}" {
+      const result = {};
+      if (entries) {
+        for (const [key, value] of entries) {
+          result[key] = value;
+        }
+      }
+      return result;
+    }
+
+ProfileProperties
+  = first:ProfileProperty rest:(CommaSpace prop:ProfileProperty { return prop; })* {
+      return [first, ...rest];
+    }
+
+ProfileProperty
+  = "requires" _ ":" _ value:NeedsObject { return ['requires', value]; }
+  / "description" _ ":" _ value:DataString { return ['description', value]; }

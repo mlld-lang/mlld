@@ -19,23 +19,30 @@ export * from './guards';
 export * from './security';
 export * from './state';
 export * from './errors';
+export * from './environment';
 
 // Re-export directive types
 export * from './import';
 export * from './export';
 export * from './show';
 export * from './exe';
-export * from './path';
 export * from './run';
 export * from './output';
 export * from './when';
+export * from './if';
 export * from './var'; // New unified var directive
 export * from './for'; // For loop directive and expression
+export * from './loop'; // Loop directive and expression
 export * from './guard'; // Guard directives
+export * from './hook'; // Hook directives
+export * from './checkpoint'; // Checkpoint directives
 export * from './policy'; // Policy directives
+export * from './env'; // Env directives
 export * from './load-content'; // Load content types and utilities including URL metadata
 export * from './while'; // While directives and stages
 export * from './control'; // Control literals (done/continue)
+export * from './label-modification';
+export * from './tools';
 
 // Parser modes
 export * from './mode';
@@ -56,16 +63,20 @@ import {
   NewlineNode,
   SectionMarkerNode,
   SourceLocation,
+  CommandReference,
   ExecInvocation,
   NegationNode,
   FileReferenceNode,
   BinaryExpression,
   TernaryExpression,
   UnaryExpression,
+  NewExpression,
   TemplateForBlockNode,
   TemplateInlineShowNode,
   ConditionalTemplateSnippetNode,
   ConditionalStringFragmentNode,
+  ConditionalVarOmissionNode,
+  NullCoalescingTightNode,
   ConditionalArrayElementNode
 } from './nodes';
 
@@ -74,9 +85,11 @@ import { WhenExpressionNode } from './when';
 
 // Import ForExpression
 import { ForExpression } from './for';
+import { LoopExpression } from './loop';
 
 // Import Exe block nodes (used by when-expression actions)
 import type { ExeBlockNode, ExeReturnNode } from './exe';
+import type { LabelModificationNode } from './label-modification';
 
 /**
  * Unified AST node type - MlldNode
@@ -105,15 +118,20 @@ export type MlldNode =
   | BinaryExpression
   | TernaryExpression
   | UnaryExpression
+  | NewExpression
   | TemplateForBlockNode
   | TemplateInlineShowNode
   | ConditionalTemplateSnippetNode
   | ConditionalStringFragmentNode
+  | ConditionalVarOmissionNode
+  | NullCoalescingTightNode
   | ConditionalArrayElementNode
   | WhenExpressionNode
   | ForExpression
+  | LoopExpression
   | ExeBlockNode
-  | ExeReturnNode;
+  | ExeReturnNode
+  | LabelModificationNode;
 
 // =========================================================================
 // VARIABLE TYPES
@@ -159,6 +177,7 @@ export interface CommandRefDefinition extends BaseCommandDefinition {
   type: 'commandRef';
   commandRef: string;
   commandArgs?: MlldNode[];
+  commandRefAst?: CommandReference | ExecInvocation;
 }
 
 export interface CodeDefinition extends BaseCommandDefinition {

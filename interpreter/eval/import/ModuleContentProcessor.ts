@@ -12,10 +12,24 @@ import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
+import { getAuditFileDescriptor } from '@core/security/AuditLogIndex';
+import {
+  maskPlainMlldTemplateFences,
+  restorePlainMlldTemplateFences
+} from '../template-fence-literals';
 import type { SerializedGuardDefinition } from '../../guards';
-import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
+import type { NeedsDeclaration, ProfilesDeclaration } from '@core/policy/needs';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { inferMlldMode } from '@core/utils/mode';
+import { isExeReturnControl } from '../exe-return';
+
+// Use a truly global import stack via globalThis to survive module reloading
+// This is necessary because child environments may have different import resolvers
+// and the module may be loaded multiple times in different bundles
+const GLOBAL_STACK_KEY = Symbol.for('mlld.globalImportStack');
+const globalImportStack: Set<string> =
+  (globalThis as any)[GLOBAL_STACK_KEY] ||
+  ((globalThis as any)[GLOBAL_STACK_KEY] = new Set<string>());
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -23,7 +37,7 @@ export interface ModuleProcessingResult {
   childEnvironment: Environment;
   guardDefinitions: SerializedGuardDefinition[];
   moduleNeeds?: NeedsDeclaration;
-  moduleWants?: WantsTier[];
+  moduleProfiles?: ProfilesDeclaration;
   policyContext?: Record<string, unknown> | null;
 }
 
@@ -47,8 +61,15 @@ export class ModuleContentProcessor {
     const { resolvedPath } = resolution;
     const isURL = resolution.type === 'url';
 
-    // Begin import tracking for security
+// Check for circular imports using global stack
+    if (globalImportStack.has(resolvedPath)) {
+      throw new Error(`Circular import detected: ${resolvedPath}`);
+    }
+
+    // Begin import tracking (both global and via security validator for URL tracking)
+    globalImportStack.add(resolvedPath);
     this.securityValidator.beginImport(resolvedPath);
+
     const snapshot = this.env.getSecuritySnapshot();
     const importDescriptor = mergeDescriptors(
       snapshot
@@ -69,8 +90,18 @@ export class ModuleContentProcessor {
           sources: [resolvedPath]
         })
       : undefined;
-    const combinedDescriptor = fileDescriptor
-      ? mergeDescriptors(importDescriptor, fileDescriptor)
+    const auditDescriptor = !isURL
+      ? await getAuditFileDescriptor(
+          this.env.getFileSystemService(),
+          this.env.getProjectRoot(),
+          resolvedPath
+        )
+      : undefined;
+    const fileDescriptorWithAudit = auditDescriptor
+      ? mergeDescriptors(fileDescriptor, auditDescriptor)
+      : fileDescriptor;
+    const combinedDescriptor = fileDescriptorWithAudit
+      ? mergeDescriptors(importDescriptor, fileDescriptorWithAudit)
       : importDescriptor;
     if (combinedDescriptor) {
       this.env.recordSecurityDescriptor(combinedDescriptor);
@@ -122,26 +153,30 @@ export class ModuleContentProcessor {
         resolvedPath,
         directive
       );
-
       // Check if this is a JSON file (special handling)
       if (resolvedPath.endsWith('.json')) {
-        return this.processJSONContent(parsed, directive, resolvedPath);
+        const result = await this.processJSONContent(parsed, directive, resolvedPath);
+        return result;
       }
 
       // Check if this is plain text content (not mlld)
       if (isPlainText) {
-        return this.processPlainTextContent(resolvedPath);
+        const result = await this.processPlainTextContent(resolvedPath);
+        return result;
       }
 
       // Handle raw template files (.att for @var, .mtt for mustache)
       if (!parsed && templateSyntax) {
-        return this.processRawTemplate(processedContent, templateSyntax, resolvedPath);
+        const result = await this.processRawTemplate(processedContent, templateSyntax, resolvedPath);
+        return result;
       }
 
-      // Process mlld content
-      return this.processMLLDContent(parsed, processedContent, resolvedPath, isURL);
+      // Process mlld content - IMPORTANT: await here so finally runs AFTER processing completes
+      const result = await this.processMLLDContent(parsed, processedContent, resolvedPath, isURL);
+      return result;
     } finally {
-      // End import tracking
+      // End import tracking (both global and security validator)
+      globalImportStack.delete(resolvedPath);
       this.securityValidator.endImport(resolvedPath);
     }
   }
@@ -156,7 +191,13 @@ export class ModuleContentProcessor {
     contentType?: 'module' | 'data' | 'text',
     labels?: readonly string[]
   ): Promise<ModuleProcessingResult> {
-    // Begin import tracking for security
+    // Check for circular imports using global stack
+    if (globalImportStack.has(ref)) {
+      throw new Error(`Circular import detected: ${ref}`);
+    }
+
+    // Begin import tracking (both global and security validator)
+    globalImportStack.add(ref);
     this.securityValidator.beginImport(ref);
     const snapshot = this.env.getSecuritySnapshot();
     const importDescriptor = mergeDescriptors(
@@ -179,8 +220,19 @@ export class ModuleContentProcessor {
             sources: [ref]
           })
         : undefined;
-    const combinedDescriptor = fileDescriptor
-      ? mergeDescriptors(importDescriptor, fileDescriptor)
+    const auditDescriptor =
+      ref && !this.isUrlLike(ref) && !ref.startsWith('@')
+        ? await getAuditFileDescriptor(
+            this.env.getFileSystemService(),
+            this.env.getProjectRoot(),
+            ref
+          )
+        : undefined;
+    const fileDescriptorWithAudit = auditDescriptor
+      ? mergeDescriptors(fileDescriptor, auditDescriptor)
+      : fileDescriptor;
+    const combinedDescriptor = fileDescriptorWithAudit
+      ? mergeDescriptors(importDescriptor, fileDescriptorWithAudit)
       : importDescriptor;
     if (combinedDescriptor) {
       this.env.recordSecurityDescriptor(combinedDescriptor);
@@ -212,12 +264,6 @@ export class ModuleContentProcessor {
         );
       }
 
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log(`[ModuleContentProcessor] Processing resolver content for: ${ref}`);
-        console.log(`[ModuleContentProcessor] Content length: ${content.length}`);
-        console.log(`[ModuleContentProcessor] Content preview: ${content.substring(0, 200)}`);
-      }
-
       // Cache the source content for error reporting
       this.env.cacheSource(ref, content);
 
@@ -235,32 +281,28 @@ export class ModuleContentProcessor {
 
       // Check if this is a JSON file (special handling)
       if (ref.endsWith('.json')) {
-        return this.processJSONContent(parsed, directive, ref);
+        const result = await this.processJSONContent(parsed, directive, ref);
+        return result;
       }
 
       // Check if this is plain text content (not mlld)
       if (isPlainText) {
-        return this.processPlainTextContent(ref);
+        const result = await this.processPlainTextContent(ref);
+        return result;
       }
 
       // Handle raw template files (.att for @var, .mtt for mustache)
       if (!parsed && templateSyntax) {
-        return this.processRawTemplate(processedContent, templateSyntax, ref);
+        const result = await this.processRawTemplate(processedContent, templateSyntax, ref);
+        return result;
       }
 
-      // Process mlld content
+      // Process mlld content - IMPORTANT: await here so finally runs AFTER processing completes
       const result = await this.processMLLDContent(parsed, processedContent, ref, false);
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log(`[ModuleContentProcessor] Module object keys: ${Object.keys(result.moduleObject).join(', ')}`);
-        console.log(`[ModuleContentProcessor] Has frontmatter: ${result.frontmatter !== null}`);
-        console.log(`[ModuleContentProcessor] Child env vars: ${result.childEnvironment.getCurrentVariables().size}`);
-        console.log(`[ModuleContentProcessor] Child env var names: ${Array.from(result.childEnvironment.getCurrentVariables().keys()).join(', ')}`);
-      }
-      
       return result;
     } finally {
-      // End import tracking
+      // End import tracking (both global and security validator)
+      globalImportStack.delete(ref);
       this.securityValidator.endImport(ref);
     }
   }
@@ -376,24 +418,27 @@ export class ModuleContentProcessor {
   ): Promise<Record<string, unknown>> {
     const ext = path.extname(filePath).toLowerCase();
     const fileContent = await this.env.readFile(filePath);
+    const { maskedContent, literalBlocks } = maskPlainMlldTemplateFences(fileContent);
     const { parseSync } = await import('@grammar/parser');
     const startRule = ext === '.mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
     let templateNodes: any[];
     try {
-      templateNodes = parseSync(fileContent, { startRule });
+      templateNodes = parseSync(maskedContent, { startRule });
     } catch (err: any) {
-      let normalized = fileContent;
+      let normalized = maskedContent;
       if (ext === '.mtt') {
         normalized = normalized.replace(/{{\s*([A-Za-z_][\w\.]*)\s*}}/g, '@$1');
       }
       templateNodes = this.buildTemplateAst(normalized);
     }
+    templateNodes = restorePlainMlldTemplateFences(templateNodes, literalBlocks);
 
     this.validateTemplateParameters(templateNodes, paramNames, displayPath);
 
     const execDef: TemplateExecutable = {
       type: 'template',
       template: templateNodes,
+      templateFileDirectory: path.dirname(filePath),
       paramNames,
       sourceDirective: 'exec'
     };
@@ -590,14 +635,44 @@ export class ModuleContentProcessor {
     const fsService = this.env.getFileSystemService();
     const hasIsVirtual = typeof fsService?.isVirtual === 'function';
     const isVirtualFS = hasIsVirtual ? fsService.isVirtual() : false;
+    const inferredMode = inferMlldMode(resolvedPath);
     const mode = isDynamicModule
       ? this.env.getDynamicModuleMode()
       : isVirtualFS
         ? 'markdown'
-        : inferMlldMode(resolvedPath);
+        : inferredMode;
 
     // Parse the imported mlld content with the inferred mode
-    const parseResult = await parse(processedContent, { mode });
+    let parseResult = await parse(processedContent, { mode });
+
+    // Virtual fixture files default to markdown parsing. Retry strict parsing for
+    // strict-mode modules when markdown parsing does not produce directives.
+    if (
+      mode === 'markdown' &&
+      inferredMode === 'strict' &&
+      isVirtualFS &&
+      parseResult.success &&
+      Array.isArray(parseResult.ast)
+    ) {
+      const markdownHasDirectives = parseResult.ast.some(node => {
+        const nodeType = typeof node === 'object' && node !== null ? (node as any).type : undefined;
+        return nodeType === 'Directive';
+      });
+
+      if (!markdownHasDirectives) {
+        const strictParseResult = await parse(processedContent, { mode: 'strict' });
+        const strictHasStructuredNodes =
+          strictParseResult.success &&
+          Array.isArray(strictParseResult.ast) &&
+          strictParseResult.ast.some(node => {
+            const nodeType = typeof node === 'object' && node !== null ? (node as any).type : undefined;
+            return nodeType !== 'Text' && nodeType !== 'Newline' && nodeType !== 'Comment';
+          });
+        if (strictHasStructuredNodes) {
+          parseResult = strictParseResult;
+        }
+      }
+    }
 
     // Check if parsing succeeded
     if (!parseResult.success) {
@@ -705,13 +780,6 @@ export class ModuleContentProcessor {
   ): Promise<ModuleProcessingResult> {
     const ast = parseResult.ast;
 
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log(`[processMLLDContent] Processing ${resolvedPath}:`, {
-        astLength: ast.length,
-        astTypes: ast.slice(0, 10).map((n: any) => `${n.type}${n.kind ? ':' + n.kind : ''}`)
-      });
-    }
-
     // Extract and validate frontmatter
     const frontmatterData = await this.extractAndValidateFrontmatter(ast, resolvedPath);
 
@@ -734,17 +802,10 @@ export class ModuleContentProcessor {
 
     // Evaluate AST in child environment
     const evalResult = await this.evaluateInChildEnvironment(ast, childEnv, resolvedPath);
+    const scriptReturnValue = isExeReturnControl(evalResult?.value) ? evalResult.value.value : undefined;
 
     // Process module exports
     const childVars = childEnv.getCurrentVariables();
-    
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log(`[processMLLDContent] After evaluation:`, {
-        childVarsSize: childVars.size,
-        childVarNames: Array.from(childVars.keys()),
-        evalResult: evalResult?.value ? 'has value' : 'no value'
-      });
-    }
     const exportManifest = childEnv.getExportManifest();
     const { moduleObject, frontmatter, guards } = this.variableImporter.processModuleExports(
       childVars,
@@ -753,6 +814,13 @@ export class ModuleContentProcessor {
       exportManifest,
       childEnv
     );
+
+    if (
+      isExeReturnControl(evalResult?.value) &&
+      !Object.prototype.hasOwnProperty.call(moduleObject, 'default')
+    ) {
+      moduleObject.default = scriptReturnValue;
+    }
 
     // Add __meta__ property with frontmatter if available
     if (frontmatter) {
@@ -765,7 +833,7 @@ export class ModuleContentProcessor {
       const hasSubstantive = this.hasSubstantiveContent(sourceContent);
       if (!hasSubstantive) {
         const moduleNeeds = childEnv.getModuleNeeds();
-        const moduleWants = childEnv.getModuleWants();
+        const moduleProfiles = childEnv.getModuleProfiles();
         const policyContext = childEnv.getPolicyContext() ?? null;
         return {
           moduleObject,
@@ -773,7 +841,7 @@ export class ModuleContentProcessor {
           childEnvironment: childEnv,
           guardDefinitions: guards,
           moduleNeeds,
-          moduleWants,
+          moduleProfiles,
           policyContext
         };
       }
@@ -797,7 +865,7 @@ export class ModuleContentProcessor {
     }
 
     const moduleNeeds = childEnv.getModuleNeeds();
-    const moduleWants = childEnv.getModuleWants();
+    const moduleProfiles = childEnv.getModuleProfiles();
     const policyContext = childEnv.getPolicyContext() ?? null;
 
     return {
@@ -806,7 +874,7 @@ export class ModuleContentProcessor {
       childEnvironment: childEnv,
       guardDefinitions: guards,
       moduleNeeds,
-      moduleWants,
+      moduleProfiles,
       policyContext
     };
   }
@@ -952,7 +1020,11 @@ export class ModuleContentProcessor {
     try {
       // Pass isExpression: true to prevent markdown content from being emitted as effects
       // Imports should only process directives and create variables, not emit document content
-      return await evaluate(ast, childEnv, { isExpression: true });
+      return await childEnv.withExecutionContext(
+        'exe',
+        { allowReturn: true, scope: 'script', hasFunctionBoundary: false },
+        async () => evaluate(ast, childEnv, { isExpression: true })
+      );
     } catch (error) {
       throw new Error(
         `Error evaluating imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`

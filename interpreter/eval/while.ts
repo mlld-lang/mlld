@@ -1,10 +1,10 @@
 import type { WhilePipelineStage } from '@core/types';
-import { isContinueLiteral, isDoneLiteral } from '@core/types/control';
 import type { Environment } from '../env/Environment';
 import { evaluate } from '../core/interpreter';
-import { wrapStructured, isStructuredValue, asData, type StructuredValue } from '../utils/structured-value';
+import { wrapStructured, isStructuredValue, type StructuredValue } from '../utils/structured-value';
 import { createStructuredValueVariable, type VariableSource } from '@core/types/variable';
-import { evaluateUnifiedExpression } from './expressions';
+import { resolveControlValue } from './control-flow';
+import { isExeReturnControl } from './exe-return';
 
 interface WhileContext {
   iteration: number;
@@ -53,69 +53,6 @@ async function setWhileInputVariable(env: Environment, value: unknown): Promise<
   env.setVariable('input', inputVar);
 }
 
-async function resolveControlValue(
-  result: any,
-  iterEnv: Environment,
-  currentState: StructuredValue
-): Promise<{ kind: 'done' | 'continue'; value: unknown }> {
-  const unwrapped = isStructuredValue(result) ? asData(result) : result;
-  const controlPayload =
-    unwrapped && typeof unwrapped === 'object' && '__whileControl' in (unwrapped as Record<string, unknown>)
-      ? (unwrapped as Record<string, unknown>)
-      : result && typeof result === 'object' && '__whileControl' in (result as Record<string, unknown>)
-        ? (result as Record<string, unknown>)
-        : null;
-
-  if (controlPayload) {
-    const controlKind = controlPayload.__whileControl === 'done' ? 'done' : 'continue';
-    const controlValue = 'value' in controlPayload ? (controlPayload as any).value : undefined;
-    return { kind: controlKind, value: controlValue ?? currentState };
-  }
-
-  if (unwrapped && typeof unwrapped === 'object' && 'valueType' in (unwrapped as Record<string, unknown>)) {
-    if (isDoneLiteral(unwrapped as any)) {
-      const val = (unwrapped as any).value;
-      if (Array.isArray(val)) {
-        const target = val.length === 1 ? val[0] : val;
-        if (target && typeof target === 'object' && 'type' in (target as Record<string, unknown>)) {
-          const evaluated = await evaluateUnifiedExpression(target as any, iterEnv);
-          return { kind: 'done', value: evaluated.value };
-        }
-        const evaluated = await evaluate(val as any, iterEnv, { isExpression: true });
-        return { kind: 'done', value: evaluated.value };
-      }
-      return { kind: 'done', value: val === 'done' ? currentState : val };
-    }
-    if (isContinueLiteral(unwrapped as any)) {
-      const val = (unwrapped as any).value;
-      if (Array.isArray(val)) {
-        const target = val.length === 1 ? val[0] : val;
-        if (target && typeof target === 'object' && 'type' in (target as Record<string, unknown>)) {
-          const evaluated = await evaluateUnifiedExpression(target as any, iterEnv);
-          return { kind: 'continue', value: evaluated.value };
-        }
-        const evaluated = await evaluate(val as any, iterEnv, { isExpression: true });
-        return { kind: 'continue', value: evaluated.value };
-      }
-      return { kind: 'continue', value: val === 'continue' ? currentState : val };
-    }
-    if ((unwrapped as any).valueType === 'retry') {
-      throw new Error("Use 'continue' instead of 'retry' in while processors");
-    }
-  }
-
-  if (unwrapped === 'retry') {
-    throw new Error("Use 'continue' instead of 'retry' in while processors");
-  }
-  if (unwrapped === 'done') {
-    return { kind: 'done', value: currentState };
-  }
-  if (unwrapped === 'continue') {
-    return { kind: 'continue', value: currentState };
-  }
-
-  return { kind: 'continue', value: isStructuredValue(result) ? result : unwrapped };
-}
 
 export async function evaluateWhileStage(
   stage: WhilePipelineStage,
@@ -154,7 +91,15 @@ export async function evaluateWhileStage(
         ? (evalResult as any).env || iterEnv
         : iterEnv;
 
-    const control = await resolveControlValue(value, resultEnv || iterEnv, state);
+    if (isExeReturnControl(value)) {
+      return value;
+    }
+
+    const control = await resolveControlValue(value, resultEnv || iterEnv, state, {
+      defaultBehavior: 'carry',
+      retryMessage: "Use 'continue' instead of 'retry' in while processors",
+      doneDefault: 'state'
+    });
 
     if (control.kind === 'done') {
       return control.value;

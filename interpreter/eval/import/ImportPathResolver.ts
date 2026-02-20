@@ -4,7 +4,7 @@ import type { Environment } from '../../env/Environment';
 import { interpolate } from '../../core/interpreter';
 
 export interface ImportResolution {
-  type: 'file' | 'url' | 'module' | 'resolver' | 'input';
+  type: 'file' | 'url' | 'module' | 'resolver' | 'input' | 'node';
   resolvedPath: string;
   expectedHash?: string;
   resolverName?: string;
@@ -13,6 +13,7 @@ export interface ImportResolution {
   importType?: ImportType;
   cacheDurationMs?: number;
   preferLocal?: boolean;
+  packageName?: string;
 }
 
 type ContentNodeArray = ContentNode[];
@@ -139,9 +140,12 @@ export class ImportPathResolver {
         };
       }
 
-      // Handle resolver imports with isSpecial flag
+      // Check if this is a special resolver (valueType: 'specialResolver')
+      const isSpecialResolver = varRef.valueType === 'specialResolver' || varRef.isSpecial;
+
+      // Handle resolver imports with isSpecial flag or specialResolver valueType
       // But only if there's no path following (e.g., @TIME alone, not @base/path)
-      if (varRef.isSpecial && varRef.identifier && pathNodes.length === 1) {
+      if (isSpecialResolver && varRef.identifier && pathNodes.length === 1) {
         const resolverManager = this.env.getResolverManager();
         if (resolverManager) {
           if (resolverManager.isResolverName(varRef.identifier)) {
@@ -166,7 +170,7 @@ export class ImportPathResolver {
       // (not resolver paths like @base or @local, which resolve to file system paths)
       // This supports Postel's Law - "be liberal in what you accept"
       const resolverManager = this.env.getResolverManager();
-      if (varRef.isSpecial && varRef.identifier) {
+      if (isSpecialResolver && varRef.identifier) {
         const potentialName = varRef.identifier;
 
         // If this is a known resolver (e.g., @base, @local), let it go through
@@ -259,6 +263,10 @@ export class ImportPathResolver {
       }
     }
 
+    if (directive.meta?.path?.isNodeImport) {
+      return this.handleNodeImport(importPath, directive, sectionName);
+    }
+
     // Check if this is a module reference (@prefix/ pattern)
     if (importPath.startsWith('@')) {
       return this.handleModuleReference(importPath, directive, sectionName);
@@ -276,6 +284,23 @@ export class ImportPathResolver {
 
     // Handle file path
     return this.handleFileImport(importPath, directive, sectionName);
+  }
+
+  /**
+   * Handle node package imports (node @pkg)
+   */
+  private async handleNodeImport(
+    importPath: string,
+    directive: DirectiveNode,
+    sectionName?: string
+  ): Promise<ImportResolution> {
+    const packageName = directive.meta?.path?.package || importPath;
+    return {
+      type: 'node',
+      resolvedPath: packageName,
+      packageName,
+      sectionName
+    };
   }
 
   /**

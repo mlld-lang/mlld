@@ -492,8 +492,8 @@ async function processTestCategory(categoryPath, validCategory, categoryType, st
   for (const dir of dirs) {
     const dirPath = path.join(categoryPath, dir);
     const dirEntries = await fs.readdir(dirPath);
-    const hasDirectMdFiles = dirEntries.some(f => f.startsWith('example') && f.endsWith('.md'));
-    
+    const hasDirectMdFiles = dirEntries.some(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
+
     if (hasDirectMdFiles) {
       // This is a test directory
       let testName;
@@ -559,6 +559,15 @@ async function processExampleDirectory(dirPath, category, name, directive = null
     // No config or invalid JSON; ignore
   }
 
+  // Read .description file if present (contains source info for doc-extracted tests)
+  const descriptionPath = path.join(dirPath, '.description');
+  let sourceInfo = null;
+  try {
+    sourceInfo = (await fs.readFile(descriptionPath, 'utf-8')).trim();
+  } catch (error) {
+    // No .description file; ignore
+  }
+
   // Check for skip files
   const skipFiles = files.filter(f => f === 'skip.md' || f.startsWith('skip-') && f.endsWith('.md'));
   if (skipFiles.length > 0) {
@@ -599,8 +608,11 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         // Examples don't have expected files - they're for demonstrating syntax
         expectedContent = null;
       } else {
-        // Look for expected.md
-        const expectedFile = file.replace('example', 'expected');
+        // Look for expected.md (expected files are always .md even when example is .mld)
+        let expectedFile = file.replace('example', 'expected');
+        if (!files.includes(expectedFile) && expectedFile.endsWith('.mld')) {
+          expectedFile = expectedFile.replace(/\.mld$/, '.md');
+        }
         if (files.includes(expectedFile)) {
           expectedContent = await fs.readFile(path.join(dirPath, expectedFile), 'utf-8');
         }
@@ -714,7 +726,8 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         ast: ast,
         parseError: parseError,
         ...(config?.env ? { environmentVariables: config.env } : {}),
-        ...(inferredMode ? { mlldMode: inferredMode } : {})
+        ...(inferredMode ? { mlldMode: inferredMode } : {}),
+        ...(sourceInfo ? { sourceInfo } : {})
       };
       
       // Write fixture only if content changed

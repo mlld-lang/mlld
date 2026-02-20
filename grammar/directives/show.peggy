@@ -27,115 +27,19 @@ ShowKeyword
 SlashShow
   // Error: Multiple arguments - must come FIRST to catch before successful parse
   = DirectiveContext ShowKeyword (HWS DataLabelList)? _ "@" id:BaseIdentifier fields:("." BaseIdentifier)* _ "@" {
-      helpers.mlldError("/show accepts only a single argument. To display multiple values, use a template: /show `@var1 @var2`", "single argument", location());
+      helpers.mlldError("show accepts only a single argument. To display multiple values, use a template: show `@var1 @var2`", "single argument", location());
     }
   // Error: Multiple quoted strings
   / DirectiveContext ShowKeyword (HWS DataLabelList)? _ (UnifiedDoubleQuote / UnifiedSingleQuote) _ ("\"" / "'" / "@") {
-      helpers.mlldError("/show accepts only a single argument. To display multiple values, use a template: /show `@var1 @var2`", "single argument", location());
+      helpers.mlldError("show accepts only a single argument. To display multiple values, use a template: show `@var1 @var2`", "single argument", location());
     }
-  // Command execution syntax: /show {echo "test"}
-  / DirectiveContext ShowKeyword labelsSegment:(HWS DataLabelList)? _ content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
-      // Command syntax for display: /show {command}
-      helpers.debug('SlashShow matched command for display', { content, tail });
-
-      const labelInfo = labelsSegment ? labelsSegment[1] : null;
-
-      const meta = {
-        ...content.meta,
-        executionMode: 'display',  // Key difference from /run
-        executionType: 'command',
-        isExecutionContent: true,
-      };
-      if (labelInfo) {
-        meta.securityLabels = labelInfo.labels;
-      }
-
-      // Apply unified pipeline processing
-      helpers.processPipelineEnding(content.values, content.raw, meta, ending);
-
-      // Add withClause from tail (either immediate tail or ending tail) if present
-      const withClause = tail || ending?.tail;
-      if (withClause) {
-        content.values.withClause = withClause;
-        content.raw.withClause = withClause;
-        meta.withClause = withClause;
-      }
-
-      if (labelInfo) {
-        content.values.securityLabels = labelInfo.labels;
-        content.raw.securityLabels = labelInfo.raw;
-      }
-
-      return helpers.createStructuredDirective(
-        DirectiveKind.show,
-        'showCommand',
-        content.values,
-        content.raw,
-        meta,
-        location(),
-        'command'
-      );
+  // Error: /show { ... } command execution is removed
+  / DirectiveContext ShowKeyword (HWS DataLabelList)? _ UnifiedCommandBrackets TailModifiers? StandardDirectiveEnding {
+      helpers.mlldError("show does not execute commands. Use run cmd { ... } (or run sh { ... }) instead.", "run", location());
     }
-  // Code execution syntax: /show js {console.log("test")}
-  / DirectiveContext ShowKeyword labelsSegment:(HWS DataLabelList)? _ lang:RunCodeLanguage _ content:UnifiedCodeBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
-      // Code syntax for display: /show language {code}
-      helpers.debug('SlashShow matched code for display', { lang, content });
-
-      const labelInfo = labelsSegment ? labelsSegment[1] : null;
-      
-      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
-      const codeNode = helpers.createNode(NodeType.Text, { content: content.content, location: location() });
-      
-      const values = {
-        lang: [langNode],
-        args: [],
-        code: [codeNode]
-      };
-      if (labelInfo) {
-        values.securityLabels = labelInfo.labels;
-      }
-      
-      const raw = {
-        lang: lang,
-        args: [],
-        code: content.content
-      };
-      if (labelInfo) {
-        raw.securityLabels = labelInfo.raw;
-      }
-      
-      const meta = {
-        isMultiLine: content.isMultiLine,
-        language: lang,
-        hasVariables: false,
-        executionMode: 'display',  // Key difference from /run
-        executionType: 'code',
-        isExecutionContent: true
-      };
-      if (labelInfo) {
-        meta.securityLabels = labelInfo.labels;
-      }
-      
-      // Apply unified pipeline processing
-      helpers.processPipelineEnding(values, raw, meta, ending);
-      
-      // Add withClause from tail (either immediate tail or ending tail) if present
-      const withClause = tail || ending?.tail;
-      if (withClause) {
-        values.withClause = withClause;
-        raw.withClause = withClause;
-        meta.withClause = withClause;
-      }
-      
-      return helpers.createStructuredDirective(
-        DirectiveKind.show,
-        'showCode',
-        values,
-        raw,
-        meta,
-        location(),
-        'code'
-      );
+  // Error: /show <lang> { ... } code execution is removed
+  / DirectiveContext ShowKeyword (HWS DataLabelList)? _ RunCodeLanguage _ UnifiedCodeBrackets TailModifiers? StandardDirectiveEnding {
+      helpers.mlldError("show does not execute code. Use run <lang> { ... } instead.", "run", location());
     }
   // REMOVED: Foreach section expression - superseded by file reference interpolation
   // Migration: Use /show <*.md # section> as "template" instead
@@ -791,7 +695,7 @@ SlashShow
       }
       return depth > 0;
     } {
-      helpers.mlldError("Unclosed double brackets in /show directive. Expected closing ']]' for path section expression.", "]]", location());
+      helpers.mlldError("Unclosed double brackets in show directive. Expected closing ']]' for path section expression.", "]]", location());
     }
     
   // Error: Unclosed alligator bracket <
@@ -805,7 +709,7 @@ SlashShow
       }
       return true;
     } {
-      helpers.mlldError("Unclosed alligator bracket in /show directive. Expected closing '>' for content loading.", ">", location());
+      helpers.mlldError("Unclosed alligator bracket in show directive. Expected closing '>' for content loading.", ">", location());
     }
     
     
@@ -814,7 +718,7 @@ SlashShow
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
-      helpers.mlldError("Invalid variable reference in /show directive. Variable names must start with a letter or underscore.", "identifier", location());
+      helpers.mlldError("Invalid variable reference in show directive. Variable names must start with a letter or underscore.", "identifier", location());
     }
     
   // Error: Unclosed backtick template
@@ -827,19 +731,19 @@ SlashShow
       }
       return true; // Unclosed at end of input
     } {
-      helpers.mlldError("Unclosed backtick template in /show directive. Expected closing backtick (`).", "`", location());
+      helpers.mlldError("Unclosed backtick template in show directive. Expected closing backtick (`).", "`", location());
     }
     
   // Error: Unclosed double-colon template
   / DirectiveContext ShowKeyword (HWS DataLabelList)? _ "::" &{
       return helpers.isUnclosedTemplate(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed double-colon template in /show directive. Expected closing '::' delimiter.", "::", location());
+      helpers.mlldError("Unclosed double-colon template in show directive. Expected closing '::' delimiter.", "::", location());
     }
     
   // Error: Missing content after /show
   / DirectiveContext ShowKeyword (HWS DataLabelList)? _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing content in /show directive. Expected template, variable, or path to show.", "@", location());
+      helpers.mlldError("Missing content in show directive. Expected template, variable, or path to show.", "@", location());
     }
     
   // Error: Invalid foreach syntax
@@ -848,12 +752,12 @@ SlashShow
       const rest = input.substring(peg$currPos).trim();
       return !rest.startsWith('@') && !rest.startsWith('<');
     } {
-      helpers.mlldError("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '<@array.field # section>' after 'foreach'.", "foreach", location());
+      helpers.mlldError("Invalid foreach syntax in show directive. Expected '@command(@arrays)' or '<@array.field # section>' after 'foreach'.", "foreach", location());
     }
 
-  // Error: Generic /show syntax error (catch-all)
+  // Error: Generic show syntax error (catch-all)
   / DirectiveContext ShowKeyword {
-      helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show <path>, or /show <path # section>", "`", location());
+      helpers.mlldError("Invalid show syntax. Expected: show `template`, show @variable, show <path>, or show <path # section>", "`", location());
     }
 
 // -------------------------------------------------------------

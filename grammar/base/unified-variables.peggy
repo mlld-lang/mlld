@@ -12,7 +12,7 @@ UnifiedVariable
 
 // Unified special variables - allow field access
 UnifiedSpecialVariable "Special reserved variable"
-  = "@" id:UnifiedSpecialVariableName fields:AnyFieldAccess* {
+  = "@" id:UnifiedSpecialVariableName fields:AnyFieldAccessOptional* {
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
         isSpecial: true,
@@ -37,7 +37,7 @@ UnifiedAtVar
         fields: id.fields
       }, location());
     }
-  / "@" VariableContext id:BaseIdentifier fields:AnyFieldAccess* {
+  / "@" VariableContext id:BaseIdentifier fields:AnyFieldAccessOptional* {
       const normalizedId = helpers.normalizePathVar(id);
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -48,7 +48,7 @@ UnifiedAtVar
     }
   // Special case for top-level @var[...] without VariableContext check
   // This ensures we capture the full expression when it appears at the start
-  / "@" id:BaseIdentifier &"[" fields:AnyFieldAccess+ {
+  / "@" id:BaseIdentifier &"[" fields:AnyFieldAccessOptional+ {
       const normalizedId = helpers.normalizePathVar(id);
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -66,7 +66,7 @@ UnifiedInterpolationVar
 
 // {{now}}, {{base}}, {{input}} - special variables in templates with field access
 UnifiedInterpolationSpecialVar
-  = "{{" _ id:UnifiedSpecialVariableName fields:AnyFieldAccess* format:UnifiedVarFormat? _ "}}" {
+  = "{{" _ id:UnifiedSpecialVariableName fields:AnyFieldAccessOptional* format:UnifiedVarFormat? _ "}}" {
       const node = helpers.createVariableReferenceNode('varInterpolation', {
         identifier: id,
         isSpecial: true,
@@ -90,7 +90,7 @@ UnifiedInterpolationSimpleVar
 
 // {{var.field}} or {{var[index]}} for data field/array access
 UnifiedInterpolationDataVar
-  = "{{" _ id:BaseIdentifier fields:AnyFieldAccess* format:UnifiedVarFormat? _ "}}" {
+  = "{{" _ id:BaseIdentifier fields:AnyFieldAccessOptional* format:UnifiedVarFormat? _ "}}" {
       const node = helpers.createVariableReferenceNode('varInterpolation', {
         identifier: id,
         fields: fields || [],
@@ -109,7 +109,7 @@ UnifiedVarFormat
 
 // Frontmatter access patterns (fm.field or frontmatter.field)
 UnifiedFrontmatterAccess
-  = ("frontmatter" / "fm") "." field:BaseIdentifier rest:AnyFieldAccess* {
+  = ("frontmatter" / "fm") "." field:BaseIdentifier rest:AnyFieldAccessOptional* {
       return {
         fields: [
           { type: 'dot', value: field },
@@ -120,7 +120,7 @@ UnifiedFrontmatterAccess
 
 // Unified variable reference with optional tail modifiers (for pipeline support)
 UnifiedVariableReferenceWithTail "variable reference with tail modifiers"
-  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* _ tail:TailModifiers? {
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccessOptional* _ tail:TailModifiers? {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -142,7 +142,7 @@ UnifiedVariableReferenceWithTail "variable reference with tail modifiers"
 
 // Unified variable reference without tail modifiers
 UnifiedVariableNoTail "variable reference without tail modifiers"
-  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* !TailModifiers {
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccessOptional* !TailModifiers {
       const normalizedId = helpers.normalizePathVar(id);
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -187,8 +187,9 @@ UnifiedTemplateVariableReference "variable reference in template context"
 // Variable boundary pattern - handles backslash escape for disambiguation
 // Single \ is consumed as boundary, double \\ produces literal \
 VariableBoundary "variable boundary"
-  = "\\\\" { return { type: 'literal', value: '\\' }; }  // Double backslash -> literal
-  / "\\" !"\\" { return { type: 'consumed' }; }           // Single backslash -> boundary only
+  = "\\@" { return { type: 'literal', value: '@' }; }      // Backslash-at -> literal @
+  / "\\\\" { return { type: 'literal', value: '\\' }; }    // Double backslash -> literal
+  / "\\" !("\\" / "@") { return { type: 'consumed' }; }    // Single backslash -> boundary only
 
 // Boundary-aware field access - checks for boundary BEFORE consuming field access
 // This allows @var\.ext to stop at the backslash instead of consuming .ext as field access

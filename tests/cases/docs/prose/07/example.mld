@@ -1,4 +1,0 @@
-import { @opus } from @mlld/prose
-
-exe @reviewAtt(code) = prose:@opus "./review.prose.att"
-exe @reviewMtt(code) = prose:@opus "./review.prose.mtt"

@@ -114,8 +114,6 @@ class ShellCommandEscapingStrategy implements EscapingStrategy {
 /**
  * Shell code escaping - preserves exact formatting for code blocks
  */
-// REMOVED: ShellCodeEscapingStrategy (revert)
-
 /**
  * Template escaping - values remain completely literal
  */

@@ -82,7 +82,7 @@ The test module provides these assertion functions that return booleans:
 
 ### Testing Functions
 
-Test `/exe` functions by calling them:
+Test `exe` functions by calling them:
 
 ```mlld
 exe @greet(name) = `Hello, @name!`
@@ -122,7 +122,7 @@ var @test_readme_has_content = @readme.length() > 0
 
 ### Testing Conditionals
 
-Test `/when` logic by checking outcomes:
+Test `when` logic by checking outcomes:
 
 ```mlld
 var @user = {"role": "admin", "active": true}
@@ -139,7 +139,7 @@ var @test_admin_access = @result == "admin-access"
 
 ### Testing Loops and Iteration
 
-Test `/for` loops and `foreach`:
+Test `for` loops and `foreach`:
 
 ```mlld
 var @numbers = [1, 2, 3, 4, 5]

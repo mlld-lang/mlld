@@ -27,8 +27,8 @@ export interface ProjectPathResolverConfig {
 }
 
 /**
- * Base Path Resolver - handles @base/ and @root/ references
- * Maps @base/@root to the project root directory
+ * Base Path Resolver - handles @base/ and @root/ references.
+ * Maps @base/@root to the project root directory.
  */
 export class ProjectPathResolver implements Resolver {
   name = 'base';
@@ -72,8 +72,8 @@ export class ProjectPathResolver implements Resolver {
       throw new MlldResolutionError(
         'ProjectPathResolver: Unable to determine project root. ' +
         'This usually means the resolver registry was not properly configured. ' +
-        'Check that @base prefix is mapped to base resolver with basePath.',
-        { reference: ref, availableConfig: Object.keys(config || {}) }
+        'Check that @base/@root prefixes are mapped to the base resolver with basePath.',
+        { code: 'E_NO_PROJECT_ROOT' }
       );
     }
 
@@ -130,7 +130,7 @@ export class ProjectPathResolver implements Resolver {
         };
       }
 
-      // Resolve full path relative to project root
+      // Resolve full path relative to configured base path
       const fullPath = path.resolve(basePath, relativePath);
 
       // Security check: ensure the resolved path is within the project
@@ -139,7 +139,7 @@ export class ProjectPathResolver implements Resolver {
       if (!normalizedFullPath.startsWith(normalizedBasePath)) {
         throw new MlldResolutionError(
           `Path outside project directory: ${relativePath}`,
-          {}
+          { code: 'E_PATH_TRAVERSAL' }
         );
       }
 
@@ -205,7 +205,7 @@ export class ProjectPathResolver implements Resolver {
       if (result.contentType !== 'module') {
         throw new MlldResolutionError(
           `Import target is not a module: ${ref}`,
-          {}
+          { code: 'E_NOT_MODULE' }
         );
       }
       
@@ -214,7 +214,7 @@ export class ProjectPathResolver implements Resolver {
 
     throw new MlldResolutionError(
       `base resolver does not support context: ${config.context}`,
-      {}
+      { code: 'E_INVALID_CONTEXT' }
     );
   }
 

@@ -1,0 +1,20 @@
+>> Debug utilities for polish pipeline
+>> Default: show Claude call progress
+>> Use --silent or MLLD_SILENT=true to suppress
+
+var @debugMode = @env.MLLD_SILENT ? false : true
+
+>> Passthrough function that logs input when debug mode is on
+>> Usage: @claudePoll(@prompt) | @debuglog("Enriching @ticket.id")
+exe @debuglog(input, title) = [
+  when @debugMode => @input | log `=== @title ===
+@input
+========`
+  => @input
+]
+
+>> Shorter version for inline use
+exe @dbg(input, label) = [
+  when @debugMode => show `[@label] @input`
+  => @input
+]

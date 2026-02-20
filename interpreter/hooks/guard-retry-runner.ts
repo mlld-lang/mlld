@@ -3,10 +3,10 @@ import { GuardRetrySignal, isGuardRetrySignal } from '@core/errors/GuardRetrySig
 import type { GuardHint, GuardResult } from '@core/types/guard';
 import type { GuardContextSnapshot, OperationContext } from '../env/ContextManager';
 import type { Environment } from '../env/Environment';
-import { appendFileSync } from 'fs';
+import { BufferedEffectHandler, type EffectHandler } from '../env/EffectHandler';
 
 const DEFAULT_GUARD_MAX = 3;
-const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
+const GUARD_WARNING_PREFIX = '[Guard Warning]';
 
 interface GuardRetryAttempt {
   attempt: number;
@@ -40,15 +40,18 @@ interface GuardRetryOptions<T> {
   sourceRetryable?: boolean;
 }
 
-function logAfterRetryDebug(label: string, payload: Record<string, unknown>): void {
-  if (!afterRetryDebugEnabled) {
-    return;
+function shouldBufferEffects(env: Environment, operationContext?: OperationContext): boolean {
+  if (env.shouldSuppressGuards()) {
+    return false;
   }
-  try {
-    console.error(`[after-guard-retry] ${label}`, payload);
-  } catch {
-    // ignore debug logging failures
+  const guards = env.getGuardRegistry().getAllGuards();
+  const hasAfterGuard = guards.some(def => def.timing === 'after' || def.timing === 'always');
+  if (!hasAfterGuard) {
+    return false;
   }
+  const streaming =
+    Boolean(operationContext?.metadata && (operationContext.metadata as Record<string, unknown>).streaming);
+  return !streaming;
 }
 
 function extractGuardRetryDetails(error: unknown): GuardRetryErrorDetails {
@@ -70,6 +73,22 @@ function extractGuardRetryDetails(error: unknown): GuardRetryErrorDetails {
   };
 }
 
+function replayBufferedGuardWarnings(
+  bufferHandler: BufferedEffectHandler,
+  originalHandler: EffectHandler
+): void {
+  const bufferedEffects = bufferHandler.getEffects();
+  for (const effect of bufferedEffects) {
+    if (effect.type !== 'stderr') {
+      continue;
+    }
+    if (!effect.content.includes(GUARD_WARNING_PREFIX)) {
+      continue;
+    }
+    originalHandler.handleEffect(effect);
+  }
+}
+
 export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promise<T> {
   const state: GuardRetryState = {
     attempt: 1,
@@ -88,39 +107,32 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
       hintHistory: state.hintHistory.slice()
     };
 
+    const bufferEffects = shouldBufferEffects(options.env, options.operationContext);
+    const originalHandler = bufferEffects ? options.env.getEffectHandler() : null;
+    const bufferHandler =
+      bufferEffects && originalHandler ? new BufferedEffectHandler(originalHandler) : null;
+    if (bufferHandler && originalHandler) {
+      options.env.setEffectHandler(bufferHandler);
+    }
+
     try {
-      return await options.env
+      const result = await options.env
         .getContextManager()
         .withGenericContext('guardRetry', guardRetryContext, options.execute);
+      if (bufferHandler && originalHandler) {
+        options.env.setEffectHandler(originalHandler);
+        bufferHandler.flush();
+      }
+      return result;
     } catch (error) {
       const isRetrySignal =
         (error instanceof GuardError && error.decision === 'retry') || isGuardRetrySignal(error);
-      const debugPayload = {
-        attempt: state.attempt,
-        isRetrySignal,
-        sourceRetryable: options.sourceRetryable ?? null,
-        pipeline: Boolean(options.env.getPipelineContext())
-      };
-      logAfterRetryDebug('guard retry caught', debugPayload);
-      try {
-        appendFileSync(
-          '/tmp/mlld_guard_retry.log',
-          JSON.stringify(
-            {
-              event: 'caught',
-              ...debugPayload,
-              hint:
-                (error as any)?.retryHint ??
-                extractGuardRetryDetails(error).hints?.[0]?.hint ??
-                (error as GuardError).reason ??
-                null
-            },
-            null,
-            2
-          ) + '\n'
-        );
-      } catch {
-        // ignore file debug failures
+      if (bufferHandler && originalHandler) {
+        options.env.setEffectHandler(originalHandler);
+        if (!isRetrySignal) {
+          replayBufferedGuardWarnings(bufferHandler, originalHandler);
+        }
+        bufferHandler.discard();
       }
       if (!isRetrySignal) {
         throw error;
@@ -128,23 +140,6 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
 
       // Allow pipeline executor to handle retries inside pipelines
       if (options.env.getPipelineContext()) {
-        const rethrowPayload = {
-          attempt: state.attempt,
-          hint:
-            (error as GuardError).retryHint ??
-            (error as any)?.retryHint ??
-            extractGuardRetryDetails(error).hints?.[0]?.hint ??
-            null
-        };
-        logAfterRetryDebug('rethrow to pipeline executor', rethrowPayload);
-        try {
-          appendFileSync(
-            '/tmp/mlld_guard_retry.log',
-            JSON.stringify({ event: 'rethrow', ...rethrowPayload }, null, 2) + '\n'
-          );
-        } catch {
-          // ignore file debug failures
-        }
         throw error;
       }
 
@@ -163,21 +158,6 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
       state.attempt += 1;
 
       if (!options.sourceRetryable) {
-        const denyPayload = {
-          attempt: state.attempt - 1,
-          hint,
-          sourceRetryable: options.sourceRetryable ?? null,
-          guardName: details.guardName ?? guardContext?.name ?? null
-        };
-        logAfterRetryDebug('guard retry denied (non-retryable source)', denyPayload);
-        try {
-          appendFileSync(
-            '/tmp/mlld_guard_retry.log',
-            JSON.stringify({ event: 'deny-non-retryable', ...denyPayload }, null, 2) + '\n'
-          );
-        } catch {
-          // ignore file debug failures
-        }
         throw new GuardError({
           decision: 'deny',
           guardName: details.guardName ?? guardContext?.name ?? null,
@@ -195,12 +175,6 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
       }
 
       if (state.attempt > state.max) {
-        logAfterRetryDebug('guard retry budget exceeded', {
-          attempt: state.attempt - 1,
-          max: state.max,
-          hint,
-          guardName: details.guardName ?? guardContext?.name ?? null
-        });
         throw new GuardError({
           decision: 'deny',
           guardName: details.guardName ?? guardContext?.name ?? null,

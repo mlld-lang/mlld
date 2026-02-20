@@ -1,0 +1,6 @@
+/needs { cmd: [claude] }
+
+/import { @spawn } from "./env-module/index.mld"
+
+/var @result = @spawn("What is 2 + 2?")
+/show @result

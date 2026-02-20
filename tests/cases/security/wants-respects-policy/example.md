@@ -1,0 +1,11 @@
+# Profiles respects policy deny
+
+/var @denyShell = { deny: { sh: true } }
+/policy @p = union(@denyShell)
+
+/profiles {
+  full: { requires: { sh } },
+  readonly: { requires: { } }
+}
+
+/show @mx.profile

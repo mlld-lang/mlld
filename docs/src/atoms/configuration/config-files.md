@@ -13,3 +13,15 @@ updated: 2026-01-05
 mlld uses dual configuration:
 - `mlld-config.json` - Your project settings (edit manually)
 - `mlld-lock.json` - Auto-generated locks (don't edit)
+
+`mlld validate` warning suppression lives in `mlld-config.json`:
+
+```json
+{
+  "validate": {
+    "suppressWarnings": ["exe-parameter-shadowing"]
+  }
+}
+```
+
+Use suppression when a warning is intentional and reviewed.

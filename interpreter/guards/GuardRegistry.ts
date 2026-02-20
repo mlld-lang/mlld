@@ -7,6 +7,28 @@ import type {
 } from '@core/types/guard';
 import type { SourceLocation } from '@core/types';
 
+export type PolicyConditionResult =
+  | { decision: 'allow' }
+  | { decision: 'deny'; reason: string; policyName?: string; rule?: string; suggestions?: string[] };
+
+export type PolicyConditionContext = {
+  operation: {
+    type?: string;
+    subtype?: string;
+    command?: string;
+    metadata?: Record<string, unknown>;
+    opLabels?: readonly string[];
+    labels?: readonly string[];
+  };
+  input?: {
+    labels?: readonly string[];
+    taint?: readonly string[];
+    sources?: readonly string[];
+  };
+};
+
+export type PolicyConditionFn = (context: PolicyConditionContext) => PolicyConditionResult;
+
 export interface GuardDefinition {
   id: string;
   name?: string;
@@ -18,6 +40,8 @@ export interface GuardDefinition {
   location?: SourceLocation | null;
   registrationOrder: number;
   timing: GuardTiming;
+  privileged?: boolean;
+  policyCondition?: PolicyConditionFn;
 }
 
 export interface SerializedGuardDefinition {
@@ -30,6 +54,7 @@ export interface SerializedGuardDefinition {
   location?: SourceLocation | null;
   registrationOrder?: number;
   timing?: GuardTiming;
+  privileged?: boolean;
 }
 
 export class GuardRegistry {
@@ -98,7 +123,8 @@ export class GuardRegistry {
       block,
       location: location ?? node.location,
       registrationOrder,
-      timing
+      timing,
+      privileged: node.meta?.privileged === true
     };
 
     this.registerDefinition(definition);
@@ -151,7 +177,8 @@ export class GuardRegistry {
         block: def.block,
         location: def.location,
         registrationOrder: def.registrationOrder ?? registrationOrder,
-        timing: def.timing ?? 'before'
+        timing: def.timing ?? 'before',
+        privileged: def.privileged
       };
       this.registerDefinition(copy);
       if (guardName) {
@@ -186,6 +213,28 @@ export class GuardRegistry {
     return results;
   }
 
+  registerPolicyGuard(def: Omit<GuardDefinition, 'id' | 'registrationOrder'>): GuardDefinition {
+    const guardName = def.name;
+    if (guardName && this.guardNames.has(guardName)) {
+      const existing = this.getByName(guardName);
+      if (existing) return existing;
+    }
+    const registrationOrder = this.allocateRegistrationOrder();
+    const guardId = guardName ?? `<policy-guard-${registrationOrder}>`;
+
+    const definition: GuardDefinition = {
+      ...def,
+      id: guardId,
+      registrationOrder
+    };
+
+    this.registerDefinition(definition);
+    if (guardName) {
+      this.guardNames.add(guardName);
+    }
+    return definition;
+  }
+
   private serializeDefinition(def: GuardDefinition): SerializedGuardDefinition {
     return {
       name: def.name,
@@ -196,7 +245,8 @@ export class GuardRegistry {
       block: def.block,
       location: def.location,
       registrationOrder: def.registrationOrder,
-      timing: def.timing
+      timing: def.timing,
+      privileged: def.privileged
     };
   }
 

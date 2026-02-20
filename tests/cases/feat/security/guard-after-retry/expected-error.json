@@ -2,9 +2,7 @@
   "name": "GuardError",
   "guardName": "@retryOutput",
   "filter": "operation:exe",
-  "reason": "Guard retry not implemented for after guards",
+  "reason": "Cannot retry: Retry output check",
   "operation": "exe",
-  "decision": "retry",
-  "timing": "after",
-  "outputPreview": "needs-retry"
+  "decision": "deny"
 }

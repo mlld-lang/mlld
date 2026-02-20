@@ -2,6 +2,7 @@
 node_modules/
 .pnp
 .pnp.js
+core/version.ts
 
 # Testing
 coverage/
@@ -43,6 +44,9 @@ tests/fixtures/**/*.generated-fixture.json
 tests/fixtures/**/index.ts
 tests/cases/EXAMPLES.md
 
+# Doc test cases (generated from docs/src/ and docs/user/)
+tests/cases/docs/
+
 # Logs
 logs/
 *.log
@@ -56,6 +60,14 @@ pids
 *.seed
 *.pid.lock
 
+# sig runtime artifacts
+.sig/content/
+.sig/audit.jsonl
+# sig committable artifacts
+!.sig/sigs/
+!.sig/chains/
+!.sig/config.json
+
 # IDE
 .idea/
 .vscode/
@@ -66,9 +78,6 @@ pids
 .env.development.local
 .env.test.local
 .env.production.local
-
-# Mistakenly created directories
-Support/ 
 
 # Documentation in root (only for main branch)
 # Note: In dev branches, we want to include all documentation files
@@ -110,6 +119,7 @@ d.ts.map
 .env
 **/.claude/settings.local.json
 .claude
+.tickets
 
 # Peggy debug output
 debug-combined-grammar.peggy
@@ -143,18 +153,23 @@ parseperf-results.json
 todo
 scripts/mlld
 
-# Beads
-.beads/bd.sock.startlock
-
 tmp
 
 .mm
 
 # Local checkout of modules repo (not a submodule)
-modules/
+/modules/
 
 __pycache__/
 
-
+.mlld
 .fray
-.beads
+
+# QA testing output
+core/version.ts
+/qa
+
+j2bd/security/runs/*
+
+# LLM orchestrator output
+llm/output/

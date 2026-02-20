@@ -20,11 +20,13 @@ if (isMainModule) {
     try {
       await main(args);
       if (!hasWatchFlag) {
-        // Avoid hanging processes caused by formatter dependencies; skip in watch mode
+        // Allow output to flush before exit; skip in watch mode
+        await new Promise(resolve => setTimeout(resolve, 10));
         process.exit(0);
       }
     } catch (error) {
       console.error(error);
+      await new Promise(resolve => setTimeout(resolve, 10));
       process.exit(1);
     }
   })();

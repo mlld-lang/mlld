@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QA Self-Review",
+  "description": "Phase 2 output: reclassification of Phase 1 findings",
+  "type": "object",
+  "required": ["experiment", "topic", "reviewed", "issues_reviewed"],
+  "properties": {
+    "experiment": { "type": "string" },
+    "topic": { "type": "string" },
+    "original_status": { "type": "string", "enum": ["fail", "partial"] },
+    "reviewed": { "type": "boolean" },
+    "issues_reviewed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["original_issue", "revised_verdict", "revised_severity"],
+        "properties": {
+          "original_issue": { "type": "string" },
+          "what_i_thought": { "type": "string" },
+          "what_i_found": { "type": "string" },
+          "evidence": { "type": "string" },
+          "chestertons_fence": {
+            "type": "object",
+            "properties": {
+              "considered": { "type": "boolean" },
+              "why_might_this_be_intentional": { "type": "string" },
+              "design_question": { "type": "string" }
+            }
+          },
+          "doc_clarity": {
+            "type": "object",
+            "properties": {
+              "issue": { "type": "string", "enum": ["qa-insufficient-exploration", "docs-could-be-clearer", "docs-genuinely-misleading", "needs-human-design", "genuine-bug"] },
+              "explanation": { "type": "string" },
+              "suggestion": { "type": "string" },
+              "affected_doc": { "type": "string" }
+            }
+          },
+          "revised_verdict": { "type": "string", "enum": ["not-a-bug", "doc-improvement-needed", "needs-human-design", "genuine-bug"] },
+          "revised_severity": { "type": "string", "enum": ["none", "minor", "major", "blocker"] }
+        }
+      }
+    },
+    "learnings": { "type": "string" },
+    "doc_improvements": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

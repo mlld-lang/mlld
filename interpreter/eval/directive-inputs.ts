@@ -7,12 +7,15 @@ import {
   type SecurityDescriptor
 } from '@core/types/variable';
 import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
-import { interpolate } from '../core/interpreter';
+import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { getTextContent } from '../utils/type-guard-helpers';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { replayInlineExecInvocations } from './directive-replay';
+import { coerceValueForStdin } from '../utils/shell-value';
+import { extractSecurityDescriptor } from '../utils/structured-value';
+import { isVariable, resolveValue, ResolutionContext } from '../utils/variable-resolution';
 
 type AstValue = Record<string, unknown> & { type?: string };
 
@@ -34,6 +37,9 @@ export async function extractDirectiveInputs(
       return extractOutputInputs(directive, env);
     case 'run':
       return extractRunInputs(directive, env);
+    case 'sign':
+    case 'verify':
+      return extractIdentifierInputs(directive, env);
 
     default:
       return [];
@@ -70,7 +76,8 @@ async function extractShowInputs(
   const inputs: Variable[] = [];
   const varName = resolveShowVariableName(directive);
   if (!varName) {
-    return inputs;
+    const inlineVars = collectVariablesFromNodes([directive.values as any], env);
+    return inlineVars.length > 0 ? materializeGuardInputs(inlineVars) : inputs;
   }
   const variable = env.getVariable(varName);
   if (variable) {
@@ -129,6 +136,27 @@ function resolveShowVariableName(directive: DirectiveNode): string | undefined {
   return undefined;
 }
 
+async function extractIdentifierInputs(
+  directive: DirectiveNode,
+  env: Environment
+): Promise<readonly Variable[]> {
+  const identifierNode = Array.isArray(directive.values?.identifier)
+    ? directive.values?.identifier?.[0]
+    : (directive.values as any)?.identifier;
+  if (!identifierNode) {
+    return [];
+  }
+  const name = getTextContent(identifierNode) || (identifierNode as any).identifier;
+  if (!name) {
+    return [];
+  }
+  const variable = env.getVariable(name);
+  if (!variable) {
+    return [];
+  }
+  return materializeGuardInputs([variable]);
+}
+
 async function extractOutputInputs(
   directive: DirectiveNode,
   env: Environment
@@ -160,7 +188,8 @@ async function extractOutputInputs(
 
   const varName = resolveOutputVariableName(sourceNode);
   if (!varName) {
-    return [];
+    const inlineVars = collectVariablesFromNodes([sourceNode], env);
+    return inlineVars.length > 0 ? materializeGuardInputs(inlineVars) : [];
   }
 
   const variable = env.getVariable(varName);
@@ -253,7 +282,18 @@ async function extractRunInputs(
     if (mergedDescriptor) {
       env.recordSecurityDescriptor(mergedDescriptor);
     }
-    return [variable];
+    const inputs: Variable[] = [variable];
+    const stdinVariable = await extractRunStdinVariable(directive, env);
+    if (stdinVariable) {
+      inputs.push(stdinVariable);
+    }
+    return inputs;
+  }
+
+  if (directive.subtype === 'runCode') {
+    const args = Array.isArray(directive.values?.args) ? directive.values?.args : [];
+    const argVariables = collectVariablesFromNodes(args, env);
+    return materializeGuardInputs(argVariables);
   }
 
   if (
@@ -277,7 +317,10 @@ async function extractRunInputs(
       return [];
     }
     const execVar = env.getVariable(execName);
-    return execVar ? materializeGuardInputs([execVar]) : [];
+    const args = Array.isArray(directive.values?.args) ? directive.values?.args : [];
+    const argVariables = collectVariablesFromNodes(args, env);
+    const inputs = execVar ? [execVar, ...argVariables] : argVariables;
+    return materializeGuardInputs(inputs);
   }
 
   return [];
@@ -305,6 +348,42 @@ function resolveRunExecName(directive: DirectiveNode): string | undefined {
   return undefined;
 }
 
+async function extractRunStdinVariable(
+  directive: DirectiveNode,
+  env: Environment
+): Promise<Variable | null> {
+  const withClause = (directive.meta?.withClause || directive.values?.withClause) as {
+    stdin?: unknown;
+  } | undefined;
+  if (!withClause || !('stdin' in withClause)) {
+    return null;
+  }
+  const result = await evaluate(withClause.stdin as any, env, { isExpression: true });
+  let value = result.value;
+  const descriptor = extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  if (isVariable(value)) {
+    value = await resolveValue(value, env, ResolutionContext.CommandExecution);
+  }
+  const stdinText = coerceValueForStdin(value);
+  const source: VariableSource = {
+    directive: 'run',
+    syntax: 'stdin',
+    hasInterpolation: true,
+    isMultiLine: typeof stdinText === 'string' && stdinText.includes('\n')
+  };
+  const stdinVar = createSimpleTextVariable('__run_stdin__', stdinText, source, {
+    mx: descriptor || {},
+    internal: { isSystem: true }
+  });
+  if (descriptor) {
+    env.recordSecurityDescriptor(descriptor);
+  }
+  return stdinVar;
+}
+
 function extractExecInvocationArgs(invocation: ExecInvocation, env: Environment): Variable[] {
   const args = invocation.commandRef?.args ?? [];
   return collectVariablesFromNodes(args, env);
@@ -317,6 +396,15 @@ function collectVariablesFromNodes(nodes: readonly unknown[], env: Environment):
     visitNodeForVariables(node as AstValue, env, bucket, seen);
   }
   return Array.from(bucket.values());
+}
+
+export function collectVariableIdentifiersFromNodes(nodes: readonly unknown[]): string[] {
+  const seen = new Set<string>();
+  const visited = new WeakSet<object>();
+  for (const node of nodes) {
+    visitNodeForIdentifiers(node as AstValue, seen, visited);
+  }
+  return Array.from(seen);
 }
 
 function findExecInvocation(candidate: unknown): ExecInvocation | undefined {
@@ -345,6 +433,62 @@ function findExecInvocation(candidate: unknown): ExecInvocation | undefined {
     }
   }
   return undefined;
+}
+
+function visitNodeForIdentifiers(
+  node: AstValue | undefined,
+  bucket: Set<string>,
+  seen: WeakSet<object>
+): void {
+  if (!node || typeof node !== 'object') {
+    return;
+  }
+  if (seen.has(node)) {
+    return;
+  }
+  seen.add(node);
+
+  switch (node.type) {
+    case 'VariableReference':
+      addIdentifier(node.identifier, bucket);
+      break;
+    case 'VariableReferenceWithTail':
+      visitNodeForIdentifiers(node.variable as AstValue, bucket, seen);
+      break;
+    case 'TemplateVariable':
+      addIdentifier(node.identifier, bucket);
+      break;
+    case 'ExecInvocation': {
+      const commandRef = (node as { commandRef?: AstValue & { args?: unknown[]; objectReference?: AstValue } }).commandRef;
+      if (commandRef?.objectReference) {
+        visitNodeForIdentifiers(commandRef.objectReference as AstValue, bucket, seen);
+      }
+      const execArgs = commandRef?.args ?? [];
+      for (const arg of execArgs) {
+        visitNodeForIdentifiers(arg as AstValue, bucket, seen);
+      }
+      break;
+    }
+  }
+
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        visitNodeForIdentifiers(entry as AstValue, bucket, seen);
+      }
+      continue;
+    }
+    if (value && typeof value === 'object') {
+      visitNodeForIdentifiers(value as AstValue, bucket, seen);
+    }
+  }
+}
+
+function addIdentifier(identifier: unknown, bucket: Set<string>): void {
+  if (typeof identifier !== 'string' || bucket.has(identifier)) {
+    return;
+  }
+  bucket.add(identifier);
 }
 
 function visitNodeForVariables(

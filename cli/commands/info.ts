@@ -89,7 +89,7 @@ function highlightMlld(code: string): string {
   let result = code;
 
   // Directives at start of line (with or without leading slash)
-  result = result.replace(/^(\/?(?:var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy))\b/gm,
+  result = result.replace(/^(\/?(?:var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy|sign|verify))\b/gm,
     chalk.magenta('$1'));
 
   // Keywords
@@ -128,13 +128,76 @@ function highlightMlld(code: string): string {
   return result;
 }
 
+// Render markdown table as ASCII
+function renderTable(tableLines: string[]): string[] {
+  // Parse table rows
+  const rows: string[][] = [];
+  let separatorIndex = -1;
+
+  for (let i = 0; i < tableLines.length; i++) {
+    const line = tableLines[i].trim();
+    if (!line.startsWith('|')) continue;
+
+    // Check for separator row (|---|---|...)
+    if (line.match(/^\|[-:\s|]+\|$/)) {
+      separatorIndex = i;
+      continue;
+    }
+
+    // Parse cells
+    const cells = line.split('|').slice(1, -1).map(c => c.trim());
+    if (cells.length > 0) {
+      rows.push(cells);
+    }
+  }
+
+  if (rows.length === 0) return tableLines;
+
+  // Calculate column widths
+  const colWidths: number[] = [];
+  for (const row of rows) {
+    for (let i = 0; i < row.length; i++) {
+      const cellLen = row[i].replace(/`([^`]+)`/g, '$1').length; // Don't count backticks
+      colWidths[i] = Math.max(colWidths[i] || 0, cellLen);
+    }
+  }
+
+  // Render ASCII table
+  const result: string[] = [];
+  const borderLine = '+-' + colWidths.map(w => '-'.repeat(w)).join('-+-') + '-+';
+
+  result.push(borderLine);
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const cells = row.map((cell, j) => {
+      const plainLen = cell.replace(/`([^`]+)`/g, '$1').length;
+      const padding = colWidths[j] - plainLen;
+      // Apply inline code formatting
+      const formatted = cell.replace(/`([^`]+)`/g, (_, code) => chalk.yellow(code));
+      return formatted + ' '.repeat(padding);
+    });
+    result.push('| ' + cells.join(' | ') + ' |');
+
+    // Add separator after header row
+    if (i === 0) {
+      result.push(borderLine);
+    }
+  }
+
+  result.push(borderLine);
+  return result;
+}
+
 // Highlight markdown with mlld code blocks and topic tree
 function highlightMarkdown(text: string): string {
   const lines = text.split('\n');
   const result: string[] = [];
   let inMlldBlock = false;
   let inCodeBlock = false;
+  let inTable = false;
   let mlldContent: string[] = [];
+  let tableLines: string[] = [];
 
   for (const line of lines) {
     // Check for mlld code block start
@@ -163,6 +226,30 @@ function highlightMarkdown(text: string): string {
       inMlldBlock = false;
       inCodeBlock = false;
       continue;
+    }
+
+    // Check for table start
+    if (!inMlldBlock && !inCodeBlock && !inTable && line.match(/^\|/)) {
+      inTable = true;
+      tableLines = [line];
+      continue;
+    }
+
+    // Accumulate table lines or end table
+    if (inTable) {
+      if (line.match(/^\|/) || line.match(/^\s*$/)) {
+        if (line.match(/^\|/)) {
+          tableLines.push(line);
+        }
+        // Check if next line continues the table
+        continue;
+      } else {
+        // End of table - render it
+        result.push(...renderTable(tableLines));
+        tableLines = [];
+        inTable = false;
+        // Fall through to process current line normally
+      }
     }
 
     if (inMlldBlock) {
@@ -227,6 +314,11 @@ function highlightMarkdown(text: string): string {
   // Handle unclosed code block
   if (mlldContent.length > 0) {
     result.push(highlightMlld(mlldContent.join('\n')));
+  }
+
+  // Handle unclosed table
+  if (tableLines.length > 0) {
+    result.push(...renderTable(tableLines));
   }
 
   return result.join('\n');

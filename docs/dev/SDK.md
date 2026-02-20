@@ -1,259 +1,110 @@
 ---
-updated: 2025-01-27
-tags: #arch, #sdk
-related-docs: docs/dev/STREAMING.md, docs/dev/EFFECTS.md, docs/dev/DYNAMIC-MODULES.md
-related-code: sdk/types.ts, sdk/execute.ts, interpreter/index.ts
+updated: 2026-02-18
+tags: #arch, #sdk, #dynamic-modules
+related-docs: docs/dev/STREAMING.md, docs/dev/RESOLVERS.md, docs/dev/INTERPRETER.md
+related-code: sdk/index.ts, sdk/execute.ts, sdk/cache/memory-ast-cache.ts, sdk/execution-emitter.ts, sdk/types.ts, interpreter/index.ts, interpreter/env/Environment.ts, core/resolvers/DynamicModuleResolver.ts
+related-types: sdk/types { StructuredResult, StreamExecution, SDKEvent, StreamingResult }, core/resolvers/DynamicModuleResolver { DynamicModuleOptions }
 ---
 
 # SDK
 
 ## tldr
 
-SDK provides execution modes (document/structured/stream/debug), runtime module injection (dynamicModules), state management (state:// protocol), and programmatic execution (execute, analyzeModule). Built on ExecutionEmitter event bridge and StructuredResult format.
+- SDK/runtime entrypoints are `processMlld(...)`, `execute(...)`, `analyzeModule(...)`, and interpreter `interpret(...)`.
+- `execute(...)` injects runtime data via dynamic modules (`@payload`, optional `@state`).
+- AST caching is content-based (`source` equality), keyed by `filePath:mode`.
+- `ExecutionEmitter` is an event hub only; StreamBus subscription is wired by `Environment.enableSDKEvents(...)`.
+- Dynamic modules are always tainted with `src:dynamic` (plus optional source label) and enforce strict object-size limits.
 
 ## Principles
 
-- Mode selection at API boundary (consumer controls consumption, script controls execution)
-- Security-first (all effects carry metadata, dynamic modules auto-tainted)
-- Single stdout writer (no double-printing, progress to stderr)
-- Structured results reusable (stream/debug build on structured)
-- Events are ordered and timestamped
+- Keep SDK APIs mode-driven (`document`, `structured`, `stream`, `debug`).
+- Keep runtime event transport separate from user callback dispatch.
+- Keep dynamic-module injection explicit and security-labeled.
+- Keep wrappers thin over canonical CLI/runtime behavior.
 
 ## Details
 
-**Entry points**:
-- `processMlld(script, options)` - Simple API, returns string
-- `interpret(script, options)` - Full control, mode selection
-- `execute(filepath, payload, options)` - File-based execution
-- `analyzeModule(filepath, options)` - Static analysis
+### Entry Points
 
-**Core types**: InterpretMode, StructuredResult, DebugResult, StreamExecution, SDKEvent, StateWrite
+- `sdk/index.ts`
+  - `processMlld(content, options?)`
+  - exports `execute`, `analyzeModule`, `ExecutionEmitter`, `StreamExecution`
+- `sdk/execute.ts`
+  - `execute(filePath, payload, options?)` for structured/stream execution with metrics.
+- `sdk/analyze.ts`
+  - `analyzeModule(...)` for static module analysis without runtime execution.
 
-**Event bridge**: ExecutionEmitter subscribes to StreamBus, emits SDK events with security context
+### `execute(...)` Flow (SDK)
 
-**Effect collection**: DefaultEffectHandler.recordEffects flag enables structured collection
+Source: `sdk/execute.ts`, `sdk/cache/memory-ast-cache.ts`.
 
-**State management**: state:// protocol captures updates without filesystem writes; @state is a live snapshot during a run (writes mutate the in-run snapshot) and stateWrites describe what to persist
+1. Resolve parse mode and read source.
+2. Query `MemoryAstCache`.
+   - Cache key: ``${filePath}:${mode}``
+   - Cache hit requires `cached.source === currentSource`.
+3. Build `dynamicModules`:
+   - merge `options.dynamicModules`
+   - inject `@payload` from `payload` argument
+   - inject `@state` from `options.state` when provided
+4. Call `interpret(...)` in `structured` or `stream` mode.
+5. Return `StructuredResult` or `StreamExecution` with SDK metrics enrichment.
 
-## Architecture
+### Event Bridge Architecture
 
-### Execution Modes
+Source: `sdk/execution-emitter.ts`, `interpreter/env/Environment.ts`.
 
-```
-┌─────────────┐
-│   Script    │
-└──────┬──────┘
-       │
-       ▼
-┌──────────────┐    Mode Selection
-│  interpret() │──────────────┐
-└──────────────┘              │
-                              │
-       ┌──────────────────────┼──────────────────────┐
-       │                      │                      │
-       ▼                      ▼                      ▼
-┌─────────────┐    ┌─────────────────┐    ┌──────────────────┐
-│  document   │    │   structured     │    │     stream        │
-│             │    │                 │    │                  │
-│  → string   │    │ → { output,     │    │ → StreamExecution│
-│             │    │     effects,    │    │   handle with    │
-│             │    │     exports,    │    │   .on() events   │
-│             │    │     stateWrites,│    │                  │
-│             │    │     metrics }   │    │                  │
-└─────────────┘    └─────────────────┘    └──────────────────┘
-                              │
-                              ▼
-                   ┌──────────────────┐
-                   │      debug       │
-                   │                  │
-                   │ → { ...structured,│
-                   │     ast,         │
-                   │     variables,   │
-                   │     trace }      │
-                   └──────────────────┘
-```
+- `ExecutionEmitter` provides `on/off/once/emit` only.
+- It does not subscribe to `StreamBus` directly.
+- StreamBus bridging happens in environment:
+  - `Environment.enableSDKEvents(emitter)`
+  - root environment subscribes to `StreamBus`
+  - stream/stage events are mapped to SDK events (`stream:*`, `command:*`) and emitted through `ExecutionEmitter`.
 
-### Dynamic Modules
+### Dynamic Modules (SDK-Facing Behavior)
 
-```
-DynamicModuleResolver (priority 1)
-        │
-        ├─ String input → parse → AST
-        ├─ Object input → serialize → parse → AST
-        │
-        └─ Add mx: { taint: ['src:dynamic'], labels: ['src:dynamic'] }
-                │
-                ▼
-        deriveImportTaint()
-                │
-                ▼
-        Variables labeled 'src:dynamic'
-```
+Source: `sdk/execute.ts`, `interpreter/index.ts`, `interpreter/env/Environment.ts`, `core/resolvers/DynamicModuleResolver.ts`.
 
-Priority order: Dynamic (1) → ProjectPath (10) → Registry (15) → HTTP/Local (20)
+- Dynamic modules are passed via `InterpretOptions.dynamicModules` / SDK `ExecuteOptions.dynamicModules`.
+- `execute(...)` always injects `@payload`; it injects `@state` when `options.state` is provided.
+- Interpreter registration splits modules:
+  - `@payload` and `@state` register with `literalStrings: true`
+  - other dynamic modules register with default serialization mode
+- Dynamic modules are resolved by `DynamicModuleResolver` (resolver name `dynamic`).
+- Resolver metadata labels/taint include:
+  - `src:dynamic`
+  - optional `src:<dynamicModuleSource>` when provided
 
-### State Management
+### Dynamic Object-Module Limits
 
-```
-Script:                 Runtime:
-┌──────────────┐       ┌────────────────────┐
-│ /output @val │       │ Environment        │
-│ to "state://"│──────▶│   .emit('state_write')│
-└──────────────┘       └────────┬───────────┘
-                                │
-                                ▼
-                       ┌────────────────────┐
-                       │ StateWrite[]       │
-                       │  { path, value,    │
-                       │    timestamp,      │
-                       │    security }      │
-                       └────────┬───────────┘
-                                │
-                                ▼
-                       ┌────────────────────┐
-                       │ StructuredResult   │
-                       │  .stateWrites      │
-                       └────────┬───────────┘
-                                │
-                                ▼
-                       ┌────────────────────┐
-                       │ Live @state        │
-                       │  (snapshot updates │
-                       │   during run)      │
-                       └────────────────────┘
-```
+Source: `core/resolvers/DynamicModuleResolver.ts`.
 
-Application persists state; runtime only captures writes.
+- max serialized module size: `1MB`
+- max depth: `10`
+- max keys per object: `1000`
+- max elements per array: `1000`
+- max total nodes: `10000`
 
-**Live snapshot rules**:
-- `@state` is injected as a dynamic module (literal strings, no interpolation).
-- `/output ... to state://path` mutates the in-run `@state` snapshot so subsequent `@state` reads/imports see the new value.
-- Persistence is out-of-band via `stateWrites`; pass the saved state back on the next `execute()` call.
+### `@state` Runtime Snapshot Semantics
 
-### Event System
+Source: `interpreter/env/Environment.ts`.
 
-```
-Executor (shell/node/bash)
-        │
-        ├─ CHUNK events
-        └─ PIPELINE/STAGE events
-                │
-                ▼
-        StreamBus (central hub)
-                │
-                ▼
-        ExecutionEmitter (SDK bridge)
-                │
-                ├─ CHUNK → stream:chunk
-                ├─ PIPELINE_* → stream:progress
-                ├─ STAGE_* → command:start/complete
-                └─ effect emissions → effect event
-                        │
-                        ▼
-                StreamExecution.on() handlers
-```
+- When `@state` is injected, runtime tracks a mutable in-run snapshot.
+- `state://` writes update the in-run snapshot for subsequent reads during that run.
+- Persistence remains application-owned via `StructuredResult.stateWrites`.
 
-### execute Flow
+### Language Wrappers
 
-```
-execute(filepath, payload, options)
-        │
-        ├─ Check MemoryASTCache (mtime-based)
-        │   ├─ Hit: use cached AST
-        │   └─ Miss: parse file, cache with mtime
-        │
-        ├─ Build dynamicModules:
-        │   ├─ '@payload': payload object
-        │   └─ '@state': options.state object
-        │
-        ├─ Call interpret(mode: 'structured')
-        │
-        └─ Return ExecuteResult:
-            ├─ value (output)
-            ├─ stateWrites (captured writes)
-            ├─ effects (all operations)
-            └─ metrics (timing, counts, tokens)
-```
+SDK wrappers exist in:
 
-### analyzeModule Flow
-
-```
-analyzeModule(filepath)
-        │
-        ├─ Parse file to AST
-        │   ├─ Success: valid = true
-        │   └─ Error: valid = false, errors = [...]
-        │
-        ├─ Extract metadata:
-        │   ├─ Frontmatter (YAML)
-        │   ├─ /needs directives
-        │   ├─ /wants directives
-        │   └─ /export directives
-        │
-        ├─ Walk AST:
-        │   ├─ Executables (/exe) → { name, params, labels }
-        │   ├─ Guards (/guard) → { name, timing, label }
-        │   ├─ Variables (/var) → { name, type }
-        │   └─ Imports (/import) → { from, names }
-        │
-        └─ Return ModuleAnalysis (no execution)
-```
+- `sdk/go/`
+- `sdk/python/`
+- `sdk/ruby/`
+- `sdk/rust/`
 
 ## Gotchas
 
-- `mode: 'stream'` returns handle, not Promise (attach handlers before execution completes)
-- Dynamic modules override filesystem/registry (highest priority)
-- State writes don't persist (app must handle stateWrites)
-- Debug mode disables streaming (captures full trace instead)
-- Effects include security metadata only in structured/stream/debug modes
-- Object modules have size limits (1MB, 10 depth, 1000 keys/arrays)
-- execute caches ASTs in-memory (process lifetime, not persistent)
-
-## Debugging
-
-**Check mode selection**:
-```typescript
-const result = await interpret(script, { mode: 'debug' });
-console.log(result.trace);  // Full execution history
-```
-
-**Inspect effects**:
-```typescript
-const result = await interpret(script, { mode: 'structured' });
-result.effects.forEach(e => {
-  console.log(e.type, e.security?.taint);
-});
-```
-
-**Monitor streaming**:
-```typescript
-const handle = interpret(script, { mode: 'stream' });
-handle.on('stream:chunk', e => console.log('CHUNK:', e.text));
-handle.on('effect', e => console.log('EFFECT:', e.effect.type));
-```
-
-**Analyze without execution**:
-```typescript
-const analysis = await analyzeModule('./module.mld');
-if (!analysis.valid) {
-  console.error('Parse errors:', analysis.errors);
-}
-```
-
-## Language Wrappers
-
-Thin CLI wrappers exist for Go, Python, and Rust in `sdk/`. These call the mlld CLI via subprocess and provide idiomatic APIs for each language.
-
-**Design decisions**:
-- Wrap CLI rather than reimplement (full feature parity, zero maintenance)
-- Each wrapper is ~200-300 LOC
-- All provide: `process()`, `execute()`, `analyze()`
-- Require Node.js + mlld CLI at runtime
-
-**When to use wrappers vs native rewrite**:
-- Wrappers: Almost always. Full compatibility, works today.
-- Native: Embedded systems without Node, extreme performance needs, WASM targets.
-
-Even a native rewrite would need to embed a JS runtime (QuickJS, Deno core) to support `/run js` and `/run node` - the JavaScript ecosystem access is a feature.
-
-**Location**: `sdk/go/`, `sdk/python/`, `sdk/rust/`
+- `mode: 'stream'` returns `StreamExecution`, not `Promise<StructuredResult>`.
+- Dynamic modules use exact key matching (`@name` must match resolver key exactly).
+- SDK AST cache is process-memory only.
+- Dynamic modules are untrusted by default (`src:dynamic` taint/labels).
