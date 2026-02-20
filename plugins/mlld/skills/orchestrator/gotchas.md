@@ -22,10 +22,12 @@ for parallel(10) @file in @files [
 
 ## File existence checks
 
-Use the built-in `@exists()` for file existence checks:
+For `llm`-labeled calls, the checkpoint cache handles idempotency automatically — no manual checks needed.
+
+For non-LLM side effects, use `@fileExists()`:
 
 ```mlld
-if @exists(@outPath) [
+if @fileExists(@outPath) [
   show `  Skipped (exists): @outPath`
   => <@outPath> | @parse
 ]

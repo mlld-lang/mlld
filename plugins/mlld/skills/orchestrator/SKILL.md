@@ -29,18 +29,122 @@ Work is broken until the adversary can't break it. This is the default stance.
 
 Every orchestrator should be:
 
-1. **Resumable** — Append progress to `events.jsonl`. Idempotency checks (`<@outPath>?`) skip completed work. Require `--new` to start a fresh run; default to resuming the latest.
+1. **Resilient** — Label expensive calls with `exe llm`. Crash recovery is automatic via the LLM cache. Use `checkpoint` directives between phases for `--resume` targeting. Use `--new` to start a fresh run.
 2. **Parallel** — Use `for parallel(N)` wherever items are independent. Accept `--parallel n` to let the caller cap concurrency (default: 20).
-3. **Observable** — Pipe LLM calls through `| log` so progress is visible. Write structured events to JSONL. Save prompts to debug files (`output @prompt to "@runDir/worker-*.prompt.md"`).
+3. **Observable** — Use hooks for instrumentation. Save prompts to debug files (`output @prompt to "@runDir/worker-*.prompt.md"`).
 4. **Dumb** — Code gathers context and executes actions. The LLM decides everything. No if-else for business logic. See `/mlld:llm-first` for the full design philosophy.
 5. **Organized** — Write logs and artifacts to `llm/output/{script-name}/YYYY-MM-DD-n` by default unless the caller specifies otherwise.
+
+## Resilience Model
+
+One cache, three invalidation strategies:
+
+| Strategy | Scope | Use case | How it works |
+|----------|-------|----------|-------------|
+| Automatic (LLM cache) | Per-call | Crash recovery | Re-run script, `llm`-labeled calls with same args hit cache |
+| `--resume @fn` | Per-function | Prompt iteration | Invalidate all cached results for a function, re-execute |
+| `--resume "name"` | Per-phase | Workflow navigation | Named `checkpoint` directive marks a position; invalidate all LLM calls after it |
+
+### Labeling LLM calls
+
+The `llm` label on `exe` marks calls for caching. Checkpointing auto-enables when `llm`-labeled calls exist — no flag needed.
+
+```mlld
+>> Define once — every invocation is independently cached by argument hash
+exe llm @review(prompt) = @claudePoll(@prompt, "sonnet", "@root", @tools)
+
+>> For one-off calls
+var llm @summary = @claudePoll(@prompt, "sonnet")
+```
+
+### Crash recovery
+
+Just re-run. Completed `llm`-labeled calls hit cache automatically. No run directories, no event logs, no idempotency checks.
+
+```bash
+mlld run pipeline              # crashes at item 47 of 100
+mlld run pipeline              # items 1-46 are instant cache hits, continues from 47
+```
+
+### Named checkpoints
+
+`checkpoint` directives mark phase boundaries. On `--resume "name"`, everything before the checkpoint hits cache; everything after re-executes.
+
+```mlld
+exe llm @collect(item) = @claudePoll(@collectPrompt(@item), "sonnet", "@root", @tools)
+exe llm @analyze(item, data) = @claudePoll(@analyzePrompt(@item, @data), "opus", "@root", @tools)
+
+checkpoint "collection"
+var @data = for parallel(20) @item in @items => @collect(@item)
+
+checkpoint "analysis"
+var @results = for parallel(20) @item in @items => @analyze(@item, @data)
+```
+
+```bash
+mlld run pipeline                      # auto-resumes via cache
+mlld run pipeline --resume "analysis"  # skip to analysis phase
+mlld run pipeline --resume @analyze    # re-run all @analyze calls
+mlld run pipeline --new                # fresh run, clear cache
+```
+
+### Why loops don't need checkpoints
+
+Checkpoints are top-level only. Loops are covered by the other two strategies:
+
+- **`for parallel` over a collection**: Each `llm`-labeled call gets a unique cache key (different args per item). Crash at item 547? Re-run, items 1-546 hit cache automatically.
+- **`loop()` convergence loops**: Each iteration calls functions with evolving arguments, so they get different cache keys. Cache handles crash recovery call-by-call.
+- **Prompt iteration inside loops**: Use `--resume @fn` to invalidate a specific function across all iterations.
+
+### Before and after
+
+BEFORE (manual resumption, ~40 lines per phase):
+```mlld
+loop(@maxAttempts) [
+  for parallel(@parallelism) @item in @items [
+    let @outPath = `@runDir/phase1/@item.id\.json`
+    let @alreadyDone = @fileExists(@outPath)
+    if @alreadyDone == "yes" [
+      show `  @item.name: skipped`
+      => null
+    ]
+    show `  @item.name: processing...`
+    @claudePoll(@prompt, "opus", "@root", @tools, @outPath)
+    let @result = <@outPath>?
+    if !@result [
+      show `  @item.name: FAILED`
+      @logEvent(@runDir, "failed", { id: @item.id })
+      => null
+    ]
+    @logEvent(@runDir, "complete", { id: @item.id })
+    => null
+  ]
+  let @checks = for @c in @items [
+    let @exists = @fileExists(`@runDir/phase1/@c.id\.json`)
+    if @exists != "yes" [ => 1 ]
+    => null
+  ]
+  let @missing = for @x in @checks when @x => @x
+  if @missing.length == 0 [ done ]
+  show `  Retrying @missing.length failed items...`
+  continue
+]
+```
+
+AFTER (checkpoint, ~3 lines):
+```mlld
+exe llm @review(item) = @claudePoll(@buildPrompt(@item), "opus", "@root", @tools)
+
+checkpoint "phase-1"
+var @results = for parallel(20) @item in @items => @review(@item)
+```
 
 **LLM-first cheat sheet** (see `/mlld:llm-first` for details):
 - Dumb orchestrator, smart decision calls — code gathers, model decides
 - Fresh context each iteration — no chat history, the context IS the history
 - Structured JSON actions — orchestrator switches mechanically, no interpretation
 - Prompts over predicates — rules in prompts, not if-else in code
-- Logs over state machines — event log shows everything, debug by reading it
+- Hooks over manual logging — observe operations at evaluation boundaries, not with inline code
 
 ## The Dumb Orchestrator
 
@@ -184,12 +288,16 @@ var @reviewTools = "Read,Write"
 >> Phase 2: verifier can explore the codebase
 var @verifyTools = "Read,Write,Glob,Grep"
 
+exe llm @review(file) = @claudePoll(@reviewPrompt(@file), "sonnet", "@root", @reviewTools)
+exe llm @verify(finding, source) = @claudePoll(@verifyPrompt(@finding, @source), "sonnet", "@root", @verifyTools)
+
 var @files = <src/**/*.ts>
-var @results = for parallel(20) @file in @files [
-  @claudePoll(@reviewPrompt(@file), "sonnet", "@root", @reviewTools, @outPath)
-  => <@outPath> | @json
-]
->> Then verification pass with expanded tools + 4-way taxonomy
+
+checkpoint "review"
+var @results = for parallel(20) @file in @files => @review(@file)
+
+checkpoint "verify"
+var @verified = for parallel(20) @finding in @results => @verify(@finding, @finding.file)
 ```
 
 ### 2. Research (multi-phase pipeline + invalidation)
@@ -201,6 +309,9 @@ Decision agent infers phase from filesystem state. Parallel fan-out for batch op
 **See**: [../../examples/research/](../../examples/research/)
 
 ```mlld
+exe llm @assess(source) = @claudePoll(@assessPrompt(@source), "sonnet", "@root", @workerTools)
+exe llm @synthesize(data) = @claudePoll(@synthesizePrompt(@data), "opus", "@root", @workerTools)
+
 loop(endless) [
   let @context = @buildContext(@runDir)
   let @decision = @callDecisionAgent(@context)
@@ -223,6 +334,9 @@ Continuous decision loop with external state (GitHub Issues). Creates issues, di
 **See**: [../../examples/development/](../../examples/development/)
 
 ```mlld
+exe llm @callWorker(prompt, model) = @claudePoll(@prompt, @model, "@root", @workerTools)
+exe llm @callDecisionAgent(context) = @claudePoll(@decisionPrompt(@context), "opus", "@root", @decisionTools)
+
 loop(endless) [
   let @context = @buildContext(@config, @runDir)
   let @decision = @callDecisionAgent(@context)
@@ -281,26 +395,32 @@ llm/run/my-orchestrator/
 
 ## State Management
 
-Two files track run state:
+### Primary: LLM Cache + Checkpoints
 
-**`run.json`** — Minimal current state. What matters right now.
-```json
-{
-  "id": "2026-02-09-0",
-  "created": "2026-02-09T10:00:00Z",
-  "lastResult": null,
-  "lastError": null
-}
+Label LLM calls and mark phase boundaries. The checkpoint system handles crash recovery and resumption automatically.
+
+```mlld
+>> Label LLM calls — caching is automatic
+exe llm @review(prompt) = @claudePoll(@prompt, "sonnet", "@root", @tools)
+
+>> Mark phase boundaries
+checkpoint "collection"
+var @data = for parallel(20) @item in @items => @collect(@item)
+
+checkpoint "analysis"
+var @results = for parallel(20) @item in @items => @analyze(@item)
 ```
 
-**`events.jsonl`** — Append-only event log. Full history for debugging.
-```jsonl
-{"ts":"2026-02-09T10:00:01Z","event":"run_start","topic":"security"}
-{"ts":"2026-02-09T10:00:15Z","event":"iteration","decision":"work","ticket":"#42"}
-{"ts":"2026-02-09T10:05:30Z","event":"worker_result","status":"completed"}
+```bash
+mlld run pipeline                      # auto-resumes via cache
+mlld run pipeline --resume "analysis"  # skip to analysis phase
+mlld run pipeline --resume @analyze    # re-run all @analyze calls
+mlld run pipeline --new                # fresh run, clear cache
 ```
 
-Context builder reads recent N events from the log for the decision agent.
+### When you also need event logs: Decision Context
+
+For decision-loop orchestrators where the LLM agent needs to see what happened, event logs serve as **data for the decision agent**, not as a resumption mechanism. The checkpoint cache handles resumption.
 
 ```mlld
 exe @logEvent(runDir, eventType, data) = [
@@ -313,6 +433,23 @@ exe @loadRecentEvents(runDir, limit) = [
   => for @line in @lines.split("\n") when @line.trim() => @line | @json
 ]
 ```
+
+Use event logs when the decision agent reads recent history to inform its next action (the development/j2bd archetype). For linear pipelines (the audit archetype), event logs are unnecessary — the checkpoint cache handles everything.
+
+### Run state for decision agents
+
+Decision-loop orchestrators that track cross-iteration state (last worker result, last error) still use `run.json`:
+
+```json
+{
+  "id": "2026-02-09-0",
+  "created": "2026-02-09T10:00:00Z",
+  "lastResult": null,
+  "lastError": null
+}
+```
+
+This is program state the decision agent reads, not resumption infrastructure.
 
 ## File-Based Output Protocol
 
@@ -409,35 +546,24 @@ Decision agents: read + write (for output file). Workers: full access scoped to 
 
 ## Parallel Processing
 
-Use `for parallel(N)` for batch operations. All examples emphasize parallelism.
+Use `for parallel(N)` for batch operations. The `llm` label makes each call independently cached — no manual idempotency checks needed.
 
 ```mlld
-var @results = for parallel(20) @item in @items [
-  let @outPath = `@runDir/results/@item.id\.json`
+exe llm @review(file) = @claudePoll(@reviewPrompt(@file), "sonnet", "@root", @tools)
 
-  >> Idempotency: skip if already done
-  let @existing = <@outPath>?
-  if @existing => @existing | @parse
-
-  >> Do work...
-  => @result
-]
+var @results = for parallel(20) @file in @files => @review(@file)
 ```
+
+Crash at item 47 out of 100? Re-run. Items 1-46 are instant cache hits.
 
 **When to parallelize**: Independent items (file reviews, assessments, invalidation checks).
 **When to sequence**: Data dependencies (synthesis depends on assessments, decisions depend on prior state).
 
 ## Idempotency
 
-Check if output exists before doing work. Makes reruns safe and enables resume.
+The LLM cache handles idempotency automatically for `llm`-labeled calls. Each call is cached by argument hash — same args return the cached result without calling the LLM.
 
-```mlld
-let @existing = <@outPath>?
-if @existing [
-  show `  Skipped: @outPath`
-  => @existing | @parse
-]
-```
+Manual idempotency checks (`<@outPath>?`) are only needed for non-LLM side effects (file writes, shell commands) that you don't want to repeat.
 
 ## Human Handoff
 
@@ -446,13 +572,12 @@ When blocked, write structured questions and exit cleanly:
 ```mlld
 "blocked" => [
   @writeQuestionsFile(@runDir, @decision.questions)
-  @logEvent(@runDir, "run_paused", { reason: "needs_human" })
-  show `Resume with: mlld run myorch --run @runId`
+  show `Resume with: mlld run myorch`
   done
 ]
 ```
 
-Human answers at their leisure. Human resumes. Decision agent reads answers from context and continues.
+Human answers at their leisure. Re-run the script — the cache auto-resumes past completed work. For phase targeting: `mlld run myorch --resume "phase-name"`. Decision agent reads answers from context and continues.
 
 ## Model Selection
 
@@ -465,19 +590,38 @@ Development archetype: opus for decisions and workers (high-stakes).
 
 ## Debugging
 
-- **Event logs**: `events.jsonl` shows every decision, action, and result.
+- **Hook-based observability**: Use hooks to log LLM calls with cache status — replaces manual event logging for instrumentation.
 - **Prompt archival**: Save worker prompts to `@runDir/worker-*.prompt.md` for replay.
 - **File-based output**: Decision/worker JSON files persist in the run directory.
 - **`MLLD_DEBUG_CLAUDE_POLL=1`**: Diagnostics for `@claudePoll` polling behavior.
 
 ```mlld
+>> Hook: log every LLM call with cache status
+hook @trace after op:exe = [
+  if @mx.op.labels.includes("llm") [
+    show `  @mx.op.name | cached: @mx.checkpoint.hit`
+  ]
+]
+
 >> Save prompt for debugging
 output @workerPrompt to "@runDir/worker-@task-@iteration.prompt.md"
 ```
 
-## Phase Inference
+## Phase Management
 
-The decision agent infers the current phase from what exists rather than tracking phase in code:
+Two approaches for two archetypes:
+
+**Linear pipelines (audit archetype)**: Use named `checkpoint` directives between phases. The script runs top-to-bottom; `--resume "phase-name"` skips to a phase.
+
+```mlld
+checkpoint "review"
+var @results = for parallel(20) @file in @files => @review(@file)
+
+checkpoint "verify"
+var @verified = for parallel(20) @finding in @results => @verify(@finding)
+```
+
+**Decision-loop orchestrators (research/development archetypes)**: The decision agent infers the current phase from what exists rather than tracking phase in code:
 
 ```
 Infer phase from filesystem state:
@@ -487,7 +631,7 @@ Infer phase from filesystem state:
 4. synthesis.json exists → invalidation phase
 ```
 
-Put this logic in the decision prompt. The orchestrator never checks what phase it's in.
+Put this logic in the decision prompt. The orchestrator never checks what phase it's in. Checkpoints are not needed inside `loop(endless)` — the LLM cache handles crash recovery call-by-call.
 
 ## LLM-First Principles
 
@@ -495,7 +639,7 @@ Put this logic in the decision prompt. The orchestrator never checks what phase 
 2. Fresh decision calls — full context each iteration, no chat history
 3. Structured actions — JSON with action type, orchestrator switches mechanically
 4. Prompts over predicates — rules in prompts, not if-else in code
-5. Multi-phase via prompt — let a decision agent track phases and progress via guidance in prompts and their access to history logs rather than creating a programmatic state machine
+5. Multi-phase via checkpoints or prompts — use `checkpoint` directives for linear pipelines; let decision agents track phases via prompts for loop-based orchestrators
 6. Edge cases in prompts — add guidance text, not conditionals
 7. File-based output — write JSON to path, don't parse streams
 8. External state — separate state management from orchestration

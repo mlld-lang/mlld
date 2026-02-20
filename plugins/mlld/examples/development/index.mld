@@ -1,5 +1,5 @@
 >> Development Orchestrator
->> Usage: mlld plugins/mlld/examples/development/index.mld --goal goal.md [--repo .] [--run <id>] [--max 100]
+>> Usage: mlld plugins/mlld/examples/development/index.mld --goal goal.md [--repo .] [--max 100]
 >>
 >> Issue-driven project execution with adversarial invalidation.
 >> Decision agent manages GitHub Issues, dispatches workers, runs invalidation.
@@ -9,24 +9,25 @@
 >>   Workers implement changes, commit, test
 >>   Invalidation worker tries to break the implementation
 >>   Only "complete" when adversary can't find failures
+>>
+>> Resilience: exe llm labels handle crash recovery automatically.
+>>   mlld run development                 # auto-resumes via cache
+>>   mlld run development --resume @callWorker  # re-run all worker calls
+>>   mlld run development --new           # fresh run
 
 import { @claudePoll } from @mlld/claude-poll
-import { @logEvent, @loadRecentEvents, @loadRunState, @saveRunState, @countIterations, @buildContext } from "./lib/context.mld"
+import { @logEvent, @loadRunState, @saveRunState, @buildContext } from "./lib/context.mld"
 import { @writeQuestionsFile } from "./lib/questions.mld"
 import "@payload" as @p
 
 >> Parse arguments
 var @goalPath = @p.goal ?? "goal.md"
 var @repoDir = @p.repo ?? "."
-var @runId = @p.run ?? null
 var @maxIterations = @p.max ? @p.max * 1 : 100
 
 >> Tool permissions
 var @decisionTools = "Read,Write,Glob,Grep"
 var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(gh:*)"
-
->> Shell helpers
-exe @mkdirp(dir) = sh { mkdir -p "$dir" }
 
 >> Prompt templates
 exe @decisionPrompt(goal, issues, recentEvents, lastWorkerResult, lastError, humanAnswers) = template "./prompts/decision/core.att"
@@ -34,14 +35,16 @@ exe @implementPrompt(issue, guidance, goal, statusFormat) = template "./prompts/
 exe @invalidatePrompt(issue, guidance, goal, evidenceRules) = template "./prompts/workers/invalidate.att"
 exe @reviewPrompt(issue, guidance, goal, evidenceRules) = template "./prompts/workers/review.att"
 
+>> LLM call wrappers — llm label enables automatic caching
+exe llm @callWorker(prompt, model, dir, tools, outPath) = @claudePoll(@prompt, @model, @dir, @tools, @outPath)
+
 >> Load shared prompt fragments
 var @evidenceRules = <./prompts/shared/evidence-rules.md>
 var @statusFormat = <./prompts/shared/status-format.md>
 
->> Resolve run directory
-var @today = @now.slice(0, 10)
-var @resolvedRunId = @runId ?? @today
-var @runDir = `@base/runs/@resolvedRunId`
+>> Run directory for decision context (event logs, run state)
+var @runDir = `@base/runs/development`
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
 run @mkdirp(@runDir)
 
 >> Load goal
@@ -53,30 +56,18 @@ if !@goal [
 >> Load or initialize run state
 let @runState = @loadRunState(@runDir)
 if !@runState.id [
-  let @newState = { id: @resolvedRunId, created: @now, goal: @goalPath }
+  let @newState = { id: "development", created: @now, goal: @goalPath }
   @saveRunState(@runDir, @newState)
   @logEvent(@runDir, "run_start", { goal: @goalPath })
 ]
 
-show `═══════════════════════════════════════════════════════════════════`
 show `Development: @goalPath`
-show `═══════════════════════════════════════════════════════════════════`
-show `Run: @resolvedRunId`
 show `Repo: @repoDir`
 show `Max iterations: @maxIterations`
-show `───────────────────────────────────────────────────────────────────`
 
->> Main decision loop
-loop(endless) [
-  >> Check iteration guard
-  let @iterationCount = @countIterations(@runDir)
-  if @iterationCount >= @maxIterations [
-    show `Max iterations (@maxIterations) reached.`
-    @logEvent(@runDir, "run_stopped", { reason: "max_iterations" })
-    done
-  ]
-
-  >> Gather context
+>> Main decision loop — loop(N) replaces manual iteration counting
+loop(@maxIterations) [
+  >> Gather context (includes recent events for decision agent)
   let @context = @buildContext(@runDir)
 
   >> Load open issues
@@ -90,7 +81,7 @@ loop(endless) [
   let @humanAnswers = <@runDir/questions.md>?
 
   >> Call decision agent
-  let @decisionOutputPath = `@runDir/decision-@iterationCount\.json`
+  let @decisionOutputPath = `@runDir/decision.json`
   let @prompt = @decisionPrompt(
     @goal,
     @issueList,
@@ -103,7 +94,7 @@ loop(endless) [
 
 IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool. Write ONLY valid JSON.`
 
-  @logEvent(@runDir, "decision_call", { iteration: @iterationCount })
+  @logEvent(@runDir, "decision_call", {})
   @claudePoll(@fullPrompt, "opus", "@root", @decisionTools, @decisionOutputPath)
   let @decision = <@decisionOutputPath>?
 
@@ -141,8 +132,8 @@ IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool.
         * => "sonnet"
       ]
 
-      let @workerOutputPath = `@runDir/worker-@issueNum-@iterationCount\.json`
-      let @workerPromptPath = `@runDir/worker-@issueNum-@iterationCount\.prompt.md`
+      let @workerOutputPath = `@runDir/worker-@issueNum\.json`
+      let @workerPromptPath = `@runDir/worker-@issueNum\.prompt.md`
 
       let @workerFullPrompt = `@workerPrompt
 
@@ -158,7 +149,7 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
         prompt_path: @workerPromptPath
       })
 
-      @claudePoll(@workerFullPrompt, @model, "@repoDir", @workerTools, @workerOutputPath)
+      @callWorker(@workerFullPrompt, @model, "@repoDir", @workerTools, @workerOutputPath)
       let @result = <@workerOutputPath>?
 
       if !@result [
@@ -205,16 +196,14 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
 
     "blocked" => [
       show `  Blocked — writing questions`
-      @writeQuestionsFile(@runDir, @decision.questions, @resolvedRunId)
+      @writeQuestionsFile(@runDir, @decision.questions)
       @logEvent(@runDir, "run_paused", { reason: "needs_human" })
-      show `Resume with: mlld <this-script> --goal @goalPath --run @resolvedRunId`
+      show `Resume: mlld run development --goal @goalPath`
       done
     ]
 
     "complete" => [
-      show `\n═══════════════════════════════════════════════════════════════════`
-      show `Complete: @decision.summary`
-      show `═══════════════════════════════════════════════════════════════════`
+      show `\nComplete: @decision.summary`
       @logEvent(@runDir, "project_complete", { summary: @decision.summary })
       done
     ]

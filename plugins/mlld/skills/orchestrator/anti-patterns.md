@@ -185,3 +185,55 @@ var @result = @callAgent() | @qualityGate
 ```
 
 The pipeline handles retry count, feedback passing, and fallback. The orchestrator code stays declarative.
+
+## 9. The Resumption Infrastructure Trap
+
+**Symptom**: Building run directory resolution, dated run IDs, event logging, file-existence checks, and retry-loops-around-parallel-for to handle crashes and enable resume.
+
+```mlld
+>> BAD
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+var @today = @now.slice(0, 10)
+var @runDir = `@root/runs/@today`
+run @mkdirp(@runDir)
+run @mkdirp(`@runDir/reviews`)
+
+loop(@maxAttempts) [
+  for parallel(@parallelism) @item in @items [
+    let @outPath = `@runDir/reviews/@item.id\.json`
+    if @fileExists(@outPath) [
+      show `  @item.name: skipped`
+      => null
+    ]
+    @claudePoll(@prompt, "opus", "@root", @tools, @outPath)
+    let @result = <@outPath>?
+    if !@result [
+      @logEvent(@runDir, "failed", { id: @item.id })
+      => null
+    ]
+    @logEvent(@runDir, "complete", { id: @item.id })
+    => null
+  ]
+  let @checks = for @c in @items [
+    let @exists = @fileExists(`@runDir/reviews/@c.id\.json`)
+    if @exists != "yes" [ => 1 ]
+    => null
+  ]
+  let @missing = for @x in @checks when @x => @x
+  if @missing.length == 0 [ done ]
+  show `  Retrying @missing.length failed items...`
+  continue
+]
+```
+
+**Fix**: The `llm` label makes each call individually cacheable. Crash at item 47 out of 100? Re-run. Items 1-46 are instant cache hits. No run directories, no event logs, no retry loops, no idempotency checks.
+
+```mlld
+>> GOOD
+exe llm @review(item) = @claudePoll(@buildPrompt(@item), "opus", "@root", @tools)
+
+checkpoint "review"
+var @results = for parallel(20) @item in @items => @review(@item)
+```
+
+Event logs are still valid when the decision agent reads them as context (the development archetype). But for linear pipelines where events were only for resumption, the checkpoint cache replaces all of it.

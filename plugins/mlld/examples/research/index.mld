@@ -1,11 +1,16 @@
 >> Research Orchestrator
->> Usage: mlld plugins/mlld/examples/research/index.mld --sources sources/ [--output report.json] [--run <id>] [--max 50]
+>> Usage: mlld plugins/mlld/examples/research/index.mld --sources sources/ [--output report.json] [--max 50]
 >>
 >> Multi-phase document analysis pipeline with adversarial invalidation.
 >> Decision agent infers phase from filesystem state:
 >>   discover → assess → classify → synthesize → invalidate → complete
 >>
 >> Sources: directory of files to analyze (any format the LLM can read)
+>>
+>> Resilience: exe llm labels handle crash recovery automatically.
+>>   mlld run research                    # auto-resumes via cache
+>>   mlld run research --resume @assess   # re-run all assessment calls
+>>   mlld run research --new              # fresh run
 
 import { @claudePoll } from @mlld/claude-poll
 import { @logEvent, @loadRecentEvents, @loadRunState, @saveRunState, @countIterations, @buildContext } from "./lib/context.mld"
@@ -14,16 +19,11 @@ import "@payload" as @p
 >> Parse arguments
 var @sourcesDir = @p.sources ?? "sources"
 var @outputPath = @p.output ?? "report.json"
-var @runId = @p.run ?? null
 var @maxIterations = @p.max ? @p.max * 1 : 50
 
 >> Tool permissions
 var @decisionTools = "Read,Write,Glob,Grep"
 var @workerTools = "Read,Write,Glob,Grep"
-
->> Shell helpers
-exe @mkdirp(dir) = sh { mkdir -p "$dir" }
-exe @countFiles(dir) = sh { ls -1 "$dir" 2>/dev/null | wc -l | tr -d ' ' }
 
 >> Prompt templates
 exe @decisionPrompt(sources, state, recentEvents, lastError) = template "./prompts/decision/core.att"
@@ -31,10 +31,14 @@ exe @assessPrompt(source, sourceContent, evidenceRules) = template "./prompts/wo
 exe @synthesizePrompt(assessments, sources, evidenceRules) = template "./prompts/workers/synthesize.att"
 exe @invalidatePrompt(claim, assessments, evidenceRules) = template "./prompts/workers/invalidate.att"
 
->> Resolve run directory
-var @today = @now.slice(0, 10)
-var @resolvedRunId = @runId ?? @today
-var @runDir = `@base/runs/@resolvedRunId`
+>> LLM call wrappers — llm label enables automatic caching
+exe llm @callAssess(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+exe llm @callSynthesize(prompt, tools, outPath) = @claudePoll(@prompt, "opus", "@root", @tools, @outPath)
+exe llm @callInvalidate(prompt, tools, outPath) = @claudePoll(@prompt, "opus", "@root", @tools, @outPath)
+
+>> Run directory for intermediate files and decision context
+var @runDir = `@base/runs/research`
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
 run @mkdirp(@runDir)
 run @mkdirp(`@runDir/assessments`)
 run @mkdirp(`@runDir/invalidations`)
@@ -42,7 +46,7 @@ run @mkdirp(`@runDir/invalidations`)
 >> Load or initialize run state
 var @runState = @loadRunState(@runDir)
 if !@runState.id [
-  let @newState = { id: @resolvedRunId, created: @now, sourcesDir: @sourcesDir }
+  let @newState = { id: "research", created: @now, sourcesDir: @sourcesDir }
   @saveRunState(@runDir, @newState)
   @logEvent(@runDir, "run_start", { sources: @sourcesDir })
 ]
@@ -50,13 +54,9 @@ if !@runState.id [
 >> Load evidence rules (shared across workers)
 var @evidenceRules = <./prompts/shared/evidence-rules.md>
 
-show `═══════════════════════════════════════════════════════════════════`
 show `Research: @sourcesDir`
-show `═══════════════════════════════════════════════════════════════════`
-show `Run: @resolvedRunId`
 show `Output: @outputPath`
 show `Max iterations: @maxIterations`
-show `───────────────────────────────────────────────────────────────────`
 
 >> Main decision loop
 loop(endless) [
@@ -107,18 +107,12 @@ IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool.
     ]
 
     "assess" => [
-      >> Parallel assessment of sources
+      >> Parallel assessment of sources — cache handles idempotency
       let @targets = @decision.targets ?? @sourceList
       show `  Assessing @targets.length sources`
 
       let @results = for parallel(20) @filename in @targets [
         let @outPath = `@runDir/assessments/@filename\.json`
-
-        >> Idempotency
-        if @exists(@outPath) [
-          show `    @filename: skipped`
-          => "skipped"
-        ]
 
         let @source = <@sourcesDir/@filename>?
         if !@source [
@@ -131,7 +125,7 @@ IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool.
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
-        @claudePoll(@fullPrompt, "sonnet", "@root", @workerTools, @outPath)
+        @callAssess(@fullPrompt, @workerTools, @outPath)
         let @result = <@outPath>?
         show `    @filename: @result.relevance`
         @logEvent(@runDir, "assess_complete", { source: @filename, relevance: @result.relevance })
@@ -154,7 +148,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
       show `  Synthesizing from @assessmentData.length assessments`
-      @claudePoll(@fullPrompt, "opus", "@root", @workerTools, @outPath)
+      @callSynthesize(@fullPrompt, @workerTools, @outPath)
       let @synthesis = <@outPath>?
 
       if @synthesis [
@@ -167,7 +161,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
     ]
 
     "invalidate" => [
-      >> Load synthesis and invalidate each claim
+      >> Load synthesis and invalidate each claim — cache handles idempotency
       let @synthesis = <@runDir/synthesis.json> | @parse
       let @claims = @synthesis.claims ?? []
       show `  Invalidating @claims.length claims`
@@ -175,12 +169,6 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
       let @results = for parallel(20) @claim in @claims [
         let @claimId = @claim.id ?? @claim.summary.slice(0, 30).replace(" ", "-")
         let @outPath = `@runDir/invalidations/@claimId\.json`
-
-        >> Idempotency
-        if @exists(@outPath) [
-          show `    @claimId: skipped`
-          => <@outPath> | @parse
-        ]
 
         let @assessmentFiles = <@runDir/assessments/*.json>
         let @assessments = for @f in @assessmentFiles => @f | @parse
@@ -190,7 +178,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
-        @claudePoll(@fullPrompt, "opus", "@root", @workerTools, @outPath)
+        @callInvalidate(@fullPrompt, @workerTools, @outPath)
         let @result = <@outPath>?
 
         let @status = when @result.verdict [ "supported" => "OK"; * => "FLAGGED" ]
@@ -233,7 +221,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
     "blocked" => [
       show `Blocked: @decision.reasoning`
       @logEvent(@runDir, "run_paused", { reason: @decision.reasoning })
-      show `Resume with: mlld <this-script> --sources @sourcesDir --run @resolvedRunId`
+      show `Resume: mlld run research --sources @sourcesDir`
       done
     ]
 

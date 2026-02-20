@@ -13,7 +13,7 @@ exe @logEvent(runDir, eventType, eventData) = [
 >> Load recent events
 exe @loadRecentEvents(runDir, limit) = [
   let @eventsFile = `@runDir/events.jsonl`
-  when !@exists(@eventsFile) => [ => [] ]
+  when !@fileExists(@eventsFile) => [ => [] ]
   let @lines = @tailFile(@eventsFile, @limit)
   => for @line in @lines.split("\n") when @line.trim() => @line | @parse
 ]

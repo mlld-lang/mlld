@@ -18,6 +18,29 @@ let @result = @claudePoll(
 
 The prompt must instruct the agent to write to the output path. The function polls for that file, then returns its contents.
 
+## Checkpoint and Resume
+
+```mlld
+>> Label expensive calls — caching is automatic
+exe llm @review(prompt) = @claudePoll(@prompt, "sonnet", "@root", @tools)
+
+>> Named checkpoints between phases
+checkpoint "collection"
+var @data = for parallel(20) @item in @items => @collect(@item)
+
+checkpoint "analysis"
+var @results = for parallel(20) @item in @items => @analyze(@item, @data)
+```
+
+```bash
+>> CLI usage:
+mlld run pipeline                      # auto-resumes via cache
+mlld run pipeline --resume "analysis"  # skip to analysis phase
+mlld run pipeline --resume @analyze    # re-run all @analyze calls
+mlld run pipeline --resume @analyze("item-50")  # fuzzy: from item-50 onward
+mlld run pipeline --new                # fresh run, clear cache
+```
+
 ## File-based output protocol
 
 ```mlld
@@ -31,6 +54,8 @@ let @decision = <@outputPath>?
 ```
 
 ## State persistence
+
+For decision context only. The checkpoint system handles resumption automatically. Use event logs and run state when the decision agent needs to read history.
 
 ```mlld
 >> Save state
@@ -50,22 +75,19 @@ append @event to "@runDir/events.jsonl"
 
 ## Idempotency
 
-Check if output exists before doing work. Makes reruns safe and enables resume.
+LLM cache handles idempotency for `llm`-labeled calls. No manual checks needed.
 
 ```mlld
->> Option A: @exists() builtin
-if @exists(@outPath) [
-  show `  Skipped: @outPath`
-  => "skipped"
-]
-
->> Option B: optional file loading
+>> Before (manual):
 let @existing = <@outPath>?
-if @existing [
-  show `  Skipped: @outPath`
-  => @existing | @parse
-]
+if @existing [ => @existing | @parse ]
+
+>> After (automatic — the llm label handles it):
+exe llm @review(item) = @claudePoll(...)
+var @result = @review(@item)  >> cache hit if already computed
 ```
+
+Manual idempotency checks are only needed for non-LLM side effects.
 
 ## Template composition (.att files)
 
@@ -96,17 +118,10 @@ var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*)"
 ## Parallel fan-out
 
 ```mlld
-var @results = for parallel(20) @file in @files [
-  let @outPath = `@runDir/results/@file.mx.filename\.json`
+exe llm @process(file) = @claudePoll(@buildPrompt(@file), "sonnet", "@root", @tools)
 
-  >> Idempotency: skip if already done
-  let @existing = <@outPath>?
-  if @existing => @existing | @parse
-
-  >> Do work...
-  let @_ = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
-  => <@outPath>? | @parse
-]
+>> Each call independently cached by argument hash — no manual idempotency needed
+var @results = for parallel(20) @file in @files => @process(@file)
 ```
 
 ## Decision loop

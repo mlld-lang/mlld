@@ -7,9 +7,13 @@
 >> 3. Collect findings
 >> 4. Verification pass: verifier gets expanded tools to check codebase context
 >> 5. Output classified findings (confirmed, false-positive, insufficient-context, needs-human)
+>>
+>> Resilience: exe llm labels + checkpoint directives. Crash recovery is automatic.
+>>   mlld run audit                       # auto-resumes via cache
+>>   mlld run audit --resume "verify"     # skip to verification phase
+>>   mlld run audit --new                 # fresh run
 
 import { @claudePoll } from @mlld/claude-poll
-import { @logEvent } from "./lib/context.mld"
 import "@payload" as @p
 
 >> Parse arguments
@@ -27,170 +31,127 @@ var @verifyTools = "Read,Write,Glob,Grep"
 exe @reviewPrompt(file, fileContent) = template "./prompts/review.att"
 exe @verifyPrompt(finding, fileContent) = template "./prompts/verify.att"
 
->> Shell helpers
-exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+>> LLM call wrappers — llm label enables automatic caching
+exe llm @callReview(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+exe llm @callVerify(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
 
 >> Array helpers
 exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => (a.data || a).findings || []) }
 exe @filterByVerdict(results, verdict) = js { return results.filter(r => { r = r.data || r; return r && r.verdict === verdict }) }
 
->> Set up run directory
-var @today = @now.slice(0, 10)
-var @runDir = `@root/runs/@today`
-run @mkdirp(@runDir)
-run @mkdirp(`@runDir/reviews`)
-run @mkdirp(`@runDir/verifications`)
+>> Shell helpers
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
 
-show `═══════════════════════════════════════════════════════════════════`
+>> Output directory for debugging artifacts
+var @outDir = `@root/runs/audit`
+run @mkdirp(@outDir)
+run @mkdirp(`@outDir/reviews`)
+run @mkdirp(`@outDir/verifications`)
+
 show `Audit: @glob`
-show `═══════════════════════════════════════════════════════════════════`
 show `Parallelism: @parallelism`
 show `Output: @outputPath`
-show `Run dir: @runDir`
-show `───────────────────────────────────────────────────────────────────`
 
 >> 1. Glob source files
 var @files = <@glob>
+show `Found @files.length files to review`
 
-if @files.length == 0 [
-  show `No files matched: @glob`
-  let @empty = []
-  output @empty to "@outputPath"
-] else [
-  show `Found @files.length files to review`
+>> 2. Fan out: parallel review (limited tools — reviewer sees only the file)
+show `\nPhase 1: Review (@files.length files, parallel @parallelism)`
+show `  Tools: @reviewTools`
 
-  >> 2. Fan out: parallel review (limited tools — reviewer sees only the file)
-  show `\nPhase 1: Review (@files.length files, parallel @parallelism)`
-  show `  Tools: @reviewTools`
-  show `───────────────────────────────────────────────────────────────────`
+checkpoint "review"
 
-  let @reviewResults = for parallel(@parallelism) @file in @files [
-    let @filename = @file.mx.filename
-    let @outPath = `@runDir/reviews/@filename\.json`
+var @reviewResults = for parallel(@parallelism) @file in @files [
+  let @filename = @file.mx.filename
+  let @outPath = `@outDir/reviews/@filename\.json`
 
-    >> Idempotency: skip if already reviewed
-    if @exists(@outPath) [
-      show `  @filename: skipped (exists)`
-      => <@outPath> | @parse
-    ]
-
-    >> Build review prompt
-    let @prompt = @reviewPrompt(@file, @file)
-    let @fullPrompt = `@prompt
+  >> Build review prompt
+  let @prompt = @reviewPrompt(@file, @file)
+  let @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema in the prompt.`
 
-    >> Call reviewer (limited tools)
-    @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
-    let @result = <@outPath>?
+  >> Call reviewer (limited tools) — cache handles idempotency
+  @callReview(@fullPrompt, @reviewTools, @outPath)
+  let @result = <@outPath>?
 
-    if !@result [
-      show `  @filename: review failed (no output)`
-      let @evtData = { file: @filename }
-      @logEvent(@runDir, "review_failed", @evtData)
-      => null
-    ]
-
-    show `  @filename: @result.findings.length findings`
-    let @evtData = { file: @filename, finding_count: @result.findings.length }
-    @logEvent(@runDir, "review_complete", @evtData)
-    => @result | @parse
+  if !@result [
+    show `  @filename: review failed (no output)`
+    => null
   ]
 
-  >> Collect all findings from review results
-  let @allFindings = @flatMap(@reviewResults)
+  show `  @filename: @result.findings.length findings`
+  => @result | @parse
+]
 
-  show `\nTotal findings: @allFindings.length`
+>> Collect all findings from review results
+var @allFindings = @flatMap(@reviewResults)
+show `\nTotal findings: @allFindings.length`
 
-  if @allFindings.length == 0 [
-    let @empty = []
-    output @empty to "@outputPath"
-    show `No findings. Written empty result to @outputPath`
-  ] else [
-    >> 3. Verification pass (expanded tools — verifier can explore codebase)
-    show `\nPhase 2: Verification (@allFindings.length findings, parallel @parallelism)`
-    show `  Tools: @verifyTools`
-    show `───────────────────────────────────────────────────────────────────`
+>> 3. Verification pass (expanded tools — verifier can explore codebase)
+show `\nPhase 2: Verification (@allFindings.length findings, parallel @parallelism)`
+show `  Tools: @verifyTools`
 
-    let @verificationResults = for parallel(@parallelism) @finding in @allFindings [
-      let @findingId = `@finding.file-@finding.line`
-      let @outPath = `@runDir/verifications/@findingId\.json`
+checkpoint "verify"
 
-      >> Idempotency
-      if @exists(@outPath) [
-        show `  @findingId: skipped (exists)`
-        => <@outPath> | @parse
-      ]
+var @verificationResults = for parallel(@parallelism) @finding in @allFindings [
+  let @findingId = `@finding.file-@finding.line`
+  let @outPath = `@outDir/verifications/@findingId\.json`
 
-      >> Load the source file for the verifier
-      let @sourceFile = <@finding.file>?
-      let @prompt = @verifyPrompt(@finding, @sourceFile)
-      let @fullPrompt = `@prompt
+  >> Load the source file for the verifier
+  let @sourceFile = <@finding.file>?
+  let @prompt = @verifyPrompt(@finding, @sourceFile)
+  let @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
 
-      >> Call verifier (expanded tools)
-      @claudePoll(@fullPrompt, "sonnet", "@root", @verifyTools, @outPath)
-      let @result = <@outPath>?
+  >> Call verifier (expanded tools) — cache handles idempotency
+  @callVerify(@fullPrompt, @verifyTools, @outPath)
+  let @result = <@outPath>?
 
-      if !@result [
-        show `  @findingId: verification failed (no output) — keeping as confirmed`
-        => { finding: @finding, verdict: "confirmed", reasoning: "verification failed" }
-      ]
-
-      let @status = when @result.verdict [
-        "confirmed" => "CONFIRMED"
-        "false-positive" => "FALSE POSITIVE"
-        "insufficient-context" => "NEEDS CONTEXT"
-        "needs-human" => "NEEDS HUMAN"
-        * => "CONFIRMED"
-      ]
-      show `  @findingId [@finding.severity]: @status — @result.reasoning`
-      let @verEvt = { finding: @findingId, verdict: @result.verdict }
-      @logEvent(@runDir, "verification_complete", @verEvt)
-      => @result
-    ]
-
-    >> 4. Classify results by verdict
-    let @confirmed = @filterByVerdict(@verificationResults, "confirmed")
-    let @falsePositives = @filterByVerdict(@verificationResults, "false-positive")
-    let @needsContext = @filterByVerdict(@verificationResults, "insufficient-context")
-    let @needsHuman = @filterByVerdict(@verificationResults, "needs-human")
-
-    >> 5. Output results
-    show `\n═══════════════════════════════════════════════════════════════════`
-    show `Results: @allFindings.length total findings`
-    show `  Confirmed:            @confirmed.length`
-    show `  False positives:      @falsePositives.length`
-    show `  Insufficient context: @needsContext.length`
-    show `  Needs human review:   @needsHuman.length`
-    show `═══════════════════════════════════════════════════════════════════`
-
-    let @output = {
-      summary: {
-        total_findings: @allFindings.length,
-        confirmed: @confirmed.length,
-        false_positives: @falsePositives.length,
-        insufficient_context: @needsContext.length,
-        needs_human: @needsHuman.length
-      },
-      confirmed: @confirmed,
-      needs_human: @needsHuman,
-      insufficient_context: @needsContext,
-      false_positives: @falsePositives
-    }
-
-    output @output to "@outputPath"
-    let @finalEvt = {
-      files_reviewed: @files.length,
-      total_findings: @allFindings.length,
-      confirmed: @confirmed.length,
-      false_positives: @falsePositives.length,
-      insufficient_context: @needsContext.length,
-      needs_human: @needsHuman.length
-    }
-    run @logEvent(@runDir, "audit_complete", @finalEvt)
-
-    show `Written to @outputPath`
+  if !@result [
+    show `  @findingId: verification failed (no output) — keeping as confirmed`
+    => { finding: @finding, verdict: "confirmed", reasoning: "verification failed" }
   ]
+
+  let @status = when @result.verdict [
+    "confirmed" => "CONFIRMED"
+    "false-positive" => "FALSE POSITIVE"
+    "insufficient-context" => "NEEDS CONTEXT"
+    "needs-human" => "NEEDS HUMAN"
+    * => "CONFIRMED"
+  ]
+  show `  @findingId [@finding.severity]: @status — @result.reasoning`
+  => @result
 ]
+
+>> 4. Classify results by verdict
+var @confirmed = @filterByVerdict(@verificationResults, "confirmed")
+var @falsePositives = @filterByVerdict(@verificationResults, "false-positive")
+var @needsContext = @filterByVerdict(@verificationResults, "insufficient-context")
+var @needsHuman = @filterByVerdict(@verificationResults, "needs-human")
+
+>> 5. Output results
+show `\nResults: @allFindings.length total findings`
+show `  Confirmed:            @confirmed.length`
+show `  False positives:      @falsePositives.length`
+show `  Insufficient context: @needsContext.length`
+show `  Needs human review:   @needsHuman.length`
+
+var @output = {
+  summary: {
+    total_findings: @allFindings.length,
+    confirmed: @confirmed.length,
+    false_positives: @falsePositives.length,
+    insufficient_context: @needsContext.length,
+    needs_human: @needsHuman.length
+  },
+  confirmed: @confirmed,
+  needs_human: @needsHuman,
+  insufficient_context: @needsContext,
+  false_positives: @falsePositives
+}
+
+output @output to "@outputPath"
+show `Written to @outputPath`
