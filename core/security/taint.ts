@@ -211,11 +211,13 @@ export function deriveCodeSourceTaintLabel(language: string | undefined): DataLa
     return undefined;
   }
 
+  if (normalized === 'node' || normalized === 'nodejs') {
+    return 'src:node';
+  }
+
   if (
     normalized === 'js'
     || normalized === 'javascript'
-    || normalized === 'node'
-    || normalized === 'nodejs'
   ) {
     return 'src:js';
   }
