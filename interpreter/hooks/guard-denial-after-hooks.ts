@@ -1,7 +1,7 @@
 import { GuardError, type GuardErrorDetails } from '@core/errors/GuardError';
 import type { HookableNode } from '@core/types/hooks';
 import type { EvalResult } from '@interpreter/core/interpreter';
-import type { DeniedContextSnapshot, GuardContextSnapshot, OperationContext } from '@interpreter/env/ContextManager';
+import type { DeniedContextSnapshot, OperationContext } from '@interpreter/env/ContextManager';
 import type { Environment } from '@interpreter/env/Environment';
 import { runUserAfterHooks } from './user-hook-runner';
 
@@ -11,13 +11,6 @@ interface GuardDenialHookRunOptions {
   operationContext: OperationContext;
   inputs: readonly unknown[];
   error: unknown;
-}
-
-function toGuardContext(details: GuardErrorDetails): GuardContextSnapshot | undefined {
-  if (details.guardContext && typeof details.guardContext === 'object') {
-    return details.guardContext as GuardContextSnapshot;
-  }
-  return undefined;
 }
 
 function toDeniedContext(error: GuardError, details: GuardErrorDetails): DeniedContextSnapshot {
@@ -47,22 +40,12 @@ export async function runUserAfterHooksOnGuardDenial(options: GuardDenialHookRun
 
   const details = (error.details ?? {}) as GuardErrorDetails;
   const deniedContext = toDeniedContext(error, details);
-  const guardContext = toGuardContext(details);
   const deniedResult: EvalResult = {
     value: buildDenialResultValue(error, details),
     env
   };
 
-  const runHooks = async () => {
+  await env.withDeniedContext(deniedContext, async () => {
     await runUserAfterHooks(node, deniedResult, inputs, env, operationContext);
-  };
-
-  if (guardContext) {
-    await env.withGuardContext(guardContext, async () =>
-      env.withDeniedContext(deniedContext, runHooks)
-    );
-    return;
-  }
-
-  await env.withDeniedContext(deniedContext, runHooks);
+  });
 }
