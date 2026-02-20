@@ -288,7 +288,9 @@ describe('evaluateRun phase-0 characterization', () => {
 
   it('extracts runCode args and auto-unwraps content-loader values', async () => {
     const env = createEnv();
-    const tempDir = fs.mkdtempSync(path.join(process.cwd(), 'tmp/run-code-char-'));
+    const tmpBase = path.join(process.cwd(), 'tmp');
+    fs.mkdirSync(tmpBase, { recursive: true });
+    const tempDir = fs.mkdtempSync(path.join(tmpBase, 'run-code-char-'));
     tempPaths.push(tempDir);
     const tempFile = path.join(tempDir, 'input.txt');
     fs.writeFileSync(tempFile, 'wrapped-file-content', 'utf8');

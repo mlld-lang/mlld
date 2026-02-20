@@ -240,7 +240,9 @@ for @question in @questions => @chat(@question)
 ```mlld
 exe @llm(prompt) = cmd {claude "@prompt"}
 
-when @isInteractive => stream @llm("Hello")
+exe @llmStream(prompt) = stream @llm(prompt)
+
+when @isInteractive => @llmStream("Hello")
 when !@isInteractive => show @llm("Hello")
 ```
 
