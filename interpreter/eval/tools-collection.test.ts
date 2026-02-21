@@ -101,4 +101,24 @@ describe('tool collections', () => {
       `)
     ).rejects.toThrow(/cover required parameters/i);
   });
+
+  it('does not evaluate net:r guards during var tools normalization', async () => {
+    const env = await interpretWithEnv(`
+      /guard @noSecretExfil before net:r = when [
+        @input.any.mx.labels.includes("secret") => deny "Secret data cannot flow to network operations"
+        * => allow
+      ]
+      /exe net:r @guardedFetch(url: string) = [
+        => @url
+      ]
+      /var tools @tools = {
+        guardedFetch: { mlld: @guardedFetch, labels: ["net:r"], expose: ["url"] }
+      }
+    `);
+
+    const toolsVar = env.getVariable('tools');
+    expect(toolsVar?.internal?.isToolsCollection).toBe(true);
+    const collection = toolsVar?.internal?.toolCollection as ToolCollection;
+    expect(collection.guardedFetch.mlld).toBe('guardedFetch');
+  });
 });

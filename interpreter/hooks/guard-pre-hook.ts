@@ -75,8 +75,17 @@ export const guardPreHook: PreHook = async (
   operation,
   helpers
 ): Promise<HookDecision> => {
-  if (!operation || (isDirectiveHookTarget(node) && node.kind === 'guard')) {
+  if (!operation) {
     return { action: 'continue' };
+  }
+
+  if (isDirectiveHookTarget(node)) {
+    if (node.kind === 'guard') {
+      return { action: 'continue' };
+    }
+    if (node.kind === 'var' && node.meta?.isToolsCollection === true) {
+      return { action: 'continue' };
+    }
   }
 
   if (env.shouldSuppressGuards()) {

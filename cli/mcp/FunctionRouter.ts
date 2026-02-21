@@ -8,7 +8,6 @@ import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { mcpNameToMlldName, mlldNameToMCPName } from '@core/mcp/names';
 import { asData, asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
-import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 
 export interface FunctionRouterOptions {
   environment: Environment;
@@ -83,7 +82,6 @@ export class FunctionRouter {
         execName,
         execVar,
         resolvedArgs,
-        toolKey,
         definition.labels,
         this.shouldUseObjectArgs(execVar)
       );
@@ -105,7 +103,6 @@ export class FunctionRouter {
         execName,
         execVar,
         args,
-        toolKey,
         undefined,
         this.shouldUseObjectArgs(execVar)
       );
@@ -163,7 +160,6 @@ export class FunctionRouter {
     name: string,
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
-    sourceName?: string,
     toolLabels?: string[],
     argsAsObject?: boolean
   ): ExecInvocation {
@@ -182,15 +178,12 @@ export class FunctionRouter {
       args: argNodes,
     };
 
-    const mcpSecurityDescriptor = this.createMcpSecurityDescriptor(sourceName ?? name);
-
     return {
       type: 'ExecInvocation',
       nodeId: randomUUID(),
       location,
       commandRef,
       meta: {
-        mcpSecurity: mcpSecurityDescriptor,
         toolCallTracking: 'router',
         ...(toolLabels && toolLabels.length > 0 ? { mcpToolLabels: toolLabels } : {})
       }
@@ -199,13 +192,6 @@ export class FunctionRouter {
 
   private shouldUseObjectArgs(execVar: ExecutableVariable): boolean {
     return execVar.internal?.mcpTool?.argumentMode === 'object';
-  }
-
-  private createMcpSecurityDescriptor(toolName: string): SecurityDescriptor {
-    return makeSecurityDescriptor({
-      taint: ['src:mcp'],
-      sources: [`mcp:${toolName}`]
-    });
   }
 
   private async resolveToolArgs(

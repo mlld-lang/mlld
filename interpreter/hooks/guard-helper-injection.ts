@@ -19,20 +19,33 @@ const GUARD_HELPER_SOURCE: VariableSource = {
 };
 
 export function attachGuardHelper(target: Variable, helper: GuardInputHelper): void {
-  const apply = (key: string, value: unknown) => {
-    Object.defineProperty(target as any, key, {
-      value,
-      enumerable: false,
-      configurable: true,
-      writable: false
-    });
+  const apply = (receiver: object, key: string, value: unknown) => {
+    try {
+      Object.defineProperty(receiver, key, {
+        value,
+        enumerable: false,
+        configurable: true,
+        writable: false
+      });
+    } catch {
+      // Non-extensible values should not break guard helper setup.
+    }
   };
 
-  apply('any', helper.any);
-  apply('all', helper.all);
-  apply('none', helper.none);
-  apply('totalTokens', helper.totalTokens);
-  apply('maxTokens', helper.maxTokens);
+  const applyAll = (receiver: object) => {
+    apply(receiver, 'any', helper.any);
+    apply(receiver, 'all', helper.all);
+    apply(receiver, 'none', helper.none);
+    apply(receiver, 'totalTokens', helper.totalTokens);
+    apply(receiver, 'maxTokens', helper.maxTokens);
+  };
+
+  applyAll(target as object);
+
+  const rawValue = (target as { value?: unknown }).value;
+  if (rawValue && (typeof rawValue === 'object' || typeof rawValue === 'function')) {
+    applyAll(rawValue as object);
+  }
 }
 
 export function injectGuardHelpers(

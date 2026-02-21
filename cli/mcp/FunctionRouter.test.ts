@@ -166,7 +166,7 @@ describe('FunctionRouter', () => {
     delete process.env.MLLD_TEST_VAR;
   });
 
-  it('applies src:mcp taint to function result', async () => {
+  it('does not apply src:mcp taint to function result for MCP-served tools', async () => {
     const environment = await createEnvironment(`
       /exe @storeResult(value) = js {
         return { result: value, processed: true };
@@ -180,11 +180,11 @@ describe('FunctionRouter', () => {
 
     const securitySnapshot = environment.getSecuritySnapshot();
     expect(securitySnapshot).toBeDefined();
-    expect(securitySnapshot?.taint).toContain('src:mcp');
-    expect(securitySnapshot?.sources).toContain('mcp:storeResult');
+    expect(securitySnapshot?.taint ?? []).not.toContain('src:mcp');
+    expect(securitySnapshot?.sources ?? []).not.toContain('mcp:storeResult');
   });
 
-  it('applies src:mcp taint even for zero-arg functions', async () => {
+  it('does not apply src:mcp taint for zero-arg MCP-served functions', async () => {
     const environment = await createEnvironment(`
       /exe @getTime() = js {
         return new Date().toISOString();
@@ -198,11 +198,11 @@ describe('FunctionRouter', () => {
 
     const securitySnapshot = environment.getSecuritySnapshot();
     expect(securitySnapshot).toBeDefined();
-    expect(securitySnapshot?.taint).toContain('src:mcp');
-    expect(securitySnapshot?.sources).toContain('mcp:getTime');
+    expect(securitySnapshot?.taint ?? []).not.toContain('src:mcp');
+    expect(securitySnapshot?.sources ?? []).not.toContain('mcp:getTime');
   });
 
-  it('exposes MCP taint to guards for zero-arg functions', async () => {
+  it('does not expose src:mcp taint to guards for MCP-served inputs', async () => {
     const environment = await createEnvironment(`
       /guard @blockMcp before op:exe = when [
         @mx.taint.includes("src:mcp") && @mx.sources.includes("mcp:getTime") => deny "MCP blocked"
@@ -217,7 +217,7 @@ describe('FunctionRouter', () => {
     `);
 
     const router = new FunctionRouter({ environment });
-    await expect(router.executeFunction('get_time', {})).rejects.toThrow('MCP blocked');
+    await expect(router.executeFunction('get_time', {})).resolves.toEqual(expect.any(String));
   });
 
   it('tracks tool calls in @mx.tools.calls', async () => {
