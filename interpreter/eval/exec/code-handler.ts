@@ -143,6 +143,18 @@ export async function executeCodeExecutable(
     const blockResult = await evaluateExeBlock(blockNode, execEnv);
     result = blockResult.value;
     execEnv = blockResult.env;
+  } else if (definition.language === 'mlld-env') {
+    const envDirectiveNode = Array.isArray(definition.codeTemplate)
+      ? (definition.codeTemplate[0] as any)
+      : undefined;
+    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'env') {
+      throw new MlldInterpreterError('mlld-env executable missing env directive');
+    }
+
+    const { evaluateEnv } = await import('@interpreter/eval/env');
+    const envResult = await evaluateEnv(envDirectiveNode, execEnv);
+    result = envResult.value;
+    execEnv = envResult.env;
   } else {
     let code: string;
     if (definition.language === 'bash' || definition.language === 'sh') {

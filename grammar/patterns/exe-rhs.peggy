@@ -34,6 +34,7 @@ ExeRHSContent "exe assignment value"
   / ForExpressionExe            // for @var in @collection => action (exe-specific with directive support)
   / LoopExpressionExe           // loop(...) [ ... ]
   / ExeForeachPattern           // foreach @command(@arrays) as executable body
+  / ExeEnvPattern               // env @config [...] or env with { ... } [...]
   / ExeRunCommandWithStdin      // run {command} with { stdin: @var } - explicit run with stdin
   / ExeRunCommandPipeStdin      // run @var | {command} - pipe sugar stdin syntax
   / ExeStreamCommandPattern     // stream cmd {command} - streaming shell command with optional tail
@@ -532,6 +533,55 @@ ExeForeachPattern "exe foreach pattern"
           isForeach: true
         }
       };
+    }
+
+ExeEnvPattern "exe env pattern"
+  = "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock {
+      const values = {
+        ...(config ? { config: [config] } : {}),
+        ...(withClause ? { envWithClause: withClause } : {}),
+        block
+      };
+
+      const raw = {};
+      if (config) {
+        raw.config = helpers.reconstructRawString([config]);
+      }
+      if (withClause) {
+        raw.envWithClause = withClause;
+      }
+
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true,
+        hasConfig: !!config
+      };
+
+      if (withClause) {
+        meta.envWithClause = withClause;
+      }
+
+      return {
+        subtype: 'exeEnv',
+        source: 'env',
+        values,
+        raw,
+        meta
+      };
+    }
+  / "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
+      helpers.mlldError(
+        'env requires a config expression or with clause. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        '@config or with { ... }',
+        location()
+      );
+    }
+  / "env" _ config:EnvConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
+      helpers.mlldError(
+        'env requires a block. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        '[',
+        location()
+      );
     }
 
 

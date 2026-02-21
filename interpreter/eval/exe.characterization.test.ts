@@ -245,6 +245,34 @@ describe('exe evaluator characterization', () => {
         }
       },
       {
+        identifier: 'envExec',
+        directive: createDirective(
+          'envExec',
+          'exeEnv',
+          {
+            envWithClause: { profile: 'readonly' },
+            block: {
+              type: 'ExeBlock',
+              nodeId: 'env-exec-block',
+              values: {
+                statements: [createText('noop')]
+              },
+              meta: {
+                statementCount: 1,
+                hasReturn: false
+              }
+            }
+          },
+          { statementCount: 1, hasReturn: false }
+        ),
+        assertDef: (def: any) => {
+          expect(def.type).toBe('code');
+          expect(def.language).toBe('mlld-env');
+          expect(def.codeTemplate?.[0]?.kind).toBe('env');
+          expect(def.codeTemplate?.[0]?.values?.withClause?.profile).toBe('readonly');
+        }
+      },
+      {
         identifier: 'blockExec',
         directive: createDirective(
           'blockExec',

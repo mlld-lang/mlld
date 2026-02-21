@@ -125,6 +125,33 @@ function chainDebug(message: string, payload?: Record<string, unknown>): void {
   }
 }
 
+function hasUntrustedWithoutTrusted(descriptor?: SecurityDescriptor): boolean {
+  if (!descriptor) {
+    return false;
+  }
+  const hasUntrusted =
+    descriptor.labels.includes('untrusted') || descriptor.taint.includes('untrusted');
+  const hasTrusted =
+    descriptor.labels.includes('trusted') || descriptor.taint.includes('trusted');
+  return hasUntrusted && !hasTrusted;
+}
+
+function stripTrustedFromDescriptor(descriptor: SecurityDescriptor): SecurityDescriptor {
+  const labels = descriptor.labels.filter(label => label !== 'trusted');
+  const taint = descriptor.taint.filter(label => label !== 'trusted');
+  if (labels.length === descriptor.labels.length && taint.length === descriptor.taint.length) {
+    return descriptor;
+  }
+
+  return makeSecurityDescriptor({
+    labels,
+    taint,
+    sources: descriptor.sources,
+    capability: descriptor.capability,
+    policyContext: descriptor.policyContext ? { ...descriptor.policyContext } : undefined
+  });
+}
+
 const resolveVariableIndexValue = async (fieldValue: any, env: Environment): Promise<unknown> => {
   const { evaluateDataValue } = await import('./data-value-evaluator');
   const node =
@@ -1609,8 +1636,20 @@ async function evaluateExecInvocationInternal(
     }
   }
 
-  mergeResultDescriptor(execEnv.getLocalSecurityDescriptor());
-  mergeResultDescriptor(extractSecurityDescriptor(result));
+  const localExecutionDescriptor = execEnv.getLocalSecurityDescriptor();
+  const resultValueDescriptor = extractSecurityDescriptor(result);
+  const shouldPreferUntrustedReturn = hasUntrustedWithoutTrusted(resultValueDescriptor);
+
+  mergeResultDescriptor(
+    shouldPreferUntrustedReturn && localExecutionDescriptor
+      ? stripTrustedFromDescriptor(localExecutionDescriptor)
+      : localExecutionDescriptor
+  );
+  mergeResultDescriptor(resultValueDescriptor);
+
+  if (shouldPreferUntrustedReturn && resultSecurityDescriptor) {
+    resultSecurityDescriptor = stripTrustedFromDescriptor(resultSecurityDescriptor);
+  }
 
   if (resultSecurityDescriptor) {
     const structured = wrapExecResult(result);

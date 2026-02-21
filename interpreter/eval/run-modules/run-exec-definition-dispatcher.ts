@@ -649,6 +649,28 @@ async function handleCodeDefinition(
     };
   }
 
+  if ((definition as any).language === 'mlld-env') {
+    const envDirectiveNode = Array.isArray((definition as any).codeTemplate)
+      ? ((definition as any).codeTemplate[0] as any)
+      : undefined;
+    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'env') {
+      throw new Error('mlld-env executable missing env directive');
+    }
+
+    const execEnv = env.createChild();
+    for (const [key, value] of Object.entries(codeParams)) {
+      bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
+    }
+
+    const { evaluateEnv } = await import('@interpreter/eval/env');
+    const envResult = await evaluateEnv(envDirectiveNode, execEnv);
+    return {
+      value: envResult.value,
+      outputDescriptors,
+      callStack
+    };
+  }
+
   const code = await services.interpolateWithPendingDescriptor(
     (definition as any).codeTemplate,
     InterpolationContext.ShellCommand,

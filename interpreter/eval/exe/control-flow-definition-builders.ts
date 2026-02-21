@@ -101,6 +101,59 @@ export function buildControlFlowExecutableDefinition(
     } satisfies CodeExecutable;
   }
 
+  if (directive.subtype === 'exeEnv') {
+    const blockNode = (directive.values as any)?.block as ExeBlockNode | undefined;
+    if (!blockNode || blockNode.type !== 'ExeBlock') {
+      throw new Error('Exec env directive missing env block');
+    }
+
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    const envConfig = Array.isArray((directive.values as any)?.config)
+      ? ((directive.values as any).config as any[])
+      : undefined;
+    const envWithClause = (directive.values as any)?.envWithClause;
+
+    const envDirective = {
+      type: 'Directive',
+      kind: 'env',
+      subtype: 'env',
+      source: 'env',
+      nodeId: directive.nodeId,
+      values: {
+        ...(envConfig && envConfig.length > 0 ? { config: envConfig } : {}),
+        ...(envWithClause ? { withClause: envWithClause } : {}),
+        block: blockNode
+      },
+      raw: {
+        ...((directive.raw as any)?.config !== undefined
+          ? { config: (directive.raw as any).config }
+          : {}),
+        ...((directive.raw as any)?.envWithClause !== undefined
+          ? { withClause: (directive.raw as any).envWithClause }
+          : {})
+      },
+      meta: {
+        statementCount:
+          (directive.meta as any)?.statementCount ??
+          blockNode?.meta?.statementCount ??
+          blockNode?.values?.statements?.length ??
+          0,
+        hasReturn: (directive.meta as any)?.hasReturn ?? blockNode?.meta?.hasReturn === true,
+        ...(envWithClause ? { withClause: envWithClause } : {})
+      },
+      location: directive.location
+    } as DirectiveNode;
+
+    return {
+      type: 'code',
+      codeTemplate: [envDirective],
+      language: 'mlld-env',
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies CodeExecutable;
+  }
+
   if (directive.subtype === 'exeBlock') {
     const statements = (directive.values as any)?.statements || [];
     const returnStmt = (directive.values as any)?.return;

@@ -93,6 +93,7 @@ export type ExeSubtype =
   | 'exeForeach'
   | 'exeFor'
   | 'exeLoop'
+  | 'exeEnv'
   | 'exeResolver'
   | 'exeBlock';
 

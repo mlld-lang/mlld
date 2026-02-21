@@ -8,12 +8,12 @@ import type { ExeBlockNode } from './exe';
 
 export interface EnvDirectiveNode extends TypedDirectiveNode<'env', 'env'> {
   values: {
-    config: BaseMlldNode[];
+    config?: BaseMlldNode[];
     withClause?: WithClause;
     block: ExeBlockNode;
   };
   raw: {
-    config: string;
+    config?: string;
     withClause?: WithClause;
   };
   meta: {

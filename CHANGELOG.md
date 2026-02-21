@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc83]
 
+### Added
+- `env with { ... } [ ... ]` configless block syntax for `/env`.
+- `/exe` definitions now accept `env` blocks directly on the RHS (`/exe @fn(...) = env with { ... } [ ... ]`).
+
 ### Fixed
 - Error display now renders all content (header, source context, details, suggestion) inside the `mlld error` box frame. Directive trace chain appears at top, error details below. Fixes `:unknown` locations in trace and strips `/` prefix from directive names.
 - `src:mcp` taint no longer applies to inputs of MCP-served tools (`mlld mcp`); it remains scoped to data returned from imported MCP tools.
@@ -19,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `var tools` normalization no longer triggers `before <operation-label>` guard evaluation; those guards now run only during actual operation execution.
 - Guard quantifier helpers now attach to object-valued guard inputs, preventing `@input.any.mx.*` field-access failures in operation guards.
 - `npm run test:case -- ...` now accepts `tests/cases/...`, `tests/fixtures/...`, absolute paths, and direct `example.md`/`example.mld` fixture paths.
+- Return label trust asymmetry is preserved for executable returns; explicit `=> untrusted ...` results no longer regain `trusted` from ambient invocation descriptors.
 
 ## [2.0.0-rc82]
 
