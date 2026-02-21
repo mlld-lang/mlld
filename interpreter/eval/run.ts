@@ -4,7 +4,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import type { SecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { executePipeline } from './pipeline';
 import { FormatAdapterSink } from './pipeline/stream-sinks/format-adapter';
 import { getAdapter } from '../streaming/adapter-registry';
@@ -249,6 +249,11 @@ export async function evaluateRun(
 
     const execDescriptor = execVar.mx ? varMxToSecurityDescriptor(execVar.mx) : undefined;
     const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
+    const exeOutputLabels = exeLabels.filter(
+      (label): label is string => typeof label === 'string' && label.length > 0
+    );
+    const exeOutputDescriptor =
+      exeOutputLabels.length > 0 ? makeSecurityDescriptor({ labels: exeOutputLabels }) : undefined;
     
     const { argValues, argRuntimeValues, argDescriptors } = await extractRunExecArguments({
       directive,
@@ -280,6 +285,7 @@ export async function evaluateRun(
       }
     });
     callStack = dispatchResult.callStack;
+    mergePendingDescriptor(exeOutputDescriptor);
     for (const descriptor of dispatchResult.outputDescriptors) {
       mergePendingDescriptor(descriptor);
     }

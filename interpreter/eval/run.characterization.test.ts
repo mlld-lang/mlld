@@ -460,6 +460,42 @@ describe('evaluateRun phase-0 characterization', () => {
     expect(asText(proseResult.value)).toBe('prose:result');
   });
 
+  it('propagates executable labels into /run exec output taint', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/exe untrusted @search(q) = `{"id":"x","q":"@q"}`',
+        '/run @search("query")'
+      ].join('\n'),
+      env
+    );
+
+    const result = await evaluateRun(runDirective, env);
+    const taint = (result.value as any)?.mx?.taint ?? [];
+
+    expect(taint).toEqual(expect.arrayContaining(['untrusted', 'src:template']));
+  });
+
+  it('propagates /run exec output labels into downstream pipeline stages', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/var @policyConfig = { labels: { "untrusted": { deny: ["destructive"] } } }',
+        '/policy @p = union(@policyConfig)',
+        '/exe untrusted @search(q) = `@q`',
+        '/exe destructive @closeIssue(id) = `closed:@id`',
+        '/run @search("q") with { pipeline: [@closeIssue(@p)] }'
+      ].join('\n'),
+      env
+    );
+
+    const result = await evaluateRun(runDirective, env);
+    const taint = (result.value as any)?.mx?.taint ?? [];
+
+    expect(asText(result.value)).toBe('closed:q');
+    expect(taint).toEqual(expect.arrayContaining(['untrusted', 'destructive']));
+  });
+
   it('passes inline object literals through /run executable parameters', async () => {
     const env = createEnv();
     const runDirective = await setupSingleRun(
