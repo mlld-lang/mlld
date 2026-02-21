@@ -262,6 +262,18 @@ describe('Environment characterization', () => {
       expect(env.getVariable('paramScoped')).toBeUndefined();
       expect(env.getNodes().some((node: any) => node.content === 'child-node')).toBe(true);
     });
+
+    it('merges child security descriptor state into the parent runtime', () => {
+      const env = createEnvironment();
+      const child = env.createChild();
+      child.recordSecurityDescriptor(makeSecurityDescriptor({ taint: ['net:r'], sources: ['tool:fetch'] }));
+
+      env.mergeChild(child);
+
+      const snapshot = env.getSecuritySnapshot();
+      expect(snapshot?.taint ?? []).toEqual(expect.arrayContaining(['net:r']));
+      expect(snapshot?.sources ?? []).toEqual(expect.arrayContaining(['tool:fetch']));
+    });
   });
 
   describe('cleanup behavior', () => {

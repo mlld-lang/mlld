@@ -1014,6 +1014,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.parent?.getSecuritySnapshot();
   }
 
+  getLocalSecurityDescriptor(): SecurityDescriptor | undefined {
+    const descriptor = this.securityRuntime?.descriptor;
+    if (!descriptor) {
+      return undefined;
+    }
+    if (descriptor.labels.length === 0 && descriptor.taint.length === 0 && descriptor.sources.length === 0) {
+      return undefined;
+    }
+    return descriptor;
+  }
+
   private snapshotToDescriptor(snapshot?: SecuritySnapshotLike): SecurityDescriptor | undefined {
     if (!snapshot) {
       return undefined;
@@ -2263,6 +2274,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         continue;
       }
       this.variableManager.setVariable(name, variable);
+    }
+    const childDescriptor = child.getLocalSecurityDescriptor();
+    if (childDescriptor) {
+      this.recordSecurityDescriptor(childDescriptor);
     }
     this.nodes.push(...child.nodes);
   }

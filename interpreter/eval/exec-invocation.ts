@@ -1609,6 +1609,7 @@ async function evaluateExecInvocationInternal(
     }
   }
 
+  mergeResultDescriptor(execEnv.getLocalSecurityDescriptor());
   mergeResultDescriptor(extractSecurityDescriptor(result));
 
   if (resultSecurityDescriptor) {

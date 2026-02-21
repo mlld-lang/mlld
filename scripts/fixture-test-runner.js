@@ -37,12 +37,42 @@ function findFixtures(basePath) {
   return fixtures;
 }
 
+function normalizeFixturePattern(pattern) {
+  let normalized = String(pattern || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\.\/+/, '')
+    .replace(/\/$/, '');
+
+  const embeddedCases = normalized.indexOf('/tests/cases/');
+  if (embeddedCases >= 0) {
+    normalized = normalized.slice(embeddedCases + '/tests/cases/'.length);
+  }
+  const embeddedFixtures = normalized.indexOf('/tests/fixtures/');
+  if (embeddedFixtures >= 0) {
+    normalized = normalized.slice(embeddedFixtures + '/tests/fixtures/'.length);
+  }
+
+  for (const prefix of ['tests/cases/', 'tests/fixtures/', 'cases/', 'fixtures/']) {
+    if (normalized.startsWith(prefix)) {
+      normalized = normalized.slice(prefix.length);
+      break;
+    }
+  }
+
+  normalized = normalized
+    .replace(/\/(example|expected|error|warning)(-[^/]+)?\.(md|mld)$/i, '')
+    .replace(/\.generated-fixture\.json$/i, '')
+    .replace(/\/$/, '');
+
+  return normalized;
+}
+
 function getMatchingFixtures(pattern) {
   const fixturesDir = 'tests/fixtures';
   const allFixtures = findFixtures(fixturesDir);
 
-  // Normalize pattern: remove trailing slash, forward slashes only
-  const normalizedPattern = pattern.replace(/\/$/, '').replace(/\\/g, '/');
+  const normalizedPattern = normalizeFixturePattern(pattern);
 
   // Exact match first
   const exact = allFixtures.filter(f => f === normalizedPattern);

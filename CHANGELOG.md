@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security label/taint propagation now survives template-literal interpolation passed as executable arguments.
 - Executable argument expressions (`? :`, unary/binary forms, and when-expression values) now preserve security descriptors.
 - Array/object literals now retain label/taint metadata from nested expression values.
+- Executable outputs now inherit taint introduced by nested tool/executable calls during actual execution paths (for example, nested `net:r` labels now propagate to parent `exe` output only when invoked).
+- `npm run test:case -- ...` now accepts `tests/cases/...`, `tests/fixtures/...`, absolute paths, and direct `example.md`/`example.mld` fixture paths.
 
 ## [2.0.0-rc82]
 
