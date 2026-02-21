@@ -145,7 +145,8 @@ function main() {
   console.log('');
 
   try {
-    const cmd = `NODE_ENV=test MLLD_NO_STREAMING=true vitest run interpreter/interpreter.fixture.test.ts -t "${combinedPattern}"`;
+    const hideSkippedFlag = process.env.MLLD_SHOW_SKIPPED === '1' ? '' : ' --hideSkippedTests';
+    const cmd = `NODE_ENV=test MLLD_NO_STREAMING=true vitest run interpreter/interpreter.fixture.test.ts${hideSkippedFlag} -t "${combinedPattern}"`;
     // Use ['ignore', 'inherit', 'inherit'] to prevent TTY suspension
     execSync(cmd, { stdio: ['ignore', 'inherit', 'inherit'] });
   } catch (error) {
