@@ -33,14 +33,15 @@ The label appears before the variable name when you declare it.
 
 **Auto-applied `secret` label:**
 
-Values retrieved from the keychain automatically receive the `secret` label:
+Values retrieved from the keychain automatically receive the `secret` label and `src:keychain` source taint:
 
 ```mlld
 var @key = keychain.get("api-token")
 show @key.mx.labels
+show @key.mx.taint
 ```
 
-Output: `["secret"]`
+Output: `["secret"]` and `["secret", "src:keychain"]`
 
 This is the ONLY case where sensitivity labels are auto-applied. All other sensitivity labels must be declared explicitly.
 

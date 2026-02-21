@@ -25,7 +25,7 @@ Labels make this possible. When an operation is attempted, mlld checks whether t
 |----------|----------|-------------|
 | Trust | `trusted`, `untrusted` | Policy defaults, explicit declaration |
 | Sensitivity | `secret`, `sensitive`, `pii` | Explicit declaration, keychain |
-| Source | `src:mcp`, `src:exec`, `src:file` | Auto-applied by system |
+| Source | `src:mcp`, `src:cmd`, `src:js`, `src:file` | Auto-applied by system |
 | Operation | `op:cmd:git:status`, `op:sh` | Auto-applied during execution |
 | Custom | `internal`, `redacted` | User-defined |
 

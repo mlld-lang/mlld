@@ -45,6 +45,52 @@ var @result = @financials | @transform | @process
 show @result.mx.labels     // ["secret"]
 ```
 
+**Expressions:** Ternary/conditional expressions, nullish coalescing, and object spread all preserve labels from their inputs.
+
+```mlld
+var pii @name = "Alice"
+var @flag = true
+var @result = @flag ? @name : "anon"
+show @result.mx.labels     // ["pii"]
+
+var @other = null
+var @fallback = @other ?? @name
+show @fallback.mx.labels   // ["pii"]
+
+var secret @creds = { key: "sk-123" }
+var @copy = { ...@creds, extra: "x" }
+show @copy.mx.labels       // ["secret"]
+```
+
+**When-expressions:** Labels from the matched branch propagate to the result.
+
+```mlld
+var pii @name = "Alice"
+var @result = when [
+  true => @name
+  * => "anonymous"
+]
+show @result.mx.labels     // ["pii"]
+```
+
+**For-loops:** Source labels propagate through iteration results.
+
+```mlld
+var secret @items = ["alpha", "beta"]
+var @results = for @item in @items => @item.toUpperCase()
+show @results.mx.labels    // ["secret"]
+```
+
+**Code blocks:** Labels on arguments survive round-trips through `js`, `sh`, `py`, and `cmd` blocks. The block type also adds its own source taint.
+
+```mlld
+var pii @name = "Alice"
+exe @process(val) = js { return val.toUpperCase(); }
+var @result = @process(@name)
+show @result.mx.labels     // ["pii"]
+show @result.mx.taint      // ["pii", "src:js"]
+```
+
 **File I/O:** When labeled data is written to disk, the audit log records the taint. Reading the file restores it.
 
 ```mlld

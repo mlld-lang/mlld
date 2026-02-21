@@ -54,7 +54,7 @@ The `op:` prefix is for disambiguation — use it when you want operation-only m
 All guards have access to the full operation context:
 
 - `@mx.labels` - semantic classification (what it is): `secret`, `pii`, `untrusted`
-- `@mx.taint` - provenance (where it came from): `src:mcp`, `src:exec`, `src:file`
+- `@mx.taint` - provenance (where it came from): `src:mcp`, `src:cmd`, `src:js`, `src:file`
 - `@mx.sources` - transformation trail (how it got here): `mcp:createIssue`, `command:curl`
 - `@mx.op.labels` - operation labels, including exe labels like `destructive` or `net:w`
 

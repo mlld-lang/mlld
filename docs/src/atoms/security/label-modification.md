@@ -109,13 +109,13 @@ Guards also support `allow with { ... }` action syntax for privileged label modi
 These labels require privilege to remove:
 - `secret` - Prevents self-blessing of sensitive data
 - `untrusted` - Tracks trust state
-- `src:mcp`, `src:exec`, `src:file`, `src:network` - Provenance tracking
+- `src:*` (all source labels: `src:mcp`, `src:cmd`, `src:sh`, `src:js`, `src:py`, `src:file`, `src:network`, `src:keychain`, etc.) - Provenance tracking
 
 Attempting to remove protected labels without privilege throws `PROTECTED_LABEL_REMOVAL` error.
 
 **Factual labels:**
 
-Labels starting with `src:` are factual provenance labels. They are part of `.mx.taint` and may not appear in `.mx.labels`. Use `.mx.taint` for source checks such as `src:mcp` and `src:exec`. `clear!` does not remove factual labels.
+Labels starting with `src:` are factual provenance labels. They are part of `.mx.taint` and may not appear in `.mx.labels`. Use `.mx.taint` for source checks such as `src:mcp` and `src:cmd`. `clear!` does not remove factual labels.
 
 **Guard context:**
 

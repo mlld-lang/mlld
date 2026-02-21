@@ -30,7 +30,7 @@
 /show "The following denial will include:"
 /show "- Operation type and description"
 /show "- Blocker: Policy p, rule: no-secret-exfil"
-/show "- Input labels: [exfil, secret, src:exec]"
+/show "- Input labels: [exfil, secret, src:cmd]"
 /show "- Operation labels: [op:cmd, op:cmd:curl, exfil]"
 /show "- Clear reason: Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'"
 /show "- Suggestions for resolution"

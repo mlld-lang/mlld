@@ -13,8 +13,17 @@ qa_tier: 2
 
 | Label | Applied To |
 |-------|------------|
-| `src:exec` | Results from `/run` and `/exe` |
+| `src:cmd` | Output from `cmd { }` blocks |
+| `src:sh` | Output from `sh { }` blocks |
+| `src:js` | Output from `js { }` blocks |
+| `src:py` | Output from `py { }` blocks |
+| `src:template` | Output from `template` executables |
+| `src:exe` | Output from pure mlld executables (no code block) |
 | `src:file` | File loads |
+| `src:mcp` | MCP tool call results |
+| `src:user` | User input (via `@input` resolver) |
+| `src:network` | Network fetches |
+| `src:keychain` | Values from the keychain |
 | `src:dynamic` | Dynamic module imports |
 | `src:env:<provider>` | Environment provider outputs |
 | `dir:/path` | File directories (all parents) |

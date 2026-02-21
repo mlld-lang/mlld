@@ -17,11 +17,17 @@ Source labels are automatically applied by the system to track where data origin
 
 | Label | Applied When |
 |-------|--------------|
+| `src:cmd` | Output from `cmd { }` blocks |
+| `src:sh` | Output from `sh { }` blocks |
+| `src:js` | Output from `js { }` blocks |
+| `src:py` | Output from `py { }` blocks |
+| `src:template` | Output from `template` executables |
+| `src:exe` | Output from pure mlld executables (no code block) |
 | `src:file` | Content loaded from files |
-| `src:exec` | Output from command execution |
 | `src:user` | User input (via `@input` resolver) |
 | `src:mcp` | Data from MCP tool calls |
 | `src:network` | Network fetches |
+| `src:keychain` | Values retrieved from the keychain |
 | `src:dynamic` | Runtime-injected modules |
 | `src:env:<provider>` | Output from environment providers |
 
@@ -38,15 +44,28 @@ show @config.mx.taint | @parse
 
 Output includes `["src:file", "dir:/path/to/parent", ...]` - the file source plus all parent directories. Note: `@root` resolves from the project root location, ensuring paths work from any working directory.
 
-**Command execution example:**
+**Code block examples:**
+
+Each code block type adds its own source label. Input labels from arguments are preserved alongside the source taint.
 
 ```mlld
-exe @runCmd() = run { echo "hello" }
-var @result = @runCmd()
-show @result.mx.taint | @parse
+exe @fromCmd(val) = cmd { printf "%s" "@val" }
+exe @fromSh(val) = sh { echo "$val" }
+exe @fromJs(val) = js { return val; }
+exe @fromPy(val) = py { print(val) }
+
+var pii @name = "Alice"
+
+var @cmdResult = @fromCmd(@name)
+show @cmdResult.mx.taint | @parse
+>> ["pii", "src:cmd"]
+
+var @jsResult = @fromJs(@name)
+show @jsResult.mx.taint | @parse
+>> ["pii", "src:js"]
 ```
 
-Output: `["src:exec"]`
+Source taint stacks with input labels: the `pii` label from `@name` is preserved, and the execution medium is recorded.
 
 **Why source labels matter:**
 
