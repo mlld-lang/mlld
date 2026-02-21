@@ -676,6 +676,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     return formattedTests.some(test => fixture.name.includes(test));
   }
 
+  function usesMcpSubprocess(fixture: any): boolean {
+    return typeof fixture?.input === 'string' && /\bmlld\s+mcp\b/.test(fixture.input);
+  }
+
   // Recursive function to copy test files to virtual filesystem
   async function copyTestFilesToVFS(sourcePath: string, targetPath: string) {
     const entries = fs.readdirSync(sourcePath, { withFileTypes: true });
@@ -924,6 +928,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     const isKnownSlowFixture = slowFixtureMatchers.some(slow => fixture.name.includes(slow));
     const shouldSkipSlow = isFastTestMode && isKnownSlowFixture;
     const requiresPythonRuntime = fixture.name.startsWith('exceptions/python/');
+    const requiresMcpSubprocess = usesMcpSubprocess(fixture);
     const shouldSkipMissingPython = requiresPythonRuntime && !pythonRuntimeAvailable;
     const shouldSkipLive = fixture.live && process.env.MLLD_LIVE !== '1';
 
@@ -1231,6 +1236,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       try {
         // For path assignment tests, we need to set the correct basePath
         let basePath = fixture.basePath || '/';
+
+        if (requiresMcpSubprocess) {
+          // MCP subprocesses execute on the real filesystem, so run from repo root
+          // to resolve tests/cases/... module paths consistently.
+          basePath = path.join(__dirname, '..');
+        }
         
         if (fixture.name.endsWith('/assignment-project') || fixture.name.endsWith('/assignment-special')) {
           basePath = '/mock/project';
