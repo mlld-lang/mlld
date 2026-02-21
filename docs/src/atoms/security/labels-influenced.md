@@ -13,12 +13,11 @@ updated: 2026-02-01
 Mark LLM outputs as `influenced` when they process untrusted data.
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: ["untrusted-llms-get-influenced"]
   }
 }
-policy @p = union(@policyConfig)
 
 var untrusted @task = "Review this external input"
 exe llm @process(input) = run cmd { claude -p "@input" }

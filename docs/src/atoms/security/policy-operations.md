@@ -18,14 +18,13 @@ exe net:w @postToSlack(msg) = run cmd { slack-cli "@msg" }
 exe fs:w @deleteFile(path) = run cmd { rm -rf "@path" }
 
 >> Step 2: Policy maps semantic labels to risk categories
-var @policyConfig = {
+policy @p = {
   defaults: { rules: ["no-secret-exfil", "no-untrusted-destructive"] },
   operations: {
     "net:w": "exfil",
     "fs:w": "destructive"
   }
 }
-policy @p = union(@policyConfig)
 ```
 
 Now `secret` data cannot flow to `@postToSlack` (exfil rule) and `untrusted` data cannot flow to `@deleteFile` (destructive rule).
@@ -49,7 +48,7 @@ Now `secret` data cannot flow to `@postToSlack` (exfil rule) and `untrusted` dat
 ```mlld
 exe net:w, fs:w @exportAndDelete(data) = run cmd { backup_and_delete "@data" }
 
-var @policyConfig = {
+policy @p = {
   operations: { "net:w": "exfil", "fs:w": "destructive" }
 }
 ```
@@ -66,11 +65,10 @@ This is simpler but couples exe definitions to risk categories. The two-step pat
 **Complete example:**
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
   operations: { "net:w": "exfil" }
 }
-policy @p = union(@policyConfig)
 
 var secret @patientRecords = <clinic/patients.csv>
 exe net:w @post(data) = run cmd { curl -d "@data" https://api.example.com }

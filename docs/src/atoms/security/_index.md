@@ -91,14 +91,13 @@ Policies are declarative. Where guards are per-operation imperative logic, polic
 ### Policy Structure
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: { rules: [...], unlabeled: "untrusted" },
   operations: { "net:w": "exfil", "fs:w": "destructive" },
   capabilities: { allow: [...], deny: [...], danger: [...] },
   labels: { secret: { deny: ["op:show", "exfil"] } },
   auth: { claude: { from: "keychain:...", as: "ANTHROPIC_API_KEY" } }
 }
-policy @p = union(@policyConfig)
 ```
 
 **Key sections:**

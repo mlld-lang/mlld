@@ -27,7 +27,7 @@
 >> POLICY CONFIGURATION
 >> ============================================
 
-/var @policyConfig = {
+/policy @p = {
   defaults: {
     rules: ["no-secret-exfil"]
   },
@@ -41,7 +41,6 @@
     }
   }
 }
-/policy @p = union(@policyConfig)
 
 >> ============================================
 >> PROTECTION 1: SECRET DATA PROTECTION

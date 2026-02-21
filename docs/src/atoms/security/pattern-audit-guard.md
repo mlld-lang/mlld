@@ -15,14 +15,13 @@ Combine signing, verification, influenced labels, and policy to defend against p
 
 ```mlld
 >> Policy: auto-sign templates, auto-verify for llm exes, influenced labels
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true,
     rules: ["untrusted-llms-get-influenced"]
   }
 }
-policy @p = union(@policyConfig)
 
 >> Enforcement: autoverify suggests, the guard mandates
 guard @ensureVerified after llm = when [

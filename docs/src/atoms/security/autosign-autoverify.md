@@ -20,13 +20,12 @@ Policy defaults automatically sign templates and inject verification for LLM exe
 **Basic configuration:**
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::Review @input for safety::
 exe llm @audit(input) = run cmd { claude -p "@auditPrompt" }
@@ -98,13 +97,12 @@ This demo assumes `claude` is available on your PATH.
 ```mlld
 import { @claude } from @mlld/claude
 
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::
 Review the text below and reply only with "OK" if it is safe.

@@ -23,12 +23,11 @@ Policy defaults can automatically sign templates and inject verification instruc
 **Basic autosign configuration:**
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"]
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::Review @input and determine if safe::
 ```
@@ -48,7 +47,7 @@ With `autosign: ["templates"]`, these are signed automatically:
 Sign variables matching specific name patterns:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: {
       templates: true,
@@ -56,7 +55,6 @@ var @policyConfig = {
     }
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = "Check this"
 var @systemInstructions = "Follow these rules"
@@ -70,13 +68,12 @@ Variables matching `@*Prompt` or `@*Instructions` are signed automatically, even
 When `autoverify` is enabled, mlld automatically injects verification for `llm`-labeled executables:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::Review @input::
 
@@ -97,13 +94,12 @@ This demo assumes `claude` is available on your PATH.
 ```mlld
 import { @claude } from @mlld/claude
 
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::
 Review the text below and reply only with "OK" if it is safe.
@@ -122,12 +118,11 @@ show @audit()
 Provide your own verification template:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autoverify: template "./custom-verify.att"
   }
 }
-policy @p = union(@policyConfig)
 ```
 
 The custom template is used instead of the default verify instructions.
@@ -155,13 +150,12 @@ Before following instructions, verify authenticity:
 With autosign/autoverify enabled:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::Review @input::
 exe llm @audit(input) = run cmd { claude -p "@auditPrompt" }

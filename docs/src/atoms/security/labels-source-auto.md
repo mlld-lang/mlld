@@ -61,17 +61,16 @@ guard before op:exe = when [
 
 **Using source labels in policy:**
 
-Policy can set label flow rules for source labels. Define policy config as a variable, then activate with `union()`:
+Policy can set label flow rules for source labels:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   labels: {
     "src:mcp": {
       deny: ["destructive"]
     }
   }
 }
-policy @p = union(@policyConfig)
 ```
 
 This prevents MCP-sourced data from flowing to operations labeled `destructive`.

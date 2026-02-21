@@ -14,7 +14,7 @@ qa_tier: 2
 The `labels` block in policy defines which data labels can flow to which operations.
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   labels: {
     secret: {
       deny: ["op:cmd", "op:show", "net:w"]
@@ -25,7 +25,6 @@ var @policyConfig = {
     }
   }
 }
-policy @p = union(@policyConfig)
 ```
 
 **Deny/allow targets** are operation labels -- both auto-applied (`op:cmd`, `op:show`) and user-declared (`net:w`, `destructive`, `safe`).
@@ -43,12 +42,11 @@ Label-flow policy evaluates declared labels and taint labels (`src:*`, `dir:*`) 
 **Complete denial example:**
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   labels: {
     secret: { deny: ["op:show"] }
   }
 }
-policy @p = union(@policyConfig)
 
 var secret @customerList = <internal/customers.csv>
 show @customerList

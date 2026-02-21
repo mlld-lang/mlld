@@ -10,7 +10,7 @@
 >>
 >> Run: npx mlld docs/src/atoms/security/examples/protection-4-errors.mld
 
-/var @policyConfig = {
+/policy @p = {
   defaults: {
     rules: ["no-secret-exfil"]
   },
@@ -20,7 +20,6 @@
     }
   }
 }
-/policy @p = union(@policyConfig)
 
 >> Load proprietary data marked as secret
 /var secret @customerList = <internal/customers.csv>

@@ -14,7 +14,7 @@ qa_tier: 2
 A policy object combines all security configuration into a single declaration.
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: [
       "no-secret-exfil",
@@ -33,7 +33,6 @@ var @policyConfig = {
     danger: ["@keychain"]
   }
 }
-policy @p = union(@policyConfig)
 ```
 
 **`defaults`** sets baseline behavior. `rules` enables built-in security rules that block dangerous label-to-operation flows. `unlabeled` optionally auto-labels all data that has no user-assigned labels -- set to `"untrusted"` to treat unlabeled data as untrusted, or `"trusted"` to treat it as trusted. This is opt-in; without it, unlabeled data has no trust label.

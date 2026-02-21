@@ -20,14 +20,13 @@ The single-auditor pattern (`pattern-audit-guard`) has a weakness: the auditor r
 
 ```mlld
 >> Policy: autosign, autoverify, influenced tracking
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true,
     rules: ["untrusted-llms-get-influenced"]
   }
 }
-policy @p = union(@policyConfig)
 
 >> Enforcement: both auditor LLMs must verify instructions
 guard @ensureVerified after llm = when [

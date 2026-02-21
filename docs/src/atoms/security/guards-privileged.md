@@ -26,11 +26,10 @@ guard @blocker before op:run = when [
 
 ```mlld
 >> Policy rules create privileged guards automatically
-var @policyConfig = {
+policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
   operations: { "net:w": "exfil" }
 }
-policy @p = union(@policyConfig)
 
 var secret @customerList = <internal/customers.csv>
 exe net:w @send(data) = run cmd { printf "%s" "@data" }

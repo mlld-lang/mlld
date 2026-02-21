@@ -71,13 +71,12 @@ verify @prompt
 Policy defaults can auto-sign templates or variables and auto-verify prompts passed to `llm`-labeled executables:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::Review @input::
 exe llm @audit() = run cmd { claude -p "@auditPrompt" }
@@ -86,7 +85,7 @@ exe llm @audit() = run cmd { claude -p "@auditPrompt" }
 Auto-sign variable name patterns with glob syntax:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: { variables: ["@*Prompt", "@*Instructions"] }
   }
@@ -96,7 +95,7 @@ var @policyConfig = {
 Auto-verify supports custom instructions:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autoverify: "./verify.att"
   }
@@ -132,16 +131,14 @@ Multiple policies compose automatically when imported or declared:
 
 ```mlld
 >> Team policy allows echo and git
-var @team = {
+policy @p1 = {
   capabilities: { allow: ["cmd:echo:*", "cmd:git:*"] }
 }
-policy @p1 = union(@team)
 
 >> Project policy allows echo and node
-var @project = {
+policy @p2 = {
   capabilities: { allow: ["cmd:echo:*", "cmd:node:*"] }
 }
-policy @p2 = union(@project)
 
 >> Effective: only echo (intersection of both policies)
 run { echo "allowed by both" }
@@ -232,12 +229,11 @@ guard @noUploads before op:run = when [
 The `influenced` label marks LLM outputs that processed untrusted data, defending against prompt injection:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: ["untrusted-llms-get-influenced"]
   }
 }
-policy @p = union(@policyConfig)
 
 var untrusted @task = "Review this external input"
 exe llm @process(input) = run cmd { claude -p "@input" }
@@ -898,22 +894,19 @@ verify @auditPrompt
 Autosign supports template categories and variable patterns:
 
 ```mlld
-var @policyConfig = { defaults: { autosign: ["templates"] } }
-policy @p = union(@policyConfig)
+policy @p = { defaults: { autosign: ["templates"] } }
 
 exe @auditPrompt(input) = template "./audit.att"
 ```
 
 ```mlld
-var @policyConfig = { defaults: { autosign: { variables: ["@*Prompt", "@*Instructions"] } } }
-policy @p = union(@policyConfig)
+policy @p = { defaults: { autosign: { variables: ["@*Prompt", "@*Instructions"] } } }
 ```
 
 Autoverify prepends verification instructions for signed variables passed to llm-labeled executables and sets `MLLD_VERIFY_VARS`:
 
 ```mlld
-var @policyConfig = { defaults: { autoverify: true } }
-policy @p = union(@policyConfig)
+policy @p = { defaults: { autoverify: true } }
 
 exe llm @audit() = run cmd { claude -p "@auditPrompt" }
 ```
@@ -921,8 +914,7 @@ exe llm @audit() = run cmd { claude -p "@auditPrompt" }
 Custom instructions use a template path:
 
 ```mlld
-var @policyConfig = { defaults: { autoverify: "./verify.att" } }
-policy @p = union(@policyConfig)
+policy @p = { defaults: { autoverify: "./verify.att" } }
 ```
 
 ## Best Practices

@@ -57,13 +57,12 @@ Without a provider, commands run locally with specified credentials.
 Combine environment config with policy to restrict an agent:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   capabilities: {
     allow: ["cmd:claude:*"],         >> Only allow claude commands
     deny: ["sh"]                     >> Block shell access
   }
 }
-policy @p = union(@policyConfig)     >> Activate policy
 
 var @sandbox = {
   tools: ["Read", "Write", "Bash"],  >> Allow Read/Write plus command execution

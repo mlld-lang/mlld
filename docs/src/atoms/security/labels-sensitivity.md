@@ -83,7 +83,7 @@ Policy defines built-in rules that block dangerous flows:
 These rules are opt-in via policy configuration:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: [
       "no-secret-exfil",
@@ -91,7 +91,6 @@ var @policyConfig = {
     ]
   }
 }
-policy @p = union(@policyConfig)
 ```
 
 **What counts as `exfil`?**
@@ -105,21 +104,19 @@ exe net:w @sendToServer(data) = run cmd {
 }
 
 >> Policy maps semantic labels to risk categories
-var @policyConfig = {
+policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
   operations: { "net:w": "exfil" }
 }
-policy @p = union(@policyConfig)
 ```
 
 **Blocked flow example:**
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
   operations: { "net:w": "exfil" }
 }
-policy @p = union(@policyConfig)
 
 var secret @customerList = <internal/customers.csv>
 exe net:w @postToWebhook(data) = run cmd {

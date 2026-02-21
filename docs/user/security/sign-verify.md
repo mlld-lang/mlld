@@ -127,12 +127,11 @@ Output is JSON with verification results.
 Policy can automatically sign templates and inject verification. With `autosign: ["templates"]`, templates are automatically signed when created. With `autoverify: true`, mlld automatically injects verify instructions and sets `MLLD_VERIFY_VARS` in the command environment.
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"]
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::Review @input::
 ```

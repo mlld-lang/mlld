@@ -13,14 +13,13 @@ updated: 2026-02-05
 The `capabilities` object controls what operations can run.
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   capabilities: {
     allow: ["cmd:git:*", "cmd:npm:*", "fs:r:**", "fs:w:@root/tmp/**"],
     danger: ["@keychain", "fs:r:~/.ssh/*"],
     deny: ["sh"]
   }
 }
-policy @p = union(@policyConfig)
 
 run cmd { git status }
 ```
@@ -46,11 +45,10 @@ Command allow/deny patterns evaluate against the interpolated command text, incl
 **Flat syntax (shorthand):**
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   allow: ["cmd:echo:*", "fs:r:**"],
   deny: { sh: true, network: true }
 }
-policy @p = union(@policyConfig)
 ```
 
 Both forms are equivalent. The nested form (`capabilities: { ... }`) is more explicit; the flat form places `allow`/`deny` at the top level as shorthand.
@@ -62,11 +60,10 @@ Both forms are equivalent. The nested form (`capabilities: { ... }`) is more exp
 mlld ships with a built-in default danger list (defined in `core/policy/danger.ts`) covering credential files, destructive commands, and security-bypass flags. When an operation matches the default danger list, policy blocks it *unless* the policy's `danger` array explicitly includes a matching pattern. This check runs independently of `allow` — an operation that matches `allow` but falls on the danger list is still blocked.
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   allow: ["cmd:git:*", "fs:r:**"],
   deny: ["sh"]
 }
-policy @p = union(@policyConfig)
 
 >> allow matches cmd:git:* — but git push --force is on the
 >> default danger list. Without danger: ["cmd:git:push:*:--force"],
@@ -77,12 +74,11 @@ run cmd { git push origin main --force }
 To unblock it, add the matching pattern to `danger`:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   allow: ["cmd:git:*", "fs:r:**"],
   danger: ["cmd:git:push:*:--force"],
   deny: ["sh"]
 }
-policy @p = union(@policyConfig)
 ```
 
 The same double-gate applies to filesystem access. `allow: ["fs:r:**"]` permits reading all files, but reading `~/.ssh/id_rsa` still requires `danger: ["fs:r:~/.ssh/*"]` because that path matches the default danger list.

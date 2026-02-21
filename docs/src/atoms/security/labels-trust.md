@@ -19,11 +19,10 @@ var untrusted @payload = "user input"
 >> Semantic label on operation, mapped to destructive via policy
 exe fs:w @wipe(data) = run cmd { rm -rf "@data" }
 
-var @policyConfig = {
+policy @p = {
   defaults: { rules: ["no-untrusted-destructive"] },
   operations: { "fs:w": "destructive" }
 }
-policy @p = union(@policyConfig)
 ```
 
 **Trust asymmetry:** `untrusted` is sticky. Adding `trusted` to untrusted data creates a conflict (both labels kept, warning logged). Removing `untrusted` requires privilege via `=> trusted! @var`.
@@ -31,10 +30,9 @@ policy @p = union(@policyConfig)
 **Built-in rules:** Enable in policy defaults:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: { rules: ["no-untrusted-destructive", "no-untrusted-privileged"] }
 }
-policy @p = union(@policyConfig)
 ```
 
 | Rule | Blocks |
@@ -45,11 +43,10 @@ policy @p = union(@policyConfig)
 **Flow blocked:**
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: { rules: ["no-untrusted-destructive"] },
   operations: { "fs:w": "destructive" }
 }
-policy @p = union(@policyConfig)
 
 var untrusted @payload = "data"
 exe fs:w @wipe(data) = run cmd { echo "@data" }
@@ -65,14 +62,13 @@ The two-step flow: `fs:w` on exe → policy maps to `destructive` → `no-untrus
 **Opt-in auto-labeling:** Instead of labeling every variable manually, `defaults.unlabeled` in policy config automatically labels all data that has no user-assigned labels:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     unlabeled: "untrusted",
     rules: ["no-untrusted-destructive"]
   },
   operations: { "fs:w": "destructive" }
 }
-policy @p = union(@policyConfig)
 
 var @data = <./input.txt>
 exe fs:w @wipe(data) = run cmd { echo "@data" }

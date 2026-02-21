@@ -16,24 +16,23 @@ Policy label flow rules restrict what MCP-sourced data can do. Since all MCP out
 **Deny destructive operations on MCP data:**
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   labels: {
     "src:mcp": {
       deny: ["destructive", "op:cmd:rm"]
     }
   }
 }
-policy @p = union(@policyConfig)
 ```
 
-`union()` activates the policy — see `policy-composition` for combining multiple sources.
+To combine multiple policies, use `union()` — see `policy-composition`.
 
 This blocks MCP-sourced data from flowing to any operation labeled `destructive` or to `rm` commands.
 
 **Allow-list specific operations:**
 
 ```mlld
-var @strictPolicy = {
+policy @p = {
   labels: {
     "src:mcp": {
       allow: ["op:cmd:git:status", "op:cmd:git:log"],
@@ -41,7 +40,6 @@ var @strictPolicy = {
     }
   }
 }
-policy @p = union(@strictPolicy)
 ```
 
 With explicit `src:mcp` allow/deny rules, MCP data can only flow to explicitly allowed operations. The most-specific rule wins: `allow: [op:cmd:git:status]` overrides a broader `deny: [op:cmd:git]`.

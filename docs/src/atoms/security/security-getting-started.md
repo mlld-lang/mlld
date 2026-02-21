@@ -41,7 +41,7 @@ needs {
   node: [lodash]
 }
 
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: [
       "no-secret-exfil",
@@ -53,7 +53,6 @@ var @policyConfig = {
     deny: ["sh"]
   }
 }
-policy @p = union(@policyConfig)
 ```
 
 `needs` validates that the environment can satisfy your module before execution. `policy` declares what operations are allowed. Built-in rules like `no-secret-exfil` block dangerous data flows without writing any guard logic.
@@ -65,7 +64,7 @@ See `needs-declaration` for the full list of `needs` keys. See `policies` and `p
 Add operation classification and label flow rules to control how data moves through your script.
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: [
       "no-secret-exfil",
@@ -85,7 +84,6 @@ var @policyConfig = {
     deny: ["sh"]
   }
 }
-policy @p = union(@policyConfig)
 
 exe net:w @postToSlack(channel, msg) = run cmd { curl -X POST @channel -d @msg }
 ```
@@ -99,7 +97,7 @@ See `policy-operations` for the two-step labeling pattern. See `policy-label-flo
 Guards are imperative hooks that inspect, transform, or block operations at runtime. Use them when policy alone isn't enough.
 
 ```mlld
-policy @p = union({
+policy @p = {
   defaults: {
     rules: ["no-secret-exfil"],
     unlabeled: "untrusted"
@@ -108,7 +106,7 @@ policy @p = union({
     allow: ["cmd:git:*", "cmd:claude:*"],
     deny: ["sh"]
   }
-})
+}
 
 guard @noMcpToShell before op:cmd = when [
   @mx.taint.includes("src:mcp") => deny "MCP data cannot reach shell commands"
@@ -130,7 +128,7 @@ See `guards-basics` for syntax, timing, and security context. See `guard-composi
 Combine policies, guards, and environments for complete isolation with credential management.
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: [
       "no-secret-exfil",
@@ -152,7 +150,6 @@ var @policyConfig = {
     claude: { from: "keychain:anthropic/{projectname}", as: "ANTHROPIC_API_KEY" }
   }
 }
-policy @p = union(@policyConfig)
 
 guard @blockInfluencedWrites before op:cmd = when [
   @mx.labels.includes("influenced") => deny "Influenced data blocked from commands"

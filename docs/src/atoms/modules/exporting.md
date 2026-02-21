@@ -33,12 +33,11 @@ export { * }
 **Environment module pattern:** Modules that wrap credentials export executables and let callers import the policy separately for credential configuration:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   auth: {
     claude: { from: "keychain:mlld-env-{projectname}/claude-dev", as: "ANTHROPIC_API_KEY" }
   }
 }
-policy @p = union(@policyConfig)
 
 exe @spawn(prompt) = run cmd { claude -p "@prompt" } using auth:claude
 

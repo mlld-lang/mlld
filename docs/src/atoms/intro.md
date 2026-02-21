@@ -54,11 +54,10 @@ Decision logic stays in your script. LLMs do what they're good at: reading, writ
 Defend against prompt injection by enforcing what data can flow where, regardless of LLM intent. Labels track data provenance automatically. Policies block dangerous flows. Guards inspect and transform operations.
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: { rules: ["no-secret-exfil"], unlabeled: "untrusted" },
   labels: { secret: { deny: ["op:show", "exfil"] } }
 }
-policy @p = union(@policyConfig)
 
 var secret @data = <@private/customer-list.txt>
 >> LLM can be tricked into trying to exfil @data

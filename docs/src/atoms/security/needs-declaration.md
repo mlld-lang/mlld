@@ -53,9 +53,9 @@ needs { git, curl }  >> same as cmd: [git, curl]
 `keychain` is not a `needs` key. Control keychain access with policy capabilities:
 
 ```mlld
-policy @p = union({
+policy @p = {
   capabilities: {
     danger: ["@keychain"]
   }
-})
+}
 ```

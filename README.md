@@ -224,7 +224,7 @@ Source labels are applied automatically — MCP tool outputs carry `src:mcp`, co
 Policies declare what should and shouldn't happen through classification:
 
 ```mlld
-var @config = {
+policy @p = {
   defaults: {
     unlabeled: "untrusted",
     rules: [
@@ -245,7 +245,6 @@ var @config = {
     deny: ["sh"]
   }
 }
-policy @p = union(@config)
 ```
 
 `defaults.rules` enables named rules that block dangerous label-to-operation flows. `operations` maps semantic exe labels to risk categories — you label functions with what they do, and policy classifies those as risk types. `capabilities` controls what operations can run at all; even if an LLM is tricked into attempting `rm -rf /`, the capability check blocks it.

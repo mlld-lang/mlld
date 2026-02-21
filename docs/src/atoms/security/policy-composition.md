@@ -15,16 +15,10 @@ Multiple policies compose automatically when imported or declared.
 
 ```mlld
 >> Team policy allows echo and git
-/var @team = {
-  capabilities: { allow: ["cmd:echo:*", "cmd:git:*"] }
-}
-/policy @p1 = union(@team)
+/policy @p1 = { capabilities: { allow: ["cmd:echo:*", "cmd:git:*"] } }
 
 >> Project policy allows echo and node
-/var @project = {
-  capabilities: { allow: ["cmd:echo:*", "cmd:node:*"] }
-}
-/policy @p2 = union(@project)
+/policy @p2 = { capabilities: { allow: ["cmd:echo:*", "cmd:node:*"] } }
 
 >> Effective: only echo (intersection of both policies)
 /run { echo "allowed by both" }
@@ -35,8 +29,7 @@ Multiple policies compose automatically when imported or declared.
 ```mlld
 /import policy @baseline from "./baseline.mld"
 /import policy @company from "./company.mld"
-/var @localConfig = { deny: { sh: true } }
-/policy @localPolicy = union(@localConfig)
+/policy @localPolicy = { deny: { sh: true } }
 ```
 
 **Composition rules:**
@@ -53,8 +46,7 @@ Multiple policies compose automatically when imported or declared.
 **Profile selection** considers composed policy. The first profile whose `requires` all pass is selected:
 
 ```mlld
-/var @denyShell = { deny: { sh: true } }
-/policy @p = union(@denyShell)
+/policy @p = { deny: { sh: true } }
 
 /profiles {
   full: { requires: { sh } },

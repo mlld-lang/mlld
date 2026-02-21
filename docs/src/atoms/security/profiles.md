@@ -53,8 +53,7 @@ Each profile has a `requires` clause that uses `needs` syntax — the same capab
 Profiles are evaluated against the active policy in declaration order. The first profile whose `requires` are all permitted is selected:
 
 ```mlld
-var @denyShell = { deny: { sh: true } }
-policy @p = union(@denyShell)
+policy @p = { deny: { sh: true } }
 
 profiles {
   full: { requires: { sh } },
@@ -89,8 +88,7 @@ var @cfg = {
   }
 }
 
-var @denyShell = { deny: { sh: true } }
-policy @p = union(@denyShell)
+policy @p = { deny: { sh: true } }
 
 env @cfg with { profile: "full" } [
   show @mx.profile

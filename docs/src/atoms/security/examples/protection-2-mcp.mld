@@ -22,7 +22,7 @@
 >>
 >> Run: npx mlld docs/src/atoms/security/examples/protection-2-mcp.mld
 
-/var @policyConfig = {
+/policy @p = {
   capabilities: {
     allow: ["cmd:ls:*", "cmd:echo:*"],
     danger: []
@@ -34,7 +34,6 @@
     }
   }
 }
-/policy @p = union(@policyConfig)
 
 >> Demonstrate what the policy WOULD do with real MCP data:
 /show "=== MCP DATA RESTRICTION POLICY ==="
