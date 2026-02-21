@@ -61,6 +61,19 @@ describe('Hook directive', () => {
     expect(hook.meta.scope).toBe('perInput');
   });
 
+  test('parses strict-mode hook without slash prefix', () => {
+    const ast = parseSync('hook @audit after op:exe = [ show "x" ]', { mode: 'strict' });
+    const hook = ast[0] as HookDirectiveNode;
+
+    expect(hook.kind).toBe('hook');
+    expect(hook.subtype).toBe('hook');
+    expect(hook.meta.timing).toBe('after');
+    expect(hook.values.filter[0]).toMatchObject({
+      filterKind: 'operation',
+      value: 'exe'
+    });
+  });
+
   test('rejects legacy guard-style hook syntax with for keyword', () => {
     expect(() => parseSync('/hook @audit for op:exe = [ show "x" ]')).toThrow();
   });

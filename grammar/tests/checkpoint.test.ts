@@ -75,6 +75,15 @@ describe('Checkpoint directive', () => {
     expect(node.meta.comment).toBeDefined();
   });
 
+  it('parses strict-mode checkpoint without slash prefix', () => {
+    const ast = parseSync('checkpoint "strict-stage"', { mode: 'strict' });
+    const node = ast[0] as DirectiveNode;
+
+    expect(node.kind).toBe('checkpoint');
+    expect(node.subtype).toBe('checkpoint');
+    expect(readLiteralCheckpointName(node)).toBe('strict-stage');
+  });
+
   it('supports checkpoints as direct actions in all top-level when forms', () => {
     const ast = parseSync(`
 /when [
