@@ -262,10 +262,12 @@ export function createRhsDispatcher(dependencies: RhsDispatcherDependencies): Rh
       case 'object': {
         const objectNode = valueNode as any;
         if (isToolsCollection) {
+          // Tool collections are metadata/configuration; tool labels belong to tool calls,
+          // not to the collection object itself.
           const value = await evaluateToolCollectionObject(
             objectNode,
             env,
-            mergeResolvedDescriptor,
+            undefined,
             context,
             sourceLocation
           );

@@ -121,4 +121,58 @@ describe('tool collections', () => {
     const collection = toolsVar?.internal?.toolCollection as ToolCollection;
     expect(collection.guardedFetch.mlld).toBe('guardedFetch');
   });
+
+  it('does not inherit tool labels into collection taint when passed as params', async () => {
+    const env = await interpretWithEnv(`
+      /exe untrusted @searchWeb(q: string) = js { return q; }
+      /exe destructive @deleteDoc(id: string) = js { return id; }
+
+      /var tools @agentTools = {
+        searchWeb: { mlld: @searchWeb, labels: ["untrusted"], expose: ["q"] },
+        deleteDoc: { mlld: @deleteDoc, labels: ["destructive"], expose: ["id"] }
+      }
+
+      /guard @destructiveGate before destructive = when [
+        @mx.taint.includes("untrusted") => deny "Blocked"
+        * => allow
+      ]
+
+      /exe @agent(tools, task) = env with { tools: @tools } [
+        => @task
+      ]
+
+      /var @result = @agent(@agentTools, "hello")
+    `);
+
+    const toolsVar = env.getVariable('agentTools');
+    expect(toolsVar?.mx.taint ?? []).not.toContain('untrusted');
+    expect(toolsVar?.mx.taint ?? []).not.toContain('destructive');
+    expect(toolsVar?.mx.labels ?? []).not.toContain('untrusted');
+    expect(toolsVar?.mx.labels ?? []).not.toContain('destructive');
+
+    const resultVar = env.getVariable('result');
+    expect((resultVar?.value as any)?.text ?? resultVar?.value).toBe('hello');
+  });
+
+  it('keeps destructive guard behavior for actual destructive tool calls', async () => {
+    await expect(
+      interpretWithEnv(`
+        /exe destructive @deleteDoc(id: string) = js { return id; }
+
+        /var tools @agentTools = {
+          deleteDoc: { mlld: @deleteDoc, labels: ["destructive"], expose: ["id"] }
+        }
+
+        /guard @blockDestructive before destructive = when [
+          * => deny "blocked"
+        ]
+
+        /exe @agent(tools, id) = env with { tools: @tools } [
+          => @deleteDoc(@id)
+        ]
+
+        /var @result = @agent(@agentTools, "doc-1")
+      `)
+    ).rejects.toThrow(/blocked/i);
+  });
 });
