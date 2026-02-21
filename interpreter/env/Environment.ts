@@ -2664,7 +2664,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
 
     const fileName = this.currentFilePath ? path.basename(this.currentFilePath) : 'unknown';
-    const lineNumber = location?.line || 'unknown';
+    const lineNumber = (location as any)?.start?.line ?? (location as any)?.line ?? 'unknown';
 
     this.directiveTrace.push({
       directive,

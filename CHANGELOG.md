@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc83]
 
 ### Fixed
+- Error display now renders all content (header, source context, details, suggestion) inside the `mlld error` box frame. Directive trace chain appears at top, error details below. Fixes `:unknown` locations in trace and strips `/` prefix from directive names.
 - `src:mcp` taint no longer applies to inputs of MCP-served tools (`mlld mcp`); it remains scoped to data returned from imported MCP tools.
 - Imported guards now resolve internal executable dependencies in the module where the guard was defined; consumers do not need to import helper executables separately.
 - Re-importing the same module in one execution (for example, guard import plus policy import) reuses cached module evaluation and no longer re-registers guards.

@@ -1,4 +1,3 @@
-import * as path from 'path';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
@@ -98,48 +97,25 @@ export class ErrorHandler {
   }
 
   private async handleGenericError(error: Error, options: CLIOptions): Promise<void> {
-    logger.error('An unexpected error occurred:', error);
+    logger.debug('Generic error caught:', error);
 
-    // Check for mlld trace on regular errors
-    if ((error as any).mlldTrace) {
-      const { DirectiveTraceFormatter } = await import('@core/utils/DirectiveTraceFormatter');
-      const formatter = new DirectiveTraceFormatter();
+    const { DirectiveTraceFormatter } = await import('@core/utils/DirectiveTraceFormatter');
+    const formatter = new DirectiveTraceFormatter();
 
-      // Check if this is an import error that's already shown in the trace
-      const hasImportError = (error as any).mlldTrace.some((t: any) => t.failed);
+    const trace = (error as any).mlldTrace ?? [];
+    const richContent = chalk.red.bold(error.message);
 
-      // Format with error message for non-import errors
-      const trace = formatter.format(
-        (error as any).mlldTrace,
-        true,
-        hasImportError ? undefined : error.message
-      );
+    const output = formatter.format(trace, true, undefined, richContent);
+    console.error('\n' + output + '\n');
 
-      // Show the formatted error box
-      const fileName = path.basename(options.input || 'unknown');
-      console.error(`\nThere was an error running ${fileName}\n`);
-      console.error(trace);
-      console.error('');
-    } else {
-      // No trace, show the error normally
-      console.error('\n  ⎿  ' + chalk.red('Error: ') + error.message);
-    }
-    
-    // Add ephemeral mode context if relevant
     if (this.isEphemeralMode && this.isEphemeralRelevantError(error)) {
-      console.error(chalk.yellow('\nNote: Running in ephemeral mode (mlldx) - no filesystem caching available'));
+      console.error(chalk.yellow('Note: Running in ephemeral mode (mlldx) - no filesystem caching available'));
     }
 
     const cause = error.cause;
     if (cause instanceof Error) {
       console.error(chalk.red(`  Cause: ${cause.message}`));
     }
-
-    // Only show stack trace in verbose mode (for now we'll skip it)
-    // TODO: Add --verbose flag support
-    // if (error.stack && options.verbose) {
-    //   console.error(chalk.gray(error.stack));
-    // }
   }
 
   private handleUnknownError(error: any): void {

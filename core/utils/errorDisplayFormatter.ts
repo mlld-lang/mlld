@@ -36,6 +36,7 @@ export class ErrorDisplayFormatter {
       workingDirectory = process.cwd()
     } = options;
 
+    // Build rich content parts (header, source context, details, suggestion)
     const parts: string[] = [];
 
     // Format the main error message
@@ -44,13 +45,11 @@ export class ErrorDisplayFormatter {
 
     // Add Peggy formatted section if available (right after header for parse errors)
     if (error.details?.peggyFormatted) {
-      // Add parse error indicator
-      const parseErrorIndicator = useColors 
+      const parseErrorIndicator = useColors
         ? chalk.red.bold('✘ Parse Error')
         : '✘ Parse Error';
       parts.push('\n' + parseErrorIndicator);
-      
-      // Extract and add the source code section from Peggy's format
+
       const sourceSection = this.extractPeggySourceSection(error.details.peggyFormatted, useColors);
       if (sourceSection) {
         parts.push(sourceSection);
@@ -64,7 +63,7 @@ export class ErrorDisplayFormatter {
         errorDetails: error.details,
         hasFile: !!(error.sourceLocation as any).filePath || !!(error.details?.filePath)
       });
-      
+
       const formattedLocation = await this.locationFormatter.formatLocation(error.sourceLocation, {
         useSmartPaths,
         basePath,
@@ -72,14 +71,12 @@ export class ErrorDisplayFormatter {
         preferRelative: true,
         maxRelativeDepth: 3
       });
-      
+
       logger.debug('[ErrorDisplay] Formatted location:', formattedLocation);
-      
-      // Check if we have source content stored in the error (for parse errors)
+
       const sourceContent = (error as any).sourceContent || error.details?.sourceContent;
-      
+
       if (sourceContent) {
-        // Use source content directly when available (more reliable than file reading)
         const sourceContext = this.sourceExtractor.extractContextFromSource(
           sourceContent,
           {
@@ -105,10 +102,9 @@ export class ErrorDisplayFormatter {
           parts.push(contextDisplay);
         }
       } else if (formattedLocation.file) {
-        // Use original file path for source extraction (absolute path needed)
         const sourceContext = await this.sourceExtractor.extractContext({
           display: formattedLocation.display,
-          file: formattedLocation.file, // Use absolute path for file reading
+          file: formattedLocation.file,
           line: formattedLocation.line,
           column: formattedLocation.column
         }, {
@@ -123,10 +119,9 @@ export class ErrorDisplayFormatter {
         });
 
         if (sourceContext) {
-          // Update the source context to use the smart display path
           const enhancedSourceContext = {
             ...sourceContext,
-            file: formattedLocation.displayPath || formattedLocation.file // Use smart path for display
+            file: formattedLocation.displayPath || formattedLocation.file
           };
           const contextDisplay = this.formatSourceContext(enhancedSourceContext, useColors, error.details?.mlldLocation);
           parts.push(contextDisplay);
@@ -151,23 +146,20 @@ export class ErrorDisplayFormatter {
       parts.push(detailsDisplay);
     }
 
-    // Add directive trace if available
-    if (error.details?.directiveTrace && error.details.directiveTrace.length > 0) {
-      const { DirectiveTraceFormatter } = await import('./DirectiveTraceFormatter');
-      const traceFormatter = new DirectiveTraceFormatter();
-      const trace = traceFormatter.format(error.details.directiveTrace, useColors);
-      parts.push('\n' + trace);
-    }
-
     // Add suggestion if available
     if (error.details?.suggestion) {
-      const suggestion = useColors 
+      const suggestion = useColors
         ? chalk.cyan(`💡 ${error.details.suggestion}`)
         : `💡 ${error.details.suggestion}`;
       parts.push(suggestion);
     }
 
-    return parts.join('\n\n');
+    // Wrap everything in the error box via DirectiveTraceFormatter
+    const richContent = parts.join('\n\n');
+    const trace = error.details?.directiveTrace ?? [];
+    const { DirectiveTraceFormatter } = await import('./DirectiveTraceFormatter');
+    const traceFormatter = new DirectiveTraceFormatter();
+    return traceFormatter.format(trace, useColors, undefined, richContent);
   }
 
   private formatErrorHeader(error: MlldError, useColors: boolean): string {
