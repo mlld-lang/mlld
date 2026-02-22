@@ -215,7 +215,6 @@ async function handleCommandDefinition(
     argRuntimeValues,
     argDescriptors,
     exeLabels,
-    execVar,
     callStack,
     services
   } = ctx;
