@@ -207,6 +207,7 @@ async function handleCommandDefinition(
     policyEnforcer,
     policyChecksEnabled,
     definition,
+    execVar,
     argValues,
     argRuntimeValues,
     argDescriptors,
@@ -224,6 +225,9 @@ async function handleCommandDefinition(
     sourceTaintLabel ? makeSecurityDescriptor({ taint: [sourceTaintLabel] }) : undefined
   );
   const tempEnv = env.createChild();
+  if (execVar.internal?.capturedModuleEnv instanceof Map) {
+    tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+  }
   for (const [key, stringValue] of Object.entries(argValues)) {
     bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
   }
@@ -387,6 +391,7 @@ async function handleCommandRefDefinition(
     context,
     withClause,
     definition,
+    execVar,
     argValues,
     callStack,
     services
@@ -396,6 +401,9 @@ async function handleCommandRefDefinition(
   if (refAst) {
     const { evaluateExecInvocation } = await import('@interpreter/eval/exec-invocation');
     const execEnv = env.createChild();
+    if (execVar.internal?.capturedModuleEnv instanceof Map) {
+      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+    }
     for (const [key, value] of Object.entries(argValues)) {
       execEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
     }
@@ -548,6 +556,9 @@ async function handleCodeDefinition(
     sourceTaintLabel ? makeSecurityDescriptor({ taint: [sourceTaintLabel] }) : undefined
   );
   const tempEnv = env.createChild();
+  if (execVar.internal?.capturedModuleEnv instanceof Map) {
+    tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+  }
   for (const [key, value] of Object.entries(argValues)) {
     tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
   }
@@ -612,6 +623,9 @@ async function handleCodeDefinition(
     }
 
     const execEnv = env.createChild();
+    if (execVar.internal?.capturedModuleEnv instanceof Map) {
+      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+    }
     for (const [key, value] of Object.entries(codeParams)) {
       bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
     }
@@ -636,6 +650,9 @@ async function handleCodeDefinition(
     }
 
     const execEnv = env.createChild();
+    if (execVar.internal?.capturedModuleEnv instanceof Map) {
+      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+    }
     for (const [key, value] of Object.entries(codeParams)) {
       bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
     }
@@ -658,6 +675,9 @@ async function handleCodeDefinition(
     }
 
     const execEnv = env.createChild();
+    if (execVar.internal?.capturedModuleEnv instanceof Map) {
+      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+    }
     for (const [key, value] of Object.entries(codeParams)) {
       bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
     }
@@ -724,8 +744,11 @@ async function handleCodeDefinition(
 async function handleTemplateDefinition(
   ctx: RunExecDispatchContext
 ): Promise<RunExecDefinitionDispatchResult> {
-  const { env, definition, argValues, argRuntimeValues, callStack, services } = ctx;
+  const { env, definition, argValues, argRuntimeValues, callStack, services, execVar } = ctx;
   const tempEnv = createTemplateInterpolationEnv(env.createChild(), definition);
+  if (execVar.internal?.capturedModuleEnv instanceof Map) {
+    tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+  }
   for (const [key, stringValue] of Object.entries(argValues)) {
     bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
   }

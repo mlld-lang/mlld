@@ -1,0 +1,6 @@
+/import { @greet } from "./run-cross-module-scope-helper.mld"
+
+/exe @doWork(name) = [
+  let @msg = @greet(@name)
+  show @msg
+]
