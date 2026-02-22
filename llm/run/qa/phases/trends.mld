@@ -3,14 +3,12 @@
 
 import { @claudePoll } from @mlld/claude-poll
 import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
-import { @updatePhaseStatus } from "../lib/state.mld"
 import { @aggregateForTrends } from "../lib/aggregate.mld"
 
 exe @trendsPrompt(topicCount, outputDir) = template "../prompts/phase3-trends.att"
 
 exe @runTrends(runDir, topics) = [
   @logPhaseStart(@runDir, "trends")
-  @updatePhaseStatus(@runDir, "trends", "in-progress")
 
   show `Analyzing trends across @topics.length topics...`
 
@@ -31,7 +29,6 @@ exe @runTrends(runDir, topics) = [
   show `  Narrative: @runDir/trend-report.md`
 
   @logPhaseComplete(@runDir, "trends", { topics: @topics.length })
-  @updatePhaseStatus(@runDir, "trends", "complete")
 
   => { trend_report: `@runDir/trend-report.json`, narrative: `@runDir/trend-report.md` }
 ]

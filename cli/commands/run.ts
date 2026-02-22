@@ -245,6 +245,7 @@ export class RunCommand {
 
   async run(scriptName: string, options: RunOptions = {}): Promise<void> {
     const scriptPath = await this.findScript(scriptName);
+    const projectRoot = await findProjectRoot(process.cwd(), this.fileSystem);
 
     if (!scriptPath) {
       const availableScripts = await this.listScripts();
@@ -327,7 +328,8 @@ export class RunCommand {
         fresh: options.fresh,
         resume: options.resume,
         fork: options.fork,
-        checkpointScriptName: scriptName
+        checkpointScriptName: scriptName,
+        checkpointCacheRootDir: path.join(projectRoot, '.mlld', 'checkpoints')
       }) as StructuredResult;
 
       // Check if streaming was enabled - if so, skip final output since it was already streamed

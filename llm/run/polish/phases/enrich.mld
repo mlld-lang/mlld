@@ -5,7 +5,6 @@
 >> Output: pipeline/<run>/enrich/enriched-items.json + tags on tickets
 
 import { @claudePoll } from @mlld/claude-poll
-import { @updatePhaseStatus } from "../lib/state.mld"
 import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone, @logEvent } from "../lib/events.mld"
 import { @getTicket, @addTags, @hasTagPrefix, @isStale, @isImplDone, @addEnrichNote, @wasRecentlyEnriched } from "../lib/tickets.mld"
 

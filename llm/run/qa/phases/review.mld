@@ -5,7 +5,6 @@
 
 import { @claudeResume } from "../lib/claude.mld"
 import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone } from "../lib/events.mld"
-import { @updatePhaseStatus } from "../lib/state.mld"
 
 exe @reviewPrompt(topic, outputDir) = template "../prompts/phase2-review.att"
 
@@ -21,7 +20,6 @@ exe @hasFailingExperiments(topicDir) = [
 
 exe @runReview(runDir, topics) = [
   @logPhaseStart(@runDir, "review")
-  @updatePhaseStatus(@runDir, "review", "in-progress")
 
   >> Find all topics with sessions that completed phase 1
   let @sessionFiles = <@runDir/topics/**/session.json>
@@ -33,7 +31,6 @@ exe @runReview(runDir, topics) = [
   if @needsReview.length == 0 [
     show `No topics completed phase 1 yet.`
     @logPhaseComplete(@runDir, "review", { reviewed: 0 })
-    @updatePhaseStatus(@runDir, "review", "complete")
     => []
   ]
 
@@ -69,7 +66,6 @@ exe @runReview(runDir, topics) = [
 
   show `Phase 2 complete. Reviewed @results.length topics.`
   @logPhaseComplete(@runDir, "review", { reviewed: @results.length })
-  @updatePhaseStatus(@runDir, "review", "complete")
 
   => @results
 ]

@@ -60,7 +60,7 @@ If the exit criteria says "Tool restrictions block unauthorized tools (attempted
 
 ### Step 1: Map Each Criterion to the Target Example
 
-The job contains a Target Example section showing specific code. Each exit criterion should be tested using patterns from that example, not alternative approaches. If the target example uses `env @sandbox [ ... ]` with `tools: ["Read", "Write"]`, that's what you test.
+The job contains a Target Example section showing specific code. Each exit criterion should be tested using patterns from that example, not alternative approaches. If the target example uses `env \@sandbox [ ... ]` with `tools: ["Read", "Write"]`, that's what you test.
 
 ### Step 2: Design a Falsification Test
 
@@ -131,7 +131,7 @@ Verify X actually happens by running it and observing behavior. Syntax correctne
 {
   "claim": "agent cannot use Bash",
   "test_file": "tmp/test-bash-blocked.mld",
-  "test_content": "var @cfg = { tools: [\"Read\", \"Write\"] }\nenv @cfg [ run cmd { bash -c 'echo BASH_WORKED' } ]",
+  "test_content": "var \@cfg = { tools: [\"Read\", \"Write\"] }\nenv \@cfg [ run cmd { bash -c 'echo BASH_WORKED' } ]",
   "command": "mlld tmp/test-bash-blocked.mld",
   "expected": "Error: Tool 'Bash' not allowed",
   "actual": "BASH_WORKED",
@@ -156,7 +156,7 @@ Verify X actually happens by running it and observing behavior. Syntax correctne
 {
   "claim": "credentials are injected but not readable as strings",
   "test_file": "tmp/test-cred-sealed.mld",
-  "test_content": "policy @p = { auth: { test: { from: \"env:TEST_KEY\", as: \"TEST_KEY\" } } }\nvar secret @s = keychain.get(\"test\")\nshow @s",
+  "test_content": "policy \@p = { auth: { test: { from: \"env:TEST_KEY\", as: \"TEST_KEY\" } } }\nvar secret \@s = keychain.get(\"test\")\nshow \@s",
   "command": "mlld tmp/test-cred-sealed.mld",
   "expected": "Error: Cannot display secret-labeled value",
   "actual": "MlldPolicyError: Cannot show value with label 'secret'",

@@ -185,26 +185,26 @@ Use atoms when available; spec sections fill gaps for topics without atoms yet.
 
 ### Existing Atoms
 
-@for @atom in @referenceMaterial.atoms [
-<atom name="@atom.name">
-@atom.content
+\@for \@atom in \@referenceMaterial.atoms [
+<atom name="\@atom.name">
+\@atom.content
 </atom>
 
 ]
 
 ### Spec Sections (for missing atoms)
 
-@for @section in @referenceMaterial.specSections [
-<spec_section name="@section.name">
-@section.content
+\@for \@section in \@referenceMaterial.specSections [
+<spec_section name="\@section.name">
+\@section.content
 </spec_section>
 
 ]
 
 ### Atoms Still Needed
 
-@for @name in @referenceMaterial.missingAtoms [
-- @name
+\@for \@name in \@referenceMaterial.missingAtoms [
+- \@name
 ]
 
 ---

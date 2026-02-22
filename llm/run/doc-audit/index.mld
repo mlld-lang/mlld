@@ -3,9 +3,13 @@
 >>
 >> Parallel review of docs/dev/ files to identify outdated documentation.
 >> Each doc gets its own LLM session with codebase access to verify claims.
+>>
+>> Resilience: exe llm labels + checkpoint directives. Crash recovery is automatic.
+>>   mlld run doc-audit                       # auto-resumes via cache
+>>   mlld run doc-audit --resume "review"     # skip to review phase
+>>   mlld run doc-audit --new                 # fresh run
 
 import { @claudePoll } from @mlld/claude-poll
-import { @logEvent, @fileExists } from "./lib/context.mld"
 import "@payload" as @p
 
 >> Config
@@ -16,13 +20,15 @@ var @reviewTools = "Read,Write,Glob,Grep"
 >> Prompt template
 exe @reviewPrompt(docPath, docContent) = template "./prompts/review.att"
 
+>> LLM call wrapper — llm label enables automatic caching
+exe llm @callReview(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+
 >> Helpers
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }
 exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => (a.data || a).findings || []) }
 
 >> Set up run directory
-var @today = @now.slice(0, 10)
-var @runDir = `@root/runs/doc-audit-@today`
+var @runDir = `@root/runs/doc-audit`
 run @mkdirp(@runDir)
 run @mkdirp(`@runDir/reviews`)
 
@@ -44,16 +50,11 @@ show ``
 show `Phase: Review (@docs.length docs, parallel @parallelism)`
 show `───────────────────────────────────────────────────────────────────`
 
+checkpoint "review"
+
 var @reviewResults = for parallel(@parallelism) @doc in @docs [
   let @filename = @doc.mx.filename
   let @outPath = `@runDir/reviews/@filename\.json`
-
-  >> Idempotency: skip if already reviewed
-  let @check = @fileExists(@outPath)
-  if @check == "yes" [
-    show `  @filename: skipped (exists)`
-    => <@outPath> | @json
-  ]
 
   >> Build prompt with full doc content
   let @prompt = @reviewPrompt(@doc.mx.relative, @doc)
@@ -61,22 +62,18 @@ var @reviewResults = for parallel(@parallelism) @doc in @docs [
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema above.`
 
-  >> Call reviewer
-  @claudePoll(@fullPrompt, "sonnet", "@root", @reviewTools, @outPath)
+  >> Call reviewer — cache handles idempotency
+  @callReview(@fullPrompt, @reviewTools, @outPath)
   let @result = <@outPath>?
 
   if !@result [
     show `  @filename: review failed (no output)`
-    let @evtData = { file: @filename }
-    @logEvent(@runDir, "review_failed", @evtData)
     => null
   ]
 
   let @findingCount = @result.findings.length
   let @status = @result.status
   show `  @filename: @status (@findingCount findings)`
-  let @evtData = { file: @filename, status: @status, findings: @findingCount }
-  @logEvent(@runDir, "review_complete", @evtData)
   => @result | @json
 ]
 
@@ -117,12 +114,5 @@ var @summary = {
   results: @validResults
 }
 output @summary to "@outputPath"
-
-var @finalEvt = {
-  docs_reviewed: @validResults.length,
-  total_findings: @allFindings.length,
-  outdated: @outdatedCount
-}
-run @logEvent(@runDir, "audit_complete", @finalEvt)
 
 show `Written to @outputPath`

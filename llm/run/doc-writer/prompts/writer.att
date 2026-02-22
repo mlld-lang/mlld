@@ -122,8 +122,8 @@ exe @countItems(items) = [
 
 Block rules:
 - Use `[...]` for multi-statement bodies
-- `let @var = value` for block-scoped variables
-- `let @var += value` for accumulation (arrays/strings/objects)
+- `let \@var = value` for block-scoped variables
+- `let \@var += value` for accumulation (arrays/strings/objects)
 - `=> value` required as last statement for return
 </example_atom_2>
 

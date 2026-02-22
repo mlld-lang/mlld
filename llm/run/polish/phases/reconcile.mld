@@ -5,7 +5,6 @@
 >> Output: pipeline/<run>/reconcile/merged-items.json
 
 import { @claudePoll } from @mlld/claude-poll
-import { @updatePhaseStatus } from "../lib/state.mld"
 import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
 import { @getOpenTickets, @needsHumanDesign } from "../lib/tickets.mld"
 

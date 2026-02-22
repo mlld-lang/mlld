@@ -23,7 +23,7 @@ For each `actionable_item`, decide whether it can be auto-classified or needs a 
 **code-fix**: The feature exists and works in some contexts but has a clear defect. The fix is to change code, not docs.
 - Example: "YAML output produces JSON" -- the serializer is broken
 - Example: "@ symbol truncation in template interpolation" -- values get corrupted
-- Example: "OOM crash in @mlld/string" -- memory leak
+- Example: "OOM crash in string utility module" -- memory leak
 
 **doc-fix**: The documentation is factually wrong about a working feature. The code is correct; only docs need updating.
 - Example: "template examples missing slash prefixes" -- syntax works fine with /for, /end

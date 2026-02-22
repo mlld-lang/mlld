@@ -1,8 +1,13 @@
 >> Review: Hooks + Checkpoint + Resume Implementation
->> Usage: mlld run review [--parallel 5] [--phase 1|2|3|4|5|6] [--skip-live]
+>> Usage: mlld run review [--parallel 5] [--skip-live]
 >>
 >> Adversarial multi-phase review of the hooks, checkpointing, and resume features.
 >> Uses hooks and checkpoint features itself — run with --checkpoint for caching.
+>>
+>> Resilience: exe llm labels + checkpoint directives. Crash recovery is automatic.
+>>   mlld run review                       # auto-resumes via cache
+>>   mlld run review --resume "invalidation"  # skip to invalidation phase
+>>   mlld run review --new                 # fresh run
 >>
 >> Phases:
 >>   1. Spec compliance review (implementation against spec)
@@ -13,16 +18,13 @@
 >>   6. Final synthesis and deficiency report
 
 import { @claudePoll } from @mlld/claude-poll
-import { @logEvent, @fileExists, @flatName, @mkdirp, @writeJson, @flatten, @countBySeverity, @tagFindings } from "./lib/context.mld"
+import { @flatName, @mkdirp, @flatten, @countBySeverity, @tagFindings } from "./lib/context.mld"
 import "@payload" as @p
 
 >> ─── Config ───
 
 var @parallelism = @p.parallel ? @p.parallel * 1 : 5
-var @startPhase = @p.phase ? @p.phase * 1 : 1
 var @skipLive = @p.nolive ?? ""
-var @maxRetries = 2
-var @maxAttempts = @maxRetries + 1
 
 >> Tool permissions — escalation by role
 var @reviewTools = "Read,Write,Glob,Grep"
@@ -62,7 +64,7 @@ hook @trackLlm after op:exe = [
 >> Implementation clusters
 var @implClusters = [
   { id: "grammar-ast", name: "Grammar and AST", files: "grammar/directives/hook.peggy, core/types/hook.ts, core/types/hooks.ts" },
-  { id: "registry", name: "HookRegistry and Registration", files: "interpreter/hooks/HookRegistry.ts, interpreter/eval/hook.ts" },
+  { id: "registry", name: "HookRegistry and Registration", files: "interpreter/hooks/HookRegistry.ts, interpreter/hooks/hook-decision-handler.ts" },
   { id: "user-hooks", name: "User Hook Runtime", files: "interpreter/hooks/user-hook-runner.ts, interpreter/hooks/hook-decision-handler.ts" },
   { id: "checkpoint-mgr", name: "Checkpoint Manager", files: "interpreter/checkpoint/CheckpointManager.ts" },
   { id: "checkpoint-hooks", name: "Checkpoint Hooks", files: "interpreter/hooks/checkpoint-pre-hook.ts, interpreter/hooks/checkpoint-post-hook.ts" },
@@ -92,8 +94,7 @@ var @docItems = [
   { id: "changelog", name: "CHANGELOG", file: "CHANGELOG.md" }
 ]
 
->> Live test scenario descriptions (kept short to avoid parse issues with special chars)
->> Full instructions are in the prompt template and spec
+>> Live test scenario descriptions
 var @liveTests = [
   { id: "hook-syntax", name: "Hook Syntax Validation", desc: "Validate all hook syntax forms parse correctly and invalid forms fail" },
   { id: "hook-execution", name: "Hook Execution and Ordering", desc: "Verify hooks fire in declaration order at correct lifecycle points" },
@@ -106,8 +107,7 @@ var @liveTests = [
 
 >> ─── Set up run directory ───
 
-var @today = @now.slice(0, 10)
-var @runDir = `@root/runs/review-@today`
+var @runDir = `@root/runs/review`
 run @mkdirp(@runDir)
 run @mkdirp(`@runDir/phase1-impl`)
 run @mkdirp(`@runDir/phase2-tests`)
@@ -120,7 +120,6 @@ show `════════════════════════�
 show `Review: Hooks + Checkpoint + Resume Implementation`
 show `═══════════════════════════════════════════════════════════════════`
 show `Parallelism: @parallelism`
-show `Start phase: @startPhase`
 show `Skip live: @skipLive`
 show `Run dir: @runDir`
 show `───────────────────────────────────────────────────────────────────`
@@ -131,57 +130,33 @@ show `────────────────────────�
 >> Each cluster reviewer reads the spec and implementation, finds gaps
 >> ═══════════════════════════════════════════════════════════════════
 
-if @startPhase <= 1 [
-
 show `\nPhase 1: Spec Compliance (@implClusters.length clusters, parallel @parallelism)`
 show `───────────────────────────────────────────────────────────────────`
 
-loop(@maxAttempts) [
-  let @batch = for parallel(@parallelism) @cluster in @implClusters [
-    let @outPath = `@runDir/phase1-impl/@cluster.id\.json`
+checkpoint "spec-compliance"
 
-    let @alreadyDone = @fileExists(@outPath)
-    if @alreadyDone == "yes" [
-      show `  @cluster.name: skipped (exists)`
-      => null
-    ]
+var @p1batch = for parallel(@parallelism) @cluster in @implClusters [
+  let @outPath = `@runDir/phase1-impl/@cluster.id\.json`
 
-    show `  @cluster.name: reviewing...`
-    let @prompt = @specCompliancePrompt(@cluster.name, @cluster.files, @specPath, @planPath, @evidenceRules)
-    let @fullPrompt = `@prompt
+  show `  @cluster.name: reviewing...`
+  let @prompt = @specCompliancePrompt(@cluster.name, @cluster.files, @specPath, @planPath, @evidenceRules)
+  let @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
 
-    let @poll = @llmCall(@fullPrompt, "opus", "@root", @reviewTools, @outPath)
-    let @result = <@outPath>?
+  let @poll = @llmCall(@fullPrompt, "opus", "@root", @reviewTools, @outPath)
+  let @result = <@outPath>?
 
-    if !@result [
-      show `  @cluster.name: FAILED (no output)`
-      @logEvent(@runDir, "impl_review_failed", { cluster: @cluster.id })
-      => null
-    ]
-
-    @logEvent(@runDir, "impl_review_complete", { cluster: @cluster.id })
-    show `  @cluster.name: done`
+  if !@result [
+    show `  @cluster.name: FAILED (no output)`
     => null
   ]
 
-  >> Check for completeness
-  let @missing = 0
-  let @checks = for @c in @implClusters [
-    let @exists = @fileExists(`@runDir/phase1-impl/@c.id\.json`)
-    if @exists != "yes" [ => 1 ]
-    => null
-  ]
-  let @missingItems = for @x in @checks when @x => @x
-  if @missingItems.length == 0 [ done ]
-  show `  Retrying @missingItems.length failed reviews...`
-  continue
+  show `  @cluster.name: done`
+  => null
 ]
 
 show `Phase 1 complete`
-
-]
 
 
 >> ═══════════════════════════════════════════════════════════════════
@@ -189,55 +164,33 @@ show `Phase 1 complete`
 >> Each cluster reviewer reads tests and spec, finds coverage gaps
 >> ═══════════════════════════════════════════════════════════════════
 
-if @startPhase <= 2 [
-
 show `\nPhase 2: Test Quality (@testClusters.length clusters, parallel @parallelism)`
 show `───────────────────────────────────────────────────────────────────`
 
-loop(@maxAttempts) [
-  let @batch = for parallel(@parallelism) @cluster in @testClusters [
-    let @outPath = `@runDir/phase2-tests/@cluster.id\.json`
+checkpoint "test-quality"
 
-    let @alreadyDone = @fileExists(@outPath)
-    if @alreadyDone == "yes" [
-      show `  @cluster.name: skipped (exists)`
-      => null
-    ]
+var @p2batch = for parallel(@parallelism) @cluster in @testClusters [
+  let @outPath = `@runDir/phase2-tests/@cluster.id\.json`
 
-    show `  @cluster.name: reviewing...`
-    let @prompt = @testQualityPrompt(@cluster.name, @cluster.files, @specPath, @evidenceRules)
-    let @fullPrompt = `@prompt
+  show `  @cluster.name: reviewing...`
+  let @prompt = @testQualityPrompt(@cluster.name, @cluster.files, @specPath, @evidenceRules)
+  let @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
 
-    let @poll = @llmCall(@fullPrompt, "opus", "@root", @reviewTools, @outPath)
-    let @result = <@outPath>?
+  let @poll = @llmCall(@fullPrompt, "opus", "@root", @reviewTools, @outPath)
+  let @result = <@outPath>?
 
-    if !@result [
-      show `  @cluster.name: FAILED (no output)`
-      @logEvent(@runDir, "test_review_failed", { cluster: @cluster.id })
-      => null
-    ]
-
-    @logEvent(@runDir, "test_review_complete", { cluster: @cluster.id })
-    show `  @cluster.name: done`
+  if !@result [
+    show `  @cluster.name: FAILED (no output)`
     => null
   ]
 
-  let @checks = for @c in @testClusters [
-    let @exists = @fileExists(`@runDir/phase2-tests/@c.id\.json`)
-    if @exists != "yes" [ => 1 ]
-    => null
-  ]
-  let @missingItems = for @x in @checks when @x => @x
-  if @missingItems.length == 0 [ done ]
-  show `  Retrying @missingItems.length failed reviews...`
-  continue
+  show `  @cluster.name: done`
+  => null
 ]
 
 show `Phase 2 complete`
-
-]
 
 
 >> ═══════════════════════════════════════════════════════════════════
@@ -245,55 +198,33 @@ show `Phase 2 complete`
 >> Each reviewer reads a doc and verifies against implementation
 >> ═══════════════════════════════════════════════════════════════════
 
-if @startPhase <= 3 [
-
 show `\nPhase 3: Docs Accuracy (@docItems.length docs, parallel @parallelism)`
 show `───────────────────────────────────────────────────────────────────`
 
-loop(@maxAttempts) [
-  let @batch = for parallel(@parallelism) @doc in @docItems [
-    let @outPath = `@runDir/phase3-docs/@doc.id\.json`
+checkpoint "docs-accuracy"
 
-    let @alreadyDone = @fileExists(@outPath)
-    if @alreadyDone == "yes" [
-      show `  @doc.name: skipped (exists)`
-      => null
-    ]
+var @p3batch = for parallel(@parallelism) @doc in @docItems [
+  let @outPath = `@runDir/phase3-docs/@doc.id\.json`
 
-    show `  @doc.name: reviewing...`
-    let @prompt = @docsAccuracyPrompt(@doc.file, @specPath, @evidenceRules)
-    let @fullPrompt = `@prompt
+  show `  @doc.name: reviewing...`
+  let @prompt = @docsAccuracyPrompt(@doc.file, @specPath, @evidenceRules)
+  let @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
 
-    let @poll = @llmCall(@fullPrompt, "opus", "@root", @reviewTools, @outPath)
-    let @result = <@outPath>?
+  let @poll = @llmCall(@fullPrompt, "opus", "@root", @reviewTools, @outPath)
+  let @result = <@outPath>?
 
-    if !@result [
-      show `  @doc.name: FAILED (no output)`
-      @logEvent(@runDir, "docs_review_failed", { doc: @doc.id })
-      => null
-    ]
-
-    @logEvent(@runDir, "docs_review_complete", { doc: @doc.id })
-    show `  @doc.name: done`
+  if !@result [
+    show `  @doc.name: FAILED (no output)`
     => null
   ]
 
-  let @checks = for @d in @docItems [
-    let @exists = @fileExists(`@runDir/phase3-docs/@d.id\.json`)
-    if @exists != "yes" [ => 1 ]
-    => null
-  ]
-  let @missingItems = for @x in @checks when @x => @x
-  if @missingItems.length == 0 [ done ]
-  show `  Retrying @missingItems.length failed reviews...`
-  continue
+  show `  @doc.name: done`
+  => null
 ]
 
 show `Phase 3 complete`
-
-]
 
 
 >> ═══════════════════════════════════════════════════════════════════
@@ -301,21 +232,14 @@ show `Phase 3 complete`
 >> Agents create and run real mlld scripts exercising hooks/checkpoint
 >> ═══════════════════════════════════════════════════════════════════
 
-if @startPhase <= 4 [
-if @skipLive != "true" [
-
 show `\nPhase 4: Live Testing (@liveTests.length scenarios, parallel @parallelism)`
 show `───────────────────────────────────────────────────────────────────`
 
-loop(@maxAttempts) [
-  let @batch = for parallel(@parallelism) @scenario in @liveTests [
-    let @outPath = `@runDir/phase4-live/@scenario.id\.json`
+checkpoint "live-testing"
 
-    let @alreadyDone = @fileExists(@outPath)
-    if @alreadyDone == "yes" [
-      show `  @scenario.name: skipped (exists)`
-      => null
-    ]
+when @skipLive != "true" => [
+  let @p4batch = for parallel(@parallelism) @scenario in @liveTests [
+    let @outPath = `@runDir/phase4-live/@scenario.id\.json`
 
     show `  @scenario.name: testing...`
     let @prompt = @liveTestPrompt(@scenario.name, @scenario.desc, @specPath, @evidenceRules)
@@ -328,30 +252,17 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
 
     if !@result [
       show `  @scenario.name: FAILED (no output)`
-      @logEvent(@runDir, "live_test_failed", { scenario: @scenario.id })
       => null
     ]
 
-    @logEvent(@runDir, "live_test_complete", { scenario: @scenario.id })
     show `  @scenario.name: done`
     => null
   ]
 
-  let @checks = for @s in @liveTests [
-    let @exists = @fileExists(`@runDir/phase4-live/@s.id\.json`)
-    if @exists != "yes" [ => 1 ]
-    => null
-  ]
-  let @missingItems = for @x in @checks when @x => @x
-  if @missingItems.length == 0 [ done ]
-  show `  Retrying @missingItems.length failed tests...`
-  continue
+  show `Phase 4 complete`
 ]
 
-show `Phase 4 complete`
-
-]
-]
+when @skipLive == "true" => show `Phase 4 skipped (--nolive)`
 
 
 >> ═══════════════════════════════════════════════════════════════════
@@ -411,23 +322,16 @@ show `  Total findings: @allFindings.length`
 >> Each finding gets an adversarial defender trying to disprove it
 >> ═══════════════════════════════════════════════════════════════════
 
-if @startPhase <= 5 [
-if @allFindings.length > 0 [
-
 show `\nPhase 5: Invalidation (@allFindings.length findings, parallel @parallelism)`
 show `───────────────────────────────────────────────────────────────────`
 
-loop(@maxAttempts) [
-  let @batch = for parallel(@parallelism) @finding in @allFindings [
+checkpoint "invalidation"
+
+when @allFindings.length > 0 => [
+  let @p5batch = for parallel(@parallelism) @finding in @allFindings [
     let @fid = @finding.id ?? "unknown"
     let @safeFid = @flatName(@fid)
     let @outPath = `@runDir/phase5-invalidation/@safeFid\.json`
-
-    let @alreadyDone = @fileExists(@outPath)
-    if @alreadyDone == "yes" [
-      show `  @fid: skipped (exists)`
-      => null
-    ]
 
     show `  @fid: invalidating...`
     let @findingStr = @finding
@@ -448,41 +352,23 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
 
     if !@result [
       show `  @fid: FAILED (no output)`
-      @logEvent(@runDir, "invalidation_failed", { finding: @fid })
       => null
     ]
 
     let @resultData = @result | @parse.llm
     if !@resultData [
       show `  @fid: FAILED (unparseable output)`
-      @logEvent(@runDir, "invalidation_failed", { finding: @fid, reason: "unparseable" })
       => null
     ]
     let @verdict = @resultData.verdict ?? "confirmed"
     show `  @fid: @verdict`
-    @logEvent(@runDir, "invalidation_complete", { finding: @fid, verdict: @verdict })
     => null
   ]
 
-  let @checks = for @f in @allFindings [
-    let @fid = @f.id ?? "unknown"
-    let @safeFid = @flatName(@fid)
-    let @exists = @fileExists(`@runDir/phase5-invalidation/@safeFid\.json`)
-    if @exists != "yes" [ => 1 ]
-    => null
-  ]
-  let @missingItems = for @x in @checks when @x => @x
-  if @missingItems.length == 0 [ done ]
-  show `  Retrying @missingItems.length failed invalidations...`
-  continue
+  show `Phase 5 complete`
 ]
 
-show `Phase 5 complete`
-
-] else [
-  show `\nPhase 5: No findings to invalidate`
-]
-]
+when @allFindings.length == 0 => show `\nPhase 5: No findings to invalidate`
 
 
 >> ═══════════════════════════════════════════════════════════════════
@@ -490,36 +376,27 @@ show `Phase 5 complete`
 >> One agent reads all artifacts and produces the final report
 >> ═══════════════════════════════════════════════════════════════════
 
-if @startPhase <= 6 [
-
 show `\nPhase 6: Synthesis`
 show `───────────────────────────────────────────────────────────────────`
 
-let @reportPath = `@runDir/report.json`
+checkpoint "synthesis"
 
-let @reportExists = @fileExists(@reportPath)
-if @reportExists == "yes" [
-  show `  Report already exists, skipping synthesis`
-] else [
-  let @prompt = @synthesizePrompt(@runDir, @specPath, @planPath, @evidenceRules)
-  let @fullPrompt = `@prompt
+var @reportPath = `@runDir/report.json`
+
+var @synthPrompt = @synthesizePrompt(@runDir, @specPath, @planPath, @evidenceRules)
+var @synthFullPrompt = `@synthPrompt
 
 IMPORTANT: Write your JSON report to @reportPath and your markdown report to @runDir/report.md using the Write tool.`
 
-  let @poll = @llmCall(@fullPrompt, "opus", "@root", @synthesizeTools, @reportPath)
+var @synthPoll = @llmCall(@synthFullPrompt, "opus", "@root", @synthesizeTools, @reportPath)
 
-  let @report = <@reportPath>?
-  if !@report [
-    show `  Synthesis FAILED (no output)`
-    @logEvent(@runDir, "synthesis_failed", {})
-  ] else [
-    let @reportData = @report | @parse.llm
-    show `  Grade: @reportData.summary.overall_grade`
-    show `  @reportData.summary.one_line_assessment`
-    @logEvent(@runDir, "synthesis_complete", { grade: @reportData.summary.overall_grade })
-  ]
-]
-
+var @report = <@reportPath>?
+if !@report [
+  show `  Synthesis FAILED (no output)`
+] else [
+  let @reportData = @report | @parse.llm
+  show `  Grade: @reportData.summary.overall_grade`
+  show `  @reportData.summary.one_line_assessment`
 ]
 
 
@@ -537,15 +414,6 @@ show `  Narrative: @runDir/report.md`
 show `  LLM call log: @runDir/llm-calls.log`
 show `═══════════════════════════════════════════════════════════════════`
 show ``
-show `To re-run with caching: mlld run review --checkpoint`
-show `To skip live tests: mlld run review --skip-live true`
-show `To start from a phase: mlld run review --phase 5`
-
-var @finalEvt = {
-  total_findings: @allFindings.length,
-  spec_compliance: @p1flat.length,
-  test_quality: @p2flat.length,
-  docs_accuracy: @p3flat.length,
-  live_test: @p4flat.length
-}
-run @logEvent(@runDir, "review_complete", @finalEvt)
+show `To re-run with caching: mlld run review`
+show `To skip live tests: mlld run review --nolive true`
+show `To resume from invalidation: mlld run review --resume invalidation`

@@ -5,7 +5,6 @@
 
 import { @claudePoll } from @mlld/claude-poll
 import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
-import { @updatePhaseStatus } from "../lib/state.mld"
 
 exe @gitChangesSince(commit) = sh {
   if [ -n "$commit" ]; then
@@ -32,11 +31,13 @@ exe @triagePrompt(allTopics, gitChanges, failureHistory, testStatus, outputDir) 
 >> Run triage phase
 exe @runTriage(runDir, allTopics, lastRunDir) = [
   @logPhaseStart(@runDir, "triage")
-  @updatePhaseStatus(@runDir, "triage", "in-progress")
 
   let @lastCommit = @lastRunDir ? <@lastRunDir/run.json>?.config.git_commit : null
+  show `  Gathering context: git changes...`
   let @gitChanges = @gitChangesSince(@lastCommit)
+  show `  Gathering context: failure history...`
   let @failureHistory = @failureHistoryFrom(@lastRunDir)
+  show `  Gathering context: test status (this may take a minute)...`
   let @testStatus = @currentTestStatus()
 
   let @prompt = @triagePrompt(@allTopics, @gitChanges, @failureHistory, @testStatus, @runDir)
@@ -53,7 +54,6 @@ exe @runTriage(runDir, allTopics, lastRunDir) = [
   show `Triage selected @selectedTopics.length of @allTopics.length topics`
 
   @logPhaseComplete(@runDir, "triage", { selected: @selectedTopics.length, total: @allTopics.length })
-  @updatePhaseStatus(@runDir, "triage", "complete")
 
   => @selectedTopics
 ]
