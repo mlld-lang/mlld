@@ -595,20 +595,67 @@ export class InitModuleCommand {
       // Create directory structure
       await fs.mkdir(moduleDir, { recursive: true });
 
+      // Create type-specific subdirectories
+      if (moduleType === 'app') {
+        await fs.mkdir(path.join(moduleDir, 'lib'), { recursive: true });
+        await fs.mkdir(path.join(moduleDir, 'prompts'), { recursive: true });
+      } else if (moduleType === 'skill') {
+        await fs.mkdir(path.join(moduleDir, '.claude-plugin'), { recursive: true });
+        await fs.mkdir(path.join(moduleDir, 'skills', moduleName), { recursive: true });
+      } else if (moduleType === 'command') {
+        await fs.mkdir(path.join(moduleDir, '.claude-plugin'), { recursive: true });
+        await fs.mkdir(path.join(moduleDir, 'commands'), { recursive: true });
+      }
+
       // Generate manifest (module.yml)
+      const entryField = moduleType === 'skill' ? `\nentry: skills/${moduleName}/SKILL.md`
+        : moduleType === 'command' ? `\nentry: commands/${moduleName}.md` : '';
       const manifest = `name: ${moduleName}
 author: ${author}
 type: ${moduleType}
 about: "${about}"
-version: ${version}
+version: ${version}${entryField}
 license: CC0
 `;
 
       await fs.writeFile(path.join(moduleDir, 'module.yml'), manifest);
 
-      // Generate index.mld
-      const indexContent = this.generateDirectoryIndexContent(moduleType, moduleName, about || '');
-      await fs.writeFile(path.join(moduleDir, 'index.mld'), indexContent);
+      // Generate entry point based on module type
+      if (moduleType === 'skill') {
+        const skillContent = this.generateSkillContent(moduleName, about || '');
+        await fs.writeFile(path.join(moduleDir, 'skills', moduleName, 'SKILL.md'), skillContent);
+      } else if (moduleType === 'command') {
+        const commandContent = this.generateCommandContent(moduleName, about || '');
+        await fs.writeFile(path.join(moduleDir, 'commands', `${moduleName}.md`), commandContent);
+      } else {
+        const indexContent = this.generateDirectoryIndexContent(moduleType, moduleName, about || '');
+        await fs.writeFile(path.join(moduleDir, 'index.mld'), indexContent);
+      }
+
+      // Generate .claude-plugin/plugin.json for marketplace-compatible types
+      if (moduleType === 'skill' || moduleType === 'command') {
+        const pluginJson = {
+          name: `${author}--${moduleName}`,
+          description: about || `${moduleName} ${moduleType}`,
+          version,
+        };
+        await fs.writeFile(
+          path.join(moduleDir, '.claude-plugin', 'plugin.json'),
+          JSON.stringify(pluginJson, null, 2) + '\n'
+        );
+      }
+
+      // Generate type-specific support files
+      if (moduleType === 'app') {
+        await fs.writeFile(
+          path.join(moduleDir, 'lib', 'context.mld'),
+          this.generateAppContextLib()
+        );
+        await fs.writeFile(
+          path.join(moduleDir, 'prompts', 'worker.att'),
+          this.generateAppWorkerPrompt(moduleName)
+        );
+      }
 
       // Generate README.md
       const readmeContent = this.generateReadmeContent(moduleType, moduleName, author || '', about || '');
@@ -619,25 +666,41 @@ license: CC0
       console.log(chalk.green(`\n✔ Created ${moduleType}: ${relPath}/`));
       console.log(chalk.gray('\nFiles created:'));
       console.log(chalk.gray(`  ${relPath}/module.yml`));
-      console.log(chalk.gray(`  ${relPath}/index.mld`));
+      if (moduleType === 'skill') {
+        console.log(chalk.gray(`  ${relPath}/.claude-plugin/plugin.json`));
+        console.log(chalk.gray(`  ${relPath}/skills/${moduleName}/SKILL.md`));
+      } else if (moduleType === 'command') {
+        console.log(chalk.gray(`  ${relPath}/.claude-plugin/plugin.json`));
+        console.log(chalk.gray(`  ${relPath}/commands/${moduleName}.md`));
+      } else {
+        console.log(chalk.gray(`  ${relPath}/index.mld`));
+      }
+      if (moduleType === 'app') {
+        console.log(chalk.gray(`  ${relPath}/lib/context.mld`));
+        console.log(chalk.gray(`  ${relPath}/prompts/worker.att`));
+      }
       console.log(chalk.gray(`  ${relPath}/README.md`));
 
       // Type-specific next steps
       console.log(chalk.gray('\nNext steps:'));
       if (moduleType === 'app') {
-        console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
-        console.log(chalk.gray(`  2. Run: mlld run ${moduleName}`));
-        console.log(chalk.gray(`  3. Publish: mlld publish ${relPath}`));
+        console.log(chalk.gray(`  1. Define your work items in ${relPath}/index.mld`));
+        console.log(chalk.gray(`  2. Edit the prompt template in ${relPath}/prompts/worker.att`));
+        console.log(chalk.gray(`  3. Run: mlld run ${moduleName}`));
+        console.log(chalk.gray(`  4. Publish: mlld publish ${relPath}`));
       } else if (moduleType === 'library') {
         console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
         console.log(chalk.gray(`  2. Test: mlld ${relPath}/index.mld`));
         console.log(chalk.gray(`  3. Publish: mlld publish ${relPath}`));
       } else if (moduleType === 'command') {
-        console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
+        console.log(chalk.gray(`  1. Edit ${relPath}/commands/${moduleName}.md`));
         console.log(chalk.gray(`  2. Test in Claude Code with /${moduleName}`));
+        console.log(chalk.gray(`  3. Publish: mlld publish ${relPath}`));
       } else if (moduleType === 'skill') {
-        console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
-        console.log(chalk.gray(`  2. Add to your Claude Code skills`));
+        console.log(chalk.gray(`  1. Edit ${relPath}/skills/${moduleName}/SKILL.md`));
+        console.log(chalk.gray(`  2. Test: mlld skill install --local ${relPath}`));
+        console.log(chalk.gray(`     (installs to Claude Code, Codex, Pi, OpenCode)`));
+        console.log(chalk.gray(`  3. Publish: mlld publish ${relPath}`));
       } else if (moduleType === 'environment') {
         console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
         console.log(chalk.gray(`  2. Use: mlld env spawn ${moduleName} -- "your prompt"`));
@@ -652,10 +715,38 @@ license: CC0
   private generateDirectoryIndexContent(type: ModuleType, name: string, about: string): string {
     if (type === 'app') {
       return `>> ${about || name}
->> Entry point for ${name}
+>> Usage: mlld run ${name} [--parallel <N>] [--filter <pattern>]
 
-var @message = "Hello from ${name}!"
-show @message
+import { @logEvent, @mkdirp } from "./lib/context.mld"
+import "@payload" as @p
+
+var @parallelism = @p.parallel ?? "4"
+var @filter = @p.filter ?? ""
+
+exe @workerPrompt(item) = template "./prompts/worker.att"
+
+var @outDir = "runs/${name}"
+run @mkdirp(@outDir)
+
+show \`=== ${name} ===\`
+show \`Parallelism: @parallelism\`
+show \`---\`
+
+>> Replace with your work items (or load from a manifest file)
+var @items = ["item-1", "item-2", "item-3"]
+
+>> Parallel fan-out
+var @results = for parallel(@parallelism) @item in @items [
+  show \`  Processing: @item\`
+  let @prompt = @workerPrompt(@item)
+  let @result = { item: @item, status: "done" }
+  run @logEvent(@outDir, "complete", @result)
+  => @result
+]
+
+show \`\`
+show \`=== Complete: @results.length items ===\`
+show \`Results in: @outDir\`
 `;
     } else if (type === 'library') {
       return `>> ${about || name}
@@ -664,13 +755,6 @@ show @message
 exe @greet(name) = \`Hello, @name!\`
 
 export { @greet }
-`;
-    } else if (type === 'command') {
-      return `>> ${about || name}
->> Claude Code slash command
-
-var @result = "Command ${name} executed"
-show @result
 `;
     } else if (type === 'environment') {
       return `>> ${about || name}
@@ -693,7 +777,229 @@ show @response
     }
   }
 
+  private generateSkillContent(name: string, about: string): string {
+    return `---
+name: ${name}
+description: ${about || `${name} skill`}
+---
+
+## When to Use
+
+- Describe when this skill should be activated
+- List the kinds of tasks or questions it handles
+
+## Instructions
+
+Provide clear instructions for the AI assistant when this skill is activated.
+
+### Key Concepts
+
+Document the domain knowledge the assistant needs.
+
+### Patterns
+
+Describe patterns, best practices, or approaches to follow.
+
+### Anti-Patterns
+
+Document common mistakes or approaches to avoid.
+
+## Examples
+
+Show concrete examples of how to apply this skill:
+
+\`\`\`
+Example input or scenario here
+\`\`\`
+
+Expected approach or output.
+`;
+  }
+
+  private generateCommandContent(name: string, about: string): string {
+    return `---
+description: ${about || `${name} command`}
+---
+
+${about || `Run the ${name} command.`}
+
+## What This Command Does
+
+Describe what happens when the user runs \`/${name}\`.
+
+## Steps
+
+1. First step
+2. Second step
+3. Third step
+
+## Guidelines
+
+- Be concise and actionable
+- Ask for clarification if the request is ambiguous
+`;
+  }
+
+  private generateAppContextLib(): string {
+    return `>> Shared context helpers
+
+exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+
+exe @logEvent(runDir, eventType, eventData) = [
+  let @eventsFile = \`@runDir/events.jsonl\`
+  let @event = { ts: @now, event: @eventType, ...@eventData }
+  append @event to "@eventsFile"
+]
+
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+
+exe @writeJson(inputData, path) = [
+  output @inputData to "@path"
+]
+
+export { @fileExists, @logEvent, @mkdirp, @writeJson }
+`;
+  }
+
+  private generateAppWorkerPrompt(name: string): string {
+    return `You are a worker agent for ${name}.
+
+## Item
+
+<item>
+@item
+</item>
+
+## Task
+
+Process the given item and return a JSON result.
+
+\`\`\`json
+{
+  "item": "<identifier>",
+  "status": "done",
+  "findings": []
+}
+\`\`\`
+`;
+  }
+
   private generateReadmeContent(type: ModuleType, name: string, author: string, about: string): string {
+    if (type === 'app') {
+      return `# ${name}
+
+${about || `A mlld orchestrator.`}
+
+## Usage
+
+\`\`\`bash
+mlld run ${name}
+mlld run ${name} --parallel 8
+mlld run ${name} --filter "pattern"
+\`\`\`
+
+## Structure
+
+\`\`\`
+${name}/
+  index.mld            Entry point
+  lib/context.mld      Helper functions
+  prompts/worker.att   Prompt template
+  module.yml           Module manifest
+\`\`\`
+
+## Customizing
+
+1. Define your work items in \`index.mld\` (or load from a manifest file)
+2. Edit \`prompts/worker.att\` to customize the LLM prompt
+3. Add more helpers in \`lib/\` as needed
+
+## License
+
+CC0 - Public Domain
+`;
+    }
+
+    if (type === 'skill') {
+      return `# ${name}
+
+${about || `A cross-harness AI skill.`}
+
+## Install
+
+\`\`\`bash
+mlld skill install --local .claude/skills/${name}
+\`\`\`
+
+Installs to all detected harnesses: Claude Code, Codex, Pi, OpenCode.
+
+## Structure
+
+\`\`\`
+${name}/
+  .claude-plugin/
+    plugin.json      Claude Code plugin manifest
+  skills/${name}/
+    SKILL.md         Skill content (YAML frontmatter + markdown)
+  module.yml         Module manifest for mlld registry
+  README.md
+\`\`\`
+
+This module is both an mlld registry module and a Claude Code plugin.
+When published, it appears in the mlld registry (\`modules.json\`) and
+in the Claude Code marketplace (\`marketplace.json\`).
+
+## How Skills Work
+
+Skills are markdown files with YAML frontmatter that AI assistants read when activated.
+They work across multiple harnesses via \`mlld skill install\`:
+
+| Harness    | Location                              |
+|------------|---------------------------------------|
+| Claude Code| Plugin system (\`claude plugin install\`)|
+| Codex      | \`~/.codex/skills/\`                    |
+| Pi         | \`~/.pi/agent/skills/\`                 |
+| OpenCode   | \`~/.config/opencode/skills/\`          |
+
+## License
+
+CC0 - Public Domain
+`;
+    }
+
+    if (type === 'command') {
+      return `# ${name}
+
+${about || `A Claude Code slash command.`}
+
+## Usage
+
+\`\`\`
+/${name}
+\`\`\`
+
+## Structure
+
+\`\`\`
+${name}/
+  .claude-plugin/
+    plugin.json        Claude Code plugin manifest
+  commands/
+    ${name}.md         Command definition (YAML frontmatter + markdown)
+  module.yml           Module manifest for mlld registry
+  README.md
+\`\`\`
+
+This module is both an mlld registry module and a Claude Code plugin.
+When published, it appears in the mlld registry (\`modules.json\`) and
+in the Claude Code marketplace (\`marketplace.json\`).
+
+## License
+
+CC0 - Public Domain
+`;
+    }
+
     return `# ${name}
 
 ${about || `A mlld ${type}.`}
@@ -703,8 +1009,6 @@ ${about || `A mlld ${type}.`}
 ${type === 'library' ? `\`\`\`mlld
 import { @greet } from @${author}/${name}
 show @greet("World")
-\`\`\`` : type === 'app' ? `\`\`\`bash
-mlld run ${name}
 \`\`\`` : `Use \`/${name}\` in Claude Code.`}
 
 ## docs
@@ -795,8 +1099,58 @@ export async function initModuleCommand(args: string[], options: InitModuleOptio
   // If type is specified, use directory scaffolding
   if (options.type && VALID_MODULE_TYPES.includes(options.type)) {
     await command.scaffoldDirectoryModule(options);
+  } else if (!options.output && !options.name && args.length === 0) {
+    // No args at all — interactive mode: ask what kind of module
+    const type = await promptModuleType();
+    if (type === 'single-file') {
+      await command.initModule(options);
+    } else {
+      options.type = type as ModuleType;
+      await command.scaffoldDirectoryModule(options);
+    }
   } else {
     await command.initModule(options);
+  }
+}
+
+async function promptModuleType(): Promise<ModuleType | 'single-file'> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  try {
+    console.log(chalk.blue('What kind of module?\n'));
+    console.log('  1. app          Orchestrator / runnable script       → llm/run/');
+    console.log('  2. library      Importable module with exports       → llm/lib/');
+    console.log('  3. command      Claude Code slash command            → .claude/commands/');
+    console.log('  4. skill        Claude Code skill                    → .claude/skills/');
+    console.log('  5. environment  AI agent environment                 → .mlld/env/');
+    console.log('  6. single-file  All-in-one .mld.md module (legacy)');
+    console.log('');
+
+    const choice = await rl.question('Choice [1]: ') || '1';
+
+    const typeMap: Record<string, ModuleType | 'single-file'> = {
+      '1': 'app', 'app': 'app',
+      '2': 'library', 'library': 'library', 'lib': 'library',
+      '3': 'command', 'command': 'command', 'cmd': 'command',
+      '4': 'skill', 'skill': 'skill',
+      '5': 'environment', 'environment': 'environment', 'env': 'environment',
+      '6': 'single-file', 'single-file': 'single-file',
+    };
+
+    const selected = typeMap[choice.trim().toLowerCase()];
+    if (!selected) {
+      throw new MlldError(`Invalid choice: ${choice}`, {
+        code: 'INVALID_CHOICE',
+        severity: ErrorSeverity.Fatal
+      });
+    }
+
+    return selected;
+  } finally {
+    rl.close();
   }
 }
 
