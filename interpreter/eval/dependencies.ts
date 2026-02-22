@@ -17,6 +17,7 @@ export interface DependencyChecker {
  */
 export class DefaultDependencyChecker implements DependencyChecker {
   private cache = new Map<string, DependencyCheckResult>();
+  private pythonPackageCheckerCommand: string | null | undefined;
   
   async checkNodePackages(packages: Record<string, string>): Promise<DependencyCheckResult> {
     const missing: string[] = [];
@@ -113,6 +114,8 @@ export class DefaultDependencyChecker implements DependencyChecker {
         mismatched: []
       };
     }
+
+    const pipCommand = this.resolvePythonPackageCheckerCommand();
     
     for (const [pkg, constraint] of Object.entries(packages)) {
       const normalizedConstraint = normalizeConstraint(constraint);
@@ -127,10 +130,21 @@ export class DefaultDependencyChecker implements DependencyChecker {
         }
         continue;
       }
+
+      if (!pipCommand) {
+        missing.push(formatRequirement(pkg, normalizedConstraint, ''));
+        const packageResult = {
+          satisfied: false,
+          missing: [formatRequirement(pkg, normalizedConstraint, '')],
+          mismatched: []
+        };
+        this.cache.set(cacheKey, packageResult);
+        continue;
+      }
       
       try {
         // Check if package exists using pip
-        const result = execSync(`pip show ${pkg}`, { 
+        const result = execSync(`${pipCommand} show ${pkg}`, {
           encoding: 'utf8',
           stdio: 'pipe'
         });
@@ -165,6 +179,28 @@ export class DefaultDependencyChecker implements DependencyChecker {
       missing,
       mismatched
     };
+  }
+
+  private resolvePythonPackageCheckerCommand(): string | null {
+    if (this.pythonPackageCheckerCommand !== undefined) {
+      return this.pythonPackageCheckerCommand;
+    }
+
+    for (const command of ['pip3', 'pip']) {
+      try {
+        execSync(`${command} --version`, {
+          encoding: 'utf8',
+          stdio: 'pipe'
+        });
+        this.pythonPackageCheckerCommand = command;
+        return command;
+      } catch {
+        // Continue to next candidate
+      }
+    }
+
+    this.pythonPackageCheckerCommand = null;
+    return null;
   }
 }
 

@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Guard quantifier helpers now attach to object-valued guard inputs, preventing `@input.any.mx.*` field-access failures in operation guards.
 - `npm run test:case -- ...` now accepts `tests/cases/...`, `tests/fixtures/...`, absolute paths, and direct `example.md`/`example.mld` fixture paths.
 - Return label trust asymmetry is preserved for executable returns; explicit `=> untrusted ...` results no longer regain `trusted` from ambient invocation descriptors.
+- `/needs { py: [...] }` dependency checks now prefer `pip3` and fall back to `pip`.
 
 ## [2.0.0-rc82]
 
