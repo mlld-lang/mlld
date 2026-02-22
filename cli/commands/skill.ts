@@ -1,9 +1,10 @@
 import chalk from 'chalk';
-import { existsSync, mkdirSync, cpSync, writeFileSync, rmSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, cpSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'fs';
+import { join, dirname } from 'path';
 import { execFileSync } from 'child_process';
 import { findClaude, pluginInstall, pluginUninstall, pluginStatus, getPackageRoot } from './plugin';
 import { version } from '@core/version';
+import { RegistryResolver } from '@core/resolvers/RegistryResolver';
 
 interface HarnessInfo {
   name: string;
@@ -67,6 +68,48 @@ function readInstalledVersion(harness: HarnessInfo): string | null {
   if (!markerPath) return null;
   try {
     return readFileSync(markerPath, 'utf8').trim();
+  } catch {
+    return null;
+  }
+}
+
+const REGISTRY_REF_PATTERN = /^@[a-z0-9-]+\/[a-z0-9-]+(@.+)?$/;
+
+function isRegistryRef(ref: string | undefined): boolean {
+  return !!ref && REGISTRY_REF_PATTERN.test(ref);
+}
+
+function parseSkillName(moduleRef: string): string {
+  return moduleRef.replace(/^@[^/]+\//, '').replace(/@.*$/, '');
+}
+
+function getSkillDir(harness: HarnessInfo, skillName: string): string | null {
+  switch (harness.name) {
+    case 'Claude Code':
+      return join(homeDir(), '.claude', 'skills', skillName);
+    case 'Pi':
+      return harness.path ? join(harness.path, 'agent', 'skills', skillName) : null;
+    default:
+      return harness.path ? join(harness.path, 'skills', skillName) : null;
+  }
+}
+
+function writeFilesTo(dir: string, files: Record<string, string>): void {
+  mkdirSync(dir, { recursive: true });
+  for (const [relativePath, content] of Object.entries(files)) {
+    const fullPath = join(dir, relativePath);
+    mkdirSync(dirname(fullPath), { recursive: true });
+    writeFileSync(fullPath, content, 'utf8');
+  }
+}
+
+function writeVersionMarker(dir: string, ver: string): void {
+  writeFileSync(join(dir, '.version'), ver, 'utf8');
+}
+
+function readSkillVersion(dir: string): string | null {
+  try {
+    return readFileSync(join(dir, '.version'), 'utf8').trim();
   } catch {
     return null;
   }
@@ -181,6 +224,108 @@ async function uninstallHarness(harness: HarnessInfo, verbose?: boolean): Promis
   }
 }
 
+async function installRegistrySkill(
+  harness: HarnessInfo, skillName: string,
+  files: Record<string, string>, ver: string
+): Promise<boolean> {
+  const skillDir = getSkillDir(harness, skillName);
+  if (!skillDir) return false;
+
+  writeFilesTo(skillDir, files);
+  writeVersionMarker(skillDir, ver);
+  console.log(chalk.green(`  Installed to ${skillDir}/`));
+  return true;
+}
+
+async function skillInstallFromRegistry(
+  moduleRef: string, target: string | undefined, scope: string, verbose?: boolean
+): Promise<void> {
+  const resolver = new RegistryResolver();
+
+  if (!resolver.canResolve(moduleRef)) {
+    console.error(chalk.red(`Invalid module reference: ${moduleRef}`));
+    console.error(chalk.gray('Expected format: @author/skill-name'));
+    process.exit(1);
+  }
+
+  console.log(chalk.blue(`Resolving ${moduleRef} from registry...`));
+
+  let resolution;
+  try {
+    resolution = await resolver.resolve(moduleRef);
+  } catch (error: any) {
+    console.error(chalk.red(`Failed to resolve ${moduleRef}: ${error.message}`));
+    process.exit(1);
+  }
+
+  const metadata = resolution.metadata ?? {};
+
+  if (!metadata.isDirectory || metadata.moduleType !== 'skill') {
+    const actualType = metadata.moduleType || 'library';
+    console.error(chalk.red(`${moduleRef} is not a skill module (type: ${actualType})`));
+    process.exit(1);
+  }
+
+  const files = metadata.directoryFiles as Record<string, string>;
+  const ver = (metadata.version as string) || 'unknown';
+  const skillName = parseSkillName(moduleRef);
+
+  const harnesses = target
+    ? [detectHarness(target as HarnessName)].filter(h => h)
+    : detectAll();
+  const detected = harnesses.filter(h => h.detected);
+
+  if (detected.length === 0) {
+    console.log(chalk.yellow('No coding tools detected.'));
+    console.log(chalk.gray('Supported: Claude Code, Codex, Pi, OpenCode'));
+    return;
+  }
+
+  console.log(chalk.blue(`Installing ${moduleRef} (v${ver})...\n`));
+
+  let installed = 0;
+  for (const harness of detected) {
+    console.log(chalk.bold(harness.name));
+    const ok = await installRegistrySkill(harness, skillName, files, ver);
+    if (ok) installed++;
+    console.log();
+  }
+
+  if (installed > 0) {
+    console.log(chalk.green(`${moduleRef} installed for ${installed} tool${installed !== 1 ? 's' : ''}.`));
+  }
+}
+
+async function skillUninstallRegistry(
+  moduleRef: string, target: string | undefined, verbose?: boolean
+): Promise<void> {
+  const skillName = parseSkillName(moduleRef);
+
+  const harnesses = target
+    ? [detectHarness(target as HarnessName)].filter(h => h)
+    : detectAll();
+  const detected = harnesses.filter(h => h.detected);
+
+  if (detected.length === 0) {
+    console.log(chalk.yellow('No coding tools detected.'));
+    return;
+  }
+
+  console.log(chalk.blue(`Uninstalling ${moduleRef}...\n`));
+
+  for (const harness of detected) {
+    const skillDir = getSkillDir(harness, skillName);
+    if (skillDir && existsSync(skillDir)) {
+      rmSync(skillDir, { recursive: true, force: true });
+      console.log(chalk.green(`  Removed ${skillName} from ${harness.name}`));
+    } else {
+      console.log(chalk.gray(`  ${harness.name}: not installed`));
+    }
+  }
+
+  console.log(chalk.green('\nDone.'));
+}
+
 async function skillInstall(target: string | undefined, scope: string, verbose?: boolean, local?: boolean): Promise<void> {
   const sourceDir = getPluginSourceDir();
   if (!existsSync(sourceDir)) {
@@ -238,6 +383,38 @@ async function skillUninstall(target: string | undefined, verbose?: boolean): Pr
   console.log(chalk.green('Done.'));
 }
 
+function listRegistrySkills(harness: HarnessInfo): { name: string; version: string }[] {
+  const results: { name: string; version: string }[] = [];
+  let skillsBase: string | null = null;
+
+  switch (harness.name) {
+    case 'Claude Code':
+      skillsBase = join(homeDir(), '.claude', 'skills');
+      break;
+    case 'Pi':
+      if (harness.path) skillsBase = join(harness.path, 'agent', 'skills');
+      break;
+    default:
+      if (harness.path) skillsBase = join(harness.path, 'skills');
+      break;
+  }
+
+  if (!skillsBase || !existsSync(skillsBase)) return results;
+
+  try {
+    const entries = readdirSync(skillsBase, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === 'mlld') continue;
+      const ver = readSkillVersion(join(skillsBase, entry.name));
+      if (ver) {
+        results.push({ name: entry.name, version: ver });
+      }
+    }
+  } catch { /* ignore read errors */ }
+
+  return results;
+}
+
 async function skillStatus(verbose?: boolean): Promise<void> {
   const harnesses = detectAll();
   const detected = harnesses.filter(h => h.detected);
@@ -253,7 +430,6 @@ async function skillStatus(verbose?: boolean): Promise<void> {
   for (const harness of detected) {
     const installed = readInstalledVersion(harness);
     if (harness.name === 'Claude Code') {
-      // Delegate to plugin status
       await pluginStatus(verbose);
     } else if (installed) {
       const current = installed === version;
@@ -267,15 +443,22 @@ async function skillStatus(verbose?: boolean): Promise<void> {
     } else {
       console.log(`  ${harness.name}: ${chalk.gray('not installed')}`);
     }
+
+    const registrySkills = listRegistrySkills(harness);
+    for (const skill of registrySkills) {
+      console.log(`  ${harness.name}/${skill.name}: ${chalk.green(skill.version)}`);
+    }
   }
 }
 
 function showUsage(): void {
   console.log(`
 ${chalk.bold('Usage:')}
-  mlld skill install [--target <harness>]   Install skills to coding tools
-  mlld skill uninstall [--target <harness>]  Remove skills from coding tools
-  mlld skill status                          Check installation state
+  mlld skill install                           Install built-in mlld skills
+  mlld skill install @author/skill-name        Install a skill from the registry
+  mlld skill uninstall                         Remove built-in mlld skills
+  mlld skill uninstall @author/skill-name      Remove a registry skill
+  mlld skill status                            Check installation state
 
 ${chalk.bold('Options:')}
   --target <harness>  Target a specific tool: claude, codex, pi, opencode
@@ -285,11 +468,13 @@ ${chalk.bold('Options:')}
   -h, --help          Show this help message
 
 ${chalk.bold('Examples:')}
-  mlld skill install                      Install to all detected tools
+  mlld skill install                      Install built-in skills to all tools
+  mlld skill install @alice/my-helper     Install a registry skill
   mlld skill install --local              Install from local directory
   mlld skill install --target codex       Install to Codex only
   mlld skill status                       Check what's installed
-  mlld skill uninstall                    Remove from all tools
+  mlld skill uninstall                    Remove built-in skills from all tools
+  mlld skill uninstall @alice/my-helper   Remove a registry skill
 `);
 }
 
@@ -305,6 +490,7 @@ export function createSkillCommand() {
       }
 
       const subcommand = args[0];
+      const moduleRef = args[1];
       const verbose = flags.verbose || flags.v;
       const scope = flags.scope || 'user';
       const target = flags.target;
@@ -313,11 +499,19 @@ export function createSkillCommand() {
       switch (subcommand) {
         case 'install':
         case 'i':
-          await skillInstall(target, scope, verbose, local);
+          if (isRegistryRef(moduleRef)) {
+            await skillInstallFromRegistry(moduleRef!, target, scope, verbose);
+          } else {
+            await skillInstall(target, scope, verbose, local);
+          }
           break;
         case 'uninstall':
         case 'remove':
-          await skillUninstall(target, verbose);
+          if (isRegistryRef(moduleRef)) {
+            await skillUninstallRegistry(moduleRef!, target, verbose);
+          } else {
+            await skillUninstall(target, verbose);
+          }
           break;
         case 'status':
           await skillStatus(verbose);

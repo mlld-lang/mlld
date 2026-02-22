@@ -633,7 +633,10 @@ mlld plugin install                  # Install for current user
 mlld plugin install --scope project  # Install for current project only
 mlld plugin status                   # Check if installed
 mlld plugin uninstall                # Remove the plugin
-mlld skill install                   # Install skills for codex, opencode, pi 
+mlld skill install                   # Install built-in skills for all detected tools
+mlld skill install @alice/my-helper  # Install a skill from the registry
+mlld skill uninstall @alice/my-helper # Remove a registry skill
+mlld skill status                    # Check installation state
 ```
 
 Requires the `claude` CLI to be installed. Restart Claude Code after installing to activate the plugin.
