@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exported executables now capture module auth bindings so imported `using auth:name` works without requiring callers to import policy objects.
 
 ### Fixed
+- `mlld publish` for directory modules now constructs correct raw GitHub URLs; previously `detectGitInfo` received the directory path instead of the entry file path, producing a `/.` base path that made URL verification fail.
+- `mlld publish` metadata updates (repo, bugs, mlldVersion) are now written to disk, committed, and pushed automatically. Previously option [1] "Apply changes and continue" only updated in-memory state and never persisted the file.
+- `mlld publish` auto-commit now pushes to remote and refreshes the commit SHA before URL verification, so the constructed raw.githubusercontent.com URL points to an accessible commit.
+- `mlld publish` directory module metadata updates now write to `module.yml` instead of incorrectly adding frontmatter to the entry file.
 - `run` directive now resolves cross-module executable dependencies; imported functions called via `run @fn(...)` can access their own module's imports. Previously only `var @_ = @fn(...)` worked.
 - Repeated `--env` CLI flags now accumulate instead of overwriting; all entries are available in `@input`.
 - `when` value-match wildcard arms (`* => show ...`) now execute directive actions instead of silently dropping them.
