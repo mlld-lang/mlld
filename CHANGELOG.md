@@ -10,9 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `env with { ... } [ ... ]` configless block syntax for `/env`.
 - `/exe` definitions now accept `env` blocks directly on the RHS (`/exe @fn(...) = env with { ... } [ ... ]`).
+- `@typeInfo(...)` builtin for rich type/provenance diagnostics, while `@typeof(...)` remains for simple type checks.
+- Directory module import convention: importing `./dir` now resolves `./dir/index.mld` when present; `./dir/` continues to mean collection import.
+- `sh(@var) { ... }` syntax support in `exe` definitions (previously run-only).
 
 ### Fixed
 - `run` directive now resolves cross-module executable dependencies; imported functions called via `run @fn(...)` can access their own module's imports. Previously only `var @_ = @fn(...)` worked.
+- Repeated `--env` CLI flags now accumulate instead of overwriting; all entries are available in `@input`.
+- `when` value-match wildcard arms (`* => show ...`) now execute directive actions instead of silently dropping them.
+- `let` object literals now evaluate expression-valued properties (`when`, ternary, binary, unary) instead of leaking raw AST nodes.
+- MCP tool routing now reports clear not-found errors for wrong tool names (with snake_case suggestion), instead of surfacing recursive/circular errors.
+- Equality behavior is unified through a single implementation across expression and `when` condition evaluation.
+- Guard denial output is deduplicated and default errors omit verbose guard JSON internals unless debug mode is enabled.
+- Missing-file path guidance and import suggestions now consistently prefer `@root` in user-facing hints.
+- Deprecated-json anti-pattern detection is narrower and no longer triggers on variable names that merely contain `json`.
 - Error display now renders all content (header, source context, details, suggestion) inside the `mlld error` box frame. Directive trace chain appears at top, error details below. Fixes `:unknown` locations in trace and strips `/` prefix from directive names.
 - `src:mcp` taint no longer applies to inputs of MCP-served tools (`mlld mcp`); it remains scoped to data returned from imported MCP tools.
 - Imported guards now resolve internal executable dependencies in the module where the guard was defined; consumers do not need to import helper executables separately.
