@@ -101,7 +101,11 @@ export class ModuleReader {
       entry: (parsed.entry as string) || undefined,
       needs: Array.isArray(parsed.needs) ? parsed.needs as string[] : undefined,
       license: (parsed.license as string) || 'CC0',
-      mlldVersion: (parsed.mlldVersion as string) || undefined,
+      mlldVersion: (parsed.mlldVersion as string) || (parsed['mlld-version'] as string) || undefined,
+      repo: (parsed.repo as string) || (parsed.repository as string) || undefined,
+      bugs: (parsed.bugs as string) || undefined,
+      homepage: (parsed.homepage as string) || undefined,
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords as string[] : undefined,
       dependencies: parsed.dependencies as Record<string, string> | undefined,
       devDependencies: parsed.devDependencies as Record<string, string> | undefined,
     };
@@ -211,6 +215,10 @@ export class ModuleReader {
           dependencies: manifest.dependencies,
           devDependencies: manifest.devDependencies,
           mlldVersion: manifest.mlldVersion,
+          repo: manifest.repo,
+          bugs: manifest.bugs,
+          homepage: manifest.homepage,
+          keywords: manifest.keywords,
         };
 
         return {

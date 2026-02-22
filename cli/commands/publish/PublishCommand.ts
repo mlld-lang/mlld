@@ -466,6 +466,16 @@ export class PublishCommand {
       for (const file of filesToAdd) {
         execSync(`git add "${file}"`, { cwd: gitRoot, stdio: 'pipe' });
       }
+
+      // Check if there are actually staged changes before committing
+      try {
+        execSync('git diff --cached --quiet', { cwd: gitRoot, stdio: 'pipe' });
+        // Exit code 0 means no staged changes — nothing to commit
+        return;
+      } catch {
+        // Exit code 1 means there ARE staged changes — proceed with commit
+      }
+
       execSync('git commit -m "Update module metadata for publishing"', { cwd: gitRoot, stdio: 'pipe' });
 
       // Push so the commit is accessible on GitHub

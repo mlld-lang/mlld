@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mlld publish` metadata updates (repo, bugs, mlldVersion) are now written to disk, committed, and pushed automatically. Previously option [1] "Apply changes and continue" only updated in-memory state and never persisted the file.
 - `mlld publish` auto-commit now pushes to remote and refreshes the commit SHA before URL verification, so the constructed raw.githubusercontent.com URL points to an accessible commit.
 - `mlld publish` directory module metadata updates now write to `module.yml` instead of incorrectly adding frontmatter to the entry file.
+- `mlld publish` manifest parser now reads `repo`, `bugs`, `homepage`, and `keywords` from `module.yml`, preventing the enhancer from perpetually flagging them as updates when they already exist.
+- `mlld publish` metadata commit gracefully skips when the file content is unchanged, instead of failing with a fatal error.
 - `run` directive now resolves cross-module executable dependencies; imported functions called via `run @fn(...)` can access their own module's imports. Previously only `var @_ = @fn(...)` worked.
 - Repeated `--env` CLI flags now accumulate instead of overwriting; all entries are available in `@input`.
 - `when` value-match wildcard arms (`* => show ...`) now execute directive actions instead of silently dropping them.
