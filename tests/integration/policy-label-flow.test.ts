@@ -379,7 +379,7 @@ describe('Policy label flow integration', () => {
       await fs.writeFile(
         path.join(root, 'main.mld'),
         [
-          `auth @test = "${envVarName}"`,
+          `/auth @test = "${envVarName}"`,
           `/run cmd { node -e "console.log(process.env.${envVarName})" } using auth:test`
         ].join('\n'),
         'utf8'
@@ -422,7 +422,7 @@ describe('Policy label flow integration', () => {
       await fs.writeFile(
         path.join(root, 'module.mld'),
         [
-          `auth @test = { from: "env:${sourceVarName}", as: "${targetVarName}" }`,
+          `/auth @test = { from: "env:${sourceVarName}", as: "${targetVarName}" }`,
           `/exe @spawn() = run cmd { node -e "console.log(process.env.${targetVarName})" } using auth:test`,
           '/export { @spawn }'
         ].join('\n'),
@@ -482,7 +482,7 @@ describe('Policy label flow integration', () => {
       await fs.writeFile(
         path.join(root, 'module.mld'),
         [
-          `auth @test = { from: "env:${moduleSourceEnvName}", as: "${targetEnvName}" }`,
+          `/auth @test = { from: "env:${moduleSourceEnvName}", as: "${targetEnvName}" }`,
           `/exe @spawn() = run cmd { node -e "console.log(process.env.${targetEnvName})" } using auth:test`,
           '/export { @spawn }'
         ].join('\n'),
@@ -491,7 +491,7 @@ describe('Policy label flow integration', () => {
       await fs.writeFile(
         path.join(root, 'main.mld'),
         [
-          `auth @test = { from: "env:${callerSourceEnvName}", as: "${targetEnvName}" }`,
+          `/auth @test = { from: "env:${callerSourceEnvName}", as: "${targetEnvName}" }`,
           '/import { @spawn } from "./module.mld"',
           '/run @spawn()'
         ].join('\n'),
@@ -532,7 +532,7 @@ describe('Policy label flow integration', () => {
     await fs.writeFile(
       path.join(root, 'main.mld'),
       [
-        'auth @bad = { from: "op://vault/item/field", as: "TOKEN" }',
+        '/auth @bad = { from: "op://vault/item/field", as: "TOKEN" }',
         '/run cmd { echo ok } using auth:bad'
       ].join('\n'),
       'utf8'
