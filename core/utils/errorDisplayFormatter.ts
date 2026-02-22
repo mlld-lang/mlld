@@ -307,6 +307,14 @@ export class ErrorDisplayFormatter {
     }
 
     const relevantDetails = [];
+    const verboseGuardKeys = new Set([
+      'guardContext',
+      'guardInput',
+      'guardResults',
+      'hints',
+      'reasons'
+    ]);
+    const showVerboseGuardDetails = process.env.MLLD_DEBUG === 'true';
     
     const detailsObj: any = error.details;
     for (const [key, value] of Object.entries(detailsObj)) {
@@ -320,6 +328,8 @@ export class ErrorDisplayFormatter {
       if (key === 'mlldLocation') continue;
       // Directive trace has its own formatted section
       if (key === 'directiveTrace') continue;
+      // Guard diagnostics are large; show only with explicit debug mode.
+      if (!showVerboseGuardDetails && verboseGuardKeys.has(key)) continue;
       if (value === undefined || value === null) continue;
 
       // Format location objects specially with smart paths

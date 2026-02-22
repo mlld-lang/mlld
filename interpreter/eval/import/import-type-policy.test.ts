@@ -50,7 +50,7 @@ describe('ImportTypePolicy', () => {
     expect(() => validateDeclaredImportType('static', createResolution({ type: 'resolver', resolverName: 'root' }))).not.toThrow();
     expect(() => validateDeclaredImportType('static', createResolution({ type: 'resolver', resolverName: 'project' }))).not.toThrow();
     expect(() => validateDeclaredImportType('static', createResolution({ type: 'resolver', resolverName: 'local' }))).toThrow(
-      /supports local files or @base\/@root\/@project resolver paths/
+      /supports local files or @root\/@base\/@project resolver paths/
     );
 
     expect(() => validateDeclaredImportType('templates', createResolution({ type: 'file' }))).not.toThrow();

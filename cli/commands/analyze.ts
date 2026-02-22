@@ -724,12 +724,6 @@ function getParseReplacementForJsonAlias(identifier: string): string | null {
   if (identifier.startsWith('JSON.')) {
     return `parse.${identifier.slice('JSON.'.length).toLowerCase()}`;
   }
-  if (identifier.startsWith('json_')) {
-    return `parse.${identifier.slice('json_'.length).toLowerCase()}`;
-  }
-  if (identifier.startsWith('JSON_')) {
-    return `parse.${identifier.slice('JSON_'.length).toLowerCase()}`;
-  }
 
   return null;
 }
@@ -784,11 +778,9 @@ function detectDeprecatedJsonTransformAntiPatterns(ast: MlldNode[]): AntiPattern
 
     const maybeRef = node as any;
     if (maybeRef.type === 'VariableReference') {
-      if (maybeRef.valueType !== 'identifier') {
-        const identifier = typeof maybeRef.identifier === 'string' ? maybeRef.identifier : '';
-        if (identifier) {
-          pushWarning(identifier, maybeRef.location);
-        }
+      const identifier = typeof maybeRef.identifier === 'string' ? maybeRef.identifier : '';
+      if (identifier === 'json' || identifier === 'JSON') {
+        pushWarning(identifier, maybeRef.location);
       }
 
       if (Array.isArray(maybeRef.pipes)) {
@@ -805,8 +797,20 @@ function detectDeprecatedJsonTransformAntiPatterns(ast: MlldNode[]): AntiPattern
       }
     }
 
-    if (typeof maybeRef.rawIdentifier === 'string' && maybeRef.rawIdentifier.length > 0) {
-      pushWarning(maybeRef.rawIdentifier, maybeRef.location);
+    if (maybeRef.type === 'ExecInvocation') {
+      const commandRef = maybeRef.commandRef;
+      const rawIdentifier =
+        commandRef && typeof commandRef === 'object' && typeof commandRef.rawIdentifier === 'string'
+          ? commandRef.rawIdentifier
+          : '';
+      const fallbackName =
+        commandRef && typeof commandRef === 'object' && typeof commandRef.name === 'string'
+          ? commandRef.name
+          : '';
+      const candidate = rawIdentifier || fallbackName;
+      if (candidate) {
+        pushWarning(candidate, maybeRef.location ?? commandRef?.location);
+      }
     }
 
     for (const value of Object.values(node as Record<string, unknown>)) {

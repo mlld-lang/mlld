@@ -99,7 +99,7 @@ export interface CLIOptions {
   // Ephemeral mode for CI/serverless
   ephemeral?: boolean;
   // Environment file path
-  env?: string;
+  env?: string | string[];
   // Allow absolute paths outside project root
   allowAbsolute?: boolean;
   // Serve command options

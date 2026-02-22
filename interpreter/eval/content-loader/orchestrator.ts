@@ -189,7 +189,7 @@ export class ContentLoaderOrchestrator {
       }
       const hasAngleBracket = pathOrUrl.includes('<') || pathOrUrl.includes('>');
       if (!hasAngleBracket && !pathOrUrl.startsWith('/') && !pathOrUrl.startsWith('@') && !env.isURL(pathOrUrl)) {
-        errorMessage += '\n\nHint: Paths are relative to mlld files. You can make them relative to your project root with the `@base/` prefix';
+        errorMessage += '\n\nHint: Paths are relative to mlld files. You can make them relative to your project root with the `@root/` prefix';
       }
 
       throw new MlldError(errorMessage, {

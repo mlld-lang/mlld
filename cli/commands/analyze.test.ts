@@ -93,6 +93,20 @@ describe('analyze/validate warnings', () => {
     expect(deprecations).toHaveLength(0);
   });
 
+  it('does not flag variables that merely contain "json" in the name', async () => {
+    const modulePath = await writeModule('deprecated-json-false-positive.mld', `/var @json_result = "ok"
+/show @json_result
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const deprecations = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'deprecated-json-transform'
+    );
+    expect(deprecations).toHaveLength(0);
+  });
+
   it('keeps reserved names as hard conflicts', async () => {
     const modulePath = await writeModule('reserved-conflict.mld', `/exe @test() = [
   let @base = "shadow"

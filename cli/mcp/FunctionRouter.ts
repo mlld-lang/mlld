@@ -53,6 +53,7 @@ export class FunctionRouter {
 
   async executeFunction(toolName: string, args: Record<string, unknown>): Promise<string> {
     this.syncToolsAvailability();
+    this.ensureToolExists(toolName);
     const toolKey = this.resolveToolKey(toolName);
     if (!this.environment.isToolAllowed(toolKey, toolName)) {
       throw new Error(`Tool '${toolName}' not available`);
@@ -67,13 +68,13 @@ export class FunctionRouter {
       if (this.toolCollection) {
         const definition = this.toolCollection[toolKey];
         if (!definition?.mlld) {
-          throw new Error(`Tool '${toolName}' not found`);
+          throw this.createToolNotFoundError(toolName);
         }
         const execName = definition.mlld;
         const variable = this.environment.getVariable(execName) as Variable | undefined;
 
         if (!variable || variable.type !== 'executable') {
-          throw new Error(`Tool '${toolName}' not found`);
+          throw this.createToolNotFoundError(toolName);
       }
 
       const execVar = variable as ExecutableVariable;
@@ -95,7 +96,7 @@ export class FunctionRouter {
       const variable = this.environment.getVariable(execName) as Variable | undefined;
 
       if (!variable || variable.type !== 'executable') {
-        throw new Error(`Tool '${toolName}' not found`);
+        throw this.createToolNotFoundError(toolName);
       }
 
       const execVar = variable as ExecutableVariable;
@@ -154,6 +155,43 @@ export class FunctionRouter {
       map.set(key, key);
     }
     return map;
+  }
+
+  private ensureToolExists(toolName: string): void {
+    if (this.toolNamesMcp.length === 0) {
+      return;
+    }
+
+    if (!this.toolNamesMcp.includes(toolName)) {
+      throw this.createToolNotFoundError(toolName);
+    }
+  }
+
+  private createToolNotFoundError(toolName: string): Error {
+    const suggestion = this.findToolNameSuggestion(toolName);
+    if (suggestion) {
+      return new Error(`Tool not found: '${toolName}'. Did you mean '${suggestion}'?`);
+    }
+    return new Error(`Tool not found: '${toolName}'`);
+  }
+
+  private findToolNameSuggestion(toolName: string): string | null {
+    if (this.toolNamesMcp.length === 0) {
+      return null;
+    }
+
+    const directSnake = mlldNameToMCPName(toolName);
+    if (directSnake !== toolName && this.toolNamesMcp.includes(directSnake)) {
+      return directSnake;
+    }
+
+    const camelCandidate = mcpNameToMlldName(toolName);
+    const snakeFromCamel = mlldNameToMCPName(camelCandidate);
+    if (snakeFromCamel !== toolName && this.toolNamesMcp.includes(snakeFromCamel)) {
+      return snakeFromCamel;
+    }
+
+    return null;
   }
 
   private buildInvocation(

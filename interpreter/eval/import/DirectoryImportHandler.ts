@@ -49,7 +49,49 @@ export class DirectoryImportHandler {
       return null;
     }
 
+    if (!this.hasTrailingSlashImportPath(directive)) {
+      const indexResult = await this.tryProcessDirectoryIndex(
+        fsService,
+        baseDir,
+        resolution,
+        directive
+      );
+      if (indexResult) {
+        return indexResult;
+      }
+    }
+
     return this.processDirectoryImport(fsService, baseDir, resolution, directive, env);
+  }
+
+  private async tryProcessDirectoryIndex(
+    fsService: IFileSystemService,
+    baseDir: string,
+    resolution: ImportResolution,
+    directive: DirectiveNode
+  ): Promise<ModuleProcessingResult | null> {
+    const indexPath = path.join(baseDir, DIRECTORY_INDEX_FILENAME);
+    const hasIndex = await fsService.exists(indexPath).catch(() => false);
+    if (!hasIndex) {
+      return null;
+    }
+
+    const indexStat = await fsService
+      .stat(indexPath)
+      .catch(() => ({ isDirectory: () => false, isFile: () => false }));
+    if (!indexStat.isFile()) {
+      return null;
+    }
+
+    const childResolution: ImportResolution = {
+      ...resolution,
+      type: 'file',
+      resolvedPath: indexPath
+    };
+
+    const result = await this.processModuleContent(childResolution, directive);
+    this.enforceModuleNeeds(result.moduleNeeds, indexPath);
+    return result;
   }
 
   private async processDirectoryImport(
@@ -226,5 +268,31 @@ export class DirectoryImportHandler {
   private sanitizeDirectoryKey(name: string): string {
     const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, '_');
     return sanitized.length > 0 ? sanitized : 'module';
+  }
+
+  private hasTrailingSlashImportPath(directive: DirectiveNode): boolean {
+    const rawPath =
+      (directive as any)?.raw?.path ??
+      this.extractPathFromNodes((directive as any)?.values?.path);
+
+    if (typeof rawPath !== 'string') {
+      return false;
+    }
+
+    const trimmed = rawPath.trim();
+    return trimmed.endsWith('/') || trimmed.endsWith('\\');
+  }
+
+  private extractPathFromNodes(pathNodes: unknown): string | null {
+    if (!Array.isArray(pathNodes) || pathNodes.length !== 1) {
+      return null;
+    }
+
+    const node = pathNodes[0] as any;
+    if (!node || typeof node !== 'object' || node.type !== 'Text') {
+      return null;
+    }
+
+    return typeof node.content === 'string' ? node.content : null;
   }
 }

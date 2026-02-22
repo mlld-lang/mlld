@@ -136,7 +136,27 @@ describe('FunctionRouter', () => {
     const environment = await createEnvironment('/export { }');
     const router = new FunctionRouter({ environment });
 
-    await expect(router.executeFunction('missing_tool', {})).rejects.toThrow("Tool 'missing_tool' not found");
+    await expect(router.executeFunction('missing_tool', {})).rejects.toThrow("Tool not found: 'missing_tool'");
+  });
+
+  it('returns a tool-not-found suggestion before invocation when MCP name casing is wrong', async () => {
+    const environment = await createEnvironment(`
+      /exe @greetUser(name) = js {
+        return 'Hello ' + name;
+      }
+
+      /export { @greetUser }
+    `);
+
+    const router = new FunctionRouter({
+      environment,
+      toolNames: ['greet_user'],
+      toolNamesAreMcp: true
+    });
+
+    await expect(router.executeFunction('greetUser', { name: 'Ada' })).rejects.toThrow(
+      "Tool not found: 'greetUser'. Did you mean 'greet_user'?"
+    );
   });
 
   it('exposes @input imports during execution', async () => {

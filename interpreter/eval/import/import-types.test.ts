@@ -276,7 +276,7 @@ describe('Import type handling', () => {
     await fileSystem.writeFile('/project/agents/_private/index.mld', '/var @who = "private"');
     await fileSystem.writeFile('/project/agents/.hidden/index.mld', '/var @who = "hidden"');
 
-    const source = `/import "./agents" as @agents
+    const source = `/import "./agents/" as @agents
 /show @agents.party.who
 /show @agents.mllddev.who`;
     const output = await interpret(source, {
@@ -289,7 +289,7 @@ describe('Import type handling', () => {
     const lines = (output as string).trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
     expect(lines).toEqual(['party', 'mllddev']);
 
-    const missingSource = `/import "./agents" as @agents
+    const missingSource = `/import "./agents/" as @agents
 /show @agents._private.who`;
     const missingOutput = await interpret(missingSource, {
       fileSystem,
@@ -305,7 +305,7 @@ describe('Import type handling', () => {
     await fileSystem.writeFile('/project/agents/_private/index.mld', '/var @who = "private"');
     await fileSystem.writeFile('/project/agents/.hidden/index.mld', '/var @who = "hidden"');
 
-    const source = `/import "./agents" as @agents with { skipDirs: [] }
+    const source = `/import "./agents/" as @agents with { skipDirs: [] }
 /show @agents.party.who
 /show @agents._private.who
 /show @agents._hidden.who`;
@@ -337,11 +337,12 @@ describe('Import type handling', () => {
   });
 
   it('keeps mixed file/directory path behavior for similarly named sources', async () => {
+    await fileSystem.writeFile('/project/agents/index.mld', '/var @kind = "index"');
     await fileSystem.writeFile('/project/agents.mld', '/var @kind = "file"');
     await fileSystem.writeFile('/project/agents/party/index.mld', '/var @who = "party"');
 
     const source = `/import "./agents.mld" as @fileAgents
-/import "./agents" as @dirAgents
+/import "./agents/" as @dirAgents
 /show @fileAgents.kind
 /show @dirAgents.party.who`;
 
@@ -354,6 +355,23 @@ describe('Import type handling', () => {
 
     const lines = (output as string).trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
     expect(lines).toEqual(['file', 'party']);
+  });
+
+  it('imports directory modules from dir/index.mld when no trailing slash is used', async () => {
+    await fileSystem.writeFile('/project/agents/index.mld', '/var @who = "index-module"');
+    await fileSystem.writeFile('/project/agents/party/index.mld', '/var @who = "party"');
+
+    const source = `/import "./agents" as @agents
+/show @agents.who`;
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect((output as string).trim()).toBe('index-module');
   });
 
   it('rejects template collection imports with undeclared variables', async () => {

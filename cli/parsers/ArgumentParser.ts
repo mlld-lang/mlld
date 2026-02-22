@@ -295,9 +295,20 @@ export class ArgumentParser {
           break;
         }
         // Environment file path
-        case '--env':
-          options.env = args[++i];
+        case '--env': {
+          const envValue = args[++i];
+          if (envValue === undefined) {
+            throw new Error('--env requires a value');
+          }
+          if (Array.isArray(options.env)) {
+            options.env.push(envValue);
+          } else if (typeof options.env === 'string' && options.env.length > 0) {
+            options.env = [options.env, envValue];
+          } else {
+            options.env = envValue;
+          }
           break;
+        }
         // Allow absolute paths outside project root
         case '--allow-absolute':
           options.allowAbsolute = true;

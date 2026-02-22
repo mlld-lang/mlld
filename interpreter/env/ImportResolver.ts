@@ -277,7 +277,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
 
     lines.push(
       '',
-      'Paths resolve relative to the current mlld file directory. Use @base/... to resolve from the project root.'
+      'Paths resolve relative to the current mlld file directory. Use @root/... to resolve from the project root.'
     );
 
     return new Error(lines.join('\n'));
@@ -321,7 +321,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     const fileDirectory = this.dependencies.pathContext.fileDirectory;
 
     const relativeSuggestion = `./${normalizedPath}`;
-    const baseSuggestion = `@base/${normalizedPath}`;
+    const baseSuggestion = `@root/${normalizedPath}`;
     const relativeExists = await this.dependencies.fileSystem.exists(path.resolve(fileDirectory, normalizedPath));
     const baseExists = await this.dependencies.fileSystem.exists(path.join(projectRoot, normalizedPath));
 

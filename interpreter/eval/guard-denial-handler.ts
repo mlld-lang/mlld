@@ -64,11 +64,6 @@ export async function handleExecGuardDenial(
 
   const { evaluateWhenExpression } = await import('./when-expression');
   const warning = formatGuardWarning(reason, deniedContext.guardFilter, deniedContext.guardName);
-  const materializedWarning = materializeDisplayValue(`${warning}\n`, undefined, warning);
-  options.env.emitEffect('stderr', materializedWarning.text);
-  if (materializedWarning.descriptor) {
-    options.env.recordSecurityDescriptor(materializedWarning.descriptor);
-  }
   maybeInjectGuardInputVariable(options.execEnv, guardInput ?? guardContext?.input);
   // Populate @output for after-guard denied handlers when available
   if (guardContext?.output !== undefined) {
@@ -104,6 +99,12 @@ export async function handleExecGuardDenial(
 
   if (!normalizedResult.internal?.deniedHandlerRan) {
     return null;
+  }
+
+  const materializedWarning = materializeDisplayValue(`${warning}\n`, undefined, warning);
+  options.env.emitEffect('stderr', materializedWarning.text);
+  if (materializedWarning.descriptor) {
+    options.env.recordSecurityDescriptor(materializedWarning.descriptor);
   }
 
   return {

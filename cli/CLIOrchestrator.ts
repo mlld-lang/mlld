@@ -11,6 +11,7 @@ import { WatchManager } from './execution/WatchManager';
 import { CommandDispatcher } from './execution/CommandDispatcher';
 import { EnvLoader } from './utils/env-loader';
 import { logger, cliLogger } from '@core/utils/logger';
+import { existsSync } from 'fs';
 
 export class CLIOrchestrator {
   private readonly errorHandler: ErrorHandler;
@@ -55,7 +56,13 @@ export class CLIOrchestrator {
       
       // Load environment variables if --env flag is provided
       if (cliOptions.env) {
-        EnvLoader.loadEnvFile(cliOptions.env, true);
+        for (const envValue of this.normalizeEnvValues(cliOptions.env)) {
+          if (this.isInlineEnvOverrides(envValue)) {
+            this.applyInlineEnvOverrides(envValue);
+            continue;
+          }
+          EnvLoader.loadEnvFile(envValue, true);
+        }
       }
       
       // Set ephemeral mode defaults for mlldx
@@ -234,5 +241,34 @@ Examples:
     }
     
     return flags;
+  }
+
+  private normalizeEnvValues(value: CLIOptions['env']): string[] {
+    if (!value) {
+      return [];
+    }
+    return Array.isArray(value) ? value.filter(Boolean) : [value];
+  }
+
+  private isInlineEnvOverrides(value: string): boolean {
+    return value.includes('=') && !existsSync(value);
+  }
+
+  private applyInlineEnvOverrides(value: string): void {
+    const entries = value
+      .split(',')
+      .map(entry => entry.trim())
+      .filter(Boolean);
+
+    for (const entry of entries) {
+      const separator = entry.indexOf('=');
+      if (separator <= 0) {
+        throw new Error(`Invalid --env entry "${entry}". Expected KEY=VALUE`);
+      }
+
+      const key = entry.slice(0, separator).trim();
+      const rawValue = entry.slice(separator + 1);
+      process.env[key] = rawValue;
+    }
   }
 }
