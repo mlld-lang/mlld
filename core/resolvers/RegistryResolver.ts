@@ -90,7 +90,7 @@ interface RegistryFile {
     author: string;
     version?: string;
     about: string;
-    type?: 'library' | 'app' | 'command' | 'skill';
+    type?: 'library' | 'app' | 'command' | 'skill' | 'environment';
     needs: string[];
     repo?: string;
     keywords?: string[];
