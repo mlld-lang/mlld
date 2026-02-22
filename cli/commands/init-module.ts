@@ -18,6 +18,7 @@ import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { ModuleType, MODULE_TYPE_PATHS } from '@core/registry/types';
 
 const VALID_MODULE_TYPES: ModuleType[] = ['library', 'app', 'command', 'skill', 'environment'];
+const MODULE_TYPE_ALIASES: Record<string, ModuleType> = { lib: 'library', env: 'environment' };
 
 export interface InitModuleOptions {
   name?: string;
@@ -526,6 +527,9 @@ export class InitModuleCommand {
       let basePath: string;
       if (options.global) {
         basePath = path.join(os.homedir(), typePaths.global);
+      } else if (moduleType === 'app' || moduleType === 'library') {
+        // Apps and libraries scaffold into cwd — the user's project layout is their own
+        basePath = process.cwd();
       } else {
         basePath = path.join(projectRoot, typePaths.local);
       }
@@ -1121,8 +1125,8 @@ async function promptModuleType(): Promise<ModuleType | 'single-file'> {
 
   try {
     console.log(chalk.blue('What kind of module?\n'));
-    console.log('  1. app          Orchestrator / runnable script       → llm/run/');
-    console.log('  2. library      Importable module with exports       → llm/lib/');
+    console.log('  1. app          Orchestrator / runnable script       → ./<name>/');
+    console.log('  2. library      Importable module with exports       → ./<name>/');
     console.log('  3. command      Claude Code slash command            → .claude/commands/');
     console.log('  4. skill        Claude Code skill                    → .claude/skills/');
     console.log('  5. environment  AI agent environment                 → .mlld/env/');
@@ -1171,15 +1175,15 @@ Create mlld modules - either directory-based (app, library, command, skill)
 or single-file modules for the registry.
 
 Module Types:
-  app         Runnable application      → llm/run/<name>/
-  library     Importable module         → llm/lib/<name>/
+  app         Runnable application      → ./<name>/
+  library     Importable module         → ./<name>/
   command     Claude slash command      → .claude/commands/<name>/
   skill       Claude skill              → .claude/skills/<name>/
   environment AI agent environment      → .mlld/env/<name>/
 
 Examples:
-  mlld module app myapp              Create app in llm/run/myapp/
-  mlld module library utils          Create library in llm/lib/utils/
+  mlld module app myapp              Create app in ./myapp/
+  mlld module library utils          Create library in ./utils/
   mlld module command review         Create command in .claude/commands/review/
   mlld module skill helper           Create skill in .claude/skills/helper/
   mlld module environment myenv      Create environment in .mlld/env/myenv/
@@ -1206,8 +1210,9 @@ Options:
       let moduleType: ModuleType | undefined;
       let moduleName: string | undefined;
 
-      if (firstArg && VALID_MODULE_TYPES.includes(firstArg as ModuleType)) {
-        moduleType = firstArg as ModuleType;
+      const resolvedType = MODULE_TYPE_ALIASES[firstArg as string] ?? firstArg;
+      if (resolvedType && VALID_MODULE_TYPES.includes(resolvedType as ModuleType)) {
+        moduleType = resolvedType as ModuleType;
         moduleName = args[1] || flags.name || flags.n;
       } else {
         // Legacy single-file module behavior
