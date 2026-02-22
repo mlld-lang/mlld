@@ -123,7 +123,6 @@ var @alt = ::Hello @name!::
 
 mlld is not JavaScript/Python, but it has familiar built-in JS methods. See `mlld howto builtins` for the full list.
 
-`@exists(@var)` checks if the *variable* is defined. `@fileExists(@var)` checks if the *file at that path* exists.
 
 **Use `>>` for comments, not `//`**
 
@@ -184,6 +183,10 @@ Errors in `for parallel` loops become data objects with `.error` and `.message` 
 var @results = for parallel(4) @item in @list [ => @process(@item) ]
 var @failures = for @r in @results when @r.error => @r
 ```
+
+`@exists(@var)` checks if the *variable* is defined. `@fileExists(@var)` checks if the *file at that path* exists.
+
+`[]` and `{}` are falsy in mlld 
 
 ## Key Syntax
 
@@ -248,4 +251,3 @@ See `mlld howto builtins` for full reference with examples.
 - `mlld howto control-flow` — if, when, for, foreach
 - `mlld howto security` — labels, policies, guards
 - `mlld howto modules` — import, export, organizing code
-- `mlld howto gotchas` — full list of common traps
