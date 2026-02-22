@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `npm run test:case -- ...` now accepts `tests/cases/...`, `tests/fixtures/...`, absolute paths, and direct `example.md`/`example.mld` fixture paths.
 - Return label trust asymmetry is preserved for executable returns; explicit `=> untrusted ...` results no longer regain `trusted` from ambient invocation descriptors.
 - `/needs { py: [...] }` dependency checks now prefer `pip3` and fall back to `pip`.
+- `import { @FOO } from @input` now resolves missing fields to `null` instead of throwing `Export not found`.
 
 ## [2.0.0-rc82]
 
