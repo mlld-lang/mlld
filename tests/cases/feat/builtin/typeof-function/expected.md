@@ -4,13 +4,13 @@ Test the @typeof() function with various variable types.
 
 ## Simple Text Variable
 
-simple-text [from /var]
+string
 ## Number Variable
 
-primitive (number) [from /var]
+number
 ## Object Variable
 
-object (2 properties) [from /var]
+object
 ## Array Variable
 
-array (3 items) [from /var]
+array

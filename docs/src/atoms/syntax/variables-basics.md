@@ -38,3 +38,9 @@ var @sum = @add(@n, 8)         >> 50 (number preserved)
 var @date = cmd {date}         >> command result
 var @readme = <README.md>      >> file contents
 ```
+
+## See Also
+
+- [Conditional Inclusion](./variables-conditional.md) - `@var?` omission and nullish fallback patterns.
+- [Templates Basics](./templates-basics.md) - Variable interpolation in template strings.
+- [Exe Simple Forms](../commands/exe-simple.md) - When to switch from `var` values to reusable `exe` functions.

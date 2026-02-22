@@ -35,12 +35,13 @@ env @sandbox [
 ```mlld
 var @task = "Review code"
 var @cfg = { auth: "claude", tools: ["Read", "Write"] }
-var @readonly = @cfg with { tools: ["Read"] }
+var @readonly = { ...@cfg, tools: ["Read"] }
 
 env @readonly [ run cmd { claude -p @task } ]
 ```
 
 Compute, compose, and pass environments like any other value.
+Use object spread for plain object derivation. The `with { ... }` clause is env-directive config syntax (for `env @cfg with { ... } [ ... ]`).
 
 **Providers add isolation:**
 

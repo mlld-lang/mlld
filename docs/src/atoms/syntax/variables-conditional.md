@@ -21,7 +21,7 @@ var @empty = ""
 
 >> In commands: @var?`...`
 run cmd { echo @tools?`--tools "@tools"` @empty?`--empty` }
->> Output: --tools "json" (--empty omitted)
+>> Output: --tools json (--empty omitted)
 
 >> In templates: omit the variable itself
 var @title = "MyTitle"

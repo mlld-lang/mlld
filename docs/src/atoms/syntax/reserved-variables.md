@@ -19,6 +19,20 @@ updated: 2026-01-11
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)
 
+`@root`/`@base` resolution algorithm:
+
+1. Start at the current file directory and walk upward.
+2. Check mlld markers first (in order):
+   - `mlld-config.json`
+   - `mlld-lock.json`
+   - `mlld.lock.json`
+3. If none are found, check fallback project markers:
+   - `package.json`
+   - `.git`
+   - `pyproject.toml`
+   - `Cargo.toml`
+4. The first directory containing any marker becomes `@root` (`@base` is an alias).
+
 Built-in transformer/helper names are available for `var`/`let` declarations and are shadowable per scope:
 - `@exists`, `@fileExists`, `@typeof`
 - `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`

@@ -58,7 +58,9 @@ Object iteration binds `@v.mx.key` but does not set `@v.mx.index`.
 
 ```mlld
 var @tasks = ["a", "b", "c"]
-for parallel(2) @t in @tasks => show `Task @mx.for.index (@mx.for.parallel): @t`
+for parallel(2) @item in @tasks => show `Slot @mx.for.index, item @item.mx.index: @item`
 ```
 
-`@mx.for.parallel` returns `true` in parallel loops, `false` in sequential loops. The index preserves original array position even when iterations complete out of order.
+`@mx.for.parallel` returns `true` in parallel loops, `false` in sequential loops.
+
+Parallel iterations complete out of order, so output lines are emitted in completion order. In that mode, treat `@mx.for.index` as execution-context metadata, not a stable ordering key for reconstructing source position. Use `@item.mx.index` when you need the original dispatch position in both sequential and parallel loops.

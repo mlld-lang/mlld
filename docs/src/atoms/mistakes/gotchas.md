@@ -32,6 +32,21 @@ when [cond => val; * => default]               >> First-match list
 when @val ["a" => x; * => y]                   >> Match value against patterns
 ```
 
+**Truthiness rules**
+
+In mlld, the following values are falsy:
+
+| Value | Falsy in mlld |
+|-------|----------------|
+| `false` | yes |
+| `0` | yes |
+| `""` (empty string) | yes |
+| `null` | yes |
+| `[]` (empty array) | yes |
+| `{}` (empty object) | yes |
+
+JavaScript users: this differs from JS, where `[]` and `{}` are truthy.
+
 `cmd` interpolates `@variables`. Pipes work, but `>`, `&&`, `;`, `2>/dev/null` are rejected. Use `sh` for full shell syntax.
 ```mlld
 exe @safe() = cmd { ls -la }                   >> correct: simple command
@@ -68,3 +83,27 @@ var @results = for parallel(4) @item in @list [ => @process(@item) ]
 var @failures = for @r in @results when @r.error => @r
 ```
 
+**Reserved names quick-reference**
+
+Using these names for your own variables can shadow built-ins and cause unexpected behavior.
+
+Reserved/system variables:
+- `@input`, `@payload`, `@state`
+- `@root`, `@base`, `@now`, `@debug`, `@keychain`
+- `@fm`, `@mx`, `@p`
+
+Built-in transformers/helpers (from builtin registry):
+- `@typeof`, `@typeInfo`, `@exists`, `@fileExists`
+- `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`
+- `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+- `@keep`, `@keepStructured`
+
+Common transformer variants:
+- `@parse.loose`, `@parse.strict`, `@parse.llm`, `@parse.fromlist`
+- `@json.loose`, `@json.strict`, `@json.llm`, `@json.fromlist`
+
+## See Also
+
+- [Reserved Variables](../syntax/reserved-variables.md) - Full list and behavior of runtime-provided names.
+- [Built-in Reference](../syntax/builtins.md) - Transformer/helper catalog and effect directives.
+- [Conditional Inclusion](../syntax/variables-conditional.md) - `@var?` omission and nullish fallback patterns.

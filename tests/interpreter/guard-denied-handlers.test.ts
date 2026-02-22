@@ -83,7 +83,7 @@ describe('handleExecGuardDenial', () => {
 
     const result = await handleExecGuardDenial(error, { execEnv, env, whenExprNode: whenExpr });
     expect(result).toBeNull();
-    expect(effects.getErrors()).toContain('[Guard Warning] Displays disabled');
+    expect(effects.getErrors()).toBe('');
   });
 
   it('executes multiple denied handlers sequentially', async () => {

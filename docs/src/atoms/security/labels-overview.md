@@ -86,7 +86,7 @@ show @key.mx.sources
 
 - `labels` - User-declared sensitivity labels
 - `taint` - Union of labels plus source markers (for provenance)
-- `sources` - Transformation trail showing how data got here
+- `sources` - Source references (file paths and guard names), not a full transformation history
 
 **Why labels work:**
 

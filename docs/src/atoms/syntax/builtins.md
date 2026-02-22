@@ -48,6 +48,7 @@ var @clean = @raw | @trim | @lower
 - `@exists(target)` - returns `true`/`false`. Works with file paths, variables, object fields, array indices, and globs. Note: `@exists(@var)` checks if the *variable* is defined, not if a file at that path exists.
 - `@fileExists(path)` - returns `true`/`false`. Always resolves argument to a path string, then checks filesystem. Unlike `@exists(@var)`, `@fileExists(@var)` resolves the variable and checks the *file*.
 - `@typeof(value)` - returns type as string
+- `@typeInfo(value)` - returns rich type/provenance details for debugging
 
 ```mlld
 >> File existence (literal paths)
@@ -69,7 +70,7 @@ if @fileExists(@settings.configPath) [ show "found" ]
 - `show <value>` - output to stdout
 - `output <value> to "<path>"` - write JSON to file
 - `append <value> to "<path>"` - append JSON line to file
-- `@log(message)` - log message (when logging enabled)
+- `log <value>` - write to stderr (directive syntax, not a callable builtin)
 
 ## Helpers
 

@@ -32,7 +32,7 @@ exe @hash(text) = node {
 }
 
 >> Python
-exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @add(a, b) = py { print(a + b) }
 exe @calculate(x, y) = py {
 result = x ** 2 + y ** 2
 print(result)
@@ -50,8 +50,9 @@ exe @analyze(data) = prose:@config { session "Analyze @data" }
 
 **Python notes:**
 - Use `print()` to return values (captured as string output)
-- Parameters arrive as strings; use `int()`, `float()` for math
+- Parameters preserve their original mlld types (`int`, `float`, `bool`, `str`, `list`, `dict`, `None`)
 - Standard library available: `import json`, `import math`, etc.
+- Cast only when you intentionally need conversion
 
 **Labels**: Add labels before the name for runtime behavior. The `llm` label enables automatic checkpointing:
 
@@ -60,3 +61,9 @@ exe llm @review(file) = template "review.att"
 ```
 
 Cached results persist across runs. Use `--resume @review` to selectively re-call. See `mlld howto checkpoint`.
+
+## See Also
+
+- [Exe Blocks](./exe-blocks.md) - More `exe` body styles including multi-step blocks.
+- [Run Basics](./run-basics.md) - `run` directive patterns and when to prefer `run` over `exe`.
+- [Run Params](./run-params.md) - Parameter passing semantics for command and shell execution.

@@ -25,7 +25,7 @@ policy @p = {
 }
 ```
 
-**Trust asymmetry:** `untrusted` is sticky. Adding `trusted` to untrusted data creates a conflict (both labels kept, warning logged). Removing `untrusted` requires privilege via `=> trusted! @var`.
+**Trust asymmetry:** `untrusted` is sticky. Adding `trusted` to untrusted data creates a conflict (both labels are kept). Removing `untrusted` requires privilege via `=> trusted! @var`.
 
 **Built-in rules:** Enable in policy defaults:
 

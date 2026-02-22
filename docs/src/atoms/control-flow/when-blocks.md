@@ -38,4 +38,4 @@ exe @guard(x) = [
 ]
 ```
 
-`when !@x => "missing"` also returns from the `exe`. `mlld validate` warns on this implicit form and suggests block-form return for clarity.
+`when !@x => "missing"` also returns from the `exe`.

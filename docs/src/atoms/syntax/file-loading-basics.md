@@ -50,3 +50,9 @@ show @matches.length                 >> 0
 var @readme = <README.md>?
 show @readme                         >> file content
 ```
+
+## See Also
+
+- [File Loading Metadata](./file-loading-metadata.md) - Access `.mx.filename`, `.mx.relative`, and related metadata.
+- [File Loading AST](./file-loading-ast.md) - Parse source into AST for structural analysis.
+- [Variables Basics](./variables-basics.md) - Combine file-loaded values with standard variable patterns.

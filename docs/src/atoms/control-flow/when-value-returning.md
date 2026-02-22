@@ -35,4 +35,4 @@ exe @guard(x) = [
 ]
 ```
 
-Block form keeps return intent explicit. Bare value actions such as `when !@x => "missing"` are valid and return early, but `mlld validate` warns so intent stays clear.
+Block form keeps return intent explicit. Bare value actions such as `when !@x => "missing"` are valid and return early.

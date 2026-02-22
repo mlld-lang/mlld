@@ -13,5 +13,17 @@ qa_tier: 2
 
 **Pipeline context:**
 - `@mx.try` - current attempt number
-- `@mx.stage` - current stage name
+- `@mx.stage` - current 1-based stage index (`1`, `2`, `3`, ...)
 - `@p[-1]` - previous stage output (same value as current stage input)
+
+```mlld
+exe @trace(input) = [
+  show `stage=@mx.stage value=@input`
+  => @input
+]
+
+show (" hello " | @trace | @trim | @trace)
+>> Output:
+>> stage=1 value= hello
+>> stage=3 value=hello
+```

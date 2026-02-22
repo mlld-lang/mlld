@@ -54,7 +54,7 @@ Derives a restricted environment inline without naming it.
 
 ```mlld
 var @sandbox = { tools: ["Read", "Write", "Bash"] }
-var @readOnly = new @sandbox with { tools: ["Read"] }
+var @readOnly = { ...@sandbox, tools: ["Read"] }
 
 env @readOnly [
   run cmd { cat README.md }
@@ -66,4 +66,5 @@ Child environments can only restrict parent capabilities, never extend them.
 **Notes:**
 - Directives inside blocks use bare syntax (no `/` prefix)
 - Environment resources are released when the block exits
+- `with { ... }` is env directive config syntax (`env @cfg with { ... } [ ... ]`), not a general object-modifier expression
 - See `env-overview` for concepts, `env-config` for configuration fields
