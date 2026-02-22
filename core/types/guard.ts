@@ -24,12 +24,14 @@ export interface GuardActionNode extends BaseMlldNode {
   value?: BaseMlldNode[];
   addLabels?: DataLabel[];
   removeLabels?: DataLabel[];
+  clearLabels?: boolean;
   warning?: string;
 }
 
 export interface GuardLabelModifications {
   addLabels?: DataLabel[];
   removeLabels?: DataLabel[];
+  clearLabels?: boolean;
 }
 
 export interface GuardRuleNode extends BaseMlldNode {

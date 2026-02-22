@@ -1,1 +1,1 @@
-Guard blocked operation: Shell cannot print secrets
+# Guard Operation Filter

@@ -10,6 +10,10 @@ import {
   isProtectedLabel
 } from '@core/types/security';
 
+function isFactualLabel(label: string): boolean {
+  return label.startsWith('src:');
+}
+
 export function guardSnapshotDescriptor(env: Environment): SecurityDescriptor | undefined {
   const snapshot = env.getSecuritySnapshot?.();
   if (!snapshot) {
@@ -31,12 +35,14 @@ export function extractGuardLabelModifications(
   }
   const addLabels = Array.isArray(action.addLabels) ? action.addLabels : undefined;
   const removeLabels = Array.isArray(action.removeLabels) ? action.removeLabels : undefined;
-  if ((addLabels?.length ?? 0) === 0 && (removeLabels?.length ?? 0) === 0) {
+  const clearLabels = action.clearLabels === true;
+  if ((addLabels?.length ?? 0) === 0 && (removeLabels?.length ?? 0) === 0 && !clearLabels) {
     return undefined;
   }
   return {
     addLabels: addLabels && addLabels.length > 0 ? [...addLabels] : undefined,
-    removeLabels: removeLabels && removeLabels.length > 0 ? [...removeLabels] : undefined
+    removeLabels: removeLabels && removeLabels.length > 0 ? [...removeLabels] : undefined,
+    clearLabels
   };
 }
 
@@ -49,7 +55,19 @@ export function applyGuardLabelModifications(
     return descriptor;
   }
 
+  const clearLabels = modifications.clearLabels === true;
   const removeLabels = modifications.removeLabels ?? [];
+  if (clearLabels && guard.privileged !== true) {
+    const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
+    throw new MlldSecurityError(
+      `Guard ${guardLabel} cannot clear labels without privilege`,
+      {
+        code: 'LABEL_PRIVILEGE_REQUIRED',
+        details: { operation: 'clear', guard: guardLabel }
+      }
+    );
+  }
+
   if (removeLabels.length > 0 && guard.privileged !== true) {
     const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
     const protectedLabel = removeLabels.find(label => isProtectedLabel(label));
@@ -71,12 +89,22 @@ export function applyGuardLabelModifications(
     );
   }
 
-  if ((modifications.addLabels?.length ?? 0) === 0 && removeLabels.length === 0) {
+  if ((modifications.addLabels?.length ?? 0) === 0 && removeLabels.length === 0 && !clearLabels) {
     return descriptor;
   }
 
   const labelSet = new Set(descriptor.labels);
   const taintSet = new Set(descriptor.taint);
+
+  if (clearLabels) {
+    const clearTargets = Array.from(new Set([...labelSet, ...taintSet])).filter(
+      label => !isFactualLabel(label)
+    );
+    for (const label of clearTargets) {
+      labelSet.delete(label);
+      taintSet.delete(label);
+    }
+  }
 
   for (const label of removeLabels) {
     labelSet.delete(label);
@@ -116,6 +144,23 @@ function normalizeLabelList(labels?: readonly string[]): string[] {
   return result;
 }
 
+function collectClearableLabels(variables: readonly Variable[]): string[] {
+  const labels = new Set<string>();
+  for (const variable of variables) {
+    const mx = variable?.mx;
+    const candidates = [
+      ...(Array.isArray(mx?.labels) ? mx.labels : []),
+      ...(Array.isArray(mx?.taint) ? mx.taint : [])
+    ];
+    for (const label of candidates) {
+      if (typeof label === 'string' && label.length > 0 && !isFactualLabel(label)) {
+        labels.add(label);
+      }
+    }
+  }
+  return Array.from(labels);
+}
+
 export async function logGuardLabelModifications(
   env: Environment,
   guard: GuardDefinition,
@@ -126,13 +171,15 @@ export async function logGuardLabelModifications(
     return;
   }
   const addLabels = normalizeLabelList(modifications.addLabels);
-  const removeLabels = normalizeLabelList(modifications.removeLabels);
+  const clearLabels = modifications.clearLabels === true;
+  const clearTargets = clearLabels ? collectClearableLabels(variables) : [];
+  const removeLabels = normalizeLabelList([...(modifications.removeLabels ?? []), ...clearTargets]);
   if (addLabels.length === 0 && removeLabels.length === 0) {
     return;
   }
   const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
   const by = `guard:${guardLabel}`;
-  const isBlessing = guard.privileged === true && removeLabels.length > 0;
+  const isBlessing = guard.privileged === true && (clearLabels || removeLabels.length > 0);
   if (!isBlessing && addLabels.length === 0) {
     return;
   }

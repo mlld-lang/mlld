@@ -1,17 +1,55 @@
 import * as shellQuote from 'shell-quote';
 
+export type CommandGuidanceContext = 'run' | 'exe' | 'generic';
+
 /**
  * CommandUtils provides utilities for command validation, parsing, and enhancement.
  * These are pure utility functions with no state dependencies.
  */
 export class CommandUtils {
+
+  static resolveGuidanceContext(directiveType?: string): CommandGuidanceContext {
+    const normalized = (directiveType || '').toLowerCase();
+    if (normalized === 'run') {
+      return 'run';
+    }
+    if (normalized === 'exec' || normalized === 'exe') {
+      return 'exe';
+    }
+    return 'generic';
+  }
+
+  static buildShellBlockGuidance(context: CommandGuidanceContext): string[] {
+    const runLines = [
+      'Run context:',
+      '  run sh(@path) { ... }'
+    ];
+    const exeLines = [
+      'Exe context:',
+      '  exe @fn(path) = sh { ... }',
+      '',
+      'In exe definitions, function parameters are available as shell variables automatically:',
+      '  exe @deploy(path) = sh { echo "$path" > out.txt }'
+    ];
+
+    if (context === 'run') {
+      return runLines;
+    }
+    if (context === 'exe') {
+      return exeLines;
+    }
+    return [...runLines, ...exeLines];
+  }
   
   /**
    * Validate and parse command for security
    * Blocks dangerous shell operators that could be used maliciously
    * Uses shell-quote library for accurate operator detection
    */
-  static validateAndParseCommand(command: string): string {
+  static validateAndParseCommand(
+    command: string,
+    guidanceContext: CommandGuidanceContext = 'generic'
+  ): string {
     // Use shell-quote to parse the command and detect operators
     const parsed = shellQuote.parse(command);
     
@@ -45,6 +83,7 @@ export class CommandUtils {
           const description = operatorDescriptions[operator] || `operator (${operator})`;
 
           // Build a detailed error message
+          const guidanceLines = CommandUtils.buildShellBlockGuidance(guidanceContext);
           const errorMessage = [
             `Shell ${description} is not allowed in cmd { } commands`,
             '',
@@ -52,13 +91,7 @@ export class CommandUtils {
             `  ${command}`,
             '',
             'Use shell blocks instead of cmd when operators are required.',
-            'Run context:',
-            '  run sh(@path) { ... }',
-            'Exe context:',
-            '  exe @fn(path) = sh { ... }',
-            '',
-            'In exe definitions, function parameters are available as shell variables automatically:',
-            '  exe @deploy(path) = sh { echo "$path" > out.txt }'
+            ...guidanceLines
           ].join('\n');
           
           throw new Error(errorMessage);

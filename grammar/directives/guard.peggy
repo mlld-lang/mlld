@@ -280,7 +280,10 @@ GuardConditionExpression
   = WhenConditionExpression
 
 GuardAction
-  = "env" value:GuardActionValue? {
+  = shorthand:GuardPrivilegedLabelAction {
+      return shorthand;
+    }
+  / "env" value:GuardActionValue? {
       if (!value) {
         helpers.mlldError('Guard env actions require a config value: env @config', '@config', location());
       }
@@ -338,6 +341,56 @@ GuardAction
         location: location()
       });
     }
+
+GuardPrivilegedLabelAction
+  = mods:GuardPrivilegedLabelModifierList value:GuardActionValue {
+      const addLabels = new Set();
+      const removeLabels = new Set();
+      let clearLabels = false;
+
+      for (const modifier of mods) {
+        if (modifier.kind === 'clear') {
+          clearLabels = true;
+          continue;
+        }
+        if (modifier.kind === 'bless') {
+          addLabels.add('trusted');
+          removeLabels.add('untrusted');
+          continue;
+        }
+        if (modifier.kind === 'remove' && modifier.label) {
+          removeLabels.add(modifier.label);
+        }
+      }
+
+      const action = {
+        decision: 'allow',
+        value: value.nodes,
+        location: location()
+      };
+
+      if (addLabels.size > 0) {
+        action.addLabels = Array.from(addLabels);
+      }
+      if (removeLabels.size > 0) {
+        action.removeLabels = Array.from(removeLabels);
+      }
+      if (clearLabels) {
+        action.clearLabels = true;
+      }
+
+      return helpers.createNode('GuardAction', action);
+    }
+
+GuardPrivilegedLabelModifierList
+  = first:GuardPrivilegedLabelModifier rest:(HWS "," HWS mod:GuardPrivilegedLabelModifier { return mod; })* {
+      return [first, ...rest];
+    }
+
+GuardPrivilegedLabelModifier
+  = "clear!" ![a-zA-Z0-9_] { return { kind: 'clear' }; }
+  / "trusted!" ![a-zA-Z0-9_] { return { kind: 'bless' }; }
+  / "!" label:GuardLabelItem { return { kind: 'remove', label }; }
 
 GuardActionValue
   = HWS !LineTerminator value:(UnifiedQuoteOrTemplate / UnifiedExpression) {

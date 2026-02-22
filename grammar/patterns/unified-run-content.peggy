@@ -243,15 +243,50 @@ ShellCommandLineContent
         } else if (!inQuote) {
           // Check for banned operators
           if (char === '&' && next === '&') {
-            helpers.mlldError(`Shell operator AND (&&) is not allowed in cmd { }. Use shell blocks instead. Run context: run sh(@path) { echo "$path" && ... }. Exe context: exe @fn(path) = sh { echo "$path" && ... } (exe parameters are available as $path).`);
+            helpers.mlldError(
+              helpers.appendCmdContextGuidance(
+                'Shell operator AND (&&) is not allowed in cmd { }. Use shell blocks instead.',
+                'echo "$path" && ...',
+                input,
+                offset() + i
+              )
+            );
           } else if (char === '|' && next === '|') {
-            helpers.mlldError(`Shell operator OR (||) is not allowed in cmd { }. Use shell blocks instead. Run context: run sh(@path) { cmd1 || cmd2 }. Exe context: exe @fn(path) = sh { cmd1 || cmd2 } (exe parameters are available as $path).`);
+            helpers.mlldError(
+              helpers.appendCmdContextGuidance(
+                'Shell operator OR (||) is not allowed in cmd { }. Use shell blocks instead.',
+                'cmd1 || cmd2',
+                input,
+                offset() + i
+              )
+            );
           } else if (char === ';') {
-            helpers.mlldError(`Shell operator semicolon (;) is not allowed in cmd { }. Use shell blocks instead. Run context: run sh(@path) { cmd1; cmd2 }. Exe context: exe @fn(path) = sh { cmd1; cmd2 } (exe parameters are available as $path).`);
+            helpers.mlldError(
+              helpers.appendCmdContextGuidance(
+                'Shell operator semicolon (;) is not allowed in cmd { }. Use shell blocks instead.',
+                'cmd1; cmd2',
+                input,
+                offset() + i
+              )
+            );
           } else if (char === '>' && next === '>') {
-            helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks. Run context: run sh(@path) { echo "$path" >> file }. Exe context: exe @fn(path) = sh { echo "$path" >> file }.`);
+            helpers.mlldError(
+              helpers.appendCmdContextGuidance(
+                '>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks.',
+                'echo "$path" >> file',
+                input,
+                offset() + i
+              )
+            );
           } else if (char === '>' || char === '<') {
-            helpers.mlldError(`Shell redirection (${char}) is not allowed in cmd { }. Use shell blocks instead. Run context: run sh(@path) { cmd "$path" ${char === '>' ? '> out.txt' : '< in.txt'} }. Exe context: exe @fn(path) = sh { cmd "$path" ${char === '>' ? '> out.txt' : '< in.txt'} }.`);
+            helpers.mlldError(
+              helpers.appendCmdContextGuidance(
+                `Shell redirection (${char}) is not allowed in cmd { }. Use shell blocks instead.`,
+                `cmd "$path" ${char === '>' ? '> out.txt' : '< in.txt'}`,
+                input,
+                offset() + i
+              )
+            );
           } else if (char === '&' && next !== '&' && next !== '>') {
             helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
           } else {
@@ -426,22 +461,64 @@ UnifiedCommandWordChar
       // Check for banned operators (skip if escaped)
       if (!isEscaped) {
         if (ahead.startsWith('&&')) {
-          helpers.mlldError(`Shell operator AND (&&) is not allowed in cmd { }. Use shell blocks instead. Run context: run sh(@path) { echo "$path" && ... }. Exe context: exe @fn(path) = sh { echo "$path" && ... } (exe parameters are available as $path).`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              'Shell operator AND (&&) is not allowed in cmd { }. Use shell blocks instead.',
+              'echo "$path" && ...',
+              input,
+              pos
+            )
+          );
         }
         if (ahead.startsWith('||')) {
-          helpers.mlldError(`Shell operator OR (||) is not allowed in cmd { }. Use shell blocks instead. Run context: run sh(@path) { cmd1 || cmd2 }. Exe context: exe @fn(path) = sh { cmd1 || cmd2 } (exe parameters are available as $path).`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              'Shell operator OR (||) is not allowed in cmd { }. Use shell blocks instead.',
+              'cmd1 || cmd2',
+              input,
+              pos
+            )
+          );
         }
         if (ahead.startsWith('>>')) {
-          helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks. Run context: run sh(@path) { echo "$path" >> file }. Exe context: exe @fn(path) = sh { echo "$path" >> file }.`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              '>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks.',
+              'echo "$path" >> file',
+              input,
+              pos
+            )
+          );
         }
         if (char === ';') {
-          helpers.mlldError(`Shell operator semicolon (;) is not allowed in cmd { }. Use shell blocks instead. Run context: run sh(@path) { cmd1; cmd2 }. Exe context: exe @fn(path) = sh { cmd1; cmd2 } (exe parameters are available as $path).`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              'Shell operator semicolon (;) is not allowed in cmd { }. Use shell blocks instead.',
+              'cmd1; cmd2',
+              input,
+              pos
+            )
+          );
         }
         if (char === '>' && input[pos + 1] !== '>') {
-          helpers.mlldError(`Shell redirection (>) is not allowed in cmd { }. Use shell blocks instead. Run context: run sh(@path) { cmd "$path" > out.txt }. Exe context: exe @fn(path) = sh { cmd "$path" > out.txt }.`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              'Shell redirection (>) is not allowed in cmd { }. Use shell blocks instead.',
+              'cmd "$path" > out.txt',
+              input,
+              pos
+            )
+          );
         }
         if (char === '<') {
-          helpers.mlldError(`Shell redirection (<) is not allowed in cmd { }. Use shell blocks instead. Run context: run sh(@path) { cmd "$path" < in.txt }. Exe context: exe @fn(path) = sh { cmd "$path" < in.txt }.`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              'Shell redirection (<) is not allowed in cmd { }. Use shell blocks instead.',
+              'cmd "$path" < in.txt',
+              input,
+              pos
+            )
+          );
         }
         if (char === '&' && input[pos + 1] !== '&' && input[pos + 1] !== '>') {
           helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);

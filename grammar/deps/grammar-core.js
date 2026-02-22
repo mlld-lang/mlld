@@ -263,6 +263,45 @@ export const helpers = {
         // For now, return false to avoid breaking the parser
         return false;
     },
+    detectCmdBlockContext(input, pos) {
+        const lookbackStart = Math.max(0, pos - 2000);
+        const snippet = input.slice(lookbackStart, pos);
+        const cmdOpenPattern = /\bcmd\b[^\n{}]*\{/g;
+        let lastCmdMatch = null;
+        while (true) {
+            const match = cmdOpenPattern.exec(snippet);
+            if (!match) {
+                break;
+            }
+            lastCmdMatch = match;
+        }
+        if (!lastCmdMatch || typeof lastCmdMatch.index !== 'number') {
+            return 'generic';
+        }
+        const cmdIndex = lastCmdMatch.index;
+        const lineStart = snippet.lastIndexOf('\n', cmdIndex) + 1;
+        const beforeCmd = snippet.slice(lineStart, cmdIndex);
+        const normalized = beforeCmd.trim().replace(/^\/\s*/, '');
+        if (/^run\b/.test(normalized) || /\brun\b/.test(beforeCmd)) {
+            return 'run';
+        }
+        if (/^exe\b/.test(normalized) || /\bexe\b/.test(beforeCmd)) {
+            return 'exe';
+        }
+        return 'generic';
+    },
+    appendCmdContextGuidance(message, example, input, pos) {
+        const context = this.detectCmdBlockContext(input, pos);
+        const runGuidance = `Run context: run sh(@path) { ${example} }.`;
+        const exeGuidance = `Exe context: exe @fn(path) = sh { ${example} } (exe parameters are available as $path).`;
+        if (context === 'run') {
+            return `${message} ${runGuidance}`;
+        }
+        if (context === 'exe') {
+            return `${message} ${exeGuidance}`;
+        }
+        return `${message} ${runGuidance} ${exeGuidance}`;
+    },
     createNode(type, props) {
         return Object.freeze({
             type,

@@ -62,7 +62,7 @@ Policy guards are automatically privileged. User-defined guards are privileged w
 | Multi-label removal | `=> !pii,!internal @var` | Remove multiple labels |
 | Clear labels | `=> clear! @var` | Remove all non-factual labels |
 
-The shorthand syntax (`trusted!`, `!label`, `clear!`) ONLY works inside privileged guards. It does not work in exe blocks, when blocks, or non-privileged guards. Attempting to use it outside a privileged guard context throws a privilege error.
+The shorthand syntax (`trusted!`, `!label`, `clear!`) ONLY works inside privileged guards (including guard `when [...]` actions). It does not work in exe blocks or non-privileged guards. Attempting to use it outside a privileged guard context throws a privilege error.
 
 ```mlld
 >> Privileged guard — shorthand works here

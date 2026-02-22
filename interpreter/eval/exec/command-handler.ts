@@ -577,7 +577,10 @@ async function executeLocalCommand(options: {
     });
 
     try {
-      CommandUtils.validateAndParseCommand(fallbackCommand);
+      CommandUtils.validateAndParseCommand(
+        fallbackCommand,
+        CommandUtils.resolveGuidanceContext('exec')
+      );
     } catch (error) {
       const sourceLocation = astLocationToSourceLocation(node.location, execEnv.getCurrentFilePath());
       throw new MlldCommandExecutionError(

@@ -111,7 +111,10 @@ export class CommandExecutorFactory {
           // Validate the simple command (ensure no dangerous shell operators)
           const safe = (() => {
             try {
-              return CommandUtils.validateAndParseCommand(command);
+              return CommandUtils.validateAndParseCommand(
+                command,
+                CommandUtils.resolveGuidanceContext(context?.directiveType)
+              );
             } catch (e) {
               // If validation fails, rethrow to be handled by ShellCommandExecutor as before
               throw e;

@@ -94,4 +94,31 @@ describe('Guard directive', () => {
     expect(guard.meta.privileged).toBe(true);
     expect(guard.raw.privileged).toBe(true);
   });
+
+  test('parses guard shorthand label-modification actions', async () => {
+    const content = `
+/guard privileged @sanitize after secret = when [
+  * => trusted!,!secret @output
+]
+
+/guard privileged @clearer after pii = when [
+  * => clear! @output
+]`;
+    const parseResult = await parse(content);
+    const guards = parseResult.ast.filter(node => isGuardDirective(node)) as GuardDirectiveNode[];
+    expect(guards).toHaveLength(2);
+
+    const sanitize = guards[0];
+    const sanitizeAction = sanitize.values.guard[0].rules[0].action as any;
+    expect(sanitizeAction.decision).toBe('allow');
+    expect(sanitizeAction.addLabels).toEqual(['trusted']);
+    expect(sanitizeAction.removeLabels).toEqual(['untrusted', 'secret']);
+    expect(sanitizeAction.value).toBeDefined();
+
+    const clearer = guards[1];
+    const clearerAction = clearer.values.guard[0].rules[0].action as any;
+    expect(clearerAction.decision).toBe('allow');
+    expect(clearerAction.clearLabels).toBe(true);
+    expect(clearerAction.value).toBeDefined();
+  });
 });

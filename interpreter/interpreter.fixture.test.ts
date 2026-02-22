@@ -1390,11 +1390,15 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           // Enable file operation logging for /output directive tests
           const enableFileLogging = fixture.name.includes('slash/output/');
           const effectHandler = new TestRedirectEffectHandler('/tmp-tests', fileSystem, enableFileLogging);
-          let caughtError: any = null;
-          let interpretSucceeded = false;
-          let interpretOutput: string | undefined;
-          try {
-            interpretOutput = await interpret(fixture.input, {
+	          let caughtError: any = null;
+	          let interpretSucceeded = false;
+	          let interpretOutput: string | undefined;
+	          const hasExpectedOutput =
+	            typeof fixture.expected === 'string' && fixture.expected.trim().length > 0;
+	          const hasExpectedError =
+	            typeof fixture.expectedError === 'string' && fixture.expectedError.trim().length > 0;
+	          try {
+	            interpretOutput = await interpret(fixture.input, {
               fileSystem,
               pathService,
               format: 'markdown',
@@ -1414,13 +1418,17 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             caughtError = error;
           }
 
-          if (requiresPythonRuntime) {
-            if (!interpretSucceeded) {
-              throw caughtError;
-            }
-            if (typeof fixture.expectedError === 'string' && fixture.expectedError.trim().length > 0) {
-              expect(interpretOutput || '').toContain(fixture.expectedError.trim());
-            }
+	          if (requiresPythonRuntime) {
+	            if (!interpretSucceeded) {
+	              throw caughtError;
+	            }
+	            if (hasExpectedOutput) {
+	              const output = (effectHandler.getDocument() || interpretOutput || '').trim();
+	              expect(output).toContain((fixture.expected as string).trim());
+	            }
+	            if (typeof fixture.expectedError === 'string' && fixture.expectedError.trim().length > 0) {
+	              expect(interpretOutput || '').toContain(fixture.expectedError.trim());
+	            }
             validateStderrOutput(effectHandler.getStderr(), ioExpectations.expectedStderr, fixture.name);
             if (ioExpectations.expectedErrorShape && caughtError) {
               validateExpectedErrorShape(caughtError, ioExpectations.expectedErrorShape, fixture.name);
@@ -1429,14 +1437,21 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           }
 
           // Fail outside try/catch so the assertion can't be caught by the inner catch
-          if (interpretSucceeded) {
-            expect.fail(`Expected interpretation to throw an error for ${fixture.name}, but it succeeded`);
-          }
+	          if (interpretSucceeded) {
+	            expect.fail(`Expected interpretation to throw an error for ${fixture.name}, but it succeeded`);
+	          }
 
-          validateStderrOutput(effectHandler.getStderr(), ioExpectations.expectedStderr, fixture.name);
-          if (ioExpectations.expectedErrorShape && caughtError) {
-            validateExpectedErrorShape(caughtError, ioExpectations.expectedErrorShape, fixture.name);
-          }
+	          if (hasExpectedOutput && hasExpectedError) {
+	            const output = (effectHandler.getDocument() || interpretOutput || '').trim();
+	            expect(output).toContain((fixture.expected as string).trim());
+	            const errorText = caughtError instanceof Error ? caughtError.message : String(caughtError ?? '');
+	            expect(errorText).toContain((fixture.expectedError as string).trim());
+	          }
+
+	          validateStderrOutput(effectHandler.getStderr(), ioExpectations.expectedStderr, fixture.name);
+	          if (ioExpectations.expectedErrorShape && caughtError) {
+	            validateExpectedErrorShape(caughtError, ioExpectations.expectedErrorShape, fixture.name);
+	          }
           
         } else {
           // Prepare stdin content for stdin import tests

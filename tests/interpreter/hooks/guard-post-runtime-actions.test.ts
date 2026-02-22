@@ -111,7 +111,11 @@ describe('guard post runtime actions', () => {
 
     const replacement = await evaluatePostGuardReplacement(
       action,
-      env.createChild(),
+      (() => {
+        const guardEnv = env.createChild();
+        guardEnv.setVariable('output', createSecretInput('output', 'raw-secret'));
+        return guardEnv;
+      })(),
       guard,
       createSecretInput('secretVar', 'raw-secret'),
       { cloneVariableWithDescriptor }
@@ -139,9 +143,11 @@ describe('guard post runtime actions', () => {
       return;
     }
 
+    const guardEnv = env.createChild();
+    guardEnv.setVariable('output', createSecretInput('output', 'raw-secret'));
     const replacement = await evaluatePostGuardReplacement(
       action,
-      env.createChild(),
+      guardEnv,
       guard,
       createSecretInput('secretVar', 'raw-secret'),
       { cloneVariableWithDescriptor }
@@ -154,6 +160,43 @@ describe('guard post runtime actions', () => {
     );
     expect(replacement?.mx?.sources ?? []).toEqual(
       expect.arrayContaining(['guard:labelOnly'])
+    );
+  });
+
+  it('supports shorthand clear! label actions in privileged guards', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard privileged after @clearer for secret = when [ * => clear! @output ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const guard = env.getGuardRegistry().getByName('clearer');
+    expect(guard).toBeDefined();
+    if (!guard) {
+      return;
+    }
+
+    const action = guard.block.rules[0]?.action;
+    expect(action).toBeDefined();
+    if (!action) {
+      return;
+    }
+
+    const guardEnv = env.createChild();
+    guardEnv.setVariable('output', createSecretInput('output', 'raw-secret'));
+    const replacement = await evaluatePostGuardReplacement(
+      action,
+      guardEnv,
+      guard,
+      createSecretInput('secretVar', 'raw-secret'),
+      { cloneVariableWithDescriptor }
+    );
+
+    expect(replacement).toBeDefined();
+    expect(toVariableText(replacement)).toBe('raw-secret');
+    expect(replacement?.mx?.labels ?? []).not.toContain('secret');
+    expect(replacement?.mx?.sources ?? []).toEqual(
+      expect.arrayContaining(['guard:clearer'])
     );
   });
 });

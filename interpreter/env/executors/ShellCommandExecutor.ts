@@ -238,7 +238,10 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
      */
     let safeCommand: string;
     try {
-      safeCommand = CommandUtils.validateAndParseCommand(commandToExecute);
+      safeCommand = CommandUtils.validateAndParseCommand(
+        commandToExecute,
+        CommandUtils.resolveGuidanceContext(context?.directiveType)
+      );
     } catch (error: unknown) {
       // Pass through the validation error with its detailed message
       const message = error instanceof Error ? error.message : String(error);
