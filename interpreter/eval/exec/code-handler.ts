@@ -18,6 +18,7 @@ import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import {
   asText,
+  extractSecurityDescriptor,
   isStructuredValue,
   normalizeWhenShowEffect,
   wrapStructured
@@ -255,6 +256,65 @@ export async function executeCodeExecutable(
       } else {
         const argValue = evaluatedArgs[i];
         codeParams[paramName] = await ASTEvaluator.evaluateToRuntime(argValue, execEnv);
+      }
+    }
+
+    const definitionArgs = Array.isArray(definition.args) ? definition.args : [];
+    if (definitionArgs.length > 0) {
+      const { evaluate } = await import('@interpreter/core/interpreter');
+      const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+
+      for (let index = 0; index < definitionArgs.length; index += 1) {
+        const rawArgNode = definitionArgs[index] as any;
+        const argNode =
+          rawArgNode &&
+          typeof rawArgNode === 'object' &&
+          rawArgNode.type === 'Argument' &&
+          rawArgNode.value
+            ? rawArgNode.value
+            : rawArgNode;
+
+        if (argNode === undefined || argNode === null) {
+          continue;
+        }
+
+        let key = `arg${index}`;
+        let runtimeValue: unknown;
+
+        if (argNode && typeof argNode === 'object' && argNode.type === 'VariableReference') {
+          const varName = argNode.identifier;
+          const variableArg = execEnv.getVariable(varName);
+          if (!variableArg) {
+            throw new MlldInterpreterError(`Variable not found: ${varName}`);
+          }
+
+          const descriptor = extractSecurityDescriptor(variableArg, {
+            recursive: true,
+            mergeArrayElements: true
+          });
+          services.mergeResultDescriptor(descriptor);
+
+          runtimeValue = AutoUnwrapManager.unwrap(
+            await extractVariableValue(variableArg, execEnv)
+          );
+          key = varName;
+        } else {
+          const evaluated = await evaluate(argNode, execEnv, { isExpression: true });
+          const descriptor = extractSecurityDescriptor(evaluated.value, {
+            recursive: true,
+            mergeArrayElements: true
+          });
+          services.mergeResultDescriptor(descriptor);
+          runtimeValue = AutoUnwrapManager.unwrap(evaluated.value);
+        }
+
+        let resolvedKey = key;
+        let suffix = 1;
+        while (Object.prototype.hasOwnProperty.call(codeParams, resolvedKey)) {
+          resolvedKey = `${key}_${suffix}`;
+          suffix += 1;
+        }
+        codeParams[resolvedKey] = runtimeValue;
       }
     }
 

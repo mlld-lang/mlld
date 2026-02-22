@@ -59,6 +59,7 @@ export interface CodeExecutable extends BaseExecutable {
   type: 'code';
   codeTemplate: MlldNode[];
   language: string;
+  args?: MlldNode[];
   sourceDirective: 'exec';
   workingDir?: MlldNode[];
   workingDirMeta?: PathMeta;

@@ -402,6 +402,7 @@ function buildCodeExecutableDefinition(
 
   const params = directive.values?.params || [];
   const paramNames = extractParamNames(params);
+  const args = directive.values?.args || [];
   const withClause = directive.values?.withClause;
   const language = directive.meta?.language || 'javascript';
   const workingDir = (directive.values as any)?.workingDir;
@@ -414,6 +415,7 @@ function buildCodeExecutableDefinition(
     codeTemplate: codeNodes,
     language,
     paramNames,
+    ...(args.length > 0 ? { args } : {}),
     sourceDirective: 'exec',
     ...(withClause ? { withClause } : {}),
     ...(workingDir ? { workingDir } : {}),

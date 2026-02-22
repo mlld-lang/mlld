@@ -264,7 +264,7 @@ ExeRunCommandPattern "exe run command pattern"
 
 // Code pattern for exe context - wraps RunLanguageCodeCore
 ExeCodePattern "exe code pattern"
-  = codeCore:RunLanguageCodeCore {
+  = codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) {
       return {
         subtype: 'exeCode',
         source: 'code',

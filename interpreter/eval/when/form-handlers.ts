@@ -97,17 +97,22 @@ export async function evaluateWhenMatchForm(
       }
     }
 
-    let conditionValue: any;
-    if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
-      conditionValue = actualCondition[0].content;
-    } else if (actualCondition.length === 1 && actualCondition[0].type === 'ExecInvocation') {
-      conditionValue = await runtime.matcherRuntime.evaluateCondition(actualCondition, childEnv);
+    let matches = false;
+    if (actualCondition.length === 1 && isWildcardCondition(actualCondition[0])) {
+      matches = true;
     } else {
-      const conditionResult = await runtime.matcherRuntime.evaluateNode(actualCondition, childEnv);
-      conditionValue = conditionResult.value;
+      let conditionValue: any;
+      if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
+        conditionValue = actualCondition[0].content;
+      } else if (actualCondition.length === 1 && actualCondition[0].type === 'ExecInvocation') {
+        conditionValue = await runtime.matcherRuntime.evaluateCondition(actualCondition, childEnv);
+      } else {
+        const conditionResult = await runtime.matcherRuntime.evaluateNode(actualCondition, childEnv);
+        conditionValue = conditionResult.value;
+      }
+      matches = await runtime.matcherRuntime.compareValues(expressionValue, conditionValue, childEnv);
     }
 
-    let matches = await runtime.matcherRuntime.compareValues(expressionValue, conditionValue, childEnv);
     if (isNegated) {
       matches = !matches;
     }
@@ -224,4 +229,13 @@ function containsNoneWithOperator(node: any): boolean {
   if (node.type === 'BinaryExpression' && (isNoneCondition(node.left) || isNoneCondition(node.right))) return true;
   if (node.type === 'ComparisonExpression' && (isNoneCondition(node.left) || isNoneCondition(node.right))) return true;
   return false;
+}
+
+function isWildcardCondition(node: BaseMlldNode | undefined): boolean {
+  return Boolean(
+    node &&
+      node.type === 'Literal' &&
+      (node as any).valueType === 'wildcard' &&
+      (node as any).value === '*'
+  );
 }

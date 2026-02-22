@@ -51,12 +51,14 @@ export class CommandUtils {
             'Command rejected:',
             `  ${command}`,
             '',
-            'Use sh { } for shell scripts that need operators:',
-            `  sh { ${command} }`,
+            'Use shell blocks instead of cmd when operators are required.',
+            'Run context:',
+            '  run sh(@path) { ... }',
+            'Exe context:',
+            '  exe @fn(path) = sh { ... }',
             '',
-            'Important: Unlike cmd, sh blocks don\'t interpolate @variables.',
-            'Pass them as parameters — they become shell variables:',
-            '  sh(@myVar) { echo "$myVar" && ... }'
+            'In exe definitions, function parameters are available as shell variables automatically:',
+            '  exe @deploy(path) = sh { echo "$path" > out.txt }'
           ].join('\n');
           
           throw new Error(errorMessage);

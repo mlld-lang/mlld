@@ -129,21 +129,34 @@ function looksLikeJson(str: string): boolean {
   return startsRight && endsRight && hasStructure && minLength;
 }
 
+const VARIABLE_OBJECT_MARKER = '__MLLD_VARIABLE_OBJECT__:';
+
 
 export const builtinTransformers: TransformerDefinition[] = [
   {
     name: 'typeof',
     uppercase: 'TYPEOF',
-    description: 'Get type information for a variable',
+    description: 'Get the simple type name for a value',
     implementation: async (input: string) => {
       // The input will be a special marker when we have a Variable object
       // Otherwise it's just the string value
-      if (input.startsWith('__MLLD_VARIABLE_OBJECT__:')) {
+      if (input.startsWith(VARIABLE_OBJECT_MARKER)) {
         // This is handled specially in exec-invocation.ts
-        return input.substring('__MLLD_VARIABLE_OBJECT__:'.length);
+        return input.substring(VARIABLE_OBJECT_MARKER.length);
       }
       // Fallback: analyze the value itself
-      return analyzeValueType(input);
+      return analyzeSimpleType(input);
+    }
+  },
+  {
+    name: 'typeInfo',
+    uppercase: 'TYPEINFO',
+    description: 'Get rich type details including provenance/source context',
+    implementation: async (input: string) => {
+      if (input.startsWith(VARIABLE_OBJECT_MARKER)) {
+        return input.substring(VARIABLE_OBJECT_MARKER.length);
+      }
+      return analyzeRichTypeInfo(input);
     }
   },
   {
@@ -450,10 +463,44 @@ function escapeCSV(value: string): string {
   return value;
 }
 
+function inferSimpleType(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (Array.isArray(value)) return 'array';
+  if (typeof value === 'string') return 'string';
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  if (typeof value === 'function') return 'executable';
+  if (typeof value === 'object') return 'object';
+  return 'string';
+}
+
 /**
- * Analyze the type of a value when we don't have Variable metadata
+ * Analyze simple type names for @typeof when no variable metadata is available.
  */
-function analyzeValueType(value: string): string {
+function analyzeSimpleType(value: string): string {
+  try {
+    const parsed = JSON.parse(value);
+    return inferSimpleType(parsed);
+  } catch {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return 'string';
+    }
+    if (trimmed === 'true' || trimmed === 'false') {
+      return 'boolean';
+    }
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric)) {
+      return 'number';
+    }
+    return 'string';
+  }
+}
+
+/**
+ * Analyze rich type details for @typeInfo when no variable metadata is available.
+ */
+function analyzeRichTypeInfo(value: string): string {
   // Try to parse as JSON to detect objects/arrays
   try {
     const parsed = JSON.parse(value);
@@ -472,12 +519,12 @@ function analyzeValueType(value: string): string {
   } catch {
     // Not JSON - it's a string
   }
-  
+
   // Check if it looks like a path
   if (value.includes('/') || value.includes('\\')) {
     return 'path';
   }
-  
+
   // Default to simple-text
   return 'simple-text';
 }

@@ -569,6 +569,49 @@ async function handleCodeDefinition(
   );
 
   const codeParams = { ...argRuntimeValues } as Record<string, unknown>;
+  const definitionArgDescriptors: SecurityDescriptor[] = [];
+  const definitionArgs = Array.isArray((definition as any).args) ? ((definition as any).args as MlldNode[]) : [];
+
+  if (definitionArgs.length > 0) {
+    const { evaluate } = await import('@interpreter/core/interpreter');
+    const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+
+    for (let index = 0; index < definitionArgs.length; index += 1) {
+      const argNode = definitionArgs[index] as any;
+      if (argNode && typeof argNode === 'object' && argNode.type === 'VariableReference') {
+        const varName = argNode.identifier;
+        const variable = tempEnv.getVariable(varName);
+        if (!variable) {
+          throw new MlldInterpreterError(`Variable not found: ${varName}`);
+        }
+        const descriptor = extractSecurityDescriptor(variable, {
+          recursive: true,
+          mergeArrayElements: true
+        });
+        if (descriptor) {
+          definitionArgDescriptors.push(descriptor);
+        }
+        const runtimeValue = AutoUnwrapManager.unwrap(await extractVariableValue(variable, tempEnv));
+        codeParams[varName] = runtimeValue;
+        argValues[varName] = typeof runtimeValue === 'string' ? runtimeValue : String(runtimeValue ?? '');
+        continue;
+      }
+
+      const evaluatedArg = await evaluate(argNode, tempEnv, { isExpression: true });
+      const descriptor = extractSecurityDescriptor(evaluatedArg.value, {
+        recursive: true,
+        mergeArrayElements: true
+      });
+      if (descriptor) {
+        definitionArgDescriptors.push(descriptor);
+      }
+      const runtimeValue = AutoUnwrapManager.unwrap(evaluatedArg.value);
+      const fallbackKey = `arg${index}`;
+      codeParams[fallbackKey] = runtimeValue;
+      argValues[fallbackKey] = typeof runtimeValue === 'string' ? runtimeValue : String(runtimeValue ?? '');
+    }
+  }
+
   const capturedEnvs = execVar.internal?.capturedShadowEnvs;
   if (
     capturedEnvs &&
@@ -595,8 +638,12 @@ async function handleCodeDefinition(
       directive.location ?? undefined
     );
   }
+  const allArgDescriptors =
+    definitionArgDescriptors.length > 0
+      ? [...argDescriptors, ...definitionArgDescriptors]
+      : argDescriptors;
   const inputDescriptor =
-    argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
+    allArgDescriptors.length > 0 ? env.mergeSecurityDescriptors(...allArgDescriptors) : undefined;
   const inputTaint = checkRunInputLabelFlow({
     descriptor: inputDescriptor,
     policyEnforcer,

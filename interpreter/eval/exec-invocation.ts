@@ -682,8 +682,9 @@ async function evaluateExecInvocationInternal(
   if (variable.internal?.isBuiltinTransformer && variable.internal?.transformerImplementation) {
     // Args were already extracted above
     
-    // Special handling for @typeof - we need the Variable object, not just the value
-    if (commandName === 'typeof' || commandName === 'TYPEOF') {
+    // Special handling for @typeof/@typeInfo - we need the Variable object, not just the value
+    const normalizedBuiltinName = typeof commandName === 'string' ? commandName.toLowerCase() : '';
+    if (normalizedBuiltinName === 'typeof' || normalizedBuiltinName === 'typeinfo') {
       if (args.length > 0) {
         const arg = args[0];
         
@@ -694,44 +695,79 @@ async function evaluateExecInvocationInternal(
           const varObj = env.getVariable(varName);
           
           if (varObj) {
-            // Generate type information from the Variable object
-            let typeInfo = varObj.type;
-            
-            // Handle subtypes for text variables
-            if (varObj.type === 'simple-text' && 'subtype' in varObj) {
-              // For simple-text, show the main type unless it has a special subtype
-              const subtype = (varObj as any).subtype;
-              if (subtype && subtype !== 'simple' && subtype !== 'interpolated-text') {
-                typeInfo = subtype;
+            const inferSimpleTypeFromValue = (value: unknown): string => {
+              if (value === null || value === undefined) return 'null';
+              if (isStructuredValue(value)) {
+                return inferSimpleTypeFromValue(value.data ?? value.text);
               }
-            } else if (varObj.type === 'primitive' && 'primitiveType' in varObj) {
-              typeInfo = `primitive (${(varObj as any).primitiveType})`;
-            } else if (varObj.type === 'object') {
-              const objValue = varObj.value;
-              if (objValue && typeof objValue === 'object') {
-                const keys = Object.keys(objValue);
-                typeInfo = `object (${keys.length} properties)`;
+              if (Array.isArray(value)) return 'array';
+              if (typeof value === 'string') return 'string';
+              if (typeof value === 'number') return 'number';
+              if (typeof value === 'boolean') return 'boolean';
+              if (typeof value === 'function') return 'executable';
+              if (typeof value === 'object') return 'object';
+              return 'string';
+            };
+
+            const getSimpleTypeInfo = (value: Variable): string => {
+              if (value.type === 'executable') return 'executable';
+              if (value.type === 'array') return 'array';
+              if (value.type === 'object') return 'object';
+              if (value.type === 'simple-text' || value.type === 'command-result') return 'string';
+              if (value.type === 'primitive' && 'primitiveType' in value) {
+                const primitiveType = (value as any).primitiveType;
+                if (primitiveType === 'number' || primitiveType === 'string' || primitiveType === 'boolean') {
+                  return primitiveType;
+                }
+                if (primitiveType === 'null') {
+                  return 'null';
+                }
               }
-            } else if (varObj.type === 'array') {
-              const arrValue = varObj.value;
-              if (Array.isArray(arrValue)) {
-                typeInfo = `array (${arrValue.length} items)`;
+              return inferSimpleTypeFromValue(value.value);
+            };
+
+            const getRichTypeInfo = (value: Variable): string => {
+              let typeInfo = value.type;
+
+              if (value.type === 'simple-text' && 'subtype' in value) {
+                const subtype = (value as any).subtype;
+                if (subtype && subtype !== 'simple' && subtype !== 'interpolated-text') {
+                  typeInfo = subtype;
+                }
+              } else if (value.type === 'primitive' && 'primitiveType' in value) {
+                typeInfo = `primitive (${(value as any).primitiveType})`;
+              } else if (value.type === 'object') {
+                const objValue = value.value;
+                if (objValue && typeof objValue === 'object') {
+                  const keys = Object.keys(objValue);
+                  typeInfo = `object (${keys.length} properties)`;
+                }
+              } else if (value.type === 'array') {
+                const arrValue = value.value;
+                if (Array.isArray(arrValue)) {
+                  typeInfo = `array (${arrValue.length} items)`;
+                }
+              } else if (value.type === 'executable') {
+                const execDef = value.internal?.executableDef;
+                if (execDef && 'type' in execDef) {
+                  typeInfo = `executable (${execDef.type})`;
+                }
               }
-            } else if (varObj.type === 'executable') {
-              // Get executable type from metadata
-              const execDef = varObj.internal?.executableDef;
-              if (execDef && 'type' in execDef) {
-                typeInfo = `executable (${execDef.type})`;
+
+              if (value.source?.directive) {
+                typeInfo += ` [from /${value.source.directive}]`;
               }
-            }
-            
-            // Add source information if available
-            if (varObj.source?.directive) {
-              typeInfo += ` [from /${varObj.source.directive}]`;
-            }
-            
-            // Pass the type info with a special marker
-            const result = await variable.internal.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
+
+              return typeInfo;
+            };
+
+            const selectedTypeInfo = normalizedBuiltinName === 'typeof'
+              ? getSimpleTypeInfo(varObj)
+              : getRichTypeInfo(varObj);
+
+            const result = await variable.internal.transformerImplementation(
+              `__MLLD_VARIABLE_OBJECT__:${selectedTypeInfo}`
+            );
             const normalized = normalizeTransformerResult(commandName, result);
             const resolvedValue = normalized.value;
             const wrapOptions = normalized.options;

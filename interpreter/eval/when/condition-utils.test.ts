@@ -19,13 +19,14 @@ describe('when condition utilities', () => {
     await expect(compareValues('True', true, env)).resolves.toBe(false);
   });
 
-  it('keeps boolean-condition truthiness comparisons stable', async () => {
+  it('keeps equality semantics aligned with expression evaluator', async () => {
     const env = createEnvironment();
 
-    await expect(compareValues(0, false, env)).resolves.toBe(true);
-    await expect(compareValues(null, false, env)).resolves.toBe(true);
-    await expect(compareValues({ value: 'hello' }, true, env)).resolves.toBe(true);
-    await expect(compareValues([], false, env)).resolves.toBe(true);
+    await expect(compareValues('5', 5, env)).resolves.toBe(true);
+    await expect(compareValues('true', true, env)).resolves.toBe(true);
+    await expect(compareValues(null, undefined, env)).resolves.toBe(true);
+    await expect(compareValues(0, false, env)).resolves.toBe(false);
+    await expect(compareValues(true, 1, env)).resolves.toBe(false);
   });
 
   it('keeps denied-target detection stable for denied literals and mx.denied fields', () => {
