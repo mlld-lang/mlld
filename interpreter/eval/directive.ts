@@ -5,6 +5,7 @@ import { interpolate } from '../core/interpreter';
 import { getTextContent } from '../utils/type-guard-helpers';
 import type { OperationContext, PipelineContextSnapshot } from '../env/ContextManager';
 import type { PolicyDirectiveNode } from '@core/types/policy';
+import type { AuthDirectiveNode } from '@core/types/auth';
 import { extractDirectiveInputs } from './directive-inputs';
 import {
   applyCheckpointDecisionToOperation,
@@ -41,6 +42,7 @@ import { runUserAfterHooksOnGuardDenial } from '../hooks/guard-denial-after-hook
 import { extractSecurityDescriptor } from '../utils/structured-value';
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluatePolicy } from './policy';
+import { evaluateAuth } from './auth';
 import { getOperationLabels, getOperationSources, parseCommand } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { collectInputDescriptor, descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
@@ -133,6 +135,13 @@ function extractTraceInfo(directive: DirectiveNode): {
       const policyName = getTextContent(policyNameNode);
       if (policyName) {
         info.varName = policyName;
+      }
+      break;
+    case 'auth':
+      const authNameNode = (directive.values as any)?.name?.[0];
+      const authName = getTextContent(authNameNode);
+      if (authName) {
+        info.varName = authName;
       }
       break;
     case 'checkpoint':
@@ -835,6 +844,9 @@ async function dispatchDirective(
 
     case 'policy':
       return await evaluatePolicy(directive as PolicyDirectiveNode, env);
+
+    case 'auth':
+      return await evaluateAuth(directive as AuthDirectiveNode, env);
 
     case 'sign':
       return await evaluateSign(directive, env);

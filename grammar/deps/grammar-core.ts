@@ -50,6 +50,7 @@ export const DirectiveKind = {
   needs: 'needs',
   profiles: 'profiles',
   policy: 'policy',
+  auth: 'auth',
   while: 'while',
   loop: 'loop',
   bail: 'bail',

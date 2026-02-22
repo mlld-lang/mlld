@@ -15,7 +15,7 @@ import { applyWithClause } from '@interpreter/eval/with-clause';
 import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
-import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import { resolveUsingEnvPartsWithOptions } from '@interpreter/utils/auth-injection';
 import {
   asText,
   extractSecurityDescriptor,
@@ -353,7 +353,16 @@ export async function executeCodeExecutable(
       (codeParams as any).__capturedShadowEnvs = capturedEnvs;
     }
 
-    const usingParts = await resolveUsingEnvParts(execEnv, definition.withClause, node.withClause);
+    const usingParts = await resolveUsingEnvPartsWithOptions(
+      execEnv,
+      {
+        capturedAuthBindings: (variable.internal as any)?.capturedAuthBindings as
+          | Record<string, unknown>
+          | undefined
+      },
+      definition.withClause,
+      node.withClause
+    );
     const envInputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(usingParts.descriptor));
     if (envInputTaint.length > 0) {
       policyEnforcer.checkLabelFlow(

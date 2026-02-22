@@ -257,6 +257,7 @@ export type DirectiveKind =
   | 'guard'
   | 'hook'
   | 'stream'
+  | 'auth'
   | 'needs'
   | 'profiles'
   | 'policy'
@@ -308,6 +309,8 @@ export type DirectiveSubtype =
   // Needs/Wants subtypes
   | 'needs'
   | 'profiles'
+  // Auth subtype
+  | 'auth'
   // Policy subtype
   | 'policy'
   // Signing subtypes

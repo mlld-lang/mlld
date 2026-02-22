@@ -35,7 +35,12 @@ import {
 } from '@core/types/security';
 import type { StateWrite } from '@core/types/state';
 import { mergeNeedsDeclarations, ALLOW_ALL_POLICY, type NeedsDeclaration, type PolicyCapabilities, type ProfilesDeclaration } from '@core/policy/needs';
-import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
+import {
+  mergePolicyConfigs,
+  normalizePolicyConfig,
+  type AuthConfig,
+  type PolicyConfig
+} from '@core/policy/union';
 import { RegistryManager, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
@@ -190,6 +195,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private securityRuntime?: SecurityRuntimeState;
   private policyCapabilities: PolicyCapabilities = ALLOW_ALL_POLICY;
   private policySummary?: PolicyConfig;
+  private standaloneAuthSummary?: Record<string, AuthConfig>;
   private allowedTools?: Set<string>;
   private allowedMcpServers?: Set<string>;
   private moduleNeeds?: NeedsDeclaration;
@@ -781,6 +787,24 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   getPolicySummary(): PolicyConfig | undefined {
     if (this.policySummary) return this.policySummary;
     return this.parent?.getPolicySummary();
+  }
+
+  getStandaloneAuthSummary(): Record<string, AuthConfig> | undefined {
+    if (this.standaloneAuthSummary) {
+      return this.standaloneAuthSummary;
+    }
+    return this.parent?.getStandaloneAuthSummary();
+  }
+
+  recordStandaloneAuthConfig(name: string, config: AuthConfig): void {
+    const authName = typeof name === 'string' ? name.trim() : '';
+    if (!authName || !config) {
+      return;
+    }
+    this.standaloneAuthSummary = {
+      ...(this.standaloneAuthSummary ?? {}),
+      [authName]: config
+    };
   }
 
   getScopedEnvironmentConfig(): EnvironmentConfig | undefined {

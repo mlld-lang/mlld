@@ -128,3 +128,42 @@ describe('PolicyConfig keychain', () => {
     expect(merged.keychain?.deny?.sort()).toEqual(['company/private/*', 'system/*'].sort());
   });
 });
+
+describe('PolicyConfig auth', () => {
+  it('normalizes short-form and bare keychain auth entries', () => {
+    const config = normalizePolicyConfig({
+      auth: {
+        brave: 'BRAVE_API_KEY',
+        claude: {
+          from: 'keychain',
+          as: 'ANTHROPIC_API_KEY'
+        }
+      }
+    } as PolicyConfig);
+
+    expect(config.auth?.brave).toEqual({
+      from: 'keychain:mlld-env-{projectname}/BRAVE_API_KEY',
+      as: 'BRAVE_API_KEY'
+    });
+    expect(config.auth?.claude).toEqual({
+      from: 'keychain:mlld-env-{projectname}/ANTHROPIC_API_KEY',
+      as: 'ANTHROPIC_API_KEY'
+    });
+  });
+
+  it('keeps explicit auth providers unchanged', () => {
+    const config = normalizePolicyConfig({
+      auth: {
+        gh: {
+          from: 'env:GITHUB_TOKEN',
+          as: 'GITHUB_TOKEN'
+        }
+      }
+    } as PolicyConfig);
+
+    expect(config.auth?.gh).toEqual({
+      from: 'env:GITHUB_TOKEN',
+      as: 'GITHUB_TOKEN'
+    });
+  });
+});

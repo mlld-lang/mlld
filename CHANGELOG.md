@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@typeInfo(...)` builtin for rich type/provenance diagnostics, while `@typeof(...)` remains for simple type checks.
 - Directory module import convention: importing `./dir` now resolves `./dir/index.mld` when present; `./dir/` continues to mean collection import.
 - `sh(@var) { ... }` syntax support in `exe` definitions (previously run-only).
+- Standalone `/auth @name = ...` directive for top-level credential declarations, including short form (`"API_KEY"`) and object forms (`{ from, as }`).
+- Exported executables now capture module auth bindings so imported `using auth:name` works without requiring callers to import policy objects.
 
 ### Fixed
 - `run` directive now resolves cross-module executable dependencies; imported functions called via `run @fn(...)` can access their own module's imports. Previously only `var @_ = @fn(...)` worked.
@@ -24,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Guard denial output is deduplicated and default errors omit verbose guard JSON internals unless debug mode is enabled.
 - Missing-file path guidance and import suggestions now consistently prefer `@root` in user-facing hints.
 - Deprecated-json anti-pattern detection is narrower and no longer triggers on variable names that merely contain `json`.
+- Auth binding resolution now composes captured module auth with caller `policy.auth` and caller standalone `auth`; caller bindings override same-name module bindings.
+- Keychain auth lookup now falls back to `process.env[as]` when keychain entries are missing, and unsupported provider schemes return explicit errors.
 - Error display now renders all content (header, source context, details, suggestion) inside the `mlld error` box frame. Directive trace chain appears at top, error details below. Fixes `:unknown` locations in trace and strips `/` prefix from directive names.
 - `src:mcp` taint no longer applies to inputs of MCP-served tools (`mlld mcp`); it remains scoped to data returned from imported MCP tools.
 - Imported guards now resolve internal executable dependencies in the module where the guard was defined; consumers do not need to import helper executables separately.

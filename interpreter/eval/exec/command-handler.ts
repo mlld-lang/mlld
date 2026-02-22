@@ -15,7 +15,10 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { logger } from '@core/utils/logger';
 import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
-import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import {
+  buildAuthDescriptor,
+  resolveUsingEnvPartsWithOptions
+} from '@interpreter/utils/auth-injection';
 import { asText, isStructuredValue, parseAndWrapJson } from '@interpreter/utils/structured-value';
 import { collectVariableIdentifiersFromNodes } from '@interpreter/eval/directive-inputs';
 import {
@@ -151,8 +154,22 @@ export async function executeCommandExecutable(
     envVars.MLLD_VERIFY_VARS = autoverifyVars.join(',');
   }
 
-  const usingParts = await resolveUsingEnvParts(execEnv, definition.withClause, node.withClause);
-  const envAuthSecrets = await resolveEnvironmentAuthSecrets(execEnv, resolvedEnvConfig);
+  const authResolutionOptions = {
+    capturedAuthBindings: (variable.internal as any)?.capturedAuthBindings as
+      | Record<string, unknown>
+      | undefined
+  };
+  const usingParts = await resolveUsingEnvPartsWithOptions(
+    execEnv,
+    authResolutionOptions,
+    definition.withClause,
+    node.withClause
+  );
+  const envAuthSecrets = await resolveEnvironmentAuthSecrets(
+    execEnv,
+    resolvedEnvConfig,
+    authResolutionOptions
+  );
   const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
   const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
   const envInputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(envInputDescriptor));

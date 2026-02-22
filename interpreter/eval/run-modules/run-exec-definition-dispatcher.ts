@@ -22,7 +22,10 @@ import {
 } from '@interpreter/utils/structured-value';
 import { resolveWorkingDirectory } from '@interpreter/utils/working-directory';
 import { mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
-import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import {
+  buildAuthDescriptor,
+  resolveUsingEnvPartsWithOptions
+} from '@interpreter/utils/auth-injection';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { createTemplateInterpolationEnv } from '@interpreter/eval/exec/template-interpolation-env';
 import {
@@ -212,6 +215,7 @@ async function handleCommandDefinition(
     argRuntimeValues,
     argDescriptors,
     exeLabels,
+    execVar,
     callStack,
     services
   } = ctx;
@@ -318,8 +322,22 @@ async function handleCommandDefinition(
     }
   }
 
-  const usingParts = await resolveUsingEnvParts(tempEnv, (definition as any).withClause, withClause);
-  const envAuthSecrets = await resolveEnvironmentAuthSecrets(tempEnv, resolvedEnvConfig);
+  const authResolutionOptions = {
+    capturedAuthBindings: (execVar.internal as any)?.capturedAuthBindings as
+      | Record<string, unknown>
+      | undefined
+  };
+  const usingParts = await resolveUsingEnvPartsWithOptions(
+    tempEnv,
+    authResolutionOptions,
+    (definition as any).withClause,
+    withClause
+  );
+  const envAuthSecrets = await resolveEnvironmentAuthSecrets(
+    tempEnv,
+    resolvedEnvConfig,
+    authResolutionOptions
+  );
   const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
   const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
   checkRunInputLabelFlow({
@@ -744,7 +762,16 @@ async function handleCodeDefinition(
     tempEnv
   );
 
-  const usingParts = await resolveUsingEnvParts(tempEnv, (definition as any).withClause, withClause);
+  const usingParts = await resolveUsingEnvPartsWithOptions(
+    tempEnv,
+    {
+      capturedAuthBindings: (execVar.internal as any)?.capturedAuthBindings as
+        | Record<string, unknown>
+        | undefined
+    },
+    (definition as any).withClause,
+    withClause
+  );
   const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor);
   checkRunInputLabelFlow({
     descriptor: envInputDescriptor,

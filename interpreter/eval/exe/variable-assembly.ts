@@ -16,6 +16,7 @@ import {
   type SecurityDescriptor
 } from '@core/types/security';
 import { maybeAutosignVariable } from '../auto-sign';
+import { captureAuthBindings } from '@interpreter/utils/auth-injection';
 
 export interface ExeSecurityContext {
   securityLabels?: DataLabel[];
@@ -79,6 +80,10 @@ export async function materializeExecutableVariable(
   };
   if (description !== undefined) {
     metadata.description = description;
+  }
+  const authBindings = captureAuthBindings(env);
+  if (authBindings) {
+    metadata.capturedAuthBindings = authBindings;
   }
   if (env.hasShadowEnvs()) {
     metadata.capturedShadowEnvs = env.captureAllShadowEnvs();

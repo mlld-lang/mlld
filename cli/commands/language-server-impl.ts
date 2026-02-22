@@ -1059,6 +1059,7 @@ export async function startLanguageServer(): Promise<void> {
       { name: 'needs', desc: 'Declare dependencies' },
       { name: 'profiles', desc: 'Declare capability profiles' },
       { name: 'policy', desc: 'Define policy object' },
+      { name: 'auth', desc: 'Declare credential sources for using auth:*' },
       { name: 'sign', desc: 'Sign values' },
       { name: 'verify', desc: 'Verify signed values' }
     ];

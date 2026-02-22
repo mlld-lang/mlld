@@ -31,6 +31,8 @@ export type AuthConfig = {
   as: string;
 };
 
+const KEYCHAIN_SHORT_SERVICE = 'mlld-env-{projectname}';
+
 export type LabelFlowRule = {
   deny?: string[];
   allow?: string[];
@@ -969,24 +971,54 @@ function normalizePolicyAuth(
   }
 
   const result: Record<string, AuthConfig> = {};
-  for (const [name, entry] of Object.entries(auth)) {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+  for (const [rawName, entry] of Object.entries(auth)) {
+    const name = rawName.trim();
+    if (!name) {
       continue;
     }
-    const from = (entry as AuthConfig).from;
-    const as = (entry as AuthConfig).as;
-    if (typeof from !== 'string' || typeof as !== 'string') {
+    const normalized = normalizeAuthConfig(entry);
+    if (!normalized) {
       continue;
     }
-    const trimmedFrom = from.trim();
-    const trimmedAs = as.trim();
-    if (!trimmedFrom || !trimmedAs) {
-      continue;
-    }
-    result[name] = { from: trimmedFrom, as: trimmedAs };
+    result[name] = normalized;
   }
 
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+export function normalizeAuthConfig(entry: unknown): AuthConfig | undefined {
+  if (typeof entry === 'string') {
+    const envName = entry.trim();
+    if (!envName) {
+      return undefined;
+    }
+    return {
+      from: `keychain:${KEYCHAIN_SHORT_SERVICE}/${envName}`,
+      as: envName
+    };
+  }
+
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return undefined;
+  }
+
+  const rawFrom = (entry as { from?: unknown }).from;
+  const rawAs = (entry as { as?: unknown }).as;
+  if (typeof rawFrom !== 'string' || typeof rawAs !== 'string') {
+    return undefined;
+  }
+
+  const as = rawAs.trim();
+  let from = rawFrom.trim();
+  if (!from || !as) {
+    return undefined;
+  }
+
+  if (from === 'keychain') {
+    from = `keychain:${KEYCHAIN_SHORT_SERVICE}/${as}`;
+  }
+
+  return { from, as };
 }
 
 function normalizePolicyKeychain(

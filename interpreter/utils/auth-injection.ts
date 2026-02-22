@@ -1,5 +1,5 @@
 import type { WithClause } from '@core/types';
-import type { AuthConfig, PolicyConfig } from '@core/policy/union';
+import type { AuthConfig } from '@core/policy/union';
 import type { Environment } from '@interpreter/env/Environment';
 import { MlldInterpreterError } from '@core/errors';
 import { getKeychainProvider } from '@core/resolvers/builtin/KeychainResolver';
@@ -10,6 +10,16 @@ import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { enforceKeychainAccess, requireKeychainProjectName } from '@interpreter/policy/keychain-policy';
 
 type UsingConfig = { var?: unknown; as?: unknown };
+
+export type AuthBindingSource = 'policy' | 'standalone';
+
+export type AuthBinding = AuthConfig & {
+  source: AuthBindingSource;
+};
+
+export type AuthResolutionOptions = {
+  capturedAuthBindings?: Record<string, AuthBinding | AuthConfig>;
+};
 
 export type UsingEnvParts = {
   vars: Record<string, string>;
@@ -22,12 +32,20 @@ export async function resolveUsingEnv(
   env: Environment,
   ...withClauses: Array<WithClause | undefined>
 ): Promise<Record<string, string>> {
-  const parts = await resolveUsingEnvParts(env, ...withClauses);
+  const parts = await resolveUsingEnvPartsWithOptions(env, undefined, ...withClauses);
   return parts.merged;
 }
 
 export async function resolveUsingEnvParts(
   env: Environment,
+  ...withClauses: Array<WithClause | undefined>
+): Promise<UsingEnvParts> {
+  return resolveUsingEnvPartsWithOptions(env, undefined, ...withClauses);
+}
+
+export async function resolveUsingEnvPartsWithOptions(
+  env: Environment,
+  options: AuthResolutionOptions | undefined,
   ...withClauses: Array<WithClause | undefined>
 ): Promise<UsingEnvParts> {
   const vars: Record<string, string> = {};
@@ -48,7 +66,7 @@ export async function resolveUsingEnvParts(
     }
 
     if (withClause.auth !== undefined) {
-      const authSecrets = await resolveAuthSecrets(env, withClause.auth);
+      const authSecrets = await resolveAuthSecrets(env, withClause.auth, options);
       for (const [key, value] of Object.entries(authSecrets)) {
         secrets[key] = value;
         merged[key] = value;
@@ -94,7 +112,8 @@ export function buildAuthDescriptor(auth: unknown): SecurityDescriptor | undefin
 
 export async function resolveAuthSecrets(
   env: Environment,
-  auth: unknown
+  auth: unknown,
+  options?: AuthResolutionOptions
 ): Promise<Record<string, string>> {
   if (auth === undefined || auth === null) {
     return {};
@@ -103,8 +122,8 @@ export async function resolveAuthSecrets(
   const secrets: Record<string, string> = {};
   for (const entry of authNames) {
     const authName = normalizeAuthName(entry);
-    const authConfig = getAuthConfig(env.getPolicySummary(), authName);
-    const authValue = await resolveAuthValue(authConfig.from, env);
+    const authConfig = getAuthConfig(env, authName, options);
+    const authValue = await resolveAuthValue(authConfig, env);
     secrets[authConfig.as] = authValue;
   }
   return secrets;
@@ -125,12 +144,26 @@ function normalizeAuthName(value: unknown): string {
   return name;
 }
 
-function getAuthConfig(policy: PolicyConfig | undefined, name: string): AuthConfig {
-  const authConfig = policy?.auth?.[name];
+export function captureAuthBindings(
+  env: Environment
+): Record<string, AuthBinding> | undefined {
+  const bindings = resolveAvailableAuthBindings(env);
+  return Object.keys(bindings).length > 0 ? bindings : undefined;
+}
+
+function getAuthConfig(
+  env: Environment,
+  name: string,
+  options?: AuthResolutionOptions
+): AuthBinding {
+  const authConfig = resolveAvailableAuthBindings(env, options)[name];
   if (!authConfig) {
-    throw new MlldInterpreterError(`Auth config '${name}' is not defined in policy`, {
-      code: 'AUTH_NOT_CONFIGURED'
-    });
+    throw new MlldInterpreterError(
+      `Auth config '${name}' is not defined. Declare auth @${name} = ... or policy.auth.${name}.`,
+      {
+        code: 'AUTH_NOT_CONFIGURED'
+      }
+    );
   }
   if (!authConfig.from || !authConfig.as) {
     throw new MlldInterpreterError(`Auth config '${name}' is missing 'from' or 'as'`, {
@@ -140,7 +173,67 @@ function getAuthConfig(policy: PolicyConfig | undefined, name: string): AuthConf
   return authConfig;
 }
 
-async function resolveAuthValue(source: string, env: Environment): Promise<string> {
+function resolveAvailableAuthBindings(
+  env: Environment,
+  options?: AuthResolutionOptions
+): Record<string, AuthBinding> {
+  const bindings: Record<string, AuthBinding> = {};
+  const captured = options?.capturedAuthBindings;
+  if (captured && typeof captured === 'object') {
+    for (const [name, config] of Object.entries(captured)) {
+      const normalized = toAuthBinding(config);
+      if (normalized) {
+        bindings[name] = normalized;
+      }
+    }
+  }
+
+  const policy = env.getPolicySummary();
+  if (policy?.auth && typeof policy.auth === 'object') {
+    for (const [name, config] of Object.entries(policy.auth)) {
+      if (isAuthConfig(config)) {
+        bindings[name] = { ...config, source: 'policy' };
+      }
+    }
+  }
+
+  const standalone = env.getStandaloneAuthSummary();
+  if (standalone && typeof standalone === 'object') {
+    for (const [name, config] of Object.entries(standalone)) {
+      if (isAuthConfig(config)) {
+        bindings[name] = { ...config, source: 'standalone' };
+      }
+    }
+  }
+
+  return bindings;
+}
+
+function isAuthConfig(value: unknown): value is AuthConfig {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      typeof (value as { from?: unknown }).from === 'string' &&
+      typeof (value as { as?: unknown }).as === 'string'
+  );
+}
+
+function toAuthBinding(value: unknown): AuthBinding | undefined {
+  if (!isAuthConfig(value)) {
+    return undefined;
+  }
+  const source = (value as { source?: unknown }).source;
+  return {
+    from: value.from,
+    as: value.as,
+    source: source === 'standalone' ? 'standalone' : 'policy'
+  };
+}
+
+async function resolveAuthValue(config: AuthBinding, env: Environment): Promise<string> {
+  const source = config.from;
+  const envVarName = config.as;
+
   if (source.startsWith('keychain:')) {
     const path = source.slice('keychain:'.length);
     const projectName = requireKeychainProjectName(env);
@@ -152,13 +245,30 @@ async function resolveAuthValue(source: string, env: Environment): Promise<strin
         code: 'KEYCHAIN_PATH_INVALID'
       });
     }
-    enforceKeychainAccess(env, { service, account, action: 'get' });
-    const provider = getKeychainProvider();
-    const value = await provider.get(service, account);
+    enforceKeychainAccess(
+      env,
+      { service, account, action: 'get' },
+      undefined,
+      { requireDanger: config.source !== 'standalone' }
+    );
+    let value: string | null | undefined;
+    try {
+      const provider = getKeychainProvider();
+      value = await provider.get(service, account);
+    } catch {
+      value = undefined;
+    }
     if (value === null || value === undefined) {
-      throw new MlldInterpreterError(`Keychain entry '${service}/${account}' not found`, {
-        code: 'KEYCHAIN_ENTRY_MISSING'
-      });
+      const fallback = process.env[envVarName];
+      if (fallback !== undefined) {
+        return fallback;
+      }
+      throw new MlldInterpreterError(
+        `Keychain entry '${service}/${account}' not found and environment variable '${envVarName}' is not set`,
+        {
+          code: 'KEYCHAIN_ENTRY_MISSING'
+        }
+      );
     }
     return value;
   }
@@ -177,6 +287,13 @@ async function resolveAuthValue(source: string, env: Environment): Promise<strin
       });
     }
     return value;
+  }
+
+  const providerMatch = source.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)/);
+  if (providerMatch) {
+    throw new MlldInterpreterError(`unsupported auth provider: ${providerMatch[1]}`, {
+      code: 'AUTH_SOURCE_INVALID'
+    });
   }
 
   throw new MlldInterpreterError(`Unsupported auth source '${source}'`, {

@@ -254,6 +254,7 @@ Directive
     / SlashHook     // Hook directives (user lifecycle hooks)
     / SlashGuard    // Guard directives (security policies)
     / SlashPolicy   // Policy composition directives
+    / SlashAuth     // Auth declaration directives
     / SlashSign     // Sign directives (signature storage)
     / SlashVerify   // Verify directives (signature checks)
     / SlashNeeds    // Needs directives (capability declarations)

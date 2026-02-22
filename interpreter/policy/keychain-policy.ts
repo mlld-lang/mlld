@@ -14,6 +14,10 @@ export type KeychainAccess = {
   action?: KeychainAction;
 };
 
+export type KeychainAccessOptions = {
+  requireDanger?: boolean;
+};
+
 export function requireKeychainProjectName(env: Environment): string {
   const projectName = env.getProjectConfig()?.getProjectName();
   if (!projectName || !isValidProjectName(projectName)) {
@@ -28,7 +32,8 @@ export function requireKeychainProjectName(env: Environment): string {
 export function enforceKeychainAccess(
   env: Environment,
   access?: KeychainAccess,
-  sourceLocation?: SourceLocation
+  sourceLocation?: SourceLocation,
+  options?: KeychainAccessOptions
 ): void {
   const projectName = requireKeychainProjectName(env);
   const policy = env.getPolicySummary();
@@ -36,13 +41,16 @@ export function enforceKeychainAccess(
     return;
   }
 
-  const dangerEntries = normalizeDangerEntries(policy.danger ?? policy.capabilities?.danger);
-  if (!isDangerAllowedForKeychain(dangerEntries)) {
-    throw new MlldSecurityError('Dangerous capability requires allow.danger', {
-      code: 'POLICY_CAPABILITY_DENIED',
-      env,
-      sourceLocation
-    });
+  const requireDanger = options?.requireDanger !== false;
+  if (requireDanger) {
+    const dangerEntries = normalizeDangerEntries(policy.danger ?? policy.capabilities?.danger);
+    if (!isDangerAllowedForKeychain(dangerEntries)) {
+      throw new MlldSecurityError('Dangerous capability requires allow.danger', {
+        code: 'POLICY_CAPABILITY_DENIED',
+        env,
+        sourceLocation
+      });
+    }
   }
 
   if (!access) {
