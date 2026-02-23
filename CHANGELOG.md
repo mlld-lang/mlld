@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc83]
 
 ### Added
+- `.flat(depth?)` and `.at(index)` array builtin methods.
 - `autosign` category renamed from `templates` to `instructions`. Aliases retained for backward compatibility: `instruction`, `instruct`, `inst`, `templates`.
 - `autosign: { labels: ["prompt"] }` signs variables with matching security labels.
 - `verify_all_instructions: true` policy shorthand for `defaults: { autosign: ["instructions"], autoverify: true }`.

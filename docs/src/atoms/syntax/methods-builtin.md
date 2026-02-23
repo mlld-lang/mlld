@@ -36,6 +36,8 @@ updated: 2026-01-05
 - `@arr.concat(other)` - combine arrays
 - `@arr.reverse()` - reverse order (returns new array)
 - `@arr.sort()` - sort alphabetically (returns new array)
+- `@arr.flat(depth?)` - flatten nested arrays (default depth 1)
+- `@arr.at(index)` - element at index (supports negative indices)
 
 Method chains can continue across lines when continuation lines start with `.`
 

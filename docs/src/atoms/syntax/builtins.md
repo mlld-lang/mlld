@@ -105,6 +105,8 @@ if @fileExists(@settings.configPath) [ show "found" ]
 - `.concat(other)` - combine arrays
 - `.reverse()` - reverse order (new array)
 - `.sort()` - sort alphabetically (new array)
+- `.flat(depth?)` - flatten nested arrays (default depth 1)
+- `.at(index)` - element at index (supports negative indices)
 
 ## Type Checks
 
