@@ -1,0 +1,3 @@
+filename: decompose-query.mld
+className: possibility-example
+heading: "The LLM writes the query. Code runs it. Zero tokens wasted on non-matches."

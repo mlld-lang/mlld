@@ -1,0 +1,5 @@
+import { @claude } from @mlld/claude
+
+var @patients = <data/patient-records.csv>
+var @reply = @claude("Summarize: @patients")
+show @reply

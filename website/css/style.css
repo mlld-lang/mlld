@@ -1041,6 +1041,18 @@ section.content-section h2 {
   grid-column: 1;
 }
 
+.card-heading span {
+  display: block;
+  margin-top: 1rem;
+  font-size: .8rem;
+  font-weight: 200;
+  line-height: 1.5;
+  color: rgba(var(--text-color-rgb), 0.6);
+}
+.card-heading span code {
+  color:rgba(var(--text-color-rgb), 0.6)
+}
+
 /* Content on the right */
 .card-content {
   display: flex;

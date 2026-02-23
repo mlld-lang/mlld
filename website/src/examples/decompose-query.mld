@@ -1,0 +1,24 @@
+var @schema = cmd { sqlite3 app.db ".schema" }
+
+>> LLM translates the question into SQL
+exe llm @ask(schema, question) = cmd {
+  claude -p "Write a SQLite query for: @question
+  <schema>@schema</schema>
+  Return JSON: { sql, rationale }"
+}
+
+>> Code runs the query — zero LLM cost
+var @q = @ask(@schema, "users with high churn risk") | @parse.llm
+var @hits = cmd { sqlite3 -json app.db "@q.sql" } | @parse
+
+>> Parallel investigation on results only
+exe llm @profile(user) = cmd {
+  claude -p "Analyze this user's behavior and recommend interventions:
+  @user
+  JSON: { user_id, risk_factors, actions }"
+}
+
+var @results = for parallel(4) @u in @hits
+  => @profile(@u) | @parse.llm
+
+show @results

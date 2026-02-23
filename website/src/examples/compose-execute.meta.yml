@@ -1,0 +1,3 @@
+filename: compose-execute.mld
+className: possibility-example
+heading: "Agents compose their own scripts. mlld -e runs them."

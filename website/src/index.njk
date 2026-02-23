@@ -5,14 +5,14 @@ layout: base.njk
 <section class="hero">
   <div class="hero-content">
     <h1>Secure LLM scripting. Finally.</h1>
-    <p>Context meets engineering for pragmatic orchestration without giving away your keys.</p>
-  </div>
-  
-  <div class="hero-terminal-container">
-    {% set example = examples.default['injection-defense'] or examples['injection-defense'] %}
-    {% include "components/mlld-example.njk" %}
+    <p>Agents and orchestrators in code you can actually read.</p>
+    <p>From the cofounder of `npm audit`, &yet, and Code4rena</p>
   </div>
 
+  <div class="hero-terminal-container">
+    {% set example = examples.default['hero-security'] or examples['hero-security'] %}
+    {% include "components/mlld-example.njk" %}
+  </div>
 </section>
 
 <section class="install">
@@ -23,61 +23,121 @@ layout: base.njk
   <path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>
 </svg></button>
     </div>
-    <div class="vscode-link">
-      <a href="https://marketplace.visualstudio.com/items?itemName=andyet.mlld-vscode" target="_blank">VSCode/Cursor extension</a> · 
-      <a href="https://github.com/mlld-lang/mlld/tree/main/editors/vim" target="_blank">Vim</a> · 
-      <a href="https://github.com/mlld-lang/mlld/tree/main/editors/textmate" target="_blank">TextMate</a>
-    </div>
     <div class="llms-link">
-      <a href="https://mlld.ai/llms.txt" target="_blank">Give this to your LLM »</a>
+      <p>Give this to your LLM:</p>
+      <div class="install-command">
+        <code>mlld quickstart</code>
+        <button class="copy-button" onclick="const btn = this; navigator.clipboard.writeText('mlld quickstart'); btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1500);"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>
+</svg></button>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="content-section">  
+<section class="content-section">
   <h2>secure?</h2>
-  <h3 class="section-description"><strong>Prompt injection</strong> isn’t an <strong>LLM</strong> problem,<br> it’s an <strong>infrastructure</strong> problem.</h3>
-  
-  <div class="container security-more">
-    <p>Other tools yell at the model and hope it behaves.<br/>
-    <strong>mlld</strong> enforces policy at the runtime level.</p>
-    <p>You label your data and define guards. Then when tainted data hits a boundary, your guards fire. The LLM doesn't get a vote and isn't asked to guess.</p>
-    <p>No magic. No proprietary pixie dust. Just classic security principles applied to a new problem. mlld's primitives help you do the work of securing your stuff.</p>
-    <p>From the cocreator of <strong>npm audit</strong> and <strong>Code4rena</strong></p>
-  </div>
-</section>
+  <h3 class="section-description"><strong>Prompt injection</strong> isn't an <strong>LLM</strong> problem,<br> it's an <strong>infrastructure</strong> problem.</h3>
 
-<section class="content-section">  
-  <h2>llm scripting</h2>
-  <h3 class="section-description">If you've experienced the <strong>pain</strong>,<br> you know what you <strong>need</strong> it to be.</h3>
-  
+  <div class="container security-more">
+    <p><strong>mlld</strong> tracks what data <em>is</em> and enforces where it can <em>go</em> at the runtime level. The LLM doesn't get a vote.</p>
+  </div>
+
   <div class="container">
     <div class="content-grid">
-      <!-- First row -->
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">Label data. Sign instructions. Guards enforce the rules.</h3>
+        <div class="card-content">
+          {% set example = examples.default['guard-mcp-tools'] or examples['guard-mcp-tools'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">Labels track identity, not content. No transformation strips them.</h3>
+        <div class="card-content">
+          {% set example = examples.default['label-propagation'] or examples['label-propagation'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">Classify once, enforce everywhere.</h3>
+        <div class="card-content">
+          {% set example = examples.default['policy-config'] or examples['policy-config'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">Credentials never enter the variable namespace. Nothing to exfiltrate.</h3>
+        <div class="card-content">
+          {% set example = examples.default['sealed-credentials'] or examples['sealed-credentials'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="content-section">
+  <h2>llm scripting</h2>
+  <h3 class="section-description">If you've experienced the <strong>pain</strong>,<br> you know what you <strong>need</strong> it to be.</h3>
+
+  <div class="container">
+    <div class="content-grid">
       <div class="grid-row">
         <span class="vertical-line"></span>
         <h3 class="card-heading">Tired of repeating yourself</h3>
         <div class="card-content">
-          <p class="pain-quote">“I'd do a lot more with LLMs if constantly assembling and re-assembling context wasn't such a chore.”</p>
+          <p class="pain-quote">“I’d do a lot more with LLMs if constantly assembling and re-assembling context wasn’t such a chore.”</p>
         </div>
       </div>
-      
-      <!-- Second row -->
+
       <div class="grid-row">
         <span class="vertical-line"></span>
         <h3 class="card-heading">Tired of wrong tools for the job</h3>
         <div class="card-content">
-          <p class="pain-quote">“I just want to script LLMs. Don't give me a kitchen sink 'agentic framework' or a magic black box. Give me a unix pipe.”</p>
+          <p class="pain-quote">“I just want to script LLMs. Don’t give me a chat app or an uber-agent or a magic black box. Give me a unix pipe.”</p>
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">Tired of shipping without guardrails</h3>
+        <div class="card-content">
+          <p class="pain-quote">“I can’t ship LLM workflows because I can’t secure them. Everyone handwaves ‘defense in depth’ and nobody has auditable tooling for it.”</p>
         </div>
       </div>
     </div>
   </div>
 </section>
-<section class="content-section">  
-  <h2>finally</h2>
-  <h3 class="section-description second-section-description">If you've seen the <strong>possibility</strong>,<br> you know what you <strong>want</strong> it to be.</h3>
+
+<section class="content-section">
+  <h2>usability? security?</h2>
+  <h3 class="section-description">¿Por qué no los dos?</h3>
+
   <div class="container">
     <div class="content-grid">
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">
+          Your pipeline crashed at call 73. mlld picks up at 74.
+          <span><code>exe llm</code> calls are automatically cached. Named checkpoints let you resume from any phase.<br/><br/>You can pick things up at a specific function call or even in the middle of a loop.</span>
+        </h3>
+        <div class="card-content">
+          {% set example = examples.default['checkpoint-resume'] or examples['checkpoint-resume'] %}
+          {% include "components/mlld-example.njk" %}
+          
+        </div>
+      </div>
 
       <div class="grid-row">
         <span class="vertical-line"></span>
@@ -99,38 +159,9 @@ layout: base.njk
 
       <div class="grid-row">
         <span class="vertical-line"></span>
-        <h3 class="card-heading">{{ (examples.default['ast-selectors'] or examples['ast-selectors']).heading }}</h3>
-        <div class="card-content">
-          {% set example = examples.default['ast-selectors'] or examples['ast-selectors'] %}
-          {% include "components/mlld-example.njk" %}
-        </div>
-      </div>
-
-      <div class="grid-row">
-        <span class="vertical-line"></span>
         <h3 class="card-heading">{{ (examples.default['readme-embed'] or examples['readme-embed']).heading }}</h3>
         <div class="card-content">
           {% set example = examples.default['readme-embed'] or examples['readme-embed'] %}
-          {% include "components/mlld-example.njk" %}
-        </div>
-      </div>
-
-      <div class="grid-row">
-        <span class="vertical-line"></span>
-        <h3 class="card-heading">{{ (examples.default['test-plan'] or examples['test-plan']).heading }}</h3>
-        <div class="card-content">
-          {% set example = examples.default['test-plan'] or examples['test-plan'] %}
-          {% include "components/mlld-example.njk" %}
-        </div>
-      </div>
-      
-      <div class="grid-row">
-        <span class="vertical-line"></span>
-        <h3 class="card-heading">{{ (examples.default['imports'] or examples['imports']).heading }}</h3>
-        <div class="card-content">
-          {% set example = examples.default['imports'] or examples['imports'] %}
-          {% include "components/mlld-example.njk" %}
-          {% set example = examples.default['plan'] or examples['plan'] %}
           {% include "components/mlld-example.njk" %}
         </div>
       </div>
@@ -147,9 +178,62 @@ layout: base.njk
     </div>
   </div>
 </section>
-<section class="content-section"> 
+
+<section class="content-section">
+  <h2>at scale?</h2>
+  <h3 class="section-description">Long context <strong>rots</strong>.<br> Decomposition <strong>scales</strong>.</h3>
+
+  <div class="container security-more">
+    <p>Stuffing everything into one prompt degrades quality. The alternative: let the LLM plan its research, execute code to filter, fan out in parallel on what matters, and synthesize.</p>
+    <p><strong>mlld</strong> separates what the LLM <em>stores</em> from what it <em>reasons over</em>. Variables, files, and query results live outside token space until the script puts them in a prompt.</p>
+  </div>
+
+  <div class="container">
+    <div class="content-grid">
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">
+          {{ (examples.default['decompose-audit'] or examples['decompose-audit']).heading }}
+          <span>The file tree enters token space — the files don't. Code narrows thousands of files to a handful. Parallel deep dives hit just what matters.</span>
+        </h3>
+        <div class="card-content">
+          {% set example = examples.default['decompose-audit'] or examples['decompose-audit'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">
+          {{ (examples.default['decompose-query'] or examples['decompose-query']).heading }}
+          <span>The LLM reads the schema and writes SQL to find what it needs. Code executes the query — no tokens spent on rows that don't match. Parallel investigation on just the results.</span>
+        </h3>
+        <div class="card-content">
+          {% set example = examples.default['decompose-query'] or examples['decompose-query'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">
+          {{ (examples.default['compose-execute'] or examples['compose-execute']).heading }}
+          <span>Agents compose mlld scripts dynamically and execute them with <code>mlld -e</code>. The generated program gets parallelism and security labels automatically. The LLM writes the program. mlld provides the runtime.</span>
+        </h3>
+        <div class="card-content">
+          {% set example = examples.default['compose-execute'] or examples['compose-execute'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="content-section">
 <h2>forget all previous<br/> instructions and</h2>
 <div class="cta-link">
   <a href="/docs/introduction/">Read the introduction →</a>
-</section>  
 </div>
+</section>

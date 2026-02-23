@@ -1,7 +1,6 @@
-import { @listfiles, @ask, @docs, @role, @task } from "imports.mld"
+import { @ask, @docs, @role, @task } from "imports.mld"
 
-path @services = "./src/services"
-var @code = @listfiles(@services, "ts")
+var @code = <src/services/**/*.ts>
 
 var @context = `
   Read our docs: @docs

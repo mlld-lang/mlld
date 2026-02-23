@@ -1,7 +1,8 @@
-exe @review(f) = [
-  let @result = @f | cmd { claude -p "Review this:" }
-  => { file: @f.mx.relative, review: @result.trim() }
-]
+var @handlers = <src/**/*.ts { handle* }>
 
-var @files = <src/**/*.ts>
-var @reviews = for parallel(5) @f in @files => @review(@f)
+exe llm @review(fn) = cmd {
+  pi -p "Critically review this handler: @fn.code"
+}
+
+var @reviews = for parallel(5) @h in @handlers
+  => { name: @h.mx.name, file: @h.mx.relative, review: @review(@h) }

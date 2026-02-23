@@ -1,5 +1,6 @@
-var @tests = run { npm test }
+var @tests = cmd { npm test }
 
-var @res = run { llm "What's broken here? @tests" }
+exe @opencode(prompt) = cmd { opencode -p "@prompt" }
 
-run { llm "Make a plan to fix @res" }
+var @diagnosis = @opencode("What's broken? @tests")
+show @opencode("Plan to fix: @diagnosis")

@@ -1,0 +1,11 @@
+exe llm @review(file) = cmd { codex -p "Review @file" }
+
+checkpoint "Phase 1: Review"
+
+var @reviews = for parallel(10) @f in <src/**/*.ts> [
+  => @review(@f.mx.relative)
+]
+
+checkpoint "Phase 2: Synthesis"
+
+var @report = @review("Synthesize findings: @reviews")

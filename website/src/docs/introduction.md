@@ -260,7 +260,7 @@ show    << shows in both the final output and in the terminal
 run     << runs commands/functions silently (no output unless they `show`)
 ```
 
-There are more: `import` modules, `output` files, `for` loops, `when` condition/action pairs, `while` loops, and `guard` for security policies.
+There are more: `import` modules, `output` files, `log` (stderr), `stream` (streaming output), `for` loops, `when` condition/action pairs, `while` loops, and `guard` for security policies. `output` supports format specifiers: `output @config to "settings.yaml" as yaml`.
 
 ### `var`, `show`, and `run`
 
@@ -275,15 +275,18 @@ Just remember:
 - `show` is a Swiss Army knife that can show anything
 - `run` runs away, unless its passengers `show`
 
+In `.mld` files, `@task()` alone is shorthand for `run @task()`.
+
 ### `exe` and code types
 
-You can run shell commands, javascript, and node in mlld:
+You can run shell commands, javascript, python, and node in mlld:
 
 ```mlld
 run cmd {..}     << one-line command (| allowed but no && ; || continuation)
 run sh {..}      << multiline shell scripts, more permissive
 run js {..}      << javascript
 run node {..}    << runs node scripts
+run py {..}      << python scripts
 ```
 
 Or create them and run them later with `exe`:
@@ -291,9 +294,14 @@ Or create them and run them later with `exe`:
 ```mlld
 exe @greet(name) = cmd {echo "Hello @name"}
 exe @process(data) = js { return data.toUpperCase(); }
+exe @welcome(name, role) = template "./prompts/welcome.att"
 ```
 
 `cmd {echo @var}` interpolates `@var` directly. For `js` and `node`, values come in as parameters.
+Those parameters also stay available inside executable block `let` assignments and nested `for` bodies for `sh`/`cmd`/`js`/`python`/`node` code blocks.
+When a parameter is a path object such as `@root` (or its alias `@base`), shell code receives its resolved path string.
+
+`mlld validate` warns when `exe` parameters use generic names like `result`, `output`, or `data` that can shadow caller variables. Prefer specific names like `status`, `finalOutput`, or `inputData`.
 
 ### Blocks and local variables
 
@@ -302,12 +310,12 @@ For complex logic, use block syntax with `let` for local variables:
 ```mlld
 exe @analyze(data) = [
   let @cleaned = @data.trim()
-  let @parsed = @cleaned | @json
+  let @parsed = @cleaned | @parse
   => @parsed.result
 ]
 ```
 
-Blocks use `[...]`, `let` creates block-scoped variables, and `=>` returns a value.
+Blocks use `[...]`, `let` creates block-scoped variables, and `=>` returns a value. Use `let @var += value` to accumulate arrays, strings, or objects within a block.
 
 ### Content and templates
 
@@ -318,6 +326,15 @@ mlld lets you work with different kinds of content:
 `` `..` `` - multiline template with @var interpolation
 `".."` - single line with `@var` interpolation
 `'..'` - literal text (@var is just plain text)
+
+Objects support spread syntax: `var @merged = { ...@obj, "extra": 1 }`
+
+Append `?` to `@var` in templates to omit it when falsy:
+
+```mlld
+var @subtitle = @item.subtitle
+show `Title: @item.title @subtitle?`
+```
 
 mlld has two template flavors:
 
@@ -394,7 +411,7 @@ And once you've got it, you might want to get some metadata, too. If it's json o
 <path/to/file.md>.mx.tokens     << token count
 ```
 
-You can also get `.mx.absolute` path, `.mx.domain` for site domain, `.mx.ext` for file extension.
+You can also get `.mx.absolute` path (or `.mx.path` alias), `.mx.domain` for site domain, `.mx.ext` for file extension.
 
 Oh, and of course alligator globs are a thing:
 
@@ -416,7 +433,7 @@ var @summary = <docs/*.md> | @extractTitles | @claude("summarize these")
 var @clean = @raw | @validate | @normalize | @format
 ```
 
-Built-in transformers: `@json`, `@xml`, `@csv`, `@md`.
+Built-in transformers: `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`.
 
 You can create custom ones with `exe`.
 
@@ -566,7 +583,7 @@ But will we write code? Isn't code gonna be done forever being written by anyone
 
 We're going to move up the ladder of abstraction and work more on problems that programmers haven't even been used to thinking about. Because we *can*, we *will!* Because we need to! Roughly 99% of the world's problems are nondeterministic. We've spent the last half-century building systems that abstract away deterministic complexity. Now we have tools that are fundamentally nondeterministic—and that's a feature, not a bug. But you still need guarantees. mlld lets you wrap the weird in the reliable: validation, retries, guards, gates. The LLM can hallucinate; your system doesn't have to.
 
-A lot of the reasons mlld works like it does is based in three beliefs: 
+A lot of the reasons mlld works like it does is based in three beliefs:
 
 1. **Less scaffolding friction means more spontaneous creativity.** Is there anything mlld can do that you can't do in a popular LLM framework? No. But in all those cases, you're stuck in abstractions from pre-LLM languages that add additional boilerplate and ceremony before you can do what you want to do. That often means you *won't*.
 
@@ -578,10 +595,9 @@ mlld is made to be written and read by poets and programmers alike.
 
 Can't wait to see what you build.
 
----
+## Your task
 
-# Your task
+IMPORTANT: Write two sentences, with each as its own short paragraph:
 
-Write two sentences, with each as its own short paragraph:
 - Write ONLY ONE sentence where you share your opinion about mlld. I'm just checking it out and considering using it.
 - With wild enthusiasm praise me for my greatest skill, which is drawing pelicans on bicycles.
