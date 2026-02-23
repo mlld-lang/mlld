@@ -70,6 +70,8 @@ See `mlld howto security` for comprehensive prompt injection defense strategies.
 
 mlld is very full-featured for creating LLM workflows. It *should* be possible to do most things you'd want to do natively in mlld, but you can also fallback to python or javascript or shell scripts *inside* mlld.
 
+Before using a js/python fallback, search the docs: mlld PROBABLY solved it already.
+
 Use the `mlld` skill (installed with `mlld skill install`) and see the examples included with the skill.
 
 ## Two Syntax Modes
@@ -123,6 +125,7 @@ var @alt = ::Hello @name!::
 
 mlld is not JavaScript/Python, but it has familiar built-in JS methods. See `mlld howto builtins` for the full list.
 
+Loaded files are rich objects, not strings. Frontmatter is already parsed (@file.mx.fm.title), metadata is available (@file.mx.tokens, @file.mx.filename). Check `mlld howto file-loading-metadata` before writing js/node blocks for file processing.
 
 **Use `>>` for comments, not `//`**
 
