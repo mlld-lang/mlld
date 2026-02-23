@@ -102,6 +102,30 @@ describe('tool collections', () => {
     ).rejects.toThrow(/cover required parameters/i);
   });
 
+  it('accepts optional values when they are exposed parameters', async () => {
+    const env = await interpretWithEnv(`
+      /exe @verify(vars: string) = js { return vars; }
+      /var tools @agentTools = {
+        verify: { mlld: @verify, expose: ["vars"], optional: ["vars"] }
+      }
+    `);
+
+    const toolsVar = env.getVariable('agentTools');
+    const collection = toolsVar?.internal?.toolCollection as ToolCollection;
+    expect(collection.verify.optional).toEqual(['vars']);
+  });
+
+  it('rejects optional values that are not exposed', async () => {
+    await expect(
+      interpretWithEnv(`
+        /exe @verify(vars: string) = js { return vars; }
+        /var tools @badTools = {
+          verify: { mlld: @verify, optional: ["vars"] }
+        }
+      `)
+    ).rejects.toThrow(/optional values require expose/i);
+  });
+
   it('does not evaluate net:r guards during var tools normalization', async () => {
     const env = await interpretWithEnv(`
       /guard @noSecretExfil before net:r = when [

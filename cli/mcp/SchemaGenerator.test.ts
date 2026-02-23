@@ -89,6 +89,28 @@ describe('SchemaGenerator', () => {
     expect(schema.inputSchema.required).toEqual(['title', 'body']);
   });
 
+  it('omits optional exposed parameters from required list', () => {
+    const execVar = createExecutableVariable(
+      'verify',
+      'code',
+      'return {};',
+      ['vars'],
+      'node',
+      source,
+      undefined
+    );
+
+    const schema = generateToolSchema('verify', execVar, {
+      expose: ['vars'],
+      optional: ['vars']
+    });
+
+    expect(schema.inputSchema.properties).toEqual({
+      vars: { type: 'string' }
+    });
+    expect(schema.inputSchema.required).toEqual([]);
+  });
+
   it('converts mlld names to MCP snake_case', () => {
     expect(mlldNameToMCPName('listIssues')).toBe('list_issues');
     expect(mlldNameToMCPName('createIssue')).toBe('create_issue');

@@ -3,7 +3,7 @@ import type { Variable } from '@core/types/variable';
 import { PersistentContentStore } from '@disreguard/sig';
 import { createSigContextForEnv } from '@core/security/sig-adapter';
 import { matchesAnyVariablePattern } from '@core/security/variable-glob';
-import { getSignatureContent } from './sign-verify';
+import { addSignedProvenanceLabel, getSignatureContent } from './sign-verify';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
 
 type AutosignConfig = {
@@ -154,4 +154,5 @@ export async function maybeAutosignVariable(
   const store = new PersistentContentStore(createSigContextForEnv(env));
   const content = getSignatureContent(variable);
   await store.signIfChanged(content, { id: identifier });
+  addSignedProvenanceLabel(variable, identifier);
 }

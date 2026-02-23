@@ -65,25 +65,6 @@ function makeGuardBlock(): GuardBlockNode {
   };
 }
 
-function isAutoverifyEnabled(policy: PolicyConfig): boolean {
-  return Boolean(policy.defaults?.autoverify);
-}
-
-function isMlldVerifyCommand(operation: { command?: string; metadata?: Record<string, unknown> }): boolean {
-  const metadataPreview = operation.metadata?.commandPreview;
-  const preview =
-    typeof metadataPreview === 'string'
-      ? metadataPreview
-      : typeof operation.command === 'string'
-        ? operation.command
-        : '';
-  if (!preview) {
-    return false;
-  }
-  const tokens = getCommandTokens(preview);
-  return tokens[0] === 'mlld' && tokens[1] === 'verify';
-}
-
 export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: string): PolicyGuardSpec[] {
   const guards: PolicyGuardSpec[] = [];
   const enabledRules = normalizeRuleList(policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
@@ -449,11 +430,6 @@ function isNetworkCommand(commandTokens: string[]): boolean {
 export function evaluateCommandAccess(policy: PolicyConfig, commandText: string): CommandAccessDecision {
   const commandTokens = getCommandTokens(commandText);
   const commandName = getCommandName(commandTokens, commandText);
-
-  // Allow mlld verify when autoverify is enabled (implicit capability)
-  if (isAutoverifyEnabled(policy) && commandTokens[0] === 'mlld' && commandTokens[1] === 'verify') {
-    return { allowed: true, commandName };
-  }
 
   const allow = policy.allow;
   const deny = policy.deny;

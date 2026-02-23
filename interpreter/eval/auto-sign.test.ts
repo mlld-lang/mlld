@@ -186,4 +186,38 @@ describe('auto-sign defaults', () => {
     const content = await fileSystem.readFile('/project/.sig/content/auditPrompt.sig.content');
     expect(content).toBe('Review @input');
   });
+
+  it('adds signed provenance labels and cascades them through composed instructions', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    let capturedEnv: any;
+    const source = `
+/var @policyConfig = {
+  defaults: {
+    autosign: ["instructions"]
+  }
+}
+/policy @p = union(@policyConfig)
+/var untrusted @data = "payload"
+/var @some = ::Instruction with @data::
+/var @prompt = ::Do @some::
+`.trim();
+
+    await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true,
+      captureEnvironment: env => {
+        capturedEnv = env;
+      }
+    });
+
+    const someVar = capturedEnv.getVariable('some');
+    const promptVar = capturedEnv.getVariable('prompt');
+    expect(someVar?.mx?.labels ?? []).toContain('signed:some');
+    expect(promptVar?.mx?.labels ?? []).toContain('signed:prompt');
+    expect(promptVar?.mx?.labels ?? []).toContain('signed:some');
+    expect(promptVar?.mx?.taint ?? []).toContain('untrusted');
+  });
 });

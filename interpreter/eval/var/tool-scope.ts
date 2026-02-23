@@ -119,6 +119,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
 
     const labels = normalizeStringArray(toolValue.labels, toolName, 'labels');
     const expose = normalizeStringArray(toolValue.expose, toolName, 'expose');
+    const optional = normalizeStringArray(toolValue.optional, toolName, 'optional');
     const bind = toolValue.bind;
     const boundKeys =
       bind && isPlainObject(bind)
@@ -142,6 +143,15 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       if (invalidExpose.length > 0) {
         throw new Error(
           `Tool '${toolName}' expose values must match parameters of '@${mlldName}': ${invalidExpose.join(', ')}`
+        );
+      }
+    }
+
+    if (optional) {
+      const invalidOptional = optional.filter(name => !paramSet.has(name));
+      if (invalidOptional.length > 0) {
+        throw new Error(
+          `Tool '${toolName}' optional values must match parameters of '@${mlldName}': ${invalidOptional.join(', ')}`
         );
       }
     }
@@ -177,12 +187,25 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       }
     }
 
+    if (optional) {
+      if (!expose) {
+        throw new Error(`Tool '${toolName}' optional values require expose to be set`);
+      }
+      const optionalOutsideExpose = optional.filter(name => !expose.includes(name));
+      if (optionalOutsideExpose.length > 0) {
+        throw new Error(
+          `Tool '${toolName}' optional values must be a subset of expose: ${optionalOutsideExpose.join(', ')}`
+        );
+      }
+    }
+
     collection[toolName] = {
       mlld: mlldName,
       ...(labels ? { labels } : {}),
       ...(description ? { description } : {}),
       ...(bind ? { bind } : {}),
-      ...(expose ? { expose } : {})
+      ...(expose ? { expose } : {}),
+      ...(optional ? { optional } : {})
     };
   }
 
@@ -208,7 +231,7 @@ function resolveToolMlldName(value: unknown, toolName: string): string {
 function normalizeStringArray(
   value: unknown,
   toolName: string,
-  field: 'labels' | 'expose'
+  field: 'labels' | 'expose' | 'optional'
 ): string[] | undefined {
   if (value === undefined) {
     return undefined;

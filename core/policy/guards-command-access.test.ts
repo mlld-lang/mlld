@@ -37,6 +37,17 @@ describe('evaluateCommandAccess', () => {
     expect(denied.reason).toContain("Command 'curl' denied by policy");
   });
 
+  it('does not implicitly allow mlld verify when autoverify is enabled', () => {
+    const policy: PolicyConfig = {
+      defaults: { autoverify: true },
+      allow: ['cmd:git:*']
+    };
+
+    const denied = evaluateCommandAccess(policy, 'mlld verify prompt');
+    expect(denied.allowed).toBe(false);
+    expect(denied.reason).toContain("Command 'mlld' denied by policy");
+  });
+
   it('denies matching commands before allow list', () => {
     const policy: PolicyConfig = {
       allow: ['cmd:npm:*'],

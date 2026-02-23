@@ -41,6 +41,18 @@ describe('/sign evaluation', () => {
     expect(signature.signedBy).toBe('alice');
     expect(signature.hash.startsWith('sha256:')).toBe(true);
   });
+
+  it('adds signed provenance labels on manual sign', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, '/project');
+    env.setVariable('prompt', makeTemplateVariable('prompt', 'Review @input'));
+
+    await evaluateSign(makeDirective('sign', 'prompt', 'sha256'), env);
+
+    const promptVar = env.getVariable('prompt');
+    expect(promptVar?.mx?.labels ?? []).toContain('signed:prompt');
+  });
 });
 
 function makeDirective(

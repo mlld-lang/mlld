@@ -8,13 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc83]
 
 ### Added
-- `autosign: ["instructions"]` as the primary autosign category. Aliases: `instruction`, `instruct`, `inst`, `templates` (backward compat).
+- `autosign` category renamed from `templates` to `instructions`. Aliases retained for backward compatibility: `instruction`, `instruct`, `inst`, `templates`.
 - `autosign: { labels: ["prompt"] }` signs variables with matching security labels.
 - `verify_all_instructions: true` policy shorthand for `defaults: { autosign: ["instructions"], autoverify: true }`.
 - Autoverify now only injects verification for variables marked as instructions, not all signed variables.
+- Autoverify now injects a scoped `verify` MCP tool when an `llm` executable runs under a tool collection.
+- `@mx.tools.results` now exposes per-tool latest results for guard checks.
+- Tool-collection schema supports `optional` exposed parameters; MCP required fields and runtime argument checks now respect optional parameters.
+- Verify tool responses now include structured pass/fail output with `allPassed`, per-variable `results`, and composition metadata (signed instruction provenance vs interpolated data taint/sources).
+- Signing now writes `signed:<var>` provenance labels; composed instruction variables inherit signed provenance for cascading verification targets.
 
 ### Fixed
 - `autosign` now signs all string literal syntaxes (`"..."`, backtick, `'...'`), not just `::` templates.
+- Removed implicit `mlld verify` command capability bypass under autoverify; verification enforcement now routes through tracked tool calls.
 - `env with { ... } [ ... ]` configless block syntax for `/env`.
 - `/exe` definitions now accept `env` blocks directly on the RHS (`/exe @fn(...) = env with { ... } [ ... ]`).
 - `@typeInfo(...)` builtin for rich type/provenance diagnostics, while `@typeof(...)` remains for simple type checks.

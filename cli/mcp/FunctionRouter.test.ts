@@ -4,6 +4,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import type { ToolCollection } from '@core/types/tools';
 
 async function createEnvironment(source: string): Promise<Environment> {
   const fileSystem = new MemoryFileSystem();
@@ -257,5 +258,47 @@ describe('FunctionRouter', () => {
     const router = new FunctionRouter({ environment });
     await expect(router.executeFunction('greet', { name: 'Ada' })).resolves.toBe('Hello Ada');
     await expect(router.executeFunction('greet', { name: 'Grace' })).rejects.toThrow('Too many calls');
+  });
+
+  it('supports optional exposed tool parameters', async () => {
+    const environment = await createEnvironment(`
+      /exe @verify(vars) = js {
+        return vars === undefined ? 'default' : vars;
+      }
+
+      /export { @verify }
+    `);
+
+    const toolCollection: ToolCollection = {
+      verify: { mlld: 'verify', expose: ['vars'], optional: ['vars'] }
+    };
+    const router = new FunctionRouter({ environment, toolCollection });
+
+    await expect(router.executeFunction('verify', {})).resolves.toBe('default');
+    await expect(router.executeFunction('verify', { vars: 'prompt' })).resolves.toBe('prompt');
+  });
+
+  it('tracks structured tool results in @mx.tools.results', async () => {
+    const environment = await createEnvironment(`
+      /guard @requirePassingVerify before op:exe = when [
+        @mx.tools.results.verify != null && @mx.tools.results.verify.allPassed == false => deny "verify failed"
+        * => allow
+      ]
+
+      /exe @verify(status) = js {
+        return { allPassed: status === 'ok', status };
+      }
+
+      /export { @verify }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    const firstResult = await router.executeFunction('verify', { status: 'bad' });
+    expect(JSON.parse(firstResult)).toMatchObject({ allPassed: false, status: 'bad' });
+
+    const toolsSnapshot = environment.getContextManager().getToolsSnapshot();
+    expect((toolsSnapshot.results as any).verify).toMatchObject({ allPassed: false, status: 'bad' });
+
+    await expect(router.executeFunction('verify', { status: 'ok' })).rejects.toThrow('verify failed');
   });
 });

@@ -88,7 +88,11 @@ export class FunctionRouter {
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
 
-        this.environment.recordToolCall({ ...callRecord, ok: true });
+        this.environment.recordToolCall({
+          ...callRecord,
+          ok: true,
+          result: this.toTrackedToolResult(result.value)
+        });
         return this.serializeResult(result.value);
       }
 
@@ -109,7 +113,11 @@ export class FunctionRouter {
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
 
-      this.environment.recordToolCall({ ...callRecord, ok: true });
+      this.environment.recordToolCall({
+        ...callRecord,
+        ok: true,
+        result: this.toTrackedToolResult(result.value)
+      });
       return this.serializeResult(result.value);
     } catch (error) {
       this.environment.recordToolCall({
@@ -248,6 +256,7 @@ export class FunctionRouter {
     const exposed = hasExpose
       ? definition.expose!
       : paramNames.filter(param => !boundKeys.includes(param));
+    const optionalSet = new Set(Array.isArray(definition.optional) ? definition.optional : []);
     const exposedSet = new Set(exposed);
 
     for (const key of Object.keys(args)) {
@@ -260,7 +269,8 @@ export class FunctionRouter {
     }
 
     if (exposed.length > 0) {
-      const missing = exposed.filter(key => !Object.prototype.hasOwnProperty.call(args, key));
+      const required = exposed.filter(key => !optionalSet.has(key));
+      const missing = required.filter(key => !Object.prototype.hasOwnProperty.call(args, key));
       if (missing.length > 0) {
         throw new Error(`Tool '${toolName}' requires parameters: ${missing.join(', ')}`);
       }
@@ -439,5 +449,12 @@ export class FunctionRouter {
     } catch {
       return String(value);
     }
+  }
+
+  private toTrackedToolResult(value: unknown): unknown {
+    if (isStructuredValue(value)) {
+      return asData(value);
+    }
+    return value;
   }
 }
