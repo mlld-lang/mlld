@@ -45,6 +45,28 @@ describe('auto-sign defaults', () => {
     expect(content).toBe('Evaluate @input');
   });
 
+  it('signs templates via verify_all_instructions shorthand', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/policy @p = { verify_all_instructions: true }
+/var @prompt = ::Evaluate @input::
+/var @quoted = "Also signed"
+/var @count = 42
+`.trim();
+
+    await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect(await fileSystem.exists('/project/.sig/content/prompt.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/quoted.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/count.sig.json')).toBe(false);
+  });
+
   it('signs variables matching autosign patterns', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();

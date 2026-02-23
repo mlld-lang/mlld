@@ -35,6 +35,29 @@ describe('PolicyConfig defaults', () => {
     );
   });
 
+  it('expands verify_all_instructions shorthand', () => {
+    const config = normalizePolicyConfig({
+      verify_all_instructions: true
+    } as PolicyConfig);
+
+    expect(config.defaults?.autosign).toEqual(['templates']);
+    expect(config.defaults?.autoverify).toBe(true);
+    expect((config as any).verify_all_instructions).toBeUndefined();
+  });
+
+  it('verify_all_instructions does not override explicit defaults', () => {
+    const config = normalizePolicyConfig({
+      verify_all_instructions: true,
+      defaults: {
+        autosign: { templates: true, variables: ['@*Prompt'] },
+        autoverify: 'template "./custom.att"'
+      }
+    } as PolicyConfig);
+
+    expect(config.defaults?.autosign).toEqual({ templates: true, variables: ['@*Prompt'] });
+    expect(config.defaults?.autoverify).toBe('template "./custom.att"');
+  });
+
   it('normalizes autosign autoverify and trustconflict', () => {
     const config = normalizePolicyConfig({
       defaults: {

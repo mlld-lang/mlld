@@ -64,6 +64,7 @@ export type PolicyCapabilitiesConfig = {
 export type PolicyOperations = Record<string, string>;
 
 export type PolicyConfig = {
+  verify_all_instructions?: boolean;
   defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
   auth?: Record<string, AuthConfig>;
@@ -147,6 +148,17 @@ export function mergePolicyConfigs(
 export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   if (!config) {
     return {};
+  }
+  if (config.verify_all_instructions === true) {
+    const { verify_all_instructions: _, ...rest } = config;
+    config = {
+      ...rest,
+      defaults: {
+        ...rest.defaults,
+        autosign: rest.defaults?.autosign ?? ['templates'],
+        autoverify: rest.defaults?.autoverify ?? true
+      }
+    };
   }
   const allowSources: Array<PolicyConfig['allow']> = [];
   const denySources: Array<PolicyConfig['deny']> = [];

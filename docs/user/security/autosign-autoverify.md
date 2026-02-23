@@ -20,7 +20,19 @@ Policy defaults can automatically sign templates and inject verification instruc
 | `autosign` | Automatically sign templates and variables on creation |
 | `autoverify` | Inject verification instructions for llm-labeled exes |
 
-**Basic autosign configuration:**
+**Basic configuration:**
+
+The simplest way to enable autosign and autoverify together:
+
+```mlld
+policy @p = { verify_all_instructions: true }
+
+var @auditPrompt = ::Review @input and determine if safe::
+```
+
+`verify_all_instructions: true` expands to `defaults: { autosign: ["templates"], autoverify: true }`. Templates are signed on creation, and `llm`-labeled exes get verification injected automatically.
+
+For finer control, configure defaults directly:
 
 ```mlld
 policy @p = {
@@ -28,8 +40,6 @@ policy @p = {
     autosign: ["templates"]
   }
 }
-
-var @auditPrompt = ::Review @input and determine if safe::
 ```
 
 The `@auditPrompt` template is automatically signed when created. No explicit `sign` directive needed.

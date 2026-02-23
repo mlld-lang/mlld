@@ -20,16 +20,13 @@ Policy defaults automatically sign templates and inject verification for LLM exe
 **Basic configuration:**
 
 ```mlld
-policy @p = {
-  defaults: {
-    autosign: ["templates"],
-    autoverify: true
-  }
-}
+policy @p = { verify_all_instructions: true }
 
 var @auditPrompt = ::Review @input for safety::
 exe llm @audit(input) = run cmd { claude -p "@auditPrompt" }
 ```
+
+`verify_all_instructions: true` expands to `defaults: { autosign: ["templates"], autoverify: true }`. Explicit `defaults` values take precedence over the shorthand.
 
 The template is auto-signed on creation. When `@audit()` runs, mlld injects `MLLD_VERIFY_VARS='auditPrompt'` and prepends verification instructions.
 
