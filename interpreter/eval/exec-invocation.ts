@@ -1373,9 +1373,25 @@ async function evaluateExecInvocationInternal(
     }
   }
   const mcpToolLabels = (node as any).meta?.mcpToolLabels;
-  const toolLabels = Array.isArray(mcpToolLabels)
+  let toolLabels = Array.isArray(mcpToolLabels)
     ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
     : [];
+  if (toolLabels.length === 0) {
+    const scopedConfig = env.getScopedEnvironmentConfig();
+    const tools = scopedConfig?.tools;
+    if (tools && typeof tools === 'object' && !Array.isArray(tools)) {
+      const exeName = variable.name ?? commandName;
+      for (const entry of Object.values(tools as Record<string, any>)) {
+        if (entry && typeof entry === 'object' && entry.mlld === exeName) {
+          const labels = entry.labels;
+          if (Array.isArray(labels)) {
+            toolLabels = labels.filter((l: unknown) => typeof l === 'string' && (l as string).length > 0);
+          }
+          break;
+        }
+      }
+    }
+  }
   const trackedMcpName =
     typeof (mcpTool as any)?.name === 'string' && (mcpTool as any).name.trim().length > 0
       ? (mcpTool as any).name.trim()
