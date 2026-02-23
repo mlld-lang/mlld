@@ -155,7 +155,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
       ...rest,
       defaults: {
         ...rest.defaults,
-        autosign: rest.defaults?.autosign ?? ['templates'],
+        autosign: rest.defaults?.autosign ?? ['instructions'],
         autoverify: rest.defaults?.autoverify ?? true
       }
     };

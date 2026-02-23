@@ -10,11 +10,11 @@ related-code: [core/security/sig-adapter.ts, interpreter/eval/auto-sign.ts, inte
 updated: 2026-02-01
 ---
 
-Policy defaults automatically sign templates and inject verification for LLM exes, eliminating boilerplate while maintaining cryptographic integrity.
+Policy defaults automatically sign instruction variables and inject verification for LLM exes, eliminating boilerplate while maintaining cryptographic integrity.
 
 | Default | Purpose |
 |---------|---------|
-| `autosign` | Sign templates/variables on creation |
+| `autosign` | Sign instructions/variables on creation |
 | `autoverify` | Inject verification for llm-labeled exes |
 
 **Basic configuration:**
@@ -26,27 +26,28 @@ var @auditPrompt = ::Review @input for safety::
 exe llm @audit(input) = run cmd { claude -p "@auditPrompt" }
 ```
 
-`verify_all_instructions: true` expands to `defaults: { autosign: ["templates"], autoverify: true }`. Explicit `defaults` values take precedence over the shorthand.
+`verify_all_instructions: true` expands to `defaults: { autosign: ["instructions"], autoverify: true }`. Explicit `defaults` values take precedence over the shorthand.
 
-The template is auto-signed on creation. When `@audit()` runs, mlld injects `MLLD_VERIFY_VARS='auditPrompt'` and prepends verification instructions.
+The instruction is auto-signed on creation. When `@audit()` runs, mlld injects verification instructions for instruction-marked variables.
 
 **What gets auto-signed:**
 
-With `autosign: ["templates"]`:
+With `autosign: ["instructions"]` (aliases: `instruction`, `instruct`, `inst`, `templates`):
 - All string literals (`::`, `` ` ``, `"`, `'`)
 - Templates from `.att` files
 - Executables returning templates
 
-**Pattern-based autosign:**
+**Label-based autosign:**
 
 ```mlld
 autosign: {
-  templates: true,
-  variables: ["@*Prompt", "@*Instructions"]
+  instructions: true,
+  labels: ["prompt", "system"],
+  variables: ["@*Prompt"]
 }
 ```
 
-Variables matching patterns are signed even if not templates.
+Variables with matching labels or name patterns are also signed and marked as instructions.
 
 **Autoverify options:**
 

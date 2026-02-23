@@ -30,43 +30,46 @@ policy @p = { verify_all_instructions: true }
 var @auditPrompt = ::Review @input and determine if safe::
 ```
 
-`verify_all_instructions: true` expands to `defaults: { autosign: ["templates"], autoverify: true }`. Templates are signed on creation, and `llm`-labeled exes get verification injected automatically.
+`verify_all_instructions: true` expands to `defaults: { autosign: ["instructions"], autoverify: true }`. Instructions are signed on creation, and `llm`-labeled exes get verification injected automatically.
 
 For finer control, configure defaults directly:
 
 ```mlld
 policy @p = {
   defaults: {
-    autosign: ["templates"]
+    autosign: ["instructions"]
   }
 }
 ```
 
-The `@auditPrompt` template is automatically signed when created. No explicit `sign` directive needed.
+The `@auditPrompt` variable is automatically signed when created. No explicit `sign` directive needed.
+
+Aliases for `"instructions"`: `instruction`, `instruct`, `inst`, `templates` (backward compat).
 
 **What gets auto-signed:**
 
-With `autosign: ["templates"]`, these are signed automatically:
+With `autosign: ["instructions"]`, these are signed automatically:
 
 - All string literals (`::`, `` ` ``, `"`, `'`)
 - Templates from `.att` files
 - Executables that return templates via `template` directive
 
-**Pattern-based autosign:**
+**Label and pattern-based autosign:**
 
-Sign variables matching specific name patterns:
+Sign variables matching specific labels or name patterns:
 
 ```mlld
 policy @p = {
   defaults: {
     autosign: {
-      templates: true,
-      variables: ["@*Prompt", "@*Instructions"]
+      instructions: true,
+      labels: ["prompt", "system"],
+      variables: ["@*Prompt"]
     }
   }
 }
 
-var @auditPrompt = "Check this"
+var prompt @auditPrompt = "Check this"
 var @systemInstructions = "Follow these rules"
 var @otherData = "Not signed"
 ```

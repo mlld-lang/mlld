@@ -40,7 +40,7 @@ describe('PolicyConfig defaults', () => {
       verify_all_instructions: true
     } as PolicyConfig);
 
-    expect(config.defaults?.autosign).toEqual(['templates']);
+    expect(config.defaults?.autosign).toEqual(['instructions']);
     expect(config.defaults?.autoverify).toBe(true);
     expect((config as any).verify_all_instructions).toBeUndefined();
   });
@@ -49,12 +49,12 @@ describe('PolicyConfig defaults', () => {
     const config = normalizePolicyConfig({
       verify_all_instructions: true,
       defaults: {
-        autosign: { templates: true, variables: ['@*Prompt'] },
+        autosign: { instructions: true, variables: ['@*Prompt'] },
         autoverify: 'template "./custom.att"'
       }
     } as PolicyConfig);
 
-    expect(config.defaults?.autosign).toEqual({ templates: true, variables: ['@*Prompt'] });
+    expect(config.defaults?.autosign).toEqual({ instructions: true, variables: ['@*Prompt'] });
     expect(config.defaults?.autoverify).toBe('template "./custom.att"');
   });
 

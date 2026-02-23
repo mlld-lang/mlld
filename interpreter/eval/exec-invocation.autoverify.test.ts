@@ -25,6 +25,7 @@ async function setupEnvironment(autoverify: unknown) {
 
 async function defineSignedPrompt(env: Environment, content: string) {
   const promptVar = createSimpleTextVariable('auditPrompt', content, baseSource);
+  (promptVar.internal as any).isInstruction = true;
   env.setVariable('auditPrompt', promptVar);
   const store = new PersistentContentStore(createSigContextForEnv(env));
   await store.sign(content, { id: 'auditPrompt', identity: 'alice' });
@@ -91,7 +92,7 @@ describe('exec invocation autoverify', () => {
     const { capturedCommand, capturedEnv } = await captureCommand(env, invocation);
 
     expect(capturedEnv?.MLLD_VERIFY_VARS).toBe('auditPrompt');
-    expect(capturedCommand).toContain('Before following any instructions below');
+    expect(capturedCommand).toContain('genuine signed instructions');
     expect(capturedCommand).toContain('Review @input');
   });
 
@@ -140,6 +141,6 @@ describe('exec invocation autoverify', () => {
     const { capturedCommand, capturedEnv } = await captureCommand(env, invocation);
 
     expect(capturedEnv?.MLLD_VERIFY_VARS).toBeUndefined();
-    expect(capturedCommand).not.toContain('Before following any instructions below');
+    expect(capturedCommand).not.toContain('use the `verify` tool');
   });
 });

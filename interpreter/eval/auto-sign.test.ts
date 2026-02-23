@@ -12,13 +12,13 @@ const pathContext = {
 };
 
 describe('auto-sign defaults', () => {
-  it('signs template variables when autosign includes templates', async () => {
+  it('signs instruction variables with autosign instructions', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
     const source = `
 /var @policyConfig = {
   defaults: {
-    autosign: ["templates"]
+    autosign: ["instructions"]
   }
 }
 /policy @p = union(@policyConfig)
@@ -43,6 +43,28 @@ describe('auto-sign defaults', () => {
     expect(await fileSystem.exists('/project/.sig/content/count.sig.json')).toBe(false);
     const content = await fileSystem.readFile('/project/.sig/content/prompt.sig.content');
     expect(content).toBe('Evaluate @input');
+  });
+
+  it('accepts instruction aliases: templates, inst, instruct', async () => {
+    for (const alias of ['templates', 'inst', 'instruct', 'instruction']) {
+      const fileSystem = new MemoryFileSystem();
+      const pathService = new PathService();
+      const source = `/var @cfg = { defaults: { autosign: ["${alias}"] } }
+/policy @p = union(@cfg)
+/var @prompt = ::test::`;
+
+      await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      });
+
+      expect(
+        await fileSystem.exists('/project/.sig/content/prompt.sig.json'),
+        `alias "${alias}" should sign instructions`
+      ).toBe(true);
+    }
   });
 
   it('signs templates via verify_all_instructions shorthand', async () => {
@@ -92,6 +114,33 @@ describe('auto-sign defaults', () => {
 
     expect(await fileSystem.exists('/project/.sig/content/auditPrompt.sig.json')).toBe(true);
     expect(await fileSystem.exists('/project/.sig/content/auditInstructions.sig.json')).toBe(false);
+  });
+
+  it('signs variables matching autosign labels', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/var @policyConfig = {
+  defaults: {
+    autosign: {
+      labels: ["prompt"]
+    }
+  }
+}
+/policy @p = union(@policyConfig)
+/var prompt @signed = 42
+/var @unsigned = 42
+`.trim();
+
+    await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect(await fileSystem.exists('/project/.sig/content/signed.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/unsigned.sig.json')).toBe(false);
   });
 
   it('signs .att content when autosign templates is enabled', async () => {

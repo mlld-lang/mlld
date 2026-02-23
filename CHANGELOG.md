@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc83]
 
-### Fixed
-- `autosign: ["templates"]` now signs quoted strings (`"..."`), backtick templates, and single-quoted strings (`'...'`), not just `::` templates.
-
 ### Added
-- `verify_all_instructions: true` policy shorthand for `defaults: { autosign: ["templates"], autoverify: true }`.
+- `autosign: ["instructions"]` as the primary autosign category. Aliases: `instruction`, `instruct`, `inst`, `templates` (backward compat).
+- `autosign: { labels: ["prompt"] }` signs variables with matching security labels.
+- `verify_all_instructions: true` policy shorthand for `defaults: { autosign: ["instructions"], autoverify: true }`.
+- Autoverify now only injects verification for variables marked as instructions, not all signed variables.
+
+### Fixed
+- `autosign` now signs all string literal syntaxes (`"..."`, backtick, `'...'`), not just `::` templates.
 - `env with { ... } [ ... ]` configless block syntax for `/env`.
 - `/exe` definitions now accept `env` blocks directly on the RHS (`/exe @fn(...) = env with { ... } [ ... ]`).
 - `@typeInfo(...)` builtin for rich type/provenance diagnostics, while `@typeof(...)` remains for simple type checks.
