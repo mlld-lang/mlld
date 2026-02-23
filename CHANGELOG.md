@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sh(@var) { ... }` syntax support in `exe` definitions (previously run-only).
 - Standalone `/auth @name = ...` directive for top-level credential declarations, including short form (`"API_KEY"`) and object forms (`{ from, as }`).
 - Exported executables now capture module auth bindings so imported `using auth:name` works without requiring callers to import policy objects.
+- AST selector results now mirror metadata on `.mx` (`name`, `type`, `line`), and glob selectors populate source path metadata on `.mx.relative` while retaining top-level selector fields.
 
 ### Fixed
 - `mlld publish` for directory modules now constructs correct raw GitHub URLs; previously `detectGitInfo` received the directory path instead of the entry file path, producing a `/.` base path that made URL verification fail.

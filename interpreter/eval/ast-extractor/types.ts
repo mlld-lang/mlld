@@ -61,6 +61,14 @@ export interface AstResult {
   type: string;
   line: number;
   file?: string;
+  relative?: string;
+  mx?: {
+    name: string;
+    type: string;
+    line: number;
+    relative?: string;
+    file?: string;
+  };
 }
 
 export interface Definition {

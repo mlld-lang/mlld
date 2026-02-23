@@ -98,4 +98,43 @@ describe('For expression - load-content metadata', () => {
     expect(isStructuredValue(item)).toBe(true);
     expect((item as any).mx?.filename).toBe('a.md');
   });
+
+  it('propagates AST selector mx metadata through indexing and for-loop bindings', async () => {
+    await fs.mkdir(path.join(tempDir, 'src'), { recursive: true });
+    await fs.writeFile(
+      path.join(tempDir, 'src', 'api.ts'),
+      [
+        'export function handlePing() {',
+        '  return 1;',
+        '}'
+      ].join('\n')
+    );
+
+    const src = [
+      '/var @handlers = <src/**/*.ts { handle* }>',
+      '/var @firstName = @handlers[0].name',
+      '/var @firstMxName = @handlers[0].mx.name',
+      '/var @firstMxType = @handlers[0].mx.type',
+      '/var @firstMxLine = @handlers[0].mx.line',
+      '/var @firstMxRelative = @handlers[0].mx.relative',
+      '/var @summary = for @h in @handlers => "@h.mx.name in @h.mx.relative"'
+    ].join('\n');
+
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const firstName = await extractVariableValue(env.getVariable('firstName')!, env);
+    const firstMxName = await extractVariableValue(env.getVariable('firstMxName')!, env);
+    const firstMxType = await extractVariableValue(env.getVariable('firstMxType')!, env);
+    const firstMxLine = await extractVariableValue(env.getVariable('firstMxLine')!, env);
+    const firstMxRelative = await extractVariableValue(env.getVariable('firstMxRelative')!, env);
+    const summary = await extractVariableValue(env.getVariable('summary')!, env);
+
+    expect(firstName).toBe('handlePing');
+    expect(firstMxName).toBe('handlePing');
+    expect(firstMxType).toBe('function');
+    expect(firstMxLine).toBe(1);
+    expect(firstMxRelative).toBe(`./${path.join('src', 'api.ts')}`);
+    expect(summary).toEqual([`handlePing in ./${path.join('src', 'api.ts')}`]);
+  });
 });
