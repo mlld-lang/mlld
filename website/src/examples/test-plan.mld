@@ -1,6 +1,6 @@
 var @tests = cmd { npm test }
 
-exe @opencode(prompt) = cmd { opencode -p "@prompt" }
+exe @ask(prompt) = cmd { opencode run "@prompt" }
 
-var @diagnosis = @opencode("What's broken? @tests")
-show @opencode("Plan to fix: @diagnosis")
+var @diagnosis = @ask("What's broken? @tests")
+show @ask("Plan to fix: @diagnosis")

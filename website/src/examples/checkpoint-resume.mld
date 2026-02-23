@@ -1,4 +1,4 @@
-exe llm @review(file) = cmd { codex -p "Review @file" }
+exe llm @review(file) = cmd { codex exec "Review @file" }
 
 checkpoint "Phase 1: Review"
 

@@ -14,6 +14,6 @@ var @task = {
   roadmap: "Create a roadmap based on highest priority"
 }
 
-exe @ask(context, role, task) = cmd { codex -p "@role @task\n\nContext:\n@context" }
+exe @ask(context, role, task) = cmd { codex exec "@role @task\n\nContext:\n@context" }
 
 export { @docs, @role, @task, @ask }
