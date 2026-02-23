@@ -1,5 +1,10 @@
-/exe net:r,untrusted @verifyGateGetIssue(number: number) = `{"number":@number,"title":"Bug report"}`
+/exe net:r @verifyGateGetIssue(number: number) = `{"number":@number,"title":"Bug report"}`
 /exe @verifyGateVerify(data) = `verified: @data`
+
+/var tools @verifyGateTools = {
+  read:   { mlld: @verifyGateGetIssue, labels: ["untrusted"] },
+  verify: { mlld: @verifyGateVerify }
+}
 
 /guard before publishes = when [
   @mx.taint.includes("untrusted") && !@mx.tools.calls.includes("verifyGateVerify")
@@ -12,7 +17,12 @@
   * => `published: @data`
 ]
 
-/var @verifyGateIssue = @verifyGateGetIssue(42)
+/exe @verifyGateReadIssue(tools) = env with { tools: @tools } [
+  let @issue = @verifyGateGetIssue(42)
+  => @issue
+]
+
+/var @verifyGateIssue = @verifyGateReadIssue(@verifyGateTools)
 
 /show @mx.tools.calls.includes("verifyGateGetIssue")
 /show @mx.tools.calls.includes("verifyGateVerify")

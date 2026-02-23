@@ -1,4 +1,4 @@
-/exe net:r,untrusted @envTaintRead(owner: string, repo: string, number: number) = `{"number": @number, "title": "Fix bug"}`
+/exe net:r @envTaintRead(owner: string, repo: string, number: number) = `{"number": @number, "title": "Fix bug"}`
 /exe net:rw @envTaintComment(owner: string, repo: string, number: number, comment: string) = `{"id": 1, "body": "@comment"}`
 
 /var tools @envTaintTools = {

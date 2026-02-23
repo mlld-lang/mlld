@@ -3,8 +3,8 @@
 }
 /policy @airlockCompPolicy = union(@airlockCompPolicyConfig)
 
-/exe net:r,untrusted @airlockCompSearch(query: string) = `{"results":["tainted data"]}`
-/exe net:rw,destructive @airlockCompClose(number: number) = `closed: @number`
+/exe net:r @airlockCompSearch(query: string) = `{"results":["tainted data"]}`
+/exe net:rw @airlockCompClose(number: number) = `closed: @number`
 
 /var tools @airlockCompTools = {
   search: { mlld: @airlockCompSearch, labels: ["untrusted"] },

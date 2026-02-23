@@ -3,7 +3,19 @@
 }
 /policy @guardDenyPolicy = union(@guardDenyPolicyConfig)
 
-/exe net:r,untrusted @guardDenyGetIssue(owner: string, repo: string, number: number) = `{"number": @number, "title": "Fix bug"}`
+/exe net:r @guardDenyGetIssue(owner: string, repo: string, number: number) = `{"number": @number, "title": "Fix bug"}`
+
+/var tools @guardDenyTools = {
+  read: { mlld: @guardDenyGetIssue, labels: ["untrusted"] }
+}
+
+/exe @guardDenyReadIssue(tools) = env with { tools: @tools } [
+  let @issue = @guardDenyGetIssue("mlld-lang", "mlld", 1)
+  => @issue
+]
+
+/var @guardDenyIssue = @guardDenyReadIssue(@guardDenyTools)
+/show @guardDenyIssue.mx.taint.includes("untrusted")
 
 /exe llm @guardDenyAgent(data) = run cmd { printf "@data" }
 
@@ -17,9 +29,6 @@
   denied => `BLOCKED: @mx.guard.reason`
   * => `published: @data`
 ]
-
-/var @guardDenyIssue = @guardDenyGetIssue("mlld-lang", "mlld", 1)
-/show @guardDenyIssue.mx.taint.includes("untrusted")
 
 /var @guardDenyProcessed = @guardDenyAgent(@guardDenyIssue)
 /var @guardDenyProcessedLabels = @guardDenyProcessed.mx.labels
