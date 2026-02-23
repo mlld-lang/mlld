@@ -1,0 +1,35 @@
+>> Live test: guard-mcp-tools with real @mlld/gh-issues module
+>> Validates guard blocking and taint propagation end-to-end
+
+import { @getIssue, @addComment } from @mlld/gh-issues
+
+var tools @guardLiveTriageTools = {
+  read:    { mlld: @getIssue, labels: ["untrusted"] },
+  comment: { mlld: @addComment, labels: ["publishes"] }
+}
+
+guard before publishes = when [
+  @mx.taint.includes("untrusted") && !@mx.tools.calls.includes("verify")
+    => deny "Must verify instructions before publishing"
+  * => allow
+]
+
+>> Read an issue — gets untrusted taint from exe net:r label
+var @guardLiveIssue = @getIssue("mlld-lang", "modules", 1)
+show `read taint: @guardLiveIssue.mx.taint.includes("untrusted")`
+show `read has net:r: @guardLiveIssue.mx.taint.includes("net:r")`
+
+>> Publishes-labeled exe with denied handler
+exe publishes @guardLivePublish(data) = when [
+  denied => `BLOCKED: @mx.guard.reason`
+  * => `published: @data`
+]
+
+>> Untrusted data -> publishes: blocked
+var @guardLiveDenied = @guardLivePublish(@guardLiveIssue)
+show @guardLiveDenied
+
+>> Clean data -> publishes: allowed
+var @guardLiveClean = "safe data"
+var @guardLiveAllowed = @guardLivePublish(@guardLiveClean)
+show @guardLiveAllowed
