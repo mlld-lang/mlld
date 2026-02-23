@@ -459,7 +459,7 @@ async function handleCommandRefDefinition(
     ...directive,
     values: {
       ...directive.values,
-      identifier: [{ type: 'Text', content: refCommand }],
+      identifier: [{ type: 'VariableReference', identifier: refCommand }],
       args: (definition as any).commandArgs
     }
   };

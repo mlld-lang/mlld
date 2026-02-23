@@ -396,9 +396,8 @@ describe('evaluateRun phase-0 characterization', () => {
       successEnv
     );
 
-    await expect(evaluateRun(successRun, successEnv)).rejects.toThrow(
-      'Run exec directive identifier must be a command reference'
-    );
+    const result = await evaluateRun(successRun, successEnv);
+    expect(String(result.value)).toBe('base');
 
     const circularEnv = createEnv();
     const circularRun = await setupSingleRun(
