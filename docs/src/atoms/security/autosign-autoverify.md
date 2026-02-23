@@ -36,7 +36,7 @@ The template is auto-signed on creation. When `@audit()` runs, mlld injects `MLL
 **What gets auto-signed:**
 
 With `autosign: ["templates"]`:
-- Template literals (`::` syntax)
+- All string literals (`::`, `` ` ``, `"`, `'`)
 - Templates from `.att` files
 - Executables returning templates
 

@@ -91,6 +91,9 @@ function isTemplateCategoryVariable(variable: Variable): boolean {
   if (variable.type === 'template') {
     return true;
   }
+  if (variable.source?.syntax === 'template' || variable.source?.wrapperType === 'singleQuote') {
+    return true;
+  }
   if (variable.type === 'executable') {
     const execDef = (variable.internal as any)?.executableDef;
     if (execDef && typeof execDef === 'object' && execDef.type === 'template') {

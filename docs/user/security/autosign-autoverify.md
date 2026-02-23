@@ -38,7 +38,7 @@ The `@auditPrompt` template is automatically signed when created. No explicit `s
 
 With `autosign: ["templates"]`, these are signed automatically:
 
-- Template literals using `::` syntax
+- All string literals (`::`, `` ` ``, `"`, `'`)
 - Templates from `.att` files
 - Executables that return templates via `template` directive
 

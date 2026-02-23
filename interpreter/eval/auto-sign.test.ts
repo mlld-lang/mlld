@@ -23,7 +23,10 @@ describe('auto-sign defaults', () => {
 }
 /policy @p = union(@policyConfig)
 /var @prompt = ::Evaluate @input::
-/var @plain = "plain"
+/var @backtickPrompt = \`Evaluate this\`
+/var @quotedPrompt = "Evaluate that"
+/var @singleQuoted = 'Also signed'
+/var @count = 42
 `.trim();
 
     await interpret(source, {
@@ -34,7 +37,10 @@ describe('auto-sign defaults', () => {
     });
 
     expect(await fileSystem.exists('/project/.sig/content/prompt.sig.json')).toBe(true);
-    expect(await fileSystem.exists('/project/.sig/content/plain.sig.json')).toBe(false);
+    expect(await fileSystem.exists('/project/.sig/content/backtickPrompt.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/quotedPrompt.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/singleQuoted.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/count.sig.json')).toBe(false);
     const content = await fileSystem.readFile('/project/.sig/content/prompt.sig.content');
     expect(content).toBe('Evaluate @input');
   });
