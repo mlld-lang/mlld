@@ -34,14 +34,38 @@ import "@payload" as @p
 var @topic = @p.topic ? @p.topic : ""
 var @topics = @p.topics ? @p.topics : ""
 var @tier = @p.tier ? @p.tier : ""
+var @isNew = @p.new ? true : false
 
 >> Shell helpers
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }
 
->> Run directory — fixed per run (checkpoint handles resumption)
+>> Run directory — auto-increments when previous run is complete
 var @qaRoot = "@base/qa/runs"
 var @today = @now.slice(0, 10)
-var @runDir = `@qaRoot/@today`
+
+>> Resolve run directory: auto-increment when previous run is complete or --new
+exe @nextIteration(qaRoot, today, n) = [
+  when @exists(`@qaRoot/@today-@n`) => @nextIteration(@qaRoot, @today, @n + 1)
+  => `@qaRoot/@today-@n`
+]
+
+exe @nextCompleteIteration(qaRoot, today, n) = [
+  when @exists(`@qaRoot/@today-@n/phase4-done.marker`) => @nextCompleteIteration(@qaRoot, @today, @n + 1)
+  => `@qaRoot/@today-@n`
+]
+
+exe @resolveRunDir(qaRoot, today, forceNew) = [
+  >> If --new, always find next unused iteration
+  when @forceNew => @nextIteration(@qaRoot, @today, 2)
+  >> If base dir doesn't exist, use it
+  when !@exists(`@qaRoot/@today`) => `@qaRoot/@today`
+  >> If base dir is incomplete, resume it
+  when !@exists(`@qaRoot/@today/phase4-done.marker`) => `@qaRoot/@today`
+  >> Base is complete — find next incomplete iteration
+  => @nextCompleteIteration(@qaRoot, @today, 2)
+]
+
+var @runDir = @resolveRunDir(@qaRoot, @today, @isNew)
 run @mkdirp(`@runDir/topics`)
 
 >> Store git commit for future triage diffing
