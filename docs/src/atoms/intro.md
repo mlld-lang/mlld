@@ -12,7 +12,8 @@ updated: 2026-02-15
 
 ```
 mlld howto                 Browse all documentation topics
-mlld howto grep <pattern>  Search docs for keywords
+mlld howto <keyword>       Search by keyword (searches tags, titles, briefs)
+mlld howto grep <pattern>  Full-text search across all docs
 mlld validate <dir>        Validate all mlld files in a directory (recommended)
 mlld validate <file>       Validate a single file
 ```

@@ -1,7 +1,7 @@
 ---
 updated: 2026-01-05
 tags: #docs, #llm, #llms-txt, #atoms
-related-docs: docs/dev/DOCS.md, docs/dev/DOCS-DEV.md, docs/dev/DOCS-USER.md, docs/dev/HOWTO-PATTERN.md
+related-docs: docs/dev/DOCS.md, docs/dev/DOCS-DEV.md, docs/dev/DOCS-CLI.md
 related-code: llms.txt, docs/llm/, docs/src/atoms/, docs/build/llm/, llm/run/llmstxt.mld
 ---
 
@@ -278,7 +278,7 @@ updated: 2026-01-05
 Content here with code examples...
 ```
 
-See [HOWTO-PATTERN.md](HOWTO-PATTERN.md) for full atom specification.
+See [DOCS-CLI.md](DOCS-CLI.md) for full atom specification.
 
 ## Build Scripts
 
@@ -370,6 +370,6 @@ Version should match mlld release version.
 - **docs/dev/DOCS.md** - Unified documentation guide (entrypoint)
 - **docs/dev/DOCS-DEV.md** - Developer-facing documentation principles
 - **docs/dev/DOCS-USER.md** - User-facing documentation guide
-- **docs/dev/HOWTO-PATTERN.md** - Full atom pattern specification
+- **docs/dev/DOCS-CLI.md** - Full atom pattern specification
 - **docs/user/** - Detailed user documentation
 - **tests/cases/valid/feat/** - Comprehensive test cases

@@ -1,24 +1,40 @@
 ---
-updated: 2026-01-05
+updated: 2026-02-23
 tags: #docs, #meta
-related-docs: docs/dev/DOCS-DEV.md, docs/dev/DOCS-USER.md, docs/dev/DOCS-LLM.md, docs/dev/HOWTO-PATTERN.md
+related-docs: docs/dev/DOCS-DEV.md, docs/dev/DOCS-LLM.md, docs/dev/DOCS-CLI.md
 ---
 
 # Documentation
 
 ## tldr
 
-When updating docs, ensure coverage for all audiences. "Update the docs" means checking all three: dev, user, LLM.
+All reference docs come from **atoms** (`docs/src/atoms/`). Article-style conceptual docs live in **explainers** (`docs/src/explainers/`). Both feed into the website, `mlld howto`, and `docs/llm/`.
 
-LLM docs use an atom-based system - update atoms in `docs/src/atoms/`, not the final `docs/llm/*.txt` files directly. See [HOWTO-PATTERN.md](HOWTO-PATTERN.md) for the full pattern.
+## Content Types
 
-## Audiences
+| Type | Location | Purpose |
+|------|----------|---------|
+| **Atoms** | `docs/src/atoms/` | Reference: "how does X work?" One concept per file, code-first |
+| **Explainers** | `docs/src/explainers/` | Conceptual: "why does X work this way?" Article-style narrative |
+| **Examples** | `docs/src/examples/` (planned) | Applied: complete working projects showing features in composition |
 
-| Audience | Location | Guide |
-|----------|----------|-------|
-| Developers | `docs/dev/` | [DOCS-DEV.md](DOCS-DEV.md) |
-| Users | `docs/user/` → website | [DOCS-USER.md](DOCS-USER.md) |
-| LLMs | `docs/src/atoms/` → `docs/llm/` | [DOCS-LLM.md](DOCS-LLM.md) |
+## Delivery Channels
+
+| Channel | Access Pattern | Source |
+|---------|---------------|--------|
+| `mlld howto <topic>` | CLI, interactive | Atoms (keyword search across id, tags, title, brief) |
+| Website | Browser | Atoms + explainers, organized by category |
+| `llms.txt` | Web, token-efficient | Curated entry point for LLMs without CLI access |
+| `llms-combined.txt` | Web, comprehensive | All atoms assembled |
+| `docs/dev/` | Developer reference | Architecture, internals |
+
+## Guides
+
+| Guide | Covers |
+|-------|--------|
+| [DOCS-DEV.md](DOCS-DEV.md) | Developer documentation style |
+| [DOCS-LLM.md](DOCS-LLM.md) | LLM docs build system (atoms → llms.txt) |
+| [DOCS-CLI.md](DOCS-CLI.md) | Howto pattern, atom format, CLI integration |
 
 ## When to Update What
 
@@ -101,10 +117,10 @@ Fix the original doc file, not the generated test. Then rebuild fixtures.
 
 ## Atom System
 
-LLM docs are built from atoms in `docs/src/atoms/`. See [HOWTO-PATTERN.md](HOWTO-PATTERN.md) for the full pattern.
+LLM docs are built from atoms in `docs/src/atoms/`. See [DOCS-CLI.md](DOCS-CLI.md) for the full pattern.
 
 ```
-docs/src/atoms/           # Source of truth (104 atoms)
+docs/src/atoms/           # Source of truth (~170 atoms)
   ├── syntax/             # Variables, templates, file loading, pipelines
   ├── commands/           # run, exe, output, log, append, stream
   ├── control-flow/       # when, for, foreach, while

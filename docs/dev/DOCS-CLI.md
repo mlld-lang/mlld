@@ -1,4 +1,10 @@
-# The Howto Pattern: Self-Documenting Help for LLMs
+---
+updated: 2026-02-23
+tags: #docs, #cli, #atoms, #howto
+related-docs: docs/dev/DOCS.md, docs/dev/DOCS-LLM.md
+---
+
+# CLI Documentation (Howto Pattern)
 
 ## Overview
 

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc83]
 
 ### Added
+- `mlld howto <keyword>` keyword search across atom tags, titles, and briefs. Single match shows full content; multiple matches show a selection list.
 - `.flat(depth?)` and `.at(index)` array builtin methods.
 - `autosign` category renamed from `templates` to `instructions`. Aliases retained for backward compatibility: `instruction`, `instruct`, `inst`, `templates`.
 - `autosign: { labels: ["prompt"] }` signs variables with matching security labels.

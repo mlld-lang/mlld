@@ -67,11 +67,12 @@ exe @buildTree(allAtoms, introAtom) = js {
   }
 
   lines.push('Usage:');
+  lines.push('  mlld howto <keyword>           Search by keyword (tags, titles, briefs)');
   lines.push('  mlld howto <section>           Show section index (e.g., howto syntax)');
   lines.push('  mlld howto <section> --all     Show full section content');
   lines.push('  mlld howto <topic>             Show specific topic (e.g., howto for-parallel)');
   lines.push('  mlld howto <topic> --section   Find topic then show its entire section');
-  lines.push('  mlld howto grep <pattern>      Search all docs for pattern');
+  lines.push('  mlld howto grep <pattern>      Full-text search across all docs');
   lines.push('');
   lines.push('Tip: Use `mlld mcp-dev` to start an MCP server with language introspection tools');
   lines.push('     (mlld_validate, mlld_analyze, mlld_ast) for editor/agent integration.');
@@ -146,6 +147,68 @@ exe @joinStripped(atoms) = js {
     const text = typeof a === 'string' ? a : (a.text || '');
     return text.replace(/^---[\s\S]*?---\n*/, '').replace(/\[([^\]]+)\]\(#[^)]+\)/g, '**$1**').trim();
   }).join('\n\n');
+}
+
+>> Keyword search across tags, title, brief (fallback when structured lookup misses)
+exe @keywordSearch(atoms, keyword) = js {
+  if (!keyword) return [];
+  const lower = keyword.toLowerCase();
+  const results = [];
+
+  for (const atom of atoms) {
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
+    const match = text.match(/^---\n([\s\S]*?)\n---/);
+    if (!match) continue;
+
+    const fm = match[1];
+    const idMatch = fm.match(/^id:\s*(.+)$/m);
+    if (!idMatch) continue;
+    const id = idMatch[1].trim();
+    if (id.startsWith('_')) continue;
+
+    const tagsMatch = fm.match(/^tags:\s*\[([^\]]*)\]/m);
+    const titleMatch = fm.match(/^title:\s*(.+)$/m);
+    const briefMatch = fm.match(/^brief:\s*(.+)$/m);
+
+    const tags = tagsMatch
+      ? tagsMatch[1].split(',').map(t => t.trim().toLowerCase())
+      : [];
+    const title = titleMatch ? titleMatch[1].trim().toLowerCase() : '';
+    const brief = briefMatch ? briefMatch[1].trim() : '';
+
+    // Tag exact match (highest relevance)
+    if (tags.includes(lower)) {
+      results.push({ atom, id, brief, score: 2 });
+      continue;
+    }
+
+    // Title or brief substring match
+    if (title.includes(lower) || brief.toLowerCase().includes(lower)) {
+      results.push({ atom, id, brief, score: 1 });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  return results;
+}
+
+>> Format keyword search results for multi-match display
+exe @formatKeywordResults(results, keyword) = js {
+  if (results.length === 0) return '';
+  const lines = [results.length + ' matches for "' + keyword + '":', ''];
+
+  for (const r of results) {
+    lines.push('  mlld howto ' + r.id);
+    if (r.brief) lines.push('  ' + r.brief);
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+>> Extract just the atom objects from keyword results
+exe @kwAtoms(results) = js {
+  return results.map(r => r.atom);
 }
 
 >> Search atoms for pattern, return matching lines with context
@@ -239,9 +302,10 @@ var @wantSection = @section == true
 var @wantAll = @all == true
 var @isSectionTopic = @isSection(@topic)
 
->> Get matches
+>> Get matches (structured lookup, then keyword fallback)
 var @exactMatches = @filterById(@allFlatAtoms, @fullId)
 var @topicMatches = @filterByTopic(@allFlatAtoms, @topic)
+var @kwResults = @keywordSearch(@allFlatAtoms, @topic)
 
 >> Get section matches when --section flag is used
 >> First, find the category of the matched atom
@@ -348,6 +412,8 @@ when [
   @hasSubtopic => show `Subtopic "@fullId" not found.`
   @isSectionTopic && !@wantAll && @topicMatches.length > 0 => show @buildSectionIndex(@topicMatches, @topic)
   @hasTopic && @topicMatches.length > 0 => show @joinStripped(@topicMatches)
+  @hasTopic && @kwResults.length == 1 => show @joinStripped(@kwAtoms(@kwResults))
+  @hasTopic && @kwResults.length > 1 => show @formatKeywordResults(@kwResults, @topic)
   @hasTopic => show @notFoundMsg(@topic, @buildTree(@allAtoms, @introAtom))
   * => show @buildTree(@allAtoms, @introAtom)
 ]
