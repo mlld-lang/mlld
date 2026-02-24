@@ -21,15 +21,40 @@ exe @failureHistoryFrom(lastRunDir) = [
   => @failing.length > 0 ? @failing.join("\n") : "(no failures in last run)"
 ]
 
+>> Gather coverage from recent runs (last 24h)
+exe @recentRunDirs(qaRoot, today) = sh {
+  yesterday=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d "yesterday" +%Y-%m-%d 2>/dev/null)
+  ls -1d "$qaRoot"/*/ 2>/dev/null | while read dir; do
+    base=$(basename "$dir")
+    if [ "$base" \> "$yesterday" ] || [ "$base" = "$yesterday" ] || echo "$base" | grep -q "^${today}"; then
+      echo "$dir"
+    fi
+  done
+}
+
+exe @recentCoverage(qaRoot, today) = [
+  let @dirs = @recentRunDirs(@qaRoot, @today).trim().split("\n")
+  let @dirs = for @d in @dirs when @d => @d
+  when @dirs.length == 0 => { tested: [], failed: [] }
+  let @summaries = for @d in @dirs [
+    let @summary = <@d/run-summary.json>?
+    when @summary => @summary
+  ]
+  let @summaries = for @s in @summaries when @s => @s
+  let @testedTopics = for @s in @summaries => for @t in @s.topics => @t.topic
+  let @failedTopics = for @s in @summaries => for @t in @s.topics when @t.fail > 0 || @t.partial > 0 => @t.topic
+  => { tested: @testedTopics.flat(), failed: @failedTopics.flat() }
+]
+
 exe @currentTestStatus() = sh {
   cd "$(git rev-parse --show-toplevel)" && npm test -- --reporter=dot 2>&1 | tail -20 || echo "(test status unavailable)"
 }
 
 >> Build triage prompt with context
-exe @triagePrompt(allTopics, gitChanges, failureHistory, testStatus, outputDir) = template "../prompts/phase0-triage.att"
+exe @triagePrompt(allTopics, gitChanges, failureHistory, testStatus, recentlyTested, recentlyFailed, outputDir) = template "../prompts/phase0-triage.att"
 
 >> Run triage phase
-exe @runTriage(runDir, allTopics, lastRunDir) = [
+exe @runTriage(runDir, allTopics, lastRunDir, qaRoot, today) = [
   @logPhaseStart(@runDir, "triage")
 
   let @lastCommit = @lastRunDir ? <@lastRunDir/run.json>?.config.git_commit : null
@@ -37,10 +62,12 @@ exe @runTriage(runDir, allTopics, lastRunDir) = [
   let @gitChanges = @gitChangesSince(@lastCommit)
   show `  Gathering context: failure history...`
   let @failureHistory = @failureHistoryFrom(@lastRunDir)
+  show `  Gathering context: recent coverage (last 24h)...`
+  let @coverage = @recentCoverage(@qaRoot, @today)
   show `  Gathering context: test status (this may take a minute)...`
   let @testStatus = @currentTestStatus()
 
-  let @prompt = @triagePrompt(@allTopics, @gitChanges, @failureHistory, @testStatus, @runDir)
+  let @prompt = @triagePrompt(@allTopics, @gitChanges, @failureHistory, @testStatus, @coverage.tested, @coverage.failed, @runDir)
   let @tools = "Read,Write,Glob,Grep"
   let @markerFile = `@runDir/triage-decision.json`
   let @fullPrompt = `@prompt\n\nIMPORTANT: When done, write your triage-decision.json to @markerFile using the Write tool. This file IS the marker.`
@@ -50,12 +77,19 @@ exe @runTriage(runDir, allTopics, lastRunDir) = [
 
   let @decision = <@markerFile>?
   let @selectedTopics = @decision ? @decision.selected_topics : @allTopics
+  let @regressionTopics = @decision && @decision.regression_topics ? @decision.regression_topics : []
 
-  show `Triage selected @selectedTopics.length of @allTopics.length topics`
+  >> Merge: selected (new diversity) + regressions (additive)
+  let @allSelected = @selectedTopics.concat(@regressionTopics)
+  >> Deduplicate
+  let @unique = for @t in @allSelected => @t
+  let @deduped = @unique
 
-  @logPhaseComplete(@runDir, "triage", { selected: @selectedTopics.length, total: @allTopics.length })
+  show `Triage selected @selectedTopics.length new + @regressionTopics.length regressions = @deduped.length total`
 
-  => @selectedTopics
+  @logPhaseComplete(@runDir, "triage", { selected: @selectedTopics.length, regressions: @regressionTopics.length, total: @deduped.length })
+
+  => @deduped
 ]
 
 /export { @runTriage }

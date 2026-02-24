@@ -1,6 +1,6 @@
 ## QA Triage: Select Topics for Testing
 
-You are the triage agent for a QA run of the mlld language project. Your job is to select which topics to test based on available signals.
+You are the triage agent for a QA run of the mlld language project. Your job is to select which topics to test, maximizing coverage diversity across runs.
 
 ## Available Topics
 
@@ -28,6 +28,22 @@ Topics that had failures in the most recent run:
 @failureHistory
 </failure_history>
 
+### Topics Tested in Last 24h
+
+These topics have ALREADY been tested in recent runs. Avoid re-selecting them unless code changed.
+
+<recently_tested>
+@recentlyTested
+</recently_tested>
+
+### Topics That Failed in Last 24h
+
+These topics had failures in recent runs. They are candidates for regression testing (to verify fixes).
+
+<recently_failed>
+@recentlyFailed
+</recently_failed>
+
 ### Current Test Status
 
 Fixture test results (passing/failing):
@@ -38,12 +54,23 @@ Fixture test results (passing/failing):
 
 ## Your Task
 
-Select topics that maximize value from this QA run. Prioritize:
+You must produce TWO separate lists:
 
-1. **Changed areas**: Topics covering recently modified code
-2. **Regression targets**: Topics that failed previously (verify fixes)
-3. **Critical path**: High-priority topics that haven't been tested recently
-4. **Breadth**: Don't re-test topics that passed recently unless code changed
+### 1. `selected_topics` — New diversity (10-30 topics)
+
+Pick topics that have NOT been tested in the last 24h. Maximize breadth across the topic space. Prioritize:
+
+1. **Untested topics**: Topics NOT in the recently_tested list (highest priority)
+2. **Changed areas**: Topics covering recently modified code
+3. **Critical path**: High-priority topics that need regular coverage
+
+Do NOT pick topics that were already tested in the last 24h unless code specifically changed in that area.
+
+### 2. `regression_topics` — Re-test prior failures (additive)
+
+From the recently_failed list, pick topics where fixes are likely to have landed (based on git changes or general project momentum). These are ADDITIVE to the selected_topics count — they don't reduce the diversity budget.
+
+If no recent failures exist, this list should be empty.
 
 ## Output
 
@@ -52,13 +79,12 @@ Write your decision to `@outputDir/triage-decision.json`:
 ```json
 {
   "reasoning": "Why these topics were selected",
-  "selected_topics": ["topic1", "topic2"],
+  "selected_topics": ["new-topic1", "new-topic2"],
+  "regression_topics": ["previously-failed-topic1"],
   "coverage_rationale": {
     "changed_areas": ["topics covering changed code"],
-    "regression_targets": ["previously failing topics"],
-    "critical_path": ["high-priority topics"]
+    "untested": ["topics not tested in last 24h"],
+    "regression_targets": ["previously failing topics to re-verify"]
   }
 }
 ```
-
-Select 10-30 topics per run. Fewer for targeted runs (specific changes), more for broad coverage runs.

@@ -92,7 +92,7 @@ exe @doTriage(runDir, allTopics) = [
   let @lastRunId = @latestRunId()
   let @lastRunIdTrimmed = @lastRunId.trim()
   let @lastRunDir = @lastRunIdTrimmed && @lastRunIdTrimmed != @today ? `@qaRoot/@lastRunIdTrimmed` : null
-  let @selected = @runTriage(@runDir, @allTopics, @lastRunDir)
+  let @selected = @runTriage(@runDir, @allTopics, @lastRunDir, @qaRoot, @today)
   show ``
   => @selected
 ]
