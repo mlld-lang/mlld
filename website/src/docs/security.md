@@ -92,7 +92,7 @@ Policies are declarative. Where guards are per-operation imperative logic, polic
 ```mlld
 policy @p = {
   defaults: { rules: [...], unlabeled: "untrusted" },
-  operations: { "net:w": "exfil", "fs:w": "destructive" },
+  operations: { exfil: ["net:w"], destructive: ["fs:w"] },
   capabilities: { allow: [...], deny: [...], danger: [...] },
   labels: { secret: { deny: ["op:show", "exfil"] } },
   auth: { claude: { from: "keychain:...", as: "ANTHROPIC_API_KEY" } }
@@ -105,7 +105,7 @@ policy @p = {
 |---------|---------|
 | `defaults.rules` | Enable built-in rules: `no-secret-exfil`, `no-sensitive-exfil`, `no-untrusted-destructive`, `no-untrusted-privileged`, `untrusted-llms-get-influenced` |
 | `defaults.unlabeled` | Auto-label data with no user labels (`"untrusted"` or `"trusted"`) |
-| `operations` | Map semantic exe labels (`net:w`) to risk categories (`exfil`, `destructive`, `privileged`) |
+| `operations` | Group semantic exe labels (`net:w`) under risk categories (`exfil`, `destructive`, `privileged`) |
 | `capabilities.allow` | Allowlist command patterns (general gate) |
 | `capabilities.danger` | Dangerous operations requiring explicit opt-in (separate gate — both `allow` AND `danger` must pass) |
 | `labels` | Label flow rules — which data labels can flow to which operation labels |
@@ -254,9 +254,9 @@ policy @p = {
     unlabeled: "untrusted"
   },
   operations: {
-    "net:w": "exfil",
-    "fs:w": "destructive",
-    "sys:admin": "privileged"
+    exfil: ["net:w"],
+    destructive: ["fs:w"],
+    privileged: ["sys:admin"]
   },
   capabilities: {
     allow: ["cmd:git:*", "cmd:npm:*"],
@@ -267,7 +267,7 @@ policy @p = {
 exe net:w @postToSlack(channel, msg) = run cmd { curl -X POST @channel -d @msg }
 ```
 
-`defaults.unlabeled` treats all data without explicit labels as `untrusted`. `operations` maps semantic exe labels (`net:w`) to risk categories (`exfil`). The built-in rules then block flows like `secret` data reaching an `exfil` operation.
+`defaults.unlabeled` treats all data without explicit labels as `untrusted`. `operations` groups semantic exe labels (`net:w`) under risk categories (`exfil`). The built-in rules then block flows like `secret` data reaching an `exfil` operation.
 
 See `policy-operations` for the two-step labeling pattern. See `policy-label-flow` for custom deny/allow rules.
 
@@ -317,8 +317,8 @@ policy @p = {
     unlabeled: "untrusted"
   },
   operations: {
-    "net:w": "exfil",
-    "fs:w": "destructive"
+    exfil: ["net:w"],
+    destructive: ["fs:w"]
   },
   capabilities: {
     allow: ["cmd:claude:*", "cmd:git:*"],
@@ -551,10 +551,10 @@ exe net:w @sendToServer(data) = run cmd {
   curl -d "@data" https://example.com/collect
 }
 
->> Policy maps semantic labels to risk categories
+>> Policy groups semantic labels under risk categories
 policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
-  operations: { "net:w": "exfil" }
+  operations: { exfil: ["net:w"] }
 }
 ```
 
@@ -563,7 +563,7 @@ policy @p = {
 ```mlld
 policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
-  operations: { "net:w": "exfil" }
+  operations: { exfil: ["net:w"] }
 }
 
 var secret @customerList = <internal/customers.csv>
@@ -618,7 +618,7 @@ exe fs:w @wipe(data) = run cmd { rm -rf "@data" }
 
 policy @p = {
   defaults: { rules: ["no-untrusted-destructive"] },
-  operations: { "fs:w": "destructive" }
+  operations: { destructive: ["fs:w"] }
 }
 ```
 
@@ -642,7 +642,7 @@ policy @p = {
 ```mlld
 policy @p = {
   defaults: { rules: ["no-untrusted-destructive"] },
-  operations: { "fs:w": "destructive" }
+  operations: { destructive: ["fs:w"] }
 }
 
 var untrusted @payload = "data"
@@ -664,7 +664,7 @@ policy @p = {
     unlabeled: "untrusted",
     rules: ["no-untrusted-destructive"]
   },
-  operations: { "fs:w": "destructive" }
+  operations: { destructive: ["fs:w"] }
 }
 
 var @data = <./input.txt>
@@ -1232,7 +1232,7 @@ guard @blocker before op:run = when [
 >> Policy rules create privileged guards automatically
 policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
-  operations: { "net:w": "exfil" }
+  operations: { exfil: ["net:w"] }
 }
 
 var secret @customerList = <internal/customers.csv>
@@ -1346,9 +1346,9 @@ policy @p = {
     ]
   },
   operations: {
-    "net:w": "exfil",
-    "fs:w": "destructive",
-    "sys:admin": "privileged"
+    exfil: ["net:w"],
+    destructive: ["fs:w"],
+    privileged: ["sys:admin"]
   },
   auth: {
     claude: "ANTHROPIC_API_KEY"
@@ -1362,7 +1362,7 @@ policy @p = {
 
 **`defaults`** sets baseline behavior. `rules` enables built-in security rules that block dangerous label-to-operation flows. `unlabeled` optionally auto-labels all data that has no user-assigned labels -- set to `"untrusted"` to treat unlabeled data as untrusted, or `"trusted"` to treat it as trusted. This is opt-in; without it, unlabeled data has no trust label.
 
-**`operations`** maps semantic exe labels to risk categories. You label functions with what they DO (`net:w`, `fs:w`), and policy classifies those as risk types (`exfil`, `destructive`). This is the two-step pattern -- see `policy-operations`.
+**`operations`** groups semantic exe labels under risk categories. You label functions with what they DO (`net:w`, `fs:w`), and policy classifies those as risk types (`exfil`, `destructive`). This is the two-step pattern -- see `policy-operations`.
 
 **`auth`** defines caller-side credential mappings for `using auth:name`. It accepts short form (`"API_KEY"`) and object form (`{ from, as }`). Policy auth composes with standalone `auth`; caller policy entries override same-name module bindings.
 
@@ -1480,12 +1480,12 @@ Classify operations by risk using the two-step pattern: label exe functions with
 exe net:w @postToSlack(msg) = run cmd { slack-cli "@msg" }
 exe fs:w @deleteFile(path) = run cmd { rm -rf "@path" }
 
->> Step 2: Policy maps semantic labels to risk categories
+>> Step 2: Policy groups semantic labels under risk categories
 policy @p = {
   defaults: { rules: ["no-secret-exfil", "no-untrusted-destructive"] },
   operations: {
-    "net:w": "exfil",
-    "fs:w": "destructive"
+    exfil: ["net:w"],
+    destructive: ["fs:w"]
   }
 }
 ```
@@ -1512,7 +1512,7 @@ Now `secret` data cannot flow to `@postToSlack` (exfil rule) and `untrusted` dat
 exe net:w, fs:w @exportAndDelete(data) = run cmd { backup_and_delete "@data" }
 
 policy @p = {
-  operations: { "net:w": "exfil", "fs:w": "destructive" }
+  operations: { exfil: ["net:w"], destructive: ["fs:w"] }
 }
 ```
 
@@ -1530,7 +1530,7 @@ This is simpler but couples exe definitions to risk categories. The two-step pat
 ```mlld
 policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
-  operations: { "net:w": "exfil" }
+  operations: { exfil: ["net:w"] }
 }
 
 var secret @patientRecords = <clinic/patients.csv>

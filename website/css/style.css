@@ -1339,13 +1339,11 @@ section.content-section h2 {
   border-bottom: 1px solid rgba(var(--text-color-rgb), 0.1);
 }
 
-.install-container {
-  max-width: 800px;
-  margin: 0 auto;
+.install-commands {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: .25rem;
+  justify-content: center;
+  gap: 3rem;
+  margin-bottom: 2rem;
 }
 
 .install-command {
@@ -1468,24 +1466,66 @@ section.content-section h2 {
   text-decoration: underline;
 }
 
-.llms-link {
-  margin-top: 0.5rem;
+.install-area,
+.quickstart-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
-.llms-link a {
-  color: var(--primary-color);
-  text-decoration: none;
-  font-weight: 100;
-  font-size: 0.9rem;
-  transition: color 0.2s;
+.install-label {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.85rem;
+  font-weight: 300;
+  opacity: 0.6;
 }
 
-.llms-link a:hover {
-  text-decoration: underline;
+.sdk-area {
+  text-align: center;
 }
 
-.llms-link p {
-  margin: 1rem 0 1.5rem 0;
+.sdk-area .section-description {
+  font-size: 1.5rem;
+  line-height: 1.5;
+  margin-bottom: 2rem;
+}
+
+.sdk-languages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+}
+
+.sdk-languages a {
+  display: flex;
+  align-items: center;
+  color: var(--text-color);
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.sdk-languages a:hover {
+  opacity: 1;
+}
+
+.sdk-languages svg {
+  width: 34px;
+  height: 34px;
+}
+
+.sdk-languages .sdk-go svg {
+  width: 48px;
+  height: 48px;
+}
+
+@media (max-width: 768px) {
+  .install-commands {
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+  }
 }
 
 /* Common Terminal Window Styles */

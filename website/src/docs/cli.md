@@ -142,6 +142,8 @@ checkpoint "data-loaded"
 >> mlld run pipeline --resume "data-loaded"
 ```
 
+Named checkpoints are discovered from source before execution starts, so `--resume "name"` works even if a prior run failed before that checkpoint was reached.
+
 #### Context Variables
 
 | Variable | Description |
