@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `mlld howto <keyword>` keyword search across atom tags, titles, and briefs. Single match shows full content; multiple matches show a selection list.
+- Markdown section selectors now support include/exclude sets (`# a, b; !# c`), quoted heading names, optional selectors (`"name"?`), and fuzzy prefix matching that ignores punctuation/case.
 - `.flat(depth?)` and `.at(index)` array builtin methods.
 - `autosign` category renamed from `templates` to `instructions`. Aliases retained for backward compatibility: `instruction`, `instruct`, `inst`, `templates`.
 - `autosign: { labels: ["prompt"] }` signs variables with matching security labels.

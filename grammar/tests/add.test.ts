@@ -311,6 +311,36 @@ describe('Add Directive', () => {
     expect(directiveNode.values.loadContent.options).toHaveProperty('section');
     expect(directiveNode.values.loadContent.options.section.identifier.content).toBe('API Reference');
   });
+
+  test('Section add with include/exclude selector syntax', async () => {
+    const content = `/show <document.md # "Titled section", Other; !# tldr, "Another section title">`;
+    const parseResult = await parse(content);
+
+    const directiveNode = parseResult.ast[0];
+
+    expect(directiveNode.type).toBe('Directive');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showLoadContent');
+    expect(directiveNode.values).toHaveProperty('loadContent');
+    expect(directiveNode.values.loadContent.options).toHaveProperty('section');
+    expect(directiveNode.values.loadContent.options.section.identifier.content)
+      .toBe('"Titled section", Other; !# tldr, "Another section title"');
+  });
+
+  test('Section add with optional include selector syntax', async () => {
+    const content = `/show <document.md # "Maybe section"?, Other>`;
+    const parseResult = await parse(content);
+
+    const directiveNode = parseResult.ast[0];
+
+    expect(directiveNode.type).toBe('Directive');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showLoadContent');
+    expect(directiveNode.values).toHaveProperty('loadContent');
+    expect(directiveNode.values.loadContent.options).toHaveProperty('section');
+    expect(directiveNode.values.loadContent.options.section.identifier.content)
+      .toBe('"Maybe section"?, Other');
+  });
   
   // ====================
   // Multiline Template Test

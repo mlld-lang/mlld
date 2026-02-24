@@ -7,6 +7,29 @@ export interface SectionUtilityDependencies {
   interpolateAndRecord: (nodes: any[], env: Environment) => Promise<string>;
 }
 
+interface SectionSelectorItem {
+  query: string;
+  optional: boolean;
+}
+
+interface ParsedSectionSelector {
+  includes: SectionSelectorItem[];
+  excludes: SectionSelectorItem[];
+}
+
+interface HeadingRange {
+  title: string;
+  normalized: string;
+  level: number;
+  startLine: number;
+  endLine: number;
+}
+
+interface LineRange {
+  startLine: number;
+  endLine: number;
+}
+
 export class ContentLoaderSectionHelper {
   constructor(private readonly dependencies: SectionUtilityDependencies) {}
 
@@ -52,7 +75,7 @@ export class ContentLoaderSectionHelper {
     const headings: string[] = [];
 
     for (const line of lines) {
-      const match = line.match(/^(#{1,6})\s+(.+)$/);
+      const match = line.match(/^\s{0,3}(#{1,6})\s+(.+)$/);
       if (!match) {
         continue;
       }
@@ -74,17 +97,35 @@ export class ContentLoaderSectionHelper {
     env?: Environment
   ): Promise<string> {
     try {
-      let extracted: string | null | undefined;
-      try {
-        extracted = await llmxmlInstance.getSection(content, sectionName, {
-          includeNested: true
-        });
-      } catch {
-        extracted = null;
+      const parsedSelector = this.parseSectionSelector(sectionName);
+      const headings = this.getHeadingRanges(content);
+
+      const includeMatches = this.resolveSelectorItems(parsedSelector.includes, headings, {
+        failOnMissing: true
+      });
+      if (includeMatches.length === 0) {
+        return '';
       }
 
-      if (!extracted) {
-        extracted = this.extractSectionByHeading(content, sectionName);
+      const excludeMatches = this.resolveSelectorItems(parsedSelector.excludes, headings, {
+        failOnMissing: false
+      });
+
+      if (renamedTitle && includeMatches.length > 1) {
+        throw new MlldError('Renaming multiple sections is not supported yet', {
+          includeCount: includeMatches.length,
+          selector: sectionName
+        });
+      }
+
+      let extracted: string;
+      if (includeMatches.length === 1 && excludeMatches.length === 0) {
+        extracted = await this.extractSingleMatchedSection(content, includeMatches[0].title);
+      } else {
+        const includeRanges = this.toMergedRanges(includeMatches);
+        const excludeRanges = this.toMergedRanges(excludeMatches);
+        const finalRanges = this.subtractRanges(includeRanges, excludeRanges);
+        extracted = this.extractByRanges(content, finalRanges);
       }
 
       if (!extracted) {
@@ -102,6 +143,9 @@ export class ContentLoaderSectionHelper {
       const { applyHeaderTransform } = await import('../show');
       return applyHeaderTransform(extracted, finalTitle);
     } catch (error: any) {
+      if (error instanceof MlldError) {
+        throw error;
+      }
       throw new MlldError(`Failed to extract section: ${error.message}`, {
         sectionName: sectionName,
         error: error.message
@@ -169,42 +213,315 @@ export class ContentLoaderSectionHelper {
     return this.dependencies.interpolateAndRecord(processedParts, env);
   }
 
-  private escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  private normalizeHeading(value: string): string {
+    return value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '');
   }
 
-  private extractSectionByHeading(content: string, sectionName: string): string | null {
-    const lines = content.split('\n');
-    const normalizedName = sectionName.replace(/^#+\s*/, '').trim();
-    const escapedName = this.escapeRegExp(normalizedName);
-    const sectionRegex = new RegExp(`^#{1,6}\\s+${escapedName}\\s*$`, 'i');
-    let inSection = false;
-    let sectionLevel = 0;
-    const sectionLines: string[] = [];
+  private parseSectionSelector(sectionName: string): ParsedSectionSelector {
+    const selector = sectionName.trim();
+    const { includePart, excludePart } = this.splitIncludeExclude(selector);
+    const includes = this.parseSelectorItems(includePart, 'include');
+    if (includes.length === 0) {
+      throw new MlldError('Invalid section selector: include set cannot be empty', {
+        selector: sectionName
+      });
+    }
+    const excludes = excludePart ? this.parseSelectorItems(excludePart, 'exclude') : [];
+    return { includes, excludes };
+  }
 
-    for (const line of lines) {
-      const lineForMatch = line.trimEnd();
-      if (!inSection && sectionRegex.test(lineForMatch)) {
-        inSection = true;
-        sectionLevel = lineForMatch.match(/^#+/)?.[0].length || 0;
-        sectionLines.push(lineForMatch);
+  private splitIncludeExclude(selector: string): { includePart: string; excludePart?: string } {
+    let quote: '"' | "'" | null = null;
+    for (let i = 0; i < selector.length; i += 1) {
+      const ch = selector[i];
+      const prev = i > 0 ? selector[i - 1] : '';
+      if (quote) {
+        if (ch === quote && prev !== '\\') {
+          quote = null;
+        }
         continue;
       }
-
-      if (inSection) {
-        const headerMatch = lineForMatch.match(/^(#{1,6})\s+/);
-        if (headerMatch && headerMatch[1].length <= sectionLevel) {
-          break;
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        continue;
+      }
+      if (ch === ';') {
+        const rest = selector.slice(i + 1);
+        if (/^\s*!?#/.test(rest)) {
+          return {
+            includePart: selector.slice(0, i),
+            excludePart: rest
+          };
         }
-        sectionLines.push(lineForMatch);
+      }
+    }
+    return { includePart: selector };
+  }
+
+  private splitOutsideQuotes(input: string, delimiter: ',' | ';'): string[] {
+    let quote: '"' | "'" | null = null;
+    const parts: string[] = [];
+    let current = '';
+    for (let i = 0; i < input.length; i += 1) {
+      const ch = input[i];
+      const prev = i > 0 ? input[i - 1] : '';
+      if (quote) {
+        current += ch;
+        if (ch === quote && prev !== '\\') {
+          quote = null;
+        }
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        current += ch;
+        continue;
+      }
+      if (ch === delimiter) {
+        parts.push(current);
+        current = '';
+        continue;
+      }
+      current += ch;
+    }
+    parts.push(current);
+    return parts;
+  }
+
+  private parseSelectorItems(rawPart: string, mode: 'include' | 'exclude'): SectionSelectorItem[] {
+    let part = rawPart.trim();
+    if (!part) {
+      return [];
+    }
+
+    if (mode === 'exclude') {
+      if (!part.startsWith('#') && !part.startsWith('!#')) {
+        throw new MlldError('Invalid exclude selector: expected "# section" or "!# section" after ";"', {
+          selector: rawPart
+        });
+      }
+      if (part.startsWith('!#')) {
+        part = part.slice(2).trim();
+      } else if (part.startsWith('#')) {
+        part = part.slice(1).trim();
       }
     }
 
-    if (!inSection) {
+    const rawItems = this.splitOutsideQuotes(part, ',');
+    return rawItems
+      .map(raw => this.parseSelectorItem(raw, mode))
+      .filter((item): item is SectionSelectorItem => item !== null);
+  }
+
+  private parseSelectorItem(rawItem: string, mode: 'include' | 'exclude'): SectionSelectorItem | null {
+    let item = rawItem.trim();
+    if (!item) {
       return null;
     }
 
-    return sectionLines.join('\n').trim();
+    if (mode === 'include' && item.includes('!#')) {
+      throw new MlldError('Invalid section selector: use "; !# section" to start exclude selectors', {
+        selectorItem: rawItem
+      });
+    }
+
+    if (item.startsWith('!#')) {
+      if (mode === 'include') {
+        throw new MlldError('Invalid section selector: use "; !# section" to start exclude selectors', {
+          selectorItem: rawItem
+        });
+      }
+      item = item.slice(2).trim();
+    } else if (item.startsWith('#')) {
+      item = item.slice(1).trim();
+    }
+
+    let optional = false;
+    if (item.endsWith('?') && !item.endsWith('??')) {
+      optional = true;
+      item = item.slice(0, -1).trim();
+    }
+
+    if (
+      (item.startsWith('"') && item.endsWith('"')) ||
+      (item.startsWith("'") && item.endsWith("'"))
+    ) {
+      const quote = item[0];
+      const inner = item.slice(1, -1);
+      const escapedQuote = quote === '"' ? /\\"/g : /\\'/g;
+      item = inner.replace(escapedQuote, quote).replace(/\\\\/g, '\\').trim();
+    }
+
+    if (!item) {
+      throw new MlldError('Invalid section selector: section name cannot be empty', {
+        selectorItem: rawItem
+      });
+    }
+
+    return {
+      query: item,
+      optional
+    };
+  }
+
+  private getHeadingRanges(content: string): HeadingRange[] {
+    const lines = content.split('\n');
+    const headings: HeadingRange[] = [];
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i].trimEnd();
+      const match = line.match(/^\s{0,3}(#{1,6})\s+(.+)$/);
+      if (!match) {
+        continue;
+      }
+      const title = match[2].trim();
+      headings.push({
+        title,
+        normalized: this.normalizeHeading(title),
+        level: match[1].length,
+        startLine: i,
+        endLine: lines.length
+      });
+    }
+
+    for (let i = 0; i < headings.length; i += 1) {
+      const current = headings[i];
+      for (let j = i + 1; j < headings.length; j += 1) {
+        if (headings[j].level <= current.level) {
+          current.endLine = headings[j].startLine;
+          break;
+        }
+      }
+    }
+
+    return headings;
+  }
+
+  private resolveSelectorItems(
+    items: SectionSelectorItem[],
+    headings: HeadingRange[],
+    options: { failOnMissing: boolean }
+  ): HeadingRange[] {
+    const resolved: HeadingRange[] = [];
+    const availableSections = headings.map(heading => heading.title);
+    for (const item of items) {
+      const matched = this.findFirstMatchingHeading(headings, item.query);
+      if (matched) {
+        resolved.push(matched);
+        continue;
+      }
+
+      if (options.failOnMissing && !item.optional) {
+        throw new MlldError(`Section "${item.query}" not found in content`, {
+          sectionName: item.query,
+          availableSections,
+          hint: 'Use "Section"? to make missing includes optional'
+        });
+      }
+    }
+    return resolved;
+  }
+
+  private findFirstMatchingHeading(headings: HeadingRange[], query: string): HeadingRange | null {
+    const normalizedQuery = this.normalizeHeading(query.replace(/^#+\s*/, '').trim());
+    if (!normalizedQuery) {
+      return null;
+    }
+    for (const heading of headings) {
+      if (heading.normalized.startsWith(normalizedQuery)) {
+        return heading;
+      }
+    }
+    return null;
+  }
+
+  private toMergedRanges(headings: HeadingRange[]): LineRange[] {
+    if (headings.length === 0) {
+      return [];
+    }
+    const ranges = headings
+      .map(heading => ({ startLine: heading.startLine, endLine: heading.endLine }))
+      .sort((a, b) => a.startLine - b.startLine);
+
+    const merged: LineRange[] = [];
+    for (const range of ranges) {
+      const last = merged[merged.length - 1];
+      if (!last || range.startLine > last.endLine) {
+        merged.push({ ...range });
+      } else {
+        last.endLine = Math.max(last.endLine, range.endLine);
+      }
+    }
+    return merged;
+  }
+
+  private subtractRanges(includes: LineRange[], excludes: LineRange[]): LineRange[] {
+    if (includes.length === 0 || excludes.length === 0) {
+      return includes;
+    }
+
+    let result: LineRange[] = includes.map(range => ({ ...range }));
+    for (const exclude of excludes) {
+      const next: LineRange[] = [];
+      for (const include of result) {
+        if (exclude.endLine <= include.startLine || exclude.startLine >= include.endLine) {
+          next.push(include);
+          continue;
+        }
+        if (exclude.startLine > include.startLine) {
+          next.push({
+            startLine: include.startLine,
+            endLine: exclude.startLine
+          });
+        }
+        if (exclude.endLine < include.endLine) {
+          next.push({
+            startLine: exclude.endLine,
+            endLine: include.endLine
+          });
+        }
+      }
+      result = next;
+    }
+    return result;
+  }
+
+  private extractByRanges(content: string, ranges: LineRange[]): string {
+    if (ranges.length === 0) {
+      return '';
+    }
+    const lines = content.split('\n');
+    const chunks = ranges
+      .map(range => lines.slice(range.startLine, range.endLine).join('\n').trim())
+      .filter(Boolean);
+    return chunks.join('\n\n').trim();
+  }
+
+  private async extractSingleMatchedSection(content: string, sectionName: string): Promise<string> {
+    try {
+      const extracted = await llmxmlInstance.getSection(content, sectionName, {
+        includeNested: true
+      });
+      if (extracted) {
+        return extracted;
+      }
+    } catch {
+      // fall through to regex/range fallback
+    }
+
+    return this.extractSectionByHeading(content, sectionName) ?? '';
+  }
+
+  private extractSectionByHeading(content: string, sectionName: string): string | null {
+    const headings = this.getHeadingRanges(content);
+    const matched = this.findFirstMatchingHeading(headings, sectionName);
+    if (!matched) {
+      return null;
+    }
+    return this.extractByRanges(content, [{ startLine: matched.startLine, endLine: matched.endLine }]);
   }
 
   private async getAvailableSections(content: string): Promise<string[]> {
@@ -216,7 +533,7 @@ export class ContentLoaderSectionHelper {
       const lines = content.split('\n');
 
       for (const line of lines) {
-        const match = line.match(/^#+\s+(.+)$/);
+        const match = line.match(/^\s{0,3}#{1,6}\s+(.+)$/);
         if (match) {
           sections.push(match[1]);
         }
