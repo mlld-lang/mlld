@@ -151,7 +151,7 @@ Frontmatter:
 - `id`: derive from the atom filename (e.g., `for-context.md` → `for-context`)
 - `title`: derive from the feature name
 - `brief`: one-line summary of what it does
-- `category`: from the atom path (e.g., `control-flow/for-context.md` → `control-flow`)
+- `category`: from the atom path (e.g., `flow-control/for-context.md` → `control-flow`)
 - `parent`: the logical parent topic
 - `related`: IDs of related atoms (find them in `docs/src/atoms/`)
 - `related-code`: source files you found in Phase 1 (relative to repo root, must be real files)

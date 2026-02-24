@@ -21,6 +21,7 @@ const steps = [
   { name: 'errors', display: 'Building error patterns' },
   { name: 'grammar', display: 'Building grammar' },
   { name: 'typescript', display: 'Compiling TypeScript' },
+  { name: 'docs', display: 'Building LLM docs' },
   { name: 'python', display: 'Building Python wrapper' },
   { name: 'wasm', display: 'Copying WASM files' },
   { name: 'sync', display: 'Syncing mlldx' }
@@ -172,6 +173,11 @@ async function build() {
     showProgress(steps[currentStep].display, 'done');
     currentStep++;
     
+    showProgress(steps[currentStep].display, 'running');
+    await runCommand('npm run build:docs', 'docs');
+    showProgress(steps[currentStep].display, 'done');
+    currentStep++;
+
     showProgress(steps[currentStep].display, 'running');
     await runCommand('npm run build:python', 'python');
     showProgress(steps[currentStep].display, 'done');

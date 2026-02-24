@@ -558,12 +558,12 @@ MCP tool availability adapts to the active security profile:
 exe @mcpConfig() = when [
   @mx.profile == "full" => {
     servers: [
-      { module: "@github/issues", tools: "*" }
+      { command: "npx -y @modelcontextprotocol/server-github", tools: "*" }
     ]
   }
   @mx.profile == "readonly" => {
     servers: [
-      { module: "@github/issues", tools: ["list_issues", "get_issue"] }
+      { command: "npx -y @modelcontextprotocol/server-github", tools: ["list_issues", "get_issue"] }
     ]
   }
   * => { servers: [] }

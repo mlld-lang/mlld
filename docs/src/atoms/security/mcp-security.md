@@ -15,7 +15,7 @@ Every MCP tool call automatically taints its output with `src:mcp`. This happens
 This provenance marker does not add a trust label like `untrusted`.
 
 ```mlld
-import tools { @echo } from mcp "echo-server"
+import tools { @echo } from mcp "npx -y @modelcontextprotocol/server-everything"
 var @result = @echo("hello")
 show @result.mx.taint | @parse
 ```

@@ -22,8 +22,8 @@ guard @noSecretToMcp for secret = when [
 ]
 
 var secret @customerList = <internal/customers.csv>
-import tools { @createIssue } from mcp "@github/issues"
-show @createIssue("title", @customerList)
+import tools { @echo } from mcp "npx -y @modelcontextprotocol/server-everything"
+show @echo(@customerList)
 ```
 
 The guard fires before any exe operation that receives secret-labeled data. Since `@customerList` carries the `secret` label, the MCP tool call is denied.

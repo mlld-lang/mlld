@@ -28,7 +28,7 @@ Any MCP client can now call `greet`. See `mcp-export`.
 **Import — use external MCP tools as functions:**
 
 ```mlld
-import tools { @echo } from mcp "@anthropic/filesystem"
+import tools { @echo } from mcp "npx -y @modelcontextprotocol/server-everything"
 show @echo("hello")
 ```
 

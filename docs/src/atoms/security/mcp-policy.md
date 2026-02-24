@@ -49,7 +49,8 @@ With explicit `src:mcp` allow/deny rules, MCP data can only flow to explicitly a
 MCP data gets `src:mcp` taint automatically, but trust classification requires explicit labeling:
 
 ```mlld
-var untrusted @mcpData = @mcp.github.listIssues()
+import tools { @echo } from mcp "npx -y @modelcontextprotocol/server-everything"
+var untrusted @mcpData = @echo("external data")
 ```
 
 Now `@mcpData` has both `src:mcp` taint AND the `untrusted` label, so built-in rules like `no-untrusted-destructive` apply.

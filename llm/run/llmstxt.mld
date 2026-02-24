@@ -1,19 +1,67 @@
->> llms.txt Build Script
->> Generates llms-combined.txt from modular docs/llm/*.txt files
+>> LLM Docs Build Script
+>> Reads shared categories config, builds XML-wrapped modules from atoms,
+>> then assembles llms-combined.txt
+>> Usage: mlld run llmstxt
 
->> Get version from package.json
-var @pkg = <@base/package.json>
+var @pkg = <@root/package.json>
 var @version = @pkg.version
+var @config = <@root/docs/build/categories.json>
+var @atomsRoot = "@root/docs/src/atoms"
 
->> Define module order (logical reading sequence)
-var @modules = [
+exe @strip(content) = js {
+  return content.replace(/^---[\s\S]*?---\n*/, '').trim();
+}
+
+exe @wrap(tag, body) = js {
+  return '<' + tag + '>\n' + body + '\n</' + tag + '>';
+}
+
+exe @wrapPadded(tag, body) = js {
+  return '<' + tag + '>\n\n' + body + '\n\n</' + tag + '>\n';
+}
+
+exe @flatten(sections) = js {
+  return sections.flat().join('\n\n');
+}
+
+>> Build each category
+for @catName, @catConfig in @config [
+  let @tag = @catConfig.tag
+  let @sections = for @group in @catConfig.groups [
+    >> Use source directory if specified, otherwise category name
+    let @srcDir = @group.source ? @group.source : @catName
+    let @atomContents = for @atomName in @group.atoms [
+      let @raw = <@atomsRoot/@srcDir/@atomName\.md>
+      => @strip(@raw)
+    ]
+    if @group.parent [
+      let @parentTag = @group.parent.replaceAll("-", "_").toUpperCase()
+      let @body = @atomContents.join("\n\n")
+      => @wrap(@parentTag, @body)
+    ]
+    >> Standalone: each atom gets its own tag
+    => for @i, @atomContent in @atomContents [
+      let @atomTag = @group.atoms[@i].replaceAll("-", "_").toUpperCase()
+      => @wrap(@atomTag, @atomContent)
+    ]
+  ]
+
+  let @flat = @flatten(@sections)
+  let @module = @wrapPadded(@tag, @flat)
+
+  output @module to `@root/docs/llm/llms-@catName\.txt`
+  log `  Built llms-@catName\.txt`
+]
+
+>> Assemble combined document from all modules (including manually maintained ones)
+var @moduleOrder = [
   "llms-overview.txt",
   "llms-core-rules.txt",
-  "llms-syntax.txt",
-  "llms-commands.txt",
-  "llms-control-flow.txt",
+  "llms-language-reference.txt",
+  "llms-flow-control.txt",
   "llms-modules.txt",
   "llms-patterns.txt",
+  "llms-cli.txt",
   "llms-configuration.txt",
   "llms-sdk.txt",
   "llms-mistakes.txt",
@@ -22,28 +70,14 @@ var @modules = [
   "llms-cookbook.txt"
 ]
 
->> Load all modules
-var @contents = for @module in @modules => <@base/docs/llm/@module>
+var @contents = for @module in @moduleOrder => <@root/docs/llm/@module>
 
->> Build combined document
->> Note: Using JS because :::...::: with large interpolated content has a bug (see mlld-zigd)
 exe @buildDoc(version, timestamp, body) = js {
-  return `<MLLD_COMPLETE_GUIDE version="${version}">
-
-This is the complete mlld reference guide, combining all documentation modules.
-For modular access, see individual files in docs/llm/.
-
-Generated: ${timestamp}
-
-${body}
-
-</MLLD_COMPLETE_GUIDE>
-`;
+  return '<MLLD_COMPLETE_GUIDE version="' + version + '">\n\nThis is the complete mlld reference guide, combining all documentation modules.\nFor modular access, see individual files in docs/llm/.\n\nGenerated: ' + timestamp + '\n\n' + body + '\n\n</MLLD_COMPLETE_GUIDE>\n';
 }
 
 var @body = @contents.join("\n\n")
 var @combined = @buildDoc(@version, @now, @body)
 
->> Write output
-output @combined to "@base/llms-combined.txt"
-show `Generated llms-combined.txt (@contents.length modules, version @version)`
+output @combined to "@root/llms-combined.txt"
+show `Built llms-combined.txt (version @version)`

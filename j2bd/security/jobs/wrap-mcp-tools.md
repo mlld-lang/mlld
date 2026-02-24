@@ -85,7 +85,7 @@ exe @mcpConfig() = when [
   @mx.profile == "full" => {
     servers: [
       {
-        module: "@github/issues",
+        command: "npx -y @modelcontextprotocol/server-github",
         tools: "*"
       }
     ]

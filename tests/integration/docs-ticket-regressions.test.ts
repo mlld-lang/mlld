@@ -21,7 +21,7 @@ describe('docs ticket regressions', () => {
   });
 
   it('m-a107: for-context explains parallel ordering and recommends @item.mx.index', async () => {
-    const content = await readDoc('docs/src/atoms/control-flow/for-context.md');
+    const content = await readDoc('docs/src/atoms/flow-control/for-context.md');
     expect(content).toContain('completion order');
     expect(content).toContain('@item.mx.index');
     expect(content).not.toContain('preserves original array position');

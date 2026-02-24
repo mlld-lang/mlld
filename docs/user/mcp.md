@@ -64,22 +64,18 @@ Tips:
 Import MCP tools directly into mlld as executable functions.
 
 ```mlld
-/import tools { @echo } from mcp "@anthropic/filesystem"
+/import tools { @echo } from mcp "npx -y @modelcontextprotocol/server-everything"
 /show @echo("hello")
 
-/import tools from mcp "@github/issues" as @github
-/show @github.createIssue("title", "body")
+/import tools from mcp "npx -y @modelcontextprotocol/server-filesystem /workspace" as @fs
+/show @fs.listDirectory("/workspace")
 ```
 
-Use a command string for external servers:
-
-```mlld
-/import tools { @readFile } from mcp "npx @anthropic/mcp-server-filesystem /workspace"
-```
+The server spec is a shell command that launches the MCP server process.
 
 Rules:
-- `import tools { ... } from mcp "server"` selects specific tools.
-- `import tools from mcp "server" as @name` imports all tools under a namespace (alias required).
+- `import tools { ... } from mcp "command"` selects specific tools.
+- `import tools from mcp "command" as @name` imports all tools under a namespace (alias required).
 - Name collisions with existing variables raise errors; use `as @alias` or a namespace.
 
 ## Tool Collections

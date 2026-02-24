@@ -6,84 +6,26 @@ const ATOMS_DIR = path.join(__dirname, '../../docs/src/atoms');
 const EXPLAINERS_DIR = path.join(__dirname, '../../docs/src/explainers');
 const OUTPUT_DIR = path.join(__dirname, 'docs');
 
-// Category ordering config derived from docs/build/llm/*.mld scripts.
-// Each group either has a `parent` (atoms grouped under a shared heading)
-// or `standalone: true` (atoms rendered as their own h2 sections).
-//
-// outputFilename overrides the default (categoryId.md).
-// titleOverride overrides the _index.md title.
-// Multi-source categories use `sources` array instead of implicit categoryId.
-const CATEGORIES = {
-  'language-reference': {
-    navOrder: 10,
-    titleOverride: 'Language Reference',
-    sources: ['syntax', 'commands'],
-    groups: [
-      // Syntax groups
-      { parent: 'variables', atoms: ['variables-basics', 'variables-conditional', 'variables-truthiness', 'payload'], source: 'syntax' },
-      { parent: 'templates', atoms: ['templates-basics', 'templates-external', 'templates-loops'], source: 'syntax' },
-      { parent: 'file-loading', atoms: ['file-loading-basics', 'file-loading-ast', 'file-loading-metadata', 'file-loading-json-accessors'], source: 'syntax' },
-      { parent: 'escaping', atoms: ['escaping-basics', 'escaping-at', 'escaping-defaults'], source: 'syntax' },
-      { parent: 'builtins', atoms: ['methods-builtin'], source: 'syntax' },
-      { parent: 'pipelines', atoms: ['pipelines-basics', 'pipelines-context', 'pipelines-retry', 'pipelines-parallel'], source: 'syntax' },
-      { standalone: true, atoms: ['comments', 'reserved-variables', 'builtins'], source: 'syntax' },
-      // Commands groups
-      { parent: 'run', atoms: ['run-basics', 'run-cwd', 'run-stdin', 'run-params'], source: 'commands' },
-      { parent: 'exe', atoms: ['exe-simple', 'exe-metadata', 'exe-prose', 'exe-blocks', 'exe-when', 'exe-shadow'], source: 'commands' },
-      { parent: 'commands', atoms: ['output', 'log', 'append', 'stream', 'hooks'], source: 'commands' },
-      { standalone: true, atoms: ['mcp', 'mcp-export', 'mcp-import', 'mcp-tools', 'tool-reshaping', 'env-directive'], source: 'commands' },
-      // Prose (moved from patterns)
-      { standalone: true, atoms: ['prose'], source: 'patterns' }
-    ]
-  },
-  'flow-control': {
-    navOrder: 20,
-    titleOverride: 'Flow Control',
-    sources: ['control-flow'],
-    groups: [
-      { standalone: true, atoms: ['if'] },
-      { parent: 'when', atoms: ['when-inline', 'when', 'when-value-returning', 'when-blocks', 'when-local-vars', 'when-operators'] },
-      { parent: 'for', atoms: ['for-arrow', 'for-collection', 'for-block', 'for-filter', 'for-skip', 'for-object', 'for-nested', 'for-batch', 'for-parallel', 'for-context'] },
-      { standalone: true, atoms: ['foreach', 'loop', 'while', 'bail', 'script-return', 'no-early-exit'] }
-    ]
-  },
-  'modules': {
-    navOrder: 30,
-    groups: [
-      { parent: 'modules', atoms: ['philosophy', 'creating', 'frontmatter-access', 'exporting', 'module-patterns', 'local-development', 'registry', 'resolvers', 'updating'] },
-      { parent: 'importing', atoms: ['importing-registry', 'importing-local', 'importing-namespace', 'importing-directory', 'importing-node', 'import-types', 'import-templates'] },
-      { standalone: true, atoms: ['module-structure'] }
-    ]
-  },
-  'cli': {
-    navOrder: 40,
-    titleOverride: 'CLI',
-    sources: ['configuration'],
-    groups: [
-      { parent: 'cli', atoms: ['cli-run', 'cli-file', 'checkpoint', 'validate-features', 'live-stdio', 'mcp-dev', 'plugin'] }
-    ]
-  },
-  'configuration': {
-    navOrder: 50,
-    groups: [
-      { parent: 'configuration', atoms: ['config-files', 'environment-variables', 'frontmatter', 'paths-urls'] }
-    ]
-  },
-  'security': {
-    navOrder: 60,
-    groups: [
-      { standalone: true, atoms: ['security-getting-started'] },
-      { parent: 'labels', atoms: ['labels-overview', 'labels-sensitivity', 'labels-trust', 'labels-influenced', 'labels-source-auto', 'automatic-labels', 'label-tracking', 'label-modification'] },
-      { parent: 'guards', atoms: ['guards-basics', 'guard-composition', 'guards-privileged', 'transform-with-allow', 'denied-handlers'] },
-      { parent: 'policies', atoms: ['policies', 'policy-capabilities', 'policy-operations', 'policy-label-flow', 'policy-composition', 'policy-auth'] },
-      { parent: 'signing', atoms: ['signing-overview', 'sign-verify', 'autosign-autoverify'] },
-      { parent: 'mcp-security', atoms: ['mcp-security', 'mcp-policy', 'mcp-guards'] },
-      { parent: 'environments', atoms: ['env-overview', 'env-config', 'env-blocks'] },
-      { standalone: true, atoms: ['needs-declaration', 'profiles', 'auth', 'audit-log', 'tool-call-tracking'] },
-      { parent: 'pattern', atoms: ['pattern-audit-guard', 'pattern-dual-audit'] }
-    ]
-  }
+// Shared atom ordering config — single source of truth for both LLM and website docs.
+const sharedConfig = require('../../docs/build/categories.json');
+
+// Website-specific metadata layered on top of the shared config.
+// The shared config defines page structure and atom ordering;
+// this adds navOrder, titleOverride, and sources for the website build.
+// Categories not listed here (mistakes, patterns) are LLM-only.
+const WEBSITE_META = {
+  'language-reference': { navOrder: 10, titleOverride: 'Language Reference', sources: ['syntax', 'commands'] },
+  'flow-control':       { navOrder: 20, titleOverride: 'Flow Control' },
+  'modules':            { navOrder: 30 },
+  'cli':                { navOrder: 40, titleOverride: 'CLI', sources: ['configuration'] },
+  'configuration':      { navOrder: 50 },
+  'security':           { navOrder: 60 }
 };
+
+const CATEGORIES = {};
+for (const [pageId, meta] of Object.entries(WEBSITE_META)) {
+  CATEGORIES[pageId] = { ...sharedConfig[pageId], ...meta };
+}
 
 function parseFrontmatter(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
@@ -122,18 +64,6 @@ function readAtom(categoryDir, filename) {
   return { fm, body, filename };
 }
 
-function resolveAtomDir(categoryId, group) {
-  // If group specifies a source, use that directory; otherwise use the category's
-  // own sources (first one) or fall back to categoryId itself
-  if (group && group.source) {
-    return path.join(ATOMS_DIR, group.source);
-  }
-  const config = CATEGORIES[categoryId];
-  if (config && config.sources) {
-    return path.join(ATOMS_DIR, config.sources[0]);
-  }
-  return path.join(ATOMS_DIR, categoryId);
-}
 
 function buildCategoryPage(categoryId, config) {
   // Determine which atom directories to use

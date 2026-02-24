@@ -2,59 +2,52 @@
 updated: 2026-01-05
 tags: #docs, #llm, #llms-txt, #atoms
 related-docs: docs/dev/DOCS.md, docs/dev/DOCS-DEV.md, docs/dev/DOCS-CLI.md
-related-code: llms.txt, docs/llm/, docs/src/atoms/, docs/build/llm/, llm/run/llmstxt.mld
+related-code: llms.txt, docs/llm/, docs/src/atoms/, docs/build/categories.json, llm/run/llmstxt.mld
 ---
 
 # llms.txt Maintenance Guide
 
 ## tldr
 
-LLM docs are built from **atoms** (atomic markdown files in `docs/src/atoms/`). Build scripts in `docs/build/llm/` assemble atoms into the `docs/llm/*.txt` module files. Don't edit `docs/llm/` directly - update atoms, run build scripts.
+LLM docs are built from **atoms** (atomic markdown files in `docs/src/atoms/`). A shared config (`docs/build/categories.json`) defines page structure and atom ordering for both LLM and website docs. A single build script (`llm/run/llmstxt.mld`) assembles atoms into `docs/llm/*.txt` module files. Don't edit `docs/llm/` directly — update atoms, run `npm run build` or `mlld run llmstxt`.
 
-All examples use **strict mode** (bare directives). Run `mlld run llmstxt` to regenerate `llms-combined.txt`.
+All examples use **strict mode** (bare directives).
 
 ## File Structure
 
 ```
-docs/src/atoms/             # SOURCE OF TRUTH (104 atoms)
+docs/src/atoms/             # SOURCE OF TRUTH
 ├── syntax/                 # Variables, templates, file loading, pipelines
 ├── commands/               # run, exe, output, log, append, stream
-├── control-flow/           # when, for, foreach, while, parallel, skip
+├── flow-control/           # when, for, foreach, while, parallel, skip
 ├── modules/                # Import/export, registry, local dev
 ├── patterns/               # Common workflow patterns
-├── configuration/          # SDK modes, env vars, resolvers
+├── configuration/          # CLI, config files, SDK modes
 ├── security/               # Guards, labels, capabilities
 └── mistakes/               # Common errors and fixes
 
-docs/build/llm/             # Build scripts (assemble atoms → modules)
-├── syntax.mld
-├── commands.mld
-├── control-flow.mld
-├── modules.mld
-├── patterns.mld
-├── configuration.mld
-├── security.mld
-└── mistakes.mld
+docs/build/
+└── categories.json         # Shared config: page structure + atom ordering
 
 docs/llm/                   # GENERATED OUTPUT (don't edit directly)
 ├── llms-overview.txt       # Purpose, mental model, two syntax modes
 ├── llms-core-rules.txt     # The 13 core rules
-├── llms-syntax.txt         # Built from syntax atoms
-├── llms-commands.txt       # Built from commands atoms
-├── llms-control-flow.txt   # Built from control-flow atoms
-├── llms-modules.txt        # Built from modules atoms
-├── llms-patterns.txt       # Built from patterns atoms
-├── llms-configuration.txt  # Built from configuration atoms
+├── llms-language-reference.txt  # syntax + commands + prose atoms
+├── llms-flow-control.txt   # flow-control atoms
+├── llms-modules.txt        # modules atoms
+├── llms-patterns.txt       # patterns atoms
+├── llms-cli.txt            # CLI atoms (from configuration/)
+├── llms-configuration.txt  # config + SDK atoms
 ├── llms-sdk.txt            # SDK usage, execution modes
-├── llms-mistakes.txt       # Built from mistakes atoms
-├── llms-security.txt       # Built from security atoms
+├── llms-mistakes.txt       # mistakes atoms
+├── llms-security.txt       # security atoms
 ├── llms-reference.txt      # Quick reference tables
-└── llms-cookbook.txt       # Annotated real-world examples
+└── llms-cookbook.txt        # Annotated real-world examples
 
 llms.txt                    # Brief entry point with TOC + essential patterns
 llms-combined.txt           # Generated: all modules concatenated
 
-llm/run/llmstxt.mld         # Build script to generate llms-combined.txt
+llm/run/llmstxt.mld         # Build script: reads categories.json, builds all modules
 ```
 
 ### When to Use Each
@@ -62,7 +55,7 @@ llm/run/llmstxt.mld         # Build script to generate llms-combined.txt
 | File | Use Case |
 |------|----------|
 | `docs/src/atoms/` | Editing content (source of truth) |
-| `docs/build/llm/*.mld` | Editing how atoms are assembled |
+| `docs/build/categories.json` | Editing page structure and atom ordering |
 | `llms.txt` | Quick context, points to modules |
 | `llms-combined.txt` | Full context injection for comprehensive tasks |
 | Individual modules | Focused help on specific topics |
@@ -166,30 +159,26 @@ var @doc = :::<GUIDE version="{{version}}">:::
 ### llms-core-rules.txt
 The 13 fundamental rules. High bar for additions - only truly essential syntax.
 
-### llms-syntax.txt
-Detailed syntax coverage:
+### llms-language-reference.txt
+Syntax + commands combined:
 - Variables and conditional inclusion
 - Templates (backticks, `::...::`)
 - File loading with globs and AST selectors
-- `.data/.text` JSON string accessors
-- Builtin methods
-- Pipelines and transforms
-- Comments and reserved variables
+- Builtin methods, pipelines and transforms
+- `run cmd/sh/js`, `exe` with blocks and when
+- `output`, `log`, `append`, `stream`
+- Prose
 
-### llms-commands.txt
-All command directives:
-- `run cmd/sh/js` with decision tree
-- `exe` with blocks and when
-- `output`, `log`, `append`
-- `stream`
-
-### llms-control-flow.txt
+### llms-flow-control.txt
 - `when` (inline, block list, value-returning)
 - `for` (arrow, block, collection, parallel)
 - `skip` keyword for filtering
-- `foreach`
-- `loop` blocks
-- `while` loops
+- `foreach`, `loop`, `while`
+
+### llms-cli.txt
+- `mlld run`, `mlld file`
+- Checkpoint/resume
+- Validation, live-stdio, MCP dev, plugin
 
 ### llms-modules.txt
 - Creating modules with frontmatter
@@ -235,28 +224,25 @@ Real-world annotated examples.
 ### Adding a New Feature
 
 1. Create atom in `docs/src/atoms/<category>/<feature>.md` with frontmatter
-2. Add atom to build script in `docs/build/llm/<category>.mld`
-3. Rebuild module: `./dist/cli.cjs docs/build/llm/<category>.mld > docs/llm/llms-<category>.txt`
-4. Verify with diff: `diff docs/llm/llms-<category>.txt <original>`
+2. Add atom to the appropriate group in `docs/build/categories.json`
+3. Rebuild: `mlld run llmstxt`
+4. Verify output: check `docs/llm/llms-<page>.txt`
 5. Update llms-reference.txt tables if applicable
 6. Consider adding to cookbook if it composes well
-7. Regenerate combined: `mlld run llmstxt`
 
 ### Adding a Common Mistake
 
 1. Create atom in `docs/src/atoms/mistakes/<mistake>.md`
-2. Show wrong and correct patterns (no ❌/✅ emoji - plain text)
-3. Add to build script: `docs/build/llm/mistakes.mld`
-4. Rebuild: `./dist/cli.cjs docs/build/llm/mistakes.mld > docs/llm/llms-mistakes.txt`
-5. Regenerate combined
+2. Show wrong and correct patterns (no emoji - plain text)
+3. Add to the mistakes group in `docs/build/categories.json`
+4. Rebuild: `mlld run llmstxt`
 
 ### Fixing Examples
 
 1. Find the source **atom** in `docs/src/atoms/`
 2. Update with correct strict mode syntax
 3. Test example parses: `npm run ast -- 'code'`
-4. Rebuild the module: `./dist/cli.cjs docs/build/llm/<category>.mld > docs/llm/llms-<category>.txt`
-5. Regenerate combined
+4. Rebuild: `mlld run llmstxt`
 
 ### Atom Format
 
@@ -282,55 +268,23 @@ See [DOCS-CLI.md](DOCS-CLI.md) for full atom specification.
 
 ## Build Scripts
 
-### Module Build Scripts
-
-Each `docs/build/llm/<category>.mld` builds one `docs/llm/llms-<category>.txt`:
+A single mlld script (`llm/run/llmstxt.mld`) builds all LLM docs:
 
 ```bash
-# Rebuild single module
-./dist/cli.cjs docs/build/llm/syntax.mld > docs/llm/llms-syntax.txt
-
-# Rebuild all modules (example)
-for script in docs/build/llm/*.mld; do
-  name=$(basename "$script" .mld)
-  ./dist/cli.cjs "$script" > "docs/llm/llms-$name.txt"
-done
-```
-
-Build scripts:
-1. Load atoms in order from `docs/src/atoms/<category>/`
-2. Strip frontmatter from each atom
-3. Wrap each section in pseudo-XML tags
-4. Output assembled module
-
-### Combined Build Script
-
-`llm/run/llmstxt.mld` generates `llms-combined.txt`:
-
-```bash
-mlld run llmstxt
+mlld run llmstxt     # or: npm run build:docs
 ```
 
 The script:
-1. Reads version from package.json
-2. Loads all modules from docs/llm/ in logical order
-3. Wraps in `<MLLD_COMPLETE_GUIDE>` with version and timestamp
-4. Writes to llms-combined.txt
+1. Reads `docs/build/categories.json` for page structure and atom ordering
+2. For each category, loads atoms from `docs/src/atoms/`, strips frontmatter
+3. Wraps in pseudo-XML tags (parent groups get `<PARENT>` tags, standalone atoms get individual tags)
+4. Writes each module to `docs/llm/llms-<category>.txt`
+5. Assembles all modules into `llms-combined.txt` with version and timestamp
 
-**Module order** (defined in script):
-1. overview
-2. core-rules
-3. syntax
-4. commands
-5. control-flow
-6. modules
-7. patterns
-8. configuration
-9. sdk
-10. mistakes
-11. security
-12. reference
-13. cookbook
+The docs step runs automatically as part of `npm run build` (after TypeScript compilation).
+
+**Module order** in combined output:
+1. overview, 2. core-rules, 3. language-reference, 4. flow-control, 5. modules, 6. patterns, 7. cli, 8. configuration, 9. sdk, 10. mistakes, 11. security, 12. reference, 13. cookbook
 
 ## Testing Changes
 

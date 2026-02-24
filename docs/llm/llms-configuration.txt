@@ -1,12 +1,22 @@
 <MLLD_CONFIGURATION>
 
-<CONFIG_FILES>
+<CONFIGURATION>
 mlld uses dual configuration:
 - `mlld-config.json` - Your project settings (edit manually)
 - `mlld-lock.json` - Auto-generated locks (don't edit)
-</CONFIG_FILES>
 
-<ENVIRONMENT_VARIABLES>
+`mlld validate` warning suppression lives in `mlld-config.json`:
+
+```json
+{
+  "validate": {
+    "suppressWarnings": ["exe-parameter-shadowing"]
+  }
+}
+```
+
+Use suppression when a warning is intentional and reviewed.
+
 Allow env vars in config, then import via `@input`.
 
 **mlld-lock.json:**
@@ -27,9 +37,7 @@ show `Running in @MLLD_NODE_ENV`
 ```
 
 All env vars must be prefixed with `MLLD_`.
-</ENVIRONMENT_VARIABLES>
 
-<FRONTMATTER>
 Document metadata at file start.
 
 ```yaml
@@ -48,9 +56,7 @@ Access via `@fm`:
 var @id = @fm.id
 var @version = @fm.version
 ```
-</FRONTMATTER>
 
-<PATHS_AND_URLS>
 Paths can be literal, interpolated, or resolver-based.
 
 ```mlld
@@ -62,9 +68,9 @@ var @template = 'templates/@var.html'  >> literal '@'
 show <https://raw.githubusercontent.com/org/repo/main/README.md>
 var @remote = <https://example.com/README.md>
 ```
-</PATHS_AND_URLS>
+</CONFIGURATION>
 
-<SDK_EXECUTION_MODES>
+<SDK>
 Four modes for SDK consumers:
 
 **document** (default): Returns string
@@ -95,29 +101,41 @@ await handle.done();
 const result = await interpret(script, { mode: 'debug' });
 console.log(result.trace);
 ```
-</SDK_EXECUTION_MODES>
 
-<DYNAMIC_MODULE_INJECTION>
 Inject runtime context without filesystem I/O.
 
 ```typescript
-processMlld(template, {
-  dynamicModules: {
-    '@state': { count: 0, messages: [...] },
-    '@payload': { text: 'user input', userId: '123' }
-  }
-});
+execute('./script.mld', { text: 'user input', userId: '123' });
 ```
 
 ```mlld
-var @count = @state.count + 1
-var @input = @payload.text
+>> Destructuring import (fields must exist)
+import { text, userId } from @payload
+show @text
+```
+
+For optional fields, use namespace import with ternary:
+
+```mlld
+>> Namespace import for optional field access
+import "@payload" as @payload
+var @text = @payload.text ? @payload.text : "default"
+```
+
+CLI usage with `mlld run`:
+
+```bash
+mlld run myscript --topic foo --count 5
+```
+
+```mlld
+>> In myscript.mld - required fields
+import { topic, count } from @payload
+show `Topic: @topic, Count: @count`
 ```
 
 Dynamic imports are labeled `src:dynamic` and marked untrusted.
-</DYNAMIC_MODULE_INJECTION>
 
-<EXECUTE_FUNCTION>
 File-based execution with state management.
 
 ```typescript
@@ -136,9 +154,7 @@ Features:
 - State hydration via `@state` module
 - Payload injection via `@payload`
 - State writes via `state://` protocol
-</EXECUTE_FUNCTION>
 
-<ANALYZE_MODULE>
 Static analysis without execution.
 
 ```typescript
@@ -153,6 +169,6 @@ const tools = analysis.executables
 ```
 
 Use cases: MCP proxy, module validation, IDE/LSP, security auditing.
-</ANALYZE_MODULE>
+</SDK>
 
 </MLLD_CONFIGURATION>

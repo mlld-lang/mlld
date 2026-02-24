@@ -1,6 +1,6 @@
-<MLLD_CONTROL_FLOW>
+<MLLD_FLOW_CONTROL>
 
-<IF_FLOW>
+<IF>
 `if` runs imperative branches. Use block form with optional `else`.
 
 ```mlld
@@ -22,18 +22,44 @@ exe @validate(input) = [
 ]
 ```
 
-Use `=>` only inside `exe` blocks.
-</IF_FLOW>
+Use `=>` inside `exe` blocks and at script top level.
+</IF>
 
-<WHEN_DECISIONS>
-`when` selects the first matching condition. Use `if` for imperative flow.
+<WHEN>
+Two forms: value matching (`when @expr [patterns]`) and condition matching (`when [conditions]`).
 
-**Inline form:**
+**Value matching** — match a value against literal patterns:
 
 ```mlld
-when @isProd => show "Production mode"
-when @score > 90 => show "Excellent!"
+var @status = "active"
+when @status [
+  "active" => show "Running"
+  "pending" => show "Waiting"
+  * => show "Unknown"
+]
 ```
+
+The colon form `when @expr: [patterns]` also works but the colon is optional.
+
+**Condition matching** — evaluate boolean expressions (no value after `when`):
+
+```mlld
+when [
+  @score > 90 => show "A"
+  @score > 80 => show "B"
+  * => show "F"
+]
+```
+
+Patterns evaluate in order. First match wins.
+
+**Simple inline** (single condition, single result):
+
+```mlld
+when @cond => show "Match"
+```
+
+Returns the result when the condition is truthy. Use block form `when [@cond => action; * => default]` when you need multiple branches or a fallback.
 
 **When block** (first match wins):
 
@@ -63,6 +89,19 @@ var @grade = @classify(85)  >> "B"
 
 `when` returns the first matching branch. Use `if` for imperative flow.
 
+Inside `exe` block statements, `when` values also return from the enclosing `exe` on match:
+
+```mlld
+exe @guard(x) = [
+  when !@x => [
+    => "missing"
+  ]
+  => "ok"
+]
+```
+
+Block form keeps return intent explicit. Bare value actions such as `when !@x => "missing"` are valid and return early.
+
 **Block actions** (side effects + return):
 
 ```mlld
@@ -77,6 +116,20 @@ var @result = when [
 ```
 
 Conditions evaluate in order and the first match runs.
+
+Inside `exe` blocks, a matched `when` action that evaluates to a value returns from the enclosing `exe`.
+Use block-form return for explicit intent:
+
+```mlld
+exe @guard(x) = [
+  when !@x => [
+    => "missing"
+  ]
+  => "ok"
+]
+```
+
+`when !@x => "missing"` also returns from the `exe`.
 
 **Local variables in when:**
 
@@ -115,11 +168,9 @@ when [
   * => show "Blocked"
 ]
 ```
-</WHEN_DECISIONS>
+</WHEN>
 
-<FOR_ITERATION>
-`for` iterates over collections. Arrow form for single actions, block form for multiple.
-
+<FOR>
 **Arrow form:**
 
 ```mlld
@@ -202,9 +253,7 @@ for @x in ["A","B"] => for @y in [1,2] => show `@x-@y`
 var @total = for @n in [1,2,3,4] => @n => | @sum
 var @sorted = for @item in @items => @process(@item) => | @sortBy("priority")
 ```
-</FOR_ITERATION>
 
-<PARALLEL_FOR>
 Run iterations concurrently with `for parallel`.
 
 ```mlld
@@ -246,7 +295,61 @@ exe @process(tasks) = [
   ]
 ]
 ```
-</PARALLEL_FOR>
+
+**Loop context via @mx.for:**
+
+```mlld
+var @items = [10, 20, 30]
+for @n in @items => show `Index: @mx.for.index, Value: @n`
+>> Output:
+>> Index: 0, Value: 10
+>> Index: 1, Value: 20
+>> Index: 2, Value: 30
+```
+
+**Available @mx.for fields:**
+
+- `@mx.for.index` - Current 0-based iteration index
+- `@mx.for.total` - Total number of items in collection
+- `@mx.for.key` - Key for objects, stringified index for arrays
+- `@mx.for.parallel` - Boolean indicating parallel execution
+
+**Array binding metadata @item.mx.index:**
+
+```mlld
+var @items = [10, 20, 30]
+for @item in @items => show `Item @item.mx.index: @item`
+>> Output:
+>> Item 0: 10
+>> Item 1: 20
+>> Item 2: 30
+```
+
+For arrays, the loop-bound variable exposes `@item.mx.index` with the zero-based array position. This works in expressions, `when` filters, templates, directive bodies, and nested loops.
+
+**Object iteration:**
+
+```mlld
+var @cfg = {"host": "localhost", "port": 3000}
+for @v in @cfg => show `Key: @v.mx.key, Value: @v`
+>> Output:
+>> Key: host, Value: localhost
+>> Key: port, Value: 3000
+```
+
+Object iteration binds `@v.mx.key` but does not set `@v.mx.index`.
+
+**In parallel loops:**
+
+```mlld
+var @tasks = ["a", "b", "c"]
+for parallel(2) @item in @tasks => show `Slot @mx.for.index, item @item.mx.index: @item`
+```
+
+`@mx.for.parallel` returns `true` in parallel loops, `false` in sequential loops.
+
+Parallel iterations complete out of order, so output lines are emitted in completion order. In that mode, treat `@mx.for.index` as execution-context metadata, not a stable ordering key for reconstructing source position. Use `@item.mx.index` when you need the original dispatch position in both sequential and parallel loops.
+</FOR>
 
 <FOREACH>
 `foreach` applies a function to each element, returning transformed array.
@@ -274,7 +377,7 @@ show foreach @greet(@names) with { separator: " | " }
 ```
 </FOREACH>
 
-<LOOP_BLOCKS>
+<LOOP>
 Block-based iteration with explicit `done` and `continue`.
 
 ```mlld
@@ -317,9 +420,9 @@ loop(endless, 10ms) until @input >= 3 [
   continue @next
 ]
 ```
-</LOOP_BLOCKS>
+</LOOP>
 
-<WHILE_LOOPS>
+<WHILE>
 Bounded iteration with `while`.
 
 ```mlld
@@ -347,30 +450,181 @@ var @result = 5 | while(10) @countdown
 ```mlld
 var @result = @initial | while(100, 1s) @processor  >> 1s between iterations
 ```
-</WHILE_LOOPS>
+</WHILE>
 
-<NO_EARLY_EXIT>
-mlld has no top-level `return` or `exit`. Model outcomes with `when` and flags.
+<BAIL>
+Terminates the entire script immediately with exit code 1. Works from any context including nested blocks and imported modules.
 
 ```mlld
->> Instead of early return, use conditional flow
-var @check = @validate(@input)
+>> Explicit message
+bail "config file missing"
+
+>> With variable interpolation
+var @missing = "database"
+bail `Missing: @missing`
+
+>> Bare bail (uses default message)
+bail
+```
+
+**Exit from nested contexts:**
+
+```mlld
+>> From if blocks
+if @checkFailed [
+  bail "validation failed"
+]
+
+>> From when expressions
 when [
-  @check.valid => @process(@input)
-  !@check.valid => show `Error: @check.message`
+  !@ready => bail "not ready"
+  * => @process()
+]
+
+>> From for loops
+for @item in @items [
+  if !@item.valid [
+    bail `Invalid item: @item.id`
+  ]
 ]
 ```
 
-Inside `exe` blocks, use `if` and `=>` for early return:
+**Terminates imported modules:**
+
+When an imported module calls `bail`, the entire script terminates, not just the module:
 
 ```mlld
-exe @guard(input) = [
+>> module.mld
+if !@configured [
+  bail "module not configured"
+]
+export { data: "ok" }
+
+>> main.mld
+import { data } from "./module.mld"  >> terminates here
+show @data  >> never reached
+```
+
+**Markdown mode:**
+
+```mlld
+/bail "markdown mode termination"
+```
+
+**Exit behavior:**
+- Throws `MlldBailError` with code `BAIL_EXIT`
+- Exit code: 1
+- Default message: "Script terminated by bail directive."
+- Message accepts strings, variables, and expressions
+</BAIL>
+
+<SCRIPT_RETURN>
+`=> @value` terminates script execution immediately. When `=>` appears inside a top-level `if` or `when` block, it terminates the script, not just the block.
+
+**Basic script return:**
+
+```mlld
+>> Strict mode
+=> "final result"
+show "unreachable"
+```
+
+**Script return from conditionals:**
+
+```mlld
+if @condition [
+  => "early exit"
+]
+=> "fallback"
+```
+
+```mlld
+var @mode = "fast"
+when @mode == "fast" => [
+  if @ready [
+    => "immediate"
+  ]
+]
+=> "deferred"
+```
+
+**Module default export:**
+
+Imported `.mld` modules expose script return values through `default`:
+
+```mlld
+>> module.mld
+var @status = "active"
+=> { code: 200, status: @status }
+var @unreachable = "never runs"
+```
+
+```mlld
+>> main.mld
+import { default as @result, status as @s } from "./module.mld"
+show @result.code     >> 200
+show @s               >> "active"
+```
+
+Scripts without `=>` do not emit implicit final return output. Use `=>` explicitly when module consumers need a default export value.
+
+**In exe blocks:**
+
+`=> @value` returns from the function body. See exe-blocks for function return syntax.
+
+```mlld
+exe @validate(input) = [
   if !@input [
     => { error: "missing" }
   ]
   => { ok: @input }
 ]
 ```
+</SCRIPT_RETURN>
+
+<NO_EARLY_EXIT>
+mlld has no `break` or `continue` for loops. Use conditional logic instead.
+
+**For loops iterate all items:**
+
+```mlld
+>> Filter with conditional accumulation
+exe @filter(items) = [
+  let @results = []
+  for @item in @items [
+    when @item.valid => [
+      let @results += [@item]
+    ]
+  ]
+  => @results
+]
+```
+
+**Exe blocks support return via `=>`:**
+
+```mlld
+exe @validate(input) = [
+  if !@input [
+    => { error: "missing" }
+  ]
+  => { ok: @input }
+]
+```
+
+**Scripts support top-level return:**
+
+Script-level `=> @value` terminates execution immediately. See script-return for details.
+
+```mlld
+if @found [
+  => "early exit"
+]
+=> "fallback"
+```
+
+**Design principle:**
+
+Loops model data transformation. Use `when` branches and accumulation (`let @var += value`) for conditional processing. For early termination of scripts or functions, use `=> @value`.
 </NO_EARLY_EXIT>
 
-</MLLD_CONTROL_FLOW>
+</MLLD_FLOW_CONTROL>

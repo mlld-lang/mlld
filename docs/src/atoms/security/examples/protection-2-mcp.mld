@@ -11,8 +11,9 @@
 >> - Security labels must reflect actual data origin, not declared origin
 >>
 >> TO VERIFY WITH REAL MCP DATA:
->> 1. Configure an MCP server (e.g., @modelcontextprotocol/filesystem)
->> 2. Load data via MCP: /var @mcpData = @mcp.filesystem.readFile("/tmp/test.txt")
+>> 1. Import from a real MCP server:
+>>    /import tools { @readTextFile } from mcp "npx -y @modelcontextprotocol/server-filesystem /tmp"
+>> 2. Load data via MCP: /var @mcpData = @readTextFile("/tmp/test.txt")
 >> 3. The runtime will auto-apply src:mcp label
 >> 4. Attempt destructive operation - it will be blocked
 >>
@@ -46,7 +47,7 @@
 /show "- Data has NO src:mcp label (literals can't fake provenance)"
 /show "- Operations would pass label flow checks"
 /show ""
-/show "With real MCP data (e.g., @mcp.filesystem.readFile):"
+/show "With real MCP data (e.g., @readTextFile from server-filesystem):"
 /show "- Data would have src:mcp label auto-applied"
 /show "- Calling @@deleteFiles(@@mcpData.path) would be DENIED"
 /show "- Error: Label 'src:mcp' cannot flow to 'destructive'"

@@ -44,6 +44,7 @@
     "build:version": "node ./scripts/generate-version.js",
     "build:python": "node lib/mlld-python/scripts/sync-version.js",
     "build:wasm": "node ./scripts/copy-wasm-files.js",
+    "build:docs": "./dist/cli.cjs llm/run/llmstxt.mld",
     "build:verbose": "node ./scripts/build-wrapper.js && npm run sync:mlldx",
     "build": "node ./scripts/build-quiet.js",
     "ast": "node ./scripts/ast-wrapper.js",

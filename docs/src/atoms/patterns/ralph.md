@@ -1,111 +1,119 @@
 ---
 id: pattern-ralph
 title: Ralph Loop Pattern
-brief: Autonomous agent loop with dynamic context assembly
+brief: Autonomous agent loop with fresh context and test backpressure
 category: patterns
 parent: patterns
 tags: [patterns, agents, loops, orchestration, autonomous]
 related: [loop, pattern-gate, pattern-llm-integration, config-sdk-execute, checkpoint, hooks]
 related-code: [interpreter/eval/loop.ts]
-updated: 2026-01-11
+updated: 2026-02-24
 ---
+
+Autonomous coding loop based on the [Ralph Wiggum technique](https://ghuntley.com/ralph/) by Geoff Huntley. Each iteration: reload context from disk, pick one task, execute it, test, commit on green. The loop is the outer process; the LLM decides what to work on.
 
 ```mlld
 >> ralph.mld - autonomous coding agent loop
->> Run once per iteration, or use loop for continuous execution
 
-import { @claude } from "@lib/claude.mld"
+import { @claudePoll } from "@mlld/claude-poll"
 
->> Load fresh context each iteration
-var @plan = <fix_plan.md>
-var @specs = <specs/*.md>
+var @tools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*)"
 
->> Classify the most important task
-exe @classifyTask(plan) = [
-  let @prompt = `Given this plan, identify the SINGLE most important next task:
+>> Cheap model picks the most important task from current plan
+exe llm @pickTask(plan, specs) = [
+  let @prompt = `Given this plan and these specs, identify the SINGLE most
+important next task. Search before assuming something isn't implemented.
+Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }
+
+<plan>
 @plan
-Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }`
-  => @haiku(@prompt) | @parse.llm
+</plan>
+
+<specs>
+@specs
+</specs>
+
+IMPORTANT: Write your JSON response to @mx.outPath using the Write tool.`
+  @claudePoll(@prompt, "haiku", ".", "Read,Glob,Grep,Write", @mx.outPath)
+  => <@mx.outPath>? | @parse.llm
 ]
 
->> Build context for the task (load only what's relevant)
-exe @buildContext(task, specs) = [
-  let @relevant = for @spec in @specs
-    when @task.type in @spec.mx.relative => @spec
-  let @code = for @file in @task.files => <@file>
-  => { specs: @relevant, code: @code }
-]
-
->> Execute the task
-exe @executeTask(task, context) = [
-  let @prompt = `
-# Task
+>> Worker executes the task with full agent capabilities
+exe llm @doTask(task, specs) = [
+  let @prompt = `# Task
 @task.task
 
-# Relevant Specs
-@context.specs.join("\n\n")
+# Specs
+@specs
 
-# Current Code
-@context.code.join("\n\n")
+Implement this task. Search the codebase before assuming anything is
+not implemented. After implementing, run tests for just this change.
 
-Implement this task. Search before assuming not implemented.
-After implementing, run tests for just this change.
-`
-  => @claude(@prompt, "sonnet", ".", "Read,Edit,Write,Bash,Grep,Glob")
+IMPORTANT: Write your result JSON to @mx.outPath using the Write tool.`
+  @claudePoll(@prompt, "sonnet", ".", @tools, @mx.outPath)
+  => <@mx.outPath>?
 ]
 
 >> Validate with tests
-exe @validate() = [
-  let @output = cmd { npm test 2>&1 }
-  => { pass: @output.exitCode == 0, output: @output }
+exe @test() = [
+  let @out = sh { npm test 2>&1 }
+  => { pass: @out.exitCode == 0, output: @out }
 ]
 
->> Single iteration
-var @task = @classifyTask(@plan)
-var @context = @buildContext(@task, @specs)
-var @result = @executeTask(@task, @context)
-var @check = @validate()
-
-when @check.pass => [
-  run cmd { git add -A && git commit -m "@task.task" && git push }
-  show "committed"
-]
-```
-
-The Ralph pattern runs autonomous coding loops with dynamic context assembly. Each iteration:
-
-1. **Load fresh context** - Reload plan and specs from disk
-2. **Classify task** - Use a cheap model to pick the most important work
-3. **Build context** - Load only relevant specs and code (saves tokens)
-4. **Execute** - Run the task with full agent capabilities
-5. **Validate** - Run tests as backpressure
-6. **Commit on success** - Only persist passing changes
-
-**With continuous loop:**
-
-```mlld
-loop(endless) until @state.stop [
-  var @plan = <fix_plan.md>
+>> The loop
+loop(endless) [
+  >> Fresh context every iteration — the context IS the history
+  let @plan = <fix_plan.md>
   when @plan.trim() == "" => done "complete"
+  let @specs = <specs/*.md>
 
-  let @task = @classifyTask(@plan)
-  let @context = @buildContext(@task, <specs/*.md>)
-  let @result = @executeTask(@task, @context)
-  let @check = @validate()
+  >> One task per loop — trust the LLM to pick what matters
+  let @task = @pickTask(@plan, @specs)
+  let @result = @doTask(@task, @specs)
 
-  when @check.pass => run cmd { git commit -am "@task.task" && git push }
+  >> Test backpressure — only commit what passes
+  let @check = @test()
+  when @check.pass => run sh { git commit -am "@task.task" && git push }
+
   continue
 ]
 ```
 
-**SDK control** - External processes can stop the loop by setting `@state.stop = true`.
+**Core principles:**
 
-**Checkpoint/resume** - Label LLM exes with `llm` to auto-cache results. If the loop crashes, `--resume` restarts without re-calling prior LLM operations. `--resume @classifyTask` re-runs only that function's cached entries.
+- **One task per loop** — Each iteration picks a single task and executes it. Narrowing scope keeps context usage low and outcomes predictable.
+- **Fresh context from disk** — Plan and specs reload every iteration. No chat history carried forward. The filesystem is the state.
+- **Test backpressure** — Tests gate commits. Failing iterations aren't fatal; the next iteration sees the current state and adapts.
+- **LLM picks the work** — The cheap classifier decides priority. The orchestrator doesn't encode task selection logic.
 
-**Hook telemetry** - Track loop progress with lifecycle hooks:
+**Crash recovery** — The `llm` label on `@pickTask` and `@doTask` enables automatic caching. If the loop crashes mid-iteration, re-running the script replays completed LLM calls from cache.
+
+```bash
+mlld run ralph                     # auto-resumes via cache
+mlld run ralph --resume @doTask    # re-run all worker calls
+mlld run ralph --new               # fresh run, clear cache
+```
+
+**Hook telemetry:**
 
 ```mlld
 hook @progress after op:loop = [
-  log `iteration @mx.loop.iteration`    >> fires per iteration
+  log `iteration @mx.loop.iteration`
+]
+```
+
+**With pacing** — Add a delay between iterations to avoid hammering APIs:
+
+```mlld
+loop(endless, 5s) [
+  ...
+]
+```
+
+**With a cap** — Limit total iterations:
+
+```mlld
+loop(50) [
+  ...
 ]
 ```

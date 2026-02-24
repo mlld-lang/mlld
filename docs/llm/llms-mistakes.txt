@@ -1,6 +1,6 @@
 <MLLD_COMMON_MISTAKES>
 
-<MISTAKE_MISSING_AT>
+<MISSING_AT>
 Variables always need `@` prefix.
 
 ```mlld
@@ -10,9 +10,9 @@ var greeting = "Hello"
 >> Correct
 var @greeting = "Hello"
 ```
-</MISTAKE_MISSING_AT>
+</MISSING_AT>
 
-<MISTAKE_SLASH_IN_STRICT_MODE>
+<SLASH_IN_STRICT_MODE>
 Strict mode (.mld) uses bare directives. Markdown mode (.mld.md) uses slashes.
 
 ```mlld
@@ -24,9 +24,9 @@ Strict mode (.mld) uses bare directives. Markdown mode (.mld.md) uses slashes.
 var @x = 1
 show @x
 ```
-</MISTAKE_SLASH_IN_STRICT_MODE>
+</SLASH_IN_STRICT_MODE>
 
-<MISTAKE_USING_AT_FOR_DIRECTIVES>
+<AT_FOR_DIRECTIVES>
 Directives don't use `@` prefix.
 
 ```mlld
@@ -38,9 +38,9 @@ var @result = @run cmd {echo "hello"}
 run cmd {echo "hello"}
 var @result = cmd {echo "hello"}
 ```
-</MISTAKE_USING_AT_FOR_DIRECTIVES>
+</AT_FOR_DIRECTIVES>
 
-<MISTAKE_JS_TEMPLATE_SYNTAX>
+<JS_TEMPLATE_SYNTAX>
 Use `@var` not `${var}`. mlld is not JavaScript.
 
 ```mlld
@@ -52,9 +52,9 @@ show `Result: ${count}`
 var @msg = "Hello @name"
 show `Result: @count`
 ```
-</MISTAKE_JS_TEMPLATE_SYNTAX>
+</JS_TEMPLATE_SYNTAX>
 
-<MISTAKE_INTERPOLATION_IN_TEXT>
+<INTERPOLATION_IN_TEXT>
 In strict mode, plain text is an error. Use `show` or templates.
 
 ```mlld
@@ -64,18 +64,18 @@ Hello @name!
 >> Correct
 show `Hello @name!`
 ```
-</MISTAKE_INTERPOLATION_IN_TEXT>
+</INTERPOLATION_IN_TEXT>
 
-<MISTAKE_FILE_VS_STRING>
+<FILE_VS_STRING>
 Angle brackets load content; quotes are literal strings.
 
 ```mlld
 var @content = <README.md>     >> loads file contents
 var @path = "README.md"        >> literal string
 ```
-</MISTAKE_FILE_VS_STRING>
+</FILE_VS_STRING>
 
-<MISTAKE_XML_VS_FILE_TAGS>
+<XML_VS_FILE_TAGS>
 `<thinking>` is plain text. `<file.txt>` (has `.`) is a file ref.
 
 ```mlld
@@ -89,9 +89,9 @@ var @path = "README.md"        >> literal string
 <src/*.ts>
 <@root/config.json>
 ```
-</MISTAKE_XML_VS_FILE_TAGS>
+</XML_VS_FILE_TAGS>
 
-<MISTAKE_NESTED_FUNC_IN_SHELL>
+<NESTED_FUNC_IN_SHELL>
 Don't call mlld functions inside shell commands.
 
 ```mlld
@@ -105,9 +105,9 @@ run cmd {
 var @r = @helper("x")
 run @r | { cat }
 ```
-</MISTAKE_NESTED_FUNC_IN_SHELL>
+</NESTED_FUNC_IN_SHELL>
 
-<MISTAKE_TEMPLATE_COLLECTION_IMPORT>
+<TEMPLATE_COLLECTION_IMPORT>
 Template collections need parameters and directories.
 
 ```mlld
@@ -119,9 +119,9 @@ import templates from "./agents" as @agents  >> missing params
 exe @tpl(x) = template "./file.att"          >> single file
 import templates from "./agents" as @agents(message, context)
 ```
-</MISTAKE_TEMPLATE_COLLECTION_IMPORT>
+</TEMPLATE_COLLECTION_IMPORT>
 
-<MISTAKE_ATT_ANGLE_BRACKET>
+<ATT_ANGLE_BRACKET>
 Never load `.att` template files with angle brackets and manual interpolation.
 
 ```mlld
@@ -141,9 +141,9 @@ The `exe ... = template` form:
 - Handles escaping and edge cases correctly
 
 Using angle brackets treats the `.att` file as plain text with no interpolation.
-</MISTAKE_ATT_ANGLE_BRACKET>
+</ATT_ANGLE_BRACKET>
 
-<MISTAKE_VAR_IN_PARALLEL_BLOCK>
+<VAR_IN_PARALLEL_BLOCK>
 Parallel blocks can't write to outer scope. Use `let`.
 
 ```mlld
@@ -159,10 +159,10 @@ exe @countItems(items) = [
   => @results.length
 ]
 ```
-</MISTAKE_VAR_IN_PARALLEL_BLOCK>
+</VAR_IN_PARALLEL_BLOCK>
 
-<MISTAKE_RETURN_STATEMENT>
-mlld has no `return`. Use `=> value` in blocks.
+<RETURN_STATEMENT>
+mlld has no `return`. Use `=> value` in executable blocks and scripts.
 
 ```mlld
 >> Wrong
@@ -176,10 +176,13 @@ exe @calc(x) = [
   let @result = @x * 2
   => @result
 ]
-```
-</MISTAKE_RETURN_STATEMENT>
 
-<MISTAKE_MISSING_BRACES>
+>> Script return
+=> "final output"
+```
+</RETURN_STATEMENT>
+
+<MISSING_BRACES>
 Commands always need braces.
 
 ```mlld
@@ -189,9 +192,9 @@ run cmd echo "hello"
 >> Correct
 run cmd {echo "hello"}
 ```
-</MISTAKE_MISSING_BRACES>
+</MISSING_BRACES>
 
-<MISTAKE_COMPLEX_LOGIC>
+<COMPLEX_LOGIC>
 Move heavy logic to helpers or modules. Keep orchestration simple.
 
 ```mlld
@@ -216,6 +219,170 @@ exe @processItem(item) = [
 
 var @result = for @item in @items when @item.type == "a" => @processItem(@item)
 ```
-</MISTAKE_COMPLEX_LOGIC>
+</COMPLEX_LOGIC>
+
+<EXE_FOR_VALUE>
+**Wrong:** Using `exe` to compute a value without parameters.
+
+```mlld
+>> WRONG: exe without parameters for a computed value
+exe @date() = cmd {date}
+var @now = @date()
+```
+
+**Right:** Use `var` for values, `exe` for functions that take parameters.
+
+```mlld
+>> RIGHT: var for computed values
+var @date = cmd {date}
+show @date
+
+>> RIGHT: exe when you need parameters
+exe @format(dt, fmt) = cmd {date -d @dt +"@fmt"}
+var @nice = @format(@date, "%Y-%m-%d")
+```
+
+**Key rule:**
+- `var` = value (no parameters)
+- `exe` = function (takes parameters)
+
+If you're not passing arguments, use `var`.
+</EXE_FOR_VALUE>
+
+<EXISTS_VS_FILEEXISTS>
+`@exists(@var)` checks if the *variable* is defined — not whether a file exists. Use `@fileExists` for filesystem checks.
+
+```mlld
+var @outPath = "/tmp/results.json"
+
+>> WRONG: checks if @outPath variable is defined (always true)
+if @exists(@outPath) [ show "cached" ]
+
+>> RIGHT: checks if the file at that path exists
+if @fileExists(@outPath) [ show "cached" ]
+```
+
+`@exists` is for expression-level checks (variables, fields, globs):
+
+```mlld
+if @exists(@obj.field) [ show "field exists" ]
+if @exists(<src/**/*.ts>) [ show "has ts files" ]
+```
+
+`@fileExists` always resolves its argument to a path string first, then checks the filesystem:
+
+```mlld
+var @cfg = "config.json"
+if @fileExists(@cfg) [ show "config found" ]
+```
+
+For optional file loading (load if exists, null otherwise), use `<path>?`:
+
+```mlld
+var @cfg = <config.json>?
+if @cfg [ show "loaded config" ]
+```
+</EXISTS_VS_FILEEXISTS>
+
+<GOTCHAS>
+mlld is not JavaScript/Python.
+
+**Use `>>` for comments, not `//`**
+
+Labels are comma-separated: `var secret,pii @data = "x"`
+
+`var` is module-level and immutable, `let` is block-scoped and mutable
+```mlld
+var @config = "global"
+if true [
+  let @temp = "local"    >> correct
+  var @temp = "local"    >> WRONG: var not allowed in blocks
+]
+```
+
+`if` vs `when`
+```
+if @cond [block] else [block]                  >> Run block if true
+when @cond => value                            >> Select first match
+when [cond => val; * => default]               >> First-match list
+when @val ["a" => x; * => y]                   >> Match value against patterns
+```
+
+**Truthiness rules**
+
+In mlld, the following values are falsy:
+
+| Value | Falsy in mlld |
+|-------|----------------|
+| `false` | yes |
+| `0` | yes |
+| `""` (empty string) | yes |
+| `null` | yes |
+| `[]` (empty array) | yes |
+| `{}` (empty object) | yes |
+
+JavaScript users: this differs from JS, where `[]` and `{}` are truthy.
+
+`cmd` interpolates `@variables`. Pipes work, but `>`, `&&`, `;`, `2>/dev/null` are rejected. Use `sh` for full shell syntax.
+```mlld
+exe @safe() = cmd { ls -la }                   >> correct: simple command
+exe @piped() = cmd { ls -la | head -5 }        >> correct: pipes work in cmd
+exe @redirect() = cmd { ls > out.txt }         >> WRONG: cmd rejects >, &&, ;
+exe @shell() = sh { ls > out.txt 2>/dev/null } >> correct: sh allows all shell syntax
+```
+
+Use native variable syntax in `js`, `node`, `sh`, `py` blocks — pass mlld values as parameters.
+
+Angle brackets `<>` in templates and expressions
+```mlld
+var @html = `<div>Hello</div>`                 >> properly interprets as text bc no slashes/dots/vars
+var @template = `File contents: <file.md>`     >> interpolates full content of file.md in template value
+var @readme = <README.md>                      >> loads file
+var @files = <src/**/*.ts>                     >> glob pattern
+var @files = <@pathvar/file.ts>                >> variable usage
+```
+See `mlld howto file-loading-basics` for advanced usage.
+
+`@var.json` is field access. Escape the dot for file extensions: `@name\.json`.
+
+```mlld
+let @out = `@dir/@name\.json`          >> correct
+let @out = `@dir/@name.json`           >> accesses .json field
+```
+
+`\@` produces a literal `@`: `user\@example.com` outputs `user@example.com`.
+
+Errors in `for parallel` loops become data objects with `.error` and `.message` fields. The loop continues. Regular (non-parallel) `for` loops throw on error.
+
+```mlld
+var @results = for parallel(4) @item in @list [ => @process(@item) ]
+var @failures = for @r in @results when @r.error => @r
+```
+
+**Reserved names quick-reference**
+
+Using these names for your own variables can shadow built-ins and cause unexpected behavior.
+
+Reserved/system variables:
+- `@input`, `@payload`, `@state`
+- `@root`, `@base`, `@now`, `@debug`, `@keychain`
+- `@fm`, `@mx`, `@p`
+
+Built-in transformers/helpers (from builtin registry):
+- `@typeof`, `@typeInfo`, `@exists`, `@fileExists`
+- `@parse`, `@json` (deprecated alias), `@xml`, `@csv`, `@md`
+- `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+- `@keep`, `@keepStructured`
+
+Common transformer variants:
+- `@parse.loose`, `@parse.strict`, `@parse.llm`, `@parse.fromlist`
+- `@json.loose`, `@json.strict`, `@json.llm`, `@json.fromlist`
+
+## See Also
+
+- [Reserved Variables](../syntax/reserved-variables.md) - Full list and behavior of runtime-provided names.
+- [Built-in Reference](../syntax/builtins.md) - Transformer/helper catalog and effect directives.
+- [Conditional Inclusion](../syntax/variables-conditional.md) - `@var?` omission and nullish fallback patterns.
+</GOTCHAS>
 
 </MLLD_COMMON_MISTAKES>

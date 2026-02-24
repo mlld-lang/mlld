@@ -99,7 +99,8 @@ policy @p = union(@config)
 
 >> Step 3: Use labeled data - protections apply automatically
 var secret @apiKey = "sk-live-12345"
-var @mcpData = @mcp.github.listIssues()
+import tools { @echo } from mcp "npx -y @modelcontextprotocol/server-everything"
+var @mcpData = @echo("external data")
 var pii @email = "user@example.com"
 
 >> This is BLOCKED: secret → exfil via no-secret-exfil rule

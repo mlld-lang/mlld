@@ -1,11 +1,7 @@
 <MLLD_MODULES>
 
-<PHILOSOPHY>
+<MODULES>
 Module-first design: keep `.mld` files readable; move complexity into focused modules. Avoid "kitchen sink" modules or side effects on import.
-</PHILOSOPHY>
-
-<CREATING_MODULES>
-Modules require frontmatter and explicit exports.
 
 ```mlld
 ---
@@ -42,11 +38,177 @@ var @meta = {
   version: @fm.version
 }
 ```
-</CREATING_MODULES>
+
+Modules only expose items listed in `export { }`. Unexported items stay private.
+
+```mlld
+exe @greet(name) = `Hello, @name!`
+exe @farewell(name) = `Goodbye, @name!`
+var @_helper = "internal"
+
+>> Only @greet and @farewell are visible to importers
+export { @greet, @farewell }
+```
+
+**Why explicit exports:** Encapsulation. Importers see a clean API surface. Internal helpers, intermediate variables, and implementation details stay hidden. Rename or remove internals without breaking callers.
+
+**Wildcard export:** Export everything (same as no `export` directive):
+
+```mlld
+export { * }
+```
+
+**Environment module pattern:** Modules that wrap credentials export executables and let callers import the policy separately for credential configuration:
+
+```mlld
+policy @p = {
+  auth: {
+    claude: { from: "keychain:mlld-env-{projectname}/claude-dev", as: "ANTHROPIC_API_KEY" }
+  }
+}
+
+exe @spawn(prompt) = run cmd { claude -p "@prompt" } using auth:claude
+
+export { @spawn }
+```
+
+**Notes:**
+- Accessing unexported items via namespace import raises a runtime error
+- Exported executables do not expose captured module internals through field access
+- Guards can be exported alongside variables
+- Without an `export` directive, all module-level items are auto-exported
+
+**Module patterns:**
+
+```mlld
+>> Library module
+exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku }
+exe @sonnet(prompt) = @prompt | cmd { claude -p --model sonnet }
+export { @haiku, @sonnet }
+
+>> Config/agent module
+var @meta = { id: @fm.id, name: @fm.name }
+var @prompts = { primary: @primaryPrompt, optional: @optionalPrompt }
+export { @meta, @prompts }
+
+>> Gate module
+exe @gate(response, instruction, message) = [...]
+export { @gate }
+```
+
+```
+llm/modules/
+├── my-utils.mld.md    # author: alice, name: experimental
+└── helpers.mld        # author: bob, name: tools
+```
+
+```mlld
+import local { @helper } from @alice/experimental
+```
+
+Matched by frontmatter `author` and `name` fields.
+
+**Publishing:**
+
+```bash
+mlld publish my-tool.mld.md             # first time creates PR
+mlld publish my-tool.mld.md             # updates publish directly
+mlld publish --tag beta my-tool.mld.md  # with tag
+```
+
+**Installing:**
+
+```bash
+mlld install @alice/utils
+mlld install @alice/utils@1.0.0
+mlld update @alice/utils
+mlld ls                                  # list installed
+```
+
+**Lock files:**
+- `mlld-lock.json` auto-generated
+- Commit to version control
+- Only registry modules validated
+
+**Built-in:**
+- `@author/module` → Registry
+- `@root/file` → Project root (preferred)
+- `@base/file` → Project root (alias for @root)
+- `./file.mld` → Local (with fuzzy extension matching)
+
+**Custom prefixes** (mlld-config.json):
+
+```json
+{
+  "resolvers": {
+    "prefixes": [
+      {
+        "prefix": "@lib/",
+        "resolver": "LOCAL",
+        "config": { "basePath": "./src/lib" }
+      },
+      {
+        "prefix": "@company/",
+        "resolver": "GITHUB",
+        "config": {
+          "repository": "company/private-modules",
+          "branch": "main"
+        }
+      }
+    ]
+  }
+}
+```
+
+`mlld` reads `resolvers.prefixes` for resolver mappings. It also reads top-level `resolverPrefixes` when present, and CLI writers persist the nested `resolvers.prefixes` shape.
+
+**Quick setup:**
+
+```bash
+mlld alias --name notes --path ~/notes
+mlld alias --name shared --path ../shared --global
+mlld setup --github   # private repo wizard
+```
+
+**Check installed modules:**
+
+```bash
+mlld ls                          # list all installed modules with versions
+```
+
+**Update a specific module:**
+
+```bash
+mlld update @alice/utils         # fetch latest version
+```
+
+**Update all modules:**
+
+```bash
+mlld update                      # updates everything in mlld-lock.json
+```
+
+**Check module info:**
+
+```bash
+mlld registry info @alice/utils  # show module details from registry
+```
+
+**Version pinning:**
+
+The lock file (`mlld-lock.json`) tracks installed versions:
+- `version: "latest"` - updates to newest on `mlld update`
+- `version: "1.2.0"` - stays pinned until manually changed
+
+**After updating:**
+
+Verify new exports are available:
+```bash
+mlld validate your-file.mld      # check imports resolve
+```
+</MODULES>
 
 <IMPORTING>
-Import from registry, local files, or URLs.
-
 **Registry modules:**
 
 ```mlld
@@ -58,13 +220,29 @@ import { @helper } from @alice/utils@1.0.0
 import { @helper } from @alice/utils@^1.0.0   >> semver range
 ```
 
-**Local files:**
+**Local files (selected exports):**
 
 ```mlld
 import { @helper } from "./utils.mld"
 import { @config } from <@root/config.mld>
 import { @prompt } from "../prompts/main.mld"
+
+import {
+  @renderHeader,
+  @renderBody
+} from "./templates.mld"
 ```
+
+**Local files (namespace import):**
+
+```mlld
+import "./utils.mld" as @utils
+show @utils.helper("report")
+```
+
+**Path resolution:**
+- `./` and `../` paths resolve from the importing file's directory, not the shell cwd.
+- `<@root/...>` resolves from the project root.
 
 **Namespace imports:**
 
@@ -74,15 +252,6 @@ import @bob/utils as @bob
 
 show @alice.format(@data)
 show @bob.format(@data)   >> no collision
-```
-
-**MCP tool imports:**
-
-```mlld
-import tools { @readFile } from mcp "@anthropic/filesystem"
-import tools from mcp "@github/issues" as @github
-
-show @github.createIssue("title", "body")
 ```
 
 **Directory imports:**
@@ -97,10 +266,54 @@ import "./agents" as @agents with { skipDirs: [] }
 ```
 
 Directories auto-load `*/index.mld`. Default `skipDirs: ["_*", ".*"]`.
-</IMPORTING>
 
-<IMPORT_TYPES>
-Control caching and resolution behavior.
+Use directory imports when you want a namespace object.
+If you want selected exports, import the entry file directly:
+
+```mlld
+import { @helper } from "./agents/index.mld"
+```
+
+Relative directory paths resolve from the importing file's directory, not the shell cwd.
+
+**Basic node imports:**
+
+```mlld
+import { basename } from node @path
+var @name = @basename("/tmp/file.txt")
+show @name
+```
+
+**Namespace imports:**
+
+```mlld
+import { posix } from node @path
+var @dir = @posix.dirname("/tmp/file.txt")
+show @dir
+```
+
+**Constructor expressions:**
+
+```mlld
+import { URL } from node @url
+exe @site = new @URL("https://example.com/path?x=1")
+show @site.hostname
+show @site.pathname
+```
+
+**Automatic wrapping:**
+- Functions are wrapped to accept and return mlld values
+- Method binding is preserved (correct `this` context)
+- Classes support `new @Constructor()` syntax
+- Async iterables are wrapped as streams
+- Promises work transparently
+- Callback-style functions trigger warnings
+
+**Module resolution:**
+- Uses Node.js module resolution from the importing file's directory
+- Supports both CommonJS and ES modules
+- Built-in modules: `node @path`, `node @fs`, `node @url`, etc.
+- NPM packages: Use package name without leading `@` (e.g., `node @chalk`)
 
 | Type | Behavior | Use Case |
 |------|----------|----------|
@@ -154,122 +367,83 @@ agents/
 - Organizing related templates by category
 
 For single templates, use `exe @func(params) = template "file.att"` instead.
-</IMPORT_TYPES>
+</IMPORTING>
 
-<EXPORTING>
-Explicit exports required (auto-export is legacy).
+<MODULE_STRUCTURE>
+Modules are directories with an entry point, manifest, and optional supporting files.
 
-```mlld
->> Export specific items
-export { @upper, @trim, @format }
-
->> Common pattern: export config object
-var @meta = { id: @fm.id, name: @fm.name }
-exe @process(data) = [...]
-
-export { @meta, @process }
+<structure>
 ```
-
-**Module patterns:**
-
-```mlld
->> Library module
-exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku }
-exe @sonnet(prompt) = @prompt | cmd { claude -p --model sonnet }
-export { @haiku, @sonnet }
-
->> Config/agent module
-var @meta = { id: @fm.id, name: @fm.name }
-var @prompts = { primary: @primaryPrompt, optional: @optionalPrompt }
-export { @meta, @prompts }
-
->> Gate module
-exe @gate(response, instruction, message) = [...]
-export { @gate }
+mymodule/
+├── index.mld          # Entry point
+├── module.yml         # Manifest (or .yaml, .json)
+├── README.md          # Documentation
+└── lib/               # Optional supporting files
 ```
-</EXPORTING>
+</structure>
 
-<LOCAL_DEVELOPMENT>
-Dev modules live in `llm/modules/` (flat structure).
-
+<manifest>
+module.yml format:
+```yaml
+name: myapp
+author: alice
+type: app               # library | app | command | skill
+about: "Description"
+version: 1.0.0
+license: CC0
+entry: index.mld        # Optional, defaults to index.mld
 ```
-llm/modules/
-├── my-utils.mld.md    # author: alice, name: experimental
-└── helpers.mld        # author: bob, name: tools
-```
+</manifest>
 
-```mlld
-import local { @helper } from @alice/experimental
-```
+<metadata_sources>
+Directory modules use two metadata sources:
 
-Matched by frontmatter `author` and `name` fields.
-</LOCAL_DEVELOPMENT>
+| Source | Lives In | Used For |
+|--------|----------|----------|
+| Frontmatter | Entry `.mld` file (`--- ... ---`) | Runtime metadata (`@fm`, imported namespace `.__meta__`) |
+| `module.yml` | Module directory root | Packaging metadata (`type`, publish/install metadata, entry selection for directory modules) |
 
-<REGISTRY>
-Public registry at github.com/mlld-lang/registry.
+Keep shared identity fields (`name`, `author`, `version`, `about`) aligned between frontmatter and `module.yml`.
+</metadata_sources>
 
-**Publishing:**
+<module_types>
+| Type | Purpose | Local Path | Global Path |
+|------|---------|------------|-------------|
+| library | Importable code | llm/lib/{name}/ | ~/.mlld/lib/{name}/ |
+| app | Runnable scripts | llm/run/{name}/ | ~/.mlld/run/{name}/ |
+| command | Claude slash cmd | .claude/commands/{name}/ | ~/.claude/commands/{name}/ |
+| skill | Claude skill | .claude/skills/{name}/ | ~/.claude/skills/{name}/ |
+</module_types>
 
+<scaffold_commands>
 ```bash
-mlld publish my-tool.mld.md             # first time creates PR
-mlld publish my-tool.mld.md             # updates publish directly
-mlld publish --tag beta my-tool.mld.md  # with tag
+mlld module app myapp              # Create app in llm/run/myapp/
+mlld module library utils          # Create library in llm/lib/utils/
+mlld module command review         # Create command in .claude/commands/review/
+mlld module skill helper           # Create skill in .claude/skills/helper/
+mlld module app myapp --global     # Create in ~/.mlld/run/myapp/
 ```
+</scaffold_commands>
 
-**Installing:**
-
+<run_apps>
 ```bash
-mlld install @alice/utils
-mlld install @alice/utils@1.0.0
-mlld update @alice/utils
-mlld ls                                  # list installed
+mlld run myapp                     # Runs llm/run/myapp/index.mld
+mlld run                           # Lists available scripts including apps
 ```
+Entry point detection order: index.mld, main.mld, index.mld.md, main.mld.md
+</run_apps>
 
-**Lock files:**
-- `mlld-lock.json` auto-generated
-- Commit to version control
-- Only registry modules validated
-</REGISTRY>
-
-<RESOLVERS>
-Prefixes map `@` references to content sources.
-
-**Built-in:**
-- `@author/module` → Registry
-- `@root/file` → Project root
-- `./file.mld` → Local (with fuzzy extension matching)
-
-**Custom prefixes** (mlld-config.json):
-
-```json
-{
-  "resolvers": {
-    "prefixes": [
-      {
-        "prefix": "@lib/",
-        "resolver": "LOCAL",
-        "config": { "basePath": "./src/lib" }
-      },
-      {
-        "prefix": "@company/",
-        "resolver": "GITHUB",
-        "config": {
-          "repository": "company/private-modules",
-          "branch": "main"
-        }
-      }
-    ]
-  }
-}
-```
-
-**Quick setup:**
-
+<install_global>
 ```bash
-mlld alias --name notes --path ~/notes
-mlld alias --name shared --path ../shared --global
-mlld setup --github   # private repo wizard
+mlld install @author/my-app --global    # Install to ~/.mlld/run/my-app/
+mlld install @author/my-lib -g          # Install to ~/.mlld/lib/my-lib/
 ```
-</RESOLVERS>
+</install_global>
+
+<packed_format>
+Packed modules are single-file bundles created by `mlld pack` (future feature).
+Use packed format for gist publishing; standard module format otherwise.
+</packed_format>
+</MODULE_STRUCTURE>
 
 </MLLD_MODULES>

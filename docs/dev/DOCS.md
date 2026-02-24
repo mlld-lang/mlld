@@ -123,7 +123,7 @@ LLM docs are built from atoms in `docs/src/atoms/`. See [DOCS-CLI.md](DOCS-CLI.m
 docs/src/atoms/           # Source of truth (~170 atoms)
   ├── syntax/             # Variables, templates, file loading, pipelines
   ├── commands/           # run, exe, output, log, append, stream
-  ├── control-flow/       # when, for, foreach, while
+  ├── flow-control/       # when, for, foreach, while
   ├── modules/            # Import, export, registry
   ├── patterns/           # Common workflows
   ├── security/           # Guards, labels

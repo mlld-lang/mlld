@@ -10,8 +10,8 @@
         "commands/run-basics.md",
         "commands/log.md",
         "commands/output.md",
-        "control-flow/when-inline.md",
-        "control-flow/for-arrow.md",
+        "flow-control/when-inline.md",
+        "flow-control/for-arrow.md",
         "syntax/escaping-defaults.md",
         "configuration/cli-run.md"
       ],
@@ -61,8 +61,8 @@
         "commands/append.md",
         "commands/stream.md",
         "commands/env-directive.md",
-        "control-flow/bail.md",
-        "control-flow/script-return.md",
+        "flow-control/bail.md",
+        "flow-control/script-return.md",
         "configuration/paths-urls.md",
         "configuration/frontmatter.md",
         "configuration/environment-variables.md"
@@ -73,28 +73,28 @@
     {
       "target": "docs/user/flow-control.md",
       "atoms": [
-        "control-flow/when.md",
-        "control-flow/when-inline.md",
-        "control-flow/when-blocks.md",
-        "control-flow/when-operators.md",
-        "control-flow/when-local-vars.md",
-        "control-flow/if.md",
-        "control-flow/for-arrow.md",
-        "control-flow/for-block.md",
-        "control-flow/for-collection.md",
-        "control-flow/for-object.md",
-        "control-flow/for-parallel.md",
-        "control-flow/for-batch.md",
-        "control-flow/for-nested.md",
-        "control-flow/for-context.md",
-        "control-flow/for-filter.md",
-        "control-flow/for-skip.md",
-        "control-flow/foreach.md",
-        "control-flow/loop.md",
-        "control-flow/while.md",
-        "control-flow/bail.md",
-        "control-flow/no-early-exit.md",
-        "control-flow/script-return.md",
+        "flow-control/when.md",
+        "flow-control/when-inline.md",
+        "flow-control/when-blocks.md",
+        "flow-control/when-operators.md",
+        "flow-control/when-local-vars.md",
+        "flow-control/if.md",
+        "flow-control/for-arrow.md",
+        "flow-control/for-block.md",
+        "flow-control/for-collection.md",
+        "flow-control/for-object.md",
+        "flow-control/for-parallel.md",
+        "flow-control/for-batch.md",
+        "flow-control/for-nested.md",
+        "flow-control/for-context.md",
+        "flow-control/for-filter.md",
+        "flow-control/for-skip.md",
+        "flow-control/foreach.md",
+        "flow-control/loop.md",
+        "flow-control/while.md",
+        "flow-control/bail.md",
+        "flow-control/no-early-exit.md",
+        "flow-control/script-return.md",
         "syntax/pipelines-retry.md",
         "syntax/pipelines-parallel.md"
       ],
@@ -244,8 +244,8 @@
       "atoms": [
         "syntax/variables-basics.md",
         "commands/exe-simple.md",
-        "control-flow/when-inline.md",
-        "control-flow/when-blocks.md",
+        "flow-control/when-inline.md",
+        "flow-control/when-blocks.md",
         "syntax/pipelines-retry.md"
       ],
       "priority": "medium",
@@ -256,7 +256,7 @@
       "atoms": [
         "syntax/variables-basics.md",
         "syntax/file-loading-ast.md",
-        "control-flow/for-arrow.md"
+        "flow-control/for-arrow.md"
       ],
       "priority": "medium",
       "type": "example"
@@ -289,7 +289,7 @@
         "syntax/variables-basics.md",
         "security/automatic-labels.md",
         "patterns/guarded-execution.md",
-        "control-flow/when-blocks.md"
+        "flow-control/when-blocks.md"
       ],
       "priority": "medium",
       "type": "example"
@@ -307,8 +307,8 @@
       "target": "website/src/examples/parallel-fanout.mld",
       "atoms": [
         "commands/exe-simple.md",
-        "control-flow/for-parallel.md",
-        "control-flow/for-arrow.md",
+        "flow-control/for-parallel.md",
+        "flow-control/for-arrow.md",
         "syntax/file-loading-ast.md"
       ],
       "priority": "medium",
@@ -350,8 +350,8 @@
         "syntax/variables-basics.md",
         "commands/exe-simple.md",
         "commands/exe-blocks.md",
-        "control-flow/when-inline.md",
-        "control-flow/when-blocks.md",
+        "flow-control/when-inline.md",
+        "flow-control/when-blocks.md",
         "syntax/pipelines-retry.md"
       ],
       "priority": "medium",

@@ -256,7 +256,7 @@ var @introAtom = <@root/docs/src/atoms/intro.md>
 >> Load atoms from all categories
 var @syntaxAtoms = <@root/docs/src/atoms/syntax/*.md>
 var @commandsAtoms = <@root/docs/src/atoms/commands/*.md>
-var @controlFlowAtoms = <@root/docs/src/atoms/control-flow/*.md>
+var @controlFlowAtoms = <@root/docs/src/atoms/flow-control/*.md>
 var @modulesAtoms = <@root/docs/src/atoms/modules/*.md>
 var @patternsAtoms = <@root/docs/src/atoms/patterns/*.md>
 var @configurationAtoms = <@root/docs/src/atoms/configuration/*.md>

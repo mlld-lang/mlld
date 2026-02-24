@@ -1,8 +1,6 @@
 <MLLD_PATTERNS>
 
 <TOOL_ORCHESTRATION>
-Coordinate multiple tools with data flow.
-
 ```mlld
 var @areas = [
   {"name": "auth", "files": ["auth/*.ts"], "tests": ["test/auth/*"]},
@@ -15,8 +13,6 @@ var @results = foreach @runQA(@areas)
 </TOOL_ORCHESTRATION>
 
 <DATA_PIPELINES>
-Chain transformations with validation.
-
 ```mlld
 import { @fetchData, @validate, @transform } from @data/pipeline
 
@@ -36,8 +32,6 @@ output @processed to "report.csv"
 </DATA_PIPELINES>
 
 <CONDITIONAL_WORKFLOWS>
-Route execution based on conditions.
-
 ```mlld
 import { @getPR, @commentOnPR } from @company/github
 
@@ -55,8 +49,6 @@ when [
 </CONDITIONAL_WORKFLOWS>
 
 <GUARDED_EXECUTION>
-Validate at each step before proceeding.
-
 ```mlld
 var @processed = @data | @validate | @normalize | @analyze
 
@@ -67,9 +59,83 @@ when [
 ```
 </GUARDED_EXECUTION>
 
-<ROUTER_PATTERN>
-Score and route to different handlers.
+<GUARDED_TOOL_EXPORT>
+Expose mlld functions as MCP tools with fixed context parameters and security guards. The agent sees a narrow interface; guards enforce what data can flow through.
 
+**Define the function, guard, and tool collection:**
+
+```mlld
+exe @searchIssues(org: string, repo: string, query: string) = cmd {
+  gh issue list -R @org/@repo --search "@query" --json number,title
+} with { description: "Search GitHub issues" }
+
+guard @noSecrets before op:exe = when [
+  @input.any.mx.labels.includes("secret") => deny "Secret data cannot flow to tools"
+  * => allow
+]
+
+var tools @agentTools = {
+  searchIssues: {
+    mlld: @searchIssues,
+    bind: { org: "mlld-lang", repo: "mlld" },
+    expose: ["query"],
+    description: "Search mlld issues by keyword"
+  }
+}
+
+export { @searchIssues, @agentTools }
+```
+
+The agent sees one parameter (`query`). The bound `org` and `repo` are invisible and fixed. The guard blocks any call carrying `secret`-labeled data.
+
+**Serve it:**
+
+```bash
+mlld mcp tools.mld --tools-collection @agentTools
+```
+
+The `--tools-collection` flag tells the MCP server to use the reshaped tool definitions instead of raw exports.
+
+**Give it to an agent:**
+
+Point any MCP client at the command. For Claude Code:
+
+```json
+{
+  "mcpServers": {
+    "my-tools": {
+      "command": "npx",
+      "args": ["mlld", "mcp", "tools.mld", "--tools-collection", "@agentTools"]
+    }
+  }
+}
+```
+
+**Add operation labels for policy:**
+
+```mlld
+var tools @agentTools = {
+  searchIssues: {
+    mlld: @searchIssues,
+    bind: { org: "mlld-lang", repo: "mlld" },
+    expose: ["query"],
+    labels: ["read-only"],
+    description: "Search mlld issues"
+  },
+  createIssue: {
+    mlld: @createIssue,
+    bind: { org: "mlld-lang", repo: "mlld" },
+    expose: ["title", "body"],
+    labels: ["destructive"],
+    description: "Create an mlld issue"
+  }
+}
+```
+
+Guards can then check `@mx.op.labels.includes("destructive")` to block or require approval for write operations. See `mcp-guards` for after-guard patterns that validate tool outputs.
+</GUARDED_TOOL_EXPORT>
+
+<ROUTER>
 ```mlld
 exe @router(message, handlers) = [
   let @scores = for @h in @handlers => {
@@ -83,11 +149,9 @@ exe @router(message, handlers) = [
   ]
 ]
 ```
-</ROUTER_PATTERN>
+</ROUTER>
 
-<GATE_PATTERN>
-Validate or filter before proceeding.
-
+<GATE>
 ```mlld
 exe @gate(response, config) = [
   let @check = @validate(@response)
@@ -98,11 +162,9 @@ exe @gate(response, config) = [
   ]
 ]
 ```
-</GATE_PATTERN>
+</GATE>
 
 <PARALLEL_EXECUTION>
-Run independent tasks concurrently.
-
 ```mlld
 >> Parallel for
 for parallel(3) @task in @tasks [
@@ -122,11 +184,11 @@ exe @runAll(tasks) = [
   ]
 ]
 ```
+
+**Hooks** for batch telemetry: `op:for:iteration` and `op:for:batch` filters observe parallel loop progress. **Checkpoint** caches `llm`-labeled calls across parallel items — `--resume` avoids re-calling completed items.
 </PARALLEL_EXECUTION>
 
 <LLM_INTEGRATION>
-Call LLMs with structured prompts.
-
 ```mlld
 import { @haiku, @sonnet } from "@lib/claude.mld"
 
@@ -142,11 +204,16 @@ exe @analyze(data) = [
   => @response | @parse.llm
 ]
 ```
+
+Add the `llm` label to enable automatic checkpointing — cached results persist across runs and `--resume` can selectively re-call:
+
+```mlld
+exe llm @classify(text) = [...]
+exe llm @analyze(data) = [...]
+```
 </LLM_INTEGRATION>
 
 <AGENT_DEFINITION>
-Define agent configuration modules.
-
 ```mlld
 ---
 id: my-agent
@@ -170,208 +237,114 @@ export { @meta, @prompts, @systemPrompt }
 ```
 </AGENT_DEFINITION>
 
-<PROSE_EXECUTION>
-Execute LLM-interpreted DSL skills (OpenProse and custom).
-
-The `prose {}` syntax executes LLM-interpreted DSL skills. By default it uses **OpenProse**, but any custom interpreter can be configured.
-
-## What is Prose Execution?
-
-Prose execution invokes skills that an LLM interprets at runtime. Unlike `run js {}` which executes deterministically, `prose {}` sends content to an LLM with specific skills enabled. This enables complex multi-agent workflows defined in a domain-specific language.
-
-## Setup
-
-1. Install the OpenProse plugin in Claude Code:
-   ```
-   /plugin marketplace add git@github.com:openprose/prose.git
-   /plugin install open-prose@prose
-   ```
-
-2. Restart Claude Code and boot OpenProse:
-   ```
-   /prose-boot
-   ```
-
-3. Skills will prompt for approval on first use.
-
-## Basic Usage
-
-```mlld
-import { @opus } from @mlld/prose
-
-exe @research(topic) = prose:@opus {
-  session "Research @topic"
-  agent researcher { model: sonnet, skills: [web-search] }
-  researcher: find current information about @topic
-  output findings
-}
-
-run @research("quantum computing trends")
-```
-
-## Key Concepts
-
-**session** - Names the workflow for context
-
-**agent** - Defines an agent with model and skills
-
-**loop until** - Iterates with semantic exit conditions:
-```mlld
-exe @refine(draft) = prose:@opus {
-  session "Refine document"
-  loop until **the draft meets publication standards** {
-    critique @draft
-    revise based on critique
-  }
-}
-```
-
-**parallel** - Run tasks concurrently:
-```mlld
-exe @gather(topics) = prose:@opus {
-  session "Research multiple topics"
-  parallel for each topic in @topics {
-    research topic
-  }
-  combine results
-}
-```
-
-## Template Files
-
-For complex workflows, use external files:
-
-```mlld
-exe @workflow(ctx) = prose:@opus "./workflow.prose"
-exe @workflow(ctx) = prose:@opus "./workflow.prose.att"  >> ATT interpolation
-```
-
-## Custom Interpreters
-
-Use any LLM-interpreted DSL by configuring different skills:
-
-```mlld
-import { @claude } from @mlld/claude
-
->> Create a custom model executor
-exe @myModel(prompt) = @claude(@prompt, "opus", @root)
-
->> Configure with custom skills
-var @myDSL = {
-  model: @myModel,
-  skills: ["my-custom:boot", "my-custom:run"]
-}
-
-exe @process(data) = prose:@myDSL {
-  >> Your custom DSL syntax here
-  analyze @data
-  output result
-}
-```
-
-The skill determines how the LLM interprets the prose content. OpenProse is one implementation - you can create your own DSL skills or use other prose interpreters.
-
-## OpenProse Requirements
-
-For OpenProse specifically:
-- **Claude Code** with Opus (only model that reliably interprets OpenProse syntax)
-- **OpenProse skills** approved: `open-prose:prose-boot`, `open-prose:prose-compile`, `open-prose:prose-run`
-
-See `mlld howto exe-prose` for syntax details. OpenProse docs: https://prose.md
-</PROSE_EXECUTION>
-
-<RALPH_LOOP>
-Autonomous agent loop with dynamic context assembly.
+<RALPH>
+Autonomous coding loop based on the [Ralph Wiggum technique](https://ghuntley.com/ralph/) by Geoff Huntley. Each iteration: reload context from disk, pick one task, execute it, test, commit on green. The loop is the outer process; the LLM decides what to work on.
 
 ```mlld
 >> ralph.mld - autonomous coding agent loop
->> Run once per iteration, or use loop for continuous execution
 
-import { @claude } from "@lib/claude.mld"
+import { @claudePoll } from "@mlld/claude-poll"
 
->> Load fresh context each iteration
-var @plan = <fix_plan.md>
-var @specs = <specs/*.md>
+var @tools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*)"
 
->> Classify the most important task
-exe @classifyTask(plan) = [
-  let @prompt = `Given this plan, identify the SINGLE most important next task:
+>> Cheap model picks the most important task from current plan
+exe llm @pickTask(plan, specs) = [
+  let @prompt = `Given this plan and these specs, identify the SINGLE most
+important next task. Search before assuming something isn't implemented.
+Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }
+
+<plan>
 @plan
-Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }`
-  => @haiku(@prompt) | @parse.llm
+</plan>
+
+<specs>
+@specs
+</specs>
+
+IMPORTANT: Write your JSON response to @mx.outPath using the Write tool.`
+  @claudePoll(@prompt, "haiku", ".", "Read,Glob,Grep,Write", @mx.outPath)
+  => <@mx.outPath>? | @parse.llm
 ]
 
->> Build context for the task (load only what's relevant)
-exe @buildContext(task, specs) = [
-  let @relevant = for @spec in @specs
-    when @task.type in @spec.mx.relative => @spec
-  let @code = for @file in @task.files => <@file>
-  => { specs: @relevant, code: @code }
-]
-
->> Execute the task
-exe @executeTask(task, context) = [
-  let @prompt = `
-# Task
+>> Worker executes the task with full agent capabilities
+exe llm @doTask(task, specs) = [
+  let @prompt = `# Task
 @task.task
 
-# Relevant Specs
-@context.specs.join("\n\n")
+# Specs
+@specs
 
-# Current Code
-@context.code.join("\n\n")
+Implement this task. Search the codebase before assuming anything is
+not implemented. After implementing, run tests for just this change.
 
-Implement this task. Search before assuming not implemented.
-After implementing, run tests for just this change.
-`
-  => @claude(@prompt, "sonnet", ".", "Read,Edit,Write,Bash,Grep,Glob")
+IMPORTANT: Write your result JSON to @mx.outPath using the Write tool.`
+  @claudePoll(@prompt, "sonnet", ".", @tools, @mx.outPath)
+  => <@mx.outPath>?
 ]
 
 >> Validate with tests
-exe @validate() = [
-  let @output = cmd { npm test 2>&1 }
-  => { pass: @output.exitCode == 0, output: @output }
+exe @test() = [
+  let @out = sh { npm test 2>&1 }
+  => { pass: @out.exitCode == 0, output: @out }
 ]
 
->> Single iteration
-var @task = @classifyTask(@plan)
-var @context = @buildContext(@task, @specs)
-var @result = @executeTask(@task, @context)
-var @check = @validate()
-
-when @check.pass => [
-  run cmd { git add -A && git commit -m "@task.task" && git push }
-  show "committed"
-]
-```
-
-The Ralph pattern runs autonomous coding loops with dynamic context assembly. Each iteration:
-
-1. **Load fresh context** - Reload plan and specs from disk
-2. **Classify task** - Use a cheap model to pick the most important work
-3. **Build context** - Load only relevant specs and code (saves tokens)
-4. **Execute** - Run the task with full agent capabilities
-5. **Validate** - Run tests as backpressure
-6. **Commit on success** - Only persist passing changes
-
-**With continuous loop:**
-
-```mlld
-loop(endless) until @state.stop [
-  var @plan = <fix_plan.md>
+>> The loop
+loop(endless) [
+  >> Fresh context every iteration — the context IS the history
+  let @plan = <fix_plan.md>
   when @plan.trim() == "" => done "complete"
+  let @specs = <specs/*.md>
 
-  let @task = @classifyTask(@plan)
-  let @context = @buildContext(@task, <specs/*.md>)
-  let @result = @executeTask(@task, @context)
-  let @check = @validate()
+  >> One task per loop — trust the LLM to pick what matters
+  let @task = @pickTask(@plan, @specs)
+  let @result = @doTask(@task, @specs)
 
-  when @check.pass => run cmd { git commit -am "@task.task" && git push }
+  >> Test backpressure — only commit what passes
+  let @check = @test()
+  when @check.pass => run sh { git commit -am "@task.task" && git push }
+
   continue
 ]
 ```
 
-**SDK control** - External processes can stop the loop by setting `@state.stop = true`.
-</RALPH_LOOP>
+**Core principles:**
+
+- **One task per loop** — Each iteration picks a single task and executes it. Narrowing scope keeps context usage low and outcomes predictable.
+- **Fresh context from disk** — Plan and specs reload every iteration. No chat history carried forward. The filesystem is the state.
+- **Test backpressure** — Tests gate commits. Failing iterations aren't fatal; the next iteration sees the current state and adapts.
+- **LLM picks the work** — The cheap classifier decides priority. The orchestrator doesn't encode task selection logic.
+
+**Crash recovery** — The `llm` label on `@pickTask` and `@doTask` enables automatic caching. If the loop crashes mid-iteration, re-running the script replays completed LLM calls from cache.
+
+```bash
+mlld run ralph                     # auto-resumes via cache
+mlld run ralph --resume @doTask    # re-run all worker calls
+mlld run ralph --new               # fresh run, clear cache
+```
+
+**Hook telemetry:**
+
+```mlld
+hook @progress after op:loop = [
+  log `iteration @mx.loop.iteration`
+]
+```
+
+**With pacing** — Add a delay between iterations to avoid hammering APIs:
+
+```mlld
+loop(endless, 5s) [
+  ...
+]
+```
+
+**With a cap** — Limit total iterations:
+
+```mlld
+loop(50) [
+  ...
+]
+```
+</RALPH>
 
 </MLLD_PATTERNS>

@@ -170,7 +170,7 @@ $ mlld howto
 
 MLLD HELP TOPICS
 
-control-flow/
+flow-control/
   when                     Conditionals (simple, bare, first-match)
   for                      Iteration (arrow, block, parallel)
   foreach                  Transform collections
@@ -212,8 +212,8 @@ Create build scripts that assemble atoms into llm docs:
 >> docs/build/llm/control-flow.mld
 
 var @whenAtoms = [
-  <@root/docs/src/atoms/control-flow/when-inline.md>,
-  <@root/docs/src/atoms/control-flow/when.md>
+  <@root/docs/src/atoms/flow-control/when-inline.md>,
+  <@root/docs/src/atoms/flow-control/when.md>
 ]
 
 var @content = for @a in @whenAtoms => @strip(@a)
