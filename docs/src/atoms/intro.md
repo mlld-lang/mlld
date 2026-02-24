@@ -30,8 +30,8 @@ mlld is an LLM scripting language for **surgical context assembly**, **token-eff
 Load exactly what you need, when you need it. Glob files, extract sections, filter by metadata, transform content — all with declarative syntax.
 
 ```mlld
-var @relevantDocs = <docs/**/*.md # API>
-var @recentChanges = <CHANGELOG.md>
+var @relevantDocs = <docs/**/*.md # API, "SDK Usage"; !# Internal>
+exe @releaseNotes(version) = <CHANGELOG.md # "[@version]" >
 ```
 
 mlld makes context preparation explicit, reviewable, and reproducible.

@@ -275,16 +275,16 @@ guard after llmjson = when [
 ]
 ```
 
-After guards validate output:
+Privileged guards can remove protected labels — non-privileged guards cannot:
 
 ```mlld
-guard @validateMcp after src:mcp = when [
-  @schema.valid(@output) => allow @output
+guard privileged @validateMcp after src:mcp = when [
+  @schema.valid(@output) => trusted! @output
   * => deny "Invalid schema"
 ]
 ```
 
-Trust is asymmetric — anyone can mark data as untrusted, but only privileged guards can bless data as trusted. This mirrors real-world security: raising a concern is easy, clearing one requires authority.
+Trust is asymmetric — anyone can mark data as untrusted, but only privileged guards can bless data as trusted (`trusted!`), remove labels (`!label`), or clear all labels (`clear!`). This mirrors real-world security: raising a concern is easy, clearing one requires authority.
 
 ### Sealed Credentials
 
