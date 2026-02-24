@@ -29,11 +29,18 @@ for @doc in @docs => show @doc.mx.filename
 var @configs = <configs/*.json>
 var @first = @configs[0]
 show @first.name                     >> access parsed JSON
+show @first.mx.data.name             >> explicit parsed-data view
+show @first.mx.text                  >> raw file text
 show @first.mx.filename              >> file metadata still available
 
 >> With "as" template
 var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 ```
+
+Structured values loaded from files are data-first:
+- `@config.apiUrl` and `@config.mx.data.apiUrl` are equivalent.
+- `@config.mx.text` is the raw text representation.
+- `.mx` stays reserved for wrapper metadata; if payload data has an `mx` key, use `@config.mx.data.mx`.
 
 **Section selection** - extract markdown heading blocks:
 

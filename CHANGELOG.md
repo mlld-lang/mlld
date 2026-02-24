@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `for @key, @value in @obj` now iterates parsed JSON object keys for values loaded from `<file.json>`, instead of StructuredValue wrapper fields.
 - `js { ... }` and `node { ... }` blocks now parse regex literals with quoted character classes (for example `/^["']|["']$/g`) without cascading parse failures.
 - `policy.operations` now uses `risk-category -> labels[]` mappings (for example `exfil: ["net:w"]`) instead of `label -> risk-category`.
+- StructuredValue wrapper access is explicit via `.mx.text` and `.mx.data`, while top-level field access remains user-data-first for keys like `text`, `data`, and `type`.
 
 ## [2.0.0-rc82]
 

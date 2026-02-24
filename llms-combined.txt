@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-02-24T11:59:04.501Z
+Generated: 2026-02-24T12:07:52.619Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -582,11 +582,18 @@ for @doc in @docs => show @doc.mx.filename
 var @configs = <configs/*.json>
 var @first = @configs[0]
 show @first.name                     >> access parsed JSON
+show @first.mx.data.name             >> explicit parsed-data view
+show @first.mx.text                  >> raw file text
 show @first.mx.filename              >> file metadata still available
 
 >> With "as" template
 var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 ```
+
+Structured values loaded from files are data-first:
+- `@config.apiUrl` and `@config.mx.data.apiUrl` are equivalent.
+- `@config.mx.text` is the raw text representation.
+- `.mx` stays reserved for wrapper metadata; if payload data has an `mx` key, use `@config.mx.data.mx`.
 
 **Section selection** - extract markdown heading blocks:
 
@@ -674,7 +681,14 @@ show @file.mx.relativeDir   >> relative path to directory
 show @file.mx.absoluteDir   >> absolute path to directory
 show @file.mx.tokens        >> token count estimate
 show @file.mx.fm.title      >> frontmatter field
+show @file.mx.text          >> raw text representation
+show @file.mx.data          >> parsed data representation
 ```
+
+For structured values, dotted field access resolves through `.mx.data`:
+- `@file.title` is equivalent to `@file.mx.data.title`.
+- Use `.mx.text` and `.mx.data` when you need explicit control.
+- If payload data has an `mx` key, access it with `@file.mx.data.mx`.
 
 **In loops** - metadata works directly:
 
