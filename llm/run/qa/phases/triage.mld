@@ -54,7 +54,8 @@ exe @triagePrompt(allTopics, gitChanges, failureHistory, recentlyTested, recentl
 exe @runTriage(runDir, allTopics, lastRunDir, qaRoot, today) = [
   @logPhaseStart(@runDir, "triage")
 
-  let @lastCommit = @lastRunDir ? <@lastRunDir/run.json>?.config.git_commit : null
+  let @lastSummary = @lastRunDir ? <@lastRunDir/run-summary.json>? : null
+  let @lastCommit = @lastSummary ? @lastSummary.git_commit : null
   show `  Gathering context: git changes...`
   let @gitChanges = @gitChangesSince(@lastCommit)
   show `  Gathering context: failure history...`

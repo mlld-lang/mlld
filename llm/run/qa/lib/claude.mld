@@ -62,13 +62,15 @@ exe @resumeSession(prompt, model, tools, markerFile, sessionId, timeout) = sh {
 
 >> Checkpoint-cached wrappers — bail on failure so empty results are never cached
 exe llm @claudeSession(prompt, model, tools, markerFile, sessionId, timeout) = [
-  let @result = @runSession(@prompt, @model, @tools, @markerFile, @sessionId, @timeout)
+  let @t = @timeout ? @timeout : 1800
+  let @result = @runSession(@prompt, @model, @tools, @markerFile, @sessionId, @t)
   when !@result => bail `Agent exited without completing (marker file not written). Likely hit API limits or crashed.`
   => @result
 ]
 
 exe llm @claudeResume(prompt, model, tools, markerFile, sessionId, timeout) = [
-  let @result = @resumeSession(@prompt, @model, @tools, @markerFile, @sessionId, @timeout)
+  let @t = @timeout ? @timeout : 1800
+  let @result = @resumeSession(@prompt, @model, @tools, @markerFile, @sessionId, @t)
   when !@result => bail `Agent exited without completing (marker file not written). Likely hit API limits or crashed.`
   => @result
 ]
