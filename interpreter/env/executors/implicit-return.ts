@@ -6,6 +6,11 @@ import { parse } from 'acorn';
 
 const WRAPPER_PREFIX = 'async function __mlldImplicitReturn__(){\n';
 const WRAPPER_SUFFIX = '\n}';
+const FUNCTION_BOUNDARY_TYPES = new Set([
+  'ArrowFunctionExpression',
+  'FunctionExpression',
+  'FunctionDeclaration'
+]);
 
 /**
  * Add an implicit return to expression-style code snippets when no explicit
@@ -80,6 +85,11 @@ function containsReturnStatement(node: unknown): boolean {
 
   if ((node as { type?: string }).type === 'ReturnStatement') {
     return true;
+  }
+
+  const nodeType = (node as { type?: string }).type;
+  if (nodeType && FUNCTION_BOUNDARY_TYPES.has(nodeType)) {
+    return false;
   }
 
   if (Array.isArray(node)) {

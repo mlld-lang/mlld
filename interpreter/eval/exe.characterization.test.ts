@@ -135,15 +135,37 @@ describe('exe evaluator characterization', () => {
         }
       },
       {
-        identifier: 'sectionExec',
-        directive: createDirective('sectionExec', 'exeSection', {
-          path: [createText('README.md')],
-          section: [createText('Overview')]
+        identifier: 'alligatorExec',
+        directive: createDirective('alligatorExec', 'exeData', {
+          data: {
+            type: 'load-content',
+            source: [
+              {
+                type: 'Text',
+                nodeId: 'source-changelog',
+                content: 'CHANGELOG.md'
+              }
+            ],
+            options: {
+              selectors: [
+                {
+                  type: 'section',
+                  value: [
+                    {
+                      type: 'Text',
+                      nodeId: 'section-version',
+                      content: '[v1.0.0]'
+                    }
+                  ]
+                }
+              ]
+            }
+          }
         }),
         assertDef: (def: any) => {
-          expect(def.type).toBe('section');
-          expect(def.pathTemplate).toBeDefined();
-          expect(def.sectionTemplate).toBeDefined();
+          expect(def.type).toBe('data');
+          expect(def.dataTemplate).toBeDefined();
+          expect(def.dataTemplate.type).toBe('load-content');
         }
       },
       {

@@ -34,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AST selector results now mirror metadata on `.mx` (`name`, `type`, `line`), and glob selectors populate source path metadata on `.mx.relative` while retaining top-level selector fields.
 
 ### Fixed
+- Removed the legacy `/exe @fn(...) = [@file # section]` special case; section/file extraction in executable bodies now uses alligator syntax (`<file.md # "Section">`).
+- `/exe` bodies now accept alligator section selectors directly (including selector sets/negation/optional selectors) via normal load-content execution.
+- `cmd { ... }` parsing now keeps `|` literal inside double-quoted strings with `@param` interpolation, and `\@` now consistently emits a literal `@` inside unquoted command words.
+- Inline `var @x = js { ... }` assignments now preserve typed results (`[]`, `{}`, numbers, booleans, null) instead of returning JSON strings.
+- JS implicit-return normalization now ignores `return` statements inside nested lambdas/functions, so top-level expression bodies still return correctly.
+- Module imports no longer inherit unrelated module-level labels on every export; export metadata now stays scoped to each variable’s own security descriptor.
+- CLI command execution errors no longer print raw stderr twice before formatted mlld error output.
 - `mlld publish` for directory modules now constructs correct raw GitHub URLs; previously `detectGitInfo` received the directory path instead of the entry file path, producing a `/.` base path that made URL verification fail.
 - Consecutive indented `>>` comment lines inside `/if` and `/for` block bodies now parse correctly.
 - `mlld publish` metadata updates (repo, bugs, mlldVersion) are now written to disk, committed, and pushed automatically. Previously option [1] "Apply changes and continue" only updated in-memory state and never persisted the file.

@@ -721,4 +721,29 @@ describe('for evaluator characterization', () => {
       })
     ]);
   });
+
+  it('handles sequential for-parallel loops with errors without runtime crashes', async () => {
+    const { fileSystem, pathService: runtimePathService } = createRuntime();
+    const input = `
+/exe @maybeFail(n, phase) = js {
+  if (n == 2) {
+    throw new Error(phase + " failed");
+  }
+  return n;
+}
+/var @first = for parallel(2) @n in [1, 2] => @maybeFail(@n, "first-loop")
+/var @second = for parallel(2) @n in [2, 3] => @maybeFail(@n, "second-loop")
+`;
+
+    await expect(
+      interpret(input, {
+        fileSystem,
+        pathService: runtimePathService,
+        format: 'markdown',
+        mlldMode: 'markdown',
+        ephemeral: true,
+        useMarkdownFormatter: false
+      })
+    ).rejects.toThrow('second-loop failed');
+  });
 });

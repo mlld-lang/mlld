@@ -45,7 +45,6 @@ ExeRHSContent "exe assignment value"
   / ExeCommandPattern           // cmd {command} - shell commands with interpolation
   / ExeTemplateFromFilePattern  // template "path" - external template file
   / ExeTemplatePattern          // [[...]] and `...` - inline template executables
-  / ExeSectionPattern           // [@file # section] - section extraction
   / ExeStatementBlock           // [ ... ] - statement block for exe definitions
   / ExeResolverPattern          // @resolver/path - resolver patterns
   / ExeUnifiedReference         // @func(args) and @otherCmd - unified reference with pipeline support
@@ -312,6 +311,21 @@ ExeDataPattern "exe data pattern"
         }
       };
     }
+  / fileLoad:AlligatorExpression {
+      return {
+        subtype: 'exeData',
+        source: 'data',
+        values: {
+          data: fileLoad
+        },
+        raw: {
+          data: text()
+        },
+        meta: {
+          inferredType: 'load-content'
+        }
+      };
+    }
 
 // Template pattern for exe context - wraps TemplateCore
 ExeTemplatePattern "exe template pattern"
@@ -471,29 +485,6 @@ ProseAtInterpolation "prose @ interpolation"
 ProseTextSegment "prose text segment"
   = chars:(!("}" / "\\@" / "@") char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
-    }
-
-// Section pattern for exe context - handles [@file # section] [as @newheader]
-ExeSectionPattern "exe section pattern"
-  = "[" _ pathVar:UnifiedVariableNoTail _ "#" _ section:SectionIdentifier _ "]" rename:ExecAsNewTitle? {
-      return {
-        type: 'exeSection',
-        values: {
-          path: [pathVar],
-          section: Array.isArray(section) ? section : [section],
-          ...(rename ? { rename: rename } : {})
-        },
-        raw: {
-          path: '@' + pathVar.identifier + (pathVar.fields ? '.' + pathVar.fields.map(f => f.name || f.index).join('.') : ''),
-          section: section.type === 'VariableReference' ? '@' + section.identifier : (section.content || section),
-          ...(rename ? { rename: rename[0].type === 'VariableReference' ? '@' + rename[0].identifier : rename[0].content } : {})
-        },
-        meta: {
-          hasRename: !!rename
-        },
-        subtype: 'exeSection',
-        source: 'section'
-      };
     }
 
 // Resolver pattern for exe context - handles @resolver/path [{ @payload }]
@@ -790,15 +781,6 @@ PipeStdinExpression
 // ExecResolverPayload - optional payload syntax: { @variable }
 ExecResolverPayload
   = _ "{" _ varRef:UnifiedVariableNoTail _ "}" {
-      return [varRef];
-    }
-
-// AsNewTitle pattern for exec section renaming - supports both literals and variables
-ExecAsNewTitle
-  = _ "as" _ title:LiteralContent {
-      return title;
-    }
-  / _ "as" _ varRef:UnifiedVariableNoTail {
       return [varRef];
     }
 

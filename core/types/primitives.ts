@@ -279,7 +279,7 @@ export type DirectiveSubtype =
   | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
   // Unified exe subtypes
   | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeValue' | 'exeTemplate' | 'exeTemplateFile'
-  | 'exeSection' | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeLoop' | 'exeResolver' | 'exeBlock'
+  | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeLoop' | 'exeResolver' | 'exeBlock'
   // Checkpoint subtype
   | 'checkpoint'
   // Path subtypes

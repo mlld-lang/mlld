@@ -17,7 +17,7 @@ import type { CommandReference, ExecInvocation } from './primitives';
  */
 export interface BaseExecutable {
   /** The type of executable */
-  type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver' | 'pipeline' | 'data' | 'prose' | 'nodeFunction' | 'nodeClass' | 'partial';
+  type: 'command' | 'commandRef' | 'code' | 'template' | 'resolver' | 'pipeline' | 'data' | 'prose' | 'nodeFunction' | 'nodeClass' | 'partial';
   /** Parameter names expected by this executable */
   paramNames: string[];
   /** Parameter types keyed by name */
@@ -74,17 +74,6 @@ export interface TemplateExecutable extends BaseExecutable {
   /** Directory of the backing template file when loaded via template "path". */
   templateFileDirectory?: string;
   sourceDirective: 'text' | 'exec';
-}
-
-/**
- * Section executable - @exec name(file, section) = [@file # @section]
- */
-export interface SectionExecutable extends BaseExecutable {
-  type: 'section';
-  pathTemplate: MlldNode[];
-  sectionTemplate: MlldNode[];
-  renameTemplate?: MlldNode[];
-  sourceDirective: 'exec';
 }
 
 /**
@@ -176,7 +165,6 @@ export type ExecutableDefinition =
   | CommandRefExecutable
   | CodeExecutable
   | TemplateExecutable
-  | SectionExecutable
   | ResolverExecutable
   | PipelineExecutable
   | DataExecutable
@@ -215,10 +203,6 @@ export function isCodeExecutable(def: ExecutableDefinition): def is CodeExecutab
 
 export function isTemplateExecutable(def: ExecutableDefinition): def is TemplateExecutable {
   return def.type === 'template';
-}
-
-export function isSectionExecutable(def: ExecutableDefinition): def is SectionExecutable {
-  return def.type === 'section';
 }
 
 export function isResolverExecutable(def: ExecutableDefinition): def is ResolverExecutable {

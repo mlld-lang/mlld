@@ -42,15 +42,6 @@ export class ErrorHandler {
   }
 
   private async handleMlldError(error: MlldError, options: CLIOptions, isCommandError: boolean): Promise<void> {
-    // For command execution errors, also output stderr content to process stderr
-    if (isCommandError && error.details && typeof error.details === 'object' && 'stderr' in error.details) {
-      const stderrContent = error.details.stderr;
-      if (stderrContent && typeof stderrContent === 'string' && stderrContent.trim()) {
-        // Write the original stderr content to process stderr before the formatted error
-        console.error(stderrContent.trim());
-      }
-    }
-
     try {
       let result: string;
 

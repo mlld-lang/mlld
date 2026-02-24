@@ -23,6 +23,23 @@ return value * 2;
     expect(addImplicitReturn(source)).toBe(source);
   });
 
+  it('ignores nested callback returns when deciding top-level implicit return', () => {
+    const source = `
+(
+  [3, 1, 2].slice().sort((a, b) => {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  })
+)
+`;
+
+    const transformed = addImplicitReturn(source);
+
+    expect(transformed).toMatch(/return\s*\(/);
+    expect(transformed).toContain('sort((a, b) => {');
+  });
+
   it('keeps non-expression trailing statements unchanged', () => {
     const source = `
 if (flag) {

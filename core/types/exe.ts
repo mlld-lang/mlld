@@ -88,7 +88,6 @@ export type ExeSubtype =
   | 'exeValue'
   | 'exeTemplate'
   | 'exeTemplateFile'
-  | 'exeSection'
   | 'exeWhen'
   | 'exeForeach'
   | 'exeFor'

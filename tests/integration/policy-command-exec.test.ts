@@ -194,4 +194,88 @@ describe('Policy command deny for executable commands', () => {
       })
     ).rejects.toThrow("Command 'git' denied by policy");
   });
+
+  it('denies native sh blocks when capabilities deny includes sh', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-policy-sh-block-deny-'));
+    tempDirs.push(root);
+
+    await fs.writeFile(
+      path.join(root, 'main.mld'),
+      [
+        '/var @policyConfig = {',
+        '  capabilities: {',
+        '    deny: ["sh"]',
+        '  }',
+        '}',
+        '/policy @p = union(@policyConfig)',
+        '/run sh { echo blocked }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await expect(
+      interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+        filePath: path.join(root, 'main.mld'),
+        fileSystem: new NodeFileSystem(),
+        pathService: new PathService(),
+        approveAllImports: true
+      })
+    ).rejects.toThrow('Shell access denied by policy');
+  });
+
+  it('denies native js blocks when capabilities deny includes js', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-policy-js-block-deny-'));
+    tempDirs.push(root);
+
+    await fs.writeFile(
+      path.join(root, 'main.mld'),
+      [
+        '/var @policyConfig = {',
+        '  capabilities: {',
+        '    deny: ["js"]',
+        '  }',
+        '}',
+        '/policy @p = union(@policyConfig)',
+        '/run js { return "blocked" }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await expect(
+      interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+        filePath: path.join(root, 'main.mld'),
+        fileSystem: new NodeFileSystem(),
+        pathService: new PathService(),
+        approveAllImports: true
+      })
+    ).rejects.toThrow('JavaScript access denied by policy');
+  });
+
+  it('denies cmd blocks when capabilities deny includes cmd', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-policy-cmd-block-deny-'));
+    tempDirs.push(root);
+
+    await fs.writeFile(
+      path.join(root, 'main.mld'),
+      [
+        '/var @policyConfig = {',
+        '  capabilities: {',
+        '    deny: ["cmd"]',
+        '  }',
+        '}',
+        '/policy @p = union(@policyConfig)',
+        '/run { echo blocked }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await expect(
+      interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+        filePath: path.join(root, 'main.mld'),
+        fileSystem: new NodeFileSystem(),
+        pathService: new PathService(),
+        approveAllImports: true
+      })
+    ).rejects.toThrow("Command 'echo' denied by policy");
+  });
 });

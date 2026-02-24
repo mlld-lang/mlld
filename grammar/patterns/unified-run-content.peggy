@@ -397,7 +397,7 @@ UnifiedCommandQuotedString
 
 // Content inside double quotes - allows variables and file references but no operator checks
 UnifiedDoubleQuotedContent
-  = varRef:UnifiedVariableNoTail {
+  = varRef:UnifiedVariableInDoubleQuotes {
       // Variable interpolation inside double quotes - return the unified pattern result
       return varRef;
     }
@@ -410,16 +410,32 @@ UnifiedDoubleQuotedContent
   / "@" { return '@'; }  // Lone @ without identifier
   / "<" { return '<'; }  // Lone < without file reference
 
+// Variable parser for command double-quoted strings.
+// Unlike UnifiedVariableNoTail, this does not check !TailModifiers so
+// literals like "@first | @second" stay inside the same quoted token.
+UnifiedVariableInDoubleQuotes
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccessOptional* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+
 // Content inside single quotes - no variables, no operator checks
 UnifiedCommandSingleQuotedContent
   = chars:$(!"'" .)+ { return chars; }
 
 // Unquoted word - apply security checks
 UnifiedCommandWord
-  = chars:UnifiedCommandWordChar+ {
-      const content = chars.join('');
+  = parts:UnifiedCommandWordPart+ {
+      const content = parts.join('');
       return helpers.createNode(NodeType.Text, { content, location: location() });
     }
+
+UnifiedCommandWordPart
+  = escaped:CmdAtEscape { return escaped; }
+  / char:UnifiedCommandWordChar { return char; }
 
 // Characters in unquoted words - with security checks
 UnifiedCommandWordChar

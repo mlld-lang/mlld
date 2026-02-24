@@ -190,12 +190,20 @@ export class ModuleExportSerializer {
     envDescriptor?: SecurityDescriptor
   ): SerializedMetadata | undefined {
     const descriptor = variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined;
-    const mergedDescriptor = descriptor && envDescriptor
-      ? mergeDescriptors(descriptor, envDescriptor)
-      : descriptor ?? envDescriptor;
     const metadataForSerialization: VariableMetadata = {};
-    if (mergedDescriptor) {
-      metadataForSerialization.security = mergedDescriptor;
+    const hasSecurityDescriptor = Boolean(
+      descriptor &&
+        (
+          (descriptor.labels?.length ?? 0) > 0 ||
+          (descriptor.taint?.length ?? 0) > 0 ||
+          (descriptor.sources?.length ?? 0) > 0 ||
+          descriptor.policyContext
+        )
+    );
+    if (hasSecurityDescriptor) {
+      metadataForSerialization.security = envDescriptor
+        ? mergeDescriptors(descriptor!, envDescriptor)
+        : descriptor;
     }
     if (variable.internal?.capability) {
       metadataForSerialization.capability = variable.internal.capability;
