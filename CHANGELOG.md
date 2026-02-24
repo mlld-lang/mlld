@@ -249,6 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pipeline context references**: `@p[-1]` correctly returns evaluated outputs when pipelines start with exe calls.
 - **log/output falsy values**: `false` and `0` output correctly instead of empty string.
 - **Field access on 'type' property**: Returns user data value instead of internal Variable type discriminator.
+- Missing object/array fields named `source` or `metadata` now resolve as missing data in expressions and `@exists`, instead of falling back to Variable metadata.
 - **JSON/JSONL parse errors**: Shows proper error messages instead of "Failed to load content".
 - **HTML/XML detection in templates**: Angle bracket content matching HTML patterns (`<tagname attr="value">`) recognized as literal HTML. Backslash-escaped characters (`\@`, `\.`, `\*`, `@@`) prevent false file reference detection inside angle brackets.
 - **Backtick template literals in exec arguments**: `@echo(@name)` where `@name` holds a backtick literal correctly evaluates.

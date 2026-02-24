@@ -86,6 +86,57 @@ describe('missing field access', () => {
     expect(result).toBeUndefined();
   });
 
+  it('does not leak Variable metadata for missing source fields on object variables', async () => {
+    const variable = createObjectVariable(
+      'obj',
+      { nested: true },
+      false,
+      source
+    );
+
+    const result = await accessField(
+      variable,
+      { type: 'field', value: 'source' },
+      { preserveContext: false }
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it('returns undefined for missing source fields on object variables in condition mode', async () => {
+    const variable = createObjectVariable(
+      'obj',
+      { nested: true },
+      false,
+      source
+    );
+
+    const result = await accessField(
+      variable,
+      { type: 'field', value: 'source' },
+      { preserveContext: false, returnUndefinedForMissing: true }
+    );
+
+    expect(result).toBeUndefined();
+  });
+
+  it('keeps user data precedence when object variables define a source field', async () => {
+    const variable = createObjectVariable(
+      'obj',
+      { source: 'user-data' },
+      false,
+      source
+    );
+
+    const result = await accessField(
+      variable,
+      { type: 'field', value: 'source' },
+      { preserveContext: false }
+    );
+
+    expect(result).toBe('user-data');
+  });
+
   it('returns null for out-of-bounds array indices', async () => {
     const result = await accessField([1, 2], { type: 'arrayIndex', value: 5 });
     expect(result).toBeNull();
