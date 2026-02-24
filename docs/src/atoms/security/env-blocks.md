@@ -1,5 +1,6 @@
 ---
 id: env-blocks
+qa_tier: 2
 title: Environment Blocks
 brief: Scoped execution within an environment configuration
 category: security

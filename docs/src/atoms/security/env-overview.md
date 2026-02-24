@@ -1,5 +1,6 @@
 ---
 id: env-overview
+qa_tier: 2
 title: Environment Overview
 brief: Execution contexts with credentials, isolation, and capabilities
 category: security

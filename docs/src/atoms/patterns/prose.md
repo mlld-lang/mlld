@@ -1,5 +1,6 @@
 ---
-id: prose
+id: pattern-prose
+qa_tier: 3
 title: Prose Execution
 brief: Execute LLM-interpreted DSL skills (OpenProse and custom)
 category: patterns

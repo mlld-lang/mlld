@@ -1,5 +1,6 @@
 ---
-id: modules-resolvers
+id: resolvers
+qa_tier: 2
 title: Custom Resolvers
 brief: Configure custom @ prefixes for imports
 category: modules

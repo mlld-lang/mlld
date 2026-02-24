@@ -1,5 +1,6 @@
 ---
 id: config-files
+qa_tier: 2
 title: Config Files
 brief: Project configuration and lock files
 category: configuration

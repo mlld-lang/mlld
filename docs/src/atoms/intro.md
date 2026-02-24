@@ -1,5 +1,6 @@
 ---
 id: intro
+qa_tier: 1
 title: Introduction to mlld
 brief: What mlld is, mental model, and key concepts
 category: intro
@@ -29,8 +30,8 @@ mlld is an LLM scripting language for **surgical context assembly**, **token-eff
 Load exactly what you need, when you need it. Glob files, extract sections, filter by metadata, transform content — all with declarative syntax.
 
 ```mlld
-var @relevantDocs = <docs/**/*.md>.section("API")
-var @recentChanges = <CHANGELOG.md> | @lines | @first(10)
+var @relevantDocs = <docs/**/*.md # API>
+var @recentChanges = <CHANGELOG.md>
 ```
 
 mlld makes context preparation explicit, reviewable, and reproducible.
@@ -192,6 +193,12 @@ var @failures = for @r in @results when @r.error => @r
 
 `[]` and `{}` are falsy in mlld 
 
+**Reserved variables**: `@root`, `@base`, `@now`, `@input`, `@payload`, `@state`, `@debug`, `@keychain`, `@fm`, `@mx`, `@p`
+
+**Built-in transformers** (pipes: `@data | name`): `@parse` (`.strict`, `.loose`, `.llm`, `.fromlist`), `@xml`, `@csv`, `@md`, `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+
+**Built-in functions**: `@exists(@var)`, `@fileExists(@path)`, `@typeof(@var)`
+
 ## Key Syntax
 
 Common patterns for quick reference. See topic-specific `mlld howto` pages for details.
@@ -233,11 +240,11 @@ var @data = @text | @parse.llm          >> extract JSON from LLM output
 
 ## Built-ins at a Glance
 
-**Reserved variables**: `@root`, `@base`, `@now`, `@input`, `@payload`, `@state`, `@debug`, `@fm`, `@mx`
+**Reserved variables**: `@root`, `@base`, `@now`, `@input`, `@payload`, `@state`, `@debug`, `@keychain`, `@fm`, `@mx`, `@p`
 
-**Transformers** (pipes): `@parse` (`.strict`, `.loose`, `.llm`), `@xml`, `@csv`, `@md`, `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+**Transformers** (pipes: `@data | name`): `@parse` (`.strict`, `.loose`, `.llm`, `.fromlist`), `@xml`, `@csv`, `@md`, `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
 
-**Checks**: `@exists`, `@fileExists`, `@typeof`
+**Functions** (call-style): `@exists(@var)`, `@fileExists(@path)`, `@typeof(@var)`
 
 **Helpers**: `@keep`, `@keepStructured`
 

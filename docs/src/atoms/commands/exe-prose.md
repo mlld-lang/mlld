@@ -1,5 +1,6 @@
 ---
 id: exe-prose
+qa_tier: 2
 title: Exe Prose Syntax
 brief: LLM-interpreted DSL execution syntax
 category: commands

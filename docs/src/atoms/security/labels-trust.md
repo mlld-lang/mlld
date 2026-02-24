@@ -1,5 +1,6 @@
 ---
 id: labels-trust
+qa_tier: 2
 title: Trust Labels
 brief: trusted and untrusted - blocking dangerous flows from unverified data
 category: security

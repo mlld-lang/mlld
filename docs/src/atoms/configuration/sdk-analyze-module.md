@@ -1,5 +1,6 @@
 ---
-id: config-sdk-analyze
+id: sdk-analyze-module
+qa_tier: 3
 title: Analyze Module
 brief: Static analysis without execution
 category: configuration

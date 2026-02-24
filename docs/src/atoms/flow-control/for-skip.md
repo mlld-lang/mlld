@@ -1,5 +1,6 @@
 ---
 id: for-skip
+qa_tier: 2
 title: Skip Keyword
 brief: Dropping items from iteration results
 category: control-flow

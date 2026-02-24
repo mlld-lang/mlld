@@ -1,5 +1,6 @@
 ---
-id: config-cli-run
+id: cli-run
+qa_tier: 2
 title: mlld run Command
 brief: Execute scripts with payload injection
 category: configuration

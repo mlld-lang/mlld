@@ -1,5 +1,6 @@
 ---
-id: config-sdk-execute
+id: sdk-execute-function
+qa_tier: 3
 title: Execute Function
 brief: File-based execution with state management
 category: configuration

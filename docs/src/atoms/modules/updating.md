@@ -1,5 +1,6 @@
 ---
 id: modules-updating
+qa_tier: 2
 title: Updating Modules
 brief: Check for and install module updates
 category: modules

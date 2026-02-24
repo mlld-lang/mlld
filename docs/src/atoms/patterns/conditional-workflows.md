@@ -1,5 +1,6 @@
 ---
 id: pattern-conditional-workflows
+qa_tier: 3
 title: Conditional Workflow Pattern
 brief: Route execution based on conditions
 category: patterns

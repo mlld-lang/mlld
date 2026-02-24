@@ -1,5 +1,6 @@
 ---
 id: signing-overview
+qa_tier: 2
 title: Signing Overview
 brief: Cryptographic integrity for templates
 category: security

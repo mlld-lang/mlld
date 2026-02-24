@@ -1,5 +1,6 @@
 ---
-id: config-cli-file
+id: cli-file
+qa_tier: 2
 title: Direct File Invocation
 brief: Run mlld files with payload, timeout, and metrics
 category: configuration

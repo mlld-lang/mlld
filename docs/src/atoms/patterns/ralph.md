@@ -1,5 +1,6 @@
 ---
 id: pattern-ralph
+qa_tier: 3
 title: Ralph Loop Pattern
 brief: Autonomous agent loop with fresh context and test backpressure
 category: patterns

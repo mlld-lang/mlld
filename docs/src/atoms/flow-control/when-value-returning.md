@@ -1,5 +1,6 @@
 ---
 id: when-value-returning
+qa_tier: 1
 title: Value-Returning When
 brief: Using when in exe to return values
 category: control-flow

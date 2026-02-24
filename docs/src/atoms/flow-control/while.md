@@ -1,5 +1,6 @@
 ---
 id: while
+qa_tier: 2
 title: While Loops
 brief: Bounded iteration with done/continue control
 category: control-flow

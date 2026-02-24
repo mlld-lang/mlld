@@ -1,5 +1,6 @@
 ---
 id: file-loading-ast
+qa_tier: 2
 title: AST Selection
 brief: Extract code definitions from source files
 category: syntax

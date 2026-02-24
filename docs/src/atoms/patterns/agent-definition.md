@@ -1,5 +1,6 @@
 ---
 id: pattern-agent-definition
+qa_tier: 3
 title: Agent Definition Pattern
 brief: Define agent configuration modules
 category: patterns

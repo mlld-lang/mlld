@@ -1,5 +1,6 @@
 ---
 id: pattern-tool-orchestration
+qa_tier: 3
 title: Tool Orchestration Pattern
 brief: Coordinate multiple tools with data flow
 category: patterns

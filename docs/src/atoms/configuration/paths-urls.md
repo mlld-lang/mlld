@@ -1,5 +1,6 @@
 ---
-id: config-paths-urls
+id: paths-urls
+qa_tier: 2
 title: Paths and URLs
 brief: Literal, interpolated, and remote paths
 category: configuration

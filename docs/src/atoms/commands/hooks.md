@@ -1,5 +1,6 @@
 ---
 id: hooks
+qa_tier: 2
 title: Hooks
 brief: Lifecycle hooks for observability and transforms
 category: commands

@@ -1,5 +1,6 @@
 ---
-id: config-env-vars
+id: environment-variables
+qa_tier: 2
 title: Environment Variables
 brief: Import environment variables via @input
 category: configuration

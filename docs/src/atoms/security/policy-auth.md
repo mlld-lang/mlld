@@ -1,5 +1,6 @@
 ---
 id: policy-auth
+qa_tier: 2
 title: Policy Auth
 brief: Credential mappings and sealed auth injection via using auth:*
 category: security

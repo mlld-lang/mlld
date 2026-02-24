@@ -1,5 +1,6 @@
 ---
 id: stream
+qa_tier: 2
 title: Streaming
 brief: Stream output during execution
 category: commands

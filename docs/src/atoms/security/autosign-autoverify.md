@@ -1,5 +1,6 @@
 ---
 id: autosign-autoverify
+qa_tier: 2
 title: Autosign and Autoverify
 brief: Policy automation for signing and verification
 category: security

@@ -1,5 +1,6 @@
 ---
-id: modules-importing-directory
+id: importing-directory
+qa_tier: 2
 title: Directory Imports
 brief: Import entire directories as namespaced modules
 category: modules

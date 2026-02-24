@@ -1,5 +1,6 @@
 ---
 id: policy-operations
+qa_tier: 2
 title: Operation Risk Labels
 brief: Label exe functions with risk categories for policy enforcement
 category: security

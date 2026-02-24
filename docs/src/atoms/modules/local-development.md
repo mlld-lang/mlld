@@ -1,5 +1,6 @@
 ---
-id: modules-local-development
+id: local-development
+qa_tier: 2
 title: Local Development Modules
 brief: Dev modules in llm/modules/ directory
 category: modules

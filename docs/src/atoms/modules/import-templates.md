@@ -1,5 +1,6 @@
 ---
-id: modules-import-templates
+id: import-templates
+qa_tier: 2
 title: Template Collections
 brief: Import directories of template files
 category: modules

@@ -1,5 +1,6 @@
 ---
 id: checkpoint
+qa_tier: 2
 title: Checkpoint & Resume
 brief: Cache LLM call results and resume interrupted runs
 category: configuration

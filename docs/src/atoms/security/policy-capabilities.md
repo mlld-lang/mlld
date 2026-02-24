@@ -1,5 +1,6 @@
 ---
 id: policy-capabilities
+qa_tier: 2
 title: Policy Capabilities
 brief: Restrict tools, filesystem, and network access
 category: security

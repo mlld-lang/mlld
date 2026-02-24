@@ -1,5 +1,6 @@
 ---
-id: modules-patterns
+id: module-patterns
+qa_tier: 2
 title: Module Patterns
 brief: Common module organization patterns
 category: modules

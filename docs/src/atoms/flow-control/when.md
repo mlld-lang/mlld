@@ -1,5 +1,6 @@
 ---
 id: when
+qa_tier: 1
 title: When
 brief: Select the first matching branch
 category: control-flow

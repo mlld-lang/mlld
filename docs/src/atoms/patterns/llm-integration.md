@@ -1,5 +1,6 @@
 ---
 id: pattern-llm-integration
+qa_tier: 3
 title: LLM Integration Pattern
 brief: Call LLMs with structured prompts
 category: patterns

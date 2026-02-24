@@ -1,5 +1,6 @@
 ---
 id: pattern-guarded-execution
+qa_tier: 3
 title: Guarded Execution Pattern
 brief: Validate at each step before proceeding
 category: patterns

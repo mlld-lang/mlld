@@ -1,5 +1,6 @@
 ---
 id: pattern-data-pipelines
+qa_tier: 3
 title: Data Pipeline Pattern
 brief: Chain transformations with validation
 category: patterns

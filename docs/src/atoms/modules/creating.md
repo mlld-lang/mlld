@@ -1,5 +1,6 @@
 ---
 id: modules-creating
+qa_tier: 2
 title: Creating Modules
 brief: Module structure with frontmatter and exports
 category: modules

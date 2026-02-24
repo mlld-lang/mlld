@@ -1,5 +1,6 @@
 ---
-id: modules-frontmatter-access
+id: frontmatter-access
+qa_tier: 2
 title: Accessing Module Frontmatter
 brief: Access module metadata via @fm
 category: modules

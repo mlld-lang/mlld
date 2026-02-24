@@ -1,5 +1,6 @@
 ---
-id: modules-import-types
+id: import-types
+qa_tier: 2
 title: Import Types
 brief: Control caching and resolution behavior
 category: modules

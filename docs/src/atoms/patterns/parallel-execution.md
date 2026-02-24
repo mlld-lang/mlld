@@ -1,5 +1,6 @@
 ---
 id: pattern-parallel-execution
+qa_tier: 3
 title: Parallel Execution Pattern
 brief: Run independent tasks concurrently
 category: patterns

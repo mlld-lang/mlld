@@ -1,5 +1,6 @@
 ---
 id: env-config
+qa_tier: 2
 title: Environment Configuration
 brief: Configure filesystem, network, limits, and credentials for environments
 category: security

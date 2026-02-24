@@ -1,5 +1,6 @@
 ---
 id: methods-builtin
+qa_tier: 1
 title: Builtin Methods
 brief: Array and string methods
 category: syntax

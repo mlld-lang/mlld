@@ -1,5 +1,6 @@
 ---
 id: pattern-gate
+qa_tier: 3
 title: Gate Pattern
 brief: Validate or filter before proceeding
 category: patterns

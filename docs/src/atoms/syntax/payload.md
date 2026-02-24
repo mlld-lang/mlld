@@ -1,5 +1,6 @@
 ---
-id: syntax-payload
+id: payload
+qa_tier: 2
 title: Payload Access
 brief: Access data passed via SDK or CLI
 category: syntax

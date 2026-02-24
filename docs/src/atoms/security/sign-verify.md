@@ -1,5 +1,6 @@
 ---
 id: sign-verify
+qa_tier: 2
 title: Sign and Verify
 brief: Directive syntax for signing and verification
 category: security

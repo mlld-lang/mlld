@@ -1,5 +1,6 @@
 ---
 id: pattern-dual-audit
+qa_tier: 2
 title: Dual-Audit Airlock Pattern
 brief: Two-call information bottleneck for hardened prompt injection defense
 category: security

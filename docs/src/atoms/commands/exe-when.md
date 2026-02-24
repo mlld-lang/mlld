@@ -1,5 +1,6 @@
 ---
 id: exe-when
+qa_tier: 2
 title: Exe When
 brief: Select the first matching branch in exe bodies
 category: commands

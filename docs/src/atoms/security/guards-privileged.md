@@ -1,5 +1,6 @@
 ---
 id: guards-privileged
+qa_tier: 2
 title: Privileged Guards
 brief: Guards that cannot be bypassed
 category: security

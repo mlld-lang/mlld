@@ -1,5 +1,6 @@
 ---
 id: labels-influenced
+qa_tier: 2
 title: Influenced Label
 brief: Track LLM outputs affected by untrusted data
 category: security

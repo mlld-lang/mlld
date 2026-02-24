@@ -1,5 +1,6 @@
 ---
 id: reserved-variables
+qa_tier: 1
 title: Reserved Variables
 brief: Built-in system variables
 category: syntax

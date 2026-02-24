@@ -1,5 +1,6 @@
 ---
 id: run-stdin
+qa_tier: 2
 title: Run Command Stdin
 brief: Pass data via stdin to commands
 category: commands

@@ -1,5 +1,6 @@
 ---
-id: config-frontmatter
+id: frontmatter
+qa_tier: 2
 title: Frontmatter
 brief: Document metadata at file start
 category: configuration

@@ -1,5 +1,6 @@
 ---
-id: modules-registry
+id: registry
+qa_tier: 2
 title: Module Registry
 brief: Publishing and installing from the public registry
 category: modules

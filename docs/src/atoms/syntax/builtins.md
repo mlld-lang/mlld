@@ -1,5 +1,6 @@
 ---
 id: builtins
+qa_tier: 1
 title: Built-in Reference
 brief: Variables, transformers, methods, effects
 category: syntax

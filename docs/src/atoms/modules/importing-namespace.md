@@ -1,5 +1,6 @@
 ---
-id: modules-importing-namespace
+id: importing-namespace
+qa_tier: 2
 title: Namespace Imports
 brief: Import modules with namespace aliases
 category: modules

@@ -1,5 +1,6 @@
 ---
 id: pattern-router
+qa_tier: 3
 title: Router Pattern
 brief: Score and route to different handlers
 category: patterns

@@ -1,5 +1,6 @@
 ---
-id: config-plugin
+id: plugin
+qa_tier: 2
 title: Claude Code Plugin
 brief: Install the mlld plugin for Claude Code
 category: configuration

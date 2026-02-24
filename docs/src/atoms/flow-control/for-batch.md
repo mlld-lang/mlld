@@ -1,5 +1,6 @@
 ---
 id: for-batch
+qa_tier: 2
 title: Batch Pipelines
 brief: Processing collected results with trailing pipeline
 category: control-flow

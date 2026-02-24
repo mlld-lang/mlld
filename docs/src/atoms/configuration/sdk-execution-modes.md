@@ -1,5 +1,6 @@
 ---
-id: config-sdk-execution-modes
+id: sdk-execution-modes
+qa_tier: 3
 title: SDK Execution Modes
 brief: Four modes for SDK consumers
 category: configuration

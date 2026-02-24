@@ -1,5 +1,6 @@
 ---
 id: when-local-vars
+qa_tier: 2
 title: Local Variables in When
 brief: Block-scoped variables with let
 category: control-flow

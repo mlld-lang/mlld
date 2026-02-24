@@ -1,5 +1,6 @@
 ---
 id: exe-shadow
+qa_tier: 2
 title: Exe Shadow Environments
 brief: Expose helpers to all code blocks (JS, Node, Python)
 category: commands

@@ -1,5 +1,6 @@
 ---
 id: modules-philosophy
+qa_tier: 3
 title: Module Philosophy
 brief: Module-first design principles
 category: modules
