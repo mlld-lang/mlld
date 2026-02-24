@@ -60,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Executable argument expressions (`? :`, unary/binary forms, and when-expression values) now preserve security descriptors.
 - Array/object literals now retain label/taint metadata from nested expression values.
 - Privileged guard `when` actions now accept shorthand label modifications (`trusted!`, `!label`, `clear!`) with action targets (for example `* => trusted!,!secret @output`).
+- Label-modification actions now also accept escaped bang forms (`trusted\!`, `clear\!`, `\!label`) in guard and return contexts.
 - `cmd { ... }` shell-operator parse/runtime errors now emit context-aware guidance, suggesting `run sh(@path) { ... }` in run contexts and `exe @fn(path) = sh { ... }` in exe contexts.
 - Executable outputs now inherit taint introduced by nested tool/executable calls during actual execution paths (for example, nested `net:r` labels now propagate to parent `exe` output only when invoked).
 - `var tools` normalization no longer triggers `before <operation-label>` guard evaluation; those guards now run only during actual operation execution.

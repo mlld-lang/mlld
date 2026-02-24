@@ -388,9 +388,9 @@ GuardPrivilegedLabelModifierList
     }
 
 GuardPrivilegedLabelModifier
-  = "clear!" ![a-zA-Z0-9_] { return { kind: 'clear' }; }
-  / "trusted!" ![a-zA-Z0-9_] { return { kind: 'bless' }; }
-  / "!" label:GuardLabelItem { return { kind: 'remove', label }; }
+  = "clear" ("\\!" / "!") ![a-zA-Z0-9_] { return { kind: 'clear' }; }
+  / "trusted" ("\\!" / "!") ![a-zA-Z0-9_] { return { kind: 'bless' }; }
+  / ("\\!" / "!") label:GuardLabelItem { return { kind: 'remove', label }; }
 
 GuardActionValue
   = HWS !LineTerminator value:(UnifiedQuoteOrTemplate / UnifiedExpression) {

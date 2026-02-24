@@ -42,4 +42,13 @@ describe('Label modification grammar', () => {
     expect(modifiers[0]).toEqual({ kind: 'bless' });
     expect(modifiers[1]).toEqual({ kind: 'remove', label: 'pii' });
   });
+
+  it('parses escaped trust and removal modifiers', () => {
+    const ast = parseSync('/exe @tag() = [ => trusted\\!,\\!pii @value ]');
+    const node = findNode(ast, (item) => item.type === 'LabelModification');
+    expect(node).toBeTruthy();
+    const modifiers = node?.modifiers as any[];
+    expect(modifiers[0]).toEqual({ kind: 'bless' });
+    expect(modifiers[1]).toEqual({ kind: 'remove', label: 'pii' });
+  });
 });
