@@ -93,7 +93,7 @@ describe('checkLabelFlow operations mapping', () => {
   it('maps semantic operation labels to risk categories', () => {
     const policy: PolicyConfig = {
       defaults: { rules: ['no-secret-exfil'] },
-      operations: { 'net:w': 'exfil' }
+      operations: { exfil: ['net:w'] }
     };
 
     const result = checkLabelFlow(
@@ -113,7 +113,7 @@ describe('checkLabelFlow operations mapping', () => {
   it('allows operations when no mapping triggers rules', () => {
     const policy: PolicyConfig = {
       defaults: { rules: ['no-secret-exfil'] },
-      operations: { 'net:w': 'exfil' }
+      operations: { exfil: ['net:w'] }
     };
 
     const result = checkLabelFlow(
@@ -131,7 +131,7 @@ describe('checkLabelFlow operations mapping', () => {
   it('preserves original labels alongside mapped labels', () => {
     const policy: PolicyConfig = {
       defaults: { rules: ['no-secret-exfil'] },
-      operations: { 'net:w': 'exfil' },
+      operations: { exfil: ['net:w'] },
       labels: {
         secret: { deny: ['net:w'] }
       }
@@ -152,7 +152,7 @@ describe('checkLabelFlow operations mapping', () => {
   it('works with op: labels from opLabels', () => {
     const policy: PolicyConfig = {
       defaults: { rules: ['no-untrusted-destructive'] },
-      operations: { 'op:cmd:rm': 'destructive' }
+      operations: { destructive: ['op:cmd:rm'] }
     };
 
     const result = checkLabelFlow(
@@ -173,8 +173,8 @@ describe('checkLabelFlow operations mapping', () => {
     const policy: PolicyConfig = {
       defaults: { rules: ['no-secret-exfil', 'no-untrusted-destructive'] },
       operations: {
-        'net:w': 'exfil',
-        'op:sh': 'destructive'
+        exfil: ['net:w'],
+        destructive: ['op:sh']
       }
     };
 

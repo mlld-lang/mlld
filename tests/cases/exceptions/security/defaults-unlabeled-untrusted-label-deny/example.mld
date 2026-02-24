@@ -4,7 +4,7 @@ var @policyConfig = {
     untrusted: { deny: ["op:cmd"] }
   },
   operations: {
-    "op:cmd": "exfil"
+    "exfil": ["op:cmd"]
   }
 }
 policy @p = union(@policyConfig)

@@ -21,7 +21,7 @@ exe fs:w @wipe(data) = run cmd { rm -rf "@data" }
 
 policy @p = {
   defaults: { rules: ["no-untrusted-destructive"] },
-  operations: { "fs:w": "destructive" }
+  operations: { destructive: ["fs:w"] }
 }
 ```
 
@@ -45,7 +45,7 @@ policy @p = {
 ```mlld
 policy @p = {
   defaults: { rules: ["no-untrusted-destructive"] },
-  operations: { "fs:w": "destructive" }
+  operations: { destructive: ["fs:w"] }
 }
 
 var untrusted @payload = "data"
@@ -67,7 +67,7 @@ policy @p = {
     unlabeled: "untrusted",
     rules: ["no-untrusted-destructive"]
   },
-  operations: { "fs:w": "destructive" }
+  operations: { destructive: ["fs:w"] }
 }
 
 var @data = <./input.txt>

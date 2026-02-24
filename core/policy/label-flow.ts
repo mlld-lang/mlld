@@ -81,9 +81,12 @@ export function expandOperationLabels(
   }
   const expanded = new Set(targets);
   for (const target of targets) {
-    const mapped = mappings[target];
-    if (mapped) {
-      expanded.add(mapped);
+    for (const [riskCategory, semanticLabels] of Object.entries(mappings)) {
+      const labels = normalizeList(semanticLabels);
+      const matches = labels.some(label => matchesPrefix(label, target));
+      if (matches) {
+        expanded.add(riskCategory);
+      }
     }
   }
   return Array.from(expanded);

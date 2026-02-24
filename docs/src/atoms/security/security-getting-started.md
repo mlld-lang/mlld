@@ -75,9 +75,9 @@ policy @p = {
     unlabeled: "untrusted"
   },
   operations: {
-    "net:w": "exfil",
-    "fs:w": "destructive",
-    "sys:admin": "privileged"
+    exfil: ["net:w"],
+    destructive: ["fs:w"],
+    privileged: ["sys:admin"]
   },
   capabilities: {
     allow: ["cmd:git:*", "cmd:npm:*"],
@@ -88,7 +88,7 @@ policy @p = {
 exe net:w @postToSlack(channel, msg) = run cmd { curl -X POST @channel -d @msg }
 ```
 
-`defaults.unlabeled` treats all data without explicit labels as `untrusted`. `operations` maps semantic exe labels (`net:w`) to risk categories (`exfil`). The built-in rules then block flows like `secret` data reaching an `exfil` operation.
+`defaults.unlabeled` treats all data without explicit labels as `untrusted`. `operations` groups semantic exe labels (`net:w`) under risk categories (`exfil`). The built-in rules then block flows like `secret` data reaching an `exfil` operation.
 
 See `policy-operations` for the two-step labeling pattern. See `policy-label-flow` for custom deny/allow rules.
 
@@ -138,8 +138,8 @@ policy @p = {
     unlabeled: "untrusted"
   },
   operations: {
-    "net:w": "exfil",
-    "fs:w": "destructive"
+    exfil: ["net:w"],
+    destructive: ["fs:w"]
   },
   capabilities: {
     allow: ["cmd:claude:*", "cmd:git:*"],

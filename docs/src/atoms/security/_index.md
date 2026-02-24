@@ -93,7 +93,7 @@ Policies are declarative. Where guards are per-operation imperative logic, polic
 ```mlld
 policy @p = {
   defaults: { rules: [...], unlabeled: "untrusted" },
-  operations: { "net:w": "exfil", "fs:w": "destructive" },
+  operations: { exfil: ["net:w"], destructive: ["fs:w"] },
   capabilities: { allow: [...], deny: [...], danger: [...] },
   labels: { secret: { deny: ["op:show", "exfil"] } },
   auth: { claude: { from: "keychain:...", as: "ANTHROPIC_API_KEY" } }
@@ -106,7 +106,7 @@ policy @p = {
 |---------|---------|
 | `defaults.rules` | Enable built-in rules: `no-secret-exfil`, `no-sensitive-exfil`, `no-untrusted-destructive`, `no-untrusted-privileged`, `untrusted-llms-get-influenced` |
 | `defaults.unlabeled` | Auto-label data with no user labels (`"untrusted"` or `"trusted"`) |
-| `operations` | Map semantic exe labels (`net:w`) to risk categories (`exfil`, `destructive`, `privileged`) |
+| `operations` | Group semantic exe labels (`net:w`) under risk categories (`exfil`, `destructive`, `privileged`) |
 | `capabilities.allow` | Allowlist command patterns (general gate) |
 | `capabilities.danger` | Dangerous operations requiring explicit opt-in (separate gate — both `allow` AND `danger` must pass) |
 | `labels` | Label flow rules — which data labels can flow to which operation labels |

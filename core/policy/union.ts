@@ -61,7 +61,7 @@ export type PolicyCapabilitiesConfig = {
   danger?: string[] | string;
 };
 
-export type PolicyOperations = Record<string, string>;
+export type PolicyOperations = Record<string, string[]>;
 
 export type PolicyConfig = {
   verify_all_instructions?: boolean;
@@ -1120,11 +1120,11 @@ function normalizePolicyOperations(
   }
 
   const result: PolicyOperations = {};
-  for (const [key, value] of Object.entries(operations)) {
-    const normalizedKey = String(key).trim();
-    const normalizedValue = String(value).trim();
-    if (normalizedKey && normalizedValue) {
-      result[normalizedKey] = normalizedValue;
+  for (const [riskCategory, labels] of Object.entries(operations)) {
+    const normalizedCategory = String(riskCategory).trim();
+    const normalizedLabels = normalizeLabelList(labels);
+    if (normalizedCategory && normalizedLabels && normalizedLabels.length > 0) {
+      result[normalizedCategory] = normalizedLabels;
     }
   }
 
@@ -1139,7 +1139,20 @@ function mergePolicyOperations(
     return undefined;
   }
 
-  return { ...(base ?? {}), ...(incoming ?? {}) };
+  const result: PolicyOperations = {};
+  for (const [riskCategory, labels] of Object.entries(base ?? {})) {
+    if (labels.length > 0) {
+      result[riskCategory] = [...labels];
+    }
+  }
+  for (const [riskCategory, labels] of Object.entries(incoming ?? {})) {
+    if (labels.length === 0) {
+      continue;
+    }
+    result[riskCategory] = mergeLabelListUnion(result[riskCategory], labels) ?? [];
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function mergePolicyLabels(

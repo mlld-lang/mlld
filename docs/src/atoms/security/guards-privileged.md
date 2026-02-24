@@ -28,7 +28,7 @@ guard @blocker before op:run = when [
 >> Policy rules create privileged guards automatically
 policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
-  operations: { "net:w": "exfil" }
+  operations: { exfil: ["net:w"] }
 }
 
 var secret @customerList = <internal/customers.csv>

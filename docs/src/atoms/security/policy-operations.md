@@ -17,12 +17,12 @@ Classify operations by risk using the two-step pattern: label exe functions with
 exe net:w @postToSlack(msg) = run cmd { slack-cli "@msg" }
 exe fs:w @deleteFile(path) = run cmd { rm -rf "@path" }
 
->> Step 2: Policy maps semantic labels to risk categories
+>> Step 2: Policy groups semantic labels under risk categories
 policy @p = {
   defaults: { rules: ["no-secret-exfil", "no-untrusted-destructive"] },
   operations: {
-    "net:w": "exfil",
-    "fs:w": "destructive"
+    exfil: ["net:w"],
+    destructive: ["fs:w"]
   }
 }
 ```
@@ -49,7 +49,7 @@ Now `secret` data cannot flow to `@postToSlack` (exfil rule) and `untrusted` dat
 exe net:w, fs:w @exportAndDelete(data) = run cmd { backup_and_delete "@data" }
 
 policy @p = {
-  operations: { "net:w": "exfil", "fs:w": "destructive" }
+  operations: { exfil: ["net:w"], destructive: ["fs:w"] }
 }
 ```
 
@@ -67,7 +67,7 @@ This is simpler but couples exe definitions to risk categories. The two-step pat
 ```mlld
 policy @p = {
   defaults: { rules: ["no-secret-exfil"] },
-  operations: { "net:w": "exfil" }
+  operations: { exfil: ["net:w"] }
 }
 
 var secret @patientRecords = <clinic/patients.csv>

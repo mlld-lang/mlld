@@ -26,9 +26,9 @@ var @policyConfig = {
     ]
   },
   operations: {
-    "net:w": "exfil",
-    "fs:w": "destructive",
-    "sys:admin": "privileged"
+    exfil: ["net:w"],
+    destructive: ["fs:w"],
+    privileged: ["sys:admin"]
   }
 }
 policy @p = union(@policyConfig)
@@ -145,7 +145,7 @@ The two-step pattern provides built-in security with minimal config:
     exe sys:admin \@updateSystemConfig() -- what it does: system admin
 
   STEP 2 - Map semantic labels to risk categories in policy
-    operations: { "net:w": "exfil", "fs:w": "destructive", "sys:admin": "privileged" }
+    operations: { exfil: ["net:w"], destructive: ["fs:w"], privileged: ["sys:admin"] }
 
   RESULT - Built-in rules enforce automatically
     no-secret-exfil:          secret    -> exfil(net:w)          BLOCKED
