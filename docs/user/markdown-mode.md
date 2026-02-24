@@ -88,7 +88,7 @@ This file:
 When publishing to the registry, `.mld.md` files are recommended:
 
 ```bash
-mlld init my-module.mld.md
+mlld module my-module.mld.md
 mlld add-needs my-module.mld.md
 mlld publish my-module.mld.md
 ```

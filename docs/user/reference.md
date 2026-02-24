@@ -558,6 +558,9 @@ Register user lifecycle hooks with required timing (`before` or `after`):
 | `hook before @fn("prefix") = [ ... ]` | Function + arg prefix | Matches first argument string prefix |
 | `hook after op:exe = when [ ... ]` | Operation | Matches operation type |
 | `hook before untrusted = [ ... ]` | Data label | Matches label-filtered inputs |
+| `hook @myHook before @fn = [ ... ]` | Named hook | Optional `@name` for identification |
+
+Hooks can optionally be named with `@name` between `hook` and the timing keyword. Named hooks are identified in `@mx.hooks.errors` entries and useful for debugging. The name has no effect on matching or execution order.
 
 Supported operation filters: `op:var`, `op:run`, `op:exe`, `op:show`, `op:output`, `op:log`, `op:append`, `op:stream`, `op:for`, `op:for:iteration`, `op:for:batch`, `op:loop`, `op:import`.
 

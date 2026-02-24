@@ -104,29 +104,37 @@ mlld script.mld --structured
 
 ## Module Commands
 
-### `mlld init [module.mld.md]`
+### `mlld module [output]` (alias: `mlld mod`)
 
-Create a new mlld module interactively.
+Create a new mlld module interactively or with flags.
 
 ```bash
 # Interactive creation
-mlld init
+mlld module
 
-# Create specific module
-mlld init utils.mld.md
+# Create specific module file
+mlld module utils.mld.md
 
 # Non-interactive with metadata
-mlld init --name utils --author alice --about "Utility functions"
+mlld module --name utils --author alice --about "Utility functions"
+
+# Create a skill module
+mlld module --type skill --name my-skill
+
+# Create in a resolver path
+mlld module -o @local/my-utils
 ```
 
 **Options:**
 - `-n, --name <name>` - Module name
 - `-a, --author <author>` - Author name
 - `-d, --about <description>` - Module description
-- `-o, --output <path>` - Output file path
+- `-o, --output <path>` - Output file path (supports `@resolver/name` syntax)
 - `--version <version>` - Module version (default: 1.0.0)
 - `-k, --keywords <keywords>` - Comma-separated keywords
 - `--homepage <url>` - Homepage URL
+- `--type <type>` - Module type: `library`, `app`, `command`, `skill`, `environment` (aliases: `lib`, `env`)
+- `--global` - Create as a global module
 - `--skip-git` - Skip git integration
 - `-f, --force` - Overwrite existing files
 
@@ -553,6 +561,31 @@ mlld setup --check
 3. Authentication setup
 4. Repository verification
 
+### `mlld init`
+
+Initialize a new mlld project. Creates `mlld-config.json` with sensible defaults.
+
+```bash
+# Initialize project in current directory
+mlld init
+
+# Override default script directory
+mlld init --script-dir scripts/
+
+# Override default local module path
+mlld init --local-path ./modules
+
+# Force overwrite existing config
+mlld init --force
+```
+
+**Options:**
+- `--script-dir <path>` - Script directory (default: `llm/run`)
+- `--local-path <path>` - Local module base path (default: `./llm/modules`)
+- `-f, --force` - Overwrite existing `mlld-config.json`
+
+For full interactive configuration, use `mlld setup`.
+
 ### `mlld alias`
 
 Create path aliases for easy module imports.
@@ -920,7 +953,7 @@ mlld supports several file extensions:
 
 ```bash
 # 1. Create module
-mlld init my-utils.mld.md
+mlld module my-utils.mld.md
 
 # 2. Develop and test
 mlld my-utils.mld.md
