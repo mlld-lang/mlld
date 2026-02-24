@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security label/taint propagation now survives template-literal interpolation passed as executable arguments.
 - Executable argument expressions (`? :`, unary/binary forms, and when-expression values) now preserve security descriptors.
 - Array/object literals now retain label/taint metadata from nested expression values.
+- Security descriptor propagation through `js`/`sh`/`py`/`cmd` executable blocks is now covered for round-trip, transform, and multi-label flows.
 - Privileged guard `when` actions now accept shorthand label modifications (`trusted!`, `!label`, `clear!`) with action targets (for example `* => trusted!,!secret @output`).
 - Label-modification actions now also accept escaped bang forms (`trusted\!`, `clear\!`, `\!label`) in guard and return contexts.
 - `cmd { ... }` shell-operator parse/runtime errors now emit context-aware guidance, suggesting `run sh(@path) { ... }` in run contexts and `exe @fn(path) = sh { ... }` in exe contexts.
