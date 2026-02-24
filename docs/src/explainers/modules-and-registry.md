@@ -128,7 +128,6 @@ type: app               # library | app | command | skill
 about: "Description"
 version: 1.0.0
 license: CC0
-entry: index.mld        # Optional, defaults to index.mld
 ```
 
 ### Frontmatter vs module.yml
@@ -138,7 +137,7 @@ Directory modules use two metadata layers:
 | Source | Lives in | Used for |
 |--------|----------|----------|
 | Frontmatter (`--- ... ---`) | Entry `.mld` file | Runtime metadata (`@fm`, imported namespace `.__meta__`) |
-| `module.yml` | Module directory root | Packaging metadata (type, publish/install metadata, directory entry selection) |
+| `module.yml` | Module directory root | Packaging metadata (type, publish/install metadata) |
 
 If fields differ, runtime metadata comes from entry-file frontmatter, while packaging metadata comes from `module.yml`.
 Keep shared identity fields (`name`, `author`, `version`, `about`) aligned in both files.
@@ -165,6 +164,8 @@ mlld module app myapp --global     # → ~/.mlld/run/myapp/
 ```bash
 mlld run myapp                     # Runs llm/run/myapp/index.mld
 ```
+Use `index.mld` as the module entry point convention.
+
 
 ## Importing Modules
 

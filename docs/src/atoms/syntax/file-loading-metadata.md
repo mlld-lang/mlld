@@ -25,18 +25,18 @@ show @file.mx.absoluteDir   >> absolute path to directory
 show @file.mx.tokens        >> token count estimate
 show @file.mx.fm.title      >> frontmatter field
 show @file.mx.text          >> raw text representation
-show @file.mx.data          >> parsed data representation
+show @file.mx.fm            >> frontmatter object
 ```
 
-For structured values, dotted field access resolves through `.mx.data`:
-- `@file.title` is equivalent to `@file.mx.data.title`.
-- Use `.mx.text` and `.mx.data` when you need explicit control.
-- If payload data has an `mx` key, access it with `@file.mx.data.mx`.
+For frontmatter metadata, use `.mx.fm`:
+- `@file.mx.fm.title` accesses the `title` frontmatter field.
+- Use `.mx.text` and `.mx.fm` when you need explicit control.
+- If frontmatter has an `mx` key, access it with `@file.mx.fm.mx`.
 
 **In loops** - metadata works directly:
 
 ```mlld
 var @files = <docs/*.md>
 for @file in @files => show @file.mx.filename
-for @file in @files => show @file.mx.data.status
+for @file in @files => show @file.mx.fm.status
 ```

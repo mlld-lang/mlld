@@ -28,7 +28,6 @@ type: app               # library | app | command | skill
 about: "Description"
 version: 1.0.0
 license: CC0
-entry: index.mld        # Optional, defaults to index.mld
 ```
 </manifest>
 
@@ -38,7 +37,7 @@ Directory modules use two metadata sources:
 | Source | Lives In | Used For |
 |--------|----------|----------|
 | Frontmatter | Entry `.mld` file (`--- ... ---`) | Runtime metadata (`@fm`, imported namespace `.__meta__`) |
-| `module.yml` | Module directory root | Packaging metadata (`type`, publish/install metadata, entry selection for directory modules) |
+| `module.yml` | Module directory root | Packaging metadata (`type`, publish/install metadata) |
 
 Keep shared identity fields (`name`, `author`, `version`, `about`) aligned between frontmatter and `module.yml`.
 </metadata_sources>
@@ -67,7 +66,7 @@ mlld module app myapp --global     # Create in ~/.mlld/run/myapp/
 mlld run myapp                     # Runs llm/run/myapp/index.mld
 mlld run                           # Lists available scripts including apps
 ```
-Entry point detection order: index.mld, main.mld, index.mld.md, main.mld.md
+Use `index.mld` as the module entry point convention.
 </run_apps>
 
 <install_global>

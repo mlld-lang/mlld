@@ -163,6 +163,13 @@ exe @shell() = sh { ls > out.txt 2>/dev/null } >> correct: sh allows all shell s
 
 Use native variable syntax in `js`, `node`, `sh`, `py` blocks — pass mlld values as parameters.
 
+| Block | mlld vars | Native vars | Comments |
+|------|-----------|-------------|----------|
+| `cmd` | `@name` | n/a | mlld interpolation |
+| `sh` | not available | `$name` | exe params become shell vars |
+| `js` | not available | `paramName` | exe params are JS locals |
+| `py` | not available | `paramName` | exe params are Python locals |
+
 Angle brackets `<>` in templates and expressions
 ```mlld
 var @html = `<div>Hello</div>`                 >> properly interprets as text bc no slashes/dots/vars
@@ -171,6 +178,8 @@ var @readme = <README.md>                      >> loads file
 var @files = <src/**/*.ts>                     >> glob pattern
 var @files = <@pathvar/file.ts>                >> variable usage
 ```
+`<@var>` always triggers file loading. For text output, use `@var` directly.
+
 See `mlld howto file-loading-basics` for advanced usage.
 
 `@var.json` is field access. Escape the dot for file extensions: `@name\.json`.

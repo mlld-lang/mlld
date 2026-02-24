@@ -65,6 +65,8 @@ var @readme = <README.md>                      >> loads file
 var @files = <src/**/*.ts>                     >> glob pattern
 var @files = <@pathvar/file.ts>                >> variable usage
 ```
+`<@var>` always triggers file loading. For text output, use `@var` directly.
+
 See `mlld howto file-loading-basics` for advanced usage.
 
 `@var.json` is field access. Escape the dot for file extensions: `@name\.json`.

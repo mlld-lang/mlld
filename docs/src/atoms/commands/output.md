@@ -32,9 +32,9 @@ Supported format specifiers for `output ... as <format>`:
 Examples:
 
 ```mlld
-output @data as json > results.json
-output @data as yaml > config.yml
-output @data as text > plain.txt
+output @data as json to "results.json"
+output @data as yaml to "config.yml"
+output @data as text to "plain.txt"
 ```
 
 ## See Also
