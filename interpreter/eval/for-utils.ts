@@ -65,6 +65,16 @@ export function toIterable(value: unknown): ForSourceIterable | null {
     return entries;
   }
 
+  if (isStructuredValue(normalized)) {
+    const structuredData = asData(normalized);
+    if (!structuredData || typeof structuredData !== 'object' || Array.isArray(structuredData)) {
+      return null;
+    }
+    const entries = Object.entries(structuredData as Record<string, unknown>) as ForSourceIterable;
+    entries.__mlldForSourceKind = 'object';
+    return entries;
+  }
+
   if (normalized && typeof normalized === 'object') {
     const entries = Object.entries(normalized as Record<string, unknown>) as ForSourceIterable;
     entries.__mlldForSourceKind = 'object';

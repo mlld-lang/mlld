@@ -67,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Return label trust asymmetry is preserved for executable returns; explicit `=> untrusted ...` results no longer regain `trusted` from ambient invocation descriptors.
 - `/needs { py: [...] }` dependency checks now prefer `pip3` and fall back to `pip`.
 - `import { @FOO } from @input` now resolves missing fields to `null` instead of throwing `Export not found`.
+- `for @key, @value in @obj` now iterates parsed JSON object keys for values loaded from `<file.json>`, instead of StructuredValue wrapper fields.
 
 ## [2.0.0-rc82]
 
