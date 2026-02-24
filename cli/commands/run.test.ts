@@ -452,9 +452,8 @@ describe('RunCommand', () => {
       });
 
       const injectArgs = vi.mocked(parseInjectOptions).mock.calls[0]?.[0] as string[];
-      expect(injectArgs).toContain('@payload={"topic":"security"}');
+      expect(injectArgs).toContain('@payload={"topic":"security","new":true}');
       expect(injectArgs.join(' ')).not.toContain('checkpoint');
-      expect(injectArgs.join(' ')).not.toContain('fresh');
       expect(injectArgs.join(' ')).not.toContain('resume');
       expect(injectArgs.join(' ')).not.toContain('fork');
 

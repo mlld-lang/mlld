@@ -54,15 +54,17 @@ exe @nextCompleteIteration(qaRoot, today, n) = [
   => `@qaRoot/@today-@n`
 ]
 
+exe @hasTopicWork(qaRoot, today) = @exists(`@qaRoot/@today/topics`)
+
 exe @resolveRunDir(qaRoot, today, forceNew) = [
-  >> If --new, always find next unused iteration
-  when @forceNew => @nextIteration(@qaRoot, @today, 2)
+  >> If --new and base dir already has work, always get a fresh iteration
+  when @forceNew && @hasTopicWork(@qaRoot, @today) => @nextIteration(@qaRoot, @today, 2)
   >> If base dir doesn't exist, use it
   when !@exists(`@qaRoot/@today`) => `@qaRoot/@today`
-  >> If base dir is incomplete, resume it
-  when !@exists(`@qaRoot/@today/phase4-done.marker`) => `@qaRoot/@today`
-  >> Base is complete — find next incomplete iteration
-  => @nextCompleteIteration(@qaRoot, @today, 2)
+  >> If base dir is complete, find next incomplete iteration
+  when @exists(`@qaRoot/@today/phase4-done.marker`) => @nextCompleteIteration(@qaRoot, @today, 2)
+  >> Base dir exists but incomplete — resume it
+  => `@qaRoot/@today`
 ]
 
 var @runDir = @resolveRunDir(@qaRoot, @today, @isNew)
