@@ -33,14 +33,14 @@ exe @recentRunDirs(qaRoot, today) = sh {
 }
 
 exe @recentCoverage(qaRoot, today) = [
-  let @dirs = @recentRunDirs(@qaRoot, @today).trim().split("\n")
-  let @dirs = for @d in @dirs when @d => @d
+  let @rawDirs = @recentRunDirs(@qaRoot, @today).trim().split("\n")
+  let @dirs = for @d in @rawDirs when @d => @d
   when @dirs.length == 0 => { tested: [], failed: [] }
-  let @summaries = for @d in @dirs [
+  let @rawSummaries = for @d in @dirs [
     let @summary = <@d/run-summary.json>?
     when @summary => @summary
   ]
-  let @summaries = for @s in @summaries when @s => @s
+  let @summaries = for @s in @rawSummaries when @s => @s
   let @testedTopics = for @s in @summaries => for @t in @s.topics => @t.topic
   let @failedTopics = for @s in @summaries => for @t in @s.topics when @t.fail > 0 || @t.partial > 0 => @t.topic
   => { tested: @testedTopics.flat(), failed: @failedTopics.flat() }
