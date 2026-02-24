@@ -86,8 +86,10 @@ describe('Context-Dependent Behavior', () => {
   });
 
   describe('input Resolver', () => {
+    let inputResolver: InputResolver;
+
     beforeEach(() => {
-      const inputResolver = new InputResolver('{"config": "test"}');
+      inputResolver = new InputResolver('{"config": "test"}');
       resolverManager.registerResolver(inputResolver);
       // Configure input resolver
       resolverManager.configurePrefixes([{
@@ -109,6 +111,20 @@ describe('Context-Dependent Behavior', () => {
       expect(result.content.contentType).toBe('data');
       const data = JSON.parse(result.content.content);
       expect(data).toHaveProperty('config');
+    });
+
+    it('returns null for missing requested fields in import context', async () => {
+      const result = await inputResolver.resolve('@input', {
+        context: 'import',
+        requestedImports: ['config', 'missingFieldDaa4']
+      });
+
+      expect(result.contentType).toBe('data');
+      const data = JSON.parse(result.content);
+      expect(data).toMatchObject({
+        config: 'test',
+        missingFieldDaa4: null
+      });
     });
   });
 

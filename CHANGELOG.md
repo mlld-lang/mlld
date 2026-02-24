@@ -69,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Return label trust asymmetry is preserved for executable returns; explicit `=> untrusted ...` results no longer regain `trusted` from ambient invocation descriptors.
 - `/needs { py: [...] }` dependency checks now prefer `pip3` and fall back to `pip`.
 - `import { @FOO } from @input` now resolves missing fields to `null` instead of throwing `Export not found`.
+- Selected `@input` imports now always include every requested key in resolver export payloads, using `null` when absent.
 - `for @key, @value in @obj` now iterates parsed JSON object keys for values loaded from `<file.json>`, instead of StructuredValue wrapper fields.
 - `js { ... }` and `node { ... }` blocks now parse regex literals with quoted character classes (for example `/^["']|["']$/g`) without cascading parse failures.
 - `policy.operations` now uses `risk-category -> labels[]` mappings (for example `exfil: ["net:w"]`) instead of `label -> risk-category`.
