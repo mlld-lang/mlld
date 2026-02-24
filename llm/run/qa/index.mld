@@ -19,7 +19,7 @@
 >>   mlld run qa --topic variables                  # Test variables-* topics
 >>   mlld run qa --topics when-inline,for-arrow     # Test specific list
 
-/needs { sh }
+needs { sh }
 
 import { @loadTopics, @filterTopics } from "./lib/topics.mld"
 import { @loadAllResults, @loadAllReviews, @buildRunSummary, @buildDocClarityReport } from "./lib/aggregate.mld"
