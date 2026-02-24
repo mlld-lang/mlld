@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { interpret } from '@interpreter/index';
@@ -261,6 +261,35 @@ describe('checkpoint resume + fork runtime semantics', () => {
       source,
       checkpointRoot,
       scriptName: 'resume-auto',
+      resume: true
+    });
+
+    expect(first).toBe(second);
+    expect(readCounter(counterKey)).toBe(1);
+  });
+
+  it('--resume without explicit --checkpoint still enables caching', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-implies-checkpoint-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointResumeImpliesCheckpointCounter';
+    registerCounter(counterKey);
+
+    const scriptName = 'resume-implies-checkpoint';
+    const source = buildSingleCallScript(counterKey);
+    const first = await runScript({
+      source,
+      checkpointRoot,
+      scriptName,
+      resume: true
+    });
+
+    const cacheDirEntries = await readdir(path.join(checkpointRoot, scriptName));
+    expect(cacheDirEntries.length).toBeGreaterThan(0);
+
+    const second = await runScript({
+      source,
+      checkpointRoot,
+      scriptName,
       resume: true
     });
 

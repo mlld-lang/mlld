@@ -58,7 +58,6 @@ describe('Hook directive', () => {
 
     expect(hook.values.filter[0].filterKind).toBe('data');
     expect(hook.values.filter[0].value).toBe('untrusted');
-    expect(hook.meta.scope).toBe('perInput');
   });
 
   test('parses strict-mode hook without slash prefix', () => {

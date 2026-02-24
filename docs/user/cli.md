@@ -22,7 +22,7 @@ mlld input.mld
 ```
 
 **Options:**
-- `--format, -f <format>` - Output format: `xml` (default), `md`
+- `--format, -f <format>` - Output format: `md` (default), `xml`
 - `--output, -o <file>` - Output file path
 - `--stdout` - Print to console instead of file
 - `--watch, -w` - Watch for file changes
@@ -1002,11 +1002,7 @@ mlld vars allow NEEDED_VAR
 ## Exit Codes
 
 - `0` - Success
-- `1` - General error
-- `2` - Invalid arguments
-- `3` - File not found
-- `4` - Authentication required
-- `5` - Network error
+- `1` - Error
 
 ## Getting Help
 

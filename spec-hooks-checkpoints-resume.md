@@ -55,7 +55,7 @@ hook @progress after op:for:iteration = [
   show `  [@mx.for.index/@mx.for.total] @mx.for.key`
 ]
 
-# Transform data when it receives a label
+# Transform operation input when the operation carries a label
 hook @normalizeUntrusted before untrusted = [
   => @input.trim()
 ]
@@ -68,9 +68,11 @@ Hooks support four trigger types:
 | Trigger | Example | Fires when |
 |---------|---------|------------|
 | Operation type | `hook after op:exe` | Any exe invocation completes |
-| Label | `hook before secret` | Data receives the `secret` label |
+| Label | `hook before secret` | Operation has the `secret` label |
 | Function name | `hook before @claudePoll` | `@claudePoll` is about to be called |
 | Function + argument | `hook before @claudePoll("review")` | `@claudePoll` called with first arg matching "review" |
+
+Data-label hooks match at the operation level. If an operation has one or more matching labels, the hook runs once for that operation.
 
 #### How hooks differ from guards
 

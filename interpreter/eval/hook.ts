@@ -9,6 +9,8 @@ export async function evaluateHook(
 ): Promise<EvalResult> {
   const hookNode = directive as HookDirectiveNode;
   const registry = env.getHookRegistry();
-  registry.register(hookNode, directive.location ?? null);
+  registry.register(hookNode, directive.location ?? null, {
+    emitWarning: message => env.emitEffect('stderr', `${message}\n`)
+  });
   return { value: undefined, env };
 }

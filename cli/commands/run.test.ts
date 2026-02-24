@@ -323,6 +323,44 @@ describe('RunCommand', () => {
       exitSpy.mockRestore();
     });
 
+    it('anchors checkpoint cache root to project root when running from a subdirectory', async () => {
+      const { execute } = await import('@sdk/execute');
+      const { findProjectRoot } = await import('@core/utils/findProjectRoot');
+      vi.mocked(findProjectRoot).mockResolvedValue('/test/project');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+
+      vi.spyOn(process, 'cwd').mockReturnValue('/test/project/subdir');
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('script.mld'));
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`exit:${code}`);
+      });
+
+      try {
+        await runCommand.run('script');
+      } catch (error: any) {
+        if (!error.message.includes('exit:0')) throw error;
+      }
+
+      expect(execute).toHaveBeenCalledWith(
+        expect.any(String),
+        undefined,
+        expect.objectContaining({
+          checkpointCacheRootDir: path.join('/test/project', '.mlld', 'checkpoints')
+        })
+      );
+
+      consoleSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
     it('should show metrics in debug mode', async () => {
       const { execute } = await import('@sdk/execute');
       vi.mocked(execute).mockResolvedValue({

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signing now writes `signed:<var>` provenance labels; composed instruction variables inherit signed provenance for cascading verification targets.
 
 ### Fixed
+- Hook registration now emits a runtime warning for unknown `op:<type>` hook filters (while still registering the hook for forward compatibility).
 - `autosign` now signs all string literal syntaxes (`"..."`, backtick, `'...'`), not just `::` templates.
 - Removed implicit `mlld verify` command capability bypass under autoverify; verification enforcement now routes through tracked tool calls.
 - `env with { ... } [ ... ]` configless block syntax for `/env`.
@@ -174,6 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **LSP tree-sitter WASM support**: `python` and `bash` code blocks (alongside `javascript`) for embedded syntax analysis
 
 ### Changed
+- Hook directives no longer emit unused `scope` metadata in parsed hook filter nodes and hook directive meta; the dead `HookScope`/`HookDefinition.scope` shape has been removed.
 - **Mandatory whitespace around arithmetic operators**: `@a - @b` requires spaces; `@a-b` is a hyphenated identifier, not subtraction. Applies to `+`, `-`, `*`, `/`, `%`.
 - **CLI payload keys preserve hyphens**: `--skip-live` produces `@payload.skip-live` (primary) with deprecated `@payload.skipLive` camelCase alias.
 - **StructuredValue `.mx` surface model**: Field access uses `.mx.*` for wrapper/system metadata (`.mx.text`, `.mx.data`). Top-level dotted access resolves through user data. System metadata (`.text`, `.data`, `.type`) no longer leaks at the top level.
