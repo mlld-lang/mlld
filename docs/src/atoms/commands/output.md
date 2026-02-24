@@ -16,25 +16,25 @@ output @content to "out.txt"
 output @data to "config.json"
 output @message to stdout
 output @error to stderr
-output @config to "settings.yaml" as yaml
-output @results to "results.json" as json
-output @plain to "plain.txt" as text
+output @config.yaml() to "settings.yaml"
+output @results.json() to "results.json"
+output @plain.text() to "plain.txt"
 ```
 
-Supported format specifiers for `output ... as <format>`:
+Use transformer methods before `output` when you need a specific file format:
 
-| Specifier | Behavior |
-|-----------|----------|
-| `as json` | Parse JSON text and write pretty-printed JSON when possible |
-| `as yaml` | Parse JSON text and emit YAML when possible |
-| `as text` | Write plain text content as-is |
+| Transformer | Behavior |
+|------------|----------|
+| `@value.json()` | Emit JSON text |
+| `@value.yaml()` | Emit YAML text |
+| `@value.text()` | Emit plain text |
 
 Examples:
 
 ```mlld
-output @data as json to "results.json"
-output @data as yaml to "config.yml"
-output @data as text to "plain.txt"
+output @data.json() to "results.json"
+output @data.yaml() to "config.yml"
+output @data.text() to "plain.txt"
 ```
 
 ## See Also

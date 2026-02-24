@@ -374,8 +374,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     if (stdout) {
       process.exit(1);
     }
-    
-    throw error;
+    return;
   }
 }
 

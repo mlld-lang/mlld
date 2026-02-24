@@ -698,7 +698,7 @@ async function evaluateExecInvocationInternal(
             const inferSimpleTypeFromValue = (value: unknown): string => {
               if (value === null || value === undefined) return 'null';
               if (isStructuredValue(value)) {
-                return inferSimpleTypeFromValue(value.data ?? value.text);
+                return inferSimpleTypeFromValue(value.data === undefined ? value.text : value.data);
               }
               if (Array.isArray(value)) return 'array';
               if (typeof value === 'string') return 'string';

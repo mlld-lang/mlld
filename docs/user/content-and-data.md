@@ -1190,7 +1190,7 @@ var @config = js {
   )
 }
 
-output @config to "runtime-config.json" as json
+output @config.json() to "runtime-config.json"
 ```
 
 ### Incremental JSONL Logging

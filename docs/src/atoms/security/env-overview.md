@@ -43,6 +43,7 @@ env @readonly [ run cmd { claude -p @task } ]
 
 Compute, compose, and pass environments like any other value.
 Use object spread for plain object derivation. The `with { ... }` clause is env-directive config syntax (for `env @cfg with { ... } [ ... ]`).
+For enforcement boundaries (what mlld enforces locally vs what requires a sandbox provider), see the table in `env-config`.
 
 **Providers add isolation:**
 

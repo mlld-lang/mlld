@@ -40,6 +40,14 @@ env @sandbox [
 
 **Important:** `tools` and `mcps` enforce runtime access inside `env` blocks.
 
+| Field | Enforced locally by mlld? | Notes |
+|-------|--------------------------|-------|
+| `tools` | Yes | mlld restricts available tools |
+| `mcps` | Yes | mlld restricts available MCP servers |
+| `fs` | No - requires container provider | mlld passes config but cannot enforce filesystem restrictions without a sandbox |
+| `net` | No - requires container provider | mlld passes config but cannot enforce network restrictions without a sandbox |
+| `limits` | No - requires container provider | mlld passes config but cannot enforce resource limits without a sandbox |
+
 - Include `Bash` in `tools` to allow `run cmd`, `run sh`, and shell-backed command executables.
 - Set `mcps: []` to block all MCP tool calls, or list servers to allow specific MCP sources.
 - Use `capabilities.deny` for command-pattern policy rules (for example `cmd:git:push`).

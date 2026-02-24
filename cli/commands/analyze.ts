@@ -239,7 +239,9 @@ const BUILTIN_VARIABLES = new Set([
   ...SOFT_RESERVED_NAMES,
   ...SHADOWABLE_BUILTIN_NAMES,
   // Builtin helpers
-  'yaml', 'html', 'text'
+  'yaml', 'html', 'text',
+  // Implicit for-loop locals
+  'item', 'index', 'key'
 ]);
 
 const DEPRECATED_JSON_BASE_NAMES = new Set(['json', 'JSON']);
@@ -352,7 +354,35 @@ async function loadSuppressedWarningCodes(moduleFilepath: string): Promise<Set<A
 /**
  * Detect undefined variable references in AST
  */
-function detectUndefinedVariables(ast: MlldNode[]): UndefinedVariableWarning[] {
+function shouldIgnoreVariableReferenceWarning(node: any, sourceText?: string): boolean {
+  if (!sourceText || !node?.location?.start || !node?.location?.end) {
+    return false;
+  }
+
+  const startOffset = node.location.start.offset;
+  const endOffset = node.location.end.offset;
+  if (typeof startOffset !== 'number' || typeof endOffset !== 'number') {
+    return false;
+  }
+
+  const prevChar = startOffset > 0 ? sourceText[startOffset - 1] : '';
+  const nextChar = endOffset < sourceText.length ? sourceText[endOffset] : '';
+  const charAfterNext = endOffset + 1 < sourceText.length ? sourceText[endOffset + 1] : '';
+
+  // Ignore @scope/package-style references.
+  if (nextChar === '/' && /[A-Za-z0-9._-]/.test(charAfterNext)) {
+    return true;
+  }
+
+  // Ignore @ tokens embedded in text literals (e.g., user@example.com).
+  if (/[A-Za-z0-9._]/.test(prevChar)) {
+    return true;
+  }
+
+  return false;
+}
+
+function detectUndefinedVariables(ast: MlldNode[], sourceText?: string): UndefinedVariableWarning[] {
   const warnings: UndefinedVariableWarning[] = [];
   const declared = new Set<string>();
 
@@ -457,6 +487,10 @@ function detectUndefinedVariables(ast: MlldNode[]): UndefinedVariableWarning[] {
     if (node.type === 'VariableReference') {
       const name = node.identifier;
       if (!name) return;
+
+      if (shouldIgnoreVariableReferenceWarning(node, sourceText)) {
+        return;
+      }
 
       // Skip if already declared, builtin, or already warned
       if (declared.has(name) || BUILTIN_VARIABLES.has(name) || seen.has(name)) {
@@ -2321,7 +2355,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         const suppressedWarningCodes = await loadSuppressedWarningCodes(filepath);
 
         const warnings = dedupeUndefinedVariableWarnings([
-          ...detectUndefinedVariables(ast),
+          ...detectUndefinedVariables(ast, content),
           ...detectPassThroughOptionalParameterWarnings(ast)
         ]);
         if (warnings.length > 0) {

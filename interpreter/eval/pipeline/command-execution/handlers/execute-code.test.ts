@@ -16,6 +16,8 @@ const {
   evaluateForeachCommandMock,
   evaluateForExpressionMock,
   evaluateLoopExpressionMock,
+  evaluateExeBlockMock,
+  evaluateEnvMock,
   extractVariableValueMock,
   interpolateMock
 } = vi.hoisted(() => ({
@@ -23,6 +25,8 @@ const {
   evaluateForeachCommandMock: vi.fn(),
   evaluateForExpressionMock: vi.fn(),
   evaluateLoopExpressionMock: vi.fn(),
+  evaluateExeBlockMock: vi.fn(),
+  evaluateEnvMock: vi.fn(),
   extractVariableValueMock: vi.fn(),
   interpolateMock: vi.fn()
 }));
@@ -41,6 +45,14 @@ vi.mock('@interpreter/eval/for', () => ({
 
 vi.mock('@interpreter/eval/loop', () => ({
   evaluateLoopExpression: evaluateLoopExpressionMock
+}));
+
+vi.mock('@interpreter/eval/exe', () => ({
+  evaluateExeBlock: evaluateExeBlockMock
+}));
+
+vi.mock('@interpreter/eval/env', () => ({
+  evaluateEnv: evaluateEnvMock
 }));
 
 vi.mock('@interpreter/utils/variable-resolution', () => ({
@@ -81,6 +93,8 @@ describe('executeCodeHandler branch extraction', () => {
     evaluateForeachCommandMock.mockReset();
     evaluateForExpressionMock.mockReset();
     evaluateLoopExpressionMock.mockReset();
+    evaluateExeBlockMock.mockReset();
+    evaluateEnvMock.mockReset();
     extractVariableValueMock.mockReset();
     interpolateMock.mockReset();
   });
@@ -176,6 +190,46 @@ describe('executeCodeHandler branch extraction', () => {
     expect(loopResult).toEqual({
       value: { done: true },
       options: { type: 'object', text: '{"done":true}' }
+    });
+  });
+
+  it('covers mlld-exe-block and mlld-env dispatch branches', async () => {
+    evaluateExeBlockMock.mockResolvedValue({ value: { status: 'block-ok' } });
+    evaluateEnvMock.mockResolvedValue({ value: 'env-ok' });
+
+    const env = createEnv();
+    const execEnv = env.createChild();
+    const finalizeResult = vi.fn((value, options) => ({ value, options }));
+
+    const blockResult = await executeCodeHandler({
+      env,
+      execEnv,
+      execDef: {
+        type: 'code',
+        language: 'mlld-exe-block',
+        codeTemplate: [{ type: 'ExeBlock', values: { statements: [] } }]
+      },
+      finalizeResult
+    });
+
+    const envResult = await executeCodeHandler({
+      env,
+      execEnv,
+      execDef: {
+        type: 'code',
+        language: 'mlld-env',
+        codeTemplate: [{ type: 'Directive', kind: 'env' }]
+      },
+      finalizeResult
+    });
+
+    expect(blockResult).toEqual({
+      value: { status: 'block-ok' },
+      options: undefined
+    });
+    expect(envResult).toEqual({
+      value: 'env-ok',
+      options: undefined
     });
   });
 

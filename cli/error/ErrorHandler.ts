@@ -19,6 +19,10 @@ export class ErrorHandler {
   }
 
   async handleError(error: any, options: CLIOptions): Promise<void> {
+    if (error && typeof error === 'object') {
+      (error as any).__mlldHandled = true;
+    }
+
     const isMlldError = error instanceof MlldError;
     const isCommandError = error.constructor.name === 'MlldCommandExecutionError';
     const severity = isMlldError ? error.severity : ErrorSeverity.Fatal;

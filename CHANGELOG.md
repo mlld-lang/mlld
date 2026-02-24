@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone `/auth @name = ...` directive for top-level credential declarations, including short form (`"API_KEY"`) and object forms (`{ from, as }`).
 - Exported executables now capture module auth bindings so imported `using auth:name` works without requiring callers to import policy objects.
 - AST selector results now mirror metadata on `.mx` (`name`, `type`, `line`), and glob selectors populate source path metadata on `.mx.relative` while retaining top-level selector fields.
+- Pipeline and `while` stage command execution now supports block-form executables (`mlld-exe-block`) and env executables (`mlld-env`) with the same dispatch behavior as direct invocation.
+- `done`/`continue` literal parsing no longer consumes following lines as accidental values, and `while` stages now handle `done null` without null-pointer failures.
+- `@typeof(...)` now treats structured null payloads as `null` (not string `"null"`), including unmatched `when` results wrapped in structured values.
+- Registry installs no longer mutate lock entries before install success, preventing lock-file corruption when requested versions fail to resolve.
+- `mlld update` now respects pinned lock constraints: exact versions stay pinned, and range constraints update within their pinned range.
+- `@root/...` and `@base/...` file-not-found errors now include the resolved absolute path for easier debugging.
+- `mlld validate` undefined-variable checks now ignore non-variable `@` text patterns (emails/scoped packages) and honor implicit loop locals (`@item`, `@index`, `@key`).
+- CLI error reporting now marks handled errors and avoids secondary re-emission paths, so representative runtime failures emit one formatted error block.
 
 ### Fixed
 - Removed the legacy `/exe @fn(...) = [@file # section]` special case; section/file extraction in executable bodies now uses alligator syntax (`<file.md # "Section">`).

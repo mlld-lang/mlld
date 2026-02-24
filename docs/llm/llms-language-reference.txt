@@ -339,20 +339,20 @@ show @file.mx.absoluteDir   >> absolute path to directory
 show @file.mx.tokens        >> token count estimate
 show @file.mx.fm.title      >> frontmatter field
 show @file.mx.text          >> raw text representation
-show @file.mx.data          >> parsed data representation
+show @file.mx.fm            >> frontmatter object
 ```
 
-For structured values, dotted field access resolves through `.mx.data`:
-- `@file.title` is equivalent to `@file.mx.data.title`.
-- Use `.mx.text` and `.mx.data` when you need explicit control.
-- If payload data has an `mx` key, access it with `@file.mx.data.mx`.
+For frontmatter metadata, use `.mx.fm`:
+- `@file.mx.fm.title` accesses the `title` frontmatter field.
+- Use `.mx.text` and `.mx.fm` when you need explicit control.
+- If frontmatter has an `mx` key, access it with `@file.mx.fm.mx`.
 
 **In loops** - metadata works directly:
 
 ```mlld
 var @files = <docs/*.md>
 for @file in @files => show @file.mx.filename
-for @file in @files => show @file.mx.data.status
+for @file in @files => show @file.mx.fm.status
 ```
 
 **Parse JSON explicitly with transforms:**
@@ -565,7 +565,7 @@ exe @trace(input) = [
   => @input
 ]
 
-show (" hello " | @trace | @trim | @trace)
+show " hello " | @trace | @trim | @trace
 >> Output:
 >> stage=1 value= hello
 >> stage=3 value=hello
@@ -1071,25 +1071,25 @@ output @content to "out.txt"
 output @data to "config.json"
 output @message to stdout
 output @error to stderr
-output @config to "settings.yaml" as yaml
-output @results to "results.json" as json
-output @plain to "plain.txt" as text
+output @config.yaml() to "settings.yaml"
+output @results.json() to "results.json"
+output @plain.text() to "plain.txt"
 ```
 
-Supported format specifiers for `output ... as <format>`:
+Use transformer methods before `output` when you need a specific file format:
 
-| Specifier | Behavior |
-|-----------|----------|
-| `as json` | Parse JSON text and write pretty-printed JSON when possible |
-| `as yaml` | Parse JSON text and emit YAML when possible |
-| `as text` | Write plain text content as-is |
+| Transformer | Behavior |
+|------------|----------|
+| `@value.json()` | Emit JSON text |
+| `@value.yaml()` | Emit YAML text |
+| `@value.text()` | Emit plain text |
 
 Examples:
 
 ```mlld
-output @data as json > results.json
-output @data as yaml > config.yml
-output @data as text > plain.txt
+output @data.json() to "results.json"
+output @data.yaml() to "config.yml"
+output @data.text() to "plain.txt"
 ```
 
 ## See Also

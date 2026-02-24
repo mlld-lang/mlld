@@ -261,15 +261,25 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       : path.resolve(this.dependencies.pathContext.fileDirectory, inputPath);
 
     if (!await this.dependencies.fileSystem.exists(resolvedPath)) {
-      throw await this.createFileNotFoundError(originalInputPath, collectedSuggestions);
+      throw await this.createFileNotFoundError(originalInputPath, collectedSuggestions, resolvedPath);
     }
 
     return resolvedPath;
   }
 
-  private async createFileNotFoundError(inputPath: string, suggestions: string[] = []): Promise<Error> {
+  private async createFileNotFoundError(
+    inputPath: string,
+    suggestions: string[] = [],
+    resolvedPath?: string
+  ): Promise<Error> {
     const didYouMean = await this.buildPathSuggestions(inputPath, suggestions);
-    const lines = [`File not found: ${inputPath}`];
+    const includeResolvedPath =
+      Boolean(resolvedPath) && (inputPath.startsWith('@root/') || inputPath.startsWith('@base/'));
+    const lines = [
+      includeResolvedPath
+        ? `File not found: ${inputPath} (resolved to ${resolvedPath})`
+        : `File not found: ${inputPath}`
+    ];
 
     if (didYouMean.length > 0) {
       lines.push('', 'Did you mean:', ...didYouMean.map(suggestion => `  - ${suggestion}`));

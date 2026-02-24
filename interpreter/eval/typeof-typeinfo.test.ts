@@ -66,4 +66,21 @@ describe('@typeof and @typeInfo builtins', () => {
     expect(String(fnInfo)).toContain('executable');
     expect(String(fnInfo)).toContain('[from /');
   });
+
+  it('treats structured null values as null for @typeof', async () => {
+    const env = createEnvironment();
+    const { ast } = await parse([
+      '/exe @maybe(value) = when @value [',
+      '  "match" => "ok"',
+      ']',
+      '/var @result = @maybe("miss")',
+      '/var @resultType = @typeof(@result)'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    await expect(extractVariableValue(env.getVariable('resultType')!, env)).resolves.toSatisfy(
+      value => String(value) === 'null'
+    );
+  });
 });

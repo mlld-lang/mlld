@@ -182,6 +182,21 @@ show @dir
     expect(undefs).not.toContain('root');
   });
 
+  it('does not flag @ text patterns in strings as undefined variables', async () => {
+    const modulePath = await writeModule('at-text-patterns.mld', `/var @email = "user@example.com"
+/var @pkg = "@anthropic/mcp-server"
+/show @email
+/show @pkg
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('example');
+    expect(undefs).not.toContain('anthropic');
+  });
+
   it('does not flag guard names as undefined', async () => {
     const modulePath = await writeModule('guard-name-decl.mld', `guard @blockDestructive before op:run = when [* => allow]
 show @blockDestructive
@@ -237,6 +252,20 @@ for @k, @v in @items => show @k
     const undefs = (result.undefinedVariables ?? []).map(w => w.variable);
     expect(undefs).not.toContain('k');
     expect(undefs).not.toContain('v');
+  });
+
+  it('does not flag implicit for-loop locals @item, @index, and @key as undefined', async () => {
+    const modulePath = await writeModule('for-implicit-locals.mld', `/var @items = ["a", "b"]
+/for @entry in @items => show \`@item:@index:@key:@entry\`
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('item');
+    expect(undefs).not.toContain('index');
+    expect(undefs).not.toContain('key');
   });
 
   it('warns for undefined variables in executable invocation arguments', async () => {

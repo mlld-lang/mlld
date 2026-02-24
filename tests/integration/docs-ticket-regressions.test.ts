@@ -106,12 +106,15 @@ describe('docs ticket regressions', () => {
     }
   });
 
-  it('m-73be: output docs list all supported format specifiers', async () => {
+  it('m-8ad7: output docs use transformer methods instead of unsupported as-format syntax', async () => {
     const content = await readDoc('docs/src/atoms/commands/output.md');
 
-    expect(content).toContain('as json');
-    expect(content).toContain('as yaml');
-    expect(content).toContain('as text');
-    expect(content).toContain('Supported format specifiers');
+    expect(content).toContain('Use transformer methods before `output`');
+    expect(content).toContain('output @data.json() to "results.json"');
+    expect(content).toContain('output @data.yaml() to "config.yml"');
+    expect(content).toContain('output @data.text() to "plain.txt"');
+    expect(content).not.toContain('as json');
+    expect(content).not.toContain('as yaml');
+    expect(content).not.toContain('as text');
   });
 });
