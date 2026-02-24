@@ -11,29 +11,37 @@ layout: base.njk
     </span>
     <span class="toggle-text">Menu</span>
   </button>
-  
-  <!-- Add overlay for mobile --> 
+
+  <!-- Add overlay for mobile -->
   <div class="docs-overlay" id="docs-overlay"></div>
-  
+
   <aside class="docs-sidebar" id="docs-sidebar">
     <nav>
       <h3>Documentation</h3>
       <ul class="nav-list">
-        <li><a href="/docs/introduction/" {{ "/docs/introduction/" | isActive(page.url) }}>Introduction</a></li>
         {% for docPage in collections.docs %}
-          {% if not docPage.url.includes('/index.html') and 
-                not docPage.url.includes('/introduction/') and
-                docPage.url != '/docs/' %}
+          {% if docPage.data.type == 'explainer' and docPage.url != '/docs/' %}
             <li><a href="{{ docPage.url }}" {{ docPage.url | isActive(page.url) }}>{{ docPage.data.title }}</a></li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+      <h3>Reference</h3>
+      <ul class="nav-list" id="ref-nav">
+        {% for docPage in collections.docs %}
+          {% if docPage.data.type == 'category' %}
+            <li>
+              <a href="{{ docPage.url }}" {{ docPage.url | isActive(page.url) }}>{{ docPage.data.title }}</a>
+              {% if docPage.url == page.url %}
+                <ul class="nav-outline" id="page-outline"></ul>
+              {% endif %}
+            </li>
           {% endif %}
         {% endfor %}
       </ul>
     </nav>
   </aside>
-  
+
   <div class="docs-content">
-    <h1>⚠️ mlld is pre-release</h1>
-    <p><a href="https://discord.gg/mlld">Join the discord</a> if you have questions. <a href="https://github.com/mlld-lang/mlld/issues">Report bugs on GitHub</a>.</p>
     {{ content | safe }}
   </div>
 </div>
@@ -43,33 +51,25 @@ layout: base.njk
     const toggleButton = document.querySelector('.docs-sidebar-toggle');
     const sidebar = document.getElementById('docs-sidebar');
     const overlay = document.getElementById('docs-overlay');
-    
-    // Function to toggle the sidebar
+
     function toggleSidebar() {
       const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
       toggleButton.setAttribute('aria-expanded', !isExpanded);
       sidebar.classList.toggle('open');
-      
-      // Toggle overlay
       overlay.classList.toggle('active');
-      
-      // Lock/unlock body scroll when sidebar is open on mobile
       if (window.innerWidth <= 950) {
         document.body.classList.toggle('sidebar-open', !isExpanded);
       }
     }
-    
-    // Add click event for toggle button
+
     toggleButton.addEventListener('click', toggleSidebar);
-    
-    // Add click event for overlay to close sidebar
+
     overlay.addEventListener('click', function() {
       if (sidebar.classList.contains('open')) {
         toggleSidebar();
       }
     });
-    
-    // Close sidebar when clicking on a link (mobile only)
+
     sidebar.querySelectorAll('a').forEach(link => {
       link.addEventListener('click', function() {
         if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
@@ -77,16 +77,32 @@ layout: base.njk
         }
       });
     });
-    
-    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+
     document.addEventListener('click', function(event) {
-      if (window.innerWidth <= 950 && 
-          sidebar.classList.contains('open') && 
-          !sidebar.contains(event.target) && 
+      if (window.innerWidth <= 950 &&
+          sidebar.classList.contains('open') &&
+          !sidebar.contains(event.target) &&
           !toggleButton.contains(event.target) &&
           !overlay.contains(event.target)) {
         toggleSidebar();
       }
     });
+
+    // Build page outline from h2/h3 headings
+    const outline = document.getElementById('page-outline');
+    if (outline) {
+      const content = document.querySelector('.docs-content');
+      const headings = content.querySelectorAll('h2, h3');
+      headings.forEach(function(h) {
+        if (!h.id) return;
+        const li = document.createElement('li');
+        if (h.tagName === 'H3') li.classList.add('outline-nested');
+        const a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        li.appendChild(a);
+        outline.appendChild(li);
+      });
+    }
   });
 </script>

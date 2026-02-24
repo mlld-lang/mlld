@@ -1,8 +1,10 @@
+>> surgical globs with AST grep 
 var @handlers = <src/**/*.ts { handle* }>
 
 exe llm @review(fn) = cmd {
   pi -p "Critically review this handler: @fn.code"
 }
 
-var @reviews = for parallel(5) @h in @handlers
+>> as concurrent as you want to be 
+var @reviews = for parallel(30) @h in @handlers
   => { name: @h.mx.name, file: @h.mx.relative, review: @review(@h) }
