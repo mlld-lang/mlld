@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Hook registration now emits a runtime warning for unknown `op:<type>` hook filters (while still registering the hook for forward compatibility).
 - `--resume "checkpoint-name"` now pre-scans source-declared checkpoints so named resume targets are available even when a prior run never reached that checkpoint.
+- `mlld validate` now warns when a trailing exe parameter can be omitted by callsites but is passed through to another function call (a runtime `Undefined variable` failure pattern).
 - `autosign` now signs all string literal syntaxes (`"..."`, backtick, `'...'`), not just `::` templates.
 - Removed implicit `mlld verify` command capability bypass under autoverify; verification enforcement now routes through tracked tool calls.
 - `env with { ... } [ ... ]` configless block syntax for `/env`.

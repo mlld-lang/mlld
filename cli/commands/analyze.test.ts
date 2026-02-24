@@ -252,6 +252,45 @@ for @k, @v in @items => show @k
     expect(undefs).toContain('typo');
   });
 
+  it('warns when an omitted trailing exe parameter is passed into another function call', async () => {
+    const modulePath = await writeModule('exe-pass-through-omitted-param.mld', `/exe @inner(x, timeout) = \`@x:@timeout\`
+/exe @outer(x, timeout) = [
+  let @result = @inner(@x, @timeout)
+  => @result
+]
+/var @r = @outer("hello")
+/show @r
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const timeoutWarnings = (result.warnings ?? []).filter(w => w.variable === 'timeout');
+    expect(timeoutWarnings.length).toBeGreaterThan(0);
+    expect(timeoutWarnings[0]?.suggestion).toContain('@outer');
+    expect(timeoutWarnings[0]?.suggestion).toContain('@inner');
+    expect(timeoutWarnings[0]?.suggestion).toContain('omitted at callsite line');
+  });
+
+  it('does not warn for pass-through parameters when all callsites provide the argument', async () => {
+    const modulePath = await writeModule('exe-pass-through-always-provided.mld', `/exe @inner(x, timeout) = \`@x:@timeout\`
+/exe @outer(x, timeout) = [
+  let @result = @inner(@x, @timeout)
+  => @result
+]
+/var @a = @outer("hello", "30s")
+/var @b = @outer("world", "10s")
+/show @a
+/show @b
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const timeoutWarnings = (result.warnings ?? []).filter(w => w.variable === 'timeout');
+    expect(timeoutWarnings).toHaveLength(0);
+  });
+
   it('reports duplicate checkpoint names as validation errors', async () => {
     const modulePath = await writeModule('checkpoint-duplicate.mld', `/checkpoint "stage-a"
 /checkpoint "stage-a"

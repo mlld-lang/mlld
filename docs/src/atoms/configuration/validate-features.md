@@ -7,7 +7,7 @@ parent: config-files
 tags: [validation, warnings, static-analysis, undefined-variables, templates]
 related: [config-files, config-cli-run]
 related-code: [cli/commands/analyze.ts, core/registry/ConfigFile.ts]
-updated: 2026-02-18
+updated: 2026-02-24
 qa_tier: 2
 ---
 
@@ -31,6 +31,20 @@ show @nmae
 ```
 
 Warns about typos like `@mx.now` (should be `@now`).
+
+**Optional parameter pass-through warnings:**
+
+```mlld
+exe @inner(x, timeout) = sh { echo @timeout }
+exe @outer(x, timeout) = [
+  let @result = @inner(@x, @timeout)
+  => @result
+]
+var @r = @outer("hello")
+>> Warning: @timeout may be omitted by callsites and fail when passed to @inner
+```
+
+This catches wrapper patterns where trailing exe parameters are omitted by callers and then forwarded into nested function calls.
 
 **Variable redefinition detection:**
 

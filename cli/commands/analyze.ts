@@ -476,6 +476,267 @@ function detectUndefinedVariables(ast: MlldNode[]): UndefinedVariableWarning[] {
   return warnings;
 }
 
+function readExecInvocationName(node: unknown): string | null {
+  if (!node || typeof node !== 'object') {
+    return null;
+  }
+
+  const invocation = node as Record<string, unknown>;
+  const commandRef =
+    invocation.commandRef && typeof invocation.commandRef === 'object'
+      ? (invocation.commandRef as Record<string, unknown>)
+      : undefined;
+
+  const explicitName = typeof commandRef?.name === 'string' ? commandRef.name.trim() : '';
+  if (explicitName) {
+    return explicitName;
+  }
+
+  const rawIdentifier = typeof commandRef?.rawIdentifier === 'string' ? commandRef.rawIdentifier.trim() : '';
+  if (rawIdentifier) {
+    return rawIdentifier;
+  }
+
+  if (Array.isArray(commandRef?.identifier)) {
+    const identifierFromParts = commandRef.identifier
+      .map(part => {
+        if (!part || typeof part !== 'object') {
+          return '';
+        }
+        const typedPart = part as Record<string, unknown>;
+        if (typeof typedPart.content === 'string') {
+          return typedPart.content;
+        }
+        if (typeof typedPart.identifier === 'string') {
+          return typedPart.identifier;
+        }
+        return '';
+      })
+      .join('')
+      .trim();
+    if (identifierFromParts) {
+      return identifierFromParts;
+    }
+  }
+
+  if (typeof commandRef?.identifier === 'string') {
+    const identifier = commandRef.identifier.trim();
+    if (identifier) {
+      return identifier;
+    }
+  }
+
+  return null;
+}
+
+function readExecInvocationArgs(node: unknown): unknown[] {
+  if (!node || typeof node !== 'object') {
+    return [];
+  }
+  const invocation = node as Record<string, unknown>;
+  const commandRef =
+    invocation.commandRef && typeof invocation.commandRef === 'object'
+      ? (invocation.commandRef as Record<string, unknown>)
+      : undefined;
+  if (!commandRef || !Array.isArray(commandRef.args)) {
+    return [];
+  }
+  return commandRef.args;
+}
+
+function detectPassThroughOptionalParameterWarnings(ast: MlldNode[]): UndefinedVariableWarning[] {
+  interface ExeDefinition {
+    name: string;
+    params: string[];
+    node: MlldNode;
+  }
+
+  interface ExeInvocation {
+    name: string;
+    argsCount: number;
+    line?: number;
+  }
+
+  const executableDefinitions = new Map<string, ExeDefinition>();
+  const invocations: ExeInvocation[] = [];
+
+  const visitAnyNode = (node: unknown, callback: (typedNode: Record<string, unknown>) => void): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        visitAnyNode(item, callback);
+      }
+      return;
+    }
+
+    const typedNode = node as Record<string, unknown>;
+    if (typeof typedNode.type === 'string') {
+      callback(typedNode);
+    }
+
+    for (const child of Object.values(typedNode)) {
+      visitAnyNode(child, callback);
+    }
+  };
+
+  visitAnyNode(ast, (node) => {
+    if (node.type === 'Directive' && node.kind === 'exe') {
+      const values =
+        node.values && typeof node.values === 'object'
+          ? (node.values as Record<string, unknown>)
+          : undefined;
+      const identifierNodes = Array.isArray(values?.identifier) ? values.identifier : [];
+      const firstIdentifier =
+        identifierNodes.length > 0 && identifierNodes[0] && typeof identifierNodes[0] === 'object'
+          ? (identifierNodes[0] as Record<string, unknown>)
+          : undefined;
+      const name = typeof firstIdentifier?.identifier === 'string' ? firstIdentifier.identifier : '';
+      if (typeof name !== 'string' || !name) {
+        return;
+      }
+      const params = Array.isArray(values?.params)
+        ? values.params
+            .map((param: any) => (typeof param?.name === 'string' ? param.name : ''))
+            .filter((paramName: string) => paramName.length > 0)
+        : [];
+      executableDefinitions.set(name, { name, params, node: node as unknown as MlldNode });
+      return;
+    }
+
+    if (node.type === 'ExecInvocation') {
+      const name = readExecInvocationName(node);
+      if (!name) {
+        return;
+      }
+      invocations.push({
+        name,
+        argsCount: readExecInvocationArgs(node).length,
+        line:
+          node.location && typeof node.location === 'object'
+            ? ((node.location as any).start?.line as number | undefined)
+            : undefined
+      });
+    }
+  });
+
+  const maybeOmittedParamsByExe = new Map<string, Map<string, number[]>>();
+  for (const [exeName, definition] of executableDefinitions.entries()) {
+    if (definition.params.length === 0) {
+      continue;
+    }
+
+    const callsites = invocations.filter(invocation => invocation.name === exeName);
+    if (callsites.length === 0) {
+      // Without callsites in this module we cannot prove omission.
+      continue;
+    }
+
+    const omittedByParam = new Map<string, number[]>();
+    for (const callsite of callsites) {
+      if (callsite.argsCount >= definition.params.length) {
+        continue;
+      }
+
+      for (let index = callsite.argsCount; index < definition.params.length; index += 1) {
+        const paramName = definition.params[index];
+        if (!paramName) {
+          continue;
+        }
+        const lines = omittedByParam.get(paramName) ?? [];
+        if (typeof callsite.line === 'number') {
+          lines.push(callsite.line);
+        }
+        omittedByParam.set(paramName, lines);
+      }
+    }
+
+    if (omittedByParam.size > 0) {
+      maybeOmittedParamsByExe.set(exeName, omittedByParam);
+    }
+  }
+
+  const warnings: UndefinedVariableWarning[] = [];
+  const seen = new Set<string>();
+
+  for (const [exeName, omittedByParam] of maybeOmittedParamsByExe.entries()) {
+    const definition = executableDefinitions.get(exeName);
+    if (!definition) {
+      continue;
+    }
+
+    visitAnyNode(definition.node, (node) => {
+      if (node.type !== 'ExecInvocation') {
+        return;
+      }
+
+      const targetName = readExecInvocationName(node) ?? 'unknown';
+      const invocationArgs = readExecInvocationArgs(node);
+      for (const arg of invocationArgs) {
+        if (!arg || typeof arg !== 'object') {
+          continue;
+        }
+        const variableArg = arg as Record<string, unknown>;
+        if (variableArg.type !== 'VariableReference' || typeof variableArg.identifier !== 'string') {
+          continue;
+        }
+
+        const paramName = variableArg.identifier;
+        if (!omittedByParam.has(paramName)) {
+          continue;
+        }
+
+        const line = (variableArg.location as any)?.start?.line as number | undefined;
+        const column = (variableArg.location as any)?.start?.column as number | undefined;
+        const dedupeKey = `${exeName}:${targetName}:${paramName}:${line ?? 0}:${column ?? 0}`;
+        if (seen.has(dedupeKey)) {
+          continue;
+        }
+        seen.add(dedupeKey);
+
+        const omittedLines = omittedByParam.get(paramName) ?? [];
+        const uniqueLines = Array.from(new Set(omittedLines));
+        const callerHint =
+          uniqueLines.length > 0
+            ? ` (omitted at callsite line${uniqueLines.length === 1 ? '' : 's'} ${uniqueLines.slice(0, 3).join(', ')}${uniqueLines.length > 3 ? ', ...' : ''})`
+            : '';
+
+        warnings.push({
+          variable: paramName,
+          line,
+          column,
+          suggestion:
+            `@${paramName} is a trailing parameter on @${exeName} and may be undefined${callerHint}. ` +
+            `Passing it to @${targetName} can fail at runtime; provide the argument at callsites or add a fallback before calling @${targetName}.`
+        });
+      }
+    });
+  }
+
+  return warnings;
+}
+
+function dedupeUndefinedVariableWarnings(
+  warnings: readonly UndefinedVariableWarning[]
+): UndefinedVariableWarning[] {
+  const byKey = new Map<string, UndefinedVariableWarning>();
+  for (const warning of warnings) {
+    const key = `${warning.variable}:${warning.line ?? 0}:${warning.column ?? 0}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, warning);
+      continue;
+    }
+
+    if (!existing.suggestion && warning.suggestion) {
+      byKey.set(key, { ...existing, suggestion: warning.suggestion });
+    }
+  }
+  return Array.from(byKey.values());
+}
+
 /**
  * Detect variable redefinitions in nested scopes
  * This catches cases like:
@@ -2059,7 +2320,10 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       if (options.checkVariables !== false) {
         const suppressedWarningCodes = await loadSuppressedWarningCodes(filepath);
 
-        const warnings = detectUndefinedVariables(ast);
+        const warnings = dedupeUndefinedVariableWarnings([
+          ...detectUndefinedVariables(ast),
+          ...detectPassThroughOptionalParameterWarnings(ast)
+        ]);
         if (warnings.length > 0) {
           result.warnings = warnings;
         }
