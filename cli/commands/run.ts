@@ -627,10 +627,6 @@ Creating Scripts:
           }
         }
       }
-      // Pass --new/--fresh through to payload so scripts can detect fresh runs
-      if (fresh) {
-        payloadObj['new'] = true;
-      }
       const isDebug = Boolean(flags.debug || flags.d);
       // Always inject @payload (empty {} if no flags) so scripts can safely reference @payload.field
       const payloadStr = `@payload=${JSON.stringify(payloadObj)}`;
