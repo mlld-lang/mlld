@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security label/taint propagation now survives template-literal interpolation passed as executable arguments.
 - Executable argument expressions (`? :`, unary/binary forms, and when-expression values) now preserve security descriptors.
 - Array/object literals now retain label/taint metadata from nested expression values.
+- Executable source taint is now medium-specific: `src:js`, `src:sh`, `src:py`, `src:cmd`, and `src:template`; pure mlld executables use `src:exe`.
 - Security descriptor propagation through `js`/`sh`/`py`/`cmd` executable blocks is now covered for round-trip, transform, and multi-label flows.
 - Object spread in `/var` assignments now preserves security labels and taint from spread sources.
 - Privileged guard `when` actions now accept shorthand label modifications (`trusted!`, `!label`, `clear!`) with action targets (for example `* => trusted!,!secret @output`).
