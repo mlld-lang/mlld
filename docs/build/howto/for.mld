@@ -1,0 +1,30 @@
+>> Build the "for" howto topic
+>> Assembles all for-related atoms
+
+var @atoms = [
+  <@base/docs/src/atoms/control-flow/for-arrow.md>,
+  <@base/docs/src/atoms/control-flow/for-collection.md>,
+  <@base/docs/src/atoms/control-flow/for-block.md>,
+  <@base/docs/src/atoms/control-flow/for-filter.md>,
+  <@base/docs/src/atoms/control-flow/for-skip.md>,
+  <@base/docs/src/atoms/control-flow/for-object.md>,
+  <@base/docs/src/atoms/control-flow/for-nested.md>,
+  <@base/docs/src/atoms/control-flow/for-batch.md>
+]
+
+>> Strip frontmatter and output content
+exe @renderAtom(atom) = js {
+  const content = atom.replace(/^---[\s\S]*?---\n*/, '');
+  return content.trim();
+}
+
+show `# For (Iteration)
+
+\`for\` iterates over collections. Arrow form for single actions, block form for multiple.
+
+`
+
+for @a in @atoms [
+  show @renderAtom(@a)
+  show ""
+]
