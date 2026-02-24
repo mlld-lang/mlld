@@ -167,13 +167,26 @@ show ``
 >> Doc clarity report
 var @docClarity = @buildDocClarityReport(@runDir)
 when @docClarity.summary.docs_could_be_clearer > 0 || @docClarity.summary.docs_genuinely_misleading > 0 => [
+  show `[debug] runDir=@runDir`
+  output @docClarity to "@runDir/doc-clarity-report.json"
+
   show `=== DOC CLARITY INSIGHTS ===`
   show `QA needed more exploration: @docClarity.summary.qa_insufficient_exploration`
   show `Docs could be clearer: @docClarity.summary.docs_could_be_clearer`
   show `Docs genuinely misleading: @docClarity.summary.docs_genuinely_misleading`
-  output @docClarity to "@runDir/doc-clarity-report.json"
-  show `Report: @runDir/doc-clarity-report.json`
   show ``
+
+  when @docClarity.doc_fixes.length > 0 => [
+    show `--- Docs genuinely misleading (action needed) ---`
+    for @fix in @docClarity.doc_fixes => show `  • @fix.affected_doc — @fix.suggestion (@fix.topic/@fix.experiment)`
+    show ``
+  ]
+
+  when @docClarity.doc_clarifications.length > 0 => [
+    show `--- Docs could be clearer ---`
+    for @c in @docClarity.doc_clarifications => show `  • @c.affected_doc — @c.suggestion (@c.topic/@c.experiment)`
+    show ``
+  ]
 ]
 
 >> ========== PHASE 3: TRENDS ==========
@@ -184,6 +197,14 @@ show `=== PHASE 3: TRENDS ===`
 run @runTrends(@runDir, @activeTopics)
 show ``
 
+>> Show trend narrative inline
+var @narrative = <@runDir/trend-report.md>?
+when @narrative => [
+  show `--- Trend Narrative ---`
+  show @narrative
+  show ``
+]
+
 >> ========== PHASE 4: STRATEGY ==========
 
 checkpoint "strategy"
@@ -191,6 +212,14 @@ checkpoint "strategy"
 show `=== PHASE 4: STRATEGY ===`
 run @runStrategy(@runDir)
 show ``
+
+>> Show strategy questions inline
+var @strategy = <@runDir/strategy-questions.md>?
+when @strategy => [
+  show `--- Strategy Questions ---`
+  show @strategy
+  show ``
+]
 
 >> ========== RUN SUMMARY ==========
 var @topicSummaries = @buildRunSummary(@runDir, @activeTopics)
@@ -220,5 +249,14 @@ var @progress = {
   runs: @allRunSummariesList
 }
 output @progress to "@qaRoot/progress.json"
-show `Progress tracker: @qaRoot/progress.json (@allRunSummariesList.length runs)`
+
+>> ========== ARTIFACTS ==========
+show `=== ARTIFACTS ===`
+show `  • Run summary:        @runDir/run-summary.json`
+when @docClarity.summary.docs_could_be_clearer > 0 || @docClarity.summary.docs_genuinely_misleading > 0 => show `  • Doc clarity report:  @runDir/doc-clarity-report.json`
+when <@runDir/trend-report.json>? => show `  • Trend report (JSON): @runDir/trend-report.json`
+when <@runDir/trend-report.md>? => show `  • Trend narrative:     @runDir/trend-report.md`
+when <@runDir/strategy-questions.md>? => show `  • Strategy questions:  @runDir/strategy-questions.md`
+show `  • Events log:         @runDir/events.jsonl`
+show `  • Progress tracker:   @qaRoot/progress.json (@allRunSummariesList.length runs)`
 

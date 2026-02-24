@@ -22,7 +22,7 @@ exe @trace(input) = [
   => @input
 ]
 
-show (" hello " | @trace | @trim | @trace)
+show " hello " | @trace | @trim | @trace
 >> Output:
 >> stage=1 value= hello
 >> stage=3 value=hello
