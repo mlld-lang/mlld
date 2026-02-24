@@ -554,8 +554,92 @@ UnifiedCodeChar
   / '`' chars:BacktickChar* '`' { return '`' + chars.join('') + '`'; }      // Template literals
   / '/*' chars:(!('*/') c:. { return c; })* '*/' { return '/*' + chars.join('') + '*/'; }  // Multi-line comments
   / '//' chars:(!('\n') c:. { return c; })* { return '//' + chars.join(''); }  // Single-line comments
+  / regex:UnifiedRegexLiteral { return regex; }                                // Regex literals
   / '{' inner:UnifiedCodeContent '}' { return '{' + inner + '}'; }          // Nested braces
   / !'}' char:. { return char; }                                            // Any other character
+
+// Regex literal in code blocks.
+// This keeps quotes inside character classes (e.g. ["']) from being misread
+// as string delimiters, which can otherwise break brace balancing.
+UnifiedRegexLiteral
+  = &{
+      const pos = peg$currPos;
+      let i = pos - 1;
+
+      // Skip horizontal whitespace; newline is a statement boundary.
+      while (i >= 0 && (input[i] === ' ' || input[i] === '\t' || input[i] === '\r')) {
+        i--;
+      }
+      if (i < 0 || input[i] === '\n') {
+        return true;
+      }
+
+      const prev = input[i];
+      const isAlpha =
+        (prev >= 'a' && prev <= 'z') ||
+        (prev >= 'A' && prev <= 'Z');
+      const isDigit = prev >= '0' && prev <= '9';
+      const isOperandLike =
+        isAlpha ||
+        isDigit ||
+        prev === '_' ||
+        prev === '$' ||
+        prev === ']' ||
+        prev === ')' ||
+        prev.charCodeAt(0) === 125;
+
+      // Most operand-like predecessors imply division, not regex.
+      if (!isOperandLike) {
+        return true;
+      }
+
+      // But keyword contexts like `return /.../` or `throw /.../` are regex starts.
+      let j = i;
+      while (
+        j >= 0 &&
+        (
+          (input[j] >= 'a' && input[j] <= 'z') ||
+          (input[j] >= 'A' && input[j] <= 'Z') ||
+          input[j] === '_' ||
+          input[j] === '$'
+        )
+      ) {
+        j--;
+      }
+      const token = input.slice(j + 1, i + 1);
+      const regexStarterKeywords = [
+        'return',
+        'throw',
+        'case',
+        'delete',
+        'void',
+        'typeof',
+        'instanceof',
+        'in',
+        'of',
+        'yield',
+        'await',
+        'new',
+      ];
+      return regexStarterKeywords.includes(token);
+    }
+    "/" !("/" / "*") body:UnifiedRegexBody "/" flags:$([dgimsuvy]*) {
+      return '/' + body + '/' + flags;
+    }
+
+UnifiedRegexBody
+  = chars:UnifiedRegexBodyChar* {
+      return chars.join('');
+    }
+
+UnifiedRegexBodyChar
+  = "\\" char:. { return '\\' + char; }
+  / "[" chars:UnifiedRegexClassChar* "]" { return '[' + chars.join('') + ']'; }
+  / !("/" / "\n" / "\r") char:. { return char; }
+
+UnifiedRegexClassChar
+  = "\\" char:. { return '\\' + char; }
+  / !"]" char:. { return char; }
 
 // Characters inside double quotes
 DoubleQuoteChar

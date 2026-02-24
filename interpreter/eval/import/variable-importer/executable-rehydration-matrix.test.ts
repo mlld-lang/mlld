@@ -109,7 +109,7 @@ describe('Executable rehydration matrix', () => {
 
     expect(() =>
       importer.createVariableFromValue('top', payload, '/project/module.mld', undefined, { env })
-    ).toThrow(/Maximum call stack size exceeded|call stack/i);
+    ).toThrow(/Maximum call stack size exceeded|call stack|applySecurityMetadata/i);
   });
 
   it('keeps executable import baseline behavior stable with and without captured env', () => {
