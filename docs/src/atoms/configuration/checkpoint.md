@@ -9,7 +9,7 @@ aliases: [resume, cache, fresh, fork]
 tags: [checkpoint, resume, cache, llm, cli]
 related: [config-cli-run, hooks, exe-simple]
 related-code: [interpreter/checkpoint/CheckpointManager.ts, interpreter/hooks/checkpoint-pre-hook.ts, cli/commands/checkpoint.ts, cli/commands/run.ts]
-updated: 2026-02-20
+updated: 2026-02-24
 ---
 
 Checkpointing automatically caches results from `llm`-labeled executables so you can resume interrupted runs without re-calling LLMs.
@@ -64,6 +64,8 @@ checkpoint "data-loaded"
 >> Later, resume from this point:
 >> mlld run pipeline --resume "data-loaded"
 ```
+
+Named checkpoints are discovered from source before execution starts, so `--resume "name"` works even if a prior run failed before that checkpoint was reached.
 
 ## Context Variables
 

@@ -159,6 +159,47 @@ describe('CheckpointManager', () => {
     );
   });
 
+  it('maps source-declared checkpoint names to execution-order boundaries for resume targeting', async () => {
+    const root = await createTempDir('checkpoint-manager-source-order-');
+    const manager = new CheckpointManager('pipeline', createOptions(root));
+    await manager.load();
+
+    const beforeKey = CheckpointManager.computeCacheKey('llm', ['before']);
+    const middleKey = CheckpointManager.computeCacheKey('llm', ['middle']);
+    const afterKey = CheckpointManager.computeCacheKey('llm', ['after']);
+
+    await manager.put(beforeKey, {
+      fn: 'llm',
+      args: ['before'],
+      result: 'before',
+      executionOrder: 0
+    });
+    await manager.put(middleKey, {
+      fn: 'llm',
+      args: ['middle'],
+      result: 'middle',
+      executionOrder: 2
+    });
+    await manager.put(afterKey, {
+      fn: 'llm',
+      args: ['after'],
+      result: 'after',
+      executionOrder: 3
+    });
+
+    manager.assignInvocationMetadata('llm');
+    manager.assignInvocationMetadata('llm');
+    await manager.registerNamedCheckpoint('middle');
+
+    manager.augmentNamedCheckpointsFromSource(['before', 'middle', 'after']);
+
+    await expect(manager.invalidateFromNamedCheckpoint('before')).resolves.toBe(2);
+    await expect(manager.get(beforeKey)).resolves.toBe('before');
+    await expect(manager.get(middleKey)).resolves.toBeNull();
+    await expect(manager.get(afterKey)).resolves.toBeNull();
+    await expect(manager.invalidateFromNamedCheckpoint('after')).resolves.toBe(0);
+  });
+
   it('clears local cache state for fresh runs', async () => {
     const root = await createTempDir('checkpoint-manager-clear-');
     const manager = new CheckpointManager('pipeline', createOptions(root));
