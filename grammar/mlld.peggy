@@ -175,7 +175,7 @@ BlockComments
 
 // Leading block comment - captures the comment for attachment to first statement
 LeadingBlockComment
-  = comment:Comment { return comment; }
+  = HWS comment:Comment { return comment; }
 
 // -------------------------------------------------------------------------
 // TEXT BLOCKS

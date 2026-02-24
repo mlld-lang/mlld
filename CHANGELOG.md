@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `mlld publish` for directory modules now constructs correct raw GitHub URLs; previously `detectGitInfo` received the directory path instead of the entry file path, producing a `/.` base path that made URL verification fail.
+- Consecutive indented `>>` comment lines inside `/if` and `/for` block bodies now parse correctly.
 - `mlld publish` metadata updates (repo, bugs, mlldVersion) are now written to disk, committed, and pushed automatically. Previously option [1] "Apply changes and continue" only updated in-memory state and never persisted the file.
 - `mlld publish` auto-commit now pushes to remote and refreshes the commit SHA before URL verification, so the constructed raw.githubusercontent.com URL points to an accessible commit.
 - `mlld publish` directory module metadata updates now write to `module.yml` instead of incorrectly adding frontmatter to the entry file.
