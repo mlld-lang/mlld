@@ -1,12 +1,12 @@
 >> Claude Session Helpers
 >> Session-aware claude invocation with poll-based completion detection
 >> Extends @mlld/claude-poll with --session-id and --resume support
+>> LLM-labeled for checkpoint caching — completed calls survive bail + re-run
 
 /needs { sh }
 
->> Poll-based session creation: starts a new session with --session-id
->> timeout parameter is max elapsed seconds (default: 1800 = 30 min)
-exe @claudeSession(prompt, model, tools, markerFile, sessionId, timeout) = sh {
+>> Raw shell helpers (not exported)
+exe @runSession(prompt, model, tools, markerFile, sessionId, timeout) = sh {
   PROMPT_FILE=$(mktemp)
   printf '%s' "$prompt" > "$PROMPT_FILE"
   TIMEOUT=${timeout:-1800}
@@ -33,9 +33,7 @@ exe @claudeSession(prompt, model, tools, markerFile, sessionId, timeout) = sh {
   cat "$markerFile" 2>/dev/null
 }
 
->> Poll-based session resume: continues an existing session with --resume
->> timeout parameter is max elapsed seconds (default: 1800 = 30 min)
-exe @claudeResume(prompt, model, tools, markerFile, sessionId, timeout) = sh {
+exe @resumeSession(prompt, model, tools, markerFile, sessionId, timeout) = sh {
   PROMPT_FILE=$(mktemp)
   printf '%s' "$prompt" > "$PROMPT_FILE"
   TIMEOUT=${timeout:-1800}
@@ -61,6 +59,19 @@ exe @claudeResume(prompt, model, tools, markerFile, sessionId, timeout) = sh {
   rm -f "$PROMPT_FILE"
   cat "$markerFile" 2>/dev/null
 }
+
+>> Checkpoint-cached wrappers — bail on failure so empty results are never cached
+exe llm @claudeSession(prompt, model, tools, markerFile, sessionId, timeout) = [
+  let @result = @runSession(@prompt, @model, @tools, @markerFile, @sessionId, @timeout)
+  when !@result => bail `Agent exited without completing (marker file not written). Likely hit API limits or crashed.`
+  => @result
+]
+
+exe llm @claudeResume(prompt, model, tools, markerFile, sessionId, timeout) = [
+  let @result = @resumeSession(@prompt, @model, @tools, @markerFile, @sessionId, @timeout)
+  when !@result => bail `Agent exited without completing (marker file not written). Likely hit API limits or crashed.`
+  => @result
+]
 
 /export {
   @claudeSession,

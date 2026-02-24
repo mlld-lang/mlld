@@ -46,12 +46,9 @@ exe @recentCoverage(qaRoot, today) = [
   => { tested: @testedTopics.flat(), failed: @failedTopics.flat() }
 ]
 
-exe @currentTestStatus() = sh {
-  cd "$(git rev-parse --show-toplevel)" && npm test -- --reporter=dot 2>&1 | tail -20 || echo "(test status unavailable)"
-}
 
 >> Build triage prompt with context
-exe @triagePrompt(allTopics, gitChanges, failureHistory, testStatus, recentlyTested, recentlyFailed, outputDir) = template "../prompts/phase0-triage.att"
+exe @triagePrompt(allTopics, gitChanges, failureHistory, recentlyTested, recentlyFailed, outputDir) = template "../prompts/phase0-triage.att"
 
 >> Run triage phase
 exe @runTriage(runDir, allTopics, lastRunDir, qaRoot, today) = [
@@ -64,10 +61,8 @@ exe @runTriage(runDir, allTopics, lastRunDir, qaRoot, today) = [
   let @failureHistory = @failureHistoryFrom(@lastRunDir)
   show `  Gathering context: recent coverage (last 24h)...`
   let @coverage = @recentCoverage(@qaRoot, @today)
-  show `  Gathering context: test status (this may take a minute)...`
-  let @testStatus = @currentTestStatus()
 
-  let @prompt = @triagePrompt(@allTopics, @gitChanges, @failureHistory, @testStatus, @coverage.tested, @coverage.failed, @runDir)
+  let @prompt = @triagePrompt(@allTopics, @gitChanges, @failureHistory, @coverage.tested, @coverage.failed, @runDir)
   let @tools = "Read,Write,Glob,Grep"
   let @markerFile = `@runDir/triage-decision.json`
   let @fullPrompt = `@prompt\n\nIMPORTANT: When done, write your triage-decision.json to @markerFile using the Write tool. This file IS the marker.`

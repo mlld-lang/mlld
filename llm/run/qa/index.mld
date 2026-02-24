@@ -86,14 +86,21 @@ when @allTopics.length == 0 => show `No topics match tier filter: @tier`
 
 checkpoint "triage"
 
-exe @latestRunId() = sh {ls -1 "@qaRoot" 2>/dev/null | grep '^20' | sort -r | head -1}
+exe @latestRunIdExcluding(qaRoot, excludeDir) = sh {
+  ls -1 "$qaRoot" 2>/dev/null | grep '^20' | sort -r | while read d; do
+    full="$qaRoot/$d"
+    if [ "$full" != "$excludeDir" ] && [ -f "$full/run-summary.json" ]; then
+      echo "$d"
+      exit 0
+    fi
+  done
+}
 
 exe @doTriage(runDir, allTopics) = [
   when @hasExplicitTopics => @allTopics
   show `=== PHASE 0: TRIAGE ===`
-  let @lastRunId = @latestRunId()
-  let @lastRunIdTrimmed = @lastRunId.trim()
-  let @lastRunDir = @lastRunIdTrimmed && @lastRunIdTrimmed != @today ? `@qaRoot/@lastRunIdTrimmed` : null
+  let @lastRunId = @latestRunIdExcluding(@qaRoot, @runDir).trim()
+  let @lastRunDir = @lastRunId ? `@qaRoot/@lastRunId` : null
   let @selected = @runTriage(@runDir, @allTopics, @lastRunDir, @qaRoot, @today)
   show ``
   => @selected

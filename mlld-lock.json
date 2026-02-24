@@ -1,28 +1,28 @@
 {
   "lockfileVersion": 1,
   "modules": {
-    "@mlld/array": {
-      "version": "2.1.0",
-      "resolved": "87afe1bcd8fe7bf426253ae7edfa71476819b1d8b90e95a86544c711f5ce5c57",
-      "source": "registry://@mlld/array@2.1.0",
-      "integrity": "sha256:87afe1bcd8fe7bf426253ae7edfa71476819b1d8b90e95a86544c711f5ce5c57",
-      "fetchedAt": "2026-02-19T23:22:40.079Z",
-      "registryVersion": "2.1.0",
-      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/ba28284be46dbf50999539bdb275ef077f65bbb1/llm/modules/array.mld.md"
+    "@root/modules/gh-issues/index.mld": {
+      "version": "latest",
+      "resolved": "5575eff5b6c06967f348986c5f5e8ce5e5e25bee37dcb140ad5b75a357bc6e9a",
+      "source": "/Users/adam/dev/mlld/modules/gh-issues/index.mld",
+      "integrity": "sha256:5575eff5b6c06967f348986c5f5e8ce5e5e25bee37dcb140ad5b75a357bc6e9a",
+      "fetchedAt": "2026-02-23T04:28:12.807Z"
     },
     "@mlld/claude-poll": {
-      "version": "latest",
+      "version": "1.2.0",
       "resolved": "94993af5a536b69f106d1e91161f0dc000232d3f2850966ba1e5082cfa00643e",
       "source": "registry://@mlld/claude-poll@1.2.0",
       "integrity": "sha256:94993af5a536b69f106d1e91161f0dc000232d3f2850966ba1e5082cfa00643e",
-      "fetchedAt": "2026-02-23T20:38:09.321Z"
+      "fetchedAt": "2026-02-24T18:51:34.573Z",
+      "registryVersion": "1.2.0",
+      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/6486343a54310a8b910e53d10eb069a1da3c35dc/llm/modules/claude-poll.mld.md"
     },
     "@mlld/claude": {
       "version": "2.1.0",
       "resolved": "a96a9b4839d2f21eedac1f5139f28058140d00d8c731de685f6a512bee1370c3",
       "source": "registry://@mlld/claude@2.1.0",
       "integrity": "sha256:a96a9b4839d2f21eedac1f5139f28058140d00d8c731de685f6a512bee1370c3",
-      "fetchedAt": "2026-02-19T23:22:40.133Z",
+      "fetchedAt": "2026-02-24T18:51:34.692Z",
       "registryVersion": "2.1.0",
       "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/6486343a54310a8b910e53d10eb069a1da3c35dc/llm/modules/claude.mld.md"
     },
@@ -31,20 +31,22 @@
       "resolved": "1a220b7e8b361d0712519b4649c7ce70951ab98d7df75f210262ccb04d9434bb",
       "source": "registry://@mlld/gh-issues@1.0.0",
       "integrity": "sha256:1a220b7e8b361d0712519b4649c7ce70951ab98d7df75f210262ccb04d9434bb",
-      "fetchedAt": "2026-02-22T22:56:58.372Z",
+      "fetchedAt": "2026-02-24T18:51:34.833Z",
       "registryVersion": "1.0.0",
       "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/1b59518dbd4449bd088dafbebdac7c57510c87a8/gh-issues/index.mld"
     },
-    "@root/modules/gh-issues/index.mld": {
-      "version": "latest",
-      "resolved": "5575eff5b6c06967f348986c5f5e8ce5e5e25bee37dcb140ad5b75a357bc6e9a",
-      "source": "/Users/adam/dev/mlld/modules/gh-issues/index.mld",
-      "integrity": "sha256:5575eff5b6c06967f348986c5f5e8ce5e5e25bee37dcb140ad5b75a357bc6e9a",
-      "fetchedAt": "2026-02-23T04:28:12.807Z"
+    "@mlld/array": {
+      "version": "2.1.0",
+      "resolved": "87afe1bcd8fe7bf426253ae7edfa71476819b1d8b90e95a86544c711f5ce5c57",
+      "source": "registry://@mlld/array@2.1.0",
+      "integrity": "sha256:87afe1bcd8fe7bf426253ae7edfa71476819b1d8b90e95a86544c711f5ce5c57",
+      "fetchedAt": "2026-02-24T18:56:02.286Z",
+      "registryVersion": "2.1.0",
+      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/ba28284be46dbf50999539bdb275ef077f65bbb1/llm/modules/array.mld.md"
     }
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-02-23T20:38:09.321Z"
+    "updatedAt": "2026-02-24T18:56:02.286Z"
   }
 }

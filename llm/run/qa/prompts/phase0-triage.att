@@ -44,14 +44,6 @@ These topics had failures in recent runs. They are candidates for regression tes
 @recentlyFailed
 </recently_failed>
 
-### Current Test Status
-
-Fixture test results (passing/failing):
-
-<test_status>
-@testStatus
-</test_status>
-
 ## Your Task
 
 You must produce TWO separate lists:
