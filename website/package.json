@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Documentation site for Mlld",
   "scripts": {
-    "dev": "node src/convertDocs.js && eleventy --serve",
-    "build": "npm run clean && node src/convertDocs.js && eleventy",
+    "dev": "node src/convertDocs.js && npx eleventy --serve",
+    "build": "npm run clean && node src/convertDocs.js && npx eleventy",
     "clean": "rm -rf _site src/docs",
     "convert-docs": "node src/convertDocs.js"
   },

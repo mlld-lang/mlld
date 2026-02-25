@@ -1,0 +1,82 @@
+<MLLD_OUTPUT>
+
+<OUTPUT>
+```mlld
+output @content to "out.txt"
+output @data to "config.json"
+output @message to stdout
+output @error to stderr
+output @config.yaml() to "settings.yaml"
+output @results.json() to "results.json"
+output @plain.text() to "plain.txt"
+```
+
+Use transformer methods before `output` when you need a specific file format:
+
+| Transformer | Behavior |
+|------------|----------|
+| `@value.json()` | Emit JSON text |
+| `@value.yaml()` | Emit YAML text |
+| `@value.text()` | Emit plain text |
+
+Examples:
+
+```mlld
+output @data.json() to "results.json"
+output @data.yaml() to "config.yml"
+output @data.text() to "plain.txt"
+```
+
+## See Also
+
+- [Append Directive](./append.md) - Append structured or text output incrementally.
+- [Log Directive](./log.md) - Emit output to stderr.
+- [Pipelines Basics](../syntax/pipelines-basics.md) - Attach `output` as a pipeline effect stage.
+</OUTPUT>
+
+<LOG>
+```mlld
+var @debugMode = true
+
+log @message                        >> same as output @message to stderr
+log `Processing: @item`
+
+>> In action contexts
+for @item in @items => log @item
+when @debugMode => log "Debug info"
+```
+
+## See Also
+
+- [Output Directive](./output.md) - File/stdout/stderr output patterns and formatting.
+- [Pipelines Basics](../syntax/pipelines-basics.md) - Use `| log` as a pipeline effect stage.
+</LOG>
+
+<APPEND>
+```mlld
+append @record to "events.jsonl"        >> JSON object per line
+append "raw line" to "events.log"
+
+>> In pipelines
+var @_ = @data | append "audit.jsonl"
+
+>> In loops
+for @name in @runs => append @name to "pipeline.log"
+```
+
+`.jsonl` enforces JSON serialization. Other extensions write text. `.json` blocked.
+</APPEND>
+
+<STREAM>
+```mlld
+stream @claude("prompt")           >> keyword form
+stream @generateReport()           >> directive form
+
+>> Parallel streams
+stream @a() || stream @b()         >> concurrent, buffered results
+```
+
+Suppress: `--no-stream` flag or `MLLD_NO_STREAM=true`
+</STREAM>
+
+</MLLD_OUTPUT>

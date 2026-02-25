@@ -1,5 +1,5 @@
 ---
-id: output
+id: output-directive
 title: Output Directive
 brief: Write data to files or streams
 category: commands

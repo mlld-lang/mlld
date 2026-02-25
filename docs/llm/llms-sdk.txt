@@ -1,186 +1,318 @@
 <MLLD_SDK>
 
-<SDK_OVERVIEW>
-The mlld SDK enables programmatic execution of mlld scripts from application code.
+<SDK>
+Four modes for SDK consumers:
 
-**Entry points:**
-- `processMlld(script)` - Simple: script in, string out
-- `interpret(script, opts)` - Full control with execution modes
-- `execute(filepath, payload, opts)` - File-based with state management
-- `analyzeModule(filepath)` - Static analysis without execution
-</SDK_OVERVIEW>
+**document** (default): Returns string
 
-<BASIC_USAGE>
-```typescript
-import { processMlld } from 'mlld';
-
-const output = await processMlld(`
-var @name = "World"
-show \`Hello @name!\`
-`);
-// output: "Hello, World!"
-```
-
-With file context for imports:
-
-```typescript
-const output = await processMlld(script, {
-  filePath: './scripts/my-script.mld'
-});
-```
-</BASIC_USAGE>
-
-<EXECUTION_MODES>
-Four modes control what `interpret()` returns:
-
-**document** (default): Plain text output
 ```typescript
 const output = await processMlld(script);
 ```
 
-**structured**: Output + effects + exports + metrics
+**structured**: Returns full result object
+
 ```typescript
 const result = await interpret(script, { mode: 'structured' });
-console.log(result.output);
 console.log(result.effects);
 console.log(result.stateWrites);
 ```
 
-**stream**: Real-time event consumption
+**stream**: Real-time events
+
 ```typescript
 const handle = interpret(script, { mode: 'stream' });
 handle.on('stream:chunk', e => process.stdout.write(e.text));
-handle.on('effect', e => console.log('Effect:', e.type));
 await handle.done();
 ```
 
-**debug**: Full execution trace
+**debug**: Full trace
+
 ```typescript
 const result = await interpret(script, { mode: 'debug' });
-console.log(result.ast);
 console.log(result.trace);
 ```
-</EXECUTION_MODES>
 
-<DYNAMIC_MODULES>
-Inject runtime data without filesystem I/O. Enables multi-tenant apps with per-user context.
-
-```typescript
-const result = await processMlld(template, {
-  dynamicModules: {
-    '@state': { count: 0, messages: [] },
-    '@payload': { text: userInput, userId: session.id }
-  }
-});
-```
-
-In your script:
-```mlld
-import { @count, @messages } from @state
-import { @text, @userId } from @payload
-
-var @newCount = @count + 1
-show `User @userId said: @text`
-```
-
-Dynamic modules are auto-labeled `src:dynamic` for security tracking.
-</DYNAMIC_MODULES>
-
-<STATE_MANAGEMENT>
-Track state changes via `state://` protocol instead of filesystem writes.
-
-```mlld
-var @count = @state.count + 1
-output @count to "state://count"
-
-var @prefs = { theme: "dark" }
-output @prefs to "state://preferences"
-```
-
-Application handles persistence:
+File-based execution with state management.
 
 ```typescript
 const result = await execute('./agent.mld', payload, {
-  state: { count: 0 }
+  state: { conversationId: '123', messages: [...] },
+  timeout: 30000
 });
 
 for (const write of result.stateWrites) {
-  await database.setState(write.path, write.value);
+  await updateState(write.path, write.value);
 }
-```
-</STATE_MANAGEMENT>
-
-<FILE_EXECUTION>
-`execute()` provides file-based execution with caching and state.
-
-```typescript
-const result = await execute('./agent.mld',
-  { text: 'user input', userId: '123' },  // payload
-  {
-    state: { count: 0, messages: [] },
-    timeout: 30000
-  }
-);
-
-console.log(result.output);
-console.log(result.stateWrites);
-console.log(result.metrics);
 ```
 
 Features:
-- AST caching with mtime invalidation
-- `@payload` and `@state` auto-injected
-- Timeout and cancellation support
-</FILE_EXECUTION>
+- In-memory AST caching (mtime-based invalidation)
+- State hydration via `@state` module
+- Payload injection via `@payload`
+- State writes via `state://` protocol
 
-<STATIC_ANALYSIS>
-`analyzeModule()` extracts metadata without execution.
+## @state Module
+
+Hydrate mutable state from the SDK:
+
+```typescript
+const result = await execute('./agent.mld', payload, {
+  state: { conversationId: '123', count: 0 }
+});
+```
+
+Access in mlld:
+
+```mlld
+import { @conversationId, @count } from @state
+show `Conversation @conversationId, count @count`
+```
+
+`@state` is a reserved variable — it's always available when state is provided via SDK or CLI.
+
+## state:// Protocol
+
+Write state back from mlld using the `state://` protocol:
+
+```mlld
+output { count: 5 } to "state://count"
+output @result to "state://lastResult"
+```
+
+State writes are collected in the execution result:
+
+```typescript
+for (const write of result.stateWrites) {
+  await updateState(write.path, write.value);
+}
+```
+
+`stateWrites` merges final-result writes and streamed `state:write` events emitted during execution.
+
+## In-Flight State Updates
+
+SDK clients can mutate `@state` during execution via `update_state`. This enables external control of running scripts:
+
+```python
+# Python
+handle = client.process_async(
+    'loop(99999, 50ms) until @state.exit [\n  continue\n]\nshow "done"',
+    state={'exit': False},
+    timeout=10,
+)
+
+time.sleep(0.12)
+handle.update_state('exit', True)
+print(handle.result())
+```
+
+```go
+// Go
+handle, _ := client.ProcessAsync(script, &mlld.ProcessOptions{
+    State: map[string]any{"exit": false},
+    Timeout: 10 * time.Second,
+})
+time.Sleep(120 * time.Millisecond)
+handle.UpdateState("exit", true)
+output, _ := handle.Result()
+```
+
+All language SDKs support `update_state` with retry semantics on `REQUEST_NOT_FOUND`.
+
+Inject runtime context without filesystem I/O.
+
+```typescript
+execute('./script.mld', { text: 'user input', userId: '123' });
+```
+
+```mlld
+>> Destructuring import (fields must exist)
+import { text, userId } from @payload
+show @text
+```
+
+For optional fields, use namespace import with ternary:
+
+```mlld
+>> Namespace import for optional field access
+import "@payload" as @payload
+var @text = @payload.text ? @payload.text : "default"
+```
+
+CLI usage with `mlld run`:
+
+```bash
+mlld run myscript --topic foo --count 5
+```
+
+```mlld
+>> In myscript.mld - required fields
+import { topic, count } from @payload
+show `Topic: @topic, Count: @count`
+```
+
+Dynamic imports are labeled `src:dynamic` and marked untrusted.
+
+Static analysis without execution.
 
 ```typescript
 const analysis = await analyzeModule('./tools.mld');
 
 if (!analysis.valid) {
-  console.error('Parse errors:', analysis.errors);
-  return;
+  console.error('Errors:', analysis.errors);
 }
 
-// Discover exported functions
 const tools = analysis.executables
   .filter(e => analysis.exports.includes(e.name));
-
-// Check capabilities
-console.log('Needs:', analysis.needs);
-console.log('Guards:', analysis.guards);
 ```
 
-Use cases: MCP proxy tool discovery, module validation, IDE/LSP, security auditing.
-</STATIC_ANALYSIS>
+Use cases: MCP proxy, module validation, IDE/LSP, security auditing.
 
-<LANGUAGE_WRAPPERS>
-Thin wrappers exist for Go, Python, and Rust. These call the mlld CLI and provide idiomatic APIs.
+`@payload` contains data passed to a script at invocation time.
 
-**Go:**
-```go
-client := mlld.New()
-output, _ := client.Process(`var @x = 1
-show @x`, nil)
+**Destructuring import** (required fields - fails if missing):
+
+```mlld
+import { topic, count } from @payload
+show `Topic: @topic, Count: @count`
 ```
+
+**Namespace import** (optional fields with defaults):
+
+```mlld
+import "@payload" as @payload
+var @topic = @payload.topic ? @payload.topic : "default"
+var @count = @payload.count ? @payload.count : 0
+```
+
+**SDK usage**:
+
+```typescript
+execute('./script.mld', { topic: 'foo', count: 5 });
+```
+
+**CLI usage** — both `mlld run` and direct invocation support payload:
+
+```bash
+mlld run myscript --topic foo --count 5
+mlld script.mld --topic foo --count 5
+```
+
+Unknown flags become `@payload` fields automatically. Kebab-case flags are converted to camelCase (e.g., `--dry-run` becomes `@dryRun`).
+
+`@payload` is always available as `{}` even when no flags are passed — scripts can safely reference `@payload` fields without checking whether payload was injected.
+
+Thin wrappers around the mlld CLI for Go, Python, Rust, Ruby, and Elixir. Each keeps a persistent `mlld live --stdio` subprocess for repeated calls via NDJSON RPC.
+
+**Tradeoff:** Feature parity with CLI semantics and low maintenance, but requires Node.js at runtime.
+
+## Core API (all languages)
+
+All SDKs provide:
+
+- `process(script, options)` — execute inline mlld
+- `execute(filepath, payload, options)` — file-based execution with state
+- `analyze(filepath)` — static analysis without execution
+- `process_async` / `execute_async` — async with handle for in-flight control
+- Handle: `wait`, `result`, `cancel`, `update_state(path, value)`
+
+`ExecuteResult.state_writes` merges final-result writes and streamed `state:write` events in all languages.
+
+## Installation
+
+```bash
+# Go
+go get github.com/mlld-lang/mlld/sdk/go
+
+# Python
+pip install mlld-sdk
+
+# Rust
+# Add to Cargo.toml: mlld = "0.1"
+
+# Ruby
+cd sdk/ruby && gem build mlld.gemspec && gem install ./mlld-*.gem
+
+# Elixir
+cd sdk/elixir && mix deps.get
+```
+
+## Quick Start Examples
 
 **Python:**
+
 ```python
 from mlld import Client
+
 client = Client()
-output = client.process('var @x = 1\nshow @x')
+output = client.process('show "Hello World"')
+
+result = client.execute('./agent.mld', {'text': 'hello'},
+    state={'count': 0},
+    dynamic_modules={'@config': {'mode': 'demo'}},
+    timeout=10)
+print(result.output)
+client.close()
+```
+
+**Go:**
+
+```go
+client := mlld.New()
+output, _ := client.Process(`show "Hello World"`, nil)
+
+result, _ := client.Execute("./agent.mld",
+    map[string]any{"text": "hello"},
+    &mlld.ExecuteOptions{
+        State: map[string]any{"count": 0},
+        Timeout: 10 * time.Second,
+    })
+fmt.Println(result.Output)
+client.Close()
 ```
 
 **Rust:**
+
 ```rust
 let client = Client::new();
-let output = client.process("var @x = 1\nshow @x", None)?;
+let output = client.process(r#"show "Hello World""#, None)?;
+
+let result = client.execute("./agent.mld",
+    Some(json!({"text": "hello"})),
+    Some(ExecuteOptions {
+        state: Some(json!({"count": 0})),
+        timeout: Some(Duration::from_secs(10)),
+        ..Default::default()
+    }))?;
+println!("{}", result.output);
 ```
 
-All wrappers provide: `process()`, `execute()`, `analyze()`
-All require: Node.js + mlld CLI at runtime
-</LANGUAGE_WRAPPERS>
+**Elixir:**
+
+```elixir
+{:ok, client} = Mlld.Client.start_link(command: "mlld", timeout: 30_000)
+
+{:ok, result} = Mlld.Client.execute(client, "./agent.mld", %{"text" => "hello"},
+    state: %{"count" => 0},
+    dynamic_modules: %{"@config" => %{"mode" => "demo"}},
+    timeout: 10_000)
+IO.puts(result.output)
+```
+
+## Elixir-Specific Features
+
+The Elixir SDK adds BEAM-native features:
+
+- **Supervision** — `Mlld.Client` is a GenServer with child spec support
+- **Connection pool** — `Mlld.Pool` with checkout/checkin and overflow
+- **Telemetry** — `:telemetry` events with `[:mlld, ...]` prefix
+- **Phoenix bridge** — `Mlld.Phoenix.stream_execute` for channel integration
+
+## Requirements
+
+All SDKs require:
+- `mlld` CLI on PATH (or command override)
+- Node.js runtime
+</SDK>
 
 </MLLD_SDK>

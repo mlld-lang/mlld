@@ -205,12 +205,12 @@ ${chalk.bold('Usage:')} mlld howto [topic] [subtopic] [options]
 
 Get help on mlld language features and syntax.
 
-${chalk.bold('Sections:')} syntax, commands, control-flow, modules, patterns, configuration, security, mistakes
+${chalk.bold('Sections:')} core, flow-control, effects, modules, mcp, output, patterns, cli, config, sdk, security
 
 ${chalk.bold('Examples:')}
   mlld howto                    Show all available topics
-  mlld howto syntax             Show syntax topics index
-  mlld howto syntax --all       Show ALL syntax docs (full content)
+  mlld howto core               Show core topics index
+  mlld howto core --all         Show ALL core docs (full content)
   mlld howto when               Show all when-related help
   mlld howto when-inline        Show just when-inline help
   mlld howto for-parallel       Show just parallel for help

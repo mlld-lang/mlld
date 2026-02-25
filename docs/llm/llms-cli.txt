@@ -1,6 +1,39 @@
 <MLLD_CLI>
 
-<CLI>
+<CLI_FILE>
+Run any mlld file directly with `mlld <file>`. Supports the same payload injection as `mlld run`, plus timeout and metrics flags.
+
+```bash
+mlld script.mld                        # Run a file
+mlld script.mld --topic foo --count 5  # Pass payload fields
+mlld script.mld --timeout 5m           # Limit execution time
+mlld script.mld --metrics              # Show timing on stderr
+```
+
+**Payload injection**: Unknown flags become `@payload` fields. `@payload` is always available as `{}` even with no flags, so scripts can safely import from it:
+
+```mlld
+import { topic } from @payload
+show @topic
+```
+
+```bash
+mlld script.mld --topic hello    # @payload = {"topic":"hello"}
+mlld script.mld                  # @payload = {}
+```
+
+**Options**:
+
+| Flag | Description |
+|------|-------------|
+| `--timeout <duration>` | Overall execution timeout (e.g., 5m, 1h, 30s) |
+| `--metrics` | Show execution timing on stderr |
+| `--<name> <value>` | Payload field (unknown flags become `@payload` fields) |
+
+**Difference from `mlld run`**: Direct invocation takes a file path. `mlld run` discovers scripts from the configured script directory (default: `llm/run/`) and supports AST caching across runs.
+</CLI_FILE>
+
+<CLI_RUN>
 Run mlld scripts from a configured directory with automatic payload injection.
 
 ```bash
@@ -45,115 +78,9 @@ mlld run pipeline --resume @review("src/")  # invalidate by arg prefix
 ```
 
 See `mlld howto checkpoint` for cache inspection and named checkpoints.
+</CLI_RUN>
 
-Run any mlld file directly with `mlld <file>`. Supports the same payload injection as `mlld run`, plus timeout and metrics flags.
-
-```bash
-mlld script.mld                        # Run a file
-mlld script.mld --topic foo --count 5  # Pass payload fields
-mlld script.mld --timeout 5m           # Limit execution time
-mlld script.mld --metrics              # Show timing on stderr
-```
-
-**Payload injection**: Unknown flags become `@payload` fields. `@payload` is always available as `{}` even with no flags, so scripts can safely import from it:
-
-```mlld
-import { topic } from @payload
-show @topic
-```
-
-```bash
-mlld script.mld --topic hello    # @payload = {"topic":"hello"}
-mlld script.mld                  # @payload = {}
-```
-
-**Options**:
-
-| Flag | Description |
-|------|-------------|
-| `--timeout <duration>` | Overall execution timeout (e.g., 5m, 1h, 30s) |
-| `--metrics` | Show execution timing on stderr |
-| `--<name> <value>` | Payload field (unknown flags become `@payload` fields) |
-
-**Difference from `mlld run`**: Direct invocation takes a file path. `mlld run` discovers scripts from the configured script directory (default: `llm/run/`) and supports AST caching across runs.
-
-Checkpointing automatically caches results from `llm`-labeled executables so you can resume interrupted runs without re-calling LLMs.
-
-**Auto-detection**: `exe` and `run` operations with the `llm` label that make external calls (cmd, sh, prose, node) are checkpoint-eligible. No opt-in flag needed.
-
-```mlld
->> This call is automatically checkpointed
-exe llm @review(file, model) = cmd {claude -p "Review @file" --model @model}
-
-var @result = @review("main.ts", "sonnet")
-```
-
-Second run: `@review("main.ts", "sonnet")` returns the cached result instantly.
-
-## CLI Flags
-
-```bash
-mlld run pipeline                        # auto-caches llm calls
-mlld run pipeline --fresh                # clear cache, rebuild from scratch
-mlld run pipeline --no-checkpoint        # disable caching entirely
-mlld run pipeline --resume @review       # invalidate @review's cache entries, re-run
-mlld run pipeline --fork other-script    # seed cache from another script's results
-```
-
-| Flag | Effect |
-|------|--------|
-| `--fresh` / `--new` | Clear this script's cache before running |
-| `--no-checkpoint` | Disable all checkpoint reads and writes |
-| `--resume @fn` | Invalidate all entries for `@fn`, re-execute |
-| `--resume @fn:2` | Invalidate only the 3rd invocation (0-based) |
-| `--resume @fn("src/")` | Invalidate entries where first arg starts with `"src/"` |
-| `--fork <script>` | Read hits from another script's cache (read-only); misses write to current cache |
-
-## Inspecting the Cache
-
-```bash
-mlld checkpoint list <script>       # list cached entries
-mlld checkpoint inspect <script>    # full JSON dump (manifest + records)
-mlld checkpoint clean <script>      # delete cache for a script
-```
-
-Cache lives in `.mlld/checkpoints/<script-name>/`.
-
-## Named Checkpoints
-
-The `checkpoint` directive registers a named marker for resume targeting:
-
-```mlld
-checkpoint "data-loaded"
-
->> Later, resume from this point:
->> mlld run pipeline --resume "data-loaded"
-```
-
-Named checkpoints are discovered from source before execution starts, so `--resume "name"` works even if a prior run failed before that checkpoint was reached.
-
-## Context Variables
-
-| Variable | Description |
-|----------|-------------|
-| `@mx.checkpoint.hit` | `true` when current operation was served from cache |
-| `@mx.checkpoint.key` | Cache key for the current operation |
-
-Use in hooks for observability:
-
-```mlld
-hook @cacheLog after @review = [
-  append `@mx.op.name hit=@mx.checkpoint.hit` to "cache.log"
-]
-```
-
-## How It Works
-
-- Cache key = SHA-256 hash of function name + normalized args
-- On hit: execution short-circuits, guards are skipped, post-hooks still run
-- On miss: result is cached after post-hooks complete
-- Cache read/write errors are isolated (logged as warnings, never abort execution)
-
+<VALIDATE>
 The `mlld validate` command detects common mistakes before runtime. Supports `.mld`, `.mld.md`, `.att`, and `.mtt` files. Pass a directory to validate all files recursively.
 
 ```bash
@@ -311,7 +238,88 @@ mlld validate module.mld --format json
 ```
 
 Returns structured data: `executables`, `exports`, `imports`, `guards`, `needs`, `warnings`, `redefinitions`, `antiPatterns`. For templates, includes `template` with `type`, `variables`, and `discoveredParams`.
+</VALIDATE>
 
+<CHECKPOINT_RESUME>
+Checkpointing automatically caches results from `llm`-labeled executables so you can resume interrupted runs without re-calling LLMs.
+
+**Auto-detection**: `exe` and `run` operations with the `llm` label that make external calls (cmd, sh, prose, node) are checkpoint-eligible. No opt-in flag needed.
+
+```mlld
+>> This call is automatically checkpointed
+exe llm @review(file, model) = cmd {claude -p "Review @file" --model @model}
+
+var @result = @review("main.ts", "sonnet")
+```
+
+Second run: `@review("main.ts", "sonnet")` returns the cached result instantly.
+
+## CLI Flags
+
+```bash
+mlld run pipeline                        # auto-caches llm calls
+mlld run pipeline --fresh                # clear cache, rebuild from scratch
+mlld run pipeline --no-checkpoint        # disable caching entirely
+mlld run pipeline --resume @review       # invalidate @review's cache entries, re-run
+mlld run pipeline --fork other-script    # seed cache from another script's results
+```
+
+| Flag | Effect |
+|------|--------|
+| `--fresh` / `--new` | Clear this script's cache before running |
+| `--no-checkpoint` | Disable all checkpoint reads and writes |
+| `--resume @fn` | Invalidate all entries for `@fn`, re-execute |
+| `--resume @fn:2` | Invalidate only the 3rd invocation (0-based) |
+| `--resume @fn("src/")` | Invalidate entries where first arg starts with `"src/"` |
+| `--fork <script>` | Read hits from another script's cache (read-only); misses write to current cache |
+
+## Inspecting the Cache
+
+```bash
+mlld checkpoint list <script>       # list cached entries
+mlld checkpoint inspect <script>    # full JSON dump (manifest + records)
+mlld checkpoint clean <script>      # delete cache for a script
+```
+
+Cache lives in `.mlld/checkpoints/<script-name>/`.
+
+## Named Checkpoints
+
+The `checkpoint` directive registers a named marker for resume targeting:
+
+```mlld
+checkpoint "data-loaded"
+
+>> Later, resume from this point:
+>> mlld run pipeline --resume "data-loaded"
+```
+
+Named checkpoints are discovered from source before execution starts, so `--resume "name"` works even if a prior run failed before that checkpoint was reached.
+
+## Context Variables
+
+| Variable | Description |
+|----------|-------------|
+| `@mx.checkpoint.hit` | `true` when current operation was served from cache |
+| `@mx.checkpoint.key` | Cache key for the current operation |
+
+Use in hooks for observability:
+
+```mlld
+hook @cacheLog after @review = [
+  append `@mx.op.name hit=@mx.checkpoint.hit` to "cache.log"
+]
+```
+
+## How It Works
+
+- Cache key = SHA-256 hash of function name + normalized args
+- On hit: execution short-circuits, guards are skipped, post-hooks still run
+- On miss: result is cached after post-hooks complete
+- Cache read/write errors are isolated (logged as warnings, never abort execution)
+</CHECKPOINT_RESUME>
+
+<LIVE_STDIO>
 Persistent NDJSON RPC transport for long-running SDK operations.
 
 ```bash
@@ -409,7 +417,9 @@ result = handle.wait()
 - `RUNTIME_ERROR` — Execution failure
 - `ABORTED` — Canceled request
 - `TIMEOUT` — Execution exceeded limit
+</LIVE_STDIO>
 
+<MCP_DEV>
 Start an MCP server that provides language introspection tools for development. Use with Claude Code or other MCP clients to validate syntax, analyze modules, and inspect ASTs during development.
 
 ```bash
@@ -477,7 +487,9 @@ Mode inference: `.mld` files use strict mode, `.mld.md` files use markdown mode.
 **Separate from user tools:**
 
 `mlld mcp-dev` serves built-in language introspection tools. `mlld mcp` serves user-defined functions as MCP tools. The two commands run independent servers with different purposes.
+</MCP_DEV>
 
+<SKILLS>
 Install the mlld Claude Code plugin for orchestrator authoring skills, the `/mlld:scaffold` command, language server integration, and MCP dev tools.
 
 ```bash
@@ -500,6 +512,6 @@ Requires the `claude` CLI to be installed. The command adds the mlld marketplace
 | MCP dev tools | `mlld mcp-dev` for development |
 
 Restart Claude Code after installing to activate the plugin.
-</CLI>
+</SKILLS>
 
 </MLLD_CLI>

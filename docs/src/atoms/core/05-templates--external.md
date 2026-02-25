@@ -23,7 +23,7 @@ show @welcome("Alice", "admin")
 
 The `.att` file uses `@var` for interpolation and supports full mlld syntax inside:
 
-```att
+```mlld
 >> prompts/welcome.att
 Hello @name!
 
@@ -58,7 +58,7 @@ If `.att` syntax conflicts with your content, use `.mtt` files instead. Common c
 exe @codeReview(files, instructions) = template "./prompts/review.mtt"
 ```
 
-```mtt
+```text
 >> prompts/review.mtt - uses {{var}} syntax
 Review these files: {{files}}
 

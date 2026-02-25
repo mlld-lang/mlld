@@ -1,0 +1,5 @@
+name: maintest
+author: qa
+type: app
+about: "Test module with main.mld entry"
+version: 1.0.0

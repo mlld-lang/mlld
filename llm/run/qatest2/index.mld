@@ -1,0 +1,33 @@
+>> QA testing module
+>> Usage: mlld run qatest2 [--parallel <N>] [--filter <pattern>]
+
+import { @logEvent, @mkdirp } from "./lib/context.mld"
+import "@payload" as @p
+
+var @parallelism = @p.parallel ?? "4"
+var @filter = @p.filter ?? ""
+
+exe @workerPrompt(item) = template "./prompts/worker.att"
+
+var @outDir = "runs/qatest2"
+run @mkdirp(@outDir)
+
+show `=== qatest2 ===`
+show `Parallelism: @parallelism`
+show `---`
+
+>> Replace with your work items (or load from a manifest file)
+var @items = ["item-1", "item-2", "item-3"]
+
+>> Parallel fan-out
+var @results = for parallel(@parallelism) @item in @items [
+  show `  Processing: @item`
+  let @prompt = @workerPrompt(@item)
+  let @result = { item: @item, status: "done" }
+  run @logEvent(@outDir, "complete", @result)
+  => @result
+]
+
+show ``
+show `=== Complete: @results.length items ===`
+show `Results in: @outDir`

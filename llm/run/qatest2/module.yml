@@ -1,0 +1,6 @@
+name: qatest2
+author: qa
+type: app
+about: "QA testing module"
+version: 1.0.0
+license: CC0

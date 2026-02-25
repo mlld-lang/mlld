@@ -1,11 +1,11 @@
 >> LLM Docs Build Script
->> Reads shared categories config, builds XML-wrapped modules from atoms,
+>> Reads atom directories, builds XML-wrapped modules from atoms,
 >> then assembles llms-combined.txt
+>> Filesystem is the source of truth — no categories.json dependency.
 >> Usage: mlld run llmstxt
 
 var @pkg = <@root/package.json>
 var @version = @pkg.version
-var @config = <@root/docs/build/categories.json>
 var @atomsRoot = "@root/docs/src/atoms"
 
 exe @strip(content) = js {
@@ -20,51 +20,114 @@ exe @wrapPadded(tag, body) = js {
   return '<' + tag + '>\n\n' + body + '\n\n</' + tag + '>\n';
 }
 
-exe @flatten(sections) = js {
-  return sections.flat().join('\n\n');
+>> Parse an atom filename to extract parent and child from -- convention
+>> Returns { parent, child, isIndex, isStandalone }
+exe @parseFilename(filename) = js {
+  if (filename === '_index.md') return { isIndex: true };
+  const name = filename.replace(/^\d+-/, '').replace(/\.md$/, '');
+  const dashIdx = name.indexOf('--');
+  if (dashIdx !== -1) {
+    return { parent: name.substring(0, dashIdx), child: name.substring(dashIdx + 2) };
+  }
+  return { isStandalone: true, name: name };
 }
 
->> Build each category
-for @catName, @catConfig in @config [
-  let @tag = @catConfig.tag
-  let @sections = for @group in @catConfig.groups [
-    >> Use source directory if specified, otherwise category name
-    let @srcDir = @group.source ? @group.source : @catName
-    let @atomContents = for @atomName in @group.atoms [
-      let @raw = <@atomsRoot/@srcDir/@atomName\.md>
-      => @strip(@raw)
-    ]
-    if @group.parent [
-      let @parentTag = @group.parent.replaceAll("-", "_").toUpperCase()
-      let @body = @atomContents.join("\n\n")
-      => @wrap(@parentTag, @body)
-    ]
-    >> Standalone: each atom gets its own tag
-    => for @i, @atomContent in @atomContents [
-      let @atomTag = @group.atoms[@i].replaceAll("-", "_").toUpperCase()
-      => @wrap(@atomTag, @atomContent)
-    ]
+>> Sort atom files: _index.md first, NN-* numerically, unnumbered alphabetically
+exe @sortFiles(files) = js {
+  return files.slice().sort((a, b) => {
+    if (a === '_index.md') return -1;
+    if (b === '_index.md') return 1;
+    const numA = a.match(/^(\d+)-/);
+    const numB = b.match(/^(\d+)-/);
+    if (numA && numB) return parseInt(numA[1]) - parseInt(numB[1]);
+    if (numA) return -1;
+    if (numB) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+>> Group sorted atoms into parent groups and standalones, return XML content
+exe @buildSection(atomContents) = js {
+  // atomContents: array of { filename, body, parsed }
+  const groups = [];
+  let currentParent = null;
+  let currentChildren = [];
+
+  function flush() {
+    if (currentParent && currentChildren.length > 0) {
+      groups.push({ type: 'parent', parent: currentParent, children: currentChildren });
+    }
+    currentParent = null;
+    currentChildren = [];
+  }
+
+  for (const item of atomContents) {
+    if (item.parsed.isIndex) continue;
+    if (item.parsed.parent) {
+      if (item.parsed.parent !== currentParent) {
+        flush();
+        currentParent = item.parsed.parent;
+      }
+      currentChildren.push(item);
+    } else {
+      flush();
+      groups.push({ type: 'standalone', item: item });
+    }
+  }
+  flush();
+
+  // Build XML tags
+  const sections = [];
+  for (const group of groups) {
+    if (group.type === 'standalone') {
+      const tag = group.item.parsed.name.replaceAll('-', '_').toUpperCase();
+      sections.push('<' + tag + '>\n' + group.item.body + '\n</' + tag + '>');
+    } else {
+      const tag = group.parent.replaceAll('-', '_').toUpperCase();
+      const bodies = group.children.map(c => c.body).join('\n\n');
+      sections.push('<' + tag + '>\n' + bodies + '\n</' + tag + '>');
+    }
+  }
+  return sections.join('\n\n');
+}
+
+>> Section directories in the order we want them in the combined doc
+var @sections = ["cli", "config", "core", "effects", "flow-control", "mcp", "modules", "output", "patterns", "sdk", "security"]
+
+>> Build each section
+for @section in @sections [
+  let @tag = `MLLD_@section.replaceAll("-", "_").toUpperCase()`
+  let @files = <@atomsRoot/@section/*.md>
+  let @filenames = for @f in @files => @f.mx.filename
+  let @sorted = @sortFiles(@filenames)
+
+  let @atomContents = for @filename in @sorted [
+    let @file = <@atomsRoot/@section/@filename>
+    let @parsed = @parseFilename(@filename)
+    => { filename: @filename, body: @strip(@file), parsed: @parsed }
   ]
 
-  let @flat = @flatten(@sections)
-  let @module = @wrapPadded(@tag, @flat)
+  let @content = @buildSection(@atomContents)
+  let @module = @wrapPadded(@tag, @content)
 
-  output @module to `@root/docs/llm/llms-@catName\.txt`
-  log `  Built llms-@catName\.txt`
+  output @module to `@root/docs/llm/llms-@section\.txt`
+  log `  Built llms-@section\.txt`
 ]
 
 >> Assemble combined document from all modules (including manually maintained ones)
 var @moduleOrder = [
   "llms-overview.txt",
   "llms-core-rules.txt",
-  "llms-language-reference.txt",
+  "llms-core.txt",
   "llms-flow-control.txt",
+  "llms-effects.txt",
   "llms-modules.txt",
+  "llms-mcp.txt",
+  "llms-output.txt",
   "llms-patterns.txt",
   "llms-cli.txt",
-  "llms-configuration.txt",
+  "llms-config.txt",
   "llms-sdk.txt",
-  "llms-mistakes.txt",
   "llms-security.txt",
   "llms-reference.txt",
   "llms-cookbook.txt"

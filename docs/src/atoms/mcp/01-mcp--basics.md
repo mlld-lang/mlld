@@ -1,5 +1,5 @@
 ---
-id: mcp
+id: mcp-basics
 title: MCP Integration
 brief: Serve mlld functions as MCP tools and import external MCP servers
 category: commands

@@ -6,26 +6,24 @@ const ATOMS_DIR = path.join(__dirname, '../../docs/src/atoms');
 const EXPLAINERS_DIR = path.join(__dirname, '../../docs/src/explainers');
 const OUTPUT_DIR = path.join(__dirname, 'docs');
 
-// Shared atom ordering config — single source of truth for both LLM and website docs.
-const sharedConfig = require('../../docs/build/categories.json');
-
-// Website-specific metadata layered on top of the shared config.
-// The shared config defines page structure and atom ordering;
-// this adds navOrder, titleOverride, and sources for the website build.
-// Categories not listed here (mistakes, patterns) are LLM-only.
-const WEBSITE_META = {
-  'language-reference': { navOrder: 10, titleOverride: 'Language Reference', sources: ['syntax', 'commands'] },
-  'flow-control':       { navOrder: 20, titleOverride: 'Flow Control' },
-  'modules':            { navOrder: 30 },
-  'cli':                { navOrder: 40, titleOverride: 'CLI', sources: ['configuration'] },
-  'configuration':      { navOrder: 50 },
-  'security':           { navOrder: 60 }
+// Website-specific overrides per section directory.
+// navOrder controls sidebar ordering. titleOverride replaces the _index.md title.
+// Sections not listed here get navOrder 1000 and use their _index.md title.
+const SECTION_META = {
+  'cli':            { navOrder: 10, titleOverride: 'CLI' },
+  'config':         { navOrder: 20, titleOverride: 'Configuration' },
+  'core':           { navOrder: 30 },
+  'effects':        { navOrder: 40 },
+  'flow-control':   { navOrder: 50, titleOverride: 'Flow Control' },
+  'mcp':            { navOrder: 60, titleOverride: 'MCP' },
+  'modules':        { navOrder: 70 },
+  'output':         { navOrder: 80 },
+  'patterns':       { navOrder: 90 },
+  'sdk':            { navOrder: 100, titleOverride: 'SDK' },
+  'security':       { navOrder: 110 },
 };
 
-const CATEGORIES = {};
-for (const [pageId, meta] of Object.entries(WEBSITE_META)) {
-  CATEGORIES[pageId] = { ...sharedConfig[pageId], ...meta };
-}
+// --- Helpers ---
 
 function parseFrontmatter(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
@@ -52,79 +50,163 @@ function shiftHeadings(content, levels) {
   });
 }
 
-function readAtom(categoryDir, filename) {
-  const filePath = path.join(categoryDir, filename + '.md');
-  if (!fs.existsSync(filePath)) {
-    console.warn(`  WARNING: Atom file not found: ${filePath}`);
-    return null;
-  }
-  const raw = fs.readFileSync(filePath, 'utf8');
-  const fm = parseFrontmatter(raw);
-  const body = stripTldr(stripFrontmatter(raw)).trim();
-  return { fm, body, filename };
+const ACRONYMS = { mcp: 'MCP', sdk: 'SDK', cli: 'CLI' };
+
+// mlld keywords that should stay lowercase in headings
+const LOWERCASE_KEYWORDS = new Set([
+  'exe', 'run', 'var', 'let', 'cmd', 'sh', 'js', 'py', 'node',
+  'when', 'for', 'if', 'while', 'loop', 'foreach', 'bail',
+  'import', 'export', 'show', 'log', 'append',
+  'guard', 'policy', 'hook', 'env',
+]);
+
+function titleCase(str) {
+  return str.split('-').map(w => ACRONYMS[w] || w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
+// Display name for parent group headings.
+// Keeps mlld keywords lowercase, titlecases concept names.
+function parentDisplayName(parentStr) {
+  if (LOWERCASE_KEYWORDS.has(parentStr)) return parentStr;
+  return titleCase(parentStr);
+}
 
-function buildCategoryPage(categoryId, config) {
-  // Determine which atom directories to use
-  const atomDirs = (config.sources || [categoryId]).map(s => path.join(ATOMS_DIR, s));
-  const primaryDir = atomDirs[0];
+// --- File sorting ---
+// _index.md first, then NN-* numerically, then unnumbered alphabetically
 
-  if (!fs.existsSync(primaryDir)) {
-    console.error(`Category directory not found: ${primaryDir}`);
+function sortAtomFiles(files) {
+  return files.slice().sort((a, b) => {
+    if (a === '_index.md') return -1;
+    if (b === '_index.md') return 1;
+
+    const numA = a.match(/^(\d+)-/);
+    const numB = b.match(/^(\d+)-/);
+
+    // Both numbered → sort numerically
+    if (numA && numB) return parseInt(numA[1]) - parseInt(numB[1]);
+    // Numbered before unnumbered
+    if (numA) return -1;
+    if (numB) return 1;
+    // Both unnumbered → alphabetical
+    return a.localeCompare(b);
+  });
+}
+
+// --- Filename parsing ---
+// "07-file-loading--basics.md" → { parent: "file-loading", child: "basics", isBasics: true }
+// "27-comments.md" → { parent: null, child: null, name: "comments" }
+// "_index.md" → { isIndex: true }
+
+function parseAtomFilename(filename) {
+  if (filename === '_index.md') return { isIndex: true };
+
+  // Strip numeric prefix and .md extension
+  const name = filename.replace(/^\d+-/, '').replace(/\.md$/, '');
+
+  const dashIdx = name.indexOf('--');
+  if (dashIdx !== -1) {
+    const parent = name.substring(0, dashIdx);
+    const child = name.substring(dashIdx + 2);
+    return { parent, child, isBasics: child === 'basics' };
+  }
+
+  return { name };
+}
+
+// --- Section builder ---
+
+function buildSectionPage(sectionDir, sectionId) {
+  const dirPath = path.join(ATOMS_DIR, sectionDir);
+  if (!fs.existsSync(dirPath)) {
+    console.error(`Section directory not found: ${dirPath}`);
     return null;
   }
 
-  // Read _index.md for title and intro (from primary source)
-  let title = config.titleOverride || categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
+  const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.md'));
+  const sorted = sortAtomFiles(files);
+
+  // Read _index.md for section title and intro
+  const meta = SECTION_META[sectionDir] || {};
+  let title = meta.titleOverride || null;
   let intro = '';
-  if (!config.titleOverride) {
-    const indexPath = path.join(primaryDir, '_index.md');
-    if (fs.existsSync(indexPath)) {
-      const indexContent = fs.readFileSync(indexPath, 'utf8');
-      const indexFm = parseFrontmatter(indexContent);
-      if (indexFm.title) title = indexFm.title;
-      intro = stripFrontmatter(indexContent).trim();
-    }
+  let navOrder = meta.navOrder || 1000;
+
+  const indexPath = path.join(dirPath, '_index.md');
+  if (fs.existsSync(indexPath)) {
+    const indexContent = fs.readFileSync(indexPath, 'utf8');
+    const indexFm = parseFrontmatter(indexContent);
+    if (!title && indexFm.title) title = indexFm.title;
+    // Check for navOrder in _index.md frontmatter (overrides SECTION_META)
+    if (indexFm.navOrder != null) navOrder = indexFm.navOrder;
+    intro = shiftHeadings(stripFrontmatter(indexContent).trim(), 1);
   }
 
+  if (!title) title = titleCase(sectionDir);
+
+  // Group atoms by parent
+  // We walk files in order, building groups as we encounter them.
+  // Consecutive files with the same parent form a group.
+  // Standalone files (no --) are their own group.
+  const groups = []; // { type: 'parent', parent, children: [{fm, body, child, isBasics}] } or { type: 'standalone', fm, body }
+  let currentParent = null;
+  let currentChildren = [];
+
+  function flushParent() {
+    if (currentParent && currentChildren.length > 0) {
+      groups.push({ type: 'parent', parent: currentParent, children: currentChildren });
+    }
+    currentParent = null;
+    currentChildren = [];
+  }
+
+  for (const file of sorted) {
+    const parsed = parseAtomFilename(file);
+    if (parsed.isIndex) continue; // already handled
+
+    const filePath = path.join(dirPath, file);
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const fm = parseFrontmatter(raw);
+    const body = stripTldr(stripFrontmatter(raw)).trim();
+
+    if (parsed.parent) {
+      // Parent-child atom
+      if (parsed.parent !== currentParent) {
+        flushParent();
+        currentParent = parsed.parent;
+      }
+      currentChildren.push({ fm, body, child: parsed.child, isBasics: parsed.isBasics });
+    } else {
+      // Standalone atom
+      flushParent();
+      groups.push({ type: 'standalone', fm, body, name: parsed.name });
+    }
+  }
+  flushParent();
+
+  // Build page sections
   const sections = [];
 
-  for (const group of config.groups) {
-    const categoryDir = group.source ? path.join(ATOMS_DIR, group.source) : primaryDir;
-
-    if (group.standalone) {
-      for (const atomName of group.atoms) {
-        const atom = readAtom(categoryDir, atomName);
-        if (!atom) continue;
-        const atomTitle = atom.fm.title || atomName;
-        sections.push(`## ${atomTitle}\n\n${shiftHeadings(atom.body, 1)}`);
-      }
+  for (const group of groups) {
+    if (group.type === 'standalone') {
+      const atomTitle = group.fm.title || titleCase(group.name);
+      const experimental = group.fm.experimental ? ' {.experimental}' : '';
+      sections.push(`## ${atomTitle}${experimental}\n\n${shiftHeadings(group.body, 1)}`);
     } else {
-      const parentName = group.parent;
-      const parentTitle = parentName.charAt(0).toUpperCase() + parentName.slice(1).replace(/-/g, ' ');
+      const parentTitle = parentDisplayName(group.parent);
+      let groupContent = `## ${parentTitle}`;
 
-      let parentIntro = '';
-      const parentAtomPath = path.join(categoryDir, parentName + '.md');
-      if (fs.existsSync(parentAtomPath) && !group.atoms.includes(parentName)) {
-        const parentAtom = readAtom(categoryDir, parentName);
-        if (parentAtom) {
-          parentIntro = shiftHeadings(parentAtom.body, 1);
+      const childSections = [];
+      for (const child of group.children) {
+        const experimental = child.fm.experimental ? ' {.experimental}' : '';
+        if (child.isBasics) {
+          // --basics: content flows directly under ## Parent, no ### heading
+          childSections.push(shiftHeadings(child.body, 1));
+        } else {
+          const childTitle = child.fm.title || titleCase(child.child);
+          childSections.push(`### ${childTitle}${experimental}\n\n${shiftHeadings(child.body, 2)}`);
         }
       }
 
-      const childSections = [];
-      for (const atomName of group.atoms) {
-        const atom = readAtom(categoryDir, atomName);
-        if (!atom) continue;
-        const atomTitle = atom.fm.title || atomName;
-        childSections.push(`### ${atomTitle}\n\n${shiftHeadings(atom.body, 2)}`);
-      }
-
-      let groupContent = `## ${parentTitle}`;
-      if (parentIntro) {
-        groupContent += `\n\n${parentIntro}`;
-      }
       if (childSections.length > 0) {
         groupContent += '\n\n' + childSections.join('\n\n');
       }
@@ -132,12 +214,13 @@ function buildCategoryPage(categoryId, config) {
     }
   }
 
+  // Assemble page
   const outputFm = [
     '---',
     'layout: docs.njk',
     `title: "${title}"`,
     'type: category',
-    `order: ${config.navOrder}`,
+    `order: ${navOrder}`,
     '---'
   ].join('\n');
 
@@ -147,8 +230,10 @@ function buildCategoryPage(categoryId, config) {
   }
   pageContent += sections.join('\n\n') + '\n';
 
-  return { filename: categoryId + '.md', content: pageContent };
+  return { filename: sectionDir + '.md', content: pageContent };
 }
+
+// --- Explainers ---
 
 function processExplainers() {
   if (!fs.existsSync(EXPLAINERS_DIR)) {
@@ -165,6 +250,8 @@ function processExplainers() {
   }
 }
 
+// --- Main ---
+
 function main() {
   if (fs.existsSync(OUTPUT_DIR)) {
     fs.rmSync(OUTPUT_DIR, { recursive: true });
@@ -174,10 +261,17 @@ function main() {
   console.log('Processing explainers...');
   processExplainers();
 
-  console.log('\nBuilding category pages...');
-  for (const [categoryId, config] of Object.entries(CATEGORIES)) {
-    console.log(`\nCategory: ${categoryId}`);
-    const result = buildCategoryPage(categoryId, config);
+  // Discover section directories from filesystem
+  const entries = fs.readdirSync(ATOMS_DIR, { withFileTypes: true });
+  const sectionDirs = entries
+    .filter(e => e.isDirectory())
+    .map(e => e.name)
+    .sort(); // alphabetical: cli, config, core, effects, flow-control, ...
+
+  console.log('\nBuilding section pages...');
+  for (const sectionDir of sectionDirs) {
+    console.log(`\nSection: ${sectionDir}`);
+    const result = buildSectionPage(sectionDir, sectionDir);
     if (result) {
       const outputPath = path.join(OUTPUT_DIR, result.filename);
       fs.writeFileSync(outputPath, result.content);

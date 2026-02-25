@@ -26,6 +26,20 @@ Use `=>` inside `exe` blocks and at script top level.
 </IF>
 
 <WHEN>
+**When block** (first match wins):
+
+```mlld
+when [
+  @score > 90 => show "Excellent!"
+  @hasBonus => show "Bonus earned!"
+  none => show "No matches"        >> runs only if nothing matched
+]
+```
+
+Use multiple `if` blocks when you need several actions to run.
+
+Inline form uses `when @cond => action`.
+
 Two forms: value matching (`when @expr [patterns]`) and condition matching (`when [conditions]`).
 
 **Value matching** — match a value against literal patterns:
@@ -60,20 +74,6 @@ when @cond => show "Match"
 ```
 
 Returns the result when the condition is truthy. Use block form `when [@cond => action; * => default]` when you need multiple branches or a fallback.
-
-**When block** (first match wins):
-
-```mlld
-when [
-  @score > 90 => show "Excellent!"
-  @hasBonus => show "Bonus earned!"
-  none => show "No matches"        >> runs only if nothing matched
-]
-```
-
-Use multiple `if` blocks when you need several actions to run.
-
-Inline form uses `when @cond => action`.
 
 **Value-returning when** (in exe):
 
@@ -351,32 +351,6 @@ for parallel(2) @item in @tasks => show `Slot @mx.for.index, item @item.mx.index
 Parallel iterations complete out of order, so output lines are emitted in completion order. In that mode, treat `@mx.for.index` as execution-context metadata, not a stable ordering key for reconstructing source position. Use `@item.mx.index` when you need the original dispatch position in both sequential and parallel loops.
 </FOR>
 
-<FOREACH>
-`foreach` applies a function to each element, returning transformed array.
-
-```mlld
-var @names = ["alice", "bob", "charlie"]
-exe @greet(name) = `Hi @name!`
-
-var @greetings = foreach @greet(@names)
->> ["Hi alice!", "Hi bob!", "Hi charlie!"]
-```
-
-**In exe:**
-
-```mlld
-exe @wrapAll(items) = foreach @wrap(@items)
-show @wrapAll(["a", "b"])  >> ["[a]", "[b]"]
-```
-
-**With options:**
-
-```mlld
-show foreach @greet(@names) with { separator: " | " }
->> "Hi alice! | Hi bob! | Hi charlie!"
-```
-</FOREACH>
-
 <LOOP>
 Block-based iteration with explicit `done` and `continue`.
 
@@ -421,36 +395,6 @@ loop(endless, 10ms) until @input >= 3 [
 ]
 ```
 </LOOP>
-
-<WHILE>
-Bounded iteration with `while`.
-
-```mlld
-exe @countdown(n) = when [
-  @n <= 0 => done "finished"
-  * => continue (@n - 1)
-]
-
-var @result = 5 | while(10) @countdown
-```
-
-**Control keywords:**
-- `done @value` - Terminate, return value
-- `done` - Terminate, return current state
-- `continue @value` - Next iteration with new state
-- `continue` - Next iteration with current state
-
-**While context** (`@mx.while`):
-- `iteration` - Current iteration (1-based)
-- `limit` - Configured cap
-- `active` - true when inside while
-
-**With pacing:**
-
-```mlld
-var @result = @initial | while(100, 1s) @processor  >> 1s between iterations
-```
-</WHILE>
 
 <BAIL>
 Terminates the entire script immediately with exit code 1. Works from any context including nested blocks and imported modules.
@@ -518,113 +462,60 @@ show @data  >> never reached
 - Message accepts strings, variables, and expressions
 </BAIL>
 
-<SCRIPT_RETURN>
-`=> @value` terminates script execution immediately. When `=>` appears inside a top-level `if` or `when` block, it terminates the script, not just the block.
-
-**Basic script return:**
+<WHILE>
+Bounded iteration with `while`.
 
 ```mlld
->> Strict mode
-=> "final result"
-show "unreachable"
-```
-
-**Script return from conditionals:**
-
-```mlld
-if @condition [
-  => "early exit"
+exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
 ]
-=> "fallback"
+
+var @result = 5 | while(10) @countdown
 ```
+
+**Control keywords:**
+- `done @value` - Terminate, return value
+- `done` - Terminate, return current state
+- `continue @value` - Next iteration with new state
+- `continue` - Next iteration with current state
+
+**While context** (`@mx.while`):
+- `iteration` - Current iteration (1-based)
+- `limit` - Configured cap
+- `active` - true when inside while
+
+**With pacing:**
 
 ```mlld
-var @mode = "fast"
-when @mode == "fast" => [
-  if @ready [
-    => "immediate"
-  ]
-]
-=> "deferred"
+var @result = @initial | while(100, 1s) @processor  >> 1s between iterations
 ```
+</WHILE>
 
-**Module default export:**
-
-Imported `.mld` modules expose script return values through `default`:
+<FOREACH>
+`foreach` applies a function to each element, returning transformed array.
 
 ```mlld
->> module.mld
-var @status = "active"
-=> { code: 200, status: @status }
-var @unreachable = "never runs"
+var @names = ["alice", "bob", "charlie"]
+exe @greet(name) = `Hi @name!`
+
+var @greetings = foreach @greet(@names)
+>> ["Hi alice!", "Hi bob!", "Hi charlie!"]
 ```
+
+**In exe:**
 
 ```mlld
->> main.mld
-import { default as @result, status as @s } from "./module.mld"
-show @result.code     >> 200
-show @s               >> "active"
+exe @wrapAll(items) = foreach @wrap(@items)
+show @wrapAll(["a", "b"])  >> ["[a]", "[b]"]
 ```
 
-Scripts without `=>` do not emit implicit final return output. Use `=>` explicitly when module consumers need a default export value.
-
-**In exe blocks:**
-
-`=> @value` returns from the function body. See exe-blocks for function return syntax.
+**With options:**
 
 ```mlld
-exe @validate(input) = [
-  if !@input [
-    => { error: "missing" }
-  ]
-  => { ok: @input }
-]
+show foreach @greet(@names) with { separator: " | " }
+>> "Hi alice! | Hi bob! | Hi charlie!"
 ```
-</SCRIPT_RETURN>
-
-<NO_EARLY_EXIT>
-mlld has no `break` or `continue` for loops. Use conditional logic instead.
-
-**For loops iterate all items:**
-
-```mlld
->> Filter with conditional accumulation
-exe @filter(items) = [
-  let @results = []
-  for @item in @items [
-    when @item.valid => [
-      let @results += [@item]
-    ]
-  ]
-  => @results
-]
-```
-
-**Exe blocks support return via `=>`:**
-
-```mlld
-exe @validate(input) = [
-  if !@input [
-    => { error: "missing" }
-  ]
-  => { ok: @input }
-]
-```
-
-**Scripts support top-level return:**
-
-Script-level `=> @value` terminates execution immediately. See script-return for details.
-
-```mlld
-if @found [
-  => "early exit"
-]
-=> "fallback"
-```
-
-**Design principle:**
-
-Loops model data transformation. Use `when` branches and accumulation (`let @var += value`) for conditional processing. For early termination of scripts or functions, use `=> @value`.
-</NO_EARLY_EXIT>
+</FOREACH>
 
 </MLLD_FLOW_CONTROL>

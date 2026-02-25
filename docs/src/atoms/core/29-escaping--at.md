@@ -20,7 +20,7 @@ var @email = `user@@example.com`  >> "user@example.com"
 
 In `.att` template files:
 
-```att
+```mlld
 Contact: user@@example.com
 Follow @@username on Twitter
 ```

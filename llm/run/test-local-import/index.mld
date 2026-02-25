@@ -1,0 +1,8 @@
+---
+about: Test import local from llm/run directory
+---
+
+import local { @formatDate, @moduleType } from @adamavenir/qa-local-utils
+
+show `Module type: @moduleType`
+show @formatDate("2026-02-24")

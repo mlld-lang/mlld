@@ -1,0 +1,83 @@
+>> GitHub Issues API tools
+>> Requires: gh CLI (https://cli.github.com)
+>> Auth: GITHUB_TOKEN env var > gh auth token (from `gh auth login`)
+
+exe net:r @listIssues(owner: string, repo: string) = node {
+  const { execFileSync } = require('child_process');
+  return execFileSync('gh', ['api', `repos/${owner}/${repo}/issues`], { encoding: 'utf8' }).trim();
+} with { description: "List open issues for a GitHub repository" }
+
+exe net:r @getIssue(owner: string, repo: string, number: number) = node {
+  const { execFileSync } = require('child_process');
+  return execFileSync('gh', ['api', `repos/${owner}/${repo}/issues/${number}`], { encoding: 'utf8' }).trim();
+} with { description: "Get a single GitHub issue by number" }
+
+exe net:rw @createIssue(owner: string, repo: string, title: string, body: string) = node {
+  const { execFileSync } = require('child_process');
+  return execFileSync('gh', ['api', `repos/${owner}/${repo}/issues`, '--input', '-'], {
+    input: JSON.stringify({ title, body: body || '' }),
+    encoding: 'utf8'
+  }).trim();
+} with { description: "Create a new GitHub issue" }
+
+exe net:rw @addComment(owner: string, repo: string, number: number, comment: string) = node {
+  const { execFileSync } = require('child_process');
+  return execFileSync('gh', ['api', `repos/${owner}/${repo}/issues/${number}/comments`, '--input', '-'], {
+    input: JSON.stringify({ body: comment }),
+    encoding: 'utf8'
+  }).trim();
+} with { description: "Add a comment to a GitHub issue" }
+
+exe net:rw @closeIssue(owner: string, repo: string, number: number) = node {
+  const { execFileSync } = require('child_process');
+  return execFileSync('gh', ['api', `repos/${owner}/${repo}/issues/${number}`, '-X', 'PATCH', '--input', '-'], {
+    input: JSON.stringify({ state: 'closed' }),
+    encoding: 'utf8'
+  }).trim();
+} with { description: "Close a GitHub issue" }
+
+exe net:r @searchIssues(query: string) = node {
+  const { execFileSync } = require('child_process');
+  return execFileSync('gh', ['api', '-X', 'GET', 'search/issues', '-f', `q=${query}`], { encoding: 'utf8' }).trim();
+} with { description: "Search GitHub issues across repositories" }
+
+var tools @tools = {
+  list_issues: {
+    mlld: @listIssues,
+    expose: ["owner", "repo"],
+    labels: ["net:r"],
+    description: "List open issues for a GitHub repository"
+  },
+  get_issue: {
+    mlld: @getIssue,
+    expose: ["owner", "repo", "number"],
+    labels: ["net:r"],
+    description: "Get a single GitHub issue by number"
+  },
+  create_issue: {
+    mlld: @createIssue,
+    expose: ["owner", "repo", "title", "body"],
+    labels: ["net:rw"],
+    description: "Create a new GitHub issue"
+  },
+  add_comment: {
+    mlld: @addComment,
+    expose: ["owner", "repo", "number", "comment"],
+    labels: ["net:rw"],
+    description: "Add a comment to a GitHub issue"
+  },
+  close_issue: {
+    mlld: @closeIssue,
+    expose: ["owner", "repo", "number"],
+    labels: ["net:rw"],
+    description: "Close a GitHub issue"
+  },
+  search_issues: {
+    mlld: @searchIssues,
+    expose: ["query"],
+    labels: ["net:r"],
+    description: "Search GitHub issues across repositories"
+  }
+}
+
+export { @listIssues, @getIssue, @createIssue, @addComment, @closeIssue, @searchIssues, @tools }

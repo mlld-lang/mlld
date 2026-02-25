@@ -1,0 +1,5 @@
+>> Test app
+>> Entry point for testapp
+
+var @message = "Hello from testapp!"
+show @message

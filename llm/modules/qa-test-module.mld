@@ -1,0 +1,11 @@
+---
+name: qa-test-module
+author: qa-tester
+version: 1.0.0
+about: Test module for registry QA
+---
+
+exe @greet(name) = js { return "Hello, " + name + "!"; }
+exe @double(n) = js { return n * 2; }
+
+export { @greet, @double }
