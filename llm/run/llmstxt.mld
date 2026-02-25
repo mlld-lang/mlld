@@ -135,12 +135,12 @@ var @moduleOrder = [
 
 var @contents = for @module in @moduleOrder => <@root/docs/llm/@module>
 
-exe @buildDoc(version, timestamp, body) = js {
-  return '<MLLD_COMPLETE_GUIDE version="' + version + '">\n\nThis is the complete mlld reference guide, combining all documentation modules.\nFor modular access, see individual files in docs/llm/.\n\nGenerated: ' + timestamp + '\n\n' + body + '\n\n</MLLD_COMPLETE_GUIDE>\n';
+exe @buildDoc(version, body) = js {
+  return '<MLLD_COMPLETE_GUIDE version="' + version + '">\n\nThis is the complete mlld reference guide, combining all documentation modules.\nFor modular access, see individual files in docs/llm/.\n\n' + body + '\n\n</MLLD_COMPLETE_GUIDE>\n';
 }
 
 var @body = @contents.join("\n\n")
-var @combined = @buildDoc(@version, @now, @body)
+var @combined = @buildDoc(@version, @body)
 
 output @combined to "@root/llms-combined.txt"
 show `Built llms-combined.txt (version @version)`
