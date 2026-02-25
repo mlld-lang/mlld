@@ -31,7 +31,7 @@ mlld input.mld
 - `--debug --json` - Output full debug trace as JSON to stdout
 - `--structured` - Output JSON with effects, exports, and security metadata
 - `--no-stream` - Disable streaming output
-- `--env <file>` - Load environment variables from specified file
+- `--mlld-env <file|KEY=VALUE,...>` - Load environment variables from a file or inline overrides
 - `--allow-absolute` - Permit file access outside project root
 
 **Examples:**
@@ -49,7 +49,7 @@ mlld document.mld --stdout
 mlld document.mld --watch
 
 # Load environment variables
-mlld document.mld --env .env.local
+mlld document.mld --mlld-env .env.local
 
 # Allow absolute paths outside project
 mlld script.mld --allow-absolute
@@ -309,7 +309,8 @@ Scripts are loaded from the directory configured in `mlld-config.json` (default:
 - `--resume` implies checkpoint behavior. Without a target, it re-runs with cache reuse only.
 - `--fork` keeps source cache read-only; changed model/prompt arguments miss locally and are written to the current script cache.
 - Payload injection: Unknown flags become `@payload` fields (`mlld run my-script --topic foo`). Import `@payload` in your script to access them.
-  Known checkpoint flags (`--checkpoint`, `--fresh`, `--resume`, `--fork`) are excluded from `@payload`.
+  Known checkpoint flags (`--checkpoint`, `--fresh`, `--resume`, `--fork`) and `--mlld-env` are excluded from `@payload`.
+  `--env` is available for payload data (for example, `@payload.env`).
 
 **Example script with payload** (`llm/run/build.mld`):
 ```mlld
@@ -368,6 +369,8 @@ mlld test --env .env.staging
 
 **Options:**
 - `--env <file>` - Load environment variables from specific file
+
+`mlld test --env` is command-specific. For other commands, use `--mlld-env`.
 
 **Environment Loading:**
 - If `--env` is specified: loads only that file
@@ -503,7 +506,7 @@ The ephemeral version of mlld for CI/CD and serverless environments. Uses in-mem
 mlldx script.mld
 
 # Load environment variables
-mlldx script.mld --env prod.env
+mlldx script.mld --mlld-env prod.env
 
 # Run without installation
 npx mlldx@latest ci-task.mld
@@ -512,10 +515,10 @@ npx mlldx@latest ci-task.mld
 **Examples:**
 ```bash
 # GitHub Actions
-mlldx github-workflow.mld --env .env.ci
+mlldx github-workflow.mld --mlld-env .env.ci
 
 # Serverless functions
-mlldx handler.mld --env .env.production
+mlldx handler.mld --mlld-env .env.production
 
 # Docker containers
 docker run -it node:18 npx mlldx@latest /scripts/task.mld

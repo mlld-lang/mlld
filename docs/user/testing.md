@@ -199,6 +199,8 @@ mlld test --env .env.test
 mlld test
 ```
 
+`mlld test --env` is command-specific. The global CLI env-loading flag is `--mlld-env`.
+
 Test files can access allowed environment variables:
 
 ```mlld
