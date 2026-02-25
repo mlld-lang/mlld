@@ -99,7 +99,7 @@ export interface CLIOptions {
   // Ephemeral mode for CI/serverless
   ephemeral?: boolean;
   // Environment file path
-  env?: string;
+  env?: string | string[];
   // Allow absolute paths outside project root
   allowAbsolute?: boolean;
   // Serve command options
@@ -374,8 +374,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     if (stdout) {
       process.exit(1);
     }
-    
-    throw error;
+    return;
   }
 }
 

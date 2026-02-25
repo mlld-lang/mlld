@@ -174,7 +174,7 @@ describe('Fuzzy Local File Imports', () => {
       });
 
       await expect(promise).rejects.toThrow(/File not found: \.\/my-utils/);
-      await expect(promise).rejects.toThrow(/Did you mean:[\s\S]*@base\/my-utils/);
+      await expect(promise).rejects.toThrow(/Did you mean:[\s\S]*@root\/my-utils/);
       await expect(promise).rejects.toThrow(/Paths resolve relative to the current mlld file directory/);
     });
 

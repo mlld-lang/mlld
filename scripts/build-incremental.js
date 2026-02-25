@@ -41,6 +41,7 @@ const needsRebuild = {
   grammar: false,
   fixtures: false,
   typescript: false,
+  docs: false,
   python: false,
   wasm: false,
   mlldx: false
@@ -353,6 +354,24 @@ function checkFixtures(lastBuildTime, dirtyFiles) {
 }
 
 /**
+ * Check if LLM docs need rebuilding
+ */
+function checkDocs(lastBuildTime, dirtyFiles) {
+  const docsPattern = (f) =>
+    (f.startsWith('docs/src/atoms/') && f.endsWith('.md')) ||
+    (f.startsWith('docs/build/') && (f.endsWith('.mld') || f.endsWith('.json'))) ||
+    f === 'llm/run/llmstxt.mld';
+
+  const changedFile = hasFilesNewerThan(docsPattern, lastBuildTime, dirtyFiles);
+  if (changedFile) {
+    console.log(`${cyan}  Docs:${reset} ${changedFile} changed`);
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Execute a build step
  */
 function runBuildStep(name, command) {
@@ -404,6 +423,8 @@ async function main() {
     needsRebuild.typescript = checkTypeScript(lastBuildTime, dirtyFiles);
     needsRebuild.fixtures = checkFixtures(lastBuildTime, dirtyFiles);
 
+    needsRebuild.docs = checkDocs(lastBuildTime, dirtyFiles);
+
     // Python, WASM, mlldx - check their files too
     const pythonPattern = (f) => (f.startsWith('python/') && f.endsWith('.py')) || f === 'package.json';
     needsRebuild.python = hasFilesNewerThan(pythonPattern, lastBuildTime, dirtyFiles) !== null;
@@ -445,6 +466,10 @@ async function main() {
 
     if (needsRebuild.typescript) {
       runBuildStep('TypeScript', 'tsup');
+    }
+
+    if (needsRebuild.docs) {
+      runBuildStep('LLM docs', 'npm run build:docs');
     }
 
     if (needsRebuild.python) {

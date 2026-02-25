@@ -14,32 +14,6 @@ exe @loadRecentEvents(runDir, limit) = [
   => for @line in @lines.split("\n") when @line.trim() => @line | @json
 ]
 
->> Count iterations from events
-exe @countIterations(runDir) = [
-  let @events = @loadRecentEvents(@runDir, 1000)
-  let @iterations = for @e in @events when @e.event == "iteration" => @e
-  => @iterations.length
-]
-
->> Load run state from run.json
-exe @loadRunState(runDir) = [
-  let @stateFile = `@runDir/run.json`
-  let @content = <@stateFile>?
-  when !@content => {
-    lastWorkerResult: null,
-    lastTestResults: null,
-    lastError: null
-  }
-  => @content | @json
-]
-
->> Save run state to run.json
-exe @saveRunState(runDir, run) = [
-  let @stateFile = `@runDir/run.json`
-  let @jsonContent = @run | @json
-  output @jsonContent to "@stateFile"
-]
-
 >> Load tickets for topic (ready = open/in-progress with deps resolved)
 exe @loadTickets(ticketDir) = [
   let @result = cmd { tk ready --dir "@ticketDir" --json } with { ok: true }
@@ -139,7 +113,7 @@ exe @extractJobSections(jobContent) = {
   exampleCode: @extractSection(@jobContent, "Example Code (Target)")
 }
 
->> Build full context for decision agent (without spec - uses reference material instead)
+>> Build full context for decision agent
 exe @buildContext(config, runDir, topic, run) = {
   tickets: @loadTickets(`j2bd-@topic`),
   recentEvents: @loadRecentEvents(@runDir, 20),
@@ -151,9 +125,6 @@ exe @buildContext(config, runDir, topic, run) = {
 
 export {
   @loadRecentEvents,
-  @countIterations,
-  @loadRunState,
-  @saveRunState,
   @loadTickets,
   @loadAnswers,
   @buildContext,

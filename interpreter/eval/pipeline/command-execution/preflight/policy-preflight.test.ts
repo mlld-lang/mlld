@@ -35,7 +35,7 @@ describe('policy preflight extraction parity', () => {
     const execEnv = env.createChild();
     env.recordPolicyConfig('test-policy', {
       defaults: { rules: ['no-untrusted-destructive'] },
-      operations: { 'op:sh': 'destructive' }
+      operations: { destructive: ['op:sh'] }
     });
 
     const untrustedInput = createUntrustedInput();

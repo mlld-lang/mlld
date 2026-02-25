@@ -1,0 +1,23 @@
+>> Module served via MCP for testing src:mcp taint behavior
+>> Inputs to this tool should NOT carry src:mcp
+>> Outputs from this tool SHOULD carry src:mcp
+
+exe net:r @guardedFetch(url: string) = `fetched:@url`
+
+>> This guard blocks if inputs have src:mcp taint.
+>> After the m-3b88 fix, MCP-served tool inputs no longer get src:mcp,
+>> so this guard should NOT fire for normal calls.
+guard @noTaintedUrls before op:exe = when [
+  @mx.op.labels.includes("net:r") && @mx.taint.includes("src:mcp") => deny "MCP-sourced data cannot be used in fetch URLs"
+  * => allow
+]
+
+var tools @tools = {
+  guardedFetch: {
+    mlld: @guardedFetch,
+    expose: ["url"],
+    labels: ["net:r"]
+  }
+}
+
+export { @guardedFetch, @tools }

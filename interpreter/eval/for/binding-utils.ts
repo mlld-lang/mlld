@@ -21,6 +21,17 @@ function looksLikeFileData(value: unknown): value is Record<string, unknown> & {
   return typeof obj.filename === 'string' || typeof obj.relative === 'string' || typeof obj.absolute === 'string';
 }
 
+function getEmbeddedObjectMx(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const mx = (value as Record<string, unknown>).mx;
+  if (!mx || typeof mx !== 'object' || Array.isArray(mx)) {
+    return undefined;
+  }
+  return mx as Record<string, unknown>;
+}
+
 export function shouldKeepStructuredForForExpression(value: StructuredValue): boolean {
   if (value.internal && (value.internal as any).keepStructured) {
     return true;
@@ -133,7 +144,15 @@ export function ensureVariable(name: string, value: unknown, env: Environment): 
     return createArrayVariable(name, value, false, { ...forSource, syntax: 'array' as const }, { source: 'for-loop' });
   }
   if (value && typeof value === 'object') {
-    return createObjectVariable(name, value as Record<string, unknown>, false, forSource, { source: 'for-loop' });
+    const variable = createObjectVariable(name, value as Record<string, unknown>, false, forSource, { source: 'for-loop' });
+    const embeddedMx = getEmbeddedObjectMx(value);
+    if (embeddedMx) {
+      variable.mx = {
+        ...(variable.mx ?? {}),
+        ...embeddedMx
+      };
+    }
+    return variable;
   }
   if (typeof value === 'string') {
     return createSimpleTextVariable(name, value, forSource, { source: 'for-loop' });

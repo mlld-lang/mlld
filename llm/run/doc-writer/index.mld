@@ -5,6 +5,11 @@
 >> that researches the implementation, writes/updates the atom, and does a
 >> structural self-check.
 >>
+>> Resilience: exe llm labels + checkpoint directives. Crash recovery is automatic.
+>>   mlld run doc-writer                         # auto-resumes via cache
+>>   mlld run doc-writer --resume "write"        # skip to write phase
+>>   mlld run doc-writer --new                   # fresh run
+>>
 >> Examples:
 >>   mlld run doc-writer                         # Full run, default settings
 >>   mlld run doc-writer --parallel 2            # Limit concurrency
@@ -31,12 +36,14 @@ exe @matchesFilter(entry, filter) = when [
 ]
 var @entries = for @e in @allEntries when @matchesFilter(@e, @filter) => @e
 
->> Atoms go directly to docs/src/atoms/; markers track completion in tmp/
+>> Atoms go directly to docs/src/atoms/
 var @atomsDir = "@base/docs/src/atoms"
-var @markerDir = "@base/tmp/doc-writer/markers"
 
+>> Helpers
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }
-run @mkdirp(@markerDir)
+
+>> LLM call wrapper — llm label enables automatic caching
+exe llm @callWriter(prompt, model, dir, tools, markerFile) = @claudePoll(@prompt, @model, @dir, @tools, @markerFile)
 
 show `=== Doc Writer ===`
 show `Entries: @entries.length of @allEntries.length`
@@ -52,22 +59,17 @@ exe @buildPrompt(action, atom, category, changelog, hints, styleRef, existingCon
 >> Agent tools: code exploration + write output + validate syntax
 var @writerTools = "Read,Write,Glob,Grep,Bash(npm:run ast*),Bash(cat:*),Task"
 
+checkpoint "write"
+
 >> Fan-out: parallel atom writing
 var @results = for parallel(@parallel) @entry in @entries [
   >> Write directly to docs/src/atoms/
   let @outputPath = `@atomsDir/@entry.atom`
-  let @markerFile = `@markerDir/@entry.atom\.done`
+  let @markerFile = `@base/tmp/doc-writer/@entry.atom\.done`
 
   >> Ensure marker subdirectory exists
   let @category = @entry.atom.split("/")[0]
-  run @mkdirp(`@markerDir/@category`)
-
-  >> Skip if already done
-  let @existing = <@markerFile>?
-  if @existing [
-    show `  Skipping (exists): @entry.atom`
-    => { atom: @entry.atom, status: "skipped" }
-  ]
+  run @mkdirp(`@base/tmp/doc-writer/@category`)
 
   >> Load existing atom content if updating
   let @existingContent = when [
@@ -96,7 +98,7 @@ When you have finished writing the atom, write "done" to @markerFile as your fin
 
   let @idx = @mx.for.index + 1
   show `  Starting (@idx of @mx.for.total): @entry.atom [@entry.action]`
-  let @response = @claudePoll(@fullPrompt, @model, @base, @writerTools, @markerFile) | log
+  let @response = @callWriter(@fullPrompt, @model, @base, @writerTools, @markerFile) | log
   show `  Complete: @entry.atom`
 
   => { atom: @entry.atom, status: "done" }

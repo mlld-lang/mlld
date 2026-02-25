@@ -119,6 +119,49 @@ function collectPreflightWarnings(results: AnalyzeResult[]): string[] {
   return lines;
 }
 
+function parseEnvOverrides(rawEnv: unknown): Record<string, string> {
+  const tokens: string[] = [];
+
+  const collect = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        collect(entry);
+      }
+      return;
+    }
+
+    if (typeof value === 'string') {
+      tokens.push(...value.split(',').map(part => part.trim()).filter(Boolean));
+      return;
+    }
+
+    if (value === true) {
+      console.error(chalk.yellow('Warning: ignoring --env without KEY=VALUE payload'));
+    }
+  };
+
+  collect(rawEnv);
+
+  const parsed: Record<string, string> = {};
+  for (const token of tokens) {
+    const separator = token.indexOf('=');
+    if (separator <= 0) {
+      console.error(chalk.yellow(`Warning: ignoring invalid --env entry "${token}" (expected KEY=VALUE)`));
+      continue;
+    }
+
+    const key = token.slice(0, separator).trim();
+    const value = token.slice(separator + 1).trim();
+    if (!key) {
+      console.error(chalk.yellow('Warning: ignoring --env entry with empty key'));
+      continue;
+    }
+    parsed[key] = value;
+  }
+
+  return parsed;
+}
+
 export class RunCommand {
   private scriptDir: string = 'llm/run';
   private fileSystem: NodeFileSystem;
@@ -245,6 +288,7 @@ export class RunCommand {
 
   async run(scriptName: string, options: RunOptions = {}): Promise<void> {
     const scriptPath = await this.findScript(scriptName);
+    const projectRoot = await findProjectRoot(process.cwd(), this.fileSystem);
 
     if (!scriptPath) {
       const availableScripts = await this.listScripts();
@@ -327,7 +371,8 @@ export class RunCommand {
         fresh: options.fresh,
         resume: options.resume,
         fork: options.fork,
-        checkpointScriptName: scriptName
+        checkpointScriptName: scriptName,
+        checkpointCacheRootDir: path.join(projectRoot, '.mlld', 'checkpoints')
       }) as StructuredResult;
 
       // Check if streaming was enabled - if so, skip final output since it was already streamed
@@ -520,6 +565,7 @@ Creating Scripts:
         'timeout',
         'debug',
         'd',
+        'env',
         'no-warn',
         'noWarn',
         'inject',
@@ -541,6 +587,11 @@ Creating Scripts:
       }
       if (flags.payload) {
         inject.push(...(Array.isArray(flags.payload) ? flags.payload : [flags.payload]));
+      }
+      const envOverrides = parseEnvOverrides(flags.env);
+      if (Object.keys(envOverrides).length > 0) {
+        // Allow --inject @input=... to override flag-derived env data when explicitly provided.
+        inject.unshift(`@input=${JSON.stringify(envOverrides)}`);
       }
       const noCheckpoint = Boolean(flags['no-checkpoint'] || flags.noCheckpoint);
       const checkpointEnabled = Boolean(flags.checkpoint);
@@ -575,6 +626,10 @@ Creating Scripts:
             }
           }
         }
+      }
+      // Pass --new/--fresh through to payload so scripts can detect fresh runs
+      if (fresh) {
+        payloadObj['new'] = true;
       }
       const isDebug = Boolean(flags.debug || flags.d);
       // Always inject @payload (empty {} if no flags) so scripts can safely reference @payload.field

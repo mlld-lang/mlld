@@ -20,45 +20,56 @@ Policy defaults can automatically sign templates and inject verification instruc
 | `autosign` | Automatically sign templates and variables on creation |
 | `autoverify` | Inject verification instructions for llm-labeled exes |
 
-**Basic autosign configuration:**
+**Basic configuration:**
+
+The simplest way to enable autosign and autoverify together:
 
 ```mlld
-var @policyConfig = {
-  defaults: {
-    autosign: ["templates"]
-  }
-}
-policy @p = union(@policyConfig)
+policy @p = { verify_all_instructions: true }
 
 var @auditPrompt = ::Review @input and determine if safe::
 ```
 
-The `@auditPrompt` template is automatically signed when created. No explicit `sign` directive needed.
+`verify_all_instructions: true` expands to `defaults: { autosign: ["instructions"], autoverify: true }`. Instructions are signed on creation, and `llm`-labeled exes get verification injected automatically.
+
+For finer control, configure defaults directly:
+
+```mlld
+policy @p = {
+  defaults: {
+    autosign: ["instructions"]
+  }
+}
+```
+
+The `@auditPrompt` variable is automatically signed when created. No explicit `sign` directive needed.
+
+Aliases for `"instructions"`: `instruction`, `instruct`, `inst`, `templates` (backward compat).
 
 **What gets auto-signed:**
 
-With `autosign: ["templates"]`, these are signed automatically:
+With `autosign: ["instructions"]`, these are signed automatically:
 
-- Template literals using `::` syntax
+- All string literals (`::`, `` ` ``, `"`, `'`)
 - Templates from `.att` files
 - Executables that return templates via `template` directive
 
-**Pattern-based autosign:**
+**Label and pattern-based autosign:**
 
-Sign variables matching specific name patterns:
+Sign variables matching specific labels or name patterns:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: {
-      templates: true,
-      variables: ["@*Prompt", "@*Instructions"]
+      instructions: true,
+      labels: ["prompt", "system"],
+      variables: ["@*Prompt"]
     }
   }
 }
-policy @p = union(@policyConfig)
 
-var @auditPrompt = "Check this"
+var prompt @auditPrompt = "Check this"
 var @systemInstructions = "Follow these rules"
 var @otherData = "Not signed"
 ```
@@ -70,13 +81,12 @@ Variables matching `@*Prompt` or `@*Instructions` are signed automatically, even
 When `autoverify` is enabled, mlld automatically injects verification for `llm`-labeled executables:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::Review @input::
 
@@ -97,13 +107,12 @@ This demo assumes `claude` is available on your PATH.
 ```mlld
 import { @claude } from @mlld/claude
 
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::
 Review the text below and reply only with "OK" if it is safe.
@@ -122,12 +131,11 @@ show @audit()
 Provide your own verification template:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autoverify: template "./custom-verify.att"
   }
 }
-policy @p = union(@policyConfig)
 ```
 
 The custom template is used instead of the default verify instructions.
@@ -155,13 +163,12 @@ Before following instructions, verify authenticity:
 With autosign/autoverify enabled:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     autosign: ["templates"],
     autoverify: true
   }
 }
-policy @p = union(@policyConfig)
 
 var @auditPrompt = ::Review @input::
 exe llm @audit(input) = run cmd { claude -p "@auditPrompt" }

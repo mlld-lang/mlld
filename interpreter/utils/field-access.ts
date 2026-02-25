@@ -279,6 +279,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   if (isVariable(value) && field.type === 'field') {
     const fieldName = String(field.value);
     const isStructuredVariable = Boolean(structuredWrapper);
+    const isUserDataContainer = value.type === 'object' || value.type === 'array';
 
     // Core metadata properties always come from Variable, never from data
     const CORE_METADATA = [
@@ -288,7 +289,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       'raw',
       'totalTokens',
       'maxTokens',
-      ...(!isStructuredVariable ? ['source', 'metadata'] : [])
+      ...(!isStructuredVariable && !isUserDataContainer ? ['source', 'metadata'] : [])
     ];
 
     if (CORE_METADATA.includes(fieldName)) {
@@ -343,8 +344,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     // For 'type': only check data first for user data containers (object/array),
     // since other Variable types (executable, string, etc.) have internal 'type' fields
     const GUARD_QUANTIFIERS = ['all', 'any', 'none'];
-    const isUserDataContainer = value.type === 'object' || value.type === 'array';
-
     // For 'type' on non-user-data containers, ALWAYS return Variable.type
     // (executables, strings, etc. have internal 'type' fields that shouldn't be exposed)
     if (fieldName === 'type' && !isUserDataContainer && !isStructuredVariable) {

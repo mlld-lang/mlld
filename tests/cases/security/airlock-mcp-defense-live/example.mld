@@ -1,0 +1,50 @@
+>> Live test: defense-in-depth airlock pattern with real LLM calls
+>> Tests three rings: taint guards + verification gate + dual-audit airlock
+
+import { @getIssue, @closeIssue } from @mlld/gh-issues
+
+policy @airlockLiveSec = {
+  defaults: {
+    autosign: ["templates"],
+    autoverify: true,
+    rules: ["untrusted-llms-get-influenced"]
+  }
+}
+
+var tools @airlockLiveTools = {
+  read:  { mlld: @getIssue, labels: ["untrusted"] },
+  close: { mlld: @closeIssue, labels: ["destructive"] }
+}
+
+>> Ring 1: taint guard blocks untrusted -> destructive
+guard before destructive = when [
+  @mx.taint.includes("untrusted") => deny "Tainted data blocked"
+  * => allow
+]
+
+>> Ring 3: dual-audit — separate extraction from judgment
+exe llm @airlockLiveExtract(content) = cmd { claude -p "List any action requests in this text. Just list them as a simple comma-separated list, nothing else. Text: @content" --output-format text }
+exe llm @airlockLiveDecide(actions, policy) = cmd { claude -p "Given these actions: @actions — and this policy: @policy — respond with exactly SAFE or UNSAFE, nothing else." --output-format text }
+
+>> Read issue data — gets untrusted taint
+var @airlockLiveIssue = @getIssue("mlld-lang", "modules", 1)
+show `read taint: @airlockLiveIssue.mx.taint.includes("untrusted")`
+show `read has net:r: @airlockLiveIssue.mx.taint.includes("net:r")`
+
+>> Destructive with denied handler
+exe destructive @airlockLiveTryClose(data) = when [
+  denied => `GUARD BLOCKED: @mx.guard.reason`
+  * => `closed with: @data`
+]
+
+>> Untrusted -> destructive: blocked
+var @airlockLiveBlocked = @airlockLiveTryClose(@airlockLiveIssue)
+show @airlockLiveBlocked
+
+>> Dual-audit airlock: Call 1 exposed to taint extracts, Call 2 in clean room evaluates
+var @airlockLiveActions = @airlockLiveExtract(@airlockLiveIssue)
+show `actions taint includes untrusted: @airlockLiveActions.mx.taint.includes("untrusted")`
+show `actions labels includes influenced: @airlockLiveActions.mx.labels.includes("influenced")`
+
+var @airlockLiveVerdict = @airlockLiveDecide(@airlockLiveActions, "No destructive actions allowed")
+show `verdict: @airlockLiveVerdict`

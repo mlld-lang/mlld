@@ -9,7 +9,6 @@ import type {
   CommandRefExecutable,
   CodeExecutable,
   TemplateExecutable,
-  SectionExecutable,
   ResolverExecutable,
   PipelineExecutable,
   ProseExecutable
@@ -107,13 +106,6 @@ export async function buildCoreExecutableFamily(
     return {
       kind: 'definition',
       executableDef: await buildTemplateFileExecutableDefinition(context)
-    };
-  }
-
-  if (directive.subtype === 'exeSection') {
-    return {
-      kind: 'definition',
-      executableDef: buildSectionExecutableDefinition(context)
     };
   }
 
@@ -402,6 +394,7 @@ function buildCodeExecutableDefinition(
 
   const params = directive.values?.params || [];
   const paramNames = extractParamNames(params);
+  const args = directive.values?.args || [];
   const withClause = directive.values?.withClause;
   const language = directive.meta?.language || 'javascript';
   const workingDir = (directive.values as any)?.workingDir;
@@ -414,6 +407,7 @@ function buildCodeExecutableDefinition(
     codeTemplate: codeNodes,
     language,
     paramNames,
+    ...(args.length > 0 ? { args } : {}),
     sourceDirective: 'exec',
     ...(withClause ? { withClause } : {}),
     ...(workingDir ? { workingDir } : {}),
@@ -490,30 +484,6 @@ async function buildTemplateFileExecutableDefinition(
     paramNames,
     sourceDirective: 'exec'
   } satisfies TemplateExecutable;
-}
-
-function buildSectionExecutableDefinition(
-  context: CoreDefinitionBuildContext
-): ExecutableDefinition {
-  const { directive } = context;
-  const pathNodes = directive.values?.path;
-  const sectionNodes = directive.values?.section;
-  if (!pathNodes || !sectionNodes) {
-    throw new Error('Exec section directive missing path or section');
-  }
-
-  const params = directive.values?.params || [];
-  const paramNames = extractParamNames(params);
-  const renameNodes = directive.values?.rename;
-
-  return {
-    type: 'section',
-    pathTemplate: pathNodes,
-    sectionTemplate: sectionNodes,
-    renameTemplate: renameNodes,
-    paramNames,
-    sourceDirective: 'exec'
-  } satisfies SectionExecutable;
 }
 
 function buildProseExecutableDefinition(

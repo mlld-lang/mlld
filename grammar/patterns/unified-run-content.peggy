@@ -243,15 +243,50 @@ ShellCommandLineContent
         } else if (!inQuote) {
           // Check for banned operators
           if (char === '&' && next === '&') {
-            helpers.mlldError(`Shell operator AND (&&) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { echo "$myVar" && ... }`);
+            helpers.mlldError(
+              helpers.appendCmdContextGuidance(
+                'Shell operator AND (&&) is not allowed in cmd { }. Use shell blocks instead.',
+                'echo "$path" && ...',
+                input,
+                offset() + i
+              )
+            );
           } else if (char === '|' && next === '|') {
-            helpers.mlldError(`Shell operator OR (||) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { cmd1 || cmd2 }`);
+            helpers.mlldError(
+              helpers.appendCmdContextGuidance(
+                'Shell operator OR (||) is not allowed in cmd { }. Use shell blocks instead.',
+                'cmd1 || cmd2',
+                input,
+                offset() + i
+              )
+            );
           } else if (char === ';') {
-            helpers.mlldError(`Shell operator semicolon (;) is not allowed in cmd { }. For shell scripts use sh { }, for JavaScript use js { } or node { }. Note: these blocks don't interpolate @variables - pass them as parameters: sh(@myVar) { cmd1; cmd2 }`);
+            helpers.mlldError(
+              helpers.appendCmdContextGuidance(
+                'Shell operator semicolon (;) is not allowed in cmd { }. Use shell blocks instead.',
+                'cmd1; cmd2',
+                input,
+                offset() + i
+              )
+            );
           } else if (char === '>' && next === '>') {
-            helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks. For append, use sh { } and pass variables as parameters: sh(@myVar) { echo "$myVar" >> file }`);
+            helpers.mlldError(
+              helpers.appendCmdContextGuidance(
+                '>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks.',
+                'echo "$path" >> file',
+                input,
+                offset() + i
+              )
+            );
           } else if (char === '>' || char === '<') {
-            helpers.mlldError(`Shell redirection (${char}) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { cmd "$myVar" ${char === '>' ? '> out.txt' : '< in.txt'} }`);
+            helpers.mlldError(
+              helpers.appendCmdContextGuidance(
+                `Shell redirection (${char}) is not allowed in cmd { }. Use shell blocks instead.`,
+                `cmd "$path" ${char === '>' ? '> out.txt' : '< in.txt'}`,
+                input,
+                offset() + i
+              )
+            );
           } else if (char === '&' && next !== '&' && next !== '>') {
             helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
           } else {
@@ -362,7 +397,7 @@ UnifiedCommandQuotedString
 
 // Content inside double quotes - allows variables and file references but no operator checks
 UnifiedDoubleQuotedContent
-  = varRef:UnifiedVariableNoTail {
+  = varRef:UnifiedVariableInDoubleQuotes {
       // Variable interpolation inside double quotes - return the unified pattern result
       return varRef;
     }
@@ -375,16 +410,32 @@ UnifiedDoubleQuotedContent
   / "@" { return '@'; }  // Lone @ without identifier
   / "<" { return '<'; }  // Lone < without file reference
 
+// Variable parser for command double-quoted strings.
+// Unlike UnifiedVariableNoTail, this does not check !TailModifiers so
+// literals like "@first | @second" stay inside the same quoted token.
+UnifiedVariableInDoubleQuotes
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccessOptional* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+
 // Content inside single quotes - no variables, no operator checks
 UnifiedCommandSingleQuotedContent
   = chars:$(!"'" .)+ { return chars; }
 
 // Unquoted word - apply security checks
 UnifiedCommandWord
-  = chars:UnifiedCommandWordChar+ {
-      const content = chars.join('');
+  = parts:UnifiedCommandWordPart+ {
+      const content = parts.join('');
       return helpers.createNode(NodeType.Text, { content, location: location() });
     }
+
+UnifiedCommandWordPart
+  = escaped:CmdAtEscape { return escaped; }
+  / char:UnifiedCommandWordChar { return char; }
 
 // Characters in unquoted words - with security checks
 UnifiedCommandWordChar
@@ -426,22 +477,64 @@ UnifiedCommandWordChar
       // Check for banned operators (skip if escaped)
       if (!isEscaped) {
         if (ahead.startsWith('&&')) {
-          helpers.mlldError(`Shell operator AND (&&) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { echo "$myVar" && ... }`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              'Shell operator AND (&&) is not allowed in cmd { }. Use shell blocks instead.',
+              'echo "$path" && ...',
+              input,
+              pos
+            )
+          );
         }
         if (ahead.startsWith('||')) {
-          helpers.mlldError(`Shell operator OR (||) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { cmd1 || cmd2 }`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              'Shell operator OR (||) is not allowed in cmd { }. Use shell blocks instead.',
+              'cmd1 || cmd2',
+              input,
+              pos
+            )
+          );
         }
         if (ahead.startsWith('>>')) {
-          helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks. For append, use sh { } and pass variables as parameters: sh(@myVar) { echo "$myVar" >> file }`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              '>> Comments and shell append operator (>>) are not allowed in cmd { }. Keep comments outside command blocks.',
+              'echo "$path" >> file',
+              input,
+              pos
+            )
+          );
         }
         if (char === ';') {
-          helpers.mlldError(`Shell operator semicolon (;) is not allowed in cmd { }. For shell scripts use sh { }, for JavaScript use js { } or node { }. Note: these blocks don't interpolate @variables - pass them as parameters: sh(@myVar) { cmd1; cmd2 }`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              'Shell operator semicolon (;) is not allowed in cmd { }. Use shell blocks instead.',
+              'cmd1; cmd2',
+              input,
+              pos
+            )
+          );
         }
         if (char === '>' && input[pos + 1] !== '>') {
-          helpers.mlldError(`Shell redirection (>) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { cmd "$myVar" > out.txt }`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              'Shell redirection (>) is not allowed in cmd { }. Use shell blocks instead.',
+              'cmd "$path" > out.txt',
+              input,
+              pos
+            )
+          );
         }
         if (char === '<') {
-          helpers.mlldError(`Shell redirection (<) is not allowed in cmd { }. Use sh { } for shell scripts. Note: sh { } doesn't interpolate @variables - pass them as parameters: sh(@myVar) { cmd "$myVar" < in.txt }`);
+          helpers.mlldError(
+            helpers.appendCmdContextGuidance(
+              'Shell redirection (<) is not allowed in cmd { }. Use shell blocks instead.',
+              'cmd "$path" < in.txt',
+              input,
+              pos
+            )
+          );
         }
         if (char === '&' && input[pos + 1] !== '&' && input[pos + 1] !== '>') {
           helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
@@ -477,8 +570,92 @@ UnifiedCodeChar
   / '`' chars:BacktickChar* '`' { return '`' + chars.join('') + '`'; }      // Template literals
   / '/*' chars:(!('*/') c:. { return c; })* '*/' { return '/*' + chars.join('') + '*/'; }  // Multi-line comments
   / '//' chars:(!('\n') c:. { return c; })* { return '//' + chars.join(''); }  // Single-line comments
+  / regex:UnifiedRegexLiteral { return regex; }                                // Regex literals
   / '{' inner:UnifiedCodeContent '}' { return '{' + inner + '}'; }          // Nested braces
   / !'}' char:. { return char; }                                            // Any other character
+
+// Regex literal in code blocks.
+// This keeps quotes inside character classes (e.g. ["']) from being misread
+// as string delimiters, which can otherwise break brace balancing.
+UnifiedRegexLiteral
+  = &{
+      const pos = peg$currPos;
+      let i = pos - 1;
+
+      // Skip horizontal whitespace; newline is a statement boundary.
+      while (i >= 0 && (input[i] === ' ' || input[i] === '\t' || input[i] === '\r')) {
+        i--;
+      }
+      if (i < 0 || input[i] === '\n') {
+        return true;
+      }
+
+      const prev = input[i];
+      const isAlpha =
+        (prev >= 'a' && prev <= 'z') ||
+        (prev >= 'A' && prev <= 'Z');
+      const isDigit = prev >= '0' && prev <= '9';
+      const isOperandLike =
+        isAlpha ||
+        isDigit ||
+        prev === '_' ||
+        prev === '$' ||
+        prev === ']' ||
+        prev === ')' ||
+        prev.charCodeAt(0) === 125;
+
+      // Most operand-like predecessors imply division, not regex.
+      if (!isOperandLike) {
+        return true;
+      }
+
+      // But keyword contexts like `return /.../` or `throw /.../` are regex starts.
+      let j = i;
+      while (
+        j >= 0 &&
+        (
+          (input[j] >= 'a' && input[j] <= 'z') ||
+          (input[j] >= 'A' && input[j] <= 'Z') ||
+          input[j] === '_' ||
+          input[j] === '$'
+        )
+      ) {
+        j--;
+      }
+      const token = input.slice(j + 1, i + 1);
+      const regexStarterKeywords = [
+        'return',
+        'throw',
+        'case',
+        'delete',
+        'void',
+        'typeof',
+        'instanceof',
+        'in',
+        'of',
+        'yield',
+        'await',
+        'new',
+      ];
+      return regexStarterKeywords.includes(token);
+    }
+    "/" !("/" / "*") body:UnifiedRegexBody "/" flags:$([dgimsuvy]*) {
+      return '/' + body + '/' + flags;
+    }
+
+UnifiedRegexBody
+  = chars:UnifiedRegexBodyChar* {
+      return chars.join('');
+    }
+
+UnifiedRegexBodyChar
+  = "\\" char:. { return '\\' + char; }
+  / "[" chars:UnifiedRegexClassChar* "]" { return '[' + chars.join('') + ']'; }
+  / !("/" / "\n" / "\r") char:. { return char; }
+
+UnifiedRegexClassChar
+  = "\\" char:. { return '\\' + char; }
+  / !"]" char:. { return char; }
 
 // Characters inside double quotes
 DoubleQuoteChar

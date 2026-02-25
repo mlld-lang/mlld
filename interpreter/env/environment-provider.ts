@@ -31,7 +31,10 @@ import { MlldCommandExecutionError, MlldInterpreterError } from '@core/errors';
 import { deriveCommandTaint } from '@core/security/taint';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
-import { resolveAuthSecrets } from '@interpreter/utils/auth-injection';
+import {
+  resolveAuthSecrets,
+  type AuthResolutionOptions
+} from '@interpreter/utils/auth-injection';
 
 type EnvironmentProviderHandle = {
   ref: string;
@@ -105,11 +108,10 @@ export function buildEnvironmentOutputDescriptor(
 ): SecurityDescriptor {
   const commandTaint = deriveCommandTaint({ command });
   const taintLabels = new Set<string>();
+  taintLabels.add('src:cmd');
   const providerRef = config?.provider;
   if (providerRef) {
     taintLabels.add(deriveProviderLabel(providerRef));
-  } else {
-    taintLabels.add('src:exec');
   }
   if (Array.isArray(config?.taint)) {
     for (const label of config!.taint) {
@@ -124,12 +126,13 @@ export function buildEnvironmentOutputDescriptor(
 
 export async function resolveEnvironmentAuthSecrets(
   env: Environment,
-  config: EnvironmentConfig | undefined
+  config: EnvironmentConfig | undefined,
+  options?: AuthResolutionOptions
 ): Promise<Record<string, string>> {
   if (!config || config.auth === undefined || config.auth === null) {
     return {};
   }
-  return resolveAuthSecrets(env, config.auth);
+  return resolveAuthSecrets(env, config.auth, options);
 }
 
 export async function executeProviderCommand(options: {

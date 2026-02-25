@@ -10,7 +10,11 @@ import {
   createSimpleTextVariable,
 } from '@core/types/variable';
 import { createCapabilityContext } from '@core/types/security';
-import { extractSecurityDescriptor } from '@interpreter/utils/structured-value';
+import {
+  applySecurityDescriptorToStructuredValue,
+  extractSecurityDescriptor,
+  isStructuredValue
+} from '@interpreter/utils/structured-value';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { maybeAutosignVariable } from './auto-sign';
 import { isExeReturnControl } from './exe-return';
@@ -158,7 +162,11 @@ export async function prepareVarAssignment(
     }
     if (finalMetadata.security) {
       updateVarMxFromDescriptor(variable.mx, finalMetadata.security);
+      if (isStructuredValue(variable.value)) {
+        applySecurityDescriptorToStructuredValue(variable.value, finalMetadata.security);
+      }
     }
+    variable.metadata = VariableMetadataUtils.mergeMetadata(variable.metadata, finalMetadata);
     return VariableMetadataUtils.attachContext(variable);
   };
 

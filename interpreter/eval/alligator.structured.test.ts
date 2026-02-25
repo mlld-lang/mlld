@@ -61,4 +61,35 @@ describe('Alligator structured behaviour', () => {
       expect(asText(showResult.value)).toContain('Body text.');
     }
   });
+
+  it('supports alligator section selectors as exe bodies', async () => {
+    await fileSystem.writeFile(
+      '/workspace/CHANGELOG.md',
+      [
+        '# Changelog',
+        '',
+        '## [1.0.0]',
+        '- Initial release',
+        '',
+        '## [0.9.0]',
+        '- Beta build'
+      ].join('\n')
+    );
+
+    const source = [
+      '/exe @releaseNotes(version) = <CHANGELOG.md # "[@version]">',
+      '/var @notes = @releaseNotes("1.0.0")'
+    ].join('\n');
+
+    const { ast } = await parse(source);
+    await evaluate(ast, env);
+
+    const notesVar = env.getVariable('notes');
+    expect(notesVar).toBeDefined();
+    const notesText = isStructuredValue(notesVar?.value)
+      ? asText(notesVar?.value)
+      : String(notesVar?.value ?? '');
+    expect(notesText).toContain('## [1.0.0]');
+    expect(notesText).toContain('Initial release');
+  });
 });

@@ -37,12 +37,42 @@ function findFixtures(basePath) {
   return fixtures;
 }
 
+function normalizeFixturePattern(pattern) {
+  let normalized = String(pattern || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\.\/+/, '')
+    .replace(/\/$/, '');
+
+  const embeddedCases = normalized.indexOf('/tests/cases/');
+  if (embeddedCases >= 0) {
+    normalized = normalized.slice(embeddedCases + '/tests/cases/'.length);
+  }
+  const embeddedFixtures = normalized.indexOf('/tests/fixtures/');
+  if (embeddedFixtures >= 0) {
+    normalized = normalized.slice(embeddedFixtures + '/tests/fixtures/'.length);
+  }
+
+  for (const prefix of ['tests/cases/', 'tests/fixtures/', 'cases/', 'fixtures/']) {
+    if (normalized.startsWith(prefix)) {
+      normalized = normalized.slice(prefix.length);
+      break;
+    }
+  }
+
+  normalized = normalized
+    .replace(/\/(example|expected|error|warning)(-[^/]+)?\.(md|mld)$/i, '')
+    .replace(/\.generated-fixture\.json$/i, '')
+    .replace(/\/$/, '');
+
+  return normalized;
+}
+
 function getMatchingFixtures(pattern) {
   const fixturesDir = 'tests/fixtures';
   const allFixtures = findFixtures(fixturesDir);
 
-  // Normalize pattern: remove trailing slash, forward slashes only
-  const normalizedPattern = pattern.replace(/\/$/, '').replace(/\\/g, '/');
+  const normalizedPattern = normalizeFixturePattern(pattern);
 
   // Exact match first
   const exact = allFixtures.filter(f => f === normalizedPattern);
@@ -50,13 +80,15 @@ function getMatchingFixtures(pattern) {
     return exact;
   }
 
-  // Prefix match (with path boundary awareness)
-  const prefixMatches = allFixtures.filter(f =>
+  // Prefix match and substring match (catches exceptions/security/... for pattern security/...)
+  const matches = allFixtures.filter(f =>
     f.startsWith(normalizedPattern + '/') ||
-    f.startsWith(normalizedPattern)
+    f.startsWith(normalizedPattern) ||
+    f.includes('/' + normalizedPattern + '/') ||
+    f.includes('/' + normalizedPattern)
   );
 
-  return prefixMatches;
+  return matches;
 }
 
 function main() {
@@ -113,7 +145,8 @@ function main() {
   console.log('');
 
   try {
-    const cmd = `NODE_ENV=test MLLD_NO_STREAMING=true vitest run interpreter/interpreter.fixture.test.ts -t "${combinedPattern}"`;
+    const hideSkippedFlag = process.env.MLLD_SHOW_SKIPPED === '1' ? '' : ' --hideSkippedTests';
+    const cmd = `NODE_ENV=test MLLD_NO_STREAMING=true vitest run interpreter/interpreter.fixture.test.ts${hideSkippedFlag} -t "${combinedPattern}"`;
     // Use ['ignore', 'inherit', 'inherit'] to prevent TTY suspension
     execSync(cmd, { stdio: ['ignore', 'inherit', 'inherit'] });
   } catch (error) {

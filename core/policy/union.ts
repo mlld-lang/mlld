@@ -31,6 +31,8 @@ export type AuthConfig = {
   as: string;
 };
 
+const KEYCHAIN_SHORT_SERVICE = 'mlld-env-{projectname}';
+
 export type LabelFlowRule = {
   deny?: string[];
   allow?: string[];
@@ -59,9 +61,10 @@ export type PolicyCapabilitiesConfig = {
   danger?: string[] | string;
 };
 
-export type PolicyOperations = Record<string, string>;
+export type PolicyOperations = Record<string, string[]>;
 
 export type PolicyConfig = {
+  verify_all_instructions?: boolean;
   defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
   auth?: Record<string, AuthConfig>;
@@ -145,6 +148,17 @@ export function mergePolicyConfigs(
 export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   if (!config) {
     return {};
+  }
+  if (config.verify_all_instructions === true) {
+    const { verify_all_instructions: _, ...rest } = config;
+    config = {
+      ...rest,
+      defaults: {
+        ...rest.defaults,
+        autosign: rest.defaults?.autosign ?? ['instructions'],
+        autoverify: rest.defaults?.autoverify ?? true
+      }
+    };
   }
   const allowSources: Array<PolicyConfig['allow']> = [];
   const denySources: Array<PolicyConfig['deny']> = [];
@@ -969,24 +983,54 @@ function normalizePolicyAuth(
   }
 
   const result: Record<string, AuthConfig> = {};
-  for (const [name, entry] of Object.entries(auth)) {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+  for (const [rawName, entry] of Object.entries(auth)) {
+    const name = rawName.trim();
+    if (!name) {
       continue;
     }
-    const from = (entry as AuthConfig).from;
-    const as = (entry as AuthConfig).as;
-    if (typeof from !== 'string' || typeof as !== 'string') {
+    const normalized = normalizeAuthConfig(entry);
+    if (!normalized) {
       continue;
     }
-    const trimmedFrom = from.trim();
-    const trimmedAs = as.trim();
-    if (!trimmedFrom || !trimmedAs) {
-      continue;
-    }
-    result[name] = { from: trimmedFrom, as: trimmedAs };
+    result[name] = normalized;
   }
 
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+export function normalizeAuthConfig(entry: unknown): AuthConfig | undefined {
+  if (typeof entry === 'string') {
+    const envName = entry.trim();
+    if (!envName) {
+      return undefined;
+    }
+    return {
+      from: `keychain:${KEYCHAIN_SHORT_SERVICE}/${envName}`,
+      as: envName
+    };
+  }
+
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return undefined;
+  }
+
+  const rawFrom = (entry as { from?: unknown }).from;
+  const rawAs = (entry as { as?: unknown }).as;
+  if (typeof rawFrom !== 'string' || typeof rawAs !== 'string') {
+    return undefined;
+  }
+
+  const as = rawAs.trim();
+  let from = rawFrom.trim();
+  if (!from || !as) {
+    return undefined;
+  }
+
+  if (from === 'keychain') {
+    from = `keychain:${KEYCHAIN_SHORT_SERVICE}/${as}`;
+  }
+
+  return { from, as };
 }
 
 function normalizePolicyKeychain(
@@ -1076,11 +1120,11 @@ function normalizePolicyOperations(
   }
 
   const result: PolicyOperations = {};
-  for (const [key, value] of Object.entries(operations)) {
-    const normalizedKey = String(key).trim();
-    const normalizedValue = String(value).trim();
-    if (normalizedKey && normalizedValue) {
-      result[normalizedKey] = normalizedValue;
+  for (const [riskCategory, labels] of Object.entries(operations)) {
+    const normalizedCategory = String(riskCategory).trim();
+    const normalizedLabels = normalizeLabelList(labels);
+    if (normalizedCategory && normalizedLabels && normalizedLabels.length > 0) {
+      result[normalizedCategory] = normalizedLabels;
     }
   }
 
@@ -1095,7 +1139,20 @@ function mergePolicyOperations(
     return undefined;
   }
 
-  return { ...(base ?? {}), ...(incoming ?? {}) };
+  const result: PolicyOperations = {};
+  for (const [riskCategory, labels] of Object.entries(base ?? {})) {
+    if (labels.length > 0) {
+      result[riskCategory] = [...labels];
+    }
+  }
+  for (const [riskCategory, labels] of Object.entries(incoming ?? {})) {
+    if (labels.length === 0) {
+      continue;
+    }
+    result[riskCategory] = mergeLabelListUnion(result[riskCategory], labels) ?? [];
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function mergePolicyLabels(

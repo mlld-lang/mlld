@@ -8,7 +8,6 @@ import {
   isNodeFunctionExecutable,
   isPipelineExecutable,
   isResolverExecutable,
-  isSectionExecutable,
   isTemplateExecutable
 } from '@core/types/executable';
 import type { SecurityDescriptor } from '@core/types/security';
@@ -20,7 +19,6 @@ import type { EvalResult } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import { mergeAuthUsingIntoWithClause } from '@interpreter/eval/exec/context';
 import { createTemplateInterpolationEnv } from '@interpreter/eval/exec/template-interpolation-env';
-import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import {
   applySecurityDescriptorToStructuredValue,
   extractSecurityDescriptor,
@@ -29,7 +27,6 @@ import {
   wrapStructured
 } from '@interpreter/utils/structured-value';
 import { wrapExecResult } from '@interpreter/utils/structured-exec';
-import { extractSection } from '@interpreter/eval/show';
 import { isEventEmitter, isLegacyStream, toJsValue, wrapNodeValue } from '@interpreter/utils/node-interop';
 
 export type NonCommandExecutableHandlerServices = {
@@ -63,7 +60,6 @@ type NonCommandHandlerKey =
   | 'data'
   | 'pipeline'
   | 'commandRef'
-  | 'section'
   | 'resolver';
 
 type NonCommandHandler = (options: NonCommandExecutableHandlerOptions) => Promise<unknown>;
@@ -93,10 +89,6 @@ const NON_COMMAND_HANDLER_MATCHERS: ReadonlyArray<{
     matches: definition => isCommandRefExecutable(definition)
   },
   {
-    key: 'section',
-    matches: definition => isSectionExecutable(definition)
-  },
-  {
     key: 'resolver',
     matches: definition => isResolverExecutable(definition)
   }
@@ -120,7 +112,6 @@ function createNonCommandHandlerMap(): Record<NonCommandHandlerKey, NonCommandHa
     data: handleDataExecutable,
     pipeline: handlePipelineExecutable,
     commandRef: handleCommandRefExecutable,
-    section: handleSectionExecutable,
     resolver: handleResolverExecutable
   };
 }
@@ -421,51 +412,6 @@ async function handleCommandRefExecutable(
 
   const refResult = await services.evaluateExecInvocation(refInvocation, refEnv);
   return refResult.value as string;
-}
-
-async function handleSectionExecutable(
-  options: NonCommandExecutableHandlerOptions
-): Promise<unknown> {
-  const { definition, nodeSourceLocation, execEnv, env, services } = options;
-  const filePath = await services.interpolateWithResultDescriptor((definition as any).pathTemplate, execEnv);
-  const sectionName = await services.interpolateWithResultDescriptor((definition as any).sectionTemplate, execEnv);
-  const fileContent = await readFileWithPolicy(execEnv, filePath, nodeSourceLocation ?? undefined);
-
-  const llmxmlInstance = env.getLlmxml();
-  let sectionContent: string;
-  try {
-    const titleWithoutHash = sectionName.replace(/^#+\s*/, '');
-    sectionContent = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
-      includeNested: true
-    });
-  } catch {
-    sectionContent = extractSection(fileContent, sectionName);
-  }
-
-  if ((definition as any).renameTemplate) {
-    const newTitle = await services.interpolateWithResultDescriptor((definition as any).renameTemplate, execEnv);
-    const lines = sectionContent.split('\n');
-    if (lines.length > 0 && lines[0].match(/^#+\s/)) {
-      const newTitleTrimmed = newTitle.trim();
-      const newHeadingMatch = newTitleTrimmed.match(/^(#+)(\s+(.*))?$/);
-
-      if (newHeadingMatch) {
-        if (!newHeadingMatch[3]) {
-          const originalText = lines[0].replace(/^#+\s*/, '');
-          lines[0] = `${newHeadingMatch[1]} ${originalText}`;
-        } else {
-          lines[0] = newTitleTrimmed;
-        }
-      } else {
-        const originalLevel = lines[0].match(/^#+/)?.[0] || '#';
-        lines[0] = `${originalLevel} ${newTitleTrimmed}`;
-      }
-
-      sectionContent = lines.join('\n');
-    }
-  }
-
-  return sectionContent;
 }
 
 async function handleResolverExecutable(

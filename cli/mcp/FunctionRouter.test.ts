@@ -4,6 +4,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import type { ToolCollection } from '@core/types/tools';
 
 async function createEnvironment(source: string): Promise<Environment> {
   const fileSystem = new MemoryFileSystem();
@@ -136,7 +137,27 @@ describe('FunctionRouter', () => {
     const environment = await createEnvironment('/export { }');
     const router = new FunctionRouter({ environment });
 
-    await expect(router.executeFunction('missing_tool', {})).rejects.toThrow("Tool 'missing_tool' not found");
+    await expect(router.executeFunction('missing_tool', {})).rejects.toThrow("Tool not found: 'missing_tool'");
+  });
+
+  it('returns a tool-not-found suggestion before invocation when MCP name casing is wrong', async () => {
+    const environment = await createEnvironment(`
+      /exe @greetUser(name) = js {
+        return 'Hello ' + name;
+      }
+
+      /export { @greetUser }
+    `);
+
+    const router = new FunctionRouter({
+      environment,
+      toolNames: ['greet_user'],
+      toolNamesAreMcp: true
+    });
+
+    await expect(router.executeFunction('greetUser', { name: 'Ada' })).rejects.toThrow(
+      "Tool not found: 'greetUser'. Did you mean 'greet_user'?"
+    );
   });
 
   it('exposes @input imports during execution', async () => {
@@ -166,7 +187,7 @@ describe('FunctionRouter', () => {
     delete process.env.MLLD_TEST_VAR;
   });
 
-  it('applies src:mcp taint to function result', async () => {
+  it('does not apply src:mcp taint to function result for MCP-served tools', async () => {
     const environment = await createEnvironment(`
       /exe @storeResult(value) = js {
         return { result: value, processed: true };
@@ -180,11 +201,11 @@ describe('FunctionRouter', () => {
 
     const securitySnapshot = environment.getSecuritySnapshot();
     expect(securitySnapshot).toBeDefined();
-    expect(securitySnapshot?.taint).toContain('src:mcp');
-    expect(securitySnapshot?.sources).toContain('mcp:storeResult');
+    expect(securitySnapshot?.taint ?? []).not.toContain('src:mcp');
+    expect(securitySnapshot?.sources ?? []).not.toContain('mcp:storeResult');
   });
 
-  it('applies src:mcp taint even for zero-arg functions', async () => {
+  it('does not apply src:mcp taint for zero-arg MCP-served functions', async () => {
     const environment = await createEnvironment(`
       /exe @getTime() = js {
         return new Date().toISOString();
@@ -198,11 +219,11 @@ describe('FunctionRouter', () => {
 
     const securitySnapshot = environment.getSecuritySnapshot();
     expect(securitySnapshot).toBeDefined();
-    expect(securitySnapshot?.taint).toContain('src:mcp');
-    expect(securitySnapshot?.sources).toContain('mcp:getTime');
+    expect(securitySnapshot?.taint ?? []).not.toContain('src:mcp');
+    expect(securitySnapshot?.sources ?? []).not.toContain('mcp:getTime');
   });
 
-  it('exposes MCP taint to guards for zero-arg functions', async () => {
+  it('does not expose src:mcp taint to guards for MCP-served inputs', async () => {
     const environment = await createEnvironment(`
       /guard @blockMcp before op:exe = when [
         @mx.taint.includes("src:mcp") && @mx.sources.includes("mcp:getTime") => deny "MCP blocked"
@@ -217,7 +238,7 @@ describe('FunctionRouter', () => {
     `);
 
     const router = new FunctionRouter({ environment });
-    await expect(router.executeFunction('get_time', {})).rejects.toThrow('MCP blocked');
+    await expect(router.executeFunction('get_time', {})).resolves.toEqual(expect.any(String));
   });
 
   it('tracks tool calls in @mx.tools.calls', async () => {
@@ -237,5 +258,47 @@ describe('FunctionRouter', () => {
     const router = new FunctionRouter({ environment });
     await expect(router.executeFunction('greet', { name: 'Ada' })).resolves.toBe('Hello Ada');
     await expect(router.executeFunction('greet', { name: 'Grace' })).rejects.toThrow('Too many calls');
+  });
+
+  it('supports optional exposed tool parameters', async () => {
+    const environment = await createEnvironment(`
+      /exe @verify(vars) = js {
+        return vars === undefined ? 'default' : vars;
+      }
+
+      /export { @verify }
+    `);
+
+    const toolCollection: ToolCollection = {
+      verify: { mlld: 'verify', expose: ['vars'], optional: ['vars'] }
+    };
+    const router = new FunctionRouter({ environment, toolCollection });
+
+    await expect(router.executeFunction('verify', {})).resolves.toBe('default');
+    await expect(router.executeFunction('verify', { vars: 'prompt' })).resolves.toBe('prompt');
+  });
+
+  it('tracks structured tool results in @mx.tools.results', async () => {
+    const environment = await createEnvironment(`
+      /guard @requirePassingVerify before op:exe = when [
+        @mx.tools.results.verify != null && @mx.tools.results.verify.allPassed == false => deny "verify failed"
+        * => allow
+      ]
+
+      /exe @verify(status) = js {
+        return { allPassed: status === 'ok', status };
+      }
+
+      /export { @verify }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    const firstResult = await router.executeFunction('verify', { status: 'bad' });
+    expect(JSON.parse(firstResult)).toMatchObject({ allPassed: false, status: 'bad' });
+
+    const toolsSnapshot = environment.getContextManager().getToolsSnapshot();
+    expect((toolsSnapshot.results as any).verify).toMatchObject({ allPassed: false, status: 'bad' });
+
+    await expect(router.executeFunction('verify', { status: 'ok' })).rejects.toThrow('verify failed');
   });
 });

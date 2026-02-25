@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseSync } from '@grammar/parser';
 import { isDirectiveNode, type DirectiveNode } from '@core/types';
 import type { Variable } from '@core/types/variable';
-import { createSimpleTextVariable } from '@core/types/variable';
+import { createObjectVariable, createSimpleTextVariable } from '@core/types/variable';
 import { createGuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
@@ -194,5 +194,32 @@ describe('guard helper injection', () => {
     expect((target as any).none).toBe(helper.none);
     expect((target as any).totalTokens()).toBe(helper.totalTokens());
     expect((target as any).maxTokens()).toBe(helper.maxTokens());
+  });
+
+  it('attaches helper members to object values for raw-value field chains', () => {
+    const target = createObjectVariable(
+      'target',
+      { payload: 'value' },
+      false,
+      SIMPLE_SOURCE
+    ) as Variable;
+    const helper = createGuardInputHelper([createSecretVariable('a', 'one')]);
+
+    attachGuardHelper(target, helper);
+
+    const valueObject = (target as any).value as Record<string, unknown>;
+    const keys = Object.keys(valueObject);
+    expect(keys).not.toContain('any');
+    expect(keys).not.toContain('all');
+    expect(keys).not.toContain('none');
+
+    const anyDescriptor = Object.getOwnPropertyDescriptor(valueObject, 'any');
+    expect(anyDescriptor?.enumerable).toBe(false);
+    expect(anyDescriptor?.configurable).toBe(true);
+    expect(anyDescriptor?.writable).toBe(false);
+
+    expect((valueObject as any).any).toBe(helper.any);
+    expect((valueObject as any).all).toBe(helper.all);
+    expect((valueObject as any).none).toBe(helper.none);
   });
 });

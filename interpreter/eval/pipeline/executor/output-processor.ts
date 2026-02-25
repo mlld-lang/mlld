@@ -23,12 +23,16 @@ export class PipelineOutputProcessor {
       return output;
     }
 
-    if (isPipelineInput(output as any)) {
-      return output as StructuredValue;
+    if (output === null) {
+      return wrapStructured(null as any, 'null', 'null');
     }
 
-    if (output === null || output === undefined) {
+    if (output === undefined) {
       return wrapStructured('', 'text', '');
+    }
+
+    if (isPipelineInput(output as any)) {
+      return output as StructuredValue;
     }
 
     if (typeof output === 'string') {

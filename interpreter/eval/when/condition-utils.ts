@@ -18,41 +18,10 @@ export async function compareValues(
   env: Environment
 ): Promise<boolean> {
   const { resolveValue, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+  const { isEqual } = await import('../expressions');
   const resolvedExpression = await resolveValue(expressionValue, env, ResolutionContext.Equality);
   const resolvedCondition = await resolveValue(conditionValue, env, ResolutionContext.Equality);
-
-  if ((resolvedExpression === null || resolvedExpression === undefined) &&
-      (resolvedCondition === null || resolvedCondition === undefined)) {
-    return true;
-  }
-
-  if (typeof resolvedExpression === 'string' && typeof resolvedCondition === 'string') {
-    return resolvedExpression === resolvedCondition;
-  }
-
-  if (typeof resolvedExpression === 'boolean' && typeof resolvedCondition === 'boolean') {
-    return resolvedExpression === resolvedCondition;
-  }
-
-  if (typeof resolvedExpression === 'number' && typeof resolvedCondition === 'number') {
-    return resolvedExpression === resolvedCondition;
-  }
-
-  if (typeof resolvedExpression === 'string' && typeof resolvedCondition === 'boolean') {
-    return (resolvedExpression === 'true' && resolvedCondition === true) ||
-      (resolvedExpression === 'false' && resolvedCondition === false);
-  }
-
-  if (typeof resolvedExpression === 'boolean' && typeof resolvedCondition === 'string') {
-    return (resolvedExpression === true && resolvedCondition === 'true') ||
-      (resolvedExpression === false && resolvedCondition === 'false');
-  }
-
-  if (typeof resolvedCondition === 'boolean') {
-    return isTruthy(resolvedExpression) === resolvedCondition;
-  }
-
-  return resolvedExpression === resolvedCondition;
+  return isEqual(resolvedExpression, resolvedCondition);
 }
 
 export function isDeniedLiteralNode(node: BaseMlldNode | undefined): boolean {

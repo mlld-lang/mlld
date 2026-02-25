@@ -1,0 +1,6 @@
+guard @denyPiiShow for pii = when [
+  @mx.op.type == "show" => deny "PII detected in output"
+  * => allow
+]
+
+export { @denyPiiShow }

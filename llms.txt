@@ -30,12 +30,12 @@ This guide is modular. Load individual sections as needed:
 |--------|----------|
 | docs/llm/llms-overview.txt | Purpose, mental model, two modes |
 | docs/llm/llms-core-rules.txt | The 13 core rules with examples |
-| docs/llm/llms-syntax.txt | Variables, templates, file loading, methods |
-| docs/llm/llms-commands.txt | run, exe, output, log, append, stream |
-| docs/llm/llms-control-flow.txt | when, for, foreach, loop, while, parallel |
+| docs/llm/llms-language-reference.txt | Variables, templates, file loading, run, exe, output |
+| docs/llm/llms-flow-control.txt | when, for, foreach, loop, while, parallel |
 | docs/llm/llms-modules.txt | Import/export, registry, local dev |
 | docs/llm/llms-patterns.txt | Common workflow patterns |
-| docs/llm/llms-configuration.txt | SDK modes, resolvers, env vars |
+| docs/llm/llms-cli.txt | mlld run, mlld file, checkpoint, validation |
+| docs/llm/llms-configuration.txt | Config files, env vars, SDK modes |
 | docs/llm/llms-mistakes.txt | Common mistakes and fixes |
 | docs/llm/llms-security.txt | Guards, labels, capabilities |
 | docs/llm/llms-reference.txt | Quick reference tables |
@@ -59,7 +59,7 @@ For full context injection, use `llms-combined.txt` which contains all modules.
 
 **Pipelines** - Chain transforms: `@data | @json | @validate`
 
-**Modules** - Code reuse: `import { @helper } from @corp/utils`; MCP tools: `import tools from mcp "@github/issues" as @github`
+**Modules** - Code reuse: `import { @helper } from @corp/utils`; MCP tools: `import tools from mcp "npx -y @modelcontextprotocol/server-everything" as @tools`
 </CORE_CONCEPTS>
 
 <ESSENTIAL_PATTERNS>

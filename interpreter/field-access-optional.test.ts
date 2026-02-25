@@ -55,4 +55,16 @@ describe('optional field access syntax', () => {
     const out = await run(src);
     expect(out).toBe('tmp/reviews/report.json');
   });
+
+  it('treats missing source fields as falsy in ternary and @exists', async () => {
+    const src = [
+      '/var @group = { atoms: ["a"], standalone: true }',
+      '/var @resolved = @group.source ? @group.source : "default"',
+      '/show @resolved',
+      '/show @exists(@group.source)'
+    ].join('\n');
+
+    const out = await run(src);
+    expect(out).toBe('default\nfalse');
+  });
 });

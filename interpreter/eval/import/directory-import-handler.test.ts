@@ -58,6 +58,88 @@ function createMockEnv({
 }
 
 describe('DirectoryImportHandler', () => {
+  it('imports dir/index.mld when path has no trailing slash', async () => {
+    const root = '/project/agents';
+    const entries = ['party'];
+    const directories = new Set<string>([root, '/project/agents/party']);
+    const files = new Set<string>([
+      '/project/agents/index.mld',
+      '/project/agents/party/index.mld'
+    ]);
+    const { env } = createMockEnv({ root, entries, directories, files });
+
+    const processModuleContent = vi.fn(async (resolution: any) => ({
+      moduleObject: { source: resolution.resolvedPath },
+      frontmatter: null,
+      childEnvironment: {},
+      guardDefinitions: []
+    }));
+    const enforceModuleNeeds = vi.fn();
+    const handler = new DirectoryImportHandler(processModuleContent as any, enforceModuleNeeds);
+
+    const result = await handler.maybeProcessDirectoryImport(
+      { type: 'file', resolvedPath: root, importType: 'live' } as any,
+      {
+        subtype: 'importNamespace',
+        values: { path: [{ type: 'Text', content: './agents' }] },
+        raw: { path: './agents' },
+        meta: {}
+      } as any,
+      env as any
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.moduleObject).toEqual({ source: '/project/agents/index.mld' });
+    expect(processModuleContent).toHaveBeenCalledTimes(1);
+    expect(processModuleContent).toHaveBeenCalledWith(
+      expect.objectContaining({ resolvedPath: '/project/agents/index.mld' }),
+      expect.any(Object)
+    );
+  });
+
+  it('keeps collection import behavior when path has a trailing slash', async () => {
+    const root = '/project/agents';
+    const entries = ['party'];
+    const directories = new Set<string>([root, '/project/agents/party']);
+    const files = new Set<string>([
+      '/project/agents/index.mld',
+      '/project/agents/party/index.mld'
+    ]);
+    const { env } = createMockEnv({ root, entries, directories, files });
+
+    const processModuleContent = vi.fn(async (resolution: any) => {
+      const segments = resolution.resolvedPath.split('/');
+      const directoryName = segments[segments.length - 2];
+      return {
+        moduleObject: { who: directoryName },
+        frontmatter: null,
+        childEnvironment: {},
+        guardDefinitions: []
+      };
+    });
+    const enforceModuleNeeds = vi.fn();
+    const handler = new DirectoryImportHandler(processModuleContent as any, enforceModuleNeeds);
+
+    const result = await handler.maybeProcessDirectoryImport(
+      { type: 'file', resolvedPath: root, importType: 'live' } as any,
+      {
+        subtype: 'importNamespace',
+        values: { path: [{ type: 'Text', content: './agents/' }] },
+        raw: { path: './agents/' },
+        meta: {}
+      } as any,
+      env as any
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.moduleObject).toEqual({ party: { who: 'party' } });
+    expect(processModuleContent).toHaveBeenCalledTimes(1);
+    expect(processModuleContent).toHaveBeenCalledWith(
+      expect.objectContaining({ resolvedPath: '/project/agents/party/index.mld' }),
+      expect.any(Object)
+    );
+  });
+
   it('keeps traversal behavior with skipDirs + index discovery and deterministic ordering', async () => {
     const root = '/project/agents';
     const entries = ['_private', 'party', 'mllddev', '.hidden', 'noindex'];

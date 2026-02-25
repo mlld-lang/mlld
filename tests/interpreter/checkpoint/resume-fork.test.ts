@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { interpret } from '@interpreter/index';
@@ -191,6 +191,29 @@ function buildCheckpointExactPriorityScript(counterKey: string): string {
 `.trim();
 }
 
+function buildResumeAfterFailureScript(counterKey: string, failFlagKey: string): string {
+  return `
+/exe llm @llm(prompt, model) = js {
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  const rawPrompt = prompt && typeof prompt === "object" && "value" in prompt ? prompt.value : prompt;
+  const rawModel = model && typeof model === "object" && "value" in model ? model.value : model;
+  return "call:" + globalThis.${counterKey} + ":" + rawPrompt + ":" + rawModel;
+}
+/exe @gate() = js {
+  if (globalThis.${failFlagKey}) {
+    throw new Error("forced-failure-before-checkpoint");
+  }
+  return "ok";
+}
+/var @first = @llm("triage", "sonnet")
+/run @gate()
+/checkpoint "trends"
+/var @second = @llm("analysis", "sonnet")
+/show @first
+/show @second
+`.trim();
+}
+
 afterEach(async () => {
   for (const key of cleanupGlobals.splice(0)) {
     delete (globalThis as Record<string, unknown>)[key];
@@ -266,6 +289,68 @@ describe('checkpoint resume + fork runtime semantics', () => {
 
     expect(first).toBe(second);
     expect(readCounter(counterKey)).toBe(1);
+  });
+
+  it('--resume without explicit --checkpoint still enables caching', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-implies-checkpoint-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointResumeImpliesCheckpointCounter';
+    registerCounter(counterKey);
+
+    const scriptName = 'resume-implies-checkpoint';
+    const source = buildSingleCallScript(counterKey);
+    const first = await runScript({
+      source,
+      checkpointRoot,
+      scriptName,
+      resume: true
+    });
+
+    const cacheDirEntries = await readdir(path.join(checkpointRoot, scriptName));
+    expect(cacheDirEntries.length).toBeGreaterThan(0);
+
+    const second = await runScript({
+      source,
+      checkpointRoot,
+      scriptName,
+      resume: true
+    });
+
+    expect(first).toBe(second);
+    expect(readCounter(counterKey)).toBe(1);
+  });
+
+  it('allows --resume "name" for checkpoints declared after a prior failure point', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-unreached-name-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointResumeUnreachedNameCounter';
+    const failFlagKey = '__checkpointResumeUnreachedNameFailFlag';
+    registerCounter(counterKey);
+    cleanupGlobals.push(failFlagKey);
+    (globalThis as Record<string, unknown>)[failFlagKey] = true;
+
+    const source = buildResumeAfterFailureScript(counterKey, failFlagKey);
+
+    await expect(
+      runScript({
+        source,
+        checkpointRoot,
+        scriptName: 'resume-unreached-name'
+      })
+    ).rejects.toThrow('forced-failure-before-checkpoint');
+    expect(readCounter(counterKey)).toBe(1);
+
+    (globalThis as Record<string, unknown>)[failFlagKey] = false;
+    const resumed = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'resume-unreached-name',
+      resume: 'trends'
+    });
+
+    expect(readCounter(counterKey)).toBeGreaterThanOrEqual(2);
+    expect(resumed).toMatch(/call:\d+:triage:sonnet/);
+    expect(resumed).toMatch(/call:\d+:analysis:sonnet/);
   });
 
   it('invalidates all cache entries for --resume @fn', async () => {

@@ -1,0 +1,72 @@
+You are performing a critical code review of a pull request. Your job is to produce an actionable verdict that a busy maintainer can act on without reading the code themselves.
+
+## PR Metadata
+
+- **PR**: #@pr.number
+- **Title**: @pr.title
+- **Author**: @pr.author.login
+- **Branch**: @pr.headRefName → @pr.baseRefName
+- **Created**: @pr.createdAt
+- **Last Updated**: @pr.updatedAt
+- **Stats**: +@pr.additions / -@pr.deletions across @pr.changedFiles files
+- **Labels**: @labels
+
+## PR Description
+
+<pr-description>
+@pr.body
+</pr-description>
+
+## Your Task
+
+You are in a git worktree with this PR's branch checked out. The base branch is `@baseBranch`.
+
+### Step 1: Understand the Changes
+
+Run `git diff @baseBranch...HEAD --stat` to see what files changed, then `git diff @baseBranch...HEAD` to read the actual diff. For large diffs, focus on the most important files first.
+
+### Step 2: Understand the Context
+
+For each significantly changed file, read the surrounding code to understand:
+- How the changed code fits into the broader architecture
+- Whether the approach follows existing patterns in the codebase
+- Whether there are similar implementations elsewhere that this duplicates or conflicts with
+
+### Step 3: Evaluate
+
+Assess the PR on these dimensions:
+
+**Intent & Value**: Is the goal clear? Is this a useful contribution? Does the approach make sense?
+
+**Correctness**: Are there bugs, logic errors, or edge cases missed? Does the code do what it claims?
+
+**Security**: Any injection, XSS, SSRF, auth bypass, or data exposure? Is user input properly validated?
+
+**Risk**: Could this break existing functionality? Any backwards-incompatible changes? Data migration risks?
+
+**Testing**: Are there tests? Do they cover the key paths? Are edge cases tested?
+
+**Staleness**: Does this PR conflict with recent changes on the base branch? Has it been abandoned?
+
+### Step 4: Produce Your Verdict
+
+Choose ONE verdict based on this rubric:
+
+- **merge**: Code is correct, safe, and valuable. No blocking issues. Minor nits are OK — note them but still say merge.
+- **close**: PR should be closed. Reasons: abandoned (90+ days inactive, no response to feedback), duplicate of another PR, harmful/wrong approach that can't be fixed, or superseded by a merged change.
+- **needs-work**: The intent is good but there are specific, fixable issues. List exactly what needs to change.
+- **needs-discussion**: The PR raises design/architecture questions that need maintainer input before proceeding.
+
+### Confidence Guide
+
+- **high**: You thoroughly reviewed the diff and surrounding code. Your verdict is well-supported.
+- **medium**: You reviewed the diff but couldn't fully verify all interactions. Reasonable confidence.
+- **low**: Large or complex PR where you couldn't assess everything. Or ambiguous situation.
+
+## Output
+
+Produce a JSON object matching the output schema. Be concise in descriptions — the maintainer has hundreds of PRs to process. Every word should carry signal.
+
+For the `changed_files` array, list the 5-10 most significant files modified (not test files or config). This is used for cross-PR duplicate detection.
+
+CRITICAL: Your verdict must be defensible. Don't say "merge" unless you've actually verified the code is correct. Don't say "close" unless there's a clear reason. When uncertain, use "needs-discussion" with specific questions.

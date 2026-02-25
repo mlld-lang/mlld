@@ -12,18 +12,21 @@ const pathContext = {
 };
 
 describe('auto-sign defaults', () => {
-  it('signs template variables when autosign includes templates', async () => {
+  it('signs instruction variables with autosign instructions', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
     const source = `
 /var @policyConfig = {
   defaults: {
-    autosign: ["templates"]
+    autosign: ["instructions"]
   }
 }
 /policy @p = union(@policyConfig)
 /var @prompt = ::Evaluate @input::
-/var @plain = "plain"
+/var @backtickPrompt = \`Evaluate this\`
+/var @quotedPrompt = "Evaluate that"
+/var @singleQuoted = 'Also signed'
+/var @count = 42
 `.trim();
 
     await interpret(source, {
@@ -34,9 +37,56 @@ describe('auto-sign defaults', () => {
     });
 
     expect(await fileSystem.exists('/project/.sig/content/prompt.sig.json')).toBe(true);
-    expect(await fileSystem.exists('/project/.sig/content/plain.sig.json')).toBe(false);
+    expect(await fileSystem.exists('/project/.sig/content/backtickPrompt.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/quotedPrompt.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/singleQuoted.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/count.sig.json')).toBe(false);
     const content = await fileSystem.readFile('/project/.sig/content/prompt.sig.content');
     expect(content).toBe('Evaluate @input');
+  });
+
+  it('accepts instruction aliases: templates, inst, instruct', async () => {
+    for (const alias of ['templates', 'inst', 'instruct', 'instruction']) {
+      const fileSystem = new MemoryFileSystem();
+      const pathService = new PathService();
+      const source = `/var @cfg = { defaults: { autosign: ["${alias}"] } }
+/policy @p = union(@cfg)
+/var @prompt = ::test::`;
+
+      await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      });
+
+      expect(
+        await fileSystem.exists('/project/.sig/content/prompt.sig.json'),
+        `alias "${alias}" should sign instructions`
+      ).toBe(true);
+    }
+  });
+
+  it('signs templates via verify_all_instructions shorthand', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/policy @p = { verify_all_instructions: true }
+/var @prompt = ::Evaluate @input::
+/var @quoted = "Also signed"
+/var @count = 42
+`.trim();
+
+    await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect(await fileSystem.exists('/project/.sig/content/prompt.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/quoted.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/count.sig.json')).toBe(false);
   });
 
   it('signs variables matching autosign patterns', async () => {
@@ -64,6 +114,33 @@ describe('auto-sign defaults', () => {
 
     expect(await fileSystem.exists('/project/.sig/content/auditPrompt.sig.json')).toBe(true);
     expect(await fileSystem.exists('/project/.sig/content/auditInstructions.sig.json')).toBe(false);
+  });
+
+  it('signs variables matching autosign labels', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/var @policyConfig = {
+  defaults: {
+    autosign: {
+      labels: ["prompt"]
+    }
+  }
+}
+/policy @p = union(@policyConfig)
+/var prompt @signed = 42
+/var @unsigned = 42
+`.trim();
+
+    await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect(await fileSystem.exists('/project/.sig/content/signed.sig.json')).toBe(true);
+    expect(await fileSystem.exists('/project/.sig/content/unsigned.sig.json')).toBe(false);
   });
 
   it('signs .att content when autosign templates is enabled', async () => {
@@ -108,5 +185,39 @@ describe('auto-sign defaults', () => {
     expect(await fileSystem.exists('/project/.sig/content/auditPrompt.sig.json')).toBe(true);
     const content = await fileSystem.readFile('/project/.sig/content/auditPrompt.sig.content');
     expect(content).toBe('Review @input');
+  });
+
+  it('adds signed provenance labels and cascades them through composed instructions', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    let capturedEnv: any;
+    const source = `
+/var @policyConfig = {
+  defaults: {
+    autosign: ["instructions"]
+  }
+}
+/policy @p = union(@policyConfig)
+/var untrusted @data = "payload"
+/var @some = ::Instruction with @data::
+/var @prompt = ::Do @some::
+`.trim();
+
+    await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true,
+      captureEnvironment: env => {
+        capturedEnv = env;
+      }
+    });
+
+    const someVar = capturedEnv.getVariable('some');
+    const promptVar = capturedEnv.getVariable('prompt');
+    expect(someVar?.mx?.labels ?? []).toContain('signed:some');
+    expect(promptVar?.mx?.labels ?? []).toContain('signed:prompt');
+    expect(promptVar?.mx?.labels ?? []).toContain('signed:some');
+    expect(promptVar?.mx?.taint ?? []).toContain('untrusted');
   });
 });

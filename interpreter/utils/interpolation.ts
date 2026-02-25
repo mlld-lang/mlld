@@ -852,7 +852,7 @@ export async function interpolateFileReference(
           }
         } else if (!resolvedPath.startsWith('/') && !resolvedPath.startsWith('@')) {
           // Check if the path looks like it might be relative
-          console.error(`Hint: Paths are relative to mlld files. You can make them relative to your project root with the \`@base/\` prefix`);
+          console.error(`Hint: Paths are relative to mlld files. You can make them relative to your project root with the \`@root/\` prefix`);
         }
         return '';
       } else if (error.code === 'EACCES') {
@@ -902,7 +902,7 @@ export async function interpolateFileReference(
 
         // Check if the path looks like it might be relative (only if no other hint shown)
         if (!hasVariableHint && !resolvedPath.startsWith('/') && !resolvedPath.startsWith('@')) {
-          console.error(`Hint: Paths are relative to mlld files. You can make them relative to your project root with the \`@base/\` prefix`);
+          console.error(`Hint: Paths are relative to mlld files. You can make them relative to your project root with the \`@root/\` prefix`);
         }
         return '';
       }

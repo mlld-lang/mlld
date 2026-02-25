@@ -37,7 +37,6 @@ exe @logItemStart(runDir, id, itemType) = [
 ]
 
 >> Log item complete (with optional extra data)
->> Note: Parameter renamed from @result to @status to avoid shadowing caller's @result variable
 exe @logItemDone(runDir, id, status, extra) = [
   let @baseEvent = { event: "item_done", id: @id, result: @status }
   let @fullEvent = @extra ? { ...@baseEvent, ...@extra } : @baseEvent
@@ -95,9 +94,7 @@ exe @logMergeFailed(runDir, ticketId, error) = [
 ]
 
 >> Log item requiring manual review to a prominent file in project root
->> File: <run-id>-manual-review-reqd.jsonl in @base/
 exe @logManualReview(runDir, ticketId, phase, reason, details) = [
-  >> Extract run ID from runDir path (last segment)
   let @runId = @runDir.split("/").pop()
   let @reviewFile = `@base/@runId-manual-review-reqd.jsonl`
   let @entry = {

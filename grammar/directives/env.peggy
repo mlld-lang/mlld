@@ -9,16 +9,20 @@ EnvConfigExpression "env config expression"
   / Expression
 
 SlashEnv "env directive"
-  = DirectiveContext EnvKeyword _ config:EnvConfigExpression withClause:WithClause? _ block:ExeStatementBlock ending:StandardDirectiveEnding {
+  = DirectiveContext EnvKeyword _ config:EnvConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock ending:StandardDirectiveEnding {
       const values = {
-        config: [config],
-        block,
-        ...(withClause ? { withClause } : {})
+        ...(config ? { config: [config] } : {}),
+        ...(withClause ? { withClause } : {}),
+        block
       };
 
-      const raw = {
-        config: helpers.reconstructRawString([config])
-      };
+      const raw = {};
+      if (config) {
+        raw.config = helpers.reconstructRawString([config]);
+      }
+      if (withClause) {
+        raw.withClause = withClause;
+      }
 
       const meta = {
         statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
@@ -26,7 +30,6 @@ SlashEnv "env directive"
       };
 
       if (withClause) {
-        raw.withClause = withClause;
         meta.withClause = withClause;
       }
 
@@ -44,16 +47,16 @@ SlashEnv "env directive"
         'env'
       );
     }
-  / DirectiveContext EnvKeyword _ !EnvConfigExpression {
+  / DirectiveContext EnvKeyword _ config:EnvConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
       helpers.mlldError(
-        'env requires a config expression. Expected: env @config [ ... ]',
-        '@config',
+        'env requires a config expression or with clause. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        '@config or with { ... }',
         location()
       );
     }
-  / DirectiveContext EnvKeyword _ config:EnvConfigExpression withClause:WithClause? _ !("[" / BlockComments) {
+  / DirectiveContext EnvKeyword _ config:EnvConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
       helpers.mlldError(
-        'env requires a block. Expected: env @config [ ... ]',
+        'env requires a block. Expected: env @config [ ... ] or env with { ... } [ ... ]',
         '[',
         location()
       );

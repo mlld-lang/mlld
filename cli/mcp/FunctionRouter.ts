@@ -8,7 +8,6 @@ import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { mcpNameToMlldName, mlldNameToMCPName } from '@core/mcp/names';
 import { asData, asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
-import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 
 export interface FunctionRouterOptions {
   environment: Environment;
@@ -54,6 +53,7 @@ export class FunctionRouter {
 
   async executeFunction(toolName: string, args: Record<string, unknown>): Promise<string> {
     this.syncToolsAvailability();
+    this.ensureToolExists(toolName);
     const toolKey = this.resolveToolKey(toolName);
     if (!this.environment.isToolAllowed(toolKey, toolName)) {
       throw new Error(`Tool '${toolName}' not available`);
@@ -68,13 +68,13 @@ export class FunctionRouter {
       if (this.toolCollection) {
         const definition = this.toolCollection[toolKey];
         if (!definition?.mlld) {
-          throw new Error(`Tool '${toolName}' not found`);
+          throw this.createToolNotFoundError(toolName);
         }
         const execName = definition.mlld;
         const variable = this.environment.getVariable(execName) as Variable | undefined;
 
         if (!variable || variable.type !== 'executable') {
-          throw new Error(`Tool '${toolName}' not found`);
+          throw this.createToolNotFoundError(toolName);
       }
 
       const execVar = variable as ExecutableVariable;
@@ -83,13 +83,16 @@ export class FunctionRouter {
         execName,
         execVar,
         resolvedArgs,
-        toolKey,
         definition.labels,
         this.shouldUseObjectArgs(execVar)
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
 
-        this.environment.recordToolCall({ ...callRecord, ok: true });
+        this.environment.recordToolCall({
+          ...callRecord,
+          ok: true,
+          result: this.toTrackedToolResult(result.value)
+        });
         return this.serializeResult(result.value);
       }
 
@@ -97,7 +100,7 @@ export class FunctionRouter {
       const variable = this.environment.getVariable(execName) as Variable | undefined;
 
       if (!variable || variable.type !== 'executable') {
-        throw new Error(`Tool '${toolName}' not found`);
+        throw this.createToolNotFoundError(toolName);
       }
 
       const execVar = variable as ExecutableVariable;
@@ -105,13 +108,16 @@ export class FunctionRouter {
         execName,
         execVar,
         args,
-        toolKey,
         undefined,
         this.shouldUseObjectArgs(execVar)
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
 
-      this.environment.recordToolCall({ ...callRecord, ok: true });
+      this.environment.recordToolCall({
+        ...callRecord,
+        ok: true,
+        result: this.toTrackedToolResult(result.value)
+      });
       return this.serializeResult(result.value);
     } catch (error) {
       this.environment.recordToolCall({
@@ -159,11 +165,47 @@ export class FunctionRouter {
     return map;
   }
 
+  private ensureToolExists(toolName: string): void {
+    if (this.toolNamesMcp.length === 0) {
+      return;
+    }
+
+    if (!this.toolNamesMcp.includes(toolName)) {
+      throw this.createToolNotFoundError(toolName);
+    }
+  }
+
+  private createToolNotFoundError(toolName: string): Error {
+    const suggestion = this.findToolNameSuggestion(toolName);
+    if (suggestion) {
+      return new Error(`Tool not found: '${toolName}'. Did you mean '${suggestion}'?`);
+    }
+    return new Error(`Tool not found: '${toolName}'`);
+  }
+
+  private findToolNameSuggestion(toolName: string): string | null {
+    if (this.toolNamesMcp.length === 0) {
+      return null;
+    }
+
+    const directSnake = mlldNameToMCPName(toolName);
+    if (directSnake !== toolName && this.toolNamesMcp.includes(directSnake)) {
+      return directSnake;
+    }
+
+    const camelCandidate = mcpNameToMlldName(toolName);
+    const snakeFromCamel = mlldNameToMCPName(camelCandidate);
+    if (snakeFromCamel !== toolName && this.toolNamesMcp.includes(snakeFromCamel)) {
+      return snakeFromCamel;
+    }
+
+    return null;
+  }
+
   private buildInvocation(
     name: string,
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
-    sourceName?: string,
     toolLabels?: string[],
     argsAsObject?: boolean
   ): ExecInvocation {
@@ -182,15 +224,12 @@ export class FunctionRouter {
       args: argNodes,
     };
 
-    const mcpSecurityDescriptor = this.createMcpSecurityDescriptor(sourceName ?? name);
-
     return {
       type: 'ExecInvocation',
       nodeId: randomUUID(),
       location,
       commandRef,
       meta: {
-        mcpSecurity: mcpSecurityDescriptor,
         toolCallTracking: 'router',
         ...(toolLabels && toolLabels.length > 0 ? { mcpToolLabels: toolLabels } : {})
       }
@@ -199,13 +238,6 @@ export class FunctionRouter {
 
   private shouldUseObjectArgs(execVar: ExecutableVariable): boolean {
     return execVar.internal?.mcpTool?.argumentMode === 'object';
-  }
-
-  private createMcpSecurityDescriptor(toolName: string): SecurityDescriptor {
-    return makeSecurityDescriptor({
-      taint: ['src:mcp'],
-      sources: [`mcp:${toolName}`]
-    });
   }
 
   private async resolveToolArgs(
@@ -224,6 +256,7 @@ export class FunctionRouter {
     const exposed = hasExpose
       ? definition.expose!
       : paramNames.filter(param => !boundKeys.includes(param));
+    const optionalSet = new Set(Array.isArray(definition.optional) ? definition.optional : []);
     const exposedSet = new Set(exposed);
 
     for (const key of Object.keys(args)) {
@@ -236,7 +269,8 @@ export class FunctionRouter {
     }
 
     if (exposed.length > 0) {
-      const missing = exposed.filter(key => !Object.prototype.hasOwnProperty.call(args, key));
+      const required = exposed.filter(key => !optionalSet.has(key));
+      const missing = required.filter(key => !Object.prototype.hasOwnProperty.call(args, key));
       if (missing.length > 0) {
         throw new Error(`Tool '${toolName}' requires parameters: ${missing.join(', ')}`);
       }
@@ -415,5 +449,12 @@ export class FunctionRouter {
     } catch {
       return String(value);
     }
+  }
+
+  private toTrackedToolResult(value: unknown): unknown {
+    if (isStructuredValue(value)) {
+      return asData(value);
+    }
+    return value;
   }
 }

@@ -1,14 +1,12 @@
 import type { TypedDirectiveNode } from './base';
 import type { BaseMlldNode, DirectiveNode, SourceLocation } from './primitives';
 
-export type HookScope = 'perInput' | 'perOperation' | 'perFunction';
 export type HookFilterKind = 'data' | 'operation' | 'function';
 export type HookTiming = 'before' | 'after';
 
 export interface HookFilterNode extends BaseMlldNode {
   type: 'HookFilter';
   filterKind: HookFilterKind;
-  scope: HookScope;
   value: string;
   raw: string;
   argPattern?: string | null;
@@ -41,7 +39,6 @@ export interface HookDirectiveRaw {
 export interface HookDirectiveMeta {
   filterKind: HookFilterKind;
   filterValue: string;
-  scope: HookScope;
   hasName: boolean;
   timing: HookTiming;
   hasArgPattern: boolean;

@@ -1,0 +1,17 @@
+>> Agent tool: the LLM writes the program. mlld runs it.
+exe @claude(prompt) = cmd { claude -p "@prompt" }
+
+exe @investigate(question: string) = [
+  let @schema = cmd { sqlite3 data.db ".schema" }
+  let @prompt = `Write mlld to answer: @question
+    DB at data.db — schema: @schema
+    Use for parallel for concurrency. Return JSON via show.`
+  let @script = @claude(@prompt)
+  => cmd { mlld -e "@script" } | @parse
+]
+
+export { @investigate }
+
+>> Agent calls: @investigate("anomalous transactions last 30 days")
+>> Gets structured results from a program it composed —
+>> executed with parallelism and label enforcement

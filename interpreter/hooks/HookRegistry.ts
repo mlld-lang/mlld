@@ -2,17 +2,36 @@ import type {
   HookBodyNode,
   HookDirectiveNode,
   HookFilterKind,
-  HookScope,
   HookTiming
 } from '@core/types/hook';
 import type { SourceLocation } from '@core/types';
+
+const KNOWN_OPERATION_TYPES = [
+  'exe',
+  'var',
+  'for',
+  'for:iteration',
+  'for:batch',
+  'loop',
+  'import',
+  'show',
+  'output',
+  'append',
+  'run'
+] as const;
+
+const KNOWN_OPERATION_TYPE_SET = new Set<string>(KNOWN_OPERATION_TYPES);
+const KNOWN_OPERATION_TYPE_LIST = KNOWN_OPERATION_TYPES.join(', ');
+
+export interface RegisterHookOptions {
+  emitWarning?: (message: string) => void;
+}
 
 export interface HookDefinition {
   id: string;
   name?: string;
   filterKind: HookFilterKind;
   filterValue: string;
-  scope: HookScope;
   timing: HookTiming;
   argPattern?: string | null;
   body: HookBodyNode;
@@ -54,7 +73,11 @@ export class HookRegistry {
     return new HookRegistry(this);
   }
 
-  register(node: HookDirectiveNode, location?: SourceLocation | null): HookDefinition {
+  register(
+    node: HookDirectiveNode,
+    location?: SourceLocation | null,
+    options?: RegisterHookOptions
+  ): HookDefinition {
     const filterNode = node.values.filter?.[0];
     if (!filterNode) {
       throw new Error('Hook directive missing filter');
@@ -76,12 +99,13 @@ export class HookRegistry {
       throw new Error(`Hook definition already exists for ${hookName ?? filterNode.value}`);
     }
 
+    this.validateFilter(filterNode.filterKind, filterNode.value, options?.emitWarning);
+
     const definition: HookDefinition = {
       id: hookId,
       name: hookName,
       filterKind: filterNode.filterKind,
       filterValue: filterNode.value,
-      scope: filterNode.scope,
       timing: node.meta.timing ?? 'before',
       argPattern: filterNode.argPattern ?? null,
       body: bodyNode,
@@ -139,6 +163,23 @@ export class HookRegistry {
 
   private hasDefinition(id: string): boolean {
     return this.definitions.has(id) || (this.parent?.hasDefinition(id) ?? false);
+  }
+
+  private validateFilter(
+    filterKind: HookFilterKind,
+    filterValue: string,
+    emitWarning?: (message: string) => void
+  ): void {
+    if (!emitWarning || filterKind !== 'operation') {
+      return;
+    }
+    if (KNOWN_OPERATION_TYPE_SET.has(filterValue)) {
+      return;
+    }
+    emitWarning(
+      `Warning: Hook "op:${filterValue}" uses unknown operation type "${filterValue}". ` +
+        `Known types: ${KNOWN_OPERATION_TYPE_LIST}.`
+    );
   }
 
   private registerDefinition(definition: HookDefinition): void {

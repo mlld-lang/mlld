@@ -5,6 +5,7 @@ import type { Variable } from '@core/types/variable';
 import { PersistentContentStore } from '@disreguard/sig';
 import { createSigContextForEnv, normalizeContentVerifyResult } from '@core/security/sig-adapter';
 import { isStructuredValue, asText } from '@interpreter/utils/structured-value';
+import { normalizeSignedVariableName } from '@interpreter/eval/exec/normalization';
 
 function coerceToString(value: unknown): string {
   if (value === null) return '';
@@ -277,6 +278,47 @@ export function getSignatureContent(variable: Variable): string {
   return coerceToString(variable.value);
 }
 
+export function makeSignedProvenanceLabel(name: string): string {
+  return `signed:${normalizeSignedVariableName(name)}`;
+}
+
+export function extractSignedProvenanceNames(labels: readonly string[] | undefined): string[] {
+  if (!labels || labels.length === 0) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const signed: string[] = [];
+  for (const label of labels) {
+    if (typeof label !== 'string' || !label.startsWith('signed:')) {
+      continue;
+    }
+    const name = normalizeSignedVariableName(label.slice('signed:'.length).trim());
+    if (!name || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    signed.push(name);
+  }
+  return signed;
+}
+
+export function addSignedProvenanceLabel(variable: Variable, name: string): void {
+  if (!variable.mx) {
+    variable.mx = {
+      labels: [],
+      taint: [],
+      sources: [],
+      policy: null
+    } as any;
+  }
+  const labels = Array.isArray(variable.mx.labels) ? [...variable.mx.labels] : [];
+  const label = makeSignedProvenanceLabel(name);
+  if (!labels.includes(label)) {
+    labels.push(label);
+  }
+  variable.mx.labels = labels;
+}
+
 export async function evaluateSign(
   directive: DirectiveNode,
   env: Environment
@@ -295,6 +337,7 @@ export async function evaluateSign(
   const content = getSignatureContent(variable);
   const store = new PersistentContentStore(createSigContextForEnv(env));
   const record = await store.sign(content, { id: varName, identity: signedBy });
+  addSignedProvenanceLabel(variable, varName);
   return { value: record, env };
 }
 

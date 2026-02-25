@@ -4,7 +4,7 @@ A scripting language for secure LLM orchestration. Compose prompts from files, c
 
 ```bash
 npm install -g mlld
-mlld howto intro      # give this to your llm
+mlld quickstart          # give this to your llm
 ```
 
 [VSCode Extension](https://marketplace.visualstudio.com/items?itemName=andyet.mlld-vscode) | [Documentation](https://mlld.ai/docs)
@@ -224,7 +224,7 @@ Source labels are applied automatically — MCP tool outputs carry `src:mcp`, co
 Policies declare what should and shouldn't happen through classification:
 
 ```mlld
-var @config = {
+policy @p = {
   defaults: {
     unlabeled: "untrusted",
     rules: [
@@ -245,7 +245,6 @@ var @config = {
     deny: ["sh"]
   }
 }
-policy @p = union(@config)
 ```
 
 `defaults.rules` enables named rules that block dangerous label-to-operation flows. `operations` maps semantic exe labels to risk categories — you label functions with what they do, and policy classifies those as risk types. `capabilities` controls what operations can run at all; even if an LLM is tricked into attempting `rm -rf /`, the capability check blocks it.
@@ -276,16 +275,16 @@ guard after llmjson = when [
 ]
 ```
 
-After guards validate output:
+Privileged guards can remove protected labels — non-privileged guards cannot:
 
 ```mlld
-guard @validateMcp after src:mcp = when [
-  @schema.valid(@output) => allow @output
+guard privileged @validateMcp after src:mcp = when [
+  @schema.valid(@output) => trusted! @output
   * => deny "Invalid schema"
 ]
 ```
 
-Trust is asymmetric — anyone can mark data as untrusted, but only privileged guards can bless data as trusted. This mirrors real-world security: raising a concern is easy, clearing one requires authority.
+Trust is asymmetric — anyone can mark data as untrusted, but only privileged guards can bless data as trusted (`trusted!`), remove labels (`!label`), or clear all labels (`clear!`). This mirrors real-world security: raising a concern is easy, clearing one requires authority.
 
 ### Sealed Credentials
 

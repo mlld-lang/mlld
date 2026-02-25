@@ -35,14 +35,17 @@ exe @buildTree(allAtoms, introAtom) = js {
   }
 
   const categories = [
-    { name: 'syntax', atoms: allAtoms.syntax },
-    { name: 'commands', atoms: allAtoms.commands },
-    { name: 'control-flow', atoms: allAtoms.controlFlow },
+    { name: 'core', atoms: allAtoms.core },
+    { name: 'flow-control', atoms: allAtoms.flowControl },
+    { name: 'effects', atoms: allAtoms.effects },
     { name: 'modules', atoms: allAtoms.modules },
+    { name: 'mcp', atoms: allAtoms.mcp },
+    { name: 'output', atoms: allAtoms.output },
     { name: 'patterns', atoms: allAtoms.patterns },
-    { name: 'configuration', atoms: allAtoms.configuration },
-    { name: 'security', atoms: allAtoms.security },
-    { name: 'mistakes', atoms: allAtoms.mistakes }
+    { name: 'cli', atoms: allAtoms.cli },
+    { name: 'config', atoms: allAtoms.config },
+    { name: 'sdk', atoms: allAtoms.sdk },
+    { name: 'security', atoms: allAtoms.security }
   ];
 
   for (const cat of categories) {
@@ -67,11 +70,12 @@ exe @buildTree(allAtoms, introAtom) = js {
   }
 
   lines.push('Usage:');
-  lines.push('  mlld howto <section>           Show section index (e.g., howto syntax)');
+  lines.push('  mlld howto <keyword>           Search by keyword (tags, titles, briefs)');
+  lines.push('  mlld howto <section>           Show section index (e.g., howto core)');
   lines.push('  mlld howto <section> --all     Show full section content');
   lines.push('  mlld howto <topic>             Show specific topic (e.g., howto for-parallel)');
   lines.push('  mlld howto <topic> --section   Find topic then show its entire section');
-  lines.push('  mlld howto grep <pattern>      Search all docs for pattern');
+  lines.push('  mlld howto grep <pattern>      Full-text search across all docs');
   lines.push('');
   lines.push('Tip: Use `mlld mcp-dev` to start an MCP server with language introspection tools');
   lines.push('     (mlld_validate, mlld_analyze, mlld_ast) for editor/agent integration.');
@@ -148,6 +152,68 @@ exe @joinStripped(atoms) = js {
   }).join('\n\n');
 }
 
+>> Keyword search across tags, title, brief (fallback when structured lookup misses)
+exe @keywordSearch(atoms, keyword) = js {
+  if (!keyword) return [];
+  const lower = keyword.toLowerCase();
+  const results = [];
+
+  for (const atom of atoms) {
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
+    const match = text.match(/^---\n([\s\S]*?)\n---/);
+    if (!match) continue;
+
+    const fm = match[1];
+    const idMatch = fm.match(/^id:\s*(.+)$/m);
+    if (!idMatch) continue;
+    const id = idMatch[1].trim();
+    if (id.startsWith('_')) continue;
+
+    const tagsMatch = fm.match(/^tags:\s*\[([^\]]*)\]/m);
+    const titleMatch = fm.match(/^title:\s*(.+)$/m);
+    const briefMatch = fm.match(/^brief:\s*(.+)$/m);
+
+    const tags = tagsMatch
+      ? tagsMatch[1].split(',').map(t => t.trim().toLowerCase())
+      : [];
+    const title = titleMatch ? titleMatch[1].trim().toLowerCase() : '';
+    const brief = briefMatch ? briefMatch[1].trim() : '';
+
+    // Tag exact match (highest relevance)
+    if (tags.includes(lower)) {
+      results.push({ atom, id, brief, score: 2 });
+      continue;
+    }
+
+    // Title or brief substring match
+    if (title.includes(lower) || brief.toLowerCase().includes(lower)) {
+      results.push({ atom, id, brief, score: 1 });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  return results;
+}
+
+>> Format keyword search results for multi-match display
+exe @formatKeywordResults(results, keyword) = js {
+  if (results.length === 0) return '';
+  const lines = [results.length + ' matches for "' + keyword + '":', ''];
+
+  for (const r of results) {
+    lines.push('  mlld howto ' + r.id);
+    if (r.brief) lines.push('  ' + r.brief);
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+>> Extract just the atom objects from keyword results
+exe @kwAtoms(results) = js {
+  return results.map(r => r.atom);
+}
+
 >> Search atoms for pattern, return matching lines with context
 exe @grepAtoms(atoms, pattern) = js {
   if (!pattern) return 'Usage: mlld howto grep <pattern>';
@@ -190,22 +256,25 @@ exe @grepAtoms(atoms, pattern) = js {
 >> Load intro atom (standalone at top level)
 var @introAtom = <@root/docs/src/atoms/intro.md>
 
->> Load atoms from all categories
-var @syntaxAtoms = <@root/docs/src/atoms/syntax/*.md>
-var @commandsAtoms = <@root/docs/src/atoms/commands/*.md>
-var @controlFlowAtoms = <@root/docs/src/atoms/control-flow/*.md>
+>> Load atoms from all sections
+var @cliAtoms = <@root/docs/src/atoms/cli/*.md>
+var @configAtoms = <@root/docs/src/atoms/config/*.md>
+var @coreAtoms = <@root/docs/src/atoms/core/*.md>
+var @effectsAtoms = <@root/docs/src/atoms/effects/*.md>
+var @flowControlAtoms = <@root/docs/src/atoms/flow-control/*.md>
+var @mcpAtoms = <@root/docs/src/atoms/mcp/*.md>
 var @modulesAtoms = <@root/docs/src/atoms/modules/*.md>
+var @outputAtoms = <@root/docs/src/atoms/output/*.md>
 var @patternsAtoms = <@root/docs/src/atoms/patterns/*.md>
-var @configurationAtoms = <@root/docs/src/atoms/configuration/*.md>
+var @sdkAtoms = <@root/docs/src/atoms/sdk/*.md>
 var @securityAtoms = <@root/docs/src/atoms/security/*.md>
-var @mistakesAtoms = <@root/docs/src/atoms/mistakes/*.md>
 
 >> Bundle all atoms into object for tree display
-exe @bundleAtoms(syntax, commands, controlFlow, modules, patterns, configuration, security, mistakes) = js {
-  return { syntax, commands, controlFlow, modules, patterns, configuration, security, mistakes };
+exe @bundleAtoms(cli, config, core, effects, flowControl, mcp, modules, output, patterns, sdk, security) = js {
+  return { cli, config, core, effects, flowControl, mcp, modules, output, patterns, sdk, security };
 }
 
-var @allAtoms = @bundleAtoms(@syntaxAtoms, @commandsAtoms, @controlFlowAtoms, @modulesAtoms, @patternsAtoms, @configurationAtoms, @securityAtoms, @mistakesAtoms)
+var @allAtoms = @bundleAtoms(@cliAtoms, @configAtoms, @coreAtoms, @effectsAtoms, @flowControlAtoms, @mcpAtoms, @modulesAtoms, @outputAtoms, @patternsAtoms, @sdkAtoms, @securityAtoms)
 var @flatAtoms = @flattenAtoms(@allAtoms)
 
 >> Add intro to flat atoms for searching
@@ -225,8 +294,17 @@ exe @buildFullId(topic, subtopic) = js {
 
 >> Check if topic is a section name
 exe @isSection(topic) = js {
-  const sections = ['syntax', 'commands', 'control-flow', 'modules', 'patterns', 'configuration', 'security', 'mistakes'];
+  const sections = ['cli', 'config', 'core', 'effects', 'flow-control', 'mcp', 'modules', 'output', 'patterns', 'sdk', 'security'];
   return sections.includes(topic);
+}
+
+>> Get atoms for a section directly from the bundled object (filesystem-derived, not frontmatter)
+exe @getSectionAtoms(allAtoms, sectionName) = js {
+  const keyMap = { 'cli': 'cli', 'config': 'config', 'core': 'core', 'effects': 'effects',
+    'flow-control': 'flowControl', 'mcp': 'mcp', 'modules': 'modules', 'output': 'output',
+    'patterns': 'patterns', 'sdk': 'sdk', 'security': 'security' };
+  const key = keyMap[sectionName];
+  return key && allAtoms[key] ? allAtoms[key] : [];
 }
 
 >> Compute values
@@ -239,9 +317,13 @@ var @wantSection = @section == true
 var @wantAll = @all == true
 var @isSectionTopic = @isSection(@topic)
 
->> Get matches
+>> Get matches (structured lookup, then keyword fallback)
 var @exactMatches = @filterById(@allFlatAtoms, @fullId)
 var @topicMatches = @filterByTopic(@allFlatAtoms, @topic)
+var @kwResults = @keywordSearch(@allFlatAtoms, @topic)
+
+>> For section topics, get atoms from the filesystem-derived bundle (not frontmatter)
+var @sectionAtoms = @getSectionAtoms(@allAtoms, @topic)
 
 >> Get section matches when --section flag is used
 >> First, find the category of the matched atom
@@ -346,8 +428,11 @@ when [
   @wantSection && @sectionMatches.length > 0 => show @joinStripped(@sectionMatches)
   @hasSubtopic && @exactMatches.length > 0 => show @joinStripped(@exactMatches)
   @hasSubtopic => show `Subtopic "@fullId" not found.`
-  @isSectionTopic && !@wantAll && @topicMatches.length > 0 => show @buildSectionIndex(@topicMatches, @topic)
+  @isSectionTopic && !@wantAll && @sectionAtoms.length > 0 => show @buildSectionIndex(@sectionAtoms, @topic)
+  @isSectionTopic && @wantAll && @sectionAtoms.length > 0 => show @joinStripped(@sectionAtoms)
   @hasTopic && @topicMatches.length > 0 => show @joinStripped(@topicMatches)
+  @hasTopic && @kwResults.length == 1 => show @joinStripped(@kwAtoms(@kwResults))
+  @hasTopic && @kwResults.length > 1 => show @formatKeywordResults(@kwResults, @topic)
   @hasTopic => show @notFoundMsg(@topic, @buildTree(@allAtoms, @introAtom))
   * => show @buildTree(@allAtoms, @introAtom)
 ]

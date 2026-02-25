@@ -255,7 +255,7 @@ show    << shows in both the final output and in the terminal
 run     << runs commands/functions silently (no output unless they `show`)
 ```
 
-There are more: `import` modules, `output` files, `log` (stderr), `stream` (streaming output), `for` loops, `when` condition/action pairs, `while` loops, and `guard` for security policies. `output` supports format specifiers: `output @config to "settings.yaml" as yaml`.
+There are more: `import` modules, `output` files, `log` (stderr), `stream` (streaming output), `for` loops, `when` condition/action pairs, `while` loops, and `guard` for security policies. Format data before writing, for example: `output @config.yaml() to "settings.yaml"`.
 
 ### `var`, `show`, and `run`
 

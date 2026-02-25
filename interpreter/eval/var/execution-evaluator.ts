@@ -1,10 +1,17 @@
 import type { DirectiveNode, SourceLocation } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
+import { deriveCodeSourceTaintLabel } from '@core/security/taint';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import {
+  asText,
+  extractSecurityDescriptor,
+  isStructuredValue
+} from '@interpreter/utils/structured-value';
 import { isExeReturnControl } from '../exe-return';
+import { extractDescriptorsFromTemplateAst } from './security-descriptor';
 import {
   enforceToolSubset,
   isPlainObject,
@@ -71,6 +78,11 @@ export function createExecutionEvaluator(
   } = dependencies;
 
   const evaluateCommand = async (valueNode: any): Promise<unknown> => {
+    const commandTemplateDescriptor = extractDescriptorsFromTemplateAst(valueNode.command, env);
+    if (commandTemplateDescriptor) {
+      descriptorState.mergeResolvedDescriptor(commandTemplateDescriptor);
+    }
+
     const withClause = (directive.values?.withClause || directive.meta?.withClause) as any | undefined;
     const runWithClause =
       valueNode.using || withClause
@@ -100,6 +112,13 @@ export function createExecutionEvaluator(
       }
     };
     const result = await evaluateRun(runDirective, env);
+    const commandResultDescriptor = extractSecurityDescriptor(result.value, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (commandResultDescriptor) {
+      descriptorState.mergeResolvedDescriptor(commandResultDescriptor);
+    }
     const textOutput = isStructuredValue(result.value)
       ? asText(result.value)
       : typeof result.value === 'string'
@@ -128,6 +147,12 @@ export function createExecutionEvaluator(
     if (node.type === 'code') {
       const { evaluateCodeExecution } = await import('../code-execution');
       const result = await evaluateCodeExecution(node, env, sourceLocation ?? undefined);
+      const sourceTaintLabel = deriveCodeSourceTaintLabel(node.language);
+      if (sourceTaintLabel) {
+        descriptorState.mergeResolvedDescriptor(
+          makeSecurityDescriptor({ taint: [sourceTaintLabel] })
+        );
+      }
       return { kind: 'resolved', value: result.value };
     }
 

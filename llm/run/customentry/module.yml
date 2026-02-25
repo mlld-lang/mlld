@@ -1,0 +1,6 @@
+name: customentry
+author: qa
+type: app
+about: "Test module with custom entry point"
+version: 1.0.0
+entry: my-app.mld

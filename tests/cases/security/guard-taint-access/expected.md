@@ -1,3 +1,3 @@
 # Guard can access @mx.taint
 
-taint:["retryable","src:exec"]
+taint:["retryable","src:cmd"]

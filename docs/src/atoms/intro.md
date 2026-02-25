@@ -1,5 +1,6 @@
 ---
 id: intro
+qa_tier: 1
 title: Introduction to mlld
 brief: What mlld is, mental model, and key concepts
 category: intro
@@ -12,7 +13,8 @@ updated: 2026-02-15
 
 ```
 mlld howto                 Browse all documentation topics
-mlld howto grep <pattern>  Search docs for keywords
+mlld howto <keyword>       Search by keyword (searches tags, titles, briefs)
+mlld howto grep <pattern>  Full-text search across all docs
 mlld validate <dir>        Validate all mlld files in a directory (recommended)
 mlld validate <file>       Validate a single file
 ```
@@ -28,8 +30,8 @@ mlld is an LLM scripting language for **surgical context assembly**, **token-eff
 Load exactly what you need, when you need it. Glob files, extract sections, filter by metadata, transform content — all with declarative syntax.
 
 ```mlld
-var @relevantDocs = <docs/**/*.md>.section("API")
-var @recentChanges = <CHANGELOG.md> | @lines | @first(10)
+var @relevantDocs = <docs/**/*.md # API, "SDK Usage"; !# Internal>
+exe @releaseNotes(version) = <CHANGELOG.md # "[@version]" >
 ```
 
 mlld makes context preparation explicit, reviewable, and reproducible.
@@ -54,11 +56,10 @@ Decision logic stays in your script. LLMs do what they're good at: reading, writ
 Defend against prompt injection by enforcing what data can flow where, regardless of LLM intent. Labels track data provenance automatically. Policies block dangerous flows. Guards inspect and transform operations.
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: { rules: ["no-secret-exfil"], unlabeled: "untrusted" },
   labels: { secret: { deny: ["op:show", "exfil"] } }
 }
-policy @p = union(@policyConfig)
 
 var secret @data = <@private/customer-list.txt>
 >> LLM can be tricked into trying to exfil @data
@@ -70,6 +71,8 @@ See `mlld howto security` for comprehensive prompt injection defense strategies.
 ## Richly featured, many examples
 
 mlld is very full-featured for creating LLM workflows. It *should* be possible to do most things you'd want to do natively in mlld, but you can also fallback to python or javascript or shell scripts *inside* mlld.
+
+Before using a js/python fallback, search the docs: mlld PROBABLY solved it already.
 
 Use the `mlld` skill (installed with `mlld skill install`) and see the examples included with the skill.
 
@@ -95,7 +98,7 @@ show `Hello @name!`
 
 ## Key Concepts
 
-**Directives** - Commands: `var`, `show`, `run`, `if`, `for`, `when`, `import`, `export`, `guard`, `policy`
+**Directives** - Commands: `var`, `show`, `run`, `if`, `for`, `when`, `import`, `export`, `guard`, `policy`, `hook`, `checkpoint`
 
 **Variables** - Always `@` prefixed: `@name`, `@data`, `@result`
 
@@ -116,11 +119,15 @@ var @alt = ::Hello @name!::
 
 **Security** - Labels + policies + guards = prompt injection defense
 
+**Hooks** - Lifecycle observers: `hook after @fn = [...]` for logging, telemetry, transforms
+
+**Checkpoint** - Auto-caches `llm`-labeled exe results; `--resume` re-runs selectively
+
 ## Gotchas
 
 mlld is not JavaScript/Python, but it has familiar built-in JS methods. See `mlld howto builtins` for the full list.
 
-`@exists(@var)` checks if the *variable* is defined. `@fileExists(@var)` checks if the *file at that path* exists.
+Loaded files are rich objects, not strings. Frontmatter is already parsed (@file.mx.fm.title), metadata is available (@file.mx.tokens, @file.mx.filename). Check `mlld howto file-loading-metadata` before writing js/node blocks for file processing.
 
 **Use `>>` for comments, not `//`**
 
@@ -156,6 +163,13 @@ exe @shell() = sh { ls > out.txt 2>/dev/null } >> correct: sh allows all shell s
 
 Use native variable syntax in `js`, `node`, `sh`, `py` blocks — pass mlld values as parameters.
 
+| Block | mlld vars | Native vars | Comments |
+|------|-----------|-------------|----------|
+| `cmd` | `@name` | n/a | mlld interpolation |
+| `sh` | not available | `$name` | exe params become shell vars |
+| `js` | not available | `paramName` | exe params are JS locals |
+| `py` | not available | `paramName` | exe params are Python locals |
+
 Angle brackets `<>` in templates and expressions
 ```mlld
 var @html = `<div>Hello</div>`                 >> properly interprets as text bc no slashes/dots/vars
@@ -164,6 +178,8 @@ var @readme = <README.md>                      >> loads file
 var @files = <src/**/*.ts>                     >> glob pattern
 var @files = <@pathvar/file.ts>                >> variable usage
 ```
+`<@var>` always triggers file loading. For text output, use `@var` directly.
+
 See `mlld howto file-loading-basics` for advanced usage.
 
 `@var.json` is field access. Escape the dot for file extensions: `@name\.json`.
@@ -181,6 +197,16 @@ Errors in `for parallel` loops become data objects with `.error` and `.message` 
 var @results = for parallel(4) @item in @list [ => @process(@item) ]
 var @failures = for @r in @results when @r.error => @r
 ```
+
+`@exists(@var)` checks if the *variable* is defined. `@fileExists(@var)` checks if the *file at that path* exists.
+
+`[]` and `{}` are falsy in mlld 
+
+**Reserved variables**: `@root`, `@base`, `@now`, `@input`, `@payload`, `@state`, `@debug`, `@keychain`, `@fm`, `@mx`, `@p`
+
+**Built-in transformers** (pipes: `@data | name`): `@parse` (`.strict`, `.loose`, `.llm`, `.fromlist`), `@xml`, `@csv`, `@md`, `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+
+**Built-in functions**: `@exists(@var)`, `@fileExists(@path)`, `@typeof(@var)`
 
 ## Key Syntax
 
@@ -223,11 +249,11 @@ var @data = @text | @parse.llm          >> extract JSON from LLM output
 
 ## Built-ins at a Glance
 
-**Reserved variables**: `@root`, `@base`, `@now`, `@input`, `@payload`, `@state`, `@debug`, `@fm`, `@mx`
+**Reserved variables**: `@root`, `@base`, `@now`, `@input`, `@payload`, `@state`, `@debug`, `@keychain`, `@fm`, `@mx`, `@p`
 
-**Transformers** (pipes): `@parse` (`.strict`, `.loose`, `.llm`), `@xml`, `@csv`, `@md`, `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
+**Transformers** (pipes: `@data | name`): `@parse` (`.strict`, `.loose`, `.llm`, `.fromlist`), `@xml`, `@csv`, `@md`, `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
 
-**Checks**: `@exists`, `@fileExists`, `@typeof`
+**Functions** (call-style): `@exists(@var)`, `@fileExists(@path)`, `@typeof(@var)`
 
 **Helpers**: `@keep`, `@keepStructured`
 
@@ -245,4 +271,3 @@ See `mlld howto builtins` for full reference with examples.
 - `mlld howto control-flow` — if, when, for, foreach
 - `mlld howto security` — labels, policies, guards
 - `mlld howto modules` — import, export, organizing code
-- `mlld howto gotchas` — full list of common traps

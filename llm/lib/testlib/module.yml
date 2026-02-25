@@ -1,0 +1,6 @@
+name: testlib
+author: testuser
+type: library
+about: "Test lib"
+version: 1.0.0
+license: CC0

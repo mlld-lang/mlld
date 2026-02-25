@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PR Review Result",
+  "type": "object",
+  "required": ["verdict", "confidence", "summary", "intent", "risk_level", "findings"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["merge", "close", "needs-work", "needs-discussion"],
+      "description": "merge=ready as-is, close=should close (stale/dupe/harmful), needs-work=fixable issues, needs-discussion=design questions"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"]
+    },
+    "summary": {
+      "type": "string",
+      "description": "One-sentence summary of the PR and its review status"
+    },
+    "intent": {
+      "type": "string",
+      "description": "What the PR is trying to accomplish, independent of code quality"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low", "none"]
+    },
+    "risk_factors": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Specific risk factors: security, breaking changes, data loss, etc."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "category", "description"],
+        "properties": {
+          "severity": { "type": "string", "enum": ["critical", "major", "minor", "nit"] },
+          "category": { "type": "string", "enum": ["bug", "security", "performance", "architecture", "testing", "style"] },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "description": { "type": "string" },
+          "suggestion": { "type": "string" }
+        }
+      }
+    },
+    "test_coverage": {
+      "type": "string",
+      "enum": ["adequate", "partial", "missing", "not-applicable"],
+      "description": "Whether the PR includes tests proportional to its changes"
+    },
+    "staleness": {
+      "type": "string",
+      "enum": ["active", "stale", "abandoned"],
+      "description": "active=updated recently, stale=no updates in 30+ days, abandoned=no updates in 90+ days"
+    },
+    "merge_blockers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Hard blockers that MUST be resolved before merge"
+    },
+    "changed_files": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Key files modified by this PR (for duplicate/conflict detection)"
+    },
+    "close_reason": {
+      "type": "string",
+      "description": "If verdict is close, explain why (stale, duplicate of #N, superseded, harmful)"
+    }
+  }
+}

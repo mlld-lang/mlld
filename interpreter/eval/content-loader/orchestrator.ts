@@ -187,9 +187,18 @@ export class ContentLoaderOrchestrator {
       if (isJsonParseError && typeof error.message === 'string' && error.message.length > 0) {
         errorMessage += `\n\n${error.message}`;
       }
+      const sectionSelectorErrorMessage = typeof error?.message === 'string' ? error.message : '';
+      const shouldIncludeSectionSelectorDetail =
+        sectionSelectorErrorMessage.startsWith('Section "') ||
+        sectionSelectorErrorMessage.startsWith('Invalid section selector') ||
+        sectionSelectorErrorMessage.startsWith('Invalid exclude selector') ||
+        sectionSelectorErrorMessage.startsWith('Renaming multiple sections is not supported yet');
+      if (shouldIncludeSectionSelectorDetail) {
+        errorMessage += `\n\n${sectionSelectorErrorMessage}`;
+      }
       const hasAngleBracket = pathOrUrl.includes('<') || pathOrUrl.includes('>');
       if (!hasAngleBracket && !pathOrUrl.startsWith('/') && !pathOrUrl.startsWith('@') && !env.isURL(pathOrUrl)) {
-        errorMessage += '\n\nHint: Paths are relative to mlld files. You can make them relative to your project root with the `@base/` prefix';
+        errorMessage += '\n\nHint: Paths are relative to mlld files. You can make them relative to your project root with the `@root/` prefix';
       }
 
       throw new MlldError(errorMessage, {

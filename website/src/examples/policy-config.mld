@@ -1,0 +1,10 @@
+policy @sec = {
+  defaults: {
+    unlabeled: "untrusted",
+    rules: ["no-sensitive-exfil", "no-untrusted-destructive"]
+  },
+  capabilities: {
+    allow: { cmd: ["git:*", "npm:test:*"] },
+    deny: ["sh"]
+  }
+}

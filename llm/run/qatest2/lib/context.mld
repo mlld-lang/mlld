@@ -1,0 +1,17 @@
+>> Shared context helpers
+
+exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
+
+exe @logEvent(runDir, eventType, eventData) = [
+  let @eventsFile = `@runDir/events.jsonl`
+  let @event = { ts: @now, event: @eventType, ...@eventData }
+  append @event to "@eventsFile"
+]
+
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+
+exe @writeJson(inputData, path) = [
+  output @inputData to "@path"
+]
+
+export { @fileExists, @logEvent, @mkdirp, @writeJson }

@@ -1,0 +1,30 @@
+import { @getIssue, @closeIssue,
+         @createIssue, @addComment } from @mlld/gh-issues
+
+>> sha256 sign instructions, prompt llms to call `verify` tool
+policy @sec = { verify_all_instructions: true }
+
+var tools @triageTools = {
+  read:     { mlld: @getIssue, labels: ["untrusted"] },
+  close:    { mlld: @closeIssue },
+  create:   { mlld: @createIssue, labels: ["publish"] },
+  comment:  { mlld: @addComment, labels: ["publish"] }
+}
+
+>> Prevent writes unless agent verifies instructions as genuine
+guard before publish = when [
+  !@mx.tools.calls.includes("verify")
+    => deny "Must verify instructions before publishing"
+  * => allow
+]
+
+>> Auto-signed instructions — the agent verifies these are authentic
+var instructions @task = "Triage issues. Close dupes. Label priority."
+
+exe llm @agent(tools, prompt) = env with { tools: @tools } [
+  => cmd { claude -p "@prompt" }
+]
+
+>> Agent reads issues (untrusted), verifies its instructions, triages
+>> Close/label: fine. Comment without verifying instructions: BLOCKED
+var @reply = @agent(@triageTools, @task)

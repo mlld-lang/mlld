@@ -1,0 +1,2 @@
+>> Test module using main.mld as entry point (no index.mld)
+show "Entry detection: main.mld found correctly!"

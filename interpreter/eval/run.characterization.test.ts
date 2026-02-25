@@ -396,9 +396,8 @@ describe('evaluateRun phase-0 characterization', () => {
       successEnv
     );
 
-    await expect(evaluateRun(successRun, successEnv)).rejects.toThrow(
-      'Run exec directive identifier must be a command reference'
-    );
+    const result = await evaluateRun(successRun, successEnv);
+    expect(String(result.value)).toBe('base');
 
     const circularEnv = createEnv();
     const circularRun = await setupSingleRun(
@@ -458,6 +457,42 @@ describe('evaluateRun phase-0 characterization', () => {
 
     expect(proseSpy).toHaveBeenCalled();
     expect(asText(proseResult.value)).toBe('prose:result');
+  });
+
+  it('propagates executable labels into /run exec output taint', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/exe untrusted @search(q) = `{"id":"x","q":"@q"}`',
+        '/run @search("query")'
+      ].join('\n'),
+      env
+    );
+
+    const result = await evaluateRun(runDirective, env);
+    const taint = (result.value as any)?.mx?.taint ?? [];
+
+    expect(taint).toEqual(expect.arrayContaining(['untrusted', 'src:template']));
+  });
+
+  it('propagates /run exec output labels into downstream pipeline stages', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/var @policyConfig = { labels: { "untrusted": { deny: ["destructive"] } } }',
+        '/policy @p = union(@policyConfig)',
+        '/exe untrusted @search(q) = `@q`',
+        '/exe destructive @closeIssue(id) = `closed:@id`',
+        '/run @search("q") with { pipeline: [@closeIssue(@p)] }'
+      ].join('\n'),
+      env
+    );
+
+    const result = await evaluateRun(runDirective, env);
+    const taint = (result.value as any)?.mx?.taint ?? [];
+
+    expect(asText(result.value)).toBe('closed:q');
+    expect(taint).toEqual(expect.arrayContaining(['untrusted', 'destructive']));
   });
 
   it('passes inline object literals through /run executable parameters', async () => {
@@ -562,7 +597,7 @@ describe('evaluateRun phase-0 characterization', () => {
     const pipelineContext = processSpy.mock.calls[0][0] as any;
     expect(Array.isArray(pipelineContext.pipeline)).toBe(true);
     expect(pipelineContext.descriptorHint).toBeDefined();
-    expect(pipelineContext.descriptorHint.taint).toEqual(expect.arrayContaining(['src:exec']));
+    expect(pipelineContext.descriptorHint.taint).toEqual(expect.arrayContaining(['src:cmd']));
   });
 
   it('keeps streaming streamFormat finalization and effect-emission gating stable', async () => {

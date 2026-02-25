@@ -1,1 +1,1 @@
-Guard blocked operation: Commands blocked
+# Guard op:cmd for exe command invocation

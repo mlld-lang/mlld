@@ -92,6 +92,32 @@ describe('BuiltinTools', () => {
       expect(response.valid).toBe(true);
     });
 
+    it('validates strict-mode hook directive without slash prefix', async () => {
+      const result = await executeBuiltinTool('mlld_validate', {
+        code: 'hook @audit after op:exe = [ show "x" ]'
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.isError).toBeFalsy();
+
+      const response = JSON.parse(result!.content[0].text);
+      expect(response.valid).toBe(true);
+      expect(response.errors).toEqual([]);
+    });
+
+    it('validates strict-mode checkpoint directive without slash prefix', async () => {
+      const result = await executeBuiltinTool('mlld_validate', {
+        code: 'checkpoint "phase-1"'
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.isError).toBeFalsy();
+
+      const response = JSON.parse(result!.content[0].text);
+      expect(response.valid).toBe(true);
+      expect(response.errors).toEqual([]);
+    });
+
     it('errors when neither file nor code provided', async () => {
       const result = await executeBuiltinTool('mlld_validate', {});
 

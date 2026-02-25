@@ -159,7 +159,7 @@ Providers are optional - they add isolation. Without a provider, commands run lo
 ```mlld
 var @devEnv = {
   auth: "claude-dev",
-  mcps: ["@github/issues"],
+  mcps: ["npx -y @modelcontextprotocol/server-github"],
 }
 ```
 

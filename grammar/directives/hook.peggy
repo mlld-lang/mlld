@@ -33,7 +33,6 @@ SlashHook
       const meta = {
         filterKind: filter.node.filterKind,
         filterValue: filter.node.value,
-        scope: filter.node.scope,
         hasName: Boolean(nameTiming?.name),
         timing: hookTiming,
         hasArgPattern: Boolean(filter.argPattern),
@@ -74,7 +73,6 @@ HookFunctionFilter
       const raw = text();
       const node = helpers.createNode('HookFilter', {
         filterKind: 'function',
-        scope: 'perFunction',
         value: identifier,
         argPattern: argPattern ?? null,
         raw,
@@ -98,7 +96,6 @@ HookOperationFilter
       const raw = `op:${identifier}`;
       const node = helpers.createNode('HookFilter', {
         filterKind: 'operation',
-        scope: 'perOperation',
         value: identifier,
         raw,
         location: location()
@@ -115,7 +112,6 @@ HookDataFilter
   = label:DataLabelIdentifier {
       const node = helpers.createNode('HookFilter', {
         filterKind: 'data',
-        scope: 'perInput',
         value: label,
         raw: label,
         location: location()

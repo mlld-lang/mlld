@@ -1,0 +1,6 @@
+name: testapp
+author: testuser
+type: app
+about: "Test app"
+version: 1.0.0
+license: CC0

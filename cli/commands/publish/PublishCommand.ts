@@ -133,8 +133,8 @@ export class PublishCommand {
         this.validateTagName(options.tag);
       }
 
-      // 4. Detect git information
-      const gitInfo = await this.detectGitInfo(modulePath);
+      // 4. Detect git information (use entry file path, not directory path)
+      const gitInfo = await this.detectGitInfo(moduleData.filePath);
 
       // 5. Get user authentication
       const octokit = await this.authService.getOctokit();
@@ -197,8 +197,8 @@ export class PublishCommand {
       // 10. Handle interactive decisions
       const finalContext = await this.prompter.collectDecisions(context);
 
-      // 11. Apply metadata changes if needed
-      if (finalContext.shouldCommitMetadata) {
+      // 11. Commit metadata changes if needed (writes file, commits, pushes, refreshes SHA)
+      if (finalContext.validationResult?.updatedMetadata) {
         await this.commitMetadataChanges(finalContext);
       }
 
@@ -441,23 +441,101 @@ export class PublishCommand {
   }
 
   private async commitMetadataChanges(context: PublishContext): Promise<void> {
-    if (!context.validationResult?.updatedContent) {
-      return;
-    }
-    
-    // Write updated content back to file
-    await fs.writeFile(context.module.filePath, context.validationResult.updatedContent, 'utf8');
-    
-    // Commit the changes
-    try {
-      const gitRoot = context.module.gitInfo.gitRoot;
-      if (gitRoot) {
-        execSync(`git add "${context.module.filePath}"`, { cwd: gitRoot });
-        execSync(`git commit -m "Auto-update module metadata for publishing"`, { cwd: gitRoot });
-        console.log(chalk.green('✔ Committed metadata changes'));
+    const gitRoot = context.module.gitInfo.gitRoot;
+    if (!gitRoot) return;
+
+    const filesToAdd: string[] = [];
+
+    if (context.module.isDirectory && context.module.directoryData) {
+      // Directory modules: update the manifest file (module.yml/yaml/json)
+      const dirPath = path.dirname(context.module.filePath);
+      const manifestPath = await this.findManifestPath(dirPath);
+      if (manifestPath) {
+        await this.updateManifestFile(manifestPath, context.validationResult!.updatedMetadata!);
+        filesToAdd.push(manifestPath);
       }
+    } else if (context.validationResult?.updatedContent) {
+      // Single-file modules: write updated frontmatter
+      await fs.writeFile(context.module.filePath, context.validationResult.updatedContent, 'utf8');
+      filesToAdd.push(context.module.filePath);
+    }
+
+    if (filesToAdd.length === 0) return;
+
+    try {
+      for (const file of filesToAdd) {
+        execSync(`git add "${file}"`, { cwd: gitRoot, stdio: 'pipe' });
+      }
+
+      // Check if there are actually staged changes before committing
+      try {
+        execSync('git diff --cached --quiet', { cwd: gitRoot, stdio: 'pipe' });
+        // Exit code 0 means no staged changes — nothing to commit
+        return;
+      } catch {
+        // Exit code 1 means there ARE staged changes — proceed with commit
+      }
+
+      execSync('git commit -m "Update module metadata for publishing"', { cwd: gitRoot, stdio: 'pipe' });
+
+      // Push so the commit is accessible on GitHub
+      execSync('git push', { cwd: gitRoot, stdio: 'pipe' });
+
+      // Refresh SHA to match the new commit
+      const newSha = execSync('git rev-parse HEAD', {
+        cwd: gitRoot, encoding: 'utf8', stdio: 'pipe'
+      }).trim();
+      context.module.gitInfo.sha = newSha;
+
+      console.log(chalk.green('✔ Committed and pushed metadata changes'));
     } catch (error) {
-      console.log(chalk.yellow('Warning: Could not auto-commit metadata changes'));
+      throw new MlldError(
+        'Failed to commit and push metadata changes. Commit or push your changes manually and retry.',
+        { code: 'METADATA_COMMIT_FAILED', severity: ErrorSeverity.Fatal }
+      );
+    }
+  }
+
+  private async findManifestPath(dirPath: string): Promise<string | null> {
+    for (const name of ['module.yml', 'module.yaml', 'module.json']) {
+      const p = path.join(dirPath, name);
+      try {
+        await fs.access(p);
+        return p;
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  private async updateManifestFile(
+    manifestPath: string,
+    updates: Record<string, unknown>
+  ): Promise<void> {
+    const content = await fs.readFile(manifestPath, 'utf8');
+    const isJson = manifestPath.endsWith('.json');
+
+    if (isJson) {
+      const parsed = JSON.parse(content);
+      Object.assign(parsed, updates);
+      await fs.writeFile(manifestPath, JSON.stringify(parsed, null, 2) + '\n', 'utf8');
+    } else {
+      // YAML: do a simple key replacement/append to preserve formatting
+      let updated = content;
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === undefined) continue;
+        const yamlKey = key === 'mlldVersion' ? 'mlldVersion' : key;
+        const yamlValue = typeof value === 'string' ? `"${value}"` : String(value);
+        const pattern = new RegExp(`^${yamlKey}:.*$`, 'm');
+        if (pattern.test(updated)) {
+          updated = updated.replace(pattern, `${yamlKey}: ${yamlValue}`);
+        } else {
+          // Append before trailing newline or at end
+          updated = updated.trimEnd() + '\n' + `${yamlKey}: ${yamlValue}` + '\n';
+        }
+      }
+      await fs.writeFile(manifestPath, updated, 'utf8');
     }
   }
 

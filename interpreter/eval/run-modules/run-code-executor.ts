@@ -1,5 +1,7 @@
 import type { DirectiveNode, WithClause } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor } from '@core/types/security';
+import { deriveCodeSourceTaintLabel } from '@core/security/taint';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import { resolveWorkingDirectory } from '@interpreter/utils/working-directory';
@@ -7,6 +9,7 @@ import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import { mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import {
   applyRunOperationContext,
   buildRunCapabilityOperationUpdate,
@@ -33,6 +36,7 @@ export type RunCodeExecutionParams = {
 
 export type RunCodeExecutionResult = {
   value: unknown;
+  outputDescriptor?: SecurityDescriptor;
 };
 
 async function extractRunCodeArgs(params: {
@@ -108,6 +112,7 @@ export async function executeRunCode(
   const { argValues, argDescriptors } = await extractRunCodeArgs({ args, env });
 
   const language = (directive.meta?.language as string) || 'javascript';
+  const sourceTaintLabel = deriveCodeSourceTaintLabel(language);
   const opType = resolveRunCodeOpType(language);
   let opLabels: string[] = [];
   if (opType) {
@@ -152,6 +157,14 @@ export async function executeRunCode(
     env,
     sourceLocation: directive.location ?? undefined
   });
+  const sourceDescriptor = sourceTaintLabel
+    ? makeSecurityDescriptor({ taint: [sourceTaintLabel] })
+    : undefined;
+  const outputDescriptor = mergeInputDescriptors(
+    sourceDescriptor,
+    inputDescriptor,
+    usingParts.descriptor
+  );
 
   const injectedEnv = usingParts.merged;
   const codeOptions =
@@ -178,5 +191,5 @@ export async function executeRunCode(
     );
   });
 
-  return { value };
+  return { value, outputDescriptor };
 }

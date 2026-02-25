@@ -61,7 +61,7 @@ export class ModuleReader {
    * Validate and normalize a manifest object
    */
   private validateManifest(parsed: Record<string, unknown>): ModuleManifest {
-    const validTypes: ModuleType[] = ['library', 'app', 'command', 'skill'];
+    const validTypes: ModuleType[] = ['library', 'app', 'command', 'skill', 'environment'];
     const type = (parsed.type as string) || 'library';
 
     if (!validTypes.includes(type as ModuleType)) {
@@ -101,7 +101,11 @@ export class ModuleReader {
       entry: (parsed.entry as string) || undefined,
       needs: Array.isArray(parsed.needs) ? parsed.needs as string[] : undefined,
       license: (parsed.license as string) || 'CC0',
-      mlldVersion: (parsed.mlldVersion as string) || undefined,
+      mlldVersion: (parsed.mlldVersion as string) || (parsed['mlld-version'] as string) || undefined,
+      repo: (parsed.repo as string) || (parsed.repository as string) || undefined,
+      bugs: (parsed.bugs as string) || undefined,
+      homepage: (parsed.homepage as string) || undefined,
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords as string[] : undefined,
       dependencies: parsed.dependencies as Record<string, string> | undefined,
       devDependencies: parsed.devDependencies as Record<string, string> | undefined,
     };
@@ -126,7 +130,8 @@ export class ModuleReader {
         const relPath = relativePath ? path.join(relativePath, entry.name) : entry.name;
 
         if (entry.isDirectory()) {
-          if (entry.name !== 'node_modules' && entry.name !== '.git') {
+          const excluded = ['node_modules', '.git', 'runs', 'tmp', '.cache'];
+          if (!excluded.includes(entry.name)) {
             await readDir(fullPath, relPath);
           }
         } else {
@@ -180,21 +185,23 @@ export class ModuleReader {
         filePath = path.join(modulePath, entryPoint);
         filename = entryPoint;
 
-        // Parse entry point for AST
-        // Use strict mode for .mld files, markdown mode for .mld.md files
-        const parserMode = filename.endsWith('.mld.md') ? 'markdown' : 'strict';
-        let ast: MlldNode[];
-        try {
-          ast = parseSync(directoryData.entryContent, { mode: parserMode });
-        } catch (parseError: any) {
-          const errorMessage = parseError.message || 'Unknown parse error';
-          const location = parseError.location
-            ? ` at line ${parseError.location.start.line}, column ${parseError.location.start.column}`
-            : '';
-          throw new MlldError(
-            `Module contains invalid mlld syntax${location}:\n${errorMessage}\n\nPlease fix syntax errors before publishing.`,
-            { code: 'INVALID_SYNTAX', severity: ErrorSeverity.Fatal, sourceLocation: parseError.location }
-          );
+        // Parse entry point for AST (skip for non-mlld entry points like SKILL.md, command .md files)
+        const isMlldFile = filename.endsWith('.mld') || filename.endsWith('.mld.md') || filename.endsWith('.mlld.md');
+        let ast: MlldNode[] = [];
+        if (isMlldFile) {
+          const parserMode = filename.endsWith('.mld.md') ? 'markdown' : 'strict';
+          try {
+            ast = parseSync(directoryData.entryContent, { mode: parserMode });
+          } catch (parseError: any) {
+            const errorMessage = parseError.message || 'Unknown parse error';
+            const location = parseError.location
+              ? ` at line ${parseError.location.start.line}, column ${parseError.location.start.column}`
+              : '';
+            throw new MlldError(
+              `Module contains invalid mlld syntax${location}:\n${errorMessage}\n\nPlease fix syntax errors before publishing.`,
+              { code: 'INVALID_SYNTAX', severity: ErrorSeverity.Fatal, sourceLocation: parseError.location }
+            );
+          }
         }
 
         // Build metadata from manifest
@@ -208,6 +215,10 @@ export class ModuleReader {
           dependencies: manifest.dependencies,
           devDependencies: manifest.devDependencies,
           mlldVersion: manifest.mlldVersion,
+          repo: manifest.repo,
+          bugs: manifest.bugs,
+          homepage: manifest.homepage,
+          keywords: manifest.keywords,
         };
 
         return {

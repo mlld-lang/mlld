@@ -1,0 +1,6 @@
+import { @claude } from @mlld/claude
+import policy @secure from "@mlld/production"
+
+var pii @patients = <data/patient-records.csv>
+var @reply = @claude("Summarize: @patients")
+show @reply

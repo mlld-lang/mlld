@@ -1,0 +1,7 @@
+import { @blockPiiExfil } from "./compose-exfil-blocked-module.mld"
+
+var pii @name = "John Doe"
+exe @summarize(data) = `summary: @data`
+exe net:w @sendToApi(data) = `sent: @data`
+var @summary = @summarize(@name)
+show @sendToApi(@summary)

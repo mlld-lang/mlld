@@ -171,6 +171,44 @@ describe('for evaluator characterization', () => {
     expect(await requireValue(env, 'keys')).toEqual(['first', 'second']);
   });
 
+  it('iterates loaded JSON objects by data keys instead of structured wrapper fields', async () => {
+    const { fileSystem, pathService: runtimePathService } = createRuntime();
+    await fileSystem.writeFile(
+      '/config.json',
+      JSON.stringify({
+        syntax: { tag: 'mld' },
+        commands: { count: 2 }
+      })
+    );
+
+    let environment: Environment | null = null;
+    await interpret(`
+/var @config = <config.json>
+/var @keys = for @k, @v in @config => @k
+/var @tag = @config.syntax.tag
+`, {
+      fileSystem,
+      pathService: runtimePathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      mlldMode: 'markdown',
+      ephemeral: true,
+      useMarkdownFormatter: false,
+      captureEnvironment: env => {
+        environment = env;
+      }
+    });
+
+    if (!environment) {
+      throw new Error('Failed to capture environment');
+    }
+
+    const tag = await requireValue(environment, 'tag');
+    expect(isStructuredValue(tag) ? asText(tag) : tag).toBe('mld');
+    expect(await requireValue(environment, 'keys')).toEqual(['syntax', 'commands']);
+  });
+
   it('exposes mx.index in for directive templates', async () => {
     const { output } = await interpretWithOutputAndEnv(`
 /for @item in ["x", "y"] => show \`@item.mx.index:@item\`
@@ -682,5 +720,30 @@ describe('for evaluator characterization', () => {
         error: 'late iteration failed'
       })
     ]);
+  });
+
+  it('handles sequential for-parallel loops with errors without runtime crashes', async () => {
+    const { fileSystem, pathService: runtimePathService } = createRuntime();
+    const input = `
+/exe @maybeFail(n, phase) = js {
+  if (n == 2) {
+    throw new Error(phase + " failed");
+  }
+  return n;
+}
+/var @first = for parallel(2) @n in [1, 2] => @maybeFail(@n, "first-loop")
+/var @second = for parallel(2) @n in [2, 3] => @maybeFail(@n, "second-loop")
+`;
+
+    await expect(
+      interpret(input, {
+        fileSystem,
+        pathService: runtimePathService,
+        format: 'markdown',
+        mlldMode: 'markdown',
+        ephemeral: true,
+        useMarkdownFormatter: false
+      })
+    ).rejects.toThrow('second-loop failed');
   });
 });

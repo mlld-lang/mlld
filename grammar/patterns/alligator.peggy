@@ -240,6 +240,20 @@ AlligatorSectionIdentifier "alligator section identifier"
         level: hashes.length
       };
     }
+  / '"' parts:AlligatorSectionQuotedPart* '"' optional:"?"? &{
+      // Only treat as interpolated quoted literal when this selector ends here.
+      // Complex selector sets like `"A", B; !# C` must remain raw text.
+      const rest = input.slice(peg$currPos);
+      return /^[ \t]*(?:>|as\b)/.test(rest);
+    } {
+      const withOptional = optional
+        ? [
+            ...parts,
+            helpers.createNode(NodeType.Text, { content: '?', location: location() })
+          ]
+        : parts;
+      return withOptional;
+    }
   / "@" varRef:BaseIdentifier fields:FieldAccess* {
       // Variable reference as section name
       return helpers.createVariableReferenceNode('sectionVariable', {
@@ -259,6 +273,27 @@ AlligatorSectionIdentifier "alligator section identifier"
 // Characters allowed in section names (inside alligators)
 AlligatorSectionChar
   = !">" !(" as") char:. { return char; }
+
+AlligatorSectionQuotedPart
+  = "@" id:BaseIdentifier fields:BoundaryAwareFieldAccess* boundary:VariableBoundary? {
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {}),
+        ...(boundary ? { boundary: boundary } : {})
+      }, location());
+    }
+  / "\\@" {
+      return helpers.createNode(NodeType.Text, {
+        content: '@',
+        location: location()
+      });
+    }
+  / chars:(!("@" / "\"") char:. { return char; })+ {
+      return helpers.createNode(NodeType.Text, {
+        content: chars.join(''),
+        location: location()
+      });
+    }
 
 // Rename clause for sections
 AsRename "section rename"

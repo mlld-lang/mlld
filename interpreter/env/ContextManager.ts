@@ -95,12 +95,14 @@ export interface ToolCallRecord {
   timestamp: number;
   ok: boolean;
   error?: string | null;
+  result?: unknown;
 }
 
 export interface ToolsContextSnapshot {
   calls: ReadonlyArray<string>;
   allowed: ReadonlyArray<string>;
   denied: ReadonlyArray<string>;
+  results: Readonly<Record<string, unknown>>;
 }
 
 interface BuildContextOptions {
@@ -124,6 +126,7 @@ export class ContextManager {
   private toolCalls: ToolCallRecord[] = [];
   private toolAllowed: string[] = [];
   private toolDenied: string[] = [];
+  private toolResults: Record<string, unknown> = {};
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
@@ -265,17 +268,29 @@ export class ContextManager {
 
   recordToolCall(call: ToolCallRecord): void {
     this.toolCalls.push(Object.freeze({ ...call }));
+    if (call.ok) {
+      if (call.result !== undefined) {
+        this.toolResults[call.name] = this.cloneToolResult(call.result);
+      }
+      return;
+    }
+    this.toolResults[call.name] = {
+      ok: false,
+      error: call.error ?? null
+    };
   }
 
   resetToolCalls(): void {
     this.toolCalls = [];
+    this.toolResults = {};
   }
 
   getToolsSnapshot(): ToolsContextSnapshot {
     return {
       calls: this.toolCalls.map(call => call.name),
       allowed: [...this.toolAllowed],
-      denied: [...this.toolDenied]
+      denied: [...this.toolDenied],
+      results: { ...this.toolResults }
     };
   }
 
@@ -396,6 +411,38 @@ export class ContextManager {
       normalized.push(trimmed);
     }
     return normalized;
+  }
+
+  private cloneToolResult(value: unknown): unknown {
+    try {
+      return structuredClone(value);
+    } catch {
+      return this.sanitizeToolResult(value, new WeakSet<object>());
+    }
+  }
+
+  private sanitizeToolResult(value: unknown, seen: WeakSet<object>): unknown {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return value.map(entry => this.sanitizeToolResult(entry, seen));
+    }
+    if (typeof value === 'object') {
+      if (seen.has(value as object)) {
+        return '[Circular]';
+      }
+      seen.add(value as object);
+      const output: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+        output[key] = this.sanitizeToolResult(entry, seen);
+      }
+      return output;
+    }
+    return String(value);
   }
 
   private normalizeOperationContext(

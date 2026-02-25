@@ -1,0 +1,6 @@
+guard @blockPiiExfil for pii = when [
+  @mx.op.labels.includes("net:w") => deny "PII cannot be sent over network"
+  * => allow
+]
+
+export { @blockPiiExfil }

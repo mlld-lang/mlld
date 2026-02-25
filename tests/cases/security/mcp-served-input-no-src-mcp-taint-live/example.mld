@@ -1,0 +1,21 @@
+>> Tests that MCP-served tool inputs do NOT carry src:mcp taint.
+>> The module has a guard that blocks if inputs have src:mcp.
+>> If the MCP call succeeds, inputs don't have src:mcp (correct behavior).
+>>
+>> Run manually from repo root:
+>>   mlld tests/cases/security/mcp-served-input-no-src-mcp-taint-live/example.mld
+
+exe @testMcpCall() = sh {
+  printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"guarded_fetch","arguments":{"url":"https://example.com"}}}\n' \
+  | mlld mcp tests/cases/security/mcp-served-input-no-src-mcp-taint-live/mcp-served-input-taint-module.mld --tools-collection @tools 2>/dev/null \
+  | tail -1
+}
+
+var @response = @testMcpCall()
+
+>> Should contain fetched content (not a guard error)
+show @response.includes("fetched:")
+
+>> Should NOT contain isError (guard didn't block)
+var @notBlocked = !@response.includes("isError")
+show @notBlocked

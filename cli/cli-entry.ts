@@ -25,9 +25,17 @@ if (isMainModule) {
         process.exit(0);
       }
     } catch (error) {
-      console.error(error);
+      const alreadyHandled = Boolean(
+        error &&
+          typeof error === 'object' &&
+          '__mlldHandled' in (error as Record<string, unknown>) &&
+          (error as Record<string, unknown>).__mlldHandled === true
+      );
+      if (!alreadyHandled) {
+        console.error(error);
+      }
       await new Promise(resolve => setTimeout(resolve, 10));
       process.exit(1);
     }
   })();
-} 
+}

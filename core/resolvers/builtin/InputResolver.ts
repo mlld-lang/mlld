@@ -81,12 +81,9 @@ export class InputResolver implements Resolver {
         };
       }
       
-      // Import specific fields
+      // Import specific fields — missing fields resolve to null
       for (const fieldName of imports) {
-        const value = this.getFieldValue(fieldName);
-        if (value !== null) {
-          exports[fieldName] = value;
-        }
+        exports[fieldName] = this.getFieldValue(fieldName);
       }
       
       const metadata = {

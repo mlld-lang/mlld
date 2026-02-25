@@ -1,0 +1,8 @@
+import { @blockPiiExfil } from "./compose-safe-local-with-exfil-guard-module.mld"
+
+var pii @name = "John Doe"
+var @greeting = `Hello, @name!`
+exe @format(input) = `processed: @input`
+var @result = @name | @format
+show @greeting
+show @result

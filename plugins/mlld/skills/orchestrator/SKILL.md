@@ -507,6 +507,8 @@ Standard XML-tagged sections in decision prompts:
 
 Use selective context loading — only load what the current job needs.
 
+Loaded files have parsed frontmatter (`@f.mx.fm.title`, `@f.mx.fm.tags`) and metadata (`@f.mx.tokens`, `@f.mx.relative`) — don't use js/node blocks for this. See `mlld howto file-loading-metadata`.
+
 ## Structured Actions with JSON Schema
 
 Decision agents return one action type. Use conditional JSON Schema:

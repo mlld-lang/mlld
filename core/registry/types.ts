@@ -89,6 +89,10 @@ export interface ModuleManifest {
   needs?: string[];
   license?: string;
   mlldVersion?: string;
+  repo?: string;
+  bugs?: string;
+  homepage?: string;
+  keywords?: string[];
   dependencies?: ModuleDependencyMap;
   devDependencies?: ModuleDependencyMap;
 }

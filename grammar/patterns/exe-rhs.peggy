@@ -34,6 +34,7 @@ ExeRHSContent "exe assignment value"
   / ForExpressionExe            // for @var in @collection => action (exe-specific with directive support)
   / LoopExpressionExe           // loop(...) [ ... ]
   / ExeForeachPattern           // foreach @command(@arrays) as executable body
+  / ExeEnvPattern               // env @config [...] or env with { ... } [...]
   / ExeRunCommandWithStdin      // run {command} with { stdin: @var } - explicit run with stdin
   / ExeRunCommandPipeStdin      // run @var | {command} - pipe sugar stdin syntax
   / ExeStreamCommandPattern     // stream cmd {command} - streaming shell command with optional tail
@@ -44,7 +45,6 @@ ExeRHSContent "exe assignment value"
   / ExeCommandPattern           // cmd {command} - shell commands with interpolation
   / ExeTemplateFromFilePattern  // template "path" - external template file
   / ExeTemplatePattern          // [[...]] and `...` - inline template executables
-  / ExeSectionPattern           // [@file # section] - section extraction
   / ExeStatementBlock           // [ ... ] - statement block for exe definitions
   / ExeResolverPattern          // @resolver/path - resolver patterns
   / ExeUnifiedReference         // @func(args) and @otherCmd - unified reference with pipeline support
@@ -263,7 +263,7 @@ ExeRunCommandPattern "exe run command pattern"
 
 // Code pattern for exe context - wraps RunLanguageCodeCore
 ExeCodePattern "exe code pattern"
-  = codeCore:RunLanguageCodeCore {
+  = codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) {
       return {
         subtype: 'exeCode',
         source: 'code',
@@ -308,6 +308,21 @@ ExeDataPattern "exe data pattern"
         },
         meta: {
           inferredType: 'object'
+        }
+      };
+    }
+  / fileLoad:AlligatorExpression {
+      return {
+        subtype: 'exeData',
+        source: 'data',
+        values: {
+          data: fileLoad
+        },
+        raw: {
+          data: text()
+        },
+        meta: {
+          inferredType: 'load-content'
         }
       };
     }
@@ -472,29 +487,6 @@ ProseTextSegment "prose text segment"
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
-// Section pattern for exe context - handles [@file # section] [as @newheader]
-ExeSectionPattern "exe section pattern"
-  = "[" _ pathVar:UnifiedVariableNoTail _ "#" _ section:SectionIdentifier _ "]" rename:ExecAsNewTitle? {
-      return {
-        type: 'exeSection',
-        values: {
-          path: [pathVar],
-          section: Array.isArray(section) ? section : [section],
-          ...(rename ? { rename: rename } : {})
-        },
-        raw: {
-          path: '@' + pathVar.identifier + (pathVar.fields ? '.' + pathVar.fields.map(f => f.name || f.index).join('.') : ''),
-          section: section.type === 'VariableReference' ? '@' + section.identifier : (section.content || section),
-          ...(rename ? { rename: rename[0].type === 'VariableReference' ? '@' + rename[0].identifier : rename[0].content } : {})
-        },
-        meta: {
-          hasRename: !!rename
-        },
-        subtype: 'exeSection',
-        source: 'section'
-      };
-    }
-
 // Resolver pattern for exe context - handles @resolver/path [{ @payload }]
 ExeResolverPattern "exe resolver pattern"
   = "@" resolver:ResolverPathPattern payload:ExecResolverPayload? {
@@ -532,6 +524,55 @@ ExeForeachPattern "exe foreach pattern"
           isForeach: true
         }
       };
+    }
+
+ExeEnvPattern "exe env pattern"
+  = "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock {
+      const values = {
+        ...(config ? { config: [config] } : {}),
+        ...(withClause ? { envWithClause: withClause } : {}),
+        block
+      };
+
+      const raw = {};
+      if (config) {
+        raw.config = helpers.reconstructRawString([config]);
+      }
+      if (withClause) {
+        raw.envWithClause = withClause;
+      }
+
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true,
+        hasConfig: !!config
+      };
+
+      if (withClause) {
+        meta.envWithClause = withClause;
+      }
+
+      return {
+        subtype: 'exeEnv',
+        source: 'env',
+        values,
+        raw,
+        meta
+      };
+    }
+  / "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
+      helpers.mlldError(
+        'env requires a config expression or with clause. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        '@config or with { ... }',
+        location()
+      );
+    }
+  / "env" _ config:EnvConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
+      helpers.mlldError(
+        'env requires a block. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        '[',
+        location()
+      );
     }
 
 
@@ -740,15 +781,6 @@ PipeStdinExpression
 // ExecResolverPayload - optional payload syntax: { @variable }
 ExecResolverPayload
   = _ "{" _ varRef:UnifiedVariableNoTail _ "}" {
-      return [varRef];
-    }
-
-// AsNewTitle pattern for exec section renaming - supports both literals and variables
-ExecAsNewTitle
-  = _ "as" _ title:LiteralContent {
-      return title;
-    }
-  / _ "as" _ varRef:UnifiedVariableNoTail {
       return [varRef];
     }
 

@@ -60,15 +60,12 @@ export class ModuleContentProcessor {
   ): Promise<ModuleProcessingResult> {
     const { resolvedPath } = resolution;
     const isURL = resolution.type === 'url';
+    const cacheKey = this.buildFileImportCacheKey(resolution, directive);
 
-// Check for circular imports using global stack
+    // Check for circular imports using global stack
     if (globalImportStack.has(resolvedPath)) {
       throw new Error(`Circular import detected: ${resolvedPath}`);
     }
-
-    // Begin import tracking (both global and via security validator for URL tracking)
-    globalImportStack.add(resolvedPath);
-    this.securityValidator.beginImport(resolvedPath);
 
     const snapshot = this.env.getSecuritySnapshot();
     const importDescriptor = mergeDescriptors(
@@ -106,9 +103,19 @@ export class ModuleContentProcessor {
     if (combinedDescriptor) {
       this.env.recordSecurityDescriptor(combinedDescriptor);
     }
+
+    const cachedResult = this.getCachedModuleResult(cacheKey);
+    if (cachedResult) {
+      return cachedResult;
+    }
+
+    // Begin import tracking (both global and via security validator for URL tracking)
+    globalImportStack.add(resolvedPath);
+    this.securityValidator.beginImport(resolvedPath);
     try {
       if (resolution.importType === 'templates') {
-        return await this.processTemplateCollection(resolution, directive);
+        const result = await this.processTemplateCollection(resolution, directive);
+        return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
@@ -156,24 +163,24 @@ export class ModuleContentProcessor {
       // Check if this is a JSON file (special handling)
       if (resolvedPath.endsWith('.json')) {
         const result = await this.processJSONContent(parsed, directive, resolvedPath);
-        return result;
+        return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Check if this is plain text content (not mlld)
       if (isPlainText) {
         const result = await this.processPlainTextContent(resolvedPath);
-        return result;
+        return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Handle raw template files (.att for @var, .mtt for mustache)
       if (!parsed && templateSyntax) {
         const result = await this.processRawTemplate(processedContent, templateSyntax, resolvedPath);
-        return result;
+        return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Process mlld content - IMPORTANT: await here so finally runs AFTER processing completes
       const result = await this.processMLLDContent(parsed, processedContent, resolvedPath, isURL);
-      return result;
+      return this.cacheAndReturnModuleResult(cacheKey, result);
     } finally {
       // End import tracking (both global and security validator)
       globalImportStack.delete(resolvedPath);
@@ -191,14 +198,12 @@ export class ModuleContentProcessor {
     contentType?: 'module' | 'data' | 'text',
     labels?: readonly string[]
   ): Promise<ModuleProcessingResult> {
+    const cacheKey = this.buildResolverImportCacheKey(ref, contentType, directive);
+
     // Check for circular imports using global stack
     if (globalImportStack.has(ref)) {
       throw new Error(`Circular import detected: ${ref}`);
     }
-
-    // Begin import tracking (both global and security validator)
-    globalImportStack.add(ref);
-    this.securityValidator.beginImport(ref);
     const snapshot = this.env.getSecuritySnapshot();
     const importDescriptor = mergeDescriptors(
       snapshot
@@ -237,6 +242,15 @@ export class ModuleContentProcessor {
     if (combinedDescriptor) {
       this.env.recordSecurityDescriptor(combinedDescriptor);
     }
+
+    const cachedResult = this.getCachedModuleResult(cacheKey);
+    if (cachedResult) {
+      return cachedResult;
+    }
+
+    // Begin import tracking (both global and security validator)
+    globalImportStack.add(ref);
+    this.securityValidator.beginImport(ref);
     try {
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerRef = ref.toLowerCase();
@@ -282,29 +296,81 @@ export class ModuleContentProcessor {
       // Check if this is a JSON file (special handling)
       if (ref.endsWith('.json')) {
         const result = await this.processJSONContent(parsed, directive, ref);
-        return result;
+        return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Check if this is plain text content (not mlld)
       if (isPlainText) {
         const result = await this.processPlainTextContent(ref);
-        return result;
+        return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Handle raw template files (.att for @var, .mtt for mustache)
       if (!parsed && templateSyntax) {
         const result = await this.processRawTemplate(processedContent, templateSyntax, ref);
-        return result;
+        return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Process mlld content - IMPORTANT: await here so finally runs AFTER processing completes
       const result = await this.processMLLDContent(parsed, processedContent, ref, false);
-      return result;
+      return this.cacheAndReturnModuleResult(cacheKey, result);
     } finally {
       // End import tracking (both global and security validator)
       globalImportStack.delete(ref);
       this.securityValidator.endImport(ref);
     }
+  }
+
+  private getCachedModuleResult(cacheKey: string | null): ModuleProcessingResult | undefined {
+    if (!cacheKey) {
+      return undefined;
+    }
+    return this.env.getModuleProcessingCacheEntry<ModuleProcessingResult>(cacheKey);
+  }
+
+  private cacheAndReturnModuleResult(
+    cacheKey: string | null,
+    result: ModuleProcessingResult
+  ): ModuleProcessingResult {
+    if (cacheKey) {
+      this.env.setModuleProcessingCacheEntry(cacheKey, result);
+    }
+    return result;
+  }
+
+  private shouldUseModuleProcessingCache(directive: DirectiveNode): boolean {
+    const sectionNodes = directive.values?.section;
+    return !(Array.isArray(sectionNodes) && sectionNodes.length > 0);
+  }
+
+  private buildFileImportCacheKey(
+    resolution: ImportResolution,
+    directive: DirectiveNode
+  ): string | null {
+    if (resolution.type !== 'file') {
+      return null;
+    }
+    if (!this.shouldUseModuleProcessingCache(directive)) {
+      return null;
+    }
+    return `file:${resolution.resolvedPath}`;
+  }
+
+  private buildResolverImportCacheKey(
+    ref: string,
+    contentType: 'module' | 'data' | 'text' | undefined,
+    directive: DirectiveNode
+  ): string | null {
+    if (contentType !== 'module') {
+      return null;
+    }
+    if (this.isUrlLike(ref) || ref.startsWith('dynamic://')) {
+      return null;
+    }
+    if (!this.shouldUseModuleProcessingCache(directive)) {
+      return null;
+    }
+    return `resolver:${ref}`;
   }
 
   private async processTemplateCollection(

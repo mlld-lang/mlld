@@ -5,7 +5,6 @@
 
 import { @claudeSession } from "../lib/claude.mld"
 import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone } from "../lib/events.mld"
-import { @updatePhaseStatus } from "../lib/state.mld"
 
 exe @generateUuid() = cmd {uuidgen | tr '[:upper:]' '[:lower:]'}
 
@@ -15,8 +14,6 @@ var @qaTools = "Read,Write,Glob,Grep,Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(fi
 
 exe @runFlail(runDir, topics) = [
   @logPhaseStart(@runDir, "flail")
-  @updatePhaseStatus(@runDir, "flail", "in-progress")
-
   show `Testing @topics.length topics with limited access...`
 
   let @results = for parallel(30) @t in @topics [
@@ -70,7 +67,6 @@ exe @runFlail(runDir, topics) = [
 
   show `Phase 1 complete. Tested @results.length topics.`
   @logPhaseComplete(@runDir, "flail", { tested: @results.length })
-  @updatePhaseStatus(@runDir, "flail", "complete")
 
   => @results
 ]

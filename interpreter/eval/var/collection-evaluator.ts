@@ -6,7 +6,7 @@ import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { isFileLoadedValue } from '@interpreter/utils/load-content-structured';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import type { DescriptorCollector } from './security-descriptor';
 import { interpolateAndCollect } from './security-descriptor';
 
@@ -310,6 +310,15 @@ export async function evaluateArrayItem(
     case 'WhenExpression': {
       const { evaluateWhenExpression } = await import('../when-expression');
       const result = await evaluateWhenExpression(item as any, env, context);
+      if (collectDescriptor) {
+        const descriptor = extractSecurityDescriptor(result.value, {
+          recursive: true,
+          mergeArrayElements: true
+        });
+        if (descriptor) {
+          collectDescriptor(descriptor);
+        }
+      }
       return result.value;
     }
     case 'TernaryExpression':
@@ -317,6 +326,17 @@ export async function evaluateArrayItem(
     case 'UnaryExpression': {
       const { evaluateUnifiedExpression } = await import('../expressions');
       const result = await evaluateUnifiedExpression(item as any, env, context);
+      if (collectDescriptor) {
+        const descriptor =
+          result.descriptor
+          ?? extractSecurityDescriptor(result.value, {
+            recursive: true,
+            mergeArrayElements: true
+          });
+        if (descriptor) {
+          collectDescriptor(descriptor);
+        }
+      }
       return result.value;
     }
     case 'array':

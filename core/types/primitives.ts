@@ -257,6 +257,7 @@ export type DirectiveKind =
   | 'guard'
   | 'hook'
   | 'stream'
+  | 'auth'
   | 'needs'
   | 'profiles'
   | 'policy'
@@ -278,7 +279,7 @@ export type DirectiveSubtype =
   | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
   // Unified exe subtypes
   | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeValue' | 'exeTemplate' | 'exeTemplateFile'
-  | 'exeSection' | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeLoop' | 'exeResolver' | 'exeBlock'
+  | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeLoop' | 'exeResolver' | 'exeBlock'
   // Checkpoint subtype
   | 'checkpoint'
   // Path subtypes
@@ -308,6 +309,8 @@ export type DirectiveSubtype =
   // Needs/Wants subtypes
   | 'needs'
   | 'profiles'
+  // Auth subtype
+  | 'auth'
   // Policy subtype
   | 'policy'
   // Signing subtypes

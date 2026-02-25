@@ -47,6 +47,9 @@ export class GuardExportChecker {
     if (guardNames.length === 0 || !childEnv) {
       return [];
     }
-    return childEnv.serializeGuardsByNames(guardNames);
+    const capturedModuleEnv = childEnv.captureModuleEnvironment();
+    return childEnv
+      .serializeGuardsByNames(guardNames)
+      .map(definition => ({ ...definition, capturedModuleEnv }));
   }
 }

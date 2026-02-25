@@ -21,7 +21,7 @@ describe('Path Resolution Suggestions', () => {
     await fileSystem.writeFile('/project/data/input.json', '{"ok": true}');
   });
 
-  it('suggests @base for missing import paths outside the script directory', async () => {
+  it('suggests @root for missing import paths outside the script directory', async () => {
     await expect(
       interpret('/import { value } from "tmp/utils.mld"\n/show @value', {
         fileSystem,
@@ -30,10 +30,10 @@ describe('Path Resolution Suggestions', () => {
         filePath: '/project/scripts/main.mld',
         localFileFuzzyMatch: false
       })
-    ).rejects.toThrow(/Did you mean:[\s\S]*@base\/tmp\/utils\.mld/);
+    ).rejects.toThrow(/Did you mean:[\s\S]*@root\/tmp\/utils\.mld/);
   });
 
-  it('suggests @base for missing template file paths', async () => {
+  it('suggests @root for missing template file paths', async () => {
     await expect(
       interpret('/exe @render(name) = template "tmp/prompt.att"\n/show @render("Ada")', {
         fileSystem,
@@ -42,7 +42,7 @@ describe('Path Resolution Suggestions', () => {
         filePath: '/project/workflows/template.mld',
         localFileFuzzyMatch: false
       })
-    ).rejects.toThrow(/Did you mean:[\s\S]*@base\/tmp\/prompt\.att/);
+    ).rejects.toThrow(/Did you mean:[\s\S]*@root\/tmp\/prompt\.att/);
   });
 
   it('preserves file-not-found suggestions for content loader errors', async () => {
@@ -55,7 +55,7 @@ describe('Path Resolution Suggestions', () => {
     });
 
     await expect(run).rejects.toThrow(/File not found: data\/input\.json/);
-    await expect(run).rejects.toThrow(/Did you mean:[\s\S]*@base\/data\/input\.json/);
+    await expect(run).rejects.toThrow(/Did you mean:[\s\S]*@root\/data\/input\.json/);
     await expect(run).rejects.toThrow(/Paths resolve relative to the current mlld file directory/);
   });
 });

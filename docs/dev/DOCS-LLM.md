@@ -1,68 +1,73 @@
 ---
-updated: 2026-01-05
+updated: 2026-02-25
 tags: #docs, #llm, #llms-txt, #atoms
-related-docs: docs/dev/DOCS.md, docs/dev/DOCS-DEV.md, docs/dev/DOCS-USER.md, docs/dev/HOWTO-PATTERN.md
-related-code: llms.txt, docs/llm/, docs/src/atoms/, docs/build/llm/, llm/run/llmstxt.mld
+related-docs: docs/dev/DOCS.md, docs/dev/DOCS-DEV.md, docs/dev/DOCS-CLI.md
+related-code: llms.txt, docs/llm/, docs/src/atoms/, llm/run/llmstxt.mld
 ---
 
 # llms.txt Maintenance Guide
 
 ## tldr
 
-LLM docs are built from **atoms** (atomic markdown files in `docs/src/atoms/`). Build scripts in `docs/build/llm/` assemble atoms into the `docs/llm/*.txt` module files. Don't edit `docs/llm/` directly - update atoms, run build scripts.
+LLM docs are built from **atoms** (atomic markdown files in `docs/src/atoms/`). The **filesystem is the source of truth** — directory structure encodes hierarchy and ordering. A build script (`llm/run/llmstxt.mld`) assembles atoms into `docs/llm/*.txt` module files. Don't edit `docs/llm/` directly — update atoms, run `mlld run llmstxt`.
 
-All examples use **strict mode** (bare directives). Run `mlld run llmstxt` to regenerate `llms-combined.txt`.
+All examples use **strict mode** (bare directives).
 
 ## File Structure
 
 ```
-docs/src/atoms/             # SOURCE OF TRUTH (104 atoms)
-├── syntax/                 # Variables, templates, file loading, pipelines
-├── commands/               # run, exe, output, log, append, stream
-├── control-flow/           # when, for, foreach, while, parallel, skip
-├── modules/                # Import/export, registry, local dev
-├── patterns/               # Common workflow patterns
-├── configuration/          # SDK modes, env vars, resolvers
-├── security/               # Guards, labels, capabilities
-└── mistakes/               # Common errors and fixes
-
-docs/build/llm/             # Build scripts (assemble atoms → modules)
-├── syntax.mld
-├── commands.mld
-├── control-flow.mld
-├── modules.mld
-├── patterns.mld
-├── configuration.mld
-├── security.mld
-└── mistakes.mld
+docs/src/atoms/             # SOURCE OF TRUTH
+├── intro.md                # LLM quickstart, powers `mlld qs`
+├── cli/                    # CLI invocation, validation, checkpoint, live-stdio
+├── config/                 # Config files, env vars, policy, env blocks, auth
+├── core/                   # Variables, templates, file loading, exe, run, builtins, escaping
+├── effects/                # Pipelines, labels, guards, hooks
+├── flow-control/           # if, when, for, foreach, while, loop, bail
+├── mcp/                    # MCP export, import, tool collections, reshaping
+├── modules/                # Import/export, registry, publishing, versioning
+├── output/                 # output, log, append, stream
+├── patterns/               # Prose, ralph, guarded tool export
+├── sdk/                    # Execution modes, state, dynamic modules, analysis
+└── security/               # Signing, MCP security, profiles, needs, audit log
 
 docs/llm/                   # GENERATED OUTPUT (don't edit directly)
 ├── llms-overview.txt       # Purpose, mental model, two syntax modes
 ├── llms-core-rules.txt     # The 13 core rules
-├── llms-syntax.txt         # Built from syntax atoms
-├── llms-commands.txt       # Built from commands atoms
-├── llms-control-flow.txt   # Built from control-flow atoms
-├── llms-modules.txt        # Built from modules atoms
-├── llms-patterns.txt       # Built from patterns atoms
-├── llms-configuration.txt  # Built from configuration atoms
-├── llms-sdk.txt            # SDK usage, execution modes
-├── llms-mistakes.txt       # Built from mistakes atoms
-├── llms-security.txt       # Built from security atoms
+├── llms-core.txt           # Variables, templates, file loading, exe, run, builtins
+├── llms-flow-control.txt   # if, when, for, foreach, while, loop
+├── llms-effects.txt        # Pipelines, labels, guards, hooks
+├── llms-modules.txt        # Import/export, registry
+├── llms-mcp.txt            # MCP integration
+├── llms-output.txt         # output, log, append, stream
+├── llms-patterns.txt       # Common workflow patterns
+├── llms-cli.txt            # CLI usage, checkpoint, validation
+├── llms-config.txt         # Configuration, policy, environments
+├── llms-sdk.txt            # SDK execution modes, state, analysis
+├── llms-security.txt       # Signing, MCP security, audit log
 ├── llms-reference.txt      # Quick reference tables
-└── llms-cookbook.txt       # Annotated real-world examples
+└── llms-cookbook.txt        # Annotated real-world examples
 
 llms.txt                    # Brief entry point with TOC + essential patterns
 llms-combined.txt           # Generated: all modules concatenated
 
-llm/run/llmstxt.mld         # Build script to generate llms-combined.txt
+llm/run/llmstxt.mld         # Build script: globs atom dirs, builds all modules
 ```
+
+### Filesystem Conventions
+
+Atom ordering and grouping come from filenames, not config files:
+
+- `_index.md` — section intro, always first
+- `NN-name.md` — standalone atom (gets its own `<TAG>`)
+- `NN-parent--child.md` — grouped under `<PARENT>` tag with siblings
+- `NN-parent--basics.md` — first child; content flows directly under parent (no separate heading)
+- Numbered files sort numerically, unnumbered sort alphabetically after numbered
 
 ### When to Use Each
 
 | File | Use Case |
 |------|----------|
 | `docs/src/atoms/` | Editing content (source of truth) |
-| `docs/build/llm/*.mld` | Editing how atoms are assembled |
 | `llms.txt` | Quick context, points to modules |
 | `llms-combined.txt` | Full context injection for comprehensive tasks |
 | Individual modules | Focused help on specific topics |
@@ -134,9 +139,9 @@ Each module uses lightweight pseudo-XML tags for LLM navigation:
 
 Content here with markdown formatting.
 
-```mlld
+\```mlld
 var @example = "code"
-```
+\```
 
 </MLLD_SECTION_NAME>
 ```
@@ -144,16 +149,6 @@ var @example = "code"
 **Tag naming:** `ALL_CAPS_UNDERSCORES` for clear visual distinction
 
 **Detection rule:** Only `<...>` containing `.`, `/`, `*`, or `@` are treated as file references. XML-like `<TAG>` is safe as plain text.
-
-**Gotcha:** Tags with `@` or `.` in attributes trigger file load detection. Use `:::...:::` escape hatch for XML with interpolated attributes:
-
-```mlld
->> This fails - @ triggers file detection
-var @doc = ::<GUIDE version="@version">::
-
->> Use triple-colon escape hatch
-var @doc = :::<GUIDE version="{{version}}">:::
-```
 
 ## Module Organization
 
@@ -166,58 +161,61 @@ var @doc = :::<GUIDE version="{{version}}">:::
 ### llms-core-rules.txt
 The 13 fundamental rules. High bar for additions - only truly essential syntax.
 
-### llms-syntax.txt
-Detailed syntax coverage:
+### llms-core.txt
+Variables, templates, file loading, exe, run, builtins, escaping:
 - Variables and conditional inclusion
 - Templates (backticks, `::...::`)
 - File loading with globs and AST selectors
-- `.data/.text` JSON string accessors
-- Builtin methods
-- Pipelines and transforms
-- Comments and reserved variables
+- exe (simple forms, blocks, when, shadow, prose)
+- run (basics, cwd, stdin, params)
+- Builtin methods and transforms
+- Comments, escaping
 
-### llms-commands.txt
-All command directives:
-- `run cmd/sh/js` with decision tree
-- `exe` with blocks and when
-- `output`, `log`, `append`
-- `stream`
+### llms-flow-control.txt
+- `if` blocks
+- `when` (inline, blocks, value-returning, operators)
+- `for` (arrow, block, collection, parallel, filter, skip)
+- `foreach`, `loop`, `while`, `bail`
 
-### llms-control-flow.txt
-- `when` (inline, block list, value-returning)
-- `for` (arrow, block, collection, parallel)
-- `skip` keyword for filtering
-- `foreach`
-- `loop` blocks
-- `while` loops
+### llms-effects.txt
+- Pipelines (basics, context, retry, parallel)
+- Labels (sensitivity, trust, influenced, source, tracking)
+- Guards (basics, composition, privileged, transform, denied)
+- Hooks
+
+### llms-mcp.txt
+- MCP basics (export and import)
+- Tool collections and reshaping
+
+### llms-output.txt
+- `output`, `log`, `append`, `stream`
+
+### llms-cli.txt
+- `mlld run`, `mlld file`
+- Checkpoint/resume
+- Validation, live-stdio, MCP dev, skills
+
+### llms-config.txt
+- Config files, environment variables, paths
+- Policy (capabilities, operations, label flow, composition, auth)
+- Environment blocks and auth
 
 ### llms-modules.txt
-- Creating modules with frontmatter
-- Import types and patterns
-- Exports
-- Registry and local dev
+- Importing (local, namespace, directory, templates, node/python, types)
+- Resolvers, lockfile, philosophy
+- Creating, exporting, publishing
+- Module structure and patterns
 
-### llms-patterns.txt
-Common workflows:
-- Tool orchestration
-- Data pipelines
-- Router/gate patterns
-- Parallel execution
-- LLM integration
-
-### llms-configuration.txt
-- Environment variables
-- SDK execution modes
-- Dynamic module injection
-- Resolvers
-
-### llms-mistakes.txt
-Common errors with ❌/✅ patterns. Add here when you identify repeated LLM mistakes.
+### llms-sdk.txt
+- Execution modes, execute function, state
+- Dynamic modules, analyze, payload, language SDKs
 
 ### llms-security.txt
-- Guards and policies
-- Data labels
-- Automatic labels
+- Getting started (progressive levels)
+- Signing (basics, sign/verify, autosign)
+- MCP security (basics, policy, guards)
+- Profiles, needs, audit log
+- Patterns (audit guard, airlock)
 
 ### llms-reference.txt
 Quick lookup tables:
@@ -234,29 +232,19 @@ Real-world annotated examples.
 
 ### Adding a New Feature
 
-1. Create atom in `docs/src/atoms/<category>/<feature>.md` with frontmatter
-2. Add atom to build script in `docs/build/llm/<category>.mld`
-3. Rebuild module: `./dist/cli.cjs docs/build/llm/<category>.mld > docs/llm/llms-<category>.txt`
-4. Verify with diff: `diff docs/llm/llms-<category>.txt <original>`
+1. Create atom in `docs/src/atoms/<section>/NN-name.md` with frontmatter
+2. Follow naming convention: `NN-parent--child.md` for grouped, `NN-name.md` for standalone
+3. Rebuild: `mlld run llmstxt`
+4. Verify output: check `docs/llm/llms-<section>.txt`
 5. Update llms-reference.txt tables if applicable
 6. Consider adding to cookbook if it composes well
-7. Regenerate combined: `mlld run llmstxt`
-
-### Adding a Common Mistake
-
-1. Create atom in `docs/src/atoms/mistakes/<mistake>.md`
-2. Show wrong and correct patterns (no ❌/✅ emoji - plain text)
-3. Add to build script: `docs/build/llm/mistakes.mld`
-4. Rebuild: `./dist/cli.cjs docs/build/llm/mistakes.mld > docs/llm/llms-mistakes.txt`
-5. Regenerate combined
 
 ### Fixing Examples
 
 1. Find the source **atom** in `docs/src/atoms/`
 2. Update with correct strict mode syntax
 3. Test example parses: `npm run ast -- 'code'`
-4. Rebuild the module: `./dist/cli.cjs docs/build/llm/<category>.mld > docs/llm/llms-<category>.txt`
-5. Regenerate combined
+4. Rebuild: `mlld run llmstxt`
 
 ### Atom Format
 
@@ -264,11 +252,11 @@ Each atom has YAML frontmatter:
 
 ```markdown
 ---
-id: when
-title: When
-brief: Select the first matching branch
-category: control-flow
-parent: control-flow
+id: when-inline
+title: When Match Form
+brief: Pattern matching with optional colon syntax
+category: flow-control
+parent: when
 tags: [conditionals, branching]
 related: [when-inline, when]
 related-code: [interpreter/eval/when.ts]
@@ -278,59 +266,26 @@ updated: 2026-01-05
 Content here with code examples...
 ```
 
-See [HOWTO-PATTERN.md](HOWTO-PATTERN.md) for full atom specification.
+See [DOCS-CLI.md](DOCS-CLI.md) for full atom specification.
 
 ## Build Scripts
 
-### Module Build Scripts
-
-Each `docs/build/llm/<category>.mld` builds one `docs/llm/llms-<category>.txt`:
+A single mlld script (`llm/run/llmstxt.mld`) builds all LLM docs:
 
 ```bash
-# Rebuild single module
-./dist/cli.cjs docs/build/llm/syntax.mld > docs/llm/llms-syntax.txt
-
-# Rebuild all modules (example)
-for script in docs/build/llm/*.mld; do
-  name=$(basename "$script" .mld)
-  ./dist/cli.cjs "$script" > "docs/llm/llms-$name.txt"
-done
-```
-
-Build scripts:
-1. Load atoms in order from `docs/src/atoms/<category>/`
-2. Strip frontmatter from each atom
-3. Wrap each section in pseudo-XML tags
-4. Output assembled module
-
-### Combined Build Script
-
-`llm/run/llmstxt.mld` generates `llms-combined.txt`:
-
-```bash
-mlld run llmstxt
+mlld run llmstxt     # or: npm run build:docs
 ```
 
 The script:
-1. Reads version from package.json
-2. Loads all modules from docs/llm/ in logical order
-3. Wraps in `<MLLD_COMPLETE_GUIDE>` with version and timestamp
-4. Writes to llms-combined.txt
+1. Globs each section directory under `docs/src/atoms/`
+2. Sorts files: `_index.md` first, then `NN-*` numerically, then unnumbered alphabetically
+3. Parses `--` delimiter to determine parent-child grouping
+4. Wraps in pseudo-XML tags (parent groups get `<PARENT>` tags, standalone atoms get individual tags)
+5. Writes each module to `docs/llm/llms-<section>.txt`
+6. Assembles all modules into `llms-combined.txt` with version and timestamp
 
-**Module order** (defined in script):
-1. overview
-2. core-rules
-3. syntax
-4. commands
-5. control-flow
-6. modules
-7. patterns
-8. configuration
-9. sdk
-10. mistakes
-11. security
-12. reference
-13. cookbook
+**Module order** in combined output:
+1. overview, 2. core-rules, 3. core, 4. flow-control, 5. effects, 6. modules, 7. mcp, 8. output, 9. patterns, 10. cli, 11. config, 12. sdk, 13. security, 14. reference, 15. cookbook
 
 ## Testing Changes
 
@@ -369,7 +324,4 @@ Version should match mlld release version.
 
 - **docs/dev/DOCS.md** - Unified documentation guide (entrypoint)
 - **docs/dev/DOCS-DEV.md** - Developer-facing documentation principles
-- **docs/dev/DOCS-USER.md** - User-facing documentation guide
-- **docs/dev/HOWTO-PATTERN.md** - Full atom pattern specification
-- **docs/user/** - Detailed user documentation
-- **tests/cases/valid/feat/** - Comprehensive test cases
+- **docs/dev/DOCS-CLI.md** - Full atom pattern specification

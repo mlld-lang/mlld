@@ -316,6 +316,64 @@ describe('Security metadata propagation', () => {
     expect(messageVar?.mx.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
+  it('preserves labels for template-literal exe arguments', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const directives = [
+      '/var pii @name = "John Doe"',
+      '/exe @echo(input) = cmd { printf "@input" }',
+      '/var @direct = @echo(@name)',
+      '/var @template = @echo(`hello @name`)'
+    ];
+
+    for (const source of directives) {
+      const directive = parseSync(source)[0] as DirectiveNode;
+      await evaluateDirective(directive, env);
+    }
+
+    const directVar = env.getVariable('direct');
+    const templateVar = env.getVariable('template');
+    expect(directVar?.mx.labels).toEqual(expect.arrayContaining(['pii']));
+    expect(templateVar?.mx.labels).toEqual(expect.arrayContaining(['pii']));
+  });
+
+  it('preserves labels for expression exe arguments', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const directives = [
+      '/var pii @name = "John Doe"',
+      '/var @flag = true',
+      '/exe @echo(input) = cmd { printf "@input" }',
+      '/var @result = @echo(@flag ? @name : "x")'
+    ];
+
+    for (const source of directives) {
+      const directive = parseSync(source)[0] as DirectiveNode;
+      await evaluateDirective(directive, env);
+    }
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['pii']));
+  });
+
+  it('preserves labels for expression values in array and object literals', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const directives = [
+      '/var pii @name = "John Doe"',
+      '/var @flag = true',
+      '/var @arrTern = [@flag ? @name : "x"]',
+      '/var @objTern = {"k": @flag ? @name : "x"}'
+    ];
+
+    for (const source of directives) {
+      const directive = parseSync(source)[0] as DirectiveNode;
+      await evaluateDirective(directive, env);
+    }
+
+    const arrVar = env.getVariable('arrTern');
+    const objVar = env.getVariable('objTern');
+    expect(arrVar?.mx.labels).toEqual(expect.arrayContaining(['pii']));
+    expect(objVar?.mx.labels).toEqual(expect.arrayContaining(['pii']));
+  });
+
   it('propagates pipeline taint and labels into structured outputs and downstream results', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
     const tokenDirective = parseSync('/var secret @token = "abc123"')[0] as DirectiveNode;
@@ -337,17 +395,17 @@ describe('Security metadata propagation', () => {
     const resultDirective = parseSync('/run { printf "Token: @token" }')[0] as DirectiveNode;
     const result = await evaluateDirective(resultDirective, env);
     const structuredResult = result.value as any;
-    expect(structuredResult?.mx?.labels ?? []).toEqual([]);
-    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+    expect(structuredResult?.mx?.labels ?? []).toEqual(expect.arrayContaining(['secret']));
+    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['secret', 'src:cmd']));
   });
 
-  it('applies src:exec taint to direct run cmd syntax', async () => {
+  it('applies src:cmd taint to direct run cmd syntax', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
     const runDirective = parseSync('/run cmd { printf "hi" }')[0] as DirectiveNode;
     const result = await evaluateDirective(runDirective, env);
 
     const structuredResult = result.value as any;
-    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:cmd']));
   });
 
   it('tags @input resolver variables with src:user taint', async () => {
@@ -358,7 +416,7 @@ describe('Security metadata propagation', () => {
     expect(resolverVar?.mx?.taint).toEqual(expect.arrayContaining(['src:user']));
   });
 
-  it('applies src:exec taint to /exe command output', async () => {
+  it('applies src:cmd taint to /exe command output', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
     const exeDirective = parseSync('/exe @echo(value) = run { printf "@value" }')[0] as DirectiveNode;
     await evaluateDirective(exeDirective, env);
@@ -367,7 +425,7 @@ describe('Security metadata propagation', () => {
     await evaluateDirective(varDirective, env);
 
     const resultVar = env.getVariable('result');
-    expect(resultVar?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+    expect(resultVar?.mx?.taint).toEqual(expect.arrayContaining(['src:cmd']));
   });
 
   it('applies src:file and directory labels to loaded file content', async () => {

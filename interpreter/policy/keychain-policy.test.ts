@@ -43,6 +43,25 @@ describe('enforceKeychainAccess', () => {
     expect(() => enforceKeychainAccess(env)).not.toThrow();
   });
 
+  it('allows standalone-style keychain checks without allow.danger when requested', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'mlld-config.json'),
+      JSON.stringify({ projectname: 'demo' }, null, 2)
+    );
+    const env = new Environment(new NodeFileSystem(), new PathService(), tempDir);
+    env.recordPolicyConfig('policy', {
+      keychain: { allow: ['mlld-env-{projectname}/*'] }
+    });
+    expect(() =>
+      enforceKeychainAccess(
+        env,
+        { service: 'mlld-env-demo', account: 'ok' },
+        undefined,
+        { requireDanger: false }
+      )
+    ).not.toThrow();
+  });
+
   it('denies access when allow list does not match', () => {
     fs.writeFileSync(
       path.join(tempDir, 'mlld-config.json'),

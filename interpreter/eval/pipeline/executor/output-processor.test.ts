@@ -21,7 +21,14 @@ describe('pipeline output processor', () => {
     const structured = wrapStructured('ok', 'text', 'ok');
     expect(processor.normalizeOutput(structured)).toBe(structured);
 
-    expect(() => processor.normalizeOutput(null)).toThrow(TypeError);
+    const nullOutput = processor.normalizeOutput(null);
+    expect(nullOutput.type).toBe('null');
+    expect(nullOutput.data).toBeNull();
+    expect(nullOutput.text).toBe('null');
+
+    const undefinedOutput = processor.normalizeOutput(undefined);
+    expect(undefinedOutput.type).toBe('text');
+    expect(undefinedOutput.text).toBe('');
 
     const numberOutput = processor.normalizeOutput(12);
     expect(numberOutput.type).toBe('text');

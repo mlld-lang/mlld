@@ -135,15 +135,37 @@ describe('exe evaluator characterization', () => {
         }
       },
       {
-        identifier: 'sectionExec',
-        directive: createDirective('sectionExec', 'exeSection', {
-          path: [createText('README.md')],
-          section: [createText('Overview')]
+        identifier: 'alligatorExec',
+        directive: createDirective('alligatorExec', 'exeData', {
+          data: {
+            type: 'load-content',
+            source: [
+              {
+                type: 'Text',
+                nodeId: 'source-changelog',
+                content: 'CHANGELOG.md'
+              }
+            ],
+            options: {
+              selectors: [
+                {
+                  type: 'section',
+                  value: [
+                    {
+                      type: 'Text',
+                      nodeId: 'section-version',
+                      content: '[v1.0.0]'
+                    }
+                  ]
+                }
+              ]
+            }
+          }
         }),
         assertDef: (def: any) => {
-          expect(def.type).toBe('section');
-          expect(def.pathTemplate).toBeDefined();
-          expect(def.sectionTemplate).toBeDefined();
+          expect(def.type).toBe('data');
+          expect(def.dataTemplate).toBeDefined();
+          expect(def.dataTemplate.type).toBe('load-content');
         }
       },
       {
@@ -245,6 +267,34 @@ describe('exe evaluator characterization', () => {
         }
       },
       {
+        identifier: 'envExec',
+        directive: createDirective(
+          'envExec',
+          'exeEnv',
+          {
+            envWithClause: { profile: 'readonly' },
+            block: {
+              type: 'ExeBlock',
+              nodeId: 'env-exec-block',
+              values: {
+                statements: [createText('noop')]
+              },
+              meta: {
+                statementCount: 1,
+                hasReturn: false
+              }
+            }
+          },
+          { statementCount: 1, hasReturn: false }
+        ),
+        assertDef: (def: any) => {
+          expect(def.type).toBe('code');
+          expect(def.language).toBe('mlld-env');
+          expect(def.codeTemplate?.[0]?.kind).toBe('env');
+          expect(def.codeTemplate?.[0]?.values?.withClause?.profile).toBe('readonly');
+        }
+      },
+      {
         identifier: 'blockExec',
         directive: createDirective(
           'blockExec',
@@ -298,7 +348,7 @@ describe('exe evaluator characterization', () => {
 
     const variable = env.getVariable('secureCommand') as any;
     expect(variable?.mx?.labels ?? []).toEqual(expect.arrayContaining(['secret']));
-    expect(variable?.mx?.taint ?? []).toEqual(expect.arrayContaining(['secret', 'src:exec']));
+    expect(variable?.mx?.taint ?? []).toEqual(expect.arrayContaining(['secret', 'src:cmd']));
   });
 
   it('keeps executable source syntax tagging stable across subtype families', async () => {
@@ -408,7 +458,7 @@ describe('exe evaluator characterization', () => {
     expect(commandVar?.internal?.capturedShadowEnvs).toBeDefined();
     expect(commandVar?.internal?.capturedModuleEnv).toBeDefined();
     expect(commandVar?.mx?.labels ?? []).toEqual(expect.arrayContaining(['secret']));
-    expect(commandVar?.mx?.taint ?? []).toEqual(expect.arrayContaining(['secret', 'src:exec']));
+    expect(commandVar?.mx?.taint ?? []).toEqual(expect.arrayContaining(['secret', 'src:cmd']));
 
     const templateVar = env.getVariable('metaTemplate') as any;
     expect(templateVar?.mx?.labels ?? []).toEqual(expect.arrayContaining(['public']));

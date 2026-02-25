@@ -5,6 +5,98 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc83]
+
+### Added
+- `mlld howto <keyword>` keyword search across atom tags, titles, and briefs. Single match shows full content; multiple matches show a selection list.
+- Markdown section selectors now support include/exclude sets (`# a, b; !# c`), quoted heading names, optional selectors (`"name"?`), and fuzzy prefix matching that ignores punctuation/case.
+- `.flat(depth?)` and `.at(index)` array builtin methods.
+- `autosign` category renamed from `templates` to `instructions`. Aliases retained for backward compatibility: `instruction`, `instruct`, `inst`, `templates`.
+- `autosign: { labels: ["prompt"] }` signs variables with matching security labels.
+- `verify_all_instructions: true` policy shorthand for `defaults: { autosign: ["instructions"], autoverify: true }`.
+- Autoverify now only injects verification for variables marked as instructions, not all signed variables.
+- Autoverify now injects a scoped `verify` MCP tool when an `llm` executable runs under a tool collection.
+- `@mx.tools.results` now exposes per-tool latest results for guard checks.
+- Tool-collection schema supports `optional` exposed parameters; MCP required fields and runtime argument checks now respect optional parameters.
+- Verify tool responses now include structured pass/fail output with `allPassed`, per-variable `results`, and composition metadata (signed instruction provenance vs interpolated data taint/sources).
+- Signing now writes `signed:<var>` provenance labels; composed instruction variables inherit signed provenance for cascading verification targets.
+
+### Fixed
+- Hook registration now emits a runtime warning for unknown `op:<type>` hook filters (while still registering the hook for forward compatibility).
+- `--resume "checkpoint-name"` now pre-scans source-declared checkpoints so named resume targets are available even when a prior run never reached that checkpoint.
+- `mlld validate` now warns when a trailing exe parameter can be omitted by callsites but is passed through to another function call (a runtime `Undefined variable` failure pattern).
+- `autosign` now signs all string literal syntaxes (`"..."`, backtick, `'...'`), not just `::` templates.
+- Removed implicit `mlld verify` command capability bypass under autoverify; verification enforcement now routes through tracked tool calls.
+- `env with { ... } [ ... ]` configless block syntax for `/env`.
+- `/exe` definitions now accept `env` blocks directly on the RHS (`/exe @fn(...) = env with { ... } [ ... ]`).
+- `@typeInfo(...)` builtin for rich type/provenance diagnostics, while `@typeof(...)` remains for simple type checks.
+- Directory module import convention: importing `./dir` now resolves `./dir/index.mld` when present; `./dir/` continues to mean collection import.
+- `sh(@var) { ... }` syntax support in `exe` definitions (previously run-only).
+- Standalone `/auth @name = ...` directive for top-level credential declarations, including short form (`"API_KEY"`) and object forms (`{ from, as }`).
+- Exported executables now capture module auth bindings so imported `using auth:name` works without requiring callers to import policy objects.
+- AST selector results now mirror metadata on `.mx` (`name`, `type`, `line`), and glob selectors populate source path metadata on `.mx.relative` while retaining top-level selector fields.
+- Pipeline and `while` stage command execution now supports block-form executables (`mlld-exe-block`) and env executables (`mlld-env`) with the same dispatch behavior as direct invocation.
+- `done`/`continue` literal parsing no longer consumes following lines as accidental values, and `while` stages now handle `done null` without null-pointer failures.
+- `@typeof(...)` now treats structured null payloads as `null` (not string `"null"`), including unmatched `when` results wrapped in structured values.
+- Registry installs no longer mutate lock entries before install success, preventing lock-file corruption when requested versions fail to resolve.
+- `mlld update` now respects pinned lock constraints: exact versions stay pinned, and range constraints update within their pinned range.
+- `@root/...` and `@base/...` file-not-found errors now include the resolved absolute path for easier debugging.
+- `mlld validate` undefined-variable checks now ignore non-variable `@` text patterns (emails/scoped packages) and honor implicit loop locals (`@item`, `@index`, `@key`).
+- CLI error reporting now marks handled errors and avoids secondary re-emission paths, so representative runtime failures emit one formatted error block.
+
+### Fixed
+- Removed the legacy `/exe @fn(...) = [@file # section]` special case; section/file extraction in executable bodies now uses alligator syntax (`<file.md # "Section">`).
+- `/exe` bodies now accept alligator section selectors directly (including selector sets/negation/optional selectors) via normal load-content execution.
+- `cmd { ... }` parsing now keeps `|` literal inside double-quoted strings with `@param` interpolation, and `\@` now consistently emits a literal `@` inside unquoted command words.
+- Inline `var @x = js { ... }` assignments now preserve typed results (`[]`, `{}`, numbers, booleans, null) instead of returning JSON strings.
+- JS implicit-return normalization now ignores `return` statements inside nested lambdas/functions, so top-level expression bodies still return correctly.
+- Module imports no longer inherit unrelated module-level labels on every export; export metadata now stays scoped to each variable’s own security descriptor.
+- CLI command execution errors no longer print raw stderr twice before formatted mlld error output.
+- `mlld publish` for directory modules now constructs correct raw GitHub URLs; previously `detectGitInfo` received the directory path instead of the entry file path, producing a `/.` base path that made URL verification fail.
+- Consecutive indented `>>` comment lines inside `/if` and `/for` block bodies now parse correctly.
+- `mlld publish` metadata updates (repo, bugs, mlldVersion) are now written to disk, committed, and pushed automatically. Previously option [1] "Apply changes and continue" only updated in-memory state and never persisted the file.
+- `mlld publish` auto-commit now pushes to remote and refreshes the commit SHA before URL verification, so the constructed raw.githubusercontent.com URL points to an accessible commit.
+- `mlld publish` directory module metadata updates now write to `module.yml` instead of incorrectly adding frontmatter to the entry file.
+- `mlld publish` manifest parser now reads `repo`, `bugs`, `homepage`, and `keywords` from `module.yml`, preventing the enhancer from perpetually flagging them as updates when they already exist.
+- `mlld publish` metadata commit gracefully skips when the file content is unchanged, instead of failing with a fatal error.
+- `run` directive now resolves cross-module executable dependencies; imported functions called via `run @fn(...)` can access their own module's imports. Previously only `var @_ = @fn(...)` worked.
+- Repeated `--env` CLI flags now accumulate instead of overwriting; all entries are available in `@input`.
+- `when` value-match wildcard arms (`* => show ...`) now execute directive actions instead of silently dropping them.
+- `let` object literals now evaluate expression-valued properties (`when`, ternary, binary, unary) instead of leaking raw AST nodes.
+- MCP tool routing now reports clear not-found errors for wrong tool names (with snake_case suggestion), instead of surfacing recursive/circular errors.
+- Equality behavior is unified through a single implementation across expression and `when` condition evaluation.
+- Guard denial output is deduplicated and default errors omit verbose guard JSON internals unless debug mode is enabled.
+- Missing-file path guidance and import suggestions now consistently prefer `@root` in user-facing hints.
+- Deprecated-json anti-pattern detection is narrower and no longer triggers on variable names that merely contain `json`.
+- Auth binding resolution now composes captured module auth with caller `policy.auth` and caller standalone `auth`; caller bindings override same-name module bindings.
+- Keychain auth lookup now falls back to `process.env[as]` when keychain entries are missing, and unsupported provider schemes return explicit errors.
+- Error display now renders all content (header, source context, details, suggestion) inside the `mlld error` box frame. Directive trace chain appears at top, error details below. Fixes `:unknown` locations in trace and strips `/` prefix from directive names.
+- `src:mcp` taint no longer applies to inputs of MCP-served tools (`mlld mcp`); it remains scoped to data returned from imported MCP tools.
+- Imported guards now resolve internal executable dependencies in the module where the guard was defined; consumers do not need to import helper executables separately.
+- Re-importing the same module in one execution (for example, guard import plus policy import) reuses cached module evaluation and no longer re-registers guards.
+- Security label/taint propagation now survives template-literal interpolation passed as executable arguments.
+- Executable argument expressions (`? :`, unary/binary forms, and when-expression values) now preserve security descriptors.
+- Array/object literals now retain label/taint metadata from nested expression values.
+- Executable source taint is now medium-specific: `src:js`, `src:sh`, `src:py`, `src:cmd`, and `src:template`; pure mlld executables use `src:exe`.
+- Security descriptor propagation through `js`/`sh`/`py`/`cmd` executable blocks is now covered for round-trip, transform, and multi-label flows.
+- Object spread in `/var` assignments now preserves security labels and taint from spread sources.
+- Label propagation audit coverage now spans templates, expression branches, collection construction/spread, method chains, accessor paths, and loop/when transformations.
+- Privileged guard `when` actions now accept shorthand label modifications (`trusted!`, `!label`, `clear!`) with action targets (for example `* => trusted!,!secret @output`).
+- Label-modification actions now also accept escaped bang forms (`trusted\!`, `clear\!`, `\!label`) in guard and return contexts.
+- `cmd { ... }` shell-operator parse/runtime errors now emit context-aware guidance, suggesting `run sh(@path) { ... }` in run contexts and `exe @fn(path) = sh { ... }` in exe contexts.
+- Executable outputs now inherit taint introduced by nested tool/executable calls during actual execution paths (for example, nested `net:r` labels now propagate to parent `exe` output only when invoked).
+- `var tools` normalization no longer triggers `before <operation-label>` guard evaluation; those guards now run only during actual operation execution.
+- Guard quantifier helpers now attach to object-valued guard inputs, preventing `@input.any.mx.*` field-access failures in operation guards.
+- `npm run test:case -- ...` now accepts `tests/cases/...`, `tests/fixtures/...`, absolute paths, and direct `example.md`/`example.mld` fixture paths.
+- Return label trust asymmetry is preserved for executable returns; explicit `=> untrusted ...` results no longer regain `trusted` from ambient invocation descriptors.
+- `/needs { py: [...] }` dependency checks now prefer `pip3` and fall back to `pip`.
+- `import { @FOO } from @input` now resolves missing fields to `null` instead of throwing `Export not found`.
+- Selected `@input` imports now always include every requested key in resolver export payloads, using `null` when absent.
+- `for @key, @value in @obj` now iterates parsed JSON object keys for values loaded from `<file.json>`, instead of StructuredValue wrapper fields.
+- `js { ... }` and `node { ... }` blocks now parse regex literals with quoted character classes (for example `/^["']|["']$/g`) without cascading parse failures.
+- `policy.operations` now uses `risk-category -> labels[]` mappings (for example `exfil: ["net:w"]`) instead of `label -> risk-category`.
+- StructuredValue wrapper access is explicit via `.mx.text` and `.mx.data`, while top-level field access remains user-data-first for keys like `text`, `data`, and `type`.
+
 ## [2.0.0-rc82]
 
 ### Breaking
@@ -93,6 +185,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **LSP tree-sitter WASM support**: `python` and `bash` code blocks (alongside `javascript`) for embedded syntax analysis
 
 ### Changed
+- Hook directives no longer emit unused `scope` metadata in parsed hook filter nodes and hook directive meta; the dead `HookScope`/`HookDefinition.scope` shape has been removed.
 - **Mandatory whitespace around arithmetic operators**: `@a - @b` requires spaces; `@a-b` is a hyphenated identifier, not subtraction. Applies to `+`, `-`, `*`, `/`, `%`.
 - **CLI payload keys preserve hyphens**: `--skip-live` produces `@payload.skip-live` (primary) with deprecated `@payload.skipLive` camelCase alias.
 - **StructuredValue `.mx` surface model**: Field access uses `.mx.*` for wrapper/system metadata (`.mx.text`, `.mx.data`). Top-level dotted access resolves through user data. System metadata (`.text`, `.data`, `.type`) no longer leaks at the top level.
@@ -185,6 +278,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pipeline context references**: `@p[-1]` correctly returns evaluated outputs when pipelines start with exe calls.
 - **log/output falsy values**: `false` and `0` output correctly instead of empty string.
 - **Field access on 'type' property**: Returns user data value instead of internal Variable type discriminator.
+- Missing object/array fields named `source` or `metadata` now resolve as missing data in expressions and `@exists`, instead of falling back to Variable metadata.
 - **JSON/JSONL parse errors**: Shows proper error messages instead of "Failed to load content".
 - **HTML/XML detection in templates**: Angle bracket content matching HTML patterns (`<tagname attr="value">`) recognized as literal HTML. Backslash-escaped characters (`\@`, `\.`, `\*`, `@@`) prevent false file reference detection inside angle brackets.
 - **Backtick template literals in exec arguments**: `@echo(@name)` where `@name` holds a backtick literal correctly evaluates.

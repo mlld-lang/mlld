@@ -81,7 +81,7 @@ DoneLiteral "done literal"
         location: location()
       });
     }
-  / "done" _ value:VarRHSContent {
+  / "done" [ \t\r\u200B\u200C\u200D]+ !LineTerminator value:VarRHSContent {
       const normalized = Array.isArray(value) ? value : [value];
       return helpers.createNode('Literal', {
         value: normalized,
@@ -106,7 +106,7 @@ ContinueLiteral "continue literal"
         location: location()
       });
     }
-  / "continue" _ value:VarRHSContent {
+  / "continue" [ \t\r\u200B\u200C\u200D]+ !LineTerminator value:VarRHSContent {
       const normalized = Array.isArray(value) ? value : [value];
       return helpers.createNode('Literal', {
         value: normalized,

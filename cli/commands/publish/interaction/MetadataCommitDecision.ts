@@ -9,15 +9,13 @@ import { PublishContext } from '../types/PublishingTypes';
 import { MlldError, ErrorSeverity } from '@core/errors';
 
 interface MetadataCommitChoice {
-  action: 'apply' | 'apply-and-commit' | 'cancel';
+  action: 'continue' | 'cancel';
 }
 
 export class MetadataCommitDecision implements DecisionPoint<MetadataCommitChoice> {
   name = 'metadata-commit';
 
   shouldPrompt(context: PublishContext): boolean {
-    // Prompt if we have validation results with metadata updates
-    // and we're in a git repository
     return !!(
       context.validationResult?.updatedMetadata &&
       context.module.gitInfo.isGitRepo &&
@@ -33,7 +31,7 @@ export class MetadataCommitDecision implements DecisionPoint<MetadataCommitChoic
 
     try {
       console.log(chalk.yellow('\nMetadata updates available:'));
-      
+
       if (context.validationResult?.updatedMetadata) {
         const updates = context.validationResult.updatedMetadata;
         Object.entries(updates).forEach(([key, value]) => {
@@ -41,23 +39,17 @@ export class MetadataCommitDecision implements DecisionPoint<MetadataCommitChoic
         });
       }
 
+      console.log(chalk.gray('\n   Changes will be committed and pushed automatically.'));
       console.log('\nOptions:');
-      console.log('  [1] Apply changes and continue (default)');
-      console.log('  [2] Apply changes and auto-commit to git');
-      console.log('  [3] Cancel publishing');
+      console.log('  [1] Continue (default)');
+      console.log('  [2] Cancel publishing');
 
       const choice = await rl.question('\nChoice [1]: ');
 
-      switch (choice) {
-        case '2':
-          return { action: 'apply-and-commit' };
-        case '3':
-          return { action: 'cancel' };
-        case '1':
-        case '':
-        default:
-          return { action: 'apply' };
+      if (choice === '2') {
+        return { action: 'cancel' };
       }
+      return { action: 'continue' };
     } finally {
       rl.close();
     }
@@ -71,7 +63,7 @@ export class MetadataCommitDecision implements DecisionPoint<MetadataCommitChoic
       });
     }
 
-    // Apply the metadata changes
+    // Apply the metadata changes in memory
     if (context.validationResult?.updatedMetadata) {
       context.module.metadata = {
         ...context.module.metadata,
@@ -79,20 +71,14 @@ export class MetadataCommitDecision implements DecisionPoint<MetadataCommitChoic
       };
     }
 
-    // Update content if available
     if (context.validationResult?.updatedContent) {
       context.module.content = context.validationResult.updatedContent;
-    }
-
-    // Mark for git commit if requested
-    if (choice.action === 'apply-and-commit') {
-      context.shouldCommitMetadata = true;
     }
 
     return context;
   }
 
   validate(choice: MetadataCommitChoice): boolean {
-    return ['apply', 'apply-and-commit', 'cancel'].includes(choice.action);
+    return ['continue', 'cancel'].includes(choice.action);
   }
 }

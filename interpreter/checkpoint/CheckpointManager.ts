@@ -439,6 +439,52 @@ export class CheckpointManager {
     this.namedCheckpointOrders = new Map();
   }
 
+  augmentNamedCheckpointsFromSource(checkpointNames: readonly string[]): void {
+    const normalizedNames: string[] = [];
+    const seen = new Set<string>();
+    for (const rawName of checkpointNames) {
+      if (typeof rawName !== 'string') {
+        continue;
+      }
+      const normalizedName = rawName.trim();
+      if (!normalizedName || seen.has(normalizedName)) {
+        continue;
+      }
+      seen.add(normalizedName);
+      normalizedNames.push(normalizedName);
+    }
+
+    if (normalizedNames.length === 0) {
+      return;
+    }
+
+    const hasKnownExecutionOrder = normalizedNames.some(name => {
+      const order = this.namedCheckpointOrders.get(name);
+      return Number.isInteger(order) && (order as number) >= 0;
+    });
+
+    if (!hasKnownExecutionOrder) {
+      for (let i = 0; i < normalizedNames.length; i += 1) {
+        const name = normalizedNames[i];
+        if (!this.namedCheckpointOrders.has(name)) {
+          this.namedCheckpointOrders.set(name, i);
+        }
+      }
+      return;
+    }
+
+    let nextKnownExecutionOrder = this.computeNextExecutionOrder();
+    for (let i = normalizedNames.length - 1; i >= 0; i -= 1) {
+      const name = normalizedNames[i];
+      const existingOrder = this.namedCheckpointOrders.get(name);
+      if (typeof existingOrder === 'number' && Number.isInteger(existingOrder) && existingOrder >= 0) {
+        nextKnownExecutionOrder = existingOrder;
+        continue;
+      }
+      this.namedCheckpointOrders.set(name, nextKnownExecutionOrder);
+    }
+  }
+
   assignInvocationMetadata(fnName: string, invocationSite?: string): CheckpointInvocationMetadata {
     const normalizedFn = fnName.trim();
     const normalizedSite = invocationSite?.trim().length ? invocationSite.trim() : undefined;

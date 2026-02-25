@@ -17,6 +17,7 @@ export function generateToolSchema(
   const exposedParams = hasExpose
     ? toolDef!.expose!
     : paramNames.filter(param => !boundSet.has(param));
+  const optionalSet = new Set(Array.isArray(toolDef?.optional) ? toolDef!.optional! : []);
   const exposedSet = new Set(exposedParams);
   const visibleParams = paramNames.filter(param => exposedSet.has(param));
   const properties: Record<string, JSONSchemaProperty> = {};
@@ -47,7 +48,7 @@ export function generateToolSchema(
     inputSchema: {
       type: 'object',
       properties,
-      required: [...visibleParams],
+      required: visibleParams.filter(param => !optionalSet.has(param)),
     },
   };
 }

@@ -1,0 +1,4 @@
+>> index.mld added to test if entry field in module.yml is respected
+>> If module.yml entry: my-app.mld works, this should NOT run
+>> If entry field is ignored, this WILL run instead
+show "Running from index.mld (entry field ignored)"

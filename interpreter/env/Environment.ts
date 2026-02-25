@@ -35,7 +35,12 @@ import {
 } from '@core/types/security';
 import type { StateWrite } from '@core/types/state';
 import { mergeNeedsDeclarations, ALLOW_ALL_POLICY, type NeedsDeclaration, type PolicyCapabilities, type ProfilesDeclaration } from '@core/policy/needs';
-import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
+import {
+  mergePolicyConfigs,
+  normalizePolicyConfig,
+  type AuthConfig,
+  type PolicyConfig
+} from '@core/policy/union';
 import { RegistryManager, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
@@ -190,6 +195,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private securityRuntime?: SecurityRuntimeState;
   private policyCapabilities: PolicyCapabilities = ALLOW_ALL_POLICY;
   private policySummary?: PolicyConfig;
+  private standaloneAuthSummary?: Record<string, AuthConfig>;
   private allowedTools?: Set<string>;
   private allowedMcpServers?: Set<string>;
   private moduleNeeds?: NeedsDeclaration;
@@ -265,6 +271,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // Source cache for error reporting
   private sourceCache: Map<string, string> = new Map();
+  // Per-execution module processing cache for idempotent import evaluation
+  private moduleProcessingCache: Map<string, unknown>;
   
   // File interpolation circular detection
   private interpolationStack: Set<string> = new Set();
@@ -383,6 +391,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.registerBuiltinHooks();
     }
     this.pipelineGuardHistoryStore = parent ? parent.pipelineGuardHistoryStore : {};
+    this.moduleProcessingCache = parent ? parent.moduleProcessingCache : new Map();
     
     // Inherit reserved names from parent environment
     if (parent) {
@@ -702,6 +711,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.moduleIsolated = env !== undefined;
   }
 
+  getCapturedModuleEnv(): Map<string, Variable> | undefined {
+    return this.capturedModuleEnv;
+  }
+
   isModuleIsolated(): boolean {
     return this.moduleIsolated;
   }
@@ -774,6 +787,24 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   getPolicySummary(): PolicyConfig | undefined {
     if (this.policySummary) return this.policySummary;
     return this.parent?.getPolicySummary();
+  }
+
+  getStandaloneAuthSummary(): Record<string, AuthConfig> | undefined {
+    if (this.standaloneAuthSummary) {
+      return this.standaloneAuthSummary;
+    }
+    return this.parent?.getStandaloneAuthSummary();
+  }
+
+  recordStandaloneAuthConfig(name: string, config: AuthConfig): void {
+    const authName = typeof name === 'string' ? name.trim() : '';
+    if (!authName || !config) {
+      return;
+    }
+    this.standaloneAuthSummary = {
+      ...(this.standaloneAuthSummary ?? {}),
+      [authName]: config
+    };
   }
 
   getScopedEnvironmentConfig(): EnvironmentConfig | undefined {
@@ -1005,6 +1036,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       };
     }
     return this.parent?.getSecuritySnapshot();
+  }
+
+  getLocalSecurityDescriptor(): SecurityDescriptor | undefined {
+    const descriptor = this.securityRuntime?.descriptor;
+    if (!descriptor) {
+      return undefined;
+    }
+    if (descriptor.labels.length === 0 && descriptor.taint.length === 0 && descriptor.sources.length === 0) {
+      return undefined;
+    }
+    return descriptor;
   }
 
   private snapshotToDescriptor(snapshot?: SecuritySnapshotLike): SecurityDescriptor | undefined {
@@ -2193,6 +2235,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
     if (options.includeModuleIsolation) {
       child.moduleIsolated = this.moduleIsolated;
+      child.capturedModuleEnv = this.capturedModuleEnv;
     }
 
     if (options.includeTraceInheritance) {
@@ -2255,6 +2298,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         continue;
       }
       this.variableManager.setVariable(name, variable);
+    }
+    const childDescriptor = child.getLocalSecurityDescriptor();
+    if (childDescriptor) {
+      this.recordSecurityDescriptor(childDescriptor);
     }
     this.nodes.push(...child.nodes);
   }
@@ -2641,7 +2688,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
 
     const fileName = this.currentFilePath ? path.basename(this.currentFilePath) : 'unknown';
-    const lineNumber = location?.line || 'unknown';
+    const lineNumber = (location as any)?.start?.line ?? (location as any)?.line ?? 'unknown';
 
     this.directiveTrace.push({
       directive,
@@ -2735,6 +2782,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return source;
     }
     return this.parent?.getSource(filePath);
+  }
+
+  getModuleProcessingCacheEntry<T = unknown>(key: string): T | undefined {
+    return this.moduleProcessingCache.get(key) as T | undefined;
+  }
+
+  setModuleProcessingCacheEntry(key: string, value: unknown): void {
+    this.moduleProcessingCache.set(key, value);
   }
 
   private ensureSecurityRuntime(): SecurityRuntimeState {
@@ -3402,6 +3457,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Clear any other resources that might keep event loop alive
     logger.debug('Clearing caches');
     this.cacheManager.clearAllCaches();
+    this.moduleProcessingCache.clear();
     this.commandExecutorFactory = undefined;
     
     // Clear import stack to prevent memory leaks (now handled by ImportResolver)

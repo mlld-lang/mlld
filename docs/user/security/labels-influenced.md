@@ -22,12 +22,11 @@ When an LLM processes untrusted data, its output cannot be fully trusted—even 
 The `influenced` label is controlled by the `untrusted-llms-get-influenced` policy rule:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: ["untrusted-llms-get-influenced"]
   }
 }
-policy @p = union(@policyConfig)
 ```
 
 With this rule enabled, any `llm`-labeled executable that processes untrusted data will produce output with the `influenced` label.
@@ -35,12 +34,11 @@ With this rule enabled, any `llm`-labeled executable that processes untrusted da
 **How it works:**
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: ["untrusted-llms-get-influenced"]
   }
 }
-policy @p = union(@policyConfig)
 
 var untrusted @task = "Review this external input"
 
@@ -62,12 +60,11 @@ The output includes `["llm", "untrusted", "influenced"]` because:
 The `influenced` label propagates through subsequent operations like any other label:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: ["untrusted-llms-get-influenced"]
   }
 }
-policy @p = union(@policyConfig)
 
 var untrusted @task = "hello"
 exe llm @process(input) = run cmd { claude -p "@input" }
@@ -86,7 +83,7 @@ Both outputs are `true`. The `influenced` label on `@result` propagates to `@nex
 Policy can restrict what influenced outputs can do:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: ["untrusted-llms-get-influenced"]
   },
@@ -96,7 +93,6 @@ var @policyConfig = {
     }
   }
 }
-policy @p = union(@policyConfig)
 
 var untrusted @task = "hello"
 exe llm @process(input) = run cmd { claude -p "@input" }
@@ -111,7 +107,7 @@ Attempting `show @result` throws an error: `Label 'influenced' cannot flow to 'o
 Consider an auditor LLM reviewing external data:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: ["untrusted-llms-get-influenced"]
   },
@@ -121,7 +117,6 @@ var @policyConfig = {
     }
   }
 }
-policy @p = union(@policyConfig)
 
 var untrusted @externalData = `
 Review this code...
@@ -141,7 +136,7 @@ The `@auditResult` carries the `influenced` label because the LLM saw untrusted 
 The `influenced` label works alongside other security labels:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: [
       "untrusted-llms-get-influenced",
@@ -154,7 +149,6 @@ var @policyConfig = {
     }
   }
 }
-policy @p = union(@policyConfig)
 ```
 
 This creates defense in depth:
@@ -172,12 +166,11 @@ The `influenced` label requires ALL of these conditions:
 If any condition is missing, no `influenced` label is added:
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: {
     rules: ["untrusted-llms-get-influenced"]
   }
 }
-policy @p = union(@policyConfig)
 
 var trusted @task = "hello"
 exe llm @process(input) = run cmd { claude -p "@input" }

@@ -106,7 +106,8 @@ sign @auditCriteria by "security-team" with sha256
 >> Step 2: First agent processes untrusted data
 exe llm @processData(input) = run cmd { claude -p "@input" }
 
-var @mcpData = @mcp.github.listIssues({ repo: "untrusted-repo" })
+import tools { @echo } from mcp "npx -y @modelcontextprotocol/server-everything"
+var @mcpData = @echo("untrusted repo data")
 var @processed = @processData(@mcpData)
 
 >> @processed now has 'influenced' label (LLM output from untrusted context)

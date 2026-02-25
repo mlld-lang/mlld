@@ -268,6 +268,24 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
 let @result = <@outPath>?
 ```
 
+### Bail on LLM failure
+
+**Critical:** Every `exe llm` wrapper must check for empty results and `bail` on failure. Without this, a failed LLM call returns empty/null, which checkpoint **caches as the result**. On re-run, the bad cached result is served and the call never retries.
+
+```mlld
+>> BAD — caches empty results on failure, breaks resume
+exe llm @llmCall(prompt, model, dir, tools, outPath) = @claudePoll(@prompt, @model, @dir, @tools, @outPath)
+
+>> GOOD — bail prevents caching, re-run retries the failed call
+exe llm @llmCall(prompt, model, dir, tools, outPath) = [
+  let @result = @claudePoll(@prompt, @model, @dir, @tools, @outPath)
+  when !@result => bail `LLM call failed (no output written to @outPath)`
+  => @result
+]
+```
+
+`bail` stops the orchestrator at the point of failure. Since completed calls before it are already cached, re-running the script resumes from where it broke.
+
 ### Tool permissions
 
 Define tool permission strings as variables, escalating by role:

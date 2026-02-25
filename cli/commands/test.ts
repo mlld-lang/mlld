@@ -601,7 +601,7 @@ export async function testCommand(args: string[]) {
       EnvLoader.loadEnvFile(path.resolve(envFile));
     } else {
       // Auto-load .env and .env.test files from current working directory
-      EnvLoader.autoLoadEnvFiles(process.cwd());
+      EnvLoader.autoLoadEnvFiles(process.cwd(), true);
     }
     
     // Discover test files from project root

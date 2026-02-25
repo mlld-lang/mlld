@@ -1,49 +1,146 @@
->> llms.txt Build Script
->> Generates llms-combined.txt from modular docs/llm/*.txt files
+>> LLM Docs Build Script
+>> Reads atom directories, builds XML-wrapped modules from atoms,
+>> then assembles llms-combined.txt
+>> Filesystem is the source of truth — no categories.json dependency.
+>> Usage: mlld run llmstxt
 
->> Get version from package.json
-var @pkg = <@base/package.json>
+var @pkg = <@root/package.json>
 var @version = @pkg.version
+var @atomsRoot = "@root/docs/src/atoms"
 
->> Define module order (logical reading sequence)
-var @modules = [
+exe @strip(content) = js {
+  return content.replace(/^---[\s\S]*?---\n*/, '').trim();
+}
+
+exe @wrap(tag, body) = js {
+  return '<' + tag + '>\n' + body + '\n</' + tag + '>';
+}
+
+exe @wrapPadded(tag, body) = js {
+  return '<' + tag + '>\n\n' + body + '\n\n</' + tag + '>\n';
+}
+
+>> Parse an atom filename to extract parent and child from -- convention
+>> Returns { parent, child, isIndex, isStandalone }
+exe @parseFilename(filename) = js {
+  if (filename === '_index.md') return { isIndex: true };
+  const name = filename.replace(/^\d+-/, '').replace(/\.md$/, '');
+  const dashIdx = name.indexOf('--');
+  if (dashIdx !== -1) {
+    return { parent: name.substring(0, dashIdx), child: name.substring(dashIdx + 2) };
+  }
+  return { isStandalone: true, name: name };
+}
+
+>> Sort atom files: _index.md first, NN-* numerically, unnumbered alphabetically
+exe @sortFiles(files) = js {
+  return files.slice().sort((a, b) => {
+    if (a === '_index.md') return -1;
+    if (b === '_index.md') return 1;
+    const numA = a.match(/^(\d+)-/);
+    const numB = b.match(/^(\d+)-/);
+    if (numA && numB) return parseInt(numA[1]) - parseInt(numB[1]);
+    if (numA) return -1;
+    if (numB) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+>> Group sorted atoms into parent groups and standalones, return XML content
+exe @buildSection(atomContents) = js {
+  // atomContents: array of { filename, body, parsed }
+  const groups = [];
+  let currentParent = null;
+  let currentChildren = [];
+
+  function flush() {
+    if (currentParent && currentChildren.length > 0) {
+      groups.push({ type: 'parent', parent: currentParent, children: currentChildren });
+    }
+    currentParent = null;
+    currentChildren = [];
+  }
+
+  for (const item of atomContents) {
+    if (item.parsed.isIndex) continue;
+    if (item.parsed.parent) {
+      if (item.parsed.parent !== currentParent) {
+        flush();
+        currentParent = item.parsed.parent;
+      }
+      currentChildren.push(item);
+    } else {
+      flush();
+      groups.push({ type: 'standalone', item: item });
+    }
+  }
+  flush();
+
+  // Build XML tags
+  const sections = [];
+  for (const group of groups) {
+    if (group.type === 'standalone') {
+      const tag = group.item.parsed.name.replaceAll('-', '_').toUpperCase();
+      sections.push('<' + tag + '>\n' + group.item.body + '\n</' + tag + '>');
+    } else {
+      const tag = group.parent.replaceAll('-', '_').toUpperCase();
+      const bodies = group.children.map(c => c.body).join('\n\n');
+      sections.push('<' + tag + '>\n' + bodies + '\n</' + tag + '>');
+    }
+  }
+  return sections.join('\n\n');
+}
+
+>> Section directories in the order we want them in the combined doc
+var @sections = ["cli", "config", "core", "effects", "flow-control", "mcp", "modules", "output", "patterns", "sdk", "security"]
+
+>> Build each section
+for @section in @sections [
+  let @tag = `MLLD_@section.replaceAll("-", "_").toUpperCase()`
+  let @files = <@atomsRoot/@section/*.md>
+  let @filenames = for @f in @files => @f.mx.filename
+  let @sorted = @sortFiles(@filenames)
+
+  let @atomContents = for @filename in @sorted [
+    let @file = <@atomsRoot/@section/@filename>
+    let @parsed = @parseFilename(@filename)
+    => { filename: @filename, body: @strip(@file), parsed: @parsed }
+  ]
+
+  let @content = @buildSection(@atomContents)
+  let @module = @wrapPadded(@tag, @content)
+
+  output @module to `@root/docs/llm/llms-@section\.txt`
+  log `  Built llms-@section\.txt`
+]
+
+>> Assemble combined document from all modules (including manually maintained ones)
+var @moduleOrder = [
   "llms-overview.txt",
   "llms-core-rules.txt",
-  "llms-syntax.txt",
-  "llms-commands.txt",
-  "llms-control-flow.txt",
+  "llms-core.txt",
+  "llms-flow-control.txt",
+  "llms-effects.txt",
   "llms-modules.txt",
+  "llms-mcp.txt",
+  "llms-output.txt",
   "llms-patterns.txt",
-  "llms-configuration.txt",
+  "llms-cli.txt",
+  "llms-config.txt",
   "llms-sdk.txt",
-  "llms-mistakes.txt",
   "llms-security.txt",
   "llms-reference.txt",
   "llms-cookbook.txt"
 ]
 
->> Load all modules
-var @contents = for @module in @modules => <@base/docs/llm/@module>
+var @contents = for @module in @moduleOrder => <@root/docs/llm/@module>
 
->> Build combined document
->> Note: Using JS because :::...::: with large interpolated content has a bug (see mlld-zigd)
 exe @buildDoc(version, timestamp, body) = js {
-  return `<MLLD_COMPLETE_GUIDE version="${version}">
-
-This is the complete mlld reference guide, combining all documentation modules.
-For modular access, see individual files in docs/llm/.
-
-Generated: ${timestamp}
-
-${body}
-
-</MLLD_COMPLETE_GUIDE>
-`;
+  return '<MLLD_COMPLETE_GUIDE version="' + version + '">\n\nThis is the complete mlld reference guide, combining all documentation modules.\nFor modular access, see individual files in docs/llm/.\n\nGenerated: ' + timestamp + '\n\n' + body + '\n\n</MLLD_COMPLETE_GUIDE>\n';
 }
 
 var @body = @contents.join("\n\n")
 var @combined = @buildDoc(@version, @now, @body)
 
->> Write output
-output @combined to "@base/llms-combined.txt"
-show `Generated llms-combined.txt (@contents.length modules, version @version)`
+output @combined to "@root/llms-combined.txt"
+show `Built llms-combined.txt (version @version)`

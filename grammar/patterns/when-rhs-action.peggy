@@ -60,11 +60,11 @@ ReturnLabelModifierList
     }
 
 ReturnLabelModifier
-  = "clear!" ![a-zA-Z0-9_] { return { kind: 'clear' }; }
-  / "trusted!" ![a-zA-Z0-9_] { return { kind: 'bless' }; }
+  = "clear" ("\\!" / "!") ![a-zA-Z0-9_] { return { kind: 'clear' }; }
+  / "trusted" ("\\!" / "!") ![a-zA-Z0-9_] { return { kind: 'bless' }; }
   / "trusted" ![a-zA-Z0-9_] { return { kind: 'trusted' }; }
   / "untrusted" ![a-zA-Z0-9_] { return { kind: 'untrusted' }; }
-  / "!" label:ReturnLabelIdentifier { return { kind: 'remove', label }; }
+  / ("\\!" / "!") label:ReturnLabelIdentifier { return { kind: 'remove', label }; }
   / label:ReturnLabelIdentifier { return { kind: 'add', label }; }
 
 ReturnLabelIdentifier

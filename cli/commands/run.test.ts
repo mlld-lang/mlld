@@ -323,6 +323,44 @@ describe('RunCommand', () => {
       exitSpy.mockRestore();
     });
 
+    it('anchors checkpoint cache root to project root when running from a subdirectory', async () => {
+      const { execute } = await import('@sdk/execute');
+      const { findProjectRoot } = await import('@core/utils/findProjectRoot');
+      vi.mocked(findProjectRoot).mockResolvedValue('/test/project');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+
+      vi.spyOn(process, 'cwd').mockReturnValue('/test/project/subdir');
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('script.mld'));
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`exit:${code}`);
+      });
+
+      try {
+        await runCommand.run('script');
+      } catch (error: any) {
+        if (!error.message.includes('exit:0')) throw error;
+      }
+
+      expect(execute).toHaveBeenCalledWith(
+        expect.any(String),
+        undefined,
+        expect.objectContaining({
+          checkpointCacheRootDir: path.join('/test/project', '.mlld', 'checkpoints')
+        })
+      );
+
+      consoleSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
     it('should show metrics in debug mode', async () => {
       const { execute } = await import('@sdk/execute');
       vi.mocked(execute).mockResolvedValue({
@@ -452,9 +490,8 @@ describe('RunCommand', () => {
       });
 
       const injectArgs = vi.mocked(parseInjectOptions).mock.calls[0]?.[0] as string[];
-      expect(injectArgs).toContain('@payload={"topic":"security"}');
+      expect(injectArgs).toContain('@payload={"topic":"security","new":true}');
       expect(injectArgs.join(' ')).not.toContain('checkpoint');
-      expect(injectArgs.join(' ')).not.toContain('fresh');
       expect(injectArgs.join(' ')).not.toContain('resume');
       expect(injectArgs.join(' ')).not.toContain('fork');
 
@@ -539,6 +576,38 @@ describe('RunCommand', () => {
       const injectArgs = vi.mocked(parseInjectOptions).mock.calls[0]?.[0] as string[];
       expect(injectArgs).toContain('@payload={"topic":"security"}');
       expect(injectArgs.join(' ')).not.toContain('no-warn');
+
+      expect(exitSpy).toHaveBeenCalledWith(0);
+
+      consoleLogSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('accumulates repeated --env flags into @input without leaking env into @payload', async () => {
+      const { execute } = await import('@sdk/execute');
+      const { parseInjectOptions } = await import('../utils/inject-parser');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('pipeline.mld'));
+
+      const command = createRunCommand();
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as any);
+
+      await command.execute(['pipeline'], {
+        env: ['KEY1=val1', 'KEY2=val2'],
+        topic: 'security'
+      });
+
+      const injectArgs = vi.mocked(parseInjectOptions).mock.calls[0]?.[0] as string[];
+      expect(injectArgs).toContain('@input={"KEY1":"val1","KEY2":"val2"}');
+      expect(injectArgs).toContain('@payload={"topic":"security"}');
+      expect(injectArgs.join(' ')).not.toContain('env');
 
       expect(exitSpy).toHaveBeenCalledWith(0);
 

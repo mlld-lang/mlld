@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parse } from '@grammar/parser';
 import { Environment } from '@interpreter/env/Environment';
+import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { createSimpleTextVariable } from '@core/types/variable';
@@ -102,6 +103,26 @@ describe('when evaluator characterization', () => {
 
     const marker = await extractVariableValue(env.getVariable('marker')!, env);
     expect(marker).toBe('seed-beta');
+  });
+
+  it('executes wildcard actions in value-matching /when forms', async () => {
+    const effects = new TestEffectHandler();
+    env.setEffectHandler(effects);
+
+    const { ast } = await parse([
+      '/var @status = "unknown"',
+      '/when @status [',
+      '  "active" => show "Active"',
+      '  * => show "Fallback hit"',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+    env.renderOutput();
+
+    const emitted = effects.getEffects().map(effect => effect.content).join('');
+    expect(emitted).toContain('Fallback hit');
+    expect(emitted).not.toContain('Active');
   });
 
   it('keeps block-form first-match behavior and none fallback stable', async () => {
@@ -516,5 +537,26 @@ describe('when evaluator characterization', () => {
 
     const value = await extractVariableValue(isolationRoot.getVariable('localShared')!, isolationRoot);
     expect(value).toBe('root-inner');
+  });
+
+  it('evaluates when expressions inside let object literals instead of returning raw AST nodes', async () => {
+    const effects = new TestEffectHandler();
+    env.setEffectHandler(effects);
+
+    const { ast } = await parse([
+      '/var @score = 95',
+      '/exe @build() = [',
+      '  let @record = { grade: when @score [ >= 90 => "A"; * => "B" ] }',
+      '  => @record.grade',
+      ']',
+      '/show @build()'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+    env.renderOutput();
+
+    const emitted = effects.getEffects().map(effect => effect.content).join('');
+    expect(emitted).toContain('A');
+    expect(emitted).not.toContain('"type": "WhenExpression"');
   });
 });

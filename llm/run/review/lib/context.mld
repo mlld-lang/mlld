@@ -1,22 +1,9 @@
 >> Review orchestrator context helpers
 
-exe @fileExists(path) = sh { test -f "$path" && echo "yes" || echo "no" }
-
->> Log event to events.jsonl
-exe @logEvent(runDir, eventType, eventData) = [
-  let @eventsFile = `@runDir/events.jsonl`
-  let @event = { ts: @now, event: @eventType, ...@eventData }
-  append @event to "@eventsFile"
-]
-
 >> Flatten a path into a safe filename
 exe @flatName(path) = @path.replaceAll("/", "--")
 
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }
-
-exe @writeJson(inputData, path) = [
-  output @inputData to "@path"
-]
 
 >> Flatten array of arrays
 exe @flatten(arrays) = js { return arrays.filter(Boolean).flat() }
@@ -36,4 +23,4 @@ exe @tagFindings(findings, phase, source) = js {
   }));
 }
 
-export { @fileExists, @logEvent, @flatName, @mkdirp, @writeJson, @flatten, @countBySeverity, @tagFindings }
+export { @flatName, @mkdirp, @flatten, @countBySeverity, @tagFindings }

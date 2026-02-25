@@ -24,6 +24,11 @@ interface AstVariantContext {
   env: Environment;
 }
 
+interface AstResultMetadataContext {
+  file?: string;
+  relative?: string;
+}
+
 const DEFAULT_GLOB_IGNORE = ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**'];
 
 export class AstVariantLoader {
@@ -69,15 +74,15 @@ export class AstVariantLoader {
       const aggregated: Array<AstResult | null> = [];
       for (const filePath of matches) {
         try {
+          const relativePath = this.transport.formatRelativePath(filePath);
           const content = await this.transport.readContent(filePath, context.sourceLocation);
           const extracted = extractAst(content, filePath, context.patterns);
-          for (const entry of extracted) {
-            if (entry) {
-              aggregated.push({ ...entry, file: filePath });
-            } else {
-              aggregated.push(null);
-            }
-          }
+          aggregated.push(
+            ...this.mapAstResultsWithMetadata(extracted, {
+              file: filePath,
+              relative: relativePath
+            })
+          );
         } catch (error: any) {
           if (error instanceof MlldSecurityError) {
             throw error;
@@ -89,7 +94,40 @@ export class AstVariantLoader {
     }
 
     const content = await this.transport.readContent(context.source, context.sourceLocation);
-    return extractAst(content, context.source, context.patterns);
+    return this.mapAstResultsWithMetadata(extractAst(content, context.source, context.patterns));
+  }
+
+  private mapAstResultsWithMetadata(
+    results: Array<AstResult | null>,
+    context?: AstResultMetadataContext
+  ): Array<AstResult | null> {
+    return results.map((entry) => {
+      if (!entry) {
+        return null;
+      }
+      return this.withAstResultMetadata(entry, context);
+    });
+  }
+
+  private withAstResultMetadata(
+    entry: AstResult,
+    context?: AstResultMetadataContext
+  ): AstResult {
+    const mergedMx = {
+      ...(entry.mx ?? {}),
+      name: entry.name,
+      type: entry.type,
+      line: entry.line,
+      ...(context?.relative ? { relative: context.relative } : {}),
+      ...(context?.file ? { file: context.file } : {})
+    };
+
+    return {
+      ...entry,
+      ...(context?.file ? { file: context.file } : {}),
+      ...(context?.relative ? { relative: context.relative } : {}),
+      mx: mergedMx
+    };
   }
 
   private async collectGlobMatches(pattern: string, env: Environment): Promise<string[]> {

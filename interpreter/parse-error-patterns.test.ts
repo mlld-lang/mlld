@@ -21,6 +21,6 @@ describe('parse error patterns', () => {
         pathService,
         mlldMode: 'strict'
       })
-    ).rejects.toThrow('Use cmd { … } for commands or data { … } for objects.');
+    ).rejects.toThrow('Text content not allowed in strict mode');
   });
 });

@@ -500,16 +500,17 @@ CodeExecution "code execution"
 // ENV EXPRESSION - env @config [...] for scoped environment with return value
 // Used in /var assignments to execute code in a scoped environment and return the result
 EnvExpression "env expression"
-  = "env" _ config:EnvConfigExpression withClause:WithClause? _ block:ExeStatementBlock {
+  = "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock {
       const values = {
-        config: [config],
-        block,
-        ...(withClause ? { withClause } : {})
+        ...(config ? { config: [config] } : {}),
+        ...(withClause ? { withClause } : {}),
+        block
       };
 
-      const raw = {
-        config: helpers.reconstructRawString([config])
-      };
+      const raw = {};
+      if (config) {
+        raw.config = helpers.reconstructRawString([config]);
+      }
 
       const meta = {
         statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
@@ -529,6 +530,20 @@ EnvExpression "env expression"
         meta,
         location(),
         'env'
+      );
+    }
+  / "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
+      helpers.mlldError(
+        'env requires a config expression or with clause. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        '@config or with { ... }',
+        location()
+      );
+    }
+  / "env" _ config:EnvConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
+      helpers.mlldError(
+        'env requires a block. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        '[',
+        location()
       );
     }
 

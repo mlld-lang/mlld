@@ -216,6 +216,58 @@ describe('MCPServer', () => {
     expect(text).toContain('Destructive tool blocked');
   });
 
+  it('does not taint MCP-served tool inputs with src:mcp', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /guard @noMcpExfil before net:r = when [
+        @input.any.mx.labels.includes("secret") => deny "Secret data blocked"
+        @input.any.mx.taint.includes("src:mcp") => deny "MCP tool input blocked"
+        * => allow
+      ]
+      /exe net:r @guardedFetch(url: string) = js { return url; }
+      /var tools @agentTools = {
+        guardedFetch: { mlld: @guardedFetch, labels: ["net:r"], expose: ["url"] }
+      }
+      /export { @guardedFetch }
+    `, ['guardedFetch']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' }
+      }
+    } satisfies JSONRPCRequest);
+
+    const response = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'guarded_fetch',
+        arguments: { url: 'https://example.com' }
+      }
+    } satisfies JSONRPCRequest);
+
+    expect(response.result).toEqual({
+      content: [
+        {
+          type: 'text',
+          text: 'https://example.com',
+        },
+      ],
+    });
+  });
+
   it('enforces tool labels in guards and policy', async () => {
     const guardSetup = await createEnvironmentWithExports(`
       /exe @readData() = js { return 'safe'; }
@@ -331,9 +383,14 @@ describe('MCPServer', () => {
       },
     } satisfies JSONRPCRequest);
 
-    expect(policyResponse.result).toMatchObject({ isError: true });
-    const policyText = (policyResponse.result as any)?.content?.[0]?.text ?? '';
-    expect(policyText).toContain('policy.labels.src:mcp.deny');
+    expect(policyResponse.result).toEqual({
+      content: [
+        {
+          type: 'text',
+          text: 'deleted',
+        },
+      ],
+    });
   });
 
   it('binds and exposes tool parameters', async () => {

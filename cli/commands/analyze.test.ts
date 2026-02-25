@@ -93,6 +93,20 @@ describe('analyze/validate warnings', () => {
     expect(deprecations).toHaveLength(0);
   });
 
+  it('does not flag variables that merely contain "json" in the name', async () => {
+    const modulePath = await writeModule('deprecated-json-false-positive.mld', `/var @json_result = "ok"
+/show @json_result
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const deprecations = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'deprecated-json-transform'
+    );
+    expect(deprecations).toHaveLength(0);
+  });
+
   it('keeps reserved names as hard conflicts', async () => {
     const modulePath = await writeModule('reserved-conflict.mld', `/exe @test() = [
   let @base = "shadow"
@@ -168,6 +182,21 @@ show @dir
     expect(undefs).not.toContain('root');
   });
 
+  it('does not flag @ text patterns in strings as undefined variables', async () => {
+    const modulePath = await writeModule('at-text-patterns.mld', `/var @email = "user@example.com"
+/var @pkg = "@anthropic/mcp-server"
+/show @email
+/show @pkg
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('example');
+    expect(undefs).not.toContain('anthropic');
+  });
+
   it('does not flag guard names as undefined', async () => {
     const modulePath = await writeModule('guard-name-decl.mld', `guard @blockDestructive before op:run = when [* => allow]
 show @blockDestructive
@@ -225,6 +254,20 @@ for @k, @v in @items => show @k
     expect(undefs).not.toContain('v');
   });
 
+  it('does not flag implicit for-loop locals @item, @index, and @key as undefined', async () => {
+    const modulePath = await writeModule('for-implicit-locals.mld', `/var @items = ["a", "b"]
+/for @entry in @items => show \`@item:@index:@key:@entry\`
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('item');
+    expect(undefs).not.toContain('index');
+    expect(undefs).not.toContain('key');
+  });
+
   it('warns for undefined variables in executable invocation arguments', async () => {
     const modulePath = await writeModule('exe-invocation-undefined-arg.mld', `/exe @greet(name) = \`Hello @name\`
 /var @result = @greet(@typo)
@@ -236,6 +279,45 @@ for @k, @v in @items => show @k
     expect(result.valid).toBe(true);
     const undefs = (result.warnings ?? []).map(w => w.variable);
     expect(undefs).toContain('typo');
+  });
+
+  it('warns when an omitted trailing exe parameter is passed into another function call', async () => {
+    const modulePath = await writeModule('exe-pass-through-omitted-param.mld', `/exe @inner(x, timeout) = \`@x:@timeout\`
+/exe @outer(x, timeout) = [
+  let @result = @inner(@x, @timeout)
+  => @result
+]
+/var @r = @outer("hello")
+/show @r
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const timeoutWarnings = (result.warnings ?? []).filter(w => w.variable === 'timeout');
+    expect(timeoutWarnings.length).toBeGreaterThan(0);
+    expect(timeoutWarnings[0]?.suggestion).toContain('@outer');
+    expect(timeoutWarnings[0]?.suggestion).toContain('@inner');
+    expect(timeoutWarnings[0]?.suggestion).toContain('omitted at callsite line');
+  });
+
+  it('does not warn for pass-through parameters when all callsites provide the argument', async () => {
+    const modulePath = await writeModule('exe-pass-through-always-provided.mld', `/exe @inner(x, timeout) = \`@x:@timeout\`
+/exe @outer(x, timeout) = [
+  let @result = @inner(@x, @timeout)
+  => @result
+]
+/var @a = @outer("hello", "30s")
+/var @b = @outer("world", "10s")
+/show @a
+/show @b
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const timeoutWarnings = (result.warnings ?? []).filter(w => w.variable === 'timeout');
+    expect(timeoutWarnings).toHaveLength(0);
   });
 
   it('reports duplicate checkpoint names as validation errors', async () => {

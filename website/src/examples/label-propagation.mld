@@ -1,0 +1,5 @@
+var proprietary @recipe = <secret-recipe.txt>
+
+var @summary = @llm("Summarize: @recipe")           << [proprietary]
+var @piece = @summary.split("\n")[0]                << [proprietary]
+var @msg = `FYI: @piece`                            << [proprietary]

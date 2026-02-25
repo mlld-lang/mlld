@@ -1,0 +1,6 @@
+guard @redactPii for pii = when [
+  @mx.op.type == "show" => allow "[PII REDACTED]"
+  * => allow
+]
+
+export { @redactPii }

@@ -163,7 +163,7 @@ export class ModuleWorkspace {
   getModulesFromLockFile(): ModuleSpecifier[] {
     return this.lockFile.getModuleEntries().map(({ moduleName, entry }) => ({
       name: moduleName,
-      version: entry.registryVersion || entry.version
+      version: entry.version
     }));
   }
 
@@ -305,23 +305,9 @@ export class ModuleInstaller {
       lockVersion &&
       requestedVersion !== lockVersion
     );
+    const shouldBypassCache = options.force || options.noCache || versionMismatch;
 
-    // If a different version is requested, purge cache and lock entry to force refetch
-    if (versionMismatch && lockEntry?.resolved) {
-      try {
-        await this.workspace.moduleCache.remove(lockEntry.resolved);
-      } catch (error) {
-        console.warn(`Failed to purge cache for ${moduleName}: ${(error as Error).message}`);
-      }
-      try {
-        await this.workspace.lockFile.removeModule(moduleName);
-        lockEntry = undefined;
-      } catch (error) {
-        console.warn(`Failed to remove lock entry for ${moduleName}: ${(error as Error).message}`);
-      }
-    }
-
-    if (!options.force && !options.noCache && lockEntry?.resolved) {
+    if (!shouldBypassCache && lockEntry?.resolved) {
       try {
         const cached = await this.workspace.moduleCache.has(lockEntry.resolved);
         if (cached) {
@@ -335,19 +321,6 @@ export class ModuleInstaller {
         }
       } catch (error) {
         console.warn(`Failed to check cache for ${moduleName}: ${(error as Error).message}`);
-      }
-    }
-
-    if ((options.force || options.noCache) && lockEntry?.resolved) {
-      try {
-        await this.workspace.moduleCache.remove(lockEntry.resolved);
-      } catch (error) {
-        console.warn(`Failed to purge cache for ${moduleName}: ${(error as Error).message}`);
-      }
-      try {
-        await this.workspace.lockFile.removeModule(moduleName);
-      } catch (error) {
-        console.warn(`Failed to remove lock entry for ${moduleName}: ${(error as Error).message}`);
       }
     }
 
@@ -438,8 +411,9 @@ export class ModuleInstaller {
       integrity = `sha256:${hash}`;
     }
 
+    const versionConstraint = requestedVersion || lockEntry?.version || 'latest';
     const lockEntryToWrite: ModuleLockEntry = {
-      version: resolvedVersion || requestedVersion || 'latest',
+      version: versionConstraint,
       resolved: hash,
       source: source ?? reference,
       sourceUrl,
@@ -478,6 +452,7 @@ export class ModuleInstaller {
 
   async updateModules(specs: ModuleSpecifier[], options: InstallOptions = {}): Promise<ModuleUpdateResult[]> {
     const targets = specs.length > 0 ? specs : this.workspace.getModulesFromLockFile();
+    const usingLockTargets = specs.length === 0;
     const results: ModuleUpdateResult[] = [];
 
     for (const spec of targets) {
@@ -503,8 +478,33 @@ export class ModuleInstaller {
         continue;
       }
 
-      // Don't pass version — let the resolver fetch the latest from the registry
-      const installResult = await this.installSingle({ name: moduleName }, {
+      const previousVersion = previousEntry.registryVersion || previousEntry.version;
+      const hasExplicitVersion =
+        !usingLockTargets && typeof spec.version === 'string' && spec.version.length > 0;
+      const versionConstraint = hasExplicitVersion
+        ? spec.version
+        : (previousEntry.version || spec.version);
+
+      if (
+        !hasExplicitVersion &&
+        !this.isFloatingVersionConstraint(versionConstraint) &&
+        this.isExactVersionConstraint(versionConstraint!)
+      ) {
+        results.push({
+          module: moduleName,
+          previousVersion,
+          newVersion: previousVersion,
+          hash: previousEntry.resolved,
+          status: 'unchanged'
+        });
+        continue;
+      }
+
+      const installSpec: ModuleSpecifier = this.isFloatingVersionConstraint(versionConstraint)
+        ? { name: moduleName }
+        : { name: moduleName, version: versionConstraint };
+
+      const installResult = await this.installSingle(installSpec, {
         ...options,
         force: true
       });
@@ -513,14 +513,13 @@ export class ModuleInstaller {
         results.push({
           module: moduleName,
           status: 'failed',
-          previousVersion: previousEntry.registryVersion || previousEntry.version,
+          previousVersion,
           error: installResult.error
         });
         continue;
       }
 
       const updatedEntry = this.workspace.lockFile.getModule(moduleName);
-      const previousVersion = previousEntry.registryVersion || previousEntry.version;
       const newVersion = updatedEntry?.registryVersion || updatedEntry?.version;
       const previousHash = previousEntry.resolved;
       const newHash = updatedEntry?.resolved;
@@ -605,6 +604,23 @@ export class ModuleInstaller {
       return true;
     }
     return this.isVersionDifferent(previousVersion, newVersion);
+  }
+
+  private isFloatingVersionConstraint(version?: string): boolean {
+    if (!version) {
+      return true;
+    }
+    const normalized = version.trim().toLowerCase();
+    return normalized === '' || normalized === 'latest' || normalized === '*';
+  }
+
+  private isExactVersionConstraint(version: string): boolean {
+    try {
+      parseSemVer(version.trim());
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private isVersionDifferent(current?: string, latest?: string): boolean {

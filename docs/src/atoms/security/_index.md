@@ -30,7 +30,7 @@ Labels are strings attached to values. They are the foundation — guards and po
 | Sensitivity | `secret`, `sensitive`, `pii` | Declared by developer; `secret` auto-applied from keychain | Classify what data IS |
 | Trust | `trusted`, `untrusted` | Declared by developer or via `defaults.unlabeled` | Classify data reliability |
 | Influence | `influenced` | Auto-applied when LLM produces output with untrusted data in context | Track LLM exposure to tainted data |
-| Source | `src:mcp`, `src:exec`, `src:file`, `src:network`, `dir:/path` | Auto-applied by runtime | Track where data CAME FROM |
+| Source | `src:mcp`, `src:cmd`, `src:js`, `src:sh`, `src:py`, `src:file`, `src:network`, `src:keychain`, `dir:/path` | Auto-applied by runtime | Track where data CAME FROM |
 
 Labels propagate through all transformations — template interpolation, method calls, pipelines, collections. You cannot accidentally strip a label by transforming data.
 
@@ -80,6 +80,8 @@ Policy-generated guards and guards declared with `privileged` cannot be bypassed
 
 Guards are regular module exports — they can be imported, composed, and bundled.
 
+**Checkpoint interaction**: Cache hits bypass guard evaluation. After changing guard or policy rules, use `--fresh` to rebuild the cache.
+
 **Atoms:** `guards-basics` (start here), `guard-composition`, `guards-privileged`, `transform-with-allow`, `denied-handlers`
 
 ## Policies
@@ -89,14 +91,13 @@ Policies are declarative. Where guards are per-operation imperative logic, polic
 ### Policy Structure
 
 ```mlld
-var @policyConfig = {
+policy @p = {
   defaults: { rules: [...], unlabeled: "untrusted" },
-  operations: { "net:w": "exfil", "fs:w": "destructive" },
+  operations: { exfil: ["net:w"], destructive: ["fs:w"] },
   capabilities: { allow: [...], deny: [...], danger: [...] },
   labels: { secret: { deny: ["op:show", "exfil"] } },
   auth: { claude: { from: "keychain:...", as: "ANTHROPIC_API_KEY" } }
 }
-policy @p = union(@policyConfig)
 ```
 
 **Key sections:**
@@ -105,7 +106,7 @@ policy @p = union(@policyConfig)
 |---------|---------|
 | `defaults.rules` | Enable built-in rules: `no-secret-exfil`, `no-sensitive-exfil`, `no-untrusted-destructive`, `no-untrusted-privileged`, `untrusted-llms-get-influenced` |
 | `defaults.unlabeled` | Auto-label data with no user labels (`"untrusted"` or `"trusted"`) |
-| `operations` | Map semantic exe labels (`net:w`) to risk categories (`exfil`, `destructive`, `privileged`) |
+| `operations` | Group semantic exe labels (`net:w`) under risk categories (`exfil`, `destructive`, `privileged`) |
 | `capabilities.allow` | Allowlist command patterns (general gate) |
 | `capabilities.danger` | Dangerous operations requiring explicit opt-in (separate gate — both `allow` AND `danger` must pass) |
 | `labels` | Label flow rules — which data labels can flow to which operation labels |

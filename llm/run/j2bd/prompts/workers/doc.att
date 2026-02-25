@@ -30,7 +30,7 @@ Atoms are **quick reference**, not tutorials. Write like unix man pages: terse, 
 
 ### Exemplar Atom
 
-Read `docs/src/atoms/control-flow/for-parallel.md` - this is the target style:
+Read `docs/src/atoms/flow-control/for-parallel.md` - this is the target style:
 - One-line intro, straight to code
 - Multiple short examples showing variants
 - Minimal prose between examples

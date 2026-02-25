@@ -55,7 +55,7 @@ hook @progress after op:for:iteration = [
   show `  [@mx.for.index/@mx.for.total] @mx.for.key`
 ]
 
-# Transform data when it receives a label
+# Transform operation input when the operation carries a label
 hook @normalizeUntrusted before untrusted = [
   => @input.trim()
 ]
@@ -68,9 +68,11 @@ Hooks support four trigger types:
 | Trigger | Example | Fires when |
 |---------|---------|------------|
 | Operation type | `hook after op:exe` | Any exe invocation completes |
-| Label | `hook before secret` | Data receives the `secret` label |
+| Label | `hook before secret` | Operation has the `secret` label |
 | Function name | `hook before @claudePoll` | `@claudePoll` is about to be called |
 | Function + argument | `hook before @claudePoll("review")` | `@claudePoll` called with first arg matching "review" |
+
+Data-label hooks match at the operation level. If an operation has one or more matching labels, the hook runs once for that operation.
 
 #### How hooks differ from guards
 
@@ -499,7 +501,7 @@ let finalResult = await hookManager.runPost(node, result, inputs, env, operation
 finalResult = await runUserHooks('after', node, finalResult, env, operationContext);
 ```
 
-**New operation context emission points.** To support `op:for:iteration` and `op:for:batch`, the for-loop evaluator (`interpreter/eval/for.ts:~270-313`) needs to emit OperationContext at iteration and batch boundaries. Currently, only top-level directives and exe invocations create operation contexts. The `runOne` callback in the for evaluator would wrap each iteration with:
+**Operation context emission points.** The for-loop evaluator (`interpreter/eval/for.ts`) emits OperationContext at iteration and batch boundaries to support `op:for:iteration` and `op:for:batch` hooks. Each iteration is wrapped with a context like:
 
 ```typescript
 const iterationContext: OperationContext = {
@@ -516,7 +518,7 @@ const iterationContext: OperationContext = {
 };
 ```
 
-Similarly, `runWithConcurrency` (`interpreter/utils/parallel.ts:19`) would need a batch callback for `op:for:batch` events.
+Parallel batch windows emit `op:for:batch` contexts similarly.
 
 ### Part 2: Checkpointing
 
@@ -602,17 +604,19 @@ Results are stored separately (they can be large):
 
 #### Built-in checkpoint hooks
 
-Registered alongside guard hooks and taint hook in `Environment.registerBuiltinHooks()` (`interpreter/env/Environment.ts:1686-1690`):
+Registered alongside guard hooks and taint hook in `Environment.registerBuiltinHooks()` (`interpreter/env/Environment.ts:1813-1819`):
 
 ```typescript
 private registerBuiltinHooks(): void {
+  this.hookManager.registerPre(checkpointPreHook);
   this.hookManager.registerPre(guardPreHook);
-  this.hookManager.registerPre(checkpointPreHook);    // NEW
   this.hookManager.registerPost(guardPostHook);
   this.hookManager.registerPost(taintPostHook);
-  this.hookManager.registerPost(checkpointPostHook);  // NEW
+  this.hookManager.registerPost(checkpointPostHook);
 }
 ```
+
+Checkpoint pre-hook runs before guard pre-hook so that cache hits skip guard evaluation entirely.
 
 **checkpoint-pre-hook:**
 
@@ -637,7 +641,7 @@ export const checkpointPreHook: PreHook = async (
   if (cached) {
     // Return cached result — the operation is skipped
     return {
-      action: 'continue',
+      action: 'fulfill',
       metadata: { checkpointHit: true, cachedResult: cached }
     };
   }
@@ -650,9 +654,7 @@ export const checkpointPreHook: PreHook = async (
 };
 ```
 
-Note: the pre-hook returns `'continue'` even on cache hit — it doesn't `'abort'`. The cached result is conveyed via metadata, and the directive evaluator checks for `checkpointHit` to short-circuit execution. This keeps the hook protocol clean (hooks don't block) while still enabling the memoization behavior.
-
-Alternatively, this could use a new `HookDecisionAction` value like `'fulfill'` that means "I have the result, skip execution." This is semantically distinct from `'abort'` (which is an error) and `'deny'` (which is a guard concept).
+On cache hit, the pre-hook returns `'fulfill'` — a `HookDecisionAction` that means "I have the result, skip execution." This is semantically distinct from `'abort'` (which is an error) and `'deny'` (which is a guard concept). On cache miss, it returns `'continue'` with metadata marking the cache key for the post-hook to store.
 
 **checkpoint-post-hook:**
 
@@ -863,8 +865,8 @@ User-defined hooks run alongside checkpoint hooks. The execution order for an `l
 ```
 1. User before hooks (from HookRegistry)
 2. checkpoint-pre-hook (check cache)
-   → cache hit: result injected, skip to step 6
-   → cache miss: continue
+   → cache hit: returns 'fulfill', skip to step 6
+   → cache miss: returns 'continue'
 3. guard-pre-hook (enforce guards)
 4. [execute function]
 5. guard-post-hook + taint-post-hook
@@ -958,24 +960,19 @@ CLI
 
 ### Appendix C: Existing Code References
 
+Note: These are reference pointers into the codebase. Line numbers are approximate and may drift as the code evolves.
+
 | Component | File | Key Lines | Relevance |
 |-----------|------|-----------|-----------|
-| HookManager class | `interpreter/hooks/HookManager.ts` | 43-95 | Hook orchestration; user hooks integrate alongside |
+| HookManager class | `interpreter/hooks/HookManager.ts` | 43+ | Hook orchestration; user hooks integrate alongside |
 | PreHook / PostHook types | `interpreter/hooks/HookManager.ts` | 23-37 | Type signatures for built-in hooks |
-| HookDecision / HookDecisionAction | `interpreter/hooks/HookManager.ts` | 12-17 | Decision protocol; may need new `'fulfill'` action |
-| GuardRegistry | `interpreter/guards/GuardRegistry.ts` | 60-283 | Template for HookRegistry (indexed storage, timing match) |
-| guard.peggy | `grammar/directives/guard.peggy` | 8-229 | Template for hook.peggy grammar |
-| OperationContext | `interpreter/env/ContextManager.ts` | 7-28 | Context passed to hooks; needs new fields for for-loop metadata |
-| evaluateDirective lifecycle | `interpreter/eval/directive.ts` | 130-149 | Where user hooks integrate (before/after built-in hooks) |
-| evaluateExecInvocation hooks | `interpreter/eval/exec/guard-policy.ts` | 525, 656 | Where function-targeted hooks fire |
-| registerBuiltinHooks | `interpreter/env/Environment.ts` | 1686-1690 | Registration point for checkpoint hooks |
-| taint-post-hook | `interpreter/hooks/taint-post-hook.ts` | 14+ | Template for checkpoint-post-hook pattern |
-| guard-pre-hook | `interpreter/hooks/guard-pre-hook.ts` | 61-67 | Template for checkpoint-pre-hook pattern |
-| runWithConcurrency | `interpreter/utils/parallel.ts` | 19-24 | Parallel runner; NO changes needed for checkpoint |
-| For-parallel evaluation | `interpreter/eval/for.ts` | 270-313 | runOne callback; needs OperationContext emission for iteration hooks |
+| HookDecisionAction | `interpreter/hooks/HookManager.ts` | 12-17 | Decision protocol; includes `'fulfill'` action for checkpoint cache hits |
+| GuardRegistry | `interpreter/guards/GuardRegistry.ts` | 63+ | Template for HookRegistry (indexed storage, timing match) |
+| guard.peggy | `grammar/directives/guard.peggy` | — | Template for hook.peggy grammar |
+| OperationContext | `interpreter/env/ContextManager.ts` | 7+ | Context passed to hooks; includes for-loop metadata |
+| registerBuiltinHooks | `interpreter/env/Environment.ts` | 1813-1819 | Registration point for checkpoint hooks |
+| taint-post-hook | `interpreter/hooks/taint-post-hook.ts` | — | Template for checkpoint-post-hook pattern |
+| guard-pre-hook | `interpreter/hooks/guard-pre-hook.ts` | — | Template for checkpoint-pre-hook pattern |
 | DataLabel type | `core/types/security.ts` | 28 | `llm` is a standard DataLabel |
-| SecurityDescriptor | `core/types/security.ts` | 72-78 | Labels field carries `llm` through operations |
-| Variable types | `core/types/variable/VariableTypes.ts` | 26-34, 103-133, 429-444 | Variable structure, mx.labels for checkpoint targeting |
-| CLI options | `cli/index.ts` | 43-127 | Where --checkpoint/--resume/--fork flags are added |
-| Run command | `cli/commands/run.ts` | 24-52 | Where flags are threaded to execution |
-| Var label grammar | `grammar/directives/var.peggy` | 9 | How `var llm @x = ...` is parsed |
+| SecurityDescriptor | `core/types/security.ts` | 73+ | Labels field carries `llm` through operations |
+| Run command | `cli/commands/run.ts` | — | Where --checkpoint/--resume/--fork flags are threaded to execution |

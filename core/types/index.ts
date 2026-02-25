@@ -36,6 +36,7 @@ export * from './loop'; // Loop directive and expression
 export * from './guard'; // Guard directives
 export * from './hook'; // Hook directives
 export * from './checkpoint'; // Checkpoint directives
+export * from './auth'; // Auth directives
 export * from './policy'; // Policy directives
 export * from './env'; // Env directives
 export * from './load-content'; // Load content types and utilities including URL metadata

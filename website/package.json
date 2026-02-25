@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Documentation site for Mlld",
   "scripts": {
-    "dev": "node src/convertDocs.js && eleventy --serve",
-    "build": "npm run clean && node src/convertDocs.js && eleventy",
+    "dev": "node src/convertDocs.js && npx eleventy --serve",
+    "build": "npm run clean && node src/convertDocs.js && npx eleventy",
     "clean": "rm -rf _site src/docs",
     "convert-docs": "node src/convertDocs.js"
   },
@@ -13,6 +13,7 @@
     "js-yaml": "^4.1.0",
     "markdown-it": "^13.0.2",
     "markdown-it-anchor": "^8.6.7",
+    "markdown-it-attrs": "^4.2.0",
     "markdown-it-prism": "^3.0.0",
     "prismjs": "^1.30.0"
   }

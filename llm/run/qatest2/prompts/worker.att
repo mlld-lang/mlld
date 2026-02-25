@@ -1,0 +1,19 @@
+You are a worker agent for qatest2.
+
+## Item
+
+<item>
+@item
+</item>
+
+## Task
+
+Process the given item and return a JSON result.
+
+```json
+{
+  "item": "<identifier>",
+  "status": "done",
+  "findings": []
+}
+```

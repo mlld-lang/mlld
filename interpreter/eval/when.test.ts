@@ -275,7 +275,7 @@ describe('evaluateWhen', () => {
       const variable = childEnv.getVariable('resp');
       expect(variable).toBeTruthy();
       const value = await extractVariableValue(variable!, childEnv);
-      expect(value).toBe('42');
+      expect(value).toBe(42);
     });
   });
 });

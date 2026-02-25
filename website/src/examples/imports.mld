@@ -14,9 +14,6 @@ var @task = {
   roadmap: "Create a roadmap based on highest priority"
 }
 
->> command creation
-exe @listfiles(dir, ext) = cmd { find @dir -type f -name "*.@ext" | head -5 }
+exe @ask(context, role, task) = cmd { codex exec "@role @task\n\nContext:\n@context" }
 
-exe @ask(context, role, task) = cmd { llm --context @context --instructions @task --system @role }
-
-export { @docs, @role, @task, @listfiles, @ask }
+export { @docs, @role, @task, @ask }

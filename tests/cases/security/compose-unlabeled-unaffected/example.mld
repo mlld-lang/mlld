@@ -1,0 +1,8 @@
+import { @denyPii } from "./compose-unlabeled-unaffected-module.mld"
+
+var @name = "John Doe"
+var @greeting = `Hello, @name!`
+exe @format(input) = `processed: @input`
+var @result = @name | @format
+show @greeting
+show @result

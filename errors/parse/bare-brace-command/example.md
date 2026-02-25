@@ -1,1 +1,0 @@
-/exe @bad() = { echo "nope" }

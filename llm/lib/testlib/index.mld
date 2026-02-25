@@ -1,0 +1,6 @@
+>> Test lib
+>> Entry point for testlib
+
+exe @greet(name) = `Hello, @name!`
+
+export { @greet }

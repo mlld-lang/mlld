@@ -45,10 +45,7 @@ async function resolveEnvConfig(
   location?: any
 ): Promise<EnvironmentConfig> {
   if (!nodes || nodes.length === 0) {
-    throw new MlldDirectiveError('env config is required.', 'env', {
-      location,
-      env
-    });
+    return {};
   }
   const value = await resolveExpressionValue(nodes, env, context);
   if (!isPlainObject(value)) {

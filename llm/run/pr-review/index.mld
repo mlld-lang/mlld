@@ -1,0 +1,343 @@
+>> PR Review Orchestrator
+>> Usage: mlld run pr-review --repo owner/repo --local /path/to/clone [--parallel 10] [--model o3] [--limit 50]
+>>
+>> Phases:
+>>   1. Discovery: gh pr list → open PRs
+>>   2. Parallel Review: codex exec in per-PR worktrees → structured JSON verdicts
+>>   3. Cleanup: remove worktrees
+>>   4. Analysis: sort, group, detect duplicates → actionable report
+>>
+>> Resilience: exe llm labels + checkpoint. Crash recovery is automatic.
+>>   mlld run pr-review --repo ... --local ...              # auto-resumes via cache
+>>   mlld run pr-review --repo ... --local ... --resume "review"  # re-review all
+>>   mlld run pr-review --repo ... --local ... --new        # fresh run
+
+import "@payload" as @p
+
+>> ============================================================
+>> Configuration
+>> ============================================================
+
+var @repo = @p.repo ?? "openclaw/openclaw"
+var @repoDir = @p.local
+var @parallelism = @p.parallel ? @p.parallel * 1 : 10
+var @model = @p.model ?? "o3"
+var @limit = @p.limit ? @p.limit * 1 : 50
+var @baseBranch = @p.base ?? "main"
+var @outBase = @p.output ?? "llm/output/pr-review"
+
+>> Validate: --local is required
+if !@repoDir [
+  show `ERROR: --local is required. Pass the path to a local git clone.`
+  show `  Example: mlld run pr-review --repo openclaw/openclaw --local ~/dev/openclaw`
+  done
+]
+
+>> Validate: local path is a git repo
+exe @checkGitRepo(dir) = sh { test -d "$dir/.git" && echo "ok" || echo "fail" }
+var @repoCheck = @checkGitRepo(@repoDir)
+if @repoCheck.trim() != "ok" [
+  show `ERROR: @repoDir is not a git repository.`
+  done
+]
+
+>> ============================================================
+>> Setup
+>> ============================================================
+
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+
+var @runDate = @now.slice(0, 10)
+var @outDir = `@outBase/@runDate`
+run @mkdirp(`@outDir/reviews`)
+
+var @schemaFile = `@base/schemas/review.json`
+var @wtBase = "/tmp/mlld-pr-review"
+run @mkdirp(@wtBase)
+
+show `PR Review Orchestrator`
+show `  Repo:     @repo`
+show `  Local:    @repoDir`
+show `  Model:    @model`
+show `  Parallel: @parallelism`
+show `  Limit:    @limit`
+show `  Output:   @outDir`
+
+>> ============================================================
+>> Phase 1: Discovery
+>> ============================================================
+
+show `\nPhase 1: Discovering open PRs...`
+
+exe @fetchPRs(repo, limit) = sh {
+  gh pr list -R "$repo" --state open --json number,title,author,body,createdAt,updatedAt,labels,headRefName,baseRefName,additions,deletions,changedFiles,isDraft,url --limit "$limit"
+}
+
+var @prsRaw = @fetchPRs(@repo, @limit)
+var @prs = @prsRaw | @parse
+
+>> Filter out drafts and sort by most recently updated first
+exe @preparePRs(prs) = js {
+  return prs
+    .filter(pr => !pr.isDraft)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+}
+
+var @activePrs = @preparePRs(@prs)
+show `  Found @prs.length open PRs (@activePrs.length non-draft, sorted by recency)`
+
+if @activePrs.length == 0 [
+  show `No PRs to review.`
+  done
+]
+
+>> ============================================================
+>> Phase 2: Parallel Review (codex in worktrees)
+>> ============================================================
+
+show `\nPhase 2: Reviewing @activePrs.length PRs (parallel @parallelism)`
+
+>> Prompt template — receives @pr object, @baseBranch string, @labels string
+exe @reviewPrompt(pr, baseBranch, labels) = template "./prompts/review.att"
+
+>> Format labels for display
+exe @formatLabels(labels) = js { return (labels || []).map(l => l.name).join(", ") || "none" }
+
+>> Worktree lifecycle
+exe @setupWorktree(repoDir, prNum, wtBase, baseBranch) = sh {
+  if [ -d "$wtBase/pr-$prNum" ]; then
+    git -C "$repoDir" worktree remove "$wtBase/pr-$prNum" --force 2>/dev/null || true
+  fi
+  git -C "$repoDir" branch -D "pr-review-$prNum" 2>/dev/null || true
+  git -C "$repoDir" fetch origin "pull/$prNum/head:pr-review-$prNum" --force 2>/dev/null
+  git -C "$repoDir" fetch origin "$baseBranch" 2>/dev/null
+  git -C "$repoDir" worktree add "$wtBase/pr-$prNum" "pr-review-$prNum" 2>/dev/null
+  echo "$wtBase/pr-$prNum"
+}
+
+exe @cleanWorktree(repoDir, prNum, wtBase) = sh {
+  git -C "$repoDir" worktree remove "$wtBase/pr-$prNum" --force 2>/dev/null || true
+  git -C "$repoDir" branch -D "pr-review-$prNum" 2>/dev/null || true
+  echo "ok"
+}
+
+>> Codex wrapper — llm label enables caching, cacheKey (updatedAt) invalidates on PR updates
+exe llm @codexReview(prompt, workdir, outPath, model, schemaPath, cacheKey) = sh {
+  tmpfile=$(mktemp)
+  printf '%s' "$prompt" > "$tmpfile"
+  codex exec -C "$workdir" --full-auto --ephemeral -m "$model" --output-schema "$schemaPath" -o "$outPath" - < "$tmpfile"
+  ret=$?
+  rm -f "$tmpfile"
+  exit $ret
+}
+
+checkpoint "review"
+
+var @reviews = for parallel(@parallelism) @pr in @activePrs [
+  let @prNum = `@pr.number`
+  let @wtDir = `@wtBase/pr-@prNum`
+  let @outPath = `@outDir/reviews/@prNum\.json`
+
+  >> Setup worktree (fetch PR branch + base branch)
+  show `  #@prNum: worktree...`
+  @setupWorktree(@repoDir, @prNum, @wtBase, @baseBranch)
+
+  >> Build review prompt
+  let @labels = @formatLabels(@pr.labels)
+  let @prompt = @reviewPrompt(@pr, @baseBranch, @labels)
+
+  >> Run codex review
+  show `  #@prNum: reviewing (@pr.changedFiles files, +@pr.additions/-@pr.deletions)...`
+  @codexReview(@prompt, @wtDir, @outPath, @model, @schemaFile, @pr.updatedAt)
+
+  >> Read structured result
+  let @result = <@outPath>? | @parse
+  if !@result [
+    show `  #@prNum: FAILED (no output)`
+    => { pr_number: @pr.number, title: @pr.title, author: @pr.author.login, url: @pr.url, error: true }
+  ]
+
+  show `  #@prNum: @result.verdict (@result.confidence)`
+  => { pr_number: @pr.number, title: @pr.title, author: @pr.author.login, url: @pr.url, ...@result }
+]
+
+>> ============================================================
+>> Phase 3: Cleanup worktrees
+>> ============================================================
+
+show `\nPhase 3: Cleaning up worktrees...`
+var @cleanups = for @pr in @activePrs [
+  @cleanWorktree(@repoDir, `@pr.number`, @wtBase)
+  => null
+]
+show `  Done.`
+
+>> ============================================================
+>> Phase 4: Analysis & Report
+>> ============================================================
+
+show `\nPhase 4: Analyzing results...`
+
+exe @analyzeAndReport(reviews, repo, runDate) = js {
+  const ok = reviews.filter(r => !r.error);
+  const failed = reviews.filter(r => !!r.error);
+
+  // --- Sort by risk (critical first) then verdict priority ---
+  const riskOrder = { critical: 0, high: 1, medium: 2, low: 3, none: 4 };
+  const sorted = [...ok].sort((a, b) => {
+    const rA = riskOrder[a.risk_level] || 5;
+    const rB = riskOrder[b.risk_level] || 5;
+    return rA - rB;
+  });
+
+  // --- Group by verdict ---
+  const groups = { merge: [], close: [], needsWork: [], needsDiscussion: [] };
+  ok.forEach(r => {
+    if (r.verdict === 'merge') groups.merge.push(r);
+    else if (r.verdict === 'close') groups.close.push(r);
+    else if (r.verdict === 'needs-work') groups.needsWork.push(r);
+    else groups.needsDiscussion.push(r);
+  });
+
+  // --- Detect potential duplicates by file overlap ---
+  const duplicates = [];
+  const withFiles = ok.filter(r => r.changed_files && r.changed_files.length > 0);
+  for (let i = 0; i < withFiles.length; i++) {
+    for (let j = i + 1; j < withFiles.length; j++) {
+      const a = withFiles[i];
+      const b = withFiles[j];
+      const setA = new Set(a.changed_files);
+      const setB = new Set(b.changed_files);
+      const overlap = [...setA].filter(f => setB.has(f));
+      const minSize = Math.min(setA.size, setB.size);
+      if (minSize > 0 && overlap.length / minSize >= 0.5) {
+        duplicates.push({
+          prs: [a.pr_number, b.pr_number],
+          titles: [a.title, b.title],
+          overlapping_files: overlap,
+          overlap_pct: Math.round(overlap.length / minSize * 100)
+        });
+      }
+    }
+  }
+
+  // --- Risk alerts (critical or high risk) ---
+  const riskAlerts = ok.filter(r => r.risk_level === 'critical' || r.risk_level === 'high');
+
+  // --- Generate markdown report ---
+  let md = '# PR Review Report\n\n';
+  md += `**Repo**: ${repo}\n`;
+  md += `**Date**: ${runDate}\n`;
+  md += `**Reviewed**: ${ok.length} PRs (${failed.length} failed)\n\n`;
+
+  // Summary table
+  md += '## Summary\n\n';
+  md += `| Verdict | Count |\n|---------|-------|\n`;
+  md += `| Merge now | ${groups.merge.length} |\n`;
+  md += `| Close | ${groups.close.length} |\n`;
+  md += `| Needs work | ${groups.needsWork.length} |\n`;
+  md += `| Needs discussion | ${groups.needsDiscussion.length} |\n`;
+  md += `| Failed | ${failed.length} |\n\n`;
+
+  // Risk alerts
+  if (riskAlerts.length > 0) {
+    md += '## Risk Alerts\n\n';
+    riskAlerts.forEach(r => {
+      md += `- **#${r.pr_number}** [${r.risk_level.toUpperCase()}]: ${r.title}`;
+      if (r.risk_factors && r.risk_factors.length) md += ` — ${r.risk_factors.join(', ')}`;
+      md += '\n';
+    });
+    md += '\n';
+  }
+
+  // Merge now
+  if (groups.merge.length > 0) {
+    md += '## Merge Now\n\n';
+    groups.merge.forEach(r => {
+      md += `- **#${r.pr_number}** ${r.title} [${r.confidence}] — ${r.summary}\n`;
+    });
+    md += '\n';
+  }
+
+  // Close
+  if (groups.close.length > 0) {
+    md += '## Recommend Close\n\n';
+    groups.close.forEach(r => {
+      const reason = r.close_reason || r.summary;
+      md += `- **#${r.pr_number}** ${r.title} — ${reason}\n`;
+    });
+    md += '\n';
+  }
+
+  // Needs work
+  if (groups.needsWork.length > 0) {
+    md += '## Needs Work\n\n';
+    groups.needsWork.forEach(r => {
+      md += `- **#${r.pr_number}** ${r.title} [${r.confidence}, risk: ${r.risk_level}]\n`;
+      if (r.merge_blockers && r.merge_blockers.length) {
+        r.merge_blockers.forEach(b => { md += `  - ${b}\n`; });
+      }
+    });
+    md += '\n';
+  }
+
+  // Needs discussion
+  if (groups.needsDiscussion.length > 0) {
+    md += '## Needs Discussion\n\n';
+    groups.needsDiscussion.forEach(r => {
+      md += `- **#${r.pr_number}** ${r.title} [${r.confidence}] — ${r.summary}\n`;
+    });
+    md += '\n';
+  }
+
+  // Duplicates
+  if (duplicates.length > 0) {
+    md += '## Potential Duplicates\n\n';
+    duplicates.forEach(d => {
+      md += `- **#${d.prs[0]}** and **#${d.prs[1]}** (${d.overlap_pct}% file overlap)\n`;
+      md += `  - ${d.titles[0]}\n  - ${d.titles[1]}\n`;
+      md += `  - Shared: ${d.overlapping_files.slice(0, 5).join(', ')}${d.overlapping_files.length > 5 ? '...' : ''}\n`;
+    });
+    md += '\n';
+  }
+
+  // Failed
+  if (failed.length > 0) {
+    md += '## Review Failed\n\n';
+    failed.forEach(r => {
+      md += `- **#${r.pr_number}** ${r.title}\n`;
+    });
+    md += '\n';
+  }
+
+  // Build JSON output
+  const jsonData = {
+    repo,
+    date: runDate,
+    summary: {
+      total: ok.length + failed.length,
+      reviewed: ok.length,
+      failed: failed.length,
+      merge: groups.merge.length,
+      close: groups.close.length,
+      needs_work: groups.needsWork.length,
+      needs_discussion: groups.needsDiscussion.length
+    },
+    risk_alerts: riskAlerts.map(r => ({ pr: r.pr_number, title: r.title, risk: r.risk_level, factors: r.risk_factors })),
+    duplicates,
+    reviews: sorted,
+    failed
+  };
+
+  return { json: JSON.stringify(jsonData, null, 2), markdown: md };
+}
+
+var @analysis = @analyzeAndReport(@reviews, @repo, @runDate)
+
+output @analysis.json to "@outDir/report.json"
+output @analysis.markdown to "@outDir/report.md"
+
+show `\n@analysis.markdown`
+show `Reports written to:`
+show `  JSON:     @outDir/report.json`
+show `  Markdown: @outDir/report.md`

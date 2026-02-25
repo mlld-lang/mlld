@@ -14,6 +14,7 @@ import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 import { wrapExecResult } from '@interpreter/utils/structured-exec';
+import { deriveExecutableSourceTaintLabel } from '@core/security/taint';
 import {
   applySecurityDescriptorToStructuredValue,
   extractSecurityDescriptor,
@@ -21,7 +22,10 @@ import {
 } from '@interpreter/utils/structured-value';
 import { resolveWorkingDirectory } from '@interpreter/utils/working-directory';
 import { mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
-import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import {
+  buildAuthDescriptor,
+  resolveUsingEnvPartsWithOptions
+} from '@interpreter/utils/auth-injection';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { createTemplateInterpolationEnv } from '@interpreter/eval/exec/template-interpolation-env';
 import {
@@ -206,6 +210,7 @@ async function handleCommandDefinition(
     policyEnforcer,
     policyChecksEnabled,
     definition,
+    execVar,
     argValues,
     argRuntimeValues,
     argDescriptors,
@@ -215,7 +220,17 @@ async function handleCommandDefinition(
   } = ctx;
 
   const outputDescriptors: SecurityDescriptor[] = [];
+  const sourceTaintLabel = deriveExecutableSourceTaintLabel({
+    type: 'command'
+  });
+  appendDescriptor(
+    outputDescriptors,
+    sourceTaintLabel ? makeSecurityDescriptor({ taint: [sourceTaintLabel] }) : undefined
+  );
   const tempEnv = env.createChild();
+  if (execVar.internal?.capturedModuleEnv instanceof Map) {
+    tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+  }
   for (const [key, stringValue] of Object.entries(argValues)) {
     bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
   }
@@ -306,8 +321,22 @@ async function handleCommandDefinition(
     }
   }
 
-  const usingParts = await resolveUsingEnvParts(tempEnv, (definition as any).withClause, withClause);
-  const envAuthSecrets = await resolveEnvironmentAuthSecrets(tempEnv, resolvedEnvConfig);
+  const authResolutionOptions = {
+    capturedAuthBindings: (execVar.internal as any)?.capturedAuthBindings as
+      | Record<string, unknown>
+      | undefined
+  };
+  const usingParts = await resolveUsingEnvPartsWithOptions(
+    tempEnv,
+    authResolutionOptions,
+    (definition as any).withClause,
+    withClause
+  );
+  const envAuthSecrets = await resolveEnvironmentAuthSecrets(
+    tempEnv,
+    resolvedEnvConfig,
+    authResolutionOptions
+  );
   const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
   const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
   checkRunInputLabelFlow({
@@ -379,6 +408,7 @@ async function handleCommandRefDefinition(
     context,
     withClause,
     definition,
+    execVar,
     argValues,
     callStack,
     services
@@ -388,6 +418,9 @@ async function handleCommandRefDefinition(
   if (refAst) {
     const { evaluateExecInvocation } = await import('@interpreter/eval/exec-invocation');
     const execEnv = env.createChild();
+    if (execVar.internal?.capturedModuleEnv instanceof Map) {
+      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+    }
     for (const [key, value] of Object.entries(argValues)) {
       execEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
     }
@@ -426,7 +459,7 @@ async function handleCommandRefDefinition(
     ...directive,
     values: {
       ...directive.values,
-      identifier: [{ type: 'Text', content: refCommand }],
+      identifier: [{ type: 'VariableReference', identifier: refCommand }],
       args: (definition as any).commandArgs
     }
   };
@@ -531,7 +564,18 @@ async function handleCodeDefinition(
   } = ctx;
 
   const outputDescriptors: SecurityDescriptor[] = [];
+  const sourceTaintLabel = deriveExecutableSourceTaintLabel({
+    type: 'code',
+    language: (definition as any).language
+  });
+  appendDescriptor(
+    outputDescriptors,
+    sourceTaintLabel ? makeSecurityDescriptor({ taint: [sourceTaintLabel] }) : undefined
+  );
   const tempEnv = env.createChild();
+  if (execVar.internal?.capturedModuleEnv instanceof Map) {
+    tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+  }
   for (const [key, value] of Object.entries(argValues)) {
     tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
   }
@@ -542,6 +586,49 @@ async function handleCodeDefinition(
   );
 
   const codeParams = { ...argRuntimeValues } as Record<string, unknown>;
+  const definitionArgDescriptors: SecurityDescriptor[] = [];
+  const definitionArgs = Array.isArray((definition as any).args) ? ((definition as any).args as MlldNode[]) : [];
+
+  if (definitionArgs.length > 0) {
+    const { evaluate } = await import('@interpreter/core/interpreter');
+    const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+
+    for (let index = 0; index < definitionArgs.length; index += 1) {
+      const argNode = definitionArgs[index] as any;
+      if (argNode && typeof argNode === 'object' && argNode.type === 'VariableReference') {
+        const varName = argNode.identifier;
+        const variable = tempEnv.getVariable(varName);
+        if (!variable) {
+          throw new MlldInterpreterError(`Variable not found: ${varName}`);
+        }
+        const descriptor = extractSecurityDescriptor(variable, {
+          recursive: true,
+          mergeArrayElements: true
+        });
+        if (descriptor) {
+          definitionArgDescriptors.push(descriptor);
+        }
+        const runtimeValue = AutoUnwrapManager.unwrap(await extractVariableValue(variable, tempEnv));
+        codeParams[varName] = runtimeValue;
+        argValues[varName] = typeof runtimeValue === 'string' ? runtimeValue : String(runtimeValue ?? '');
+        continue;
+      }
+
+      const evaluatedArg = await evaluate(argNode, tempEnv, { isExpression: true });
+      const descriptor = extractSecurityDescriptor(evaluatedArg.value, {
+        recursive: true,
+        mergeArrayElements: true
+      });
+      if (descriptor) {
+        definitionArgDescriptors.push(descriptor);
+      }
+      const runtimeValue = AutoUnwrapManager.unwrap(evaluatedArg.value);
+      const fallbackKey = `arg${index}`;
+      codeParams[fallbackKey] = runtimeValue;
+      argValues[fallbackKey] = typeof runtimeValue === 'string' ? runtimeValue : String(runtimeValue ?? '');
+    }
+  }
+
   const capturedEnvs = execVar.internal?.capturedShadowEnvs;
   if (
     capturedEnvs &&
@@ -568,8 +655,12 @@ async function handleCodeDefinition(
       directive.location ?? undefined
     );
   }
+  const allArgDescriptors =
+    definitionArgDescriptors.length > 0
+      ? [...argDescriptors, ...definitionArgDescriptors]
+      : argDescriptors;
   const inputDescriptor =
-    argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
+    allArgDescriptors.length > 0 ? env.mergeSecurityDescriptors(...allArgDescriptors) : undefined;
   const inputTaint = checkRunInputLabelFlow({
     descriptor: inputDescriptor,
     policyEnforcer,
@@ -596,6 +687,9 @@ async function handleCodeDefinition(
     }
 
     const execEnv = env.createChild();
+    if (execVar.internal?.capturedModuleEnv instanceof Map) {
+      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+    }
     for (const [key, value] of Object.entries(codeParams)) {
       bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
     }
@@ -620,6 +714,9 @@ async function handleCodeDefinition(
     }
 
     const execEnv = env.createChild();
+    if (execVar.internal?.capturedModuleEnv instanceof Map) {
+      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+    }
     for (const [key, value] of Object.entries(codeParams)) {
       bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
     }
@@ -633,13 +730,47 @@ async function handleCodeDefinition(
     };
   }
 
+  if ((definition as any).language === 'mlld-env') {
+    const envDirectiveNode = Array.isArray((definition as any).codeTemplate)
+      ? ((definition as any).codeTemplate[0] as any)
+      : undefined;
+    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'env') {
+      throw new Error('mlld-env executable missing env directive');
+    }
+
+    const execEnv = env.createChild();
+    if (execVar.internal?.capturedModuleEnv instanceof Map) {
+      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+    }
+    for (const [key, value] of Object.entries(codeParams)) {
+      bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
+    }
+
+    const { evaluateEnv } = await import('@interpreter/eval/env');
+    const envResult = await evaluateEnv(envDirectiveNode, execEnv);
+    return {
+      value: envResult.value,
+      outputDescriptors,
+      callStack
+    };
+  }
+
   const code = await services.interpolateWithPendingDescriptor(
     (definition as any).codeTemplate,
     InterpolationContext.ShellCommand,
     tempEnv
   );
 
-  const usingParts = await resolveUsingEnvParts(tempEnv, (definition as any).withClause, withClause);
+  const usingParts = await resolveUsingEnvPartsWithOptions(
+    tempEnv,
+    {
+      capturedAuthBindings: (execVar.internal as any)?.capturedAuthBindings as
+        | Record<string, unknown>
+        | undefined
+    },
+    (definition as any).withClause,
+    withClause
+  );
   const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor);
   checkRunInputLabelFlow({
     descriptor: envInputDescriptor,
@@ -686,8 +817,11 @@ async function handleCodeDefinition(
 async function handleTemplateDefinition(
   ctx: RunExecDispatchContext
 ): Promise<RunExecDefinitionDispatchResult> {
-  const { env, definition, argValues, argRuntimeValues, callStack, services } = ctx;
+  const { env, definition, argValues, argRuntimeValues, callStack, services, execVar } = ctx;
   const tempEnv = createTemplateInterpolationEnv(env.createChild(), definition);
+  if (execVar.internal?.capturedModuleEnv instanceof Map) {
+    tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
+  }
   for (const [key, stringValue] of Object.entries(argValues)) {
     bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
   }
@@ -697,9 +831,12 @@ async function handleTemplateDefinition(
     InterpolationContext.Default,
     tempEnv
   );
+  const sourceTaintLabel = deriveExecutableSourceTaintLabel({ type: 'template' });
   return {
     value: templateOutput,
-    outputDescriptors: [],
+    outputDescriptors: sourceTaintLabel
+      ? [makeSecurityDescriptor({ taint: [sourceTaintLabel] })]
+      : [],
     callStack
   };
 }

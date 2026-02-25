@@ -148,16 +148,16 @@ export class CommandDispatcher {
       if (arg.startsWith('--')) {
         const key = arg.slice(2);
         if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
-          flags[key] = args[++i];
+          this.assignParsedFlag(flags, key, args[++i]);
         } else {
-          flags[key] = true;
+          this.assignParsedFlag(flags, key, true);
         }
       } else if (arg.startsWith('-') && arg.length > 1) {
         const key = arg.slice(1);
         if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
-          flags[key] = args[++i];
+          this.assignParsedFlag(flags, key, args[++i]);
         } else {
-          flags[key] = true;
+          this.assignParsedFlag(flags, key, true);
         }
       }
     }
@@ -175,16 +175,16 @@ export class CommandDispatcher {
       if (arg.startsWith('--')) {
         const key = arg.slice(2);
         if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
-          flags[key] = args[++i];
+          this.assignParsedFlag(flags, key, args[++i]);
         } else {
-          flags[key] = true;
+          this.assignParsedFlag(flags, key, true);
         }
       } else if (arg.startsWith('-') && arg.length > 1) {
         const key = arg.slice(1);
         if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
-          flags[key] = args[++i];
+          this.assignParsedFlag(flags, key, args[++i]);
         } else {
-          flags[key] = true;
+          this.assignParsedFlag(flags, key, true);
         }
       } else {
         remaining.push(arg);
@@ -192,6 +192,27 @@ export class CommandDispatcher {
     }
 
     return { flags, remaining };
+  }
+
+  private assignParsedFlag(flags: Record<string, unknown>, key: string, value: unknown): void {
+    if (key !== 'env') {
+      flags[key] = value;
+      return;
+    }
+
+    const existing = flags[key];
+    if (existing === undefined) {
+      flags[key] = value;
+      return;
+    }
+
+    if (Array.isArray(existing)) {
+      existing.push(value);
+      flags[key] = existing;
+      return;
+    }
+
+    flags[key] = [existing, value];
   }
 
   getAvailableCommands(): string[] {

@@ -20,6 +20,7 @@ import { applyWithClause } from './with-clause';
 import { MlldInterpreterError, MlldSecurityError, CircularReferenceError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import { deriveExecutableSourceTaintLabel } from '@core/security/taint';
 import {
   asText,
   isStructuredValue,
@@ -122,6 +123,33 @@ function chainDebug(message: string, payload?: Record<string, unknown>): void {
   } catch {
     process.stdout.write(`[CHAIN] ${message}\n`);
   }
+}
+
+function hasUntrustedWithoutTrusted(descriptor?: SecurityDescriptor): boolean {
+  if (!descriptor) {
+    return false;
+  }
+  const hasUntrusted =
+    descriptor.labels.includes('untrusted') || descriptor.taint.includes('untrusted');
+  const hasTrusted =
+    descriptor.labels.includes('trusted') || descriptor.taint.includes('trusted');
+  return hasUntrusted && !hasTrusted;
+}
+
+function stripTrustedFromDescriptor(descriptor: SecurityDescriptor): SecurityDescriptor {
+  const labels = descriptor.labels.filter(label => label !== 'trusted');
+  const taint = descriptor.taint.filter(label => label !== 'trusted');
+  if (labels.length === descriptor.labels.length && taint.length === descriptor.taint.length) {
+    return descriptor;
+  }
+
+  return makeSecurityDescriptor({
+    labels,
+    taint,
+    sources: descriptor.sources,
+    capability: descriptor.capability,
+    policyContext: descriptor.policyContext ? { ...descriptor.policyContext } : undefined
+  });
 }
 
 const resolveVariableIndexValue = async (fieldValue: any, env: Environment): Promise<unknown> => {
@@ -654,8 +682,9 @@ async function evaluateExecInvocationInternal(
   if (variable.internal?.isBuiltinTransformer && variable.internal?.transformerImplementation) {
     // Args were already extracted above
     
-    // Special handling for @typeof - we need the Variable object, not just the value
-    if (commandName === 'typeof' || commandName === 'TYPEOF') {
+    // Special handling for @typeof/@typeInfo - we need the Variable object, not just the value
+    const normalizedBuiltinName = typeof commandName === 'string' ? commandName.toLowerCase() : '';
+    if (normalizedBuiltinName === 'typeof' || normalizedBuiltinName === 'typeinfo') {
       if (args.length > 0) {
         const arg = args[0];
         
@@ -666,44 +695,79 @@ async function evaluateExecInvocationInternal(
           const varObj = env.getVariable(varName);
           
           if (varObj) {
-            // Generate type information from the Variable object
-            let typeInfo = varObj.type;
-            
-            // Handle subtypes for text variables
-            if (varObj.type === 'simple-text' && 'subtype' in varObj) {
-              // For simple-text, show the main type unless it has a special subtype
-              const subtype = (varObj as any).subtype;
-              if (subtype && subtype !== 'simple' && subtype !== 'interpolated-text') {
-                typeInfo = subtype;
+            const inferSimpleTypeFromValue = (value: unknown): string => {
+              if (value === null || value === undefined) return 'null';
+              if (isStructuredValue(value)) {
+                return inferSimpleTypeFromValue(value.data === undefined ? value.text : value.data);
               }
-            } else if (varObj.type === 'primitive' && 'primitiveType' in varObj) {
-              typeInfo = `primitive (${(varObj as any).primitiveType})`;
-            } else if (varObj.type === 'object') {
-              const objValue = varObj.value;
-              if (objValue && typeof objValue === 'object') {
-                const keys = Object.keys(objValue);
-                typeInfo = `object (${keys.length} properties)`;
+              if (Array.isArray(value)) return 'array';
+              if (typeof value === 'string') return 'string';
+              if (typeof value === 'number') return 'number';
+              if (typeof value === 'boolean') return 'boolean';
+              if (typeof value === 'function') return 'executable';
+              if (typeof value === 'object') return 'object';
+              return 'string';
+            };
+
+            const getSimpleTypeInfo = (value: Variable): string => {
+              if (value.type === 'executable') return 'executable';
+              if (value.type === 'array') return 'array';
+              if (value.type === 'object') return 'object';
+              if (value.type === 'simple-text' || value.type === 'command-result') return 'string';
+              if (value.type === 'primitive' && 'primitiveType' in value) {
+                const primitiveType = (value as any).primitiveType;
+                if (primitiveType === 'number' || primitiveType === 'string' || primitiveType === 'boolean') {
+                  return primitiveType;
+                }
+                if (primitiveType === 'null') {
+                  return 'null';
+                }
               }
-            } else if (varObj.type === 'array') {
-              const arrValue = varObj.value;
-              if (Array.isArray(arrValue)) {
-                typeInfo = `array (${arrValue.length} items)`;
+              return inferSimpleTypeFromValue(value.value);
+            };
+
+            const getRichTypeInfo = (value: Variable): string => {
+              let typeInfo = value.type;
+
+              if (value.type === 'simple-text' && 'subtype' in value) {
+                const subtype = (value as any).subtype;
+                if (subtype && subtype !== 'simple' && subtype !== 'interpolated-text') {
+                  typeInfo = subtype;
+                }
+              } else if (value.type === 'primitive' && 'primitiveType' in value) {
+                typeInfo = `primitive (${(value as any).primitiveType})`;
+              } else if (value.type === 'object') {
+                const objValue = value.value;
+                if (objValue && typeof objValue === 'object') {
+                  const keys = Object.keys(objValue);
+                  typeInfo = `object (${keys.length} properties)`;
+                }
+              } else if (value.type === 'array') {
+                const arrValue = value.value;
+                if (Array.isArray(arrValue)) {
+                  typeInfo = `array (${arrValue.length} items)`;
+                }
+              } else if (value.type === 'executable') {
+                const execDef = value.internal?.executableDef;
+                if (execDef && 'type' in execDef) {
+                  typeInfo = `executable (${execDef.type})`;
+                }
               }
-            } else if (varObj.type === 'executable') {
-              // Get executable type from metadata
-              const execDef = varObj.internal?.executableDef;
-              if (execDef && 'type' in execDef) {
-                typeInfo = `executable (${execDef.type})`;
+
+              if (value.source?.directive) {
+                typeInfo += ` [from /${value.source.directive}]`;
               }
-            }
-            
-            // Add source information if available
-            if (varObj.source?.directive) {
-              typeInfo += ` [from /${varObj.source.directive}]`;
-            }
-            
-            // Pass the type info with a special marker
-            const result = await variable.internal.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
+
+              return typeInfo;
+            };
+
+            const selectedTypeInfo = normalizedBuiltinName === 'typeof'
+              ? getSimpleTypeInfo(varObj)
+              : getRichTypeInfo(varObj);
+
+            const result = await variable.internal.transformerImplementation(
+              `__MLLD_VARIABLE_OBJECT__:${selectedTypeInfo}`
+            );
             const normalized = normalizeTransformerResult(commandName, result);
             const resolvedValue = normalized.value;
             const wrapOptions = normalized.options;
@@ -1309,9 +1373,25 @@ async function evaluateExecInvocationInternal(
     }
   }
   const mcpToolLabels = (node as any).meta?.mcpToolLabels;
-  const toolLabels = Array.isArray(mcpToolLabels)
+  let toolLabels = Array.isArray(mcpToolLabels)
     ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
     : [];
+  if (toolLabels.length === 0) {
+    const scopedConfig = env.getScopedEnvironmentConfig();
+    const tools = scopedConfig?.tools;
+    if (tools && typeof tools === 'object' && !Array.isArray(tools)) {
+      const exeName = variable.name ?? commandName;
+      for (const entry of Object.values(tools as Record<string, any>)) {
+        if (entry && typeof entry === 'object' && entry.mlld === exeName) {
+          const labels = entry.labels;
+          if (Array.isArray(labels)) {
+            toolLabels = labels.filter((l: unknown) => typeof l === 'string' && (l as string).length > 0);
+          }
+          break;
+        }
+      }
+    }
+  }
   const trackedMcpName =
     typeof (mcpTool as any)?.name === 'string' && (mcpTool as any).name.trim().length > 0
       ? (mcpTool as any).name.trim()
@@ -1426,11 +1506,21 @@ async function evaluateExecInvocationInternal(
       if (mcpSecurityDescriptor) {
         descriptorPieces.push(mcpSecurityDescriptor);
       }
+      const sourceTaintLabel = deriveExecutableSourceTaintLabel({
+        type: (definition as any).type,
+        language: (definition as any).language
+      });
+      if (sourceTaintLabel) {
+        descriptorPieces.push(makeSecurityDescriptor({ taint: [sourceTaintLabel] }));
+      }
       if (descriptorPieces.length > 0) {
-        resultSecurityDescriptor =
+        const descriptorFromPieces =
           descriptorPieces.length === 1
             ? descriptorPieces[0]
             : env.mergeSecurityDescriptors(...descriptorPieces);
+        resultSecurityDescriptor = resultSecurityDescriptor
+          ? env.mergeSecurityDescriptors(resultSecurityDescriptor, descriptorFromPieces)
+          : descriptorFromPieces;
       }
       const paramFlowHandled = await enforceExecParamLabelFlow({
         env,
@@ -1598,7 +1688,20 @@ async function evaluateExecInvocationInternal(
     }
   }
 
-  mergeResultDescriptor(extractSecurityDescriptor(result));
+  const localExecutionDescriptor = execEnv.getLocalSecurityDescriptor();
+  const resultValueDescriptor = extractSecurityDescriptor(result);
+  const shouldPreferUntrustedReturn = hasUntrustedWithoutTrusted(resultValueDescriptor);
+
+  mergeResultDescriptor(
+    shouldPreferUntrustedReturn && localExecutionDescriptor
+      ? stripTrustedFromDescriptor(localExecutionDescriptor)
+      : localExecutionDescriptor
+  );
+  mergeResultDescriptor(resultValueDescriptor);
+
+  if (shouldPreferUntrustedReturn && resultSecurityDescriptor) {
+    resultSecurityDescriptor = stripTrustedFromDescriptor(resultSecurityDescriptor);
+  }
 
   if (resultSecurityDescriptor) {
     const structured = wrapExecResult(result);

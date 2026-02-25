@@ -15,9 +15,10 @@ import { applyWithClause } from '@interpreter/eval/with-clause';
 import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
-import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import { resolveUsingEnvPartsWithOptions } from '@interpreter/utils/auth-injection';
 import {
   asText,
+  extractSecurityDescriptor,
   isStructuredValue,
   normalizeWhenShowEffect,
   wrapStructured
@@ -143,6 +144,18 @@ export async function executeCodeExecutable(
     const blockResult = await evaluateExeBlock(blockNode, execEnv);
     result = blockResult.value;
     execEnv = blockResult.env;
+  } else if (definition.language === 'mlld-env') {
+    const envDirectiveNode = Array.isArray(definition.codeTemplate)
+      ? (definition.codeTemplate[0] as any)
+      : undefined;
+    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'env') {
+      throw new MlldInterpreterError('mlld-env executable missing env directive');
+    }
+
+    const { evaluateEnv } = await import('@interpreter/eval/env');
+    const envResult = await evaluateEnv(envDirectiveNode, execEnv);
+    result = envResult.value;
+    execEnv = envResult.env;
   } else {
     let code: string;
     if (definition.language === 'bash' || definition.language === 'sh') {
@@ -246,6 +259,65 @@ export async function executeCodeExecutable(
       }
     }
 
+    const definitionArgs = Array.isArray(definition.args) ? definition.args : [];
+    if (definitionArgs.length > 0) {
+      const { evaluate } = await import('@interpreter/core/interpreter');
+      const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+
+      for (let index = 0; index < definitionArgs.length; index += 1) {
+        const rawArgNode = definitionArgs[index] as any;
+        const argNode =
+          rawArgNode &&
+          typeof rawArgNode === 'object' &&
+          rawArgNode.type === 'Argument' &&
+          rawArgNode.value
+            ? rawArgNode.value
+            : rawArgNode;
+
+        if (argNode === undefined || argNode === null) {
+          continue;
+        }
+
+        let key = `arg${index}`;
+        let runtimeValue: unknown;
+
+        if (argNode && typeof argNode === 'object' && argNode.type === 'VariableReference') {
+          const varName = argNode.identifier;
+          const variableArg = execEnv.getVariable(varName);
+          if (!variableArg) {
+            throw new MlldInterpreterError(`Variable not found: ${varName}`);
+          }
+
+          const descriptor = extractSecurityDescriptor(variableArg, {
+            recursive: true,
+            mergeArrayElements: true
+          });
+          services.mergeResultDescriptor(descriptor);
+
+          runtimeValue = AutoUnwrapManager.unwrap(
+            await extractVariableValue(variableArg, execEnv)
+          );
+          key = varName;
+        } else {
+          const evaluated = await evaluate(argNode, execEnv, { isExpression: true });
+          const descriptor = extractSecurityDescriptor(evaluated.value, {
+            recursive: true,
+            mergeArrayElements: true
+          });
+          services.mergeResultDescriptor(descriptor);
+          runtimeValue = AutoUnwrapManager.unwrap(evaluated.value);
+        }
+
+        let resolvedKey = key;
+        let suffix = 1;
+        while (Object.prototype.hasOwnProperty.call(codeParams, resolvedKey)) {
+          resolvedKey = `${key}_${suffix}`;
+          suffix += 1;
+        }
+        codeParams[resolvedKey] = runtimeValue;
+      }
+    }
+
     const capturedModuleEnv = variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined;
     if (capturedModuleEnv instanceof Map && isShadowLanguage(definition.language)) {
       for (const [capturedName, capturedVar] of capturedModuleEnv) {
@@ -281,7 +353,16 @@ export async function executeCodeExecutable(
       (codeParams as any).__capturedShadowEnvs = capturedEnvs;
     }
 
-    const usingParts = await resolveUsingEnvParts(execEnv, definition.withClause, node.withClause);
+    const usingParts = await resolveUsingEnvPartsWithOptions(
+      execEnv,
+      {
+        capturedAuthBindings: (variable.internal as any)?.capturedAuthBindings as
+          | Record<string, unknown>
+          | undefined
+      },
+      definition.withClause,
+      node.withClause
+    );
     const envInputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(usingParts.descriptor));
     if (envInputTaint.length > 0) {
       policyEnforcer.checkLabelFlow(

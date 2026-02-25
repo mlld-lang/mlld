@@ -1,0 +1,11 @@
+---
+name: qa-local-utils
+author: adamavenir
+version: 0.1.0
+about: Local dev module for QA testing
+---
+
+exe @formatDate(d) = js { return new Date(d).toISOString().split('T')[0] }
+var @moduleType = "local-dev"
+
+export { @formatDate, @moduleType }

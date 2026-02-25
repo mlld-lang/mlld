@@ -20,7 +20,7 @@ export type StringBuiltinMethod =
   | 'padEnd'
   | 'repeat';
 
-export type ArrayBuiltinMethod = 'slice' | 'concat' | 'reverse' | 'sort';
+export type ArrayBuiltinMethod = 'slice' | 'concat' | 'reverse' | 'sort' | 'flat' | 'at';
 export type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
 export type MatchBuiltinMethod = 'match';
 export type TypeCheckingMethod =
@@ -74,6 +74,8 @@ export const BUILTIN_METHODS: readonly (
   'concat',
   'reverse',
   'sort',
+  'flat',
+  'at',
   'isArray',
   'isObject',
   'isString',
@@ -218,7 +220,7 @@ function handleStringBuiltin(method: StringBuiltinMethod, target: unknown, args:
   throw new MlldInterpreterError(`Unsupported string builtin: ${method}`);
 }
 
-function handleArrayBuiltin(method: ArrayBuiltinMethod, target: unknown, args: unknown[] = []): unknown[] {
+function handleArrayBuiltin(method: ArrayBuiltinMethod, target: unknown, args: unknown[] = []): unknown {
   const array = ensureArrayTarget(method, target);
   switch (method) {
     case 'slice': {
@@ -237,6 +239,14 @@ function handleArrayBuiltin(method: ArrayBuiltinMethod, target: unknown, args: u
         return cloned.sort(comparator as (a: unknown, b: unknown) => number);
       }
       return cloned.sort();
+    }
+    case 'flat': {
+      const depth = args.length > 0 ? Number(args[0]) : 1;
+      return array.flat(depth);
+    }
+    case 'at': {
+      const index = args.length > 0 ? Number(args[0]) : 0;
+      return array.at(index);
     }
   }
   throw new MlldInterpreterError(`Unsupported array builtin: ${method}`);
@@ -345,9 +355,15 @@ export function dispatchBuiltinMethod(options: {
     case 'concat':
     case 'reverse':
     case 'sort':
+    case 'flat':
       return {
         result: handleArrayBuiltin(commandName as ArrayBuiltinMethod, objectValue, evaluatedArgs),
         propagateResultDescriptor: true
+      };
+    case 'at':
+      return {
+        result: handleArrayBuiltin('at', objectValue, evaluatedArgs),
+        propagateResultDescriptor: false
       };
     case 'length':
       return {

@@ -676,6 +676,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     return formattedTests.some(test => fixture.name.includes(test));
   }
 
+  function usesMcpSubprocess(fixture: any): boolean {
+    return typeof fixture?.input === 'string' && /\bmlld\s+mcp\b/.test(fixture.input);
+  }
+
   // Recursive function to copy test files to virtual filesystem
   async function copyTestFilesToVFS(sourcePath: string, targetPath: string) {
     const entries = fs.readdirSync(sourcePath, { withFileTypes: true });
@@ -924,13 +928,16 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     const isKnownSlowFixture = slowFixtureMatchers.some(slow => fixture.name.includes(slow));
     const shouldSkipSlow = isFastTestMode && isKnownSlowFixture;
     const requiresPythonRuntime = fixture.name.startsWith('exceptions/python/');
+    const requiresMcpSubprocess = usesMcpSubprocess(fixture);
     const shouldSkipMissingPython = requiresPythonRuntime && !pythonRuntimeAvailable;
+    const shouldSkipLive = fixture.live && process.env.MLLD_LIVE !== '1';
 
-    const testFn = (skipTests[fixture.name] || shouldSkipDoc || shouldSkipSlow || shouldSkipMissingPython) ? it.skip : it;
+    const testFn = (skipTests[fixture.name] || shouldSkipDoc || shouldSkipSlow || shouldSkipMissingPython || shouldSkipLive) ? it.skip : it;
     const skipReason = skipTests[fixture.name] ? ` (Skipped: ${skipTests[fixture.name]})` :
                        shouldSkipDoc ? ` (Skipped: Intentional partial/educational example)` :
                        shouldSkipSlow ? ` (Skipped: Slow test in fast mode)` :
-                       shouldSkipMissingPython ? ` (Skipped: Python runtime not available)` : '';
+                       shouldSkipMissingPython ? ` (Skipped: Python runtime not available)` :
+                       shouldSkipLive ? ` (Skipped: Requires MLLD_LIVE=1)` : '';
 
     testFn(`should handle ${fixture.name}${isDocumentationTest ? ' (syntax only)' : isSmokeTest ? ' (smoke test)' : ''}${skipReason}`, async () => {
       // Check if this is a valid fixture that has a parse error
@@ -1229,6 +1236,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       try {
         // For path assignment tests, we need to set the correct basePath
         let basePath = fixture.basePath || '/';
+
+        if (requiresMcpSubprocess) {
+          // MCP subprocesses execute on the real filesystem, so run from repo root
+          // to resolve tests/cases/... module paths consistently.
+          basePath = path.join(__dirname, '..');
+        }
         
         if (fixture.name.endsWith('/assignment-project') || fixture.name.endsWith('/assignment-special')) {
           basePath = '/mock/project';
@@ -1377,11 +1390,15 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           // Enable file operation logging for /output directive tests
           const enableFileLogging = fixture.name.includes('slash/output/');
           const effectHandler = new TestRedirectEffectHandler('/tmp-tests', fileSystem, enableFileLogging);
-          let caughtError: any = null;
-          let interpretSucceeded = false;
-          let interpretOutput: string | undefined;
-          try {
-            interpretOutput = await interpret(fixture.input, {
+	          let caughtError: any = null;
+	          let interpretSucceeded = false;
+	          let interpretOutput: string | undefined;
+	          const hasExpectedOutput =
+	            typeof fixture.expected === 'string' && fixture.expected.trim().length > 0;
+	          const hasExpectedError =
+	            typeof fixture.expectedError === 'string' && fixture.expectedError.trim().length > 0;
+	          try {
+	            interpretOutput = await interpret(fixture.input, {
               fileSystem,
               pathService,
               format: 'markdown',
@@ -1401,13 +1418,17 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             caughtError = error;
           }
 
-          if (requiresPythonRuntime) {
-            if (!interpretSucceeded) {
-              throw caughtError;
-            }
-            if (typeof fixture.expectedError === 'string' && fixture.expectedError.trim().length > 0) {
-              expect(interpretOutput || '').toContain(fixture.expectedError.trim());
-            }
+	          if (requiresPythonRuntime) {
+	            if (!interpretSucceeded) {
+	              throw caughtError;
+	            }
+	            if (hasExpectedOutput) {
+	              const output = (effectHandler.getDocument() || interpretOutput || '').trim();
+	              expect(output).toContain((fixture.expected as string).trim());
+	            }
+	            if (typeof fixture.expectedError === 'string' && fixture.expectedError.trim().length > 0) {
+	              expect(interpretOutput || '').toContain(fixture.expectedError.trim());
+	            }
             validateStderrOutput(effectHandler.getStderr(), ioExpectations.expectedStderr, fixture.name);
             if (ioExpectations.expectedErrorShape && caughtError) {
               validateExpectedErrorShape(caughtError, ioExpectations.expectedErrorShape, fixture.name);
@@ -1416,14 +1437,21 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           }
 
           // Fail outside try/catch so the assertion can't be caught by the inner catch
-          if (interpretSucceeded) {
-            expect.fail(`Expected interpretation to throw an error for ${fixture.name}, but it succeeded`);
-          }
+	          if (interpretSucceeded) {
+	            expect.fail(`Expected interpretation to throw an error for ${fixture.name}, but it succeeded`);
+	          }
 
-          validateStderrOutput(effectHandler.getStderr(), ioExpectations.expectedStderr, fixture.name);
-          if (ioExpectations.expectedErrorShape && caughtError) {
-            validateExpectedErrorShape(caughtError, ioExpectations.expectedErrorShape, fixture.name);
-          }
+	          if (hasExpectedOutput && hasExpectedError) {
+	            const output = (effectHandler.getDocument() || interpretOutput || '').trim();
+	            expect(output).toContain((fixture.expected as string).trim());
+	            const errorText = caughtError instanceof Error ? caughtError.message : String(caughtError ?? '');
+	            expect(errorText).toContain((fixture.expectedError as string).trim());
+	          }
+
+	          validateStderrOutput(effectHandler.getStderr(), ioExpectations.expectedStderr, fixture.name);
+	          if (ioExpectations.expectedErrorShape && caughtError) {
+	            validateExpectedErrorShape(caughtError, ioExpectations.expectedErrorShape, fixture.name);
+	          }
           
         } else {
           // Prepare stdin content for stdin import tests

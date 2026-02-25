@@ -1,0 +1,28 @@
+>> File tree in — not the files themselves
+var @tree = cmd { tree --gitignore src/ }
+
+exe llm @plan(tree) = cmd {
+  claude -p "Which files handle user input or database queries?
+  @tree
+  Return JSON: array of file paths"
+}
+
+>> Code filters: 2000 files to ~5. Zero LLM cost.
+var @targets = @plan(@tree) | @parse.llm
+var @files = for @path in @targets => <@path>
+
+>> Parallel deep analysis on just the targets
+exe llm @audit(file) = cmd {
+  claude -p "Audit for injection vulnerabilities:
+  <file path='@file.mx.relative'>@file</file>
+  JSON: { file, severity, findings[] }"
+}
+
+var @results = for parallel(8) @f in @files
+  => @audit(@f) | @parse.llm
+
+>> Findings only — the codebase never entered token space
+exe llm @report(findings) = cmd {
+  claude -p "Prioritize by severity: @findings"
+}
+show @report(@results)

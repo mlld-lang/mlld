@@ -269,7 +269,7 @@ import local { @tool } from @alice/my-tool
 
 Generate module template:
 ```bash
-mlld init @alice/my-tool
+mlld module @alice/my-tool
 ```
 
 This creates a complete module structure with frontmatter and examples.

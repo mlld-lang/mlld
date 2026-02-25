@@ -3,19 +3,16 @@
 
 import { @claudePoll } from @mlld/claude-poll
 import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
-import { @updatePhaseStatus } from "../lib/state.mld"
 
 exe @strategyPrompt(outputDir) = template "../prompts/phase4-strategy.att"
 
 exe @runStrategy(runDir) = [
   @logPhaseStart(@runDir, "strategy")
-  @updatePhaseStatus(@runDir, "strategy", "in-progress")
 
   >> Guard: trend-report.json must exist
   let @trendReport = <@runDir/trend-report.json>?
   if !@trendReport [
     show `Error: No trend-report.json found. Run phase 3 first.`
-    @updatePhaseStatus(@runDir, "strategy", "failed")
     => null
   ]
 
@@ -35,7 +32,6 @@ exe @runStrategy(runDir) = [
   show `Next step: Review and answer questions in strategy-questions.md, then run 'mlld run polish'.`
 
   @logPhaseComplete(@runDir, "strategy", null)
-  @updatePhaseStatus(@runDir, "strategy", "complete")
 
   => { strategy_questions: `@runDir/strategy-questions.md` }
 ]

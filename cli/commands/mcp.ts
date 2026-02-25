@@ -627,6 +627,15 @@ function getStringFlag(flags: Record<string, unknown>, key: string): string | un
   if (typeof value === 'string') {
     return value;
   }
+  if (Array.isArray(value)) {
+    const normalized = value
+      .map(entry => (typeof entry === 'string' ? entry : String(entry)))
+      .filter(Boolean);
+    if (normalized.length === 0) {
+      return undefined;
+    }
+    return normalized.join(',');
+  }
   if (value === true) {
     console.error(`Flag --${key} requires a value`);
     process.exit(1);

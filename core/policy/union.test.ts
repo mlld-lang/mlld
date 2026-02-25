@@ -35,6 +35,29 @@ describe('PolicyConfig defaults', () => {
     );
   });
 
+  it('expands verify_all_instructions shorthand', () => {
+    const config = normalizePolicyConfig({
+      verify_all_instructions: true
+    } as PolicyConfig);
+
+    expect(config.defaults?.autosign).toEqual(['instructions']);
+    expect(config.defaults?.autoverify).toBe(true);
+    expect((config as any).verify_all_instructions).toBeUndefined();
+  });
+
+  it('verify_all_instructions does not override explicit defaults', () => {
+    const config = normalizePolicyConfig({
+      verify_all_instructions: true,
+      defaults: {
+        autosign: { instructions: true, variables: ['@*Prompt'] },
+        autoverify: 'template "./custom.att"'
+      }
+    } as PolicyConfig);
+
+    expect(config.defaults?.autosign).toEqual({ instructions: true, variables: ['@*Prompt'] });
+    expect(config.defaults?.autoverify).toBe('template "./custom.att"');
+  });
+
   it('normalizes autosign autoverify and trustconflict', () => {
     const config = normalizePolicyConfig({
       defaults: {
@@ -126,5 +149,44 @@ describe('PolicyConfig keychain', () => {
     expect(merged.keychain?.provider).toBe('system');
     expect(merged.keychain?.allow).toEqual(['company/*']);
     expect(merged.keychain?.deny?.sort()).toEqual(['company/private/*', 'system/*'].sort());
+  });
+});
+
+describe('PolicyConfig auth', () => {
+  it('normalizes short-form and bare keychain auth entries', () => {
+    const config = normalizePolicyConfig({
+      auth: {
+        brave: 'BRAVE_API_KEY',
+        claude: {
+          from: 'keychain',
+          as: 'ANTHROPIC_API_KEY'
+        }
+      }
+    } as PolicyConfig);
+
+    expect(config.auth?.brave).toEqual({
+      from: 'keychain:mlld-env-{projectname}/BRAVE_API_KEY',
+      as: 'BRAVE_API_KEY'
+    });
+    expect(config.auth?.claude).toEqual({
+      from: 'keychain:mlld-env-{projectname}/ANTHROPIC_API_KEY',
+      as: 'ANTHROPIC_API_KEY'
+    });
+  });
+
+  it('keeps explicit auth providers unchanged', () => {
+    const config = normalizePolicyConfig({
+      auth: {
+        gh: {
+          from: 'env:GITHUB_TOKEN',
+          as: 'GITHUB_TOKEN'
+        }
+      }
+    } as PolicyConfig);
+
+    expect(config.auth?.gh).toEqual({
+      from: 'env:GITHUB_TOKEN',
+      as: 'GITHUB_TOKEN'
+    });
   });
 });

@@ -1,5 +1,6 @@
 const markdownIt = require('markdown-it');
 const markdownItAnchor = require('markdown-it-anchor');
+const markdownItAttrs = require('markdown-it-attrs');
 const markdownItPrism = require('markdown-it-prism');
 
 // Load our custom Meld language
@@ -13,7 +14,10 @@ module.exports = function(eleventyConfig) {
     breaks: true,
     linkify: true
   })
-  .use(markdownItAnchor)
+  .use(markdownItAnchor, {
+    permalink: markdownItAnchor.permalink.headerLink({ safariReaderFix: true })
+  })
+  .use(markdownItAttrs)
   .use(markdownItPrism);
   
   eleventyConfig.setLibrary('md', markdownLib);
@@ -37,34 +41,10 @@ module.exports = function(eleventyConfig) {
   // Create a collection for documentation pages
   eleventyConfig.addCollection('docs', function(collectionApi) {
     return collectionApi.getFilteredByGlob('src/docs/**/*.md').sort((a, b) => {
-      // Custom sort order for docs
-      const order = {
-        'introduction': 1,
-        'cli-usage': 3,
-        'sdk-usage': 4,
-        'variables': 5,
-        'error-handling': 6,
-        'syntax-reference': 2,
-        'directives': 100 // Directives at the end
-      };
-      
-      // Extract slug from URL
-      const getSlug = (item) => {
-        const parts = item.url.split('/');
-        const slug = parts[parts.length - 2] || parts[parts.length - 3];
-        return slug;
-      };
-      
-      const aSlug = getSlug(a);
-      const bSlug = getSlug(b);
-      
-      // Get order or default to high number
-      const aOrder = order[aSlug] || 1000;
-      const bOrder = order[bSlug] || 1000;
-      
-      // Sort by order, then by title
+      const aOrder = a.data.order ?? 1000;
+      const bOrder = b.data.order ?? 1000;
       if (aOrder === bOrder) {
-        return a.data.title.localeCompare(b.data.title);
+        return (a.data.title || '').localeCompare(b.data.title || '');
       }
       return aOrder - bOrder;
     });

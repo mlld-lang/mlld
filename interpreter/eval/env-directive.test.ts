@@ -59,6 +59,31 @@ describe('env directive', () => {
     expect(scopedEnv?.getScopedEnvironmentConfig()?.provider).toBe('@local');
   });
 
+  it('supports configless env blocks with with-clause-only config', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, process.cwd());
+
+    const src = `
+/exe @readData() = js { return "ok" }
+/var tools @agentTools = {
+  read: { mlld: @readData }
+}
+/env with { tools: @agentTools, profile: "readonly" } [
+  show @mx.profile
+]
+`;
+
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const scopedEnv = findEnvWithScopedTools(env);
+    expect(scopedEnv).toBeDefined();
+    const allowedTools = Array.from(((scopedEnv as any).allowedTools as Set<string>) || []).sort();
+    expect(allowedTools).toEqual(['read']);
+    expect(scopedEnv?.getScopedEnvironmentConfig()?.profile).toBe('readonly');
+  });
+
   it('enforces tool attenuation', async () => {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();

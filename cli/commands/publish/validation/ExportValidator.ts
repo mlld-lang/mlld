@@ -39,6 +39,11 @@ export class ExportValidator implements ValidationStep {
     const errors: ValidationError[] = [];
     const warnings: ValidationWarning[] = [];
 
+    // Skills and commands are markdown files, not mlld modules — no exports expected
+    if (module.moduleType === 'skill' || module.moduleType === 'command') {
+      return { valid: true, errors: [], warnings: [] };
+    }
+
     const { entries, manifestCount, hasWildcard } = this.collectExportBindings(module);
     const declarations = this.collectDeclarations(module.ast);
 

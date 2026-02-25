@@ -101,4 +101,128 @@ describe('tool collections', () => {
       `)
     ).rejects.toThrow(/cover required parameters/i);
   });
+
+  it('accepts optional values when they are exposed parameters', async () => {
+    const env = await interpretWithEnv(`
+      /exe @verify(vars: string) = js { return vars; }
+      /var tools @agentTools = {
+        verify: { mlld: @verify, expose: ["vars"], optional: ["vars"] }
+      }
+    `);
+
+    const toolsVar = env.getVariable('agentTools');
+    const collection = toolsVar?.internal?.toolCollection as ToolCollection;
+    expect(collection.verify.optional).toEqual(['vars']);
+  });
+
+  it('rejects optional values that are not exposed', async () => {
+    await expect(
+      interpretWithEnv(`
+        /exe @verify(vars: string) = js { return vars; }
+        /var tools @badTools = {
+          verify: { mlld: @verify, optional: ["vars"] }
+        }
+      `)
+    ).rejects.toThrow(/optional values require expose/i);
+  });
+
+  it('does not evaluate net:r guards during var tools normalization', async () => {
+    const env = await interpretWithEnv(`
+      /guard @noSecretExfil before net:r = when [
+        @input.any.mx.labels.includes("secret") => deny "Secret data cannot flow to network operations"
+        * => allow
+      ]
+      /exe net:r @guardedFetch(url: string) = [
+        => @url
+      ]
+      /var tools @tools = {
+        guardedFetch: { mlld: @guardedFetch, labels: ["net:r"], expose: ["url"] }
+      }
+    `);
+
+    const toolsVar = env.getVariable('tools');
+    expect(toolsVar?.internal?.isToolsCollection).toBe(true);
+    const collection = toolsVar?.internal?.toolCollection as ToolCollection;
+    expect(collection.guardedFetch.mlld).toBe('guardedFetch');
+  });
+
+  it('does not inherit tool labels into collection taint when passed as params', async () => {
+    const env = await interpretWithEnv(`
+      /exe untrusted @searchWeb(q: string) = js { return q; }
+      /exe destructive @deleteDoc(id: string) = js { return id; }
+
+      /var tools @agentTools = {
+        searchWeb: { mlld: @searchWeb, labels: ["untrusted"], expose: ["q"] },
+        deleteDoc: { mlld: @deleteDoc, labels: ["destructive"], expose: ["id"] }
+      }
+
+      /guard @destructiveGate before destructive = when [
+        @mx.taint.includes("untrusted") => deny "Blocked"
+        * => allow
+      ]
+
+      /exe @agent(tools, task) = env with { tools: @tools } [
+        => @task
+      ]
+
+      /var @result = @agent(@agentTools, "hello")
+    `);
+
+    const toolsVar = env.getVariable('agentTools');
+    expect(toolsVar?.mx.taint ?? []).not.toContain('untrusted');
+    expect(toolsVar?.mx.taint ?? []).not.toContain('destructive');
+    expect(toolsVar?.mx.labels ?? []).not.toContain('untrusted');
+    expect(toolsVar?.mx.labels ?? []).not.toContain('destructive');
+
+    const resultVar = env.getVariable('result');
+    expect((resultVar?.value as any)?.text ?? resultVar?.value).toBe('hello');
+  });
+
+  it('applies tool collection labels as taint on direct exe calls inside env with tools', async () => {
+    const result = await interpret(`
+      /exe @tcRead(id: string) = \`data:@id\`
+
+      /var tools @tcTools = {
+        read: { mlld: @tcRead, labels: ["untrusted"] }
+      }
+
+      /exe @tcAgent(tools, task) = env with { tools: @tools } [
+        let @result = @tcRead("123")
+        => @result
+      ]
+
+      /var @tcOutput = @tcAgent(@tcTools, "go")
+      /show @tcOutput.mx.taint.includes("untrusted")
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+    expect(result.trim()).toBe('true');
+  });
+
+  it('keeps destructive guard behavior for actual destructive tool calls', async () => {
+    await expect(
+      interpretWithEnv(`
+        /exe destructive @deleteDoc(id: string) = js { return id; }
+
+        /var tools @agentTools = {
+          deleteDoc: { mlld: @deleteDoc, labels: ["destructive"], expose: ["id"] }
+        }
+
+        /guard @blockDestructive before destructive = when [
+          * => deny "blocked"
+        ]
+
+        /exe @agent(tools, id) = env with { tools: @tools } [
+          => @deleteDoc(@id)
+        ]
+
+        /var @result = @agent(@agentTools, "doc-1")
+      `)
+    ).rejects.toThrow(/blocked/i);
+  });
 });

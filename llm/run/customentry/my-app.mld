@@ -1,0 +1,2 @@
+>> Test module with custom entry specified in module.yml
+show "Custom entry via module.yml entry field works!"

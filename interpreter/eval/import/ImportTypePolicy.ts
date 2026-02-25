@@ -111,7 +111,7 @@ export function validateDeclaredImportType(type: ImportType, resolution: ImportR
       if (resolution.type === 'resolver' && (resolverName === 'base' || resolverName === 'root' || resolverName === 'project')) {
         return;
       }
-      throw new MlldImportError("Import type 'static' supports local files or @base/@root/@project resolver paths.", {
+      throw new MlldImportError("Import type 'static' supports local files or @root/@base/@project resolver paths.", {
         code: 'IMPORT_TYPE_MISMATCH',
         details: { importType: type, resolvedType: resolution.type }
       });
@@ -132,7 +132,7 @@ export function validateDeclaredImportType(type: ImportType, resolution: ImportR
       if (resolution.type === 'file' || isAllowedResolver) {
         return;
       }
-      throw new MlldImportError("Import type 'templates' expects a directory from the local filesystem or @base/@root/@project/@local resolvers.", {
+      throw new MlldImportError("Import type 'templates' expects a directory from the local filesystem or @root/@base/@project/@local resolvers.", {
         code: 'IMPORT_TYPE_MISMATCH',
         details: { importType: type, resolvedType: resolution.type }
       });

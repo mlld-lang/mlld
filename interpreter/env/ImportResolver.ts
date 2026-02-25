@@ -261,15 +261,25 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       : path.resolve(this.dependencies.pathContext.fileDirectory, inputPath);
 
     if (!await this.dependencies.fileSystem.exists(resolvedPath)) {
-      throw await this.createFileNotFoundError(originalInputPath, collectedSuggestions);
+      throw await this.createFileNotFoundError(originalInputPath, collectedSuggestions, resolvedPath);
     }
 
     return resolvedPath;
   }
 
-  private async createFileNotFoundError(inputPath: string, suggestions: string[] = []): Promise<Error> {
+  private async createFileNotFoundError(
+    inputPath: string,
+    suggestions: string[] = [],
+    resolvedPath?: string
+  ): Promise<Error> {
     const didYouMean = await this.buildPathSuggestions(inputPath, suggestions);
-    const lines = [`File not found: ${inputPath}`];
+    const includeResolvedPath =
+      Boolean(resolvedPath) && (inputPath.startsWith('@root/') || inputPath.startsWith('@base/'));
+    const lines = [
+      includeResolvedPath
+        ? `File not found: ${inputPath} (resolved to ${resolvedPath})`
+        : `File not found: ${inputPath}`
+    ];
 
     if (didYouMean.length > 0) {
       lines.push('', 'Did you mean:', ...didYouMean.map(suggestion => `  - ${suggestion}`));
@@ -277,7 +287,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
 
     lines.push(
       '',
-      'Paths resolve relative to the current mlld file directory. Use @base/... to resolve from the project root.'
+      'Paths resolve relative to the current mlld file directory. Use @root/... to resolve from the project root.'
     );
 
     return new Error(lines.join('\n'));
@@ -321,7 +331,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     const fileDirectory = this.dependencies.pathContext.fileDirectory;
 
     const relativeSuggestion = `./${normalizedPath}`;
-    const baseSuggestion = `@base/${normalizedPath}`;
+    const baseSuggestion = `@root/${normalizedPath}`;
     const relativeExists = await this.dependencies.fileSystem.exists(path.resolve(fileDirectory, normalizedPath));
     const baseExists = await this.dependencies.fileSystem.exists(path.join(projectRoot, normalizedPath));
 

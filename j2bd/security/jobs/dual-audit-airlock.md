@@ -287,7 +287,8 @@ guard privileged @dualAuditGate before influenced = when [
 >> ============================================================
 
 >> Step 1: Data arrives from MCP (auto-tainted src:mcp)
-var @mcpData = @mcp.github.getIssue({ number: 42 })
+import tools { @echo } from mcp "npx -y @modelcontextprotocol/server-everything"
+var @mcpData = @echo("issue #42 data")
 show `MCP data taint: @mcpData.mx.taint`
 >> Expected: ["src:mcp"]
 

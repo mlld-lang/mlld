@@ -1,0 +1,27 @@
+---
+id: config-files
+qa_tier: 2
+title: Config Files
+brief: Project configuration and lock files
+category: config
+tags: [configuration, files, settings]
+related: [config-env-vars, modules-registry]
+related-code: [core/config/Config.ts, core/config/LockFile.ts]
+updated: 2026-01-05
+---
+
+mlld uses dual configuration:
+- `mlld-config.json` - Your project settings (edit manually)
+- `mlld-lock.json` - Auto-generated locks (don't edit)
+
+`mlld validate` warning suppression lives in `mlld-config.json`:
+
+```json
+{
+  "validate": {
+    "suppressWarnings": ["exe-parameter-shadowing"]
+  }
+}
+```
+
+Use suppression when a warning is intentional and reviewed.

@@ -179,6 +179,73 @@ function parseResumeTarget(target: string): ParsedResumeTarget | null {
   return { kind: 'named-checkpoint', checkpointName: trimmed };
 }
 
+function readLiteralCheckpointName(rawName: unknown): string | null {
+  if (typeof rawName === 'string') {
+    return rawName.trim();
+  }
+  if (rawName && typeof rawName === 'object') {
+    const literal = rawName as Record<string, unknown>;
+    if (literal.type === 'Literal' && typeof literal.value === 'string') {
+      return literal.value.trim();
+    }
+  }
+  return null;
+}
+
+function collectDeclaredCheckpointNames(ast: readonly unknown[]): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+
+  const readCheckpointContext = (value: Record<string, unknown>): string | undefined => {
+    const meta =
+      value.meta && typeof value.meta === 'object'
+        ? (value.meta as Record<string, unknown>)
+        : undefined;
+    return typeof meta?.checkpointContext === 'string' ? meta.checkpointContext : undefined;
+  };
+
+  const visit = (node: unknown, insideExeBody: boolean): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        visit(child, insideExeBody);
+      }
+      return;
+    }
+
+    const value = node as Record<string, unknown>;
+    const isDirective = value.type === 'Directive';
+    const isCheckpoint = isDirective && value.kind === 'checkpoint';
+    const isExeDirective = isDirective && value.kind === 'exe';
+
+    if (isCheckpoint) {
+      const values =
+        value.values && typeof value.values === 'object'
+          ? (value.values as Record<string, unknown>)
+          : undefined;
+      const literalName = readLiteralCheckpointName(values?.name);
+      const checkpointContext = readCheckpointContext(value);
+      const isValidCheckpointContext =
+        checkpointContext === undefined || checkpointContext === 'top-level-when-direct';
+      if (literalName && !insideExeBody && isValidCheckpointContext && !seen.has(literalName)) {
+        seen.add(literalName);
+        names.push(literalName);
+      }
+    }
+
+    for (const [key, child] of Object.entries(value)) {
+      const childInsideExeBody = isExeDirective && key === 'values' ? true : insideExeBody;
+      visit(child, childInsideExeBody);
+    }
+  };
+
+  visit(ast, false);
+  return names;
+}
+
 async function applyResumeTargetInvalidation(
   checkpointManager: CheckpointManager,
   resume: string | true | undefined
@@ -352,6 +419,7 @@ export async function interpret(
   const provenanceEnabled = mode === 'debug' ? true : options.provenance === true;
   
   const ast = parseResult.ast;
+  const declaredCheckpointNames = collectDeclaredCheckpointNames(ast);
   
   // Build or use provided PathContext
   let pathContext: PathContext;
@@ -415,6 +483,7 @@ export async function interpret(
       if (options.fresh) {
         await checkpointManager.clear();
       }
+      checkpointManager.augmentNamedCheckpointsFromSource(declaredCheckpointNames);
       await applyResumeTargetInvalidation(checkpointManager, options.resume);
       checkpointManager.beginRun();
       return checkpointManager;

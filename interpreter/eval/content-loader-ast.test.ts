@@ -476,6 +476,55 @@ describe('Content Loader AST patterns', () => {
     expect(files).toEqual([fileA, fileB].sort());
   });
 
+  it('attaches mx metadata to AST selector results, including glob relative paths', async () => {
+    const dir = path.join(process.cwd(), 'ast-mx');
+    const filePath = path.join(dir, 'handler.ts');
+    await fileSystem.writeFile(filePath, [
+      'export function handlePing() {',
+      '  return 1;',
+      '}'
+    ].join('\n'));
+
+    const singleNode = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [{ type: 'definition', name: 'handlePing' }]
+    };
+
+    const rawSingle = await processContentLoader(singleNode as any, env);
+    const { data: singleResults } = unwrapStructuredForTest<Array<any | null>>(rawSingle);
+    const singleMatch = singleResults.find(Boolean) as any;
+    expect(singleMatch?.name).toBe('handlePing');
+    expect(singleMatch?.mx).toEqual(
+      expect.objectContaining({
+        name: 'handlePing',
+        type: 'function',
+        line: 1
+      })
+    );
+
+    const globPath = path.join('ast-mx', '*.ts');
+    const globNode = {
+      type: 'load-content',
+      source: { type: 'path', raw: globPath, segments: [{ type: 'Text', content: globPath }] },
+      ast: [{ type: 'definition', name: 'handlePing' }]
+    };
+
+    const rawGlob = await processContentLoader(globNode as any, env);
+    const { data: globResults } = unwrapStructuredForTest<Array<any | null>>(rawGlob);
+    const globMatch = globResults.find(Boolean) as any;
+    expect(globMatch?.file).toBe(filePath);
+    expect(globMatch?.relative).toBe(`./${path.join('ast-mx', 'handler.ts')}`);
+    expect(globMatch?.mx).toEqual(
+      expect.objectContaining({
+        name: 'handlePing',
+        type: 'function',
+        line: 1,
+        relative: `./${path.join('ast-mx', 'handler.ts')}`
+      })
+    );
+  });
+
   it('rejects mixed content and name-list selectors', async () => {
     const filePath = path.join(process.cwd(), 'mixed-selectors.ts');
     await fileSystem.writeFile(filePath, 'export function createUser() { return 1; }');

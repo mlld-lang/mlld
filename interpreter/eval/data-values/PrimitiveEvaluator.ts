@@ -71,6 +71,10 @@ export class PrimitiveEvaluator {
       return true;
     }
 
+    if (value && typeof value === 'object' && value.type === 'WhenExpression') {
+      return true;
+    }
+
     if (isExpressionNode(value)) {
       return true;
     }
@@ -122,6 +126,12 @@ export class PrimitiveEvaluator {
       const pattern = (value as any).pattern || '';
       const flags = (value as any).flags || '';
       return new RegExp(pattern, flags);
+    }
+
+    if (value && typeof value === 'object' && value.type === 'WhenExpression') {
+      const { evaluateWhenExpression } = await import('../when-expression');
+      const result = await evaluateWhenExpression(value as any, env, { isExpression: true });
+      return result.value;
     }
 
     if (isExpressionNode(value)) {

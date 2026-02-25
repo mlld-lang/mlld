@@ -77,16 +77,21 @@ export async function evaluateFirstMatch(
         }
       }
 
-      if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
-        conditionValue = (actualCondition[0] as any).content;
-      } else if (actualCondition.length === 1 && actualCondition[0].type === 'ExecInvocation') {
-        conditionValue = await runtime.evaluateCondition(actualCondition, env);
+      if (actualCondition.length === 1 && isWildcardConditionNode(actualCondition[0])) {
+        matches = true;
       } else {
-        const conditionResult = await runtime.evaluateNode(actualCondition, env);
-        conditionValue = conditionResult.value;
+        if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
+          conditionValue = (actualCondition[0] as any).content;
+        } else if (actualCondition.length === 1 && actualCondition[0].type === 'ExecInvocation') {
+          conditionValue = await runtime.evaluateCondition(actualCondition, env);
+        } else {
+          const conditionResult = await runtime.evaluateNode(actualCondition, env);
+          conditionValue = conditionResult.value;
+        }
+
+        matches = await runtime.compareValues(expressionValue, conditionValue, env);
       }
 
-      matches = await runtime.compareValues(expressionValue, conditionValue, env);
       if (isNegated) {
         matches = !matches;
       }
@@ -278,4 +283,13 @@ export function validateNonePlacement(conditions: any[]): void {
       );
     }
   }
+}
+
+function isWildcardConditionNode(node: BaseMlldNode | undefined): boolean {
+  return Boolean(
+    node &&
+      node.type === 'Literal' &&
+      (node as any).valueType === 'wildcard' &&
+      (node as any).value === '*'
+  );
 }

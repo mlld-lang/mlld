@@ -138,6 +138,26 @@ export async function executeCodeHandler(
     return finalizeResult(value, { type, text: toStableText(value) });
   }
 
+  if (execDef.language === 'mlld-exe-block') {
+    const blockNode = execDef.codeTemplate[0];
+    if (!blockNode || blockNode.type !== 'ExeBlock') {
+      throw new Error('mlld-exe-block executable missing block content');
+    }
+    const { evaluateExeBlock } = await import('@interpreter/eval/exe');
+    const blockResult = await evaluateExeBlock(blockNode, execEnv);
+    return finalizeResult(blockResult.value);
+  }
+
+  if (execDef.language === 'mlld-env') {
+    const envDirectiveNode = execDef.codeTemplate[0];
+    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'env') {
+      throw new Error('mlld-env executable missing env directive');
+    }
+    const { evaluateEnv } = await import('@interpreter/eval/env');
+    const envResult = await evaluateEnv(envDirectiveNode, execEnv);
+    return finalizeResult(envResult.value);
+  }
+
   const { interpolate } = await import('@interpreter/core/interpreter');
   const { InterpolationContext } = await import('@interpreter/core/interpolation-context');
   const code = await interpolate(execDef.codeTemplate, execEnv, InterpolationContext.Default);

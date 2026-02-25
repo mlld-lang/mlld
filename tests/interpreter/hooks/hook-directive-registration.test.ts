@@ -5,6 +5,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
+import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -31,5 +32,29 @@ describe('/hook directive evaluation', () => {
 
     await evaluateDirective(first, env);
     await expect(evaluateDirective(duplicate, env)).rejects.toThrow(/already exists/);
+  });
+
+  it('emits a warning effect for unknown operation hook filters', async () => {
+    const env = createEnv();
+    const effects = new TestEffectHandler();
+    env.setEffectHandler(effects);
+    const directive = parseSync('/hook after op:nonsense = [ => @output ]')[0] as DirectiveNode;
+
+    await evaluateDirective(directive, env);
+
+    expect(effects.getErrors()).toContain(
+      'Warning: Hook "op:nonsense" uses unknown operation type "nonsense".'
+    );
+  });
+
+  it('does not emit warning effects for known operation hook filters', async () => {
+    const env = createEnv();
+    const effects = new TestEffectHandler();
+    env.setEffectHandler(effects);
+    const directive = parseSync('/hook after op:exe = [ => @output ]')[0] as DirectiveNode;
+
+    await evaluateDirective(directive, env);
+
+    expect(effects.getErrors()).toBe('');
   });
 });
