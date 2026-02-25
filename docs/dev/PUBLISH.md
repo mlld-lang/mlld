@@ -104,7 +104,7 @@ Publishes both `mlld` and `mlldx` packages with the same tag. Syncs mlldx versio
 
 - The package.json script is `pub`, not `publish:all` — the workflow calls the script directly via `node scripts/publish-with-mlldx.cjs`
 - Go SDK has no publish job — it uses git tags (`sdk/go/v{version}`), pkg.go.dev indexes automatically
-- PyPI uses OIDC trusted publishing (no API key secret needed)
+- PyPI and RubyGems use OIDC trusted publishing (no API key secrets needed)
 - `cargo publish --allow-dirty` is required because synced `Cargo.toml` isn't committed yet at publish time
 - If finalize fails after some packages published, re-run with `workflow_dispatch` — idempotency checks skip already-published targets
 
