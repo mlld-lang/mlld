@@ -2,7 +2,7 @@
 id: templates-loops
 title: Loops in Templates
 brief: For loops inside template bodies
-category: syntax
+category: core
 parent: templates
 tags: [templates, loops, for]
 related: [for-block, templates-basics]

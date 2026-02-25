@@ -3,7 +3,7 @@ id: sdk-analyze-module
 qa_tier: 3
 title: Analyze Module
 brief: Static analysis without execution
-category: configuration
+category: sdk
 parent: sdk
 tags: [configuration, sdk, analysis, static-analysis]
 related: [config-sdk-execute, modules-exporting]

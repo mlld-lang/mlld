@@ -3,8 +3,8 @@ id: labels-influenced
 qa_tier: 2
 title: Influenced Label
 brief: Track LLM outputs affected by untrusted data
-category: security
-parent: security
+category: effects
+parent: labels
 tags: [labels, influenced, llm, untrusted]
 related: [labels-overview, labels-source-auto, pattern-audit-guard, pattern-dual-audit]
 related-code: [core/policy/builtin-rules.ts]

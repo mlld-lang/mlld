@@ -2,7 +2,8 @@
 id: mcp-export
 title: Exporting MCP Tools
 brief: Serve exe functions as MCP tools with mlld mcp
-category: commands
+category: mcp
+parent: mcp
 tags: [mcp, export, tools, server, serve]
 related: [mcp, mcp-tool-gateway, tool-reshaping, exe-metadata, mcp-security]
 related-code: [cli/mcp/MCPServer.ts, cli/mcp/MCPOrchestrator.ts, cli/mcp/SchemaGenerator.ts]

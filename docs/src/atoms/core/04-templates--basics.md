@@ -2,7 +2,7 @@
 id: templates-basics
 title: Templates Basics
 brief: String interpolation with backticks and double-colon
-category: syntax
+category: core
 parent: templates
 aliases: [template]
 tags: [templates, strings, interpolation]

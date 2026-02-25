@@ -2,7 +2,7 @@
 id: exe-blocks
 title: Exe Block Syntax
 brief: Multi-statement function bodies
-category: commands
+category: core
 parent: exe
 tags: [functions, blocks, let, accumulation]
 related: [exe-simple, exe-when, for-block]

@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-02-25T00:14:45.257Z
+Generated: 2026-02-25T00:33:22.498Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -437,7 +437,7 @@ show @welcome("Alice", "admin")
 
 The `.att` file uses `@var` for interpolation and supports full mlld syntax inside:
 
-```att
+```mlld
 >> prompts/welcome.att
 Hello @name!
 
@@ -472,7 +472,7 @@ If `.att` syntax conflicts with your content, use `.mtt` files instead. Common c
 exe @codeReview(files, instructions) = template "./prompts/review.mtt"
 ```
 
-```mtt
+```text
 >> prompts/review.mtt - uses {{var}} syntax
 Review these files: {{files}}
 
@@ -1263,7 +1263,7 @@ var @email = `user@@example.com`  >> "user@example.com"
 
 In `.att` template files:
 
-```att
+```mlld
 Contact: user@@example.com
 Follow @@username on Twitter
 ```

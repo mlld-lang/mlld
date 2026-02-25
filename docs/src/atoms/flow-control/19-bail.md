@@ -2,7 +2,7 @@
 id: bail
 title: Bail Directive
 brief: Terminate script execution with exit code 1
-category: control-flow
+category: flow-control
 tags: [exit, termination, error-handling]
 related: [if, when, no-early-exit]
 related-code: [interpreter/eval/bail.ts, grammar/directives/bail.peggy, core/errors/MlldBailError.ts]

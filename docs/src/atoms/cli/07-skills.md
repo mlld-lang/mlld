@@ -3,8 +3,7 @@ id: plugin
 qa_tier: 2
 title: Claude Code Plugin
 brief: Install the mlld plugin for Claude Code
-category: configuration
-parent: cli
+category: cli
 tags: [cli, plugin, claude-code, setup]
 related: [config-cli-run]
 related-code: [cli/commands/plugin.ts]

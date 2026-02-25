@@ -2,7 +2,8 @@
 id: mcp-basics
 title: MCP Integration
 brief: Serve mlld functions as MCP tools and import external MCP servers
-category: commands
+category: mcp
+parent: mcp
 tags: [mcp, tools, export, import, server]
 related: [mcp-export, mcp-import, mcp-tool-gateway, tool-reshaping, mcp-security]
 related-code: [cli/mcp/MCPServer.ts, cli/mcp/MCPOrchestrator.ts]

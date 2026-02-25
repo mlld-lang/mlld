@@ -2,8 +2,7 @@
 id: log
 title: Log Directive
 brief: Syntactic sugar for output to stderr
-category: commands
-parent: commands
+category: output
 tags: [output, logging, stderr, sugar]
 related: [output, for-arrow]
 related-code: [interpreter/eval/log.ts, grammar/patterns/log.peggy]

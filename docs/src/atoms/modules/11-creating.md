@@ -4,7 +4,6 @@ qa_tier: 2
 title: Creating Modules
 brief: Module structure with frontmatter and exports
 category: modules
-parent: modules
 tags: [modules, frontmatter, exports, creation]
 related: [modules-exporting, modules-importing-local]
 related-code: [interpreter/eval/import.ts, core/module/Module.ts]

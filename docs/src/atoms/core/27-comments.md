@@ -2,8 +2,7 @@
 id: comments
 title: Comments
 brief: Line and end-of-line comments
-category: syntax
-parent: syntax
+category: core
 tags: [comments, documentation]
 related: []
 related-code: [grammar/patterns/comment.peggy]

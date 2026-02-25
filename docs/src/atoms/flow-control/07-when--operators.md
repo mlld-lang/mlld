@@ -2,7 +2,7 @@
 id: when-operators
 title: Operators in When Conditions
 brief: Comparison and logical operators
-category: control-flow
+category: flow-control
 parent: when
 tags: [conditionals, operators]
 related: [when, when-inline]

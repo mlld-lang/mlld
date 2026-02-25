@@ -3,8 +3,7 @@ id: hooks
 qa_tier: 2
 title: Hooks
 brief: Lifecycle hooks for observability and transforms
-category: commands
-parent: commands
+category: effects
 tags: [hooks, lifecycle, observability, before, after]
 related: [exe-simple, guards-basics, append]
 related-code: [interpreter/hooks/HookManager.ts, interpreter/hooks/HookRegistry.ts, grammar/directives/hook.peggy]

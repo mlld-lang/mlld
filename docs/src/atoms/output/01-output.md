@@ -2,8 +2,7 @@
 id: output-directive
 title: Output Directive
 brief: Write data to files or streams
-category: commands
-parent: commands
+category: output
 tags: [output, files, streams, io]
 related: [log, append]
 related-code: [interpreter/eval/output.ts, grammar/patterns/output.peggy]

@@ -3,8 +3,8 @@ id: env-config
 qa_tier: 2
 title: Environment Configuration
 brief: Configure filesystem, network, limits, and credentials for environments
-category: security
-parent: security
+category: config
+parent: env
 tags: [environments, configuration, isolation, credentials, limits, mcp]
 related: [env-overview, env-directive, security-policies, mcp-security, mcp-policy, mcp-guards]
 related-code: [interpreter/eval/env.ts, interpreter/env/Environment.ts, interpreter/eval/env-mcp-config.test.ts]

@@ -3,8 +3,7 @@ id: checkpoint
 qa_tier: 2
 title: Checkpoint & Resume
 brief: Cache LLM call results and resume interrupted runs
-category: configuration
-parent: cli
+category: cli
 aliases: [resume, cache, fresh, fork]
 tags: [checkpoint, resume, cache, llm, cli]
 related: [config-cli-run, hooks, exe-simple]

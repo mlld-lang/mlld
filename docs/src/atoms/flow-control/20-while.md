@@ -3,7 +3,7 @@ id: while
 qa_tier: 2
 title: While Loops
 brief: Bounded iteration with done/continue control
-category: control-flow
+category: flow-control
 tags: [iteration, loops]
 related: [for-arrow]
 related-code: [interpreter/eval/while.ts]

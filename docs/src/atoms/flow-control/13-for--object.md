@@ -3,7 +3,7 @@ id: for-object
 qa_tier: 2
 title: Object Iteration
 brief: Iterating over object key-value pairs
-category: control-flow
+category: flow-control
 parent: for
 tags: [iteration, loops, objects]
 related: [for-arrow]

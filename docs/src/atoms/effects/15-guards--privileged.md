@@ -3,8 +3,8 @@ id: guards-privileged
 qa_tier: 2
 title: Privileged Guards
 brief: Guards that cannot be bypassed
-category: security
-parent: security
+category: effects
+parent: guards
 tags: [guards, privileged, policy, labels, trust, security]
 related: [security-guards-basics, label-modification, pattern-audit-guard, security-policies]
 related-code: [core/policy/guards.ts, interpreter/hooks/guard-pre-hook.ts, interpreter/hooks/guard-post-hook.ts]

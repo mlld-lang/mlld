@@ -3,7 +3,7 @@ id: mcp-policy
 title: MCP Policy Rules
 brief: Control what MCP-sourced data can do with label flow rules
 category: security
-parent: security
+parent: mcp-security
 tags: [mcp, policy, labels, label-flow, security]
 related: [mcp, mcp-security, mcp-guards, mcp-import, security-policies]
 related-code: [interpreter/eval/policy.ts, interpreter/eval/exec-invocation.ts]

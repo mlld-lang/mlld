@@ -2,7 +2,7 @@
 id: security-guards-basics
 title: Guards Basics
 brief: Protect data and operations with guards
-category: security
+category: effects
 parent: guards
 aliases: [guard]
 tags: [security, guards, labels, policies]

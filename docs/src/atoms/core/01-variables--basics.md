@@ -2,7 +2,7 @@
 id: variables-basics
 title: Variables Basics
 brief: Create primitives, arrays, objects, or assign from command/code results
-category: syntax
+category: core
 parent: variables
 aliases: [var, variable]
 tags: [variables, primitives, arrays, objects]

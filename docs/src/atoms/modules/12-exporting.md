@@ -3,7 +3,6 @@ id: modules-exporting
 title: Exporting from Modules
 brief: Control which items are visible to importers
 category: modules
-parent: modules
 tags: [modules, exports, encapsulation, api]
 related: [modules-creating, modules-importing-registry, env-overview, policy-auth]
 related-code: [interpreter/eval/export.ts, grammar/patterns/export.peggy]

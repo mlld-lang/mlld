@@ -3,8 +3,8 @@ id: labels-trust
 qa_tier: 2
 title: Trust Labels
 brief: trusted and untrusted - blocking dangerous flows from unverified data
-category: security
-parent: security
+category: effects
+parent: labels
 tags: [labels, trust, untrusted, security, policy]
 related: [labels-overview, labels-sensitivity, labels-source-auto, policy-label-flow, policy-operations]
 related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]

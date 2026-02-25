@@ -3,8 +3,7 @@ id: stream
 qa_tier: 2
 title: Streaming
 brief: Stream output during execution
-category: commands
-parent: commands
+category: output
 tags: [streaming, output, parallel]
 related: [exe-simple, pipelines-parallel]
 related-code: [interpreter/eval/stream.ts, grammar/patterns/stream.peggy]

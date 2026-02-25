@@ -2,7 +2,7 @@
 id: for-parallel
 title: Parallel For
 brief: Concurrent iteration with for parallel
-category: control-flow
+category: flow-control
 parent: for
 tags: [iteration, loops, parallel, concurrency]
 related: [for-arrow, for-block]

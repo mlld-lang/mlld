@@ -3,7 +3,7 @@ id: exe-prose
 qa_tier: 2
 title: Exe Prose Syntax
 brief: LLM-interpreted DSL execution syntax
-category: commands
+category: core
 parent: exe
 tags: [prose, llm, skills, interpolation, dsl]
 related: [exe-simple, exe-blocks, prose]

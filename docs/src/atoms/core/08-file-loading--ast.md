@@ -3,7 +3,7 @@ id: file-loading-ast
 qa_tier: 2
 title: AST Selection
 brief: Extract code definitions from source files
-category: syntax
+category: core
 parent: file-loading
 tags: [files, ast, code-extraction, wildcards]
 related: [file-loading-basics, file-loading-metadata]

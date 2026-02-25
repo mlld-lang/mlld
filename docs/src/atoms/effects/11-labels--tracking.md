@@ -2,7 +2,7 @@
 id: security-label-tracking
 title: Label Tracking
 brief: How labels flow through operations
-category: security
+category: effects
 parent: labels
 aliases: [label]
 tags: [security, labels, tracking, flow]

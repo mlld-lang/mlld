@@ -2,7 +2,7 @@
 id: exe-metadata
 title: Exe Metadata
 brief: Add descriptions and typed parameters to executables
-category: commands
+category: core
 parent: exe
 tags: [functions, metadata, types, mcp, tools]
 related: [exe-simple, exe-blocks, mcp-export, mcp-tool-gateway]

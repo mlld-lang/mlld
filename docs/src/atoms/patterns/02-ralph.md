@@ -4,7 +4,6 @@ qa_tier: 3
 title: Ralph Loop Pattern
 brief: Autonomous agent loop with fresh context and test backpressure
 category: patterns
-parent: patterns
 tags: [patterns, agents, loops, orchestration, autonomous]
 related: [loop, pattern-gate, pattern-llm-integration, config-sdk-execute, checkpoint, hooks]
 related-code: [interpreter/eval/loop.ts]

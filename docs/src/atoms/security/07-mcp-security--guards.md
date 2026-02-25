@@ -3,7 +3,7 @@ id: mcp-guards
 title: Guards for MCP Tool Calls
 brief: Inspect, block, and transform MCP tool calls with guards
 category: security
-parent: security
+parent: mcp-security
 tags: [mcp, guards, for secret, src:mcp, security]
 related: [mcp, mcp-security, mcp-policy, mcp-import, security-guards-basics]
 related-code: [interpreter/eval/exec-invocation.ts, interpreter/eval/guard.ts]

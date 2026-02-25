@@ -3,7 +3,7 @@ id: for-skip
 qa_tier: 2
 title: Skip Keyword
 brief: Dropping items from iteration results
-category: control-flow
+category: flow-control
 parent: for
 tags: [iteration, loops, filtering]
 related: [for-filter]

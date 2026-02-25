@@ -3,7 +3,6 @@ id: security-getting-started
 title: Security Getting Started
 brief: Progressive levels of engagement from zero-config to full custom security
 category: security
-parent: security
 tags: [security, onboarding, policy, guards, needs, environments, getting-started]
 related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, env-overview, labels-overview]
 updated: 2026-02-15

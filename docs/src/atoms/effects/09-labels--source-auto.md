@@ -2,8 +2,8 @@
 id: labels-source-auto
 title: Automatic Source Labels
 brief: System-applied labels that track data provenance
-category: security
-parent: security
+category: effects
+parent: labels
 tags: [labels, taint, provenance, automatic, security]
 related: [labels-overview, security-label-tracking, security-guards-basics, labels-sensitivity]
 related-code: [core/security/taint.ts, interpreter/eval/label-modification.ts]

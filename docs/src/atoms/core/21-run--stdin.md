@@ -3,7 +3,7 @@ id: run-stdin
 qa_tier: 2
 title: Run Command Stdin
 brief: Pass data via stdin to commands
-category: commands
+category: core
 parent: run
 tags: [execution, commands, stdin, pipes]
 related: [run-basics, pipelines-basics]

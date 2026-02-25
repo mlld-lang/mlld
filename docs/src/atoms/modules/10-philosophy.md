@@ -4,7 +4,6 @@ qa_tier: 3
 title: Module Philosophy
 brief: Module-first design principles
 category: modules
-parent: modules
 tags: [modules, design, principles]
 related: [modules-creating, modules-exporting]
 related-code: []

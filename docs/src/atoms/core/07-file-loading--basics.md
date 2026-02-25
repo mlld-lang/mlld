@@ -2,7 +2,7 @@
 id: file-loading-basics
 title: File Loading Basics
 brief: Load file contents, sections, and globs
-category: syntax
+category: core
 parent: file-loading
 aliases: [file, files, load]
 tags: [files, loading, angle-brackets, globs, sections, optional]

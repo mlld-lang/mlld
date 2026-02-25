@@ -2,7 +2,7 @@
 id: escaping-at
 title: Escaping @ Symbol
 brief: Output literal @ without variable interpolation
-category: syntax
+category: core
 parent: escaping
 tags: [escaping, templates, special-characters]
 related: [templates-basics, templates-external, escaping-basics]

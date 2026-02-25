@@ -2,7 +2,8 @@
 id: mcp-tool-gateway
 title: Tool Collections
 brief: Define tool sets with labels, scoping, and metadata for agents
-category: commands
+category: mcp
+parent: mcp
 tags: [mcp, tools, env, labels, collections]
 related: [mcp, mcp-export, tool-reshaping, mcp-guards, exe-metadata]
 related-code: [interpreter/eval/var.ts, cli/mcp/FunctionRouter.ts, cli/mcp/MCPOrchestrator.ts]

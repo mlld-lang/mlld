@@ -2,8 +2,7 @@
 id: auth
 title: Auth
 brief: Standalone credential declarations for using auth:*
-category: security
-parent: security
+category: config
 tags: [auth, keychain, credentials, secrets, security]
 related: [policy-auth, security-policies, policy-capabilities]
 related-code: [interpreter/utils/auth-injection.ts, core/policy/union.ts, interpreter/policy/keychain-policy.ts, cli/commands/keychain.ts]

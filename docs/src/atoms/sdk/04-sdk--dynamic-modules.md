@@ -3,7 +3,7 @@ id: sdk-dynamic-modules
 qa_tier: 3
 title: Dynamic Module Injection
 brief: Inject runtime context without filesystem I/O
-category: configuration
+category: sdk
 parent: sdk
 tags: [configuration, sdk, modules, injection, payload]
 related: [config-sdk-execution-modes, config-sdk-execute, security-automatic-labels, syntax-payload]

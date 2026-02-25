@@ -2,7 +2,7 @@
 id: run-cwd
 title: Run Command Working Directory
 brief: Override working directory for command execution
-category: commands
+category: core
 parent: run
 tags: [execution, commands, cwd, directory]
 related: [run-basics]

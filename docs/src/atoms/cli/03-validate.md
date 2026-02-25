@@ -2,8 +2,7 @@
 id: validate-features
 title: Validate Features
 brief: Static analysis warnings and error detection
-category: configuration
-parent: config-files
+category: cli
 tags: [validation, warnings, static-analysis, undefined-variables, templates]
 related: [config-files, config-cli-run]
 related-code: [cli/commands/analyze.ts, core/registry/ConfigFile.ts]

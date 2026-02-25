@@ -3,8 +3,7 @@ id: environment-variables
 qa_tier: 2
 title: Environment Variables
 brief: Import environment variables via @input
-category: configuration
-parent: configuration
+category: config
 tags: [configuration, environment, variables, input]
 related: [config-files, reserved-variables]
 related-code: [interpreter/eval/import.ts, core/env/EnvironmentVariables.ts]

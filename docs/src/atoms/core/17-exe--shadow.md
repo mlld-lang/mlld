@@ -3,7 +3,7 @@ id: exe-shadow
 qa_tier: 2
 title: Exe Shadow Environments
 brief: Expose helpers to all code blocks (JS, Node, Python)
-category: commands
+category: core
 parent: exe
 tags: [functions, javascript, python, node, environment, reusable]
 related: [exe-simple, run-basics]

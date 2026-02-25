@@ -2,7 +2,7 @@
 id: security-guard-composition
 title: Guard Composition
 brief: How multiple guards resolve
-category: security
+category: effects
 parent: guards
 tags: [security, guards, composition, resolution]
 related: [security-guards-basics]

@@ -2,7 +2,7 @@
 id: escaping-basics
 title: Escaping Overview
 brief: Handle special characters and edge cases in templates
-category: syntax
+category: core
 parent: escaping
 tags: [escaping, templates, special-characters]
 related: [escaping-at, escaping-defaults, templates-basics]

@@ -2,7 +2,8 @@
 id: tool-reshaping
 title: Tool Reshaping
 brief: Bind and expose parameters to customize tool interfaces
-category: commands
+category: mcp
+parent: mcp
 tags: [tools, mcp, bind, expose, parameters]
 related: [mcp-tool-gateway, mcp-export, exe-metadata, exe-simple]
 related-code: [cli/mcp/FunctionRouter.ts, cli/mcp/SchemaGenerator.ts]

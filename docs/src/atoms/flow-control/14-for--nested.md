@@ -2,7 +2,7 @@
 id: for-nested
 title: Nested For Loops
 brief: For loops inside for loops
-category: control-flow
+category: flow-control
 parent: for
 tags: [iteration, loops]
 related: [for-arrow]

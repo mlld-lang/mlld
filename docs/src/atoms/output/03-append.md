@@ -2,8 +2,7 @@
 id: append
 title: Append Directive
 brief: Append newline-delimited records
-category: commands
-parent: commands
+category: output
 tags: [output, append, jsonl, logging]
 related: [output, log, pipelines-basics]
 related-code: [interpreter/eval/append.ts, grammar/patterns/append.peggy]

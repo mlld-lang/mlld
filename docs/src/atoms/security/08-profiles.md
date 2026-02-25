@@ -3,7 +3,6 @@ id: profiles
 title: Profiles
 brief: Tiered capability bundles for graceful degradation
 category: security
-parent: security
 tags: [profiles, capabilities, degradation, policy, needs, environments]
 related: [policy-composition, env-config, env-blocks, policy-capabilities, security-needs-declaration]
 related-code: [interpreter/eval/profiles.ts, core/policy/needs.ts, interpreter/eval/env.ts]

@@ -2,7 +2,7 @@
 id: security-transform-with-allow
 title: Transform with Allow
 brief: Transform data during guard evaluation
-category: security
+category: effects
 parent: guards
 tags: [security, guards, transform, allow]
 related: [security-guards-basics]

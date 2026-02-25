@@ -3,8 +3,7 @@ id: cli-file
 qa_tier: 2
 title: Direct File Invocation
 brief: Run mlld files with payload, timeout, and metrics
-category: configuration
-parent: cli
+category: cli
 tags: [cli, file, payload, timeout, metrics]
 related: [syntax-payload, config-cli-run, config-sdk-dynamic-modules]
 related-code: [cli/parsers/ArgumentParser.ts, cli/execution/FileProcessor.ts]

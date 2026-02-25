@@ -3,7 +3,7 @@ id: audit-log
 title: Audit Log
 brief: Event ledgers for labels, taint, and signatures
 category: security
-parent: security
+parent: audit-log
 tags: [audit, security, labels, signing, taint]
 related: [labels-overview, label-modification, signing-overview, policy-label-flow, security-label-tracking]
 related-code: [core/security/AuditLogger.ts, core/security/AuditLogIndex.ts, core/security/sig-adapter.ts, interpreter/utils/audit-log.ts]

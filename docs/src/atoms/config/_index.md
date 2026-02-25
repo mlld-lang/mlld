@@ -2,7 +2,7 @@
 id: configuration
 title: Configuration
 brief: Config files, environment variables, and SDK integration
-category: configuration
+category: config
 updated: 2026-01-05
 ---
 

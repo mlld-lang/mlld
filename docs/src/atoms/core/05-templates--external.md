@@ -2,7 +2,7 @@
 id: templates-external
 title: External Template Files (.att)
 brief: Use exe with template keyword for .att files
-category: syntax
+category: core
 parent: templates
 tags: [templates, files, att, interpolation]
 related: [exe-simple, modules-import-templates, mistake-att-angle-bracket, escaping-at]

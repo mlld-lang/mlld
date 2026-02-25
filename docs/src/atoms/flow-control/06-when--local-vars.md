@@ -3,7 +3,7 @@ id: when-local-vars
 qa_tier: 2
 title: Local Variables in When
 brief: Block-scoped variables with let
-category: control-flow
+category: flow-control
 parent: when
 tags: [conditionals, variables, scope]
 related: [when-blocks]

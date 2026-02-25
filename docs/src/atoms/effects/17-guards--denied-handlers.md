@@ -2,7 +2,7 @@
 id: security-denied-handlers
 title: Denied Handlers
 brief: Handle denied operations gracefully
-category: security
+category: effects
 parent: guards
 tags: [security, guards, denied, error-handling]
 related: [security-guards-basics, when]

@@ -2,7 +2,7 @@
 id: run-params
 title: Run Parameter Syntax
 brief: Parameter passing conventions by language
-category: commands
+category: core
 parent: run
 tags: [execution, commands, parameters, javascript, python]
 related: [run-basics, exe-simple]

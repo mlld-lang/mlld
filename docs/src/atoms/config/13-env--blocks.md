@@ -3,8 +3,8 @@ id: env-blocks
 qa_tier: 2
 title: Environment Blocks
 brief: Scoped execution within an environment configuration
-category: security
-parent: security
+category: config
+parent: env
 tags: [environments, blocks, isolation, scoping]
 related: [env-overview, env-config, security-policies]
 related-code: [interpreter/eval/env.ts, grammar/directives/env.peggy]

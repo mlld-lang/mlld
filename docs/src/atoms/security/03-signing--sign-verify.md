@@ -4,7 +4,7 @@ qa_tier: 2
 title: Sign and Verify
 brief: Directive syntax for signing and verification
 category: security
-parent: security
+parent: signing
 tags: [signing, verification, cryptography]
 related: [signing-overview, autosign-autoverify]
 related-code: [core/security/sig-adapter.ts, interpreter/eval/sign-verify.ts, cli/commands/verify.ts]

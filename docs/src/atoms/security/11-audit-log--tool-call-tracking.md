@@ -3,6 +3,7 @@ id: tool-call-tracking
 title: Tool Call Tracking
 brief: Track exe invocations with @mx.tools namespace
 category: security
+parent: audit-log
 tags: [tools, guards, mx, tracking]
 related: [mcp, mcp-tool-gateway, security-guards-basics, env-directive]
 related-code: [interpreter/env/ContextManager.ts, cli/mcp/FunctionRouter.ts]

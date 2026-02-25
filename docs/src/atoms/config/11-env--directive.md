@@ -2,7 +2,8 @@
 id: env-directive
 title: Environment Directive
 brief: Scoped execution with isolation, credentials, and capability control
-category: commands
+category: config
+parent: env
 tags: [environment, isolation, credentials, tools, scoping, security]
 related: [env-overview, env-config, env-blocks, policy-auth, security-getting-started]
 related-code: [interpreter/eval/env.ts, interpreter/env/Environment.ts, interpreter/env/environment-provider.ts]

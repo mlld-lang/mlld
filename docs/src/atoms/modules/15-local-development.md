@@ -4,7 +4,6 @@ qa_tier: 2
 title: Local Development Modules
 brief: Dev modules in llm/modules/ directory
 category: modules
-parent: modules
 tags: [modules, development, local]
 related: [modules-import-types, modules-importing-local]
 related-code: [core/resolvers/LocalModuleResolver.ts]

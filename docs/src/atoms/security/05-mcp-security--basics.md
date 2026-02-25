@@ -3,7 +3,7 @@ id: mcp-security
 title: MCP Output Tainting
 brief: All MCP tool outputs automatically carry src:mcp provenance
 category: security
-parent: security
+parent: mcp-security
 tags: [mcp, taint, provenance, src:mcp, security]
 related: [mcp, mcp-import, mcp-policy, mcp-guards, labels-source-auto]
 related-code: [interpreter/eval/exec-invocation.ts, core/types/security.ts]

@@ -2,7 +2,7 @@
 id: when-blocks
 title: Block Actions in When
 brief: Side effects and return with block syntax
-category: control-flow
+category: flow-control
 parent: when
 tags: [conditionals, blocks]
 related: [when, exe-blocks, if]

@@ -3,7 +3,8 @@ id: when
 qa_tier: 1
 title: When
 brief: Select the first matching branch
-category: control-flow
+category: flow-control
+parent: when
 tags: [conditionals, branching]
 related: [when-inline, when-blocks, if]
 related-code: [interpreter/eval/when.ts]

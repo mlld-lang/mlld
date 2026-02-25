@@ -2,7 +2,7 @@
 id: for-context
 title: For Loop Context
 brief: Access loop state with @mx.for and @item.mx.index
-category: control-flow
+category: flow-control
 parent: for
 tags: [iteration, loops, metadata, context]
 related: [for-arrow, for-block, for-parallel, for-object]

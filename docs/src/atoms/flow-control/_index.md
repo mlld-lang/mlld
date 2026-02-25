@@ -2,7 +2,7 @@
 id: control-flow
 title: Control Flow
 brief: Conditionals, iteration, and execution flow
-category: control-flow
+category: flow-control
 updated: 2026-01-30
 ---
 

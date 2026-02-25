@@ -3,7 +3,6 @@ id: pattern-guarded-tool-export
 title: Guarded Tool Export
 brief: Wrap mlld functions as MCP tools with bound context and guards
 category: patterns
-parent: patterns
 tags: [mcp, tools, bind, expose, guards, export, pattern]
 related: [mcp, mcp-export, tool-reshaping, mcp-tool-gateway, mcp-guards]
 related-code: [cli/mcp/FunctionRouter.ts, cli/mcp/SchemaGenerator.ts, interpreter/eval/guard.ts]

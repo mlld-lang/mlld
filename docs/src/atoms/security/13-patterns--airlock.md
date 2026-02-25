@@ -4,7 +4,7 @@ qa_tier: 2
 title: Dual-Audit Airlock Pattern
 brief: Two-call information bottleneck for hardened prompt injection defense
 category: security
-parent: security
+parent: patterns
 tags: [pattern, audit, guard, signing, verification, influenced, security, prompt-injection, dual-audit, airlock]
 related: [pattern-audit-guard, signing-overview, sign-verify, autosign-autoverify, labels-influenced, guards-privileged]
 related-code: [llm/run/j2bd/security/impl/main.mld]

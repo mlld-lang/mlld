@@ -3,8 +3,8 @@ id: env-overview
 qa_tier: 2
 title: Environment Overview
 brief: Execution contexts with credentials, isolation, and capabilities
-category: security
-parent: security
+category: config
+parent: env
 tags: [environments, credentials, isolation, capabilities, providers]
 related: [env-config, env-blocks, policy-auth, policy-capabilities, env-directive, security-guards-basics, security-policies]
 related-code: [interpreter/eval/env.ts, interpreter/env/Environment.ts]

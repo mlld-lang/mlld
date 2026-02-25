@@ -2,7 +2,7 @@
 id: foreach
 title: Foreach
 brief: Transform collections by applying a function to each element
-category: control-flow
+category: flow-control
 tags: [iteration, transformation, arrays]
 related: [for-arrow, for-collection]
 related-code: [interpreter/eval/foreach.ts]

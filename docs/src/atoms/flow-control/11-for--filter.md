@@ -3,7 +3,7 @@ id: for-filter
 qa_tier: 2
 title: For with Inline Filter
 brief: Filtering during iteration with when clause
-category: control-flow
+category: flow-control
 parent: for
 tags: [iteration, loops, filtering]
 related: [for-arrow, for-skip]

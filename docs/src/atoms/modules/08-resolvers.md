@@ -4,7 +4,6 @@ qa_tier: 2
 title: Custom Resolvers
 brief: Configure custom @ prefixes for imports
 category: modules
-parent: modules
 tags: [modules, resolvers, prefixes, configuration]
 related: [modules-importing-registry, modules-importing-local]
 related-code: [core/resolvers/ResolverRegistry.ts, core/config/ResolverConfig.ts]

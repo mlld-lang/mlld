@@ -2,8 +2,8 @@
 id: security-policies
 title: Policies
 brief: Define and import policy objects
-category: security
-parent: guards
+category: config
+parent: policy
 tags: [security, policies, guards]
 related: [security-guards-basics, policy-operations, policy-composition, policy-capabilities, policy-label-flow, policy-auth, auth]
 related-code: [interpreter/eval/policy.ts]

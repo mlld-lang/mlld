@@ -3,7 +3,7 @@ id: loop
 qa_tier: 2
 title: Loop Blocks
 brief: Block iteration with done/continue control
-category: control-flow
+category: flow-control
 tags: [iteration, loops]
 related: [while]
 related-code: [interpreter/eval/loop.ts]

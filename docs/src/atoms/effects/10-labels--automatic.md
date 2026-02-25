@@ -2,7 +2,7 @@
 id: security-automatic-labels
 title: Automatic Labels
 brief: System-assigned labels for tracking
-category: security
+category: effects
 parent: labels
 tags: [security, labels, automatic, tracking]
 related: [security-guards-basics, security-label-tracking]

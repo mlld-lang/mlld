@@ -3,8 +3,7 @@ id: cli-run
 qa_tier: 2
 title: mlld run Command
 brief: Execute scripts with payload injection
-category: configuration
-parent: cli
+category: cli
 tags: [cli, run, scripts, payload, checkpoint, resume]
 related: [syntax-payload, config-sdk-dynamic-modules, config-cli-file, checkpoint]
 related-code: [cli/commands/run.ts]

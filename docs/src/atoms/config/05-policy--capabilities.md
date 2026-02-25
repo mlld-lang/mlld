@@ -3,8 +3,8 @@ id: policy-capabilities
 qa_tier: 2
 title: Policy Capabilities
 brief: Restrict tools, filesystem, and network access
-category: security
-parent: security
+category: config
+parent: policy
 tags: [policy, capabilities, allow, deny, danger, filesystem, network]
 related: [security-policies, policy-auth, env-config, policy-composition, policy-label-flow]
 related-code: [core/policy/capability-patterns.ts, interpreter/policy/filesystem-policy.ts]

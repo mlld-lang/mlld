@@ -2,8 +2,8 @@
 id: labels-overview
 title: Labels Overview
 brief: What labels are and why they matter
-category: security
-parent: security
+category: effects
+parent: labels
 tags: [labels, taint, security, tracking]
 related: [labels-source-auto, labels-sensitivity, security-label-tracking]
 related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]

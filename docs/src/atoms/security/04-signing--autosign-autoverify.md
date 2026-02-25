@@ -4,7 +4,7 @@ qa_tier: 2
 title: Autosign and Autoverify
 brief: Policy automation for signing and verification
 category: security
-parent: security
+parent: signing
 tags: [signing, verification, policy, automation]
 related: [signing-overview, sign-verify]
 related-code: [core/security/sig-adapter.ts, interpreter/eval/auto-sign.ts, interpreter/eval/exec-invocation.ts]

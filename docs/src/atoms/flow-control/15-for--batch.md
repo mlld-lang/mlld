@@ -3,7 +3,7 @@ id: for-batch
 qa_tier: 2
 title: Batch Pipelines
 brief: Processing collected results with trailing pipeline
-category: control-flow
+category: flow-control
 parent: for
 tags: [iteration, loops, pipelines]
 related: [for-collection, pipelines-basics]

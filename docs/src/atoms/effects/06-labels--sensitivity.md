@@ -2,8 +2,8 @@
 id: labels-sensitivity
 title: Sensitivity Labels
 brief: secret, pii, sensitive - protecting confidential data
-category: security
-parent: security
+category: effects
+parent: labels
 tags: [labels, sensitivity, secret, pii, security]
 related: [labels-overview, labels-trust, labels-source-auto, security-guards-basics]
 related-code: [core/security/taint.ts, interpreter/eval/label-modification.ts]

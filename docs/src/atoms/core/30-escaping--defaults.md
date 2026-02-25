@@ -2,7 +2,7 @@
 id: escaping-defaults
 title: Default Values
 brief: Provide fallbacks for missing or undefined values
-category: syntax
+category: core
 parent: escaping
 tags: [escaping, defaults, null-safety]
 related: [variables-conditional, escaping-at]

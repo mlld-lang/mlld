@@ -1,5 +1,5 @@
 ---
-updated: 2026-02-23
+updated: 2026-02-25
 tags: #docs, #cli, #atoms, #howto
 related-docs: docs/dev/DOCS.md, docs/dev/DOCS-LLM.md
 ---
@@ -24,24 +24,19 @@ This pattern was developed for mlld and is designed to be adopted by other tools
 ```
 project/
 ├── docs/
-│   ├── src/
-│   │   └── atoms/           # SOURCE OF TRUTH
-│   │       ├── category-a/
-│   │       │   ├── _index.md
-│   │       │   ├── topic-1.md
-│   │       │   ├── topic-2.md
-│   │       │   └── subtopic-a.md
-│   │       └── category-b/
-│   │           └── ...
-│   ├── build/               # Build scripts
-│   │   ├── howto/
-│   │   │   ├── topic-1.mld
-│   │   │   └── topic-2.mld
-│   │   └── llm/
-│   │       └── combined.mld
-│   └── templates/           # Output format templates
-│       ├── llm.att
-│       └── howto.att
+│   └── src/
+│       └── atoms/           # SOURCE OF TRUTH (filesystem = hierarchy)
+│           ├── intro.md     # Root quickstart
+│           ├── core/        # NN-parent--child.md convention
+│           │   ├── _index.md
+│           │   ├── 01-variables--basics.md
+│           │   ├── 02-variables--conditional.md
+│           │   └── 27-comments.md
+│           ├── flow-control/
+│           │   ├── _index.md
+│           │   ├── 01-if.md
+│           │   └── 02-when--basics.md
+│           └── ...          # cli, config, effects, mcp, modules, output, patterns, sdk, security
 ├── llm/
 │   └── run/
 │       └── howto.mld        # CLI entrypoint
@@ -50,24 +45,30 @@ project/
         └── howto.ts         # CLI command implementation
 ```
 
+### Filesystem Conventions
+
+- `_index.md` — section intro, always sorted first
+- `NN-name.md` — standalone atom (numbered for ordering)
+- `NN-parent--child.md` — grouped under parent heading
+- `NN-parent--basics.md` — first child; heading skipped, content flows under parent
+- Unnumbered files sort alphabetically after numbered items
+
 ## Atom Format
 
 Each atom is a markdown file with YAML frontmatter:
 
 ```markdown
 ---
-id: when
-title: When
-brief: Select the first matching branch
-category: control-flow
-parent: control-flow
+id: when-inline
+title: When Match Form
+brief: Pattern matching with optional colon syntax
+category: flow-control
+parent: when
 tags: [conditionals, branching]
-related: [when-inline, when]
+related: [when, when-blocks]
 related-code: [interpreter/eval/when.ts]
 updated: 2026-01-05
 ---
-
-## When
 
 `when` stops at the first matching condition, like a switch statement.
 
@@ -87,8 +88,8 @@ The `*` wildcard catches all unmatched cases.
 - **id** (required): Unique identifier (kebab-case)
 - **title** (required): Human-readable title
 - **brief** (required): One-line summary
-- **category** (required): Top-level category
-- **parent** (optional): Parent topic ID for hierarchical grouping
+- **category** (required): Section directory name (core, flow-control, effects, etc.)
+- **parent** (optional): Parent group from filename `--` convention (when, for, exe, etc.)
 - **aliases** (optional): Array of alternate lookup names (e.g., `[sh, cmd]` for run-basics)
 - **tags** (optional): Array of tags for cross-referencing
 - **related** (optional): Array of related atom IDs
@@ -110,20 +111,27 @@ The `*` wildcard catches all unmatched cases.
 The entrypoint script at `llm/run/howto.mld`:
 
 ```mlld
->> Load all atoms
-var @atoms = <@root/docs/src/atoms/**/*.md>
+>> Load atoms from all sections
+var @coreAtoms = <@root/docs/src/atoms/core/*.md>
+var @flowControlAtoms = <@root/docs/src/atoms/flow-control/*.md>
+>> ... (one var per section)
 
->> Get topic/subtopic from payload (injected by CLI)
-import { @topic, @subtopic } from @payload
+>> Bundle for tree display
+var @allAtoms = @bundleAtoms(@coreAtoms, @flowControlAtoms, ...)
+var @flatAtoms = @flattenAtoms(@allAtoms)
 
->> Filter atoms by topic or subtopic
-var @matches = @filterByTopic(@atoms, @topic, @subtopic)
+>> Get topic from payload (injected by CLI)
+import { @topic, @subtopic, @section, @all } from @payload
 
->> Output the appropriate help
+>> Section lookup uses filesystem-derived bundles (not frontmatter category)
+var @sectionAtoms = @getSectionAtoms(@allAtoms, @topic)
+
+>> Route to appropriate output
 when [
-  @subtopic => show @joinStripped(@exactMatches(@atoms, @fullId))
-  @topic => show @joinStripped(@topicMatches(@atoms, @topic))
-  * => show @buildTree(@atoms)
+  @isGrep => show @grepAtoms(@allFlatAtoms, @subtopic)
+  @isSectionTopic && !@wantAll => show @buildSectionIndex(@sectionAtoms, @topic)
+  @hasTopic && @topicMatches.length > 0 => show @joinStripped(@topicMatches)
+  * => show @buildTree(@allAtoms, @introAtom)
 ]
 ```
 
@@ -170,65 +178,60 @@ $ mlld howto
 
 MLLD HELP TOPICS
 
-flow-control/
-  when                     Conditionals (simple, bare, first-match)
-  for                      Iteration (arrow, block, parallel)
-  foreach                  Transform collections
-  while                    Bounded loops
+  intro                    What mlld is, mental model, and key concepts
 
-Use: mlld howto <topic> for details
+core                              (--all for full content)
+  variables-basics         Create primitives, arrays, objects
+  templates-basics         String interpolation with backticks
+  exe-simple               Define reusable commands, code, and templates
+  ...
+
+flow-control                      (--all for full content)
+  if                       Imperative branching with optional else
+  when                     Select the first matching branch
+  for-parallel             Concurrent iteration
+  ...
 ```
 
-### Show topic help
+### Show section index
+
+```bash
+$ mlld howto core
+
+Variables, templates, file loading, executables...
+
+---
+
+CORE TOPICS
+
+  variables-basics         Create primitives, arrays, objects
+  templates-basics         String interpolation with backticks
+  ...
+```
+
+### Show specific topic
 
 ```bash
 $ mlld howto when
 
-## When Simple
+**When block** (first match wins):
 ...
-
-## When List
-...
-
-## When (First-Match)
-...
-```
-
-### Show specific subtopic
-
-```bash
-$ mlld howto when
-
-## When
-
-`when` stops at the first matching condition...
 ```
 
 ## Building LLM Docs
 
-Create build scripts that assemble atoms into llm docs:
+The build script `llm/run/llmstxt.mld` globs each section directory, sorts files by the naming convention, groups by `--` parent, and wraps in pseudo-XML tags:
 
-```mlld
->> docs/build/llm/control-flow.mld
-
-var @whenAtoms = [
-  <@root/docs/src/atoms/flow-control/when-inline.md>,
-  <@root/docs/src/atoms/flow-control/when.md>
-]
-
-var @content = for @a in @whenAtoms => @strip(@a)
-
-show `<WHEN_DECISIONS>
-\`when\` selects the first matching condition.
-
-@content.join("\n\n")
-</WHEN_DECISIONS>`
+```bash
+mlld run llmstxt
 ```
 
-This lets you:
-1. Keep atoms as the source of truth
-2. Build different output formats (llms.txt, website, CLI help)
-3. Ensure consistency across all documentation
+The filesystem conventions handle ordering and grouping automatically — no config files needed. See [DOCS-LLM.md](DOCS-LLM.md) for the full build system.
+
+This gives you:
+1. Atoms as the single source of truth
+2. Three output formats from the same atoms (website, CLI help, llms.txt)
+3. Consistency across all documentation
 
 ## Package Distribution
 

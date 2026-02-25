@@ -2,7 +2,7 @@
 id: pipelines-basics
 title: Pipelines Basics
 brief: Chain stages with built-in and custom functions
-category: syntax
+category: effects
 parent: pipelines
 aliases: [pipeline, pipe]
 tags: [pipelines, transforms, builtins]

@@ -2,7 +2,8 @@
 id: label-modification
 title: Label Modification
 brief: Add, remove, and modify security labels on return values
-category: security
+category: effects
+parent: labels
 tags: [labels, trust, security, guards, privileged]
 related: [security-guards-basics, security-automatic-labels, security-policies]
 related-code: [interpreter/eval/label-modification.ts, grammar/tests/label-modification-grammar.test.ts]

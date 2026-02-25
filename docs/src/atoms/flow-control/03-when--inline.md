@@ -2,7 +2,7 @@
 id: when-inline
 title: When Match Form
 brief: Pattern matching with optional colon syntax
-category: control-flow
+category: flow-control
 parent: when
 tags: [conditionals, pattern-matching]
 related: [when, when-blocks, when-value-returning]

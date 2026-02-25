@@ -3,7 +3,7 @@ id: for-collection
 qa_tier: 2
 title: For Collection Form
 brief: Collecting results from iteration
-category: control-flow
+category: flow-control
 parent: for
 tags: [iteration, loops, arrays]
 related: [for-arrow, for-block]

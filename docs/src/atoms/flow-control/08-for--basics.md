@@ -2,7 +2,7 @@
 id: for-arrow
 title: For Arrow Form
 brief: Single-action iteration with =>
-category: control-flow
+category: flow-control
 parent: for
 tags: [iteration, loops]
 related: [for-block, for-collection]

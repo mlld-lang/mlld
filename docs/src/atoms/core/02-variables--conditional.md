@@ -2,7 +2,7 @@
 id: variables-conditional
 title: Conditional Inclusion
 brief: Omit content with @var? and use nullish fallbacks in templates and expressions
-category: syntax
+category: core
 parent: variables
 tags: [variables, conditionals, optional]
 related: [variables-basics, variables-truthiness]

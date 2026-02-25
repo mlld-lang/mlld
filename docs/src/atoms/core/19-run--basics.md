@@ -2,7 +2,7 @@
 id: run-basics
 title: Run Command Basics
 brief: Execute shell commands or code
-category: commands
+category: core
 parent: run
 aliases: [sh, cmd, shell]
 tags: [execution, commands, shell, code, javascript, python]

@@ -2,7 +2,7 @@
 id: variables-truthiness
 title: Truthiness Rules
 brief: What mlld considers falsy
-category: syntax
+category: core
 parent: variables
 tags: [variables, conditionals, truthiness]
 related: [variables-conditional, when-inline]

@@ -2,7 +2,7 @@
 id: file-loading-metadata
 title: File Metadata
 brief: Access file metadata via .mx
-category: syntax
+category: core
 parent: file-loading
 tags: [files, metadata, frontmatter]
 related: [file-loading-basics, file-loading-ast]

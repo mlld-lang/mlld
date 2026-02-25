@@ -3,7 +3,7 @@ id: sdk-execute-function
 qa_tier: 3
 title: Execute Function
 brief: File-based execution with state management
-category: configuration
+category: sdk
 parent: sdk
 tags: [configuration, sdk, execute, state]
 related: [config-sdk-dynamic-modules, config-sdk-execution-modes]

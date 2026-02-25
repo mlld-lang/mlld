@@ -4,7 +4,7 @@ qa_tier: 2
 title: Signing Overview
 brief: Cryptographic integrity for templates
 category: security
-parent: security
+parent: signing
 tags: [signing, verification, security, templates]
 related: [sign-verify, autosign-autoverify, labels-overview, pattern-audit-guard, pattern-dual-audit]
 related-code: [core/security/sig-adapter.ts, interpreter/eval/sign-verify.ts, interpreter/eval/auto-sign.ts]

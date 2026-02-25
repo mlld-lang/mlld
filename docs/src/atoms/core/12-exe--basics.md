@@ -2,7 +2,7 @@
 id: exe-simple
 title: Exe Simple Forms
 brief: Define reusable commands, code, and templates
-category: commands
+category: core
 parent: exe
 aliases: [exec, function, func, js, py, javascript, python]
 tags: [functions, reusable, templates, commands, javascript, python]

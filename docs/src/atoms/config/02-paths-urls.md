@@ -3,8 +3,7 @@ id: paths-urls
 qa_tier: 2
 title: Paths and URLs
 brief: Literal, interpolated, and remote paths
-category: configuration
-parent: configuration
+category: config
 tags: [configuration, paths, urls, files]
 related: [file-loading-basics, modules-importing-local]
 related-code: [core/resolvers/PathResolver.ts, core/resolvers/URLResolver.ts]

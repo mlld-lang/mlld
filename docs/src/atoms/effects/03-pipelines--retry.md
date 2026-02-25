@@ -2,7 +2,7 @@
 id: pipelines-retry
 title: Retry in Pipelines
 brief: Automatic retry with feedback
-category: syntax
+category: effects
 parent: pipelines
 tags: [pipelines, retry, error-handling]
 related: [pipelines-context, pipelines-basics]

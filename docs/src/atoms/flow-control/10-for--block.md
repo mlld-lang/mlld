@@ -2,7 +2,7 @@
 id: for-block
 title: For Block Form
 brief: Multi-statement iteration bodies
-category: control-flow
+category: flow-control
 parent: for
 tags: [iteration, loops, blocks]
 related: [for-arrow, for-collection]

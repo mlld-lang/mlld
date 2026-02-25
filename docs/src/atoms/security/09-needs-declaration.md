@@ -3,7 +3,6 @@ id: security-needs-declaration
 title: Needs Declarations
 brief: Declare module requirements for tools, runtimes, and packages
 category: security
-parent: security
 tags: [security, needs, modules, dependencies]
 related: [modules-creating, policy-capabilities, security-policies]
 related-code: [core/policy/needs.ts, interpreter/eval/needs.ts, interpreter/eval/import/ModuleNeedsValidator.ts]

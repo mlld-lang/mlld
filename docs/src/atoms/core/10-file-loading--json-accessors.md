@@ -2,7 +2,7 @@
 id: file-loading-json-accessors
 title: JSON Parsing
 brief: Parse JSON strings with pipeline transforms
-category: syntax
+category: core
 parent: file-loading
 tags: [json, parsing, strings]
 related: [pipelines-basics, variables-basics]

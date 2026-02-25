@@ -4,7 +4,6 @@ qa_tier: 2
 title: Module Patterns
 brief: Common module organization patterns
 category: modules
-parent: modules
 tags: [modules, patterns, exports, organization]
 related: [modules-exporting, modules-creating]
 related-code: [interpreter/eval/export.ts]

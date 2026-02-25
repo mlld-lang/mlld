@@ -2,7 +2,8 @@
 id: mcp-import
 title: Importing MCP Tools
 brief: Import external MCP server tools as callable functions
-category: commands
+category: mcp
+parent: mcp
 tags: [mcp, import, tools]
 related: [mcp, mcp-export, mcp-security, mcp-guards]
 related-code: [interpreter/eval/import/ImportDirectiveEvaluator.ts, interpreter/mcp/McpImportManager.ts]

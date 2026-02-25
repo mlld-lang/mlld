@@ -2,7 +2,7 @@
 id: pipelines-context
 title: Pipeline Context
 brief: Access pipeline metadata during execution
-category: syntax
+category: effects
 parent: pipelines
 tags: [pipelines, metadata, context]
 related: [pipelines-basics, pipelines-retry]

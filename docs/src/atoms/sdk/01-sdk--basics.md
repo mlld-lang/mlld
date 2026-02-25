@@ -3,7 +3,7 @@ id: sdk-execution-modes
 qa_tier: 3
 title: SDK Execution Modes
 brief: Four modes for SDK consumers
-category: configuration
+category: sdk
 parent: sdk
 tags: [configuration, sdk, modes, execution]
 related: [config-sdk-dynamic-modules, config-sdk-execute]

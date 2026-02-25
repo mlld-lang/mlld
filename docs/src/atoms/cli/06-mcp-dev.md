@@ -2,8 +2,7 @@
 id: config-mcp-dev
 title: mlld mcp-dev Command
 brief: MCP server for language introspection tools
-category: configuration
-parent: cli
+category: cli
 tags: [cli, mcp, development, validation, ast, analysis]
 related: [mcp, mcp-export, mcp-import, config-plugin, config-cli-run]
 related-code: [cli/commands/mcp-dev.ts, cli/mcp/DevMCPServer.ts, cli/mcp/BuiltinTools.ts, cli/mcp/BuiltinTools.test.ts]

@@ -2,7 +2,8 @@
 id: script-return
 title: Script Return
 brief: Explicit script return with =>
-category: control-flow
+category: core
+parent: exe
 tags: [return, modules, script-level, default-export]
 related: [if, when-value-returning, exe-blocks]
 related-code: [interpreter/eval/exe-return.ts, interpreter/core/interpreter/traversal.ts, interpreter/eval/import/ModuleContentProcessor.ts]

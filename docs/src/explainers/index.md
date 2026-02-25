@@ -17,13 +17,17 @@ Ready to write code? The [Quick Start](/docs/quickstart/) gets you running in 5 
 
 The reference sections cover every directive and configuration option:
 
-- [Language Reference](/docs/language-reference/) - Variables, templates, file loading, commands, pipelines
-- [Flow Control](/docs/flow-control/) - Conditionals, iteration, loops
+- [Core](/docs/core/) - Variables, templates, file loading, exe, run, builtins, escaping
+- [Flow Control](/docs/flow-control/) - if, when, for, foreach, while, loop
+- [Effects](/docs/effects/) - Pipelines, labels, guards, hooks
 - [Modules](/docs/modules/) - Creating, importing, and publishing modules
+- [MCP](/docs/mcp/) - Export functions as tools, import external servers
+- [Output](/docs/output/) - output, log, append, stream
 - [CLI](/docs/cli/) - Command line usage, checkpoint, validation
-- [Configuration](/docs/configuration/) - Config files, environment variables, paths
+- [Configuration](/docs/config/) - Config files, policy, environments, auth
 - [SDK](/docs/sdk/) - Execution modes, dynamic modules, static analysis
-- [Security](/docs/security/) - Guards, labels, policies, signing
+- [Security](/docs/security/) - Signing, MCP security, audit logging
+- [Patterns](/docs/patterns/) - Prose, ralph, guarded tool export
 
 ## Community
 

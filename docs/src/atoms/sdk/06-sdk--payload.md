@@ -3,8 +3,8 @@ id: payload
 qa_tier: 2
 title: Payload Access
 brief: Access data passed via SDK or CLI
-category: syntax
-parent: variables
+category: sdk
+parent: sdk
 tags: [variables, payload, sdk, cli]
 related: [reserved-variables, config-sdk-dynamic-modules, config-cli-file]
 related-code: [sdk/execute.ts, cli/commands/run.ts, cli/parsers/ArgumentParser.ts]

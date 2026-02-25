@@ -4,7 +4,6 @@ qa_tier: 3
 title: Prose Execution
 brief: Execute LLM-interpreted DSL skills (OpenProse and custom)
 category: patterns
-parent: patterns
 tags: [patterns, llm, prose, openprose, skills, agents, dsl]
 related: [exe-prose, pattern-llm-integration, exe-blocks]
 related-code: [interpreter/eval/prose-execution.ts]

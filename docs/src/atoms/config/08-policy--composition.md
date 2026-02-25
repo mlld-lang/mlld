@@ -2,8 +2,8 @@
 id: policy-composition
 title: Policy Composition
 brief: How multiple policies combine their rules
-category: security
-parent: security
+category: config
+parent: policy
 tags: [policy, composition, import, profiles]
 related: [security-policies, policy-capabilities, policy-auth, policy-label-flow]
 related-code: [interpreter/eval/policy.ts]

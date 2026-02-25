@@ -3,8 +3,8 @@ id: policy-auth
 qa_tier: 2
 title: Policy Auth
 brief: Credential mappings and sealed auth injection via using auth:*
-category: security
-parent: security
+category: config
+parent: policy
 tags: [credentials, auth, policy, secrets, keychain]
 related: [auth, security-policies, env-config, labels-sensitivity]
 related-code: [interpreter/utils/auth-injection.ts, interpreter/policy/PolicyEnforcer.ts]

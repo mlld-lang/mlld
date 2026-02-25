@@ -2,8 +2,7 @@
 id: config-live-stdio
 title: Live STDIO Transport
 brief: Persistent NDJSON RPC server for SDK calls
-category: configuration
-parent: cli
+category: cli
 tags: [cli, sdk, rpc, stdio, transport]
 related: [config-sdk-execute, config-sdk-execution-modes, config-sdk-dynamic-modules]
 related-code: [cli/commands/live.ts, cli/commands/live-stdio-server.ts, sdk/execute.ts, sdk/types.ts]

@@ -2,8 +2,8 @@
 id: policy-label-flow
 title: Policy Label Flow Rules
 brief: Deny/allow rules controlling which data labels can flow to which operations
-category: security
-parent: security
+category: config
+parent: policy
 tags: [policy, labels, deny, allow, flow, prefix-matching]
 related: [labels-sensitivity, labels-source-auto, policy-capabilities, security-policies, policy-composition]
 related-code: [interpreter/eval/policy.ts, core/security/taint.ts]

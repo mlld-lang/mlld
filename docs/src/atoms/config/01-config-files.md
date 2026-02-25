@@ -3,8 +3,7 @@ id: config-files
 qa_tier: 2
 title: Config Files
 brief: Project configuration and lock files
-category: configuration
-parent: configuration
+category: config
 tags: [configuration, files, settings]
 related: [config-env-vars, modules-registry]
 related-code: [core/config/Config.ts, core/config/LockFile.ts]

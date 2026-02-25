@@ -4,7 +4,6 @@ qa_tier: 2
 title: Updating Modules
 brief: Check for and install module updates
 category: modules
-parent: modules
 tags: [modules, registry, updating, versions]
 related: [modules-registry, modules-importing-registry]
 related-code: [cli/commands/registry.ts, cli/commands/install.ts]

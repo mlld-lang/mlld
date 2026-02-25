@@ -3,7 +3,7 @@ id: pipelines-parallel
 qa_tier: 2
 title: Parallel Pipeline Groups
 brief: Run multiple stages concurrently
-category: syntax
+category: effects
 parent: pipelines
 tags: [pipelines, parallel, concurrency]
 related: [pipelines-basics, for-parallel]
