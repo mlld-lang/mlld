@@ -432,17 +432,6 @@ export class PublishCommand {
       options,
       user,
       octokit,
-      changes: [],
-      checkpoints: [],
-      rollback: async () => {
-        // TODO: Implement rollback logic
-      },
-      checkpoint: (name: string) => {
-        // TODO: Implement checkpoint logic
-      },
-      restoreCheckpoint: async (name: string) => {
-        // TODO: Implement restore checkpoint logic
-      },
       toErrorContext: () => {
         return {
           module: moduleData.metadata.name,

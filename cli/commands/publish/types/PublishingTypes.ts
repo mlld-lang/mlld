@@ -151,30 +151,9 @@ export interface PublishContext {
   // Validation results
   validationResult?: ValidationResult;
 
-  // State tracking
-  changes: StateChange[];
-  checkpoints: Checkpoint[];
   shouldCommitMetadata?: boolean;
 
-  // Methods
-  rollback(): Promise<void>;
-  checkpoint(name: string): void;
-  restoreCheckpoint(name: string): Promise<void>;
   toErrorContext(): any;
-}
-
-export interface StateChange {
-  type: 'file' | 'git' | 'github';
-  action: string;
-  data: any;
-  timestamp: Date;
-  revert(): Promise<void>;
-}
-
-export interface Checkpoint {
-  name: string;
-  timestamp: Date;
-  changes: StateChange[];
 }
 
 export interface GitHubUser {
