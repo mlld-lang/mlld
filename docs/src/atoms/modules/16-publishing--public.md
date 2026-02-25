@@ -8,7 +8,7 @@ parent: publishing
 tags: [modules, publishing, registry, auth]
 related: [registry, versioning, ownership-permissions]
 related-code: [cli/commands/publish.ts, cli/commands/auth.ts]
-updated: 2026-02-24
+updated: 2026-02-25
 ---
 
 ## Prerequisites
@@ -21,15 +21,17 @@ updated: 2026-02-24
 
 ```yaml
 ---
-name: my-tool
+name: my-tool              # or use title: My Tool (name falls back from title)
 author: yourname
 version: 1.0.0
-about: Brief description of what this does
+about: Brief description   # description: ... also supported
+tags: [utils, strings]     # optional (keywords also supported)
 license: CC0
 ---
 ```
 
-All fields required. License must be CC0.
+Required: module name/title, author, version, and about/description. License must be CC0.
+`mlld publish` now reads these frontmatter fields as metadata defaults, and CLI metadata flags override them when provided.
 
 ## Authentication
 
@@ -108,4 +110,5 @@ mlld publish my-tool.mld.md                    # Publish to registry
 mlld publish --pr my-tool.mld.md               # Force PR workflow
 mlld publish --tag beta my-tool.mld.md         # Publish with tag
 mlld publish --dry-run my-tool.mld.md          # Validate without publishing
+mlld publish my-tool.mld.md --title "My Tool" --tags utils,strings
 ```

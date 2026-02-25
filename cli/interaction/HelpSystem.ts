@@ -279,7 +279,16 @@ Options:
   -p, --private        Publish to private repository (skip prompts)
   --pr                 Create registry PR for private publish
   --path <path>        Custom directory for private publish (default: mlld/modules/)
+  --title <text>       Override module title (normalized into published module name)
+  --description <text> Override module description/about
+  --version <semver>   Override module version
+  --tags <list>        Override tags/keywords (comma-separated)
+  --author <name>      Override module author
   -v, --verbose        Show detailed output
+
+Metadata precedence:
+  - CLI metadata flags (e.g., --title, --description) override module frontmatter
+  - Frontmatter acts as default metadata when CLI overrides are not provided
 
 Git Integration:
   - Automatically detects git repositories
@@ -319,6 +328,7 @@ Examples:
   mlld publish --force            # Publish with uncommitted changes
   mlld publish --use-gist         # Force gist creation
   mlld publish --org myorg        # Publish as organization 'myorg'
+  mlld publish my-module.mld --title "My Utility" --tags utils,strings
   mlld publish --private          # Publish to private repo (skip prompts)
   mlld publish --private --pr     # Private publish + registry PR
   mlld publish --private --path lib/modules  # Custom directory

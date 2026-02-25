@@ -28,6 +28,14 @@ export interface DirectoryModuleData {
   entryContent: string;
 }
 
+export interface ModuleMetadataOverrides {
+  title?: string;
+  description?: string;
+  version?: string;
+  tags?: string | string[];
+  author?: string;
+}
+
 export class ModuleReader {
   private authService: GitHubAuthService;
 
@@ -162,7 +170,10 @@ export class ModuleReader {
   /**
    * Read and parse a module from file system
    */
-  async readModule(modulePath: string, options?: { verbose?: boolean }): Promise<{
+  async readModule(
+    modulePath: string,
+    options?: { verbose?: boolean; metadataOverrides?: ModuleMetadataOverrides }
+  ): Promise<{
     content: string;
     metadata: ModuleMetadata;
     filename: string;
@@ -205,7 +216,7 @@ export class ModuleReader {
         }
 
         // Build metadata from manifest
-        const metadata: ModuleMetadata = {
+        let metadata: ModuleMetadata = {
           name: manifest.name,
           author: manifest.author,
           about: manifest.about,
@@ -220,6 +231,7 @@ export class ModuleReader {
           homepage: manifest.homepage,
           keywords: manifest.keywords,
         };
+        metadata = this.applyMetadataOverrides(metadata, options?.metadataOverrides);
 
         return {
           content: directoryData.entryContent,
@@ -281,6 +293,7 @@ export class ModuleReader {
     
     // Parse metadata from content
     let metadata = this.parseMetadata(content, filename);
+    metadata = this.applyMetadataOverrides(metadata, options?.metadataOverrides);
     
     // Interactive frontmatter setup if missing
     if (!this.hasFrontmatter(content)) {
@@ -346,14 +359,17 @@ export class ModuleReader {
     if (frontmatterMatch) {
       try {
         const parsed = yaml.load(frontmatterMatch[1]) as any;
-        
-        // Frontmatter 'name' field takes precedence
-        metadata.name = parsed.name || parsed.module || '';
+
+        const frontmatterName = parsed.name || parsed.module || '';
+        const frontmatterTitle = typeof parsed.title === 'string' ? parsed.title : '';
+
+        // Frontmatter 'name' field takes precedence, then title fallback.
+        metadata.name = frontmatterName || this.normalizeTitleToModuleName(frontmatterTitle);
         metadata.author = parsed.author || metadata.author;
         metadata.version = parsed.version;
-        // Support both 'about' and legacy 'description'
-        metadata.about = parsed.about || parsed.description || metadata.about;
-        metadata.keywords = parsed.keywords;
+        // Support both 'about' and legacy 'description', then title fallback.
+        metadata.about = parsed.about || parsed.description || frontmatterTitle || metadata.about;
+        metadata.keywords = this.parseTagsValue(parsed.tags ?? parsed.keywords) || metadata.keywords;
         metadata.homepage = parsed.homepage;
         metadata.license = parsed.license || 'CC0';
         metadata.bugs = parsed.bugs;
@@ -399,6 +415,78 @@ export class ModuleReader {
     metadata.version = metadata.version || parsedNeeds.version;
 
     return metadata as ModuleMetadata;
+  }
+
+  private normalizeTitleToModuleName(title: unknown): string {
+    if (typeof title !== 'string') {
+      return '';
+    }
+
+    const trimmed = title.trim().toLowerCase();
+    if (!trimmed) {
+      return '';
+    }
+
+    return trimmed
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  private parseTagsValue(rawTags: unknown): string[] | undefined {
+    if (Array.isArray(rawTags)) {
+      const normalized = rawTags
+        .filter(tag => typeof tag === 'string')
+        .map(tag => tag.trim())
+        .filter(Boolean);
+      return normalized.length > 0 ? normalized : undefined;
+    }
+
+    if (typeof rawTags === 'string') {
+      const normalized = rawTags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(Boolean);
+      return normalized.length > 0 ? normalized : undefined;
+    }
+
+    return undefined;
+  }
+
+  private applyMetadataOverrides(
+    metadata: ModuleMetadata,
+    overrides?: ModuleMetadataOverrides
+  ): ModuleMetadata {
+    if (!overrides) {
+      return metadata;
+    }
+
+    const updated = { ...metadata };
+
+    if (typeof overrides.title === 'string' && overrides.title.trim().length > 0) {
+      const titleName = this.normalizeTitleToModuleName(overrides.title);
+      if (titleName) {
+        updated.name = titleName;
+      }
+    }
+
+    if (typeof overrides.description === 'string' && overrides.description.trim().length > 0) {
+      updated.about = overrides.description.trim();
+    }
+
+    if (typeof overrides.version === 'string' && overrides.version.trim().length > 0) {
+      updated.version = overrides.version.trim();
+    }
+
+    if (typeof overrides.author === 'string' && overrides.author.trim().length > 0) {
+      updated.author = overrides.author.trim();
+    }
+
+    const tags = this.parseTagsValue(overrides.tags);
+    if (tags) {
+      updated.keywords = tags;
+    }
+
+    return updated;
   }
 
   private applyModuleNeeds(metadata: Partial<ModuleMetadata>, needs: ModuleNeedsNormalized): void {

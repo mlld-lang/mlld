@@ -31,6 +31,11 @@ export interface PublishOptions {
   pr?: boolean; // Create PR even for private publish
   path?: string; // Custom path for private publish (default: mlld/modules/)
   tag?: string; // Publish with custom tag (e.g., beta, alpha, stable)
+  title?: string; // Module title; normalized and applied as the module name
+  description?: string; // Module description/about
+  version?: string; // Module version override
+  tags?: string | string[]; // Comma-separated string or array
+  author?: string; // Module author override
 }
 
 export interface ModuleMetadata {

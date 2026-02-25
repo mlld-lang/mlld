@@ -37,6 +37,11 @@ export function createPublishCommand() {
         pr: flags.pr,
         path: flags.path,
         tag: flags.tag || flags.t,
+        title: flags.title,
+        description: flags.description || flags.about,
+        version: flags.version,
+        tags: flags.tags,
+        author: flags.author,
       };
       
       try {
