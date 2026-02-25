@@ -2,11 +2,11 @@ export const pattern = {
   name: 'exe-run-sh',
   
   test(error, mx) {
-    // Check if this is an /exe error with "run sh" in the line
-    return error.message && 
-           error.message.includes('Invalid /exe syntax') &&
-           mx.line && 
-           mx.line.includes('/exe') && 
+    // Check if this is an exe error with "run sh" in the line
+    return error.message &&
+           error.message.includes('Invalid exe syntax') &&
+           mx.line &&
+           mx.line.match(/\/?exe/) &&
            mx.line.includes('run sh');
   },
   

@@ -8,7 +8,7 @@ export const pattern = {
 
     // Check if line contains 'var' and 'template' together (with possible indentation)
     const line = mx.line || '';
-    const hasVarTemplate = /^\s*var\s+@\w+\s*=\s*template\s/.test(line);
+    const hasVarTemplate = /^\s*\/?var\s+@\w+\s*=\s*template\s/.test(line);
 
     // Also match 'let' context inside blocks
     const hasLetTemplate = /^\s*let\s+@\w+\s*=\s*template\s/.test(line);

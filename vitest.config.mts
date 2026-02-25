@@ -34,7 +34,9 @@ export default defineConfig({
       'services/lsp/as-modifier-tokens.test.ts',
       // Exclude heredoc e2e tests - they need low concurrency, run with npm run test:heredoc
       'tests/heredoc.e2e.test.ts',
-      'tests/integration/heredoc-large-variable.test.ts'
+      'tests/integration/heredoc-large-variable.test.ts',
+      // Exclude worktree copies from test discovery
+      '**/.claude/worktrees/**'
     ],
     coverage: {
       reporter: ['text', 'json', 'html'],
