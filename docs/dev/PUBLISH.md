@@ -62,7 +62,7 @@ Each job: checkout → download synced artifacts (if SDK) → idempotency check 
 | vscode | VS Code Marketplace | — | `VSCE_TOKEN` |
 | pypi | pypi.org | `curl pypi.org/pypi/mlld-sdk/$VERSION/json` | OIDC (trusted publishing) |
 | crates | crates.io | `curl crates.io/api/v1/crates/mlld/$VERSION` | `CRATES_IO_TOKEN` |
-| rubygems | rubygems.org | `curl rubygems.org/api/v1/versions/mlld.json` | `RUBYGEMS_API_KEY` |
+| rubygems | rubygems.org | `curl rubygems.org/api/v1/versions/mlld.json` | OIDC (trusted publishing) |
 | hex | hex.pm | `curl hex.pm/api/packages/mlld` | `HEX_API_KEY` |
 
 The npm job builds the project itself (needs `dist/`). SDK jobs download `publish-artifacts` to get synced version files. VS Code uploads its `package.json`/`package-lock.json` bump as a separate `vscode-bump` artifact.
