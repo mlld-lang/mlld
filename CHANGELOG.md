@@ -23,9 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signing now writes `signed:<var>` provenance labels; composed instruction variables inherit signed provenance for cascading verification targets.
 
 ### Fixed
-- Streaming declared on executable definitions now propagates correctly through `/run @exe(...)` and `/show @exe(...)`; adapter pipelines activate even when invocation-level `stream` is omitted.
+- Streaming declared on executable definitions now propagates correctly through `run @exe(...)` and `show @exe(...)`; adapter pipelines activate even when invocation-level `stream` is omitted.
 - Executable-definition `streamFormat` is now respected across invocations, and invocation-level `streamFormat` correctly takes precedence when both are present.
-- `/show` streaming invocations no longer double-emit output when executable-definition streaming is active.
+- `show` streaming invocations no longer double-emit output when executable-definition streaming is active.
 - CLI streaming debug flags are now wired end-to-end: `--show-json` mirrors raw NDJSON to stderr and `--append-json` appends raw NDJSON to JSONL output files.
 - Hook registration now emits a runtime warning for unknown `op:<type>` hook filters (while still registering the hook for forward compatibility).
 - `--resume "checkpoint-name"` now pre-scans source-declared checkpoints so named resume targets are available even when a prior run never reached that checkpoint.
