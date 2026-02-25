@@ -31,15 +31,15 @@ This is the content of the document.`
 
 ## Test other common dependencies
 
-/exe @testLodash() = node {
-  // Test if lodash is available (it's a dependency of mlld)
+/exe @testChalk() = node {
+  // Test if chalk is available (it's a dependency of mlld)
   try {
-    const _ = require('lodash');
-    return _.capitalize('hello world');
+    const chalk = require('chalk');
+    return chalk.level >= 0 ? 'Chalk available' : 'Chalk not available';
   } catch (e) {
-    return 'Lodash not available';
+    return 'Chalk not available';
   }
 }
 
-/var @lodashResult = @testLodash()
-/show `Lodash test: @lodashResult`
+/var @chalkResult = @testChalk()
+/show `Chalk test: @chalkResult`

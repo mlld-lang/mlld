@@ -16,10 +16,8 @@ const externalDependencies = [
   // Core libraries
   // Note: mlld-ast is now consolidated into @core/ast and should be bundled, not external
   'llmxml',
-  'marked',
   'minimatch',
   'winston',
-  'yargs',
   'vscode-languageserver/node',
   'vscode-languageserver',
   // TypeScript is only used for AST extraction and has CJS code that breaks ESM

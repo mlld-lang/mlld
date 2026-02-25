@@ -114,7 +114,7 @@ export default tseslint.config(
   // Disable type-aware rules for low-impact areas
   {
     files: [
-      'cli/**/*.ts',         // CLI with yargs
+      'cli/**/*.ts',
       'scripts/**/*.js',     // Build scripts
       'scripts/**/*.mjs',    // Build scripts
     ],

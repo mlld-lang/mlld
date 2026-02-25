@@ -11,4 +11,4 @@ Author: Test User
 Content: This is the content of the document.
 ## Test other common dependencies
 
-Lodash test: Hello world
+Chalk test: Chalk available
