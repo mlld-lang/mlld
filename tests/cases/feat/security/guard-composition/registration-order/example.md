@@ -1,20 +1,20 @@
 # Guard Composition - Registration Order
 
-/guard @first for op:exe = when [
+/var secret @data = "x"
+
+/exe @foo(val) = @val
+
+/exe @report(val) = `order: @p.guards[0].trace[0].guardName,@p.guards[0].trace[1].guardName
+@val`
+
+/guard @first for secret = when [
+  @mx.op.type == "exe" => allow
   * => allow
 ]
 
-/guard @second for op:exe = when [
+/guard @second for secret = when [
+  @mx.op.type == "exe" => allow
   * => allow
 ]
 
-/exe @foo() = cmd {
-  "x"
-}
-
-/exe @report(val) = cmd {
-  /show `order: @p.guards.filter(g => g.operation?.name == "foo").map(g => g.trace[0].guardName)`
-  @val
-}
-
-/show @foo() | @report
+/show @data | @foo | @report

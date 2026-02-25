@@ -1,9 +1,6 @@
 # Guard Composition - No Guards Recorded
 
-/exe @echo(val) = cmd {
-  /show `guards-len: @p.guards.length`
-  @val
-}
+/exe @echo(val) = `guards-len: @p.guards.length`
 
 /var @data = "plain"
 
