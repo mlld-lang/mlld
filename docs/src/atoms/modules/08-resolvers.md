@@ -5,7 +5,7 @@ title: Custom Resolvers
 brief: Configure custom @ prefixes for imports
 category: modules
 tags: [modules, resolvers, prefixes, configuration]
-related: [modules-importing-registry, modules-importing-local]
+related: [modules-importing-registry, modules-importing-local, paths-urls, builtins-reserved-variables]
 related-code: [core/resolvers/ResolverRegistry.ts, core/config/ResolverConfig.ts]
 updated: 2026-01-05
 ---

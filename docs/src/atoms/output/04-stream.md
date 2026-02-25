@@ -19,3 +19,5 @@ stream @a() || stream @b()         >> concurrent, buffered results
 ```
 
 Suppress: `--no-stream` flag or `MLLD_NO_STREAM=true`
+
+**Note:** `--no-stream` changes output behavior — instead of streaming only directive output, it renders the full document output after execution completes.

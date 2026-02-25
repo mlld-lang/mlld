@@ -21,15 +21,17 @@ mlld run qa --topic vars     # Pass payload: @payload.topic = "vars"
 **Payload injection**: Unknown flags become `@payload` fields:
 
 ```bash
-mlld run build --env prod --fast true
+mlld run build --environment prod --fast true
 ```
 
 ```mlld
 >> In build.mld
 import "@payload" as @payload
-var @env = @payload.env ? @payload.env : "dev"
+var @env = @payload.environment ? @payload.environment : "dev"
 var @fast = @payload.fast ? @payload.fast : false
 ```
+
+**Reserved flags**: `--env` is reserved for agent environment loading. Use `--environment` or another name for payload injection.
 
 **Script directory**: Configured in `mlld-config.json`, defaults to `llm/run/`.
 

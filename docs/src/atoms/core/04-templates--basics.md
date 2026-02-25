@@ -6,7 +6,7 @@ category: core
 parent: templates
 aliases: [template]
 tags: [templates, strings, interpolation]
-related: [templates-loops, variables-basics]
+related: [templates-loops, variables-basics, escaping-basics]
 related-code: [interpreter/eval/template.ts, grammar/patterns/template.peggy]
 updated: 2026-01-05
 qa_tier: 1

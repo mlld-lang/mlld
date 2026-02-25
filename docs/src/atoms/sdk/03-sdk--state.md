@@ -35,7 +35,8 @@ show `Conversation @conversationId, count @count`
 Write state back from mlld using the `state://` protocol:
 
 ```mlld
-output { count: 5 } to "state://count"
+var @countUpdate = { count: 5 }
+output @countUpdate to "state://count"
 output @result to "state://lastResult"
 ```
 

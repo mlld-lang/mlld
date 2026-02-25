@@ -5,7 +5,7 @@ brief: Single-action iteration with =>
 category: flow-control
 parent: for
 tags: [iteration, loops]
-related: [for-block, for-collection]
+related: [for-block, for-collection, for-filter]
 related-code: [interpreter/eval/for.ts, grammar/patterns/for.peggy]
 updated: 2026-01-05
 qa_tier: 1

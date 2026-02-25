@@ -12,12 +12,12 @@ updated: 2026-01-05
 
 Allow env vars in config, then import via `@input`.
 
-**mlld-lock.json:**
+**mlld-config.json:**
 
 ```json
 {
   "security": {
-    "allowedEnv": ["MLLD_NODE_ENV", "MLLD_API_KEY", "MLLD_GITHUB_TOKEN"]
+    "allowedEnvVars": ["MLLD_NODE_ENV", "MLLD_API_KEY", "MLLD_GITHUB_TOKEN"]
   }
 }
 ```

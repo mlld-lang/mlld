@@ -5,7 +5,7 @@ brief: Comparison and logical operators
 category: flow-control
 parent: when
 tags: [conditionals, operators]
-related: [when, when-inline]
+related: [when, when-inline, if]
 related-code: [grammar/patterns/operators.peggy]
 updated: 2026-01-31
 qa_tier: 2
