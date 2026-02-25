@@ -451,8 +451,8 @@ async function processCategoryDirectory(dirPath, categoryName, dirName) {
       stats.fixtures += processed.fixtures;
       stats.skipped += processed.skipped;
     } else {
-      // This directory contains subdirectories - process them
-      await processTestCategory(dirPath, categoryName, dirName, stats);
+      // Walk to arbitrary depth to find all example files
+      await walkAndProcessExamples(dirPath, categoryName, stats);
     }
   } else {
     // For other categories (exceptions, warnings, invalid), process recursively
@@ -514,9 +514,32 @@ async function processTestCategory(categoryPath, validCategory, categoryType, st
       stats.fixtures += processed.fixtures;
       stats.skipped += processed.skipped;
     } else {
-      // This directory may contain subdirectories at arbitrary depth
-      // (e.g., docs/atoms/core/02-variables--conditional/a3515bcd/)
-      await walkAndProcessExamples(dirPath, validCategory, stats);
+      // This directory contains subdirectories
+      const subEntries = await fs.readdir(dirPath, { withFileTypes: true });
+      const subDirs = subEntries.filter(d => d.isDirectory()).map(d => d.name);
+
+      for (const subDir of subDirs) {
+        const subDirPath = path.join(dirPath, subDir);
+
+        // Generate test name based on category type
+        let testName;
+        if (categoryType === 'directives') {
+          // For directives, use directive-testname format
+          testName = `${dir}-${subDir}`;
+        } else {
+          // For features/integration, check if we need to include parent
+          if (dir === subDir || subDir.startsWith(dir)) {
+            testName = subDir;
+          } else {
+            testName = `${dir}-${subDir}`;
+          }
+        }
+
+        const processed = await processExampleDirectory(subDirPath, validCategory, testName, categoryType);
+        stats.total += processed.total;
+        stats.fixtures += processed.fixtures;
+        stats.skipped += processed.skipped;
+      }
     }
   }
 }
