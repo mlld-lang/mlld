@@ -456,40 +456,34 @@ async function processCategoryDirectory(dirPath, categoryName, dirName) {
     }
   } else {
     // For other categories (exceptions, warnings, invalid), process recursively
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    await walkAndProcessExamples(dirPath, categoryName, stats);
+  }
+
+  return stats;
+}
+
+/**
+ * Recursively walk a directory tree and process any directory that contains
+ * example.md/mld files. Works at arbitrary nesting depth (needed for
+ * docs/atoms/category/atom-name/hash/ structure).
+ */
+async function walkAndProcessExamples(dirPath, categoryName, stats) {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  const files = entries.filter(d => !d.isDirectory()).map(d => d.name);
+  const hasExample = files.some(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
+
+  if (hasExample) {
+    const name = path.basename(dirPath);
+    const processed = await processExampleDirectory(dirPath, categoryName, name);
+    stats.total += processed.total;
+    stats.fixtures += processed.fixtures;
+    stats.skipped += processed.skipped;
+  } else {
     const subDirs = entries.filter(d => d.isDirectory()).map(d => d.name);
-    
     for (const subDir of subDirs) {
-      const subDirPath = path.join(dirPath, subDir);
-      
-      // Check if this subdirectory contains example.md files directly
-      const subEntries = await fs.readdir(subDirPath);
-      const hasDirectMdFiles = subEntries.some(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
-      
-      if (hasDirectMdFiles) {
-        // Process this directory directly
-        const processed = await processExampleDirectory(subDirPath, categoryName, subDir);
-        stats.total += processed.total;
-        stats.fixtures += processed.fixtures;
-        stats.skipped += processed.skipped;
-      } else {
-        // This subdirectory contains more subdirectories, process them
-        const nestedEntries = await fs.readdir(subDirPath, { withFileTypes: true });
-        const nestedDirs = nestedEntries.filter(d => d.isDirectory()).map(d => d.name);
-        
-        for (const nestedDir of nestedDirs) {
-          const exampleDir = path.join(subDirPath, nestedDir);
-          const testName = `${subDir}-${nestedDir}`;
-          const processed = await processExampleDirectory(exampleDir, categoryName, testName);
-          stats.total += processed.total;
-          stats.fixtures += processed.fixtures;
-          stats.skipped += processed.skipped;
-        }
-      }
+      await walkAndProcessExamples(path.join(dirPath, subDir), categoryName, stats);
     }
   }
-  
-  return stats;
 }
 
 /**
@@ -520,32 +514,9 @@ async function processTestCategory(categoryPath, validCategory, categoryType, st
       stats.fixtures += processed.fixtures;
       stats.skipped += processed.skipped;
     } else {
-      // This directory contains subdirectories
-      const subEntries = await fs.readdir(dirPath, { withFileTypes: true });
-      const subDirs = subEntries.filter(d => d.isDirectory()).map(d => d.name);
-      
-      for (const subDir of subDirs) {
-        const subDirPath = path.join(dirPath, subDir);
-        
-        // Generate test name based on category type
-        let testName;
-        if (categoryType === 'directives') {
-          // For directives, use directive-testname format
-          testName = `${dir}-${subDir}`;
-        } else {
-          // For features/integration, check if we need to include parent
-          if (dir === subDir || subDir.startsWith(dir)) {
-            testName = subDir;
-          } else {
-            testName = `${dir}-${subDir}`;
-          }
-        }
-        
-        const processed = await processExampleDirectory(subDirPath, validCategory, testName, categoryType);
-        stats.total += processed.total;
-        stats.fixtures += processed.fixtures;
-        stats.skipped += processed.skipped;
-      }
+      // This directory may contain subdirectories at arbitrary depth
+      // (e.g., docs/atoms/core/02-variables--conditional/a3515bcd/)
+      await walkAndProcessExamples(dirPath, validCategory, stats);
     }
   }
 }
