@@ -17,6 +17,54 @@ LetAssignment "let assignment"
       let processedValue;
       let metaInfo = {};
 
+      const mergeWithClause = (existing, incoming) => {
+        if (!existing) return incoming || null;
+        if (!incoming) return existing;
+
+        const merged = Object.assign({}, existing, incoming);
+        if (existing.pipeline || incoming.pipeline) {
+          merged.pipeline = [
+            ...(Array.isArray(existing.pipeline) ? existing.pipeline : []),
+            ...(Array.isArray(incoming.pipeline) ? incoming.pipeline : [])
+          ];
+        }
+        return merged;
+      };
+
+      const convertCondensedPipes = (pipes) => {
+        if (!Array.isArray(pipes) || pipes.length === 0) return [];
+
+        return pipes.map((pipe) => {
+          const transform = typeof pipe?.transform === 'string'
+            ? pipe.transform
+            : (typeof pipe?.rawIdentifier === 'string' ? pipe.rawIdentifier : '');
+
+          const dotted = transform.split('.').filter(Boolean);
+          const baseIdentifier = dotted[0] || transform;
+          const explicitFields = Array.isArray(pipe?.fields) ? pipe.fields : [];
+          const fieldTokens = explicitFields.length > 0
+            ? explicitFields.map(field => typeof field === 'string'
+              ? { type: 'field', value: field }
+              : field)
+            : dotted.slice(1).map(field => ({ type: 'field', value: field }));
+
+          const identifier = helpers.createVariableReferenceNode('varIdentifier', {
+            identifier: baseIdentifier,
+            ...(fieldTokens.length > 0 ? { fields: fieldTokens } : {})
+          }, location());
+
+          const args = Array.isArray(pipe?.args) ? pipe.args : [];
+
+          return {
+            identifier: [identifier],
+            args,
+            fields: fieldTokens,
+            rawIdentifier: transform,
+            rawArgs: args
+          };
+        });
+      };
+
       if (value && value.content && value.wrapperType) {
         processedValue = value.content;
         if (processedValue.length === 0) {
@@ -26,7 +74,7 @@ LetAssignment "let assignment"
         metaInfo.inferredType = 'template';
 
         if (value.withClause) {
-          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+          tail = mergeWithClause(value.withClause, tail);
         }
         // Note: Pipeline is preserved for all wrapper types (backtick, doubleColon, tripleColon)
         // to allow `let @x = \`template\` | log` syntax to work consistently
@@ -41,26 +89,38 @@ LetAssignment "let assignment"
         metaInfo.isEmptyArray = value.items.length === 0;
       }
       else if (value && value.type === 'load-content') {
-        processedValue = [value];
+        let normalizedLoadValue = value;
+        if (Array.isArray(value.pipes) && value.pipes.length > 0 && Array.isArray(tail?.pipeline)) {
+          tail = mergeWithClause({ pipeline: convertCondensedPipes(value.pipes) }, tail);
+          normalizedLoadValue = { ...value };
+          delete normalizedLoadValue.pipes;
+        }
+        processedValue = [normalizedLoadValue];
         metaInfo.inferredType = value.options && value.options.section ? 'section-content' : 'file-content';
         metaInfo.sourceType = value.source.type;
       }
       else if (value && (value.type === 'variableReference' || value.type === 'VariableReference')) {
-        processedValue = [value];
+        let normalizedVarValue = value;
+        if (Array.isArray(value.pipes) && value.pipes.length > 0 && Array.isArray(tail?.pipeline)) {
+          tail = mergeWithClause({ pipeline: convertCondensedPipes(value.pipes) }, tail);
+          normalizedVarValue = { ...value };
+          delete normalizedVarValue.pipes;
+        }
+        processedValue = [normalizedVarValue];
         metaInfo.inferredType = 'reference';
       }
       else if (value && value.type === 'VariableReferenceWithTail') {
         processedValue = [value.variable];
         metaInfo.inferredType = 'reference';
         if (value.withClause) {
-          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+          tail = mergeWithClause(value.withClause, tail);
         }
       }
       else if (value && value.type === 'LeadingParallelPipeline') {
         const placeholder = value.placeholder;
         processedValue = [placeholder];
         metaInfo.inferredType = 'pipeline';
-        tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        tail = mergeWithClause(value.withClause, tail);
       }
       else if (value && value.type === 'nestedDirective') {
         processedValue = [value.directive];
@@ -145,6 +205,54 @@ AugmentedAssignment "augmented assignment"
       let processedValue;
       let metaInfo = {};
 
+      const mergeWithClause = (existing, incoming) => {
+        if (!existing) return incoming || null;
+        if (!incoming) return existing;
+
+        const merged = Object.assign({}, existing, incoming);
+        if (existing.pipeline || incoming.pipeline) {
+          merged.pipeline = [
+            ...(Array.isArray(existing.pipeline) ? existing.pipeline : []),
+            ...(Array.isArray(incoming.pipeline) ? incoming.pipeline : [])
+          ];
+        }
+        return merged;
+      };
+
+      const convertCondensedPipes = (pipes) => {
+        if (!Array.isArray(pipes) || pipes.length === 0) return [];
+
+        return pipes.map((pipe) => {
+          const transform = typeof pipe?.transform === 'string'
+            ? pipe.transform
+            : (typeof pipe?.rawIdentifier === 'string' ? pipe.rawIdentifier : '');
+
+          const dotted = transform.split('.').filter(Boolean);
+          const baseIdentifier = dotted[0] || transform;
+          const explicitFields = Array.isArray(pipe?.fields) ? pipe.fields : [];
+          const fieldTokens = explicitFields.length > 0
+            ? explicitFields.map(field => typeof field === 'string'
+              ? { type: 'field', value: field }
+              : field)
+            : dotted.slice(1).map(field => ({ type: 'field', value: field }));
+
+          const identifier = helpers.createVariableReferenceNode('varIdentifier', {
+            identifier: baseIdentifier,
+            ...(fieldTokens.length > 0 ? { fields: fieldTokens } : {})
+          }, location());
+
+          const args = Array.isArray(pipe?.args) ? pipe.args : [];
+
+          return {
+            identifier: [identifier],
+            args,
+            fields: fieldTokens,
+            rawIdentifier: transform,
+            rawArgs: args
+          };
+        });
+      };
+
       if (value && value.content && value.wrapperType) {
         processedValue = value.content;
         if (processedValue.length === 0) {
@@ -154,7 +262,7 @@ AugmentedAssignment "augmented assignment"
         metaInfo.inferredType = 'template';
 
         if (value.withClause) {
-          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+          tail = mergeWithClause(value.withClause, tail);
         }
         // Note: Pipeline is preserved for all wrapper types (backtick, doubleColon, tripleColon)
         // to allow `let @x = \`template\` | log` syntax to work consistently
@@ -169,26 +277,38 @@ AugmentedAssignment "augmented assignment"
         metaInfo.isEmptyArray = value.items.length === 0;
       }
       else if (value && value.type === 'load-content') {
-        processedValue = [value];
+        let normalizedLoadValue = value;
+        if (Array.isArray(value.pipes) && value.pipes.length > 0 && Array.isArray(tail?.pipeline)) {
+          tail = mergeWithClause({ pipeline: convertCondensedPipes(value.pipes) }, tail);
+          normalizedLoadValue = { ...value };
+          delete normalizedLoadValue.pipes;
+        }
+        processedValue = [normalizedLoadValue];
         metaInfo.inferredType = value.options && value.options.section ? 'section-content' : 'file-content';
         metaInfo.sourceType = value.source.type;
       }
       else if (value && (value.type === 'variableReference' || value.type === 'VariableReference')) {
-        processedValue = [value];
+        let normalizedVarValue = value;
+        if (Array.isArray(value.pipes) && value.pipes.length > 0 && Array.isArray(tail?.pipeline)) {
+          tail = mergeWithClause({ pipeline: convertCondensedPipes(value.pipes) }, tail);
+          normalizedVarValue = { ...value };
+          delete normalizedVarValue.pipes;
+        }
+        processedValue = [normalizedVarValue];
         metaInfo.inferredType = 'reference';
       }
       else if (value && value.type === 'VariableReferenceWithTail') {
         processedValue = [value.variable];
         metaInfo.inferredType = 'reference';
         if (value.withClause) {
-          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+          tail = mergeWithClause(value.withClause, tail);
         }
       }
       else if (value && value.type === 'LeadingParallelPipeline') {
         const placeholder = value.placeholder;
         processedValue = [placeholder];
         metaInfo.inferredType = 'pipeline';
-        tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        tail = mergeWithClause(value.withClause, tail);
       }
       else if (value && value.type === 'nestedDirective') {
         processedValue = [value.directive];

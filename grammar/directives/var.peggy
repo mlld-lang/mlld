@@ -21,6 +21,54 @@ SlashVar "var directive"
       // Process the value based on its structure
       let processedValue;
       let metaInfo = {};
+
+      const mergeWithClause = (existing, incoming) => {
+        if (!existing) return incoming || null;
+        if (!incoming) return existing;
+
+        const merged = Object.assign({}, existing, incoming);
+        if (existing.pipeline || incoming.pipeline) {
+          merged.pipeline = [
+            ...(Array.isArray(existing.pipeline) ? existing.pipeline : []),
+            ...(Array.isArray(incoming.pipeline) ? incoming.pipeline : [])
+          ];
+        }
+        return merged;
+      };
+
+      const convertCondensedPipes = (pipes) => {
+        if (!Array.isArray(pipes) || pipes.length === 0) return [];
+
+        return pipes.map((pipe) => {
+          const transform = typeof pipe?.transform === 'string'
+            ? pipe.transform
+            : (typeof pipe?.rawIdentifier === 'string' ? pipe.rawIdentifier : '');
+
+          const dotted = transform.split('.').filter(Boolean);
+          const baseIdentifier = dotted[0] || transform;
+          const explicitFields = Array.isArray(pipe?.fields) ? pipe.fields : [];
+          const fieldTokens = explicitFields.length > 0
+            ? explicitFields.map(field => typeof field === 'string'
+              ? { type: 'field', value: field }
+              : field)
+            : dotted.slice(1).map(field => ({ type: 'field', value: field }));
+
+          const identifier = helpers.createVariableReferenceNode('varIdentifier', {
+            identifier: baseIdentifier,
+            ...(fieldTokens.length > 0 ? { fields: fieldTokens } : {})
+          }, location());
+
+          const args = Array.isArray(pipe?.args) ? pipe.args : [];
+
+          return {
+            identifier: [identifier],
+            args,
+            fields: fieldTokens,
+            rawIdentifier: transform,
+            rawArgs: args
+          };
+        });
+      };
       
       // Handle template content (backtick, [[...]], quotes)
       if (value && value.content && value.wrapperType) {
@@ -37,7 +85,7 @@ SlashVar "var directive"
         
         // Check if template has a pipeline attached
         if (value.withClause) {
-          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+          tail = mergeWithClause(value.withClause, tail);
         }
         // Note: Pipeline is preserved for all wrapper types (backtick, doubleColon, tripleColon)
         // to allow `var @x = \`template\` | log` syntax to work consistently
@@ -55,17 +103,30 @@ SlashVar "var directive"
       }
       // Handle alligator expressions (file/URL loading)
       else if (value && value.type === 'load-content') {
-        processedValue = [value];
+        let normalizedLoadValue = value;
+        if (Array.isArray(value.pipes) && value.pipes.length > 0 && Array.isArray(tail?.pipeline)) {
+          tail = mergeWithClause({ pipeline: convertCondensedPipes(value.pipes) }, tail);
+          normalizedLoadValue = { ...value };
+          delete normalizedLoadValue.pipes;
+        }
+        processedValue = [normalizedLoadValue];
         metaInfo.inferredType = value.options && value.options.section ? 'section-content' : 'file-content';
         metaInfo.sourceType = value.source.type; // 'path' or 'url'
       }
       // Handle variable references
       else if (value && (value.type === 'variableReference' || value.type === 'VariableReference')) {
+        let normalizedVarValue = value;
+        if (Array.isArray(value.pipes) && value.pipes.length > 0 && Array.isArray(tail?.pipeline)) {
+          tail = mergeWithClause({ pipeline: convertCondensedPipes(value.pipes) }, tail);
+          normalizedVarValue = { ...value };
+          delete normalizedVarValue.pipes;
+        }
         // Store the variable reference node directly
-        processedValue = [value];
+        processedValue = [normalizedVarValue];
         metaInfo.inferredType = 'reference';
-        // Note: keep node-level condensed pipes on the VariableReference; they will be
-        // applied during evaluation via applyCondensedPipes. Do not promote to tail.
+        // Keep condensed pipes on the node for custom-only pipelines, but if a tail
+        // pipeline already exists (e.g., builtin effects), promote and merge so stage
+        // order is preserved in a single pipeline array.
       }
       // Handle variable references with tail modifiers
       else if (value && value.type === 'VariableReferenceWithTail') {
@@ -73,7 +134,7 @@ SlashVar "var directive"
         metaInfo.inferredType = 'reference';
         // Merge the withClause from the variable reference
         if (value.withClause) {
-          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+          tail = mergeWithClause(value.withClause, tail);
         }
       }
       // Handle leading parallel pipelines (|| @a() || @b())
@@ -81,7 +142,7 @@ SlashVar "var directive"
         const placeholder = value.placeholder;
         processedValue = [placeholder];
         metaInfo.inferredType = 'pipeline';
-        tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        tail = mergeWithClause(value.withClause, tail);
       }
       // Handle nested directives
       else if (value && value.type === 'nestedDirective') {
