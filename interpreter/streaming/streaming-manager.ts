@@ -5,6 +5,7 @@ import { TerminalSink } from '@interpreter/eval/pipeline/stream-sinks/terminal';
 import { ProgressOnlySink } from '@interpreter/eval/pipeline/stream-sinks/progress';
 import type { StreamAdapter } from './adapters/base';
 import { FormatAdapterSink, type FormatAdapterSinkOptions } from '@interpreter/eval/pipeline/stream-sinks/format-adapter';
+import { RawJsonMirrorSink } from '@interpreter/eval/pipeline/stream-sinks/raw-json';
 import type { StreamingResult } from '@sdk/types';
 
 type Unsubscribe = () => void;
@@ -45,6 +46,20 @@ export class StreamingManager {
     const { env, streamingEnabled, streamingOptions, adapter, formatOptions } = config;
     if (!streamingEnabled) {
       return;
+    }
+
+    const needsRawMirror =
+      streamingOptions.showJson === true || streamingOptions.appendJson !== undefined;
+    if (needsRawMirror) {
+      const rawMirrorSink = new RawJsonMirrorSink({
+        showJson: streamingOptions.showJson === true,
+        appendJson: streamingOptions.appendJson
+      });
+      const rawMirrorUnsub = this.bus.subscribe(event => rawMirrorSink.handle(event));
+      this.unsubscribes.push(() => {
+        rawMirrorUnsub();
+        rawMirrorSink.stop?.();
+      });
     }
 
     if (adapter) {

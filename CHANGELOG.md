@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc83]
 
 ### Added
+- `@mlld/claude-stream` registry module: drop-in `@mlld/claude` replacement that defaults to `stream-json` output with `streamFormat: "claude-code"` on all exported executables.
 - `mlld howto <keyword>` keyword search across atom tags, titles, and briefs. Single match shows full content; multiple matches show a selection list.
 - Markdown section selectors now support include/exclude sets (`# a, b; !# c`), quoted heading names, optional selectors (`"name"?`), and fuzzy prefix matching that ignores punctuation/case.
 - `.flat(depth?)` and `.at(index)` array builtin methods.
@@ -22,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signing now writes `signed:<var>` provenance labels; composed instruction variables inherit signed provenance for cascading verification targets.
 
 ### Fixed
+- Executable-definition streaming now propagates through `run` and `show`: `stream` and `streamFormat` declared on `/exe` definitions activate the adapter pipeline even when not repeated at invocation.
+- Invocation `streamFormat` now correctly overrides executable-definition `streamFormat` while preserving definition-level streaming defaults.
+- `show` streaming invocations no longer double-emit output when executable-definition streaming is active.
+- CLI streaming debug flags are now wired end-to-end: `--show-json` mirrors raw NDJSON to stderr and `--append-json` appends raw NDJSON to JSONL output files.
 - Hook registration now emits a runtime warning for unknown `op:<type>` hook filters (while still registering the hook for forward compatibility).
 - `--resume "checkpoint-name"` now pre-scans source-declared checkpoints so named resume targets are available even when a prior run never reached that checkpoint.
 - `mlld validate` now warns when a trailing exe parameter can be omitted by callsites but is passed through to another function call (a runtime `Undefined variable` failure pattern).

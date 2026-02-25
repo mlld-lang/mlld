@@ -110,58 +110,67 @@ export async function evaluateRun(
     }
   }
 
-  const streamingOptions = env.getStreamingOptions();
-  const streamingRequested = Boolean(withClause && (withClause as any).stream);
-  const streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
+  let streamingOptions = env.getStreamingOptions();
+  let activeStreamingOptions = streamingOptions;
+  let streamingRequested = Boolean(withClause && (withClause as any).stream);
+  let streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
   const pipelineId = `run-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
 
   // Check for streamFormat in withClause
-  const hasStreamFormat = withClause && (withClause as any).streamFormat !== undefined;
-  const rawStreamFormat = hasStreamFormat ? (withClause as any).streamFormat : undefined;
-  const streamFormatValue = hasStreamFormat
+  let hasStreamFormat = Boolean(withClause && (withClause as any).streamFormat !== undefined);
+  let rawStreamFormat = hasStreamFormat ? (withClause as any).streamFormat : undefined;
+  let streamFormatValue = hasStreamFormat
     ? await resolveStreamFormatValue(rawStreamFormat, env)
     : undefined;
 
-  // Persist streamFormat/sink preferences in env so downstream executors see them
-  if (hasStreamFormat) {
-    env.setStreamingOptions({
-      ...streamingOptions,
-      streamFormat: streamFormatValue as any,
-      skipDefaultSinks: true,
-      suppressTerminal: true
-    });
-  }
-  const activeStreamingOptions = env.getStreamingOptions();
-
-  if (process.env.MLLD_DEBUG) {
-    console.error('[FormatAdapter /run] streamingEnabled:', streamingEnabled);
-    console.error('[FormatAdapter /run] hasStreamFormat:', hasStreamFormat);
-    console.error('[FormatAdapter /run] streamFormatValue:', streamFormatValue);
-    console.error('[FormatAdapter /run] withClause:', JSON.stringify(withClause));
-  }
-
-  // Setup streaming via manager
   const streamingManager = env.getStreamingManager();
-  if (streamingEnabled) {
+  const refreshStreamingOptions = (): void => {
+    streamingOptions = env.getStreamingOptions();
+    activeStreamingOptions = streamingOptions;
+  };
+  const definitionRequestsStreaming = (definition: any): boolean => {
+    return (
+      definition?.withClause?.stream === true ||
+      definition?.meta?.withClause?.stream === true ||
+      definition?.meta?.isStream === true
+    );
+  };
+  const definitionHasStreamFormat = (definition: any): boolean => {
+    return (
+      definition?.withClause?.streamFormat !== undefined ||
+      definition?.meta?.withClause?.streamFormat !== undefined
+    );
+  };
+  const resolveDefinitionRawStreamFormat = (definition: any): unknown => {
+    if (definition?.withClause?.streamFormat !== undefined) {
+      return definition.withClause.streamFormat;
+    }
+    return definition?.meta?.withClause?.streamFormat;
+  };
+  const configureStreamingManager = async (): Promise<void> => {
+    if (!streamingEnabled) {
+      return;
+    }
+
     let adapter;
-    // Only use format adapter when streamFormat is explicitly specified
-    // This ensures FormatAdapterSink is used for JSON streaming (like claude --output-format stream-json)
-    // but plain text streaming (sh/bash) uses the terminal sink + normal output path
     if (hasStreamFormat && streamFormatValue) {
       adapter = await loadStreamAdapter(streamFormatValue);
       if (!adapter) {
         adapter = await getAdapter('ndjson');
       }
     }
+
     streamingManager.configure({
       env,
       streamingEnabled: true,
       streamingOptions: activeStreamingOptions,
       adapter: adapter as any
     });
-  }
-
-  if (streamingEnabled) {
+  };
+  const enforceNoAfterGuardsWhenStreaming = (): void => {
+    if (!streamingEnabled) {
+      return;
+    }
     const registry = env.getGuardRegistry?.();
     const subtypeKey =
       directive.subtype === 'runCommand'
@@ -175,27 +184,53 @@ export async function evaluateRun(
           ...(subtypeKey ? registry.getOperationGuardsForTiming(subtypeKey, 'after') : [])
         ]
       : [];
-    if (afterGuards.length > 0) {
-      const streamingMessage = [
-        'Cannot run after-guards when streaming is enabled.',
-        'Options:',
-        '- Remove after-timed guards or change them to before',
-        '- Disable streaming with `with { stream: false }`'
-      ].join('\n');
-      throw new GuardError({
-        decision: 'deny',
-        message: streamingMessage,
-        reason: streamingMessage,
-        operation: {
-          type: 'run',
-          subtype: directive.subtype === 'runCode' ? 'runCode' : 'runCommand'
-        } as any,
-        timing: 'after',
-        guardResults: [],
-        reasons: [streamingMessage]
-      });
+    if (afterGuards.length === 0) {
+      return;
     }
+
+    const streamingMessage = [
+      'Cannot run after-guards when streaming is enabled.',
+      'Options:',
+      '- Remove after-timed guards or change them to before',
+      '- Disable streaming with `with { stream: false }`'
+    ].join('\n');
+    throw new GuardError({
+      decision: 'deny',
+      message: streamingMessage,
+      reason: streamingMessage,
+      operation: {
+        type: 'run',
+        subtype: directive.subtype === 'runCode' ? 'runCode' : 'runCommand'
+      } as any,
+      timing: 'after',
+      guardResults: [],
+      reasons: [streamingMessage]
+    });
+  };
+
+  // Persist streamFormat/sink preferences in env so downstream executors see them
+  if (hasStreamFormat) {
+    env.setStreamingOptions({
+      ...streamingOptions,
+      streamFormat: streamFormatValue as any,
+      skipDefaultSinks: true,
+      suppressTerminal: true
+    });
+    refreshStreamingOptions();
+  } else {
+    refreshStreamingOptions();
   }
+
+  if (process.env.MLLD_DEBUG) {
+    console.error('[FormatAdapter /run] streamingEnabled:', streamingEnabled);
+    console.error('[FormatAdapter /run] hasStreamFormat:', hasStreamFormat);
+    console.error('[FormatAdapter /run] streamFormatValue:', streamFormatValue);
+    console.error('[FormatAdapter /run] withClause:', JSON.stringify(withClause));
+  }
+
+  // Setup streaming via manager
+  await configureStreamingManager();
+  enforceNoAfterGuardsWhenStreaming();
 
   // Create execution context with source information
   const executionContext = {
@@ -246,6 +281,32 @@ export async function evaluateRun(
     });
     callStack = runExecResolution.callStack;
     const { execVar, definition } = runExecResolution;
+
+    const definitionWantsStreaming = definitionRequestsStreaming(definition);
+    const definitionWantsStreamFormat = definitionHasStreamFormat(definition);
+    streamingRequested = streamingRequested || definitionWantsStreaming;
+    hasStreamFormat = hasStreamFormat || definitionWantsStreamFormat;
+    rawStreamFormat = hasStreamFormat
+      ? rawStreamFormat ?? resolveDefinitionRawStreamFormat(definition)
+      : undefined;
+    streamFormatValue = hasStreamFormat
+      ? await resolveStreamFormatValue(rawStreamFormat, env)
+      : undefined;
+
+    if (hasStreamFormat) {
+      env.setStreamingOptions({
+        ...streamingOptions,
+        streamFormat: streamFormatValue as any,
+        skipDefaultSinks: true,
+        suppressTerminal: true
+      });
+      refreshStreamingOptions();
+    } else {
+      refreshStreamingOptions();
+    }
+    streamingEnabled = activeStreamingOptions.enabled !== false && streamingRequested;
+    await configureStreamingManager();
+    enforceNoAfterGuardsWhenStreaming();
 
     const execDescriptor = execVar.mx ? varMxToSecurityDescriptor(execVar.mx) : undefined;
     const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];

@@ -289,7 +289,7 @@ async function evaluateExecInvocationInternal(
   let streamingOptions = streamingSetup.streamingOptions;
   let streamingRequested = streamingSetup.streamingRequested;
   let streamingEnabled = streamingSetup.streamingEnabled;
-  const hasStreamFormat = streamingSetup.hasStreamFormat;
+  let hasStreamFormat = streamingSetup.hasStreamFormat;
   const pipelineId = streamingSetup.pipelineId;
   const streamingManager = streamingSetup.streamingManager;
   const chunkEffect = createExecInvocationChunkEffect({
@@ -1309,10 +1309,22 @@ async function evaluateExecInvocationInternal(
   if (isPartial) {
     definition = definition.base;
   }
-  ({ streamingRequested, streamingEnabled } = mergeExecInvocationStreamingFromDefinition(
-    streamingRequested,
+  ({
     streamingOptions,
-    definition
+    streamingRequested,
+    streamingEnabled,
+    hasStreamFormat
+  } = await mergeExecInvocationStreamingFromDefinition(
+    node,
+    definition,
+    env,
+    streamingManager,
+    {
+      streamingOptions,
+      streamingRequested,
+      streamingEnabled,
+      hasStreamFormat
+    }
   ));
 
   let whenExprNode: WhenExpressionNode | null = null;

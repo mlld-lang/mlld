@@ -83,6 +83,14 @@ export class OptionProcessor {
       streaming.format = cliOptions.streamOutputFormat;
     }
 
+    if (cliOptions.showJson) {
+      streaming.showJson = true;
+    }
+
+    if (cliOptions.appendJson !== undefined) {
+      streaming.appendJson = cliOptions.appendJson;
+    }
+
     return Object.keys(streaming).length > 0 ? streaming : undefined;
   }
 
