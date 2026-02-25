@@ -294,18 +294,18 @@ export class ArgumentParser {
           }
           break;
         }
-        // Environment file path
-        case '--env': {
+        // MLLD environment file path / inline overrides
+        case '--mlld-env': {
           const envValue = args[++i];
           if (envValue === undefined) {
-            throw new Error('--env requires a value');
+            throw new Error('--mlld-env requires a value');
           }
-          if (Array.isArray(options.env)) {
-            options.env.push(envValue);
-          } else if (typeof options.env === 'string' && options.env.length > 0) {
-            options.env = [options.env, envValue];
+          if (Array.isArray(options.mlldEnv)) {
+            options.mlldEnv.push(envValue);
+          } else if (typeof options.mlldEnv === 'string' && options.mlldEnv.length > 0) {
+            options.mlldEnv = [options.mlldEnv, envValue];
           } else {
-            options.env = envValue;
+            options.mlldEnv = envValue;
           }
           break;
         }

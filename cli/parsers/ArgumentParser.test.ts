@@ -102,6 +102,25 @@ describe('ArgumentParser custom payload flags', () => {
     expect(options.resume).toBe(true);
     expect(options.inject).toEqual(['@payload={}']);
   });
+
+  it('parses reserved --mlld-env values without adding them to @payload', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs([
+      'script.mld',
+      '--mlld-env', 'agent.env',
+      '--mlld-env', 'MLLD_TOKEN=abc'
+    ]);
+
+    expect(options.mlldEnv).toEqual(['agent.env', 'MLLD_TOKEN=abc']);
+    expect(options.inject).toEqual(['@payload={}']);
+  });
+
+  it('treats --env as a normal payload flag', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--env', 'staging']);
+
+    expect(options.inject).toEqual(['@payload={"env":"staging"}']);
+  });
 });
 
 describe('ArgumentParser eval mode', () => {

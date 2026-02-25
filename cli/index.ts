@@ -98,8 +98,8 @@ export interface CLIOptions {
   captureErrors?: boolean;
   // Ephemeral mode for CI/serverless
   ephemeral?: boolean;
-  // Environment file path
-  env?: string | string[];
+  // MLLD environment loading (file path or inline KEY=VALUE list)
+  mlldEnv?: string | string[];
   // Allow absolute paths outside project root
   allowAbsolute?: boolean;
   // Serve command options

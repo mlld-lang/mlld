@@ -7,7 +7,7 @@ category: cli
 tags: [cli, run, scripts, payload, checkpoint, resume]
 related: [syntax-payload, config-sdk-dynamic-modules, config-cli-file, checkpoint]
 related-code: [cli/commands/run.ts]
-updated: 2026-02-17
+updated: 2026-02-25
 ---
 
 Run mlld scripts from a configured directory with automatic payload injection.
@@ -21,17 +21,17 @@ mlld run qa --topic vars     # Pass payload: @payload.topic = "vars"
 **Payload injection**: Unknown flags become `@payload` fields:
 
 ```bash
-mlld run build --environment prod --fast true
+mlld run build --env prod --fast true
 ```
 
 ```mlld
 >> In build.mld
 import "@payload" as @payload
-var @env = @payload.environment ? @payload.environment : "dev"
+var @env = @payload.env ? @payload.env : "dev"
 var @fast = @payload.fast ? @payload.fast : false
 ```
 
-**Reserved flags**: `--env` is reserved for agent environment loading. Use `--environment` or another name for payload injection.
+**Reserved flags**: `--mlld-env` is reserved for agent environment loading. `--env` now flows through as `@payload.env`.
 
 **Script directory**: Configured in `mlld-config.json`, defaults to `llm/run/`.
 
@@ -45,6 +45,7 @@ var @fast = @payload.fast ? @payload.fast : false
 | `--no-checkpoint` | Disable checkpoint reads/writes for this run |
 | `--resume [target]` | Invalidate checkpoint entries and re-run (see below) |
 | `--fork <script>` | Seed cache from another script's checkpoints (read-only) |
+| `--mlld-env <env>` | Load agent env file(s) or inline KEY=VALUE overrides |
 | `--<name> <value>` | Payload field |
 
 **Checkpoint/resume**: `llm`-labeled exes are automatically cached. Use `--resume` to selectively re-run:

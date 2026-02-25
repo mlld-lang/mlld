@@ -583,7 +583,7 @@ describe('RunCommand', () => {
       exitSpy.mockRestore();
     });
 
-    it('accumulates repeated --env flags into @input without leaking env into @payload', async () => {
+    it('accumulates repeated --mlld-env flags into @input without leaking env into @payload', async () => {
       const { execute } = await import('@sdk/execute');
       const { parseInjectOptions } = await import('../utils/inject-parser');
       vi.mocked(execute).mockResolvedValue({
@@ -600,15 +600,44 @@ describe('RunCommand', () => {
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as any);
 
       await command.execute(['pipeline'], {
-        env: ['KEY1=val1', 'KEY2=val2'],
+        'mlld-env': ['KEY1=val1', 'KEY2=val2'],
         topic: 'security'
       });
 
       const injectArgs = vi.mocked(parseInjectOptions).mock.calls[0]?.[0] as string[];
       expect(injectArgs).toContain('@input={"KEY1":"val1","KEY2":"val2"}');
       expect(injectArgs).toContain('@payload={"topic":"security"}');
-      expect(injectArgs.join(' ')).not.toContain('env');
+      expect(injectArgs.join(' ')).not.toContain('mlld-env');
 
+      expect(exitSpy).toHaveBeenCalledWith(0);
+
+      consoleLogSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('passes --env through to @payload.env', async () => {
+      const { execute } = await import('@sdk/execute');
+      const { parseInjectOptions } = await import('../utils/inject-parser');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('pipeline.mld'));
+
+      const command = createRunCommand();
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as any);
+
+      await command.execute(['pipeline'], {
+        env: 'prod'
+      });
+
+      const injectArgs = vi.mocked(parseInjectOptions).mock.calls[0]?.[0] as string[];
+      expect(injectArgs).toContain('@payload={"env":"prod"}');
+      expect(injectArgs.join(' ')).not.toContain('@input=');
       expect(exitSpy).toHaveBeenCalledWith(0);
 
       consoleLogSpy.mockRestore();

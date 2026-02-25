@@ -42,9 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mlld update` now respects pinned lock constraints: exact versions stay pinned, and range constraints update within their pinned range.
 - `@root/...` and `@base/...` file-not-found errors now include the resolved absolute path for easier debugging.
 - `mlld validate` undefined-variable checks now ignore non-variable `@` text patterns (emails/scoped packages) and honor implicit loop locals (`@item`, `@index`, `@key`).
+- `mlld validate` now treats pipeline alias `@p`, resolver-prefix variables from `mlld-config.json`, and `hook @name ...` declarations as known variables to avoid false undefined-variable warnings.
+- Hook operation validation now recognizes `op:log` as a known operation type.
 - CLI error reporting now marks handled errors and avoids secondary re-emission paths, so representative runtime failures emit one formatted error block.
 - `var`/`let` pipeline shorthand now preserves custom stages immediately before builtin effects (`log`, `show`, `output`, `append`) instead of silently dropping prior stages in parsed pipeline order.
 - Namespace executable internals now seal `capturedModuleEnv` from enumeration/JSON serialization, and namespace missing-field errors now show sanitized export-only diagnostics (without internal runtime dumps).
+- Namespace method calls now prefer exported functions over colliding built-in string methods (for names like `trim`, `split`, `replace`, etc.).
+- `mlld publish` now reads file frontmatter metadata defaults (`title`, `description`/`about`, `version`, `tags`/`keywords`, `author`) and lets CLI metadata flags override them.
+- Reserved CLI env loading flag renamed from `--env` to `--mlld-env`; `--env` now flows through to payload fields (for example `@payload.env`).
 
 ### Fixed
 - Removed the legacy `/exe @fn(...) = [@file # section]` special case; section/file extraction in executable bodies now uses alligator syntax (`<file.md # "Section">`).
