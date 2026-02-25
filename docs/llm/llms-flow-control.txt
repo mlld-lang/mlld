@@ -485,6 +485,21 @@ var @result = 5 | while(10) @countdown
 - `limit` - Configured cap
 - `active` - true when inside while
 
+**Accumulator pattern** — build a collection over iterations:
+
+```mlld
+exe @collect(state) = [
+  let @items = @state.items
+  let @next = @fetchNext(@state.cursor)
+  if !@next [
+    done @items
+  ]
+  continue { items: @items.concat([@next.data]), cursor: @next.cursor }
+]
+
+var @all = { items: [], cursor: null } | while(50) @collect
+```
+
 **With pacing:**
 
 ```mlld
