@@ -31,35 +31,16 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const CASES_DIR = path.join(PROJECT_ROOT, 'tests', 'cases', 'docs');
 
 /**
- * Dynamically import the interpreter (requires build)
+ * Dynamically import processMlld from the SDK (requires build)
  */
 async function loadInterpreter() {
   try {
-    const mod = await import('../dist/interpreter/index.js');
-    return mod.interpret;
+    const mod = await import('../dist/index.mjs');
+    return mod.processMlld;
   } catch (error) {
-    console.error('❌ Could not load interpreter. Run `npm run build` first.');
+    console.error('❌ Could not load processMlld. Run `npm run build` first.');
     console.error(`   ${error.message}`);
     process.exit(1);
-  }
-}
-
-/**
- * Dynamically import MemoryFileSystem
- */
-async function loadMemoryFileSystem() {
-  try {
-    const mod = await import('../dist/tests/utils/MemoryFileSystem.js');
-    return mod.MemoryFileSystem;
-  } catch (error) {
-    // Try alternate path
-    try {
-      const mod = await import('../tests/utils/MemoryFileSystem.ts');
-      return mod.MemoryFileSystem;
-    } catch {
-      console.error('❌ Could not load MemoryFileSystem. Run `npm run build` first.');
-      process.exit(1);
-    }
   }
 }
 
@@ -192,17 +173,16 @@ async function executeBlock(dirPath, interpret) {
   }
 
   const input = await fs.readFile(path.join(dirPath, exampleFile), 'utf-8');
-  const mode = exampleFile.endsWith('.mld') ? 'strict' : undefined;
+  const mode = exampleFile.endsWith('.mld') ? 'strict' : 'markdown';
 
   try {
     const output = await interpret(input, {
       format: 'markdown',
-      mlldMode: mode,
-      ephemeral: true,
+      mode,
       useMarkdownFormatter: false,
     });
 
-    return { output: typeof output === 'string' ? output : output?.document || '' };
+    return { output: typeof output === 'string' ? output : '' };
   } catch (error) {
     return { error: error.message };
   }
