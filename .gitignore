@@ -25,6 +25,7 @@ website/src/docs/
 core/version.ts
 core/errors/patterns/parse-errors.generated.js
 core/errors/patterns/js-errors.generated.js
+llms-combined.txt
 
 # IDE-generated JavaScript files in core/types
 core/types/*.js
