@@ -196,6 +196,66 @@ async function cleanOrphanedFixtures() {
   } else {
     console.log(`  ✓ No orphaned fixtures`);
   }
+
+  // Also clean stale fixture files within active directories.
+  // When the naming convention changes, old fixture files linger and cause
+  // duplicate test runs (e.g. globalThis state bleeding between runs).
+  let staleFiles = 0;
+  async function cleanStaleFiles(fixtureDir, caseDir) {
+    let entries;
+    try {
+      entries = await fs.readdir(fixtureDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        await cleanStaleFiles(
+          path.join(fixtureDir, entry.name),
+          path.join(caseDir, entry.name)
+        );
+        continue;
+      }
+      if (!entry.name.endsWith('.generated-fixture.json')) continue;
+
+      // Compute expected fixture filenames for this case directory
+      const dirName = path.basename(caseDir);
+      let caseFiles;
+      try {
+        caseFiles = await fs.readdir(caseDir);
+      } catch {
+        continue; // Case dir gone; orphan cleanup handles this
+      }
+
+      const isExamplesDir = dirName === 'examples';
+      const expectedNames = new Set();
+      const exampleFiles = isExamplesDir
+        ? caseFiles.filter(f => (f.endsWith('.md') || f.endsWith('.mld')) && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.'))
+        : caseFiles.filter(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
+
+      for (const file of exampleFiles) {
+        if (isExamplesDir) {
+          expectedNames.add(file.replace('.md', '').replace('.mld', '') + '.generated-fixture.json');
+        } else if (file !== 'example.md' && file !== 'example.mld') {
+          const variant = file.replace('example-', '').replace('.md', '').replace('.mld', '');
+          expectedNames.add(`${dirName}-${variant}.generated-fixture.json`);
+        } else {
+          expectedNames.add(`${dirName}.generated-fixture.json`);
+        }
+      }
+
+      if (expectedNames.size > 0 && !expectedNames.has(entry.name)) {
+        await fs.unlink(path.join(fixtureDir, entry.name));
+        staleFiles++;
+      }
+    }
+  }
+
+  await cleanStaleFiles(FIXTURES_DIR, CASES_DIR);
+  if (staleFiles > 0) {
+    console.log(`  🗑️  Removed ${staleFiles} stale fixture file(s)`);
+  }
 }
 
 /**

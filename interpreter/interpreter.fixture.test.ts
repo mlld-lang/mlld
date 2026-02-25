@@ -1359,7 +1359,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               // JSON stdin content (default for all other stdin tests)
               stdinContent = '{"name": "test-project", "version": "1.0.0"}';
             }
-          } else if (fixture.name.includes('input-stdin-compatibility') || fixture.name.includes('input-input-new-syntax') || fixture.name.endsWith('/input-new-syntax')) {
+          } else if (fixture.name.includes('input/stdin-compatibility') || fixture.name.includes('input/input-new-syntax') || fixture.name.endsWith('/input-new-syntax')) {
             // These tests expect JSON with config and data fields
             stdinContent = '{"config": {"greeting": "Hello from stdin!"}, "data": {"message": "Input data loaded"}}';
           } else if (fixture.name.endsWith('/stdin-deprecated')) {
@@ -1451,7 +1451,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               // JSON stdin content (default for all other stdin tests)
               stdinContent = '{"name": "test-project", "version": "1.0.0"}';
             }
-          } else if (fixture.name.includes('input-stdin-compatibility') || fixture.name.includes('input-input-new-syntax') || fixture.name.endsWith('/input-new-syntax')) {
+          } else if (fixture.name.includes('input/stdin-compatibility') || fixture.name.includes('input/input-new-syntax') || fixture.name.endsWith('/input-new-syntax')) {
             // These tests expect JSON with config and data fields
             stdinContent = '{"config": {"greeting": "Hello from stdin!"}, "data": {"message": "Input data loaded"}}';
           } else if (fixture.name.endsWith('/stdin-deprecated')) {

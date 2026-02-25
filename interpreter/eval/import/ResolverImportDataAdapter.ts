@@ -86,6 +86,32 @@ export class ResolverImportDataAdapter {
       return;
     }
 
+    if (directive.subtype === 'importNamespace') {
+      const namespaceNodes = directive.values?.namespace;
+      const namespaceNode = namespaceNodes && Array.isArray(namespaceNodes) ? namespaceNodes[0] : undefined;
+      const alias = namespaceNode?.identifier ?? namespaceNode?.content;
+      if (!alias) {
+        throw new Error('Namespace import missing alias');
+      }
+      const namespaceVar = this.variableImporter.createNamespaceVariable(
+        alias,
+        exportData,
+        sourcePath,
+        securityLabels,
+        undefined,
+        env
+      );
+      // Mark as reserved so it can override the resolver's reserved name slot
+      // (e.g. `import @stdin as @input` needs to override the @input resolver variable)
+      if (namespaceVar.internal) {
+        namespaceVar.internal.isReserved = true;
+      } else {
+        (namespaceVar as any).internal = { isReserved: true, isNamespace: true };
+      }
+      env.setVariable(alias, namespaceVar);
+      return;
+    }
+
     for (const [name, value] of Object.entries(exportData)) {
       const variable = this.variableImporter.createVariableFromValue(name, value, sourcePath, undefined, {
         securityLabels,

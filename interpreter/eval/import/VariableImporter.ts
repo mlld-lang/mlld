@@ -192,6 +192,30 @@ export class VariableImporter {
   }
 
   /**
+   * Create a namespace variable wrapping all exported data under a single alias.
+   * Used by resolver-based imports (e.g. `import @stdin as @input`).
+   */
+  createNamespaceVariable(
+    alias: string,
+    moduleObject: Record<string, any>,
+    importPath: string,
+    securityLabels?: DataLabel[],
+    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
+    env?: Environment,
+    options?: { strictFieldAccess?: boolean }
+  ): Variable {
+    return this.importUtilities.createNamespaceVariable(
+      alias,
+      moduleObject,
+      importPath,
+      securityLabels,
+      metadataMap,
+      env,
+      options
+    );
+  }
+
+  /**
    * Create a variable from an imported value, inferring the type
    */
   createVariableFromValue(
