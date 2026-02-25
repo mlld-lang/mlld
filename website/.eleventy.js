@@ -1,5 +1,6 @@
 const markdownIt = require('markdown-it');
 const markdownItAnchor = require('markdown-it-anchor');
+const markdownItAttrs = require('markdown-it-attrs');
 const markdownItPrism = require('markdown-it-prism');
 
 // Load our custom Meld language
@@ -16,6 +17,7 @@ module.exports = function(eleventyConfig) {
   .use(markdownItAnchor, {
     permalink: markdownItAnchor.permalink.headerLink({ safariReaderFix: true })
   })
+  .use(markdownItAttrs)
   .use(markdownItPrism);
   
   eleventyConfig.setLibrary('md', markdownLib);

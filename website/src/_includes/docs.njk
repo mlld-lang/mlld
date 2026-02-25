@@ -31,9 +31,6 @@ layout: base.njk
           {% if docPage.data.type == 'category' %}
             <li>
               <a href="{{ docPage.url }}" {{ docPage.url | isActive(page.url) }}>{{ docPage.data.title }}</a>
-              {% if docPage.url == page.url %}
-                <ul class="nav-outline" id="page-outline"></ul>
-              {% endif %}
             </li>
           {% endif %}
         {% endfor %}
@@ -44,6 +41,13 @@ layout: base.njk
   <div class="docs-content">
     {{ content | safe }}
   </div>
+
+  <aside class="docs-toc" id="docs-toc">
+    <nav>
+      <h4>On this page</h4>
+      <ul id="page-outline"></ul>
+    </nav>
+  </aside>
 </div>
 
 <script>
@@ -93,6 +97,7 @@ layout: base.njk
     if (outline) {
       const content = document.querySelector('.docs-content');
       const headings = content.querySelectorAll('h2, h3');
+      const tocLinks = [];
       headings.forEach(function(h) {
         if (!h.id) return;
         const li = document.createElement('li');
@@ -102,7 +107,30 @@ layout: base.njk
         a.textContent = h.textContent;
         li.appendChild(a);
         outline.appendChild(li);
+        tocLinks.push({ id: h.id, el: a });
       });
+
+      // Scroll spy: highlight current heading in right rail
+      if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
+        let currentId = null;
+        const observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              currentId = entry.target.id;
+            }
+          });
+          tocLinks.forEach(function(link) {
+            if (link.id === currentId) {
+              link.el.classList.add('active');
+            } else {
+              link.el.classList.remove('active');
+            }
+          });
+        }, { rootMargin: '0px 0px -70% 0px', threshold: 0.1 });
+        headings.forEach(function(h) {
+          if (h.id) observer.observe(h);
+        });
+      }
     }
   });
 </script>
