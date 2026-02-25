@@ -9,6 +9,7 @@ import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
+import { isNamespaceInternalField } from '../core/interpreter/namespace-shared';
 import {
   asData,
   isStructuredValue,
@@ -204,13 +205,33 @@ function hasCapturedModuleEnv(value: unknown): boolean {
   return 'capturedModuleEnv' in (value as Record<string, unknown>);
 }
 
-function isSerializedExecutableWithCapturedEnv(value: unknown): boolean {
+function isSerializedExecutableWithInternal(value: unknown): boolean {
   if (!value || typeof value !== 'object') {
     return false;
   }
 
   const raw = value as Record<string, unknown>;
-  return raw.__executable === true && hasCapturedModuleEnv(raw.internal);
+  return raw.__executable === true && Boolean(raw.internal && typeof raw.internal === 'object');
+}
+
+function getNamespaceExportKeys(value: Record<string, unknown>): string[] {
+  return Object.keys(value).filter(key => {
+    if (key === '__metadata__') {
+      return false;
+    }
+    if (isNamespaceInternalField(key)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function getNamespaceImportSource(variable: Variable): string | undefined {
+  if (variable.definedAt?.filePath && variable.definedAt.filePath.length > 0) {
+    return variable.definedAt.filePath;
+  }
+  const internalPath = variable.internal?.importPath;
+  return typeof internalPath === 'string' && internalPath.length > 0 ? internalPath : undefined;
 }
 
 /**
@@ -540,7 +561,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
 
       // Handle regular objects (including Variables with type: 'object')
-      if (name === 'internal' && isSerializedExecutableWithCapturedEnv(rawValue)) {
+      if (name === 'internal' && isSerializedExecutableWithInternal(rawValue)) {
         const baseValue = Object.fromEntries(
           Object.entries(rawValue as Record<string, unknown>).filter(([key]) => key !== 'internal')
         );
@@ -575,6 +596,37 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         }
         if (strictMissingFieldAccess) {
           const accessPath = [...(options?.parentPath || []), name];
+          const namespaceVariable = isVariable(value) && value.internal?.isNamespace === true
+            ? value
+            : undefined;
+          if (
+            namespaceVariable &&
+            rawValue &&
+            typeof rawValue === 'object' &&
+            !Array.isArray(rawValue)
+          ) {
+            const namespaceName = `@${namespaceVariable.name}`;
+            const availableKeys = getNamespaceExportKeys(rawValue as Record<string, unknown>);
+            const availableSummary = availableKeys.length > 0 ? availableKeys.join(', ') : '(none)';
+            const importSource = getNamespaceImportSource(namespaceVariable);
+            const importSuffix = importSource ? ` Imported from ${importSource}.` : '';
+            throw new FieldAccessError(
+              `Namespace ${namespaceName} does not export "${name}". Available exports: ${availableSummary}.${importSuffix}`,
+              {
+                baseValue: namespaceName,
+                fieldAccessChain: [],
+                failedAtIndex: Math.max(0, accessPath.length - 1),
+                failedKey: name,
+                accessPath,
+                availableKeys
+              },
+              {
+                sourceLocation: options?.sourceLocation,
+                env: options?.env
+              }
+            );
+          }
+
           const extensionHint = getCommonExtensionFieldAccessHint(name, options);
           const message = extensionHint
             ? `Field "${name}" not found in object. ${extensionHint}`

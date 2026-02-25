@@ -69,6 +69,7 @@ import {
 import { executeNonCommandExecutable } from './exec/non-command-handlers';
 import { executeCommandExecutable } from './exec/command-handler';
 import { executeCodeExecutable } from './exec/code-handler';
+import { getCapturedModuleEnv } from './import/variable-importer/executable/CapturedModuleEnvKeychain';
 import {
   applyExecOutputPolicyLabels,
   createExecOperationContextAndEnforcePolicy,
@@ -571,9 +572,14 @@ async function evaluateExecInvocationInternal(
     // Handle __executable objects from resolved imports
     if (typeof variable === 'object' && variable !== null && '__executable' in variable && variable.__executable) {
       // Deserialize shadow environments if needed
-      let serializedInternal =
+      const rawInternal =
         (variable.internal as Record<string, unknown> | undefined) ??
         {};
+      let serializedInternal: Record<string, unknown> = { ...rawInternal };
+      let capturedModuleEnv = getCapturedModuleEnv(rawInternal);
+      if (capturedModuleEnv !== undefined) {
+        serializedInternal.capturedModuleEnv = capturedModuleEnv;
+      }
       if (serializedInternal.capturedShadowEnvs && typeof serializedInternal.capturedShadowEnvs === 'object') {
         // Check if it needs deserialization (is plain object, not Map)
         const needsDeserialization = Object.entries(serializedInternal.capturedShadowEnvs).some(
@@ -589,11 +595,11 @@ async function evaluateExecInvocationInternal(
       }
 
       // Deserialize module environment if needed
-      if (serializedInternal.capturedModuleEnv && !(serializedInternal.capturedModuleEnv instanceof Map)) {
+      if (capturedModuleEnv && !(capturedModuleEnv instanceof Map)) {
         // Import the VariableImporter to reuse the proper deserialization logic
         const { VariableImporter } = await import('./import/VariableImporter');
         const importer = new VariableImporter(null); // ObjectResolver not needed for this
-        const moduleEnvMap = importer.deserializeModuleEnv(serializedInternal.capturedModuleEnv);
+        const moduleEnvMap = importer.deserializeModuleEnv(capturedModuleEnv);
 
         // Each executable in the module env needs access to the full env
         for (const [_, variable] of moduleEnvMap) {
@@ -605,14 +611,19 @@ async function evaluateExecInvocationInternal(
           }
         }
 
-        serializedInternal = {
-          ...serializedInternal,
-          capturedModuleEnv: moduleEnvMap
-        };
+        capturedModuleEnv = moduleEnvMap;
+        serializedInternal.capturedModuleEnv = moduleEnvMap;
       }
       
       // Convert the __executable object to a proper ExecutableVariable
       const { createExecutableVariable } = await import('@core/types/variable/VariableFactories');
+      const executableInternal: Record<string, unknown> = {
+        executableDef: variable.executableDef,
+        ...serializedInternal
+      };
+      if (capturedModuleEnv !== undefined) {
+        executableInternal.capturedModuleEnv = capturedModuleEnv;
+      }
       variable = createExecutableVariable(
         commandName,
         'command', // Default type - the real type is in executableDef
@@ -627,8 +638,7 @@ async function evaluateExecInvocationInternal(
         },
         {
           internal: {
-            executableDef: variable.executableDef,
-            ...serializedInternal
+            ...executableInternal
           }
         }
       );
