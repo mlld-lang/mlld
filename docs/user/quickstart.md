@@ -169,7 +169,7 @@ Create new arrays with transformations:
 
 ```mlld
 var @numbers = [1, 2, 3, 4]
-var @doubled = for @n in @numbers => js { return @n * 2 }
+var @doubled = for @n in @numbers => @n * 2
 show @doubled  >> [2, 4, 6, 8]
 ```
 

@@ -32,15 +32,26 @@ function countLiteral(haystack: string, needle: string): number {
 
 function runCli(scriptPath: string): Promise<CliRunResult> {
   return new Promise(resolve => {
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      TSX_TSCONFIG_PATH: tsconfigPath
+    };
+    // Isolate CLI subprocess from vitest/test-runner globals so exit codes
+    // reflect real CLI behavior in all modes (full + TESTFAST).
+    delete childEnv.NODE_OPTIONS;
+    delete childEnv.VITEST;
+    delete childEnv.VITEST_WORKER_ID;
+    delete childEnv.VITEST_POOL_ID;
+    delete childEnv.TESTFAST;
+    delete childEnv.SKIP_SLOW;
+    delete childEnv.MLLD_STRICT;
+
     const child = spawn(
       process.execPath,
       ['--import', tsxImportPath, cliEntryPath, scriptPath],
       {
         cwd: projectRoot,
-        env: {
-          ...process.env,
-          TSX_TSCONFIG_PATH: tsconfigPath
-        }
+        env: childEnv
       }
     );
 
