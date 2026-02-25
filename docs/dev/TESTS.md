@@ -20,6 +20,13 @@ tests/
 │   │   └── ...             # Feature collections
 │   ├── integration/         # Cross-feature integration tests
 │   ├── docs/                # Auto-extracted documentation examples
+│   │   ├── quickstart/     # Content-addressed hash dirs
+│   │   │   ├── b564aaa6/  # Dir name = SHA-256(code block)[:8]
+│   │   │   │   ├── example.mld
+│   │   │   │   ├── expected.md  # Optional: enables execution testing
+│   │   │   │   └── .description
+│   │   │   └── .../
+│   │   └── atoms/...
 │   ├── examples/            # Auto-copied from examples/ directory
 │   ├── exceptions/          # Tests that should fail at runtime
 │   ├── warnings/            # Tests that should produce warnings
@@ -153,12 +160,43 @@ Located in `tests/cases/` (at root level, organized in subdirectories like `slas
 - When a test exercises file effects (e.g., `/append`), read the generated files back via `<@root/...>` in the fixture so assertions cover both the output document and the filesystem side effects.
 
 #### 2. Documentation Tests
-Located in `tests/cases/docs/`. Automatically extracted from `docs/user/*.md`:
-- **Syntax-only validation** - Parse but don't execute
+Located in `tests/cases/docs/`. Automatically extracted from `docs/user/*.md` and `docs/src/atoms/**/*.md`:
 - Extract via `scripts/extract-doc-tests.mjs` during `npm run build:fixtures`
 - 140+ code blocks from documentation become test cases
-- Tests marked as `(syntax only)` in output
-- Catches outdated/invalid syntax without requiring complete context
+- **Content-addressed directories**: Each test directory is named with an 8-character SHA-256 hash of the code block content (e.g., `quickstart/b564aaa6/`). This means directories are stable when blocks are reordered in docs, and content changes are immediately detected.
+- **Two levels of validation**:
+  - **Syntax-only** (default): Parse but don't execute. Marked `(syntax only)` in test output. Catches outdated/invalid syntax.
+  - **Full execution** (opt-in): When an `expected.md` file is added to a hash directory, the block is executed and its output is compared. Marked `(docs)` in test output.
+- Doc blocks with parse errors are automatically skipped (educational examples showing invalid syntax)
+- Add `skip.md` to a hash directory to exclude a block from testing entirely
+
+##### Adding Expected Output to Doc Tests
+
+```bash
+# See which doc tests have expectations and which don't
+npm run doc:expect -- --status
+npm run doc:expect -- --status quickstart
+
+# Capture expected output for a specific block
+npm run doc:expect -- quickstart/b564aaa6
+
+# Preview what all blocks would output without writing
+npm run doc:expect -- quickstart --dry-run
+
+# Auto-capture all outputs for a doc (interactive confirmation for each)
+npm run doc:expect -- quickstart
+
+# Show orphaned expectations (stale after doc changes)
+npm run doc:expect -- --orphans
+```
+
+##### When Documentation Changes
+
+When a doc code block is edited, its content hash changes:
+1. The old hash directory becomes an orphan (has `expected.md` but no `example.mld`)
+2. A new hash directory is created with the new content
+3. `npm run build:fixtures` warns about orphans and fuzzy-matches them to suggest which new hash directory the expectation should migrate to
+4. Run `npm run doc:expect -- <doc>/<new-hash>` to recapture the expected output
 
 #### 3. Smoke Tests
 For examples without expected output (mainly in `examples/` directory):
@@ -248,10 +286,13 @@ The fixture generation happens in two phases:
 
 ### Scripts
 
-- `npm run build:fixtures` - Generate fixtures from test cases
+- `npm run build:fixtures` - Generate fixtures from test cases (includes doc extraction)
 - `npm run build:outputs` - Generate actual outputs for examples (cleans up after)
 - `npm run build:outputs:keep` - Generate outputs and keep files for review
 - `npm run build` - Full build including fixture and output generation
+- `npm run doc:expect -- --status` - Show which doc tests have expected output
+- `npm run doc:expect -- <pattern>` - Capture expected output for doc tests
+- `npm run doc:expect -- --orphans` - Show stale expectations after doc changes
 
 ## Test Execution
 
@@ -290,7 +331,7 @@ The main test runner is in `interpreter/interpreter.fixture.test.ts`. It:
 2. Sets up appropriate test environment for each fixture
 3. Runs different test types based on fixture metadata:
    - **Valid tests**: Compare output to expected result + validate semantic token coverage
-   - **Documentation tests**: Validate syntax only, skip execution (return after parse check)
+   - **Documentation tests**: Syntax-only by default `(syntax only)`, or execute and compare if `expected.md` is present `(docs)`
    - **Smoke tests**: Verify execution doesn't crash + validate semantic token coverage
    - **Exception tests**: Verify specific errors are thrown
    - **Warning tests**: Verify warnings are produced

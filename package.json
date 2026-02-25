@@ -55,6 +55,7 @@
     "test:coverage": "NODE_ENV=test MLLD_NO_STREAMING=true TESTFAST=1 SKIP_SLOW=1 MLLD_STRICT=${MLLD_STRICT:-0} vitest run --coverage --reporter=dot --silent --exclude=\"**/integration/imports/edge-cases.test.ts\" --exclude=\"**/integration/cli/absolute-paths.test.ts\" --exclude=\"**/integration/imports/local-resolver-bugs.test.ts\" --exclude=\"**/integration/shadow-env-basic-import.test.ts\" --exclude=\"**/integration/imports/shadow-environments.test.ts\" --exclude=\"**/integration/imports/complex-scenarios.test.ts\" --exclude=\"**/integration/node-shadow-cleanup.test.ts\" --exclude=\"**/integration/heredoc-large-variable.test.ts\" --exclude=\"**/core/registry/python/VirtualEnvironmentManager.test.ts\" --exclude=\"**/parallel/shell-commands-parallel.test.ts\" --exclude=\"**/*.e2e.test.ts\"",
     "test:watch": "vitest",
     "test:case": "node scripts/fixture-test-runner.js",
+    "doc:expect": "node scripts/doc-expect.mjs",
     "test:tokens": "vitest run --config vitest.config.tokens.mts",
     "test:heredoc": "vitest run --config vitest.config.heredoc.mts",
     "test:nvim-lsp": "node scripts/test-nvim-lsp.mjs",

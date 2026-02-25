@@ -156,35 +156,45 @@ async function main() {
 }
 
 /**
- * Clean orphaned fixtures: Remove fixtures that no longer have corresponding test cases
- * This is more surgical than wiping everything
+ * Clean orphaned fixtures: Remove fixture dirs whose corresponding test case dir no longer exists.
+ * Walks the fixtures tree and checks each leaf against the cases tree.
  */
 async function cleanOrphanedFixtures() {
-  try {
-    await fs.mkdir(FIXTURES_DIR, { recursive: true });
-    
-    // Get all current fixture files
-    let existingFixtures = [];
+  await fs.mkdir(FIXTURES_DIR, { recursive: true });
+
+  let removed = 0;
+
+  async function cleanDir(fixtureDir, caseDir) {
+    let entries;
     try {
-      const fixtureFiles = await fs.readdir(FIXTURES_DIR);
-      existingFixtures = fixtureFiles.filter(f => f.endsWith('.generated-fixture.json'));
-    } catch (error) {
-      // Directory doesn't exist yet, that's fine
-      console.log('  ℹ️ No existing fixtures directory');
+      entries = await fs.readdir(fixtureDir, { withFileTypes: true });
+    } catch {
       return;
     }
-    
-    if (existingFixtures.length === 0) {
-      console.log('  ℹ️ No existing fixtures to check');
-      return;
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const fixtureSub = path.join(fixtureDir, entry.name);
+      const caseSub = path.join(caseDir, entry.name);
+
+      try {
+        await fs.access(caseSub);
+        // Case dir exists — recurse to check children
+        await cleanDir(fixtureSub, caseSub);
+      } catch {
+        // Case dir doesn't exist — this fixture is orphaned
+        await fs.rm(fixtureSub, { recursive: true });
+        removed++;
+      }
     }
-    
-    // TODO: In future, we could check which fixtures are orphaned
-    // For now, we'll rely on writeFixtureIfChanged to only update what's needed
-    console.log(`  ℹ️ Found ${existingFixtures.length} existing fixtures (will update only if changed)`);
-    
-  } catch (error) {
-    console.log('  ⚠️ Error checking existing fixtures:', error.message);
+  }
+
+  await cleanDir(FIXTURES_DIR, CASES_DIR);
+
+  if (removed > 0) {
+    console.log(`  🗑️  Removed ${removed} orphaned fixture dir(s)`);
+  } else {
+    console.log(`  ✓ No orphaned fixtures`);
   }
 }
 

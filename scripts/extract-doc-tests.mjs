@@ -2,10 +2,17 @@
 /**
  * Extract mlld code blocks from documentation and create test cases
  * This runs as part of the build:fixtures process to ensure docs are always tested
+ *
+ * Uses content-addressed directories: each code block's directory name is a
+ * truncated SHA-256 hash of its content. This means:
+ * - Directories are stable when blocks are reordered in docs
+ * - expected.md files survive reordering (tied to content, not position)
+ * - Content changes are detected as orphaned dirs with stale expectations
  */
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,6 +26,23 @@ const DIRECTIVE_KEYWORDS = [
   'var', 'show', 'exe', 'run', 'for', 'when', 'import', 'export',
   'output', 'append', 'log', 'stream', 'data', 'load', 'while', 'skip'
 ];
+
+/** Files preserved during clean (not regenerated from docs) */
+const PRESERVED_FILES = new Set([
+  'expected.md', 'error.md', 'warning.md'
+]);
+
+/** Check if a filename should be preserved during clean */
+function isPreservedFile(name) {
+  return PRESERVED_FILES.has(name) || name.startsWith('skip');
+}
+
+/**
+ * Compute content hash for a code block (8 hex chars = 32 bits)
+ */
+function contentHash(code) {
+  return createHash('sha256').update(code).digest('hex').slice(0, 8);
+}
 
 /**
  * Check if a line looks like an mlld directive (strict or markdown mode)
@@ -94,7 +118,8 @@ function extractMlldCodeBlocks(content, filePath) {
             line: blockStartLine,
             description: lastHeading || `Block ${blockIndex}`,
             index: blockIndex,
-            mode: blockMode
+            mode: blockMode,
+            hash: contentHash(code)
           });
         }
 
@@ -116,9 +141,12 @@ function extractMlldCodeBlocks(content, filePath) {
 }
 
 /**
- * Clean directory but preserve expected.md files
+ * Clean directory: remove regenerated files, preserve expected.md etc.
+ * Returns a map of hash dirs that have preserved files (for orphan detection).
  */
 async function cleanDirectory(dir) {
+  const preservedDirs = new Map(); // hash → { files: string[], description: string|null }
+
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
 
@@ -126,43 +154,94 @@ async function cleanDirectory(dir) {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        // Recursively clean subdirectories
-        await cleanDirectory(fullPath);
+        // Check if this is a hash dir (8 hex chars) or a doc-name dir
+        if (/^[0-9a-f]{8}$/.test(entry.name)) {
+          // Hash dir — clean regenerated files, track preserved files
+          const subEntries = await fs.readdir(fullPath);
+          const preserved = [];
+          let description = null;
+
+          for (const subFile of subEntries) {
+            const subPath = path.join(fullPath, subFile);
+            if (isPreservedFile(subFile)) {
+              preserved.push(subFile);
+            } else if (subFile === '.description') {
+              // Read description for orphan reporting; keep the file
+              // (it will be overwritten on active dirs, and is useful on orphans)
+              try {
+                description = (await fs.readFile(subPath, 'utf-8')).trim();
+              } catch { /* ignore */ }
+            } else if (subFile === 'example.md' || subFile === 'example.mld') {
+              await fs.unlink(subPath);
+            }
+          }
+
+          if (preserved.length > 0) {
+            preservedDirs.set(entry.name, { files: preserved, description });
+          }
+        } else {
+          // Doc-name dir (e.g., "quickstart", "atoms") — recurse
+          const subPreserved = await cleanDirectory(fullPath);
+          // Prefix keys with the dir name for full path context
+          for (const [hash, info] of subPreserved) {
+            preservedDirs.set(`${entry.name}/${hash}`, info);
+          }
+        }
       } else if (entry.isFile()) {
-        // Remove example.md, example.mld, and .description files
+        // Remove legacy numbered-dir files at this level if any
         if (entry.name === 'example.md' || entry.name === 'example.mld' || entry.name === '.description') {
           await fs.unlink(fullPath);
         }
-        // Preserve expected.md, error.md, warning.md files
+      }
+    }
+
+    // Also clean up legacy numbered directories (01/, 02/, etc.)
+    for (const entry of entries) {
+      if (entry.isDirectory() && /^\d{2}$/.test(entry.name)) {
+        const legacyDir = path.join(dir, entry.name);
+        const legacyEntries = await fs.readdir(legacyDir);
+        // Only remove if it has no preserved files
+        const hasPreserved = legacyEntries.some(f => isPreservedFile(f));
+        if (!hasPreserved) {
+          await fs.rm(legacyDir, { recursive: true });
+        } else {
+          console.log(`  ⚠️  Legacy numbered dir ${path.relative(dir, legacyDir)} has preserved files — skipping removal`);
+        }
       }
     }
   } catch (error) {
     // Directory doesn't exist yet, that's fine
   }
+
+  return preservedDirs;
 }
 
 /**
  * Process a documentation file and create test cases
+ * Returns { fileName, count, hashes } where hashes is the set of content hashes created
  */
 async function processDocFile(docPath, outputDir) {
   const content = await fs.readFile(docPath, 'utf-8');
   const fileName = path.basename(docPath, '.md');
-  
+
   const blocks = extractMlldCodeBlocks(content, docPath);
-  
+
   if (blocks.length === 0) {
-    return { fileName, count: 0 };
+    return { fileName, count: 0, hashes: new Set() };
   }
-  
+
   // Create directory for this doc's tests
   const docTestDir = path.join(outputDir, fileName);
   await fs.mkdir(docTestDir, { recursive: true });
-  
+
+  const hashes = new Set();
+
   // Create a test case for each code block
   for (const block of blocks) {
-    // Create a subdirectory for each block (numbered)
-    const blockDir = path.join(docTestDir, String(block.index).padStart(2, '0'));
+    // Use content hash as directory name
+    const blockDir = path.join(docTestDir, block.hash);
     await fs.mkdir(blockDir, { recursive: true });
+    hashes.add(block.hash);
 
     // Write the example file with appropriate extension based on mode
     // strict mode → .mld, markdown mode → .md
@@ -175,8 +254,129 @@ async function processDocFile(docPath, outputDir) {
     const description = `From ${fileName}.md line ${block.line}: ${block.description} (${block.mode} mode)`;
     await fs.writeFile(descPath, description);
   }
-  
-  return { fileName, count: blocks.length };
+
+  return { fileName, count: blocks.length, hashes };
+}
+
+/**
+ * Detect orphaned hash dirs that have expected.md but no longer match any current block.
+ * Uses the preservedDirs map (captured during clean before descriptions were deleted)
+ * and fuzzy matching to suggest which new hash dir the expectation should migrate to.
+ *
+ * @param outputDir - The docs test output directory
+ * @param allHashesByDoc - Map of docName → Set of current content hashes
+ * @param preservedDirs - Map from cleanDirectory: "docname/hash" → { files, description }
+ */
+async function detectOrphans(outputDir, allHashesByDoc, preservedDirs) {
+  const orphans = [];
+
+  // Walk preservedDirs to find hashes that are no longer in any current doc
+  for (const [dirKey, info] of preservedDirs) {
+    // dirKey format: "quickstart/a1b2c3d4" or "atoms/directives/exe/a1b2c3d4"
+    // We need to split into docName and hash
+    const lastSlash = dirKey.lastIndexOf('/');
+    if (lastSlash === -1) continue;
+    const docName = dirKey.slice(0, lastSlash);
+    const hash = dirKey.slice(lastSlash + 1);
+
+    // Check if this hash is still active
+    const currentHashes = allHashesByDoc.get(docName);
+    if (currentHashes && currentHashes.has(hash)) continue; // Still active
+
+    orphans.push({ docName, hash, files: info.files, description: info.description });
+  }
+
+  // Also scan for orphaned dirs not captured during clean (edge case: dir was empty during clean
+  // but got expected.md added manually between cleans)
+  for (const [docName, currentHashes] of allHashesByDoc) {
+    const docDir = path.join(outputDir, docName);
+    let entries;
+    try {
+      entries = await fs.readdir(docDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !/^[0-9a-f]{8}$/.test(entry.name)) continue;
+
+      const hash = entry.name;
+      if (currentHashes.has(hash)) continue;
+      if (orphans.some(o => o.docName === docName && o.hash === hash)) continue; // Already found
+
+      const dirPath = path.join(docDir, hash);
+      const files = await fs.readdir(dirPath);
+      const preserved = files.filter(f => isPreservedFile(f));
+
+      if (preserved.length > 0) {
+        orphans.push({ docName, hash, files: preserved, description: null });
+      } else {
+        // Empty orphan — remove it
+        await fs.rm(dirPath, { recursive: true });
+      }
+    }
+  }
+
+  if (orphans.length > 0) {
+    console.log(`\n⚠️  Found ${orphans.length} orphaned doc test(s) with stale expectations:`);
+
+    for (const orphan of orphans) {
+      const preserved = orphan.files.join(', ');
+      console.log(`  • ${orphan.docName}/${orphan.hash} (has ${preserved})`);
+      if (orphan.description) {
+        console.log(`    Was: ${orphan.description}`);
+      }
+
+      // Try fuzzy match: find the new hash dir whose description is most similar
+      const currentHashes = allHashesByDoc.get(orphan.docName);
+      if (currentHashes && orphan.description) {
+        const bestMatch = await findClosestMatch(
+          path.join(outputDir, orphan.docName),
+          currentHashes,
+          orphan.description
+        );
+        if (bestMatch) {
+          console.log(`    Likely moved to: ${orphan.docName}/${bestMatch.hash}`);
+          console.log(`    Now: ${bestMatch.description}`);
+          console.log(`    Run: npm run doc:expect -- ${orphan.docName}/${bestMatch.hash}`);
+        }
+      }
+    }
+  }
+
+  return orphans;
+}
+
+/**
+ * Find the current hash dir whose .description is most similar to the orphan's description.
+ * Uses simple word-overlap scoring (Jaccard similarity on words).
+ */
+async function findClosestMatch(docDir, currentHashes, orphanDescription) {
+  const orphanWords = new Set(orphanDescription.toLowerCase().split(/\s+/));
+  let bestScore = 0;
+  let bestMatch = null;
+
+  for (const hash of currentHashes) {
+    const descPath = path.join(docDir, hash, '.description');
+    let desc;
+    try {
+      desc = (await fs.readFile(descPath, 'utf-8')).trim();
+    } catch {
+      continue;
+    }
+
+    const descWords = new Set(desc.toLowerCase().split(/\s+/));
+    const intersection = [...orphanWords].filter(w => descWords.has(w));
+    const union = new Set([...orphanWords, ...descWords]);
+    const score = intersection.length / union.size;
+
+    if (score > bestScore && score > 0.3) { // Minimum 30% word overlap
+      bestScore = score;
+      bestMatch = { hash, description: desc, score };
+    }
+  }
+
+  return bestMatch;
 }
 
 /**
@@ -207,10 +407,15 @@ export async function extractDocumentationTests() {
   console.log('📖 Extracting documentation code blocks...');
 
   // Clean existing doc tests (but preserve expected.md files)
-  await cleanDirectory(OUTPUT_DIR);
+  // preservedDirs captures descriptions before they're deleted, for orphan detection later
+  const preservedDirs = await cleanDirectory(OUTPUT_DIR);
 
   // Create output directory
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
+
+  // Track all hashes per doc for orphan detection
+  // Key format: "docname" for user docs, "atoms/category/atomname" for atoms
+  const allHashesByDoc = new Map();
 
   let totalBlocks = 0;
   const results = [];
@@ -224,6 +429,9 @@ export async function extractDocumentationTests() {
     const result = await processDocFile(filePath, OUTPUT_DIR);
     totalBlocks += result.count;
     results.push(result);
+    if (result.hashes.size > 0) {
+      allHashesByDoc.set(result.fileName, result.hashes);
+    }
   }
 
   console.log(`  ✓ Extracted ${totalBlocks} mlld blocks from ${mdFiles.length} user docs`);
@@ -250,6 +458,9 @@ export async function extractDocumentationTests() {
     const result = await processDocFile(atomPath, atomOutputDir);
     atomBlocks += result.count;
     atomResults.push({ ...result, category });
+    if (result.hashes.size > 0) {
+      allHashesByDoc.set(`atoms/${category}/${result.fileName}`, result.hashes);
+    }
   }
 
   totalBlocks += atomBlocks;
@@ -260,6 +471,9 @@ export async function extractDocumentationTests() {
       console.log(`    • atoms/${result.category}/${result.fileName}: ${result.count} blocks`);
     }
   }
+
+  // Detect orphaned expectations
+  await detectOrphans(OUTPUT_DIR, allHashesByDoc, preservedDirs);
 
   return totalBlocks;
 }
