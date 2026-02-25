@@ -209,6 +209,70 @@ show @blockDestructive
     expect(undefs).not.toContain('blockDestructive');
   });
 
+  it('does not flag @p pipeline context alias as undefined', async () => {
+    const modulePath = await writeModule('pipeline-p-alias.mld', `/exe @stage(input) = \`ok:@input\`
+/var @result = "seed" with { pipeline: [@stage(@p)] }
+/show @result
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('p');
+  });
+
+  it('treats configured resolver prefix variables as known names', async () => {
+    await fs.writeFile(
+      path.join(tempDir, 'mlld-config.json'),
+      JSON.stringify({
+        resolvers: {
+          prefixes: [
+            {
+              prefix: '@lib/',
+              resolver: 'LOCAL',
+              type: 'io',
+              config: { basePath: './src/lib' }
+            }
+          ]
+        }
+      }, null, 2),
+      'utf8'
+    );
+
+    const modulePath = await writeModule('resolver-prefix-known.mld', `show @lib
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('lib');
+  });
+
+  it('does not flag hook declaration names as undefined', async () => {
+    const modulePath = await writeModule('hook-name-decl.mld', `/hook @audit before op:run = [ => @input ]
+/show @audit
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('audit');
+  });
+
+  it('still warns for genuinely undefined variables', async () => {
+    const modulePath = await writeModule('genuine-undef.mld', `/show @doesNotExist
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).toContain('doesNotExist');
+  });
+
   it('extracts guard timing from guard fields instead of subtype', async () => {
     const modulePath = await writeModule('guard-timing.mld', `guard @beforeGuard before op:run = when [* => allow]
 guard @afterGuard after op:run = when [* => allow]

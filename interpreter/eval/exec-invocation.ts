@@ -233,6 +233,58 @@ async function evaluateExecInvocationInternal(
       return field;
     });
 
+  const resolveNamespaceMethodCandidate = async (
+    commandRefWithObject: { objectReference?: any },
+    methodName: string,
+    sourceLocation: any
+  ): Promise<{ found: boolean; value?: unknown }> => {
+    const objectRef = commandRefWithObject.objectReference;
+    if (!objectRef || typeof objectRef.identifier !== 'string') {
+      return { found: false };
+    }
+
+    let objectVar = env.getVariable(objectRef.identifier);
+    if (!objectVar) {
+      objectVar = await env.getResolverVariable(objectRef.identifier);
+    }
+
+    if (!objectVar || objectVar.internal?.isNamespace !== true) {
+      return { found: false };
+    }
+
+    try {
+      const { extractVariableValue } = await import('../utils/variable-resolution');
+      let objectValue = await extractVariableValue(objectVar, env);
+
+      if (objectRef.fields && objectRef.fields.length > 0) {
+        const { accessFields } = await import('../utils/field-access');
+        objectValue = await accessFields(objectValue, normalizeFields(objectRef.fields), {
+          env,
+          preserveContext: false,
+          returnUndefinedForMissing: true,
+          sourceLocation: objectRef.location ?? sourceLocation
+        });
+      }
+
+      if (!objectValue || typeof objectValue !== 'object') {
+        return { found: false };
+      }
+
+      if (!(methodName in (objectValue as Record<string, unknown>))) {
+        return { found: false };
+      }
+
+      const resolved = (objectValue as Record<string, unknown>)[methodName];
+      if (typeof resolved === 'undefined') {
+        return { found: false };
+      }
+
+      return { found: true, value: resolved };
+    } catch {
+      return { found: false };
+    }
+  };
+
   const streamingSetup = await setupExecInvocationStreaming(node, env);
   let streamingOptions = streamingSetup.streamingOptions;
   let streamingRequested = streamingSetup.streamingRequested;
@@ -426,7 +478,20 @@ async function evaluateExecInvocationInternal(
   let variable;
   const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: ExecInvocation };
   if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
-    if (isBuiltinMethod(commandName)) {
+    let namespaceMethodPreferred = false;
+    if (commandRefWithObject.objectReference) {
+      const namespaceCandidate = await resolveNamespaceMethodCandidate(
+        commandRefWithObject,
+        commandName,
+        nodeSourceLocation
+      );
+      if (namespaceCandidate.found) {
+        variable = namespaceCandidate.value;
+        namespaceMethodPreferred = true;
+      }
+    }
+
+    if (!namespaceMethodPreferred && isBuiltinMethod(commandName)) {
       const builtinResolution = await resolveBuiltinInvocationObject({
         commandName,
         commandRefWithObject,
@@ -518,55 +583,56 @@ async function evaluateExecInvocationInternal(
     if (commandRefWithObject.objectSource && !commandRefWithObject.objectReference) {
       throw new MlldInterpreterError(`Only builtin methods are supported on exec results (got: ${commandName})`);
     }
-    
-    // Get the object first
-    const objectRef = commandRefWithObject.objectReference;
-    // Try regular variable first, then resolver variable (for reserved names like @keychain)
-    let objectVar = env.getVariable(objectRef.identifier);
-    if (!objectVar) {
-      // Check if it's a resolver variable (e.g., @keychain, @debug)
-      objectVar = await env.getResolverVariable(objectRef.identifier);
-    }
-    if (!objectVar) {
-      throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
-    }
-    
-    // Extract Variable value for object field access - WHY: Need raw object to access fields
-    const { extractVariableValue } = await import('../utils/variable-resolution');
-    const objectValue = await extractVariableValue(objectVar, env);
-    
-    
-    // Access the field
-    if (objectRef.fields && objectRef.fields.length > 0) {
-      const { accessFields } = await import('../utils/field-access');
-      const accessedObject = await accessFields(objectValue, normalizeFields(objectRef.fields), {
-        env,
-        preserveContext: false,
-        returnUndefinedForMissing: true,
-        sourceLocation: objectRef.location
-      });
+    if (!namespaceMethodPreferred) {
+      // Get the object first
+      const objectRef = commandRefWithObject.objectReference;
+      // Try regular variable first, then resolver variable (for reserved names like @keychain)
+      let objectVar = env.getVariable(objectRef.identifier);
+      if (!objectVar) {
+        // Check if it's a resolver variable (e.g., @keychain, @debug)
+        objectVar = await env.getResolverVariable(objectRef.identifier);
+      }
+      if (!objectVar) {
+        throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
+      }
+      
+      // Extract Variable value for object field access - WHY: Need raw object to access fields
+      const { extractVariableValue } = await import('../utils/variable-resolution');
+      const objectValue = await extractVariableValue(objectVar, env);
+      
+      
+      // Access the field
+      if (objectRef.fields && objectRef.fields.length > 0) {
+        const { accessFields } = await import('../utils/field-access');
+        const accessedObject = await accessFields(objectValue, normalizeFields(objectRef.fields), {
+          env,
+          preserveContext: false,
+          returnUndefinedForMissing: true,
+          sourceLocation: objectRef.location
+        });
 
-      if (typeof accessedObject === 'object' && accessedObject !== null) {
-        const fieldValue = (accessedObject as any)[commandName];
-        variable = fieldValue;
-      }
-    } else {
-      // Direct field access on the object
-      if (typeof objectValue === 'object' && objectValue !== null) {
-        // Handle AST object structure with type and properties
-        let fieldValue;
-        if (objectValue.type === 'object' && objectValue.properties) {
-          fieldValue = objectValue.properties[commandName];
-        } else {
-          fieldValue = (objectValue as any)[commandName];
+        if (typeof accessedObject === 'object' && accessedObject !== null) {
+          const fieldValue = (accessedObject as any)[commandName];
+          variable = fieldValue;
         }
-        
-        variable = fieldValue;
+      } else {
+        // Direct field access on the object
+        if (typeof objectValue === 'object' && objectValue !== null) {
+          // Handle AST object structure with type and properties
+          let fieldValue;
+          if (objectValue.type === 'object' && objectValue.properties) {
+            fieldValue = objectValue.properties[commandName];
+          } else {
+            fieldValue = (objectValue as any)[commandName];
+          }
+          
+          variable = fieldValue;
+        }
       }
-    }
-    
-    if (!variable) {
-      throw new MlldInterpreterError(`Method not found: ${commandName} on ${objectRef.identifier}`);
+      
+      if (!variable) {
+        throw new MlldInterpreterError(`Method not found: ${commandName} on ${objectRef.identifier}`);
+      }
     }
     
     // Handle __executable objects from resolved imports

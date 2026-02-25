@@ -240,6 +240,8 @@ const BUILTIN_VARIABLES = new Set([
   ...SHADOWABLE_BUILTIN_NAMES,
   // Builtin helpers
   'yaml', 'html', 'text',
+  // Pipeline context aliases
+  'p',
   // Implicit for-loop locals
   'item', 'index', 'key'
 ]);
@@ -351,6 +353,71 @@ async function loadSuppressedWarningCodes(moduleFilepath: string): Promise<Set<A
   }
 }
 
+function parseResolverPrefixVariables(configData: unknown): Set<string> {
+  const known = new Set<string>();
+  if (!configData || typeof configData !== 'object' || Array.isArray(configData)) {
+    return known;
+  }
+
+  const config = configData as {
+    resolvers?: { prefixes?: unknown };
+    resolverPrefixes?: unknown;
+  };
+
+  const prefixes: unknown[] = [];
+  if (Array.isArray(config.resolvers?.prefixes)) {
+    prefixes.push(...config.resolvers.prefixes);
+  }
+  if (Array.isArray(config.resolverPrefixes)) {
+    prefixes.push(...config.resolverPrefixes);
+  }
+
+  for (const entry of prefixes) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+
+    const prefixValue = (entry as { prefix?: unknown }).prefix;
+    if (typeof prefixValue !== 'string') {
+      continue;
+    }
+
+    const trimmedPrefix = prefixValue.trim();
+    if (!trimmedPrefix.startsWith('@')) {
+      continue;
+    }
+
+    const withoutAt = trimmedPrefix.slice(1);
+    const firstSegment = withoutAt.split('/')[0]?.trim() ?? '';
+    if (!firstSegment) {
+      continue;
+    }
+
+    if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(firstSegment)) {
+      continue;
+    }
+
+    known.add(firstSegment);
+  }
+
+  return known;
+}
+
+async function loadResolverPrefixVariables(moduleFilepath: string): Promise<Set<string>> {
+  const configPath = await findNearestValidateConfigPath(moduleFilepath);
+  if (!configPath) {
+    return new Set();
+  }
+
+  try {
+    const configRaw = await fs.readFile(configPath, 'utf8');
+    const parsed = JSON.parse(configRaw) as unknown;
+    return parseResolverPrefixVariables(parsed);
+  } catch {
+    return new Set();
+  }
+}
+
 /**
  * Detect undefined variable references in AST
  */
@@ -382,7 +449,11 @@ function shouldIgnoreVariableReferenceWarning(node: any, sourceText?: string): b
   return false;
 }
 
-function detectUndefinedVariables(ast: MlldNode[], sourceText?: string): UndefinedVariableWarning[] {
+function detectUndefinedVariables(
+  ast: MlldNode[],
+  sourceText?: string,
+  additionalKnownVariables: ReadonlySet<string> = new Set()
+): UndefinedVariableWarning[] {
   const warnings: UndefinedVariableWarning[] = [];
   const declared = new Set<string>();
 
@@ -401,6 +472,14 @@ function detectUndefinedVariables(ast: MlldNode[], sourceText?: string): Undefin
       const nameNode = node.values?.name?.[0];
       if (nameNode?.identifier) {
         declared.add(nameNode.identifier);
+      }
+    }
+
+    // hook @name before/after ... = [...]
+    if (node.type === 'Directive' && node.kind === 'hook') {
+      const hookNameNode = node.values?.name?.[0];
+      if (hookNameNode?.identifier) {
+        declared.add(hookNameNode.identifier);
       }
     }
 
@@ -493,7 +572,12 @@ function detectUndefinedVariables(ast: MlldNode[], sourceText?: string): Undefin
       }
 
       // Skip if already declared, builtin, or already warned
-      if (declared.has(name) || BUILTIN_VARIABLES.has(name) || seen.has(name)) {
+      if (
+        declared.has(name) ||
+        BUILTIN_VARIABLES.has(name) ||
+        additionalKnownVariables.has(name) ||
+        seen.has(name)
+      ) {
         return;
       }
 
@@ -973,6 +1057,13 @@ function collectDeclaredNames(ast: MlldNode[]): Set<string> {
             declared.add(param.name);
           }
         }
+      }
+    }
+
+    if (node.type === 'Directive' && node.kind === 'hook') {
+      const hookNameNode = node.values?.name?.[0];
+      if (hookNameNode?.identifier) {
+        declared.add(hookNameNode.identifier);
       }
     }
 
@@ -2353,9 +2444,10 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       // Check for undefined variables (enabled by default)
       if (options.checkVariables !== false) {
         const suppressedWarningCodes = await loadSuppressedWarningCodes(filepath);
+        const resolverPrefixVariables = await loadResolverPrefixVariables(filepath);
 
         const warnings = dedupeUndefinedVariableWarnings([
-          ...detectUndefinedVariables(ast, content),
+          ...detectUndefinedVariables(ast, content, resolverPrefixVariables),
           ...detectPassThroughOptionalParameterWarnings(ast)
         ]);
         if (warnings.length > 0) {

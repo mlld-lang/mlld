@@ -15,6 +15,7 @@ const KNOWN_OPERATION_TYPES = [
   'loop',
   'import',
   'show',
+  'log',
   'output',
   'append',
   'run'

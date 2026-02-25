@@ -238,6 +238,57 @@ describe('Import type handling', () => {
     expect(serialized).not.toContain('codeTemplate');
   });
 
+  it('prefers namespace exported functions over colliding built-in string method names', async () => {
+    const collidingNames = [
+      'trim',
+      'split',
+      'slice',
+      'replace',
+      'replaceAll',
+      'includes',
+      'indexOf',
+      'startsWith',
+      'endsWith',
+      'toLowerCase',
+      'toUpperCase',
+      'match',
+      'padStart',
+      'padEnd',
+      'repeat',
+      'concat',
+      'substring'
+    ] as const;
+
+    await fileSystem.writeFile(
+      '/project/import-types-namespace-collisions.mld',
+      [
+        ...collidingNames.map(name => `/exe @${name}(input) = js { return "${name}:" + input }`),
+        `/export { ${collidingNames.join(', ')} }`
+      ].join('\n')
+    );
+
+    const source = [
+      '/import "./import-types-namespace-collisions.mld" as @ns',
+      ...collidingNames.map(name => `/show @ns.${name}("value-${name}")`),
+      '/var @myString = "  spaced  "',
+      '/show @myString.trim()'
+    ].join('\n');
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = String(output).trim().split('\n').map(line => line.trim()).filter(Boolean);
+    expect(lines).toHaveLength(collidingNames.length + 1);
+    for (const [index, name] of collidingNames.entries()) {
+      expect(lines[index]).toBe(`${name}:value-${name}`);
+    }
+    expect(lines[lines.length - 1]).toBe('spaced');
+  });
+
   it('supports explicit live imports from @input', async () => {
     const source = `/import live { value } from @input\n/show @value`;
     const output = await interpret(source, {
