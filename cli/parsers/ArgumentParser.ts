@@ -39,11 +39,8 @@ export class ArgumentParser {
     // Flag to stop parsing when we hit a command with subcommands
     let stopParsing = false;
 
-    // Handle special debug commands
+    // Handle special commands
     args = this.handleSpecialCommands(args, options);
-
-    // Handle context debug options
-    args = this.handleContextDebugOptions(args, options);
 
     for (let i = 0; i < args.length; i++) {
       if (stopParsing) break;
@@ -352,76 +349,7 @@ export class ArgumentParser {
   }
 
   private handleSpecialCommands(args: string[], options: CLIOptions): string[] {
-    let modifiedArgs = [...args];
-
-    // Check for debug-resolution command
-    if (modifiedArgs.length > 0 && modifiedArgs[0] === 'debug-resolution') {
-      options.debugResolution = true;
-      modifiedArgs = modifiedArgs.slice(1);
-    }
-
-    // Check for debug-transform command
-    if (modifiedArgs.length > 0 && modifiedArgs[0] === 'debug-transform') {
-      options.debugTransform = true;
-      modifiedArgs = modifiedArgs.slice(1);
-    }
-
-    // Check for debug-context command
-    if (modifiedArgs.length > 0 && modifiedArgs[0] === 'debug-context') {
-      options.debugContext = true;
-      modifiedArgs = modifiedArgs.slice(1);
-    }
-
-    return modifiedArgs;
-  }
-
-  private handleContextDebugOptions(args: string[], options: CLIOptions): string[] {
-    let modifiedArgs = [...args];
-
-    // Add context debug options
-    if (modifiedArgs.includes('--debug-context')) {
-      options.debugContext = true;
-      modifiedArgs = modifiedArgs.filter(arg => arg !== '--debug-context');
-    }
-
-    // Handle visualization type
-    const vizTypeIndex = modifiedArgs.findIndex(arg => arg === '--viz-type');
-    if (vizTypeIndex !== -1 && vizTypeIndex < modifiedArgs.length - 1) {
-      const vizType = modifiedArgs[vizTypeIndex + 1];
-      if (['hierarchy', 'variable-propagation', 'combined', 'timeline'].includes(vizType)) {
-        options.visualizationType = vizType as 'hierarchy' | 'variable-propagation' | 'combined' | 'timeline';
-      } else {
-        console.error(`Invalid visualization type: ${vizType}. Using default.`);
-      }
-      modifiedArgs.splice(vizTypeIndex, 2);
-    }
-
-    // Handle root state ID
-    const rootStateIdIndex = modifiedArgs.findIndex(arg => arg === '--root-state-id');
-    if (rootStateIdIndex !== -1 && rootStateIdIndex < modifiedArgs.length - 1) {
-      options.rootStateId = modifiedArgs[rootStateIdIndex + 1];
-      modifiedArgs.splice(rootStateIdIndex, 2);
-    }
-
-    // Include vars option
-    if (modifiedArgs.includes('--no-vars')) {
-      options.includeVars = false;
-      modifiedArgs = modifiedArgs.filter(arg => arg !== '--no-vars');
-    }
-
-    // Include timestamps option
-    if (modifiedArgs.includes('--no-timestamps')) {
-      options.includeTimestamps = false;
-      modifiedArgs = modifiedArgs.filter(arg => arg !== '--no-timestamps');
-    }
-
-    // Include file paths option
-    if (modifiedArgs.includes('--no-file-paths')) {
-      options.includeFilePaths = false;
-      modifiedArgs = modifiedArgs.filter(arg => arg !== '--no-file-paths');
-    }
-
-    return modifiedArgs;
+    return [...args];
   }
 
   validateOptions(options: CLIOptions): void {

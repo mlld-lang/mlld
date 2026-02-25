@@ -56,18 +56,6 @@ export interface CLIOptions {
   version?: boolean;
   help?: boolean;
   custom?: boolean; // Flag for custom filesystem in tests
-  debugResolution?: boolean;
-  variableName?: string;
-  outputFormat?: 'json' | 'text' | 'mermaid';
-  debugContext?: boolean;
-  visualizationType?: 'hierarchy' | 'variable-propagation' | 'combined' | 'timeline';
-  rootStateId?: string;
-  includeVars?: boolean;
-  includeTimestamps?: boolean;
-  includeFilePaths?: boolean;
-  debugTransform?: boolean;
-  directiveType?: string;
-  includeContent?: boolean;
   debugSourceMaps?: boolean; // Flag to display source mapping information
   detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
   pretty?: boolean; // Flag to enable Prettier formatting

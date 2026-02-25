@@ -135,15 +135,6 @@ export class OptionProcessor {
       throw new Error('Cannot specify both --output and --stdout');
     }
 
-    // Validate debug context visualization requirements
-    if (options.debugContext) {
-      if (options.visualizationType === 'variable-propagation' || options.visualizationType === 'timeline') {
-        if (!options.variableName) {
-          throw new Error(`--variable-name is required for ${options.visualizationType} visualization`);
-        }
-      }
-    }
-
     // Validate URL timeout constraints
     if (options.urlTimeout !== undefined) {
       if (options.urlTimeout < 1000 || options.urlTimeout > 300000) {

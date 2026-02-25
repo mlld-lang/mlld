@@ -89,24 +89,6 @@ export class FileProcessor {
     // Convert CLI options to API options
     const apiOptions = this.optionProcessor.cliToApiOptions(options);
     
-    if (options.debugContext) {
-      // TODO: debugContextCommand is not imported
-      console.error('Debug context command not yet implemented');
-      return;
-    }
-
-    if (options.debugResolution) {
-      // TODO: debugResolutionCommand is not imported
-      console.error('Debug resolution command not yet implemented');
-      return;
-    }
-
-    if (options.debugTransform) {
-      // TODO: debugTransformCommand is not imported  
-      console.error('Debug transform command not yet implemented');
-      return;
-    }
-
     await this.processFileWithOptions(options, apiOptions);
   }
 
