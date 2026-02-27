@@ -290,8 +290,9 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         working-directory: sdk/ruby
         run: |
-          gem_file=$(gem build *.gemspec | awk '/^File:/ {print $2}')
-          gem push "$gem_file"
+          VERSION=${{ needs.prepare.outputs.version }}
+          gem build mlld.gemspec
+          gem push "mlld-${VERSION}.gem"
 
   publish-hex:
     needs: prepare
