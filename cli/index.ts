@@ -26,8 +26,7 @@ import { PathService } from '@services/fs/PathService';
 import { OutputPathService } from '@services/fs/OutputPathService';
 import { interpret } from '@interpreter/index';
 import { logger, cliLogger } from '@core/utils/logger';
-import { ConfigLoader } from '@core/config/loader';
-import type { ResolvedURLConfig } from '@core/config/types';
+import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { MlldMode } from '@core/types/mode';
 import type { Environment } from '@interpreter/env/Environment';
 import { ErrorHandler } from './error/ErrorHandler';
@@ -240,36 +239,32 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     // Read stdin if available
     const stdinContent = await readStdinIfAvailable();
     
-    // Load configuration using PathContext
-    const configLoader = new ConfigLoader(pathContext);
-    const config = configLoader.load();
-    const urlConfig = configLoader.resolveURLConfig(config);
-    const outputConfig = configLoader.resolveOutputConfig(config);
-    
-    // CLI options override config
-    let finalUrlConfig: ResolvedURLConfig | undefined = urlConfig;
+    const outputConfig = {
+      showProgress: false,
+      maxOutputLines: 50,
+      errorBehavior: 'continue' as const,
+      collectErrors: true,
+      showCommandContext: true
+    };
+
+    let finalUrlConfig: ResolvedURLConfig | undefined;
     
     if (cliOptions.allowUrls) {
-      // CLI explicitly enables URLs, override config
       finalUrlConfig = {
         enabled: true,
-        allowedDomains: cliOptions.urlAllowedDomains || urlConfig?.allowedDomains || [],
-        blockedDomains: cliOptions.urlBlockedDomains || urlConfig?.blockedDomains || [],
-        allowedProtocols: urlConfig?.allowedProtocols || ['https', 'http'],
-        timeout: cliOptions.urlTimeout || urlConfig?.timeout || 30000,
-        maxSize: cliOptions.urlMaxSize || urlConfig?.maxSize || 5 * 1024 * 1024,
-        warnOnInsecureProtocol: urlConfig?.warnOnInsecureProtocol ?? true,
-        cache: urlConfig?.cache || {
+        allowedDomains: cliOptions.urlAllowedDomains || [],
+        blockedDomains: cliOptions.urlBlockedDomains || [],
+        allowedProtocols: ['https', 'http'],
+        timeout: cliOptions.urlTimeout || 30000,
+        maxSize: cliOptions.urlMaxSize || 5 * 1024 * 1024,
+        warnOnInsecureProtocol: true,
+        cache: {
           enabled: true,
           defaultTTL: 5 * 60 * 1000,
           rules: []
         }
       };
-    } else if (urlConfig?.enabled && cliOptions.allowUrls !== false) {
-      // Config enables URLs and CLI doesn't explicitly disable
-      finalUrlConfig = urlConfig;
     } else {
-      // URLs disabled
       finalUrlConfig = undefined;
     }
 

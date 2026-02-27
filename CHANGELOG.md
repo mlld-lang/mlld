@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ambiguous `when @cond [ ... ]` parse errors now include explicit `for...when` static-condition guidance with the pre-filter pattern (`var @items = @cond ? @list : []`).
 - `mlld validate` now warns on `for...when` static conditions that do not reference loop variables (`for-when-static-condition`), with suppression support via `validate.suppressWarnings`.
 - CLI/help text for output formatting now refers to markdown output normalization (and legacy `--pretty` alias behavior) instead of removed Prettier integration.
+- Removed the dead `ConfigLoader`/`mlld.config.json` pipeline; import-approval persistence and config discovery now use `mlld-config.json`/`mlld-lock.json` paths only.
 - Streaming declared on executable definitions now propagates correctly through `run @exe(...)` and `show @exe(...)`; adapter pipelines activate even when invocation-level `stream` is omitted.
 - Executable-definition `streamFormat` is now respected across invocations, and invocation-level `streamFormat` correctly takes precedence when both are present.
 - `show` streaming invocations no longer double-emit output when executable-definition streaming is active.

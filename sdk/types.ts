@@ -1,4 +1,4 @@
-import type { ResolvedURLConfig } from '@core/config/types';
+import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { PathContext } from '@core/services/PathContextService';
 import type { DirectiveKind, MlldNode } from '@core/types';

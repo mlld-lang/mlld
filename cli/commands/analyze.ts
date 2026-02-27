@@ -248,7 +248,7 @@ const BUILTIN_VARIABLES = new Set([
 ]);
 
 const DEPRECATED_JSON_BASE_NAMES = new Set(['json', 'JSON']);
-const VALIDATE_CONFIG_FILENAMES = ['mlld-config.json', 'mlld.config.json'];
+const VALIDATE_CONFIG_FILENAMES = ['mlld-config.json'];
 const MODULE_FILE_EXTENSIONS = ['.mld.md', '.mld', '.mlld.md', '.mlld'] as const;
 const MODULE_ENTRY_CANDIDATES = [
   'index.mld',

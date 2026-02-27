@@ -12,7 +12,7 @@ import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { isDirectiveNode, isVariableReferenceNode, isTextNode } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
-import type { ResolvedURLConfig } from '@core/config/types';
+import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { DirectiveTrace } from '@core/types/trace';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { EnvironmentConfig } from '@core/types/environment';

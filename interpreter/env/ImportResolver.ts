@@ -2,7 +2,7 @@ import type { MlldNode, SourceLocation, DirectiveNode } from '@core/types';
 import type { Variable, VariableSource, PipelineInput, VariableMetadata } from '@core/types/variable';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
-import type { ResolvedURLConfig } from '@core/config/types';
+import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import * as path from 'path';
 import type { ImportType } from '@core/types/security';
