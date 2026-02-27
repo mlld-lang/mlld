@@ -290,8 +290,8 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         working-directory: sdk/ruby
         run: |
-          gem build *.gemspec
-          gem push *.gem
+          gem_file=$(gem build *.gemspec | awk '/^File:/ {print $2}')
+          gem push "$gem_file"
 
   publish-hex:
     needs: prepare
