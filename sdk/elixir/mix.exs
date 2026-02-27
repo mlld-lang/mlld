@@ -1,7 +1,7 @@
 defmodule Mlld.MixProject do
   use Mix.Project
 
-  @version "2.0.0"
+  @version "2.0.1"
   @source_url "https://github.com/mlld-lang/mlld/tree/main/sdk/elixir"
 
   def project do
@@ -25,7 +25,9 @@ defmodule Mlld.MixProject do
   end
 
   defp deps do
-    []
+    [
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
+    ]
   end
 
   defp package do

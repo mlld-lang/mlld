@@ -282,11 +282,16 @@ jobs:
         with:
           ruby-version: ruby
 
-      - name: Publish to RubyGems
+      - name: Configure RubyGems credentials
         if: steps.check.outputs.skip == 'false'
-        uses: rubygems/release-gem@v1
-        with:
-          gem-directory: sdk/ruby
+        uses: rubygems/configure-rubygems-credentials@v1.0.0
+
+      - name: Build and publish gem
+        if: steps.check.outputs.skip == 'false'
+        working-directory: sdk/ruby
+        run: |
+          gem build *.gemspec
+          gem push *.gem
 
   publish-hex:
     needs: prepare
