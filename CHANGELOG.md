@@ -5,6 +5,12 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1]
+
+### Fixed
+- Publish workflow: fix RubyGems publish for subdirectory gems (`rubygems/release-gem` doesn't support `gem-directory`)
+- Publish workflow: add `ex_doc` dependency to Elixir SDK so `mix hex.publish` can build docs
+
 ## [2.0.0]
 
 ### Added

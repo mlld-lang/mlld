@@ -28,7 +28,7 @@ try {
   
   // Publish mlldx with the same tag
   console.log('\n📦 Publishing mlldx...');
-  execSync(`npm run publish:mlldx -- --tag ${tag}`, { stdio: 'inherit' });
+  execSync(`node scripts/sync-mlldx.cjs --publish --tag ${tag}`, { stdio: 'inherit' });
   
   console.log('\n✅ Successfully published both packages!');
 } catch (error) {
