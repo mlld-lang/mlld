@@ -1,4 +1,4 @@
-import type { ResolvedURLConfig } from '@core/config/types';
+import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { Variable } from '@core/types/variable';
 import { ImmutableCache } from '@core/security/ImmutableCache';
 

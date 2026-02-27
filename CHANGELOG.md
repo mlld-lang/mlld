@@ -5,9 +5,10 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0-rc83]
+## [2.0.0]
 
 ### Added
+- `@mlld/claude-stream` registry module: drop-in `@mlld/claude` replacement that defaults to `stream-json` output with `streamFormat: "claude-code"` on all exported executables.
 - `mlld howto <keyword>` keyword search across atom tags, titles, and briefs. Single match shows full content; multiple matches show a selection list.
 - Markdown section selectors now support include/exclude sets (`# a, b; !# c`), quoted heading names, optional selectors (`"name"?`), and fuzzy prefix matching that ignores punctuation/case.
 - `.flat(depth?)` and `.at(index)` array builtin methods.
@@ -22,6 +23,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signing now writes `signed:<var>` provenance labels; composed instruction variables inherit signed provenance for cascading verification targets.
 
 ### Fixed
+- `format: "xml"` output now applies XML conversion in the main document-render path instead of silently returning markdown/plain text.
+- `/output` and `/append` now reject paths that resolve to `[object Object]` to prevent accidental writes to invalid filenames.
+- `mlld validate --format json` now populates `needs.cmd` with detected command names (from `/needs` declarations and shell command analysis), not just empty arrays.
+- `@now` resolver import context now honors custom format-string imports (for example `YYYY-MM-DD`, `HH:mm:ss`) instead of always returning ISO.
+- Expression parsing now supports builtin method calls directly on array literals (for example `[1, 2, 3].join("-")`).
+- AST-aware JSON serialization now preserves interpolated wrapped-string content instead of returning empty strings.
+- Markdown chunk parsing now ignores prose `::` text on non-directive lines, preventing false template-fence state during validation/tokenization.
+- Policy config now supports `deny_cmd` shorthand (for example `deny_cmd: ["npm:run:*"]`) and merges it into command deny rules.
+- Command deny patterns are now enforced for `sh`/`bash` code blocks before execution, so denied commands (for example `cmd:npm:run:*`) cannot bypass policy through shell blocks.
+- Direct `=> @toolCall()` returns inside `env with { tools: ... }` blocks now preserve tool-collection label taint, matching the existing `let`-binding behavior.
+- Ambiguous `when @cond [ ... ]` parse errors now include explicit `for...when` static-condition guidance with the pre-filter pattern (`var @items = @cond ? @list : []`).
+- `mlld validate` now warns on `for...when` static conditions that do not reference loop variables (`for-when-static-condition`), with suppression support via `validate.suppressWarnings`.
+- CLI/help text for output formatting now refers to markdown output normalization (and legacy `--pretty` alias behavior) instead of removed Prettier integration.
+- Removed the dead `ConfigLoader`/`mlld.config.json` pipeline; import-approval persistence and config discovery now use `mlld-config.json`/`mlld-lock.json` paths only.
+- `RegistryManager` now fetches locked module content and enforces lock integrity checks before caching, instead of bypassing integrity verification in locked-fetch paths.
+- Streaming declared on executable definitions now propagates correctly through `run @exe(...)` and `show @exe(...)`; adapter pipelines activate even when invocation-level `stream` is omitted.
+- Executable-definition `streamFormat` is now respected across invocations, and invocation-level `streamFormat` correctly takes precedence when both are present.
+- `show` streaming invocations no longer double-emit output when executable-definition streaming is active.
+- CLI streaming debug flags are now wired end-to-end: `--show-json` mirrors raw NDJSON to stderr and `--append-json` appends raw NDJSON to JSONL output files.
 - Hook registration now emits a runtime warning for unknown `op:<type>` hook filters (while still registering the hook for forward compatibility).
 - `--resume "checkpoint-name"` now pre-scans source-declared checkpoints so named resume targets are available even when a prior run never reached that checkpoint.
 - `mlld validate` now warns when a trailing exe parameter can be omitted by callsites but is passed through to another function call (a runtime `Undefined variable` failure pattern).
@@ -42,7 +62,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mlld update` now respects pinned lock constraints: exact versions stay pinned, and range constraints update within their pinned range.
 - `@root/...` and `@base/...` file-not-found errors now include the resolved absolute path for easier debugging.
 - `mlld validate` undefined-variable checks now ignore non-variable `@` text patterns (emails/scoped packages) and honor implicit loop locals (`@item`, `@index`, `@key`).
+- `mlld validate` now treats pipeline alias `@p`, resolver-prefix variables from `mlld-config.json`, and `hook @name ...` declarations as known variables to avoid false undefined-variable warnings.
+- Hook operation validation now recognizes `op:log` as a known operation type.
 - CLI error reporting now marks handled errors and avoids secondary re-emission paths, so representative runtime failures emit one formatted error block.
+- `var`/`let` pipeline shorthand now preserves custom stages immediately before builtin effects (`log`, `show`, `output`, `append`) instead of silently dropping prior stages in parsed pipeline order.
+- Namespace executable internals now seal `capturedModuleEnv` from enumeration/JSON serialization, and namespace missing-field errors now show sanitized export-only diagnostics (without internal runtime dumps).
+- Namespace method calls now prefer exported functions over colliding built-in string methods (for names like `trim`, `split`, `replace`, etc.).
+- `mlld publish` now reads file frontmatter metadata defaults (`title`, `description`/`about`, `version`, `tags`/`keywords`, `author`) and lets CLI metadata flags override them.
+- Reserved CLI env loading flag renamed from `--env` to `--mlld-env`; `--env` now flows through to payload fields (for example `@payload.env`).
 
 ### Fixed
 - Removed the legacy `/exe @fn(...) = [@file # section]` special case; section/file extraction in executable bodies now uses alligator syntax (`<file.md # "Section">`).

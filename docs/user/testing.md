@@ -147,7 +147,7 @@ var @test_first_square = @squared[0] == 1
 var @test_last_square = @squared[4] == 25
 
 >> Test for loop collection
-var @doubled = for @n in @numbers => js { return @n * 2 }
+var @doubled = for @n in @numbers => @n * 2
 var @test_doubled_sum = @doubled[0] + @doubled[1] == 6  >> 2 + 4
 ```
 
@@ -198,6 +198,8 @@ mlld test --env .env.test
 # Auto-loads .env and .env.test from current directory
 mlld test
 ```
+
+`mlld test --env` is command-specific. The global CLI env-loading flag is `--mlld-env`.
 
 Test files can access allowed environment variables:
 

@@ -3,7 +3,6 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
 import { astLocationToSourceLocation } from '@core/types';
-// import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError'; // Removed - parameter shadowing is allowed
 import {
   extractParamTypes,
   resolveExeDescription

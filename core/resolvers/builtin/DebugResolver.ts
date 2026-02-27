@@ -345,7 +345,7 @@ export class DebugResolver implements Resolver {
    * Find mlld config file
    */
   private async findConfigFile(projectPath: string): Promise<string | null> {
-    const configFiles = ['mlld.config.json', '.mlldrc', '.mlldrc.json'];
+    const configFiles = ['mlld-config.json', 'mlld-lock.json', 'mlld.lock.json'];
     
     for (const configFile of configFiles) {
       const configPath = path.join(projectPath, configFile);

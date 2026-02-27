@@ -7,6 +7,49 @@ import type { Environment } from '../env/Environment';
 import type { SecurityDescriptor } from '@core/types/security';
 import { isStructuredValue } from './structured-value';
 
+function serializeWrappedTemplateNode(node: unknown): string {
+  if (node === null || node === undefined) {
+    return '';
+  }
+
+  if (typeof node === 'string' || typeof node === 'number' || typeof node === 'boolean') {
+    return String(node);
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(item => serializeWrappedTemplateNode(item)).join('');
+  }
+
+  if (typeof node !== 'object') {
+    return '';
+  }
+
+  const candidate = node as Record<string, unknown>;
+  if (candidate.type === 'Text' && typeof candidate.content === 'string') {
+    return candidate.content;
+  }
+  if (candidate.type === 'Literal') {
+    return String(candidate.value ?? '');
+  }
+  if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
+    return `@${candidate.identifier}`;
+  }
+  if (candidate.type === 'ExecInvocation') {
+    const commandRef = candidate.commandRef as Record<string, unknown> | undefined;
+    const commandName = typeof commandRef?.name === 'string' ? commandRef.name : '';
+    return commandName ? `@${commandName}()` : '';
+  }
+  if (Array.isArray(candidate.content)) {
+    return candidate.content.map(item => serializeWrappedTemplateNode(item)).join('');
+  }
+
+  return '';
+}
+
+function serializeWrappedTemplateContent(content: unknown[]): string {
+  return content.map(item => serializeWrappedTemplateNode(item)).join('');
+}
+
 /**
  * Creates a JSON replacer function that properly handles AST nodes
  * This is used to ensure consistent serialization across the codebase
@@ -30,23 +73,9 @@ export function createASTAwareJSONReplacer() {
     if (val && typeof val === 'object' && 'wrapperType' in val && 'content' in val) {
       const valWithContent = val as { wrapperType: string; content: unknown[] };
       if (Array.isArray(valWithContent.content)) {
-        // Extract the string content from wrapped strings
-        if (valWithContent.content.length > 0) {
-          const firstItem = valWithContent.content[0];
-          if (firstItem && typeof firstItem === 'object' && 'type' in firstItem && 'content' in firstItem) {
-            const textNode = firstItem as { type: string; content: string };
-            if (textNode.type === 'Text') {
-              return textNode.content;
-            }
-          }
-        }
-        // Handle empty content - return empty string instead of the wrapper object
-        if (valWithContent.content.length === 0) {
-          return '';
-        }
+        return serializeWrappedTemplateContent(valWithContent.content);
       }
-      // TODO: Handle interpolated content in wrapped strings
-      return ''; // Fallback for unhandled content
+      return '';
     }
     
     // Handle raw Text nodes

@@ -1,4 +1,4 @@
 # Guard Composition - Retry Shared Budget
 
-decisions: retry,allow,allow
+g0-decision: retry, g1-decision: allow
 value

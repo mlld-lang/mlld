@@ -37,7 +37,7 @@ export class OptionProcessor {
       riskyApproveAll: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       // Blank line normalization
       noNormalizeBlankLines: cliOptions.noNormalizeBlankLines,
-      // Disable prettier formatting
+      // Disable markdown output normalization
       noFormat: cliOptions.noFormat,
       // Error capture for pattern development
       captureErrors: cliOptions.captureErrors,
@@ -83,6 +83,14 @@ export class OptionProcessor {
       streaming.format = cliOptions.streamOutputFormat;
     }
 
+    if (cliOptions.showJson) {
+      streaming.showJson = true;
+    }
+
+    if (cliOptions.appendJson !== undefined) {
+      streaming.appendJson = cliOptions.appendJson;
+    }
+
     return Object.keys(streaming).length > 0 ? streaming : undefined;
   }
 
@@ -125,15 +133,6 @@ export class OptionProcessor {
     // Validate output constraints
     if (options.output && options.stdout) {
       throw new Error('Cannot specify both --output and --stdout');
-    }
-
-    // Validate debug context visualization requirements
-    if (options.debugContext) {
-      if (options.visualizationType === 'variable-propagation' || options.visualizationType === 'timeline') {
-        if (!options.variableName) {
-          throw new Error(`--variable-name is required for ${options.visualizationType} visualization`);
-        }
-      }
     }
 
     // Validate URL timeout constraints

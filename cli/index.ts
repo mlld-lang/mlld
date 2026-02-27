@@ -26,8 +26,7 @@ import { PathService } from '@services/fs/PathService';
 import { OutputPathService } from '@services/fs/OutputPathService';
 import { interpret } from '@interpreter/index';
 import { logger, cliLogger } from '@core/utils/logger';
-import { ConfigLoader } from '@core/config/loader';
-import type { ResolvedURLConfig } from '@core/config/types';
+import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { MlldMode } from '@core/types/mode';
 import type { Environment } from '@interpreter/env/Environment';
 import { ErrorHandler } from './error/ErrorHandler';
@@ -56,21 +55,9 @@ export interface CLIOptions {
   version?: boolean;
   help?: boolean;
   custom?: boolean; // Flag for custom filesystem in tests
-  debugResolution?: boolean;
-  variableName?: string;
-  outputFormat?: 'json' | 'text' | 'mermaid';
-  debugContext?: boolean;
-  visualizationType?: 'hierarchy' | 'variable-propagation' | 'combined' | 'timeline';
-  rootStateId?: string;
-  includeVars?: boolean;
-  includeTimestamps?: boolean;
-  includeFilePaths?: boolean;
-  debugTransform?: boolean;
-  directiveType?: string;
-  includeContent?: boolean;
   debugSourceMaps?: boolean; // Flag to display source mapping information
   detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
-  pretty?: boolean; // Flag to enable Prettier formatting
+  pretty?: boolean; // Legacy alias for markdown output formatting
   // URL support options
   allowUrls?: boolean;
   urlTimeout?: number;
@@ -92,14 +79,14 @@ export interface CLIOptions {
   y?: boolean;
   // Blank line normalization
   noNormalizeBlankLines?: boolean;
-  // Disable prettier formatting
+  // Disable markdown output normalization
   noFormat?: boolean;
   // Error capture for pattern development
   captureErrors?: boolean;
   // Ephemeral mode for CI/serverless
   ephemeral?: boolean;
-  // Environment file path
-  env?: string | string[];
+  // MLLD environment loading (file path or inline KEY=VALUE list)
+  mlldEnv?: string | string[];
   // Allow absolute paths outside project root
   allowAbsolute?: boolean;
   // Serve command options
@@ -252,36 +239,32 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     // Read stdin if available
     const stdinContent = await readStdinIfAvailable();
     
-    // Load configuration using PathContext
-    const configLoader = new ConfigLoader(pathContext);
-    const config = configLoader.load();
-    const urlConfig = configLoader.resolveURLConfig(config);
-    const outputConfig = configLoader.resolveOutputConfig(config);
-    
-    // CLI options override config
-    let finalUrlConfig: ResolvedURLConfig | undefined = urlConfig;
+    const outputConfig = {
+      showProgress: false,
+      maxOutputLines: 50,
+      errorBehavior: 'continue' as const,
+      collectErrors: true,
+      showCommandContext: true
+    };
+
+    let finalUrlConfig: ResolvedURLConfig | undefined;
     
     if (cliOptions.allowUrls) {
-      // CLI explicitly enables URLs, override config
       finalUrlConfig = {
         enabled: true,
-        allowedDomains: cliOptions.urlAllowedDomains || urlConfig?.allowedDomains || [],
-        blockedDomains: cliOptions.urlBlockedDomains || urlConfig?.blockedDomains || [],
-        allowedProtocols: urlConfig?.allowedProtocols || ['https', 'http'],
-        timeout: cliOptions.urlTimeout || urlConfig?.timeout || 30000,
-        maxSize: cliOptions.urlMaxSize || urlConfig?.maxSize || 5 * 1024 * 1024,
-        warnOnInsecureProtocol: urlConfig?.warnOnInsecureProtocol ?? true,
-        cache: urlConfig?.cache || {
+        allowedDomains: cliOptions.urlAllowedDomains || [],
+        blockedDomains: cliOptions.urlBlockedDomains || [],
+        allowedProtocols: ['https', 'http'],
+        timeout: cliOptions.urlTimeout || 30000,
+        maxSize: cliOptions.urlMaxSize || 5 * 1024 * 1024,
+        warnOnInsecureProtocol: true,
+        cache: {
           enabled: true,
           defaultTTL: 5 * 60 * 1000,
           rules: []
         }
       };
-    } else if (urlConfig?.enabled && cliOptions.allowUrls !== false) {
-      // Config enables URLs and CLI doesn't explicitly disable
-      finalUrlConfig = urlConfig;
     } else {
-      // URLs disabled
       finalUrlConfig = undefined;
     }
 
@@ -356,9 +339,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       process.exit(0);
     }
     
-    // Force exit if not in stdout mode but cleanup is complete
-    // This is a workaround for a Prettier v3 bug where the process doesn't exit naturally
-    // after formatting markdown content. The issue persists in v3.6.2.
+    // Force exit if not in stdout mode but cleanup is complete.
+    // Some runtime handles may remain open after execution.
     cliLogger.debug('Forcing process exit after cleanup');
     await new Promise(resolve => setTimeout(resolve, 50));
     process.exit(0);

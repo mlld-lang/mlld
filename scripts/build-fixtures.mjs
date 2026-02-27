@@ -156,35 +156,105 @@ async function main() {
 }
 
 /**
- * Clean orphaned fixtures: Remove fixtures that no longer have corresponding test cases
- * This is more surgical than wiping everything
+ * Clean orphaned fixtures: Remove fixture dirs whose corresponding test case dir no longer exists.
+ * Walks the fixtures tree and checks each leaf against the cases tree.
  */
 async function cleanOrphanedFixtures() {
-  try {
-    await fs.mkdir(FIXTURES_DIR, { recursive: true });
-    
-    // Get all current fixture files
-    let existingFixtures = [];
+  await fs.mkdir(FIXTURES_DIR, { recursive: true });
+
+  let removed = 0;
+
+  async function cleanDir(fixtureDir, caseDir) {
+    let entries;
     try {
-      const fixtureFiles = await fs.readdir(FIXTURES_DIR);
-      existingFixtures = fixtureFiles.filter(f => f.endsWith('.generated-fixture.json'));
-    } catch (error) {
-      // Directory doesn't exist yet, that's fine
-      console.log('  ℹ️ No existing fixtures directory');
+      entries = await fs.readdir(fixtureDir, { withFileTypes: true });
+    } catch {
       return;
     }
-    
-    if (existingFixtures.length === 0) {
-      console.log('  ℹ️ No existing fixtures to check');
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const fixtureSub = path.join(fixtureDir, entry.name);
+      const caseSub = path.join(caseDir, entry.name);
+
+      try {
+        await fs.access(caseSub);
+        // Case dir exists — recurse to check children
+        await cleanDir(fixtureSub, caseSub);
+      } catch {
+        // Case dir doesn't exist — this fixture is orphaned
+        await fs.rm(fixtureSub, { recursive: true });
+        removed++;
+      }
+    }
+  }
+
+  await cleanDir(FIXTURES_DIR, CASES_DIR);
+
+  if (removed > 0) {
+    console.log(`  🗑️  Removed ${removed} orphaned fixture dir(s)`);
+  } else {
+    console.log(`  ✓ No orphaned fixtures`);
+  }
+
+  // Also clean stale fixture files within active directories.
+  // When the naming convention changes, old fixture files linger and cause
+  // duplicate test runs (e.g. globalThis state bleeding between runs).
+  let staleFiles = 0;
+  async function cleanStaleFiles(fixtureDir, caseDir) {
+    let entries;
+    try {
+      entries = await fs.readdir(fixtureDir, { withFileTypes: true });
+    } catch {
       return;
     }
-    
-    // TODO: In future, we could check which fixtures are orphaned
-    // For now, we'll rely on writeFixtureIfChanged to only update what's needed
-    console.log(`  ℹ️ Found ${existingFixtures.length} existing fixtures (will update only if changed)`);
-    
-  } catch (error) {
-    console.log('  ⚠️ Error checking existing fixtures:', error.message);
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        await cleanStaleFiles(
+          path.join(fixtureDir, entry.name),
+          path.join(caseDir, entry.name)
+        );
+        continue;
+      }
+      if (!entry.name.endsWith('.generated-fixture.json')) continue;
+
+      // Compute expected fixture filenames for this case directory
+      const dirName = path.basename(caseDir);
+      let caseFiles;
+      try {
+        caseFiles = await fs.readdir(caseDir);
+      } catch {
+        continue; // Case dir gone; orphan cleanup handles this
+      }
+
+      const isExamplesDir = dirName === 'examples';
+      const expectedNames = new Set();
+      const exampleFiles = isExamplesDir
+        ? caseFiles.filter(f => (f.endsWith('.md') || f.endsWith('.mld')) && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.'))
+        : caseFiles.filter(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
+
+      for (const file of exampleFiles) {
+        if (isExamplesDir) {
+          expectedNames.add(file.replace('.md', '').replace('.mld', '') + '.generated-fixture.json');
+        } else if (file !== 'example.md' && file !== 'example.mld') {
+          const variant = file.replace('example-', '').replace('.md', '').replace('.mld', '');
+          expectedNames.add(`${dirName}-${variant}.generated-fixture.json`);
+        } else {
+          expectedNames.add(`${dirName}.generated-fixture.json`);
+        }
+      }
+
+      if (expectedNames.size > 0 && !expectedNames.has(entry.name)) {
+        await fs.unlink(path.join(fixtureDir, entry.name));
+        staleFiles++;
+      }
+    }
+  }
+
+  await cleanStaleFiles(FIXTURES_DIR, CASES_DIR);
+  if (staleFiles > 0) {
+    console.log(`  🗑️  Removed ${staleFiles} stale fixture file(s)`);
   }
 }
 
@@ -441,45 +511,39 @@ async function processCategoryDirectory(dirPath, categoryName, dirName) {
       stats.fixtures += processed.fixtures;
       stats.skipped += processed.skipped;
     } else {
-      // This directory contains subdirectories - process them
-      await processTestCategory(dirPath, categoryName, dirName, stats);
+      // Walk to arbitrary depth to find all example files
+      await walkAndProcessExamples(dirPath, categoryName, stats);
     }
   } else {
     // For other categories (exceptions, warnings, invalid), process recursively
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    await walkAndProcessExamples(dirPath, categoryName, stats);
+  }
+
+  return stats;
+}
+
+/**
+ * Recursively walk a directory tree and process any directory that contains
+ * example.md/mld files. Works at arbitrary nesting depth (needed for
+ * docs/atoms/category/atom-name/hash/ structure).
+ */
+async function walkAndProcessExamples(dirPath, categoryName, stats) {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  const files = entries.filter(d => !d.isDirectory()).map(d => d.name);
+  const hasExample = files.some(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
+
+  if (hasExample) {
+    const name = path.basename(dirPath);
+    const processed = await processExampleDirectory(dirPath, categoryName, name);
+    stats.total += processed.total;
+    stats.fixtures += processed.fixtures;
+    stats.skipped += processed.skipped;
+  } else {
     const subDirs = entries.filter(d => d.isDirectory()).map(d => d.name);
-    
     for (const subDir of subDirs) {
-      const subDirPath = path.join(dirPath, subDir);
-      
-      // Check if this subdirectory contains example.md files directly
-      const subEntries = await fs.readdir(subDirPath);
-      const hasDirectMdFiles = subEntries.some(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
-      
-      if (hasDirectMdFiles) {
-        // Process this directory directly
-        const processed = await processExampleDirectory(subDirPath, categoryName, subDir);
-        stats.total += processed.total;
-        stats.fixtures += processed.fixtures;
-        stats.skipped += processed.skipped;
-      } else {
-        // This subdirectory contains more subdirectories, process them
-        const nestedEntries = await fs.readdir(subDirPath, { withFileTypes: true });
-        const nestedDirs = nestedEntries.filter(d => d.isDirectory()).map(d => d.name);
-        
-        for (const nestedDir of nestedDirs) {
-          const exampleDir = path.join(subDirPath, nestedDir);
-          const testName = `${subDir}-${nestedDir}`;
-          const processed = await processExampleDirectory(exampleDir, categoryName, testName);
-          stats.total += processed.total;
-          stats.fixtures += processed.fixtures;
-          stats.skipped += processed.skipped;
-        }
-      }
+      await walkAndProcessExamples(path.join(dirPath, subDir), categoryName, stats);
     }
   }
-  
-  return stats;
 }
 
 /**
@@ -513,10 +577,10 @@ async function processTestCategory(categoryPath, validCategory, categoryType, st
       // This directory contains subdirectories
       const subEntries = await fs.readdir(dirPath, { withFileTypes: true });
       const subDirs = subEntries.filter(d => d.isDirectory()).map(d => d.name);
-      
+
       for (const subDir of subDirs) {
         const subDirPath = path.join(dirPath, subDir);
-        
+
         // Generate test name based on category type
         let testName;
         if (categoryType === 'directives') {
@@ -530,7 +594,7 @@ async function processTestCategory(categoryPath, validCategory, categoryType, st
             testName = `${dir}-${subDir}`;
           }
         }
-        
+
         const processed = await processExampleDirectory(subDirPath, validCategory, testName, categoryType);
         stats.total += processed.total;
         stats.fixtures += processed.fixtures;

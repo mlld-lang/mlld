@@ -54,9 +54,9 @@ export class CLIOrchestrator {
       
       cliOptions = this.argumentParser.parseArgs(args);
       
-      // Load environment variables if --env flag is provided
-      if (cliOptions.env) {
-        for (const envValue of this.normalizeEnvValues(cliOptions.env)) {
+      // Load environment variables if --mlld-env flag is provided
+      if (cliOptions.mlldEnv) {
+        for (const envValue of this.normalizeEnvValues(cliOptions.mlldEnv)) {
           if (this.isInlineEnvOverrides(envValue)) {
             this.applyInlineEnvOverrides(envValue);
             continue;
@@ -243,7 +243,7 @@ Examples:
     return flags;
   }
 
-  private normalizeEnvValues(value: CLIOptions['env']): string[] {
+  private normalizeEnvValues(value: CLIOptions['mlldEnv']): string[] {
     if (!value) {
       return [];
     }
@@ -263,7 +263,7 @@ Examples:
     for (const entry of entries) {
       const separator = entry.indexOf('=');
       if (separator <= 0) {
-        throw new Error(`Invalid --env entry "${entry}". Expected KEY=VALUE`);
+        throw new Error(`Invalid --mlld-env entry "${entry}". Expected KEY=VALUE`);
       }
 
       const key = entry.slice(0, separator).trim();

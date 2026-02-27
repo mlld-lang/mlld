@@ -1,0 +1,221 @@
+>> Slop Audit — AI Code Anti-Pattern Detection
+>> Usage:
+>>   mlld run slop-audit                              # audit uncommitted changes, or changes since last run
+>>   mlld run slop-audit --all true                   # full codebase audit
+>>   mlld run slop-audit --since abc1234              # changes since commit
+>>   mlld run slop-audit --files "cli/index.ts,core/policy/guards.ts"  # specific files
+>>   mlld run slop-audit --parallel 10                # cap concurrency
+>>   mlld run slop-audit --new                        # fresh run (ignore cache)
+>>
+>> Resilience: exe llm labels + checkpoint directives. Crash recovery is automatic.
+>>   mlld run slop-audit                       # auto-resumes via cache
+>>   mlld run slop-audit --resume "verify"     # skip to verification phase
+>>   mlld run slop-audit --new                 # fresh run
+
+needs { sh }
+import { @claudePoll } from @mlld/claude-poll
+import "@payload" as @p
+
+>> Config
+var @parallelism = @p.parallel ? @p.parallel * 1 : 20
+var @today = cmd { date -u +%Y-%m-%d }
+var @runId = `slop-audit-@today`
+var @runDir = `@root/llm/output/@runId`
+
+>> Create run directory
+run sh { mkdir -p "$runDir/scope" "$runDir/reviews" "$runDir/verifications" }
+
+>> Tool permissions — escalation between phases
+var @scopeTools = "Read,Write,Bash(git:*)"
+var @reviewTools = "Read,Write"
+var @verifyTools = "Read,Write,Glob,Grep"
+
+>> Load the anti-slop guide — this is the reviewer's reference material
+var @antiSlopGuide = <@root/docs/dev/ANTI-SLOP.md>
+
+>> Prompt templates
+exe @scopePrompt(flags, lastRunCommit) = template "./prompts/scope.att"
+exe @reviewPrompt(file, fileContent, guide) = template "./prompts/review.att"
+exe @verifyPrompt(finding, fileContent, guide) = template "./prompts/verify.att"
+
+>> LLM wrappers — llm label enables automatic caching, bail on failure
+exe llm @callScope(prompt, tools, outPath) = [
+  let @result = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+  when !@result => bail `Scope agent failed to produce output`
+  => @result
+]
+
+exe llm @callReview(prompt, tools, outPath) = [
+  let @result = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+  when !@result => bail `Review agent failed to produce output`
+  => @result
+]
+
+exe llm @callVerify(prompt, tools, outPath) = [
+  let @result = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+  when !@result => bail `Verify agent failed to produce output`
+  => @result
+]
+
+>> Helpers
+exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => { const d = a.data || a; return d.findings || [] }) }
+exe @filterByVerdict(results, verdict) = js { return results.filter(r => { const d = r.data || r; return d && d.verdict === verdict }) }
+
+>> ═══════════════════════════════════════════════════════
+>> Phase 0: Scope Resolution
+>> ═══════════════════════════════════════════════════════
+
+show `Slop Audit`
+show `Run: @runDir`
+
+>> Check for last run's commit hash
+var @lastRunCommit = <@root/llm/output/.slop-audit-last-commit>?
+
+>> Build flags context for the scope agent
+var @flags = {
+  all: @p.all ?? false,
+  since: @p.since ?? null,
+  files: @p.files ?? null,
+  lastRunCommit: @lastRunCommit ? @lastRunCommit.trim() : null
+}
+
+var @scopeOutPath = `@runDir/scope/files.json`
+var @scopeFullPrompt = `@scopePrompt(@flags, @lastRunCommit)
+
+IMPORTANT: Write your JSON response to @scopeOutPath using the Write tool. Write ONLY valid JSON.`
+
+show `  Resolving scope...`
+@callScope(@scopeFullPrompt, @scopeTools, @scopeOutPath)
+show `  Scope resolved.`
+var @scopeResult = <@scopeOutPath>? | @parse
+
+>> bail is an error — scope failure means we can't proceed
+when !@scopeResult => bail `Scope resolution failed — no output at @scopeOutPath`
+
+var @filesToAudit = @scopeResult.files
+var @scopeDescription = @scopeResult.description
+
+show `Scope: @scopeDescription`
+show `Files: @filesToAudit.length`
+
+>> ═══════════════════════════════════════════════════════
+>> Phase 1: Review (limited tools — reviewer sees only the file)
+>> Empty file list → for-parallel returns [] → no findings → skip to report
+>> ═══════════════════════════════════════════════════════
+
+show `\nPhase 1: Review (@filesToAudit.length files, parallel @parallelism)`
+
+checkpoint "review"
+
+var @reviewResults = for parallel(@parallelism) @filePath in @filesToAudit [
+  let @file = <@root/@filePath>?
+  when !@file => [
+    show `  @filePath: file not found, skipping`
+    => null
+  ]
+
+  let @flatName = @filePath.replaceAll("/", "--")
+  let @outPath = `@runDir/reviews/@flatName\.json`
+
+  show `  @filePath: reviewing...`
+  let @prompt = @reviewPrompt(@filePath, @file, @antiSlopGuide)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema.`
+
+  @callReview(@fullPrompt, @reviewTools, @outPath)
+  let @result = <@outPath>? | @parse
+
+  when !@result => [
+    show `  @filePath: FAILED (no output)`
+    => null
+  ]
+
+  let @count = @result.findings.length
+  show `  @filePath: done, @count findings`
+  => @result
+]
+
+var @allFindings = @flatMap(@reviewResults)
+show `\nTotal findings: @allFindings.length`
+
+>> ═══════════════════════════════════════════════════════
+>> Phase 2: Verification (expanded tools — verifier explores codebase)
+>> Empty findings → for-parallel returns [] → report shows 0s
+>> ═══════════════════════════════════════════════════════
+
+show `\nPhase 2: Verification (@allFindings.length findings, parallel @parallelism)`
+
+checkpoint "verify"
+
+var @verificationResults = for parallel(@parallelism) @finding in @allFindings [
+  let @findingId = `@finding.file-@finding.line`
+  let @flatId = @findingId.replaceAll("/", "--")
+  let @outPath = `@runDir/verifications/@flatId\.json`
+
+  show `  @findingId: verifying...`
+  let @sourceFile = <@root/@finding.file>?
+  let @prompt = @verifyPrompt(@finding, @sourceFile, @antiSlopGuide)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+
+  @callVerify(@fullPrompt, @verifyTools, @outPath)
+  let @result = <@outPath>? | @parse
+
+  when !@result => [
+    show `  @findingId: FAILED — keeping as confirmed`
+    => { finding: @finding, verdict: "confirmed", reasoning: "verification agent produced no output" }
+  ]
+
+  let @status = when @result.verdict [
+    "confirmed" => "CONFIRMED"
+    "false-positive" => "FALSE POS"
+    "insufficient-context" => "NEEDS CTX"
+    "needs-human" => "NEEDS HUMAN"
+    * => "CONFIRMED"
+  ]
+  show `  @findingId: @status`
+  => @result
+]
+
+>> ═══════════════════════════════════════════════════════
+>> Phase 3: Report
+>> ═══════════════════════════════════════════════════════
+
+var @confirmed = @filterByVerdict(@verificationResults, "confirmed")
+var @falsePositives = @filterByVerdict(@verificationResults, "false-positive")
+var @needsContext = @filterByVerdict(@verificationResults, "insufficient-context")
+var @needsHuman = @filterByVerdict(@verificationResults, "needs-human")
+
+show `\n═══ Results ═══`
+show `Total findings:        @allFindings.length`
+show `  Confirmed:           @confirmed.length`
+show `  False positives:     @falsePositives.length`
+show `  Insufficient context: @needsContext.length`
+show `  Needs human review:  @needsHuman.length`
+
+var @report = {
+  run: @runId,
+  scope: @scopeDescription,
+  files_audited: @filesToAudit.length,
+  summary: {
+    total: @allFindings.length,
+    confirmed: @confirmed.length,
+    false_positives: @falsePositives.length,
+    insufficient_context: @needsContext.length,
+    needs_human: @needsHuman.length
+  },
+  confirmed: @confirmed,
+  needs_human: @needsHuman,
+  insufficient_context: @needsContext,
+  false_positives: @falsePositives
+}
+
+output @report to "@runDir/report.json"
+
+>> Record commit hash for next run
+var @currentCommit = cmd { git rev-parse HEAD }
+output @currentCommit to "@root/llm/output/.slop-audit-last-commit"
+
+show `\nReport: @runDir/report.json`

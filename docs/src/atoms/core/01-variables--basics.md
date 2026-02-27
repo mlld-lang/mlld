@@ -6,7 +6,7 @@ category: core
 parent: variables
 aliases: [var, variable]
 tags: [variables, primitives, arrays, objects]
-related: [variables-conditional, templates-basics, exe-simple]
+related: [variables-conditional, templates-basics, exe-simple, builtins-reserved-variables]
 related-code: [interpreter/eval/var.ts, grammar/patterns/var.peggy]
 updated: 2026-01-05
 qa_tier: 1

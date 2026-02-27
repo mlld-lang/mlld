@@ -302,7 +302,7 @@ export class ProjectPathResolver implements Resolver {
    */
   private async isProjectRoot(path: string): Promise<boolean> {
     // Check for project indicators
-    const indicators = ['package.json', '.git', 'mlld.config.json', 'mlld.lock.json'];
+    const indicators = ['package.json', '.git', 'mlld-config.json', 'mlld-lock.json', 'mlld.lock.json'];
     for (const indicator of indicators) {
       if (await this.fileSystem.exists(path + '/' + indicator)) {
         return true;

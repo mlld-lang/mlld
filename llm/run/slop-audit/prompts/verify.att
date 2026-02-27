@@ -1,0 +1,60 @@
+You are verifying a slop-audit finding. Your job is to determine whether this finding is real — whether the flagged code is genuinely an AI anti-pattern, or whether there's a good reason for it.
+
+## The Finding
+
+```json
+@finding
+```
+
+## Source File
+
+<file path="@finding.file">
+@fileContent
+</file>
+
+## Anti-Slop Reference
+
+<guide>
+@guide
+</guide>
+
+## Verification Process
+
+### 1. Chesterton's Fence
+
+Before judging:
+- **Why might this code exist this way?** What problem does it solve?
+- **Is this a system boundary?** Runtime type checks ARE appropriate for user input, JSON.parse output, external API responses, and dynamically-shaped data.
+- **Is this a known workaround?** Some `as any` casts exist because TypeScript's type system can't express the actual constraint. Check for comments explaining why.
+
+### 2. Gather Evidence
+
+You have broader codebase access than the reviewer. Use it:
+- **Check the types** — Is the parameter actually typed, or does it come from an `any`/`unknown` source? Look at the caller chain.
+- **Check for shared utilities** — If the finding says "duplicated utility," search for the function name with Glob/Grep. Does a shared version actually exist?
+- **Check the data source** — If the finding says "over-handling shapes," look at what actually produces the data. Is the shape truly known, or does it come from multiple sources?
+- **Check commit history context** — Some patterns may be intentional migration artifacts, compatibility shims, or deliberately conservative for security reasons.
+
+### 3. Classify
+
+- **confirmed**: The slop pattern exists as described. You found no mitigating context. Cite evidence.
+- **false-positive**: The pattern is justified. Cite the specific reason (system boundary, untyped source, intentional workaround).
+- **insufficient-context**: Can't determine from available info. Say what's missing.
+- **needs-human**: Ambiguous — could be intentional design or could be slop. Describe the tension.
+
+## Output
+
+Write a JSON object:
+
+```json
+{
+  "finding": <original finding>,
+  "verdict": "confirmed|false-positive|insufficient-context|needs-human",
+  "reasoning": "Specific explanation with file:line references",
+  "evidence": "The code or context that supports your verdict",
+  "adjusted_severity": "high|medium|low|null",
+  "context_checked": ["list of files or patterns you examined"]
+}
+```
+
+Default to "confirmed" when uncertain. False negatives are worse than false positives for a slop audit.

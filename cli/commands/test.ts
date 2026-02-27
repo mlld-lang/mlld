@@ -670,7 +670,7 @@ export async function testCommand(args: string[]) {
     const duration = Date.now() - startTime;
     displaySummary(summary, duration, testFiles.length);
     
-    // Workaround for Prettier hanging issue (see docs/dev/PRETTIER-HANGING-ISSUE.md)
+    // Force exit after a short delay so buffered output flushes cleanly.
     // Force exit after a brief delay to ensure all output is flushed
     setTimeout(() => {
       process.exit(summary.failed > 0 || summary.errors > 0 ? 1 : 0);

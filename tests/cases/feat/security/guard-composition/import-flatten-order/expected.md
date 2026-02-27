@@ -1,4 +1,4 @@
 # Guard Composition - Import Flatten Order
 
-trace: gImported,gLocal
+t0: gImported, t1: gLocal
 value: seed-imported-local

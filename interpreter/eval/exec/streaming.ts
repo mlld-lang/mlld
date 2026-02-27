@@ -17,6 +17,79 @@ export type ExecInvocationStreamingSetup = {
   streamingManager: StreamingManager;
 };
 
+type ExecInvocationStreamingState = Pick<
+  ExecInvocationStreamingSetup,
+  'streamingOptions' | 'streamingRequested' | 'streamingEnabled' | 'hasStreamFormat'
+>;
+
+function definitionRequestsStreaming(definition: ExecutableDefinition): boolean {
+  return (
+    definition.withClause?.stream === true ||
+    (definition.meta as any)?.withClause?.stream === true ||
+    (definition.meta as any)?.isStream === true
+  );
+}
+
+function definitionHasStreamFormat(definition: ExecutableDefinition): boolean {
+  return (
+    definition.withClause?.streamFormat !== undefined ||
+    (definition.meta as any)?.withClause?.streamFormat !== undefined
+  );
+}
+
+function resolveMergedStreamFormatRaw(
+  node: ExecInvocation,
+  definition: ExecutableDefinition
+): unknown {
+  if (node.withClause?.streamFormat !== undefined) {
+    return node.withClause.streamFormat;
+  }
+  if (node.meta?.withClause?.streamFormat !== undefined) {
+    return node.meta.withClause.streamFormat;
+  }
+  if (definition.withClause?.streamFormat !== undefined) {
+    return definition.withClause.streamFormat;
+  }
+  return (definition.meta as any)?.withClause?.streamFormat;
+}
+
+async function configureExecStreamingManager(options: {
+  env: Environment;
+  streamingManager: StreamingManager;
+  streamingEnabled: boolean;
+  streamingOptions: StreamingOptions;
+  hasStreamFormat: boolean;
+  streamFormatValue: unknown;
+}): Promise<void> {
+  const {
+    env,
+    streamingManager,
+    streamingEnabled,
+    streamingOptions,
+    hasStreamFormat,
+    streamFormatValue
+  } = options;
+
+  if (!streamingEnabled) {
+    return;
+  }
+
+  let adapter;
+  if (hasStreamFormat && streamFormatValue) {
+    adapter = await loadStreamAdapter(streamFormatValue);
+  }
+  if (!adapter) {
+    adapter = await getAdapter('ndjson');
+  }
+
+  streamingManager.configure({
+    env,
+    streamingEnabled: true,
+    streamingOptions,
+    adapter: adapter as any
+  });
+}
+
 export async function setupExecInvocationStreaming(
   node: ExecInvocation,
   env: Environment
@@ -47,21 +120,14 @@ export async function setupExecInvocationStreaming(
   }
 
   const streamingManager = env.getStreamingManager();
-  if (streamingEnabled) {
-    let adapter;
-    if (hasStreamFormat && streamFormatValue) {
-      adapter = await loadStreamAdapter(streamFormatValue);
-    }
-    if (!adapter) {
-      adapter = await getAdapter('ndjson');
-    }
-    streamingManager.configure({
-      env,
-      streamingEnabled: true,
-      streamingOptions,
-      adapter: adapter as any
-    });
-  }
+  await configureExecStreamingManager({
+    env,
+    streamingManager,
+    streamingEnabled,
+    streamingOptions,
+    hasStreamFormat,
+    streamFormatValue
+  });
 
   return {
     streamingOptions,
@@ -73,20 +139,49 @@ export async function setupExecInvocationStreaming(
   };
 }
 
-export function mergeExecInvocationStreamingFromDefinition(
-  streamingRequested: boolean,
-  streamingOptions: StreamingOptions,
-  definition: ExecutableDefinition
-): { streamingRequested: boolean; streamingEnabled: boolean } {
-  const mergedRequest =
-    streamingRequested ||
-    definition.withClause?.stream === true ||
-    (definition.meta as any)?.withClause?.stream === true ||
-    (definition.meta as any)?.isStream === true;
+export async function mergeExecInvocationStreamingFromDefinition(
+  node: ExecInvocation,
+  definition: ExecutableDefinition,
+  env: Environment,
+  streamingManager: StreamingManager,
+  current: ExecInvocationStreamingState
+): Promise<ExecInvocationStreamingState> {
+  const mergedRequest = current.streamingRequested || definitionRequestsStreaming(definition);
+  const mergedHasStreamFormat =
+    current.hasStreamFormat || definitionHasStreamFormat(definition);
+  const rawMergedStreamFormat = mergedHasStreamFormat
+    ? resolveMergedStreamFormatRaw(node, definition)
+    : undefined;
+  const streamFormatValue = mergedHasStreamFormat
+    ? await resolveStreamFormatValue(rawMergedStreamFormat, env)
+    : undefined;
+
+  let streamingOptions = current.streamingOptions;
+  if (mergedHasStreamFormat && mergedRequest) {
+    env.setStreamingOptions({
+      ...streamingOptions,
+      streamFormat: streamFormatValue as any,
+      skipDefaultSinks: true,
+      suppressTerminal: true
+    });
+    streamingOptions = env.getStreamingOptions();
+  }
+
   const streamingEnabled = streamingOptions.enabled !== false && mergedRequest;
+  await configureExecStreamingManager({
+    env,
+    streamingManager,
+    streamingEnabled,
+    streamingOptions,
+    hasStreamFormat: mergedHasStreamFormat,
+    streamFormatValue
+  });
+
   return {
+    streamingOptions,
     streamingRequested: mergedRequest,
-    streamingEnabled
+    streamingEnabled,
+    hasStreamFormat: mergedHasStreamFormat
   };
 }
 
@@ -96,24 +191,15 @@ export function createExecInvocationChunkEffect(options: {
   shouldSkipDefaultSinks: () => boolean;
 }): (chunk: string, source: ChunkSource) => void {
   const { env, isStreamingEnabled, shouldSkipDefaultSinks } = options;
-  let lastEmittedChunk: string | undefined;
   return (chunk: string, source: ChunkSource): void => {
     if (!isStreamingEnabled()) {
       return;
     }
 
-    const trimmed = chunk.trim();
-    if (trimmed && trimmed === lastEmittedChunk) {
-      return;
-    }
-    lastEmittedChunk = trimmed || chunk;
-    const withSpacing = chunk.endsWith('\n') ? `${chunk}\n` : `${chunk}\n\n`;
     if (!shouldSkipDefaultSinks()) {
       return;
     }
-    if (source === 'stdout') {
-      env.emitEffect('doc', withSpacing);
-    } else {
+    if (source === 'stderr') {
       env.emitEffect('stderr', chunk);
     }
   };

@@ -209,6 +209,70 @@ show @blockDestructive
     expect(undefs).not.toContain('blockDestructive');
   });
 
+  it('does not flag @p pipeline context alias as undefined', async () => {
+    const modulePath = await writeModule('pipeline-p-alias.mld', `/exe @stage(input) = \`ok:@input\`
+/var @result = "seed" with { pipeline: [@stage(@p)] }
+/show @result
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('p');
+  });
+
+  it('treats configured resolver prefix variables as known names', async () => {
+    await fs.writeFile(
+      path.join(tempDir, 'mlld-config.json'),
+      JSON.stringify({
+        resolvers: {
+          prefixes: [
+            {
+              prefix: '@lib/',
+              resolver: 'LOCAL',
+              type: 'io',
+              config: { basePath: './src/lib' }
+            }
+          ]
+        }
+      }, null, 2),
+      'utf8'
+    );
+
+    const modulePath = await writeModule('resolver-prefix-known.mld', `show @lib
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('lib');
+  });
+
+  it('does not flag hook declaration names as undefined', async () => {
+    const modulePath = await writeModule('hook-name-decl.mld', `/hook @audit before op:run = [ => @input ]
+/show @audit
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).not.toContain('audit');
+  });
+
+  it('still warns for genuinely undefined variables', async () => {
+    const modulePath = await writeModule('genuine-undef.mld', `/show @doesNotExist
+`);
+
+    const result = await analyze(modulePath, { checkVariables: true });
+
+    expect(result.valid).toBe(true);
+    const undefs = (result.warnings ?? []).map(w => w.variable);
+    expect(undefs).toContain('doesNotExist');
+  });
+
   it('extracts guard timing from guard fields instead of subtype', async () => {
     const modulePath = await writeModule('guard-timing.mld', `guard @beforeGuard before op:run = when [* => allow]
 guard @afterGuard after op:run = when [* => allow]
@@ -226,7 +290,7 @@ guard @alwaysGuard always op:run = when [* => allow]
   });
 
   it('includes guards and needs from directives in analyze output', async () => {
-    const modulePath = await writeModule('analyze-json-guards-needs.mld', `/needs { sh }
+    const modulePath = await writeModule('analyze-json-guards-needs.mld', `/needs { cmd: [curl], sh }
 guard @g before op:run = when [* => allow]
 /exe @hello() = \`hi\`
 /export { @hello }
@@ -238,7 +302,19 @@ guard @g before op:run = when [* => allow]
     expect(result.guards).toEqual(expect.arrayContaining([
       { name: 'g', timing: 'before' }
     ]));
-    expect(result.needs?.cmd).toBeDefined();
+    expect(result.needs?.cmd).toEqual(expect.arrayContaining(['curl']));
+  });
+
+  it('populates needs.cmd with shell commands detected from run directives', async () => {
+    const modulePath = await writeModule('analyze-needs-shell-commands.mld', `/run sh {
+curl https://example.com | jq ".ok"
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.needs?.cmd).toEqual(expect.arrayContaining(['curl', 'jq']));
   });
 
   it('does not flag for-loop key variables as undefined', async () => {

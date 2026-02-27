@@ -344,4 +344,66 @@ version: 2.0.0
       expect(result.directoryData?.manifest.type).toBe('app');
     });
   });
+
+  describe('frontmatter metadata defaults', () => {
+    it('uses title/description/version/tags/author from YAML frontmatter defaults', async () => {
+      const modulePath = path.join(tempDir, 'frontmatter-defaults.mld');
+      await fs.writeFile(
+        modulePath,
+        `---
+title: My Utility
+description: Helper functions for string processing
+version: 1.2.0
+tags: [utils, strings]
+author: someone
+---
+/var @value = "ok"
+/export { value }
+`,
+        'utf8'
+      );
+
+      const result = await reader.readModule(modulePath);
+
+      expect(result.metadata.name).toBe('my-utility');
+      expect(result.metadata.about).toBe('Helper functions for string processing');
+      expect(result.metadata.version).toBe('1.2.0');
+      expect(result.metadata.keywords).toEqual(['utils', 'strings']);
+      expect(result.metadata.author).toBe('someone');
+    });
+
+    it('applies metadata overrides with precedence over frontmatter values', async () => {
+      const modulePath = path.join(tempDir, 'frontmatter-overrides.mld');
+      await fs.writeFile(
+        modulePath,
+        `---
+title: My Utility
+description: Helper functions for string processing
+version: 1.2.0
+tags: [utils, strings]
+author: someone
+---
+/var @value = "ok"
+/export { value }
+`,
+        'utf8'
+      );
+
+      const result = await reader.readModule(modulePath, {
+        metadataOverrides: {
+          title: 'CLI Override Utility',
+          description: 'CLI description',
+          version: '2.1.0',
+          tags: 'cli,override',
+          author: 'cli-user'
+        }
+      });
+
+      expect(result.metadata.name).toBe('cli-override-utility');
+      expect(result.metadata.about).toBe('CLI description');
+      expect(result.metadata.version).toBe('2.1.0');
+      expect(result.metadata.keywords).toEqual(['cli', 'override']);
+      expect(result.metadata.author).toBe('cli-user');
+    });
+  });
 });

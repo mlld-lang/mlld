@@ -1,0 +1,122 @@
+## Ticket Assessment: @ticketId
+
+You are assessing a ticket for the mlld project to determine its current relevance, implementation status, scope, and actionability.
+
+## Ticket Details
+
+**ID**: @ticketId
+**Title**: @ticketTitle
+**Type**: @ticketType
+**Priority**: @ticketPriority
+**Tags**: @ticketTags
+
+### Full Ticket Content
+
+```markdown
+@ticketContent
+```
+
+## Project Context
+
+### Recent CHANGELOG entries (current release cycle)
+
+```markdown
+@changelog
+```
+
+### Git commits (last 90 days)
+
+```
+@commits
+```
+
+## Your Assessment Task
+
+You have access to the codebase via Read, Glob, and Grep tools. Use them to verify your assessments — don't guess.
+
+### 1. Staleness Assessment
+
+Is this ticket still relevant given the project's current state?
+
+**Check specifically:**
+- Scan the CHANGELOG entries above for matching features, fixes, or changes that address this ticket
+- Search git commit messages for related work
+- Use Grep to check if referenced code, patterns, or files still exist in the codebase
+- Consider whether the project's architecture has evolved past this ticket
+
+**Score** (0.0-1.0):
+- 0.0-0.2: Definitely still relevant, no conflicting changes
+- 0.3-0.4: Minor staleness, ticket description may need updating
+- 0.5-0.6: Significant context shift, needs human review
+- 0.7-0.8: Likely obsolete or already addressed by other work
+- 0.9-1.0: Definitely stale — should be closed
+
+### 2. Implementation Status
+
+Has this work been partially or fully implemented?
+
+**Search the codebase for:**
+- Source code implementing the described feature or fix (use Grep for key terms from the ticket)
+- Test cases covering the described behavior (check tests/cases/ and tests/)
+- Grammar changes if grammar-related (check grammar/)
+- Documentation if docs-related (check docs/)
+- CHANGELOG entries announcing this as shipped
+
+**Status values:**
+- `none` (score 0.0-0.2): No implementation found
+- `partial` (score 0.3-0.6): Some implementation exists but incomplete
+- `done` (score 0.7-1.0): Fully or nearly fully implemented
+
+### 3. Scope Estimation
+
+Estimate effort across three dimensions using ONLY these exact values:
+
+**Size** (effort): `xs` (<1h) / `s` (1-4h) / `m` (4-16h) / `l` (2-5d) / `xl` (1+wk)
+**Complexity** (technical difficulty): `xs` (trivial) / `s` (simple) / `m` (moderate) / `l` (complex) / `xl` (research-required)
+**Risk** (blast radius): `xs` (isolated) / `s` (mostly isolated) / `m` (some deps) / `l` (many deps) / `xl` (core changes)
+
+### 4. Category
+
+Classify into exactly ONE category:
+
+- `closeable`: Already implemented, obsolete, or duplicate. Evidence supports closing now.
+- `stale`: Potentially relevant but description is outdated. Context has shifted enough to need human review.
+- `clear-task`: Well-defined, actionable work. Someone could pick this up and start immediately.
+- `needs-research`: Requires investigation, profiling, or exploration before work can begin.
+- `needs-design-decision`: Requires human judgment on architecture, UX, or approach. Multiple valid options exist.
+
+### 5. Summary
+
+Write a single sentence describing the ticket's current state and what should happen next.
+
+## Output Format
+
+Write ONLY a JSON object (no markdown code fences, no surrounding text):
+
+{
+  "ticket_id": "@ticketId",
+  "title": "@ticketTitle",
+  "summary": "One-line assessment and recommended action",
+  "staleness": {
+    "score": 0.2,
+    "reasoning": "Brief explanation",
+    "evidence": ["specific references found"]
+  },
+  "implementation": {
+    "score": 0.0,
+    "status": "none",
+    "reasoning": "What was checked and found",
+    "evidence": ["file paths or code references"]
+  },
+  "scope": {
+    "size": "m",
+    "complexity": "s",
+    "risk": "m",
+    "reasoning": "Why these estimates"
+  },
+  "category": "clear-task",
+  "recommended_action": "close|update|implement|research|design-review",
+  "priority_context": "Why this matters or doesn't right now"
+}
+
+Be thorough in your codebase searches but decisive in your conclusions. Every assessment should lead to a clear recommendation.

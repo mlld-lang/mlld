@@ -1,6 +1,10 @@
 import type { Variable, ExecutableVariable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from './variable-importer/executable/CapturedModuleEnvKeychain';
 
 /**
  * Handles complex object variable reference resolution for imported modules
@@ -127,6 +131,7 @@ export class ObjectReferenceResolver {
       // Serialize shadow environments if present (Maps don't serialize to JSON)
       let serializedCtx = { ...execVar.mx };
       let serializedInternal = { ...execVar.internal };
+      const capturedModuleEnv = getCapturedModuleEnv(execVar.internal);
 
       if (execVar.internal?.capturedShadowEnvs) {
         serializedInternal = {
@@ -135,11 +140,10 @@ export class ObjectReferenceResolver {
         };
       }
       // Serialize module environment if present
-      if (execVar.internal?.capturedModuleEnv) {
-        serializedInternal = {
-          ...serializedInternal,
-          capturedModuleEnv: this.serializeModuleEnv(execVar.internal.capturedModuleEnv)
-        };
+      if (capturedModuleEnv instanceof Map) {
+        sealCapturedModuleEnv(serializedInternal, this.serializeModuleEnv(capturedModuleEnv));
+      } else if (capturedModuleEnv !== undefined) {
+        sealCapturedModuleEnv(serializedInternal, capturedModuleEnv);
       }
 
       const result = {

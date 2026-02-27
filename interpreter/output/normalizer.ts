@@ -1,8 +1,8 @@
 /**
  * Output Normalizer
  *
- * Simple line-based normalization that replaces Prettier.
- * Eliminates hanging bug, JSON protection hacks, and adds ~0ms overhead.
+ * Simple line-based normalization for markdown output.
+ * Keeps formatting predictable with minimal overhead.
  */
 
 /**
@@ -16,8 +16,7 @@
  * 5. Collapse 3+ newlines to max 2 (one blank line)
  * 6. Ensure single trailing newline
  *
- * This replaces Prettier markdown formatting with a simple,
- * predictable normalization that doesn't require workarounds.
+ * Applies lightweight markdown normalization rules with predictable output.
  *
  * @param output Raw output string
  * @returns Normalized output

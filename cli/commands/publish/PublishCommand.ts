@@ -6,7 +6,7 @@ import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { MlldError, ErrorSeverity } from '@core/errors';
 import { PublishOptions, PublishContext, ModuleData, GitInfo, PublishResult } from './types/PublishingTypes';
 import { PublishingStrategy } from './types/PublishingStrategy';
-import { ModuleReader } from './utils/ModuleReader';
+import { ModuleReader, type ModuleMetadataOverrides } from './utils/ModuleReader';
 import { ModuleValidator } from './validation/ModuleValidator';
 import { InteractivePrompter } from './interaction/InteractivePrompter';
 import { GistPublishingStrategy } from './strategies/GistPublishingStrategy';
@@ -126,7 +126,7 @@ export class PublishCommand {
       }
 
       // 2. Read and parse the module
-      const moduleData = await this.readModule(modulePath);
+      const moduleData = await this.readModule(modulePath, options);
 
       // 3. Validate tag name if provided
       if (options.tag) {
@@ -289,8 +289,32 @@ export class PublishCommand {
     }
   }
 
-  private async readModule(modulePath: string): Promise<ModuleData> {
-    const result = await this.moduleReader.readModule(modulePath);
+  private extractMetadataOverrides(options: PublishOptions): ModuleMetadataOverrides | undefined {
+    const overrides: ModuleMetadataOverrides = {};
+
+    if (typeof options.title === 'string' && options.title.trim().length > 0) {
+      overrides.title = options.title;
+    }
+    if (typeof options.description === 'string' && options.description.trim().length > 0) {
+      overrides.description = options.description;
+    }
+    if (typeof options.version === 'string' && options.version.trim().length > 0) {
+      overrides.version = options.version;
+    }
+    if (typeof options.author === 'string' && options.author.trim().length > 0) {
+      overrides.author = options.author;
+    }
+    if (Array.isArray(options.tags) || typeof options.tags === 'string') {
+      overrides.tags = options.tags;
+    }
+
+    return Object.keys(overrides).length > 0 ? overrides : undefined;
+  }
+
+  private async readModule(modulePath: string, options: PublishOptions = {}): Promise<ModuleData> {
+    const result = await this.moduleReader.readModule(modulePath, {
+      metadataOverrides: this.extractMetadataOverrides(options)
+    });
 
     return {
       metadata: result.metadata,
@@ -408,17 +432,6 @@ export class PublishCommand {
       options,
       user,
       octokit,
-      changes: [],
-      checkpoints: [],
-      rollback: async () => {
-        // TODO: Implement rollback logic
-      },
-      checkpoint: (name: string) => {
-        // TODO: Implement checkpoint logic
-      },
-      restoreCheckpoint: async (name: string) => {
-        // TODO: Implement restore checkpoint logic
-      },
       toErrorContext: () => {
         return {
           module: moduleData.metadata.name,

@@ -3,203 +3,406 @@ name: Publish
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Targets: npm,vscode,pypi,crates,rubygems,hex (comma-separated) or "all"'
+        default: 'all'
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
 
 permissions:
   contents: write
-  packages: write
-  id-token: write  # For npm and PyPI trusted publishing (OIDC)
+  id-token: write
 
 jobs:
-  release:
+  prepare:
     if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      skip: ${{ steps.version.outputs.skip }}
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Extract version and check if release needed
+        id: version
+        run: |
+          set -e
+          VERSION=$(grep -m1 '^## \[' CHANGELOG.md | sed -E 's/^## \[([^]]+)\].*/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "::error::No version found in CHANGELOG.md"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists — skipping release"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate version matches package.json
+        if: steps.version.outputs.skip == 'false'
+        run: |
+          set -e
+          VERSION=${{ steps.version.outputs.version }}
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$PKG" != "$VERSION" ]; then
+            echo "::error::package.json ($PKG) does not match CHANGELOG.md ($VERSION)"
+            exit 1
+          fi
+
+      - name: Resolve targets
+        id: targets
+        run: echo "targets=${{ github.event.inputs.targets || 'all' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Sync SDK versions
+        if: steps.version.outputs.skip == 'false'
+        run: node scripts/sync-sdk-versions.cjs
+
+      - name: Build EXAMPLES.md
+        if: steps.version.outputs.skip == 'false'
+        run: npm run build:fixtures
+
+      - name: Generate release notes
+        if: steps.version.outputs.skip == 'false'
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {flag=1;next} /^## \[/{flag=0} flag' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::Empty release notes for $VERSION"
+            exit 1
+          fi
+
+      - name: Upload artifacts
+        if: steps.version.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-artifacts
+          retention-days: 1
+          path: |
+            RELEASE_NOTES.md
+            tests/cases/EXAMPLES.md
+            sdk/python/pyproject.toml
+            sdk/rust/Cargo.toml
+            sdk/ruby/mlld.gemspec
+            sdk/elixir/mix.exs
+
+  publish-npm:
+    needs: prepare
+    if: >-
+      needs.prepare.outputs.skip == 'false' &&
+      (needs.prepare.outputs.targets == 'all' || contains(needs.prepare.outputs.targets, 'npm'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Check if already published
+        id: check
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          if npm view mlld@$VERSION version 2>/dev/null; then
+            echo "mlld@$VERSION already on npm — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish npm packages
+        if: steps.check.outputs.skip == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish-with-mlldx.cjs --tag latest
+
+  publish-vscode:
+    needs: prepare
+    if: >-
+      needs.prepare.outputs.skip == 'false' &&
+      (needs.prepare.outputs.targets == 'all' || contains(needs.prepare.outputs.targets, 'vscode'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Build and publish VS Code extension
+        env:
+          VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
+        run: |
+          set -e
+          VERSION=${{ needs.prepare.outputs.version }}
+          cd editors/vscode
+          npm ci
+          npm version "$VERSION" --no-git-tag-version
+          npx @vscode/vsce package --out "mlld-${VERSION}.vsix"
+          npx @vscode/vsce publish --packagePath "mlld-${VERSION}.vsix" --pat "$VSCE_TOKEN"
+
+      - name: Upload version bump
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-bump
+          retention-days: 1
+          path: |
+            editors/vscode/package.json
+            editors/vscode/package-lock.json
+
+  publish-pypi:
+    needs: prepare
+    if: >-
+      needs.prepare.outputs.skip == 'false' &&
+      (needs.prepare.outputs.targets == 'all' || contains(needs.prepare.outputs.targets, 'pypi'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: publish-artifacts
+          path: .
+
+      - name: Check if already published
+        id: check
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          if curl -sf "https://pypi.org/pypi/mlld-sdk/$VERSION/json" >/dev/null 2>&1; then
+            echo "mlld-sdk $VERSION already on PyPI — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.skip == 'false'
+        with:
+          python-version: '3.12'
+
+      - name: Build Python package
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          cd sdk/python
+          pip install build
+          python -m build
+
+      - name: Publish to PyPI
+        if: steps.check.outputs.skip == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist/
+
+  publish-crates:
+    needs: prepare
+    if: >-
+      needs.prepare.outputs.skip == 'false' &&
+      (needs.prepare.outputs.targets == 'all' || contains(needs.prepare.outputs.targets, 'crates'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: publish-artifacts
+          path: .
+
+      - name: Check if already published
+        id: check
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          if curl -sf "https://crates.io/api/v1/crates/mlld/$VERSION" >/dev/null 2>&1; then
+            echo "mlld $VERSION already on crates.io — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.check.outputs.skip == 'false'
+
+      - name: Publish to crates.io
+        if: steps.check.outputs.skip == 'false'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: cd sdk/rust && cargo publish --allow-dirty
+
+  publish-rubygems:
+    needs: prepare
+    if: >-
+      needs.prepare.outputs.skip == 'false' &&
+      (needs.prepare.outputs.targets == 'all' || contains(needs.prepare.outputs.targets, 'rubygems'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: publish-artifacts
+          path: .
+
+      - name: Check if already published
+        id: check
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          if curl -sf "https://rubygems.org/api/v1/versions/mlld.json" | grep -q "\"number\":\"$VERSION\""; then
+            echo "mlld $VERSION already on RubyGems — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: ruby/setup-ruby@v1
+        if: steps.check.outputs.skip == 'false'
+        with:
+          ruby-version: ruby
+
+      - name: Publish to RubyGems
+        if: steps.check.outputs.skip == 'false'
+        uses: rubygems/release-gem@v1
+        with:
+          gem-directory: sdk/ruby
+
+  publish-hex:
+    needs: prepare
+    if: >-
+      needs.prepare.outputs.skip == 'false' &&
+      (needs.prepare.outputs.targets == 'all' || contains(needs.prepare.outputs.targets, 'hex'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: publish-artifacts
+          path: .
+
+      - name: Check if already published
+        id: check
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          if curl -sf "https://hex.pm/api/packages/mlld" | grep -q "\"version\":\"$VERSION\""; then
+            echo "mlld $VERSION already on Hex — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: erlef/setup-beam@v1
+        if: steps.check.outputs.skip == 'false'
+        with:
+          elixir-version: '1.16'
+          otp-version: '26'
+
+      - name: Publish to Hex
+        if: steps.check.outputs.skip == 'false'
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+        run: |
+          cd sdk/elixir
+          mix deps.get
+          mix hex.publish --yes
+
+  finalize:
+    needs: [prepare, publish-npm, publish-vscode, publish-pypi, publish-crates, publish-rubygems, publish-hex]
+    if: >-
+      always() &&
+      needs.prepare.outputs.skip == 'false' &&
+      !contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Use Node.js
-        uses: actions/setup-node@v4
+
+      - uses: actions/download-artifact@v4
         with:
-          node-version: 20
-          cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
-      - name: Install dependencies
-        run: npm ci
-      - name: Build project (required before tests)
-        run: npm run build
-      - name: Run tests
-        run: npm test
-      - name: Build EXAMPLES.md
-        run: npm run build:fixtures
-      - name: Commit generated EXAMPLES.md (force add)
+          name: publish-artifacts
+          path: .
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: vscode-bump
+          path: .
+        continue-on-error: true
+
+      - name: Configure git
         run: |
-          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- tests/cases/EXAMPLES.md; then
-            git add -f tests/cases/EXAMPLES.md
-            git commit -m "chore: update generated EXAMPLES.md [skip ci]"
-            git push
-          fi
-      - name: Check if release needed
-        id: check_release
+
+      - name: Commit, tag, and push
         run: |
           set -e
-          CHANGELOG_VERSION=$(grep -m1 '^## \[' CHANGELOG.md | sed -E 's/^## \[([^]]+)\].*/\1/')
-          if [ -z "$CHANGELOG_VERSION" ]; then
-            echo "No version found in CHANGELOG.md"
-            exit 1
+          VERSION=${{ needs.prepare.outputs.version }}
+
+          # Stage changed files
+          git add -f tests/cases/EXAMPLES.md
+          git add sdk/python/pyproject.toml sdk/rust/Cargo.toml sdk/ruby/mlld.gemspec sdk/elixir/mix.exs
+          git add editors/vscode/package.json editors/vscode/package-lock.json 2>/dev/null || true
+
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: release v${VERSION} [skip ci]"
           fi
 
-          # Check if tag already exists
-          if git rev-parse "v$CHANGELOG_VERSION" >/dev/null 2>&1; then
-            echo "Tag v$CHANGELOG_VERSION already exists, skipping release"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Tag v$CHANGELOG_VERSION does not exist, proceeding with release"
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-          echo "version=$CHANGELOG_VERSION" >> "$GITHUB_OUTPUT"
-      - name: Validate version format
-        if: steps.check_release.outputs.skip == 'false'
-        run: |
-          set -e
-          VERSION=${{ steps.check_release.outputs.version }}
-          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
-            echo "Invalid changelog version format: $VERSION"
-            exit 1
-          fi
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
-            echo "package.json version ($PACKAGE_VERSION) does not match changelog version ($VERSION)"
-            exit 1
-          fi
-      - name: Generate release notes
-        if: steps.check_release.outputs.skip == 'false'
-        run: |
-          VERSION=${{ steps.check_release.outputs.version }}
-          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {flag=1;next} /^## \[/{flag=0} flag' CHANGELOG.md > RELEASE_NOTES.md
-          if [ ! -s RELEASE_NOTES.md ]; then
-            echo "Release notes not found for version $VERSION"
-            exit 1
-          fi
-          cat RELEASE_NOTES.md
-      - name: Tag release
-        if: steps.check_release.outputs.skip == 'false'
-        run: |
-          VERSION=${{ steps.check_release.outputs.version }}
-          git tag v$VERSION
-          git push origin v$VERSION
-      - name: Create GitHub release
-        if: steps.check_release.outputs.skip == 'false'
-        uses: softprops/action-gh-release@v1
+          # Create tags (idempotent — skip if they already exist locally)
+          git tag "v${VERSION}" 2>/dev/null || true
+          git tag "sdk/go/v${VERSION}" 2>/dev/null || true
+
+          # Push commit and tags separately for idempotency
+          git push origin HEAD:main
+          git push origin "v${VERSION}" 2>/dev/null || echo "::notice::Tag v${VERSION} already on remote"
+          git push origin "sdk/go/v${VERSION}" 2>/dev/null || echo "::notice::Tag sdk/go/v${VERSION} already on remote"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.check_release.outputs.version }}
+          tag_name: v${{ needs.prepare.outputs.version }}
           body_path: RELEASE_NOTES.md
-      - name: Publish packages
-        if: steps.check_release.outputs.skip == 'false'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          RC_LATEST: ${{ vars.RC_LATEST }}
+
+  report:
+    needs: [prepare, publish-npm, publish-vscode, publish-pypi, publish-crates, publish-rubygems, publish-hex, finalize]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
         run: |
-          VERSION=${{ steps.check_release.outputs.version }}
-          if [[ "$VERSION" == *-rc* ]]; then
-            if [ "$RC_LATEST" = "true" ]; then
-              TAG=latest
-            else
-              TAG=rc
-            fi
-          else
-            TAG=latest
-          fi
-          npm run publish:all -- --tag $TAG
-
-      - name: Build VS Code extension package
-        if: steps.check_release.outputs.skip == 'false'
-        run: |
-          set -e
-          VERSION=${{ steps.check_release.outputs.version }}
-          cd editors/vscode
-          npm ci
-          npm version "$VERSION" --no-git-tag-version
-          npx @vscode/vsce package --out "../mlld-vscode-${VERSION}.vsix"
-
-      - name: Publish VS Code extension
-        if: steps.check_release.outputs.skip == 'false'
-        env:
-          VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
-        run: |
-          set -e
-          VERSION=${{ steps.check_release.outputs.version }}
-          cd editors/vscode
-          VSIX_PATH="../mlld-vscode-${VERSION}.vsix"
-          npx @vscode/vsce publish --packagePath "$VSIX_PATH" --pat "$VSCE_TOKEN"
-          rm -f "$VSIX_PATH"
-
-      - name: Commit VS Code extension version bump
-        if: steps.check_release.outputs.skip == 'false'
-        run: |
-          set -e
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- editors/vscode/package.json editors/vscode/package-lock.json; then
-            git add editors/vscode/package.json editors/vscode/package-lock.json
-            git commit -m "chore: release VS Code extension v${{ steps.check_release.outputs.version }}"
-            git push
-          fi
-
-      # SDK Publishing
-      - name: Sync SDK versions
-        if: steps.check_release.outputs.skip == 'false'
-        run: node scripts/sync-sdk-versions.cjs
-
-      - name: Setup Python
-        if: steps.check_release.outputs.skip == 'false'
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Publish Python SDK to PyPI
-        if: steps.check_release.outputs.skip == 'false'
-        run: |
-          set -e
-          cd sdk/python
-          pip install build
-          python -m build
-
-      - name: Publish Python SDK to PyPI (Trusted Publishing)
-        if: steps.check_release.outputs.skip == 'false'
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: sdk/python/dist/
-
-      - name: Setup Rust
-        if: steps.check_release.outputs.skip == 'false'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Publish Rust SDK to crates.io
-        if: steps.check_release.outputs.skip == 'false'
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-        run: |
-          set -e
-          cd sdk/rust
-          cargo publish --allow-dirty
-
-      - name: Tag Go SDK
-        if: steps.check_release.outputs.skip == 'false'
-        run: |
-          set -e
-          VERSION=${{ steps.check_release.outputs.version }}
-          git tag "sdk/go/v${VERSION}"
-          git push origin "sdk/go/v${VERSION}"
-
-      - name: Commit SDK version updates
-        if: steps.check_release.outputs.skip == 'false'
-        run: |
-          set -e
-          if ! git diff --quiet -- sdk/python/pyproject.toml sdk/rust/Cargo.toml; then
-            git add sdk/python/pyproject.toml sdk/rust/Cargo.toml
-            git commit -m "chore: sync SDK versions to v${{ steps.check_release.outputs.version }}"
-            git push
-          fi
+          {
+            echo "## Publish v${{ needs.prepare.outputs.version }}"
+            echo ""
+            echo "| Target | Result |"
+            echo "|--------|--------|"
+            echo "| prepare | \`${{ needs.prepare.result }}\` |"
+            echo "| npm | \`${{ needs.publish-npm.result }}\` |"
+            echo "| vscode | \`${{ needs.publish-vscode.result }}\` |"
+            echo "| pypi | \`${{ needs.publish-pypi.result }}\` |"
+            echo "| crates | \`${{ needs.publish-crates.result }}\` |"
+            echo "| rubygems | \`${{ needs.publish-rubygems.result }}\` |"
+            echo "| hex | \`${{ needs.publish-hex.result }}\` |"
+            echo "| finalize | \`${{ needs.finalize.result }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

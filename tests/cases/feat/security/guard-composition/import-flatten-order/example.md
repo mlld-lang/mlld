@@ -1,16 +1,14 @@
 # Guard Composition - Import Flatten Order
 
-/import module { @gImported } from "./guard-import-order.mld"
+/var secret @value = "seed"
+
+/import { @gImported } from "./guard-import-order.mld"
+
+/exe @report(val) = `t0: @p.guards[0].trace[0].guardName, t1: @p.guards[0].trace[1].guardName
+value: @val`
 
 /guard @gLocal for secret = when [
   * => allow `@input\-local`
 ]
-
-/var secret @value = "seed"
-
-/exe @report(val) = cmd {
-  /show `trace: @p.guards.filter(g => g.operation?.name == "report").map(g => g.trace[0].guardName)`
-  /show `value: @val`
-}
 
 /show @value | @report

@@ -12,7 +12,7 @@ import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { isDirectiveNode, isVariableReferenceNode, isTextNode } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
-import type { ResolvedURLConfig } from '@core/config/types';
+import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { DirectiveTrace } from '@core/types/trace';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { EnvironmentConfig } from '@core/types/environment';
@@ -41,6 +41,7 @@ import {
   type AuthConfig,
   type PolicyConfig
 } from '@core/policy/union';
+import { findDeniedShellCommand } from '@core/policy/guards';
 import { RegistryManager, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
@@ -2180,6 +2181,20 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         sourceLocation: normalized.context?.sourceLocation,
         reason: "Shell execution requires 'Bash' in env.tools"
       });
+      const policySummary = this.getPolicySummary();
+      if (policySummary) {
+        const deniedShellCommand = findDeniedShellCommand(policySummary, code);
+        if (deniedShellCommand) {
+          throw new MlldSecurityError(
+            `${deniedShellCommand.reason} in shell block (matched: ${deniedShellCommand.commandText})`,
+            {
+              code: 'POLICY_CAPABILITY_DENIED',
+              sourceLocation: normalized.context?.sourceLocation,
+              env: this
+            }
+          );
+        }
+      }
     }
     const finalParams = this.injectAmbientMx(language, params);
     const bus = this.getStreamingBus();

@@ -39,11 +39,8 @@ export class ArgumentParser {
     // Flag to stop parsing when we hit a command with subcommands
     let stopParsing = false;
 
-    // Handle special debug commands
+    // Handle special commands
     args = this.handleSpecialCommands(args, options);
-
-    // Handle context debug options
-    args = this.handleContextDebugOptions(args, options);
 
     for (let i = 0; i < args.length; i++) {
       if (stopParsing) break;
@@ -231,7 +228,7 @@ export class ArgumentParser {
         case '--no-normalize-blank-lines':
           options.noNormalizeBlankLines = true;
           break;
-        // Disable prettier formatting
+        // Disable markdown output normalization
         case '--no-format':
           options.noFormat = true;
           break;
@@ -294,18 +291,18 @@ export class ArgumentParser {
           }
           break;
         }
-        // Environment file path
-        case '--env': {
+        // MLLD environment file path / inline overrides
+        case '--mlld-env': {
           const envValue = args[++i];
           if (envValue === undefined) {
-            throw new Error('--env requires a value');
+            throw new Error('--mlld-env requires a value');
           }
-          if (Array.isArray(options.env)) {
-            options.env.push(envValue);
-          } else if (typeof options.env === 'string' && options.env.length > 0) {
-            options.env = [options.env, envValue];
+          if (Array.isArray(options.mlldEnv)) {
+            options.mlldEnv.push(envValue);
+          } else if (typeof options.mlldEnv === 'string' && options.mlldEnv.length > 0) {
+            options.mlldEnv = [options.mlldEnv, envValue];
           } else {
-            options.env = envValue;
+            options.mlldEnv = envValue;
           }
           break;
         }
@@ -352,76 +349,7 @@ export class ArgumentParser {
   }
 
   private handleSpecialCommands(args: string[], options: CLIOptions): string[] {
-    let modifiedArgs = [...args];
-
-    // Check for debug-resolution command
-    if (modifiedArgs.length > 0 && modifiedArgs[0] === 'debug-resolution') {
-      options.debugResolution = true;
-      modifiedArgs = modifiedArgs.slice(1);
-    }
-
-    // Check for debug-transform command
-    if (modifiedArgs.length > 0 && modifiedArgs[0] === 'debug-transform') {
-      options.debugTransform = true;
-      modifiedArgs = modifiedArgs.slice(1);
-    }
-
-    // Check for debug-context command
-    if (modifiedArgs.length > 0 && modifiedArgs[0] === 'debug-context') {
-      options.debugContext = true;
-      modifiedArgs = modifiedArgs.slice(1);
-    }
-
-    return modifiedArgs;
-  }
-
-  private handleContextDebugOptions(args: string[], options: CLIOptions): string[] {
-    let modifiedArgs = [...args];
-
-    // Add context debug options
-    if (modifiedArgs.includes('--debug-context')) {
-      options.debugContext = true;
-      modifiedArgs = modifiedArgs.filter(arg => arg !== '--debug-context');
-    }
-
-    // Handle visualization type
-    const vizTypeIndex = modifiedArgs.findIndex(arg => arg === '--viz-type');
-    if (vizTypeIndex !== -1 && vizTypeIndex < modifiedArgs.length - 1) {
-      const vizType = modifiedArgs[vizTypeIndex + 1];
-      if (['hierarchy', 'variable-propagation', 'combined', 'timeline'].includes(vizType)) {
-        options.visualizationType = vizType as 'hierarchy' | 'variable-propagation' | 'combined' | 'timeline';
-      } else {
-        console.error(`Invalid visualization type: ${vizType}. Using default.`);
-      }
-      modifiedArgs.splice(vizTypeIndex, 2);
-    }
-
-    // Handle root state ID
-    const rootStateIdIndex = modifiedArgs.findIndex(arg => arg === '--root-state-id');
-    if (rootStateIdIndex !== -1 && rootStateIdIndex < modifiedArgs.length - 1) {
-      options.rootStateId = modifiedArgs[rootStateIdIndex + 1];
-      modifiedArgs.splice(rootStateIdIndex, 2);
-    }
-
-    // Include vars option
-    if (modifiedArgs.includes('--no-vars')) {
-      options.includeVars = false;
-      modifiedArgs = modifiedArgs.filter(arg => arg !== '--no-vars');
-    }
-
-    // Include timestamps option
-    if (modifiedArgs.includes('--no-timestamps')) {
-      options.includeTimestamps = false;
-      modifiedArgs = modifiedArgs.filter(arg => arg !== '--no-timestamps');
-    }
-
-    // Include file paths option
-    if (modifiedArgs.includes('--no-file-paths')) {
-      options.includeFilePaths = false;
-      modifiedArgs = modifiedArgs.filter(arg => arg !== '--no-file-paths');
-    }
-
-    return modifiedArgs;
+    return [...args];
   }
 
   validateOptions(options: CLIOptions): void {

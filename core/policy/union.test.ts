@@ -104,6 +104,15 @@ describe('PolicyConfig capabilities', () => {
     expect(cmd.sort()).toEqual(['git:*', 'npm:*'].sort());
   });
 
+  it('supports deny_cmd shorthand for command deny rules', () => {
+    const config = normalizePolicyConfig({
+      deny_cmd: ['npm:run:*', 'cmd:git:*']
+    } as PolicyConfig);
+
+    const cmd = (config.deny as { cmd?: string[] })?.cmd ?? [];
+    expect(cmd.sort()).toEqual(['git:*', 'npm:run:*'].sort());
+  });
+
   it('parses fs patterns into filesystem rules', () => {
     const config = normalizePolicyConfig({
       allow: ['fs:r:@base/tmp/**', 'fs:w:@base/dist/**']

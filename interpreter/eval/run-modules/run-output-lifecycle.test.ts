@@ -115,6 +115,23 @@ describe('run output lifecycle', () => {
     expect(plainResult.formattedText).toBeUndefined();
   });
 
+  it('preserves previous streaming result when run-level manager has no new streaming payload', () => {
+    const env = createEnv();
+    env.setStreamingResult({ text: 'nested-stream' } as any);
+    const streamingManager = {
+      finalizeResults: vi.fn(() => ({}))
+    };
+
+    const result = finalizeRunStreamingLifecycle({
+      env,
+      streamingManager,
+      hasStreamFormat: true
+    });
+
+    expect(result.formattedText).toBe('nested-stream');
+    expect(env.getStreamingResult()?.text).toBe('nested-stream');
+  });
+
   it('normalizes display text, inserts output nodes, and emits effects when eligible', () => {
     const env = createEnv();
     const addNodeSpy = vi.spyOn(env, 'addNode');
@@ -158,6 +175,30 @@ describe('run output lifecycle', () => {
     expect(emitEffectSpy).not.toHaveBeenCalled();
     expect(addNodeSpy).toHaveBeenCalledTimes(1);
 
+    env.setStreamingResult({ text: 'nested-stream' } as any);
+    finalizeRunOutputLifecycle({
+      directive: createDirective(),
+      env,
+      outputValue: 'formatted-nested',
+      outputText: 'formatted-nested',
+      hasStreamFormat: true,
+      streamingEnabled: false
+    });
+    expect(emitEffectSpy).not.toHaveBeenCalled();
+    expect(addNodeSpy).toHaveBeenCalledTimes(2);
+    env.setStreamingResult(undefined);
+
+    finalizeRunOutputLifecycle({
+      directive: createDirective(),
+      env,
+      outputValue: 'formatted-no-stream',
+      outputText: 'formatted-no-stream',
+      hasStreamFormat: true,
+      streamingEnabled: false
+    });
+    expect(emitEffectSpy).toHaveBeenCalledWith('both', 'formatted-no-stream\n');
+    expect(addNodeSpy).toHaveBeenCalledTimes(3);
+
     finalizeRunOutputLifecycle({
       directive: createDirective({ isEmbedded: true }),
       env,
@@ -191,7 +232,7 @@ describe('run output lifecycle', () => {
       streamingEnabled: false
     });
 
-    expect(emitEffectSpy).toHaveBeenCalledTimes(0);
-    expect(addNodeSpy).toHaveBeenCalledTimes(3);
+    expect(emitEffectSpy).toHaveBeenCalledTimes(1);
+    expect(addNodeSpy).toHaveBeenCalledTimes(5);
   });
 });

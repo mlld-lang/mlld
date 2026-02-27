@@ -9,35 +9,38 @@ The mlld SDK embeds the interpreter in Node.js applications. Four execution mode
 
 ## SDK
 
-Four modes for SDK consumers:
+Two public functions cover all SDK use cases:
 
-**document** (default): Returns string
+**`processMlld`** — returns output as a string (simplest API)
 
 ```typescript
 const output = await processMlld(script);
 ```
 
-**structured**: Returns full result object
+**`execute`** — returns a structured result object
 
 ```typescript
-const result = await interpret(script, { mode: 'structured' });
+const result = await execute(filePath, payload);
+console.log(result.output);
 console.log(result.effects);
 console.log(result.stateWrites);
 ```
 
-**stream**: Real-time events
+**Streaming** — pass `stream: true` to get real-time events
 
 ```typescript
-const handle = interpret(script, { mode: 'stream' });
-handle.on('stream:chunk', e => process.stdout.write(e.text));
-await handle.done();
+const stream = await execute(filePath, payload, { stream: true });
+stream.on('effect', e => console.log(e));
+stream.on('stream:chunk', e => process.stdout.write(e.text));
+await stream.done();
 ```
 
-**debug**: Full trace
+The `StreamExecution` object supports `on`/`off`/`once` event subscriptions and is also an `AsyncIterable`:
 
 ```typescript
-const result = await interpret(script, { mode: 'debug' });
-console.log(result.trace);
+for await (const event of stream) {
+  console.log(event.type, event);
+}
 ```
 
 ### Execute Function
@@ -87,7 +90,8 @@ show `Conversation @conversationId, count @count`
 Write state back from mlld using the `state://` protocol:
 
 ```mlld
-output { count: 5 } to "state://count"
+var @countUpdate = { count: 5 }
+output @countUpdate to "state://count"
 output @result to "state://lastResult"
 ```
 

@@ -99,11 +99,13 @@ export function finalizeRunStreamingLifecycle(
   params: RunStreamingLifecycleParams
 ): RunStreamingLifecycleResult {
   const { env, streamingManager, hasStreamFormat } = params;
+  const previousStreaming = env.getStreamingResult();
   const finalizedStreaming = streamingManager.finalizeResults();
-  env.setStreamingResult(finalizedStreaming.streaming as any);
+  const effectiveStreaming = finalizedStreaming.streaming ?? previousStreaming;
+  env.setStreamingResult(effectiveStreaming as any);
 
-  if (hasStreamFormat && finalizedStreaming.streaming?.text) {
-    return { formattedText: finalizedStreaming.streaming.text };
+  if (hasStreamFormat && effectiveStreaming?.text) {
+    return { formattedText: effectiveStreaming.text };
   }
 
   return {};
@@ -135,7 +137,9 @@ export function finalizeRunOutputLifecycle(
     env.addNode(replacementNode);
   }
 
-  const shouldEmitFinalOutput = !hasStreamFormat || !streamingEnabled;
+  const hasFormattedStreamingText = Boolean(env.getStreamingResult()?.text);
+  const shouldEmitFinalOutput =
+    !hasStreamFormat || (!streamingEnabled && !hasFormattedStreamingText);
   const hasActualOutput = displayText.trim().length > 0;
   if (
     hasActualOutput &&

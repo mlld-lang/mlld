@@ -44,18 +44,11 @@ export async function registryCommand(args: string[]): Promise<void> {
       break;
       
     case 'stats':
-      if (args[1] === 'share') {
-        console.log('Stats sharing not yet implemented');
-        // await manager.shareStats();
-      } else {
-        await manager.showStats();
-      }
+      await manager.showStats();
       break;
       
     case 'outdated':
-      console.log('Checking for outdated modules...');
-      // This would need to be implemented in RegistryManager
-      console.log('Not yet implemented');
+      await outdatedCommand(args.slice(1));
       break;
       
     default:
@@ -70,7 +63,6 @@ Commands:
   search-servers <q>   Search for MCP servers
   info <module>        Show module details
   stats                Show local usage statistics
-  stats share          Share anonymous usage statistics
   outdated             Show outdated modules
 
 Examples:

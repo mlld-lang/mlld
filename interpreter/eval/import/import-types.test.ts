@@ -142,7 +142,7 @@ describe('Import type handling', () => {
         pathContext,
         approveAllImports: true
       })
-    ).rejects.toThrow('Field "_internal" not found in object');
+    ).rejects.toThrow('Namespace @utils does not export "_internal"');
   });
 
   it('blocks namespace access to captured module internals on exported executables', async () => {
@@ -177,6 +177,116 @@ describe('Import type handling', () => {
         approveAllImports: true
       })
     ).rejects.toThrow('Field "internal" not found in object');
+  });
+
+  it('seals capturedModuleEnv from namespace JSON/object key introspection', async () => {
+    await fileSystem.writeFile(
+      '/project/import-types-sealed-namespace.mld',
+      '/var @foo = "public"\n/var @bar = "private"\n/exe @trim(input) = js { return input.trim() }\n/export { foo, trim }'
+    );
+
+    const source = [
+      '/import "./import-types-sealed-namespace.mld" as @ns',
+      '/exe @namespaceKeys(obj) = js { return Object.keys(obj).join(",") }',
+      '/exe @keys(obj) = js { return Object.keys(obj.trim.internal || {}).join(",") }',
+      '/exe @json(obj) = js { return JSON.stringify(obj.trim.internal || {}) }',
+      '/show @namespaceKeys(@ns)',
+      '/show @keys(@ns)',
+      '/show @json(@ns)'
+    ].join('\n');
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const rendered = String(output);
+    expect(rendered).toContain('foo,trim');
+    expect(rendered).not.toContain('capturedModuleEnv');
+    expect(rendered).toContain('definedAt');
+    expect(rendered).toContain('executableDef');
+  });
+
+  it('sanitizes namespace missing-field errors without leaking captured module state', async () => {
+    await fileSystem.writeFile(
+      '/project/import-types-sanitized-errors.mld',
+      '/var @foo = "public"\n/var @bar = "private"\n/exe @trim(input) = js { return input.trim() }\n/export { foo, trim }'
+    );
+
+    const source = '/import "./import-types-sanitized-errors.mld" as @ns\n/var @x = @ns.bar';
+    let thrown: unknown;
+    try {
+      await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    const error = thrown as Error & { details?: unknown };
+    const serialized = `${error.message}\n${JSON.stringify(error.details ?? {})}`;
+    expect(error.message).toContain('Namespace @ns does not export "bar"');
+    expect(error.message).toContain('Available exports: foo, trim');
+    expect(error.message).toContain('/project/import-types-sanitized-errors.mld');
+    expect(serialized).not.toContain('capturedModuleEnv');
+    expect(serialized).not.toContain('codeTemplate');
+  });
+
+  it('prefers namespace exported functions over colliding built-in string method names', async () => {
+    const collidingNames = [
+      'trim',
+      'split',
+      'slice',
+      'replace',
+      'replaceAll',
+      'includes',
+      'indexOf',
+      'startsWith',
+      'endsWith',
+      'toLowerCase',
+      'toUpperCase',
+      'match',
+      'padStart',
+      'padEnd',
+      'repeat',
+      'concat',
+      'substring'
+    ] as const;
+
+    await fileSystem.writeFile(
+      '/project/import-types-namespace-collisions.mld',
+      [
+        ...collidingNames.map(name => `/exe @${name}(input) = js { return "${name}:" + input }`),
+        `/export { ${collidingNames.join(', ')} }`
+      ].join('\n')
+    );
+
+    const source = [
+      '/import "./import-types-namespace-collisions.mld" as @ns',
+      ...collidingNames.map(name => `/show @ns.${name}("value-${name}")`),
+      '/var @myString = "  spaced  "',
+      '/show @myString.trim()'
+    ].join('\n');
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = String(output).trim().split('\n').map(line => line.trim()).filter(Boolean);
+    expect(lines).toHaveLength(collidingNames.length + 1);
+    for (const [index, name] of collidingNames.entries()) {
+      expect(lines[index]).toBe(`${name}:value-${name}`);
+    }
+    expect(lines[lines.length - 1]).toBe('spaced');
   });
 
   it('supports explicit live imports from @input', async () => {

@@ -75,20 +75,12 @@ export class PrivateRepoStrategy implements PublishingStrategy {
       };
     }
     
-    // TODO: Implement actual private repository publishing logic
-    // This would involve:
-    // 1. Creating the module directory structure
-    // 2. Copying the module file
-    // 3. Updating manifest.json
-    // 4. Committing and pushing changes
-    
-    console.log(chalk.green(`✔ Published to private repository`));
-    
-    return {
-      success: true,
-      url: `https://github.com/${gitInfo.owner}/${gitInfo.repo}`,
-      type: 'private',
-      message: `Published to private repository: ${gitInfo.owner}/${gitInfo.repo}`
-    };
+    throw new MlldError(
+      'Private repository publishing is not yet implemented. Use --repo for public repository publishing or --gist for gist-based publishing.',
+      {
+        code: 'NOT_IMPLEMENTED',
+        severity: ErrorSeverity.Fatal
+      }
+    );
   }
 }

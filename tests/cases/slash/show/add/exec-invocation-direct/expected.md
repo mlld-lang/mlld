@@ -1,2 +1,5 @@
 Hello, World!
-{"name":"Alice","role":"developer"}
+{
+  "name": "Alice",
+  "role": "developer"
+}

@@ -72,6 +72,14 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, PipelineInp
 - Integration surfaces: [SDK.md](SDK.md), [MCP.md](MCP.md), [LANGUAGE-SERVER.md](LANGUAGE-SERVER.md)
 - Validation and testing: [TESTS.md](TESTS.md), [BUILD-TEST.md](BUILD-TEST.md)
 
+### Build and Module Format
+
+The package is ESM-first (`"type": "module"`) but the CLI is compiled to CJS via tsup. This is because some TypeScript and formatter dependencies break under pure ESM. The SDK ships dual-format (`.mjs` and `.cjs`).
+
+Peggy generates the parser in three formats: `parser.ts` (ESM with types, for development), `parser.js` (ESM, for the published module), and `parser.cjs` (CJS fallback). Internal code imports via the `@grammar/parser` alias which resolves to the TypeScript wrapper at `grammar/parser/index.ts`.
+
+The CLI entry point (`cli/cli-entry.ts`) hardcodes `isMainModule = true` because the standard ESM check (`import.meta.url`) is unavailable in CJS output. This is safe because the CLI bundle is always executed as an entry point via `bin/mlld-wrapper.cjs`, never imported as a library. See [MODULES.md](MODULES.md) for the full module system documentation.
+
 ## Gotchas
 
 - Do not copy deep implementation detail into this file; link to the owning deep-dive doc.

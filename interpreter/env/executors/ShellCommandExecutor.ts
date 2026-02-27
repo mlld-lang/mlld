@@ -6,7 +6,6 @@ import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import { resolveAliasWithCache } from '@interpreter/utils/alias-resolver';
 import { randomUUID } from 'crypto';
-import * as fs from 'fs';
 
 /**
  * Executes shell commands using async exec for true parallel execution
@@ -319,22 +318,6 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     startTime: number
   ): Promise<CommandExecutionResult> {
     const workingDirectory = options?.workingDirectory || this.workingDirectory;
-    const showRawStream =
-      (Array.isArray(process.argv) && process.argv.includes('--show-json')) ||
-      process.env.MLLD_SHOW_JSON === 'true';
-    const appendTarget = (() => {
-      const argv = Array.isArray(process.argv) ? process.argv : [];
-      const idx = argv.indexOf('--append-json');
-      if (idx === -1) return undefined;
-      const candidate = argv[idx + 1];
-      if (candidate && !candidate.startsWith('--')) {
-        return candidate;
-      }
-      const d = new Date();
-      const pad = (n: number) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}-stream.jsonl`;
-    })();
-    const appendStream = appendTarget ? fs.createWriteStream(appendTarget, { flags: 'a' }) : null;
     const bus = context?.bus ?? this.getBus();
     const pipelineId = context?.pipelineId || 'pipeline';
     const stageIndex = context?.stageIndex ?? 0;
@@ -351,7 +334,6 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
 
     const stdoutDecoder = new StringDecoder('utf8');
     const stderrDecoder = new StringDecoder('utf8');
-    let streamJsonCarry = '';
     let stdoutBuffer = '';
     let stderrBuffer = '';
     const chunkEffect = context?.emitEffect;
@@ -470,14 +452,6 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
             chunkEffect(finalOut, 'stdout');
           }
         }
-        if (streamJsonCarry) {
-          stdoutBuffer += streamJsonCarry;
-          emitChunk(streamJsonCarry, 'stdout');
-          streamJsonCarry = '';
-        }
-        if (appendStream) {
-          appendStream.end();
-        }
         const finalErr = stderrDecoder.end();
         if (finalErr) {
           stderrBuffer += finalErr;
@@ -516,59 +490,4 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       });
     });
   }
-}
-
-function extractStreamJsonText(data: any): string | null {
-  if (!data || typeof data !== 'object') {
-    return null;
-  }
-  if (typeof (data as any).completion === 'string') {
-    return (data as any).completion;
-  }
-  const delta = (data as any).delta;
-  if (delta && typeof delta === 'object') {
-    if (typeof delta.text === 'string') {
-      return delta.text;
-    }
-    if (typeof delta.partial_json === 'string') {
-      return delta.partial_json;
-    }
-  }
-  if (typeof (data as any).text === 'string') {
-    return (data as any).text;
-  }
-  return null;
-}
-
-function processStreamJsonChunk(
-  chunk: string,
-  carry: string
-): { text: string; remainder: string; parsed: boolean; hadText: boolean } {
-  const combined = (carry || '') + chunk;
-  const lines = combined.split(/\r?\n/);
-  const remainder = lines.pop() ?? '';
-  let parsedAny = false;
-  let textOut = '';
-  let hadText = false;
-
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    try {
-      const parsed = JSON.parse(line);
-      parsedAny = true;
-      const text = extractStreamJsonText(parsed);
-      if (text) {
-        textOut += text;
-        hadText = true;
-      }
-    } catch {
-      // ignore parse errors; fall through
-    }
-  }
-
-  if (!parsedAny) {
-    return { text: combined, remainder: '', parsed: false, hadText: false };
-  }
-
-  return { text: hadText ? textOut : combined, remainder, parsed: true, hadText };
 }

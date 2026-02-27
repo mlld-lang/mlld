@@ -50,6 +50,31 @@ describe('Exec directive', () => {
       expect(dir.values.withClause.pipeline[0].rawIdentifier).toBe('upper');
       expect(dir.meta.wrapperType).toBe('backtick');
     });
+
+    test('preserves custom stage before builtin log effect', async () => {
+      const content = '/var @t = "hello" | @addBang | log';
+      const { ast } = await parse(content);
+      const dir = ast[0] as any;
+      const pipeline = dir.values.withClause?.pipeline ?? [];
+      expect(pipeline.map((stage: any) => stage.rawIdentifier)).toEqual(['addBang', 'log']);
+    });
+
+    test('preserves variable pipeline stages before builtin show effect', async () => {
+      const content = '/var @t = @input | @transform | @validate | show';
+      const { ast } = await parse(content);
+      const dir = ast[0] as any;
+      const pipeline = dir.values.withClause?.pipeline ?? [];
+      expect(pipeline.map((stage: any) => stage.rawIdentifier)).toEqual(['transform', 'validate', 'show']);
+      expect(dir.values.value[0].pipes).toBeUndefined();
+    });
+
+    test('keeps custom-to-custom variable pipelines unchanged', async () => {
+      const content = '/var @t = @a | @b | @c';
+      const { ast } = await parse(content);
+      const dir = ast[0] as any;
+      expect(dir.values.withClause).toBeUndefined();
+      expect(dir.values.value[0].pipes?.map((pipe: any) => pipe.transform)).toEqual(['b', 'c']);
+    });
   });
   describe('execCommand subtype', () => {
     test('Basic exec command', async () => {

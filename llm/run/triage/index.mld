@@ -1,0 +1,222 @@
+>> Triage Orchestrator
+>> Usage: mlld run triage [--parallel 20] [--new]
+>>
+>> Standalone ticket triage: assess all open tickets against current project
+>> state (CHANGELOG, commits, codebase), synthesize a categorized report,
+>> and produce actionable recommendation packages.
+>>
+>> Phases:
+>>   1. Gather context (tickets + CHANGELOG + commits)
+>>   2. Assess each ticket in parallel (sonnet with codebase access)
+>>   3. Synthesize findings into a categorized report (opus)
+>>   4. Generate recommendation packages (opus)
+>>
+>> Resilience: exe llm labels + checkpoint directives. Crash recovery is automatic.
+>>   mlld run triage                       # auto-resumes via cache
+>>   mlld run triage --resume "synthesize" # skip to synthesis phase
+>>   mlld run triage --new                 # fresh run
+
+import { @claudePoll } from @mlld/claude-poll
+import { @loadOpenTickets, @loadTicketContent, @loadChangelog, @loadRecentCommits, @mkdirp, @resolveRunDir } from "./lib/context.mld"
+import "@payload" as @p
+
+/needs { sh }
+
+>> ─── Config ───
+
+var @parallelism = @p.parallel ? @p.parallel * 1 : 20
+var @forceNew = @p.new ? true : false
+
+>> ─── Tool permissions (escalation between phases) ───
+
+var @assessTools = "Read,Write,Glob,Grep"
+var @synthesizeTools = "Read,Write,Glob"
+var @recommendTools = "Read,Write"
+
+>> ─── Prompt templates ───
+
+exe @assessPrompt(ticketId, ticketTitle, ticketType, ticketPriority, ticketTags, ticketContent, changelog, commits) = template "./prompts/assess.att"
+exe @synthesizePrompt(assessmentDir, ticketCount, changelog) = template "./prompts/synthesize.att"
+exe @recommendPrompt(reportContent) = template "./prompts/recommend.att"
+
+>> ─── LLM call wrappers (llm label = automatic caching, bail = no caching failures) ───
+
+exe llm @callAssess(prompt, tools, outPath) = [
+  let @result = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+  when !@result => bail `Assessment failed (no output at @outPath)`
+  => @result
+]
+
+exe llm @callSynthesize(prompt, tools, outPath) = [
+  let @result = @claudePoll(@prompt, "opus", "@root", @tools, @outPath)
+  when !@result => bail `Synthesis failed (no output at @outPath)`
+  => @result
+]
+
+exe llm @callRecommend(prompt, tools, outPath) = [
+  let @result = @claudePoll(@prompt, "opus", "@root", @tools, @outPath)
+  when !@result => bail `Recommendations failed (no output at @outPath)`
+  => @result
+]
+
+>> ─── Helpers ───
+
+>> Extract title from ticket markdown (first # heading)
+exe @extractTitle(content) = js {
+  if (!content) return 'untitled';
+  const str = typeof content === 'string' ? content : String(content);
+  const match = str.match(/^#\s+(.+)$/m);
+  return match ? match[1].trim() : 'untitled';
+}
+
+>> ─── Run directory setup ───
+
+var @outputRoot = `@base/llm/output`
+var @today = @now.slice(0, 10)
+var @runDirRaw = @resolveRunDir(@outputRoot, "triage", @forceNew, @today)
+var @runDir = @runDirRaw.trim()
+run @mkdirp(@runDir)
+run @mkdirp(`@runDir/assessments`)
+
+show `=== Triage: Ticket Assessment & Recommendations ===`
+show ``
+show `  Parallelism: @parallelism`
+show `  Output: @runDir`
+show ``
+
+>> ═══════════════════════════════════════════════════════════════
+>> Phase 1: Gather Context
+>> ═══════════════════════════════════════════════════════════════
+
+show `--- Phase 1: Gather Context ---`
+
+var @tickets = @loadOpenTickets()
+var @changelog = @loadChangelog(`@base/CHANGELOG.md`)
+var @commits = @loadRecentCommits()
+
+show `  Open tickets: @tickets.length`
+show `  CHANGELOG: loaded (first 300 lines)`
+show `  Recent commits: loaded (last 90 days)`
+
+when @tickets.length == 0 => bail `No open tickets found. Nothing to triage.`
+
+show ``
+
+>> ═══════════════════════════════════════════════════════════════
+>> Phase 2: Assess (parallel fan-out, sonnet + codebase tools)
+>> ═══════════════════════════════════════════════════════════════
+
+show `--- Phase 2: Assess (@tickets.length tickets, parallel @parallelism) ---`
+
+checkpoint "assess"
+
+var @assessResults = for parallel(@parallelism) @ticket in @tickets [
+  let @id = @ticket.id
+  let @title = @ticket.title
+  let @outPath = `@runDir/assessments/@id\.json`
+
+  >> Load full ticket content (try top-level, then subdirectories)
+  let @ticketContent = @loadTicketContent(@id, null)
+  let @content = @ticketContent ? `@ticketContent` : `Ticket @id: @title`
+
+  >> Build and call assessment prompt
+  let @prompt = @assessPrompt(@id, @title, @content, @changelog, @commits)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema in the prompt.`
+
+  @callAssess(@fullPrompt, @assessTools, @outPath)
+  let @result = <@outPath>?
+
+  if !@result [
+    show `  @id: assessment failed (no output)`
+    => null
+  ]
+
+  let @category = @result.category ? @result.category : "unknown"
+  let @size = @result.scope ? @result.scope.size : "?"
+  show `  @id: @category (@size)`
+  => @result
+]
+
+>> Count results
+var @validResults = for @r in @assessResults when @r => @r
+show ``
+show `  Assessed: @validResults.length / @tickets.length`
+show ``
+
+>> ═══════════════════════════════════════════════════════════════
+>> Phase 3: Synthesize (opus reads all assessments, produces report)
+>> ═══════════════════════════════════════════════════════════════
+
+show `--- Phase 3: Synthesize ---`
+
+checkpoint "synthesize"
+
+var @reportPath = `@runDir/report.md`
+var @synthMarkerPath = `@runDir/synthesis-done.json`
+var @assessmentDir = `@runDir/assessments`
+
+var @synthPrompt = @synthesizePrompt(@assessmentDir, @validResults.length, @changelog)
+var @synthFullPrompt = `@synthPrompt
+
+IMPORTANT:
+1. Write your human-readable markdown report to @reportPath using the Write tool.
+2. Write the JSON summary to @synthMarkerPath using the Write tool.`
+
+@callSynthesize(@synthFullPrompt, @synthesizeTools, @synthMarkerPath)
+
+var @synthResult = <@synthMarkerPath>?
+when @synthResult => show `  Report written: @reportPath`
+when !@synthResult => show `  WARNING: Synthesis may have failed`
+show ``
+
+>> ═══════════════════════════════════════════════════════════════
+>> Phase 4: Recommend (opus reads report, produces three packages)
+>> ═══════════════════════════════════════════════════════════════
+
+show `--- Phase 4: Recommend ---`
+
+checkpoint "recommend"
+
+var @recsPath = `@runDir/recommendations.md`
+var @recsMarkerPath = `@runDir/recommendations-done.json`
+
+>> Load the report for the recommender
+var @reportContent = <@reportPath>?
+when !@reportContent => bail `Cannot generate recommendations: report.md not found at @reportPath`
+
+var @recPrompt = @recommendPrompt(@reportContent)
+var @recFullPrompt = `@recPrompt
+
+IMPORTANT:
+1. Write your markdown recommendations to @recsPath using the Write tool.
+2. Write the JSON summary to @recsMarkerPath using the Write tool.`
+
+@callRecommend(@recFullPrompt, @recommendTools, @recsMarkerPath)
+
+var @recsResult = <@recsMarkerPath>?
+when @recsResult => show `  Recommendations written: @recsPath`
+when !@recsResult => show `  WARNING: Recommendations may have failed`
+show ``
+
+>> ═══════════════════════════════════════════════════════════════
+>> Done
+>> ═══════════════════════════════════════════════════════════════
+
+>> Write completion marker
+var @doneMarker = { completed: @now, tickets: @tickets.length, assessed: @validResults.length }
+output @doneMarker to "@runDir/done.marker"
+
+show `=== Triage Complete ===`
+show ``
+show `  Tickets assessed: @validResults.length / @tickets.length`
+show `  Report:           @reportPath`
+show `  Recommendations:  @recsPath`
+show `  Assessments:      @runDir/assessments/`
+show ``
+show `Next steps:`
+show `  Read the report:         cat @reportPath`
+show `  Read recommendations:    cat @recsPath`
+show `  Re-run (resumes cache):  mlld run triage`
+show `  Fresh run:               mlld run triage --new`

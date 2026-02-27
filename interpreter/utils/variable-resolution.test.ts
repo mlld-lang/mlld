@@ -11,7 +11,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { wrapStructured } from '../utils/structured-value';
 
 // Mock the module imports
-vi.mock('@interpreter/eval/data-values', () => ({
+vi.mock('@interpreter/eval/data-value-evaluator', () => ({
   evaluateDataValue: vi.fn(async (value) => value)
 }));
 

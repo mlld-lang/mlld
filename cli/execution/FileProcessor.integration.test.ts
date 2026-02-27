@@ -29,20 +29,6 @@ vi.mock('@services/fs/PathService', () => ({
   PathService: vi.fn().mockImplementation(() => ({}))
 }));
 
-vi.mock('@core/config/loader', () => ({
-  ConfigLoader: vi.fn().mockImplementation(() => ({
-    load: () => ({}),
-    resolveURLConfig: () => undefined,
-    resolveOutputConfig: () => ({
-      showProgress: false,
-      maxOutputLines: 50,
-      errorBehavior: 'continue',
-      collectErrors: false,
-      showCommandContext: false
-    })
-  }))
-}));
-
 vi.mock('@core/services/PathContextService', () => ({
   PathContextBuilder: {
     fromFile: vi.fn().mockResolvedValue({

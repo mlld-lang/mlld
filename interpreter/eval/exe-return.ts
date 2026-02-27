@@ -15,6 +15,28 @@ export function isExeReturnControl(value: unknown): value is ExeReturnControl {
   return !!value && typeof value === 'object' && (value as Record<string, unknown>).__exeReturn === true;
 }
 
+function isDescendantEnvironment(candidate: Environment, ancestor: Environment): boolean {
+  let current: Environment | undefined = candidate;
+  while (current) {
+    if (current === ancestor) {
+      return true;
+    }
+    current = current.getParent();
+  }
+  return false;
+}
+
+function normalizeReturnEnvironment(baseEnv: Environment, evaluatedEnv: Environment | undefined): Environment {
+  if (!evaluatedEnv || evaluatedEnv === baseEnv) {
+    return baseEnv;
+  }
+  if (isDescendantEnvironment(evaluatedEnv, baseEnv)) {
+    baseEnv.mergeChild(evaluatedEnv);
+    return baseEnv;
+  }
+  return evaluatedEnv;
+}
+
 export async function resolveExeReturnValue(
   node: ExeReturnNode,
   env: Environment
@@ -28,5 +50,6 @@ export async function resolveExeReturnValue(
     return { value: undefined, env };
   }
   const result = await evaluate(returnNodes, env, { isExpression: true });
-  return { value: result.value, env: result.env || env };
+  const resolvedEnv = normalizeReturnEnvironment(env, result.env || env);
+  return { value: result.value, env: resolvedEnv };
 }

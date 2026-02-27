@@ -25,6 +25,8 @@ exe @llm(prompt) = stream cmd {claude "@prompt"}
 show @llm("Hello")  >> Streams output
 ```
 
+When `stream` and `streamFormat` are defined on an executable, both `show @exe(...)` and `run @exe(...)` inherit that configuration.
+
 ### 2. At Invocation
 
 Stream when calling:
@@ -84,6 +86,13 @@ For better parsing of specific LLM output formats, use `streamFormat` in a with 
 exe @llm(prompt) = stream cmd {claude "@prompt" --output-format stream-json}
 
 run stream @llm("Hello") with { streamFormat: "claude-code" }
+```
+
+**Streaming module shortcut:**
+
+```mlld
+import { @haiku } from @mlld/claude-stream
+show @haiku("Explain TCP/IP")  >> streams + parses by default
 ```
 
 **Installable adapter config:**
@@ -308,4 +317,3 @@ const result = await interpret(script, { mode: 'structured' });
 console.log(result.streaming?.text);    // Accumulated text
 console.log(result.streaming?.events);  // All parsed events
 ```
-

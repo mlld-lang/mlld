@@ -708,13 +708,10 @@ async function outputToFile(
   directive: DirectiveNode,
   descriptor?: SecurityDescriptor
 ): Promise<void> {
-  
-  
   // Evaluate the file path
   const pathResult = await interpolateAndRecord(target.path, env);
-  let targetPath = String(pathResult);
-  
-  
+  let targetPath = normalizeOutputTargetPath(pathResult, directive, env);
+
   // TODO: This is a hack to handle @base/@root in quoted output paths
   // The proper fix requires rethinking how @identifier resolution works
   // across variables, resolvers, and paths in a unified way
@@ -758,6 +755,39 @@ async function outputToFile(
     path: targetPath,
     source: directive.location 
   });
+}
+
+function normalizeOutputTargetPath(
+  rawPath: unknown,
+  directive: DirectiveNode,
+  env: Environment
+): string {
+  const targetPath = String(rawPath ?? '');
+  if (targetPath.length === 0) {
+    throw new MlldOutputError(
+      'Output target path cannot be empty',
+      'unknown',
+      { sourceLocation: directive.location, env }
+    );
+  }
+
+  if (isObjectPlaceholderPath(targetPath)) {
+    throw new MlldOutputError(
+      'Output target path resolved to [object Object]. Ensure path interpolation resolves to a string value.',
+      'unknown',
+      { sourceLocation: directive.location, env }
+    );
+  }
+
+  return targetPath;
+}
+
+function isObjectPlaceholderPath(targetPath: string): boolean {
+  if (!targetPath.includes('[object Object]')) {
+    return false;
+  }
+  const segments = targetPath.split(/[\\/]/).filter(Boolean);
+  return segments.some(segment => segment === '[object Object]');
 }
 
 /**

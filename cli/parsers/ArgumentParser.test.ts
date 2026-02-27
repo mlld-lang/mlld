@@ -102,6 +102,25 @@ describe('ArgumentParser custom payload flags', () => {
     expect(options.resume).toBe(true);
     expect(options.inject).toEqual(['@payload={}']);
   });
+
+  it('parses reserved --mlld-env values without adding them to @payload', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs([
+      'script.mld',
+      '--mlld-env', 'agent.env',
+      '--mlld-env', 'MLLD_TOKEN=abc'
+    ]);
+
+    expect(options.mlldEnv).toEqual(['agent.env', 'MLLD_TOKEN=abc']);
+    expect(options.inject).toEqual(['@payload={}']);
+  });
+
+  it('treats --env as a normal payload flag', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--env', 'staging']);
+
+    expect(options.inject).toEqual(['@payload={"env":"staging"}']);
+  });
 });
 
 describe('ArgumentParser eval mode', () => {
@@ -156,6 +175,20 @@ describe('ArgumentParser streaming flag', () => {
 
     expect(options.json).toBe(true);
     expect(options.showJson).toBe(true);
+  });
+
+  it('parses --append-json with explicit file', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--append-json', 'events.jsonl']);
+
+    expect(options.appendJson).toBe('events.jsonl');
+  });
+
+  it('parses --append-json with default naming sentinel', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--append-json']);
+
+    expect(options.appendJson).toBe('');
   });
 });
 
@@ -264,13 +297,39 @@ describe('OptionProcessor streaming mapping', () => {
     });
   });
 
+  it('maps showJson to streaming.showJson', () => {
+    const processor = new OptionProcessor();
+    const apiOptions = processor.cliToApiOptions({
+      input: 'script.mld',
+      showJson: true
+    } as any);
+
+    expect(apiOptions.streaming).toEqual({
+      showJson: true
+    });
+  });
+
+  it('maps appendJson to streaming.appendJson', () => {
+    const processor = new OptionProcessor();
+    const apiOptions = processor.cliToApiOptions({
+      input: 'script.mld',
+      appendJson: 'out.jsonl'
+    } as any);
+
+    expect(apiOptions.streaming).toEqual({
+      appendJson: 'out.jsonl'
+    });
+  });
+
   it('combines all streaming options', () => {
     const processor = new OptionProcessor();
     const apiOptions = processor.cliToApiOptions({
       input: 'script.mld',
       noStream: false,
       showThinking: true,
-      streamOutputFormat: 'text'
+      streamOutputFormat: 'text',
+      showJson: true,
+      appendJson: 'events.jsonl'
     } as any);
 
     expect(apiOptions.streaming).toEqual({
@@ -278,7 +337,9 @@ describe('OptionProcessor streaming mapping', () => {
       visibility: {
         showThinking: true
       },
-      format: 'text'
+      format: 'text',
+      showJson: true,
+      appendJson: 'events.jsonl'
     });
   });
 });

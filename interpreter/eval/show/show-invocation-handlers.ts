@@ -30,6 +30,36 @@ export interface ShowInvocationResult {
   skipJsonFormatting?: boolean;
 }
 
+function invocationRequestsStreaming(invocation: any): boolean {
+  return (
+    invocation?.stream === true ||
+    invocation?.withClause?.stream === true ||
+    invocation?.meta?.withClause?.stream === true
+  );
+}
+
+function executableDefinitionRequestsStreaming(variable: any): boolean {
+  const definition = variable?.internal?.executableDef;
+  if (!definition || typeof definition !== 'object') {
+    return false;
+  }
+  return (
+    definition.withClause?.stream === true ||
+    (definition.meta as any)?.withClause?.stream === true ||
+    (definition.meta as any)?.isStream === true
+  );
+}
+
+function withStreamEnabled(invocation: any): any {
+  return {
+    ...invocation,
+    withClause: {
+      ...(invocation.withClause || {}),
+      stream: true
+    }
+  };
+}
+
 function getExtractedVariable(
   context: EvaluationContext | undefined,
   name: string
@@ -129,16 +159,13 @@ export async function evaluateShowInvocation({
     throw new Error('Show invocation directive missing invocation');
   }
 
-  const isStreamingShow = Boolean(securityLabels?.includes('stream'));
-  const invocation = isStreamingShow
-    ? {
-        ...baseInvocation,
-        withClause: {
-          ...(baseInvocation.withClause || {}),
-          stream: true
-        }
-      }
-    : baseInvocation;
+  const hasStreamingSecurityLabel = Boolean(securityLabels?.includes('stream'));
+  const invocationHasStreaming = invocationRequestsStreaming(baseInvocation);
+  let isStreamingShow = hasStreamingSecurityLabel || invocationHasStreaming;
+  let invocation =
+    hasStreamingSecurityLabel && !invocationHasStreaming
+      ? withStreamEnabled(baseInvocation)
+      : baseInvocation;
 
   const commandRef = (invocation as any).commandRef;
   if (commandRef && (commandRef.objectReference || commandRef.objectSource)) {
@@ -150,19 +177,29 @@ export async function evaluateShowInvocation({
     };
   }
 
-  const name = commandRef?.name || commandRef?.identifier?.[0]?.content;
+  const name =
+    commandRef?.name ||
+    commandRef?.identifier?.[0]?.identifier ||
+    commandRef?.identifier?.[0]?.content;
   if (!name) {
-    throw new Error('Add invocation missing name');
+    throw new Error('Show invocation missing name');
   }
 
   const extracted = getExtractedVariable(context, name);
-  const variable = extracted ?? env.getVariable(name);
+  const envVariable = env.getVariable(name);
+  const variable = extracted ?? envVariable;
   if (!variable) {
     throw new Error(`Variable not found: ${name}`);
   }
 
   if (!isExecutableVariable(variable)) {
     throw new Error(`Variable ${name} is not executable (type: ${variable.type})`);
+  }
+
+  const streamingMetadataVariable =
+    envVariable && isExecutableVariable(envVariable) ? envVariable : variable;
+  if (executableDefinitionRequestsStreaming(streamingMetadataVariable)) {
+    isStreamingShow = true;
   }
 
   const invocationResult = await resolveDirectiveExecInvocation(directive, env, invocation);

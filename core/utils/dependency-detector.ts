@@ -79,8 +79,12 @@ export class DependencyDetector {
    */
   private extractCode(node: RunDirective | ExecDirective): string {
     // For run directives, look for command content
-    if (node.type === 'Directive' && node.kind === 'run' && node.values?.command) {
-      return node.values.command.map((n: MlldNode) => {
+    if (node.type === 'Directive' && node.kind === 'run') {
+      const runBody = node.values?.command || node.values?.code;
+      if (!Array.isArray(runBody)) {
+        return '';
+      }
+      return runBody.map((n: MlldNode) => {
         if (n.type === 'Text') return n.content;
         return '';
       }).join('');

@@ -1,0 +1,5 @@
+name: triage
+type: app
+version: 1.0.0
+about: Ticket triage -- assess open tickets, synthesize a report, and recommend next steps
+entry: index.mld

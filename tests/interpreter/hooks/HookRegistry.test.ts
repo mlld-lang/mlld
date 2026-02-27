@@ -95,7 +95,7 @@ describe('HookRegistry', () => {
 
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('unknown operation type "nonsense"');
-    expect(warnings[0]).toContain('Known types: exe, var, for, for:iteration, for:batch, loop, import, show, output, append, run.');
+    expect(warnings[0]).toContain('Known types: exe, var, for, for:iteration, for:batch, loop, import, show, log, output, append, run.');
   });
 
   test('does not emit warnings for known operation hook filter values', () => {
@@ -110,6 +110,7 @@ describe('HookRegistry', () => {
       'loop',
       'import',
       'show',
+      'log',
       'output',
       'append',
       'run'

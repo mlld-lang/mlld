@@ -31,6 +31,11 @@ export interface PublishOptions {
   pr?: boolean; // Create PR even for private publish
   path?: string; // Custom path for private publish (default: mlld/modules/)
   tag?: string; // Publish with custom tag (e.g., beta, alpha, stable)
+  title?: string; // Module title; normalized and applied as the module name
+  description?: string; // Module description/about
+  version?: string; // Module version override
+  tags?: string | string[]; // Comma-separated string or array
+  author?: string; // Module author override
 }
 
 export interface ModuleMetadata {
@@ -146,30 +151,9 @@ export interface PublishContext {
   // Validation results
   validationResult?: ValidationResult;
 
-  // State tracking
-  changes: StateChange[];
-  checkpoints: Checkpoint[];
   shouldCommitMetadata?: boolean;
 
-  // Methods
-  rollback(): Promise<void>;
-  checkpoint(name: string): void;
-  restoreCheckpoint(name: string): Promise<void>;
   toErrorContext(): any;
-}
-
-export interface StateChange {
-  type: 'file' | 'git' | 'github';
-  action: string;
-  data: any;
-  timestamp: Date;
-  revert(): Promise<void>;
-}
-
-export interface Checkpoint {
-  name: string;
-  timestamp: Date;
-  changes: StateChange[];
 }
 
 export interface GitHubUser {

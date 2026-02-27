@@ -2,6 +2,7 @@ import { createExecutableVariable, VariableMetadataUtils } from '@core/types/var
 import type { DataLabel } from '@core/types/security';
 import type { ExecutableVariable, Variable, VariableMetadata, VariableSource } from '@core/types/variable';
 import { CapturedEnvRehydrator, type CapturedEnvVariableFactory } from './CapturedEnvRehydrator';
+import { getCapturedModuleEnv } from './CapturedModuleEnvKeychain';
 
 export interface ExecutableImportRehydrationRequest {
   name: string;
@@ -19,6 +20,7 @@ export class ExecutableImportRehydrator {
     const executableDef = request.value.executableDef;
     const paramNames = executableDef?.paramNames || [];
     let originalInternal = request.value.internal || request.value.metadata || {};
+    const originalCapturedModuleEnv = getCapturedModuleEnv(originalInternal);
 
     if (originalInternal.capturedShadowEnvs) {
       originalInternal = {
@@ -27,9 +29,17 @@ export class ExecutableImportRehydrator {
       };
     }
 
-    if (originalInternal.capturedModuleEnv) {
+    if (originalCapturedModuleEnv !== undefined) {
+      originalInternal = {
+        ...originalInternal,
+        capturedModuleEnv: originalCapturedModuleEnv
+      };
+    }
+
+    const capturedModuleEnv = getCapturedModuleEnv(originalInternal);
+    if (capturedModuleEnv) {
       const deserializedEnv = this.capturedEnvRehydrator.deserializeModuleEnv(
-        originalInternal.capturedModuleEnv,
+        capturedModuleEnv,
         request.createVariableFromValue
       );
       this.capturedEnvRehydrator.rehydrateCapturedModuleScope(deserializedEnv);

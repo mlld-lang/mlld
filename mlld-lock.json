@@ -43,10 +43,17 @@
       "fetchedAt": "2026-02-25T02:28:40.299Z",
       "registryVersion": "2.1.0",
       "sourceUrl": "registry://@mlld/array@2.1.0"
+    },
+    "@mlld/prose": {
+      "version": "latest",
+      "resolved": "be87dccc163788ebf1d08bda93a4d3fcec958c6d255230421e136f8fa4a222f2",
+      "source": "registry://@mlld/prose@2.2.0",
+      "integrity": "sha256:be87dccc163788ebf1d08bda93a4d3fcec958c6d255230421e136f8fa4a222f2",
+      "fetchedAt": "2026-02-25T19:47:01.474Z"
     }
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-02-25T02:28:40.299Z"
+    "updatedAt": "2026-02-25T19:47:01.474Z"
   }
 }

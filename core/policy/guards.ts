@@ -1,5 +1,5 @@
 import type { GuardBlockNode, GuardRuleNode, GuardActionNode } from '@core/types/guard';
-import type { PolicyConfig, PolicyOperations } from './union';
+import { normalizePolicyConfig, type PolicyConfig, type PolicyOperations } from './union';
 import type { PolicyConditionFn } from '../../interpreter/guards';
 import { v4 as uuid } from 'uuid';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
@@ -27,6 +27,12 @@ export type CommandAccessDecision = {
   allowed: boolean;
   commandName: string;
   reason?: string;
+};
+
+export type ShellCommandDenyMatch = {
+  commandText: string;
+  commandName: string;
+  reason: string;
 };
 
 export type CapabilityAccessDecision = {
@@ -552,6 +558,90 @@ export function evaluateCapabilityAccess(policy: PolicyConfig, capability: strin
   }
 
   return { allowed: true };
+}
+
+export function findDeniedShellCommand(
+  policy: PolicyConfig,
+  shellCode: string
+): ShellCommandDenyMatch | null {
+  if (typeof shellCode !== 'string' || shellCode.trim().length === 0) {
+    return null;
+  }
+  const normalizedPolicy = normalizePolicyConfig(policy);
+  if (normalizedPolicy.deny === undefined) {
+    return null;
+  }
+  const denyOnlyPolicy: PolicyConfig = { deny: normalizedPolicy.deny };
+  const candidates = extractShellCommandCandidates(shellCode);
+  for (const commandText of candidates) {
+    const decision = evaluateCommandAccess(denyOnlyPolicy, commandText);
+    if (decision.allowed) {
+      continue;
+    }
+    return {
+      commandText,
+      commandName: decision.commandName,
+      reason: decision.reason ?? `Command '${decision.commandName}' denied by policy`
+    };
+  }
+  return null;
+}
+
+const SHELL_CONTROL_KEYWORDS = new Set([
+  'if',
+  'then',
+  'else',
+  'elif',
+  'fi',
+  'for',
+  'while',
+  'until',
+  'do',
+  'done',
+  'case',
+  'esac',
+  'select',
+  'function',
+  'in',
+  'time',
+  '{',
+  '}',
+  '(',
+  ')'
+]);
+
+function extractShellCommandCandidates(shellCode: string): string[] {
+  const candidates: string[] = [];
+  const segments = shellCode
+    .split(/\r?\n/)
+    .flatMap(line => line.split(/(?:&&|\|\||[;|])/g))
+    .map(segment => segment.trim())
+    .filter(segment => segment.length > 0 && !segment.startsWith('#'));
+
+  for (const segment of segments) {
+    const tokens = getCommandTokens(segment);
+    if (tokens.length === 0) {
+      continue;
+    }
+    const firstToken = tokens[0]!;
+    if (!SHELL_CONTROL_KEYWORDS.has(firstToken)) {
+      candidates.push(segment);
+      continue;
+    }
+    if (firstToken === 'if' || firstToken === 'while' || firstToken === 'until') {
+      const stripped = segment.replace(/^(if|while|until)\s+/i, '').trim();
+      if (!stripped) {
+        continue;
+      }
+      const strippedTokens = getCommandTokens(stripped);
+      if (strippedTokens.length === 0 || SHELL_CONTROL_KEYWORDS.has(strippedTokens[0]!)) {
+        continue;
+      }
+      candidates.push(stripped);
+    }
+  }
+
+  return candidates;
 }
 
 function matchesPrefix(rule: string, target: string): boolean {

@@ -65,6 +65,12 @@ describe('String .split() + indexing + pipelines', () => {
     expect(out.split('\n').filter((line) => line.length > 0)).toEqual(['true', 'true']);
   });
 
+  it('supports builtin method calls directly on array literals', async () => {
+    const src = `/var @joined = [1, 2, 3].join("-")\n/show @joined`;
+    const out = await run(src);
+    expect(out).toBe('1-2-3');
+  });
+
   it('search methods accept structured field-access arguments across expression contexts', async () => {
     await fs.writeFile(`${process.cwd()}/topic.json`, JSON.stringify({
       payload: {

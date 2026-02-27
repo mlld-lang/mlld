@@ -470,6 +470,26 @@ describe('when evaluator characterization', () => {
     expect(importedValue).toBe('inner');
   });
 
+  it('allows let re-declaration in the same block scope chain', async () => {
+    const firstLet = {
+      type: 'LetAssignment',
+      nodeId: 'let-first',
+      identifier: 'temp',
+      value: [{ type: 'Text', nodeId: 'rhs-first', content: 'one' }]
+    } as any;
+    const secondLet = {
+      type: 'LetAssignment',
+      nodeId: 'let-second',
+      identifier: 'temp',
+      value: [{ type: 'Text', nodeId: 'rhs-second', content: 'two' }]
+    } as any;
+
+    const scopeEnv = await evaluateLetAssignment(firstLet, env);
+    const redeclaredEnv = await evaluateLetAssignment(secondLet, scopeEnv);
+    const value = await extractVariableValue(redeclaredEnv.getVariable('temp')!, redeclaredEnv);
+    expect(value).toBe('two');
+  });
+
   it('keeps when-expression shadowing override behavior stable', async () => {
     env.setVariable(
       'ctxVar',

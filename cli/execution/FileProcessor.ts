@@ -6,8 +6,7 @@ import { PathService } from '@services/fs/PathService';
 import { OutputPathService } from '@services/fs/OutputPathService';
 import { interpret } from '@interpreter/index';
 import { logger, cliLogger } from '@core/utils/logger';
-import { ConfigLoader } from '@core/config/loader';
-import type { ResolvedURLConfig } from '@core/config/types';
+import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { Environment } from '@interpreter/env/Environment';
 import { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { StreamExecution, SDKEvent } from '@sdk/types';
@@ -23,8 +22,6 @@ import chalk from 'chalk';
 export interface ProcessingEnvironment {
   fileSystem: NodeFileSystem;
   pathService: PathService;
-  configLoader: ConfigLoader;
-  urlConfig?: ResolvedURLConfig;
   pathContext?: PathContext;
 }
 
@@ -33,6 +30,22 @@ export type InterpretModeConfig = {
   streaming?: { enabled: boolean };
   jsonOutput: boolean;
   emitter?: ExecutionEmitter;
+};
+
+type OutputOptionDefaults = {
+  showProgress: boolean;
+  maxOutputLines: number;
+  errorBehavior: 'halt' | 'continue';
+  collectErrors: boolean;
+  showCommandContext: boolean;
+};
+
+const DEFAULT_OUTPUT_OPTIONS: OutputOptionDefaults = {
+  showProgress: false,
+  maxOutputLines: 50,
+  errorBehavior: 'continue',
+  collectErrors: true,
+  showCommandContext: true
 };
 
 export function resolveInterpretMode(cliOptions: CLIOptions): InterpretModeConfig {
@@ -89,24 +102,6 @@ export class FileProcessor {
     // Convert CLI options to API options
     const apiOptions = this.optionProcessor.cliToApiOptions(options);
     
-    if (options.debugContext) {
-      // TODO: debugContextCommand is not imported
-      console.error('Debug context command not yet implemented');
-      return;
-    }
-
-    if (options.debugResolution) {
-      // TODO: debugResolutionCommand is not imported
-      console.error('Debug resolution command not yet implemented');
-      return;
-    }
-
-    if (options.debugTransform) {
-      // TODO: debugTransformCommand is not imported  
-      console.error('Debug transform command not yet implemented');
-      return;
-    }
-
     await this.processFileWithOptions(options, apiOptions);
   }
 
@@ -256,71 +251,43 @@ export class FileProcessor {
 
   async setupEnvironment(options: CLIOptions): Promise<ProcessingEnvironment> {
     const fileSystem = new NodeFileSystem();
-    const pathService = new PathService(fileSystem);
-    
+
     // Build PathContext for the input file
     const pathContext = await PathContextBuilder.fromFile(
       path.resolve(options.input),
       fileSystem,
       { invocationDirectory: process.cwd() }
     );
-    
-    // Load configuration using PathContext
-    const configLoader = new ConfigLoader(pathContext);
-    const config = configLoader.load();
-    const urlConfig = configLoader.resolveURLConfig(config);
 
-    return {
-      fileSystem,
-      pathService,
-      configLoader,
-      urlConfig,
-      pathContext
-    };
+    return this.createProcessingEnvironment(fileSystem, pathContext);
   }
 
   async setupEnvironmentForStdin(): Promise<ProcessingEnvironment> {
     const fileSystem = new NodeFileSystem();
-    const pathService = new PathService(fileSystem);
 
     // For stdin input, use cwd-based PathContext
     const pathContext = PathContextBuilder.fromDefaults({
       invocationDirectory: process.cwd()
     });
 
-    // Use PathContext for config
-    const configLoader = new ConfigLoader(pathContext);
-    const config = configLoader.load();
-    const urlConfig = configLoader.resolveURLConfig(config);
-
-    return {
-      fileSystem,
-      pathService,
-      configLoader,
-      urlConfig,
-      pathContext
-    };
+    return this.createProcessingEnvironment(fileSystem, pathContext);
   }
 
   async setupEnvironmentForURL(): Promise<ProcessingEnvironment> {
     const fileSystem = new NodeFileSystem();
-    const pathService = new PathService(fileSystem);
 
     // For URLs, create default PathContext
     const pathContext = PathContextBuilder.fromDefaults({
       invocationDirectory: process.cwd()
     });
-    
-    // Use PathContext for config
-    const configLoader = new ConfigLoader(pathContext);
-    const config = configLoader.load();
-    const urlConfig = configLoader.resolveURLConfig(config);
 
+    return this.createProcessingEnvironment(fileSystem, pathContext);
+  }
+
+  private createProcessingEnvironment(fileSystem: NodeFileSystem, pathContext: PathContext): ProcessingEnvironment {
     return {
       fileSystem,
-      pathService,
-      configLoader,
-      urlConfig,
+      pathService: new PathService(fileSystem),
       pathContext
     };
   }
@@ -368,66 +335,17 @@ export class FileProcessor {
       }
     }
     
-    // Merge CLI URL config with loaded config
-    const finalUrlConfig = this.mergeUrlConfig(cliOptions, environment.urlConfig);
-    
-    // Get output config
-    const outputConfig = environment.configLoader.resolveOutputConfig(environment.configLoader.load());
-    
-    // Use PathContext from environment or build one if not available
-    const pathContext = environment.pathContext || await PathContextBuilder.fromFile(
+    const {
+      interpretResult,
+      resultEnvironment,
+      modeConfig,
+      detachLogging
+    } = await this.createInterpreter({
+      cliOptions,
+      environment,
+      content,
       effectivePath,
-      environment.fileSystem,
-      { invocationDirectory: process.cwd() }
-    );
-    
-    // Call the interpreter with PathContext
-    let resultEnvironment: Environment | null = null;
-    const modeConfig = resolveInterpretMode(cliOptions);
-    const detachLogging = modeConfig.emitter ? attachEmitterLogging(modeConfig.emitter) : undefined;
-
-    // Parse dynamic modules from --inject flags
-    const dynamicModules = cliOptions.inject
-      ? await parseInjectOptions(cliOptions.inject, environment.fileSystem, path.dirname(effectivePath))
-      : undefined;
-
-    const interpretResult = await interpret(content, {
-      pathContext,
-      filePath: effectivePath, // Use effective path for error reporting
-      format: this.normalizeFormat(cliOptions.format),
-      mlldMode: cliOptions.mode,
-      fileSystem: environment.fileSystem,
-      pathService: environment.pathService,
-      strict: cliOptions.strict,
-      urlConfig: finalUrlConfig,
-      stdinContent: stdinContent,
-      dynamicModules,
-      outputOptions: {
-        showProgress: cliOptions.showProgress !== undefined ? cliOptions.showProgress : outputConfig.showProgress,
-        maxOutputLines: cliOptions.maxOutputLines !== undefined ? cliOptions.maxOutputLines : outputConfig.maxOutputLines,
-        errorBehavior: cliOptions.errorBehavior || outputConfig.errorBehavior,
-        collectErrors: cliOptions.collectErrors !== undefined ? cliOptions.collectErrors : outputConfig.collectErrors,
-        showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext,
-        timeout: cliOptions.commandTimeout
-      },
-      approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
-      normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
-      enableTrace: true,
-      useMarkdownFormatter: !cliOptions.noFormat,
-      captureErrors: cliOptions.captureErrors,
-      ephemeral: cliOptions.ephemeral,
-      allowAbsolutePaths: cliOptions.allowAbsolute,
-      checkpoint: cliOptions.checkpoint,
-      noCheckpoint: cliOptions.noCheckpoint,
-      fresh: cliOptions.fresh,
-      resume: cliOptions.resume,
-      fork: cliOptions.fork,
-      captureEnvironment: env => {
-        resultEnvironment = env;
-      },
-      mode: modeConfig.mode,
-      streaming: modeConfig.streaming ?? (cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined),
-      emitter: modeConfig.emitter
+      stdinContent
     });
 
     if (modeConfig.mode === 'stream') {
@@ -465,6 +383,71 @@ export class FileProcessor {
       result,
       hasExplicitOutput,
       interpretEnvironment: resultEnvironment,
+      detachLogging
+    };
+  }
+
+  private async createInterpreter(options: {
+    cliOptions: CLIOptions;
+    environment: ProcessingEnvironment;
+    content: string;
+    effectivePath: string;
+    stdinContent?: string;
+  }): Promise<{
+    interpretResult: unknown;
+    resultEnvironment: Environment | null;
+    modeConfig: InterpretModeConfig;
+    detachLogging?: () => void;
+  }> {
+    const { cliOptions, environment, content, effectivePath, stdinContent } = options;
+    const pathContext = environment.pathContext || await PathContextBuilder.fromFile(
+      effectivePath,
+      environment.fileSystem,
+      { invocationDirectory: process.cwd() }
+    );
+    const modeConfig = resolveInterpretMode(cliOptions);
+    const detachLogging = modeConfig.emitter ? attachEmitterLogging(modeConfig.emitter) : undefined;
+    const dynamicModules = cliOptions.inject
+      ? await parseInjectOptions(cliOptions.inject, environment.fileSystem, path.dirname(effectivePath))
+      : undefined;
+
+    let resultEnvironment: Environment | null = null;
+    const interpretResult = await interpret(content, {
+      pathContext,
+      filePath: effectivePath,
+      format: this.normalizeFormat(cliOptions.format),
+      mlldMode: cliOptions.mode,
+      fileSystem: environment.fileSystem,
+      pathService: environment.pathService,
+      strict: cliOptions.strict,
+      urlConfig: this.resolveUrlConfig(cliOptions),
+      stdinContent,
+      dynamicModules,
+      outputOptions: this.resolveOutputOptions(cliOptions),
+      approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
+      normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
+      enableTrace: true,
+      useMarkdownFormatter: !cliOptions.noFormat,
+      captureErrors: cliOptions.captureErrors,
+      ephemeral: cliOptions.ephemeral,
+      allowAbsolutePaths: cliOptions.allowAbsolute,
+      checkpoint: cliOptions.checkpoint,
+      noCheckpoint: cliOptions.noCheckpoint,
+      fresh: cliOptions.fresh,
+      resume: cliOptions.resume,
+      fork: cliOptions.fork,
+      captureEnvironment: env => {
+        resultEnvironment = env;
+      },
+      mode: modeConfig.mode,
+      streaming: modeConfig.streaming ?? (cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined),
+      emitter: modeConfig.emitter
+    });
+
+    return {
+      interpretResult,
+      resultEnvironment,
+      modeConfig,
       detachLogging
     };
   }
@@ -578,34 +561,43 @@ export class FileProcessor {
     return false;
   }
 
-  private mergeUrlConfig(cliOptions: CLIOptions, loadedUrlConfig?: ResolvedURLConfig): ResolvedURLConfig | undefined {
-    let finalUrlConfig: ResolvedURLConfig | undefined = loadedUrlConfig;
-    
-    if (cliOptions.allowUrls) {
-      // CLI explicitly enables URLs, override config
-      finalUrlConfig = {
-        enabled: true,
-        allowedDomains: cliOptions.urlAllowedDomains || loadedUrlConfig?.allowedDomains || [],
-        blockedDomains: cliOptions.urlBlockedDomains || loadedUrlConfig?.blockedDomains || [],
-        allowedProtocols: loadedUrlConfig?.allowedProtocols || ['https', 'http'],
-        timeout: cliOptions.urlTimeout || loadedUrlConfig?.timeout || 30000,
-        maxSize: cliOptions.urlMaxSize || loadedUrlConfig?.maxSize || 5 * 1024 * 1024,
-        warnOnInsecureProtocol: loadedUrlConfig?.warnOnInsecureProtocol ?? true,
-        cache: loadedUrlConfig?.cache || {
-          enabled: true,
-          defaultTTL: 5 * 60 * 1000,
-          rules: []
-        }
-      };
-    } else if (loadedUrlConfig?.enabled && cliOptions.allowUrls !== false) {
-      // Config enables URLs and CLI doesn't explicitly disable
-      finalUrlConfig = loadedUrlConfig;
-    } else {
-      // URLs disabled
-      finalUrlConfig = undefined;
+  private resolveUrlConfig(cliOptions: CLIOptions): ResolvedURLConfig | undefined {
+    if (!cliOptions.allowUrls) {
+      return undefined;
     }
 
-    return finalUrlConfig;
+    return {
+      enabled: true,
+      allowedDomains: cliOptions.urlAllowedDomains || [],
+      blockedDomains: cliOptions.urlBlockedDomains || [],
+      allowedProtocols: ['https', 'http'],
+      timeout: cliOptions.urlTimeout || 30000,
+      maxSize: cliOptions.urlMaxSize || 5 * 1024 * 1024,
+      warnOnInsecureProtocol: true,
+      cache: {
+        enabled: true,
+        defaultTTL: 5 * 60 * 1000,
+        rules: []
+      }
+    };
+  }
+
+  private resolveOutputOptions(cliOptions: CLIOptions): {
+    showProgress: boolean;
+    maxOutputLines: number;
+    errorBehavior: 'halt' | 'continue';
+    collectErrors: boolean;
+    showCommandContext: boolean;
+    timeout?: number;
+  } {
+    return {
+      showProgress: cliOptions.showProgress !== undefined ? cliOptions.showProgress : DEFAULT_OUTPUT_OPTIONS.showProgress,
+      maxOutputLines: cliOptions.maxOutputLines !== undefined ? cliOptions.maxOutputLines : DEFAULT_OUTPUT_OPTIONS.maxOutputLines,
+      errorBehavior: cliOptions.errorBehavior || DEFAULT_OUTPUT_OPTIONS.errorBehavior,
+      collectErrors: cliOptions.collectErrors !== undefined ? cliOptions.collectErrors : DEFAULT_OUTPUT_OPTIONS.collectErrors,
+      showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : DEFAULT_OUTPUT_OPTIONS.showCommandContext,
+      timeout: cliOptions.commandTimeout
+    };
   }
 
   async readStdinIfAvailable(): Promise<string | undefined> {
@@ -636,12 +628,6 @@ export class FileProcessor {
         resolve(undefined);
       });
     });
-  }
-
-  loadConfiguration(inputPath: string): any {
-    // Load and return configuration for the given input path
-    const configLoader = new ConfigLoader(path.dirname(inputPath));
-    return configLoader.load();
   }
 
   validateInputFile(inputPath: string): void {

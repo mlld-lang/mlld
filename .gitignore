@@ -45,7 +45,12 @@ tests/fixtures/**/index.ts
 tests/cases/EXAMPLES.md
 
 # Doc test cases (generated from docs/src/ and docs/user/)
-tests/cases/docs/
+# Ignore all generated files but track expectations and skips
+tests/cases/docs/**/*
+!tests/cases/docs/**/
+!tests/cases/docs/**/expected.md
+!tests/cases/docs/**/skip.md
+!tests/cases/docs/**/skip-*.md
 
 # Logs
 logs/

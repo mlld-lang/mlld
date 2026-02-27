@@ -16,6 +16,8 @@ export interface StreamingOptions {
   visibility?: StreamingVisibility;
   accumulate?: boolean;
   keepRawEvents?: boolean;
+  showJson?: boolean;
+  appendJson?: string;
   streamFormat?: string | AdapterConfig;
   ansiEnabled?: boolean;
   /**

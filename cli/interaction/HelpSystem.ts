@@ -42,16 +42,6 @@ export class HelpSystem {
       return;
     }
     
-    if (command === 'debug-resolution') {
-      this.displayDebugResolutionHelp();
-      return;
-    }
-    
-    if (command === 'debug-transform') {
-      this.displayDebugTransformHelp();
-      return;
-    }
-    
     if (command === 'test') {
       this.displayTestHelp();
       return;
@@ -279,7 +269,16 @@ Options:
   -p, --private        Publish to private repository (skip prompts)
   --pr                 Create registry PR for private publish
   --path <path>        Custom directory for private publish (default: mlld/modules/)
+  --title <text>       Override module title (normalized into published module name)
+  --description <text> Override module description/about
+  --version <semver>   Override module version
+  --tags <list>        Override tags/keywords (comma-separated)
+  --author <name>      Override module author
   -v, --verbose        Show detailed output
+
+Metadata precedence:
+  - CLI metadata flags (e.g., --title, --description) override module frontmatter
+  - Frontmatter acts as default metadata when CLI overrides are not provided
 
 Git Integration:
   - Automatically detects git repositories
@@ -319,6 +318,7 @@ Examples:
   mlld publish --force            # Publish with uncommitted changes
   mlld publish --use-gist         # Force gist creation
   mlld publish --org myorg        # Publish as organization 'myorg'
+  mlld publish my-module.mld --title "My Utility" --tags utils,strings
   mlld publish --private          # Publish to private repo (skip prompts)
   mlld publish --private --pr     # Private publish + registry PR
   mlld publish --private --path lib/modules  # Custom directory
@@ -368,7 +368,6 @@ Subcommands:
   search <query>       Search for modules
   info <module>        Show module details
   stats                Show local usage statistics
-  stats share          Share anonymous usage statistics
   outdated             Show outdated modules
 
 Examples:
@@ -449,38 +448,6 @@ Examples:
   mlld keychain list
   mlld keychain get ANTHROPIC_API_KEY
   mlld keychain import .env
-    `);
-  }
-
-  private displayDebugResolutionHelp(): void {
-    console.log(`
-Usage: mlld debug-resolution [options] <input-file>
-
-Debug variable resolution in a mlld file.
-
-Options:
-  --var, --variable <n>     Filter to a specific variable
-  --output-format <format>     Output format (json, text) [default: text]
-  -w, --watch                  Watch for changes and reprocess
-  -v, --verbose                Enable verbose output
-  --home-path <path>           Custom home path for ~/ substitution
-  -h, --help                   Display this help message
-    `);
-  }
-
-  private displayDebugTransformHelp(): void {
-    console.log(`
-Usage: mlld debug-transform [options] <input-file>
-
-Debug node transformations through the pipeline.
-
-Options:
-  --directive <type>           Focus on a specific directive type
-  --output-format <format>     Output format (text, json, mermaid) [default: text]
-  --output <path>              Output file path
-  --include-content            Include node content in output
-  -v, --verbose                Enable verbose output
-  -h, --help                   Display this help message
     `);
   }
 
@@ -607,9 +574,6 @@ Commands:
   nvim-setup, nvim        Set up mlld Language Server for Neovim
   nvim-doctor             Diagnose and fix mlld Neovim LSP configuration
   validate, analyze       Validate mlld syntax and show module/template structure
-  debug-resolution        Debug variable resolution in a mlld file
-  debug-transform         Debug node transformations through the pipeline
-
 Options:
   -f, --format <format>   Output format: md, markdown, xml, llm [default: llm]
   --mode <mode>           Parser mode: strict or markdown (default: .mld strict, .mld.md/.md markdown, stdin/eval strict)
@@ -620,7 +584,7 @@ Options:
   --stdout                Print to stdout instead of file
   --strict                Enable strict mode (fail on all errors)
   --permissive            Enable permissive mode (ignore recoverable errors) [default]
-  --pretty                Format the output with Prettier
+  --pretty                Enable markdown output formatting (legacy alias)
     --home-path <path>      Custom home path for ~/ substitution
   -v, --verbose           Enable verbose output (some additional info)
   -d, --debug             Stream execution with progress logs to stderr
@@ -659,7 +623,7 @@ Import Approval Options:
 
 Output Formatting Options:
   --no-normalize-blank-lines  Disable blank line normalization in output
-  --no-format                 Disable prettier markdown formatting (preserve original spacing)
+  --no-format                 Disable markdown output normalization (preserve original spacing)
 
 Security Options:
   --allow-absolute            Allow absolute paths outside project root (use with caution!)
@@ -696,17 +660,6 @@ New to mlld? Run 'mlld quickstart' for an introduction.
 Built-in docs and examples available via 'mlld howto'.
   `);
 
-    if (!command || command === 'debug-context') {
-      console.log('\nContext Debugging Options:');
-      console.log('  --debug-context            Debug context boundaries and variable propagation');
-      console.log('  --viz-type <type>          Type of visualization (hierarchy, variable-propagation, combined, timeline)');
-      console.log('  --root-state-id <id>       Root state ID to start visualization from');
-      console.log('  --variable-name <n>     Variable name to track (required for variable-propagation and timeline)');
-      console.log('  --output-format <format>   Output format (mermaid, dot, json)');
-      console.log('  --no-vars                  Exclude variables from context visualization');
-      console.log('  --no-timestamps            Exclude timestamps from visualization');
-      console.log('  --no-file-paths            Exclude file paths from visualization');
-    }
   }
 
   getCommandHelp(command: string): string | null {
@@ -722,8 +675,6 @@ Built-in docs and examples available via 'mlld howto'.
       case 'dev':
       case 'live':
       case 'docs':
-      case 'debug-resolution':
-      case 'debug-transform':
       case 'test':
       case 'language-server':
       case 'lsp':

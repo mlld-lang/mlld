@@ -73,3 +73,4 @@ mlld run <script>    # Run mlld script from script directory (default: llm/run/)
 ## Important notes
 - Don't ever run `mlld run polish` or `mlld run qa` -- have the user run them. They will take 30+ minutes to run.
 - Don't ever run `npx mlld` -- use `mlld` (which is our local dir installed with `npm install -g .`)
+- The `/` at the start of eg `/run` `/var` `/exe` is a disambiguator for embedding mlld in markdown docs and is not part of the directive itself. Unless an example specifically calls for markdown context, all docs, CHANGELOG.md updates, comments, errors, etc should not include `/`

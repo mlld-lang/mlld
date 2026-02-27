@@ -163,6 +163,26 @@ describe('evaluateRun phase-0 characterization', () => {
     expect(executeSpy).not.toHaveBeenCalled();
   });
 
+  it('blocks denied commands inside /run sh blocks', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/var @policyConfig = {',
+        '  deny_cmd: ["echo:blocked"]',
+        '}',
+        '/policy @p = union(@policyConfig)',
+        '/run sh {',
+        '  echo blocked',
+        '}'
+      ].join('\n'),
+      env
+    );
+
+    await expect(evaluateRun(runDirective, env)).rejects.toThrow(
+      /Command 'echo' denied by policy.*shell block/i
+    );
+  });
+
   it('enforces hierarchical op:cmd policy patterns with most-specific precedence', async () => {
     const deniedEnv = createEnv();
     const deniedRun = await setupSingleRun(

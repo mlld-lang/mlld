@@ -125,7 +125,17 @@ var @alt = ::Hello @name!::
 
 ## Gotchas
 
-mlld is not JavaScript/Python, but it has familiar built-in JS methods. See `mlld howto builtins` for the full list.
+### Coming from JS/Python
+
+mlld is its own language — don't assume JS/Python syntax works. Common mistakes:
+
+- **No `else if`** — use `when` for multi-branch matching, or nest `if` blocks: `if @a [...] else [ if @b [...] ]`
+- **No array spread in literals** — use `.concat()`: `var @combined = @arr1.concat(@arr2)`
+- **No computed object keys** — use `js{}`: `exe @build(key, val) = js { return {[key]: val} }`
+- **No methods on literals** — assign first: `var @s = "hello"` then `var @up = @s.toUpperCase()`
+- **No standalone boolean flags** — use `--flag true` not `--flag` (all CLI payload flags need values)
+
+mlld has familiar built-in JS methods. See `mlld howto builtins` for the full list.
 
 Loaded files are rich objects, not strings. Frontmatter is already parsed (@file.mx.fm.title), metadata is available (@file.mx.tokens, @file.mx.filename). Check `mlld howto file-loading-metadata` before writing js/node blocks for file processing.
 
@@ -181,6 +191,8 @@ var @files = <@pathvar/file.ts>                >> variable usage
 `<@var>` always triggers file loading. For text output, use `@var` directly.
 
 See `mlld howto file-loading-basics` for advanced usage.
+
+**Hyphens are valid in identifiers**: `@prefix-alpha` is one variable name, not `@prefix` minus `alpha`. If you need subtraction, use spaces: `@a - @b`.
 
 `@var.json` is field access. Escape the dot for file extensions: `@name\.json`.
 

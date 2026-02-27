@@ -1,24 +1,94 @@
 import { createHash } from 'crypto';
 import * as readline from 'readline/promises';
-import type { ImportAllowEntry, ImportSecurityConfig } from '@core/config/types';
-import { ConfigLoader } from '@core/config/loader';
+import { existsSync, readFileSync } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+interface ImportAllowEntry {
+  url: string;
+  hash: string;
+  pinnedVersion: boolean;
+  allowedAt: string;
+  detectedCommands?: string[];
+}
+
+interface ImportSecurityConfig {
+  requireApproval: boolean;
+  allowed: ImportAllowEntry[];
+  pinByDefault: boolean;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export class ImportApproval {
   private config: ImportSecurityConfig;
-  private configLoader: ConfigLoader;
   private projectPath: string;
+  private configPath: string;
   
   constructor(projectPath: string) {
     this.projectPath = projectPath;
-    this.configLoader = new ConfigLoader(projectPath);
-    const config = this.configLoader.load();
-    this.config = config.security?.imports || {
+    this.configPath = path.join(this.projectPath, 'mlld-config.json');
+    this.config = this.loadImportSecurityConfig();
+  }
+
+  private defaultImportSecurityConfig(): ImportSecurityConfig {
+    return {
       requireApproval: true,
       pinByDefault: true,
       allowed: []
     };
+  }
+
+  private loadImportSecurityConfig(): ImportSecurityConfig {
+    if (!existsSync(this.configPath)) {
+      return this.defaultImportSecurityConfig();
+    }
+
+    try {
+      const content = readFileSync(this.configPath, 'utf8');
+      const parsed = JSON.parse(content) as unknown;
+      if (!isObject(parsed)) {
+        return this.defaultImportSecurityConfig();
+      }
+
+      const security = isObject(parsed.security) ? parsed.security : undefined;
+      const imports = isObject(security?.imports) ? security.imports : undefined;
+      const allowed = Array.isArray(imports?.allowed)
+        ? (imports.allowed.filter(isObject).map(entry => ({
+            url: typeof entry.url === 'string' ? entry.url : '',
+            hash: typeof entry.hash === 'string' ? entry.hash : '',
+            pinnedVersion: Boolean(entry.pinnedVersion),
+            allowedAt: typeof entry.allowedAt === 'string' ? entry.allowedAt : new Date().toISOString(),
+            detectedCommands: Array.isArray(entry.detectedCommands)
+              ? entry.detectedCommands.filter((value): value is string => typeof value === 'string')
+              : undefined
+          })).filter(entry => entry.url && entry.hash))
+        : [];
+
+      return {
+        requireApproval: imports?.requireApproval !== false,
+        pinByDefault: imports?.pinByDefault !== false,
+        allowed
+      };
+    } catch {
+      return this.defaultImportSecurityConfig();
+    }
+  }
+
+  private async readProjectConfig(): Promise<Record<string, unknown>> {
+    if (!existsSync(this.configPath)) {
+      return {};
+    }
+
+    try {
+      const content = await fs.readFile(this.configPath, 'utf8');
+      const parsed = JSON.parse(content) as unknown;
+      return isObject(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
   }
 
   /**
@@ -36,7 +106,9 @@ export class ImportApproval {
         process.env.MLLD_TEST === '1' ||
         process.env.VITEST || 
         process.env.VITEST_WORKER_ID ||
-        process.env.VITEST_POOL_ID !== undefined) {
+        process.env.VITEST_POOL_ID !== undefined ||
+        !process.stdin.isTTY ||
+        !process.stdout.isTTY) {
       return true;
     }
 
@@ -171,7 +243,7 @@ export class ImportApproval {
       const choice = await rl.question('   Choice: ');
       
       if (choice.toLowerCase() === 'y') {
-        await this.updateApproval(url, newHash, existing.pinnedVersion);
+        await this.updateApproval(url, newHash);
         console.log('   ✅ Import updated and cached\n');
         return true;
       } else {
@@ -232,48 +304,74 @@ export class ImportApproval {
       detectedCommands
     };
     
-    // Load current config
-    const config = this.configLoader.load();
-    
-    // Ensure structure exists
-    if (!config.security) config.security = {};
-    if (!config.security.imports) config.security.imports = {};
-    if (!config.security.imports.allowed) config.security.imports.allowed = [];
-    
-    // Add or update entry
-    const existingIndex = config.security.imports.allowed.findIndex(e => e.url === url);
+    const config = await this.readProjectConfig();
+    const security = isObject(config.security) ? config.security : {};
+    const imports = isObject(security.imports) ? security.imports : {};
+    const allowed = Array.isArray(imports.allowed)
+      ? imports.allowed.filter(isObject).map(item => ({
+          url: typeof item.url === 'string' ? item.url : '',
+          hash: typeof item.hash === 'string' ? item.hash : '',
+          pinnedVersion: Boolean(item.pinnedVersion),
+          allowedAt: typeof item.allowedAt === 'string' ? item.allowedAt : new Date().toISOString(),
+          detectedCommands: Array.isArray(item.detectedCommands)
+            ? item.detectedCommands.filter((value): value is string => typeof value === 'string')
+            : undefined
+        }))
+      : [];
+
+    const existingIndex = allowed.findIndex(e => e.url === url);
     if (existingIndex >= 0) {
-      config.security.imports.allowed[existingIndex] = entry;
+      allowed[existingIndex] = entry;
     } else {
-      config.security.imports.allowed.push(entry);
+      allowed.push(entry);
     }
-    
-    // Save config
-    const configPath = path.join(this.projectPath, 'mlld.config.json');
-    await fs.writeFile(configPath, JSON.stringify(config, null, 2));
-    
-    // Reload config
-    this.config = config.security.imports;
+
+    const updatedImports = {
+      requireApproval: imports.requireApproval !== false,
+      pinByDefault: imports.pinByDefault !== false,
+      allowed
+    };
+
+    config.security = {
+      ...security,
+      imports: updatedImports
+    };
+
+    await fs.mkdir(path.dirname(this.configPath), { recursive: true });
+    await fs.writeFile(this.configPath, JSON.stringify(config, null, 2));
+
+    this.config = updatedImports;
   }
 
   private async updateApproval(
     url: string,
-    newHash: string,
-    pinnedVersion: boolean
+    newHash: string
   ): Promise<void> {
-    const config = this.configLoader.load();
-    
-    if (config.security?.imports?.allowed) {
-      const entry = config.security.imports.allowed.find(e => e.url === url);
-      if (entry) {
-        entry.hash = newHash;
-        entry.allowedAt = new Date().toISOString();
-        
-        // Save config
-        const configPath = path.join(this.projectPath, 'mlld.config.json');
-        await fs.writeFile(configPath, JSON.stringify(config, null, 2));
-      }
+    const config = await this.readProjectConfig();
+    const security = isObject(config.security) ? config.security : {};
+    const imports = isObject(security.imports) ? security.imports : {};
+    const allowed = Array.isArray(imports.allowed) ? imports.allowed : [];
+
+    const entry = allowed.find(candidate => isObject(candidate) && candidate.url === url) as Record<string, unknown> | undefined;
+    if (!entry) {
+      return;
     }
+
+    entry.hash = newHash;
+    entry.allowedAt = new Date().toISOString();
+
+    config.security = {
+      ...security,
+      imports: {
+        requireApproval: imports.requireApproval !== false,
+        pinByDefault: imports.pinByDefault !== false,
+        allowed
+      }
+    };
+
+    await fs.mkdir(path.dirname(this.configPath), { recursive: true });
+    await fs.writeFile(this.configPath, JSON.stringify(config, null, 2));
+    this.config = this.loadImportSecurityConfig();
   }
 
   /**

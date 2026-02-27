@@ -640,7 +640,7 @@ try {
 | `fileSystem` | IFileSystemService | NodeFileSystem | Custom filesystem |
 | `pathService` | IPathService | PathService | Custom path service |
 | `normalizeBlankLines` | boolean | true | Normalize blank lines |
-| `useMarkdownFormatter` | boolean | true | Use prettier |
+| `useMarkdownFormatter` | boolean | true | Apply markdown output normalization |
 | `dynamicModules` | Record<string, string \| object> | - | Runtime module injection (strings or structured objects) |
 
 ### InterpretOptions (Advanced)
@@ -670,4 +670,3 @@ These wrappers require the mlld CLI to be installed (`npm install -g mlld`).
 - [CLI Usage](cli.md) - Command line interface
 - [Modules](modules.md) - Import system
 - [Security](security.md) - Guards and taint tracking
-

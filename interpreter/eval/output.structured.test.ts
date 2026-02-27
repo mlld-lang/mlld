@@ -4,6 +4,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { parse } from '@grammar/parser';
 import { evaluateOutput } from './output';
+import { evaluateAppend } from './append';
 import { wrapStructured } from '../utils/structured-value';
 import { createStructuredValueVariable } from '@core/types/variable';
 
@@ -90,5 +91,45 @@ describe('evaluateOutput (structured boundaries)', () => {
     expect(written).not.toContain('"data"');
     expect(written).not.toContain('"text"');
     expect(written).not.toContain('"type"');
+  });
+
+  it('rejects output targets that resolve to [object Object]', async () => {
+    const source = `
+/output "hello" to "result.txt"
+`;
+    const { ast } = await parse(source);
+    const [outputDirective] = getDirectiveNodes(ast, 'output');
+    expect(outputDirective).toBeDefined();
+    const outputNode: any = {
+      ...outputDirective,
+      location: outputDirective.location || { line: 1, column: 1 },
+      meta: outputDirective.meta || {}
+    };
+
+    outputNode.values.target.path = [{ type: 'Text', content: '[object Object]' }];
+
+    await expect(evaluateOutput(outputNode, env)).rejects.toThrow(
+      'Output target path resolved to [object Object]'
+    );
+  });
+
+  it('rejects append targets that resolve to [object Object]', async () => {
+    const source = `
+/append "hello" to "result.txt"
+`;
+    const { ast } = await parse(source);
+    const [appendDirective] = getDirectiveNodes(ast, 'append');
+    expect(appendDirective).toBeDefined();
+    const appendNode: any = {
+      ...appendDirective,
+      location: appendDirective.location || { line: 1, column: 1 },
+      meta: appendDirective.meta || {}
+    };
+
+    appendNode.values.target.path = [{ type: 'Text', content: '[object Object]' }];
+
+    await expect(evaluateAppend(appendNode, env)).rejects.toThrow(
+      'Append target path resolved to [object Object]'
+    );
   });
 });

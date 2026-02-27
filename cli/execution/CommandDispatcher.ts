@@ -195,7 +195,7 @@ export class CommandDispatcher {
   }
 
   private assignParsedFlag(flags: Record<string, unknown>, key: string, value: unknown): void {
-    if (key !== 'env') {
+    if (key !== 'mlld-env') {
       flags[key] = value;
       return;
     }

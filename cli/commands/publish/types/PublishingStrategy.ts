@@ -18,11 +18,6 @@ export interface PublishingStrategy {
   execute(context: PublishContext): Promise<PublishResult>;
   
   /**
-   * Rollback changes if execution fails
-   */
-  rollback?(context: PublishContext): Promise<void>;
-  
-  /**
    * Validate context before execution
    */
   validate?(context: PublishContext): Promise<void>;

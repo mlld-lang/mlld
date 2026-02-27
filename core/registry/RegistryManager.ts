@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { LockFile } from './LockFile';
 import { Cache } from './Cache';
 import { RegistryResolver } from './RegistryResolver';
@@ -330,9 +331,87 @@ export class RegistryManager {
   getStats(): StatsCollector { return this.stats; }
 
   private async fetchLocked(importPath: string, locked: any): Promise<string> {
-    // This would be implemented by the gist fetcher
-    // For now, just return the resolved path
-    console.warn('Fetching locked version not yet implemented');
+    const fetchUrl = await this.resolveLockedFetchUrl(importPath, locked);
+    const response = await fetch(fetchUrl);
+    if (!response.ok) {
+      throw new MlldImportError(
+        `Failed to fetch locked module ${importPath} from ${fetchUrl}: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const content = await response.text();
+    await this.assertLockedIntegrity(importPath, content, locked?.integrity);
+
+    await this.cache.store(locked.resolved, content, {
+      importPath,
+      gistRevision: locked.gistRevision,
+      integrity: locked.integrity
+    });
+
+    await this.stats.track(importPath, 'import');
     return locked.resolved;
+  }
+
+  private async resolveLockedFetchUrl(importPath: string, locked: any): Promise<string> {
+    const resolved = typeof locked?.resolved === 'string' ? locked.resolved.trim() : '';
+    if (!resolved) {
+      throw new MlldImportError(`Locked module ${importPath} is missing a resolved source URL.`);
+    }
+
+    if (resolved.startsWith('http://') || resolved.startsWith('https://')) {
+      return resolved;
+    }
+
+    if (resolved.startsWith('registry://')) {
+      const registryRef = resolved.slice('registry://'.length);
+      const normalizedRef = registryRef.startsWith('@')
+        ? `mlld://${registryRef.slice(1)}`
+        : `mlld://${registryRef}`;
+      const registryResolved = await this.resolver.resolve(normalizedRef);
+      return this.resolveLockedFetchUrl(importPath, { ...locked, resolved: registryResolved });
+    }
+
+    if (resolved.startsWith('mlld://gist/')) {
+      const gistRef = resolved.slice('mlld://gist/'.length);
+      const [username, gistId] = gistRef.split('/', 2);
+      if (!username || !gistId) {
+        throw new MlldImportError(`Invalid locked gist reference for ${importPath}: ${resolved}`);
+      }
+
+      const revisionSegment = locked?.gistRevision ? `/${locked.gistRevision}` : '';
+      return `https://gist.githubusercontent.com/${username}/${gistId}/raw${revisionSegment}/`;
+    }
+
+    if (resolved.startsWith('mlld://')) {
+      const moduleRef = resolved.slice('mlld://'.length);
+      const registryResolved = await this.resolver.resolve(`mlld://${moduleRef}`);
+      return this.resolveLockedFetchUrl(importPath, { ...locked, resolved: registryResolved });
+    }
+
+    throw new MlldImportError(
+      `Locked module ${importPath} has unsupported resolved source '${resolved}'.`
+    );
+  }
+
+  private async assertLockedIntegrity(importPath: string, content: string, integrity: string | undefined): Promise<void> {
+    if (!integrity || integrity.trim().length === 0) {
+      throw new MlldImportError(`Lock entry for ${importPath} is missing integrity data.`);
+    }
+
+    const expected = integrity.trim();
+    let isValid = false;
+    if (expected.startsWith('sha256:')) {
+      const computed = await this.lockFile.calculateIntegrity(content);
+      isValid = computed === expected;
+    } else if (expected.startsWith('sha256-')) {
+      const computed = `sha256-${crypto.createHash('sha256').update(content, 'utf8').digest('base64')}`;
+      isValid = computed === expected;
+    }
+
+    if (!isValid) {
+      throw new MlldImportError(
+        `Lock integrity check failed for ${importPath}. Expected ${expected}.`
+      );
+    }
   }
 }

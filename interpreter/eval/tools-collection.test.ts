@@ -178,7 +178,32 @@ describe('tool collections', () => {
     expect((resultVar?.value as any)?.text ?? resultVar?.value).toBe('hello');
   });
 
-  it('applies tool collection labels as taint on direct exe calls inside env with tools', async () => {
+  it('applies tool collection labels as taint on direct env-block returns', async () => {
+    const result = await interpret(`
+      /exe @tcRead(id: string) = \`data:@id\`
+
+      /var tools @tcTools = {
+        read: { mlld: @tcRead, labels: ["untrusted"] }
+      }
+
+      /exe @tcAgent(tools, task) = env with { tools: @tools } [
+        => @tcRead("123")
+      ]
+
+      /var @tcOutput = @tcAgent(@tcTools, "go")
+      /show @tcOutput.mx.taint.includes("untrusted")
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+    expect(result.trim()).toBe('true');
+  });
+
+  it('applies tool collection labels as taint on let-bound env-block calls', async () => {
     const result = await interpret(`
       /exe @tcRead(id: string) = \`data:@id\`
 

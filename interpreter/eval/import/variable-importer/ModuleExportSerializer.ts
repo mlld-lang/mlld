@@ -2,6 +2,10 @@ import type { Environment } from '@interpreter/env/Environment';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import type { ObjectReferenceResolver } from '../ObjectReferenceResolver';
 import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from './executable/CapturedModuleEnvKeychain';
+import {
   type ExecutableVariable,
   type TemplateVariable,
   type Variable,
@@ -127,6 +131,7 @@ export class ModuleExportSerializer {
   ): Record<string, unknown> {
     const isImported = Boolean(execVar.mx?.isImported);
     let serializedInternal: Record<string, unknown> = { ...(execVar.internal ?? {}) };
+    const existingCapturedEnv = getCapturedModuleEnv(execVar.internal);
 
     if (serializedInternal.capturedShadowEnvs) {
       serializedInternal = {
@@ -138,29 +143,31 @@ export class ModuleExportSerializer {
     if (context.shouldSerializeModuleEnv) {
       const capturedEnv = !isImported
         ? context.getModuleEnvSnapshot()
-        : serializedInternal.capturedModuleEnv instanceof Map
-          ? serializedInternal.capturedModuleEnv
+        : existingCapturedEnv instanceof Map
+          ? existingCapturedEnv
           : context.getModuleEnvSnapshot();
-      serializedInternal = {
-        ...serializedInternal,
-        capturedModuleEnv: context.serializeModuleEnv(capturedEnv, context.serializingEnvs)
-      };
+      sealCapturedModuleEnv(
+        serializedInternal,
+        context.serializeModuleEnv(capturedEnv, context.serializingEnvs)
+      );
     } else {
-      const existingCapture = serializedInternal.capturedModuleEnv;
+      const existingCapture = existingCapturedEnv;
       if (!isImported) {
-        delete serializedInternal.capturedModuleEnv;
+        sealCapturedModuleEnv(serializedInternal, undefined);
       } else if (existingCapture instanceof Map) {
         if (
           (context.currentSerializationTarget && existingCapture === context.currentSerializationTarget) ||
           (context.serializingEnvs && context.serializingEnvs.has(existingCapture))
         ) {
-          delete serializedInternal.capturedModuleEnv;
+          sealCapturedModuleEnv(serializedInternal, undefined);
         } else {
-          serializedInternal = {
-            ...serializedInternal,
-            capturedModuleEnv: context.serializeModuleEnv(existingCapture, context.serializingEnvs)
-          };
+          sealCapturedModuleEnv(
+            serializedInternal,
+            context.serializeModuleEnv(existingCapture, context.serializingEnvs)
+          );
         }
+      } else if (existingCapture !== undefined) {
+        sealCapturedModuleEnv(serializedInternal, existingCapture);
       }
     }
 

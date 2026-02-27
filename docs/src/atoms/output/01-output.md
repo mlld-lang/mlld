@@ -15,26 +15,9 @@ output @content to "out.txt"
 output @data to "config.json"
 output @message to stdout
 output @error to stderr
-output @config.yaml() to "settings.yaml"
-output @results.json() to "results.json"
-output @plain.text() to "plain.txt"
 ```
 
-Use transformer methods before `output` when you need a specific file format:
-
-| Transformer | Behavior |
-|------------|----------|
-| `@value.json()` | Emit JSON text |
-| `@value.yaml()` | Emit YAML text |
-| `@value.text()` | Emit plain text |
-
-Examples:
-
-```mlld
-output @data.json() to "results.json"
-output @data.yaml() to "config.yml"
-output @data.text() to "plain.txt"
-```
+Objects and arrays are automatically serialized to JSON when writing to `.json` files. For other file types, the value is converted to a string.
 
 ## See Also
 

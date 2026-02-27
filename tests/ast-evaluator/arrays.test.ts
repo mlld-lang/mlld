@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ASTEvaluator } from '@interpreter/core/ast-evaluator';
 
-// Mock the lazy-eval module
-vi.mock('@interpreter/eval/lazy-eval', () => ({
+// Mock the data-value-evaluator module
+vi.mock('@interpreter/eval/data-value-evaluator', () => ({
   evaluateDataValue: vi.fn(async (value: any) => {
     // Simple mock that handles Text nodes
     if (value && typeof value === 'object' && value.type === 'Text' && 'content' in value) {

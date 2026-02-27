@@ -234,7 +234,7 @@ function isDirectiveStart(line: string, mode: MlldMode): boolean {
  * @param state - The current splitter state (mutated in place)
  * @param line - The line to process
  */
-function updateStateForLine(state: SplitterState, line: string): void {
+function updateStateForLine(state: SplitterState, line: string, mode: MlldMode): void {
   // Handle code fences
   if (line.trim().startsWith('```')) {
     state.inCodeFence = !state.inCodeFence;
@@ -313,8 +313,10 @@ function updateStateForLine(state: SplitterState, line: string): void {
       }
     }
 
-    // Handle :: and ::: templates
-    if (char === ':' && nextChar === ':') {
+    // Handle :: and ::: templates.
+    // In markdown mode we only treat these as template delimiters when
+    // they appear on directive lines (or while a template is already open).
+    if (char === ':' && nextChar === ':' && (state.templateStack.length > 0 || isDirectiveStart(line, mode))) {
       const thirdChar = line[i + 2];
       if (thirdChar === ':') {
         // ::: triple colon
@@ -423,7 +425,7 @@ export function splitIntoChunks(text: string, mode: MlldMode): Chunk[] {
     }
 
     // Update state for this line
-    updateStateForLine(state, line);
+    updateStateForLine(state, line, mode);
 
     // Track whether this was a blank line for next iteration
     wasBlankLine = isBlank;

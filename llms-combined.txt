@@ -3,8 +3,6 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-02-25T00:33:22.498Z
-
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
 mlld is a modular prompt scripting language for dynamically assembling context and orchestrating LLMs—think Make + npm for the LLM era, or a Unix pipe for chaining discrete AI/tool steps.
@@ -1802,6 +1800,21 @@ var @result = 5 | while(10) @countdown
 - `limit` - Configured cap
 - `active` - true when inside while
 
+**Accumulator pattern** — build a collection over iterations:
+
+```mlld
+exe @collect(state) = [
+  let @items = @state.items
+  let @next = @fetchNext(@state.cursor)
+  if !@next [
+    done @items
+  ]
+  continue { items: @items.concat([@next.data]), cursor: @next.cursor }
+]
+
+var @all = { items: [], cursor: null } | while(50) @collect
+```
+
 **With pacing:**
 
 ```mlld
@@ -3361,15 +3374,17 @@ Matched by frontmatter `author` and `name` fields.
 
 ```yaml
 ---
-name: my-tool
+name: my-tool              # or use title: My Tool (name falls back from title)
 author: yourname
 version: 1.0.0
-about: Brief description of what this does
+about: Brief description   # description: ... also supported
+tags: [utils, strings]     # optional (keywords also supported)
 license: CC0
 ---
 ```
 
-All fields required. License must be CC0.
+Required: module name/title, author, version, and about/description. License must be CC0.
+`mlld publish` now reads these frontmatter fields as metadata defaults, and CLI metadata flags override them when provided.
 
 ## Authentication
 
@@ -3448,6 +3463,7 @@ mlld publish my-tool.mld.md                    # Publish to registry
 mlld publish --pr my-tool.mld.md               # Force PR workflow
 mlld publish --tag beta my-tool.mld.md         # Publish with tag
 mlld publish --dry-run my-tool.mld.md          # Validate without publishing
+mlld publish my-tool.mld.md --title "My Tool" --tags utils,strings
 ```
 
 For private or internal modules, use local imports or custom resolvers instead of the public registry.
@@ -3998,26 +4014,9 @@ output @content to "out.txt"
 output @data to "config.json"
 output @message to stdout
 output @error to stderr
-output @config.yaml() to "settings.yaml"
-output @results.json() to "results.json"
-output @plain.text() to "plain.txt"
 ```
 
-Use transformer methods before `output` when you need a specific file format:
-
-| Transformer | Behavior |
-|------------|----------|
-| `@value.json()` | Emit JSON text |
-| `@value.yaml()` | Emit YAML text |
-| `@value.text()` | Emit plain text |
-
-Examples:
-
-```mlld
-output @data.json() to "results.json"
-output @data.yaml() to "config.yml"
-output @data.text() to "plain.txt"
-```
+Objects and arrays are automatically serialized to JSON when writing to `.json` files. For other file types, the value is converted to a string.
 
 ## See Also
 
@@ -4061,127 +4060,83 @@ for @name in @runs => append @name to "pipeline.log"
 
 <STREAM>
 ```mlld
-stream @claude("prompt")           >> keyword form
-stream @generateReport()           >> directive form
+>> In definition (recommended)
+exe @llm(prompt) = stream cmd {
+  claude -p "@prompt" --output-format stream-json --verbose --include-partial-messages
+} with { streamFormat: "claude-code" }
 
->> Parallel streams
-stream @a() || stream @b()         >> concurrent, buffered results
+show @llm("Explain TCP/IP")           >> streams tokens as they arrive
+
+>> At invocation
+exe @raw(prompt) = cmd {claude -p "@prompt" --output-format stream-json --verbose --include-partial-messages}
+run stream @raw("Hello") with { streamFormat: "claude-code" }
 ```
 
-Suppress: `--no-stream` flag or `MLLD_NO_STREAM=true`
+Definition-level `stream` and `streamFormat` are inherited by both `run @exe()` and `show @exe()`.
+
+```mlld
+import { @haiku } from @mlld/claude-stream
+show @haiku("Explain TCP/IP")        >> streams + parses by default
+```
+
+## Format Adapters
+
+NDJSON streams require a format adapter to parse and display incrementally.
+
+```mlld
+>> Built-in adapter (string shorthand)
+run stream @exe("prompt") with { streamFormat: "claude-code" }
+
+>> Installable adapter
+import { @claudeAgentSdkAdapter } from @mlld/stream-claude-agent-sdk
+run stream @exe("prompt") with { streamFormat: @claudeAgentSdkAdapter }
+```
+
+| Adapter | Aliases | Parses |
+|---------|---------|--------|
+| `ndjson` | — | Generic NDJSON (default) |
+| `claude-code` | `claude-agent-sdk` | Claude CLI stream-json events |
+
+Without an adapter, raw NDJSON passes through unformatted.
+
+## Shell Streaming
+
+Non-NDJSON commands stream raw stdout:
+
+```mlld
+exe @build() = stream sh {npm run build}
+show @build()                          >> live build output
+```
+
+## Parallel
+
+```mlld
+stream @a() || stream @b()            >> concurrent, buffered per-task
+```
+
+## Suppress
+
+```bash
+mlld script.mld --no-stream
+MLLD_NO_STREAM=true mlld script.mld
+```
+
+## Debug
+
+```bash
+mlld script.mld --show-json           >> mirror NDJSON to stderr
+mlld script.mld --append-json out.jsonl  >> save events to file
+```
+
+## Limitations
+
+- After-guards conflict with streaming (output must be complete for validation)
+- Pipeline stages buffer between stages; streaming is within each stage
 </STREAM>
 
 </MLLD_OUTPUT>
 
 <MLLD_PATTERNS>
-
-<PROSE>
-The `prose {}` syntax executes LLM-interpreted DSL skills. By default it uses **OpenProse**, but any custom interpreter can be configured.
-
-## What is Prose Execution?
-
-Prose execution invokes skills that an LLM interprets at runtime. Unlike `run js {}` which executes deterministically, `prose {}` sends content to an LLM with specific skills enabled. This enables complex multi-agent workflows defined in a domain-specific language.
-
-## Setup
-
-1. Install the OpenProse plugin in Claude Code:
-   ```
-   /plugin marketplace add git@github.com:openprose/prose.git
-   /plugin install open-prose@prose
-   ```
-
-2. Restart Claude Code and boot OpenProse:
-   ```
-   /prose-boot
-   ```
-
-3. Skills will prompt for approval on first use.
-
-## Basic Usage
-
-```mlld
-import { @opus } from @mlld/prose
-
-exe @research(topic) = prose:@opus {
-  session "Research @topic"
-  agent researcher { model: sonnet, skills: [web-search] }
-  researcher: find current information about @topic
-  output findings
-}
-
-run @research("quantum computing trends")
-```
-
-## Key Concepts
-
-**session** - Names the workflow for context
-
-**agent** - Defines an agent with model and skills
-
-**loop until** - Iterates with semantic exit conditions:
-```mlld
-exe @refine(draft) = prose:@opus {
-  session "Refine document"
-  loop until **the draft meets publication standards** {
-    critique @draft
-    revise based on critique
-  }
-}
-```
-
-**parallel** - Run tasks concurrently:
-```mlld
-exe @gather(topics) = prose:@opus {
-  session "Research multiple topics"
-  parallel for each topic in @topics {
-    research topic
-  }
-  combine results
-}
-```
-
-## Template Files
-
-For complex workflows, use external files:
-
-```mlld
-exe @workflow(ctx) = prose:@opus "./workflow.prose"
-exe @workflow(ctx) = prose:@opus "./workflow.prose.att"  >> ATT interpolation
-```
-
-## Custom Interpreters
-
-Use any LLM-interpreted DSL by configuring different skills:
-
-```mlld
-import { @claude } from @mlld/claude
-
->> Create a custom model executor
-exe @myModel(prompt) = @claude(@prompt, "opus", @root)
-
->> Configure with custom skills
-var @myDSL = {
-  model: @myModel,
-  skills: ["my-custom:boot", "my-custom:run"]
-}
-
-exe @process(data) = prose:@myDSL {
-  >> Your custom DSL syntax here
-  analyze @data
-  output result
-}
-```
-
-The skill determines how the LLM interprets the prose content. OpenProse is one implementation - you can create your own DSL skills or use other prose interpreters.
-
-## OpenProse Requirements
-
-For OpenProse specifically:
-- **Claude Code** with Opus (only model that reliably interprets OpenProse syntax)
-- **OpenProse skills** approved: `open-prose:prose-boot`, `open-prose:prose-compile`, `open-prose:prose-run`
-
-See `mlld howto exe-prose` for syntax details. OpenProse docs: https://prose.md
-</PROSE>
 
 <RALPH>
 Autonomous coding loop based on the [Ralph Wiggum technique](https://ghuntley.com/ralph/) by Geoff Huntley. Each iteration: reload context from disk, pick one task, execute it, test, commit on green. The loop is the outer process; the LLM decides what to work on.
@@ -4369,6 +4324,114 @@ var tools @agentTools = {
 Guards can then check `@mx.op.labels.includes("destructive")` to block or require approval for write operations. See `mcp-guards` for after-guard patterns that validate tool outputs.
 </GUARDED_TOOL_EXPORT>
 
+<PROSE>
+The `prose {}` syntax executes LLM-interpreted DSL skills. By default it uses **OpenProse**, but any custom interpreter can be configured.
+
+## What is Prose Execution?
+
+Prose execution invokes skills that an LLM interprets at runtime. Unlike `run js {}` which executes deterministically, `prose {}` sends content to an LLM with specific skills enabled. This enables complex multi-agent workflows defined in a domain-specific language.
+
+## Setup
+
+1. Install the OpenProse plugin in Claude Code:
+   ```
+   /plugin marketplace add git@github.com:openprose/prose.git
+   /plugin install open-prose@prose
+   ```
+
+2. Restart Claude Code and boot OpenProse:
+   ```
+   /prose-boot
+   ```
+
+3. Skills will prompt for approval on first use.
+
+## Basic Usage
+
+```mlld
+import { @opus } from @mlld/prose
+
+exe @research(topic) = prose:@opus {
+  session "Research @topic"
+  agent researcher { model: sonnet, skills: [web-search] }
+  researcher: find current information about @topic
+  output findings
+}
+
+run @research("quantum computing trends")
+```
+
+## Key Concepts
+
+**session** - Names the workflow for context
+
+**agent** - Defines an agent with model and skills
+
+**loop until** - Iterates with semantic exit conditions:
+```mlld
+exe @refine(draft) = prose:@opus {
+  session "Refine document"
+  loop until **the draft meets publication standards** {
+    critique @draft
+    revise based on critique
+  }
+}
+```
+
+**parallel** - Run tasks concurrently:
+```mlld
+exe @gather(topics) = prose:@opus {
+  session "Research multiple topics"
+  parallel for each topic in @topics {
+    research topic
+  }
+  combine results
+}
+```
+
+## Template Files
+
+For complex workflows, use external files:
+
+```mlld
+exe @workflow(ctx) = prose:@opus "./workflow.prose"
+exe @workflow(ctx) = prose:@opus "./workflow.prose.att"  >> ATT interpolation
+```
+
+## Custom Interpreters
+
+Use any LLM-interpreted DSL by configuring different skills:
+
+```mlld
+import { @claude } from @mlld/claude
+
+>> Create a custom model executor
+exe @myModel(prompt) = @claude(@prompt, "opus", @root)
+
+>> Configure with custom skills
+var @myDSL = {
+  model: @myModel,
+  skills: ["my-custom:boot", "my-custom:run"]
+}
+
+exe @process(data) = prose:@myDSL {
+  >> Your custom DSL syntax here
+  analyze @data
+  output result
+}
+```
+
+The skill determines how the LLM interprets the prose content. OpenProse is one implementation - you can create your own DSL skills or use other prose interpreters.
+
+## OpenProse Requirements
+
+For OpenProse specifically:
+- **Claude Code** with Opus (only model that reliably interprets OpenProse syntax)
+- **OpenProse skills** approved: `open-prose:prose-boot`, `open-prose:prose-compile`, `open-prose:prose-run`
+
+See `mlld howto exe-prose` for syntax details. OpenProse docs: https://prose.md
+</PROSE>
+
 </MLLD_PATTERNS>
 
 <MLLD_CLI>
@@ -4428,6 +4491,8 @@ var @env = @payload.env ? @payload.env : "dev"
 var @fast = @payload.fast ? @payload.fast : false
 ```
 
+**Reserved flags**: `--mlld-env` is reserved for agent environment loading. `--env` now flows through as `@payload.env`.
+
 **Script directory**: Configured in `mlld-config.json`, defaults to `llm/run/`.
 
 **Options**:
@@ -4440,6 +4505,7 @@ var @fast = @payload.fast ? @payload.fast : false
 | `--no-checkpoint` | Disable checkpoint reads/writes for this run |
 | `--resume [target]` | Invalidate checkpoint entries and re-run (see below) |
 | `--fork <script>` | Seed cache from another script's checkpoints (read-only) |
+| `--mlld-env <env>` | Load agent env file(s) or inline KEY=VALUE overrides |
 | `--<name> <value>` | Payload field |
 
 **Checkpoint/resume**: `llm`-labeled exes are automatically cached. Use `--resume` to selectively re-run:
@@ -4921,17 +4987,19 @@ var @template = 'templates/@var.html'  >> literal '@'
 show <https://raw.githubusercontent.com/org/repo/main/README.md>
 var @remote = <https://example.com/README.md>
 ```
+
+**`@root` resolution**: `@root` (alias: `@base`) resolves to the project root by walking up from the current file's directory looking for `mlld-config.json`, `mlld-lock.json`, `package.json`, `.git`, or similar project markers. Use `<@root/path>` for project-absolute paths. See `mlld howto builtins-reserved-variables` for the full resolution algorithm.
 </PATHS_URLS>
 
 <ENVIRONMENT_VARIABLES>
 Allow env vars in config, then import via `@input`.
 
-**mlld-lock.json:**
+**mlld-config.json:**
 
 ```json
 {
   "security": {
-    "allowedEnv": ["MLLD_NODE_ENV", "MLLD_API_KEY", "MLLD_GITHUB_TOKEN"]
+    "allowedEnvVars": ["MLLD_NODE_ENV", "MLLD_API_KEY", "MLLD_GITHUB_TOKEN"]
   }
 }
 ```
@@ -5619,10 +5687,13 @@ env @cfg with { profile: "readonly" } [
 
 The function is called when an `env` block spawns, with `@mx.profile` set from the `with { profile }` clause. When no profile is specified, the first profile whose requirements are satisfied by the active policy is selected. Explicit `with { profile: "name" }` overrides this automatic selection.
 
-**Compose with `with`:**
+**Compose with object spread:**
 
 ```mlld
-var @readonly = @sandbox with { fs: { read: [".:/app"], write: [] } }
+var @readonly = {
+  ...@sandbox,
+  fs: { ...@sandbox.fs, read: [".:/app"], write: [] }
+}
 ```
 
 See `env-overview` for concepts, `env-directive` for block syntax.
@@ -5753,35 +5824,38 @@ Entries are stored as `service=mlld-env-{projectname}` / `account=<name>`.
 <MLLD_SDK>
 
 <SDK>
-Four modes for SDK consumers:
+Two public functions cover all SDK use cases:
 
-**document** (default): Returns string
+**`processMlld`** — returns output as a string (simplest API)
 
 ```typescript
 const output = await processMlld(script);
 ```
 
-**structured**: Returns full result object
+**`execute`** — returns a structured result object
 
 ```typescript
-const result = await interpret(script, { mode: 'structured' });
+const result = await execute(filePath, payload);
+console.log(result.output);
 console.log(result.effects);
 console.log(result.stateWrites);
 ```
 
-**stream**: Real-time events
+**Streaming** — pass `stream: true` to get real-time events
 
 ```typescript
-const handle = interpret(script, { mode: 'stream' });
-handle.on('stream:chunk', e => process.stdout.write(e.text));
-await handle.done();
+const stream = await execute(filePath, payload, { stream: true });
+stream.on('effect', e => console.log(e));
+stream.on('stream:chunk', e => process.stdout.write(e.text));
+await stream.done();
 ```
 
-**debug**: Full trace
+The `StreamExecution` object supports `on`/`off`/`once` event subscriptions and is also an `AsyncIterable`:
 
 ```typescript
-const result = await interpret(script, { mode: 'debug' });
-console.log(result.trace);
+for await (const event of stream) {
+  console.log(event.type, event);
+}
 ```
 
 File-based execution with state management.
@@ -5827,7 +5901,8 @@ show `Conversation @conversationId, count @count`
 Write state back from mlld using the `state://` protocol:
 
 ```mlld
-output { count: 5 } to "state://count"
+var @countUpdate = { count: 5 }
+output @countUpdate to "state://count"
 output @result to "state://lastResult"
 ```
 

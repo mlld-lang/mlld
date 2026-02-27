@@ -119,7 +119,7 @@ function collectPreflightWarnings(results: AnalyzeResult[]): string[] {
   return lines;
 }
 
-function parseEnvOverrides(rawEnv: unknown): Record<string, string> {
+function parseEnvOverrides(rawEnv: unknown, flagLabel: string): Record<string, string> {
   const tokens: string[] = [];
 
   const collect = (value: unknown): void => {
@@ -136,7 +136,7 @@ function parseEnvOverrides(rawEnv: unknown): Record<string, string> {
     }
 
     if (value === true) {
-      console.error(chalk.yellow('Warning: ignoring --env without KEY=VALUE payload'));
+      console.error(chalk.yellow(`Warning: ignoring ${flagLabel} without KEY=VALUE payload`));
     }
   };
 
@@ -146,14 +146,14 @@ function parseEnvOverrides(rawEnv: unknown): Record<string, string> {
   for (const token of tokens) {
     const separator = token.indexOf('=');
     if (separator <= 0) {
-      console.error(chalk.yellow(`Warning: ignoring invalid --env entry "${token}" (expected KEY=VALUE)`));
+      console.error(chalk.yellow(`Warning: ignoring invalid ${flagLabel} entry "${token}" (expected KEY=VALUE)`));
       continue;
     }
 
     const key = token.slice(0, separator).trim();
     const value = token.slice(separator + 1).trim();
     if (!key) {
-      console.error(chalk.yellow('Warning: ignoring --env entry with empty key'));
+      console.error(chalk.yellow(`Warning: ignoring ${flagLabel} entry with empty key`));
       continue;
     }
     parsed[key] = value;
@@ -495,6 +495,7 @@ Options:
   -h, --help              Show this help message
   --timeout <duration>    Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
   --debug                 Show execution metrics (timing, cache hits, effects)
+  --mlld-env <env>        Load MLLD env file or inline KEY=VALUE overrides (reserved flag)
   --no-warn               Suppress pre-flight warning output (errors still block execution)
   --checkpoint            Backward-compatible no-op (checkpointing auto-detects llm-labeled calls)
   --new                   Start a fresh checkpoint run (alias: --fresh)
@@ -535,6 +536,7 @@ Payload:
     import { topic, count } from @payload
     show @topic    >> "foo"
     show @count    >> "5"
+  Note: --env is not reserved and will flow through as @payload.env.
 
 Creating Scripts:
   Single file:    Create llm/run/hello.mld
@@ -565,7 +567,7 @@ Creating Scripts:
         'timeout',
         'debug',
         'd',
-        'env',
+        'mlld-env',
         'no-warn',
         'noWarn',
         'inject',
@@ -588,7 +590,7 @@ Creating Scripts:
       if (flags.payload) {
         inject.push(...(Array.isArray(flags.payload) ? flags.payload : [flags.payload]));
       }
-      const envOverrides = parseEnvOverrides(flags.env);
+      const envOverrides = parseEnvOverrides(flags['mlld-env'], '--mlld-env');
       if (Object.keys(envOverrides).length > 0) {
         // Allow --inject @input=... to override flag-derived env data when explicitly provided.
         inject.unshift(`@input=${JSON.stringify(envOverrides)}`);

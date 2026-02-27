@@ -1,0 +1,133 @@
+## Triage Recommendations
+
+You are producing actionable recommendation packages from a ticket triage report for the mlld project. Each package targets a different workflow: automated agent execution, quick human decisions, and deep human thinking.
+
+## Triage Report
+
+```markdown
+@reportContent
+```
+
+## Instructions
+
+Read the triage report above carefully. Produce three recommendation packages and write them as a single markdown document.
+
+## Package 1: Agent-Ready Work
+
+Tickets that could be handed to an LLM coding agent (like Claude Code) as autonomous tasks.
+
+**Inclusion criteria:**
+- Category is "clear-task" in the triage report
+- Size is xs, s, or m (agents struggle with l/xl scope)
+- Complexity is xs, s, or m
+- Risk is xs or s (low blast radius if agent makes mistakes)
+- Well-defined scope — the ticket describes what "done" looks like
+- Does NOT require design decisions, human judgment, or UX choices
+- Does NOT require creating new architectural patterns
+
+**For each ticket, write an agent-assignable brief:**
+- **ticket-id: Title** `[size]`
+- Task: 2-3 sentence description of exactly what to do
+- Files: key files/areas to modify
+- Done when: concrete acceptance criteria
+- Watch out: any gotchas or constraints
+
+Sort by priority, then smallest-first within each priority level.
+
+End this section with:
+- Total count and estimated total effort
+- Suggested batching (which tickets could be parallelized vs sequenced)
+
+## Package 2: One-Shot Decisions
+
+Quick decisions the human needs to make. Each should take 30 seconds to 2 minutes.
+
+**Include:**
+- Closeable tickets: present the evidence, recommend close
+- Stale tickets that just need a yes/no (update or close?)
+- Simple scoping questions: "Is this still wanted?"
+- Obvious duplicate candidates
+
+**Format each as a decision card:**
+
+### [ticket-id]: One-line question?
+
+> Context (2-3 lines max from the assessment)
+
+**Recommendation:** [what you'd do and why, one sentence]
+
+Sort by confidence — most obvious decisions first (the human should build momentum).
+
+End with total count and estimated total time for the session.
+
+## Package 3: Design & Research Work
+
+Items requiring human creative thinking, architectural decisions, or investigation.
+
+**Include:**
+- "needs-design-decision" tickets from the triage
+- "needs-research" tickets from the triage
+- Any "clear-task" tickets with complexity l/xl or risk l/xl (too risky for agents)
+- Cross-cutting themes that emerged from the triage (e.g., "5 tickets relate to the security model")
+
+**For each, provide:**
+- **ticket-id: Title**
+- Core question: the design challenge or research question in one sentence
+- Why not an agent: why this requires human judgment
+- Context: relevant findings from the triage assessment
+- Suggested next step: what to do first (write a design doc, prototype, research, etc.)
+
+Sort by:
+1. Items that block agent-ready work (highest priority — unblocking these multiplies throughput)
+2. Items by priority level
+3. Items by dependency chains
+
+End with:
+- Total count
+- Which items block Package 1 work (and which Package 1 tickets they unblock)
+- Suggested order of attack
+
+## Final Summary
+
+End the document with:
+
+```
+## Summary
+
+| Package | Items | Estimated Time |
+|---------|-------|---------------|
+| Agent-Ready Work | N | ~Xh agent time |
+| One-Shot Decisions | N | ~Xmin human time |
+| Design & Research | N | varies |
+
+**Blocking chain:** [list design items that unblock the most agent work]
+**Quick win:** [the single most impactful thing to do first]
+```
+
+## Output
+
+Write TWO files to the same directory as the triage report:
+
+1. Markdown recommendations to: recommendations.md (in the same directory as report.md)
+2. JSON summary to: recommendations-done.json (in the same directory)
+
+The JSON summary:
+
+{
+  "completed_at": "[ISO timestamp]",
+  "agent_ready": {
+    "count": N,
+    "ticket_ids": ["id1", "id2"],
+    "estimated_hours": N
+  },
+  "one_shot_decisions": {
+    "count": N,
+    "ticket_ids": ["id1", "id2"],
+    "estimated_minutes": N
+  },
+  "design_work": {
+    "count": N,
+    "ticket_ids": ["id1", "id2"]
+  },
+  "blocking_design": ["ticket-ids that block agent work"]
+}

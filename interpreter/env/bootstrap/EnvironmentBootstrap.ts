@@ -1,5 +1,5 @@
 import type { PathContext } from '@core/services/PathContextService';
-import type { ResolvedURLConfig } from '@core/config/types';
+import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { Variable } from '@core/types/variable';
 import type { SecurityDescriptor } from '@core/types/security';
