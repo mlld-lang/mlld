@@ -14,12 +14,12 @@ Determine which files to audit based on these rules, in priority order:
 
 2. **`--all` flag**: If `flags.all` is true, return all `.ts` files in these directories: `cli/`, `core/`, `interpreter/`, `services/`, `sdk/`, `security/`. Exclude test files (`*.test.ts`, `*.fixture.test.ts`), generated files, and `node_modules/`.
 
-3. **`--since` flag**: If `flags.since` is set, return all `.ts` files changed since that commit. Use `git diff --name-only <commit> HEAD -- '*.ts'`. Apply the same directory and test-file filters as `--all`.
+3. **`--since` flag**: If `flags.since` is set, return all `.ts` files changed since that commit. Use `git diff --diff-filter=d --name-only <commit> HEAD -- '*.ts'` (the `--diff-filter=d` excludes deleted files). Apply the same directory and test-file filters as `--all`.
 
 4. **Default (no flags)**: Check for uncommitted changes first:
-   - Run `git diff --name-only HEAD -- '*.ts'` and `git diff --name-only --cached HEAD -- '*.ts'` to find modified/staged `.ts` files.
+   - Run `git diff --diff-filter=d --name-only HEAD -- '*.ts'` and `git diff --diff-filter=d --name-only --cached HEAD -- '*.ts'` to find modified/staged `.ts` files (excluding deleted files).
    - If there are uncommitted `.ts` files (in the allowed directories, excluding tests), use those.
-   - If there are NO uncommitted changes, check `flags.lastRunCommit`. If it exists, use `git diff --name-only <lastRunCommit> HEAD -- '*.ts'` to get all changes since the last audit.
+   - If there are NO uncommitted changes, check `flags.lastRunCommit`. If it exists, use `git diff --diff-filter=d --name-only <lastRunCommit> HEAD -- '*.ts'` to get all changes since the last audit (excluding deleted files).
    - If there's no last run commit either, fall back to `--all` behavior.
 
 ## Directory filter
@@ -51,3 +51,5 @@ Write a JSON object:
 ```
 
 Return an empty `files` array if no qualifying files are found.
+
+IMPORTANT: Every file in the `files` array must exist on disk. After assembling your list, verify with `git ls-files` and drop any paths that don't appear in the output. `git diff` includes deleted files by default — always use `--diff-filter=d` to exclude them.

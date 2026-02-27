@@ -84,7 +84,9 @@ var @scopeFullPrompt = `@scopePrompt(@flags, @lastRunCommit)
 
 IMPORTANT: Write your JSON response to @scopeOutPath using the Write tool. Write ONLY valid JSON.`
 
+show `  Resolving scope...`
 @callScope(@scopeFullPrompt, @scopeTools, @scopeOutPath)
+show `  Scope resolved.`
 var @scopeResult = <@scopeOutPath>? | @parse
 
 >> bail is an error — scope failure means we can't proceed
@@ -115,6 +117,7 @@ var @reviewResults = for parallel(@parallelism) @filePath in @filesToAudit [
   let @flatName = @filePath.replaceAll("/", "--")
   let @outPath = `@runDir/reviews/@flatName\.json`
 
+  show `  @filePath: reviewing...`
   let @prompt = @reviewPrompt(@filePath, @file, @antiSlopGuide)
   let @fullPrompt = `@prompt
 
@@ -124,12 +127,12 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
   let @result = <@outPath>? | @parse
 
   when !@result => [
-    show `  @filePath: review failed (no output)`
+    show `  @filePath: FAILED (no output)`
     => null
   ]
 
   let @count = @result.findings.length
-  show `  @filePath: @count findings`
+  show `  @filePath: done, @count findings`
   => @result
 ]
 
@@ -150,6 +153,7 @@ var @verificationResults = for parallel(@parallelism) @finding in @allFindings [
   let @flatId = @findingId.replaceAll("/", "--")
   let @outPath = `@runDir/verifications/@flatId\.json`
 
+  show `  @findingId: verifying...`
   let @sourceFile = <@root/@finding.file>?
   let @prompt = @verifyPrompt(@finding, @sourceFile, @antiSlopGuide)
   let @fullPrompt = `@prompt
@@ -160,7 +164,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
   let @result = <@outPath>? | @parse
 
   when !@result => [
-    show `  @findingId: verification failed — keeping as confirmed`
+    show `  @findingId: FAILED — keeping as confirmed`
     => { finding: @finding, verdict: "confirmed", reasoning: "verification agent produced no output" }
   ]
 
@@ -171,7 +175,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
     "needs-human" => "NEEDS HUMAN"
     * => "CONFIRMED"
   ]
-  show `  @findingId [@finding.severity]: @status`
+  show `  @findingId: @status`
   => @result
 ]
 
