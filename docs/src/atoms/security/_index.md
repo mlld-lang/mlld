@@ -8,6 +8,11 @@ updated: 2026-02-15
 
 mlld's security model prevents the consequences of prompt injection from manifesting. LLMs can be tricked — but labels track facts about data that the runtime enforces regardless of LLM intent.
 
+Most detailed security atoms now live in:
+- `effects` (labels, guards, hooks)
+- `config` (policy and environment configuration)
+- `security` (signing, MCP, patterns, audit)
+
 ## Decision Tree
 
 **"I want to..."**
@@ -41,7 +46,7 @@ Labels propagate through all transformations — template interpolation, method 
 - `.mx.taint` — union of all labels plus source markers (the full provenance picture)
 - `.mx.sources` — transformation trail (`mcp:createIssue`, `command:curl`)
 
-**Atoms:** `labels-overview` (start here), `labels-sensitivity`, `labels-trust`, `labels-influenced`, `labels-source-auto`, `automatic-labels`, `label-tracking`, `label-modification`
+**Atoms:** `labels-overview` (start here), `labels-sensitivity`, `labels-trust`, `labels-influenced`, `labels-source-auto`, `security-automatic-labels`, `security-label-tracking`, `label-modification`
 
 ## Guards
 
@@ -82,7 +87,7 @@ Guards are regular module exports — they can be imported, composed, and bundle
 
 **Checkpoint interaction**: Cache hits bypass guard evaluation. After changing guard or policy rules, use `--fresh` to rebuild the cache.
 
-**Atoms:** `guards-basics` (start here), `guard-composition`, `guards-privileged`, `transform-with-allow`, `denied-handlers`
+**Atoms:** `security-guards-basics` (start here), `security-guard-composition`, `guards-privileged`, `security-transform-with-allow`, `security-denied-handlers`
 
 ## Policies
 
@@ -116,7 +121,7 @@ policy @p = {
 
 **Policy vs. guards:** Policy denials are hard errors — immediate, uncatchable. Guard denials can be handled with `denied =>` handlers for graceful fallback. Use policy for absolute constraints; use guards when you need inspection, transformation, or recovery logic.
 
-**Atoms:** `policies` (start here), `policy-capabilities`, `policy-operations`, `policy-label-flow`, `policy-composition`, `policy-auth`
+**Atoms:** `security-policies` (start here), `policy-capabilities`, `policy-operations`, `policy-label-flow`, `policy-composition`, `policy-auth`
 
 ## Signing
 
@@ -124,7 +129,7 @@ Cryptographic signing defends against prompt injection by letting auditor LLMs v
 
 **Flow:** sign templates (with placeholders intact) → pass to LLM exe → LLM calls `mlld verify` → confirms instructions are authentic.
 
-**Automation:** Policy `autosign: ["templates"]` signs `::` templates on creation. `autoverify: true` injects verification instructions and `MLLD_VERIFY_VARS` into `exe llm` calls. Pair with an enforcement guard to require verification.
+**Automation:** Policy `autosign: ["instructions"]` signs instruction templates on creation. `autoverify: true` injects verification instructions and `MLLD_VERIFY_VARS` into `exe llm` calls. Pair with an enforcement guard to require verification.
 
 **Atoms:** `signing-overview` (start here), `sign-verify`, `autosign-autoverify`
 
@@ -153,7 +158,7 @@ Environments encapsulate execution contexts with credentials, isolation, tool re
 
 `needs` declares what a module requires (commands, runtimes, packages) but does not authorize anything. It validates that the environment can satisfy the module before execution. Security enforcement comes from `policy` and `guard`.
 
-**Atoms:** `needs-declaration`
+**Atoms:** `security-needs-declaration`
 
 ## Audit Logging
 
@@ -179,11 +184,11 @@ Composite patterns that combine multiple security primitives:
 3. `labels-trust` — trusted vs untrusted, sticky asymmetry
 4. `labels-influenced` — tracking LLM exposure to tainted data
 5. `labels-source-auto` — automatic provenance tracking
-6. `policies` — declaring policy objects
+6. `security-policies` — declaring policy objects
 7. `policy-operations` — semantic labels → risk categories
 8. `policy-label-flow` — deny/allow rules for data flow (includes hierarchical op:* matching)
-9. `guards-basics` — guard syntax, timing, triggers, and security context
-11. `signing-overview` → `sign-verify` → `autosign-autoverify`
-12. `mcp-security` → `mcp-policy` → `mcp-guards`
-13. `env-overview` → `env-config` → `env-blocks`
-14. `pattern-audit-guard` → `pattern-dual-audit`
+9. `security-guards-basics` — guard syntax, timing, triggers, and security context
+10. `signing-overview` → `sign-verify` → `autosign-autoverify`
+11. `mcp-security` → `mcp-policy` → `mcp-guards`
+12. `env-overview` → `env-config` → `env-blocks`
+13. `pattern-audit-guard` → `pattern-dual-audit`

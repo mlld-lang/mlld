@@ -10,7 +10,7 @@ import { jsonToXml } from '@interpreter/utils/json-to-xml';
 export interface FormatOptions {
   format: 'markdown' | 'xml';
   variables?: Map<string, Variable>;
-  useMarkdownFormatter?: boolean; // Default: true - use prettier for formatting
+  useMarkdownFormatter?: boolean; // Default: true - apply markdown normalization
   normalizeBlankLines?: boolean; // Default: true - normalize blank lines
 }
 

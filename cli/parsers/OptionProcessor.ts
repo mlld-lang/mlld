@@ -37,7 +37,7 @@ export class OptionProcessor {
       riskyApproveAll: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       // Blank line normalization
       noNormalizeBlankLines: cliOptions.noNormalizeBlankLines,
-      // Disable prettier formatting
+      // Disable markdown output normalization
       noFormat: cliOptions.noFormat,
       // Error capture for pattern development
       captureErrors: cliOptions.captureErrors,

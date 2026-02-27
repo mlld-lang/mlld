@@ -11,7 +11,7 @@ import { normalizeOutput } from './normalizer';
  *
  * This enables:
  * - Automatic blank line normalization (fixes #396)
- * - Clean separation from Prettier (fixes #281)
+ * - Clean separation from legacy formatter dependencies (fixes #281)
  * - Foundation for streaming format adapters
  */
 export class OutputRenderer {

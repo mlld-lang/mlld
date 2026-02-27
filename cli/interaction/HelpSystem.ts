@@ -584,7 +584,7 @@ Options:
   --stdout                Print to stdout instead of file
   --strict                Enable strict mode (fail on all errors)
   --permissive            Enable permissive mode (ignore recoverable errors) [default]
-  --pretty                Format the output with Prettier
+  --pretty                Enable markdown output formatting (legacy alias)
     --home-path <path>      Custom home path for ~/ substitution
   -v, --verbose           Enable verbose output (some additional info)
   -d, --debug             Stream execution with progress logs to stderr
@@ -623,7 +623,7 @@ Import Approval Options:
 
 Output Formatting Options:
   --no-normalize-blank-lines  Disable blank line normalization in output
-  --no-format                 Disable prettier markdown formatting (preserve original spacing)
+  --no-format                 Disable markdown output normalization (preserve original spacing)
 
 Security Options:
   --allow-absolute            Allow absolute paths outside project root (use with caution!)

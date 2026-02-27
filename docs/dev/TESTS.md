@@ -342,13 +342,13 @@ The main test runner is in `interpreter/interpreter.fixture.test.ts`. It:
 
 ### Output Formatting in Tests
 
-**Important**: The test runner disables prettier markdown formatting (`useMarkdownFormatter: false`) to ensure exact output matching. This means:
+**Important**: The test runner disables markdown output normalization (`useMarkdownFormatter: false`) to ensure exact output matching. This means:
 
-- Expected output files don't have prettier's automatic formatting (e.g., blank lines before headers)
-- Tests verify the raw mlld output, not the prettified version
-- This makes tests more stable and independent of prettier's formatting rules
+- Expected output files don't include automatic normalization adjustments (for example, blank lines before headers)
+- Tests verify raw mlld output, not normalized output
+- This keeps tests stable and independent of formatter behavior
 
-In production use, mlld applies prettier formatting by default, which adds proper spacing, normalizes line breaks, and ensures consistent markdown formatting. Users can disable this with the `--no-format` flag.
+In production use, mlld normalizes markdown output by default. Users can disable this with the `--no-format` flag.
 
 ### Environment Setup
 

@@ -58,7 +58,7 @@ export interface CLIOptions {
   custom?: boolean; // Flag for custom filesystem in tests
   debugSourceMaps?: boolean; // Flag to display source mapping information
   detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
-  pretty?: boolean; // Flag to enable Prettier formatting
+  pretty?: boolean; // Legacy alias for markdown output formatting
   // URL support options
   allowUrls?: boolean;
   urlTimeout?: number;
@@ -80,7 +80,7 @@ export interface CLIOptions {
   y?: boolean;
   // Blank line normalization
   noNormalizeBlankLines?: boolean;
-  // Disable prettier formatting
+  // Disable markdown output normalization
   noFormat?: boolean;
   // Error capture for pattern development
   captureErrors?: boolean;
@@ -344,9 +344,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       process.exit(0);
     }
     
-    // Force exit if not in stdout mode but cleanup is complete
-    // This is a workaround for a Prettier v3 bug where the process doesn't exit naturally
-    // after formatting markdown content. The issue persists in v3.6.2.
+    // Force exit if not in stdout mode but cleanup is complete.
+    // Some runtime handles may remain open after execution.
     cliLogger.debug('Forcing process exit after cleanup');
     await new Promise(resolve => setTimeout(resolve, 50));
     process.exit(0);

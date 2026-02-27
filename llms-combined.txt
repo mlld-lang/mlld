@@ -5687,10 +5687,13 @@ env @cfg with { profile: "readonly" } [
 
 The function is called when an `env` block spawns, with `@mx.profile` set from the `with { profile }` clause. When no profile is specified, the first profile whose requirements are satisfied by the active policy is selected. Explicit `with { profile: "name" }` overrides this automatic selection.
 
-**Compose with `with`:**
+**Compose with object spread:**
 
 ```mlld
-var @readonly = @sandbox with { fs: { read: [".:/app"], write: [] } }
+var @readonly = {
+  ...@sandbox,
+  fs: { ...@sandbox.fs, read: [".:/app"], write: [] }
+}
 ```
 
 See `env-overview` for concepts, `env-directive` for block syntax.

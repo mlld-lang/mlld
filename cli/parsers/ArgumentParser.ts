@@ -228,7 +228,7 @@ export class ArgumentParser {
         case '--no-normalize-blank-lines':
           options.noNormalizeBlankLines = true;
           break;
-        // Disable prettier formatting
+        // Disable markdown output normalization
         case '--no-format':
           options.noFormat = true;
           break;

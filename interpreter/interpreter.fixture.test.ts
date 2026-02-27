@@ -1396,7 +1396,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               // Avoid real filesystem writes and locks
               ephemeral: true,
               effectHandler,
-              useMarkdownFormatter: false, // Disable prettier for tests
+              useMarkdownFormatter: false, // Disable markdown normalization for exact fixture assertions
               // Allow absolute paths for absolute path test
               allowAbsolutePaths: fixture.name.endsWith('/assignment-absolute')
             });
