@@ -1,0 +1,127 @@
+## Ticket Triage Synthesis
+
+You are producing a human-readable triage report for the mlld project's open tickets.
+
+## Input
+
+**Assessment directory**: @assessmentDir
+**Total tickets assessed**: @ticketCount
+
+### Recent CHANGELOG (for reference)
+
+```markdown
+@changelog
+```
+
+## Instructions
+
+1. Use the Glob tool to list all `.json` files in `@assessmentDir`
+2. Use the Read tool to read each assessment file
+3. Organize the assessments into the report structure below
+4. Write the report and summary files
+
+## Report Structure
+
+Write a markdown report with these exact sections:
+
+```
+# Ticket Triage Report
+
+> Generated: [date] | Tickets assessed: [N]
+
+## Summary
+
+Quick stats table:
+| Category | Count | Description |
+|----------|-------|-------------|
+
+Breakdown by recommended action.
+Aggregate scope distribution (how many xs/s/m/l/xl).
+
+## Closeable Tickets
+
+Tickets where category is "closeable". Sub-group by reason:
+
+### Already Implemented
+For each: **ticket-id: Title** — evidence of implementation (CHANGELOG entry, file path, etc.)
+
+### Obsolete / Superseded
+For each: **ticket-id: Title** — what changed that makes this obsolete
+
+### Duplicates
+For each: **ticket-id: Title** — what it duplicates
+
+## Stale Tickets
+
+Tickets where category is "stale". For each:
+- **ticket-id: Title** — what's changed since it was filed
+- Recommendation: update description, re-scope, or close
+
+## Clear Tasks (Ready to Work)
+
+Tickets where category is "clear-task", sorted by priority then size (smallest first). For each:
+- **ticket-id: Title** `[size]` `[complexity]` `[risk]`
+- Brief description of what needs to be done
+
+## Needs Research
+
+Tickets where category is "needs-research". For each:
+- **ticket-id: Title**
+- What needs to be investigated and why
+
+## Needs Design Decision
+
+Tickets where category is "needs-design-decision". For each:
+- **ticket-id: Title**
+- The design question that needs answering
+- Key trade-offs if apparent
+
+## Scope Overview
+
+| Size | Count | Example Tickets |
+|------|-------|----------------|
+| xs   | N     | ticket-1, ...  |
+| s    | N     | ticket-1, ...  |
+| m    | N     | ticket-1, ...  |
+| l    | N     | ticket-1, ...  |
+| xl   | N     | ticket-1, ...  |
+```
+
+## Quality Guidelines
+
+- Be concise: 2-3 lines max per ticket entry
+- Use the assessment's `summary` and `priority_context` but rewrite for human readability
+- Group related tickets within sections when they share a theme (e.g., "Security design tickets", "Docs gaps")
+- The report should be immediately actionable — a reader should finish knowing what to do next
+- Don't editorialize beyond what the assessments say
+
+## Output
+
+Write TWO files:
+
+1. The markdown report to: @assessmentDir/../report.md
+2. A JSON summary to: @assessmentDir/../synthesis-done.json
+
+The JSON summary structure:
+
+{
+  "completed_at": "[ISO timestamp]",
+  "total_assessed": N,
+  "by_category": {
+    "closeable": N,
+    "stale": N,
+    "clear-task": N,
+    "needs-research": N,
+    "needs-design-decision": N
+  },
+  "by_action": {
+    "close": N,
+    "update": N,
+    "implement": N,
+    "research": N,
+    "design-review": N
+  },
+  "by_size": {
+    "xs": N, "s": N, "m": N, "l": N, "xl": N
+  }
+}

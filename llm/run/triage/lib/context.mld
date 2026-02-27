@@ -1,0 +1,73 @@
+>> Triage Context Helpers
+>> Ticket loading, CHANGELOG, commits, and run directory management
+
+/needs { sh }
+
+>> Parse tk ls text output into array of { id, title } objects
+exe @parseTkLs(raw) = js {
+  return raw.split('\n').filter(Boolean).map(line => {
+    const m = line.match(/^(\S+)\s+\[.*?\]\s+-\s+(.+)$/);
+    return m ? { id: m[1], title: m[2].trim() } : null;
+  }).filter(Boolean);
+}
+
+>> Load all open tickets as an array of { id, title } objects
+exe @loadOpenTickets() = [
+  let @raw = sh { tk ls --status=open 2>/dev/null }
+  let @trimmed = @raw.trim()
+  when !@trimmed => []
+  => @parseTkLs(@trimmed)
+]
+
+>> Load full ticket content by ID
+exe @loadTicketContent(id, dir) = [
+  let @ext = ".md"
+  let @topPath = `@base/.tickets/@id@ext`
+  let @topContent = <@topPath>?
+  when @topContent => @topContent
+  when @dir => [
+    let @subPath = `@base/.tickets/@dir/@id@ext`
+    => <@subPath>?
+  ]
+  => null
+]
+
+>> Load first 300 lines of CHANGELOG.md
+exe @loadChangelog(path) = sh { head -300 "$path" 2>/dev/null }
+
+>> Load recent git commits (last 90 days)
+exe @loadRecentCommits() = sh { git log --oneline --since="90 days ago" --no-decorate 2>/dev/null | head -150 }
+
+>> Create directory and parents
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+
+>> Resolve output run directory
+>> Resumes incomplete runs (no done.marker) unless forceNew
+exe @resolveRunDir(root, name, forceNew, today) = sh {
+  prefix="${name}-${today}"
+
+  if [ -z "$forceNew" ] || [ "$forceNew" = "false" ]; then
+    for dir in $(ls -1d "${root}"/${prefix}-* 2>/dev/null | sort -r); do
+      if [ -d "$dir" ] && [ ! -f "$dir/done.marker" ]; then
+        echo "$dir"
+        exit 0
+      fi
+    done
+  fi
+
+  n=0
+  while [ -d "${root}/${prefix}-${n}" ]; do
+    n=$((n + 1))
+  done
+  echo "${root}/${prefix}-${n}"
+}
+
+/export {
+  @parseTkLs,
+  @loadOpenTickets,
+  @loadTicketContent,
+  @loadChangelog,
+  @loadRecentCommits,
+  @mkdirp,
+  @resolveRunDir
+}
