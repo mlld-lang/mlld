@@ -19,7 +19,8 @@ import "@payload" as @p
 >> Config
 var @parallelism = @p.parallel ? @p.parallel * 1 : 20
 var @today = cmd { date -u +%Y-%m-%d }
-var @runId = `slop-audit-@today`
+var @nextN = sh { n=0; while [ -d "$ROOT/llm/output/slop-audit-$today-$n" ]; do n=$((n+1)); done; echo $n }
+var @runId = `slop-audit-@today-@nextN`
 var @runDir = `@root/llm/output/@runId`
 
 >> Create run directory
