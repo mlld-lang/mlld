@@ -71,6 +71,7 @@ export type PolicyConfig = {
   keychain?: PolicyKeychainConfig;
   allow?: Record<string, PolicyCapabilityValue> | string[] | true;
   deny?: Record<string, PolicyCapabilityValue> | string[] | true;
+  deny_cmd?: string[] | string;
   danger?: string[] | string;
   capabilities?: PolicyCapabilitiesConfig;
   labels?: PolicyLabels;
@@ -170,6 +171,10 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   }
   if (config.deny !== undefined) {
     denySources.push(config.deny);
+  }
+  const denyCmd = normalizeDenyCommandList(config.deny_cmd);
+  if (denyCmd !== undefined) {
+    denySources.push(denyCmd);
   }
   if (config.capabilities?.deny !== undefined) {
     denySources.push(config.capabilities.deny);
@@ -408,6 +413,25 @@ function normalizeStringList(value: unknown): string[] | undefined {
     return normalized ? [normalized] : [];
   }
   return undefined;
+}
+
+function normalizeDenyCommandList(value: unknown): string[] | undefined {
+  const entries = normalizeStringList(value);
+  if (entries === undefined) {
+    return undefined;
+  }
+  const normalized = entries
+    .map(entry => {
+      const raw = entry.trim();
+      if (!raw) {
+        return '';
+      }
+      const prefixed = /^(?:op:cmd:|cmd:)/i.test(raw) ? raw : `cmd:${raw}`;
+      const pattern = normalizeCommandPatternEntry(prefixed);
+      return pattern ? `cmd:${pattern}` : '';
+    })
+    .filter(entry => entry.length > 0);
+  return normalized.length > 0 ? Array.from(new Set(normalized)) : [];
 }
 
 function normalizeFilesystemRules(value: unknown): PolicyFilesystemRules | undefined {

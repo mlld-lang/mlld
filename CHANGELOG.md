@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expression parsing now supports builtin method calls directly on array literals (for example `[1, 2, 3].join("-")`).
 - AST-aware JSON serialization now preserves interpolated wrapped-string content instead of returning empty strings.
 - Markdown chunk parsing now ignores prose `::` text on non-directive lines, preventing false template-fence state during validation/tokenization.
+- Policy config now supports `deny_cmd` shorthand (for example `deny_cmd: ["npm:run:*"]`) and merges it into command deny rules.
+- Command deny patterns are now enforced for `sh`/`bash` code blocks before execution, so denied commands (for example `cmd:npm:run:*`) cannot bypass policy through shell blocks.
+- Direct `=> @toolCall()` returns inside `env with { tools: ... }` blocks now preserve tool-collection label taint, matching the existing `let`-binding behavior.
 - Streaming declared on executable definitions now propagates correctly through `run @exe(...)` and `show @exe(...)`; adapter pipelines activate even when invocation-level `stream` is omitted.
 - Executable-definition `streamFormat` is now respected across invocations, and invocation-level `streamFormat` correctly takes precedence when both are present.
 - `show` streaming invocations no longer double-emit output when executable-definition streaming is active.

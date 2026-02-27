@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateCommandAccess } from './guards';
+import { evaluateCommandAccess, findDeniedShellCommand } from './guards';
 import type { PolicyConfig } from './union';
 
 describe('evaluateCommandAccess', () => {
@@ -103,6 +103,35 @@ describe('evaluateCommandAccess', () => {
 
     const allowed = evaluateCommandAccess(policy, 'git push origin --force');
     expect(allowed.allowed).toBe(true);
+  });
+
+  it('finds denied command patterns inside shell blocks', () => {
+    const policy: PolicyConfig = {
+      deny: ['cmd:npm:run:*']
+    };
+
+    const denied = findDeniedShellCommand(policy, 'echo ok\nnpm run malicious-script\n');
+    expect(denied).not.toBeNull();
+    expect(denied?.commandName).toBe('npm');
+    expect(denied?.commandText).toBe('npm run malicious-script');
+  });
+
+  it('supports deny_cmd shorthand when scanning shell blocks', () => {
+    const policy: PolicyConfig = {
+      deny_cmd: ['npm:run:*']
+    };
+
+    const denied = findDeniedShellCommand(policy, 'npm run malicious-script');
+    expect(denied?.commandName).toBe('npm');
+  });
+
+  it('returns null when no denied shell commands are present', () => {
+    const policy: PolicyConfig = {
+      deny: ['cmd:git:*']
+    };
+
+    const denied = findDeniedShellCommand(policy, 'echo safe\nnpm run build');
+    expect(denied).toBeNull();
   });
 
   describe('deny: ["sh"] blocks all shells and wrapper bypasses', () => {
