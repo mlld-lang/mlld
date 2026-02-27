@@ -125,6 +125,7 @@ UnifiedAtomicExpression
   / ForeachCommandExpression       // Treat foreach as atomic expression
   / NewExpression                  // new @Class(...) constructor expression
   / UnifiedArrayOperation
+  / ArrayLiteralMethodCall
   / ExecResultMethodCall   // Support @func(args).method(args) in expressions
   / AlligatorWithFields    // File with field access: <path>.field - must come before bare AlligatorExpression
   / AlligatorExpression    // File/URL loading: <path> - enables <file> ?? default
@@ -246,6 +247,22 @@ ExecResultMethodCallNoTail
 
       const exec = helpers.createExecInvocation(methodRef, null, location());
       return helpers.attachPostFields(exec, post);
+    }
+
+ArrayLiteralMethodCall
+  = streamPrefix:StreamKeyword? _ base:ArrayLiteral _ "." method:BaseIdentifier "(" margs:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
+      const methodRef = {
+        name: method,
+        identifier: [helpers.createNode(NodeType.Text, { content: method, location: location() })],
+        args: margs || [],
+        isCommandReference: true,
+        objectSource: base
+      };
+
+      const finalTail = streamPrefix ? (tail ? { ...tail, stream: true } : { stream: true }) : tail;
+      const exec = helpers.createExecInvocation(methodRef, null, location());
+      const execWithPost = helpers.attachPostFields(exec, post);
+      return finalTail ? helpers.applyTail(execWithPost, finalTail) : execWithPost;
     }
 
 // Array operations for advanced filtering and manipulation

@@ -235,6 +235,18 @@ some random text`;
     expect(chunks).toHaveLength(1);
   });
 
+  it('ignores :: prose text when splitting markdown chunks', () => {
+    const text = `/var @a = 1
+
+This prose mentions :: delimiters but is not a template.
+
+/var @b = 2`;
+    const chunks = splitIntoChunks(text, 'markdown');
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0].text).toContain('/var @a = 1');
+    expect(chunks[1].text).toContain('/var @b = 2');
+  });
+
   it('startColumn is always 0 for top-level chunks', () => {
     const text = `/var @a = 1
 

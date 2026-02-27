@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signing now writes `signed:<var>` provenance labels; composed instruction variables inherit signed provenance for cascading verification targets.
 
 ### Fixed
+- `format: "xml"` output now applies XML conversion in the main document-render path instead of silently returning markdown/plain text.
+- `/output` and `/append` now reject paths that resolve to `[object Object]` to prevent accidental writes to invalid filenames.
+- `mlld validate --format json` now populates `needs.cmd` with detected command names (from `/needs` declarations and shell command analysis), not just empty arrays.
+- `@now` resolver import context now honors custom format-string imports (for example `YYYY-MM-DD`, `HH:mm:ss`) instead of always returning ISO.
+- Expression parsing now supports builtin method calls directly on array literals (for example `[1, 2, 3].join("-")`).
+- AST-aware JSON serialization now preserves interpolated wrapped-string content instead of returning empty strings.
+- Markdown chunk parsing now ignores prose `::` text on non-directive lines, preventing false template-fence state during validation/tokenization.
 - Streaming declared on executable definitions now propagates correctly through `run @exe(...)` and `show @exe(...)`; adapter pipelines activate even when invocation-level `stream` is omitted.
 - Executable-definition `streamFormat` is now respected across invocations, and invocation-level `streamFormat` correctly takes precedence when both are present.
 - `show` streaming invocations no longer double-emit output when executable-definition streaming is active.

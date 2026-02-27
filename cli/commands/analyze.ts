@@ -1473,6 +1473,75 @@ function extractGuards(ast: MlldNode[]): GuardInfo[] {
  */
 function extractNeeds(content: string, ast: MlldNode[]): NeedsInfo | undefined {
   const needs: NeedsInfo = {};
+  const commandNeeds = new Set<string>();
+
+  const addCommandNeed = (commandName: unknown): void => {
+    if (typeof commandName !== 'string') {
+      return;
+    }
+    const normalized = commandName.trim();
+    if (!normalized) {
+      return;
+    }
+    needs.cmd = needs.cmd || [];
+    commandNeeds.add(normalized);
+  };
+
+  const addCommandNeedsFromValue = (value: unknown): void => {
+    if (!value) {
+      return;
+    }
+
+    if (typeof value === 'string') {
+      addCommandNeed(value);
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        addCommandNeed(entry);
+      }
+      return;
+    }
+
+    if (typeof value !== 'object') {
+      return;
+    }
+
+    const record = value as Record<string, unknown>;
+    if (Array.isArray(record.__commands)) {
+      for (const command of record.__commands) {
+        addCommandNeed(command);
+      }
+    }
+
+    const cmdValue = record.cmd;
+    if (!cmdValue || typeof cmdValue !== 'object') {
+      return;
+    }
+
+    const cmdRecord = cmdValue as Record<string, unknown>;
+    if (cmdRecord.type === 'list' && Array.isArray(cmdRecord.items)) {
+      for (const command of cmdRecord.items) {
+        addCommandNeed(command);
+      }
+      return;
+    }
+
+    if (cmdRecord.type === 'map' && cmdRecord.entries && typeof cmdRecord.entries === 'object') {
+      for (const command of Object.keys(cmdRecord.entries as Record<string, unknown>)) {
+        addCommandNeed(command);
+      }
+      return;
+    }
+
+    if (Array.isArray(cmdRecord.list)) {
+      for (const command of cmdRecord.list) {
+        addCommandNeed(command);
+      }
+    }
+  };
+
   const addNeed = (need: string): void => {
     const normalized = need.toLowerCase();
     if (normalized === 'sh' || normalized === 'cmd' || normalized === 'bash' || normalized === 'shell') {
@@ -1496,6 +1565,8 @@ function extractNeeds(content: string, ast: MlldNode[]): NeedsInfo | undefined {
         for (const need of needsArray) {
           if (typeof need === 'string') {
             addNeed(need);
+          } else {
+            addCommandNeedsFromValue(need);
           }
         }
       }
@@ -1522,6 +1593,7 @@ function extractNeeds(content: string, ast: MlldNode[]): NeedsInfo | undefined {
       || needsRecord.bash === true
       || (Array.isArray(needsRecord.__commands) && needsRecord.__commands.length > 0)) {
       needs.cmd = needs.cmd || [];
+      addCommandNeedsFromValue(needsRecord);
     }
     if (needsRecord.node !== undefined || needsRecord.js !== undefined) {
       needs.node = needs.node || [];
@@ -1534,9 +1606,17 @@ function extractNeeds(content: string, ast: MlldNode[]): NeedsInfo | undefined {
   // Also detect from AST
   const detector = new DependencyDetector();
   const runtimeNeeds = detector.detectRuntimeNeeds(ast);
+  const detectedCommands = detector.detectShellCommands(ast);
 
   for (const need of runtimeNeeds) {
     addNeed(need);
+  }
+  for (const command of detectedCommands) {
+    addCommandNeed(command);
+  }
+
+  if (needs.cmd) {
+    needs.cmd = Array.from(commandNeeds).sort();
   }
 
   // Return undefined if no needs detected

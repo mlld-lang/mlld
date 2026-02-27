@@ -74,8 +74,8 @@ export class NowResolver implements Resolver {
           } else if (importName === 'time') {
             exports[importName] = currentTime.toTimeString().split(' ')[0];
           } else {
-            // For custom format strings, just return ISO for now
-            exports[importName] = currentTime.toISOString();
+            const customFormat = this.formatCustomDate(currentTime, importName);
+            exports[importName] = customFormat ?? currentTime.toISOString();
           }
         }
       }
@@ -126,5 +126,43 @@ export class NowResolver implements Resolver {
   getDefaultValue(): string {
     const currentTime = this.getMockedTime() || new Date();
     return currentTime.toISOString();
+  }
+
+  private formatCustomDate(date: Date, pattern: string): string | null {
+    if (typeof pattern !== 'string' || pattern.trim().length === 0) {
+      return null;
+    }
+
+    const recognizedTokenPattern = /(YYYY|YY|MM|M|DD|D|HH|H|mm|m|ss|s|SSS)/;
+    if (!recognizedTokenPattern.test(pattern)) {
+      return null;
+    }
+
+    const pad = (value: number, width = 2): string => value.toString().padStart(width, '0');
+    const utcYear = date.getUTCFullYear();
+    const utcMonth = date.getUTCMonth() + 1;
+    const utcDay = date.getUTCDate();
+    const utcHour = date.getUTCHours();
+    const utcMinute = date.getUTCMinutes();
+    const utcSecond = date.getUTCSeconds();
+    const utcMillis = date.getUTCMilliseconds();
+
+    const replacements: Record<string, string> = {
+      YYYY: String(utcYear),
+      YY: String(utcYear).slice(-2),
+      MM: pad(utcMonth),
+      M: String(utcMonth),
+      DD: pad(utcDay),
+      D: String(utcDay),
+      HH: pad(utcHour),
+      H: String(utcHour),
+      mm: pad(utcMinute),
+      m: String(utcMinute),
+      ss: pad(utcSecond),
+      s: String(utcSecond),
+      SSS: pad(utcMillis, 3)
+    };
+
+    return pattern.replace(/YYYY|YY|MM|M|DD|D|HH|H|mm|m|ss|s|SSS/g, token => replacements[token]);
   }
 }

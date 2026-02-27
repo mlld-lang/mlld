@@ -426,7 +426,7 @@ type BuiltinObjectReference = {
 
 type BuiltinCommandRefWithObject = {
   objectReference?: BuiltinObjectReference;
-  objectSource?: ExecInvocation;
+  objectSource?: unknown;
 };
 
 type BuiltinObjectResolution = {
@@ -441,7 +441,7 @@ export async function resolveBuiltinInvocationObject(options: {
   env: Environment;
   normalizeFields: (fields?: Array<{ type: string; value: any }>) => Array<{ type: string; value: any }>;
   resolveVariableIndexValue: (fieldValue: unknown, env: Environment) => Promise<unknown>;
-  // Recursion seam: objectSource points back to an ExecInvocation.
+  // Recursion seam: objectSource may point back to an ExecInvocation.
   evaluateExecInvocationNode: (node: ExecInvocation, env: Environment) => Promise<EvalResult>;
 }): Promise<
   { kind: 'type-check-fallback'; result: boolean } | { kind: 'resolved'; value: BuiltinObjectResolution }
@@ -519,15 +519,22 @@ export async function resolveBuiltinInvocationObject(options: {
       }
     }
   } else if (commandRefWithObject.objectSource) {
-    const srcResult = await evaluateExecInvocationNode(commandRefWithObject.objectSource, env);
-    if (srcResult && typeof srcResult === 'object') {
-      sourceDescriptor = extractSecurityDescriptor(srcResult.value);
-      if (srcResult.value !== undefined) {
-        const { resolveValue, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
-        objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Display);
-      } else if (typeof srcResult.stdout === 'string') {
-        objectValue = srcResult.stdout;
+    const objectSource = commandRefWithObject.objectSource as any;
+    if (objectSource?.type === 'ExecInvocation') {
+      const srcResult = await evaluateExecInvocationNode(objectSource, env);
+      if (srcResult && typeof srcResult === 'object') {
+        sourceDescriptor = extractSecurityDescriptor(srcResult.value);
+        if (srcResult.value !== undefined) {
+          const { resolveValue, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+          objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Display);
+        } else if (typeof srcResult.stdout === 'string') {
+          objectValue = srcResult.stdout;
+        }
       }
+    } else {
+      const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
+      objectValue = await evaluateDataValue(objectSource, env);
+      sourceDescriptor = extractSecurityDescriptor(objectValue, { recursive: true });
     }
   }
 

@@ -58,4 +58,20 @@ describe('formatForDisplay', () => {
     const rendered = formatForDisplay(payload, { pretty: false });
     expect(rendered).toBe(JSON.stringify({ stance }));
   });
+
+  it('serializes interpolated wrapped strings instead of returning empty text', () => {
+    const value = {
+      message: {
+        wrapperType: 'doubleColon',
+        content: [
+          { type: 'Text', content: 'Hello ' },
+          { type: 'VariableReference', identifier: 'name' },
+          { type: 'Text', content: '!' }
+        ]
+      }
+    };
+
+    const rendered = JSONFormatter.stringify(value, { pretty: false });
+    expect(rendered).toBe(JSON.stringify({ message: 'Hello @name!' }));
+  });
 });

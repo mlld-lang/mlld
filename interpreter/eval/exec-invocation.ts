@@ -476,7 +476,7 @@ async function evaluateExecInvocationInternal(
   // Check if this is a field access exec invocation (e.g., @obj.method())
   // or a method call on an exec result (e.g., @func(args).method())
   let variable;
-  const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: ExecInvocation };
+  const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: unknown };
   if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
     let namespaceMethodPreferred = false;
     if (commandRefWithObject.objectReference) {

@@ -160,14 +160,7 @@ async function resolveAppendPath(
   if (merged) {
     env.recordSecurityDescriptor(merged);
   }
-  let resolvedPath = String(interpolated);
-
-  if (!resolvedPath) {
-    throw new MlldDirectiveError(
-      'Append target path cannot be empty',
-      'append'
-    );
-  }
+  let resolvedPath = normalizeAppendTargetPath(interpolated);
 
   if (resolvedPath.startsWith('@base/') || resolvedPath.startsWith('@root/')) {
     const projectRoot = env.getProjectRoot();
@@ -181,6 +174,33 @@ async function resolveAppendPath(
   }
 
   return resolvedPath;
+}
+
+function normalizeAppendTargetPath(rawPath: unknown): string {
+  const resolvedPath = String(rawPath ?? '');
+  if (!resolvedPath) {
+    throw new MlldDirectiveError(
+      'Append target path cannot be empty',
+      'append'
+    );
+  }
+
+  if (isObjectPlaceholderPath(resolvedPath)) {
+    throw new MlldDirectiveError(
+      'Append target path resolved to [object Object]. Ensure path interpolation resolves to a string value.',
+      'append'
+    );
+  }
+
+  return resolvedPath;
+}
+
+function isObjectPlaceholderPath(targetPath: string): boolean {
+  if (!targetPath.includes('[object Object]')) {
+    return false;
+  }
+  const segments = targetPath.split(/[\\/]/).filter(Boolean);
+  return segments.some(segment => segment === '[object Object]');
 }
 
 function formatAppendPayload(

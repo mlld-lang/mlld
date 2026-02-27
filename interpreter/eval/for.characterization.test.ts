@@ -495,6 +495,27 @@ describe('for evaluator characterization', () => {
     expect(lines).toEqual(['a', 'b']);
   });
 
+  it('does not leak append action output from for-arrow iterations to stdout', async () => {
+    const { output } = await interpretWithOutputAndEnv(`
+/var @records = [
+  {"id": 1, "status": "ok"},
+  {"id": 2, "status": "retry"}
+]
+/for @record in @records => append @record to "jobs.jsonl"
+/show <jobs.jsonl>
+`);
+
+    const lines = output
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    expect(lines).toEqual([
+      '{"id":1,"status":"ok"}',
+      '{"id":2,"status":"retry"}'
+    ]);
+  });
+
   it('retries rate-limit failures in directive block actions', async () => {
     const { fileSystem, pathService: runtimePathService } = createRuntime();
     const source = `

@@ -648,12 +648,13 @@ export async function interpret(
     const activeEffectHandler = env.getEffectHandler();
     let output: string;
     
+    const format = options.format || 'markdown';
+
     if (activeEffectHandler && typeof activeEffectHandler.getDocument === 'function') {
       // Get the accumulated document from the effect handler
       output = activeEffectHandler.getDocument();
 
       // Apply output normalization if requested (default format is markdown)
-      const format = options.format || 'markdown';
       if (options.useMarkdownFormatter !== false && format === 'markdown') {
         const { normalizeOutput } = await import('./output/normalizer');
         output = normalizeOutput(output);
@@ -664,11 +665,16 @@ export async function interpret(
 
       // Format the output
       output = await formatOutput(nodes, {
-        format: options.format || 'markdown',
+        format: 'markdown',
         variables: env.getAllVariables(),
         useMarkdownFormatter: options.useMarkdownFormatter,
         normalizeBlankLines: options.normalizeBlankLines
       });
+    }
+
+    if (format === 'xml') {
+      const { applyOutputFormatToText } = await import('./output/formatter');
+      output = await applyOutputFormatToText(output, format);
     }
     
     // Call captureEnvironment callback if provided

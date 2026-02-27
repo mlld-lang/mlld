@@ -52,6 +52,30 @@ describe('Context-Dependent Behavior', () => {
       // Path context should return the default (variable) behavior
       expect(result.content.contentType).toBe('text');
     });
+
+    it('applies custom date format strings requested in import context', async () => {
+      const originalMock = process.env.MLLD_MOCK_TIME;
+      process.env.MLLD_MOCK_TIME = '2024-01-15T10:30:45.123Z';
+
+      try {
+        const resolver = new NowResolver();
+        const result = await resolver.resolve('@now', {
+          context: 'import',
+          requestedImports: ['YYYY-MM-DD', 'HH:mm:ss', 'YYYY/MM/DD HH:mm']
+        });
+        const data = JSON.parse(result.content);
+
+        expect(data['YYYY-MM-DD']).toBe('2024-01-15');
+        expect(data['HH:mm:ss']).toBe('10:30:45');
+        expect(data['YYYY/MM/DD HH:mm']).toBe('2024/01/15 10:30');
+      } finally {
+        if (originalMock === undefined) {
+          delete process.env.MLLD_MOCK_TIME;
+        } else {
+          process.env.MLLD_MOCK_TIME = originalMock;
+        }
+      }
+    });
   });
 
   describe('debug Resolver', () => {
