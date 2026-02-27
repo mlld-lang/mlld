@@ -1,10 +1,11 @@
-# mlld (pre-release)
+# mlld
 
 A scripting language for secure LLM orchestration. Compose prompts from files, commands, and modules. Chain LLM calls with pipelines. Label sensitive data and define guards to control where it flows.
 
 ```bash
 npm install -g mlld
 mlld quickstart          # give this to your llm
+mlld skill install       # install skills for coding agents
 ```
 
 [VSCode Extension](https://marketplace.visualstudio.com/items?itemName=andyet.mlld-vscode) | [Documentation](https://mlld.ai/docs)
