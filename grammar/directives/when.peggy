@@ -229,6 +229,9 @@ WhenSimpleBlockForm
         `Note: Inside exe/for, these have different return semantics.\n` +
         `  when @cond => [=> @val]   returns @val from the when expression\n` +
         `  if @cond [=> @val]        returns @val from the enclosing exe\n\n` +
+        `For for...when static conditions, pre-filter the list instead:\n` +
+        `  var @items = @cond ? @list : []\n` +
+        `  for @item in @items [ ... ]\n\n` +
         `if vs when:\n` +
         `  if @cond [block]                 Run block if true\n` +
         `  when @cond => action             Select first match\n` +

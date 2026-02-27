@@ -23,4 +23,16 @@ describe('parse error patterns', () => {
       })
     ).rejects.toThrow('Text content not allowed in strict mode');
   });
+
+  it('includes for...when pre-filter guidance in ambiguous when block errors', async () => {
+    const source = `/var @cond = true\nwhen @cond [\n  show "x"\n]\n`;
+
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        mlldMode: 'strict'
+      })
+    ).rejects.toThrow('var @items = @cond ? @list : []');
+  });
 });

@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Policy config now supports `deny_cmd` shorthand (for example `deny_cmd: ["npm:run:*"]`) and merges it into command deny rules.
 - Command deny patterns are now enforced for `sh`/`bash` code blocks before execution, so denied commands (for example `cmd:npm:run:*`) cannot bypass policy through shell blocks.
 - Direct `=> @toolCall()` returns inside `env with { tools: ... }` blocks now preserve tool-collection label taint, matching the existing `let`-binding behavior.
+- Ambiguous `when @cond [ ... ]` parse errors now include explicit `for...when` static-condition guidance with the pre-filter pattern (`var @items = @cond ? @list : []`).
+- `mlld validate` now warns on `for...when` static conditions that do not reference loop variables (`for-when-static-condition`), with suppression support via `validate.suppressWarnings`.
 - Streaming declared on executable definitions now propagates correctly through `run @exe(...)` and `show @exe(...)`; adapter pipelines activate even when invocation-level `stream` is omitted.
 - Executable-definition `streamFormat` is now respected across invocations, and invocation-level `streamFormat` correctly takes precedence when both are present.
 - `show` streaming invocations no longer double-emit output when executable-definition streaming is active.

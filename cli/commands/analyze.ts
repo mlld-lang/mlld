@@ -83,7 +83,8 @@ export type AntiPatternWarningCode =
   | 'deprecated-json-transform'
   | 'exe-parameter-shadowing'
   | 'template-strict-for-syntax'
-  | 'hyphenated-identifier-in-template';
+  | 'hyphenated-identifier-in-template'
+  | 'for-when-static-condition';
 
 export interface AntiPatternWarning {
   code: AntiPatternWarningCode;
@@ -265,7 +266,8 @@ const WARNING_CODE_ALIASES: Record<string, AntiPatternWarningCode> = {
 const SUPPRESSIBLE_WARNING_CODES = new Set<AntiPatternWarningCode>([
   'deprecated-json-transform',
   'exe-parameter-shadowing',
-  'hyphenated-identifier-in-template'
+  'hyphenated-identifier-in-template',
+  'for-when-static-condition'
 ]);
 const GENERIC_EXE_PARAMETER_SUGGESTIONS = new Map<string, string>([
   ['result', 'status'],
@@ -1255,6 +1257,139 @@ function detectExeParameterShadowingWarnings(ast: MlldNode[]): AntiPatternWarnin
         suggestion: `Use a more specific name such as @${suggestedName}. If intentional, add "validate.suppressWarnings": ["exe-parameter-shadowing"] to mlld-config.json.`
       });
     }
+  });
+
+  return warnings;
+}
+
+function isNoneOrWildcardConditionNode(node: unknown): boolean {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+  const literal = node as { type?: string; valueType?: string };
+  return literal.type === 'Literal' && (literal.valueType === 'none' || literal.valueType === 'wildcard');
+}
+
+function isNoneOrWildcardCondition(condition: unknown): boolean {
+  if (!Array.isArray(condition) || condition.length !== 1) {
+    return false;
+  }
+  const first = condition[0];
+  if (Array.isArray(first)) {
+    return first.length === 1 && isNoneOrWildcardConditionNode(first[0]);
+  }
+  return isNoneOrWildcardConditionNode(first);
+}
+
+function collectVariableReferences(value: unknown, out: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectVariableReferences(item, out);
+    }
+    return;
+  }
+  if (!value || typeof value !== 'object') {
+    return;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (record.type === 'VariableReference' && typeof record.identifier === 'string' && record.identifier.trim().length > 0) {
+    out.add(record.identifier);
+  }
+
+  for (const nested of Object.values(record)) {
+    collectVariableReferences(nested, out);
+  }
+}
+
+function getFirstForWhenCondition(whenExpression: any): { condition: unknown; line?: number; column?: number } | null {
+  if (!whenExpression || whenExpression.type !== 'WhenExpression' || !Array.isArray(whenExpression.conditions)) {
+    return null;
+  }
+
+  for (const entry of whenExpression.conditions) {
+    if (!entry || typeof entry !== 'object' || !('condition' in entry)) {
+      continue;
+    }
+    const condition = (entry as { condition?: unknown }).condition;
+    if (!condition || isNoneOrWildcardCondition(condition)) {
+      continue;
+    }
+    const conditionLocation =
+      (Array.isArray(condition) && condition.length > 0
+        ? (Array.isArray(condition[0]) ? condition[0]?.[0] : condition[0])
+        : null) as any;
+    return {
+      condition,
+      line: conditionLocation?.location?.start?.line ?? whenExpression.location?.start?.line,
+      column: conditionLocation?.location?.start?.column ?? whenExpression.location?.start?.column
+    };
+  }
+
+  return null;
+}
+
+function detectForWhenStaticConditionWarnings(ast: MlldNode[]): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+  const seen = new Set<string>();
+
+  walkAST(ast, (node: any) => {
+    let loopVariableNames: string[] = [];
+    let whenExpression: any = null;
+
+    if (node.type === 'ForExpression') {
+      const variableName = node.variable?.identifier;
+      const keyVariableName = node.keyVariable?.identifier;
+      loopVariableNames = [variableName, keyVariableName].filter(
+        (name): name is string => typeof name === 'string' && name.trim().length > 0
+      );
+      if (Array.isArray(node.expression) && node.expression.length === 1 && node.expression[0]?.type === 'WhenExpression') {
+        whenExpression = node.expression[0];
+      }
+    } else if (node.type === 'Directive' && node.kind === 'for') {
+      const variableName = node.values?.variable?.[0]?.identifier;
+      const keyVariableName = node.values?.key?.[0]?.identifier;
+      loopVariableNames = [variableName, keyVariableName].filter(
+        (name): name is string => typeof name === 'string' && name.trim().length > 0
+      );
+      if (Array.isArray(node.values?.action) && node.values.action.length === 1 && node.values.action[0]?.type === 'WhenExpression') {
+        whenExpression = node.values.action[0];
+      }
+    }
+
+    if (loopVariableNames.length === 0 || !whenExpression) {
+      return;
+    }
+
+    const firstCondition = getFirstForWhenCondition(whenExpression);
+    if (!firstCondition) {
+      return;
+    }
+
+    const referencedVariables = new Set<string>();
+    collectVariableReferences(firstCondition.condition, referencedVariables);
+
+    const referencesLoopVariable = loopVariableNames.some(name => referencedVariables.has(name));
+    if (referencesLoopVariable) {
+      return;
+    }
+
+    const line = firstCondition.line ?? node.location?.start?.line;
+    const column = firstCondition.column ?? node.location?.start?.column;
+    const dedupeKey = `${loopVariableNames.sort().join(',')}:${line ?? 0}:${column ?? 0}`;
+    if (seen.has(dedupeKey)) {
+      return;
+    }
+    seen.add(dedupeKey);
+
+    const target = loopVariableNames.map(name => `@${name}`).join(' or ');
+    warnings.push({
+      code: 'for-when-static-condition',
+      message: `for...when condition does not reference ${target}, so the same condition is evaluated for every iteration.`,
+      line,
+      column,
+      suggestion: 'If you want to gate the whole loop, pre-filter first: var @items = @cond ? @list : []. To silence this warning, set validate.suppressWarnings to include "for-when-static-condition".'
+    });
   });
 
   return warnings;
@@ -2543,6 +2678,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         const antiPatterns = [
           ...detectDeprecatedJsonTransformAntiPatterns(ast),
           ...detectExeParameterShadowingWarnings(ast),
+          ...detectForWhenStaticConditionWarnings(ast),
           ...detectHyphenatedIdentifiersInTemplates(ast),
         ].filter(warning => !suppressedWarningCodes.has(warning.code));
         if (antiPatterns.length > 0) {
