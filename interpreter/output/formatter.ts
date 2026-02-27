@@ -30,7 +30,7 @@ export async function applyOutputFormatToText(
     return jsonToXml(parsed);
   } catch {
     const converted = await llmxmlInstance.toXML(content);
-    if (converted === content || !converted.trimStart().startsWith('<')) {
+    if (!converted.trimStart().startsWith('<')) {
       return `<DOCUMENT>\n${content}\n</DOCUMENT>`;
     }
     return converted;

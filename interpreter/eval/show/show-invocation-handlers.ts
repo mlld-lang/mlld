@@ -182,7 +182,7 @@ export async function evaluateShowInvocation({
     commandRef?.identifier?.[0]?.identifier ||
     commandRef?.identifier?.[0]?.content;
   if (!name) {
-    throw new Error('Add invocation missing name');
+    throw new Error('Show invocation missing name');
   }
 
   const extracted = getExtractedVariable(context, name);
