@@ -328,7 +328,7 @@ export class ArgumentParser {
             options._ = args.slice(i);
             stopParsing = true;
             break;
-          } else if (arg.startsWith('-') && options.input && !this.commandsWithSubcommands.includes(options.input)) {
+          } else if (arg.startsWith('-') && (options.input && !this.commandsWithSubcommands.includes(options.input) || options.eval !== undefined)) {
             const parsed = this.parseCustomFlag(arg, args[i + 1]);
             if (!parsed) {
               throw new Error(`Unknown option: ${arg}`);
@@ -413,8 +413,8 @@ export class ArgumentParser {
   }
 
   private attachPayloadInject(options: CLIOptions, payloadFlags: Record<string, unknown>): void {
-    if (!options.input) return;
-    if (this.commandsWithSubcommands.includes(options.input)) return;
+    if (!options.input && options.eval === undefined) return;
+    if (options.input && this.commandsWithSubcommands.includes(options.input)) return;
     // Always inject @payload (even when empty) so scripts can safely reference @payload
     // This matches `mlld run` behavior where @payload={} is always available
 

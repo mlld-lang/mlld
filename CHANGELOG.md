@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `mlld install skill`, `mlld install skills`, and `mlld skills install` all alias to `mlld skill install`
 
+### Fixed
+- `mlld -e` rejects unknown flags instead of collecting them into `@payload`
+
 ## [2.0.2]
 
 ### Fixed
