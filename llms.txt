@@ -1,4 +1,4 @@
-<MLLD_GUIDE version="2.0.0-rc78">
+<MLLD_GUIDE version="2.0.3">
 
 mlld is a modular prompt scripting language for dynamically assembling context and orchestrating LLMs.
 
@@ -30,16 +30,18 @@ This guide is modular. Load individual sections as needed:
 |--------|----------|
 | docs/llm/llms-overview.txt | Purpose, mental model, two modes |
 | docs/llm/llms-core-rules.txt | The 13 core rules with examples |
-| docs/llm/llms-language-reference.txt | Variables, templates, file loading, run, exe, output |
-| docs/llm/llms-flow-control.txt | when, for, foreach, loop, while, parallel |
-| docs/llm/llms-modules.txt | Import/export, registry, local dev |
+| docs/llm/llms-core.txt | Variables, templates, file loading, exe, run, builtins, escaping |
+| docs/llm/llms-flow-control.txt | if, when, for, foreach, while, loop, bail |
+| docs/llm/llms-effects.txt | Pipelines, labels, guards, hooks |
+| docs/llm/llms-modules.txt | Import/export, registry, publishing, versioning |
+| docs/llm/llms-mcp.txt | MCP export, import, tool collections, reshaping |
+| docs/llm/llms-output.txt | output, log, append, stream |
 | docs/llm/llms-patterns.txt | Common workflow patterns |
-| docs/llm/llms-cli.txt | mlld run, mlld file, checkpoint, validation |
-| docs/llm/llms-configuration.txt | Config files, env vars, SDK modes |
-| docs/llm/llms-mistakes.txt | Common mistakes and fixes |
-| docs/llm/llms-security.txt | Guards, labels, capabilities |
+| docs/llm/llms-cli.txt | CLI usage, checkpoint, validation, skills |
+| docs/llm/llms-config.txt | Config files, policy, environments |
+| docs/llm/llms-sdk.txt | SDK execution modes, state, analysis |
+| docs/llm/llms-security.txt | Signing, MCP security, audit log |
 | docs/llm/llms-reference.txt | Quick reference tables |
-| docs/llm/llms-cookbook.txt | Annotated real-world examples |
 
 For full context injection, use `llms-combined.txt` which contains all modules.
 </MODULES>
@@ -140,7 +142,6 @@ env @agent with { tools: @agentTools } [
 </ESSENTIAL_PATTERNS>
 
 <SEE_ALSO>
-- Full cookbook with real-world examples: docs/llm/llms-cookbook.txt
 - Documentation: https://mlld.ai/docs
 - Source & examples: https://github.com/mlld-lang/mlld
 </SEE_ALSO>
