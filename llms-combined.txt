@@ -1,4 +1,4 @@
-<MLLD_COMPLETE_GUIDE version="2.0.0-rc82">
+<MLLD_COMPLETE_GUIDE version="2.0.1">
 
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
