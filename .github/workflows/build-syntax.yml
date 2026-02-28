@@ -36,7 +36,7 @@ jobs:
         run: npm run build:grammar:core
       
       - name: Force build syntax files
-        run: npm run build:syntax:force
+        run: npm run build:grammar:syntax
         env:
           FORCE_SYNTAX_BUILD: true
       
