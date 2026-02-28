@@ -10,11 +10,10 @@ mlld script.mld --timeout 5m           # Limit execution time
 mlld script.mld --metrics              # Show timing on stderr
 ```
 
-**Payload injection**: Unknown flags become `@payload` fields. `@payload` is always available as `{}` even with no flags, so scripts can safely import from it:
+**Payload injection**: Unknown flags become `@payload` fields. `@payload` is always available as `{}` even with no flags:
 
 ```mlld
-import { topic } from @payload
-show @topic
+show @payload.topic
 ```
 
 ```bash
@@ -49,8 +48,7 @@ mlld run build --env prod --fast true
 ```
 
 ```mlld
->> In build.mld
-import "@payload" as @payload
+>> In build.mld — @payload is available directly
 var @env = @payload.env ? @payload.env : "dev"
 var @fast = @payload.fast ? @payload.fast : false
 ```

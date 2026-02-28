@@ -18,17 +18,16 @@ execute('./script.mld', { text: 'user input', userId: '123' });
 ```
 
 ```mlld
->> Destructuring import (fields must exist)
-import { text, userId } from @payload
-show @text
+>> @payload is available directly — no import required
+show @payload.text
+var @name = @payload.userId ? @payload.userId : "anonymous"
 ```
 
-For optional fields, use namespace import with ternary:
+Destructuring import also works for required fields:
 
 ```mlld
->> Namespace import for optional field access
-import "@payload" as @payload
-var @text = @payload.text ? @payload.text : "default"
+import { text, userId } from @payload
+show @text
 ```
 
 CLI usage with `mlld run`:
@@ -38,9 +37,8 @@ mlld run myscript --topic foo --count 5
 ```
 
 ```mlld
->> In myscript.mld - required fields
-import { topic, count } from @payload
-show `Topic: @topic, Count: @count`
+>> In myscript.mld
+show `Topic: @payload.topic, Count: @payload.count`
 ```
 
 Dynamic imports are labeled `src:dynamic` and marked untrusted.

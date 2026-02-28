@@ -549,6 +549,17 @@ export async function interpret(
 
     if (Object.keys(userDataModules).length > 0) {
       env.registerDynamicModules(userDataModules, options.dynamicModuleSource, { literalStrings: true });
+
+      // Make @payload directly available as a variable (no import required)
+      const payloadValue = userDataModules['@payload'] ?? userDataModules['@Payload'];
+      if (payloadValue !== undefined) {
+        const payloadVar = typeof payloadValue === 'object' && !Array.isArray(payloadValue)
+          ? { type: 'object' as const, value: payloadValue as Record<string, any> }
+          : Array.isArray(payloadValue)
+            ? { type: 'array' as const, value: payloadValue }
+            : { type: 'simple_text' as const, value: String(payloadValue) };
+        env.setVariable('payload', payloadVar);
+      }
     }
 
     if (Object.keys(otherModules).length > 0) {

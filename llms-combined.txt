@@ -4446,11 +4446,10 @@ mlld script.mld --timeout 5m           # Limit execution time
 mlld script.mld --metrics              # Show timing on stderr
 ```
 
-**Payload injection**: Unknown flags become `@payload` fields. `@payload` is always available as `{}` even with no flags, so scripts can safely import from it:
+**Payload injection**: Unknown flags become `@payload` fields. `@payload` is always available as `{}` even with no flags:
 
 ```mlld
-import { topic } from @payload
-show @topic
+show @payload.topic
 ```
 
 ```bash
@@ -4485,8 +4484,7 @@ mlld run build --env prod --fast true
 ```
 
 ```mlld
->> In build.mld
-import "@payload" as @payload
+>> In build.mld — @payload is available directly
 var @env = @payload.env ? @payload.env : "dev"
 var @fast = @payload.fast ? @payload.fast : false
 ```
@@ -5953,17 +5951,16 @@ execute('./script.mld', { text: 'user input', userId: '123' });
 ```
 
 ```mlld
->> Destructuring import (fields must exist)
-import { text, userId } from @payload
-show @text
+>> @payload is available directly — no import required
+show @payload.text
+var @name = @payload.userId ? @payload.userId : "anonymous"
 ```
 
-For optional fields, use namespace import with ternary:
+Destructuring import also works for required fields:
 
 ```mlld
->> Namespace import for optional field access
-import "@payload" as @payload
-var @text = @payload.text ? @payload.text : "default"
+import { text, userId } from @payload
+show @text
 ```
 
 CLI usage with `mlld run`:
@@ -5973,9 +5970,8 @@ mlld run myscript --topic foo --count 5
 ```
 
 ```mlld
->> In myscript.mld - required fields
-import { topic, count } from @payload
-show `Topic: @topic, Count: @count`
+>> In myscript.mld
+show `Topic: @payload.topic, Count: @payload.count`
 ```
 
 Dynamic imports are labeled `src:dynamic` and marked untrusted.
@@ -5995,7 +5991,12 @@ const tools = analysis.executables
 
 Use cases: MCP proxy, module validation, IDE/LSP, security auditing.
 
-`@payload` contains data passed to a script at invocation time.
+`@payload` contains data passed to a script at invocation time. It's available as a direct variable — no import required.
+
+```mlld
+show `Topic: @payload.topic, Count: @payload.count`
+var @env = @payload.env ? @payload.env : "dev"
+```
 
 **Destructuring import** (required fields - fails if missing):
 
@@ -6004,30 +6005,23 @@ import { topic, count } from @payload
 show `Topic: @topic, Count: @count`
 ```
 
-**Namespace import** (optional fields with defaults):
-
-```mlld
-import "@payload" as @payload
-var @topic = @payload.topic ? @payload.topic : "default"
-var @count = @payload.count ? @payload.count : 0
-```
-
 **SDK usage**:
 
 ```typescript
 execute('./script.mld', { topic: 'foo', count: 5 });
 ```
 
-**CLI usage** — both `mlld run` and direct invocation support payload:
+**CLI usage** — `mlld run`, direct invocation, and `-e` all support payload:
 
 ```bash
 mlld run myscript --topic foo --count 5
 mlld script.mld --topic foo --count 5
+mlld -e 'show @payload.topic' --topic foo
 ```
 
 Unknown flags become `@payload` fields automatically. Kebab-case flags are converted to camelCase (e.g., `--dry-run` becomes `@dryRun`).
 
-`@payload` is always available as `{}` even when no flags are passed — scripts can safely reference `@payload` fields without checking whether payload was injected.
+`@payload` is always `{}` when no flags are passed — safe to reference fields without checking.
 
 Thin wrappers around the mlld CLI for Go, Python, Rust, Ruby, and Elixir. Each keeps a persistent `mlld live --stdio` subprocess for repeated calls via NDJSON RPC.
 
