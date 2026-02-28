@@ -296,17 +296,17 @@ export function createInstallCommand() {
     description: 'Install mlld modules',
 
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
-      const redirects: Record<string, string> = {
-        'plugin': 'mlld plugin install',
-        'skill': 'mlld skill install',
-        'skills': 'mlld skill install',
-      };
-      for (const arg of args) {
-        const redirect = redirects[arg.toLowerCase()];
-        if (redirect) {
-          console.log(chalk.yellow(`"${arg}" is not a module. Did you mean \`${redirect}\`?`));
-          return;
-        }
+      const skillArgs = ['skill', 'skills'];
+      if (args.length > 0 && skillArgs.includes(args[0].toLowerCase())) {
+        const { createSkillCommand } = await import('./skill');
+        const skillCmd = createSkillCommand();
+        await skillCmd.execute(['install', ...args.slice(1)], flags);
+        return;
+      }
+
+      if (args.length > 0 && args[0].toLowerCase() === 'plugin') {
+        console.log(chalk.yellow(`"${args[0]}" is not a module. Did you mean \`mlld plugin install\`?`));
+        return;
       }
 
       const options: InstallOptions = {

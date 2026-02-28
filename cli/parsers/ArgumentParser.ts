@@ -16,7 +16,7 @@ export class ArgumentParser {
     'checkpoint',
     'mcp', 'serve', 'live', 'language-server', 'lsp', 'nvim-setup', 'nvim', 'nvim-doctor', 'verify',
     'howto', 'ht', 'qs', 'quickstart', 'validate', 'analyze',
-    'update', 'outdated', 'plugin', 'skill'
+    'update', 'outdated', 'plugin', 'skill', 'skills'
   ];
 
   parseArgs(args: string[]): CLIOptions {
