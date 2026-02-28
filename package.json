@@ -25,6 +25,7 @@
   "files": [
     "dist/",
     "bin/",
+    ".claude-plugin/",
     "llm/run/howto.mld",
     "docs/src/atoms/",
     "plugins/",

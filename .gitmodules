@@ -1,3 +1,0 @@
-[submodule "lib/llmxml"]
-	path = lib/llmxml
-	url = git@github.com:adamavenir/llmxml.git
