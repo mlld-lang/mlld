@@ -70,6 +70,14 @@ mlld run <script>    # Run mlld script from script directory (default: llm/run/)
 - **Smart evaluators**: Each directive evaluator does all the work directly
 - **CLI/API integrated**: Both now use the new interpreter directly
 
+## Publishing / Releases
+- **Version source of truth**: First `## [x.y.z]` heading in CHANGELOG.md
+- **package.json must match**: The publish workflow validates `package.json` version matches CHANGELOG.md — both must be bumped together
+- **Flow**: Bump version in both CHANGELOG.md and package.json → merge to main → publish workflow auto-detects new version (no matching tag) and publishes to all registries
+- **Don't bump version on feature branches** unless the PR is specifically a release PR
+- **Idempotent**: Safe to re-run after partial failure via `gh workflow run publish.yml -f targets=npm`
+- See `docs/dev/PUBLISH.md` for full details
+
 ## Important notes
 - Don't ever run `mlld run polish` or `mlld run qa` -- have the user run them. They will take 30+ minutes to run.
 - Don't ever run `npx mlld` -- use `mlld` (which is our local dir installed with `npm install -g .`)
