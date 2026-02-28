@@ -30,11 +30,10 @@ import { @runTrends } from "./phases/trends.mld"
 import { @runStrategy } from "./phases/strategy.mld"
 
 >> Parse CLI options
-import "@payload" as @p
-var @topic = @p.topic ? @p.topic : ""
-var @topics = @p.topics ? @p.topics : ""
-var @tier = @p.tier ? @p.tier : ""
-var @isNew = @p.new ? true : false
+var @topic = @payload.topic ? @payload.topic : ""
+var @topics = @payload.topics ? @payload.topics : ""
+var @tier = @payload.tier ? @payload.tier : ""
+var @isNew = @payload.new ? true : false
 
 >> Shell helpers
 exe @mkdirp(dir) = sh { mkdir -p "$dir" }

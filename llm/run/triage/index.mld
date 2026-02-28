@@ -18,14 +18,13 @@
 
 import { @claudePoll } from @mlld/claude-poll
 import { @loadOpenTickets, @loadTicketContent, @loadChangelog, @loadRecentCommits, @mkdirp, @resolveRunDir } from "./lib/context.mld"
-import "@payload" as @p
 
 /needs { sh }
 
 >> ─── Config ───
 
-var @parallelism = @p.parallel ? @p.parallel * 1 : 20
-var @forceNew = @p.new ? true : false
+var @parallelism = @payload.parallel ? @payload.parallel * 1 : 20
+var @forceNew = @payload.new ? true : false
 
 >> ─── Tool permissions (escalation between phases) ───
 

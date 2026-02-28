@@ -36,17 +36,16 @@ import { @runDocs } from "./phases/docs.mld"
 /needs { sh }
 
 >> Parse payload options
-import "@payload" as @p
 
-var @batchSize = @p.batch ? @p.batch * 1 : 5
-var @pl = @p.parallel ? @p.parallel * 1 : 10
-var @pt = @p.timeout ? @p.timeout : "1s"
-var @loopMode = @p.loop ? true : false
-var @skipEnrich = @p.skipEnrich ? true : false
-var @docsOnly = @p.docsOnly ? true : false
-var @useQa = @p.qa ? true : false
-var @retryFailed = @p.retryFailed ? true : false
-var @dryRun = @p.dryRun ? true : false
+var @batchSize = @payload.batch ? @payload.batch * 1 : 5
+var @pl = @payload.parallel ? @payload.parallel * 1 : 10
+var @pt = @payload.timeout ? @payload.timeout : "1s"
+var @loopMode = @payload.loop ? true : false
+var @skipEnrich = @payload.skipEnrich ? true : false
+var @docsOnly = @payload.docsOnly ? true : false
+var @useQa = @payload.qa ? true : false
+var @retryFailed = @payload.retryFailed ? true : false
+var @dryRun = @payload.dryRun ? true : false
 
 >> Pipeline root directory
 var @pipelineRoot = `@base/pipeline`

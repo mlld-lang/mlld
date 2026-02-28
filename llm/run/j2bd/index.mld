@@ -19,17 +19,16 @@
 import { @claudePoll } from @mlld/claude-poll
 import { @buildContext, @loadRecentEvents, @loadTickets, @buildReferenceMaterial, @extractJobSections } from "./lib/context.mld"
 import { @writeQuestionsFile, @logEvent } from "./lib/questions.mld"
-import "@payload" as @p
 
 >> Tool permissions for agents
 var @decisionTools = "Read,Write,Glob,Grep"
 var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(tk:*)"
 
 >> Parse arguments (--topic is required)
-var @topic = @p.topic
-var @jobFilter = @p.job ?? null
-var @maxIterations = @p.max ? @p.max * 1 : null
-var @polishArg = @p.polish ?? "false"
+var @topic = @payload.topic
+var @jobFilter = @payload.job ?? null
+var @maxIterations = @payload.max ? @payload.max * 1 : null
+var @polishArg = @payload.polish ?? "false"
 
 >> Validate and normalize polish level
 var @polishValid = @polishArg == "false" || @polishArg == "med" || @polishArg == "medium" || @polishArg == "high"

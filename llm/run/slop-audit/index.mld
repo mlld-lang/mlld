@@ -14,10 +14,9 @@
 
 needs { sh }
 import { @claudePoll } from @mlld/claude-poll
-import "@payload" as @p
 
 >> Config
-var @parallelism = @p.parallel ? @p.parallel * 1 : 20
+var @parallelism = @payload.parallel ? @payload.parallel * 1 : 20
 var @today = cmd { date -u +%Y-%m-%d }
 var @runId = `slop-audit-@today`
 var @runDir = `@root/llm/output/@runId`
@@ -73,9 +72,9 @@ var @lastRunCommit = <@root/llm/output/.slop-audit-last-commit>?
 
 >> Build flags context for the scope agent
 var @flags = {
-  all: @p.all ?? false,
-  since: @p.since ?? null,
-  files: @p.files ?? null,
+  all: @payload.all ?? false,
+  since: @payload.since ?? null,
+  files: @payload.files ?? null,
   lastRunCommit: @lastRunCommit ? @lastRunCommit.trim() : null
 }
 

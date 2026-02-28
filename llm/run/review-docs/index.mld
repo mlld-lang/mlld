@@ -12,13 +12,12 @@
 
 import { @claudePoll } from @mlld/claude-poll
 import { @flatName, @loadAtoms } from "./lib/context.mld"
-import "@payload" as @p
 
 >> ─── Config ───
 
-var @parallelism = @p.parallel ? @p.parallel * 1 : 10
-var @priorityFilter = @p.priority ?? ""
-var @docsFilter = @p.docs ?? ""
+var @parallelism = @payload.parallel ? @payload.parallel * 1 : 10
+var @priorityFilter = @payload.priority ?? ""
+var @docsFilter = @payload.docs ?? ""
 var @reviewTools = "Read,Write,Glob,Grep"
 var @verifyTools = "Read,Write,Glob,Grep,Bash(mlld:*),Bash(ls:*),Bash(cat:*),Bash(find:*)"
 var @reviseTools = "Read,Write"

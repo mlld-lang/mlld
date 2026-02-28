@@ -9,12 +9,11 @@
 
 import { @claude } from @mlld/claude
 
-import "@payload" as @p
-var @dryRun = @p.dryRun ? true : false
-var @skipPatterns = @p.skip ? @p.skip.split(",") : []
-var @maxAssess = @p.maxAssess ? @p.maxAssess * 1 : 10
-var @targetBranch = @p.targetBranch ? @p.targetBranch : "main"
-var @maxConflicts = @p.maxConflicts ? @p.maxConflicts * 1 : 10
+var @dryRun = @payload.dryRun ? true : false
+var @skipPatterns = @payload.skip ? @payload.skip.split(",") : []
+var @maxAssess = @payload.maxAssess ? @payload.maxAssess * 1 : 10
+var @targetBranch = @payload.targetBranch ? @payload.targetBranch : "main"
+var @maxConflicts = @payload.maxConflicts ? @payload.maxConflicts * 1 : 10
 
 >> Default patterns to skip
 var @defaultSkips = ["envsec", "main", "master", "security-stream-a", "security-stream-b", "python-epic"]

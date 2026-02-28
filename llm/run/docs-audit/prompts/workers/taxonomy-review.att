@@ -1,0 +1,96 @@
+You are reviewing the taxonomy and organization of mlld's atom-based documentation system.
+
+## Context
+
+@strategyContext
+
+## Current Atom Organization
+
+Here is every atom organized by category, with id, title, brief, parent, and tags:
+
+<atom_details>
+@atomDetails
+</atom_details>
+
+## Current Website Navigation (docs/user/)
+
+The website currently has these pages in its sidebar:
+
+<website_nav>
+@websiteNav
+</website_nav>
+
+## Your Task
+
+Evaluate the atom organization from three angles:
+
+### 1. Website Navigation
+If atoms replace docs/user/ as the website content, how should they be organized in the sidebar? Consider:
+- Is the current 8-category split (syntax, commands, control-flow, modules, patterns, configuration, security, mistakes) good for website nav?
+- Should any categories be merged or split?
+- What ordering makes sense for progressive disclosure (simple → advanced)?
+- Are there gaps where the website currently has pages but atoms don't have good coverage?
+
+### 2. CLI howto Navigation
+For `mlld howto` (the CLI), consider:
+- The current tree listing shows ALL atoms — is that overwhelming?
+- Would a tiered approach work better (popular topics, then drill-down)?
+- Are the parent groupings within categories useful for CLI navigation?
+- Should `mlld howto` with no args show something different than the full tree?
+
+### 3. Shared vs Divergent Organization
+- Can the website and CLI use the exact same organization, or do they need different structures?
+- What would a unified taxonomy look like?
+
+## Response Format
+
+Write your response as JSON to @outPath:
+
+```json
+{
+  "website_nav": {
+    "proposed_structure": [
+      {
+        "section": "Section name",
+        "description": "What goes here",
+        "atoms": ["atom-id-1", "atom-id-2"],
+        "ordering_rationale": "Why this order"
+      }
+    ],
+    "categories_to_merge": [
+      {
+        "merge": ["category-a", "category-b"],
+        "into": "new-category-name",
+        "rationale": "Why merge"
+      }
+    ],
+    "categories_to_split": [],
+    "gaps": ["Things the website needs that atoms don't cover"]
+  },
+  "cli_howto": {
+    "default_view": "What mlld howto (no args) should show",
+    "proposed_tiers": [
+      {
+        "tier": "essentials",
+        "description": "Core topics every user needs",
+        "atoms": ["atom-id-1", "atom-id-2"]
+      }
+    ],
+    "navigation_improvements": ["Specific suggestions"]
+  },
+  "unified_taxonomy": {
+    "feasible": true,
+    "proposed_categories": [
+      {
+        "name": "Category name",
+        "display_name": "Human-readable name for nav",
+        "atoms": ["atom-id-1"],
+        "order": 1,
+        "rationale": "Why this grouping"
+      }
+    ],
+    "divergences": ["Cases where website and CLI need different treatment"]
+  },
+  "overall_assessment": "Summary of findings and main recommendations"
+}
+```
