@@ -99,6 +99,16 @@ Targets:
 - Update required dev/user docs and docs atoms with VirtualFS usage.
 - Add doc-mirroring SDK test coverage to reduce drift.
 
+Implementation notes:
+- Updated required docs:
+  - `docs/dev/ARCHITECTURE.md`
+  - `docs/dev/GRAMMAR.md`
+  - `docs/dev/TESTS.md`
+  - `docs/dev/SDK.md`
+  - `docs/user/sdk.md`
+- Added docs atom: `docs/src/atoms/sdk/08-sdk--virtualfs.md`.
+- Added explicit docs-mirroring SDK test: `sdk/virtualfs.docs.test.ts`.
+
 ## Phase 7: Final Hardening (`m-df9f`)
 
 Targets:

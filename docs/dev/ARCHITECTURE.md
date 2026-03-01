@@ -14,6 +14,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, PipelineInp
 - It defines layer boundaries and links to deep-dive docs that own implementation detail.
 - Runtime flow is single-pass: parse AST, evaluate in `Environment`, emit effects, format output.
 - CLI, SDK, MCP, and LSP reuse shared core components rather than separate execution stacks.
+- Filesystem behavior is abstracted behind `IFileSystemService`; `VirtualFS` provides copy-on-write overlays for sandboxed SDK/test workflows.
 - Security and policy checks are part of the runtime path, not optional wrappers.
 - Hooks/checkpoint/resume/fork are shipped runtime paths; rollout contracts and risk gates remain documented in `docs/dev/HOOKS-CHECKPOINT-RESUME-CONTRACT.md` and `docs/dev/HOOKS-CHECKPOINT-RISK-GATES.md`.
 
