@@ -73,6 +73,14 @@ Targets:
 - Validate interpreter import/output paths under virtual fs mode.
 - Preserve default NodeFileSystem behavior for non-VirtualFS callers.
 
+Implementation notes:
+- SDK surface now exports `VirtualFS` and lifecycle patch/change types from `sdk/index.ts`.
+- Package export map includes `./sdk` as a public alias to the SDK surface.
+- Added SDK and interpreter integration tests for VirtualFS workflows:
+  - `sdk/index.test.ts`
+  - `sdk/execute.test.ts`
+  - `interpreter/eval/import/virtualfs-integration.test.ts`
+
 ## Phase 5: MemoryFileSystem Migration (`m-56a0`)
 
 Targets:

@@ -30,57 +30,10 @@ console.log(output); // "Hello"
 `VirtualFS` is available from the SDK surface:
 
 ```typescript
-import { VirtualFS, NodeFileSystem } from 'mlld';
+import { VirtualFS, processMlld } from 'mlld';
 ```
 
 `mlld/sdk` is also supported as a subpath alias.
-
-Create an in-memory VFS:
-
-```typescript
-const vfs = VirtualFS.empty();
-await vfs.writeFile('/scratch/input.mld', '/show "hello"');
-```
-
-Create a copy-on-write overlay over the real filesystem service:
-
-```typescript
-const vfs = VirtualFS.over(new NodeFileSystem());
-```
-
-Inspect and review pending changes:
-
-```typescript
-const changes = await vfs.changes(); // canonical
-const compat = await vfs.diff();     // alias of changes()
-
-if (changes.length > 0) {
-  const unified = await vfs.fileDiff(changes[0].path);
-  console.log(unified);
-}
-```
-
-Apply or discard selectively:
-
-```typescript
-for (const change of await vfs.changes()) {
-  if (await approve(change)) {
-    await vfs.flush(change.path);
-  } else {
-    vfs.discard(change.path);
-  }
-}
-```
-
-Export and replay changes:
-
-```typescript
-const patch = vfs.export();
-
-const replay = VirtualFS.over(new NodeFileSystem());
-replay.apply(patch);
-await replay.flush();
-```
 
 With a file path for imports:
 
