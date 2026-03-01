@@ -72,6 +72,7 @@ Core API behavior in `services/fs/VirtualFS.ts`:
 Lifecycle API behavior:
 - `changes()` is canonical change inspection.
 - `diff()` is a compatibility alias of `changes()`.
+- `fileDiff(path)` returns deterministic unified diff output for file-level inspection.
 - `discard(path)` removes shadow/deleted state under a scoped path.
 - `reset()` clears all shadow/deleted lifecycle state.
 - `export()` emits deterministic patch entries.

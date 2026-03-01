@@ -118,6 +118,38 @@ export class VirtualFS implements IFileSystemService {
     return await this.changes();
   }
 
+  async fileDiff(targetPath: string): Promise<string> {
+    const normalizedPath = this.normalizePath(targetPath);
+
+    if (await this.isDirectory(normalizedPath)) {
+      throw this.createFsError('EISDIR', 'open', normalizedPath);
+    }
+
+    const before = await this.readBackingFile(normalizedPath);
+    const after = this.deletedPaths.has(normalizedPath)
+      ? null
+      : this.shadowFiles.has(normalizedPath)
+        ? (this.shadowFiles.get(normalizedPath) as string)
+        : before;
+
+    if (before === null && after === null) {
+      throw this.createFsError('ENOENT', 'open', normalizedPath);
+    }
+
+    if (before === after) {
+      return '';
+    }
+
+    const beforeLines = this.splitLinesForDiff(before ?? '');
+    const afterLines = this.splitLinesForDiff(after ?? '');
+    const fileLabel = this.toDiffLabel(normalizedPath);
+    const oldLabel = before === null ? '/dev/null' : `a/${fileLabel}`;
+    const newLabel = after === null ? '/dev/null' : `b/${fileLabel}`;
+
+    const hunk = this.buildUnifiedDiffHunk(beforeLines, afterLines);
+    return [`--- ${oldLabel}`, `+++ ${newLabel}`, hunk, ''].join('\n');
+  }
+
   reset(): void {
     this.shadowFiles.clear();
     this.deletedPaths.clear();
@@ -664,5 +696,82 @@ export class VirtualFS implements IFileSystemService {
     } catch {
       return null;
     }
+  }
+
+  private toDiffLabel(targetPath: string): string {
+    return targetPath.replace(/^\/+/, '');
+  }
+
+  private splitLinesForDiff(content: string): string[] {
+    const normalized = content.replace(/\r\n/g, '\n');
+    if (normalized.length === 0) {
+      return [];
+    }
+    return normalized.endsWith('\n')
+      ? normalized.slice(0, -1).split('\n')
+      : normalized.split('\n');
+  }
+
+  private buildUnifiedDiffHunk(beforeLines: string[], afterLines: string[]): string {
+    const ops = this.computeDiffOperations(beforeLines, afterLines);
+    const beforeStart = beforeLines.length === 0 ? 0 : 1;
+    const afterStart = afterLines.length === 0 ? 0 : 1;
+    const header = `@@ -${beforeStart},${beforeLines.length} +${afterStart},${afterLines.length} @@`;
+    const body = ops.map(op => {
+      if (op.type === 'equal') return ` ${op.value}`;
+      if (op.type === 'delete') return `-${op.value}`;
+      return `+${op.value}`;
+    });
+    return [header, ...body].join('\n');
+  }
+
+  private computeDiffOperations(
+    beforeLines: string[],
+    afterLines: string[]
+  ): Array<{ type: 'equal' | 'delete' | 'add'; value: string }> {
+    const beforeLen = beforeLines.length;
+    const afterLen = afterLines.length;
+    const lcs = Array.from({ length: beforeLen + 1 }, () => new Array<number>(afterLen + 1).fill(0));
+
+    for (let i = beforeLen - 1; i >= 0; i--) {
+      for (let j = afterLen - 1; j >= 0; j--) {
+        if (beforeLines[i] === afterLines[j]) {
+          lcs[i][j] = lcs[i + 1][j + 1] + 1;
+        } else {
+          lcs[i][j] = Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+        }
+      }
+    }
+
+    const ops: Array<{ type: 'equal' | 'delete' | 'add'; value: string }> = [];
+    let i = 0;
+    let j = 0;
+    while (i < beforeLen && j < afterLen) {
+      if (beforeLines[i] === afterLines[j]) {
+        ops.push({ type: 'equal', value: beforeLines[i] });
+        i++;
+        j++;
+        continue;
+      }
+
+      if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+        ops.push({ type: 'delete', value: beforeLines[i] });
+        i++;
+      } else {
+        ops.push({ type: 'add', value: afterLines[j] });
+        j++;
+      }
+    }
+
+    while (i < beforeLen) {
+      ops.push({ type: 'delete', value: beforeLines[i] });
+      i++;
+    }
+    while (j < afterLen) {
+      ops.push({ type: 'add', value: afterLines[j] });
+      j++;
+    }
+
+    return ops;
   }
 }
