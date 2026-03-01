@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VirtualFS` lifecycle APIs for inspect/apply/revert workflows: `changes`/`diff`, `discard`, `reset`, scoped/global `flush`, deterministic `export`, and `apply` with strict patch typings
 - `VirtualFS.fileDiff(path)` unified diff inspection with deterministic output; inspection naming finalized with `changes()` canonical and `diff()` compatibility alias
 - SDK/interpreter VirtualFS integration: SDK now exports `VirtualFS` on the public surface, package exports include `mlld/sdk`, and interpreter import workflows are covered against VirtualFS-backed parsing/directory behaviors
+- Test harness migration: `MemoryFileSystem` now wraps `VirtualFS.empty()` for semantics parity, with dedicated parity tests and updated test-environment docs
 
 ## [2.0.3]
 
