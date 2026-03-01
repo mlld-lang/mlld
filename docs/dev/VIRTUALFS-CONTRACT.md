@@ -69,6 +69,15 @@ Core API behavior in `services/fs/VirtualFS.ts`:
 - `readdir` merges backing and shadow entries with deterministic sorting.
 - `isVirtual()` returns `true` for virtual-mode detection in interpreter paths.
 
+Lifecycle API behavior:
+- `changes()` is canonical change inspection.
+- `diff()` is a compatibility alias of `changes()`.
+- `discard(path)` removes shadow/deleted state under a scoped path.
+- `reset()` clears all shadow/deleted lifecycle state.
+- `export()` emits deterministic patch entries.
+- `apply(patch)` rehydrates shadow state from patch entries.
+- `flush(path?)` applies scoped or global patch state to backing.
+
 ## Non-Goals (Contract Phase)
 
 - No production implementation details beyond contract definitions.

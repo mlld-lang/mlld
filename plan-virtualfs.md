@@ -48,6 +48,13 @@ Targets:
 - Deterministic patch serialization and path-scoped lifecycle behavior.
 - `services/fs/VirtualFS.lifecycle.test.ts` + output/append integration coverage.
 
+Implementation notes:
+- Added strict patch/change typings in `services/fs/VirtualFS.ts`:
+  - `VirtualFSChange`, `VirtualFSChangeType`, `VirtualFSPatch`, `VirtualFSPatchEntry`.
+- `flush(path?)` now supports scoped flush and global flush.
+- `VirtualFS.empty().flush()` fails with `ENOTSUP` (no backing contract).
+- Added integration coverage for `/output` + `/append` shadow behavior before flush and apply/export replay.
+
 ## Phase 3: `fileDiff` and Inspection Compatibility (`m-0c26`)
 
 Targets:
