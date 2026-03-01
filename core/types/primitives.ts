@@ -199,6 +199,11 @@ export interface TemplateInlineShowNode extends BaseMlldNode {
   meta?: { [key: string]: unknown };
 }
 
+export interface EscapedAngleBracketExpressionNode extends BaseMlldNode {
+  type: 'EscapedAngleBracketExpression';
+  content: BaseMlldNode[];
+}
+
 export interface ConditionalTemplateSnippetNode extends BaseMlldNode {
   type: 'ConditionalTemplateSnippet';
   condition: VariableReferenceNode;

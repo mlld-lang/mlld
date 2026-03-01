@@ -69,6 +69,42 @@ ExpressionWithOperator
       // Only look within the current line/directive context
       const endOfContext = rest.search(/[\n\r]|(?:^|\s)\/\w+|(?:^|\s)(?:>>|<<)/);
       const contextToSearch = endOfContext === -1 ? rest : rest.substring(0, endOfContext);
+
+      // If RHS starts with a quoted literal/template and no operator follows
+      // outside the closing quote, don't force expression parsing.
+      const trimmed = contextToSearch.trimStart();
+      if (trimmed.length > 0 && (trimmed[0] === '"' || trimmed[0] === '\'' || trimmed[0] === '`')) {
+        const quote = trimmed[0];
+        let i = 1;
+        let escaped = false;
+        while (i < trimmed.length) {
+          const ch = trimmed[i];
+          if (escaped) {
+            escaped = false;
+            i += 1;
+            continue;
+          }
+          if (ch === '\\') {
+            escaped = true;
+            i += 1;
+            continue;
+          }
+          if (ch === quote) break;
+          i += 1;
+        }
+
+        // Unclosed quote: let literal/template parsing surface the real error.
+        if (i >= trimmed.length) return false;
+
+        const after = trimmed.substring(i + 1).trimStart();
+        if (
+          after.length === 0 ||
+          /^(with\b|pipeline\b|as\b|#|>>|<<)/.test(after)
+        ) {
+          return false;
+        }
+      }
+
       return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?\?|!|[-+*/%]))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
     }
     expr:Expression {

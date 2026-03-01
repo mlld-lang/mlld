@@ -270,6 +270,10 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           const value = asText(variable.value);
           pushPart(strategy.escape(value));
         }
+      } else if (node.type === 'EscapedAngleBracketExpression') {
+        const innerNodes = Array.isArray((node as any).content) ? (node as any).content : [];
+        const inner = await interpolateImpl(innerNodes as any[], env, context, options);
+        pushPart(`<${inner}>`);
       } else if (
         node.type === 'VariableReference' ||
         node.type === 'VariableReferenceWithTail' ||

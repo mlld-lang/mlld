@@ -116,6 +116,7 @@ UnifiedDoubleColon "Double colon template"
 UnifiedDoubleBracket "Double bracket template"
   = '[[' parts:(
       UnifiedBraceInterpolation
+      / EscapedAngleBracketExpression
       / FileReferenceInterpolation
       / UnifiedBracketTextSegment
     )* ']]' {
@@ -144,7 +145,7 @@ UnifiedAtInterpolation "At-sign interpolation"
   / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)
-  / UnifiedAngleBracketContent   // <file.md> or literal <xml> - USE UNIFIED PATTERN
+  / UnifiedAngleBracketContent   // <<...>> / <file.md> / literal <xml> - USE UNIFIED PATTERN
   / TemplateVariableReference    // @var (with template pipes and fields)
   / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
   / "@@" {                       // @@ -> literal @ (mlld-75e)
@@ -186,7 +187,7 @@ UnifiedTemplateChar
 // Text for double colon templates (excludes ::, @, \@, and < only when it's a valid file ref or literal tag)
 // Only excludes /for and /end when they appear at line start
 UnifiedDoubleColonTextSegment "Double colon text segment"
-  = chars:(!("::" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / "\\@" / "@" / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
+  = chars:(!("::" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / "\\@" / "@" / &"<<" EscapedAngleBracketExpression / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
@@ -282,7 +283,7 @@ TemplateBodyAtt "template body for .att files"
 // Text for standalone .att files - allows :: as literal text
 // Only excludes @, \@, < (for file refs), and /for, /end at line start
 UnifiedAttTextSegment "ATT text segment"
-  = chars:(!((LineStartPredicate "/for") / (LineStartPredicate "/end") / "\\@" / "@" / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
+  = chars:(!((LineStartPredicate "/for") / (LineStartPredicate "/end") / "\\@" / "@" / &"<<" EscapedAngleBracketExpression / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 

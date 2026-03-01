@@ -74,6 +74,7 @@ import {
   NewExpression,
   TemplateForBlockNode,
   TemplateInlineShowNode,
+  EscapedAngleBracketExpressionNode,
   ConditionalTemplateSnippetNode,
   ConditionalStringFragmentNode,
   ConditionalVarOmissionNode,
@@ -122,6 +123,7 @@ export type MlldNode =
   | NewExpression
   | TemplateForBlockNode
   | TemplateInlineShowNode
+  | EscapedAngleBracketExpressionNode
   | ConditionalTemplateSnippetNode
   | ConditionalStringFragmentNode
   | ConditionalVarOmissionNode

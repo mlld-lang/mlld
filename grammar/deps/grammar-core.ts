@@ -21,6 +21,7 @@ export const NodeType = {
   ExecInvocation: 'ExecInvocation',
   CommandReference: 'CommandReference',
   FileReference: 'FileReference',
+  EscapedAngleBracketExpression: 'EscapedAngleBracketExpression',
   BinaryExpression: 'BinaryExpression',
   TernaryExpression: 'TernaryExpression',
   UnaryExpression: 'UnaryExpression',
@@ -1454,6 +1455,30 @@ export const helpers = {
         isPlaceholder: source && source.type === 'placeholder'
       }
     };
+  },
+
+  /**
+   * Creates an escaped angle bracket expression node (<<...>>)
+   * Static content is collapsed to a Text node, dynamic content is preserved for runtime interpolation.
+   */
+  createEscapedAngleBracketNode(parts: any[], location: any): any {
+    const normalizedParts = Array.isArray(parts) ? parts.filter((part) => part !== null && part !== undefined) : [];
+    const hasDynamicContent = normalizedParts.some(
+      (part) => part && typeof part === 'object' && part.type && part.type !== NodeType.Text
+    );
+
+    if (!hasDynamicContent) {
+      const content = this.reconstructRawString(normalizedParts);
+      return this.createNode(NodeType.Text, {
+        content: `<${content}>`,
+        location
+      });
+    }
+
+    return this.createNode(NodeType.EscapedAngleBracketExpression, {
+      content: normalizedParts,
+      location
+    });
   },
 
   // Binary expression builder with left-to-right associativity

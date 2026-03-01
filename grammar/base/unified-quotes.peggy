@@ -128,6 +128,7 @@ UnifiedInterpolationContent "Shared interpolation content"
   / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)
+  / EscapedAngleBracketExpression // <<...>> escaped angle expression
   / FileReferenceInterpolation   // <file.md> references with fields/pipes
   / TemplateVariableReference    // @var (with template pipes and fields)
   / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
@@ -238,13 +239,13 @@ UnifiedBacktickTextSegmentInline
 UnifiedBacktickChar
   = StringEscapeSequence  // Process string escapes first
   / EscapeSequence       // Then mlld syntax escapes
-  / !("`" / "!@" / "@" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
+  / !("`" / "!@" / "@" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<<" EscapedAngleBracketExpression / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
 
 // Inline backtick char (no newlines)
 UnifiedBacktickCharInline
   = StringEscapeSequence  // Process string escapes first
   / EscapeSequence       // Then mlld syntax escapes
-  / !("`" / "!@" / "@" / "\n" / "\r" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
+  / !("`" / "!@" / "@" / "\n" / "\r" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<<" EscapedAngleBracketExpression / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
 
 // Inline backtick interpolation content (no newlines)
 UnifiedBacktickInterpolationInline
