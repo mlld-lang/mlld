@@ -180,4 +180,44 @@ describe('@payload optional field access', () => {
 
     expect(result.trim()).toBe('unknown:5');
   });
+
+  it('@payload is available as direct variable without import', async () => {
+    const script = `/show @payload.topic
+/show @payload.count`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { topic: 'direct', count: 123 }
+      }
+    });
+
+    expect(result.trim()).toBe('direct\n\n123');
+  });
+
+  it('@payload is present as empty object when no flags passed', async () => {
+    const script = `/var @hasPayload = @payload != null
+/show @hasPayload`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': {}
+      }
+    });
+
+    expect(result.trim()).toBe('true');
+  });
+
+  it('destructuring import from @payload still works alongside direct access', async () => {
+    const script = `/import { @topic } from @payload
+/show @topic
+/show @payload.count`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { topic: 'imported', count: 456 }
+      }
+    });
+
+    expect(result.trim()).toBe('imported\n\n456');
+  });
 });

@@ -328,7 +328,13 @@ export class ArgumentParser {
             options._ = args.slice(i);
             stopParsing = true;
             break;
-          } else if (arg.startsWith('-') && (options.input && !this.commandsWithSubcommands.includes(options.input) || options.eval !== undefined)) {
+          } else if (
+            arg.startsWith('-') &&
+            (
+              (options.input && !this.commandsWithSubcommands.includes(options.input)) ||
+              options.eval !== undefined
+            )
+          ) {
             const parsed = this.parseCustomFlag(arg, args[i + 1]);
             if (!parsed) {
               throw new Error(`Unknown option: ${arg}`);
