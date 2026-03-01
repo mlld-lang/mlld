@@ -313,6 +313,9 @@ export class VirtualFS implements IFileSystemService {
 
   async exists(filePath: string): Promise<boolean> {
     const normalizedPath = this.normalizePath(filePath);
+    if (normalizedPath === '/') {
+      return !this.isDeleted('/');
+    }
     if (this.isDeleted(normalizedPath)) {
       return false;
     }
@@ -441,6 +444,9 @@ export class VirtualFS implements IFileSystemService {
 
   async isDirectory(filePath: string): Promise<boolean> {
     const normalizedPath = this.normalizePath(filePath);
+    if (normalizedPath === '/') {
+      return !this.isDeleted('/');
+    }
     if (this.isDeleted(normalizedPath)) {
       return false;
     }

@@ -88,6 +88,11 @@ Targets:
 - Keep test helper compatibility behavior.
 - Add `tests/utils/MemoryFileSystem.parity.test.ts`.
 
+Implementation notes:
+- `tests/utils/MemoryFileSystem.ts` now delegates filesystem behavior to `VirtualFS.empty()`.
+- Existing helper behavior (`execute(...)`, `isVirtual()`) is preserved.
+- Added parity coverage in `tests/utils/MemoryFileSystem.parity.test.ts`.
+
 ## Phase 6: Docs Completion (`m-78df`)
 
 Targets:
