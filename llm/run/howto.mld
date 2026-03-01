@@ -284,7 +284,10 @@ exe @addIntro(flatAtoms, introAtom) = js {
 var @allFlatAtoms = @addIntro(@flatAtoms, @introAtom)
 
 >> Get topic from payload (injected by SDK via dynamicModules)
-import { @topic, @subtopic, @section, @all } from @payload
+var @topic = @payload.topic ?? ""
+var @subtopic = @payload.subtopic ?? ""
+var @section = @payload.section ?? ""
+var @all = @payload.all ?? false
 
 >> Build fullId for subtopic lookup
 exe @buildFullId(topic, subtopic) = js {

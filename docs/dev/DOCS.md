@@ -88,24 +88,23 @@ LLM docs are built from atoms in `docs/src/atoms/`. See [DOCS-CLI.md](DOCS-CLI.m
 ```
 docs/src/atoms/             # Source of truth (~143 atoms + intro)
 ├── intro.md                # LLM quickstart
-├── cli/         (7)        # CLI invocation, validation, checkpoint
-├── config/      (14)       # Config files, policy, env blocks, auth
-├── core/        (30)       # Variables, templates, file loading, exe, run, builtins
+├── cli/         (7)        # CLI invocation, validation, checkpoint, live-stdio, skills
+├── config/      (14)       # Config files, env vars, policy, env blocks, auth
+├── core/        (30)       # Variables, templates, file loading, exe, run, builtins, escaping
 ├── effects/     (18)       # Pipelines, labels, guards, hooks
 ├── flow-control/(21)       # if, when, for, foreach, while, loop, bail
-├── mcp/         (5)        # MCP export, import, tool collections
-├── modules/     (21)       # Import/export, registry, publishing
+├── mcp/         (5)        # MCP export, import, tool collections, reshaping
+├── modules/     (21)       # Import/export, registry, publishing, versioning
 ├── output/      (4)        # output, log, append, stream
 ├── patterns/    (3)        # Prose, ralph, guarded tool export
-├── sdk/         (7)        # Execution modes, state, analysis
-└── security/    (13)       # Signing, MCP security, audit log
+├── sdk/         (7)        # Execution modes, state, dynamic modules, analysis
+└── security/    (13)       # Signing, MCP security, profiles, needs, audit log
 
 docs/llm/                   # Generated output (don't edit directly)
 ├── llms-core.txt           # core atoms
 ├── llms-flow-control.txt   # flow-control atoms
 ├── llms-effects.txt        # effects atoms
-├── ...                     # one file per section
-└── llms-cookbook.txt        # Annotated examples
+└── ...                     # one file per section
 ```
 
 ### Filesystem Conventions

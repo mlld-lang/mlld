@@ -19,11 +19,10 @@ mlld script.mld --timeout 5m           # Limit execution time
 mlld script.mld --metrics              # Show timing on stderr
 ```
 
-**Payload injection**: Unknown flags become `@payload` fields. `@payload` is always available as `{}` even with no flags, so scripts can safely import from it:
+**Payload injection**: Unknown flags become `@payload` fields. `@payload` is always available as `{}` even with no flags:
 
 ```mlld
-import { topic } from @payload
-show @topic
+show @payload.topic
 ```
 
 ```bash

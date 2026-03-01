@@ -19,12 +19,11 @@
 
 import { @claudePoll } from @mlld/claude-poll
 import { @flatName, @mkdirp, @flatten, @countBySeverity, @tagFindings } from "./lib/context.mld"
-import "@payload" as @p
 
 >> ─── Config ───
 
-var @parallelism = @p.parallel ? @p.parallel * 1 : 5
-var @skipLive = @p.nolive ?? ""
+var @parallelism = @payload.parallel ? @payload.parallel * 1 : 5
+var @skipLive = @payload.nolive ?? ""
 
 >> Tool permissions — escalation by role
 var @reviewTools = "Read,Write,Glob,Grep"

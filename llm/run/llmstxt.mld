@@ -129,8 +129,7 @@ var @moduleOrder = [
   "llms-config.txt",
   "llms-sdk.txt",
   "llms-security.txt",
-  "llms-reference.txt",
-  "llms-cookbook.txt"
+  "llms-reference.txt"
 ]
 
 var @contents = for @module in @moduleOrder => <@root/docs/llm/@module>

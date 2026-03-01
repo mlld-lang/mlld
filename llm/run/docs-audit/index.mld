@@ -1,0 +1,218 @@
+>> Docs Audit Orchestrator
+>> Usage: mlld run docs-audit [--parallel 10]
+>>
+>> Two-phase audit for documentation consolidation:
+>>   Phase 1: Gap analysis — compare each docs/user/ file against atoms
+>>   Phase 2: Taxonomy review — evaluate atom organization for website + CLI
+>>   Phase 3: Synthesis — combine findings into actionable recommendations
+>>
+>> Resilience: exe llm labels + checkpoint directives.
+>>   mlld run docs-audit                       # auto-resumes via cache
+>>   mlld run docs-audit --resume "taxonomy"   # skip to taxonomy phase
+>>   mlld run docs-audit --resume "synthesis"  # skip to synthesis
+>>   mlld run docs-audit --new                 # fresh run
+
+import { @claudePoll } from @mlld/claude-poll
+
+>> Config
+var @parallelism = @payload.parallel ? @payload.parallel * 1 : 10
+
+>> Prompt templates
+exe @gapAnalysisPrompt(filename, userDoc, atomInventory, strategyContext, outPath) = template "./prompts/workers/gap-analysis.att"
+exe @taxonomyReviewPrompt(atomDetails, websiteNav, strategyContext, outPath) = template "./prompts/workers/taxonomy-review.att"
+
+>> LLM call wrappers
+exe llm @callGapAnalysis(prompt, outPath) = @claudePoll(@prompt, "sonnet", "@root", "Read,Write", @outPath)
+exe llm @callTaxonomy(prompt, outPath) = @claudePoll(@prompt, "sonnet", "@root", "Read,Write,Glob,Grep", @outPath)
+exe llm @callSynthesis(prompt, outPath) = @claudePoll(@prompt, "opus", "@root", "Read,Write,Glob,Grep", @outPath)
+
+>> Shell helpers
+exe @mkdirp(dir) = sh { mkdir -p "$dir" }
+
+>> Output directory
+var @outDir = `@root/tmp/docs-audit`
+run @mkdirp(@outDir)
+run @mkdirp(`@outDir/gap-analysis`)
+
+>> Shared context
+var @strategyContext = <./prompts/shared/strategy-context.md>
+
+>> Build atom inventory from native frontmatter access
+var @syntaxAtoms = <@root/docs/src/atoms/syntax/*.md>
+var @commandsAtoms = <@root/docs/src/atoms/commands/*.md>
+var @controlFlowAtoms = <@root/docs/src/atoms/flow-control/*.md>
+var @modulesAtoms = <@root/docs/src/atoms/modules/*.md>
+var @patternsAtoms = <@root/docs/src/atoms/patterns/*.md>
+var @configAtoms = <@root/docs/src/atoms/configuration/*.md>
+var @securityAtoms = <@root/docs/src/atoms/security/*.md>
+var @mistakesAtoms = <@root/docs/src/atoms/mistakes/*.md>
+
+exe @flatten(arrays) = js { return [].concat(...arrays) }
+var @allAtoms = @flatten([@syntaxAtoms, @commandsAtoms, @controlFlowAtoms, @modulesAtoms, @patternsAtoms, @configAtoms, @securityAtoms, @mistakesAtoms])
+
+var @atomMetas = for @atom in @allAtoms [
+  let @id = @atom.mx.fm.id
+  if !@id [ => skip ]
+  if @id.startsWith("_") [ => skip ]
+  => { id: @id, title: @atom.mx.fm.title, brief: @atom.mx.fm.brief, category: @atom.mx.fm.category, parent: @atom.mx.fm.parent, tags: @atom.mx.fm.tags }
+]
+
+var @atomInventory = for @m in @atomMetas => `- [@m.category] @m.id: @m.title — @m.brief (tags: @m.tags)`
+var @atomInventoryText = @atomInventory.join("\n")
+
+>> Build detailed atom info for taxonomy review
+var @atomDetails = for @m in @atomMetas => `- id: @m.id | title: @m.title | brief: @m.brief | category: @m.category | parent: @m.parent | tags: @m.tags`
+var @atomDetailsText = @atomDetails.join("\n")
+
+>> Website nav (current state)
+var @websiteNav = `Introduction
+Alternative Syntax and Escape Hatches
+CLI Usage
+Content and Data
+Control Flow
+Cookbook
+Markdown Mode
+MCP Server Support
+mlld Modules
+mlld Registry
+mlld Resolvers
+Prose Execution
+Quick Start
+SDK Usage
+Security
+Streaming
+Syntax Reference
+Testing modules
+Working with Large Variables`
+
+>> List of user doc files to audit (excluding security.md and introduction.md which are staying as explainers)
+var @userDocFiles = [
+  "alternatives.md",
+  "cli.md",
+  "content-and-data.md",
+  "cookbook.md",
+  "flow-control.md",
+  "large-variables.md",
+  "markdown-mode.md",
+  "mcp.md",
+  "modules.md",
+  "prose.md",
+  "quickstart.md",
+  "reference.md",
+  "registry.md",
+  "resolvers.md",
+  "sdk.md",
+  "streaming.md",
+  "testing.md"
+]
+
+show `Docs Audit`
+show `  Atoms: @atomMetas.length`
+show `  User docs to audit: @userDocFiles.length (excluding introduction.md, security.md)`
+show `  Parallelism: @parallelism`
+show ``
+
+>> ============================================================
+>> Phase 1: Gap Analysis
+>> For each docs/user/ file, compare content against atoms
+>> ============================================================
+
+show `Phase 1: Gap Analysis (@userDocFiles.length files)`
+
+checkpoint "gap-analysis"
+
+var @gapResults = for parallel(@parallelism) @filename in @userDocFiles [
+  let @outPath = `@outDir/gap-analysis/@filename\.json`
+
+  let @userDoc = <@root/docs/user/@filename>?
+  if !@userDoc [
+    show `  @filename: not found`
+    => null
+  ]
+
+  let @prompt = @gapAnalysisPrompt(@filename, @userDoc, @atomInventoryText, @strategyContext, @outPath)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema above.`
+
+  @callGapAnalysis(@fullPrompt, @outPath)
+  let @result = <@outPath>? | @parse.loose
+
+  if !@result [
+    show `  @filename: analysis failed`
+    => null
+  ]
+
+  show `  @filename: @result.recommendation`
+  => @result
+]
+
+>> Summarize gap analysis
+var @gapSummary = for @r in @gapResults when @r [
+  => `- @r.file: @r.recommendation (@r.total_sections_analyzed sections)`
+]
+show `\nGap Analysis Summary:`
+show @gapSummary.join("\n")
+
+>> ============================================================
+>> Phase 2: Taxonomy Review
+>> Evaluate atom organization for website + CLI
+>> ============================================================
+
+show `\nPhase 2: Taxonomy Review`
+
+checkpoint "taxonomy"
+
+var @taxonomyOutPath = `@outDir/taxonomy-review.json`
+var @taxonomyPrompt = @taxonomyReviewPrompt(@atomDetailsText, @websiteNav, @strategyContext, @taxonomyOutPath)
+var @taxonomyFullPrompt = `@taxonomyPrompt
+
+IMPORTANT: Write your JSON response to @taxonomyOutPath using the Write tool. Write ONLY valid JSON matching the schema above.`
+
+@callTaxonomy(@taxonomyFullPrompt, @taxonomyOutPath)
+var @taxonomy = <@taxonomyOutPath>? | @parse.loose
+
+if @taxonomy [
+  show `  Categories proposed: @taxonomy.unified_taxonomy.proposed_categories.length`
+  show `  Feasible unified taxonomy: @taxonomy.unified_taxonomy.feasible`
+]
+
+>> ============================================================
+>> Phase 3: Synthesis
+>> Combine gap + taxonomy findings into recommendations
+>> ============================================================
+
+show `\nPhase 3: Synthesis`
+
+checkpoint "synthesis"
+
+var @gapFiles = <@outDir/gap-analysis/*.json>
+var @gapData = for @f in @gapFiles [
+  let @parsed = @f | @parse.loose
+  if !@parsed [ => skip ]
+  => @parsed
+]
+
+var @synthesisOutPath = `@outDir/synthesis.json`
+var @gapDataLength = @gapData.length
+exe @synthesisPrompt(strategyContext, gapDataLength, gapData, taxonomy, outPath) = template "./prompts/workers/synthesis.att"
+
+var @synthesisFullPrompt = @synthesisPrompt(@strategyContext, @gapDataLength, @gapData, @taxonomy, @synthesisOutPath)
+@callSynthesis(@synthesisFullPrompt, @synthesisOutPath)
+var @synthesis = <@synthesisOutPath>? | @parse.loose
+
+if !@synthesis [
+  show `\nSynthesis failed — check @synthesisOutPath`
+] else [
+  show `\n================================================`
+  show `SYNTHESIS COMPLETE`
+  show `================================================`
+  show `\n@synthesis.overall_summary`
+  show `\nMigration plan: @synthesis.migration_plan.length files`
+  show `New atoms needed: @synthesis.new_atoms_needed.length`
+  show `Explainer articles: @synthesis.explainer_articles.length`
+  show `Priority phases: @synthesis.priority_order.length`
+  show `\nFull results: @outDir/synthesis.json`
+  show `Gap analyses: @outDir/gap-analysis/`
+  show `Taxonomy: @outDir/taxonomy-review.json`
+]

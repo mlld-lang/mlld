@@ -5,6 +5,17 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3]
+
+### Added
+- `mlld install skill`, `mlld install skills`, and `mlld skills install` all alias to `mlld skill install`
+- `@payload` is a direct variable — no import required. `show @payload.name` just works. Import still works for destructuring (`import { name } from @payload`).
+- Added `/mlld:fanout` and `/mlld:query` skills to teach agents about RLM in mlld
+
+### Fixed
+- `mlld -e` now collects unknown flags into `@payload` instead of rejecting them
+- Registry directory modules (e.g. `@mlld/airlock`, `@mlld/gh-issues`) failed to import because strict-mode `.mld` content was parsed as markdown when the resolver path had no recognized file extension
+
 ## [2.0.2]
 
 ### Fixed

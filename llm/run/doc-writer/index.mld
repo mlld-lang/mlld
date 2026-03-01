@@ -17,11 +17,10 @@
 >>   mlld run doc-writer --filter bail           # Only entries matching "bail"
 
 import { @claudePoll } from @mlld/claude-poll
-import "@payload" as @p
 
-var @parallel = @p.parallel ?? "4"
-var @model = @p.model ?? "sonnet"
-var @filter = @p.filter ?? ""
+var @parallel = @payload.parallel ?? "4"
+var @model = @payload.model ?? "sonnet"
+var @filter = @payload.filter ?? ""
 
 >> Load manifest (.jsonl auto-parses to array of objects)
 var @manifestPath = "@base/llm/run/doc-writer/manifest.jsonl"

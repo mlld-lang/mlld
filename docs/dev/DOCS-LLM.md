@@ -44,8 +44,7 @@ docs/llm/                   # GENERATED OUTPUT (don't edit directly)
 ├── llms-config.txt         # Configuration, policy, environments
 ├── llms-sdk.txt            # SDK execution modes, state, analysis
 ├── llms-security.txt       # Signing, MCP security, audit log
-├── llms-reference.txt      # Quick reference tables
-└── llms-cookbook.txt        # Annotated real-world examples
+└── llms-reference.txt      # Quick reference tables
 
 llms.txt                    # Brief entry point with TOC + essential patterns
 llms-combined.txt           # Generated: all modules concatenated
@@ -71,7 +70,6 @@ Atom ordering and grouping come from filenames, not config files:
 | `llms.txt` | Quick context, points to modules |
 | `llms-combined.txt` | Full context injection for comprehensive tasks |
 | Individual modules | Focused help on specific topics |
-| `llms-cookbook.txt` | Learning by example, real patterns |
 | `mlld howto <topic>` | CLI access to atoms |
 
 ## Principles
@@ -82,7 +80,6 @@ Atom ordering and grouping come from filenames, not config files:
 - **Modular** - Each topic standalone, can be loaded independently
 - **Present tense only** - Document current syntax, not history or roadmap
 - **Tested examples** - Every code block must be valid mlld syntax
-- **Cookbook for composition** - Reference docs show features; cookbook shows them working together
 
 ## Strict Mode vs Markdown Mode
 
@@ -108,27 +105,6 @@ The overview module explains both modes, but examples throughout use strict mode
 |------------|-------------|
 | `run { ... }` | `run cmd { ... }` |
 | `@var_key` in iteration | `for @key, @value in @obj` or `@var.mx.key` |
-
-## The Cookbook
-
-`llms-cookbook.txt` contains annotated real-world examples showing feature composition. Each recipe is 30-80 lines with heavy comments explaining patterns.
-
-**Current recipes:**
-1. **LLM Library** - Clean utility module (pipelines, when, cmd:dir)
-2. **Gate Pattern** - Validation with blocks and structured returns
-3. **Agent Definition** - Config module with frontmatter and templates
-4. **Router** - Complex scoring and decision logic
-5. **Orchestrator** - Parallel execution with routing
-
-**Why a cookbook?**
-LLMs learn better from composed examples than isolated feature docs. The cookbook shows how patterns combine in real code, leading to faster comprehension.
-
-**Adding recipes:**
-- Base on real working code (anonymize if needed)
-- Show multiple features working together
-- Heavy `>>` comments explaining the "why"
-- Keep to 30-80 lines
-- Include a summary of demonstrated features
 
 ## Pseudo-XML Structure
 
@@ -225,9 +201,6 @@ Quick lookup tables:
 - Metadata fields
 - Escape hatch templates
 
-### llms-cookbook.txt
-Real-world annotated examples.
-
 ## Updating Content
 
 ### Adding a New Feature
@@ -237,7 +210,6 @@ Real-world annotated examples.
 3. Rebuild: `mlld run llmstxt`
 4. Verify output: check `docs/llm/llms-<section>.txt`
 5. Update llms-reference.txt tables if applicable
-6. Consider adding to cookbook if it composes well
 
 ### Fixing Examples
 
@@ -285,7 +257,7 @@ The script:
 6. Assembles all modules into `llms-combined.txt` with version and timestamp
 
 **Module order** in combined output:
-1. overview, 2. core-rules, 3. core, 4. flow-control, 5. effects, 6. modules, 7. mcp, 8. output, 9. patterns, 10. cli, 11. config, 12. sdk, 13. security, 14. reference, 15. cookbook
+1. overview, 2. core-rules, 3. core, 4. flow-control, 5. effects, 6. modules, 7. mcp, 8. output, 9. patterns, 10. cli, 11. config, 12. sdk, 13. security, 14. reference
 
 ## Testing Changes
 

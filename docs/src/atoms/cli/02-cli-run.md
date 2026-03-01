@@ -25,8 +25,7 @@ mlld run build --env prod --fast true
 ```
 
 ```mlld
->> In build.mld
-import "@payload" as @payload
+>> In build.mld — @payload is available directly
 var @env = @payload.env ? @payload.env : "dev"
 var @fast = @payload.fast ? @payload.fast : false
 ```

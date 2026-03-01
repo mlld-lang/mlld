@@ -1,12 +1,7 @@
 <div class="terminal-window {{ example.className }}">
   <div class="title-bar">
-    <div class="window-controls">
-      <span class="window-control red"></span>
-      <span class="window-control yellow"></span>
-      <span class="window-control green"></span>
-    </div>
-    <div class="filename">{{ example.filename }}</div>
-    <div class="spacer"></div>
+    <span class="terminal-dot"></span>
+    <span class="filename">{{ example.filename }}</span>
   </div>
   <div class="terminal-content">{%- if example and example.code -%}
 {% meld example.code %}

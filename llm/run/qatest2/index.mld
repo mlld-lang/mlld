@@ -2,10 +2,9 @@
 >> Usage: mlld run qatest2 [--parallel <N>] [--filter <pattern>]
 
 import { @logEvent, @mkdirp } from "./lib/context.mld"
-import "@payload" as @p
 
-var @parallelism = @p.parallel ?? "4"
-var @filter = @p.filter ?? ""
+var @parallelism = @payload.parallel ?? "4"
+var @filter = @payload.filter ?? ""
 
 exe @workerPrompt(item) = template "./prompts/worker.att"
 
