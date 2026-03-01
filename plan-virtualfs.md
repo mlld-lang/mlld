@@ -35,6 +35,12 @@ Targets:
 - Add `services/fs/VirtualFS.core.test.ts`.
 - Add/extend PathContext + project-root integration tests with VirtualFS.
 
+Implementation notes:
+- `VirtualFS` now implements core methods: `readFile`, `writeFile`, `appendFile`, `exists`, `access`, `mkdir`, `readdir`, `isDirectory`, `stat`, `unlink`, `rm`, `isVirtual`.
+- Path normalization is deterministic and absolute (forward-slash normalized).
+- Read precedence is shadow-first with delete masking before backing fallback.
+- Core integration coverage includes VirtualFS-backed `PathContextBuilder`/`PathContextService` and `findProjectRoot`.
+
 ## Phase 2: Change Lifecycle APIs (`m-978e`)
 
 Targets:

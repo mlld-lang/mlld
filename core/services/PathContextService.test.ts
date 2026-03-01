@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'path';
 import { PathContextBuilder, PathContextService } from './PathContextService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
+import { VirtualFS } from '@services/fs/VirtualFS';
 
 describe('PathContextService', () => {
   let fileSystem: MemoryFileSystem;
@@ -94,6 +95,22 @@ describe('PathContextService', () => {
         } finally {
           process.cwd = originalCwd;
         }
+      });
+
+      it('should build context from VirtualFS-backed file system', async () => {
+        const virtual = VirtualFS.empty();
+        await virtual.mkdir('/virtual/project/src', { recursive: true });
+        await virtual.writeFile('/virtual/project/mlld-config.json', '{}');
+        await virtual.writeFile('/virtual/project/src/main.mld', '/show "ok"');
+
+        const context = await PathContextBuilder.fromFile(
+          '/virtual/project/src/main.mld',
+          virtual
+        );
+
+        expect(context.projectRoot).toBe('/virtual/project');
+        expect(context.fileDirectory).toBe('/virtual/project/src');
+        expect(context.filePath).toBe('/virtual/project/src/main.mld');
       });
     });
     
@@ -238,6 +255,20 @@ describe('PathContextService', () => {
         
         expect(validation.valid).toBe(false);
         expect(validation.errors).toContain('filePath must be in fileDirectory');
+      });
+
+      it('should validate a VirtualFS-backed context as valid', async () => {
+        const virtual = VirtualFS.empty();
+        await virtual.mkdir('/vproj/src', { recursive: true });
+        await virtual.writeFile('/vproj/mlld.lock.json', '{}');
+        await virtual.writeFile('/vproj/src/app.mld', '/show "vfs"');
+
+        const virtualService = new PathContextService(virtual);
+        const context = await PathContextBuilder.fromFile('/vproj/src/app.mld', virtual);
+        const validation = await virtualService.validate(context);
+
+        expect(validation.valid).toBe(true);
+        expect(validation.errors).toHaveLength(0);
       });
     });
     
