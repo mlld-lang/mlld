@@ -62,6 +62,10 @@ Targets:
 - Final `changes()` canonical + `diff()` alias behavior and tests.
 - `services/fs/VirtualFS.diff.test.ts`.
 
+Implementation notes:
+- Added `fileDiff(path)` with stable unified-diff rendering in `services/fs/VirtualFS.ts`.
+- Finalized inspection naming contract in code/tests/docs: `changes()` canonical, `diff()` alias.
+
 ## Phase 4: SDK and Interpreter Integration (`m-14ff`)
 
 Targets:
