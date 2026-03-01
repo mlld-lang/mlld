@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `mlld -e` now collects unknown flags into `@payload` instead of rejecting them
+- Registry directory modules (e.g. `@mlld/airlock`, `@mlld/gh-issues`) failed to import because strict-mode `.mld` content was parsed as markdown when the resolver path had no recognized file extension
 
 ## [2.0.2]
 
