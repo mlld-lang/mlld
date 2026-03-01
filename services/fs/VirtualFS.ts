@@ -2,6 +2,44 @@ import path from 'node:path';
 import type { IFileSystemService } from './IFileSystemService';
 
 type StatShape = { isDirectory(): boolean; isFile(): boolean; size?: number };
+type FlushScope = { path?: string };
+
+export type VirtualFSChangeType = 'created' | 'modified' | 'deleted';
+export type VirtualFSChangeEntity = 'file' | 'directory';
+
+export interface VirtualFSChange {
+  path: string;
+  type: VirtualFSChangeType;
+  entity: VirtualFSChangeEntity;
+}
+
+export type VirtualFSPatchOperation = 'write' | 'mkdir' | 'delete';
+
+export interface VirtualFSPatchWriteEntry {
+  path: string;
+  op: 'write';
+  content: string;
+}
+
+export interface VirtualFSPatchMkdirEntry {
+  path: string;
+  op: 'mkdir';
+}
+
+export interface VirtualFSPatchDeleteEntry {
+  path: string;
+  op: 'delete';
+}
+
+export type VirtualFSPatchEntry =
+  | VirtualFSPatchWriteEntry
+  | VirtualFSPatchMkdirEntry
+  | VirtualFSPatchDeleteEntry;
+
+export interface VirtualFSPatch {
+  version: 1;
+  entries: VirtualFSPatchEntry[];
+}
 
 /**
  * VirtualFS is a copy-on-write filesystem overlay.
@@ -21,6 +59,163 @@ export class VirtualFS implements IFileSystemService {
 
   static over(backing: IFileSystemService): VirtualFS {
     return new VirtualFS(backing);
+  }
+
+  async changes(): Promise<VirtualFSChange[]> {
+    const changes: VirtualFSChange[] = [];
+    const candidatePaths = new Set<string>([
+      ...this.shadowFiles.keys(),
+      ...this.explicitDirectories.keys(),
+      ...this.deletedPaths.keys()
+    ]);
+
+    for (const candidatePath of Array.from(candidatePaths).sort()) {
+      if (this.deletedPaths.has(candidatePath)) {
+        changes.push({
+          path: candidatePath,
+          type: 'deleted',
+          entity: (await this.isDirectoryInBacking(candidatePath)) ? 'directory' : 'file'
+        });
+        continue;
+      }
+
+      if (this.shadowFiles.has(candidatePath)) {
+        const shadowContent = this.shadowFiles.get(candidatePath) as string;
+        const existsInBacking = await this.existsInBacking(candidatePath);
+        if (!existsInBacking) {
+          changes.push({
+            path: candidatePath,
+            type: 'created',
+            entity: 'file'
+          });
+          continue;
+        }
+
+        const backingContent = await this.readBackingFile(candidatePath);
+        if (backingContent !== shadowContent) {
+          changes.push({
+            path: candidatePath,
+            type: 'modified',
+            entity: 'file'
+          });
+        }
+        continue;
+      }
+
+      if (this.explicitDirectories.has(candidatePath) && !(await this.existsInBacking(candidatePath))) {
+        changes.push({
+          path: candidatePath,
+          type: 'created',
+          entity: 'directory'
+        });
+      }
+    }
+
+    return changes.sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  async diff(): Promise<VirtualFSChange[]> {
+    return await this.changes();
+  }
+
+  reset(): void {
+    this.shadowFiles.clear();
+    this.deletedPaths.clear();
+    this.explicitDirectories.clear();
+  }
+
+  discard(targetPath: string): void {
+    const normalizedPath = this.normalizePath(targetPath);
+    this.removeShadowPath(normalizedPath, true);
+    this.deleteMatchingPaths(this.deletedPaths, normalizedPath);
+  }
+
+  export(): VirtualFSPatch {
+    const entries: VirtualFSPatchEntry[] = [];
+
+    for (const dirPath of this.explicitDirectories.keys()) {
+      entries.push({
+        path: dirPath,
+        op: 'mkdir'
+      });
+    }
+
+    for (const [filePath, content] of this.shadowFiles.entries()) {
+      entries.push({
+        path: filePath,
+        op: 'write',
+        content
+      });
+    }
+
+    for (const deletedPath of this.deletedPaths.keys()) {
+      entries.push({
+        path: deletedPath,
+        op: 'delete'
+      });
+    }
+
+    entries.sort((a, b) => {
+      const pathCmp = a.path.localeCompare(b.path);
+      if (pathCmp !== 0) return pathCmp;
+      return this.operationSortKey(a.op) - this.operationSortKey(b.op);
+    });
+
+    return {
+      version: 1,
+      entries
+    };
+  }
+
+  apply(patch: VirtualFSPatch): void {
+    if (!patch || patch.version !== 1 || !Array.isArray(patch.entries)) {
+      throw new Error('Invalid VirtualFS patch');
+    }
+
+    for (const entry of patch.entries) {
+      const normalizedPath = this.normalizePath(entry.path);
+      if (entry.op === 'write') {
+        this.shadowFiles.set(normalizedPath, entry.content);
+        this.clearDeletionForPath(normalizedPath);
+        continue;
+      }
+
+      if (entry.op === 'mkdir') {
+        this.explicitDirectories.add(normalizedPath);
+        this.clearDeletionForPath(normalizedPath);
+        continue;
+      }
+
+      this.removeShadowPath(normalizedPath, true);
+      this.deletedPaths.add(normalizedPath);
+    }
+  }
+
+  async flush(targetPath?: string): Promise<void> {
+    if (!this.backing) {
+      const error = new Error('VirtualFS cannot flush without backing filesystem') as NodeJS.ErrnoException;
+      error.code = 'ENOTSUP';
+      throw error;
+    }
+
+    const scope: FlushScope = targetPath ? { path: this.normalizePath(targetPath) } : {};
+    const entries = this.selectPatchEntriesForScope(this.export().entries, scope);
+    for (const entry of entries) {
+      if (entry.op === 'mkdir') {
+        await this.backing.mkdir(entry.path, { recursive: true });
+        this.explicitDirectories.delete(entry.path);
+        continue;
+      }
+
+      if (entry.op === 'write') {
+        await this.backing.writeFile(entry.path, entry.content);
+        this.shadowFiles.delete(entry.path);
+        continue;
+      }
+
+      await this.deleteFromBacking(entry.path);
+      this.deletedPaths.delete(entry.path);
+    }
   }
 
   isVirtual(): boolean {
@@ -132,7 +327,9 @@ export class VirtualFS implements IFileSystemService {
       let current = '';
       for (const segment of segments) {
         current = `${current}/${segment}`;
-        this.explicitDirectories.add(current);
+        if (!(await this.isDirectory(current))) {
+          this.explicitDirectories.add(current);
+        }
         this.clearDeletionForPath(current);
       }
       return;
@@ -342,12 +539,6 @@ export class VirtualFS implements IFileSystemService {
       }
       current = path.posix.dirname(current);
     }
-    const childPrefix = targetPath === '/' ? '/' : `${targetPath}/`;
-    for (const deletedPath of Array.from(this.deletedPaths)) {
-      if (deletedPath.startsWith(childPrefix)) {
-        this.deletedPaths.delete(deletedPath);
-      }
-    }
   }
 
   private isDeleted(targetPath: string): boolean {
@@ -412,5 +603,66 @@ export class VirtualFS implements IFileSystemService {
 
     this.shadowFiles.delete(targetPath);
     this.explicitDirectories.delete(targetPath);
+  }
+
+  private deleteMatchingPaths(paths: Set<string>, targetPath: string): void {
+    const prefix = targetPath === '/' ? '/' : `${targetPath}/`;
+    for (const value of Array.from(paths)) {
+      if (value === targetPath || value.startsWith(prefix)) {
+        paths.delete(value);
+      }
+    }
+  }
+
+  private operationSortKey(op: VirtualFSPatchOperation): number {
+    switch (op) {
+      case 'mkdir':
+        return 0;
+      case 'write':
+        return 1;
+      case 'delete':
+        return 2;
+      default:
+        return 99;
+    }
+  }
+
+  private selectPatchEntriesForScope(
+    entries: VirtualFSPatchEntry[],
+    scope: FlushScope
+  ): VirtualFSPatchEntry[] {
+    if (!scope.path) {
+      return entries;
+    }
+    const prefix = scope.path === '/' ? '/' : `${scope.path}/`;
+    return entries.filter(entry => entry.path === scope.path || entry.path.startsWith(prefix));
+  }
+
+  private async deleteFromBacking(targetPath: string): Promise<void> {
+    if (!this.backing) {
+      return;
+    }
+
+    if (typeof this.backing.rm === 'function') {
+      await this.backing.rm(targetPath, { recursive: true, force: true });
+      return;
+    }
+
+    if (typeof this.backing.unlink === 'function') {
+      try {
+        await this.backing.unlink(targetPath);
+      } catch {
+        // Best-effort fallback when rm/unlink support differs by backing implementation.
+      }
+    }
+  }
+
+  private async readBackingFile(targetPath: string): Promise<string | null> {
+    if (!this.backing) return null;
+    try {
+      return await this.backing.readFile(targetPath);
+    } catch {
+      return null;
+    }
   }
 }

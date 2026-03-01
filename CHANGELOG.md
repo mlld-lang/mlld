@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - VirtualFS contract freeze baseline: finalized public API/migration decisions, phase plan, and regression checklist artifacts (`plan-virtualfs.md`, `docs/dev/VIRTUALFS-CONTRACT.md`, `tests/virtualfs/REGRESSION-CHECKLIST.md`)
 - `VirtualFS` core `IFileSystemService` implementation with copy-on-write overlay semantics (`empty`/`over`, shadow-first reads, delete masking, directory merge behavior) plus new core/integration test coverage
+- `VirtualFS` lifecycle APIs for inspect/apply/revert workflows: `changes`/`diff`, `discard`, `reset`, scoped/global `flush`, deterministic `export`, and `apply` with strict patch typings
 
 ## [2.0.3]
 
