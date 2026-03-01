@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { processMlld, MlldError, VirtualFS } from './index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile as writeNodeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import os from 'node:os';
 
 describe('Mlld API', () => {
   let fileSystem: MemoryFileSystem;
@@ -239,6 +240,28 @@ show @name
       ) as { exports?: Record<string, unknown> };
       expect(packageJson.exports).toBeDefined();
       expect(packageJson.exports).toHaveProperty('./sdk');
+    });
+
+    it('preserves default NodeFileSystem behavior when fileSystem is not provided', async () => {
+      const dir = await mkdtemp(path.join(os.tmpdir(), 'mlld-vfs-nodefs-'));
+      try {
+        const scriptPath = path.join(dir, 'default-nodefs.mld');
+        await writeNodeFile(scriptPath, '/show "ok"', 'utf8');
+
+        const result = await processMlld(
+          [
+            '/output "node-default" to "./out.txt"',
+            '/show "ok"'
+          ].join('\n'),
+          { filePath: scriptPath }
+        );
+
+        expect(result.trim()).toBe('ok');
+        const persisted = await readFile(path.join(dir, 'out.txt'), 'utf8');
+        expect(persisted).toBe('node-default');
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
     });
   });
 });

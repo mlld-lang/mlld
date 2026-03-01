@@ -4,7 +4,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { ExecuteError } from './types';
 import { VirtualFS } from '@services/fs/VirtualFS';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdtemp, readFile, rm, writeFile as writeNodeFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
@@ -213,5 +213,25 @@ describe('execute', () => {
 
     await vfs.flush('/project/result.txt');
     expect(await backing.readFile('/project/result.txt')).toBe('shadow-write');
+  });
+
+  it('preserves default NodeFileSystem behavior in execute() when fileSystem is omitted', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'mlld-execute-nodefs-'));
+    cleanupDirs.push(dir);
+    const route = path.join(dir, 'route.mld');
+    await writeNodeFile(
+      route,
+      [
+        '/output "node-fs" to "./node-output.txt"',
+        '/show "done"'
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = await execute(route, undefined, { pathService: new PathService() });
+    expect(result.output.trim()).toBe('done');
+
+    const persisted = await readFile(path.join(dir, 'node-output.txt'), 'utf8');
+    expect(persisted).toBe('node-fs');
   });
 });

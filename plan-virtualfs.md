@@ -114,3 +114,12 @@ Implementation notes:
 Targets:
 - Stress and regression coverage for deep directory merges and repeated lifecycle operations.
 - Final consistency sweep for exports/docs/changelog/API.
+
+Implementation notes:
+- Added stress coverage in `services/fs/VirtualFS.stress.test.ts` for:
+  - deep directory merge/mask behavior across many files,
+  - repeated `flush`/`discard` lifecycle cycles.
+- Added default NodeFileSystem regression checks in:
+  - `sdk/index.test.ts`
+  - `sdk/execute.test.ts`
+- Completed VirtualFS scope TODO/naming/export consistency audit.
