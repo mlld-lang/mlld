@@ -35,25 +35,12 @@ Targets:
 - Add `services/fs/VirtualFS.core.test.ts`.
 - Add/extend PathContext + project-root integration tests with VirtualFS.
 
-Implementation notes:
-- `VirtualFS` now implements core methods: `readFile`, `writeFile`, `appendFile`, `exists`, `access`, `mkdir`, `readdir`, `isDirectory`, `stat`, `unlink`, `rm`, `isVirtual`.
-- Path normalization is deterministic and absolute (forward-slash normalized).
-- Read precedence is shadow-first with delete masking before backing fallback.
-- Core integration coverage includes VirtualFS-backed `PathContextBuilder`/`PathContextService` and `findProjectRoot`.
-
 ## Phase 2: Change Lifecycle APIs (`m-978e`)
 
 Targets:
 - `changes()` / `reset()` / `discard(path)` / `flush(path?)` / `export()` / `apply(patch)`.
 - Deterministic patch serialization and path-scoped lifecycle behavior.
 - `services/fs/VirtualFS.lifecycle.test.ts` + output/append integration coverage.
-
-Implementation notes:
-- Added strict patch/change typings in `services/fs/VirtualFS.ts`:
-  - `VirtualFSChange`, `VirtualFSChangeType`, `VirtualFSPatch`, `VirtualFSPatchEntry`.
-- `flush(path?)` now supports scoped flush and global flush.
-- `VirtualFS.empty().flush()` fails with `ENOTSUP` (no backing contract).
-- Added integration coverage for `/output` + `/append` shadow behavior before flush and apply/export replay.
 
 ## Phase 3: `fileDiff` and Inspection Compatibility (`m-0c26`)
 
@@ -62,24 +49,12 @@ Targets:
 - Final `changes()` canonical + `diff()` alias behavior and tests.
 - `services/fs/VirtualFS.diff.test.ts`.
 
-Implementation notes:
-- Added `fileDiff(path)` with stable unified-diff rendering in `services/fs/VirtualFS.ts`.
-- Finalized inspection naming contract in code/tests/docs: `changes()` canonical, `diff()` alias.
-
 ## Phase 4: SDK and Interpreter Integration (`m-14ff`)
 
 Targets:
 - Export VirtualFS on SDK/public package surfaces.
 - Validate interpreter import/output paths under virtual fs mode.
 - Preserve default NodeFileSystem behavior for non-VirtualFS callers.
-
-Implementation notes:
-- SDK surface now exports `VirtualFS` and lifecycle patch/change types from `sdk/index.ts`.
-- Package export map includes `./sdk` as a public alias to the SDK surface.
-- Added SDK and interpreter integration tests for VirtualFS workflows:
-  - `sdk/index.test.ts`
-  - `sdk/execute.test.ts`
-  - `interpreter/eval/import/virtualfs-integration.test.ts`
 
 ## Phase 5: MemoryFileSystem Migration (`m-56a0`)
 
@@ -88,38 +63,14 @@ Targets:
 - Keep test helper compatibility behavior.
 - Add `tests/utils/MemoryFileSystem.parity.test.ts`.
 
-Implementation notes:
-- `tests/utils/MemoryFileSystem.ts` now delegates filesystem behavior to `VirtualFS.empty()`.
-- Existing helper behavior (`execute(...)`, `isVirtual()`) is preserved.
-- Added parity coverage in `tests/utils/MemoryFileSystem.parity.test.ts`.
-
 ## Phase 6: Docs Completion (`m-78df`)
 
 Targets:
 - Update required dev/user docs and docs atoms with VirtualFS usage.
 - Add doc-mirroring SDK test coverage to reduce drift.
 
-Implementation notes:
-- Updated required docs:
-  - `docs/dev/ARCHITECTURE.md`
-  - `docs/dev/GRAMMAR.md`
-  - `docs/dev/TESTS.md`
-  - `docs/dev/SDK.md`
-  - `docs/user/sdk.md`
-- Added docs atom: `docs/src/atoms/sdk/08-sdk--virtualfs.md`.
-- Added explicit docs-mirroring SDK test: `sdk/virtualfs.docs.test.ts`.
-
 ## Phase 7: Final Hardening (`m-df9f`)
 
 Targets:
 - Stress and regression coverage for deep directory merges and repeated lifecycle operations.
 - Final consistency sweep for exports/docs/changelog/API.
-
-Implementation notes:
-- Added stress coverage in `services/fs/VirtualFS.stress.test.ts` for:
-  - deep directory merge/mask behavior across many files,
-  - repeated `flush`/`discard` lifecycle cycles.
-- Added default NodeFileSystem regression checks in:
-  - `sdk/index.test.ts`
-  - `sdk/execute.test.ts`
-- Completed VirtualFS scope TODO/naming/export consistency audit.

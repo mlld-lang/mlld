@@ -59,26 +59,6 @@ Delete masking and directory visibility:
 No-backing flush:
 - `flush(...)` fails when VirtualFS has no backing filesystem (`VirtualFS.empty()`).
 
-## Core Semantics Map (Phase 1)
-
-Core API behavior in `services/fs/VirtualFS.ts`:
-- `VirtualFS.empty()` creates a virtual-only filesystem with no backing.
-- `VirtualFS.over(backing)` overlays copy-on-write shadow state over any `IFileSystemService`.
-- Writes (`writeFile`, `appendFile`, `mkdir`, `rm`, `unlink`) mutate shadow state only.
-- Reads and existence checks consult shadow state and delete masks before backing.
-- `readdir` merges backing and shadow entries with deterministic sorting.
-- `isVirtual()` returns `true` for virtual-mode detection in interpreter paths.
-
-Lifecycle API behavior:
-- `changes()` is canonical change inspection.
-- `diff()` is a compatibility alias of `changes()`.
-- `fileDiff(path)` returns deterministic unified diff output for file-level inspection.
-- `discard(path)` removes shadow/deleted state under a scoped path.
-- `reset()` clears all shadow/deleted lifecycle state.
-- `export()` emits deterministic patch entries.
-- `apply(patch)` rehydrates shadow state from patch entries.
-- `flush(path?)` applies scoped or global patch state to backing.
-
 ## Non-Goals (Contract Phase)
 
 - No production implementation details beyond contract definitions.
