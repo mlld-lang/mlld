@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VirtualFS` core `IFileSystemService` implementation with copy-on-write overlay semantics (`empty`/`over`, shadow-first reads, delete masking, directory merge behavior) plus new core/integration test coverage
 - `VirtualFS` lifecycle APIs for inspect/apply/revert workflows: `changes`/`diff`, `discard`, `reset`, scoped/global `flush`, deterministic `export`, and `apply` with strict patch typings
 - `VirtualFS.fileDiff(path)` unified diff inspection with deterministic output; inspection naming finalized with `changes()` canonical and `diff()` compatibility alias
+- SDK/interpreter VirtualFS integration: SDK now exports `VirtualFS` on the public surface, package exports include `mlld/sdk`, and interpreter import workflows are covered against VirtualFS-backed parsing/directory behaviors
 
 ## [2.0.2]
 

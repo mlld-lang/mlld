@@ -3,6 +3,7 @@ import { execute, MemoryAstCache } from './execute';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { ExecuteError } from './types';
+import { VirtualFS } from '@services/fs/VirtualFS';
 import { mkdtemp, rm } from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -186,5 +187,31 @@ describe('execute', () => {
     expect(first.output).toContain('review:1:src/a.ts:sonnet');
     expect(second.output).toContain('review:1:src/a.ts:sonnet');
     expect((globalThis as Record<string, unknown>)[counterKey]).toBe(1);
+  });
+
+  it('supports execute() over VirtualFS while preserving backing immutability until flush', async () => {
+    const backing = new MemoryFileSystem();
+    await backing.mkdir('/routes', { recursive: true });
+    await backing.mkdir('/project', { recursive: true });
+    await backing.writeFile(
+      '/routes/vfs-route.mlld',
+      [
+        '/output "shadow-write" to "/project/result.txt"',
+        '/show "ok"'
+      ].join('\n')
+    );
+
+    const vfs = VirtualFS.over(backing);
+    const result = await execute('/routes/vfs-route.mlld', undefined, {
+      fileSystem: vfs,
+      pathService
+    });
+
+    expect(result.output.trim()).toBe('ok');
+    expect(await backing.exists('/project/result.txt')).toBe(false);
+    expect(await vfs.readFile('/project/result.txt')).toBe('shadow-write');
+
+    await vfs.flush('/project/result.txt');
+    expect(await backing.readFile('/project/result.txt')).toBe('shadow-write');
   });
 });

@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { processMlld, MlldError } from './index';
+import { processMlld, MlldError, VirtualFS } from './index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { readFile } from 'node:fs/promises';
+import * as path from 'node:path';
 
 describe('Mlld API', () => {
   let fileSystem: MemoryFileSystem;
@@ -202,6 +204,41 @@ show @name
       });
       expect(result.trim()).not.toBe('World');
       expect(result).toContain('show @name');
+    });
+
+    it('keeps output writes shadowed when processMlld runs on VirtualFS', async () => {
+      const backing = new MemoryFileSystem();
+      await backing.mkdir('/project', { recursive: true });
+      const vfs = VirtualFS.over(backing);
+
+      const content = [
+        '/output "vfs-content" to "/project/out.txt"',
+        '/show "ok"'
+      ].join('\n');
+
+      const result = await processMlld(content, {
+        fileSystem: vfs,
+        pathService,
+        filePath: '/project/main.mld'
+      });
+
+      expect(result.trim()).toBe('ok');
+      expect(await backing.exists('/project/out.txt')).toBe(false);
+      expect(await vfs.readFile('/project/out.txt')).toBe('vfs-content');
+
+      await vfs.flush('/project/out.txt');
+      expect(await backing.readFile('/project/out.txt')).toBe('vfs-content');
+    });
+
+    it('exports VirtualFS on SDK surface and package exports include ./sdk', async () => {
+      const vfs = VirtualFS.empty();
+      expect(vfs.isVirtual()).toBe(true);
+
+      const packageJson = JSON.parse(
+        await readFile(path.resolve(process.cwd(), 'package.json'), 'utf8')
+      ) as { exports?: Record<string, unknown> };
+      expect(packageJson.exports).toBeDefined();
+      expect(packageJson.exports).toHaveProperty('./sdk');
     });
   });
 });

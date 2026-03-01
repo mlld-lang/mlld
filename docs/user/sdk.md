@@ -25,6 +25,16 @@ const output = await processMlld(script);
 console.log(output); // "Hello"
 ```
 
+### VirtualFS (Sandboxed File Workflows)
+
+`VirtualFS` is available from the SDK surface:
+
+```typescript
+import { VirtualFS, processMlld } from 'mlld';
+```
+
+`mlld/sdk` is also supported as a subpath alias.
+
 With a file path for imports:
 
 ```typescript

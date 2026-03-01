@@ -11,6 +11,7 @@ related-types: sdk/types { StructuredResult, StreamExecution, SDKEvent, Streamin
 ## tldr
 
 - SDK/runtime entrypoints are `processMlld(...)`, `execute(...)`, `analyzeModule(...)`, and interpreter `interpret(...)`.
+- `VirtualFS` is exported on the SDK surface (`import { VirtualFS } from "mlld"`), with `mlld/sdk` as a public subpath alias.
 - `execute(...)` injects runtime data via dynamic modules (`@payload`, optional `@state`).
 - AST caching is content-based (`source` equality), keyed by `filePath:mode`.
 - `ExecutionEmitter` is an event hub only; StreamBus subscription is wired by `Environment.enableSDKEvents(...)`.
