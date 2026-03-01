@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SDK/interpreter VirtualFS integration: SDK now exports `VirtualFS` on the public surface, package exports include `mlld/sdk`, and interpreter import workflows are covered against VirtualFS-backed parsing/directory behaviors
 - Test harness migration: `MemoryFileSystem` now wraps `VirtualFS.empty()` for semantics parity, with dedicated parity tests and updated test-environment docs
 
+### Documentation
+- Completed VirtualFS coverage across dev/user docs and SDK atoms, including architecture placement, no-grammar-impact note, test-harness guidance, SDK usage patterns, and docs-mirroring SDK example tests
+
 ## [2.0.3]
 
 ### Added
