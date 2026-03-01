@@ -12,7 +12,6 @@ layout: base.njk
     <span class="toggle-text">Menu</span>
   </button>
 
-  <!-- Add overlay for mobile -->
   <div class="docs-overlay" id="docs-overlay"></div>
 
   <aside class="docs-sidebar" id="docs-sidebar">
@@ -52,16 +51,16 @@ layout: base.njk
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    const toggleButton = document.querySelector('.docs-sidebar-toggle');
-    const sidebar = document.getElementById('docs-sidebar');
-    const overlay = document.getElementById('docs-overlay');
+    var toggleButton = document.querySelector('.docs-sidebar-toggle');
+    var sidebar = document.getElementById('docs-sidebar');
+    var overlay = document.getElementById('docs-overlay');
 
     function toggleSidebar() {
-      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      var isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
       toggleButton.setAttribute('aria-expanded', !isExpanded);
       sidebar.classList.toggle('open');
       overlay.classList.toggle('active');
-      if (window.innerWidth <= 950) {
+      if (window.innerWidth <= 960) {
         document.body.classList.toggle('sidebar-open', !isExpanded);
       }
     }
@@ -74,16 +73,16 @@ layout: base.njk
       }
     });
 
-    sidebar.querySelectorAll('a').forEach(link => {
+    sidebar.querySelectorAll('a').forEach(function(link) {
       link.addEventListener('click', function() {
-        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+        if (window.innerWidth <= 960 && sidebar.classList.contains('open')) {
           toggleSidebar();
         }
       });
     });
 
     document.addEventListener('click', function(event) {
-      if (window.innerWidth <= 950 &&
+      if (window.innerWidth <= 960 &&
           sidebar.classList.contains('open') &&
           !sidebar.contains(event.target) &&
           !toggleButton.contains(event.target) &&
@@ -92,17 +91,17 @@ layout: base.njk
       }
     });
 
-    // Build page outline from h2/h3 headings
-    const outline = document.getElementById('page-outline');
+    // Build page outline
+    var outline = document.getElementById('page-outline');
     if (outline) {
-      const content = document.querySelector('.docs-content');
-      const headings = content.querySelectorAll('h2, h3');
-      const tocLinks = [];
+      var content = document.querySelector('.docs-content');
+      var headings = content.querySelectorAll('h2, h3');
+      var tocLinks = [];
       headings.forEach(function(h) {
         if (!h.id) return;
-        const li = document.createElement('li');
+        var li = document.createElement('li');
         if (h.tagName === 'H3') li.classList.add('outline-nested');
-        const a = document.createElement('a');
+        var a = document.createElement('a');
         a.href = '#' + h.id;
         a.textContent = h.textContent;
         li.appendChild(a);
@@ -110,10 +109,10 @@ layout: base.njk
         tocLinks.push({ id: h.id, el: a });
       });
 
-      // Scroll spy: highlight current heading in right rail
+      // Scroll spy
       if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
-        let currentId = null;
-        const observer = new IntersectionObserver(function(entries) {
+        var currentId = null;
+        var observer = new IntersectionObserver(function(entries) {
           entries.forEach(function(entry) {
             if (entry.isIntersecting) {
               currentId = entry.target.id;

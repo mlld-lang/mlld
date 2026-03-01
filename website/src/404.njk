@@ -6,24 +6,28 @@ permalink: 404.html
 
 <div class="error-page">
   <h1>404</h1>
-  <h2>Page Not Found</h2>
-  <p>The page you're looking for doesn't exist or has been moved.</p>
-  <p><a href="/">Return to the home page</a></p>
+  <p class="error-sub">This page doesn't exist or has been moved.</p>
+  <a href="/" class="cta-btn">Back to home</a>
 </div>
 
 <style>
   .error-page {
     text-align: center;
-    padding: 4rem 0;
+    padding: 6rem 2rem;
   }
-  
+
   .error-page h1 {
-    font-size: 6rem;
-    margin-bottom: 0;
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: clamp(5rem, 12vw, 10rem);
+    font-weight: 400;
+    color: var(--accent);
+    line-height: 1;
+    margin: 0 0 1rem;
   }
-  
-  .error-page h2 {
-    margin-top: 0;
-    font-size: 2rem;
+
+  .error-sub {
+    font-size: 1.15rem;
+    color: var(--text-secondary);
+    margin-bottom: 2.5rem;
   }
 </style>

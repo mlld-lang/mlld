@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `mlld install skill`, `mlld install skills`, and `mlld skills install` all alias to `mlld skill install`
 - `@payload` is a direct variable — no import required. `show @payload.name` just works. Import still works for destructuring (`import { @name } from @payload`).
+- Added `/mlld:fanout` and `/mlld:query` skills to teach agents about RLM in mlld
 
 ### Fixed
 - `mlld -e` rejects unknown flags instead of collecting them into `@payload`

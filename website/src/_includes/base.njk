@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% if title %}{{ title }} - mlld{% else %}mlld - modular llm scripting{% endif %}</title>
+  <title>{% if title %}{{ title }} - mlld{% else %}mlld - secure LLM scripting{% endif %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Instrument+Serif:ital@0;1&family=Outfit:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
@@ -16,13 +16,12 @@
 </head>
 <body>
   <header>
-    <div class="container">
-      <div class="logo-container">
-        <a href="/" class="logo">mlld</a>
-      </div>
+    <div class="header-inner">
+      <a href="/" class="logo">mlld</a>
       <nav>
         <ul>
           <li><a href="/docs/" {{ "/docs/" | isActive(page.url) }}>Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
           <li><a href="https://discord.gg/mlld">Discord</a></li>
           <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
         </ul>
@@ -37,8 +36,16 @@
   </main>
 
   <footer>
-    <div class="container">
-      <p>&copy; {% year %} mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    <div class="footer-inner">
+      <p class="footer-copy">&copy; {% year %} mlld</p>
+      <nav>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
     </div>
   </footer>
 </body>
