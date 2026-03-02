@@ -154,14 +154,29 @@ jobs:
           node-version: 20
           cache: npm
 
+      - run: |
+          cd editors/vscode && npm ci
+
+      - name: Check if already published
+        id: check
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          CURRENT=$(npx @vscode/vsce show andyet.mlld-vscode --json 2>/dev/null | node -e "process.stdin.setEncoding('utf8');let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{console.log(JSON.parse(d).versions[0].version)}catch{console.log('none')}})" 2>/dev/null || echo "none")
+          if [ "$CURRENT" = "$VERSION" ]; then
+            echo "andyet.mlld-vscode $VERSION already published — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and publish VS Code extension
+        if: steps.check.outputs.skip == 'false'
         env:
           VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
         run: |
           set -e
           VERSION=${{ needs.prepare.outputs.version }}
           cd editors/vscode
-          npm ci
           npm version "$VERSION" --no-git-tag-version
           npx @vscode/vsce package --out "mlld-${VERSION}.vsix"
           npx @vscode/vsce publish --packagePath "mlld-${VERSION}.vsix" --pat "$VSCE_TOKEN"
@@ -236,7 +251,7 @@ jobs:
         id: check
         run: |
           VERSION=${{ needs.prepare.outputs.version }}
-          if curl -sf "https://crates.io/api/v1/crates/mlld/$VERSION" >/dev/null 2>&1; then
+          if curl -sf -H "User-Agent: mlld-ci" "https://crates.io/api/v1/crates/mlld/$VERSION" >/dev/null 2>&1; then
             echo "mlld $VERSION already on crates.io — skipping"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
