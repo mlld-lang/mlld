@@ -96,4 +96,11 @@ export class NoOpLockFile implements LockFile {
   getData(): LockFileData {
     return this.inMemoryLock;
   }
+
+  /**
+   * Get module entry (always returns undefined — no lock data in ephemeral mode)
+   */
+  getModule(_moduleName: string): undefined {
+    return undefined;
+  }
 }

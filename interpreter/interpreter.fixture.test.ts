@@ -922,7 +922,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
                        shouldSkipLive ? ` (Skipped: Requires MLLD_LIVE=1)` : '';
 
     const hasDocExpected = isDocumentationTest && fixture.expected != null;
-    testFn(`should handle ${fixture.name}${isDocumentationTest ? (hasDocExpected ? ' (docs)' : ' (syntax only)') : isSmokeTest ? ' (smoke test)' : ''}${skipReason}`, async () => {
+    const testTimeout = fixture.live ? 60000 : undefined; // 60s for live tests making real LLM calls
+    testFn(`should handle ${fixture.name}${isDocumentationTest ? (hasDocExpected ? ' (docs)' : ' (syntax only)') : isSmokeTest ? ' (smoke test)' : ''}${skipReason}`, { timeout: testTimeout }, async () => {
       // Check if this is a valid fixture that has a parse error
       if (isValidWithParseError) {
         throw new Error(
