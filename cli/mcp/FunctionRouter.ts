@@ -39,14 +39,16 @@ export class FunctionRouter {
     this.toolCollection = options.toolCollection;
     this.toolNames = options.toolNames;
     this.toolNamesAreMcp = options.toolNamesAreMcp ?? false;
-    this.toolKeyByMcpName = this.toolCollection ? this.buildToolKeyMap(this.toolCollection) : undefined;
     if (this.toolCollection) {
+      this.toolKeyByMcpName = this.buildToolKeyMap(this.toolCollection);
       this.toolNamesMcp = Object.keys(this.toolCollection).map(name => mlldNameToMCPName(name));
     } else if (this.toolNames && this.toolNames.length > 0) {
+      this.toolKeyByMcpName = this.buildToolNameKeyMap(this.toolNames, this.toolNamesAreMcp);
       this.toolNamesMcp = this.toolNamesAreMcp
         ? [...this.toolNames]
         : this.toolNames.map(name => mlldNameToMCPName(name));
     } else {
+      this.toolKeyByMcpName = undefined;
       this.toolNamesMcp = [];
     }
   }
@@ -161,6 +163,16 @@ export class FunctionRouter {
       const mcpName = mlldNameToMCPName(key);
       map.set(mcpName, key);
       map.set(key, key);
+    }
+    return map;
+  }
+
+  private buildToolNameKeyMap(toolNames: string[], areMcp: boolean): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const name of toolNames) {
+      const mcpName = areMcp ? name : mlldNameToMCPName(name);
+      map.set(mcpName, name);
+      map.set(name, name);
     }
     return map;
   }
