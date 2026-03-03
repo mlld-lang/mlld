@@ -5,7 +5,7 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.4]
 
 ### Added
 - VirtualFS contract freeze baseline: finalized public API/migration decisions, phase plan, and regression checklist artifacts (`plan-virtualfs.md`, `docs/dev/VIRTUALFS-CONTRACT.md`, `tests/virtualfs/REGRESSION-CHECKLIST.md`)
@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 - Completed VirtualFS coverage across dev/user docs and SDK atoms, including architecture placement, no-grammar-impact note, test-harness guidance, SDK usage patterns, and docs-mirroring SDK example tests
+
+### Fixed
+- MCP server: handle `notifications/initialized` per protocol spec instead of returning an error that caused clients to restart the server
+- MCP server: suppress responses for JSON-RPC notifications (messages without `id`)
+- MCP server: `tools/call` returned "Tool not found" for exported functions with snake_case names due to incorrect camelCase round-trip in `resolveToolKey`
 
 ## [2.0.3]
 
