@@ -1,0 +1,90 @@
+You are auditing a user documentation file to determine what content would be lost if we switched to an atom-based documentation system.
+
+## Context
+
+@strategyContext
+
+## The User Doc Being Audited
+
+**File**: @filename
+
+<user_doc_content>
+@userDoc
+</user_doc_content>
+
+## Available Atoms
+
+These are the atomic documentation files that already exist. Each entry shows the atom's id, title, brief description, and category.
+
+<atom_inventory>
+@atomInventory
+</atom_inventory>
+
+## Your Task
+
+Analyze every section and concept in the user doc. For each meaningful piece of content, classify it:
+
+1. **covered_by_atom**: Content that maps to an existing atom. Cite the atom id.
+2. **needs_new_atom**: Content that SHOULD be an atom but no matching atom exists. Describe what the atom would cover.
+3. **explainer_content**: Conceptual, philosophical, or narrative content that doesn't fit the atom format (mental models, design rationale, "why" discussions, analogies). This should become a standalone explainer article.
+4. **redundant**: Outdated, incorrect, or duplicated content that can be safely dropped.
+5. **procedural**: Step-by-step workflows (installation, publishing, CI setup) that could be atoms or could be their own thing.
+
+## Response Format
+
+Write your response as JSON to @outPath:
+
+```json
+{
+  "file": "filename.md",
+  "summary": "One paragraph overall assessment",
+  "total_sections_analyzed": 0,
+  "classification": {
+    "covered_by_atom": [
+      {
+        "content_description": "What the content covers",
+        "section_heading": "Section name from the doc",
+        "atom_id": "matching-atom-id",
+        "coverage_quality": "full|partial|minimal",
+        "notes": "Any gaps between the user doc and atom coverage"
+      }
+    ],
+    "needs_new_atom": [
+      {
+        "content_description": "What the content covers",
+        "section_heading": "Section name from the doc",
+        "suggested_atom_id": "proposed-id",
+        "suggested_category": "which atom category it belongs in",
+        "why_not_existing": "Why no current atom covers this"
+      }
+    ],
+    "explainer_content": [
+      {
+        "content_description": "What the content covers",
+        "section_heading": "Section name from the doc",
+        "why_explainer": "Why this is narrative/conceptual rather than reference",
+        "suggested_explainer": "Which explainer article this belongs in (existing or new)",
+        "approximate_length": "short|medium|long"
+      }
+    ],
+    "redundant": [
+      {
+        "content_description": "What the content covers",
+        "section_heading": "Section name from the doc",
+        "reason": "Why this can be dropped"
+      }
+    ],
+    "procedural": [
+      {
+        "content_description": "What the content covers",
+        "section_heading": "Section name from the doc",
+        "suggested_treatment": "atom|standalone-guide|fold-into-explainer"
+      }
+    ]
+  },
+  "recommendation": "keep_as_explainer|replace_with_atoms|hybrid|drop",
+  "recommendation_rationale": "Why this recommendation"
+}
+```
+
+Be thorough. Don't skip sections. If a section has both reference and narrative content, classify the parts separately.

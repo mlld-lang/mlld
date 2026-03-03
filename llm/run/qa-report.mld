@@ -18,10 +18,9 @@
 >>   mlld run qa-report --category doc-hallucination  # Filter to one category
 >>   mlld run qa-report --run 2026-01-25          # Report on a specific run
 
-import "@payload" as @p
-var @format = @p.format ? @p.format : "markdown"
-var @categoryFilter = @p.category ? @p.category : ""
-var @run = @p.run ? @p.run : ""
+var @format = @payload.format ? @payload.format : "markdown"
+var @categoryFilter = @payload.category ? @payload.category : ""
+var @run = @payload.run ? @payload.run : ""
 
 >> Configuration
 var @qaRoot = "@base/qa"

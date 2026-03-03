@@ -179,8 +179,8 @@ export class VariableManager implements IVariableManager {
       const existing = this.variables.get(name)!;
       const existingIsLegitimate = this.isLegitimateVariableType(existing);
 
-      // Allow system-reserved state placeholder to be overwritten (keeps @state usable)
-      if (name === 'state' && existing.internal?.isReserved === true) {
+      // Allow system-reserved variables to be overwritten by imports
+      if ((name === 'state' || name === 'payload') && existing.internal?.isReserved === true) {
         this.variables.set(name, variable);
         return;
       }

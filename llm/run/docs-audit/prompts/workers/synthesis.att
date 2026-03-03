@@ -1,0 +1,107 @@
+You are synthesizing the results of a documentation audit for the mlld scripting language.
+
+## Strategy Context
+
+@strategyContext
+
+## Gap Analysis Results
+
+@gapDataLength user doc files were analyzed. Here are the results:
+
+<gap_analysis>
+@gapData
+</gap_analysis>
+
+## Taxonomy Review
+
+<taxonomy>
+@taxonomy
+</taxonomy>
+
+## Your Task
+
+Synthesize these findings into actionable recommendations:
+
+### 1. Content Migration Plan
+For each docs/user/ file, what's the verdict?
+- Which files can be fully replaced by atoms?
+- Which files need new atoms created first?
+- Which files (or portions) should become explainer articles?
+- What content can be dropped entirely?
+
+### 2. New Atoms Needed
+Across all the gap analyses, compile a deduplicated list of atoms that need to be created.
+Group by category. Include suggested id and brief.
+
+### 3. Explainer Articles
+What standalone explainer articles are needed beyond introduction.md and security.md?
+What content from docs/user/ should feed into each?
+
+### 4. Taxonomy Recommendations
+Based on the taxonomy review and gap analysis together:
+- Final recommended category structure
+- Ordering for website nav
+- Changes needed for mlld howto CLI
+
+### 5. Migration Priority
+What order should we do this work in? What's high-value and low-effort vs. high-effort?
+
+Write your synthesis as JSON to @outPath:
+
+```json
+{
+  "migration_plan": [
+    {
+      "file": "filename.md",
+      "verdict": "replace_with_atoms|needs_new_atoms_first|becomes_explainer|hybrid|drop",
+      "atoms_covering": ["atom-id-1"],
+      "new_atoms_needed": ["suggested-id"],
+      "explainer_content": "description of narrative content to preserve",
+      "effort": "low|medium|high",
+      "notes": ""
+    }
+  ],
+  "new_atoms_needed": [
+    {
+      "suggested_id": "atom-id",
+      "category": "category-name",
+      "brief": "One-line description",
+      "source_files": ["which docs/user/ files contain this content"],
+      "priority": "high|medium|low"
+    }
+  ],
+  "explainer_articles": [
+    {
+      "title": "Article title",
+      "source_content": ["Which docs/user/ files contribute"],
+      "key_topics": ["What it covers"],
+      "rationale": "Why this needs to be an explainer, not atoms"
+    }
+  ],
+  "taxonomy": {
+    "recommended_categories": [
+      {
+        "name": "category-name",
+        "display_name": "Human name",
+        "order": 1,
+        "atom_count": 0,
+        "changes_from_current": "What's different"
+      }
+    ],
+    "howto_changes": ["Recommended changes to mlld howto"],
+    "website_vs_cli_divergences": ["Where they need different treatment"]
+  },
+  "priority_order": [
+    {
+      "phase": "Phase name",
+      "description": "What to do",
+      "effort": "low|medium|high",
+      "value": "low|medium|high",
+      "files_affected": ["list"]
+    }
+  ],
+  "overall_summary": "2-3 paragraph executive summary of findings and recommendations"
+}
+```
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.

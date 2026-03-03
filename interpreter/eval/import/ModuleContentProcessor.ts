@@ -196,7 +196,8 @@ export class ModuleContentProcessor {
     ref: string,
     directive: DirectiveNode,
     contentType?: 'module' | 'data' | 'text',
-    labels?: readonly string[]
+    labels?: readonly string[],
+    entryPoint?: string
   ): Promise<ModuleProcessingResult> {
     const cacheKey = this.buildResolverImportCacheKey(ref, contentType, directive);
 
@@ -290,7 +291,8 @@ export class ModuleContentProcessor {
         ref,
         directive,
         contentType,
-        isDynamicModule
+        isDynamicModule,
+        entryPoint
       );
 
       // Check if this is a JSON file (special handling)
@@ -631,7 +633,8 @@ export class ModuleContentProcessor {
     resolvedPath: string,
     directive: DirectiveNode,
     contentType?: 'module' | 'data' | 'text',
-    isDynamicModule?: boolean
+    isDynamicModule?: boolean,
+    entryPoint?: string
   ): Promise<{ parsed: any | null; processedContent: string; isPlainText: boolean; templateSyntax?: 'tripleColon' | 'doubleColon' }> {
     // Check if this is a JSON file
     if (resolvedPath.endsWith('.json')) {
@@ -701,7 +704,7 @@ export class ModuleContentProcessor {
     const fsService = this.env.getFileSystemService();
     const hasIsVirtual = typeof fsService?.isVirtual === 'function';
     const isVirtualFS = hasIsVirtual ? fsService.isVirtual() : false;
-    const inferredMode = inferMlldMode(resolvedPath);
+    const inferredMode = inferMlldMode(entryPoint ?? resolvedPath);
     const mode = isDynamicModule
       ? this.env.getDynamicModuleMode()
       : isVirtualFS
@@ -711,12 +714,16 @@ export class ModuleContentProcessor {
     // Parse the imported mlld content with the inferred mode
     let parseResult = await parse(processedContent, { mode });
 
-    // Virtual fixture files default to markdown parsing. Retry strict parsing for
-    // strict-mode modules when markdown parsing does not produce directives.
+    // Retry strict parsing when markdown mode was chosen but may be wrong:
+    // 1. VFS defaults to markdown but the file extension indicates strict
+    // 2. Path has no recognized extension (e.g. registry URIs) so mode was a fallback guess
+    const modeRef = entryPoint ?? resolvedPath;
+    const hasKnownExtension = modeRef
+      ? /\.(mld(\.md)?|md)$/i.test(modeRef)
+      : false;
     if (
       mode === 'markdown' &&
-      inferredMode === 'strict' &&
-      isVirtualFS &&
+      ((inferredMode === 'strict' && isVirtualFS) || !hasKnownExtension) &&
       parseResult.success &&
       Array.isArray(parseResult.ast)
     ) {

@@ -12,19 +12,18 @@
 >>   mlld run pr-review --repo ... --local ... --resume "review"  # re-review all
 >>   mlld run pr-review --repo ... --local ... --new        # fresh run
 
-import "@payload" as @p
 
 >> ============================================================
 >> Configuration
 >> ============================================================
 
-var @repo = @p.repo ?? "openclaw/openclaw"
-var @repoDir = @p.local
-var @parallelism = @p.parallel ? @p.parallel * 1 : 10
-var @model = @p.model ?? "o3"
-var @limit = @p.limit ? @p.limit * 1 : 50
-var @baseBranch = @p.base ?? "main"
-var @outBase = @p.output ?? "llm/output/pr-review"
+var @repo = @payload.repo ?? "openclaw/openclaw"
+var @repoDir = @payload.local
+var @parallelism = @payload.parallel ? @payload.parallel * 1 : 10
+var @model = @payload.model ?? "o3"
+var @limit = @payload.limit ? @payload.limit * 1 : 50
+var @baseBranch = @payload.base ?? "main"
+var @outBase = @payload.output ?? "llm/output/pr-review"
 
 >> Validate: --local is required
 if !@repoDir [

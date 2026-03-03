@@ -10,11 +10,10 @@
 >>   mlld run doc-audit --new                 # fresh run
 
 import { @claudePoll } from @mlld/claude-poll
-import "@payload" as @p
 
 >> Config
-var @parallelism = @p.parallel ? @p.parallel * 1 : 10
-var @outputPath = @p.output ?? "doc-audit-results.json"
+var @parallelism = @payload.parallel ? @payload.parallel * 1 : 10
+var @outputPath = @payload.output ?? "doc-audit-results.json"
 var @reviewTools = "Read,Write,Glob,Grep"
 
 >> Prompt template

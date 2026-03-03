@@ -91,6 +91,7 @@ export class CommandDispatcher {
     this.commandMap.set('verify', createVerifyCommand());
     this.commandMap.set('plugin', createPluginCommand());
     this.commandMap.set('skill', createSkillCommand());
+    this.commandMap.set('skills', createSkillCommand()); // Alias
   }
 
   async executeCommand(
@@ -255,7 +256,8 @@ export class CommandDispatcher {
       'qs': 'Quick start guide',
       'quickstart': 'Quick start guide',
       'plugin': 'Manage Claude Code plugin',
-      'skill': 'Manage coding tool skills'
+      'skill': 'Manage coding tool skills',
+      'skills': 'Manage coding tool skills'
     };
 
     return descriptions[command] || 'No description available';

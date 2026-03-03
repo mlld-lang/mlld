@@ -47,7 +47,8 @@ export class ResolverContentImportHandler {
         processingRef,
         directive,
         resolverContent.contentType,
-        resolverContent.mx?.labels
+        resolverContent.mx?.labels,
+        resolverContent.metadata?.entryPoint
       );
 
       this.validateModuleResult(processingResult, directive, processingRef);

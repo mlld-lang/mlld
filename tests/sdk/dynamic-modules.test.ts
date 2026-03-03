@@ -85,9 +85,8 @@ describe('dynamic module imports', () => {
 });
 
 describe('@payload optional field access', () => {
-  it('ternary returns default when field missing from namespace import', async () => {
-    const script = `/import "@payload" as @payload
-/var @topic = @payload.topic ? @payload.topic : "default"
+  it('ternary returns default when field missing', async () => {
+    const script = `/var @topic = @payload.topic ? @payload.topic : "default"
 /show @topic`;
 
     const result = await processMlld(script, {
@@ -99,9 +98,8 @@ describe('@payload optional field access', () => {
     expect(result.trim()).toBe('default');
   });
 
-  it('ternary returns value when field exists in namespace import', async () => {
-    const script = `/import "@payload" as @payload
-/var @topic = @payload.topic ? @payload.topic : "default"
+  it('ternary returns value when field exists', async () => {
+    const script = `/var @topic = @payload.topic ? @payload.topic : "default"
 /show @topic`;
 
     const result = await processMlld(script, {
@@ -114,8 +112,7 @@ describe('@payload optional field access', () => {
   });
 
   it('handles multiple optional fields with defaults', async () => {
-    const script = `/import "@payload" as @payload
-/var @topic = @payload.topic ? @payload.topic : "default-topic"
+    const script = `/var @topic = @payload.topic ? @payload.topic : "default-topic"
 /var @count = @payload.count ? @payload.count : 0
 /show \`@topic:@count\``;
 
@@ -182,5 +179,45 @@ describe('@payload optional field access', () => {
     });
 
     expect(result.trim()).toBe('unknown:5');
+  });
+
+  it('@payload is available as direct variable without import', async () => {
+    const script = `/show @payload.topic
+/show @payload.count`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { topic: 'direct', count: 123 }
+      }
+    });
+
+    expect(result.trim()).toBe('direct\n\n123');
+  });
+
+  it('@payload is present as empty object when no flags passed', async () => {
+    const script = `/var @hasPayload = @payload != null
+/show @hasPayload`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': {}
+      }
+    });
+
+    expect(result.trim()).toBe('true');
+  });
+
+  it('destructuring import from @payload still works alongside direct access', async () => {
+    const script = `/import { @topic } from @payload
+/show @topic
+/show @payload.count`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { topic: 'imported', count: 456 }
+      }
+    });
+
+    expect(result.trim()).toBe('imported\n\n456');
   });
 });
