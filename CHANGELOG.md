@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 - Completed VirtualFS coverage across dev/user docs and SDK atoms, including architecture placement, no-grammar-impact note, test-harness guidance, SDK usage patterns, and docs-mirroring SDK example tests
 
+## [2.0.4]
+
+### Fixed
+- MCP server: handle `notifications/initialized` per protocol spec instead of returning an error that caused clients to restart the server
+- MCP server: suppress responses for JSON-RPC notifications (messages without `id`)
+- MCP server: `tools/call` returned "Tool not found" for exported functions with snake_case names due to incorrect camelCase round-trip in `resolveToolKey`
+
 ## [2.0.2]
 
 ### Fixed
