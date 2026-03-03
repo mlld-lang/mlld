@@ -170,6 +170,44 @@ describe('MCPServer', () => {
     });
   });
 
+  it('strips namespace prefix from tool calls', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @greet(name) = js { return 'Hello ' + name; }
+      /export { @greet }
+    `, ['greet']);
+
+    const server = new MCPServer({ environment, exportedFunctions: exports });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const response = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'my-server:greet',
+        arguments: { name: 'Bob' },
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(response.result).toEqual({
+      content: [
+        {
+          type: 'text',
+          text: 'Hello Bob',
+        },
+      ],
+    });
+  });
+
   it('surfaces tool labels in guard context', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /guard @blockDestructive before op:exe = when [

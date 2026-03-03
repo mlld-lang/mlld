@@ -189,9 +189,10 @@ export class MCPServer {
     this.syncToolsContext();
 
     const { name, arguments: args } = request.params;
+    const toolName = this.stripNamespacePrefix(name);
 
     try {
-      const result = await this.router.executeFunction(name, args ?? {});
+      const result = await this.router.executeFunction(toolName, args ?? {});
       return {
         content: [
           {
@@ -259,5 +260,13 @@ export class MCPServer {
       'code' in error &&
       'message' in error
     );
+  }
+
+  private stripNamespacePrefix(name: string): string {
+    const colonIndex = name.indexOf(':');
+    if (colonIndex === -1) {
+      return name;
+    }
+    return name.substring(colonIndex + 1);
   }
 }
