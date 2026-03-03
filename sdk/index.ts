@@ -38,6 +38,8 @@ export {
   type VirtualFSPatchEntry,
   type VirtualFSPatchOperation
 } from '@services/fs/VirtualFS';
+export { VirtualFSAdapter } from '@services/fs/VirtualFSAdapter';
+export { ShellSession, type ShellSessionOptions } from '@services/fs/ShellSession';
 
 // Export static analysis
 export { analyzeModule } from './analyze';
