@@ -60,6 +60,7 @@ export async function executeWrite({
   enforceFilesystemAccess(env, 'write', targetPath, sourceLocation);
 
   const targetFileSystem = resolveWriteFileSystem(env, fileSystem);
+  const existedBefore = await targetFileSystem.exists(targetPath).catch(() => false);
   await ensureDirectoryExists(targetFileSystem, targetPath);
 
   if (mode === 'append') {
@@ -68,7 +69,14 @@ export async function executeWrite({
     await targetFileSystem.writeFile(targetPath, content);
   }
 
-  await logFileWriteEvent(env, targetPath, descriptor);
+  const changeType: 'created' | 'modified' = existedBefore ? 'modified' : 'created';
+  const directiveName = typeof metadata?.directive === 'string' ? metadata.directive : undefined;
+  const writer = directiveName ? `directive:${directiveName}` : undefined;
+
+  await logFileWriteEvent(env, targetPath, descriptor, {
+    changeType,
+    writer
+  });
 
   env.emitEffect('file', content, {
     path: targetPath,

@@ -5798,6 +5798,24 @@ box @workspace [
 
 Use `box @workspace` to bind an existing resolver-backed workspace as the active box filesystem.
 
+**Inspect workspace edits and diffs:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "draft" }]
+
+box @workspace [
+  run cmd { echo "done" >> @root/task.md }
+]
+
+show @workspace.mx.edits
+show @workspace.mx.diff
+show <@root/task.md>.mx.diff
+```
+
+- `@workspace.mx.edits` returns the workspace change list (`created`/`modified`/`deleted`)
+- `@workspace.mx.diff` returns workspace diff inspection output
+- `@file.mx.diff` returns unified diff for the file path when backed by a workspace
+
 **Git hydration with `files = git`:**
 
 ```mlld

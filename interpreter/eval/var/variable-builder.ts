@@ -47,6 +47,7 @@ type StrategyKey =
   | 'new-node'
   | 'reference-tail-node'
   | 'env-node'
+  | 'box-node'
   | 'expression-meta'
   | 'literal-node'
   | 'text-default';
@@ -476,7 +477,7 @@ export function createVariableBuilder(dependencies: VariableBuilderDependencies)
       return createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
     }
 
-    if (strategyKey === 'env-node') {
+    if (strategyKey === 'env-node' || strategyKey === 'box-node') {
       return buildFromResolvedShape(
         identifier,
         resolvedValue,

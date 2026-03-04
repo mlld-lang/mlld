@@ -25,6 +25,20 @@ async function createFileSystem(): Promise<MemoryFileSystem> {
   return fileSystem;
 }
 
+async function readAuditEvents(fileSystem: MemoryFileSystem): Promise<Record<string, unknown>[]> {
+  const auditPath = '/project/.mlld/sec/audit.jsonl';
+  const exists = await fileSystem.exists(auditPath).catch(() => false);
+  if (!exists) {
+    return [];
+  }
+  const content = await fileSystem.readFile(auditPath);
+  return content
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as Record<string, unknown>);
+}
+
 let cachedGitAvailable: boolean | null = null;
 
 async function gitAvailable(): Promise<boolean> {
@@ -397,5 +411,73 @@ describe('file/files evaluation', () => {
     expect(thrown).toBeTruthy();
     expect(thrown?.message ?? '').toMatch(/Network access denied/);
     expect(thrown?.message ?? '').not.toContain('secret-token');
+  });
+
+  it('returns workspace values from box blocks without explicit return for inspection', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+    let capturedEnv: any;
+
+    const result = await interpret(
+      [
+        '/var @result = box [',
+        '  file "task.md" = "alpha"',
+        '  run cmd { cp @root/task.md @root/task-copy.md }',
+        ']',
+        '/show @result.type'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext,
+        mode: 'structured',
+        captureEnvironment: env => {
+          capturedEnv = env;
+        }
+      }
+    ) as any;
+
+    expect(String(result.output).trim()).toBe('workspace');
+    const workspace = capturedEnv.getVariableValue('result') as {
+      fs: { readFile: (target: string) => Promise<string> };
+    };
+    expect(await workspace.fs.readFile('/project/task-copy.md')).toContain('alpha');
+  });
+
+  it('records directive and command workspace writes in audit log with change types', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+
+    await interpret(
+      [
+        '/box [',
+        '  file "task.md" = "alpha"',
+        '  run cmd { cp @root/task.md @root/task-copy.md }',
+        ']'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext
+      }
+    );
+
+    const writes = (await readAuditEvents(fileSystem)).filter(event => event.event === 'write');
+    const directiveWrites = writes.filter(event => event.path === '/project/task.md');
+    const commandWrites = writes.filter(event => event.path === '/project/task-copy.md');
+
+    expect(directiveWrites.length).toBeGreaterThanOrEqual(1);
+    expect(commandWrites.length).toBeGreaterThanOrEqual(1);
+    expect(
+      directiveWrites.some(event => event.writer === 'directive:file' && event.changeType === 'created')
+    ).toBe(true);
+    expect(
+      commandWrites.some(
+        event =>
+          typeof event.writer === 'string' &&
+          event.writer === 'command:cp' &&
+          event.changeType === 'created'
+      )
+    ).toBe(true);
   });
 });

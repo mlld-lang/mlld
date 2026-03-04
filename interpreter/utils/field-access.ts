@@ -20,6 +20,8 @@ import {
 import { wrapExecResult } from './structured-exec';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import type { DataObjectValue } from '@core/types/var';
+import type { WorkspaceValue } from '@core/types/workspace';
+import { isWorkspaceValue } from '@core/types/workspace';
 
 const COMMON_FILE_EXTENSION_FIELDS = new Set([
   'json',
@@ -44,6 +46,13 @@ const COMMON_FILE_EXTENSION_FIELDS = new Set([
   'log',
   'pdf'
 ]);
+
+const WORKSPACE_MX_CONTEXT = Symbol('mlld.workspace-mx-context');
+
+interface WorkspaceMxContext {
+  workspace?: WorkspaceValue;
+  path?: string;
+}
 
 function buildFieldAccessReference(fieldName: string, options?: FieldAccessOptions): {
   parsed: string;
@@ -151,9 +160,10 @@ function createObjectUtilityMxView(
   data: unknown,
   structured?: StructuredValue
 ): unknown {
+  const workspaceContext = deriveWorkspaceMxContext(mx, data);
   const hasMxObject = Boolean(mx && typeof mx === 'object');
   const hasObjectUtilityData = isPlainObjectValue(data);
-  if (!structured && !hasObjectUtilityData) {
+  if (!structured && !hasObjectUtilityData && !workspaceContext) {
     return mx;
   }
 
@@ -194,7 +204,99 @@ function createObjectUtilityMxView(
     });
   }
 
+  if (workspaceContext) {
+    Object.defineProperty(view, WORKSPACE_MX_CONTEXT, {
+      value: workspaceContext,
+      enumerable: false,
+      configurable: true
+    });
+  }
+
   return view;
+}
+
+function readStringProperty(value: unknown, key: string): string | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const candidate = (value as Record<string, unknown>)[key];
+  return typeof candidate === 'string' && candidate.length > 0
+    ? candidate
+    : undefined;
+}
+
+function deriveWorkspaceMxContext(mx: unknown, data: unknown): WorkspaceMxContext | undefined {
+  const workspace = isWorkspaceValue(data) ? data : undefined;
+  const path = readStringProperty(mx, 'path') ?? readStringProperty(data, 'path');
+  if (!workspace && !path) {
+    return undefined;
+  }
+  return {
+    ...(workspace ? { workspace } : {}),
+    ...(path ? { path } : {})
+  };
+}
+
+function getWorkspaceMxContext(value: unknown): WorkspaceMxContext | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const context = (value as Record<PropertyKey, unknown>)[WORKSPACE_MX_CONTEXT];
+  if (!context || typeof context !== 'object') {
+    return undefined;
+  }
+  const record = context as Record<string, unknown>;
+  const workspace = isWorkspaceValue(record.workspace) ? record.workspace : undefined;
+  const path = typeof record.path === 'string' ? record.path : undefined;
+  if (!workspace && !path) {
+    return undefined;
+  }
+  return {
+    ...(workspace ? { workspace } : {}),
+    ...(path ? { path } : {})
+  };
+}
+
+function isIgnorableWorkspaceDiffError(error: unknown): boolean {
+  const code = (error as { code?: string } | undefined)?.code;
+  return code === 'ENOENT' || code === 'EISDIR';
+}
+
+function collectWorkspaceCandidates(env: Environment): WorkspaceValue[] {
+  const candidates: WorkspaceValue[] = [];
+  const activeWorkspace = env.getActiveWorkspace();
+  if (activeWorkspace) {
+    candidates.push(activeWorkspace);
+  }
+
+  const allVariables = env.getAllVariables();
+  for (const variable of allVariables.values()) {
+    const candidate = (variable as { value?: unknown }).value;
+    if (isWorkspaceValue(candidate)) {
+      candidates.push(candidate);
+    }
+  }
+
+  return candidates;
+}
+
+async function resolveWorkspaceFileDiff(filePath: string, env: Environment): Promise<string | undefined> {
+  const seen = new Set<WorkspaceValue>();
+  for (const workspace of collectWorkspaceCandidates(env)) {
+    if (seen.has(workspace)) {
+      continue;
+    }
+    seen.add(workspace);
+    try {
+      return await workspace.fs.fileDiff(filePath);
+    } catch (error) {
+      if (isIgnorableWorkspaceDiffError(error)) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  return undefined;
 }
 
 function hasCapturedModuleEnv(value: unknown): boolean {
@@ -488,6 +590,38 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           failedAtIndex: Math.max(0, chain.length - 1),
           failedKey: name
         }, { sourceLocation: options?.sourceLocation, env: options?.env });
+      }
+
+      if (isWorkspaceValue(rawValue)) {
+        if (name === 'edits') {
+          accessedValue = await rawValue.fs.changes();
+          break;
+        }
+        if (name === 'diff') {
+          accessedValue = await rawValue.fs.diff();
+          break;
+        }
+      }
+
+      const workspaceMxContext = getWorkspaceMxContext(rawValue);
+      if (workspaceMxContext) {
+        if (name === 'edits' && workspaceMxContext.workspace) {
+          accessedValue = await workspaceMxContext.workspace.fs.changes();
+          break;
+        }
+        if (name === 'diff') {
+          if (workspaceMxContext.workspace) {
+            accessedValue = await workspaceMxContext.workspace.fs.diff();
+            break;
+          }
+          if (workspaceMxContext.path && options?.env) {
+            const diff = await resolveWorkspaceFileDiff(workspaceMxContext.path, options.env);
+            if (diff !== undefined) {
+              accessedValue = diff;
+              break;
+            }
+          }
+        }
       }
       
       // Handle LoadContentResult objects - access metadata properties

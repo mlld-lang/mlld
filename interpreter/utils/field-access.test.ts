@@ -1,8 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { accessField, accessFields } from './field-access';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
-import { createObjectVariable, createStructuredValueVariable } from '@core/types/variable/VariableFactories';
+import {
+  createObjectVariable,
+  createSimpleTextVariable,
+  createStructuredValueVariable
+} from '@core/types/variable/VariableFactories';
 import { wrapStructured } from './structured-value';
+import { Environment } from '@interpreter/env/Environment';
+import { PathService } from '@services/fs/PathService';
+import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
+import { VirtualFS } from '@services/fs/VirtualFS';
 
 const source = {
   directive: 'var' as const,
@@ -277,5 +285,95 @@ describe('structured value mx accessors', () => {
       { preserveContext: false }
     );
     expect(mxType).toBe('object');
+  });
+});
+
+describe('workspace metadata accessors', () => {
+  it('resolves @workspace.mx.edits and @workspace.mx.diff from VirtualFS state', async () => {
+    const backing = new MemoryFileSystem();
+    await backing.mkdir('/project', { recursive: true });
+    await backing.writeFile('/project/old.txt', 'old\n');
+    await backing.writeFile('/project/remove.txt', 'remove\n');
+    const vfs = VirtualFS.over(backing);
+    await vfs.writeFile('/project/old.txt', 'updated\n');
+    await vfs.writeFile('/project/new.txt', 'new\n');
+    await vfs.rm('/project/remove.txt');
+
+    const workspace = {
+      type: 'workspace' as const,
+      fs: vfs,
+      descriptions: new Map<string, string>()
+    };
+
+    const env = new Environment(backing, new PathService(), '/project');
+    const workspaceVar = createObjectVariable('workspace', workspace as Record<string, unknown>, true, source);
+    env.setVariable('workspace', workspaceVar);
+
+    const edits = await accessFields(
+      workspaceVar,
+      [
+        { type: 'field', value: 'mx' } as const,
+        { type: 'field', value: 'edits' } as const
+      ],
+      { preserveContext: false, env }
+    );
+    const diff = await accessFields(
+      workspaceVar,
+      [
+        { type: 'field', value: 'mx' } as const,
+        { type: 'field', value: 'diff' } as const
+      ],
+      { preserveContext: false, env }
+    );
+
+    expect(diff).toEqual(edits);
+    expect(edits).toEqual([
+      { path: '/project/new.txt', type: 'created', entity: 'file' },
+      { path: '/project/old.txt', type: 'modified', entity: 'file' },
+      { path: '/project/remove.txt', type: 'deleted', entity: 'file' }
+    ]);
+  });
+
+  it('resolves @file.mx.diff using workspace file metadata path', async () => {
+    const backing = new MemoryFileSystem();
+    await backing.mkdir('/project', { recursive: true });
+    await backing.writeFile('/project/task.md', 'one\ntwo\n');
+    const vfs = VirtualFS.over(backing);
+    await vfs.writeFile('/project/task.md', 'one\nTWO\nthree\n');
+
+    const workspace = {
+      type: 'workspace' as const,
+      fs: vfs,
+      descriptions: new Map<string, string>()
+    };
+
+    const env = new Environment(backing, new PathService(), '/project');
+    const workspaceVar = createObjectVariable('workspace', workspace as Record<string, unknown>, true, source);
+    env.setVariable('workspace', workspaceVar);
+
+    const fileVar = createSimpleTextVariable('task', 'one\nTWO\nthree\n', source, {
+      mx: {
+        path: '/project/task.md',
+        absolute: '/project/task.md',
+        relative: 'task.md',
+        filename: 'task.md'
+      }
+    });
+
+    const diff = await accessFields(
+      fileVar,
+      [
+        { type: 'field', value: 'mx' } as const,
+        { type: 'field', value: 'diff' } as const
+      ],
+      { preserveContext: false, env }
+    );
+
+    expect(typeof diff).toBe('string');
+    expect(diff).toContain('--- a/project/task.md');
+    expect(diff).toContain('+++ b/project/task.md');
+    expect(diff).toContain('-two');
+    expect(diff).toContain('+TWO');
+    expect(diff).toContain('+three');
   });
 });

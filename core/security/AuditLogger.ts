@@ -13,6 +13,7 @@ export type AuditEvent = {
   result?: boolean;
   caller?: string;
   path?: string;
+  changeType?: 'created' | 'modified' | 'deleted';
   taint?: string[];
   writer?: string;
   labels?: string[];
@@ -35,6 +36,7 @@ export async function appendAuditEvent(
     ...(event.result !== undefined ? { result: event.result } : {}),
     ...(event.caller ? { caller: event.caller } : {}),
     ...(event.path ? { path: event.path } : {}),
+    ...(event.changeType ? { changeType: event.changeType } : {}),
     ...(event.taint !== undefined ? { taint: event.taint } : {}),
     ...(event.writer ? { writer: event.writer } : {}),
     ...(event.labels ? { labels: event.labels } : {}),

@@ -8,12 +8,38 @@ import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { ErrorUtils as ErrorUtilsClass } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
+import { appendAuditEvent } from '@core/security/AuditLogger';
+import { makeSecurityDescriptor } from '@core/types/security';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import type { ShellSession } from '@services/fs/ShellSession';
 import type { WorkspaceValue } from '@core/types/workspace';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
 
 export interface WorkspaceProvider {
   getActiveWorkspace(): WorkspaceValue | undefined;
 }
+
+interface SecuritySnapshotLike {
+  labels?: readonly string[];
+  taint?: readonly string[];
+  sources?: readonly string[];
+}
+
+interface AuditCapableWorkspaceProvider extends WorkspaceProvider {
+  getFileSystemService?: () => IFileSystemService;
+  getProjectRoot?: () => string;
+  getSecuritySnapshot?: () => SecuritySnapshotLike | undefined;
+}
+
+type WorkspaceChangeType = 'created' | 'modified' | 'deleted';
+
+interface WorkspaceSnapshotEntry {
+  type: WorkspaceChangeType;
+  entity: 'file' | 'directory';
+  content?: string;
+}
+
+type WorkspaceSnapshot = Map<string, WorkspaceSnapshotEntry>;
 
 export interface ExecutorDependencies {
   errorUtils: ErrorUtils;
@@ -202,13 +228,21 @@ export class CommandExecutorFactory {
       console.log(`Running: ${command}`);
     }
 
+    let beforeSnapshot: WorkspaceSnapshot | undefined;
+    let writesRecorded = false;
     try {
+      beforeSnapshot = await this.captureWorkspaceSnapshot(workspace);
       const shellSession = await this.getOrCreateShellSession(workspace);
       const result = await shellSession.exec(command, {
         env: options?.env,
         cwd: options?.workingDirectory,
         stdin: options?.input
       });
+
+      if (beforeSnapshot) {
+        await this.recordWorkspaceCommandWrites(workspace, beforeSnapshot, command);
+        writesRecorded = true;
+      }
 
       const duration = Date.now() - startTime;
       if (result.exitCode !== 0) {
@@ -232,6 +266,14 @@ export class CommandExecutorFactory {
       ).output;
       return processed.trimEnd();
     } catch (error: unknown) {
+      if (beforeSnapshot && !writesRecorded) {
+        try {
+          await this.recordWorkspaceCommandWrites(workspace, beforeSnapshot, command);
+        } catch {
+          // Best-effort audit logging for workspace command writes.
+        }
+      }
+
       const duration = Date.now() - startTime;
       const commandError =
         error instanceof MlldCommandExecutionError
@@ -267,6 +309,109 @@ export class CommandExecutorFactory {
       ).output;
       return processed.trimEnd();
     }
+  }
+
+  private async captureWorkspaceSnapshot(workspace: WorkspaceValue): Promise<WorkspaceSnapshot> {
+    const [changes, patch] = await Promise.all([
+      workspace.fs.changes(),
+      Promise.resolve(workspace.fs.export())
+    ]);
+
+    const contentByPath = new Map<string, string>();
+    for (const entry of patch.entries) {
+      if (entry.op === 'write') {
+        contentByPath.set(entry.path, entry.content);
+      }
+    }
+
+    const snapshot: WorkspaceSnapshot = new Map();
+    for (const change of changes) {
+      snapshot.set(change.path, {
+        type: change.type,
+        entity: change.entity,
+        content: contentByPath.get(change.path)
+      });
+    }
+    return snapshot;
+  }
+
+  private detectWorkspaceWrites(
+    before: WorkspaceSnapshot,
+    after: WorkspaceSnapshot
+  ): Array<{ path: string; changeType: WorkspaceChangeType }> {
+    const writes: Array<{ path: string; changeType: WorkspaceChangeType }> = [];
+    for (const [path, next] of after.entries()) {
+      const previous = before.get(path);
+      if (!previous) {
+        writes.push({ path, changeType: next.type });
+        continue;
+      }
+
+      if (next.type !== previous.type || next.entity !== previous.entity) {
+        writes.push({ path, changeType: next.type });
+        continue;
+      }
+
+      if (
+        (next.type === 'created' || next.type === 'modified') &&
+        next.content !== previous.content
+      ) {
+        writes.push({ path, changeType: 'modified' });
+      }
+    }
+    return writes;
+  }
+
+  private async recordWorkspaceCommandWrites(
+    workspace: WorkspaceValue,
+    beforeSnapshot: WorkspaceSnapshot,
+    command: string
+  ): Promise<void> {
+    const provider = this.workspaceProvider as AuditCapableWorkspaceProvider;
+    const getFs = provider.getFileSystemService;
+    const getProjectRoot = provider.getProjectRoot;
+    if (typeof getFs !== 'function' || typeof getProjectRoot !== 'function') {
+      return;
+    }
+
+    const afterSnapshot = await this.captureWorkspaceSnapshot(workspace);
+    const writes = this.detectWorkspaceWrites(beforeSnapshot, afterSnapshot);
+    if (writes.length === 0) {
+      return;
+    }
+
+    const writer = this.formatCommandWriter(command);
+    const snapshot = provider.getSecuritySnapshot?.();
+    const inheritedSources = Array.isArray(snapshot?.sources)
+      ? snapshot.sources.filter((source): source is string => typeof source === 'string' && source.length > 0)
+      : [];
+    const descriptor = makeSecurityDescriptor({
+      labels: Array.isArray(snapshot?.labels) ? snapshot.labels : [],
+      taint: Array.isArray(snapshot?.taint) ? snapshot.taint : [],
+      sources: [writer, ...inheritedSources]
+    });
+    const taint = descriptorToInputTaint(descriptor);
+
+    const fileSystem = getFs.call(provider);
+    const projectRoot = getProjectRoot.call(provider);
+    for (const write of writes) {
+      await appendAuditEvent(fileSystem, projectRoot, {
+        event: 'write',
+        path: write.path,
+        changeType: write.changeType,
+        taint,
+        writer
+      });
+    }
+  }
+
+  private formatCommandWriter(command: string): string {
+    const normalized = command.trim();
+    if (!normalized) {
+      return 'command:<empty>';
+    }
+    const firstToken = normalized.split(/\s+/)[0];
+    return `command:${firstToken}`;
   }
 
   private async getOrCreateShellSession(workspace: WorkspaceValue): Promise<ShellSession> {

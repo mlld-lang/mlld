@@ -722,7 +722,8 @@ export async function evaluateBox(
       await applyMcpConfigForBox(mergedConfig, scopedEnv, env, context, directive.location);
       const result = await evaluateExeBlock(block, scopedEnv, {}, { scope: 'block' });
       env.mergeChild(scopedEnv);
-      return { value: result.value, env };
+      const resolvedValue = result.value === undefined && workspace ? workspace : result.value;
+      return { value: resolvedValue, env };
     } finally {
       if (pushedWorkspace) {
         scopedEnv.popActiveWorkspace();
