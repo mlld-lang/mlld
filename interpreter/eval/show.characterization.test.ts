@@ -358,6 +358,16 @@ describe('evaluateShow (characterization)', () => {
     expect(asText(result.value)).toContain('body line');
   });
 
+  it('keeps showLoadContent file-reference field access behavior stable', async () => {
+    await fileSystem.writeFile('/project/doc.md', '# Intro\n');
+    const [showDirective] = parseDirectives('/show <doc.md>.mx.filename');
+    expect(showDirective?.subtype).toBe('showLoadContent');
+    expect((showDirective as any)?.values?.loadContent?.type).toBe('FileReference');
+
+    const result = await evaluateShow(toShowDirective(showDirective), env);
+    expect(asText(result.value)).toBe('doc.md');
+  });
+
   it('keeps showTemplate pipeline behavior stable', async () => {
     const [pipelineSourceDirective] = parseDirectives('/show @msg | @upper');
     const pipeline = (pipelineSourceDirective as any).values.invocation.withClause.pipeline;

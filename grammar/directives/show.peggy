@@ -169,7 +169,8 @@ SlashShow
       );
     }
   // Load content expression: <path/to/file.md> or <path # Section>
-  / DirectiveContext ShowKeyword labelsSegment:(HWS DataLabelList)? _ content:AlligatorExpression rename:AsNewTitle? ending:StandardDirectiveEnding {
+  // NOTE: AlligatorWithFields must be first so /show <file>.mx.field consumes post-angle field chains.
+  / DirectiveContext ShowKeyword labelsSegment:(HWS DataLabelList)? _ content:(AlligatorWithFields / AlligatorExpression) rename:AsNewTitle? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched load content expression', { content, rename, ending });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -766,7 +767,7 @@ SlashShow
 
 // Reference for other directives to use
 AddDirectiveRef
-  = RHSContext _ content:AlligatorExpression {
+  = RHSContext _ content:(AlligatorWithFields / AlligatorExpression) {
       // Handle alligator syntax for showing file content
       return {
         subtype: 'showLoadContent',

@@ -58,8 +58,14 @@ export async function evaluateShowLoadContent({
     throw new Error('Show load content directive missing content loader');
   }
 
-  const { processContentLoader } = await import('@interpreter/eval/content-loader');
-  const loadResult = await processContentLoader(loadContentNode, env);
+  let loadResult: unknown;
+  if ((loadContentNode as any).type === 'FileReference') {
+    const { evaluate } = await import('@interpreter/core/interpreter');
+    loadResult = (await evaluate(loadContentNode as any, env)).value;
+  } else {
+    const { processContentLoader } = await import('@interpreter/eval/content-loader');
+    loadResult = await processContentLoader(loadContentNode, env);
+  }
 
   let content = '';
   let resultValue: unknown;
