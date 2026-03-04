@@ -231,6 +231,33 @@ describe('file/files evaluation', () => {
     expect(String(output).trim()).toBe('relative-shell-read');
   });
 
+  it('routes run sh through workspace VFS inside box blocks', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+
+    const output = await interpret(
+      [
+        '/var @out = box [',
+        '  file "box-sh-vfs-source-19f2.txt" = "from-sh-vfs"',
+        '  run sh {',
+        '    cat box-sh-vfs-source-19f2.txt > box-sh-vfs-target-19f2.txt',
+        '  }',
+        '  => run cmd { cat box-sh-vfs-target-19f2.txt }',
+        ']',
+        '/show @out'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext
+      }
+    );
+
+    expect(String(output).trim()).toBe('from-sh-vfs');
+    expect(await fileSystem.exists('/project/box-sh-vfs-source-19f2.txt')).toBe(false);
+    expect(await fileSystem.exists('/project/box-sh-vfs-target-19f2.txt')).toBe(false);
+  });
+
   it('uses resolver shorthand workspaces in box blocks', async () => {
     const fileSystem = await createFileSystem();
     const pathService = new PathService();

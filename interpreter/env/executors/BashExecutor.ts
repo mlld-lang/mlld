@@ -9,12 +9,19 @@ import { adaptVariablesForBash } from '../bash-variable-adapter';
 import { StringDecoder } from 'string_decoder';
 import { randomUUID } from 'crypto';
 import { buildAliasPreamble } from '@interpreter/utils/alias-resolver';
+import type { WorkspaceValue } from '@core/types/workspace';
+import type { ShellSession } from '@services/fs/ShellSession';
 
 export interface VariableProvider {
   /**
    * Get all variables in the environment
    */
   getVariables(): Map<string, Variable>;
+}
+
+interface WorkspaceProvider {
+  getActiveWorkspace(): WorkspaceValue | undefined;
+  getProjectRoot?(): string;
 }
 
 /**
@@ -26,7 +33,8 @@ export class BashExecutor extends BaseCommandExecutor {
     errorUtils: ErrorUtils,
     workingDirectory: string,
     private variableProvider: VariableProvider,
-    private getBus: () => import('@interpreter/eval/pipeline/stream-bus').StreamBus
+    private getBus: () => import('@interpreter/eval/pipeline/stream-bus').StreamBus,
+    private workspaceProvider?: WorkspaceProvider
   ) {
     super(errorUtils, workingDirectory);
     this.bashPath = this.resolveBashPath();
@@ -233,6 +241,19 @@ export class BashExecutor extends BaseCommandExecutor {
         } catch {}
       }
 
+      const activeWorkspace = this.workspaceProvider?.getActiveWorkspace();
+      if (activeWorkspace) {
+        return await this.executeWorkspaceBashCode({
+          workspace: activeWorkspace,
+          enhancedCode,
+          envVars,
+          workingDirectory,
+          startTime,
+          context,
+          options
+        });
+      }
+
       // Always use async spawn() — enables parallelism in for-parallel loops.
       // spawnSync() blocked the event loop, preventing concurrent sh {} execution.
       const bus = context?.bus ?? this.getBus();
@@ -421,6 +442,109 @@ export class BashExecutor extends BaseCommandExecutor {
         }
       }
     }
+  }
+
+  private resolveWorkspaceShellCwd(defaultCwd: string): string {
+    const root = this.workspaceProvider?.getProjectRoot?.();
+    if (typeof root === 'string' && root.length > 0) {
+      return root;
+    }
+    return defaultCwd;
+  }
+
+  private async getOrCreateWorkspaceShellSession(
+    workspace: WorkspaceValue,
+    fallbackCwd: string
+  ): Promise<ShellSession> {
+    if (!workspace.shellSession) {
+      const { ShellSession } = await import('@services/fs/ShellSession');
+      workspace.shellSession = await ShellSession.create(workspace.fs, {
+        cwd: this.resolveWorkspaceShellCwd(fallbackCwd)
+      });
+    }
+    return workspace.shellSession;
+  }
+
+  private async executeWorkspaceBashCode(params: {
+    workspace: WorkspaceValue;
+    enhancedCode: string;
+    envVars: Record<string, string>;
+    workingDirectory: string;
+    startTime: number;
+    context?: CommandExecutionContext;
+    options?: CommandExecutionOptions;
+  }): Promise<CommandExecutionResult> {
+    const {
+      workspace,
+      enhancedCode,
+      envVars,
+      workingDirectory,
+      startTime,
+      context,
+      options
+    } = params;
+
+    const shellSession = await this.getOrCreateWorkspaceShellSession(workspace, workingDirectory);
+    const result = await shellSession.exec(enhancedCode, {
+      env: envVars,
+      cwd: options?.workingDirectory,
+      stdin: options?.input
+    });
+
+    const bus = context?.bus ?? this.getBus();
+    const pipelineId = context?.pipelineId || 'pipeline';
+    const stageIndex = context?.stageIndex ?? 0;
+    const parallelIndex = context?.parallelIndex;
+    if (bus && result.stdout) {
+      bus.emit({
+        type: 'CHUNK',
+        pipelineId,
+        stageIndex,
+        parallelIndex,
+        chunk: result.stdout,
+        source: 'stdout',
+        timestamp: Date.now()
+      });
+    }
+    if (bus && result.stderr) {
+      bus.emit({
+        type: 'CHUNK',
+        pipelineId,
+        stageIndex,
+        parallelIndex,
+        chunk: result.stderr,
+        source: 'stderr',
+        timestamp: Date.now()
+      });
+    }
+
+    const duration = Date.now() - startTime;
+    if (result.exitCode !== 0) {
+      throw new MlldCommandExecutionError(
+        'Code execution failed: bash',
+        context?.sourceLocation,
+        {
+          command: 'bash code execution',
+          exitCode: result.exitCode,
+          duration,
+          stderr: result.stderr || '',
+          stdout: result.stdout || '',
+          workingDirectory: options?.workingDirectory || shellSession.getCwd(),
+          directiveType: context?.directiveType || 'run'
+        }
+      );
+    }
+
+    const hasTTYCheck = enhancedCode.includes('[ -t ') || enhancedCode.includes('>&2');
+    const merged =
+      hasTTYCheck && result.stderr && !result.stdout ? result.stderr : result.stdout;
+
+    return {
+      output: String(merged || '').replace(/\n+$/, ''),
+      duration,
+      exitCode: result.exitCode ?? 0,
+      stderr: result.stderr || undefined
+    };
   }
 
   private handleBashTestMocks(code: string, envVars: Record<string, string>): string | null {

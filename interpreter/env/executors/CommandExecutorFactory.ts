@@ -86,7 +86,13 @@ export class CommandExecutorFactory {
     this.jsExecutor = new JavaScriptExecutor(errorUtils, workingDirectory, shadowEnvironment);
     this.nodeExecutor = new NodeExecutor(errorUtils, workingDirectory, nodeShadowProvider, getStreamingBus);
     this.pythonExecutor = new PythonExecutor(errorUtils, workingDirectory, this.shellExecutor, pythonShadowProvider, getStreamingBus);
-    this.bashExecutor = new BashExecutor(errorUtils, workingDirectory, variableProvider, getStreamingBus);
+    this.bashExecutor = new BashExecutor(
+      errorUtils,
+      workingDirectory,
+      variableProvider,
+      getStreamingBus,
+      workspaceProvider
+    );
   }
 
   /**
