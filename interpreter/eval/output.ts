@@ -27,9 +27,8 @@ import { resolveDirectiveExecInvocation } from './directive-replay';
 import { getOperationLabels } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
-import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
-import { logFileWriteEvent } from '../utils/audit-log';
 import yaml from 'js-yaml';
+import { executeWrite } from './write-executor';
 
 function mergeInterpolatedDescriptors(
   env: Environment,
@@ -726,34 +725,17 @@ async function outputToFile(
     targetPath = path.resolve(env.getFileDirectory(), targetPath);
   }
 
-  enforceFilesystemAccess(env, 'write', targetPath, directive.location ?? undefined);
-  
-  // Write the file using the environment's file system
-  const fileSystem = (env as any).fileSystem;
-  if (!fileSystem) {
-    throw new MlldOutputError(
-      'File system not available',
-      'unknown',
-      { sourceLocation: directive.location, env }
-    );
-  }
-  
-  // Ensure directory exists
-  const dirPath = path.dirname(targetPath);
-  try {
-    await fileSystem.mkdir(dirPath, { recursive: true });
-  } catch (err) {
-    // Directory might already exist, that's okay
-  }
-  
-  // Write the file
-  await fileSystem.writeFile(targetPath, content);
-  await logFileWriteEvent(env, targetPath, descriptor);
-  
-  // Also emit a file effect for tracking/logging purposes
-  env.emitEffect('file', content, { 
-    path: targetPath,
-    source: directive.location 
+  await executeWrite({
+    env,
+    targetPath,
+    content,
+    mode: 'write',
+    sourceLocation: directive.location ?? undefined,
+    descriptor,
+    metadata: {
+      targetType: 'file',
+      directive: 'output'
+    }
   });
 }
 

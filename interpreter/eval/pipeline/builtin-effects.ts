@@ -23,7 +23,7 @@ import { isGuardRetrySignal } from '@core/errors/GuardRetrySignal';
 import type { EvalResult } from '../../core/interpreter';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { collectInputDescriptor, descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
-import { logFileWriteEvent } from '../../utils/audit-log';
+import { executeWrite } from '../write-executor';
 
 // Minimal builtin effects support for pipelines. These are inline effects that
 // do not create stages and run after the owning stage succeeds.
@@ -449,20 +449,18 @@ async function executeEffect(
             // eslint-disable-next-line no-console
             console.error('[builtin-effects] output:file →', resolvedPath);
           }
-          const fileSystem = (env as any).fileSystem;
-          if (!fileSystem || typeof fileSystem.writeFile !== 'function') {
-            throw new Error('File system not available for pipeline output');
-          }
-          const dir = path.dirname(resolvedPath);
-          try {
-            await fileSystem.mkdir(dir, { recursive: true });
-          } catch {
-            // Directory may already exist; ignore
-          }
-          await fileSystem.writeFile(resolvedPath, content);
-          await logFileWriteEvent(env, resolvedPath, materializedContent.descriptor);
-
-          env.emitEffect('file', content, { path: resolvedPath });
+          await executeWrite({
+            env,
+            targetPath: resolvedPath,
+            content,
+            mode: 'write',
+            descriptor: materializedContent.descriptor,
+            metadata: {
+              targetType: 'file',
+              directive: 'output',
+              source: 'pipeline'
+            }
+          });
           return { value: payloadVariable ?? materializedContent.text, env };
         }
         case 'stream': {
