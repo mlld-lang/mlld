@@ -8,6 +8,7 @@ import type {
   GuardDecisionType,
   GuardResult
 } from '@core/types/guard';
+import type { GuardEnvActionResolution } from './guard-action-evaluator';
 import type { Variable, VariableSource } from '@core/types/variable';
 import { createArrayVariable, createSimpleTextVariable } from '@core/types/variable';
 import { attachArrayHelpers } from '@core/types/variable/ArrayHelpers';
@@ -72,7 +73,10 @@ export interface EvaluateGuardRuntimeDependencies {
     guard: GuardDefinition,
     inputVariable: Variable
   ) => Promise<Variable | undefined>;
-  resolveGuardEnvConfig: (action: GuardActionNode, guardEnv: Environment) => Promise<unknown>;
+  resolveGuardEnvConfig: (
+    action: GuardActionNode,
+    guardEnv: Environment
+  ) => Promise<GuardEnvActionResolution>;
   buildDecisionMetadata: (
     action: GuardActionNode,
     guard: GuardDefinition,
@@ -287,11 +291,13 @@ export async function evaluateGuardRuntime(
   }
 
   if (action.decision === 'env') {
-    const envConfig = await deps.resolveGuardEnvConfig(action, guardEnv);
+    const envDecision = await deps.resolveGuardEnvConfig(action, guardEnv);
+    const envConfig = envDecision.envConfig;
     const metadata = {
       ...metadataBase,
       decision: 'env',
-      envConfig
+      ...(envConfig !== undefined ? { envConfig } : {}),
+      ...(envDecision.policyFragment ? { policyFragment: envDecision.policyFragment } : {})
     };
     deps.logGuardDecisionEvent({
       guard,
@@ -308,7 +314,8 @@ export async function evaluateGuardRuntime(
       guardName: guard.name ?? null,
       decision: 'env',
       timing: 'before',
-      envConfig,
+      ...(envConfig !== undefined ? { envConfig } : {}),
+      ...(envDecision.policyFragment ? { policyFragment: envDecision.policyFragment } : {}),
       metadata
     };
   }

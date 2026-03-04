@@ -124,6 +124,120 @@ describe('PolicyConfig capabilities', () => {
   });
 });
 
+describe('PolicyConfig env', () => {
+  it('normalizes policy env provider/tool/mcp/network rules', () => {
+    const config = normalizePolicyConfig({
+      env: {
+        default: ' @docker ',
+        providers: {
+          '@docker': {
+            allowed: false,
+            auth: ['token-a', 'token-a', 'token-b'],
+            taint: ['src:provider', 'src:provider'],
+            profiles: { mode: 'strict' }
+          }
+        },
+        tools: {
+          allow: ['Read', 'Write', 'Read'],
+          deny: ['Write']
+        },
+        mcps: {
+          allow: ['stdio:alpha', 'stdio:alpha']
+        },
+        net: {
+          allow: ['github.com'],
+          deny: ['internal.local']
+        }
+      }
+    } as PolicyConfig);
+
+    expect(config.env?.default).toBe('@docker');
+    expect(config.env?.providers?.['@docker']).toEqual({
+      allowed: false,
+      auth: ['token-a', 'token-b'],
+      taint: ['src:provider'],
+      profiles: { mode: 'strict' }
+    });
+    expect(config.env?.tools).toEqual({
+      allow: ['Read', 'Write'],
+      deny: ['Write']
+    });
+    expect(config.env?.mcps).toEqual({
+      allow: ['stdio:alpha']
+    });
+    expect(config.env?.net).toEqual({
+      allow: ['github.com'],
+      deny: ['internal.local']
+    });
+  });
+
+  it('merges env rules with default attenuation semantics', () => {
+    const base: PolicyConfig = {
+      env: {
+        default: '@provider/base',
+        providers: {
+          '@provider/base': {
+            auth: 'token-a',
+            taint: ['src:base']
+          }
+        },
+        tools: {
+          allow: ['Read', 'Write'],
+          deny: ['DangerTool']
+        },
+        mcps: {
+          allow: ['stdio:alpha', 'stdio:beta']
+        },
+        net: {
+          allow: ['github.com', 'api.openai.com']
+        }
+      }
+    };
+    const incoming: PolicyConfig = {
+      env: {
+        default: '@provider/child',
+        providers: {
+          '@provider/base': {
+            allowed: false,
+            auth: ['token-b']
+          }
+        },
+        tools: {
+          allow: ['Read'],
+          deny: ['Write']
+        },
+        mcps: {
+          allow: ['stdio:beta']
+        },
+        net: {
+          deny: ['api.openai.com']
+        }
+      }
+    };
+
+    const merged = mergePolicyConfigs(base, incoming);
+    expect(merged.env?.default).toBe('@provider/child');
+    expect(merged.env?.providers?.['@provider/base']).toEqual({
+      allowed: false,
+      auth: ['token-a', 'token-b'],
+      taint: ['src:base']
+    });
+    expect(merged.env?.tools).toEqual({
+      allow: ['Read'],
+      deny: ['DangerTool', 'Write'],
+      attenuation: 'intersection'
+    });
+    expect(merged.env?.mcps).toEqual({
+      allow: ['stdio:beta'],
+      attenuation: 'intersection'
+    });
+    expect(merged.env?.net).toEqual({
+      allow: ['github.com', 'api.openai.com'],
+      deny: ['api.openai.com']
+    });
+  });
+});
+
 describe('PolicyConfig keychain', () => {
   it('normalizes keychain provider and pattern lists', () => {
     const config = normalizePolicyConfig({

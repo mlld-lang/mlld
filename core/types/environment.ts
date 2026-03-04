@@ -1,5 +1,12 @@
 import type { DataLabel } from './security';
 import type { ToolCollection } from './tools';
+import type { PolicyConfig } from '../policy/union';
+
+export type PolicyDerivedConstraints = {
+  policy?: PolicyConfig;
+  policyFragment?: PolicyConfig;
+  policyEnv?: PolicyConfig['env'];
+};
 
 export type EnvironmentConfig = {
   provider?: string;
@@ -11,6 +18,7 @@ export type EnvironmentConfig = {
   profiles?: Record<string, unknown>;
   mcpConfig?: unknown;
   tools?: ToolCollection | string[];
+  _policyDerivedConstraints?: PolicyDerivedConstraints;
   [key: string]: unknown;
 };
 

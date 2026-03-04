@@ -84,6 +84,58 @@ describe('box directive', () => {
     expect(scopedEnv?.getScopedEnvironmentConfig()?.profile).toBe('readonly');
   });
 
+  it('applies policy env constraints when deriving box runtime config', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, process.cwd());
+    env.recordPolicyConfig('policy', {
+      env: {
+        default: '@provider/default',
+        tools: { allow: ['read'] }
+      }
+    });
+
+    const src = `
+/exe @readData() = js { return "ok" }
+/exe @writeData() = js { return "ok" }
+/var tools @agentTools = {
+  read: { mlld: @readData },
+  write: { mlld: @writeData }
+}
+/box with { tools: @agentTools } [
+  show "ok"
+]
+`;
+
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const scopedEnv = findEnvWithScopedTools(env);
+    expect(scopedEnv).toBeDefined();
+    const allowedTools = Array.from(((scopedEnv as any).allowedTools as Set<string>) || []).sort();
+    expect(allowedTools).toEqual(['read']);
+    expect(scopedEnv?.getScopedEnvironmentConfig()?.provider).toBe('@provider/default');
+    expect(scopedEnv?.getScopedEnvironmentConfig()?._policyDerivedConstraints?.policyEnv).toMatchObject({
+      default: '@provider/default'
+    });
+  });
+
+  it('rejects box config when selected provider is denied by policy', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, process.cwd());
+    env.recordPolicyConfig('policy', {
+      env: {
+        providers: {
+          '@provider/blocked': { allowed: false }
+        }
+      }
+    });
+
+    const { ast } = await parse('/box { provider: "@provider/blocked", tools: ["read"] } [ show "ok" ]');
+    await expect(evaluate(ast, env)).rejects.toThrow(/denied by policy/i);
+  });
+
   it('enforces tool attenuation', async () => {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();

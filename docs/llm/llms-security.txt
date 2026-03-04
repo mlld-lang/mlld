@@ -502,6 +502,8 @@ Now `@mcpData` has both `src:mcp` taint AND the `untrusted` label, so built-in r
 
 **Policy denials are hard errors** — the operation fails immediately. Unlike guard denials, they cannot be caught with `denied =>` handlers. Use policy for absolute constraints and guards for cases needing graceful fallback. See `security-denied-handlers` for guard denial handling.
 
+**Environment policy alignment:** `policy.env` constraints (provider allow/deny, tools, mcps, network) are enforced when runtime env config is derived. Guard `env` actions may return a policy fragment, and that fragment is merged into active policy before execution. This lets guards tighten runtime environment constraints without mutating the declared policy source.
+
 See `security-policies` for general policy structure and `labels-source-auto` for source label details.
 
 Guards catch labeled data flowing to MCP calls. A bare label trigger like `for secret` matches both data labels on inputs and operation labels on exes (see `guards-basics`). Since MCP tool calls execute as exe operations, use `@mx.op.type == "exe"` to narrow to MCP/exe context, or guard directly on the tool's operation labels (e.g., `guard before destructive`).

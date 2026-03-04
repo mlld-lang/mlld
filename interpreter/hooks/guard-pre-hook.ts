@@ -216,7 +216,9 @@ export const guardPreHook: PreHook = async (
       primaryMetadata: decisionState.primaryMetadata,
       guardContext: aggregateContext,
       envConfig: decisionState.selectedEnvConfig,
-      envGuard: decisionState.selectedEnvGuard
+      envGuard: decisionState.selectedEnvGuard,
+      policyFragment: decisionState.selectedPolicyFragment,
+      policyGuard: decisionState.selectedPolicyGuard
     });
     appendGuardHistory(
       env,

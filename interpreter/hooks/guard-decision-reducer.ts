@@ -1,4 +1,5 @@
 import type { GuardHint, GuardResult } from '@core/types/guard';
+import type { PolicyConfig } from '@core/policy/union';
 
 export type GuardAggregateDecision = 'allow' | 'deny' | 'retry';
 
@@ -9,6 +10,8 @@ export interface GuardDecisionState {
   primaryMetadata?: Record<string, unknown>;
   selectedEnvConfig?: unknown;
   selectedEnvGuard: string | null | undefined;
+  selectedPolicyFragment?: PolicyConfig;
+  selectedPolicyGuard: string | null | undefined;
 }
 
 export interface GuardDecisionOptions {
@@ -20,7 +23,8 @@ export function createGuardDecisionState(): GuardDecisionState {
     decision: 'allow',
     reasons: [],
     hints: [],
-    selectedEnvGuard: undefined
+    selectedEnvGuard: undefined,
+    selectedPolicyGuard: undefined
   };
 }
 
@@ -37,6 +41,10 @@ export function applyGuardDecisionResult(
     if (state.selectedEnvConfig === undefined && result.envConfig !== undefined) {
       state.selectedEnvConfig = result.envConfig;
       state.selectedEnvGuard = result.guardName ?? null;
+    }
+    if (state.selectedPolicyFragment === undefined && result.policyFragment !== undefined) {
+      state.selectedPolicyFragment = result.policyFragment;
+      state.selectedPolicyGuard = result.guardName ?? null;
     }
     return;
   }

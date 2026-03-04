@@ -5,9 +5,9 @@ brief: Control what MCP-sourced data can do with label flow rules
 category: security
 parent: mcp-security
 tags: [mcp, policy, labels, label-flow, security]
-related: [mcp, mcp-security, mcp-guards, mcp-import, security-policies]
-related-code: [interpreter/eval/policy.ts, interpreter/eval/exec-invocation.ts]
-updated: 2026-02-04
+related: [mcp, mcp-security, mcp-guards, mcp-import, security-policies, box-config]
+related-code: [interpreter/eval/policy.ts, interpreter/eval/exec-invocation.ts, interpreter/env/environment-provider.ts]
+updated: 2026-03-04
 qa_tier: 2
 ---
 
@@ -56,5 +56,7 @@ var untrusted @mcpData = @echo("external data")
 Now `@mcpData` has both `src:mcp` taint AND the `untrusted` label, so built-in rules like `no-untrusted-destructive` apply.
 
 **Policy denials are hard errors** — the operation fails immediately. Unlike guard denials, they cannot be caught with `denied =>` handlers. Use policy for absolute constraints and guards for cases needing graceful fallback. See `security-denied-handlers` for guard denial handling.
+
+**Environment policy alignment:** `policy.env` constraints (provider allow/deny, tools, mcps, network) are enforced when runtime env config is derived. Guard `env` actions may return a policy fragment, and that fragment is merged into active policy before execution. This lets guards tighten runtime environment constraints without mutating the declared policy source.
 
 See `security-policies` for general policy structure and `labels-source-auto` for source label details.

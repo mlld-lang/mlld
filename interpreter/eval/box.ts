@@ -15,6 +15,7 @@ import { asData, isStructuredValue } from '../utils/structured-value';
 import { evaluateExeBlock } from './exe';
 import { normalizeMcpConfig, registerMcpToolsFromConfig } from '../mcp/config-spawner';
 import { VirtualFS } from '@services/fs/VirtualFS';
+import { applyEnvironmentDefaults } from '@interpreter/env/environment-provider';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -669,6 +670,9 @@ export async function evaluateBox(
       };
     }
   }
+
+  mergedConfig = applyEnvironmentDefaults(mergedConfig, env.getPolicySummary()) ?? mergedConfig;
+  resolvedTools = mergedConfig.tools;
 
   const scopedEnv = env.createChild();
   scopedEnv.setScopedEnvironmentConfig(mergedConfig);

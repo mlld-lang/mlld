@@ -1,12 +1,37 @@
 import { normalizeCommandPatternEntry, parseFsPatternEntry } from './capability-patterns';
+import type { DataLabel } from '@core/types/security';
 
 export type PolicyLimits = {
   maxTokens?: number;
   timeout?: number;
 };
 
+export type PolicyEnvironmentAttenuation = 'intersection' | 'union';
+
+export type PolicyEnvironmentProviderConfig = {
+  allowed?: boolean;
+  auth?: string | string[];
+  taint?: DataLabel[];
+  profiles?: Record<string, unknown>;
+};
+
+export type PolicyEnvironmentListConfig = {
+  allow?: string[];
+  deny?: string[];
+  attenuation?: PolicyEnvironmentAttenuation;
+};
+
+export type PolicyEnvironmentNetworkConfig = {
+  allow?: string[];
+  deny?: string[];
+};
+
 export type PolicyEnvironmentConfig = {
   default?: string;
+  providers?: Record<string, PolicyEnvironmentProviderConfig>;
+  tools?: PolicyEnvironmentListConfig;
+  mcps?: PolicyEnvironmentListConfig;
+  net?: PolicyEnvironmentNetworkConfig;
 };
 
 export type PolicyTrustStance = 'trusted' | 'untrusted';
@@ -212,17 +237,129 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
 function normalizePolicyEnv(
   config?: PolicyEnvironmentConfig
 ): PolicyEnvironmentConfig | undefined {
-  if (!config) {
+  if (!config || !isPlainObject(config)) {
     return undefined;
   }
   const defaultProvider =
     typeof config.default === 'string' && config.default.trim().length > 0
       ? config.default.trim()
       : undefined;
-  if (!defaultProvider) {
+  const providers = normalizePolicyEnvironmentProviders(config.providers);
+  const tools = normalizePolicyEnvironmentListConfig(config.tools);
+  const mcps = normalizePolicyEnvironmentListConfig(config.mcps);
+  const net = normalizePolicyEnvironmentNetworkConfig(config.net);
+  if (!defaultProvider && !providers && !tools && !mcps && !net) {
     return undefined;
   }
-  return { default: defaultProvider };
+  return {
+    ...(defaultProvider ? { default: defaultProvider } : {}),
+    ...(providers ? { providers } : {}),
+    ...(tools ? { tools } : {}),
+    ...(mcps ? { mcps } : {}),
+    ...(net ? { net } : {})
+  };
+}
+
+function normalizePolicyEnvironmentProviders(
+  value: unknown
+): Record<string, PolicyEnvironmentProviderConfig> | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const entries = Object.entries(value);
+  const providers: Record<string, PolicyEnvironmentProviderConfig> = {};
+  for (const [rawRef, rawConfig] of entries) {
+    const providerRef = rawRef.trim();
+    if (!providerRef || !isPlainObject(rawConfig)) {
+      continue;
+    }
+    const normalized = normalizePolicyEnvironmentProviderConfig(rawConfig);
+    if (normalized) {
+      providers[providerRef] = normalized;
+    }
+  }
+  return Object.keys(providers).length > 0 ? providers : undefined;
+}
+
+function normalizePolicyEnvironmentProviderConfig(
+  value: unknown
+): PolicyEnvironmentProviderConfig | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const allowed = typeof value.allowed === 'boolean' ? value.allowed : undefined;
+  const auth = normalizeStringOrList(value.auth);
+  const taint = normalizeStringList(value.taint) as DataLabel[] | undefined;
+  const profiles = isPlainObject(value.profiles)
+    ? { ...(value.profiles as Record<string, unknown>) }
+    : undefined;
+
+  if (allowed === undefined && auth === undefined && taint === undefined && !profiles) {
+    return undefined;
+  }
+
+  return {
+    ...(allowed !== undefined ? { allowed } : {}),
+    ...(auth !== undefined ? { auth } : {}),
+    ...(taint !== undefined ? { taint } : {}),
+    ...(profiles ? { profiles } : {})
+  };
+}
+
+function normalizePolicyEnvironmentListConfig(
+  value: unknown
+): PolicyEnvironmentListConfig | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const allow = normalizeStringList(value.allow);
+  const deny = normalizeStringList(value.deny);
+  const attenuation = normalizePolicyEnvironmentAttenuation(value.attenuation);
+  if (allow === undefined && deny === undefined && attenuation === undefined) {
+    return undefined;
+  }
+  return {
+    ...(allow !== undefined ? { allow } : {}),
+    ...(deny !== undefined ? { deny } : {}),
+    ...(attenuation !== undefined ? { attenuation } : {})
+  };
+}
+
+function normalizePolicyEnvironmentNetworkConfig(
+  value: unknown
+): PolicyEnvironmentNetworkConfig | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const allow = normalizeStringList(value.allow);
+  const deny = normalizeStringList(value.deny);
+  if (allow === undefined && deny === undefined) {
+    return undefined;
+  }
+  return {
+    ...(allow !== undefined ? { allow } : {}),
+    ...(deny !== undefined ? { deny } : {})
+  };
+}
+
+function normalizePolicyEnvironmentAttenuation(
+  value: unknown
+): PolicyEnvironmentAttenuation | undefined {
+  if (value === 'intersection' || value === 'union') {
+    return value;
+  }
+  return undefined;
+}
+
+function normalizeStringOrList(value: unknown): string | string[] | undefined {
+  const list = normalizeStringList(value);
+  if (list === undefined) {
+    return undefined;
+  }
+  if (list.length <= 1) {
+    return list[0];
+  }
+  return list;
 }
 
 function normalizePolicyDefaults(
@@ -627,10 +764,165 @@ function mergePolicyEnv(
     return undefined;
   }
   const defaultProvider = normalizedIncoming?.default ?? normalizedBase?.default;
-  if (!defaultProvider) {
+  const providers = mergePolicyEnvironmentProviders(
+    normalizedBase?.providers,
+    normalizedIncoming?.providers
+  );
+  const tools = mergePolicyEnvironmentListRule(
+    normalizedBase?.tools,
+    normalizedIncoming?.tools,
+    'intersection'
+  );
+  const mcps = mergePolicyEnvironmentListRule(
+    normalizedBase?.mcps,
+    normalizedIncoming?.mcps,
+    'intersection'
+  );
+  const net = mergePolicyEnvironmentNetworkRule(normalizedBase?.net, normalizedIncoming?.net);
+  if (!defaultProvider && !providers && !tools && !mcps && !net) {
     return undefined;
   }
-  return { default: defaultProvider };
+  return {
+    ...(defaultProvider ? { default: defaultProvider } : {}),
+    ...(providers ? { providers } : {}),
+    ...(tools ? { tools } : {}),
+    ...(mcps ? { mcps } : {}),
+    ...(net ? { net } : {})
+  };
+}
+
+function mergePolicyEnvironmentProviders(
+  base?: Record<string, PolicyEnvironmentProviderConfig>,
+  incoming?: Record<string, PolicyEnvironmentProviderConfig>
+): Record<string, PolicyEnvironmentProviderConfig> | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  const merged: Record<string, PolicyEnvironmentProviderConfig> = {};
+  const keys = new Set<string>([
+    ...Object.keys(base ?? {}),
+    ...Object.keys(incoming ?? {})
+  ]);
+  for (const key of keys) {
+    const next = mergePolicyEnvironmentProviderRule(base?.[key], incoming?.[key]);
+    if (next) {
+      merged[key] = next;
+    }
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function mergePolicyEnvironmentProviderRule(
+  base?: PolicyEnvironmentProviderConfig,
+  incoming?: PolicyEnvironmentProviderConfig
+): PolicyEnvironmentProviderConfig | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  const allowed = incoming?.allowed === false || base?.allowed === false
+    ? false
+    : incoming?.allowed ?? base?.allowed;
+  const auth = mergePolicyEnvironmentAuth(base?.auth, incoming?.auth);
+  const taint = mergePolicyEnvironmentTaint(base?.taint, incoming?.taint);
+  const profiles = base?.profiles || incoming?.profiles
+    ? {
+        ...(base?.profiles ?? {}),
+        ...(incoming?.profiles ?? {})
+      }
+    : undefined;
+  if (allowed === undefined && auth === undefined && taint === undefined && !profiles) {
+    return undefined;
+  }
+  return {
+    ...(allowed !== undefined ? { allowed } : {}),
+    ...(auth !== undefined ? { auth } : {}),
+    ...(taint !== undefined ? { taint } : {}),
+    ...(profiles ? { profiles } : {})
+  };
+}
+
+function mergePolicyEnvironmentAuth(
+  base?: string | string[],
+  incoming?: string | string[]
+): string | string[] | undefined {
+  const baseList = normalizeStringList(base);
+  const incomingList = normalizeStringList(incoming);
+  const merged = mergeStringLists(baseList, incomingList);
+  if (merged === undefined) {
+    return undefined;
+  }
+  if (merged.length <= 1) {
+    return merged[0];
+  }
+  return merged;
+}
+
+function mergePolicyEnvironmentTaint(
+  base?: DataLabel[],
+  incoming?: DataLabel[]
+): DataLabel[] | undefined {
+  const merged = mergeStringLists(base as string[] | undefined, incoming as string[] | undefined);
+  if (merged === undefined) {
+    return undefined;
+  }
+  return merged as DataLabel[];
+}
+
+function mergePolicyEnvironmentListRule(
+  base?: PolicyEnvironmentListConfig,
+  incoming?: PolicyEnvironmentListConfig,
+  defaultAttenuation: PolicyEnvironmentAttenuation = 'intersection'
+): PolicyEnvironmentListConfig | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  const attenuation = incoming?.attenuation ?? base?.attenuation ?? defaultAttenuation;
+  const allow =
+    attenuation === 'union'
+      ? mergeStringLists(base?.allow, incoming?.allow)
+      : intersectStringLists(base?.allow, incoming?.allow);
+  const deny = mergeStringLists(base?.deny, incoming?.deny);
+  if (allow === undefined && deny === undefined && attenuation === undefined) {
+    return undefined;
+  }
+  return {
+    ...(allow !== undefined ? { allow } : {}),
+    ...(deny !== undefined ? { deny } : {}),
+    ...(attenuation !== undefined ? { attenuation } : {})
+  };
+}
+
+function mergePolicyEnvironmentNetworkRule(
+  base?: PolicyEnvironmentNetworkConfig,
+  incoming?: PolicyEnvironmentNetworkConfig
+): PolicyEnvironmentNetworkConfig | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  const allow = intersectStringLists(base?.allow, incoming?.allow);
+  const deny = mergeStringLists(base?.deny, incoming?.deny);
+  if (allow === undefined && deny === undefined) {
+    return undefined;
+  }
+  return {
+    ...(allow !== undefined ? { allow } : {}),
+    ...(deny !== undefined ? { deny } : {})
+  };
+}
+
+function intersectStringLists(base?: string[], incoming?: string[]): string[] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  if (!base) {
+    return incoming ? Array.from(new Set(incoming)) : undefined;
+  }
+  if (!incoming) {
+    return base ? Array.from(new Set(base)) : undefined;
+  }
+  const incomingSet = new Set(incoming);
+  const intersection = base.filter(entry => incomingSet.has(entry));
+  return Array.from(new Set(intersection));
 }
 
 function toAllowShape(value: PolicyConfig['allow']): AllowShape {

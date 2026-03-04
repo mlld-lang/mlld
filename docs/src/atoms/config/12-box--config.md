@@ -46,6 +46,8 @@ In VFS mode, defaults are applied unless overridden:
 - `mcps: []`
 - `net: { allow: [] }`
 
+Active `policy.env` constraints are then applied to the resolved box config. Local box config can only be attenuated by policy (for example, requested tools are intersected with `policy.env.tools.allow`, and denied providers throw).
+
 **Configuration fields:**
 
 | Field | Values | Purpose |

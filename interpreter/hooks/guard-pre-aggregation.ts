@@ -2,6 +2,7 @@ import type { GuardHint, GuardResult } from '@core/types/guard';
 import type { Variable } from '@core/types/variable';
 import type { GuardContextSnapshot } from '../env/ContextManager';
 import { DEFAULT_GUARD_MAX } from './guard-pre-runtime';
+import type { PolicyConfig } from '@core/policy/union';
 
 export function buildAggregateMetadata(options: {
   guardResults: GuardResult[];
@@ -12,6 +13,8 @@ export function buildAggregateMetadata(options: {
   guardContext?: GuardContextSnapshot;
   envConfig?: unknown;
   envGuard?: string | null;
+  policyFragment?: PolicyConfig;
+  policyGuard?: string | null;
 }): Record<string, unknown> {
   const metadata: Record<string, unknown> = {
     guardResults: options.guardResults,
@@ -35,6 +38,13 @@ export function buildAggregateMetadata(options: {
     metadata.envConfig = options.envConfig;
     if (options.envGuard !== undefined) {
       metadata.envGuard = options.envGuard;
+    }
+  }
+
+  if (options.policyFragment !== undefined) {
+    metadata.policyFragment = options.policyFragment;
+    if (options.policyGuard !== undefined) {
+      metadata.policyGuard = options.policyGuard;
     }
   }
 

@@ -14,7 +14,7 @@ import { evaluateGuardBlock } from './guard-block-evaluator';
 import {
   buildDecisionMetadata,
   evaluateGuardReplacement,
-  resolveGuardEnvConfig
+  resolveGuardEnvDecision
 } from './guard-action-evaluator';
 import {
   logGuardDecisionEvent,
@@ -49,7 +49,7 @@ export async function evaluatePreHookGuard(
     injectGuardHelpers,
     evaluateGuardBlock,
     evaluateGuardReplacement,
-    resolveGuardEnvConfig,
+    resolveGuardEnvConfig: resolveGuardEnvDecision,
     buildDecisionMetadata,
     logGuardEvaluationStart,
     logGuardDecisionEvent

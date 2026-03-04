@@ -5,9 +5,9 @@ brief: Define and import policy objects
 category: config
 parent: policy
 tags: [security, policies, guards]
-related: [security-guards-basics, policy-operations, policy-composition, policy-capabilities, policy-label-flow, policy-auth, auth]
-related-code: [interpreter/eval/policy.ts]
-updated: 2026-02-22
+related: [security-guards-basics, policy-operations, policy-composition, policy-capabilities, policy-label-flow, policy-auth, auth, box-config]
+related-code: [interpreter/eval/policy.ts, interpreter/env/environment-provider.ts]
+updated: 2026-03-04
 qa_tier: 2
 ---
 
@@ -45,6 +45,34 @@ policy @p = {
 **`auth`** defines caller-side credential mappings for `using auth:name`. It accepts short form (`"API_KEY"`) and object form (`{ from, as }`). Policy auth composes with standalone `auth`; caller policy entries override same-name module bindings.
 
 **`capabilities`** controls what operations are allowed at all. `allow` whitelists command patterns. `danger` marks capabilities that require explicit opt-in.
+
+**`env`** defines execution-environment constraints as policy (provider defaults, provider allow/deny rules, tools/mcps/network allowlists). These constraints attenuate runtime box/env configs and cannot be bypassed by local config.
+
+```mlld
+policy @p = {
+  env: {
+    default: "@provider/sandbox",
+    providers: {
+      "@provider/sandbox": { allowed: true },
+      "@provider/raw": { allowed: false }
+    },
+    tools: { allow: ["Read", "Write"] },
+    mcps: { allow: [] },
+    net: { allow: ["github.com"] }
+  }
+}
+```
+
+Guards can also return policy fragments through `env` actions. The fragment is merged into active policy for that operation before environment config is derived:
+
+```mlld
+guard before op:run = when [
+  * => env {
+    env: { tools: ["Read", "Write"] },
+    policy: { env: { tools: { allow: ["Read"] } } }
+  }
+]
+```
 
 `danger: ["@keychain"]` is required for keychain sources declared in `policy.auth`. Standalone top-level `auth` declarations do not require `danger`.
 
