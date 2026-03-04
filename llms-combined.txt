@@ -4134,6 +4134,30 @@ mlld script.mld --append-json out.jsonl  >> save events to file
 - Pipeline stages buffer between stages; streaming is within each stage
 </STREAM>
 
+<FILE>
+```mlld
+file "task.md" = @task
+file "notes/today.md" = `## Notes\n@summary`
+```
+
+`file` writes exactly one path. Paths must be relative and cannot use `..`.
+</FILE>
+
+<FILES>
+```mlld
+files "src/" = [
+  { "index.js": @source, desc: "Entry point" },
+  { "config.json": @config }
+]
+
+files <@workspace/> = [
+  { "README.md": @readme }
+]
+```
+
+`files` accepts an array of objects where each object has one file key and optional `desc`.
+</FILES>
+
 </MLLD_OUTPUT>
 
 <MLLD_PATTERNS>

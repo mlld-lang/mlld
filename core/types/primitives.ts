@@ -251,6 +251,8 @@ export type DirectiveKind =
   | 'export'
   | 'var'
   | 'show'
+  | 'file'
+  | 'files'
   | 'exe'
   | 'checkpoint'
   | 'box'
@@ -282,6 +284,9 @@ export type DirectiveSubtype =
   | 'var'
   // Unified show subtypes
   | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
+  // File projection subtypes
+  | 'file'
+  | 'files'
   // Unified exe subtypes
   | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeValue' | 'exeTemplate' | 'exeTemplateFile'
   | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeLoop' | 'exeResolver' | 'exeBlock'

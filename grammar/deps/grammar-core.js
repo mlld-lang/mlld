@@ -30,6 +30,8 @@ export const DirectiveKind = {
     run: 'run',
     var: 'var', // NEW: Replaces text/data
     show: 'show', // NEW: Replaces add
+    file: 'file',
+    files: 'files',
     stream: 'stream',
     exe: 'exe', // NEW: Replaces exec
     checkpoint: 'checkpoint',

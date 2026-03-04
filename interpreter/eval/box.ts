@@ -4,6 +4,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { EnvironmentConfig } from '@core/types/environment';
 import type { Variable } from '@core/types/variable';
+import type { WorkspaceValue } from '@core/types/workspace';
 import { evaluate } from '../core/interpreter';
 import { MlldDirectiveError } from '@core/errors';
 import { normalizeProfilesDeclaration, selectProfile } from '@core/policy/needs';
@@ -12,6 +13,7 @@ import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { asData, isStructuredValue } from '../utils/structured-value';
 import { evaluateExeBlock } from './exe';
 import { normalizeMcpConfig, registerMcpToolsFromConfig } from '../mcp/config-spawner';
+import { VirtualFS } from '@services/fs/VirtualFS';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -538,6 +540,28 @@ async function normalizeMcpScope(
   return { mcps: Array.from(resolved), hasMcps: true };
 }
 
+function containsFileProjectionDirective(node: unknown): boolean {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+  if (Array.isArray(node)) {
+    return node.some(entry => containsFileProjectionDirective(entry));
+  }
+  const record = node as Record<string, unknown>;
+  if (record.type === 'Directive' && (record.kind === 'file' || record.kind === 'files')) {
+    return true;
+  }
+  return Object.values(record).some(value => containsFileProjectionDirective(value));
+}
+
+function createScopedWorkspace(): WorkspaceValue {
+  return {
+    type: 'workspace',
+    fs: VirtualFS.empty(),
+    descriptions: new Map<string, string>()
+  };
+}
+
 export async function evaluateBox(
   directive: BoxDirectiveNode,
   env: Environment,
@@ -602,10 +626,23 @@ export async function evaluateBox(
   }
 
   try {
-    await applyMcpConfigForBox(mergedConfig, scopedEnv, env, context, directive.location);
-    const result = await evaluateExeBlock(block, scopedEnv, {}, { scope: 'block' });
-    env.mergeChild(scopedEnv);
-    return { value: result.value, env };
+    const shouldScopeWorkspace = containsFileProjectionDirective(block);
+    let pushedWorkspace = false;
+    if (shouldScopeWorkspace) {
+      scopedEnv.pushActiveWorkspace(createScopedWorkspace());
+      pushedWorkspace = true;
+    }
+
+    try {
+      await applyMcpConfigForBox(mergedConfig, scopedEnv, env, context, directive.location);
+      const result = await evaluateExeBlock(block, scopedEnv, {}, { scope: 'block' });
+      env.mergeChild(scopedEnv);
+      return { value: result.value, env };
+    } finally {
+      if (pushedWorkspace) {
+        scopedEnv.popActiveWorkspace();
+      }
+    }
   } finally {
     contextManager.setProfile(previousProfile);
   }

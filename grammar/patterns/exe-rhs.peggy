@@ -727,6 +727,8 @@ ExeBlockStatement
   / AugmentedAssignment
   / WhenExpressionAny
   / ForNestedDirective
+  / SlashFile
+  / SlashFiles
   / SlashIf
   / SlashBail
   / SlashCheckpoint

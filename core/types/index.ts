@@ -26,6 +26,7 @@ export * from './workspace';
 export * from './import';
 export * from './export';
 export * from './show';
+export * from './file';
 export * from './exe';
 export * from './run';
 export * from './output';

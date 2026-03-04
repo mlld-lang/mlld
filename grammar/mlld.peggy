@@ -249,6 +249,8 @@ Directive
     / SlashExport   // Export directives (explicit exports)
     / SlashOutput   // Output directives (output routing)
     / SlashAppend   // Append directives (incremental file writing)
+    / SlashFile     // File projection directives
+    / SlashFiles    // Multi-file projection directives
     / SlashIf       // If directives (conditional blocks)
     / SlashWhen     // When directives (conditional execution)
     / SlashHook     // Hook directives (user lifecycle hooks)
