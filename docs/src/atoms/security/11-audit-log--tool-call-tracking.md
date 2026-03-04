@@ -5,7 +5,7 @@ brief: Track exe invocations with @mx.tools namespace
 category: security
 parent: audit-log
 tags: [tools, guards, mx, tracking]
-related: [mcp, mcp-tool-gateway, security-guards-basics, env-directive]
+related: [mcp, mcp-tool-gateway, security-guards-basics, box-directive]
 related-code: [interpreter/env/ContextManager.ts, cli/mcp/FunctionRouter.ts]
 updated: 2026-02-16
 qa_tier: 2
@@ -94,7 +94,7 @@ exe @smartFetch(url) = when [
 Calls are tracked within the current execution context. `env` blocks with tool restrictions get their own scope.
 
 ```mlld
-env @agent with { tools: @agentTools } [
+box @agent with { tools: @agentTools } [
   >> @mx.tools.calls scoped to this env block
   >> only tracks exe invocations the agent makes
   var @result = @fetchData("input")

@@ -100,7 +100,7 @@ Tool collections define what an agent sees and how tools behave.
   * => allow
 ]
 
-/env @agent with { tools: @agentTools } [
+/box @agent with { tools: @agentTools } [
   /run cmd { claude -p @task }
 ]
 ```

@@ -1,12 +1,12 @@
 /**
- * Env directive type definitions
+ * Box directive type definitions
  */
 import type { TypedDirectiveNode } from './base';
 import type { BaseMlldNode } from './primitives';
 import type { WithClause } from './run';
 import type { ExeBlockNode } from './exe';
 
-export interface EnvDirectiveNode extends TypedDirectiveNode<'env', 'env'> {
+export interface BoxDirectiveNode extends TypedDirectiveNode<'box', 'box'> {
   values: {
     config?: BaseMlldNode[];
     withClause?: WithClause;

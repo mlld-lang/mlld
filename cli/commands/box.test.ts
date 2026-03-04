@@ -16,11 +16,11 @@ vi.mock('os', async (importOriginal) => {
   };
 });
 
-import { envCommand, extractPromptFromArgs } from './env';
+import { boxCommand, extractPromptFromArgs } from './box';
 
 const originalCwd = process.cwd;
 
-describe('envCommand', () => {
+describe('boxCommand', () => {
   const tempDirs: string[] = [];
 
   afterEach(async () => {
@@ -41,7 +41,7 @@ describe('envCommand', () => {
     });
 
     try {
-      await envCommand({ _: ['spawn', '..', '--', 'echo', 'test'] });
+      await boxCommand({ _: ['spawn', '..', '--', 'echo', 'test'] });
     } catch (error: any) {
       if (!error.message.includes('exit:1')) {
         throw error;
@@ -55,11 +55,11 @@ describe('envCommand', () => {
   });
 
   it('rejects modules that are not environment modules', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-env-test-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-box-test-'));
     tempDirs.push(root);
     process.cwd = vi.fn(() => root);
 
-    const envDir = path.join(root, '.mlld/env/bad-env');
+    const envDir = path.join(root, '.mlld/box/bad-env');
     await fs.mkdir(envDir, { recursive: true });
     await fs.writeFile(
       path.join(envDir, 'module.yml'),
@@ -73,7 +73,7 @@ describe('envCommand', () => {
     });
 
     try {
-      await envCommand({ _: ['spawn', 'bad-env', '--', 'echo', 'test'] });
+      await boxCommand({ _: ['spawn', 'bad-env', '--', 'echo', 'test'] });
     } catch (error: any) {
       if (!error.message.includes('exit:1')) {
         throw error;
@@ -115,11 +115,11 @@ describe('envCommand', () => {
   });
 
   it('invokes @spawn export from environment module', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-env-spawn-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-box-spawn-'));
     tempDirs.push(root);
     process.cwd = vi.fn(() => root);
 
-    const envDir = path.join(root, '.mlld/env/good-env');
+    const envDir = path.join(root, '.mlld/box/good-env');
     await fs.mkdir(envDir, { recursive: true });
     await fs.writeFile(
       path.join(envDir, 'module.yml'),
@@ -141,7 +141,7 @@ describe('envCommand', () => {
     });
 
     try {
-      await envCommand({ _: ['spawn', 'good-env', '--', 'hello'] });
+      await boxCommand({ _: ['spawn', 'good-env', '--', 'hello'] });
     } catch (error: any) {
       if (!error.message.includes('exit:0')) {
         throw error;
@@ -161,7 +161,7 @@ describe('envCommand', () => {
     });
 
     it('captures skills directory when present', async () => {
-      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-env-capture-'));
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-box-capture-'));
       tempDirs.push(root);
       process.cwd = vi.fn(() => root);
 
@@ -178,10 +178,10 @@ describe('envCommand', () => {
       vi.spyOn(console, 'log').mockImplementation(() => {});
       vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      await envCommand({ _: ['capture', 'test-env'] });
+      await boxCommand({ _: ['capture', 'test-env'] });
 
       // Check skills were copied
-      const targetSkillsDir = path.join(root, '.mlld/env/test-env/.claude/skills');
+      const targetSkillsDir = path.join(root, '.mlld/box/test-env/.claude/skills');
       const mySkill = await fs.readFile(path.join(targetSkillsDir, 'my-skill.md'), 'utf8');
       expect(mySkill).toBe('# My Skill\nDoes stuff');
 
@@ -190,7 +190,7 @@ describe('envCommand', () => {
     });
 
     it('captures from local .claude with --local flag', async () => {
-      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-env-capture-local-'));
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-box-capture-local-'));
       tempDirs.push(root);
       process.cwd = vi.fn(() => root);
 
@@ -210,24 +210,24 @@ describe('envCommand', () => {
       vi.spyOn(console, 'log').mockImplementation(() => {});
       vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      await envCommand({ _: ['capture', 'local-env', '--local'] });
+      await boxCommand({ _: ['capture', 'local-env', '--local'] });
 
       // Check local config was used (not global)
       const settings = await fs.readFile(
-        path.join(root, '.mlld/env/local-env/.claude/settings.json'),
+        path.join(root, '.mlld/box/local-env/.claude/settings.json'),
         'utf8'
       );
       expect(JSON.parse(settings)).toEqual({ local: true });
 
       const claudeMd = await fs.readFile(
-        path.join(root, '.mlld/env/local-env/.claude/CLAUDE.md'),
+        path.join(root, '.mlld/box/local-env/.claude/CLAUDE.md'),
         'utf8'
       );
       expect(claudeMd).toBe('# Local Config');
     });
 
     it('captures Codex config with --codex flag', async () => {
-      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-env-capture-codex-'));
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-box-capture-codex-'));
       tempDirs.push(root);
       process.cwd = vi.fn(() => root);
 
@@ -241,26 +241,26 @@ describe('envCommand', () => {
       vi.spyOn(console, 'log').mockImplementation(() => {});
       vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      await envCommand({ _: ['capture', 'codex-env', '--codex'] });
+      await boxCommand({ _: ['capture', 'codex-env', '--codex'] });
 
       // Check .codex directory was created and used
       const settings = await fs.readFile(
-        path.join(root, '.mlld/env/codex-env/.codex/settings.json'),
+        path.join(root, '.mlld/box/codex-env/.codex/settings.json'),
         'utf8'
       );
       expect(JSON.parse(settings)).toEqual({ codex: true });
 
       // Check index.mld references codex
       const indexMld = await fs.readFile(
-        path.join(root, '.mlld/env/codex-env/index.mld'),
+        path.join(root, '.mlld/box/codex-env/index.mld'),
         'utf8'
       );
       expect(indexMld).toContain('codex -p @prompt');
       expect(indexMld).toContain('CODEX_CONFIG_DIR');
     });
 
-    it('stores in global .mlld/env with --global flag', async () => {
-      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-env-capture-global-'));
+    it('stores in global .mlld/box with --global flag', async () => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-box-capture-global-'));
       tempDirs.push(root);
       process.cwd = vi.fn(() => root);
 
@@ -273,11 +273,11 @@ describe('envCommand', () => {
       vi.spyOn(console, 'log').mockImplementation(() => {});
       vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      await envCommand({ _: ['capture', 'global-env', '--global'] });
+      await boxCommand({ _: ['capture', 'global-env', '--global'] });
 
-      // Should be in fake-home/.mlld/env, not root/.mlld/env
-      const globalEnvPath = path.join(fakeHome, '.mlld/env/global-env/module.yml');
-      const localEnvPath = path.join(root, '.mlld/env/global-env/module.yml');
+      // Should be in fake-home/.mlld/box, not root/.mlld/box
+      const globalEnvPath = path.join(fakeHome, '.mlld/box/global-env/module.yml');
+      const localEnvPath = path.join(root, '.mlld/box/global-env/module.yml');
 
       expect(await fs.access(globalEnvPath).then(() => true).catch(() => false)).toBe(true);
       expect(await fs.access(localEnvPath).then(() => true).catch(() => false)).toBe(false);

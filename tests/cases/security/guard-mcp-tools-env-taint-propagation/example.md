@@ -6,7 +6,7 @@
   comment: { mlld: @envTaintComment, labels: ["publishes"] }
 }
 
-/exe @envTaintAgent(tools, task) = env with { tools: @tools } [
+/exe @envTaintAgent(tools, task) = box with { tools: @tools } [
   let @issue = @envTaintRead("mlld-lang", "mlld", 1)
   => @issue
 ]

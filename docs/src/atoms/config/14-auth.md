@@ -21,7 +21,7 @@ exe @search(q) = js { /* uses process.env.BRAVE_API_KEY */ } using auth:brave
 ```
 
 Short form expands to:
-- `from: "keychain:mlld-env-{projectname}/BRAVE_API_KEY"`
+- `from: "keychain:mlld-box-{projectname}/BRAVE_API_KEY"`
 - `as: "BRAVE_API_KEY"`
 - runtime resolution: keychain first, then `process.env.BRAVE_API_KEY`
 
@@ -33,7 +33,7 @@ auth @brave = { from: "keychain:custom-service/custom-account", as: "BRAVE_API_K
 auth @brave = { from: "env:SOME_OTHER_VAR", as: "BRAVE_API_KEY" }
 ```
 
-`from: "keychain"` expands to `keychain:mlld-env-{projectname}/<as>`.
+`from: "keychain"` expands to `keychain:mlld-box-{projectname}/<as>`.
 
 Unknown provider schemes (for example `op://...`) fail with a clear error until provider support is added.
 
@@ -67,4 +67,4 @@ mlld keychain rm BRAVE_API_KEY
 mlld keychain import .env
 ```
 
-Entries are stored as `service=mlld-env-{projectname}` / `account=<name>`.
+Entries are stored as `service=mlld-box-{projectname}` / `account=<name>`.

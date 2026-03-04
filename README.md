@@ -297,7 +297,7 @@ run cmd { claude -p "@prompt" } using auth:claude
 
 The secret is defined in policy (`auth.claude.from: "keychain:..."`) and injected as an env var at execution time. There is no `@apiKey` variable for the LLM to reference or exfiltrate.
 
-### Environments
+### Boxes
 
 Scoped execution with OS-level isolation, credentials, and capability control:
 
@@ -310,7 +310,7 @@ var @sandbox = {
   mcps: []
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { claude -p "Analyze the codebase" } using auth:claude
 ]
 ```

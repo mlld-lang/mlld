@@ -129,13 +129,13 @@ describe('PolicyConfig keychain', () => {
     const config = normalizePolicyConfig({
       keychain: {
         provider: ' system ',
-        allow: ['mlld-env/*', '  ', 'mlld-env/*'],
+        allow: ['mlld-box/*', '  ', 'mlld-box/*'],
         deny: 'system/*'
       }
     } as PolicyConfig);
 
     expect(config.keychain?.provider).toBe('system');
-    expect(config.keychain?.allow).toEqual(['mlld-env/*']);
+    expect(config.keychain?.allow).toEqual(['mlld-box/*']);
     expect(config.keychain?.deny).toEqual(['system/*']);
   });
 
@@ -143,7 +143,7 @@ describe('PolicyConfig keychain', () => {
     const base: PolicyConfig = {
       keychain: {
         provider: 'system',
-        allow: ['mlld-env/*', 'company/*'],
+        allow: ['mlld-box/*', 'company/*'],
         deny: ['system/*']
       }
     };
@@ -174,11 +174,11 @@ describe('PolicyConfig auth', () => {
     } as PolicyConfig);
 
     expect(config.auth?.brave).toEqual({
-      from: 'keychain:mlld-env-{projectname}/BRAVE_API_KEY',
+      from: 'keychain:mlld-box-{projectname}/BRAVE_API_KEY',
       as: 'BRAVE_API_KEY'
     });
     expect(config.auth?.claude).toEqual({
-      from: 'keychain:mlld-env-{projectname}/ANTHROPIC_API_KEY',
+      from: 'keychain:mlld-box-{projectname}/ANTHROPIC_API_KEY',
       as: 'ANTHROPIC_API_KEY'
     });
   });

@@ -405,7 +405,7 @@ describe('evaluateExecInvocation (structured)', () => {
   it('labels keychain get output as secret', async () => {
     env.recordPolicyConfig('policy', {
       capabilities: { danger: ['@keychain'] },
-      keychain: { allow: ['mlld-env-{projectname}/*'] }
+      keychain: { allow: ['mlld-box-{projectname}/*'] }
     });
     const source: VariableSource = {
       directive: 'var',
@@ -437,7 +437,7 @@ describe('evaluateExecInvocation (structured)', () => {
         nodeId: 'kc-get-ref',
         identifier: 'kcGet',
         args: [
-          { type: 'Text', content: 'mlld-env-demo' } as any,
+          { type: 'Text', content: 'mlld-box-demo' } as any,
           { type: 'Text', content: 'account' } as any
         ]
       }

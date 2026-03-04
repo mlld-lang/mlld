@@ -65,7 +65,7 @@ interface LoadedEnvModule extends EnvModuleLocation {
   exports: Map<string, ExecutableVariable>;
 }
 
-function validateEnvName(name: string): string | null {
+function validateBoxName(name: string): string | null {
   if (!name) {
     return 'Environment name required';
   }
@@ -84,8 +84,8 @@ function validateEnvName(name: string): string | null {
   return null;
 }
 
-function assertValidEnvName(name: string): void {
-  const error = validateEnvName(name);
+function assertValidBoxName(name: string): void {
+  const error = validateBoxName(name);
   if (!error) {
     return;
   }
@@ -106,9 +106,9 @@ async function loadManifest(manifestPath: string): Promise<ModuleManifest | null
   }
 }
 
-async function findEnvModule(name: string): Promise<EnvModuleLocation | null> {
-  const localPath = path.join(process.cwd(), '.mlld/env', name);
-  const globalPath = path.join(os.homedir(), '.mlld/env', name);
+async function findBoxModule(name: string): Promise<EnvModuleLocation | null> {
+  const localPath = path.join(process.cwd(), '.mlld/box', name);
+  const globalPath = path.join(os.homedir(), '.mlld/box', name);
   const candidates: Array<{ path: string; scope: 'local' | 'global' }> = [
     { path: localPath, scope: 'local' },
     { path: globalPath, scope: 'global' }
@@ -328,7 +328,7 @@ async function loadEnvironmentModule(location: EnvModuleLocation): Promise<Loade
   };
 }
 
-async function executeEnvExport(
+async function executeBoxExport(
   module: LoadedEnvModule,
   name: string,
   args: string[]
@@ -389,55 +389,55 @@ function applyProcessEnv(env: Record<string, string>): () => void {
   };
 }
 
-interface EnvInfo {
+interface BoxInfo {
   name: string;
   about?: string;
   version?: string;
   path: string;
 }
 
-export interface EnvCommandOptions {
+export interface BoxCommandOptions {
   _: string[]; // Subcommand and arguments
   cwd?: string;
 }
 
-export async function envCommand(options: EnvCommandOptions): Promise<void> {
+export async function boxCommand(options: BoxCommandOptions): Promise<void> {
   const subcommand = options._[0];
   const subArgs = options._.slice(1);
 
   switch (subcommand) {
     case 'list':
     case 'ls':
-      return listEnvCommand(subArgs);
+      return listBoxCommand(subArgs);
 
     case 'capture':
-      return captureEnvCommand(subArgs);
+      return captureBoxCommand(subArgs);
 
     case 'spawn':
-      return spawnEnvCommand(subArgs);
+      return spawnBoxCommand(subArgs);
 
     case 'shell':
-      return shellEnvCommand(subArgs);
+      return shellBoxCommand(subArgs);
 
     case 'export':
     case 'import':
-      console.error(chalk.yellow(`'mlld env ${subcommand}' coming in v1.1`));
+      console.error(chalk.yellow(`'mlld box ${subcommand}' coming in v1.1`));
       process.exit(1);
 
     default:
-      printEnvHelp();
+      printBoxHelp();
       process.exit(subcommand ? 1 : 0);
   }
 }
 
-async function listEnvCommand(args: string[]): Promise<void> {
+async function listBoxCommand(args: string[]): Promise<void> {
   const isJson = args.includes('--json');
 
-  const localPath = path.join(process.cwd(), '.mlld/env');
-  const globalPath = path.join(os.homedir(), '.mlld/env');
+  const localPath = path.join(process.cwd(), '.mlld/box');
+  const globalPath = path.join(os.homedir(), '.mlld/box');
 
-  const localEnvs = await scanEnvDir(localPath);
-  const globalEnvs = await scanEnvDir(globalPath);
+  const localEnvs = await scanBoxDir(localPath);
+  const globalEnvs = await scanBoxDir(globalPath);
 
   if (isJson) {
     console.log(JSON.stringify({
@@ -470,16 +470,16 @@ async function listEnvCommand(args: string[]): Promise<void> {
   const total = localEnvs.length + globalEnvs.length;
   if (total === 0) {
     console.log(chalk.gray('No environment modules found.'));
-    console.log(chalk.gray('Use `mlld env capture <name>` to create one from ~/.claude config.'));
+    console.log(chalk.gray('Use `mlld box capture <name>` to create one from ~/.claude config.'));
   } else {
     console.log(chalk.gray(`(${total} environment${total !== 1 ? 's' : ''} total)`));
   }
 }
 
-async function scanEnvDir(dirPath: string): Promise<EnvInfo[]> {
+async function scanBoxDir(dirPath: string): Promise<BoxInfo[]> {
   try {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    const envs: EnvInfo[] = [];
+    const envs: BoxInfo[] = [];
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
@@ -512,14 +512,14 @@ async function scanEnvDir(dirPath: string): Promise<EnvInfo[]> {
 
 type AgentType = 'claude' | 'codex';
 
-async function captureEnvCommand(args: string[]): Promise<void> {
+async function captureBoxCommand(args: string[]): Promise<void> {
   const name = args[0];
   if (!name) {
     console.error(chalk.red('Error: Environment name required'));
-    console.error('Usage: mlld env capture <name> [--local] [--codex] [--global]');
+    console.error('Usage: mlld box capture <name> [--local] [--codex] [--global]');
     process.exit(1);
   }
-  assertValidEnvName(name);
+  assertValidBoxName(name);
 
   const useLocal = args.includes('--local');
   const useCodex = args.includes('--codex');
@@ -555,8 +555,8 @@ async function captureEnvCommand(args: string[]): Promise<void> {
   }
 
   const targetDir = storeGlobal
-    ? path.join(os.homedir(), '.mlld/env', name)
-    : path.join(process.cwd(), '.mlld/env', name);
+    ? path.join(os.homedir(), '.mlld/box', name)
+    : path.join(process.cwd(), '.mlld/box', name);
 
   // Check if environment already exists
   if (await exists(path.join(targetDir, 'module.yml'))) {
@@ -578,7 +578,7 @@ async function captureEnvCommand(args: string[]): Promise<void> {
       const token = creds.oauth_token || creds.token;
       if (token) {
         const keychain = getKeychainProviderOrExit();
-        await keychain.set('mlld-env', name, token);
+        await keychain.set('mlld-box', name, token);
         console.log(chalk.green('✓ Token stored in keychain'));
         tokenStored = true;
       }
@@ -626,7 +626,7 @@ entry: index.mld
   const indexMld = `/needs { cmd: [${agentCommand}] }
 /policy @env = {
   auth: {
-    ${agentType}: { from: "keychain:mlld-env/${name}", as: "${tokenEnvVar}" }
+    ${agentType}: { from: "keychain:mlld-box/${name}", as: "${tokenEnvVar}" }
   },
   capabilities: {
     danger: ["@keychain"]
@@ -654,24 +654,24 @@ entry: index.mld
   console.log(chalk.gray(`  Location: ${targetDir}`));
   console.log();
   console.log(chalk.gray('Usage:'));
-  console.log(chalk.gray(`  mlld env spawn ${name} -- "Your prompt"`));
-  console.log(chalk.gray(`  mlld env shell ${name}`));
+  console.log(chalk.gray(`  mlld box spawn ${name} -- "Your prompt"`));
+  console.log(chalk.gray(`  mlld box shell ${name}`));
 }
 
-async function spawnEnvCommand(args: string[]): Promise<void> {
+async function spawnBoxCommand(args: string[]): Promise<void> {
   const name = args[0];
   if (!name) {
     console.error(chalk.red('Error: Environment name required'));
-    console.error('Usage: mlld env spawn <name> -- <prompt>');
+    console.error('Usage: mlld box spawn <name> -- <prompt>');
     process.exit(1);
   }
-  assertValidEnvName(name);
+  assertValidBoxName(name);
 
   // Check for -- separator
   const separatorIndex = args.indexOf('--');
   if (separatorIndex === -1 || separatorIndex === args.length - 1) {
     console.error(chalk.red('Error: Prompt required after --'));
-    console.error('Usage: mlld env spawn <name> -- <prompt>');
+    console.error('Usage: mlld box spawn <name> -- <prompt>');
     process.exit(1);
   }
 
@@ -684,7 +684,7 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
   // Find environment
   let envLocation: EnvModuleLocation | null = null;
   try {
-    envLocation = await findEnvModule(name);
+    envLocation = await findBoxModule(name);
   } catch (error) {
     if (error instanceof EnvModuleTypeError) {
       console.error(chalk.red(`Error: Module '${name}' is not an environment module.`));
@@ -697,8 +697,8 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
   }
   if (!envLocation) {
     console.error(chalk.red(`Error: Environment '${name}' not found`));
-    console.error(chalk.gray('Run `mlld env list` to see available environments.'));
-    console.error(chalk.gray(`Or create one with: mlld env capture ${name}`));
+    console.error(chalk.gray('Run `mlld box list` to see available environments.'));
+    console.error(chalk.gray(`Or create one with: mlld box capture ${name}`));
     process.exit(1);
   }
 
@@ -708,7 +708,7 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
   let exitCode = 0;
 
   try {
-    const mcpResult = await executeEnvExport(loaded, 'mcpConfig', []);
+    const mcpResult = await executeBoxExport(loaded, 'mcpConfig', []);
     const mcpConfig = parseMcpConfigResult(mcpResult);
     if (mcpConfig) {
       const connection = await orchestrator.start(mcpConfig);
@@ -717,7 +717,7 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
       }
     }
 
-    const spawnResult = await executeEnvExport(loaded, 'spawn', [prompt]);
+    const spawnResult = await executeBoxExport(loaded, 'spawn', [prompt]);
     if (!spawnResult) {
       console.error(chalk.red(`Error: Environment '${name}' does not export @spawn`));
       exitCode = 1;
@@ -732,19 +732,19 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
   process.exit(exitCode);
 }
 
-async function shellEnvCommand(args: string[]): Promise<void> {
+async function shellBoxCommand(args: string[]): Promise<void> {
   const name = args[0];
   if (!name) {
     console.error(chalk.red('Error: Environment name required'));
-    console.error('Usage: mlld env shell <name>');
+    console.error('Usage: mlld box shell <name>');
     process.exit(1);
   }
-  assertValidEnvName(name);
+  assertValidBoxName(name);
 
   // Find environment
   let envLocation: EnvModuleLocation | null = null;
   try {
-    envLocation = await findEnvModule(name);
+    envLocation = await findBoxModule(name);
   } catch (error) {
     if (error instanceof EnvModuleTypeError) {
       console.error(chalk.red(`Error: Module '${name}' is not an environment module.`));
@@ -757,8 +757,8 @@ async function shellEnvCommand(args: string[]): Promise<void> {
   }
   if (!envLocation) {
     console.error(chalk.red(`Error: Environment '${name}' not found`));
-    console.error(chalk.gray('Run `mlld env list` to see available environments.'));
-    console.error(chalk.gray(`Or create one with: mlld env capture ${name}`));
+    console.error(chalk.gray('Run `mlld box list` to see available environments.'));
+    console.error(chalk.gray(`Or create one with: mlld box capture ${name}`));
     process.exit(1);
   }
 
@@ -768,7 +768,7 @@ async function shellEnvCommand(args: string[]): Promise<void> {
   let exitCode = 0;
 
   try {
-    const mcpResult = await executeEnvExport(loaded, 'mcpConfig', []);
+    const mcpResult = await executeBoxExport(loaded, 'mcpConfig', []);
     const mcpConfig = parseMcpConfigResult(mcpResult);
     if (mcpConfig) {
       const connection = await orchestrator.start(mcpConfig);
@@ -777,7 +777,7 @@ async function shellEnvCommand(args: string[]): Promise<void> {
       }
     }
 
-    const shellResult = await executeEnvExport(loaded, 'shell', []);
+    const shellResult = await executeBoxExport(loaded, 'shell', []);
     if (!shellResult) {
       console.error(chalk.red(`Error: Environment '${name}' does not export @shell`));
       exitCode = 1;
@@ -792,11 +792,11 @@ async function shellEnvCommand(args: string[]): Promise<void> {
   process.exit(exitCode);
 }
 
-function printEnvHelp(): void {
+function printBoxHelp(): void {
   console.log(`
-${chalk.bold('mlld env')} - Manage AI agent environments
+${chalk.bold('mlld box')} - Manage AI agent environments
 
-${chalk.bold('Usage:')} mlld env <command> [options]
+${chalk.bold('Usage:')} mlld box <command> [options]
 
 ${chalk.bold('Commands:')}
   list              List available environments
@@ -807,15 +807,15 @@ ${chalk.bold('Commands:')}
 ${chalk.bold('Capture options:')}
   --local           Capture from project .claude/ instead of ~/.claude
   --codex           Capture from Codex config (.codex/) instead of Claude
-  --global          Store environment in ~/.mlld/env/ instead of .mlld/env/
+  --global          Store environment in ~/.mlld/box/ instead of .mlld/box/
 
 ${chalk.bold('Examples:')}
-  mlld env capture claude-dev
-  mlld env capture project-env --local
-  mlld env capture codex-env --codex
-  mlld env list
-  mlld env spawn claude-dev -- "Fix the bug in main.ts"
-  mlld env shell claude-dev
+  mlld box capture claude-dev
+  mlld box capture project-env --local
+  mlld box capture codex-env --codex
+  mlld box list
+  mlld box spawn claude-dev -- "Fix the bug in main.ts"
+  mlld box shell claude-dev
 
 ${chalk.gray('Environment modules package credentials, configuration,')}
 ${chalk.gray('MCP tools, and security policy for AI agents.')}

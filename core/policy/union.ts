@@ -31,7 +31,7 @@ export type AuthConfig = {
   as: string;
 };
 
-const KEYCHAIN_SHORT_SERVICE = 'mlld-env-{projectname}';
+const KEYCHAIN_SHORT_SERVICE = 'mlld-box-{projectname}';
 
 export type LabelFlowRule = {
   deny?: string[];

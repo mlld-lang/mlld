@@ -48,7 +48,7 @@ describe('keychain command', () => {
 
     await command.execute(['add', 'ANTHROPIC_API_KEY'], { value: 'secret' });
 
-    expect(mockProvider.set).toHaveBeenCalledWith('mlld-env-demo', 'ANTHROPIC_API_KEY', 'secret');
+    expect(mockProvider.set).toHaveBeenCalledWith('mlld-box-demo', 'ANTHROPIC_API_KEY', 'secret');
     consoleSpy.mockRestore();
   });
 
@@ -61,7 +61,7 @@ describe('keychain command', () => {
 
     await command.execute(['rm', 'ANTHROPIC_API_KEY'], {});
 
-    expect(mockProvider.delete).toHaveBeenCalledWith('mlld-env-demo', 'ANTHROPIC_API_KEY');
+    expect(mockProvider.delete).toHaveBeenCalledWith('mlld-box-demo', 'ANTHROPIC_API_KEY');
     consoleSpy.mockRestore();
   });
 
@@ -74,7 +74,7 @@ describe('keychain command', () => {
 
     await command.execute(['list'], {});
 
-    expect(mockProvider.list).toHaveBeenCalledWith('mlld-env-demo');
+    expect(mockProvider.list).toHaveBeenCalledWith('mlld-box-demo');
     expect(consoleSpy).toHaveBeenCalledWith('ONE');
     expect(consoleSpy).toHaveBeenCalledWith('TWO');
     consoleSpy.mockRestore();
@@ -89,7 +89,7 @@ describe('keychain command', () => {
 
     await command.execute(['get', 'ANTHROPIC_API_KEY'], {});
 
-    expect(mockProvider.get).toHaveBeenCalledWith('mlld-env-demo', 'ANTHROPIC_API_KEY');
+    expect(mockProvider.get).toHaveBeenCalledWith('mlld-box-demo', 'ANTHROPIC_API_KEY');
     expect(consoleSpy).toHaveBeenCalledWith('token-value');
     consoleSpy.mockRestore();
   });
@@ -106,8 +106,8 @@ describe('keychain command', () => {
 
     await command.execute(['import', 'secrets.env'], {});
 
-    expect(mockProvider.set).toHaveBeenCalledWith('mlld-env-demo', 'FOO', 'bar');
-    expect(mockProvider.set).toHaveBeenCalledWith('mlld-env-demo', 'BAZ', 'qux');
+    expect(mockProvider.set).toHaveBeenCalledWith('mlld-box-demo', 'FOO', 'bar');
+    expect(mockProvider.set).toHaveBeenCalledWith('mlld-box-demo', 'BAZ', 'qux');
     consoleSpy.mockRestore();
   });
 

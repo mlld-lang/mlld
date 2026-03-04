@@ -144,18 +144,18 @@ export async function executeCodeExecutable(
     const blockResult = await evaluateExeBlock(blockNode, execEnv);
     result = blockResult.value;
     execEnv = blockResult.env;
-  } else if (definition.language === 'mlld-env') {
+  } else if (definition.language === 'mlld-box') {
     const envDirectiveNode = Array.isArray(definition.codeTemplate)
       ? (definition.codeTemplate[0] as any)
       : undefined;
-    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'env') {
-      throw new MlldInterpreterError('mlld-env executable missing env directive');
+    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'box') {
+      throw new MlldInterpreterError('mlld-box executable missing box directive');
     }
 
-    const { evaluateEnv } = await import('@interpreter/eval/env');
-    const envResult = await evaluateEnv(envDirectiveNode, execEnv);
-    result = envResult.value;
-    execEnv = envResult.env;
+    const { evaluateBox } = await import('@interpreter/eval/box');
+    const boxResult = await evaluateBox(envDirectiveNode, execEnv);
+    result = boxResult.value;
+    execEnv = boxResult.env;
   } else {
     let code: string;
     if (definition.language === 'bash' || definition.language === 'sh') {

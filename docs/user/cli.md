@@ -688,57 +688,57 @@ Requires the `claude` CLI to be installed. Restart Claude Code after installing 
 | MCP dev tools | `mlld mcp-dev` for development |
 
 
-## Environment Commands
+## Box Commands
 
-### `mlld env`
+### `mlld box`
 
-Manage AI agent environment modules. Environments package credentials, configuration, MCP tools, and security policies for spawning AI agents.
+Manage AI agent box modules. Boxes package credentials, configuration, MCP tools, and security policies for spawning AI agents.
 
 ```bash
-# List available environments
-mlld env list
+# List available boxes
+mlld box list
 
-# Create environment from Claude config
-mlld env capture my-claude
+# Create box from Claude config
+mlld box capture my-claude
 
 # Run agent with prompt
-mlld env spawn my-claude -- "Fix the bug"
+mlld box spawn my-claude -- "Fix the bug"
 
 # Start interactive session
-mlld env shell my-claude
+mlld box shell my-claude
 ```
 
-#### `mlld env list`
+#### `mlld box list`
 
-List available environment modules.
+List available box modules.
 
-**Aliases:** `mlld env ls`
+**Aliases:** `mlld box ls`
 
 ```bash
 # Human-readable list
-mlld env list
+mlld box list
 
 # JSON output for scripts
-mlld env list --json
+mlld box list --json
 ```
 
-Shows environments from:
-- `.mlld/env/` (project-local)
-- `~/.mlld/env/` (global)
+Shows boxes from:
+- `.mlld/box/` (project-local)
+- `~/.mlld/box/` (global)
 
 **Options:**
 - `--json` - Output as JSON
 
-#### `mlld env capture <name>`
+#### `mlld box capture <name>`
 
-Create an environment module from your current Claude configuration.
+Create a box module from your current Claude configuration.
 
 ```bash
-# Create project-local environment
-mlld env capture my-claude
+# Create project-local box
+mlld box capture my-claude
 
-# Create global environment
-mlld env capture my-claude --global
+# Create global box
+mlld box capture my-claude --global
 ```
 
 **What it does:**
@@ -748,11 +748,11 @@ mlld env capture my-claude --global
 4. Generates `module.yml` and `index.mld`
 
 **Options:**
-- `--global` - Create in `~/.mlld/env/` instead of `.mlld/env/`
+- `--global` - Create in `~/.mlld/box/` instead of `.mlld/box/`
 
 **Output structure:**
 ```
-.mlld/env/my-claude/
+.mlld/box/my-claude/
 ├── module.yml          # Module manifest (type: environment)
 ├── index.mld           # Entry point with @spawn, @shell exports
 └── .claude/            # Copied config files
@@ -761,39 +761,39 @@ mlld env capture my-claude --global
     └── hooks.json
 ```
 
-#### `mlld env spawn <name> -- <prompt>`
+#### `mlld box spawn <name> -- <prompt>`
 
-Run an agent with a prompt using the environment's credentials and configuration.
+Run an agent with a prompt using the box's credentials and configuration.
 
 ```bash
 # Basic usage
-mlld env spawn my-claude -- "Fix the authentication bug"
+mlld box spawn my-claude -- "Fix the authentication bug"
 
-# Equivalent to running claude -p with the environment's config
-mlld env spawn my-claude -- claude -p "Refactor the tests"
+# Equivalent to running claude -p with the box's config
+mlld box spawn my-claude -- claude -p "Refactor the tests"
 ```
 
-The environment module's `@spawn` export is invoked with the prompt. Credentials are injected from the keychain.
+The box module's `@spawn` export is invoked with the prompt. Credentials are injected from the keychain.
 
-#### `mlld env shell <name>`
+#### `mlld box shell <name>`
 
 Start an interactive agent session.
 
 ```bash
-mlld env shell my-claude
+mlld box shell my-claude
 ```
 
-Invokes the environment module's `@shell` export, which typically starts an interactive Claude session with the captured configuration.
+Invokes the box module's `@shell` export, which typically starts an interactive Claude session with the captured configuration.
 
-#### Environment Module Structure
+#### Box Module Structure
 
-Environment modules use `type: environment` in their manifest:
+Box modules use `type: environment` in their manifest:
 
 ```yaml
 # module.yml
 name: my-claude
 type: environment
-about: "Development Claude environment"
+about: "Development Claude box"
 version: 1.0.0
 entry: index.mld
 ```
@@ -810,7 +810,7 @@ Optional exports:
 /needs { cmd: [claude] }
 /policy @env = {
   auth: {
-    claude: { from: "keychain:mlld-env/my-claude", as: "CLAUDE_CODE_OAUTH_TOKEN" }
+    claude: { from: "keychain:mlld-box/my-claude", as: "CLAUDE_CODE_OAUTH_TOKEN" }
   }
 }
 

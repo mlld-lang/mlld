@@ -14,7 +14,7 @@ VarRHSContent "var assignment value"
   / ExecInvocationWithFields    // Exec invocations followed by field/index access (must come before FieldAccessExecPattern)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
-  / EnvExpression               // env @config [...] - scoped environment with return value
+  / BoxExpression               // box @config [...] - scoped environment with return value
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateWithPipeline        // Template content with pipeline support - MUST come before PrimitiveValue
   / VarBlock                    // Statement block for var evaluation
@@ -533,10 +533,10 @@ CodeExecution "code execution"
       };
     }
 
-// ENV EXPRESSION - env @config [...] for scoped environment with return value
+// BOX EXPRESSION - box @config [...] for scoped environment with return value
 // Used in /var assignments to execute code in a scoped environment and return the result
-EnvExpression "env expression"
-  = "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock {
+BoxExpression "box expression"
+  = "box" _ config:BoxConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock {
       const values = {
         ...(config ? { config: [config] } : {}),
         ...(withClause ? { withClause } : {}),
@@ -559,25 +559,25 @@ EnvExpression "env expression"
       }
 
       return helpers.createStructuredDirective(
-        'env',
-        'env',
+        'box',
+        'box',
         values,
         raw,
         meta,
         location(),
-        'env'
+        'box'
       );
     }
-  / "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
+  / "box" _ config:BoxConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
       helpers.mlldError(
-        'env requires a config expression or with clause. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        'box requires a config expression or with clause. Expected: box @config [ ... ] or box with { ... } [ ... ]',
         '@config or with { ... }',
         location()
       );
     }
-  / "env" _ config:EnvConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
+  / "box" _ config:BoxConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
       helpers.mlldError(
-        'env requires a block. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        'box requires a block. Expected: box @config [ ... ] or box with { ... } [ ... ]',
         '[',
         location()
       );

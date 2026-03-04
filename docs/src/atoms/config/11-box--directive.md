@@ -1,19 +1,19 @@
 ---
-id: env-directive
-title: Environment Directive
+id: box-directive
+title: Box Directive
 brief: Scoped execution with isolation, credentials, and capability control
 category: config
-parent: env
-tags: [environment, isolation, credentials, tools, scoping, security]
-related: [env-overview, env-config, env-blocks, policy-auth, security-getting-started]
-related-code: [interpreter/eval/env.ts, interpreter/env/Environment.ts, interpreter/env/environment-provider.ts]
-updated: 2026-02-15
+parent: box
+tags: [box, isolation, credentials, tools, scoping, security]
+related: [box-overview, box-config, box-blocks, policy-auth, security-getting-started]
+related-code: [interpreter/eval/box.ts, interpreter/env/Environment.ts, interpreter/env/environment-provider.ts]
+updated: 2026-03-04
 qa_tier: 2
 ---
 
-The `env` directive creates scoped execution contexts that combine process isolation, credential management, and capability control.
+The `box` directive creates scoped execution contexts that combine process isolation, credential management, and capability control.
 
-For concepts and configuration details, see `env-overview`, `env-config`, and `env-blocks`.
+For concepts and configuration details, see `box-overview`, `box-config`, and `box-blocks`.
 
 **Sandboxed execution with credentials:**
 
@@ -26,7 +26,7 @@ var @sandbox = {
   mcps: []
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { claude -p "Analyze the codebase" } using auth:claude
 ]
 ```
@@ -38,7 +38,7 @@ The provider runs commands in a Docker container. `fs` restricts filesystem moun
 ```mlld
 var @cfg = { auth: "claude-alt" }
 
-env @cfg [
+box @cfg [
   run cmd { claude -p @task } using auth:claude-alt
 ]
 ```
@@ -67,7 +67,7 @@ var @sandbox = {
   tools: ["Read", "Write", "Bash"]
 }
 
-env @sandbox with { tools: ["Read"] } [
+box @sandbox with { tools: ["Read"] } [
   >> Only Read is available here
   run cmd { claude -p @task }
 ]
@@ -78,12 +78,12 @@ env @sandbox with { tools: ["Read"] } [
 **Tool scope formats:**
 
 ```mlld
-env @config with { tools: ["read", "write"] } [...]
-env @config with { tools: "read, write" } [...]
-env @config with { tools: "*" } [...]
+box @config with { tools: ["read", "write"] } [...]
+box @config with { tools: "read, write" } [...]
+box @config with { tools: "*" } [...]
 
 var @subset = { read: @readTool, write: @writeTool }
-env @config with { tools: @subset } [...]
+box @config with { tools: @subset } [...]
 ```
 
 **Profile selection:**
@@ -96,7 +96,7 @@ var @cfg = {
   }
 }
 
-env @cfg with { profile: "readonly" } [
+box @cfg with { profile: "readonly" } [
   run cmd { claude -p @task }
 ]
 ```
@@ -106,7 +106,7 @@ When no profile is specified, the first profile whose requirements are satisfied
 **Return values:**
 
 ```mlld
-var @result = env @config [
+var @result = box @config [
   let @data = run cmd { fetch-data }
   => @data
 ]
@@ -114,12 +114,12 @@ var @result = env @config [
 
 **Scoped environment:**
 
-The env block creates a child environment. Variables defined inside don't leak out, but the block can access parent scope variables.
+The box block creates a child environment. Variables defined inside don't leak out, but the block can access parent scope variables.
 
 ```mlld
 var @input = "test"
 
-env @config [
+box @config [
   let @processed = @input | @transform
   => @processed
 ]

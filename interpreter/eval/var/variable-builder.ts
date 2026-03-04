@@ -136,7 +136,7 @@ function resolveStrategyKey(
   if (nodeType === 'ExecInvocation' || nodeType === 'ExeBlock') return 'exec-node';
   if (nodeType === 'NewExpression') return 'new-node';
   if (nodeType === 'VariableReferenceWithTail') return 'reference-tail-node';
-  if (nodeType === 'Directive' && (valueNode as any).kind === 'env') return 'env-node';
+  if (nodeType === 'Directive' && (valueNode as any).kind === 'box') return 'box-node';
 
   if (directive.meta?.expressionType) {
     return 'expression-meta';

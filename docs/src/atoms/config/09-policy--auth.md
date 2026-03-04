@@ -6,7 +6,7 @@ brief: Credential mappings and sealed auth injection via using auth:*
 category: config
 parent: policy
 tags: [credentials, auth, policy, secrets, keychain]
-related: [auth, security-policies, env-config, labels-sensitivity]
+related: [auth, security-policies, box-config, labels-sensitivity]
 related-code: [interpreter/utils/auth-injection.ts, interpreter/policy/PolicyEnforcer.ts]
 updated: 2026-02-22
 ---
@@ -52,8 +52,8 @@ policy @p = {
 ```
 
 Expansion rules:
-- `"BRAVE_API_KEY"` -> `{ from: "keychain:mlld-env-{projectname}/BRAVE_API_KEY", as: "BRAVE_API_KEY" }`
-- `{ from: "keychain", as: "ANTHROPIC_API_KEY" }` -> `{ from: "keychain:mlld-env-{projectname}/ANTHROPIC_API_KEY", as: "ANTHROPIC_API_KEY" }`
+- `"BRAVE_API_KEY"` -> `{ from: "keychain:mlld-box-{projectname}/BRAVE_API_KEY", as: "BRAVE_API_KEY" }`
+- `{ from: "keychain", as: "ANTHROPIC_API_KEY" }` -> `{ from: "keychain:mlld-box-{projectname}/ANTHROPIC_API_KEY", as: "ANTHROPIC_API_KEY" }`
 
 ## Resolution order
 
@@ -84,10 +84,10 @@ Linux keychain access uses `secret-tool` (libsecret). Ensure `secret-tool` is on
 ```mlld
 policy @p = {
   auth: {
-    claude: { from: "keychain:mlld-env-{projectname}/claude", as: "ANTHROPIC_API_KEY" }
+    claude: { from: "keychain:mlld-box-{projectname}/claude", as: "ANTHROPIC_API_KEY" }
   },
   keychain: {
-    allow: ["mlld-env-{projectname}/*"],
+    allow: ["mlld-box-{projectname}/*"],
     deny: ["system/*"]
   },
   capabilities: { danger: ["@keychain"] }

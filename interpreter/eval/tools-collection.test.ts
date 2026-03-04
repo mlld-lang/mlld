@@ -161,7 +161,7 @@ describe('tool collections', () => {
         * => allow
       ]
 
-      /exe @agent(tools, task) = env with { tools: @tools } [
+      /exe @agent(tools, task) = box with { tools: @tools } [
         => @task
       ]
 
@@ -178,7 +178,7 @@ describe('tool collections', () => {
     expect((resultVar?.value as any)?.text ?? resultVar?.value).toBe('hello');
   });
 
-  it('applies tool collection labels as taint on direct env-block returns', async () => {
+  it('applies tool collection labels as taint on direct box-block returns', async () => {
     const result = await interpret(`
       /exe @tcRead(id: string) = \`data:@id\`
 
@@ -186,7 +186,7 @@ describe('tool collections', () => {
         read: { mlld: @tcRead, labels: ["untrusted"] }
       }
 
-      /exe @tcAgent(tools, task) = env with { tools: @tools } [
+      /exe @tcAgent(tools, task) = box with { tools: @tools } [
         => @tcRead("123")
       ]
 
@@ -203,7 +203,7 @@ describe('tool collections', () => {
     expect(result.trim()).toBe('true');
   });
 
-  it('applies tool collection labels as taint on let-bound env-block calls', async () => {
+  it('applies tool collection labels as taint on let-bound box-block calls', async () => {
     const result = await interpret(`
       /exe @tcRead(id: string) = \`data:@id\`
 
@@ -211,7 +211,7 @@ describe('tool collections', () => {
         read: { mlld: @tcRead, labels: ["untrusted"] }
       }
 
-      /exe @tcAgent(tools, task) = env with { tools: @tools } [
+      /exe @tcAgent(tools, task) = box with { tools: @tools } [
         let @result = @tcRead("123")
         => @result
       ]
@@ -242,7 +242,7 @@ describe('tool collections', () => {
           * => deny "blocked"
         ]
 
-        /exe @agent(tools, id) = env with { tools: @tools } [
+        /exe @agent(tools, id) = box with { tools: @tools } [
           => @deleteDoc(@id)
         ]
 

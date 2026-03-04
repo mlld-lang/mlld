@@ -17,7 +17,7 @@
   * => `published: @data`
 ]
 
-/exe @verifyGateReadIssue(tools) = env with { tools: @tools } [
+/exe @verifyGateReadIssue(tools) = box with { tools: @tools } [
   let @issue = @verifyGateGetIssue(42)
   => @issue
 ]

@@ -1,6 +1,6 @@
 /var @cfg = {}
 /exe @mcpConfig() = "not-json"
 
-/env @cfg [
+/box @cfg [
   show "should not execute"
 ]

@@ -8,7 +8,7 @@ import { isValidProjectName } from '@core/utils/project-name';
 import { getCommandContext } from '../utils/command-context';
 import { OutputFormatter } from '../utils/output';
 
-const SERVICE_PREFIX = 'mlld-env-';
+const SERVICE_PREFIX = 'mlld-box-';
 
 export interface KeychainOptions {
   verbose?: boolean;

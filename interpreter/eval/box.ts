@@ -1,5 +1,5 @@
 import type { BaseMlldNode } from '@core/types';
-import type { EnvDirectiveNode } from '@core/types/env';
+import type { BoxDirectiveNode } from '@core/types/box';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { EnvironmentConfig } from '@core/types/environment';
@@ -38,7 +38,7 @@ async function resolveExpressionValue(
   return value;
 }
 
-async function resolveEnvConfig(
+async function resolveBoxConfig(
   nodes: BaseMlldNode[] | undefined,
   env: Environment,
   context?: EvaluationContext,
@@ -49,7 +49,7 @@ async function resolveEnvConfig(
   }
   const value = await resolveExpressionValue(nodes, env, context);
   if (!isPlainObject(value)) {
-    throw new MlldDirectiveError('env config must be an object.', 'env', {
+    throw new MlldDirectiveError('box config must be an object.', 'box', {
       location,
       env,
       context: { value }
@@ -78,7 +78,7 @@ function toProfileString(
     return null;
   }
   if (typeof value !== 'string') {
-    throw new MlldDirectiveError('profile must be a string.', 'env', {
+    throw new MlldDirectiveError('profile must be a string.', 'box', {
       location,
       env,
       context: { value }
@@ -119,7 +119,7 @@ async function resolveMcpConfigPayload(
   }
   if (typeof resolved === 'string') {
     if (!looksLikeJsonString(resolved)) {
-      throw new MlldDirectiveError('mcpConfig output is not valid JSON', 'env', {
+      throw new MlldDirectiveError('mcpConfig output is not valid JSON', 'box', {
         location,
         env
       });
@@ -127,7 +127,7 @@ async function resolveMcpConfigPayload(
     try {
       resolved = JSON.parse(resolved);
     } catch (error) {
-      throw new MlldDirectiveError('mcpConfig output is not valid JSON', 'env', {
+      throw new MlldDirectiveError('mcpConfig output is not valid JSON', 'box', {
         location,
         env,
         context: { error: error instanceof Error ? error.message : String(error) }
@@ -135,7 +135,7 @@ async function resolveMcpConfigPayload(
     }
   }
   if (!isPlainObject(resolved)) {
-    throw new MlldDirectiveError('mcpConfig output must be an object', 'env', {
+    throw new MlldDirectiveError('mcpConfig output must be an object', 'box', {
       location,
       env,
       context: { value: resolved }
@@ -172,10 +172,10 @@ function bindTemporaryExecutable(
   variable: Variable
 ): string {
   let attempt = 0;
-  let name = '__env_mcp_config';
+  let name = '__box_mcp_config';
   while (env.hasVariable(name)) {
     attempt += 1;
-    name = `__env_mcp_config_${attempt}`;
+    name = `__box_mcp_config_${attempt}`;
   }
 
   const clone: Variable = {
@@ -210,7 +210,7 @@ async function resolveMcpConfigExecutableName(
       const name = normalizeVariableName(resolvedConfigured);
       const variable = scopedEnv.getVariable(name);
       if (!variable || !isExecutableVariable(variable)) {
-        throw new MlldDirectiveError(`mcpConfig reference '@${name}' is not executable`, 'env', {
+        throw new MlldDirectiveError(`mcpConfig reference '@${name}' is not executable`, 'box', {
           location,
           env
         });
@@ -220,7 +220,7 @@ async function resolveMcpConfigExecutableName(
     if (isExecutableVariable(resolvedConfigured as any)) {
       return bindTemporaryExecutable(scopedEnv, resolvedConfigured as Variable);
     }
-    throw new MlldDirectiveError('mcpConfig must reference an executable or executable variable name', 'env', {
+    throw new MlldDirectiveError('mcpConfig must reference an executable or executable variable name', 'box', {
       location,
       env
     });
@@ -234,8 +234,8 @@ async function resolveMcpConfigExecutableName(
   const moduleCandidates = findModuleMcpConfigVariables(scopedEnv);
   if (moduleCandidates.length > 1) {
     throw new MlldDirectiveError(
-      'Multiple environment module mcpConfig functions are available. Set env.mcpConfig explicitly.',
-      'env',
+      'Multiple environment module mcpConfig functions are available. Set box.mcpConfig explicitly.',
+      'box',
       { location, env }
     );
   }
@@ -254,11 +254,11 @@ async function invokeMcpConfig(
   const { evaluateExecInvocation } = await import('./exec-invocation');
   const invocation = {
     type: 'ExecInvocation',
-    nodeId: 'env-mcp-config',
+    nodeId: 'box-mcp-config',
     location: location ?? null,
     commandRef: {
       type: 'CommandReference',
-      nodeId: 'env-mcp-config-ref',
+      nodeId: 'box-mcp-config-ref',
       location: location ?? null,
       identifier: executableName,
       name: executableName,
@@ -270,7 +270,7 @@ async function invokeMcpConfig(
   return result.value;
 }
 
-async function applyMcpConfigForEnv(
+async function applyMcpConfigForBox(
   envConfig: EnvironmentConfig,
   scopedEnv: Environment,
   env: Environment,
@@ -294,7 +294,7 @@ async function applyMcpConfigForEnv(
   } catch (error) {
     throw new MlldDirectiveError(
       error instanceof Error ? error.message : 'Invalid mcpConfig output',
-      'env',
+      'box',
       { location, env }
     );
   }
@@ -313,8 +313,8 @@ async function applyMcpConfigForEnv(
     scopedEnv.setToolsAvailability(allowed, denied);
   } catch (error) {
     throw new MlldDirectiveError(
-      error instanceof Error ? error.message : 'Failed to configure MCP tools for env',
-      'env',
+      error instanceof Error ? error.message : 'Failed to configure MCP tools for box',
+      'box',
       { location, env }
     );
   }
@@ -333,7 +333,7 @@ function resolveProfileFromConfig(
   if (explicitProfileRaw !== undefined) {
     const explicitProfile = toProfileString(explicitProfileRaw, env, location);
     if (explicitProfile && profileNames.length > 0 && !profiles[explicitProfile]) {
-      throw new MlldDirectiveError(`Unknown profile '${explicitProfile}' for env config.`, 'env', {
+      throw new MlldDirectiveError(`Unknown profile '${explicitProfile}' for box config.`, 'box', {
         location,
         env,
         context: { availableProfiles: profileNames }
@@ -360,7 +360,7 @@ function normalizeToolScope(
     return { hasTools: false };
   }
   if (value === null) {
-    throw new MlldDirectiveError('tools must be an array or object.', 'env', {
+    throw new MlldDirectiveError('tools must be an array or object.', 'box', {
       location,
       env
     });
@@ -379,7 +379,7 @@ function normalizeToolScope(
     const tools: string[] = [];
     for (const entry of value) {
       if (typeof entry !== 'string') {
-        throw new MlldDirectiveError('tools entries must be strings.', 'env', {
+        throw new MlldDirectiveError('tools entries must be strings.', 'box', {
           location,
           env,
           context: { entry }
@@ -395,7 +395,7 @@ function normalizeToolScope(
   if (isPlainObject(value)) {
     return { tools: Object.keys(value), hasTools: true };
   }
-  throw new MlldDirectiveError('tools must be an array or object.', 'env', {
+  throw new MlldDirectiveError('tools must be an array or object.', 'box', {
     location,
     env,
     context: { value }
@@ -416,7 +416,7 @@ function normalizeStringArray(
   location?: any
 ): string[] {
   if (!Array.isArray(value)) {
-    throw new MlldDirectiveError(`${label} must be an array of strings.`, 'env', {
+    throw new MlldDirectiveError(`${label} must be an array of strings.`, 'box', {
       location,
       env,
       context: { value }
@@ -425,7 +425,7 @@ function normalizeStringArray(
   const normalized: string[] = [];
   for (const entry of value) {
     if (typeof entry !== 'string') {
-      throw new MlldDirectiveError(`${label} entries must be strings.`, 'env', {
+      throw new MlldDirectiveError(`${label} entries must be strings.`, 'box', {
         location,
         env,
         context: { entry }
@@ -447,14 +447,14 @@ function resolveMcpEntrySpec(entry: Record<string, unknown>, env: Environment, l
   if (sourceCount === 0) {
     throw new MlldDirectiveError(
       'mcps entries must define one of module, command, or npm.',
-      'env',
+      'box',
       { location, env, context: { entry } }
     );
   }
   if (sourceCount > 1) {
     throw new MlldDirectiveError(
       'mcps entries cannot combine module, command, and npm sources.',
-      'env',
+      'box',
       { location, env, context: { entry } }
     );
   }
@@ -488,7 +488,7 @@ async function normalizeMcpScope(
     return { hasMcps: false };
   }
   if (value === null) {
-    throw new MlldDirectiveError('mcps must be an array or string.', 'env', { location, env });
+    throw new MlldDirectiveError('mcps must be an array or string.', 'box', { location, env });
   }
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -508,7 +508,7 @@ async function normalizeMcpScope(
     return { mcps: Array.from(resolved), hasMcps: true };
   }
   if (!Array.isArray(value)) {
-    throw new MlldDirectiveError('mcps must be an array or string.', 'env', {
+    throw new MlldDirectiveError('mcps must be an array or string.', 'box', {
       location,
       env,
       context: { value }
@@ -523,7 +523,7 @@ async function normalizeMcpScope(
     } else if (isPlainObject(entry)) {
       spec = resolveMcpEntrySpec(entry, env, location);
     } else {
-      throw new MlldDirectiveError('mcps entries must be strings or server objects.', 'env', {
+      throw new MlldDirectiveError('mcps entries must be strings or server objects.', 'box', {
         location,
         env,
         context: { entry }
@@ -538,12 +538,12 @@ async function normalizeMcpScope(
   return { mcps: Array.from(resolved), hasMcps: true };
 }
 
-export async function evaluateEnv(
-  directive: EnvDirectiveNode,
+export async function evaluateBox(
+  directive: BoxDirectiveNode,
   env: Environment,
   context?: EvaluationContext
 ): Promise<EvalResult> {
-  const config = await resolveEnvConfig(directive.values?.config, env, context, directive.location);
+  const config = await resolveBoxConfig(directive.values?.config, env, context, directive.location);
   const withClauseTools = directive.values?.withClause?.tools;
   const withClauseProfile = (directive.values?.withClause as any)?.profile;
   const resolvedTools =
@@ -591,8 +591,8 @@ export async function evaluateEnv(
       throw error;
     }
     throw new MlldDirectiveError(
-      error instanceof Error ? error.message : 'Failed to resolve env profile',
-      'env',
+      error instanceof Error ? error.message : 'Failed to resolve box profile',
+      'box',
       { location: directive.location, env }
     );
   }
@@ -602,7 +602,7 @@ export async function evaluateEnv(
   }
 
   try {
-    await applyMcpConfigForEnv(mergedConfig, scopedEnv, env, context, directive.location);
+    await applyMcpConfigForBox(mergedConfig, scopedEnv, env, context, directive.location);
     const result = await evaluateExeBlock(block, scopedEnv, {}, { scope: 'block' });
     env.mergeChild(scopedEnv);
     return { value: result.value, env };

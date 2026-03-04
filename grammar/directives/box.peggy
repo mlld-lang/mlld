@@ -1,15 +1,15 @@
-// ENV DIRECTIVE
+// BOX DIRECTIVE
 // Scoped environment execution blocks with tool scoping
 
-EnvKeyword
-  = "/"? "env"
+BoxKeyword
+  = "/"? "box"
 
-EnvConfigExpression "env config expression"
+BoxConfigExpression "box config expression"
   = UnifiedReferenceNoTailLoose
   / Expression
 
-SlashEnv "env directive"
-  = DirectiveContext EnvKeyword _ config:EnvConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock ending:StandardDirectiveEnding {
+SlashBox "box directive"
+  = DirectiveContext BoxKeyword _ config:BoxConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock ending:StandardDirectiveEnding {
       const values = {
         ...(config ? { config: [config] } : {}),
         ...(withClause ? { withClause } : {}),
@@ -38,25 +38,25 @@ SlashEnv "env directive"
       }
 
       return helpers.createStructuredDirective(
-        'env',
-        'env',
+        'box',
+        'box',
         values,
         raw,
         meta,
         location(),
-        'env'
+        'box'
       );
     }
-  / DirectiveContext EnvKeyword _ config:EnvConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
+  / DirectiveContext BoxKeyword _ config:BoxConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
       helpers.mlldError(
-        'env requires a config expression or with clause. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        'box requires a config expression or with clause. Expected: box @config [ ... ] or box with { ... } [ ... ]',
         '@config or with { ... }',
         location()
       );
     }
-  / DirectiveContext EnvKeyword _ config:EnvConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
+  / DirectiveContext BoxKeyword _ config:BoxConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
       helpers.mlldError(
-        'env requires a block. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        'box requires a block. Expected: box @config [ ... ] or box with { ... } [ ... ]',
         '[',
         location()
       );

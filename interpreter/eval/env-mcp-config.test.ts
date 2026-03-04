@@ -18,14 +18,14 @@ const pathContext = {
   filePath: '/module.mld.md'
 };
 
-describe('env MCP config integration', () => {
+describe('box MCP config integration', () => {
   it('registers MCP tools under explicit namespace aliases', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
     const source = [
       '/var @cfg = {}',
       '/exe @mcpConfig() = {"servers": [{"command": "' + serverSpec + '", "as": "@github", "tools": ["ping"]}]}',
-      '/env @cfg [',
+      '/box @cfg [',
       '  show @github.ping()',
       ']'
     ].join('\n');
@@ -57,7 +57,7 @@ describe('env MCP config integration', () => {
       '  @mx.profile == "readonly" => {"servers": [{"command": "' + serverSpec + '", "tools": ["ping"]}]}',
       '  * => {"servers": []}',
       ']',
-      '/env @cfg with { profile: "readonly" } [',
+      '/box @cfg with { profile: "readonly" } [',
       '  show @ping()',
       ']'
     ].join('\n');
@@ -80,13 +80,13 @@ describe('env MCP config integration', () => {
     }
   });
 
-  it('does not leak env-scoped MCP tools outside the env block', async () => {
+  it('does not leak box-scoped MCP tools outside the box block', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
     const source = [
       '/var @cfg = {}',
       '/exe @mcpConfig() = {"servers": [{"command": "' + serverSpec + '", "tools": ["ping"]}]}',
-      '/env @cfg with { profile: "readonly" } [',
+      '/box @cfg with { profile: "readonly" } [',
       '  show @ping()',
       ']',
       '/show @ping()'
@@ -110,7 +110,7 @@ describe('env MCP config integration', () => {
     }
   });
 
-  it('selects profile from env config profiles when profile override is not provided', async () => {
+  it('selects profile from box config profiles when profile override is not provided', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
     const source = [
@@ -126,7 +126,7 @@ describe('env MCP config integration', () => {
       '  @mx.profile == "readonly" => {"servers": [{"command": "' + serverSpec + '", "tools": ["ping"]}]}',
       '  * => {"servers": []}',
       ']',
-      '/env @cfg [',
+      '/box @cfg [',
       '  show @mx.profile',
       '  show @ping()',
       ']'
@@ -150,13 +150,13 @@ describe('env MCP config integration', () => {
     }
   });
 
-  it('sets @mx.tools.allowed and @mx.tools.denied for env mcpConfig tools', async () => {
+  it('sets @mx.tools.allowed and @mx.tools.denied for box mcpConfig tools', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
     const source = [
       '/var @cfg = { tools: ["ping"] }',
       '/exe @mcpConfig() = {"servers": [{"command": "' + serverSpec + '", "tools": ["ping", "echo"]}]}',
-      '/env @cfg [',
+      '/box @cfg [',
       '  show @mx.tools.allowed | @json',
       '  show @mx.tools.denied | @json',
       ']'
@@ -189,7 +189,7 @@ describe('env MCP config integration', () => {
       '/var @policyConfig = { labels: { "src:mcp": { deny: ["destructive"] } } }',
       '/policy @p = union(@policyConfig)',
       '/exe destructive @destroy(data) = `destroyed: @data`',
-      '/env @cfg with { profile: "readonly" } [',
+      '/box @cfg with { profile: "readonly" } [',
       '  let @mcpData = @echo({ text: "mcp data" })',
       '  let @result = @destroy(@mcpData)',
       '  show @result',
@@ -214,13 +214,13 @@ describe('env MCP config integration', () => {
     }
   });
 
-  it('blocks MCP tool calls when env mcps scope is empty', async () => {
+  it('blocks MCP tool calls when box mcps scope is empty', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
     const source = [
       '/var @cfg = { mcps: [] }',
       `/import tools { @ping } from mcp "${serverSpec}"`,
-      '/env @cfg [',
+      '/box @cfg [',
       '  show @ping()',
       ']'
     ].join('\n');
@@ -243,7 +243,7 @@ describe('env MCP config integration', () => {
     }
   });
 
-  it('allows MCP tool calls for servers listed in env mcps scope', async () => {
+  it('allows MCP tool calls for servers listed in box mcps scope', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
     const source = [
@@ -251,7 +251,7 @@ describe('env MCP config integration', () => {
       '  mcps: [{ command: "' + process.execPath + '", args: ["' + fakeServerPath + '"] }]',
       '}',
       `/import tools { @ping } from mcp "${serverSpec}"`,
-      '/env @cfg [',
+      '/box @cfg [',
       '  show @ping()',
       ']'
     ].join('\n');

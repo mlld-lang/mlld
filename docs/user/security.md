@@ -647,12 +647,12 @@ run cmd { echo @key }  >> Protected by imported guard
 
 ## Environment Isolation
 
-Use `env` blocks to scope execution within a named environment configuration:
+Use `box` blocks to scope execution within a named environment configuration:
 
 ```mlld
 var @sandbox = { tools: ["Read", "Write", "Bash"] }
 
-env @sandbox [
+box @sandbox [
   run cmd { echo "inside sandbox" }
 ]
 ```
@@ -664,7 +664,7 @@ Return a value from a block with `=>`:
 ```mlld
 var @config = { tools: ["Read", "Write"] }
 
-var @result = env @config [
+var @result = box @config [
   => "completed"
 ]
 
@@ -676,16 +676,16 @@ Derive a restricted environment inline with `with`:
 ```mlld
 var @sandbox = { tools: ["Read", "Write", "Bash"] }
 
-var @result = env @sandbox with { tools: ["Read"] } [
+var @result = box @sandbox with { tools: ["Read"] } [
   => "read-only mode"
 ]
 ```
 
 Child environments can only restrict parent capabilities, never extend them.
 
-### Sandboxed Execution with the env Directive
+### Sandboxed Execution with the box Directive
 
-The full `env` directive supports provider-based isolation, credential management, and capability control:
+The full `box` directive supports provider-based isolation, credential management, and capability control:
 
 ```mlld
 var @sandbox = {
@@ -696,7 +696,7 @@ var @sandbox = {
   mcps: []
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { claude -p "Analyze the codebase" } using auth:claude
 ]
 ```
@@ -725,7 +725,7 @@ var @sandbox = {
   tools: ["Read", "Write", "Bash"]
 }
 
-env @sandbox with { tools: ["Read"] } [
+box @sandbox with { tools: ["Read"] } [
   >> Only Read is available here
   run cmd { claude -p @task }
 ]

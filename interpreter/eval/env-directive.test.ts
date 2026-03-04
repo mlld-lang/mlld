@@ -30,7 +30,7 @@ function findEnvWithScopedTools(root: Environment): Environment | undefined {
   return undefined;
 }
 
-describe('env directive', () => {
+describe('box directive', () => {
   it('sets scoped tools and environment config', async () => {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();
@@ -44,7 +44,7 @@ describe('env directive', () => {
   write: { mlld: @writeData }
 }
 /var @baseEnv = { provider: '@local' }
-/env @baseEnv with { tools: @agentTools } [
+/box @baseEnv with { tools: @agentTools } [
   show "ok"
 ]
 `;
@@ -59,7 +59,7 @@ describe('env directive', () => {
     expect(scopedEnv?.getScopedEnvironmentConfig()?.provider).toBe('@local');
   });
 
-  it('supports configless env blocks with with-clause-only config', async () => {
+  it('supports configless box blocks with with-clause-only config', async () => {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();
     const env = new Environment(fileSystem, pathService, process.cwd());
@@ -69,7 +69,7 @@ describe('env directive', () => {
 /var tools @agentTools = {
   read: { mlld: @readData }
 }
-/env with { tools: @agentTools, profile: "readonly" } [
+/box with { tools: @agentTools, profile: "readonly" } [
   show @mx.profile
 ]
 `;
@@ -92,7 +92,7 @@ describe('env directive', () => {
 
     const src = `
 /var @baseEnv = { provider: '@local' }
-/env @baseEnv with { tools: ["read", "write"] } [
+/box @baseEnv with { tools: ["read", "write"] } [
   show "ok"
 ]
 `;
@@ -101,7 +101,7 @@ describe('env directive', () => {
     await expect(evaluate(ast, env)).rejects.toThrow(/Tool scope cannot add tools outside parent/);
   });
 
-  it('derives env configs with tool overrides', async () => {
+  it('derives box configs with tool overrides', async () => {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();
     const env = new Environment(fileSystem, pathService, process.cwd());
@@ -115,7 +115,7 @@ describe('env directive', () => {
 }
 /var @baseEnv = { provider: '@local', tools: @allTools }
 /var @childEnv = new @baseEnv with { tools: ["read"] }
-/env @childEnv [
+/box @childEnv [
   show "ok"
 ]
 `;
@@ -129,7 +129,7 @@ describe('env directive', () => {
     expect(allowedTools).toEqual(['read']);
   });
 
-  it('rejects derived env tool expansion', async () => {
+  it('rejects derived box tool expansion', async () => {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();
     const env = new Environment(fileSystem, pathService, process.cwd());

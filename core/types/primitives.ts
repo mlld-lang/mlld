@@ -253,7 +253,7 @@ export type DirectiveKind =
   | 'show'
   | 'exe'
   | 'checkpoint'
-  | 'env'
+  | 'box'
   | 'path'
   | 'output'
   | 'append'
@@ -321,8 +321,8 @@ export type DirectiveSubtype =
   // Signing subtypes
   | 'sign'
   | 'verify'
-  // Env subtype
-  | 'env';
+  // Box subtype
+  | 'box';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

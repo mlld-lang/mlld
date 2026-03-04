@@ -50,12 +50,12 @@ describe('enforceKeychainAccess', () => {
     );
     const env = new Environment(new NodeFileSystem(), new PathService(), tempDir);
     env.recordPolicyConfig('policy', {
-      keychain: { allow: ['mlld-env-{projectname}/*'] }
+      keychain: { allow: ['mlld-box-{projectname}/*'] }
     });
     expect(() =>
       enforceKeychainAccess(
         env,
-        { service: 'mlld-env-demo', account: 'ok' },
+        { service: 'mlld-box-demo', account: 'ok' },
         undefined,
         { requireDanger: false }
       )
@@ -70,10 +70,10 @@ describe('enforceKeychainAccess', () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), tempDir);
     env.recordPolicyConfig('policy', {
       capabilities: { danger: ['@keychain'] },
-      keychain: { allow: ['mlld-env-{projectname}/allowed'] }
+      keychain: { allow: ['mlld-box-{projectname}/allowed'] }
     });
 
-    expect(() => enforceKeychainAccess(env, { service: 'mlld-env-demo', account: 'blocked' }))
+    expect(() => enforceKeychainAccess(env, { service: 'mlld-box-demo', account: 'blocked' }))
       .toThrow('Keychain access denied');
   });
 
@@ -86,12 +86,12 @@ describe('enforceKeychainAccess', () => {
     env.recordPolicyConfig('policy', {
       capabilities: { danger: ['@keychain'] },
       keychain: {
-        allow: ['mlld-env-{projectname}/*'],
-        deny: ['mlld-env-demo/blocked']
+        allow: ['mlld-box-{projectname}/*'],
+        deny: ['mlld-box-demo/blocked']
       }
     });
 
-    expect(() => enforceKeychainAccess(env, { service: 'mlld-env-demo', account: 'blocked' }))
+    expect(() => enforceKeychainAccess(env, { service: 'mlld-box-demo', account: 'blocked' }))
       .toThrow('Keychain access denied');
   });
 
@@ -104,12 +104,12 @@ describe('enforceKeychainAccess', () => {
     env.recordPolicyConfig('policy', {
       capabilities: { danger: ['@keychain'] },
       keychain: {
-        allow: ['mlld-env-{projectname}/*'],
-        deny: ['mlld-env-demo/blocked']
+        allow: ['mlld-box-{projectname}/*'],
+        deny: ['mlld-box-demo/blocked']
       }
     });
 
-    expect(() => enforceKeychainAccess(env, { service: 'mlld-env-demo', account: 'ok' }))
+    expect(() => enforceKeychainAccess(env, { service: 'mlld-box-demo', account: 'ok' }))
       .not.toThrow();
   });
 });

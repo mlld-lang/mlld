@@ -148,14 +148,14 @@ export async function executeCodeHandler(
     return finalizeResult(blockResult.value);
   }
 
-  if (execDef.language === 'mlld-env') {
+  if (execDef.language === 'mlld-box') {
     const envDirectiveNode = execDef.codeTemplate[0];
-    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'env') {
-      throw new Error('mlld-env executable missing env directive');
+    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'box') {
+      throw new Error('mlld-box executable missing box directive');
     }
-    const { evaluateEnv } = await import('@interpreter/eval/env');
-    const envResult = await evaluateEnv(envDirectiveNode, execEnv);
-    return finalizeResult(envResult.value);
+    const { evaluateBox } = await import('@interpreter/eval/box');
+    const boxResult = await evaluateBox(envDirectiveNode, execEnv);
+    return finalizeResult(boxResult.value);
   }
 
   const { interpolate } = await import('@interpreter/core/interpreter');

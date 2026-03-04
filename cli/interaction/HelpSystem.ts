@@ -32,8 +32,8 @@ export class HelpSystem {
       return;
     }
     
-    if (command === 'env') {
-      this.displayEnvHelp();
+    if (command === 'box') {
+      this.displayBoxHelp();
       return;
     }
 
@@ -404,27 +404,30 @@ Aliases:
     `);
   }
 
-  private displayEnvHelp(): void {
+  private displayBoxHelp(): void {
     console.log(`
-Usage: mlld env <subcommand> [options]
+Usage: mlld box <subcommand> [options]
 
-Manage environment variables allowed in @INPUT.
+Manage AI agent boxes captured from local/global agent config.
 
 Subcommands:
-  list                    List allowed environment variables
-  allow <name> [...]      Allow environment variable(s) in @INPUT
-  remove <name> [...]     Remove environment variable(s) from allowed list
-  clear                   Clear all allowed environment variables
+  list                    List available boxes
+  capture <name>          Create box from config
+  spawn <name> -- <prompt>  Run agent with prompt
+  shell <name>            Start interactive session
 
 Examples:
-  mlld env list           # Show currently allowed variables
-  mlld env allow API_KEY  # Allow API_KEY to be accessed via @INPUT
-  mlld env allow HOME USER PATH  # Allow multiple variables
-  mlld env remove API_KEY # Remove API_KEY from allowed list
-  mlld env clear          # Clear all allowed variables
+  mlld box capture claude-dev
+  mlld box capture project-env --local
+  mlld box capture codex-env --codex
+  mlld box list
+  mlld box spawn claude-dev -- "Fix the bug in main.ts"
+  mlld box shell claude-dev
 
-Note: Environment variables are only accessible via @INPUT when explicitly
-allowed. The allowed list is stored in mlld-config.json.
+Capture options:
+  --local                 Capture from project .claude/ instead of ~/.claude
+  --codex                 Capture from Codex config (.codex/) instead of Claude
+  --global                Store in ~/.mlld/box/ instead of .mlld/box/
     `);
   }
 
@@ -432,7 +435,7 @@ allowed. The allowed list is stored in mlld-config.json.
     console.log(`
 Usage: mlld keychain <command> [options]
 
-Manage project keychain entries under mlld-env-{projectname}.
+Manage project keychain entries under mlld-box-{projectname}.
 
 Commands:
   add <name>               Add or update a keychain entry (prompts for value)
@@ -553,7 +556,7 @@ Commands:
   keychain                Manage project keychain entries
   dev                     Inspect local module discovery
   docs                    Show module documentation (# tldr + # docs)
-  env                     Manage environment variables allowed in @INPUT
+  box                     Manage AI agent environments
   install, i              Install mlld modules
   update                  Update installed modules to latest versions
   outdated                List modules with available updates
@@ -671,7 +674,7 @@ Built-in docs and examples available via 'mlld howto'.
       case 'init':
       case 'registry':
       case 'add-needs':
-      case 'env':
+      case 'box':
       case 'dev':
       case 'live':
       case 'docs':

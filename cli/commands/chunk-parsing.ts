@@ -208,7 +208,7 @@ const MAX_CHUNKS = 200;
 /**
  * Bare directive keywords that can start a directive in strict mode.
  */
-const BARE_DIRECTIVE_PATTERN = /^(var|show|stream|run|exe|checkpoint|path|import|when|if|for|foreach|loop|while|output|append|log|guard|hook|export|policy|sign|verify|env|bail)\b/;
+const BARE_DIRECTIVE_PATTERN = /^(var|show|stream|run|exe|checkpoint|path|import|when|if|for|foreach|loop|while|output|append|log|guard|hook|export|policy|sign|verify|box|bail)\b/;
 
 /**
  * Checks if a line starts a new directive.

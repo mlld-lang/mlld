@@ -1,22 +1,22 @@
 ---
-id: env-blocks
+id: box-blocks
 qa_tier: 2
-title: Environment Blocks
-brief: Scoped execution within an environment configuration
+title: Box Blocks
+brief: Scoped execution within a box configuration
 category: config
-parent: env
-tags: [environments, blocks, isolation, scoping]
-related: [env-overview, env-config, security-policies]
-related-code: [interpreter/eval/env.ts, grammar/directives/env.peggy]
-updated: 2026-02-03
+parent: box
+tags: [box, blocks, isolation, scoping]
+related: [box-overview, box-config, security-policies]
+related-code: [interpreter/eval/box.ts, grammar/directives/box.peggy]
+updated: 2026-03-04
 ---
 
-Execute directives within a scoped environment using `env @config [ ... ]`.
+Execute directives within a scoped environment using `box @config [ ... ]`.
 
 ```mlld
 var @sandbox = { tools: ["Read", "Write", "Bash"] }
 
-env @sandbox [
+box @sandbox [
   run cmd { echo "inside sandbox" }
 ]
 ```
@@ -28,7 +28,7 @@ The environment is active only within the block and released on exit.
 ```mlld
 var @config = { tools: ["Read", "Write"] }
 
-var @result = env @config [
+var @result = box @config [
   => "completed"
 ]
 
@@ -42,7 +42,7 @@ Use `=>` to return a value from the block.
 ```mlld
 var @sandbox = { tools: ["Read", "Write", "Bash"] }
 
-var @result = env @sandbox with { tools: ["Read"] } [
+var @result = box @sandbox with { tools: ["Read"] } [
   => "read-only mode"
 ]
 
@@ -57,7 +57,7 @@ Derives a restricted environment inline without naming it.
 var @sandbox = { tools: ["Read", "Write", "Bash"] }
 var @readOnly = { ...@sandbox, tools: ["Read"] }
 
-env @readOnly [
+box @readOnly [
   run cmd { cat README.md }
 ]
 ```
@@ -67,5 +67,5 @@ Child environments can only restrict parent capabilities, never extend them.
 **Notes:**
 - Directives inside blocks use bare syntax (no `/` prefix)
 - Environment resources are released when the block exits
-- `with { ... }` is env directive config syntax (`env @cfg with { ... } [ ... ]`), not a general object-modifier expression
-- See `env-overview` for concepts, `env-config` for configuration fields
+- `with { ... }` is box directive config syntax (`box @cfg with { ... } [ ... ]`), not a general object-modifier expression
+- See `box-overview` for concepts, `box-config` for configuration fields

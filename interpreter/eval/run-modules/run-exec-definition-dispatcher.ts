@@ -730,12 +730,12 @@ async function handleCodeDefinition(
     };
   }
 
-  if ((definition as any).language === 'mlld-env') {
+  if ((definition as any).language === 'mlld-box') {
     const envDirectiveNode = Array.isArray((definition as any).codeTemplate)
       ? ((definition as any).codeTemplate[0] as any)
       : undefined;
-    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'env') {
-      throw new Error('mlld-env executable missing env directive');
+    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'box') {
+      throw new Error('mlld-box executable missing box directive');
     }
 
     const execEnv = env.createChild();
@@ -746,10 +746,10 @@ async function handleCodeDefinition(
       bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
     }
 
-    const { evaluateEnv } = await import('@interpreter/eval/env');
-    const envResult = await evaluateEnv(envDirectiveNode, execEnv);
+    const { evaluateBox } = await import('@interpreter/eval/box');
+    const boxResult = await evaluateBox(envDirectiveNode, execEnv);
     return {
-      value: envResult.value,
+      value: boxResult.value,
       outputDescriptors,
       callStack
     };

@@ -521,13 +521,13 @@ describe('Semantic Tokens - Unit Tests', () => {
     });
   });
 
-  describe('Env Directives', () => {
-    it('tokenizes env directive with config and block', async () => {
-      const code = '/env @config [show "hello"]';
+  describe('Box Directives', () => {
+    it('tokenizes box directive with config and block', async () => {
+      const code = '/box @config [show "hello"]';
       const tokens = await getSemanticTokens(code);
 
       expectToken(tokens, {
-        text: '/env',
+        text: '/box',
         tokenType: 'directive'
       });
 

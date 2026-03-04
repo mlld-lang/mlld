@@ -270,9 +270,9 @@ describe('exe evaluator characterization', () => {
         identifier: 'envExec',
         directive: createDirective(
           'envExec',
-          'exeEnv',
+          'exeBox',
           {
-            envWithClause: { profile: 'readonly' },
+            boxWithClause: { profile: 'readonly' },
             block: {
               type: 'ExeBlock',
               nodeId: 'env-exec-block',
@@ -289,8 +289,8 @@ describe('exe evaluator characterization', () => {
         ),
         assertDef: (def: any) => {
           expect(def.type).toBe('code');
-          expect(def.language).toBe('mlld-env');
-          expect(def.codeTemplate?.[0]?.kind).toBe('env');
+          expect(def.language).toBe('mlld-box');
+          expect(def.codeTemplate?.[0]?.kind).toBe('box');
           expect(def.codeTemplate?.[0]?.values?.withClause?.profile).toBe('readonly');
         }
       },

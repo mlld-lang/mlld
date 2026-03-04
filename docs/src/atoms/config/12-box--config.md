@@ -1,17 +1,17 @@
 ---
-id: env-config
+id: box-config
 qa_tier: 2
-title: Environment Configuration
-brief: Configure filesystem, network, limits, and credentials for environments
+title: Box Configuration
+brief: Configure filesystem, network, limits, and credentials for box execution
 category: config
-parent: env
-tags: [environments, configuration, isolation, credentials, limits, mcp]
-related: [env-overview, env-directive, security-policies, mcp-security, mcp-policy, mcp-guards]
-related-code: [interpreter/eval/env.ts, interpreter/env/Environment.ts, interpreter/eval/env-mcp-config.test.ts]
-updated: 2026-02-05
+parent: box
+tags: [box, configuration, isolation, credentials, limits, mcp]
+related: [box-overview, box-directive, security-policies, mcp-security, mcp-policy, mcp-guards]
+related-code: [interpreter/eval/box.ts, interpreter/env/Environment.ts, interpreter/eval/env-mcp-config.test.ts]
+updated: 2026-03-04
 ---
 
-Environment configuration objects control isolation, credentials, and resource limits.
+Box configuration objects control isolation, credentials, and resource limits.
 
 ```mlld
 var @sandbox = {
@@ -21,7 +21,7 @@ var @sandbox = {
   limits: { mem: "512m", cpu: 1.0, timeout: 30000 }
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { npm test }
 ]
 ```
@@ -38,7 +38,7 @@ env @sandbox [
 | `tools` | `["Read", "Write", "Bash"]` | Runtime tool allowlist for commands and MCP tools |
 | `mcps` | `[]`, `[server-config]` | Runtime MCP server allowlist |
 
-**Important:** `tools` and `mcps` enforce runtime access inside `env` blocks.
+**Important:** `tools` and `mcps` enforce runtime access inside `box` blocks.
 
 | Field | Enforced locally by mlld? | Notes |
 |-------|--------------------------|-------|
@@ -74,12 +74,12 @@ exe @mcpConfig() = when [
   * => { servers: [] }
 ]
 
-env @cfg with { profile: "readonly" } [
+box @cfg with { profile: "readonly" } [
   show @list()
 ]
 ```
 
-The function is called when an `env` block spawns, with `@mx.profile` set from the `with { profile }` clause. When no profile is specified, the first profile whose requirements are satisfied by the active policy is selected. Explicit `with { profile: "name" }` overrides this automatic selection.
+The function is called when a `box` block spawns, with `@mx.profile` set from the `with { profile }` clause. When no profile is specified, the first profile whose requirements are satisfied by the active policy is selected. Explicit `with { profile: "name" }` overrides this automatic selection.
 
 **Compose with object spread:**
 
@@ -90,4 +90,4 @@ var @readonly = {
 }
 ```
 
-See `env-overview` for concepts, `env-directive` for block syntax.
+See `box-overview` for concepts, `box-directive` for block syntax.

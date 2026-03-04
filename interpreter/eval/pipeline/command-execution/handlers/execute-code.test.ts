@@ -17,7 +17,7 @@ const {
   evaluateForExpressionMock,
   evaluateLoopExpressionMock,
   evaluateExeBlockMock,
-  evaluateEnvMock,
+  evaluateBoxMock,
   extractVariableValueMock,
   interpolateMock
 } = vi.hoisted(() => ({
@@ -26,7 +26,7 @@ const {
   evaluateForExpressionMock: vi.fn(),
   evaluateLoopExpressionMock: vi.fn(),
   evaluateExeBlockMock: vi.fn(),
-  evaluateEnvMock: vi.fn(),
+  evaluateBoxMock: vi.fn(),
   extractVariableValueMock: vi.fn(),
   interpolateMock: vi.fn()
 }));
@@ -51,8 +51,8 @@ vi.mock('@interpreter/eval/exe', () => ({
   evaluateExeBlock: evaluateExeBlockMock
 }));
 
-vi.mock('@interpreter/eval/env', () => ({
-  evaluateEnv: evaluateEnvMock
+vi.mock('@interpreter/eval/box', () => ({
+  evaluateBox: evaluateBoxMock
 }));
 
 vi.mock('@interpreter/utils/variable-resolution', () => ({
@@ -94,7 +94,7 @@ describe('executeCodeHandler branch extraction', () => {
     evaluateForExpressionMock.mockReset();
     evaluateLoopExpressionMock.mockReset();
     evaluateExeBlockMock.mockReset();
-    evaluateEnvMock.mockReset();
+    evaluateBoxMock.mockReset();
     extractVariableValueMock.mockReset();
     interpolateMock.mockReset();
   });
@@ -193,9 +193,9 @@ describe('executeCodeHandler branch extraction', () => {
     });
   });
 
-  it('covers mlld-exe-block and mlld-env dispatch branches', async () => {
+  it('covers mlld-exe-block and mlld-box dispatch branches', async () => {
     evaluateExeBlockMock.mockResolvedValue({ value: { status: 'block-ok' } });
-    evaluateEnvMock.mockResolvedValue({ value: 'env-ok' });
+    evaluateBoxMock.mockResolvedValue({ value: 'box-ok' });
 
     const env = createEnv();
     const execEnv = env.createChild();
@@ -212,13 +212,13 @@ describe('executeCodeHandler branch extraction', () => {
       finalizeResult
     });
 
-    const envResult = await executeCodeHandler({
+    const boxResult = await executeCodeHandler({
       env,
       execEnv,
       execDef: {
         type: 'code',
-        language: 'mlld-env',
-        codeTemplate: [{ type: 'Directive', kind: 'env' }]
+        language: 'mlld-box',
+        codeTemplate: [{ type: 'Directive', kind: 'box' }]
       },
       finalizeResult
     });
@@ -227,8 +227,8 @@ describe('executeCodeHandler branch extraction', () => {
       value: { status: 'block-ok' },
       options: undefined
     });
-    expect(envResult).toEqual({
-      value: 'env-ok',
+    expect(boxResult).toEqual({
+      value: 'box-ok',
       options: undefined
     });
   });

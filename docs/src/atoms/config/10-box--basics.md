@@ -1,17 +1,17 @@
 ---
-id: env-overview
+id: box-overview
 qa_tier: 2
-title: Environment Overview
+title: Box Overview
 brief: Execution contexts with credentials, isolation, and capabilities
 category: config
-parent: env
-tags: [environments, credentials, isolation, capabilities, providers]
-related: [env-config, env-blocks, policy-auth, policy-capabilities, env-directive, security-guards-basics, security-policies]
-related-code: [interpreter/eval/env.ts, interpreter/env/Environment.ts]
-updated: 2026-02-03
+parent: box
+tags: [box, credentials, isolation, capabilities, providers]
+related: [box-config, box-blocks, policy-auth, policy-capabilities, box-directive, security-guards-basics, security-policies]
+related-code: [interpreter/eval/box.ts, interpreter/env/Environment.ts]
+updated: 2026-03-04
 ---
 
-Environments are mlld's primitive for execution contexts. They encapsulate credentials, isolation, capabilities, and state.
+Boxes are mlld's primitive for scoped execution contexts. They encapsulate credentials, isolation, capabilities, and state.
 
 ```mlld
 var @sandbox = {
@@ -20,30 +20,30 @@ var @sandbox = {
   net: "none"                        >> No network access
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { npm test }
 ]
 ```
 
-**Why environments matter for security:**
+**Why boxes matter for security:**
 
 - **Credential isolation** - Auth injected via sealed paths, not exposed as strings
 - **Capability restriction** - Limit what tools and operations agents can use
-- **Blast radius** - Contain failures within environment boundaries
+- **Blast radius** - Contain failures within box boundaries
 
-**Environments are values:**
+**Boxes are values:**
 
 ```mlld
 var @task = "Review code"
 var @cfg = { auth: "claude", tools: ["Read", "Write"] }
 var @readonly = { ...@cfg, tools: ["Read"] }
 
-env @readonly [ run cmd { claude -p @task } ]
+box @readonly [ run cmd { claude -p @task } ]
 ```
 
-Compute, compose, and pass environments like any other value.
-Use object spread for plain object derivation. The `with { ... }` clause is env-directive config syntax (for `env @cfg with { ... } [ ... ]`).
-For enforcement boundaries (what mlld enforces locally vs what requires a sandbox provider), see the table in `env-config`.
+Compute, compose, and pass boxes like any other value.
+Use object spread for plain object derivation. The `with { ... }` clause is box-directive config syntax (for `box @cfg with { ... } [ ... ]`).
+For enforcement boundaries (what mlld enforces locally vs what requires a sandbox provider), see the table in `box-config`.
 
 **Providers add isolation:**
 
@@ -57,7 +57,7 @@ Without a provider, commands run locally with specified credentials.
 
 **Complete sandbox example:**
 
-Combine environment config with policy to restrict an agent:
+Combine box config with policy to restrict an agent:
 
 ```mlld
 policy @p = {
@@ -72,11 +72,11 @@ var @sandbox = {
   mcps: []                           >> Block MCP servers in this block
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { claude -p "Analyze code" }
 ]
 ```
 
 For a complete working example with Docker isolation, credentials, and guards, see `sandbox-demo` in `llm/run/j2bd/security/impl/sandbox-demo.mld`.
 
-Reading order: `env-config` for configuration fields, `env-blocks` for scoped execution, `policy-capabilities` for restrictions, `policy-auth` for credentials.
+Reading order: `box-config` for configuration fields, `box-blocks` for scoped execution, `policy-capabilities` for restrictions, `policy-auth` for credentials.

@@ -20,7 +20,7 @@
   * => `closed with: @data`
 ]
 
-/exe @airlockTaintDoSearch(tools) = env with { tools: @tools } [
+/exe @airlockTaintDoSearch(tools) = box with { tools: @tools } [
   let @results = @airlockTaintSearch("test query")
   => @results
 ]

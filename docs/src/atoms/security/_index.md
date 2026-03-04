@@ -152,7 +152,7 @@ Environments encapsulate execution contexts with credentials, isolation, tool re
 - **Process isolation** — providers (`@mlld/env-docker`, `@mlld/env-sprites`) sandbox execution. Provider designation is an explicit trust grant.
 - **Composition** — `with` derives restricted children that can only narrow parent capabilities (attenuation invariant)
 
-**Atoms:** `env-overview` (start here), `env-config`, `env-blocks`
+**Atoms:** `box-overview` (start here), `box-config`, `box-blocks`
 
 ## Needs Declarations
 
@@ -190,5 +190,5 @@ Composite patterns that combine multiple security primitives:
 9. `security-guards-basics` — guard syntax, timing, triggers, and security context
 10. `signing-overview` → `sign-verify` → `autosign-autoverify`
 11. `mcp-security` → `mcp-policy` → `mcp-guards`
-12. `env-overview` → `env-config` → `env-blocks`
+12. `box-overview` → `box-config` → `box-blocks`
 13. `pattern-audit-guard` → `pattern-dual-audit`

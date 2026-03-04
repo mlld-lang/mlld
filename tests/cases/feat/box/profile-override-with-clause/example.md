@@ -8,6 +8,6 @@
 /var @denyShell = { deny: { sh: true } }
 /policy @p = union(@denyShell)
 
-/env @cfg with { profile: "full" } [
+/box @cfg with { profile: "full" } [
   show @mx.profile
 ]

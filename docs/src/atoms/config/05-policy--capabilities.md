@@ -6,7 +6,7 @@ brief: Restrict tools, filesystem, and network access
 category: config
 parent: policy
 tags: [policy, capabilities, allow, deny, danger, filesystem, network]
-related: [security-policies, policy-auth, env-config, policy-composition, policy-label-flow]
+related: [security-policies, policy-auth, box-config, policy-composition, policy-label-flow]
 related-code: [core/policy/capability-patterns.ts, interpreter/policy/filesystem-policy.ts]
 updated: 2026-02-05
 ---
@@ -95,4 +95,4 @@ Keychain allow/deny patterns live under `policy.keychain` and match `service/acc
 - Keychain access requires both `danger: ["@keychain"]` in capabilities AND `projectname` in `mlld-config.json`
 - `no-secret-exfil` doesn't block `show`/`log` — add label flow rules for `op:show` and `op:log` (see `policy-auth`)
 
-See `policy-auth` for credential flow, `env-config` for environment restrictions.
+See `policy-auth` for credential flow, `box-config` for environment restrictions.

@@ -21,7 +21,7 @@ guard before publish = when [
 >> Auto-signed instructions — the agent verifies these are authentic
 var instructions @task = "Triage issues. Close dupes. Label priority."
 
-exe llm @agent(tools, prompt) = env with { tools: @tools } [
+exe llm @agent(tools, prompt) = box with { tools: @tools } [
   => cmd { claude -p "@prompt" }
 ]
 

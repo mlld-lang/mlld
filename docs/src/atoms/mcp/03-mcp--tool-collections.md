@@ -37,7 +37,7 @@ var tools @agentTools = {
 **Scope tools to an agent with `env`:**
 
 ```mlld
-env @agent with { tools: @agentTools } [
+box @agent with { tools: @agentTools } [
   run cmd { claude -p @task }
 ]
 ```
