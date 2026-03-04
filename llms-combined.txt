@@ -4140,7 +4140,23 @@ file "task.md" = @task
 file "notes/today.md" = `## Notes\n@summary`
 ```
 
-`file` writes exactly one path. Paths must be relative and cannot use `..`.
+`file` writes exactly one file. Paths must be relative (no leading `/`) and cannot use `..`.
+
+**Inside a box block** — writes to the box's workspace VFS:
+
+```mlld
+box [
+  file "task.md" = @task
+  file "src/main.js" = @source
+  run cmd { cat task.md }
+]
+```
+
+Files written this way are scoped to the box. ShellSession commands can read them. No resolver is created.
+
+**Outside a box block** — writes to the real filesystem, relative to project root.
+
+**Immutability:** A path can only be written once per scope. Writing the same path again throws an error. Commands inside box blocks (via ShellSession) can modify files — the one-shot rule applies only to `file` directive writes.
 </FILE>
 
 <FILES>
@@ -4149,13 +4165,65 @@ files "src/" = [
   { "index.js": @source, desc: "Entry point" },
   { "config.json": @config }
 ]
+```
 
-files <@workspace/> = [
-  { "README.md": @readme }
+Each entry is an object with one file key mapped to content, and optional `desc` for metadata.
+
+**Named resolver — workspace creation:**
+
+```mlld
+files <@workspace/> = [{ "task.md": @task }]
+files <@workspace/src/> = [{ "main.js": @code }]
+
+var @content = <@workspace/task.md>
+show @content
+```
+
+The `<@name/>` syntax creates a VFS-backed resolver on first use. Subsequent `files <@name/subdir>` writes extend the same VFS. Read files back with `<@name/path>`.
+
+**Descriptions:**
+
+The `desc` field populates `workspace.descriptions` — a map of path to description. Agents can inspect file purposes without reading content:
+
+```mlld
+files <@ws/> = [
+  { "task.md": @task, desc: "Current task specification" },
+  { "context.md": @ctx, desc: "Background context" }
+]
+show @ws
+```
+
+**Inside a box block** — writes to the active workspace VFS without creating a resolver:
+
+```mlld
+box [
+  files "src/" = [
+    { "index.js": @source },
+    { "util.js": @utils }
+  ]
+  run cmd { ls src/ }
 ]
 ```
 
-`files` accepts an array of objects where each object has one file key and optional `desc`.
+**Git hydration:**
+
+```mlld
+files <@workspace/> = git "https://github.com/user/repo" branch:"main"
+files <@workspace/docs/> = git "https://github.com/user/repo" path:"docs/" depth:1
+```
+
+Clones text files into VFS. Binary files and symlinks are skipped. Options: `auth:` (keychain ref), `branch:` (branch/tag/commit), `path:` (subdirectory), `depth:` (default 1). Git-sourced files carry `src:git` taint.
+
+**Workspace inspection:**
+
+```mlld
+files <@ws/> = [{ "file.md": "draft" }]
+show @ws.mx.edits
+var @f = <@ws/file.md>
+show @f.mx.diff
+```
+
+`.mx.edits` returns the change list. Per-file `.mx.diff` returns a unified diff string.
 </FILES>
 
 </MLLD_OUTPUT>
@@ -5623,7 +5691,7 @@ box @sandbox with { tools: ["Read"] } [
 files <@workspace/> = [{ "task.md": "checklist" }]
 
 box @workspace [
-  run cmd { cat @root/task.md }
+  run cmd { cat task.md }
 ]
 ```
 
@@ -5634,7 +5702,7 @@ box @workspace [
 ```mlld
 box [
   file "task.md" = "inside box"
-  run cmd { cat @root/task.md }
+  run cmd { cat task.md }
 ]
 ```
 
@@ -5810,11 +5878,11 @@ The environment is active only within the block and released on exit.
 ```mlld
 box [
   file "task.md" = "inside box"
-  run cmd { cat @root/task.md }
+  run cmd { cat task.md }
 ]
 ```
 
-`box [ ... ]` creates an anonymous in-memory workspace for the block.
+`box [ ... ]` creates an anonymous in-memory workspace for the block. Commands run via ShellSession with cwd at the project root.
 
 **Named workspace block:**
 
@@ -5822,7 +5890,7 @@ box [
 files <@workspace/> = [{ "task.md": "from resolver" }]
 
 box @workspace [
-  run cmd { cat @root/task.md }
+  run cmd { cat task.md }
 ]
 ```
 
@@ -5834,17 +5902,17 @@ Use `box @workspace` to bind an existing resolver-backed workspace as the active
 files <@workspace/> = [{ "task.md": "draft" }]
 
 box @workspace [
-  run cmd { echo "done" >> @root/task.md }
+  run cmd { echo "done" >> task.md }
 ]
 
 show @workspace.mx.edits
-show @workspace.mx.diff
-show <@root/task.md>.mx.diff
+
+var @file = <@workspace/task.md>
+show @file.mx.diff
 ```
 
-- `@workspace.mx.edits` returns the workspace change list (`created`/`modified`/`deleted`)
-- `@workspace.mx.diff` returns workspace diff inspection output
-- `@file.mx.diff` returns unified diff for the file path when backed by a workspace
+- `@workspace.mx.edits` — array of `{path, type, entity}` where type is `created`/`modified`/`deleted`
+- Per-file `.mx.diff` — unified diff string. Access via variable: `var @f = <@workspace/path>` then `@f.mx.diff`
 
 **Git hydration with `files = git`:**
 
@@ -5852,7 +5920,7 @@ show <@root/task.md>.mx.diff
 files <@workspace/> = git "https://github.com/mlld-lang/mlld" branch:"main" path:"docs/" depth:1
 
 box @workspace with { tools: ["Read", "Bash"], net: { allow: ["github.com"] } } [
-  run cmd { ls @root }
+  run cmd { ls . }
 ]
 ```
 

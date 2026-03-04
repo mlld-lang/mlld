@@ -28,11 +28,11 @@ The environment is active only within the block and released on exit.
 ```mlld
 box [
   file "task.md" = "inside box"
-  run cmd { cat @root/task.md }
+  run cmd { cat task.md }
 ]
 ```
 
-`box [ ... ]` creates an anonymous in-memory workspace for the block.
+`box [ ... ]` creates an anonymous in-memory workspace for the block. Commands run via ShellSession with cwd at the project root.
 
 **Named workspace block:**
 
@@ -40,7 +40,7 @@ box [
 files <@workspace/> = [{ "task.md": "from resolver" }]
 
 box @workspace [
-  run cmd { cat @root/task.md }
+  run cmd { cat task.md }
 ]
 ```
 
@@ -52,17 +52,15 @@ Use `box @workspace` to bind an existing resolver-backed workspace as the active
 files <@workspace/> = [{ "task.md": "draft" }]
 
 box @workspace [
-  run cmd { echo "done" >> @root/task.md }
+  run cmd { echo "done" >> task.md }
 ]
 
 show @workspace.mx.edits
-show @workspace.mx.diff
-show <@root/task.md>.mx.diff
+show <@workspace/task.md>.mx.diff
 ```
 
-- `@workspace.mx.edits` returns the workspace change list (`created`/`modified`/`deleted`)
-- `@workspace.mx.diff` returns workspace diff inspection output
-- `@file.mx.diff` returns unified diff for the file path when backed by a workspace
+- `@workspace.mx.edits` — array of `{path, type, entity}` where type is `created`/`modified`/`deleted`
+- `<@workspace/path>.mx.diff` — unified diff string for a single file
 
 **Git hydration with `files = git`:**
 
@@ -70,7 +68,7 @@ show <@root/task.md>.mx.diff
 files <@workspace/> = git "https://github.com/mlld-lang/mlld" branch:"main" path:"docs/" depth:1
 
 box @workspace with { tools: ["Read", "Bash"], net: { allow: ["github.com"] } } [
-  run cmd { ls @root }
+  run cmd { ls . }
 ]
 ```
 

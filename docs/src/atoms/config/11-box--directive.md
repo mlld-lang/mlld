@@ -81,7 +81,7 @@ box @sandbox with { tools: ["Read"] } [
 files <@workspace/> = [{ "task.md": "checklist" }]
 
 box @workspace [
-  run cmd { cat @root/task.md }
+  run cmd { cat task.md }
 ]
 ```
 
@@ -92,7 +92,7 @@ box @workspace [
 ```mlld
 box [
   file "task.md" = "inside box"
-  run cmd { cat @root/task.md }
+  run cmd { cat task.md }
 ]
 ```
 
