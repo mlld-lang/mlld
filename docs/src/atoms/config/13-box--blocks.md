@@ -23,6 +23,29 @@ box @sandbox [
 
 The environment is active only within the block and released on exit.
 
+**Anonymous workspace block:**
+
+```mlld
+box [
+  file "task.md" = "inside box"
+  run cmd { cat @root/task.md }
+]
+```
+
+`box [ ... ]` creates an anonymous in-memory workspace for the block.
+
+**Named workspace block:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "from resolver" }]
+
+box @workspace [
+  run cmd { cat @root/task.md }
+]
+```
+
+Use `box @workspace` to bind an existing resolver-backed workspace as the active box filesystem.
+
 **Return values:**
 
 ```mlld

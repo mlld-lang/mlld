@@ -536,7 +536,7 @@ CodeExecution "code execution"
 // BOX EXPRESSION - box @config [...] for scoped environment with return value
 // Used in /var assignments to execute code in a scoped environment and return the result
 BoxExpression "box expression"
-  = "box" _ config:BoxConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock {
+  = "box" _ config:BoxConfigExpression withClause:WithClause? _ block:ExeStatementBlock {
       const values = {
         ...(config ? { config: [config] } : {}),
         ...(withClause ? { withClause } : {}),
@@ -568,16 +568,53 @@ BoxExpression "box expression"
         'box'
       );
     }
-  / "box" _ config:BoxConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
-      helpers.mlldError(
-        'box requires a config expression or with clause. Expected: box @config [ ... ] or box with { ... } [ ... ]',
-        '@config or with { ... }',
-        location()
+  / "box" _ withClause:WithClause _ block:ExeStatementBlock {
+      const values = {
+        withClause,
+        block
+      };
+
+      const raw = {
+        withClause
+      };
+
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true,
+        withClause
+      };
+
+      return helpers.createStructuredDirective(
+        'box',
+        'box',
+        values,
+        raw,
+        meta,
+        location(),
+        'box'
       );
     }
-  / "box" _ config:BoxConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
+  / "box" _ block:ExeStatementBlock {
+      const values = { block };
+      const raw = {};
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true
+      };
+
+      return helpers.createStructuredDirective(
+        'box',
+        'box',
+        values,
+        raw,
+        meta,
+        location(),
+        'box'
+      );
+    }
+  / "box" _ !("[" / BlockComments) {
       helpers.mlldError(
-        'box requires a block. Expected: box @config [ ... ] or box with { ... } [ ... ]',
+        'box requires a block. Expected: box [ ... ], box @config [ ... ], or box with { ... } [ ... ]',
         '[',
         location()
       );

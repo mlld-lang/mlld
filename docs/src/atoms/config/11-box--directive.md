@@ -75,6 +75,29 @@ box @sandbox with { tools: ["Read"] } [
 
 `with` derives a restricted child inline. Children can only narrow parent capabilities, never extend them.
 
+**VFS resolver shorthand:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "checklist" }]
+
+box @workspace [
+  run cmd { cat @root/task.md }
+]
+```
+
+`box @workspace` is shorthand for `box { fs: @workspace } [...]`.
+
+**Anonymous VFS box:**
+
+```mlld
+box [
+  file "task.md" = "inside box"
+  run cmd { cat @root/task.md }
+]
+```
+
+When no config expression is provided, box creates an anonymous in-memory workspace.
+
 **Tool scope formats:**
 
 ```mlld

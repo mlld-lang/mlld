@@ -142,4 +142,36 @@ describe('box directive', () => {
     const { ast } = await parse(src);
     await expect(evaluate(ast, env)).rejects.toThrow(/Tool scope cannot add tools outside parent/);
   });
+
+  it('applies VFS defaults for anonymous box blocks', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, process.cwd());
+
+    const { ast } = await parse('/box [ show "ok" ]');
+    await evaluate(ast, env);
+
+    const scopedEnv = findEnvWithScopedTools(env);
+    expect(scopedEnv).toBeDefined();
+    const allowedTools = Array.from(((scopedEnv as any).allowedTools as Set<string>) || []).sort();
+    expect(allowedTools).toEqual(['bash', 'read', 'write']);
+    const allowedMcps = Array.from((((scopedEnv as any).allowedMcpServers as Set<string>) || []));
+    expect(allowedMcps).toEqual([]);
+    expect(scopedEnv?.getScopedEnvironmentConfig()?.net).toEqual({ allow: [] });
+    expect(scopedEnv?.getScopedEnvironmentConfig()?.mcps).toEqual([]);
+  });
+
+  it('does not apply VFS defaults for object-config boxes without workspace fs', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, process.cwd());
+
+    const { ast } = await parse('/box { tools: ["read"] } [ show "ok" ]');
+    await evaluate(ast, env);
+
+    const scopedEnv = findEnvWithScopedTools(env);
+    expect(scopedEnv).toBeDefined();
+    expect(scopedEnv?.getScopedEnvironmentConfig()?.net).toBeUndefined();
+    expect(scopedEnv?.getScopedEnvironmentConfig()?.mcps).toBeUndefined();
+  });
 });

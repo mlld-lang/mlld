@@ -5,6 +5,7 @@ import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { EnvironmentConfig } from '@core/types/environment';
 import type { Variable } from '@core/types/variable';
 import type { WorkspaceValue } from '@core/types/workspace';
+import { isWorkspaceValue } from '@core/types/workspace';
 import { evaluate } from '../core/interpreter';
 import { MlldDirectiveError } from '@core/errors';
 import { normalizeProfilesDeclaration, selectProfile } from '@core/policy/needs';
@@ -45,11 +46,26 @@ async function resolveBoxConfig(
   env: Environment,
   context?: EvaluationContext,
   location?: any
-): Promise<EnvironmentConfig> {
+): Promise<{
+  config: EnvironmentConfig;
+  workspace?: WorkspaceValue;
+  hasConfigExpression: boolean;
+}> {
   if (!nodes || nodes.length === 0) {
-    return {};
+    return {
+      config: {},
+      hasConfigExpression: false
+    };
   }
+
   const value = await resolveExpressionValue(nodes, env, context);
+  if (isWorkspaceValue(value)) {
+    return {
+      config: {},
+      workspace: value,
+      hasConfigExpression: true
+    };
+  }
   if (!isPlainObject(value)) {
     throw new MlldDirectiveError('box config must be an object.', 'box', {
       location,
@@ -57,7 +73,23 @@ async function resolveBoxConfig(
       context: { value }
     });
   }
-  return value as EnvironmentConfig;
+
+  const config: EnvironmentConfig = { ...(value as EnvironmentConfig) };
+  let workspace: WorkspaceValue | undefined;
+  if ((config as any).fs !== undefined) {
+    const resolvedFs = await resolveRuntimeValue((config as any).fs, env);
+    if (isWorkspaceValue(resolvedFs)) {
+      workspace = resolvedFs;
+      // Keep provider config payload serializable and avoid leaking runtime-only fs objects.
+      delete (config as any).fs;
+    }
+  }
+
+  return {
+    config,
+    workspace,
+    hasConfigExpression: true
+  };
 }
 
 async function resolveToolsValue(
@@ -69,6 +101,17 @@ async function resolveToolsValue(
     return value;
   }
   return resolveExpressionValue([value as BaseMlldNode], env, context);
+}
+
+async function resolveRuntimeValue(value: unknown, env: Environment): Promise<unknown> {
+  let resolved = value;
+  if (isVariable(resolved)) {
+    resolved = await extractVariableValue(resolved, env);
+  }
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+  return resolved;
 }
 
 function toProfileString(
@@ -540,20 +583,6 @@ async function normalizeMcpScope(
   return { mcps: Array.from(resolved), hasMcps: true };
 }
 
-function containsFileProjectionDirective(node: unknown): boolean {
-  if (!node || typeof node !== 'object') {
-    return false;
-  }
-  if (Array.isArray(node)) {
-    return node.some(entry => containsFileProjectionDirective(entry));
-  }
-  const record = node as Record<string, unknown>;
-  if (record.type === 'Directive' && (record.kind === 'file' || record.kind === 'files')) {
-    return true;
-  }
-  return Object.values(record).some(value => containsFileProjectionDirective(value));
-}
-
 function createScopedWorkspace(): WorkspaceValue {
   return {
     type: 'workspace',
@@ -562,15 +591,39 @@ function createScopedWorkspace(): WorkspaceValue {
   };
 }
 
+const DEFAULT_VFS_TOOLS = ['Bash', 'Read', 'Write'] as const;
+
+function attenuateDefaultToolsToParent(
+  tools: string[],
+  env: Environment
+): string[] {
+  const parentAllowed = env.getAllowedTools();
+  if (!parentAllowed) {
+    return tools;
+  }
+  const normalizedParent = new Set<string>();
+  for (const entry of parentAllowed) {
+    if (typeof entry !== 'string') {
+      continue;
+    }
+    const trimmed = entry.trim().toLowerCase();
+    if (trimmed.length > 0) {
+      normalizedParent.add(trimmed);
+    }
+  }
+  return tools.filter(tool => normalizedParent.has(tool.trim().toLowerCase()));
+}
+
 export async function evaluateBox(
   directive: BoxDirectiveNode,
   env: Environment,
   context?: EvaluationContext
 ): Promise<EvalResult> {
-  const config = await resolveBoxConfig(directive.values?.config, env, context, directive.location);
+  const resolvedConfig = await resolveBoxConfig(directive.values?.config, env, context, directive.location);
+  const config = resolvedConfig.config;
   const withClauseTools = directive.values?.withClause?.tools;
   const withClauseProfile = (directive.values?.withClause as any)?.profile;
-  const resolvedTools =
+  let resolvedTools =
     withClauseTools !== undefined
       ? await resolveToolsValue(withClauseTools, env, context)
       : config.tools;
@@ -579,7 +632,7 @@ export async function evaluateBox(
       ? await resolveToolsValue(withClauseProfile, env, context)
       : undefined;
 
-  const mergedConfig =
+  let mergedConfig =
     withClauseTools !== undefined || withClauseProfile !== undefined
       ? {
           ...config,
@@ -588,12 +641,45 @@ export async function evaluateBox(
         }
       : config;
 
+  let workspace = resolvedConfig.workspace;
+  if (!workspace && !resolvedConfig.hasConfigExpression) {
+    workspace = createScopedWorkspace();
+  }
+
+  const usingVfsWorkspace = Boolean(workspace);
+  const usingDefaultVfsTools = usingVfsWorkspace && resolvedTools === undefined;
+  if (usingVfsWorkspace) {
+    if (resolvedTools === undefined) {
+      resolvedTools = Array.from(DEFAULT_VFS_TOOLS);
+      mergedConfig = {
+        ...mergedConfig,
+        tools: resolvedTools
+      };
+    }
+    if ((mergedConfig as any).mcps === undefined) {
+      mergedConfig = {
+        ...mergedConfig,
+        mcps: []
+      };
+    }
+    if ((mergedConfig as any).net === undefined) {
+      mergedConfig = {
+        ...mergedConfig,
+        net: { allow: [] }
+      };
+    }
+  }
+
   const scopedEnv = env.createChild();
   scopedEnv.setScopedEnvironmentConfig(mergedConfig);
 
   const toolScope = normalizeToolScope(resolvedTools, env, directive.location);
   if (toolScope.hasTools) {
-    scopedEnv.setAllowedTools(toolScope.tools);
+    const scopedTools =
+      usingDefaultVfsTools && toolScope.tools
+        ? attenuateDefaultToolsToParent(toolScope.tools, scopedEnv)
+        : toolScope.tools;
+    scopedEnv.setAllowedTools(scopedTools);
   }
   const mcpScope = await normalizeMcpScope((mergedConfig as any).mcps, scopedEnv, directive.location);
   if (mcpScope.hasMcps) {
@@ -626,10 +712,9 @@ export async function evaluateBox(
   }
 
   try {
-    const shouldScopeWorkspace = containsFileProjectionDirective(block);
     let pushedWorkspace = false;
-    if (shouldScopeWorkspace) {
-      scopedEnv.pushActiveWorkspace(createScopedWorkspace());
+    if (workspace) {
+      scopedEnv.pushActiveWorkspace(workspace);
       pushedWorkspace = true;
     }
 

@@ -26,6 +26,26 @@ box @sandbox [
 ]
 ```
 
+**VFS-backed local mode:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "todo" }]
+
+box @workspace [
+  run cmd { cat @root/task.md }
+]
+```
+
+These forms create a VirtualFS-backed runtime for local execution:
+- `box @workspace [ ... ]`
+- `box { fs: @workspace } [ ... ]`
+- `box [ ... ]` (anonymous workspace)
+
+In VFS mode, defaults are applied unless overridden:
+- `tools: ["Bash", "Read", "Write"]`
+- `mcps: []`
+- `net: { allow: [] }`
+
 **Configuration fields:**
 
 | Field | Values | Purpose |

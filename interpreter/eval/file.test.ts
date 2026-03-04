@@ -126,4 +126,86 @@ describe('file/files evaluation', () => {
     expect(String(output).trim()).toBe('inside-box');
     expect(await fileSystem.exists('/project/task.md')).toBe(false);
   });
+
+  it('supports anonymous box blocks without config', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+
+    const output = await interpret(
+      [
+        '/var @out = box [',
+        '  file "task.md" = "anonymous-box"',
+        '  let @result = run cmd { cat @root/task.md }',
+        '  => @result',
+        ']',
+        '/show @out'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext
+      }
+    );
+
+    expect(String(output).trim()).toBe('anonymous-box');
+    expect(await fileSystem.exists('/project/task.md')).toBe(false);
+  });
+
+  it('uses resolver shorthand workspaces in box blocks', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+    let capturedEnv: any;
+
+    const output = await interpret(
+      [
+        '/files <@workspace/> = [{ "task.md": "resolver-box" }]',
+        '/var @out = box @workspace [',
+        '  => run cmd { cat @root/task.md }',
+        ']',
+        '/show @out'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext,
+        captureEnvironment: env => {
+          capturedEnv = env;
+        }
+      }
+    );
+
+    expect(String(output).trim()).toBe('resolver-box');
+    const workspace = capturedEnv.getVariableValue('workspace') as { shellSession?: unknown };
+    expect(workspace.shellSession).toBeDefined();
+  });
+
+  it('uses fs workspace config form and restores nested workspace stack', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+
+    const output = await interpret(
+      [
+        '/files <@outer/> = [{ "outer.txt": "outer" }]',
+        '/files <@inner/> = [{ "inner.txt": "inner" }]',
+        '/box { fs: @outer } [',
+        '  let @first = run cmd { cat @root/outer.txt }',
+        '  let @middle = box @inner [',
+        '    let @innerValue = run cmd { cat @root/inner.txt }',
+        '    => @innerValue',
+        '  ]',
+        '  let @last = run cmd { cat @root/outer.txt }',
+        '  show @first',
+        '  show @middle',
+        '  show @last',
+        ']',
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext
+      }
+    );
+
+    expect(String(output).trim()).toBe('outer\n\ninner\n\nouter');
+  });
 });

@@ -610,6 +610,29 @@ box @sandbox with { tools: ["Read"] } [
 
 `with` derives a restricted child inline. Children can only narrow parent capabilities, never extend them.
 
+**VFS resolver shorthand:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "checklist" }]
+
+box @workspace [
+  run cmd { cat @root/task.md }
+]
+```
+
+`box @workspace` is shorthand for `box { fs: @workspace } [...]`.
+
+**Anonymous VFS box:**
+
+```mlld
+box [
+  file "task.md" = "inside box"
+  run cmd { cat @root/task.md }
+]
+```
+
+When no config expression is provided, box creates an anonymous in-memory workspace.
+
 **Tool scope formats:**
 
 ```mlld
@@ -674,6 +697,26 @@ box @sandbox [
   run cmd { npm test }
 ]
 ```
+
+**VFS-backed local mode:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "todo" }]
+
+box @workspace [
+  run cmd { cat @root/task.md }
+]
+```
+
+These forms create a VirtualFS-backed runtime for local execution:
+- `box @workspace [ ... ]`
+- `box { fs: @workspace } [ ... ]`
+- `box [ ... ]` (anonymous workspace)
+
+In VFS mode, defaults are applied unless overridden:
+- `tools: ["Bash", "Read", "Write"]`
+- `mcps: []`
+- `net: { allow: [] }`
 
 **Configuration fields:**
 
@@ -752,6 +795,29 @@ box @sandbox [
 ```
 
 The environment is active only within the block and released on exit.
+
+**Anonymous workspace block:**
+
+```mlld
+box [
+  file "task.md" = "inside box"
+  run cmd { cat @root/task.md }
+]
+```
+
+`box [ ... ]` creates an anonymous in-memory workspace for the block.
+
+**Named workspace block:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "from resolver" }]
+
+box @workspace [
+  run cmd { cat @root/task.md }
+]
+```
+
+Use `box @workspace` to bind an existing resolver-backed workspace as the active box filesystem.
 
 **Return values:**
 

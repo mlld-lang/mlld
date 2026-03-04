@@ -527,7 +527,7 @@ ExeForeachPattern "exe foreach pattern"
     }
 
 ExeBoxPattern "exe box pattern"
-  = "box" _ config:BoxConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock {
+  = "box" _ config:BoxConfigExpression withClause:WithClause? _ block:ExeStatementBlock {
       const values = {
         ...(config ? { config: [config] } : {}),
         ...(withClause ? { boxWithClause: withClause } : {}),
@@ -560,16 +560,51 @@ ExeBoxPattern "exe box pattern"
         meta
       };
     }
-  / "box" _ config:BoxConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
-      helpers.mlldError(
-        'box requires a config expression or with clause. Expected: box @config [ ... ] or box with { ... } [ ... ]',
-        '@config or with { ... }',
-        location()
-      );
+  / "box" _ withClause:WithClause _ block:ExeStatementBlock {
+      const values = {
+        boxWithClause: withClause,
+        block
+      };
+
+      const raw = {
+        boxWithClause: withClause
+      };
+
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true,
+        hasConfig: false,
+        boxWithClause: withClause
+      };
+
+      return {
+        subtype: 'exeBox',
+        source: 'box',
+        values,
+        raw,
+        meta
+      };
     }
-  / "box" _ config:BoxConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
+  / "box" _ block:ExeStatementBlock {
+      const values = { block };
+      const raw = {};
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true,
+        hasConfig: false
+      };
+
+      return {
+        subtype: 'exeBox',
+        source: 'box',
+        values,
+        raw,
+        meta
+      };
+    }
+  / "box" _ !("[" / BlockComments) {
       helpers.mlldError(
-        'box requires a block. Expected: box @config [ ... ] or box with { ... } [ ... ]',
+        'box requires a block. Expected: box [ ... ], box @config [ ... ], or box with { ... } [ ... ]',
         '[',
         location()
       );

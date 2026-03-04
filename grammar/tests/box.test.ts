@@ -6,6 +6,18 @@ function firstNode(result: Awaited<ReturnType<typeof parse>>): any {
 }
 
 describe('box grammar', () => {
+  it('parses anonymous box blocks in strict mode', async () => {
+    const source = 'box [ show "ok" ]';
+    const result = await parse(source, { mode: 'strict' });
+
+    expect(result.success).toBe(true);
+    const node = firstNode(result);
+    expect(node.kind).toBe('box');
+    expect(node.values.config).toBeUndefined();
+    expect(node.values.withClause).toBeUndefined();
+    expect(node.values.block?.type).toBe('ExeBlock');
+  });
+
   it('parses configless box with a with clause in strict mode', async () => {
     const source = 'box with { profile: "readonly" } [ show "ok" ]';
     const result = await parse(source, { mode: 'strict' });
@@ -30,12 +42,26 @@ describe('box grammar', () => {
     expect(node.values.block?.type).toBe('ExeBlock');
   });
 
-  it('errors when box has neither config nor with clause', async () => {
-    const source = '/box [\n  /show "x"\n]';
+  it('parses resolver shorthand box form', async () => {
+    const source = '/box @workspace [\n  show "x"\n]';
     const result = await parse(source, { mode: 'markdown' });
 
-    expect(result.success).toBe(false);
-    expect(result.error?.message).toContain('box requires a config expression or with clause');
+    expect(result.success).toBe(true);
+    const node = firstNode(result);
+    expect(node.kind).toBe('box');
+    expect(node.values.config).toBeDefined();
+    expect(node.values.block?.type).toBe('ExeBlock');
+  });
+
+  it('parses object config box form with fs field', async () => {
+    const source = '/box { fs: @workspace, tools: ["Bash"] } [\n  show "x"\n]';
+    const result = await parse(source, { mode: 'markdown' });
+
+    expect(result.success).toBe(true);
+    const node = firstNode(result);
+    expect(node.kind).toBe('box');
+    expect(node.values.config).toBeDefined();
+    expect(node.values.block?.type).toBe('ExeBlock');
   });
 
   it('parses box as exe RHS with configless with-clause form', async () => {
@@ -47,6 +73,19 @@ describe('box grammar', () => {
     expect(node.kind).toBe('exe');
     expect(node.subtype).toBe('exeBox');
     expect(node.values.boxWithClause).toBeDefined();
+    expect(node.values.block?.type).toBe('ExeBlock');
+  });
+
+  it('parses box as exe RHS with anonymous form', async () => {
+    const source = '/exe @fn() = box [ run cmd { echo ok } ]';
+    const result = await parse(source, { mode: 'markdown' });
+
+    expect(result.success).toBe(true);
+    const node = firstNode(result);
+    expect(node.kind).toBe('exe');
+    expect(node.subtype).toBe('exeBox');
+    expect(node.values.config).toBeUndefined();
+    expect(node.values.boxWithClause).toBeUndefined();
     expect(node.values.block?.type).toBe('ExeBlock');
   });
 
