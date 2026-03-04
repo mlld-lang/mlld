@@ -9,14 +9,13 @@
  *
  * Usage:
  *   const vfs = VirtualFS.empty();
- *   const shell = ShellSession.create(vfs);
+ *   const shell = await ShellSession.create(vfs);
  *   const result = await shell.exec('echo "hello" > /tmp/out.txt && cat /tmp/out.txt');
  *   // result.stdout === "hello\n"
  *   // vfs.changes() shows the created file
  */
 
-import { Bash } from 'just-bash';
-import type { BashOptions, ExecOptions, BashExecResult } from 'just-bash';
+import type { Bash, BashOptions, ExecOptions, BashExecResult } from 'just-bash';
 import type { VirtualFS } from './VirtualFS';
 import { VirtualFSAdapter } from './VirtualFSAdapter';
 
@@ -31,6 +30,23 @@ export interface ShellSessionOptions {
   customCommands?: BashOptions['customCommands'];
   /** Network configuration for curl */
   network?: BashOptions['network'];
+}
+
+type BashConstructor = new (options: BashOptions) => Bash;
+
+let bashConstructorPromise: Promise<BashConstructor> | undefined;
+
+async function getBashConstructor(): Promise<BashConstructor> {
+  if (!bashConstructorPromise) {
+    bashConstructorPromise = import('just-bash').then((module) => {
+      const constructor = (module as { Bash?: unknown }).Bash;
+      if (typeof constructor !== 'function') {
+        throw new Error('Failed to load just-bash Bash constructor.');
+      }
+      return constructor as BashConstructor;
+    });
+  }
+  return bashConstructorPromise;
 }
 
 export class ShellSession {
@@ -52,9 +68,10 @@ export class ShellSession {
    * The VirtualFS instance is shared — any files already in shadow state
    * are visible to bash commands, and any bash writes land in shadow state.
    */
-  static create(vfs: VirtualFS, options?: ShellSessionOptions): ShellSession {
+  static async create(vfs: VirtualFS, options?: ShellSessionOptions): Promise<ShellSession> {
     const adapter = new VirtualFSAdapter(vfs);
-    const bash = new Bash({
+    const BashConstructor = await getBashConstructor();
+    const bash = new BashConstructor({
       fs: adapter,
       cwd: options?.cwd ?? '/home/user',
       env: options?.env,

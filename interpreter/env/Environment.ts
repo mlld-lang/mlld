@@ -2059,8 +2059,59 @@ export class Environment
   }
 
   // --- Capabilities ---
+
+  private isIgnorableWorkspaceReadError(error: unknown): boolean {
+    const code = (error as { code?: string } | undefined)?.code;
+    return code === 'ENOENT' || code === 'EISDIR';
+  }
+
+  private buildWorkspaceReadCandidates(pathOrUrl: string): string[] {
+    const candidate = String(pathOrUrl ?? '').trim();
+    if (!candidate) {
+      return [];
+    }
+
+    if (candidate.startsWith('@base/') || candidate.startsWith('@root/')) {
+      const projectRoot = this.getProjectRoot();
+      return [path.resolve(projectRoot, candidate.slice(6))];
+    }
+
+    if (path.isAbsolute(candidate)) {
+      return [path.resolve(candidate)];
+    }
+
+    if (candidate.startsWith('@')) {
+      return [];
+    }
+
+    return [path.resolve(this.getFileDirectory(), candidate)];
+  }
+
+  private async readFromActiveWorkspace(pathOrUrl: string): Promise<string | undefined> {
+    const workspace = this.getActiveWorkspace();
+    if (!workspace || this.isURL(pathOrUrl)) {
+      return undefined;
+    }
+
+    for (const candidatePath of this.buildWorkspaceReadCandidates(pathOrUrl)) {
+      try {
+        return await workspace.fs.readFile(candidatePath);
+      } catch (error) {
+        if (this.isIgnorableWorkspaceReadError(error)) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return undefined;
+  }
   
   async readFile(pathOrUrl: string): Promise<string> {
+    const workspaceRead = await this.readFromActiveWorkspace(pathOrUrl);
+    if (workspaceRead !== undefined) {
+      return workspaceRead;
+    }
     return this.importResolver.readFile(pathOrUrl);
   }
   

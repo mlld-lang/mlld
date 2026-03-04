@@ -237,6 +237,57 @@ describe('file/files evaluation', () => {
     expect(workspace.shellSession).toBeDefined();
   });
 
+  it('reads resolver-backed workspace files via file reference shorthand', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+
+    const output = await interpret(
+      [
+        '/files <@ws/> = [{ "task.md": "resolver-read" }]',
+        '/show <@ws/task.md>'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext
+      }
+    );
+
+    expect(String(output).trim()).toBe('resolver-read');
+    expect(await fileSystem.exists('/project/task.md')).toBe(false);
+  });
+
+  it('serializes workspace internals with map-backed data in show output', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+
+    const output = await interpret(
+      [
+        '/files <@workspace/> = [{ "task.md": "workspace-json", desc: "task file" }]',
+        '/show @workspace'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext
+      }
+    );
+
+    const parsed = JSON.parse(String(output).trim()) as {
+      fs?: {
+        shadowFiles?: Record<string, string>;
+        deletedPaths?: unknown;
+        explicitDirectories?: unknown;
+      };
+      descriptions?: Record<string, string>;
+    };
+
+    expect(parsed.fs?.shadowFiles?.['/project/task.md']).toBe('workspace-json');
+    expect(parsed.descriptions?.['/project/task.md']).toBe('task file');
+    expect(Array.isArray(parsed.fs?.deletedPaths)).toBe(true);
+    expect(Array.isArray(parsed.fs?.explicitDirectories)).toBe(true);
+  });
+
   it('uses fs workspace config form and restores nested workspace stack', async () => {
     const fileSystem = await createFileSystem();
     const pathService = new PathService();

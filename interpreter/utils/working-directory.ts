@@ -5,8 +5,7 @@ import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldError, ErrorSeverity } from '@core/errors';
 import type { Environment } from '../env/Environment';
-import { extractVariableValue } from './variable-resolution';
-import { isWorkspaceValue, type WorkspaceValue } from '@core/types/workspace';
+import { resolveWorkspaceFromVariable } from './workspace-reference';
 
 export interface WorkingDirectoryOptions {
   sourceLocation?: SourceLocation;
@@ -93,30 +92,6 @@ function extractSingleVariableName(workingDir: ContentNodeArray | string | undef
     if (typeof node.name === 'string') {
       return node.name;
     }
-  }
-  return undefined;
-}
-
-async function resolveWorkspaceFromVariable(
-  variableName: string,
-  env: Environment
-): Promise<WorkspaceValue | undefined> {
-  const local = env.getVariable(variableName);
-  if (local) {
-    const value = await extractVariableValue(local, env);
-    if (isWorkspaceValue(value)) {
-      return value;
-    }
-    return undefined;
-  }
-
-  const resolverVariable = await env.getResolverVariable(variableName);
-  if (!resolverVariable) {
-    return undefined;
-  }
-  const resolverValue = await extractVariableValue(resolverVariable, env);
-  if (isWorkspaceValue(resolverValue)) {
-    return resolverValue;
   }
   return undefined;
 }

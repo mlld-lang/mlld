@@ -6,7 +6,7 @@ describe('ShellSession', () => {
   describe('basic execution', () => {
     it('runs echo and captures stdout', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       const result = await shell.exec('echo "hello world"');
       expect(result.stdout).toBe('hello world\n');
@@ -15,7 +15,7 @@ describe('ShellSession', () => {
 
     it('captures nonzero exit code', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       const result = await shell.exec('exit 42');
       expect(result.exitCode).toBe(42);
@@ -25,7 +25,7 @@ describe('ShellSession', () => {
   describe('filesystem integration', () => {
     it('writes files visible to VirtualFS', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       await shell.exec('echo "created by bash" > /tmp/output.txt');
 
@@ -45,7 +45,7 @@ describe('ShellSession', () => {
       await vfs.mkdir('/data', { recursive: true });
       await vfs.writeFile('/data/input.txt', 'pre-existing content');
 
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
       const result = await shell.exec('cat /data/input.txt');
       expect(result.stdout).toBe('pre-existing content');
     });
@@ -57,7 +57,7 @@ describe('ShellSession', () => {
       await vfs.writeFile('/project/config.json', '{"key": "value"}');
 
       // bash tool reads it
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
       const result = await shell.exec('cat /project/config.json | jq .key');
       expect(result.stdout.trim()).toBe('"value"');
 
@@ -73,7 +73,7 @@ describe('ShellSession', () => {
   describe('pipes and commands', () => {
     it('supports pipes between commands', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       await shell.exec(
         'echo -e "banana\\napple\\ncherry" > /tmp/fruits.txt'
@@ -84,7 +84,7 @@ describe('ShellSession', () => {
 
     it('supports grep', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       await shell.exec(
         'echo -e "hello world\\nfoo bar\\nhello again" > /tmp/lines.txt'
@@ -97,7 +97,7 @@ describe('ShellSession', () => {
 
     it('supports ls', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       await shell.exec('mkdir -p /project/src');
       await shell.exec('echo "a" > /project/src/main.ts');
@@ -114,14 +114,14 @@ describe('ShellSession', () => {
       const vfs = VirtualFS.empty();
       await vfs.mkdir('/workspace', { recursive: true });
 
-      const shell = ShellSession.create(vfs, { cwd: '/workspace' });
+      const shell = await ShellSession.create(vfs, { cwd: '/workspace' });
       const result = await shell.exec('pwd');
       expect(result.stdout.trim()).toBe('/workspace');
     });
 
     it('respects custom env vars', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs, {
+      const shell = await ShellSession.create(vfs, {
         env: { MY_VAR: 'custom_value' },
       });
 
@@ -131,7 +131,7 @@ describe('ShellSession', () => {
 
     it('getCwd and getEnv reflect shell state', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs, {
+      const shell = await ShellSession.create(vfs, {
         cwd: '/start',
         env: { FOO: 'bar' },
       });
@@ -145,7 +145,7 @@ describe('ShellSession', () => {
   describe('VirtualFS lifecycle integration', () => {
     it('export/apply round-trips bash changes', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       await shell.exec('mkdir -p /output');
       await shell.exec('echo "result" > /output/data.txt');
@@ -162,7 +162,7 @@ describe('ShellSession', () => {
 
     it('changes() reports bash-created files', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       await shell.exec('echo "new" > /new-file.txt');
 
@@ -178,7 +178,7 @@ describe('ShellSession', () => {
       await backing.mkdir('/project', { recursive: true });
 
       const vfs = VirtualFS.over(backing);
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       await shell.exec('echo "flushed" > /project/out.txt');
 
@@ -195,7 +195,7 @@ describe('ShellSession', () => {
 
     it('discard() reverts bash changes', async () => {
       const vfs = VirtualFS.empty();
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       await shell.exec('echo "temp" > /scratch.txt');
       expect(await vfs.exists('/scratch.txt')).toBe(true);
@@ -215,7 +215,7 @@ describe('ShellSession', () => {
       await backing.writeFile('/repo/README.md', '# My Project\n\nHello from backing.');
 
       const vfs = VirtualFS.over(backing);
-      const shell = ShellSession.create(vfs);
+      const shell = await ShellSession.create(vfs);
 
       const result = await shell.exec('cat /repo/README.md');
       expect(result.stdout).toContain('Hello from backing');

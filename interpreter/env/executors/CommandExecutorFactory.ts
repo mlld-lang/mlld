@@ -417,7 +417,7 @@ export class CommandExecutorFactory {
   private async getOrCreateShellSession(workspace: WorkspaceValue): Promise<ShellSession> {
     if (!workspace.shellSession) {
       const { ShellSession } = await import('@services/fs/ShellSession');
-      workspace.shellSession = ShellSession.create(workspace.fs);
+      workspace.shellSession = await ShellSession.create(workspace.fs);
     }
     return workspace.shellSession;
   }
