@@ -98,6 +98,8 @@ export async function executeCommandHandler(
   const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
   const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
   const envInputTaint = descriptorToInputTaint(envInputDescriptor);
+  const execDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
+  const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
   if (envInputTaint.length > 0) {
     const parsedCommand = parseCommand(command);
     const opLabels = getOperationLabels({
@@ -105,8 +107,6 @@ export async function executeCommandHandler(
       command: parsedCommand.command,
       subcommand: parsedCommand.subcommand
     });
-    const execDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
-    const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
     const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
     policyEnforcer.checkLabelFlow(
       {
@@ -119,6 +119,11 @@ export async function executeCommandHandler(
       { env, sourceLocation: policyLocation }
     );
   }
+
+  const executionContextWithLabels = {
+    ...(executionContext ?? {}),
+    exeLabels
+  } as CommandExecutionContext;
 
   let commandOutput: unknown;
   if (resolvedEnvConfig?.provider) {
@@ -134,9 +139,9 @@ export async function executeCommandHandler(
         ...envAuthSecrets,
         ...usingParts.secrets
       },
-      executionContext,
+      executionContext: executionContextWithLabels,
       sourceLocation: commandVar?.mx?.definedAt ?? null,
-      directiveType: executionContext?.directiveType ?? 'exec'
+      directiveType: executionContextWithLabels.directiveType ?? 'exec'
     });
     commandOutput = providerResult.stdout ?? '';
   } else {
@@ -155,7 +160,7 @@ export async function executeCommandHandler(
     commandOutput = await env.executeCommand(
       command,
       commandOptions as any,
-      executionContext
+      executionContextWithLabels
     );
   }
 

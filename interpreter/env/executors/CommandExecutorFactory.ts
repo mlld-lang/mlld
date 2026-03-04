@@ -14,9 +14,11 @@ import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import type { ShellSession } from '@services/fs/ShellSession';
 import type { WorkspaceValue } from '@core/types/workspace';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import { createWorkspaceMcpBridge, type WorkspaceBridgeToolName } from './workspace-mcp-bridge';
 
 export interface WorkspaceProvider {
   getActiveWorkspace(): WorkspaceValue | undefined;
+  isToolAllowed?(toolName: string, rawToolName?: string): boolean;
 }
 
 interface SecuritySnapshotLike {
@@ -105,6 +107,9 @@ export class CommandExecutorFactory {
   ): Promise<string> {
     const activeWorkspace = this.workspaceProvider.getActiveWorkspace();
     if (activeWorkspace) {
+      if (this.isWorkspaceLlmInvocation(context)) {
+        return this.executeWorkspaceLlmCommand(activeWorkspace, command, options, context);
+      }
       return this.executeWorkspaceCommand(activeWorkspace, command, options, context);
     }
 
@@ -212,6 +217,67 @@ export class CommandExecutorFactory {
 
     // Normal path: strict simple executor
     return this.shellExecutor.execute(command, options, context);
+  }
+
+  private isWorkspaceLlmInvocation(context?: CommandExecutionContext): boolean {
+    const labels = Array.isArray(context?.exeLabels) ? context!.exeLabels : [];
+    return labels.some(label => typeof label === 'string' && label.trim().toLowerCase() === 'llm');
+  }
+
+  private shouldUseWorkspaceMcpBridge(command: string): boolean {
+    if (!command || /--mcp-config(=|\s)/.test(command)) {
+      return false;
+    }
+    return /\b(claude|codex)\b/.test(command);
+  }
+
+  private async executeWorkspaceLlmCommand(
+    workspace: WorkspaceValue,
+    command: string,
+    options?: CommandExecutionOptions,
+    context?: CommandExecutionContext
+  ): Promise<string> {
+    let bridge:
+      | Awaited<ReturnType<typeof createWorkspaceMcpBridge>>
+      | undefined;
+    let beforeSnapshot: WorkspaceSnapshot | undefined;
+    let writesRecorded = false;
+
+    try {
+      beforeSnapshot = await this.captureWorkspaceSnapshot(workspace);
+
+      if (this.shouldUseWorkspaceMcpBridge(command)) {
+        bridge = await createWorkspaceMcpBridge({
+          workspace,
+          getShellSession: () => this.getOrCreateShellSession(workspace),
+          isToolAllowed: (toolName: WorkspaceBridgeToolName) =>
+            this.workspaceProvider.isToolAllowed?.(toolName, toolName) ?? true
+        });
+      }
+
+      const bridgedCommand = bridge ? bridge.injectCommand(command) : command;
+      const result = await this.shellExecutor.execute(bridgedCommand, options, context);
+
+      if (beforeSnapshot) {
+        await this.recordWorkspaceCommandWrites(workspace, beforeSnapshot, command);
+        writesRecorded = true;
+      }
+
+      return result;
+    } catch (error) {
+      if (beforeSnapshot && !writesRecorded) {
+        try {
+          await this.recordWorkspaceCommandWrites(workspace, beforeSnapshot, command);
+        } catch {
+          // Best-effort audit logging for workspace command writes.
+        }
+      }
+      throw error;
+    } finally {
+      if (bridge) {
+        await bridge.cleanup();
+      }
+    }
   }
 
   private async executeWorkspaceCommand(

@@ -368,7 +368,8 @@ async function handleCommandDefinition(
         ...executionContext,
         streamingEnabled,
         pipelineId,
-        workingDirectory
+        workingDirectory,
+        exeLabels
       },
       sourceLocation: directive.location ?? null,
       directiveType: 'run'
@@ -395,7 +396,8 @@ async function handleCommandDefinition(
     ...executionContext,
     streamingEnabled,
     pipelineId,
-    workingDirectory
+    workingDirectory,
+    exeLabels
   });
   return { value, outputDescriptors, callStack };
 }

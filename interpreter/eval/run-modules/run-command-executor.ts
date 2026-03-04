@@ -427,7 +427,8 @@ export async function executeRunCommand(
             streamingEnabled,
             pipelineId,
             suppressTerminal,
-            workingDirectory
+            workingDirectory,
+            exeLabels
           },
           sourceLocation: directive.location ?? null,
           directiveType: 'run'
@@ -459,7 +460,8 @@ export async function executeRunCommand(
           streamingEnabled,
           pipelineId,
           suppressTerminal: hasStreamFormat || suppressTerminal,
-          workingDirectory
+          workingDirectory,
+          exeLabels
         }),
         outputDescriptor
       };
