@@ -36,6 +36,37 @@ FileProjectionTarget "file/files target"
   = FileProjectionResolverTarget
   / FileProjectionPathTarget
 
+GitFilesOptionKey
+  = "auth"
+  / "branch"
+  / "path"
+  / "depth"
+
+GitFilesOptionValue
+  = Expression
+
+GitFilesOption
+  = key:GitFilesOptionKey _ ":" _ value:GitFilesOptionValue {
+      return { key, value, raw: text() };
+    }
+
+GitFilesSource "git files source"
+  = "git" __ url:Expression options:(_ opt:GitFilesOption { return opt; })* {
+      const optionNodes = {};
+      const optionRaw = {};
+      for (const option of options) {
+        optionNodes[option.key] = [option.value];
+        optionRaw[option.key] = option.raw;
+      }
+      return helpers.createNode('GitFilesSource', {
+        url: [url],
+        options: optionNodes,
+        raw: text(),
+        optionRaw,
+        location: location()
+      });
+    }
+
 SlashFile "file directive"
   = DirectiveContext FileKeyword _ target:FileProjectionTarget _ "=" _ content:Expression ending:StandardDirectiveEnding {
       const values = {
@@ -79,7 +110,7 @@ SlashFile "file directive"
     }
 
 SlashFiles "files directive"
-  = DirectiveContext FilesKeyword _ target:FileProjectionTarget _ "=" _ entries:Expression ending:StandardDirectiveEnding {
+  = DirectiveContext FilesKeyword _ target:FileProjectionTarget _ "=" _ entries:(GitFilesSource / Expression) ending:StandardDirectiveEnding {
       const values = {
         target,
         entries: [entries]

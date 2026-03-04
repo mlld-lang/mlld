@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import { execFile as execFileCallback } from 'node:child_process';
+import { promisify } from 'node:util';
 import { interpret } from '@interpreter/index';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import type { PathContext } from '@core/services/PathContextService';
+
+const execFile = promisify(execFileCallback);
 
 const pathContext: PathContext = {
   projectRoot: '/project',
@@ -16,6 +23,43 @@ async function createFileSystem(): Promise<MemoryFileSystem> {
   const fileSystem = new MemoryFileSystem();
   await fileSystem.mkdir('/project', { recursive: true });
   return fileSystem;
+}
+
+let cachedGitAvailable: boolean | null = null;
+
+async function gitAvailable(): Promise<boolean> {
+  if (cachedGitAvailable !== null) {
+    return cachedGitAvailable;
+  }
+  try {
+    await execFile('git', ['--version']);
+    cachedGitAvailable = true;
+  } catch {
+    cachedGitAvailable = false;
+  }
+  return cachedGitAvailable;
+}
+
+async function runGit(repoDir: string, args: string[]): Promise<void> {
+  await execFile('git', args, { cwd: repoDir });
+}
+
+async function currentGitBranch(repoDir: string): Promise<string> {
+  const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoDir });
+  return String(stdout).trim();
+}
+
+async function createGitFixture(
+  setup: (repoDir: string) => Promise<void>
+): Promise<string> {
+  const repoDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-git-fixture-'));
+  await runGit(repoDir, ['init']);
+  await runGit(repoDir, ['config', 'user.email', 'test@mlld.local']);
+  await runGit(repoDir, ['config', 'user.name', 'mlld-test']);
+  await setup(repoDir);
+  await runGit(repoDir, ['add', '.']);
+  await runGit(repoDir, ['commit', '-m', 'initial']);
+  return repoDir;
 }
 
 describe('file/files evaluation', () => {
@@ -207,5 +251,151 @@ describe('file/files evaluation', () => {
     );
 
     expect(String(output).trim()).toBe('outer\n\ninner\n\nouter');
+  });
+
+  it('hydrates workspace files from a local git repository', async () => {
+    if (!(await gitAvailable())) {
+      return;
+    }
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+    let capturedEnv: any;
+
+    const repoDir = await createGitFixture(async repo => {
+      await fs.mkdir(path.join(repo, 'src'), { recursive: true });
+      await fs.writeFile(path.join(repo, 'README.md'), 'root');
+      await fs.writeFile(path.join(repo, 'src', 'main.ts'), 'export const value = 1;');
+    });
+
+    await interpret(
+      `/files <@workspace/> = git "${repoDir}" path:"src/"`,
+      {
+        fileSystem,
+        pathService,
+        pathContext,
+        mode: 'structured',
+        captureEnvironment: env => {
+          capturedEnv = env;
+        }
+      }
+    );
+
+    const workspace = capturedEnv.getVariableValue('workspace') as {
+      fs: { readFile: (target: string) => Promise<string> };
+    };
+
+    expect(await workspace.fs.readFile('/project/main.ts')).toContain('value = 1');
+    await expect(workspace.fs.readFile('/project/README.md')).rejects.toThrow();
+  });
+
+  it('supports git branch selection for hydration', async () => {
+    if (!(await gitAvailable())) {
+      return;
+    }
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+    let capturedEnv: any;
+
+    const repoDir = await createGitFixture(async repo => {
+      await fs.writeFile(path.join(repo, 'branch.txt'), 'main');
+    });
+    const baseBranch = await currentGitBranch(repoDir);
+    await runGit(repoDir, ['checkout', '-b', 'feature']);
+    await fs.writeFile(path.join(repoDir, 'branch.txt'), 'feature');
+    await runGit(repoDir, ['add', 'branch.txt']);
+    await runGit(repoDir, ['commit', '-m', 'feature branch']);
+    await runGit(repoDir, ['checkout', baseBranch]);
+
+    await interpret(
+      `/files <@workspace/> = git "${repoDir}" branch:"feature"`,
+      {
+        fileSystem,
+        pathService,
+        pathContext,
+        mode: 'structured',
+        captureEnvironment: env => {
+          capturedEnv = env;
+        }
+      }
+    );
+
+    const workspace = capturedEnv.getVariableValue('workspace') as {
+      fs: { readFile: (target: string) => Promise<string> };
+    };
+    expect(await workspace.fs.readFile('/project/branch.txt')).toBe('feature');
+  });
+
+  it('skips binary files and symlinks during git hydration', async () => {
+    if (!(await gitAvailable())) {
+      return;
+    }
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let capturedEnv: any;
+
+    const repoDir = await createGitFixture(async repo => {
+      await fs.writeFile(path.join(repo, 'text.txt'), 'hello');
+      await fs.writeFile(path.join(repo, 'binary.bin'), Buffer.from([0x00, 0x01, 0x02]));
+      try {
+        await fs.symlink('text.txt', path.join(repo, 'text.link'));
+      } catch {
+        // Ignore if symlink creation is not supported in the current environment.
+      }
+    });
+
+    try {
+      await interpret(
+        `/files <@workspace/> = git "${repoDir}"`,
+        {
+          fileSystem,
+          pathService,
+          pathContext,
+          mode: 'structured',
+          captureEnvironment: env => {
+            capturedEnv = env;
+          }
+        }
+      );
+
+      const workspace = capturedEnv.getVariableValue('workspace') as {
+        fs: { readFile: (target: string) => Promise<string> };
+      };
+
+      expect(await workspace.fs.readFile('/project/text.txt')).toBe('hello');
+      await expect(workspace.fs.readFile('/project/binary.bin')).rejects.toThrow();
+      expect(
+        warnSpy.mock.calls.some(call => String(call[0]).includes('Skipping binary file'))
+      ).toBe(true);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('enforces box network policy and redacts credentials in git source errors', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+
+    let thrown: Error | null = null;
+    try {
+      await interpret(
+        [
+          '/box [',
+          '  files <@workspace/> = git "https://alice:secret-token@github.com/mlld-lang/private-repo"',
+          ']'
+        ].join('\n'),
+        {
+          fileSystem,
+          pathService,
+          pathContext
+        }
+      );
+    } catch (error) {
+      thrown = error as Error;
+    }
+
+    expect(thrown).toBeTruthy();
+    expect(thrown?.message ?? '').toMatch(/Network access denied/);
+    expect(thrown?.message ?? '').not.toContain('secret-token');
   });
 });

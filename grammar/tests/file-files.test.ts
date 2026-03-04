@@ -47,4 +47,20 @@ box with { profile: "readonly" } [
     expect(kinds).toContain('files');
     expect(kinds).toContain('file');
   });
+
+  it('parses git source entries with option shorthands', async () => {
+    const source = 'files <@workspace/src/> = git "https://github.com/user/repo" auth:@token branch:"main" path:"src/" depth:5';
+    const result = await parse(source, { mode: 'strict' });
+
+    expect(result.success).toBe(true);
+    const node = firstNode(result);
+    expect(node.kind).toBe('files');
+    const entries = node.values.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.type).toBe('GitFilesSource');
+    expect(entries[0]?.options?.auth?.[0]?.type).toBe('VariableReference');
+    expect(entries[0]?.options?.branch?.[0]?.type).toBe('Literal');
+    expect(entries[0]?.options?.path?.[0]?.type).toBe('Literal');
+    expect(entries[0]?.options?.depth?.[0]?.type).toBe('Literal');
+  });
 });

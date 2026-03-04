@@ -19,6 +19,20 @@ export type FileProjectionTarget =
   | FileProjectionPathTarget
   | FileProjectionResolverTarget;
 
+export interface GitFilesSourceNode extends BaseMlldNode {
+  type: 'GitFilesSource';
+  url: BaseMlldNode[];
+  options?: {
+    auth?: BaseMlldNode[];
+    branch?: BaseMlldNode[];
+    path?: BaseMlldNode[];
+    depth?: BaseMlldNode[];
+    [key: string]: BaseMlldNode[] | undefined;
+  };
+  raw?: string;
+  optionRaw?: Record<string, string>;
+}
+
 export interface FileDirectiveNode extends TypedDirectiveNode<'file', 'file'> {
   values: {
     target: FileProjectionTarget;
@@ -59,4 +73,8 @@ export function isFileDirective(node: BaseMlldNode): node is FileDirectiveNode {
 
 export function isFilesDirective(node: BaseMlldNode): node is FilesDirectiveNode {
   return node.type === 'Directive' && (node as any).kind === 'files';
+}
+
+export function isGitFilesSourceNode(node: unknown): node is GitFilesSourceNode {
+  return Boolean(node) && typeof node === 'object' && (node as { type?: string }).type === 'GitFilesSource';
 }

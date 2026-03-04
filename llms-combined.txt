@@ -5798,6 +5798,30 @@ box @workspace [
 
 Use `box @workspace` to bind an existing resolver-backed workspace as the active box filesystem.
 
+**Git hydration with `files = git`:**
+
+```mlld
+files <@workspace/> = git "https://github.com/mlld-lang/mlld" branch:"main" path:"docs/" depth:1
+
+box @workspace with { tools: ["Read", "Bash"], net: { allow: ["github.com"] } } [
+  run cmd { ls @root }
+]
+```
+
+Use `git` as a `files` source to clone text files into workspace VFS.
+
+Supported git options:
+- `auth:` token or keychain ref (for private repos)
+- `branch:` branch/tag/commit
+- `path:` subdirectory within the repo
+- `depth:` shallow clone depth (default `1`)
+
+Hydration behavior:
+- Text files are imported into workspace VFS
+- Binary files and symlinks are skipped with warnings
+- Imported files are tainted with `src:git` provenance metadata
+- `box.net` allow rules are enforced for remote git hosts
+
 **Return values:**
 
 ```mlld

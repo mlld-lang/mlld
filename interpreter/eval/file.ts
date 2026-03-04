@@ -1,10 +1,17 @@
 import path from 'node:path';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import { execFile as execFileCallback } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { BaseMlldNode } from '@core/types';
-import type { FileDirectiveNode, FilesDirectiveNode } from '@core/types/file';
+import type { SecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor } from '@core/types/security';
+import type { FileDirectiveNode, FilesDirectiveNode, GitFilesSourceNode } from '@core/types/file';
 import type { WorkspaceValue } from '@core/types/workspace';
 import { createObjectVariable } from '@core/types/variable';
 import { isWorkspaceValue } from '@core/types/workspace';
 import { MlldDirectiveError } from '@core/errors';
+import { getKeychainProvider } from '@core/resolvers/builtin/KeychainResolver';
 import { VirtualFS } from '@services/fs/VirtualFS';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
@@ -13,6 +20,8 @@ import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { asData, isStructuredValue } from '../utils/structured-value';
 import { materializeDisplayValue } from '../utils/display-materialization';
 import { executeWrite } from './write-executor';
+
+const execFile = promisify(execFileCallback);
 
 const WORKSPACE_VARIABLE_SOURCE = {
   directive: 'var',
@@ -34,6 +43,20 @@ interface NormalizedFileEntry {
   name: string;
   content: string;
   description?: string;
+}
+
+interface GitHydrationSource {
+  url: string;
+  auth?: string;
+  branch?: string;
+  path?: string;
+  depth: number;
+  sanitizedSource: string;
+}
+
+interface GitHydratedFile {
+  relativePath: string;
+  content: string;
 }
 
 function normalizePathSeparators(value: string): string {
@@ -329,6 +352,449 @@ async function resolveFilesEntries(
   return entries;
 }
 
+function isGitFilesSourceNode(node: BaseMlldNode | undefined): node is GitFilesSourceNode {
+  return Boolean(node) && node.type === 'GitFilesSource';
+}
+
+function extractRemoteHost(remoteUrl: string): string | undefined {
+  const trimmed = remoteUrl.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+      const parsed = new URL(trimmed);
+      return parsed.hostname || undefined;
+    }
+  } catch {
+    // fall through to SSH-like syntax checks.
+  }
+
+  const sshMatch = trimmed.match(/^[^@]+@([^:]+):/);
+  if (sshMatch?.[1]) {
+    return sshMatch[1];
+  }
+
+  if (trimmed.startsWith('git@')) {
+    const host = trimmed.slice(4).split(':')[0];
+    return host || undefined;
+  }
+
+  return undefined;
+}
+
+function sanitizeRemoteUrl(remoteUrl: string): string {
+  const trimmed = remoteUrl.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString();
+  } catch {
+    // Remove inline credentials for scp-like forms if present.
+    return trimmed.replace(/\/\/[^/@]+@/, '//');
+  }
+}
+
+function matchesHostPattern(host: string, pattern: string): boolean {
+  const normalizedHost = host.trim().toLowerCase();
+  const normalizedPattern = pattern.trim().toLowerCase();
+  if (!normalizedPattern) {
+    return false;
+  }
+  if (normalizedPattern === '*') {
+    return true;
+  }
+
+  const withoutScheme = normalizedPattern.replace(/^[a-z]+:\/\//, '');
+  const slashIndex = withoutScheme.indexOf('/');
+  const hostPattern = slashIndex >= 0 ? withoutScheme.slice(0, slashIndex) : withoutScheme;
+  if (!hostPattern) {
+    return false;
+  }
+
+  if (hostPattern.startsWith('*.')) {
+    const suffix = hostPattern.slice(2);
+    return normalizedHost === suffix || normalizedHost.endsWith(`.${suffix}`);
+  }
+
+  return normalizedHost === hostPattern || normalizedHost.endsWith(`.${hostPattern}`);
+}
+
+function enforceGitNetworkPolicy(
+  env: Environment,
+  remoteUrl: string,
+  location: unknown
+): void {
+  const host = extractRemoteHost(remoteUrl);
+  if (!host) {
+    // Local path clones are filesystem operations and do not require network.
+    return;
+  }
+
+  const scopedConfig = env.getScopedEnvironmentConfig();
+  const netConfig = (scopedConfig as Record<string, unknown> | undefined)?.net;
+  if (netConfig === undefined) {
+    return;
+  }
+
+  if (typeof netConfig === 'string') {
+    if (netConfig.trim().toLowerCase() === 'none') {
+      throw new MlldDirectiveError(
+        `Network access denied by box.net policy for git source '${sanitizeRemoteUrl(remoteUrl)}'.`,
+        'files',
+        { location, context: { host } }
+      );
+    }
+    return;
+  }
+
+  if (!netConfig || typeof netConfig !== 'object') {
+    return;
+  }
+
+  const allowRaw = (netConfig as Record<string, unknown>).allow;
+  if (!Array.isArray(allowRaw)) {
+    return;
+  }
+  const allow = allowRaw.map(value => String(value ?? '').trim()).filter(Boolean);
+  if (allow.length === 0) {
+    throw new MlldDirectiveError(
+      `Network access denied by box.net.allow for git source '${sanitizeRemoteUrl(remoteUrl)}'.`,
+      'files',
+      { location, context: { host } }
+    );
+  }
+
+  const allowed = allow.some(pattern => matchesHostPattern(host, pattern));
+  if (!allowed) {
+    throw new MlldDirectiveError(
+      `Host '${host}' is not allowed by box.net.allow for git hydration.`,
+      'files',
+      { location, context: { host, allow } }
+    );
+  }
+}
+
+async function resolveOptionString(
+  optionNodes: BaseMlldNode[] | undefined,
+  env: Environment,
+  context: EvaluationContext | undefined,
+  key: string,
+  location: unknown
+): Promise<string | undefined> {
+  if (!optionNodes || optionNodes.length === 0) {
+    return undefined;
+  }
+  const resolved = await resolveExpressionValue(optionNodes, env, context);
+  if (resolved === null || resolved === undefined) {
+    return undefined;
+  }
+  if (typeof resolved !== 'string') {
+    throw new MlldDirectiveError(`git ${key} option must resolve to a string.`, 'files', {
+      location,
+      context: { key, value: resolved }
+    });
+  }
+  const trimmed = resolved.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+async function resolveOptionNumber(
+  optionNodes: BaseMlldNode[] | undefined,
+  env: Environment,
+  context: EvaluationContext | undefined,
+  key: string,
+  location: unknown
+): Promise<number | undefined> {
+  if (!optionNodes || optionNodes.length === 0) {
+    return undefined;
+  }
+  const resolved = await resolveExpressionValue(optionNodes, env, context);
+  let numeric: number;
+  if (typeof resolved === 'number') {
+    numeric = resolved;
+  } else if (typeof resolved === 'string' && resolved.trim().length > 0) {
+    numeric = Number.parseInt(resolved.trim(), 10);
+  } else {
+    throw new MlldDirectiveError(`git ${key} option must resolve to a positive integer.`, 'files', {
+      location,
+      context: { key, value: resolved }
+    });
+  }
+
+  if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric <= 0) {
+    throw new MlldDirectiveError(`git ${key} option must resolve to a positive integer.`, 'files', {
+      location,
+      context: { key, value: resolved }
+    });
+  }
+  return numeric;
+}
+
+function resolveKeychainRef(ref: string): { service: string; account: string } | null {
+  const trimmed = ref.trim();
+  if (!trimmed.startsWith('keychain:')) {
+    return null;
+  }
+  const payload = trimmed.slice('keychain:'.length);
+  const separator = payload.indexOf('/');
+  if (separator <= 0 || separator >= payload.length - 1) {
+    return null;
+  }
+  return {
+    service: payload.slice(0, separator),
+    account: payload.slice(separator + 1)
+  };
+}
+
+async function resolveExplicitGitAuthToken(authValue: string | undefined): Promise<string | undefined> {
+  if (!authValue) {
+    return undefined;
+  }
+  const keychainRef = resolveKeychainRef(authValue);
+  if (!keychainRef) {
+    return authValue;
+  }
+
+  const provider = getKeychainProvider();
+  const keychainValue = await provider.get(keychainRef.service, keychainRef.account);
+  if (!keychainValue) {
+    throw new Error(`No keychain value found for ${keychainRef.service}/${keychainRef.account}`);
+  }
+  return keychainValue;
+}
+
+async function resolveGitAuthToken(
+  env: Environment,
+  remoteUrl: string,
+  explicitAuth: string | undefined
+): Promise<string | undefined> {
+  if (explicitAuth) {
+    return resolveExplicitGitAuthToken(explicitAuth);
+  }
+
+  const host = extractRemoteHost(remoteUrl);
+  if (!host || !host.toLowerCase().endsWith('github.com')) {
+    return undefined;
+  }
+
+  try {
+    const provider = getKeychainProvider();
+    const githubToken = await provider.get('mlld-cli', 'github-token');
+    return githubToken ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveGitHydrationSource(
+  gitNode: GitFilesSourceNode,
+  env: Environment,
+  context: EvaluationContext | undefined,
+  location: unknown
+): Promise<GitHydrationSource> {
+  const url = await resolveOptionString(gitNode.url, env, context, 'url', location);
+  if (!url) {
+    throw new MlldDirectiveError('git source requires a repository URL.', 'files', {
+      location
+    });
+  }
+
+  const options = gitNode.options ?? {};
+  const branch = await resolveOptionString(options.branch, env, context, 'branch', location);
+  const authOption = await resolveOptionString(options.auth, env, context, 'auth', location);
+  const pathOption = await resolveOptionString(options.path, env, context, 'path', location);
+  const depth = (await resolveOptionNumber(options.depth, env, context, 'depth', location)) ?? 1;
+
+  const normalizedPath = pathOption
+    ? normalizeRelativePath(pathOption, 'files', { allowEmpty: true, location })
+    : undefined;
+
+  enforceGitNetworkPolicy(env, url, location);
+  const auth = await resolveGitAuthToken(env, url, authOption);
+
+  return {
+    url,
+    auth,
+    branch,
+    path: normalizedPath,
+    depth,
+    sanitizedSource: sanitizeRemoteUrl(url)
+  };
+}
+
+async function runGitCommand(
+  args: string[],
+  envVars?: Record<string, string>
+): Promise<void> {
+  await execFile('git', args, {
+    env: envVars ? { ...process.env, ...envVars } : process.env
+  });
+}
+
+async function cloneGitRepository(
+  source: GitHydrationSource,
+  cloneRoot: string
+): Promise<string> {
+  const cloneArgs = ['clone', '--depth', String(source.depth)];
+  if (source.branch) {
+    cloneArgs.push('--branch', source.branch, '--single-branch');
+  }
+
+  const isHttpRemote = /^https?:\/\//i.test(source.url);
+  if (source.auth && isHttpRemote) {
+    cloneArgs.unshift('-c', `http.extraHeader=Authorization: Bearer ${source.auth}`);
+  }
+  cloneArgs.push(source.url, cloneRoot);
+
+  await runGitCommand(cloneArgs);
+  return cloneRoot;
+}
+
+async function collectGitFiles(rootDir: string): Promise<GitHydratedFile[]> {
+  const files: GitHydratedFile[] = [];
+
+  async function walk(currentDir: string): Promise<void> {
+    const entries = await fs.readdir(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const absolutePath = path.join(currentDir, entry.name);
+      const relativePath = normalizePathSeparators(path.relative(rootDir, absolutePath));
+
+      if (entry.isSymbolicLink()) {
+        console.warn(`[files git] Skipping symlink: ${relativePath}`);
+        continue;
+      }
+
+      if (entry.isDirectory()) {
+        await walk(absolutePath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const data = await fs.readFile(absolutePath);
+      if (data.includes(0)) {
+        console.warn(`[files git] Skipping binary file: ${relativePath}`);
+        continue;
+      }
+
+      files.push({
+        relativePath,
+        content: data.toString('utf8')
+      });
+    }
+  }
+
+  await walk(rootDir);
+  return files;
+}
+
+function buildGitWriteDescriptor(sanitizedSource: string): SecurityDescriptor {
+  const sourceLabel = `src:git:${sanitizedSource}`;
+  return makeSecurityDescriptor({
+    taint: ['src:git'],
+    labels: ['src:git'],
+    sources: [sourceLabel]
+  });
+}
+
+async function hydrateFilesFromGitSource(
+  gitNode: GitFilesSourceNode,
+  concreteTarget: {
+    workspace?: WorkspaceValue;
+    basePath: string;
+    useWorkspacePaths: boolean;
+  },
+  env: Environment,
+  context: EvaluationContext | undefined,
+  location: unknown
+): Promise<void> {
+  const source = await resolveGitHydrationSource(gitNode, env, context, location);
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-git-hydrate-'));
+  const descriptor = buildGitWriteDescriptor(source.sanitizedSource);
+
+  try {
+    await cloneGitRepository(source, tempRoot);
+
+    const contentRoot = source.path ? path.join(tempRoot, source.path) : tempRoot;
+    const contentRootExists = await fs.stat(contentRoot).then(stat => stat.isDirectory()).catch(() => false);
+    if (!contentRootExists) {
+      throw new MlldDirectiveError(
+        `git path '${source.path}' was not found in repository.`,
+        'files',
+        { location, context: { source: source.sanitizedSource, path: source.path } }
+      );
+    }
+
+    const hydratedFiles = await collectGitFiles(contentRoot);
+    const workspace = concreteTarget.workspace;
+    const basePath = concreteTarget.basePath;
+
+    for (const hydratedFile of hydratedFiles) {
+      const normalizedName = normalizeRelativePath(hydratedFile.relativePath, 'files', {
+        location
+      });
+      const combinedRelativePath = normalizeRelativePath(
+        path.posix.join(basePath, normalizedName),
+        'files',
+        { location }
+      );
+
+      if (concreteTarget.useWorkspacePaths && workspace) {
+        const targetPath = workspaceFilePath(combinedRelativePath, env);
+        markProjectedWorkspacePath(workspace, targetPath, 'files', location);
+        await executeWrite({
+          env,
+          targetPath,
+          content: hydratedFile.content,
+          descriptor,
+          fileSystem: workspace.fs,
+          sourceLocation: location as any,
+          metadata: {
+            directive: 'files',
+            source: 'git',
+            remote: source.sanitizedSource
+          }
+        });
+        continue;
+      }
+
+      const absoluteTargetPath = resolveHostWritePath(combinedRelativePath, env);
+      await executeWrite({
+        env,
+        targetPath: absoluteTargetPath,
+        content: hydratedFile.content,
+        descriptor,
+        sourceLocation: location as any,
+        metadata: {
+          directive: 'files',
+          source: 'git',
+          remote: source.sanitizedSource
+        }
+      });
+    }
+  } catch (error) {
+    if (error instanceof MlldDirectiveError) {
+      throw error;
+    }
+    const details = error instanceof Error ? error.message : String(error);
+    throw new MlldDirectiveError(
+      `Failed to hydrate files from git source '${source.sanitizedSource}': ${details}`,
+      'files',
+      { location }
+    );
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 async function resolveConcreteTarget(
   target: ParsedProjectionTarget,
   env: Environment,
@@ -440,11 +906,23 @@ export async function evaluateFiles(
   const entriesNodes = Array.isArray(directive.values?.entries)
     ? (directive.values.entries as BaseMlldNode[])
     : [];
-  const entries = await resolveFilesEntries(entriesNodes, env, context, directive.location);
-
   const concreteTarget = await resolveConcreteTarget(target, env, 'files', directive.location, {
     allowEmptyPath: true
   });
+
+  const maybeGitSource = entriesNodes.length === 1 ? entriesNodes[0] : undefined;
+  if (isGitFilesSourceNode(maybeGitSource)) {
+    await hydrateFilesFromGitSource(
+      maybeGitSource,
+      concreteTarget,
+      env,
+      context,
+      directive.location
+    );
+    return { value: '', env };
+  }
+
+  const entries = await resolveFilesEntries(entriesNodes, env, context, directive.location);
   const basePath = concreteTarget.basePath;
   const workspace = concreteTarget.workspace;
 
