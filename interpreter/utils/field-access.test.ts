@@ -376,4 +376,33 @@ describe('workspace metadata accessors', () => {
     expect(diff).toContain('+TWO');
     expect(diff).toContain('+three');
   });
+
+  it('filters project-root ancestor directories from workspace mx.edits output', async () => {
+    const backing = new MemoryFileSystem();
+    const vfs = VirtualFS.empty();
+    await vfs.writeFile('/repo/project/task.md', 'draft\n');
+
+    const workspace = {
+      type: 'workspace' as const,
+      fs: vfs,
+      descriptions: new Map<string, string>()
+    };
+
+    const env = new Environment(backing, new PathService(), '/repo/project');
+    const workspaceVar = createObjectVariable('workspace', workspace as Record<string, unknown>, true, source);
+    env.setVariable('workspace', workspaceVar);
+
+    const edits = await accessFields(
+      workspaceVar,
+      [
+        { type: 'field', value: 'mx' } as const,
+        { type: 'field', value: 'edits' } as const
+      ],
+      { preserveContext: false, env }
+    );
+
+    expect(edits).toEqual([
+      { path: '/repo/project/task.md', type: 'created', entity: 'file' }
+    ]);
+  });
 });

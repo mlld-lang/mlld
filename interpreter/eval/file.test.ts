@@ -209,6 +209,28 @@ describe('file/files evaluation', () => {
     expect(await fileSystem.exists('/project/task.md')).toBe(false);
   });
 
+  it('resolves relative shell paths against project-root workspace cwd', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+
+    const output = await interpret(
+      [
+        '/var @out = box [',
+        '  file "hello.txt" = "relative-shell-read"',
+        '  => run cmd { cat hello.txt }',
+        ']',
+        '/show @out'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext
+      }
+    );
+
+    expect(String(output).trim()).toBe('relative-shell-read');
+  });
+
   it('uses resolver shorthand workspaces in box blocks', async () => {
     const fileSystem = await createFileSystem();
     const pathService = new PathService();
@@ -235,6 +257,31 @@ describe('file/files evaluation', () => {
     expect(String(output).trim()).toBe('resolver-box');
     const workspace = capturedEnv.getVariableValue('workspace') as { shellSession?: unknown };
     expect(workspace.shellSession).toBeDefined();
+  });
+
+  it('parses and executes nested box blocks', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+
+    const output = await interpret(
+      [
+        '/var @out = box [',
+        '  let @inner = box [',
+        '    file "inner.txt" = "nested-box"',
+        '    => run cmd { cat inner.txt }',
+        '  ]',
+        '  => @inner',
+        ']',
+        '/show @out'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext
+      }
+    );
+
+    expect(String(output).trim()).toBe('nested-box');
   });
 
   it('reads resolver-backed workspace files via file reference shorthand', async () => {

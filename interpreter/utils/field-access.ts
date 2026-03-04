@@ -6,6 +6,7 @@ import { FieldAccessNode } from '@core/types/primitives';
 import { FieldAccessError } from '@core/errors';
 import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
 import type { Variable } from '@core/types/variable/VariableTypes';
+import path from 'node:path';
 import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
@@ -235,6 +236,30 @@ function deriveWorkspaceMxContext(mx: unknown, data: unknown): WorkspaceMxContex
     ...(workspace ? { workspace } : {}),
     ...(path ? { path } : {})
   };
+}
+
+function normalizeWorkspaceChangesForDisplay(
+  changes: Array<{ path: string; type: string; entity: string }>,
+  env?: Environment
+): Array<{ path: string; type: string; entity: string }> {
+  const projectRoot = env?.getProjectRoot?.();
+  if (!projectRoot) {
+    return changes;
+  }
+  const normalizedRoot = path.posix.normalize(String(projectRoot).replace(/\\/g, '/'));
+  if (!normalizedRoot || normalizedRoot === '/') {
+    return changes;
+  }
+
+  return changes.filter(change => {
+    if (change.type !== 'created' || change.entity !== 'directory') {
+      return true;
+    }
+    if (change.path === normalizedRoot) {
+      return false;
+    }
+    return !normalizedRoot.startsWith(`${change.path}/`);
+  });
 }
 
 function getWorkspaceMxContext(value: unknown): WorkspaceMxContext | undefined {
@@ -594,11 +619,13 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
       if (isWorkspaceValue(rawValue)) {
         if (name === 'edits') {
-          accessedValue = await rawValue.fs.changes();
+          const changes = await rawValue.fs.changes();
+          accessedValue = normalizeWorkspaceChangesForDisplay(changes, options?.env);
           break;
         }
         if (name === 'diff') {
-          accessedValue = await rawValue.fs.diff();
+          const changes = await rawValue.fs.diff();
+          accessedValue = normalizeWorkspaceChangesForDisplay(changes, options?.env);
           break;
         }
       }
@@ -606,12 +633,14 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       const workspaceMxContext = getWorkspaceMxContext(rawValue);
       if (workspaceMxContext) {
         if (name === 'edits' && workspaceMxContext.workspace) {
-          accessedValue = await workspaceMxContext.workspace.fs.changes();
+          const changes = await workspaceMxContext.workspace.fs.changes();
+          accessedValue = normalizeWorkspaceChangesForDisplay(changes, options?.env);
           break;
         }
         if (name === 'diff') {
           if (workspaceMxContext.workspace) {
-            accessedValue = await workspaceMxContext.workspace.fs.diff();
+            const changes = await workspaceMxContext.workspace.fs.diff();
+            accessedValue = normalizeWorkspaceChangesForDisplay(changes, options?.env);
             break;
           }
           if (workspaceMxContext.path && options?.env) {

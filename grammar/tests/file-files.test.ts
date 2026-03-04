@@ -48,6 +48,24 @@ box with { profile: "readonly" } [
     expect(kinds).toContain('file');
   });
 
+  it('parses nested box directives inside box blocks', async () => {
+    const source = `
+box [
+  box [
+    show "nested"
+  ]
+]
+`.trim();
+    const result = await parse(source, { mode: 'strict' });
+
+    expect(result.success).toBe(true);
+    const node = firstNode(result);
+    expect(node.kind).toBe('box');
+    const statements = node.values.block?.values?.statements ?? [];
+    expect(statements).toHaveLength(1);
+    expect(statements[0]?.kind).toBe('box');
+  });
+
   it('parses git source entries with option shorthands', async () => {
     const source = 'files <@workspace/src/> = git "https://github.com/user/repo" auth:@token branch:"main" path:"src/" depth:5';
     const result = await parse(source, { mode: 'strict' });

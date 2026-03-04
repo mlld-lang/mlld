@@ -414,10 +414,23 @@ export class CommandExecutorFactory {
     return `command:${firstToken}`;
   }
 
+  private resolveWorkspaceShellCwd(): string {
+    const provider = this.workspaceProvider as Partial<AuditCapableWorkspaceProvider>;
+    if (typeof provider.getProjectRoot === 'function') {
+      const root = provider.getProjectRoot.call(provider);
+      if (typeof root === 'string' && root.length > 0) {
+        return root;
+      }
+    }
+    return this.defaultWorkingDirectory;
+  }
+
   private async getOrCreateShellSession(workspace: WorkspaceValue): Promise<ShellSession> {
     if (!workspace.shellSession) {
       const { ShellSession } = await import('@services/fs/ShellSession');
-      workspace.shellSession = await ShellSession.create(workspace.fs);
+      workspace.shellSession = await ShellSession.create(workspace.fs, {
+        cwd: this.resolveWorkspaceShellCwd()
+      });
     }
     return workspace.shellSession;
   }

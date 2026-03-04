@@ -762,6 +762,7 @@ ExeBlockStatement
   / AugmentedAssignment
   / WhenExpressionAny
   / ForNestedDirective
+  / SlashBox
   / SlashFile
   / SlashFiles
   / SlashIf
