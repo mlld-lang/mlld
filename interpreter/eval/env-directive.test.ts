@@ -213,7 +213,7 @@ describe('box directive', () => {
     expect(scopedEnv?.getScopedEnvironmentConfig()?.mcps).toEqual([]);
   });
 
-  it('does not apply VFS defaults for object-config boxes without workspace fs', async () => {
+  it('does not apply VFS defaults for object-config boxes without explicit workspace fs', async () => {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();
     const env = new Environment(fileSystem, pathService, process.cwd());

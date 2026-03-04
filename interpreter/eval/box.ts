@@ -643,13 +643,15 @@ export async function evaluateBox(
       : config;
 
   let workspace = resolvedConfig.workspace;
-  if (!workspace && !resolvedConfig.hasConfigExpression) {
+  if (!workspace) {
     workspace = createScopedWorkspace();
   }
 
   const usingVfsWorkspace = Boolean(workspace);
-  const usingDefaultVfsTools = usingVfsWorkspace && resolvedTools === undefined;
-  if (usingVfsWorkspace) {
+  const shouldApplyVfsDefaults =
+    usingVfsWorkspace && (!resolvedConfig.hasConfigExpression || Boolean(resolvedConfig.workspace));
+  const usingDefaultVfsTools = shouldApplyVfsDefaults && resolvedTools === undefined;
+  if (shouldApplyVfsDefaults) {
     if (resolvedTools === undefined) {
       resolvedTools = Array.from(DEFAULT_VFS_TOOLS);
       mergedConfig = {

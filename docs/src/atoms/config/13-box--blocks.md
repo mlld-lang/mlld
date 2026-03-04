@@ -32,7 +32,7 @@ box [
 ]
 ```
 
-`box [ ... ]` creates an anonymous in-memory workspace for the block. Commands run via ShellSession with cwd at the project root.
+All box blocks create an in-memory workspace for the block. `box [ ... ]`, `box @config [ ... ]`, and `box @workspace [ ... ]` all support `file`/`files` directives and shell commands via ShellSession with cwd at the project root.
 
 **Named workspace block:**
 

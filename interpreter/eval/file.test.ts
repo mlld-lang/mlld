@@ -209,6 +209,31 @@ describe('file/files evaluation', () => {
     expect(await fileSystem.exists('/project/task.md')).toBe(false);
   });
 
+  it('supports file/files + shell visibility in config-form boxes without explicit fs', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+
+    const output = await interpret(
+      [
+        '/var @cfg = { tools: ["Bash", "Read"] }',
+        '/var @out = box @cfg [',
+        '  file "config-box-vfs-x.txt" = "config-box-vfs"',
+        '  let @r = run cmd { cat config-box-vfs-x.txt }',
+        '  => @r',
+        ']',
+        '/show @out'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        pathContext
+      }
+    );
+
+    expect(String(output).trim()).toBe('config-box-vfs');
+    expect(await fileSystem.exists('/project/config-box-vfs-x.txt')).toBe(false);
+  });
+
   it('resolves relative shell paths against project-root workspace cwd', async () => {
     const fileSystem = await createFileSystem();
     const pathService = new PathService();

@@ -96,7 +96,7 @@ box [
 ]
 ```
 
-When no config expression is provided, box creates an anonymous in-memory workspace.
+All box forms provide an in-memory workspace. `box { tools: ["Read", "Bash"] } [ ... ]` restricts tools while still using workspace VFS. Use `box { fs: @workspace } [ ... ]` to bind an existing resolver-backed filesystem instead.
 
 **Tool scope formats:**
 
