@@ -284,6 +284,39 @@ describe('file/files evaluation', () => {
     expect(String(output).trim()).toBe('nested-box');
   });
 
+  it('does not attempt host filesystem writes for nested workspace file paths in box blocks', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const output = await interpret(
+        [
+          '/var @out = box [',
+          "  file \"src/main.js\" = \"console.log('main')\"",
+          '  => run cmd { cat src/main.js }',
+          ']',
+          '/show @out'
+        ].join('\n'),
+        {
+          fileSystem,
+          pathService,
+          pathContext
+        }
+      );
+
+      expect(String(output).trim()).toBe("console.log('main')");
+      expect(await fileSystem.exists('/project/src/main.js')).toBe(false);
+
+      const failedWriteLogs = consoleErrorSpy.mock.calls.filter(call =>
+        String(call[0]).includes('Failed to write to file /project/src/main.js')
+      );
+      expect(failedWriteLogs).toHaveLength(0);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it('reads resolver-backed workspace files via file reference shorthand', async () => {
     const fileSystem = await createFileSystem();
     const pathService = new PathService();

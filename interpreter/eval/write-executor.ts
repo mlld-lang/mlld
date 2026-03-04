@@ -60,6 +60,8 @@ export async function executeWrite({
   enforceFilesystemAccess(env, 'write', targetPath, sourceLocation);
 
   const targetFileSystem = resolveWriteFileSystem(env, fileSystem);
+  const hostFileSystem = env.getFileSystemService();
+  const suppressDefaultHostEffectWrite = targetFileSystem !== hostFileSystem;
   const existedBefore = await targetFileSystem.exists(targetPath).catch(() => false);
   await ensureDirectoryExists(targetFileSystem, targetPath);
 
@@ -82,6 +84,9 @@ export async function executeWrite({
     path: targetPath,
     source: sourceLocation,
     mode,
-    metadata
+    metadata: {
+      ...(metadata ?? {}),
+      suppressDefaultHostEffectWrite
+    }
   });
 }

@@ -119,6 +119,10 @@ export class DefaultEffectHandler implements EffectHandler {
           // Append operations already performed by evaluator
           break;
         }
+        if (effect.metadata?.suppressDefaultHostEffectWrite === true) {
+          // Writes routed to workspace/resolver filesystems are already complete.
+          break;
+        }
         if (effect.path) {
           try {
             // File output: strip ANSI markers
