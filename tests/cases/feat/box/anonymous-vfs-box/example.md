@@ -1,6 +1,6 @@
 /var @out = box [
   file "task.md" = "anonymous-vfs"
-  let @result = run cmd { cat @root/task.md }
+  let @result = run cmd { cat task.md }
   => @result
 ]
 /show @out

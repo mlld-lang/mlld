@@ -2,12 +2,12 @@
 /files <@inner/> = [{ "inner.txt": "inner" }]
 
 /box @outer [
-  let @first = run cmd { cat @root/outer.txt }
+  let @first = run cmd { cat outer.txt }
   let @middle = box @inner [
-    let @innerValue = run cmd { cat @root/inner.txt }
+    let @innerValue = run cmd { cat inner.txt }
     => @innerValue
   ]
-  let @last = run cmd { cat @root/outer.txt }
+  let @last = run cmd { cat outer.txt }
   show @first
   show @middle
   show @last
