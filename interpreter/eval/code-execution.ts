@@ -1,7 +1,7 @@
 import type { ContentNodeArray, SourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
-import { resolveWorkingDirectory } from '../utils/working-directory';
+import { executeInWorkingDirectory } from '../utils/working-directory';
 
 interface CodeExecutionNode {
   type: 'code';
@@ -39,22 +39,21 @@ export async function evaluateCodeExecution(
 ): Promise<EvalResult> {
   const { language, code } = node;
 
-  // Resolve working directory if provided
-  const workingDirectory = await resolveWorkingDirectory(
-    node.workingDir,
-    env,
-    { sourceLocation, directiveType: 'var' }
-  );
-
   // Delegate to environment's executeCode method which uses the proper executor
   // This ensures we use VM for Node.js, AsyncFunction for JS, etc.
   const params = collectParameterBindings(env);
-  const result = await env.executeCode(
-    code,
-    language,
-    params,
-    undefined, // metadata
-    workingDirectory ? { workingDirectory } : undefined // options
+  const result = await executeInWorkingDirectory(
+    node.workingDir,
+    env,
+    async workingDirectory =>
+      env.executeCode(
+        code,
+        language,
+        params,
+        undefined, // metadata
+        workingDirectory ? { workingDirectory } : undefined // options
+      ),
+    { sourceLocation, directiveType: 'var' }
   );
 
   let processedResult: unknown = result;

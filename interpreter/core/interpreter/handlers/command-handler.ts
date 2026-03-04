@@ -2,7 +2,7 @@ import type { EvalResult } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
 import type { SourceLocation } from '@core/types';
 import type { InterpolationNode } from '@interpreter/utils/interpolation';
-import { resolveWorkingDirectory } from '@interpreter/utils/working-directory';
+import { executeInWorkingDirectory } from '@interpreter/utils/working-directory';
 import {
   resolveCommandStringOrEmpty,
   type InterpolateWithSecurityRecording,
@@ -26,14 +26,15 @@ export async function evaluateCommandNode(
     env,
     interpolateWithSecurityRecording
   );
-  const workingDirectory = await resolveWorkingDirectory(
+  const result = await executeInWorkingDirectory(
     node.workingDir,
     env,
+    async workingDirectory =>
+      env.executeCommand(
+        commandStr,
+        workingDirectory ? { workingDirectory } : undefined
+      ),
     { sourceLocation: node.location, directiveType: 'var' }
-  );
-  const result = await env.executeCommand(
-    commandStr,
-    workingDirectory ? { workingDirectory } : undefined
   );
   return wrapEvalValue(result, env);
 }

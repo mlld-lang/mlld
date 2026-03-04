@@ -20,7 +20,7 @@ import {
   extractSecurityDescriptor,
   normalizeWhenShowEffect
 } from '@interpreter/utils/structured-value';
-import { resolveWorkingDirectory } from '@interpreter/utils/working-directory';
+import { executeInWorkingDirectory } from '@interpreter/utils/working-directory';
 import { mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import {
   buildAuthDescriptor,
@@ -235,9 +235,10 @@ async function handleCommandDefinition(
     bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
   }
 
-  const workingDirectory = await resolveWorkingDirectory(
+  const workingDirectory = await executeInWorkingDirectory(
     (definition as any)?.workingDir,
     tempEnv,
+    async resolvedPath => resolvedPath,
     { sourceLocation: directive.location, directiveType: 'run' }
   );
   const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
@@ -579,9 +580,10 @@ async function handleCodeDefinition(
   for (const [key, value] of Object.entries(argValues)) {
     tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
   }
-  const workingDirectory = await resolveWorkingDirectory(
+  const workingDirectory = await executeInWorkingDirectory(
     (definition as any)?.workingDir,
     tempEnv,
+    async resolvedPath => resolvedPath,
     { sourceLocation: directive.location, directiveType: 'run' }
   );
 

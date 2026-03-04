@@ -12,7 +12,7 @@ import { MlldSecurityError } from '@core/errors';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
-import { resolveWorkingDirectory } from '@interpreter/utils/working-directory';
+import { executeInWorkingDirectory } from '@interpreter/utils/working-directory';
 import { PipelineOutputProcessor } from './output-processor';
 import { safeJSONStringify } from './helpers';
 import type { PipelineCommandExecutionContextFactory, StageExecutionResult } from './types';
@@ -49,10 +49,15 @@ export class PipelineInlineStageExecutor {
     const runInline = async (): Promise<StageExecutionResult> => {
       const { interpolate } = await import('@interpreter/core/interpreter');
       const descriptors: SecurityDescriptor[] = [];
-      const workingDirectory = await resolveWorkingDirectory(stage.workingDir as any, stageEnv, {
-        sourceLocation: stage.location,
-        directiveType: 'run'
-      });
+      const workingDirectory = await executeInWorkingDirectory(
+        stage.workingDir as any,
+        stageEnv,
+        async resolvedPath => resolvedPath,
+        {
+          sourceLocation: stage.location,
+          directiveType: 'run'
+        }
+      );
       const commandText = await interpolate(stage.command, stageEnv, InterpolationContext.ShellCommand, {
         collectSecurityDescriptor: d => {
           if (d) descriptors.push(d);

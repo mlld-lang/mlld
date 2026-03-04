@@ -70,7 +70,8 @@ import { ErrorUtils, type CollectedError, type CommandExecutionContext } from '.
 import {
   CommandExecutorFactory,
   type CommandExecutionOptions,
-  type ExecutorDependencies
+  type ExecutorDependencies,
+  type WorkspaceProvider
 } from './executors';
 import type { VariableProvider } from './executors/BashExecutor';
 import { VariableManager, type IVariableManager, type VariableManagerContext } from './VariableManager';
@@ -117,6 +118,7 @@ import type { SDKEvent, StreamingResult } from '@sdk/types';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import type { ImportApproval } from '@core/security/ImportApproval';
 import type { ImmutableCache } from '@core/security/ImmutableCache';
+import type { WorkspaceValue } from '@core/types/workspace';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
 
@@ -185,7 +187,13 @@ type ShadowFunctions = Map<string, any>;
  * Environment holds all state and provides capabilities for evaluation.
  * This replaces StateService, ResolutionService, and capability injection.
  */
-export class Environment implements VariableManagerContext, ImportResolverContext, ShadowEnvironmentProvider {
+export class Environment
+  implements
+    VariableManagerContext,
+    ImportResolverContext,
+    ShadowEnvironmentProvider,
+    WorkspaceProvider
+{
   private nodes: MlldNode[] = [];
   private parent?: Environment;
   // Note: importStack is now handled by ImportResolver
@@ -281,6 +289,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   // Executable resolution circular detection
   private resolutionStack: Set<string> = new Set();
+
+  // Active workspace stack for nested workspace-aware execution contexts.
+  private workspaceStack: WorkspaceValue[] = [];
 
   // Current iteration file for <> placeholder
   private currentIterationFile?: any;
@@ -2282,10 +2293,24 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.childEnvironments.add(child);
     }
 
+    child.workspaceStack = [...this.workspaceStack];
+
     return child;
   }
   
   // --- Scope Management ---
+
+  pushActiveWorkspace(workspace: WorkspaceValue): void {
+    this.workspaceStack.push(workspace);
+  }
+
+  popActiveWorkspace(): WorkspaceValue | undefined {
+    return this.workspaceStack.pop();
+  }
+
+  getActiveWorkspace(): WorkspaceValue | undefined {
+    return this.workspaceStack[this.workspaceStack.length - 1];
+  }
   
   /**
    * Create a child environment with isolated variable scope
@@ -3067,7 +3092,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         nodeShadowProvider: this,
         pythonShadowProvider: this,
         variableProvider: this.variableManager as VariableProvider,
-        getStreamingBus: () => this.getStreamingBus()
+        getStreamingBus: () => this.getStreamingBus(),
+        workspaceProvider: this
       };
       this.commandExecutorFactory = new CommandExecutorFactory(dependencies);
     }

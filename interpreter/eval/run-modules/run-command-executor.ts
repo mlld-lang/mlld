@@ -7,7 +7,7 @@ import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 import { extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { coerceValueForStdin } from '@interpreter/utils/shell-value';
-import { resolveWorkingDirectory } from '@interpreter/utils/working-directory';
+import { executeInWorkingDirectory } from '@interpreter/utils/working-directory';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import { buildAuthDescriptor, resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
@@ -326,141 +326,144 @@ export async function executeRunCommand(
     sourceLocation: directive.location ?? undefined
   });
 
-  const workingDirectory = await resolveWorkingDirectory(
+  return executeInWorkingDirectory(
     (directive.values as any)?.workingDir,
     env,
+    async workingDirectory => {
+      const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
+      const commandTaint = deriveCommandTaint({ command });
+      const scopedEnvConfig = resolveEnvironmentConfig(env, context?.guardMetadata);
+      const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, env.getPolicySummary());
+      const baseOutputDescriptor = buildEnvironmentOutputDescriptor(command, resolvedEnvConfig);
+      let outputDescriptor =
+        mergeInputDescriptors(baseOutputDescriptor, commandInputDescriptor) ?? baseOutputDescriptor;
+      if (resolvedEnvConfig?.provider) {
+        env.enforceToolAllowed('bash', {
+          sourceLocation: directive.location ?? undefined,
+          reason: "Command execution requires 'Bash' in env.tools"
+        });
+      }
+
+      enforceRunCommandSizeLimit({
+        command,
+        directive,
+        env,
+        workingDirectory: effectiveWorkingDirectory
+      });
+
+      await enforceRunCommandSecurity({
+        env,
+        command,
+        commandTaint: commandTaint.taint,
+        directive,
+        workingDirectory: effectiveWorkingDirectory
+      });
+
+      let stdinInput: string | undefined;
+      let stdinDescriptor: SecurityDescriptor | undefined;
+      if (withClause && 'stdin' in withClause) {
+        const preExtractedStdin = getPreExtractedRunStdin(context);
+        if (preExtractedStdin) {
+          stdinInput = preExtractedStdin.text;
+          stdinDescriptor = preExtractedStdin.descriptor;
+        } else {
+          const resolvedStdin = await resolveStdinInput(withClause.stdin, env);
+          stdinInput = resolvedStdin.text;
+          stdinDescriptor = resolvedStdin.descriptor;
+        }
+      }
+
+      checkRunInputLabelFlow({
+        descriptor: stdinDescriptor,
+        policyEnforcer,
+        policyChecksEnabled,
+        opLabels,
+        exeLabels,
+        flowChannel: 'stdin',
+        command: parsedCommand.command,
+        env,
+        sourceLocation: directive.location ?? undefined
+      });
+
+      const usingParts = await resolveUsingEnvParts(env, withClause);
+      const envAuthSecrets = await resolveEnvironmentAuthSecrets(env, resolvedEnvConfig);
+      const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
+      const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
+
+      outputDescriptor =
+        mergeInputDescriptors(outputDescriptor, stdinDescriptor, envInputDescriptor) ??
+        outputDescriptor;
+
+      checkRunInputLabelFlow({
+        descriptor: envInputDescriptor,
+        policyEnforcer,
+        policyChecksEnabled,
+        opLabels,
+        exeLabels,
+        flowChannel: 'using',
+        command: parsedCommand.command,
+        env,
+        sourceLocation: directive.location ?? undefined
+      });
+
+      if (resolvedEnvConfig?.provider) {
+        const providerResult = await executeProviderCommand({
+          env,
+          providerRef: resolvedEnvConfig.provider,
+          config: resolvedEnvConfig,
+          command,
+          workingDirectory,
+          stdin: stdinInput,
+          vars: {
+            ...argEnvVars,
+            ...usingParts.vars
+          },
+          secrets: {
+            ...envAuthSecrets,
+            ...usingParts.secrets
+          },
+          executionContext: {
+            ...executionContext,
+            streamingEnabled,
+            pipelineId,
+            suppressTerminal,
+            workingDirectory
+          },
+          sourceLocation: directive.location ?? null,
+          directiveType: 'run'
+        });
+
+        return {
+          value: providerResult.stdout ?? '',
+          outputDescriptor
+        };
+      }
+
+      const injectedEnv = {
+        ...argEnvVars,
+        ...envAuthSecrets,
+        ...usingParts.merged
+      };
+      const commandOptions =
+        stdinInput !== undefined || workingDirectory || Object.keys(injectedEnv).length > 0
+          ? {
+              ...(stdinInput !== undefined ? { input: stdinInput } : {}),
+              ...(workingDirectory ? { workingDirectory } : {}),
+              ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
+            }
+          : undefined;
+
+      return {
+        value: await env.executeCommand(command, commandOptions, {
+          ...executionContext,
+          streamingEnabled,
+          pipelineId,
+          suppressTerminal: hasStreamFormat || suppressTerminal,
+          workingDirectory
+        }),
+        outputDescriptor
+      };
+    },
     { sourceLocation: directive.location, directiveType: 'run' }
   );
-  const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
-  const commandTaint = deriveCommandTaint({ command });
-  const scopedEnvConfig = resolveEnvironmentConfig(env, context?.guardMetadata);
-  const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, env.getPolicySummary());
-  const baseOutputDescriptor = buildEnvironmentOutputDescriptor(command, resolvedEnvConfig);
-  let outputDescriptor =
-    mergeInputDescriptors(baseOutputDescriptor, commandInputDescriptor) ?? baseOutputDescriptor;
-  if (resolvedEnvConfig?.provider) {
-    env.enforceToolAllowed('bash', {
-      sourceLocation: directive.location ?? undefined,
-      reason: "Command execution requires 'Bash' in env.tools"
-    });
-  }
-
-  enforceRunCommandSizeLimit({
-    command,
-    directive,
-    env,
-    workingDirectory: effectiveWorkingDirectory
-  });
-
-  await enforceRunCommandSecurity({
-    env,
-    command,
-    commandTaint: commandTaint.taint,
-    directive,
-    workingDirectory: effectiveWorkingDirectory
-  });
-
-  let stdinInput: string | undefined;
-  let stdinDescriptor: SecurityDescriptor | undefined;
-  if (withClause && 'stdin' in withClause) {
-    const preExtractedStdin = getPreExtractedRunStdin(context);
-    if (preExtractedStdin) {
-      stdinInput = preExtractedStdin.text;
-      stdinDescriptor = preExtractedStdin.descriptor;
-    } else {
-      const resolvedStdin = await resolveStdinInput(withClause.stdin, env);
-      stdinInput = resolvedStdin.text;
-      stdinDescriptor = resolvedStdin.descriptor;
-    }
-  }
-
-  checkRunInputLabelFlow({
-    descriptor: stdinDescriptor,
-    policyEnforcer,
-    policyChecksEnabled,
-    opLabels,
-    exeLabels,
-    flowChannel: 'stdin',
-    command: parsedCommand.command,
-    env,
-    sourceLocation: directive.location ?? undefined
-  });
-
-  const usingParts = await resolveUsingEnvParts(env, withClause);
-  const envAuthSecrets = await resolveEnvironmentAuthSecrets(env, resolvedEnvConfig);
-  const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
-  const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
-
-  outputDescriptor =
-    mergeInputDescriptors(outputDescriptor, stdinDescriptor, envInputDescriptor) ?? outputDescriptor;
-
-  checkRunInputLabelFlow({
-    descriptor: envInputDescriptor,
-    policyEnforcer,
-    policyChecksEnabled,
-    opLabels,
-    exeLabels,
-    flowChannel: 'using',
-    command: parsedCommand.command,
-    env,
-    sourceLocation: directive.location ?? undefined
-  });
-
-  if (resolvedEnvConfig?.provider) {
-    const providerResult = await executeProviderCommand({
-      env,
-      providerRef: resolvedEnvConfig.provider,
-      config: resolvedEnvConfig,
-      command,
-      workingDirectory,
-      stdin: stdinInput,
-      vars: {
-        ...argEnvVars,
-        ...usingParts.vars
-      },
-      secrets: {
-        ...envAuthSecrets,
-        ...usingParts.secrets
-      },
-      executionContext: {
-        ...executionContext,
-        streamingEnabled,
-        pipelineId,
-        suppressTerminal,
-        workingDirectory
-      },
-      sourceLocation: directive.location ?? null,
-      directiveType: 'run'
-    });
-
-    return {
-      value: providerResult.stdout ?? '',
-      outputDescriptor
-    };
-  }
-
-  const injectedEnv = {
-    ...argEnvVars,
-    ...envAuthSecrets,
-    ...usingParts.merged
-  };
-  const commandOptions =
-    stdinInput !== undefined || workingDirectory || Object.keys(injectedEnv).length > 0
-      ? {
-          ...(stdinInput !== undefined ? { input: stdinInput } : {}),
-          ...(workingDirectory ? { workingDirectory } : {}),
-          ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
-        }
-      : undefined;
-
-  return {
-    value: await env.executeCommand(command, commandOptions, {
-      ...executionContext,
-      streamingEnabled,
-      pipelineId,
-      suppressTerminal: hasStreamFormat || suppressTerminal,
-      workingDirectory
-    }),
-    outputDescriptor
-  };
 }

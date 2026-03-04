@@ -77,3 +77,18 @@ export async function resolveWorkingDirectory(
 
   return normalized;
 }
+
+export async function executeInWorkingDirectory<T>(
+  workingDir: ContentNodeArray | string | undefined,
+  env: Environment,
+  execute: (resolvedPath?: string) => Promise<T>,
+  options: WorkingDirectoryOptions = {}
+): Promise<T> {
+  const resolved = await resolveWorkingDirectory(workingDir, env, options);
+  try {
+    return await execute(resolved);
+  } finally {
+    // Workspace stack cleanup is wired in Phase 6 when workspace-aware cwd
+    // resolution starts pushing active workspace values.
+  }
+}

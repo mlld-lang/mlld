@@ -6,6 +6,14 @@ import { PythonExecutor, type ShellCommandExecutor as IShellCommandExecutor, typ
 import { BashExecutor, type VariableProvider } from './BashExecutor';
 import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
+import { ErrorUtils as ErrorUtilsClass } from '../ErrorUtils';
+import { MlldCommandExecutionError } from '@core/errors';
+import type { ShellSession } from '@services/fs/ShellSession';
+import type { WorkspaceValue } from '@core/types/workspace';
+
+export interface WorkspaceProvider {
+  getActiveWorkspace(): WorkspaceValue | undefined;
+}
 
 export interface ExecutorDependencies {
   errorUtils: ErrorUtils;
@@ -15,6 +23,7 @@ export interface ExecutorDependencies {
   pythonShadowProvider?: PythonShadowEnvironmentProvider;
   variableProvider: VariableProvider;
   getStreamingBus: () => import('@interpreter/eval/pipeline/stream-bus').StreamBus;
+  workspaceProvider: WorkspaceProvider;
 }
 
 /**
@@ -26,9 +35,25 @@ export class CommandExecutorFactory {
   private nodeExecutor: NodeExecutor;
   private pythonExecutor: PythonExecutor;
   private bashExecutor: BashExecutor;
+  private readonly workspaceProvider: WorkspaceProvider;
+  private readonly errorUtils: ErrorUtils;
+  private readonly defaultWorkingDirectory: string;
 
   constructor(dependencies: ExecutorDependencies) {
-    const { errorUtils, workingDirectory, shadowEnvironment, nodeShadowProvider, pythonShadowProvider, variableProvider, getStreamingBus } = dependencies;
+    const {
+      errorUtils,
+      workingDirectory,
+      shadowEnvironment,
+      nodeShadowProvider,
+      pythonShadowProvider,
+      variableProvider,
+      getStreamingBus,
+      workspaceProvider
+    } = dependencies;
+
+    this.workspaceProvider = workspaceProvider;
+    this.errorUtils = errorUtils;
+    this.defaultWorkingDirectory = workingDirectory;
 
     // Create all executor instances
     this.shellExecutor = new ShellCommandExecutor(errorUtils, workingDirectory, getStreamingBus);
@@ -46,6 +71,11 @@ export class CommandExecutorFactory {
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
+    const activeWorkspace = this.workspaceProvider.getActiveWorkspace();
+    if (activeWorkspace) {
+      return this.executeWorkspaceCommand(activeWorkspace, command, options, context);
+    }
+
     // If shell mode is explicitly disabled, use strict simple executor
     const disableSh = (() => {
       const v = (process.env.MLLD_DISABLE_SH || '').toLowerCase();
@@ -150,6 +180,101 @@ export class CommandExecutorFactory {
 
     // Normal path: strict simple executor
     return this.shellExecutor.execute(command, options, context);
+  }
+
+  private async executeWorkspaceCommand(
+    workspace: WorkspaceValue,
+    command: string,
+    options?: CommandExecutionOptions,
+    context?: CommandExecutionContext
+  ): Promise<string> {
+    const finalOptions = {
+      showProgress: false,
+      maxOutputLines: undefined,
+      errorBehavior: 'halt',
+      collectErrors: false,
+      ...options
+    };
+    const startTime = Date.now();
+    const workingDirectory = options?.workingDirectory || this.defaultWorkingDirectory;
+
+    if (finalOptions.showProgress) {
+      console.log(`Running: ${command}`);
+    }
+
+    try {
+      const shellSession = await this.getOrCreateShellSession(workspace);
+      const result = await shellSession.exec(command, {
+        env: options?.env,
+        cwd: options?.workingDirectory,
+        stdin: options?.input
+      });
+
+      const duration = Date.now() - startTime;
+      if (result.exitCode !== 0) {
+        throw MlldCommandExecutionError.create(
+          command,
+          result.exitCode,
+          duration,
+          context?.sourceLocation,
+          {
+            stdout: result.stdout,
+            stderr: result.stderr,
+            workingDirectory: options?.workingDirectory || shellSession.getCwd(),
+            directiveType: context?.directiveType || 'run'
+          }
+        );
+      }
+
+      const processed = ErrorUtilsClass.processOutput(
+        result.stdout,
+        finalOptions.maxOutputLines
+      ).output;
+      return processed.trimEnd();
+    } catch (error: unknown) {
+      const duration = Date.now() - startTime;
+      const commandError =
+        error instanceof MlldCommandExecutionError
+          ? error
+          : MlldCommandExecutionError.create(
+              command,
+              1,
+              duration,
+              context?.sourceLocation,
+              {
+                stdout: '',
+                stderr: error instanceof Error ? error.message : String(error),
+                workingDirectory,
+                directiveType: context?.directiveType || 'run'
+              }
+            );
+
+      if (finalOptions.errorBehavior === 'continue' || finalOptions.collectErrors) {
+        this.errorUtils.collectError(commandError, command, duration, context);
+      }
+
+      if (finalOptions.errorBehavior === 'halt') {
+        throw commandError;
+      }
+
+      const fallbackOutput =
+        typeof commandError.details?.stdout === 'string' && commandError.details.stdout.length > 0
+          ? commandError.details.stdout
+          : String(commandError.details?.stderr || '');
+      const processed = ErrorUtilsClass.processOutput(
+        fallbackOutput,
+        finalOptions.maxOutputLines
+      ).output;
+      return processed.trimEnd();
+    }
+  }
+
+  private async getOrCreateShellSession(workspace: WorkspaceValue): Promise<ShellSession> {
+    if (!workspace.shellSession) {
+      const { ShellSession } = await import('@services/fs/ShellSession');
+      workspace.shellSession = ShellSession.create(workspace.fs);
+    }
+    return workspace.shellSession;
   }
 
   /**

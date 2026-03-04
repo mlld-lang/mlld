@@ -20,6 +20,7 @@ export * from './security';
 export * from './state';
 export * from './errors';
 export * from './environment';
+export * from './workspace';
 
 // Re-export directive types
 export * from './import';
