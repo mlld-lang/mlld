@@ -187,6 +187,19 @@ describe('boxCommand', () => {
 
       const otherSkill = await fs.readFile(path.join(targetSkillsDir, 'other-skill.md'), 'utf8');
       expect(otherSkill).toBe('# Other Skill');
+
+      const pulledBase = await fs.readFile(
+        path.join(root, '.mlld/box/test-env/agents/base.mld'),
+        'utf8'
+      );
+      expect(pulledBase).toContain('/export { @keychainRef, @emptyMcpConfig }');
+
+      const indexMld = await fs.readFile(
+        path.join(root, '.mlld/box/test-env/index.mld'),
+        'utf8'
+      );
+      expect(indexMld).toContain('Pulled module: @mlld/agents/claude');
+      expect(indexMld).toContain('from "./agents/claude.mld"');
     });
 
     it('captures from local .claude with --local flag', async () => {
@@ -251,12 +264,37 @@ describe('boxCommand', () => {
       expect(JSON.parse(settings)).toEqual({ codex: true });
 
       // Check index.mld references codex
-      const indexMld = await fs.readFile(
-        path.join(root, '.mlld/box/codex-env/index.mld'),
+      const pulledCodex = await fs.readFile(
+        path.join(root, '.mlld/box/codex-env/agents/codex.mld'),
         'utf8'
       );
-      expect(indexMld).toContain('codex -p @prompt');
-      expect(indexMld).toContain('CODEX_CONFIG_DIR');
+      expect(pulledCodex).toContain('codex -p @prompt');
+      expect(pulledCodex).toContain('CODEX_CONFIG_DIR');
+    });
+
+    it('auto-discovers codex when only codex config exists', async () => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-box-capture-auto-codex-'));
+      tempDirs.push(root);
+      process.cwd = vi.fn(() => root);
+
+      const fakeHome = path.join(root, 'fake-home');
+      const codexDir = path.join(fakeHome, '.codex');
+      await fs.mkdir(codexDir, { recursive: true });
+      await fs.writeFile(path.join(codexDir, 'settings.json'), '{"codex": true}');
+
+      mockHomedirValue = fakeHome;
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await boxCommand({ _: ['capture', 'autodetect-env'] });
+
+      const codexSettingsPath = path.join(root, '.mlld/box/autodetect-env/.codex/settings.json');
+      const claudeSettingsPath = path.join(root, '.mlld/box/autodetect-env/.claude/settings.json');
+      const codexModulePath = path.join(root, '.mlld/box/autodetect-env/agents/codex.mld');
+
+      expect(await fs.access(codexSettingsPath).then(() => true).catch(() => false)).toBe(true);
+      expect(await fs.access(claudeSettingsPath).then(() => true).catch(() => false)).toBe(false);
+      expect(await fs.access(codexModulePath).then(() => true).catch(() => false)).toBe(true);
     });
 
     it('stores in global .mlld/box with --global flag', async () => {

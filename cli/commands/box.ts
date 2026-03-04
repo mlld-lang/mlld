@@ -17,6 +17,13 @@ import { PathService } from '@services/fs/PathService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { MCPOrchestrator, type McpConfig } from '../mcp/MCPOrchestrator';
 import { asData, isStructuredValue, looksLikeJsonString } from '@interpreter/utils/structured-value';
+import {
+  getAgentDefinition,
+  getDefaultAgentType,
+  listAgentTypes,
+  pullAgentRegistryModules,
+  type AgentType
+} from './box-agent-registry';
 
 async function exists(filePath: string): Promise<boolean> {
   try {
@@ -41,24 +48,24 @@ async function copyDir(src: string, dest: string): Promise<void> {
   }
 }
 
-class EnvModuleTypeError extends Error {
+class BoxModuleTypeError extends Error {
   readonly entries: Array<{ path: string; type?: string | null }>;
 
   constructor(name: string, entries: Array<{ path: string; type?: string | null }>) {
     super(`Module '${name}' is not an environment module.`);
-    this.name = 'EnvModuleTypeError';
+    this.name = 'BoxModuleTypeError';
     this.entries = entries;
   }
 }
 
-interface EnvModuleLocation {
+interface BoxModuleLocation {
   name: string;
   path: string;
   manifest: ModuleManifest;
   scope: 'local' | 'global';
 }
 
-interface LoadedEnvModule extends EnvModuleLocation {
+interface LoadedBoxModule extends BoxModuleLocation {
   entryPath: string;
   source: string;
   environment: Environment;
@@ -106,7 +113,7 @@ async function loadManifest(manifestPath: string): Promise<ModuleManifest | null
   }
 }
 
-async function findBoxModule(name: string): Promise<EnvModuleLocation | null> {
+async function findBoxModule(name: string): Promise<BoxModuleLocation | null> {
   const localPath = path.join(process.cwd(), '.mlld/box', name);
   const globalPath = path.join(os.homedir(), '.mlld/box', name);
   const candidates: Array<{ path: string; scope: 'local' | 'global' }> = [
@@ -133,7 +140,7 @@ async function findBoxModule(name: string): Promise<EnvModuleLocation | null> {
   }
 
   if (wrongType.length > 0) {
-    throw new EnvModuleTypeError(name, wrongType);
+    throw new BoxModuleTypeError(name, wrongType);
   }
 
   return null;
@@ -258,7 +265,7 @@ function buildExecInvocation(
   } as ExecInvocation;
 }
 
-async function loadEnvironmentModule(location: EnvModuleLocation): Promise<LoadedEnvModule> {
+async function loadEnvironmentModule(location: BoxModuleLocation): Promise<LoadedBoxModule> {
   const entryName = location.manifest.entry || 'index.mld';
   const entryPath = path.join(location.path, entryName);
 
@@ -329,7 +336,7 @@ async function loadEnvironmentModule(location: EnvModuleLocation): Promise<Loade
 }
 
 async function executeBoxExport(
-  module: LoadedEnvModule,
+  module: LoadedBoxModule,
   name: string,
   args: string[]
 ) {
@@ -470,7 +477,7 @@ async function listBoxCommand(args: string[]): Promise<void> {
   const total = localEnvs.length + globalEnvs.length;
   if (total === 0) {
     console.log(chalk.gray('No environment modules found.'));
-    console.log(chalk.gray('Use `mlld box capture <name>` to create one from ~/.claude config.'));
+    console.log(chalk.gray('Use `mlld box capture <name>` to create one from your agent config.'));
   } else {
     console.log(chalk.gray(`(${total} environment${total !== 1 ? 's' : ''} total)`));
   }
@@ -510,49 +517,156 @@ async function scanBoxDir(dirPath: string): Promise<BoxInfo[]> {
   }
 }
 
-type AgentType = 'claude' | 'codex';
+type AgentSourceScope = 'local' | 'global';
+
+interface DiscoveredAgentSource {
+  agentType: AgentType;
+  sourceDir: string;
+  sourceScope: AgentSourceScope;
+}
+
+function parseAgentFlag(args: string[]): AgentType | null {
+  if (args.includes('--codex')) {
+    return 'codex';
+  }
+  if (args.includes('--claude')) {
+    return 'claude';
+  }
+  return null;
+}
+
+function getAgentSourceDir(agentType: AgentType, scope: AgentSourceScope): string {
+  const definition = getAgentDefinition(agentType);
+  const baseDir = scope === 'local' ? process.cwd() : os.homedir();
+  return path.join(baseDir, definition.configDirName);
+}
+
+async function discoverAgentSource(
+  explicitAgentType: AgentType | null,
+  useLocal: boolean
+): Promise<DiscoveredAgentSource> {
+  const scopes: AgentSourceScope[] = useLocal ? ['local'] : ['global', 'local'];
+
+  if (explicitAgentType) {
+    for (const scope of scopes) {
+      const sourceDir = getAgentSourceDir(explicitAgentType, scope);
+      if (await exists(sourceDir)) {
+        return { agentType: explicitAgentType, sourceDir, sourceScope: scope };
+      }
+    }
+    const definition = getAgentDefinition(explicitAgentType);
+    const expected = scopes.map(scope => getAgentSourceDir(explicitAgentType, scope)).join(' or ');
+    throw new Error(`${definition.displayName} config not found at ${expected}`);
+  }
+
+  for (const scope of scopes) {
+    const available: DiscoveredAgentSource[] = [];
+    for (const candidate of listAgentTypes()) {
+      const sourceDir = getAgentSourceDir(candidate, scope);
+      if (await exists(sourceDir)) {
+        available.push({ agentType: candidate, sourceDir, sourceScope: scope });
+      }
+    }
+
+    if (available.length === 1) {
+      return available[0];
+    }
+    if (available.length > 1) {
+      return available.find(agent => agent.agentType === getDefaultAgentType()) || available[0];
+    }
+  }
+
+  const expectedPaths = listAgentTypes()
+    .map(type => `${getAgentDefinition(type).displayName}: ${getAgentSourceDir(type, useLocal ? 'local' : 'global')}`)
+    .join('; ');
+  throw new Error(`No supported agent configuration found. Expected one of: ${expectedPaths}`);
+}
+
+function readNestedStringValue(value: unknown, pathParts: string[]): string | null {
+  let current: unknown = value;
+  for (const part of pathParts) {
+    if (!current || typeof current !== 'object' || !(part in (current as Record<string, unknown>))) {
+      return null;
+    }
+    current = (current as Record<string, unknown>)[part];
+  }
+  return typeof current === 'string' && current.trim().length > 0 ? current : null;
+}
+
+function extractTokenFromCredentials(rawValue: unknown, paths: string[]): string | null {
+  for (const tokenPath of paths) {
+    const token = readNestedStringValue(rawValue, tokenPath.split('.'));
+    if (token) {
+      return token;
+    }
+  }
+  return null;
+}
+
+async function runAuthSetup(
+  sourceDir: string,
+  boxName: string,
+  agentType: AgentType
+): Promise<boolean> {
+  const definition = getAgentDefinition(agentType);
+  const credsPath = path.join(sourceDir, '.credentials.json');
+  if (!(await exists(credsPath))) {
+    return false;
+  }
+
+  try {
+    const credsContent = await fs.readFile(credsPath, 'utf-8');
+    const creds = JSON.parse(credsContent);
+    const token = extractTokenFromCredentials(creds, definition.credentialTokenPaths);
+    if (!token) {
+      return false;
+    }
+    const keychain = getKeychainProviderOrExit();
+    await keychain.set('mlld-box', boxName, token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function pullAgentModules(targetDir: string, agentType: AgentType): Promise<string[]> {
+  const modules = pullAgentRegistryModules(agentType);
+  for (const pulledModule of modules) {
+    const absolutePath = path.join(targetDir, pulledModule.relativePath);
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, pulledModule.source, 'utf8');
+  }
+  return modules.map(module => module.ref);
+}
 
 async function captureBoxCommand(args: string[]): Promise<void> {
   const name = args[0];
   if (!name) {
     console.error(chalk.red('Error: Environment name required'));
-    console.error('Usage: mlld box capture <name> [--local] [--codex] [--global]');
+    console.error('Usage: mlld box capture <name> [--local] [--global] [--codex|--claude]');
     process.exit(1);
   }
   assertValidBoxName(name);
 
   const useLocal = args.includes('--local');
-  const useCodex = args.includes('--codex');
   const storeGlobal = args.includes('--global');
+  const explicitAgentType = parseAgentFlag(args);
 
-  const agentType: AgentType = useCodex ? 'codex' : 'claude';
-  const agentDirName = useCodex ? '.codex' : '.claude';
-  const agentCommand = useCodex ? 'codex' : 'claude';
-
-  // Determine source directory
-  const localSourceDir = path.join(process.cwd(), agentDirName);
-  const globalSourceDir = path.join(os.homedir(), agentDirName);
-
-  let sourceDir: string;
-  let sourceScope: 'local' | 'global';
-
-  if (useLocal) {
-    if (!await exists(localSourceDir)) {
-      console.error(chalk.red(`Error: ${agentType} config not found at ${localSourceDir}`));
-      console.error(chalk.gray(`Make sure you have a local ${agentDirName}/ directory in this project.`));
-      process.exit(1);
+  let discovered: DiscoveredAgentSource;
+  try {
+    discovered = await discoverAgentSource(explicitAgentType, useLocal);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Agent configuration discovery failed';
+    console.error(chalk.red(`Error: ${message}`));
+    if (!explicitAgentType) {
+      console.error(chalk.gray('Tip: pass --claude or --codex to select an agent explicitly.'));
     }
-    sourceDir = localSourceDir;
-    sourceScope = 'local';
-  } else {
-    if (!await exists(globalSourceDir)) {
-      console.error(chalk.red(`Error: ${agentType} config not found at ${globalSourceDir}`));
-      console.error(chalk.gray(`Make sure ${agentType === 'claude' ? 'Claude Code' : 'Codex'} is installed and configured.`));
-      process.exit(1);
-    }
-    sourceDir = globalSourceDir;
-    sourceScope = 'global';
+    process.exit(1);
+    return;
   }
+
+  const { agentType, sourceDir, sourceScope } = discovered;
+  const agent = getAgentDefinition(agentType);
 
   const targetDir = storeGlobal
     ? path.join(os.homedir(), '.mlld/box', name)
@@ -565,38 +679,24 @@ async function captureBoxCommand(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // Create directories
-  await fs.mkdir(path.join(targetDir, agentDirName), { recursive: true });
+  await fs.mkdir(path.join(targetDir, agent.configDirName), { recursive: true });
 
-  // Extract and store token
-  const credsPath = path.join(sourceDir, '.credentials.json');
-  let tokenStored = false;
-  if (await exists(credsPath)) {
-    try {
-      const credsContent = await fs.readFile(credsPath, 'utf-8');
-      const creds = JSON.parse(credsContent);
-      const token = creds.oauth_token || creds.token;
-      if (token) {
-        const keychain = getKeychainProviderOrExit();
-        await keychain.set('mlld-box', name, token);
-        console.log(chalk.green('✓ Token stored in keychain'));
-        tokenStored = true;
-      }
-    } catch {
-      console.error(chalk.yellow('Warning: Could not extract token from credentials'));
-    }
-  }
+  const pulledModuleRefs = await pullAgentModules(targetDir, agentType);
+  console.log(chalk.green(`✓ Pulled ${agent.registryModule} module templates`));
 
+  const tokenStored = await runAuthSetup(sourceDir, name, agentType);
   if (!tokenStored) {
     console.log(chalk.yellow('⚠ No token found - you may need to add credentials manually'));
+  } else {
+    console.log(chalk.green(`✓ Auth configured for ${agent.displayName}`));
   }
 
   // Copy config files (NOT credentials)
-  const filesToCopy = ['settings.json', 'CLAUDE.md', 'hooks.json'];
+  const filesToCopy = ['settings.json', 'CLAUDE.md', 'AGENTS.md', 'hooks.json'];
   for (const file of filesToCopy) {
     const src = path.join(sourceDir, file);
     if (await exists(src)) {
-      await fs.copyFile(src, path.join(targetDir, agentDirName, file));
+      await fs.copyFile(src, path.join(targetDir, agent.configDirName, file));
       console.log(chalk.green(`✓ Copied ${file}`));
     }
   }
@@ -604,15 +704,17 @@ async function captureBoxCommand(args: string[]): Promise<void> {
   // Copy skills directory if it exists
   const skillsDir = path.join(sourceDir, 'skills');
   if (await exists(skillsDir)) {
-    await copyDir(skillsDir, path.join(targetDir, agentDirName, 'skills'));
+    await copyDir(skillsDir, path.join(targetDir, agent.configDirName, 'skills'));
     console.log(chalk.green('✓ Copied skills/'));
   }
 
   // Generate module.yml
-  const aboutSource = sourceScope === 'local' ? `${agentDirName} (local)` : `~/${agentDirName}`;
+  const aboutSource = sourceScope === 'local'
+    ? `${agent.configDirName} (local)`
+    : `~/${agent.configDirName}`;
   const moduleYml = `name: ${name}
 type: environment
-about: "Environment captured from ${aboutSource}"
+about: "Box generated from ${agent.registryModule} using ${aboutSource}"
 version: 1.0.0
 entry: index.mld
 `;
@@ -620,30 +722,20 @@ entry: index.mld
   console.log(chalk.green('✓ Created module.yml'));
 
   // Generate index.mld
-  const configEnvVar = useCodex ? 'CODEX_CONFIG_DIR' : 'CLAUDE_CONFIG_DIR';
-  const tokenEnvVar = useCodex ? 'CODEX_OAUTH_TOKEN' : 'CLAUDE_CODE_OAUTH_TOKEN';
+  const indexMld = `>> Generated by mlld box capture
+>> Pulled module: ${agent.registryModule}
+/import { @setup, @configureAuth as @agentConfigureAuth, @spawn as @agentSpawn, @shell as @agentShell, @mcpConfig } from "./agents/${agentType}.mld"
 
-  const indexMld = `/needs { cmd: [${agentCommand}] }
-/policy @env = {
-  auth: {
-    ${agentType}: { from: "keychain:mlld-box/${name}", as: "${tokenEnvVar}" }
-  },
-  capabilities: {
-    danger: ["@keychain"]
-  }
-}
+/var @boxName = "${name}"
+/var @configDir = "@fm.dir/${agent.configDirName}"
+/var @registryModule = "${agent.registryModule}"
+/var @tokenEnvVar = "${agent.tokenEnvVar}"
 
-/exe @spawn(prompt) = run { \\
-  ${configEnvVar}=@fm.dir/${agentDirName} \\
-  ${agentCommand} -p @prompt
-} using auth:${agentType}
+/exe @configureAuth() = @agentConfigureAuth(@boxName)
+/exe @spawn(prompt) = @agentSpawn(@boxName, @prompt, @configDir)
+/exe @shell() = @agentShell(@boxName, @configDir)
 
-/exe @shell() = run { \\
-  ${configEnvVar}=@fm.dir/${agentDirName} \\
-  ${agentCommand}
-} using auth:${agentType}
-
-/export { @spawn, @shell }
+/export { @setup, @configureAuth, @spawn, @shell, @mcpConfig }
 `;
   await fs.writeFile(path.join(targetDir, 'index.mld'), indexMld);
   console.log(chalk.green('✓ Created index.mld'));
@@ -652,6 +744,8 @@ entry: index.mld
   console.log(chalk.bold.green(`✓ Created environment: ${name}`));
   console.log(chalk.gray(`  Source: ${sourceDir}`));
   console.log(chalk.gray(`  Location: ${targetDir}`));
+  console.log(chalk.gray(`  Agent: ${agent.displayName}`));
+  console.log(chalk.gray(`  Registry modules: ${pulledModuleRefs.join(', ')}`));
   console.log();
   console.log(chalk.gray('Usage:'));
   console.log(chalk.gray(`  mlld box spawn ${name} -- "Your prompt"`));
@@ -682,11 +776,11 @@ async function spawnBoxCommand(args: string[]): Promise<void> {
   const prompt = extractPromptFromArgs(commandArgs);
 
   // Find environment
-  let envLocation: EnvModuleLocation | null = null;
+  let envLocation: BoxModuleLocation | null = null;
   try {
     envLocation = await findBoxModule(name);
   } catch (error) {
-    if (error instanceof EnvModuleTypeError) {
+    if (error instanceof BoxModuleTypeError) {
       console.error(chalk.red(`Error: Module '${name}' is not an environment module.`));
       for (const entry of error.entries) {
         console.error(chalk.gray(`- ${entry.path} (type: ${entry.type ?? 'unknown'})`));
@@ -742,11 +836,11 @@ async function shellBoxCommand(args: string[]): Promise<void> {
   assertValidBoxName(name);
 
   // Find environment
-  let envLocation: EnvModuleLocation | null = null;
+  let envLocation: BoxModuleLocation | null = null;
   try {
     envLocation = await findBoxModule(name);
   } catch (error) {
-    if (error instanceof EnvModuleTypeError) {
+    if (error instanceof BoxModuleTypeError) {
       console.error(chalk.red(`Error: Module '${name}' is not an environment module.`));
       for (const entry of error.entries) {
         console.error(chalk.gray(`- ${entry.path} (type: ${entry.type ?? 'unknown'})`));
@@ -800,13 +894,14 @@ ${chalk.bold('Usage:')} mlld box <command> [options]
 
 ${chalk.bold('Commands:')}
   list              List available environments
-  capture <name>    Create environment from config
+  capture <name>    Pull agent module + generate local box
   spawn <name> -- <prompt>    Run agent with prompt
   shell <name>      Start interactive session
 
 ${chalk.bold('Capture options:')}
-  --local           Capture from project .claude/ instead of ~/.claude
-  --codex           Capture from Codex config (.codex/) instead of Claude
+  --local           Read agent config from current project first
+  --claude          Force Claude capture
+  --codex           Force Codex capture
   --global          Store environment in ~/.mlld/box/ instead of .mlld/box/
 
 ${chalk.bold('Examples:')}

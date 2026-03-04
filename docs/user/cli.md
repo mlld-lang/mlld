@@ -692,7 +692,7 @@ Requires the `claude` CLI to be installed. Restart Claude Code after installing 
 
 ### `mlld box`
 
-Manage AI agent box modules. Boxes package credentials, configuration, MCP tools, and security policies for spawning AI agents.
+Manage AI agent box modules. Boxes are plain local modules generated from registry agent modules (`@mlld/agents/*`), plus your local auth/config context.
 
 ```bash
 # List available boxes
@@ -731,7 +731,7 @@ Shows boxes from:
 
 #### `mlld box capture <name>`
 
-Create a box module from your current Claude configuration.
+Create a box module from discovered local/global agent configuration.
 
 ```bash
 # Create project-local box
@@ -739,23 +739,35 @@ mlld box capture my-claude
 
 # Create global box
 mlld box capture my-claude --global
+
+# Force agent type
+mlld box capture my-codex --codex
 ```
 
 **What it does:**
-1. Extracts OAuth token from `~/.claude/.credentials.json`
-2. Stores token securely in macOS Keychain
-3. Copies `settings.json`, `CLAUDE.md`, `hooks.json`
-4. Generates `module.yml` and `index.mld`
+1. Discovers agent type (`claude`/`codex`) from config dirs (or uses explicit flag)
+2. Pulls registry module templates into `.mlld/box/<name>/agents/`
+   - `@mlld/agents/base`
+   - `@mlld/agents/<agent>`
+3. Imports OAuth token from `.credentials.json` into keychain (`mlld-box/<name>`)
+4. Copies local agent config files (settings/instructions/hooks/skills when present)
+5. Generates inspectable `module.yml` and `index.mld`
 
 **Options:**
+- `--local` - Prefer project-local config dirs (`./.claude`, `./.codex`)
 - `--global` - Create in `~/.mlld/box/` instead of `.mlld/box/`
+- `--claude` - Force Claude module capture
+- `--codex` - Force Codex module capture
 
 **Output structure:**
 ```
 .mlld/box/my-claude/
-├── module.yml          # Module manifest (type: environment)
-├── index.mld           # Entry point with @spawn, @shell exports
-└── .claude/            # Copied config files
+├── module.yml                 # Module manifest (type: environment)
+├── index.mld                  # Local wrapper module
+├── agents/
+│   ├── base.mld               # Pulled @mlld/agents/base
+│   └── claude.mld             # Pulled @mlld/agents/claude (or codex.mld)
+└── .claude/                   # Copied local config files (if present)
     ├── settings.json
     ├── CLAUDE.md
     └── hooks.json
@@ -807,24 +819,15 @@ Optional exports:
 
 **Example index.mld:**
 ```mlld
-/needs { cmd: [claude] }
-/policy @env = {
-  auth: {
-    claude: { from: "keychain:mlld-box/my-claude", as: "CLAUDE_CODE_OAUTH_TOKEN" }
-  }
-}
+/import { @setup, @configureAuth as @agentConfigureAuth, @spawn as @agentSpawn, @shell as @agentShell, @mcpConfig } from "./agents/claude.mld"
+/var @boxName = "my-claude"
+/var @configDir = "@fm.dir/.claude"
 
-/exe @spawn(prompt) = run { \
-  CLAUDE_CONFIG_DIR=@fm.dir/.claude \
-  claude -p @prompt
-} using auth:claude
+/exe @configureAuth() = @agentConfigureAuth(@boxName)
+/exe @spawn(prompt) = @agentSpawn(@boxName, @prompt, @configDir)
+/exe @shell() = @agentShell(@boxName, @configDir)
 
-/exe @shell() = run { \
-  CLAUDE_CONFIG_DIR=@fm.dir/.claude \
-  claude
-} using auth:claude
-
-/export { @spawn, @shell }
+/export { @setup, @configureAuth, @spawn, @shell, @mcpConfig }
 ```
 
 #### Security

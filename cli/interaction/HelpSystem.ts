@@ -408,11 +408,11 @@ Aliases:
     console.log(`
 Usage: mlld box <subcommand> [options]
 
-Manage AI agent boxes captured from local/global agent config.
+Manage AI agent boxes generated from registry agent modules.
 
 Subcommands:
   list                    List available boxes
-  capture <name>          Create box from config
+  capture <name>          Pull agent module + create local box
   spawn <name> -- <prompt>  Run agent with prompt
   shell <name>            Start interactive session
 
@@ -425,8 +425,9 @@ Examples:
   mlld box shell claude-dev
 
 Capture options:
-  --local                 Capture from project .claude/ instead of ~/.claude
-  --codex                 Capture from Codex config (.codex/) instead of Claude
+  --local                 Read config from project directories first
+  --claude                Force Claude capture
+  --codex                 Force Codex capture
   --global                Store in ~/.mlld/box/ instead of .mlld/box/
     `);
   }
