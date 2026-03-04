@@ -211,11 +211,10 @@ Clones text files into VFS. Binary files and symlinks are skipped. Options: `aut
 ```mlld
 files <@ws/> = [{ "file.md": "draft" }]
 show @ws.mx.edits
-var @f = <@ws/file.md>
-show @f.mx.diff
+show <@ws/file.md>.mx.diff
 ```
 
-`.mx.edits` returns the change list. Per-file `.mx.diff` returns a unified diff string.
+`.mx.edits` returns the change list. `<@ws/path>.mx.diff` returns a unified diff string.
 </FILES>
 
 </MLLD_OUTPUT>

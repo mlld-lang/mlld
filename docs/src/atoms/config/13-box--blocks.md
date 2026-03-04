@@ -52,11 +52,11 @@ Use `box @workspace` to bind an existing resolver-backed workspace as the active
 files <@workspace/> = [{ "task.md": "draft" }]
 
 box @workspace [
-  run cmd { echo "done" >> task.md }
+  file "notes.md" = "review complete"
 ]
 
 show @workspace.mx.edits
-show <@workspace/task.md>.mx.diff
+show <@workspace/notes.md>.mx.diff
 ```
 
 - `@workspace.mx.edits` — array of `{path, type, entity}` where type is `created`/`modified`/`deleted`
