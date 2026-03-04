@@ -5,11 +5,18 @@ import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldError, ErrorSeverity } from '@core/errors';
 import type { Environment } from '../env/Environment';
+import { extractVariableValue } from './variable-resolution';
+import { isWorkspaceValue, type WorkspaceValue } from '@core/types/workspace';
 
 export interface WorkingDirectoryOptions {
   sourceLocation?: SourceLocation;
   directiveType?: string;
 }
+
+export type WorkingDirectoryResult =
+  | { type: 'path'; path: string; workspacePushed: false }
+  | { type: 'workspace'; workspacePushed: true }
+  | { type: 'none'; workspacePushed: false };
 
 function createWorkingDirError(
   message: string,
@@ -29,28 +36,11 @@ function createWorkingDirError(
   });
 }
 
-export async function resolveWorkingDirectory(
-  workingDir: ContentNodeArray | string | undefined,
+async function validateAndNormalizeWorkingDirectory(
+  candidate: string,
   env: Environment,
-  options: WorkingDirectoryOptions = {}
-): Promise<string | undefined> {
-  if (!workingDir || (Array.isArray(workingDir) && workingDir.length === 0)) {
-    return undefined;
-  }
-
-  const rawPath =
-    typeof workingDir === 'string'
-      ? workingDir
-      : await interpolate(workingDir, env, InterpolationContext.FilePath);
-
-  const candidate = rawPath.trim();
-
-  // Empty string or "." means "use current working directory"
-  // This allows reusable functions where dir is optional
-  if (!candidate || candidate === '.') {
-    return undefined;
-  }
-
+  options: WorkingDirectoryOptions
+): Promise<string> {
   const expandedCandidate = candidate === '~' || candidate.startsWith('~/')
     ? path.join(os.homedir(), candidate === '~' ? '' : candidate.slice(2))
     : candidate;
@@ -78,6 +68,98 @@ export async function resolveWorkingDirectory(
   return normalized;
 }
 
+function extractSingleVariableName(workingDir: ContentNodeArray | string | undefined): string | undefined {
+  if (!Array.isArray(workingDir) || workingDir.length !== 1) {
+    return undefined;
+  }
+  const node = workingDir[0] as Record<string, unknown> | undefined;
+  if (!node || typeof node !== 'object') {
+    return undefined;
+  }
+  if (node.type === 'VariableReference' && typeof node.identifier === 'string') {
+    return node.identifier;
+  }
+  if (
+    node.type === 'VariableReferenceWithTail' &&
+    node.variable &&
+    typeof (node.variable as Record<string, unknown>).identifier === 'string'
+  ) {
+    return (node.variable as Record<string, unknown>).identifier as string;
+  }
+  if (node.type === 'TemplateVariable') {
+    if (typeof node.identifier === 'string') {
+      return node.identifier;
+    }
+    if (typeof node.name === 'string') {
+      return node.name;
+    }
+  }
+  return undefined;
+}
+
+async function resolveWorkspaceFromVariable(
+  variableName: string,
+  env: Environment
+): Promise<WorkspaceValue | undefined> {
+  const local = env.getVariable(variableName);
+  if (local) {
+    const value = await extractVariableValue(local, env);
+    if (isWorkspaceValue(value)) {
+      return value;
+    }
+    return undefined;
+  }
+
+  const resolverVariable = await env.getResolverVariable(variableName);
+  if (!resolverVariable) {
+    return undefined;
+  }
+  const resolverValue = await extractVariableValue(resolverVariable, env);
+  if (isWorkspaceValue(resolverValue)) {
+    return resolverValue;
+  }
+  return undefined;
+}
+
+export async function resolveWorkingDirectory(
+  workingDir: ContentNodeArray | string | undefined,
+  env: Environment,
+  options: WorkingDirectoryOptions = {}
+): Promise<WorkingDirectoryResult> {
+  if (!workingDir || (Array.isArray(workingDir) && workingDir.length === 0)) {
+    return { type: 'none', workspacePushed: false };
+  }
+
+  const variableName = extractSingleVariableName(workingDir);
+  if (variableName) {
+    const workspace = await resolveWorkspaceFromVariable(variableName, env);
+    if (workspace) {
+      env.pushActiveWorkspace(workspace);
+      return { type: 'workspace', workspacePushed: true };
+    }
+  }
+
+  const rawPath =
+    typeof workingDir === 'string'
+      ? workingDir
+      : await interpolate(workingDir, env, InterpolationContext.FilePath);
+
+  const candidate = rawPath.trim();
+
+  // Empty string or "." means "use current working directory"
+  // This allows reusable functions where dir is optional
+  if (!candidate || candidate === '.') {
+    return { type: 'none', workspacePushed: false };
+  }
+
+  const normalized = await validateAndNormalizeWorkingDirectory(candidate, env, options);
+  return {
+    type: 'path',
+    path: normalized,
+    workspacePushed: false
+  };
+}
+
 export async function executeInWorkingDirectory<T>(
   workingDir: ContentNodeArray | string | undefined,
   env: Environment,
@@ -86,9 +168,11 @@ export async function executeInWorkingDirectory<T>(
 ): Promise<T> {
   const resolved = await resolveWorkingDirectory(workingDir, env, options);
   try {
-    return await execute(resolved);
+    const resolvedPath = resolved.type === 'path' ? resolved.path : undefined;
+    return await execute(resolvedPath);
   } finally {
-    // Workspace stack cleanup is wired in Phase 6 when workspace-aware cwd
-    // resolution starts pushing active workspace values.
+    if (resolved.workspacePushed) {
+      env.popActiveWorkspace();
+    }
   }
 }

@@ -1647,8 +1647,9 @@ async function evaluateExecInvocationInternal(
   
   let result: unknown;
   let workingDirectory: string | undefined;
+  let workspacePushed = false;
   if ('workingDir' in definition && (definition as any).workingDir) {
-    workingDirectory = await resolveWorkingDirectory(
+    const resolvedWorkingDirectory = await resolveWorkingDirectory(
       (definition as any).workingDir as any,
       execEnv,
       {
@@ -1656,8 +1657,13 @@ async function evaluateExecInvocationInternal(
         directiveType: 'exec'
       }
     );
+    if (resolvedWorkingDirectory.type === 'path') {
+      workingDirectory = resolvedWorkingDirectory.path;
+    }
+    workspacePushed = resolvedWorkingDirectory.workspacePushed;
   }
-  
+
+  try {
   const nonCommandResult = await executeNonCommandExecutable({
     definition,
     commandName,
@@ -1890,6 +1896,11 @@ async function evaluateExecInvocationInternal(
 
   const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
   return finalEvalResult;
+  } finally {
+    if (workspacePushed) {
+      execEnv.popActiveWorkspace();
+    }
+  }
       });
     });
     recordToolCall(true);
