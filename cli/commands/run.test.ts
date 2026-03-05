@@ -361,6 +361,51 @@ describe('RunCommand', () => {
       exitSpy.mockRestore();
     });
 
+    it('prints resume guidance when a checkpoint cache already exists and --resume is omitted', async () => {
+      const { execute } = await import('@sdk/execute');
+      vi.mocked(execute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const value = p.toString();
+        if (value.endsWith('script.mld')) return true;
+        if (value.endsWith(path.join('.mlld', 'checkpoints', 'script'))) return true;
+        return false;
+      });
+      vi.mocked(fs.readFile).mockImplementation(async (filePath: any) => {
+        const value = String(filePath);
+        if (value.endsWith(path.join('.mlld', 'checkpoints', 'script', 'manifest.json'))) {
+          return JSON.stringify({ totalCached: 3 });
+        }
+        const error = new Error('ENOENT') as NodeJS.ErrnoException;
+        error.code = 'ENOENT';
+        throw error;
+      });
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`exit:${code}`);
+      });
+
+      try {
+        await runCommand.run('script');
+      } catch (error: any) {
+        if (!error.message.includes('exit:0')) throw error;
+      }
+
+      const logged = consoleSpy.mock.calls.map(call => String(call[0] ?? '')).join('\n');
+      expect(logged).toContain('Checkpoint found for this script (3 cached entries)');
+      expect(logged).toContain('Use --resume to continue from where you left off.');
+
+      consoleSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
     it('should show metrics in debug mode', async () => {
       const { execute } = await import('@sdk/execute');
       vi.mocked(execute).mockResolvedValue({

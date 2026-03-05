@@ -65,7 +65,8 @@ describe('@toolbridge builtin', () => {
       expect(result).toEqual({
         config: '',
         tools: 'Read,Write',
-        inBox: false
+        inBox: false,
+        mcpAllowedTools: ''
       });
     } finally {
       env.cleanup();

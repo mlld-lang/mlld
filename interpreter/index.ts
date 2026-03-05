@@ -7,7 +7,6 @@ import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { resolveMlldMode } from '@core/utils/mode';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
-import * as path from 'path';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 import type {
   InterpretOptions,
@@ -26,40 +25,7 @@ import type { DirectiveNode } from '@core/types';
 import { isExeReturnControl } from './eval/exe-return';
 import { materializeDisplayValue } from './utils/display-materialization';
 import { CheckpointManager } from './checkpoint/CheckpointManager';
-
-function stripCheckpointScriptSuffix(baseName: string): string {
-  if (baseName.endsWith('.mld.md')) {
-    return baseName.slice(0, -'.mld.md'.length);
-  }
-  if (baseName.endsWith('.mld')) {
-    return baseName.slice(0, -'.mld'.length);
-  }
-  return baseName;
-}
-
-function resolveCheckpointScriptName(
-  filePath?: string,
-  explicitName?: string
-): string | undefined {
-  if (typeof explicitName === 'string' && explicitName.trim().length > 0) {
-    return explicitName.trim();
-  }
-  if (!filePath || typeof filePath !== 'string') {
-    return undefined;
-  }
-
-  const parsed = path.parse(filePath);
-  const normalizedBase = parsed.base.toLowerCase();
-  if (normalizedBase === 'index.mld' || normalizedBase === 'main.mld' || normalizedBase === 'index.mld.md' || normalizedBase === 'main.mld.md') {
-    const dirName = path.basename(parsed.dir);
-    if (dirName && dirName !== path.sep) {
-      return dirName;
-    }
-  }
-
-  const candidate = stripCheckpointScriptSuffix(parsed.base).trim();
-  return candidate.length > 0 ? candidate : undefined;
-}
+import { resolveCheckpointScriptName } from './checkpoint/script-name';
 
 function validateCheckpointOptions(options: InterpretOptions): void {
   if (options.noCheckpoint !== true) {
@@ -468,12 +434,17 @@ export async function interpret(
     options.checkpointScriptName
   );
   if (options.noCheckpoint !== true && checkpointScriptName) {
+    const checkpointReadsEnabled =
+      options.resume !== undefined ||
+      (typeof options.fork === 'string' && options.fork.length > 0);
+
     env.setCheckpointManagerFactory(async () => {
       const checkpointManager = new CheckpointManager(checkpointScriptName, {
         scriptPath: options.filePath,
         ...(typeof options.fork === 'string' && options.fork.length > 0
           ? { forkScriptName: options.fork }
           : {}),
+        readEnabled: checkpointReadsEnabled,
         ...(typeof options.checkpointCacheRootDir === 'string' &&
         options.checkpointCacheRootDir.length > 0
           ? { cacheRootDir: options.checkpointCacheRootDir }

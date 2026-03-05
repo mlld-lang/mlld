@@ -206,7 +206,7 @@ describe('box directive', () => {
     const scopedEnv = findEnvWithScopedTools(env);
     expect(scopedEnv).toBeDefined();
     const allowedTools = Array.from(((scopedEnv as any).allowedTools as Set<string>) || []).sort();
-    expect(allowedTools).toEqual(['bash', 'read', 'write']);
+    expect(allowedTools).toEqual(['bash', 'glob', 'grep', 'read', 'write']);
     const allowedMcps = Array.from((((scopedEnv as any).allowedMcpServers as Set<string>) || []));
     expect(allowedMcps).toEqual([]);
     expect(scopedEnv?.getScopedEnvironmentConfig()?.net).toEqual({ allow: [] });

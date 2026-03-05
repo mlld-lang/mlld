@@ -183,10 +183,19 @@ describe('execute', () => {
       checkpointScriptName: 'sdk-route',
       checkpointCacheRootDir: checkpointRoot
     });
+    const resumed = await execute(routePath, undefined, {
+      fileSystem,
+      pathService,
+      checkpoint: true,
+      resume: true,
+      checkpointScriptName: 'sdk-route',
+      checkpointCacheRootDir: checkpointRoot
+    });
 
     expect(first.output).toContain('review:1:src/a.ts:sonnet');
-    expect(second.output).toContain('review:1:src/a.ts:sonnet');
-    expect((globalThis as Record<string, unknown>)[counterKey]).toBe(1);
+    expect(second.output).toContain('review:2:src/a.ts:sonnet');
+    expect(resumed.output).toContain('review:2:src/a.ts:sonnet');
+    expect((globalThis as Record<string, unknown>)[counterKey]).toBe(2);
   });
 
   it('supports execute() over VirtualFS while preserving backing immutability until flush', async () => {

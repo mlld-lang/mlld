@@ -214,6 +214,28 @@ function buildResumeAfterFailureScript(counterKey: string, failFlagKey: string):
 `.trim();
 }
 
+function buildPartialFailureScript(counterKey: string, failFlagKey: string): string {
+  return `
+/exe llm @llm(prompt, model) = js {
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  const rawPrompt = prompt && typeof prompt === "object" && "value" in prompt ? prompt.value : prompt;
+  const rawModel = model && typeof model === "object" && "value" in model ? model.value : model;
+  return "call:" + globalThis.${counterKey} + ":" + rawPrompt + ":" + rawModel;
+}
+/exe @gate() = js {
+  if (globalThis.${failFlagKey}) {
+    throw new Error("forced-failure-mid-run");
+  }
+  return "ok";
+}
+/var @first = @llm("alpha", "sonnet")
+/run @gate()
+/var @second = @llm("beta", "sonnet")
+/show @first
+/show @second
+`.trim();
+}
+
 afterEach(async () => {
   for (const key of cleanupGlobals.splice(0)) {
     delete (globalThis as Record<string, unknown>)[key];
@@ -222,7 +244,7 @@ afterEach(async () => {
 });
 
 describe('checkpoint resume + fork runtime semantics', () => {
-  it('auto-enables checkpointing for llm-labeled calls when --checkpoint is omitted', async () => {
+  it('auto-enables checkpoint persistence for llm-labeled calls when --checkpoint is omitted', async () => {
     const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-auto-enable-'));
     cleanupDirs.push(checkpointRoot);
     const counterKey = '__checkpointAutoEnableCounter';
@@ -240,8 +262,8 @@ describe('checkpoint resume + fork runtime semantics', () => {
       scriptName: 'auto-enable'
     });
 
-    expect(first).toBe(second);
-    expect(readCounter(counterKey)).toBe(1);
+    expect(first).not.toBe(second);
+    expect(readCounter(counterKey)).toBe(2);
   });
 
   it('disables checkpointing when --no-checkpoint is enabled', async () => {
@@ -318,6 +340,46 @@ describe('checkpoint resume + fork runtime semantics', () => {
 
     expect(first).toBe(second);
     expect(readCounter(counterKey)).toBe(1);
+  });
+
+  it('preserves unreached cached entries when a non-resume rerun fails mid-script', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-preserve-mid-failure-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointPreserveMidFailureCounter';
+    const failFlagKey = '__checkpointPreserveMidFailureFlag';
+    registerCounter(counterKey);
+    cleanupGlobals.push(failFlagKey);
+    (globalThis as Record<string, unknown>)[failFlagKey] = false;
+
+    const source = buildPartialFailureScript(counterKey, failFlagKey);
+    await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'preserve-mid-failure'
+    });
+    expect(readCounter(counterKey)).toBe(2);
+
+    (globalThis as Record<string, unknown>)[failFlagKey] = true;
+    await expect(
+      runScript({
+        source,
+        checkpointRoot,
+        scriptName: 'preserve-mid-failure'
+      })
+    ).rejects.toThrow('forced-failure-mid-run');
+    expect(readCounter(counterKey)).toBe(3);
+
+    (globalThis as Record<string, unknown>)[failFlagKey] = false;
+    const resumed = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'preserve-mid-failure',
+      resume: true
+    });
+
+    expect(readCounter(counterKey)).toBe(3);
+    expect(resumed).toContain('call:3:alpha:sonnet');
+    expect(resumed).toContain('call:2:beta:sonnet');
   });
 
   it('allows --resume "name" for checkpoints declared after a prior failure point', async () => {

@@ -55,6 +55,7 @@ export interface CheckpointManagerOptions {
   cacheRootDir?: string;
   scriptPath?: string;
   forkScriptName?: string;
+  readEnabled?: boolean;
   argsPreviewLimit?: number;
   now?: () => Date;
 }
@@ -356,6 +357,7 @@ export class CheckpointManager {
   private readonly scriptName: string;
   private readonly scriptPath?: string;
   private readonly forkScriptName?: string;
+  private readonly readEnabled: boolean;
   private readonly argsPreviewLimit: number;
   private readonly now: () => Date;
 
@@ -384,6 +386,7 @@ export class CheckpointManager {
   private executionOrderCounter = 0;
   private namedCheckpointOrders = new Map<string, number>();
   private runRegisteredCheckpointNames = new Set<string>();
+  private runWrittenKeys = new Set<string>();
 
   constructor(scriptName: string, options: CheckpointManagerOptions = {}) {
     if (!scriptName || scriptName.trim().length === 0) {
@@ -393,6 +396,7 @@ export class CheckpointManager {
     this.scriptName = scriptName;
     this.scriptPath = options.scriptPath;
     this.forkScriptName = options.forkScriptName;
+    this.readEnabled = options.readEnabled !== false;
     this.argsPreviewLimit = options.argsPreviewLimit ?? DEFAULT_ARGS_PREVIEW_LIMIT;
     this.now = options.now ?? (() => new Date());
 
@@ -437,6 +441,7 @@ export class CheckpointManager {
     this.executionOrderCounter = 0;
     this.runRegisteredCheckpointNames.clear();
     this.namedCheckpointOrders = new Map();
+    this.runWrittenKeys.clear();
   }
 
   augmentNamedCheckpointsFromSource(checkpointNames: readonly string[]): void {
@@ -506,6 +511,9 @@ export class CheckpointManager {
 
   async get(key: string): Promise<unknown | null> {
     await this.ensureLoaded();
+    if (!this.readEnabled && !this.runWrittenKeys.has(key)) {
+      return null;
+    }
 
     if (this.forkScriptName && this.forkResultsDir && this.forkIndex.has(key)) {
       return this.readCachedResult(key, this.forkResultCache, this.forkResultsDir);
@@ -566,6 +574,7 @@ export class CheckpointManager {
 
     this.localResultCache.set(key, resultEnvelope.value);
     this.localIndex.set(key, record);
+    this.runWrittenKeys.add(key);
     if (record.invocationSite && typeof record.invocationIndex === 'number') {
       this.getOrAssignInvocationSiteIndex(record.fn, record.invocationSite, record.invocationIndex);
     }
@@ -743,6 +752,7 @@ export class CheckpointManager {
     this.executionOrderCounter = 0;
     this.namedCheckpointOrders = new Map();
     this.runRegisteredCheckpointNames = new Set();
+    this.runWrittenKeys = new Set();
 
     await this.rewriteCacheIndex();
     await this.writeManifest();

@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { existsSync } from 'fs';
 import { readFile, rm } from 'fs/promises';
 import path from 'path';
+import { resolveCheckpointScriptCandidates } from '@interpreter/checkpoint/script-name';
 
 interface CheckpointRecord {
   key: string;
@@ -57,10 +58,11 @@ class CheckpointCommand {
     this.cacheRoot = path.resolve(root, '.mlld', 'checkpoints');
   }
 
-  async list(scriptName: string): Promise<void> {
+  async list(scriptRef: string): Promise<void> {
+    const scriptName = this.resolveScriptName(scriptRef);
     const records = await this.loadRecords(scriptName);
     if (records.length === 0) {
-      console.log(chalk.gray(`No checkpoint entries found for "${scriptName}".`));
+      console.log(chalk.gray(`No checkpoint entries found for "${scriptRef}".`));
       return;
     }
 
@@ -72,7 +74,8 @@ class CheckpointCommand {
     console.log(chalk.gray(`Total: ${records.length}`));
   }
 
-  async inspect(scriptName: string): Promise<void> {
+  async inspect(scriptRef: string): Promise<void> {
+    const scriptName = this.resolveScriptName(scriptRef);
     const [records, manifest] = await Promise.all([
       this.loadRecords(scriptName),
       this.loadManifest(scriptName)
@@ -87,10 +90,11 @@ class CheckpointCommand {
     console.log(JSON.stringify(payload, null, 2));
   }
 
-  async clean(scriptName: string): Promise<void> {
+  async clean(scriptRef: string): Promise<void> {
+    const scriptName = this.resolveScriptName(scriptRef);
     const scriptDir = this.getScriptDir(scriptName);
     if (!existsSync(scriptDir)) {
-      console.log(chalk.gray(`No checkpoint cache found for "${scriptName}".`));
+      console.log(chalk.gray(`No checkpoint cache found for "${scriptRef}".`));
       return;
     }
 
@@ -100,6 +104,21 @@ class CheckpointCommand {
 
   private getScriptDir(scriptName: string): string {
     return path.join(this.cacheRoot, scriptName);
+  }
+
+  private resolveScriptName(scriptRef: string): string {
+    const candidates = resolveCheckpointScriptCandidates(scriptRef);
+    if (candidates.length === 0) {
+      return scriptRef.trim();
+    }
+
+    for (const candidate of candidates) {
+      if (existsSync(this.getScriptDir(candidate))) {
+        return candidate;
+      }
+    }
+
+    return candidates[candidates.length - 1];
   }
 
   private async loadRecords(scriptName: string): Promise<CheckpointRecord[]> {
@@ -153,14 +172,14 @@ export function createCheckpointCommand() {
 
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
       const subcommand = args[0] || 'list';
-      const scriptName = args[1];
+      const scriptRef = args[1];
       const basePath =
         typeof flags['base-path'] === 'string' && flags['base-path'].trim().length > 0
           ? flags['base-path']
           : process.cwd();
       const command = new CheckpointCommand({ basePath });
 
-      if (!scriptName) {
+      if (!scriptRef) {
         console.error(chalk.red('Error: script name is required.'));
         console.error(usage());
         process.exit(1);
@@ -168,15 +187,15 @@ export function createCheckpointCommand() {
 
       try {
         if (subcommand === 'list') {
-          await command.list(scriptName);
+          await command.list(scriptRef);
           return;
         }
         if (subcommand === 'inspect') {
-          await command.inspect(scriptName);
+          await command.inspect(scriptRef);
           return;
         }
         if (subcommand === 'clean') {
-          await command.clean(scriptName);
+          await command.clean(scriptRef);
           return;
         }
 
