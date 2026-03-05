@@ -719,9 +719,27 @@ export async function evaluateBox(
 
   try {
     let pushedWorkspace = false;
+    let bridgePushed = false;
     if (workspace) {
       scopedEnv.pushActiveWorkspace(workspace);
       pushedWorkspace = true;
+      const { createWorkspaceMcpBridge } = await import('@interpreter/env/executors/workspace-mcp-bridge');
+      const bridge = await createWorkspaceMcpBridge({
+        workspace,
+        getShellSession: async () => {
+          if (!workspace.shellSession) {
+            const { ShellSession } = await import('@services/fs/ShellSession');
+            workspace.shellSession = await ShellSession.create(workspace.fs, {
+              cwd: scopedEnv.getProjectRoot()
+            });
+          }
+          return workspace.shellSession;
+        },
+        isToolAllowed: (toolName) => scopedEnv.isToolAllowed(toolName, toolName),
+        workingDirectory: scopedEnv.getProjectRoot()
+      });
+      scopedEnv.pushBridge(bridge);
+      bridgePushed = true;
     }
 
     try {
@@ -732,6 +750,12 @@ export async function evaluateBox(
       return { value: resolvedValue, env };
     } finally {
       if (pushedWorkspace) {
+        if (bridgePushed) {
+          const bridge = scopedEnv.popBridge();
+          if (bridge) {
+            await bridge.cleanup();
+          }
+        }
         scopedEnv.popActiveWorkspace();
       }
     }

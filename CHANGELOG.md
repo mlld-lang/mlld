@@ -27,10 +27,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.4]
 
+### Added
+- `@toolbridge(tools, cwd?)` exec-only builtin for mixed tool arrays (string + executable refs), returning `{ config, tools, inBox }` for module-side MCP/allowedTools branching
+- Ambient `@mx.box` context now includes active box MCP bridge metadata (`mcpConfigPath`, `socketPath`)
+
+### Changed
+- Workspace LLM command execution no longer rewrites CLI tool flags implicitly; tool bridging is now explicit via `@toolbridge(...)`
+
 ### Fixed
 - MCP server: handle `notifications/initialized` per protocol spec instead of returning an error that caused clients to restart the server
 - MCP server: suppress responses for JSON-RPC notifications (messages without `id`)
 - MCP server: `tools/call` returned "Tool not found" for exported functions with snake_case names due to incorrect camelCase round-trip in `resolveToolKey`
+- Streaming `stream` flags now resolve expression values (for example `stream: @config.stream`) across exec/run/show/pipeline paths; only strict boolean `true` enables streaming
+- Per-call MCP config generation now hard-fails on unknown in-box VFS tool names and MCP tool-name collisions
+- Per-invocation scope cleanups now deterministically tear down transient per-call MCP bridge resources
 
 ## [2.0.3]
 

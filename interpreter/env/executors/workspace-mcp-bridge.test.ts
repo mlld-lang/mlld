@@ -131,4 +131,5 @@ describe('workspace mcp bridge', () => {
       await bridge.cleanup();
     }
   });
+
 });

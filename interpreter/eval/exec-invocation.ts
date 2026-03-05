@@ -208,11 +208,13 @@ export async function evaluateExecInvocation(
   env: Environment
 ): Promise<EvalResult> {
   const operationPreview = buildExecOperationPreview(node);
-  return await runWithGuardRetry({
-    env,
-    operationContext: operationPreview,
-    sourceRetryable: true,
-    execute: () => evaluateExecInvocationInternal(node, env)
+  return env.withExecutionContext('exec-invocation', { allowToolbridge: true }, async () => {
+    return runWithGuardRetry({
+      env,
+      operationContext: operationPreview,
+      sourceRetryable: true,
+      execute: () => evaluateExecInvocationInternal(node, env)
+    });
   });
 }
 
@@ -1644,7 +1646,7 @@ async function evaluateExecInvocationInternal(
       if (preGuardHandled) {
         return finalizeResult(preGuardHandled);
       }
-  
+
   let result: unknown;
   let workingDirectory: string | undefined;
   let workspacePushed = false;
@@ -1675,6 +1677,7 @@ async function evaluateExecInvocationInternal(
     params,
     evaluatedArgs,
     resultSecurityDescriptor,
+    exeLabels,
     services: {
       interpolateWithResultDescriptor,
       toPipelineInput,
@@ -1865,7 +1868,7 @@ async function evaluateExecInvocationInternal(
         true,  // hasSyntheticSource
         undefined,
         undefined,
-        { returnStructured: true }
+        { returnStructured: true, stream: streamingRequested }
       );
       
       // Still need to handle other withClause features (trust, needs)
@@ -1897,6 +1900,7 @@ async function evaluateExecInvocationInternal(
   const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
   return finalEvalResult;
   } finally {
+    await execEnv.runScopeCleanups();
     if (workspacePushed) {
       execEnv.popActiveWorkspace();
     }

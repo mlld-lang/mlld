@@ -51,6 +51,7 @@ export type NonCommandExecutableHandlerOptions = {
   params: string[];
   evaluatedArgs: unknown[];
   resultSecurityDescriptor?: SecurityDescriptor;
+  exeLabels?: readonly string[];
   services: NonCommandExecutableHandlerServices;
 };
 
@@ -170,6 +171,7 @@ async function handleTemplateExecutable(
     node,
     execEnv,
     resultSecurityDescriptor,
+    exeLabels,
     services
   } = options;
   const templateInterpolationEnv = createTemplateInterpolationEnv(execEnv, definition);
@@ -211,7 +213,8 @@ async function handleTemplateExecutable(
       isRetryable: false,
       identifier: commandName,
       location: node.location,
-      descriptorHint: resultSecurityDescriptor
+      descriptorHint: resultSecurityDescriptor,
+      exeLabels
     });
   }
 
@@ -246,7 +249,7 @@ async function handleDataExecutable(
 async function handlePipelineExecutable(
   options: NonCommandExecutableHandlerOptions
 ): Promise<unknown> {
-  const { definition, commandName, node, execEnv, evaluatedArgs, resultSecurityDescriptor, services } = options;
+  const { definition, commandName, node, execEnv, evaluatedArgs, resultSecurityDescriptor, exeLabels, services } = options;
   const { processPipeline } = await import('@interpreter/eval/pipeline/unified-processor');
   const pipelineInputValue =
     evaluatedArgs.length > 0
@@ -260,7 +263,8 @@ async function handlePipelineExecutable(
     identifier: commandName,
     location: node.location,
     isRetryable: false,
-    descriptorHint: resultSecurityDescriptor
+    descriptorHint: resultSecurityDescriptor,
+    exeLabels
   });
   return typeof pipelineResult === 'string' ? pipelineResult : String(pipelineResult ?? '');
 }

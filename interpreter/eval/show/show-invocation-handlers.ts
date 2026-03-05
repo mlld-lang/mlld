@@ -14,6 +14,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { formatForDisplay } from '@interpreter/utils/display-formatter';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { resolveDirectiveExecInvocation } from '@interpreter/eval/directive-replay';
+import { resolveAnyStreamFlag } from '@interpreter/eval/stream-flag';
 
 export interface ShowInvocationHandlerParams {
   directive: DirectiveNode;
@@ -30,23 +31,35 @@ export interface ShowInvocationResult {
   skipJsonFormatting?: boolean;
 }
 
-function invocationRequestsStreaming(invocation: any): boolean {
-  return (
-    invocation?.stream === true ||
-    invocation?.withClause?.stream === true ||
-    invocation?.meta?.withClause?.stream === true
+async function invocationRequestsStreaming(
+  invocation: any,
+  env: Environment
+): Promise<boolean> {
+  return resolveAnyStreamFlag(
+    [
+      invocation?.stream,
+      invocation?.withClause?.stream,
+      invocation?.meta?.withClause?.stream
+    ],
+    env
   );
 }
 
-function executableDefinitionRequestsStreaming(variable: any): boolean {
+async function executableDefinitionRequestsStreaming(
+  variable: any,
+  env: Environment
+): Promise<boolean> {
   const definition = variable?.internal?.executableDef;
   if (!definition || typeof definition !== 'object') {
     return false;
   }
-  return (
-    definition.withClause?.stream === true ||
-    (definition.meta as any)?.withClause?.stream === true ||
-    (definition.meta as any)?.isStream === true
+  return resolveAnyStreamFlag(
+    [
+      definition.withClause?.stream,
+      (definition.meta as any)?.withClause?.stream,
+      (definition.meta as any)?.isStream
+    ],
+    env
   );
 }
 
@@ -160,7 +173,7 @@ export async function evaluateShowInvocation({
   }
 
   const hasStreamingSecurityLabel = Boolean(securityLabels?.includes('stream'));
-  const invocationHasStreaming = invocationRequestsStreaming(baseInvocation);
+  const invocationHasStreaming = await invocationRequestsStreaming(baseInvocation, env);
   let isStreamingShow = hasStreamingSecurityLabel || invocationHasStreaming;
   let invocation =
     hasStreamingSecurityLabel && !invocationHasStreaming
@@ -198,7 +211,7 @@ export async function evaluateShowInvocation({
 
   const streamingMetadataVariable =
     envVariable && isExecutableVariable(envVariable) ? envVariable : variable;
-  if (executableDefinitionRequestsStreaming(streamingMetadataVariable)) {
+  if (await executableDefinitionRequestsStreaming(streamingMetadataVariable, env)) {
     isStreamingShow = true;
   }
 

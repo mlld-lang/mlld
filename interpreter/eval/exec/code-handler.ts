@@ -93,6 +93,10 @@ export async function executeCodeExecutable(
       throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
     }
 
+    if (exeLabels.length > 0) {
+      execEnv.setExeLabels(exeLabels);
+    }
+
     const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
     let whenResult: EvalResult;
     try {
@@ -442,7 +446,8 @@ export async function executeCodeExecutable(
           isRetryable: false,
           identifier: commandName,
           location: node.location,
-          descriptorHint: services.getResultSecurityDescriptor()
+          descriptorHint: services.getResultSecurityDescriptor(),
+          exeLabels
         });
       } else {
         const withClauseResult = await applyWithClause(result, definition.withClause, execEnv);

@@ -111,14 +111,14 @@ import { checkpointPostHook } from '../hooks/checkpoint-post-hook';
 import { guardPreHook } from '../hooks/guard-pre-hook';
 import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
-import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
+import { createKeepExecutable, createKeepStructuredExecutable, createToolbridgeExecutable } from './builtins';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { SDKEvent, StreamingResult } from '@sdk/types';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import type { ImportApproval } from '@core/security/ImportApproval';
 import type { ImmutableCache } from '@core/security/ImmutableCache';
-import type { WorkspaceValue } from '@core/types/workspace';
+import type { WorkspaceValue, WorkspaceMcpBridgeHandle } from '@core/types/workspace';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
 
@@ -207,6 +207,7 @@ export class Environment
   private standaloneAuthSummary?: Record<string, AuthConfig>;
   private allowedTools?: Set<string>;
   private allowedMcpServers?: Set<string>;
+  private _exeLabels?: readonly string[];
   private moduleNeeds?: NeedsDeclaration;
   private moduleProfiles?: ProfilesDeclaration;
   private scopedEnvironmentConfig?: EnvironmentConfig;
@@ -292,6 +293,8 @@ export class Environment
 
   // Active workspace stack for nested workspace-aware execution contexts.
   private workspaceStack: WorkspaceValue[] = [];
+  private bridgeStack: WorkspaceMcpBridgeHandle[] = [];
+  private scopeCleanups: Array<() => Promise<void>> = [];
 
   // Current iteration file for <> placeholder
   private currentIterationFile?: any;
@@ -456,6 +459,7 @@ export class Environment
       getExecutionDirectory: this.getExecutionDirectory.bind(this),
       getPipelineContext: this.getPipelineContext.bind(this),
       getSecuritySnapshot: this.getSecuritySnapshot.bind(this),
+      getActiveBridge: this.getActiveBridge.bind(this),
       recordSecurityDescriptor: this.recordSecurityDescriptor.bind(this),
       getContextManager: () => this.contextManager
     });
@@ -474,6 +478,8 @@ export class Environment
       // Reserve module prefixes from resolver configuration and create path variables
       this.reserveModulePrefixes();
     }
+
+    this.registerToolbridgeBuiltin();
     
     // Initialize import resolver
     // Child environments get parent's resolver temporarily; createChild/createChildEnvironment
@@ -830,6 +836,15 @@ export class Environment
       return;
     }
     this.scopedEnvironmentConfig = config;
+  }
+
+  setExeLabels(labels: readonly string[]): void {
+    this._exeLabels = labels;
+  }
+
+  getExeLabels(): readonly string[] | undefined {
+    if (this._exeLabels) return this._exeLabels;
+    return this.parent?.getExeLabels();
   }
 
   getAllowedTools(): Set<string> | undefined {
@@ -1844,6 +1859,18 @@ export class Environment
     }
   }
 
+  private registerToolbridgeBuiltin(): void {
+    try {
+      if (this.variableManager.getVariables().has('toolbridge')) {
+        return;
+      }
+      const toolbridgeExec = createToolbridgeExecutable(this);
+      this.variableManager.setVariable('toolbridge', toolbridgeExec as any);
+    } catch (error) {
+      logger.warn('Failed to register toolbridge builtin', error);
+    }
+  }
+
   private getRootEnvironment(): Environment {
     let current: Environment = this;
     while (current.parent) {
@@ -2345,6 +2372,7 @@ export class Environment
     }
 
     child.workspaceStack = [...this.workspaceStack];
+    child.bridgeStack = [...this.bridgeStack];
 
     return child;
   }
@@ -2361,6 +2389,36 @@ export class Environment
 
   getActiveWorkspace(): WorkspaceValue | undefined {
     return this.workspaceStack[this.workspaceStack.length - 1];
+  }
+
+  pushBridge(bridge: WorkspaceMcpBridgeHandle): void {
+    this.bridgeStack.push(bridge);
+  }
+
+  popBridge(): WorkspaceMcpBridgeHandle | undefined {
+    return this.bridgeStack.pop();
+  }
+
+  getActiveBridge(): WorkspaceMcpBridgeHandle | undefined {
+    if (this.bridgeStack.length > 0) {
+      return this.bridgeStack[this.bridgeStack.length - 1];
+    }
+    return this.parent?.getActiveBridge();
+  }
+
+  registerScopeCleanup(fn: () => Promise<void>): void {
+    this.scopeCleanups.push(fn);
+  }
+
+  async runScopeCleanups(): Promise<void> {
+    const cleanups = this.scopeCleanups.splice(0);
+    for (const cleanup of cleanups) {
+      try {
+        await cleanup();
+      } catch {
+        // Best-effort cleanup.
+      }
+    }
   }
   
   /**
@@ -3166,11 +3224,16 @@ export class Environment
 
     try {
       const testCtxVar = this.getVariable('test_mx');
+      const bridge = this.getActiveBridge();
+      const boxContext = bridge
+        ? { mcpConfigPath: bridge.mcpConfigPath, socketPath: bridge.socketPath }
+        : null;
       const mxValue = testCtxVar
         ? (testCtxVar.value as any)
         : this.getContextManager().buildAmbientContext({
             pipelineContext: this.getPipelineContext(),
-            securitySnapshot: this.getSecuritySnapshot()
+            securitySnapshot: this.getSecuritySnapshot(),
+            boxContext
           });
       if (!('mx' in finalParams)) {
         finalParams = { ...finalParams, mx: Object.freeze(mxValue) };
@@ -3519,6 +3582,7 @@ export class Environment
    */
   cleanup(): void {
     logger.debug('Environment cleanup called');
+    void this.runScopeCleanups();
     
     if (!this.parent) {
       try {

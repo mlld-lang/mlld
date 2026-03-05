@@ -5,6 +5,7 @@ import type { StreamingManager } from '@interpreter/streaming/streaming-manager'
 import type { StreamingOptions } from '@interpreter/eval/pipeline/streaming-options';
 import { getAdapter } from '@interpreter/streaming/adapter-registry';
 import { loadStreamAdapter, resolveStreamFormatValue } from '@interpreter/streaming/stream-format';
+import { resolveAnyStreamFlag } from '@interpreter/eval/stream-flag';
 
 type ChunkSource = 'stdout' | 'stderr';
 
@@ -22,11 +23,17 @@ type ExecInvocationStreamingState = Pick<
   'streamingOptions' | 'streamingRequested' | 'streamingEnabled' | 'hasStreamFormat'
 >;
 
-function definitionRequestsStreaming(definition: ExecutableDefinition): boolean {
-  return (
-    definition.withClause?.stream === true ||
-    (definition.meta as any)?.withClause?.stream === true ||
-    (definition.meta as any)?.isStream === true
+async function definitionRequestsStreaming(
+  definition: ExecutableDefinition,
+  env: Environment
+): Promise<boolean> {
+  return resolveAnyStreamFlag(
+    [
+      definition.withClause?.stream,
+      (definition.meta as any)?.withClause?.stream,
+      (definition.meta as any)?.isStream
+    ],
+    env
   );
 }
 
@@ -95,10 +102,10 @@ export async function setupExecInvocationStreaming(
   env: Environment
 ): Promise<ExecInvocationStreamingSetup> {
   let streamingOptions = env.getStreamingOptions();
-  const streamingRequested =
-    node.stream === true ||
-    node.withClause?.stream === true ||
-    node.meta?.withClause?.stream === true;
+  const streamingRequested = await resolveAnyStreamFlag(
+    [node.stream, node.withClause?.stream, node.meta?.withClause?.stream],
+    env
+  );
   const streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
   const hasStreamFormat =
     node.withClause?.streamFormat !== undefined ||
@@ -146,7 +153,8 @@ export async function mergeExecInvocationStreamingFromDefinition(
   streamingManager: StreamingManager,
   current: ExecInvocationStreamingState
 ): Promise<ExecInvocationStreamingState> {
-  const mergedRequest = current.streamingRequested || definitionRequestsStreaming(definition);
+  const mergedRequest =
+    current.streamingRequested || (await definitionRequestsStreaming(definition, env));
   const mergedHasStreamFormat =
     current.hasStreamFormat || definitionHasStreamFormat(definition);
   const rawMergedStreamFormat = mergedHasStreamFormat

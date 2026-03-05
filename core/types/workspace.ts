@@ -1,6 +1,12 @@
 import type { ShellSession } from '@services/fs/ShellSession';
 import type { VirtualFS } from '@services/fs/VirtualFS';
 
+export interface WorkspaceMcpBridgeHandle {
+  readonly mcpConfigPath: string;
+  readonly socketPath: string;
+  cleanup(): Promise<void>;
+}
+
 export interface WorkspaceValue {
   type: 'workspace';
   fs: VirtualFS;

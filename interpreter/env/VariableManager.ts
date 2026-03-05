@@ -15,6 +15,7 @@ import type { SourceLocation } from '@core/types';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { ContextManager, PipelineContextSnapshot } from './ContextManager';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import type { WorkspaceMcpBridgeHandle } from '@core/types/workspace';
 
 export interface IVariableManager {
   // Core variable operations
@@ -58,6 +59,7 @@ export interface VariableManagerDependencies {
     policy?: Readonly<Record<string, unknown>>;
     operation?: Readonly<Record<string, unknown>>;
   } | undefined;
+  getActiveBridge?(): WorkspaceMcpBridgeHandle | undefined;
   recordSecurityDescriptor?(descriptor: SecurityDescriptor | undefined): void;
   getContextManager?(): ContextManager | undefined;
 }
@@ -299,8 +301,12 @@ export class VariableManager implements IVariableManager {
       const contextManager = this.deps.getContextManager?.();
       const pipelineContext = this.deps.getPipelineContext?.();
       const securitySnapshot = this.deps.getSecuritySnapshot?.();
+      const bridge = this.deps.getActiveBridge?.();
+      const boxContext = bridge
+        ? { mcpConfigPath: bridge.mcpConfigPath, socketPath: bridge.socketPath }
+        : null;
       const mxValue = contextManager
-        ? contextManager.buildAmbientContext({ pipelineContext, securitySnapshot })
+        ? contextManager.buildAmbientContext({ pipelineContext, securitySnapshot, boxContext })
         : this.buildLegacyContext(pipelineContext, securitySnapshot);
 
       return createObjectVariable('mx', mxValue, false, undefined, {

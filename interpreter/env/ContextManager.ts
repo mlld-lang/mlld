@@ -109,6 +109,7 @@ interface BuildContextOptions {
   pipelineContext?: PipelineContextSnapshot;
   securitySnapshot?: SecuritySnapshotLike;
   testOverride?: unknown;
+  boxContext?: { mcpConfigPath?: string; socketPath?: string } | null;
 }
 
 /**
@@ -366,7 +367,8 @@ export class ContextManager {
         errors: Array.isArray(hookErrors) ? [...hookErrors] : []
       },
       tools: this.getToolsSnapshot(),
-      ...(checkpointContext ? { checkpoint: checkpointContext } : {})
+      ...(checkpointContext ? { checkpoint: checkpointContext } : {}),
+      ...(options.boxContext ? { box: options.boxContext } : {})
     };
 
     if (deniedContext) {

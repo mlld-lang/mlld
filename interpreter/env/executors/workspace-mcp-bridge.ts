@@ -101,12 +101,13 @@ export interface WorkspaceMcpBridgeOptions {
   workspace: WorkspaceValue;
   getShellSession: () => Promise<ShellSession>;
   isToolAllowed?: (toolName: WorkspaceBridgeToolName) => boolean;
+  workingDirectory?: string;
 }
 
 export interface WorkspaceMcpBridge {
   readonly allowedTools: readonly WorkspaceBridgeToolName[];
   readonly mcpConfigPath: string;
-  injectCommand(command: string): string;
+  readonly socketPath: string;
   cleanup(): Promise<void>;
 }
 
@@ -133,8 +134,17 @@ class WorkspaceMcpBridgeServer {
     private readonly workspace: WorkspaceValue,
     private readonly allowedTools: readonly WorkspaceBridgeToolName[],
     private readonly getShellSession: () => Promise<ShellSession>,
-    private readonly socketPath: string
+    private readonly socketPath: string,
+    private readonly workingDirectory: string
   ) {}
+
+  private resolvePath(input: string): string {
+    const normalized = input.replace(/\\/g, '/');
+    if (path.isAbsolute(normalized)) {
+      return path.posix.normalize(normalized);
+    }
+    return path.resolve(this.workingDirectory, normalized);
+  }
 
   async start(): Promise<void> {
     await removeFileIfExists(this.socketPath);
@@ -309,12 +319,12 @@ class WorkspaceMcpBridgeServer {
   }
 
   private async handleRead(args: Record<string, unknown>): Promise<string> {
-    const filePath = normalizeWorkspacePath(extractStringArg(args, ['file_path', 'path', 'filePath']));
+    const filePath = this.resolvePath(extractStringArg(args, ['file_path', 'path', 'filePath']));
     return await this.workspace.fs.readFile(filePath);
   }
 
   private async handleWrite(args: Record<string, unknown>): Promise<string> {
-    const filePath = normalizeWorkspacePath(extractStringArg(args, ['file_path', 'path', 'filePath']));
+    const filePath = this.resolvePath(extractStringArg(args, ['file_path', 'path', 'filePath']));
     const content = extractStringArg(args, ['content', 'text', 'value']);
     await this.workspace.fs.writeFile(filePath, content);
     return `Wrote ${filePath}`;
@@ -338,8 +348,8 @@ class WorkspaceMcpBridgeServer {
 
   private async handleGlob(args: Record<string, unknown>): Promise<string> {
     const pattern = extractStringArg(args, ['pattern']);
-    const scopePathRaw = extractOptionalStringArg(args, ['path', 'cwd', 'base']) || '/';
-    const scopePath = normalizeWorkspacePath(scopePathRaw);
+    const scopePathRaw = extractOptionalStringArg(args, ['path', 'cwd', 'base']);
+    const scopePath = scopePathRaw ? this.resolvePath(scopePathRaw) : this.workingDirectory;
 
     const files = await collectWorkspaceFiles(this.workspace, scopePath);
     const matches = files.filter(filePath => {
@@ -356,8 +366,8 @@ class WorkspaceMcpBridgeServer {
 
   private async handleGrep(args: Record<string, unknown>): Promise<string> {
     const pattern = extractStringArg(args, ['pattern']);
-    const scopePathRaw = extractOptionalStringArg(args, ['path', 'cwd', 'base']) || '/';
-    const scopePath = normalizeWorkspacePath(scopePathRaw);
+    const scopePathRaw = extractOptionalStringArg(args, ['path', 'cwd', 'base']);
+    const scopePath = scopePathRaw ? this.resolvePath(scopePathRaw) : this.workingDirectory;
     const matcher = compileGrepPattern(pattern);
 
     const files = await collectWorkspaceFiles(this.workspace, scopePath);
@@ -402,14 +412,6 @@ function extractOptionalStringArg(args: Record<string, unknown>, keys: string[])
     }
   }
   return undefined;
-}
-
-function normalizeWorkspacePath(input: string): string {
-  const withForwardSlashes = input.replace(/\\/g, '/');
-  const normalized = withForwardSlashes.startsWith('/')
-    ? path.posix.normalize(withForwardSlashes)
-    : path.posix.normalize(path.posix.join('/', withForwardSlashes));
-  return normalized.startsWith('/') ? normalized : `/${normalized}`;
 }
 
 async function collectWorkspaceFiles(
@@ -526,9 +528,7 @@ export async function createWorkspaceMcpBridge(
     return {
       allowedTools,
       mcpConfigPath: configPath,
-      injectCommand(command: string): string {
-        return appendMcpConfigFlag(command, configPath);
-      },
+      socketPath: '',
       async cleanup(): Promise<void> {
         await removeFileIfExists(configPath);
       }
@@ -549,7 +549,8 @@ export async function createWorkspaceMcpBridge(
     options.workspace,
     allowedTools,
     options.getShellSession,
-    socketPath
+    socketPath,
+    options.workingDirectory || process.cwd()
   );
   await server.start();
 
@@ -582,23 +583,7 @@ export async function createWorkspaceMcpBridge(
   return {
     allowedTools,
     mcpConfigPath: configPath,
-    injectCommand(command: string): string {
-      return appendMcpConfigFlag(command, configPath);
-    },
+    socketPath,
     cleanup
   };
-}
-
-function appendMcpConfigFlag(command: string, configPath: string): string {
-  if (/\s--mcp-config(=|\s)/.test(` ${command}`)) {
-    return command;
-  }
-  return `${command} --mcp-config ${quoteShellArg(configPath)}`;
-}
-
-function quoteShellArg(value: string): string {
-  if (/^[A-Za-z0-9_\-./]+$/.test(value)) {
-    return value;
-  }
-  return `'${value.replace(/'/g, `'\\''`)}'`;
 }

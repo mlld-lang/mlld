@@ -81,6 +81,12 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
   private readonly debugStructured = process.env.MLLD_DEBUG_STRUCTURED === 'true';
   private stageHookNodeCounter = 0;
   private pipelineId: string = createPipelineId();
+  private _exeLabels: readonly string[] = [];
+
+  setExeLabels(labels: readonly string[]): void {
+    this._exeLabels = labels;
+  }
+
   createCommandExecutionContext(
     stageIndex: number,
     stageContext: StageContext,
@@ -95,7 +101,8 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
       stageIndex,
       parallelIndex,
       streamId: stageContext.contextId ?? createPipelineId(),
-      workingDirectory
+      workingDirectory,
+      exeLabels: this._exeLabels
     };
   }
 
@@ -108,7 +115,8 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
     hasSyntheticSource: boolean = false,
     parallelCap?: number,
     delayMs?: number,
-    streamingManager?: StreamingManager
+    streamingManager?: StreamingManager,
+    resolvedStreamRequested?: boolean
   ) {
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Constructor:', {
@@ -116,7 +124,8 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
         pipelineStages: pipeline.map(p => Array.isArray(p) ? '[parallel]' : p.rawIdentifier || 'unknown'),
         isRetryable,
         hasSourceFunction: !!sourceFunction,
-        hasSyntheticSource
+        hasSyntheticSource,
+        streamRequested: resolvedStreamRequested
       });
     }
     
@@ -146,7 +155,8 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
       pipeline,
       env,
       this.pipelineId,
-      streamingManager
+      streamingManager,
+      resolvedStreamRequested
     );
   }
 

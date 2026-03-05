@@ -59,7 +59,18 @@ export async function executePipeline(
   delayMs?: number,
   options?: ExecuteOptions
 ): Promise<string | StructuredValue> {
-  const executor = new PipelineExecutor(pipeline, env, format, isRetryable, sourceFunction, hasSyntheticSource, parallelCap, delayMs);
+  const executor = new PipelineExecutor(
+    pipeline,
+    env,
+    format,
+    isRetryable,
+    sourceFunction,
+    hasSyntheticSource,
+    parallelCap,
+    delayMs,
+    undefined,
+    options?.stream
+  );
   if (options?.returnStructured) {
     return await executor.execute(baseOutput, { returnStructured: true });
   }

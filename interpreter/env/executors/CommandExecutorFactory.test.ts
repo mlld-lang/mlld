@@ -4,14 +4,6 @@ import { ErrorUtils } from '../ErrorUtils';
 import { VirtualFS } from '@services/fs/VirtualFS';
 import type { WorkspaceValue } from '@core/types/workspace';
 
-const { bridgeFactoryMock } = vi.hoisted(() => ({
-  bridgeFactoryMock: vi.fn()
-}));
-
-vi.mock('./workspace-mcp-bridge', () => ({
-  createWorkspaceMcpBridge: bridgeFactoryMock
-}));
-
 function createWorkspace(): WorkspaceValue {
   return {
     type: 'workspace',
@@ -44,23 +36,15 @@ describe('CommandExecutorFactory workspace llm routing', () => {
     vi.clearAllMocks();
   });
 
-  it('routes workspace llm commands through the MCP bridge and real shell executor', async () => {
+  it('routes workspace llm commands through shell executor without bridge mutation', async () => {
     const workspace = createWorkspace();
     const factory = new CommandExecutorFactory(createDependencies(workspace));
 
     const shellExecute = vi.fn().mockResolvedValue('llm-ok');
-    const bridgeCleanup = vi.fn().mockResolvedValue(undefined);
 
     (factory as any).shellExecutor = { execute: shellExecute };
     (factory as any).captureWorkspaceSnapshot = vi.fn().mockResolvedValue(new Map());
     (factory as any).recordWorkspaceCommandWrites = vi.fn().mockResolvedValue(undefined);
-
-    bridgeFactoryMock.mockResolvedValue({
-      allowedTools: ['Read', 'Write'],
-      mcpConfigPath: '/tmp/mock-mcp.json',
-      injectCommand: (command: string) => `${command} --mcp-config /tmp/mock-mcp.json`,
-      cleanup: bridgeCleanup
-    });
 
     const output = await factory.executeCommand(
       'claude -p "hello"',
@@ -69,13 +53,11 @@ describe('CommandExecutorFactory workspace llm routing', () => {
     );
 
     expect(output).toBe('llm-ok');
-    expect(bridgeFactoryMock).toHaveBeenCalledTimes(1);
     expect(shellExecute).toHaveBeenCalledWith(
-      'claude -p "hello" --mcp-config /tmp/mock-mcp.json',
+      'claude -p "hello"',
       undefined,
       expect.objectContaining({ exeLabels: ['llm'] })
     );
-    expect(bridgeCleanup).toHaveBeenCalledTimes(1);
   });
 
   it('keeps non-llm workspace commands on ShellSession routing', async () => {
@@ -93,7 +75,6 @@ describe('CommandExecutorFactory workspace llm routing', () => {
 
     expect(output).toBe('workspace-ok');
     expect(workspaceExecute).toHaveBeenCalledTimes(1);
-    expect(bridgeFactoryMock).not.toHaveBeenCalled();
   });
 
   it('does not create workspace bridge when no workspace is active', async () => {
@@ -113,6 +94,5 @@ describe('CommandExecutorFactory workspace llm routing', () => {
       undefined,
       expect.objectContaining({ exeLabels: ['llm'] })
     );
-    expect(bridgeFactoryMock).not.toHaveBeenCalled();
   });
 });

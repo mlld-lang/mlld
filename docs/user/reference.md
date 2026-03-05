@@ -631,6 +631,10 @@ box @sandbox with { tools: ["Read"] } [
 ]
 ```
 
+Inside a box scope, `@mx.box` exposes active MCP bridge metadata:
+- `@mx.box.mcpConfigPath`
+- `@mx.box.socketPath`
+
 Return values from box blocks:
 
 ```mlld
@@ -1048,6 +1052,7 @@ Existence checks:
 Helpers:
 - `@keep(obj, [...keys])`: keep only specified keys from an object
 - `@keepStructured(obj, schema)`: keep keys matching a schema structure
+- `@toolbridge(tools, cwd?)`: exec-only helper for LLM module authors; returns `{ config, tools, inBox }` for mixed string/executable tool lists
 
 ### File Metadata Fields
 

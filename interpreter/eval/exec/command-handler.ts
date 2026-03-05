@@ -301,7 +301,8 @@ export async function executeCommandExecutable(
       isRetryable: false,
       identifier: commandName,
       location: variable.mx?.definedAt || node.location,
-      descriptorHint: services.getResultSecurityDescriptor()
+      descriptorHint: services.getResultSecurityDescriptor(),
+      exeLabels
     });
 
     if (typeof pipelineResult === 'string') {
