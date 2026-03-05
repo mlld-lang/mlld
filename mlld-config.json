@@ -1,5 +1,4 @@
 {
-  "projectname": "mlld",
   "resolvers": {
     "prefixes": [
       {
@@ -9,6 +8,15 @@
         "priority": 20,
         "config": {
           "basePath": "./llm/modules"
+        }
+      },
+      {
+        "prefix": "@modules/",
+        "resolver": "LOCAL",
+        "type": "input",
+        "priority": 20,
+        "config": {
+          "basePath": "./modules"
         }
       },
       {

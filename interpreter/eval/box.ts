@@ -592,7 +592,7 @@ function createScopedWorkspace(): WorkspaceValue {
   };
 }
 
-const DEFAULT_VFS_TOOLS = ['Bash', 'Read', 'Write'] as const;
+const DEFAULT_VFS_TOOLS = ['Bash', 'Read', 'Write', 'Glob', 'Grep'] as const;
 
 function attenuateDefaultToolsToParent(
   tools: string[],

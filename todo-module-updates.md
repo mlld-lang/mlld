@@ -2,30 +2,23 @@
 
 This repository now provides interpreter-side support for per-call MCP tool bridging and strict stream flag resolution. Module packages still need to adopt the new interface patterns.
 
-## Required module updates
+## Done
 
-1. Update `@mlld/claude` (and any similar LLM module) to the `(prompt, config)` convention:
-- `config.model`
-- `config.dir`
-- `config.tools` (mixed string + executable refs)
-- `config.stream` (strict boolean)
+1. **`(prompt, config)` convention** — `modules/claude/index.mld` implements `@claude(prompt, config)` with config.model, config.dir, config.tools, config.stream, config.system.
 
-2. Replace legacy tool flag assumptions with `@toolbridge(...)`:
-- Call `var @tb = @toolbridge(@config.tools, @config.dir)` when tools are provided.
-- Branch on:
-  - `@tb.config && @tb.inBox` -> `--tools "" --mcp-config "@tb.config"`
-  - `@tb.config && !@tb.inBox` -> `--mcp-config "@tb.config"`
-  - `!@tb.config` -> `--allowedTools "@tb.tools"`
+2. **`@toolbridge` integration** — `@claude` calls `@toolbridge(@cfg.tools, @cfg.dir)` when tools are present. Branches on `@tb.config && @tb.inBox`, `@tb.config`, and fallback `--allowedTools`.
 
-3. Export and use module-owned stream adapter configs:
-- Export adapter object (for example `@claudeStreamFormat`).
-- Wire executable with `with { stream: @config.stream, streamFormat: @claudeStreamFormat }`.
+3. **Module-owned stream adapter** — `@claudeStreamFormat` exported with full NDJSON schemas (message, thinking, tool-use, tool-result, error, metadata). Wired via `with { stream: @cfg.stream, streamFormat: @claudeStreamFormat }`.
 
-4. Simplify model helpers to avoid spread-on-undefined patterns:
-- Prefer single-arity helpers like:
-  - `exe llm @haiku(prompt) = @claude(@prompt, { model: "haiku" })`
-  - `exe llm @sonnet(prompt) = @claude(@prompt, { model: "sonnet" })`
-  - `exe llm @opus(prompt) = @claude(@prompt, { model: "opus" })`
+4. **Single-arity model helpers** — `@haiku(prompt)`, `@sonnet(prompt)`, `@opus(prompt)` delegate to `@claude` with fixed model.
+
+5. **`@claudeWithSystem` folded into `config.system`** — `--append-system-prompt` flag added when `@cfg.system` is set. No separate export.
+
+6. **Poll exes merged** — `@claudePoll`, `@claudePollJsonl`, `@claudePollEvent` use `(prompt, config)` convention. Same config shape as `@claude` plus poll-specific fields (config.poll, config.pattern, config.event, config.itemId, config.timeout). Internal `@pollFileImpl`/`@pollJsonlImpl`/`@pollEventImpl` sh helpers handle background exec + polling.
+
+7. **Directory-based module** — `modules/claude/` with `module.yml`, `index.mld`, `README.md`. Version 3.0.0.
+
+## Remaining
 
 5. Add module tests for new toolbridge/streaming paths:
 - in-box VFS string tools
@@ -33,8 +26,12 @@ This repository now provides interpreter-side support for per-call MCP tool brid
 - function-ref tools (MCP config path)
 - mixed tools + stream true/false behavior
 
-## Open decisions to confirm in modules repo
+8. Registry publishing — publish `@mlld/claude@3.0.0` from `modules/claude/`. Decide deprecation for `@mlld/claude-poll`.
 
-1. Whether to keep `--tools ""` only for in-box MCP path (recommended) or broaden usage.
-2. Final adapter schema set for Claude stream events across CLI versions.
-3. Whether any module should expose `@toolbridge` directly or keep it internal.
+## Resolved decisions
+
+1. `--tools ""` only for in-box MCP path — yes, only when `@tb.inBox` is true.
+2. Adapter schemas — 6 event types matching Claude Code CLI output format.
+3. `@toolbridge` stays internal — not exposed by the module.
+4. Poll config shape — flat keys (config.poll, config.timeout, config.pattern, config.event, config.itemId).
+5. `@mlld/claude-poll` deprecation — deferred. Old module stays published; new module is a separate package path (`modules/claude/`).

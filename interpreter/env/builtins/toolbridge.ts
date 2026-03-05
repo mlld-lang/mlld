@@ -69,6 +69,7 @@ export function createToolbridgeExecutable(env: Environment): Variable {
       return {
         config: callConfig.mcpConfigPath,
         tools: callConfig.toolsCsv,
+        mcpAllowedTools: callConfig.mcpAllowedTools,
         inBox: callConfig.inBox
       };
     },

@@ -12,6 +12,8 @@ import { createFunctionMcpBridge } from './function-mcp-bridge';
 const PROTOCOL_VERSION = '2024-11-05';
 const FILTERED_VFS_SOCKET_ENV = 'MLLD_FILTERED_VFS_MCP_SOCKET';
 const VFS_TOOL_NAMES = ['Read', 'Write', 'Bash', 'Glob', 'Grep'] as const;
+const VFS_MCP_SERVER_NAME = 'mlld_vfs';
+const FUNCTION_MCP_SERVER_NAME = 'mlld_tools';
 
 type WorkspaceBridgeToolName = typeof VFS_TOOL_NAMES[number];
 
@@ -45,6 +47,7 @@ export interface CallMcpConfigOptions {
 export interface CallMcpConfig {
   readonly mcpConfigPath: string;
   readonly toolsCsv: string;
+  readonly mcpAllowedTools: string;
   readonly inBox: boolean;
   cleanup(): Promise<void>;
 }
@@ -505,6 +508,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
 
   const cleanupFns: Array<() => Promise<void>> = [];
   const mcpServers: Record<string, unknown> = {};
+  const mcpAllowedToolNames: string[] = [];
 
   if (inBox && vfsTools.length > 0) {
     const activeBridge = options.env.getActiveBridge();
@@ -518,6 +522,9 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     });
     cleanupFns.push(filteredVfsBridge.cleanup);
     Object.assign(mcpServers, await readMcpServers(filteredVfsBridge.mcpConfigPath));
+    for (const tool of vfsTools) {
+      mcpAllowedToolNames.push(`mcp__${VFS_MCP_SERVER_NAME}__${tool}`);
+    }
   }
 
   if (functionTools.length > 0) {
@@ -537,12 +544,16 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     });
     cleanupFns.push(functionBridge.cleanup);
     Object.assign(mcpServers, await readMcpServers(functionBridge.mcpConfigPath));
+    for (const [mcpName] of functionMap) {
+      mcpAllowedToolNames.push(`mcp__${FUNCTION_MCP_SERVER_NAME}__${mcpName}`);
+    }
   }
 
   if (Object.keys(mcpServers).length === 0) {
     return {
       mcpConfigPath: '',
       toolsCsv,
+      mcpAllowedTools: '',
       inBox,
       async cleanup(): Promise<void> {
         // No-op
@@ -575,6 +586,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   return {
     mcpConfigPath: configPath,
     toolsCsv,
+    mcpAllowedTools: mcpAllowedToolNames.join(','),
     inBox,
     cleanup
   };
