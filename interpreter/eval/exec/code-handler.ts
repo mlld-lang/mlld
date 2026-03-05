@@ -87,14 +87,14 @@ export async function executeCodeExecutable(
   let execEnv = options.execEnv;
   let result: unknown;
 
+  if (exeLabels.length > 0) {
+    execEnv.setExeLabels(exeLabels);
+  }
+
   if (definition.language === 'mlld-when') {
     const activeWhenExpr = whenExprNode;
     if (!activeWhenExpr) {
       throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
-    }
-
-    if (exeLabels.length > 0) {
-      execEnv.setExeLabels(exeLabels);
     }
 
     const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');

@@ -99,7 +99,8 @@ export async function executeCommandHandler(
   const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
   const envInputTaint = descriptorToInputTaint(envInputDescriptor);
   const execDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
-  const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
+  const localLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
+  const exeLabels = localLabels.length > 0 ? localLabels : (executionContext?.exeLabels ?? []);
   if (envInputTaint.length > 0) {
     const parsedCommand = parseCommand(command);
     const opLabels = getOperationLabels({

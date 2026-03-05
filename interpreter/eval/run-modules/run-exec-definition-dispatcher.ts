@@ -691,6 +691,9 @@ async function handleCodeDefinition(
     }
 
     const execEnv = env.createChild();
+    if (exeLabels.length > 0) {
+      execEnv.setExeLabels(exeLabels);
+    }
     if (execVar.internal?.capturedModuleEnv instanceof Map) {
       execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
     }
@@ -718,6 +721,9 @@ async function handleCodeDefinition(
     }
 
     const execEnv = env.createChild();
+    if (exeLabels.length > 0) {
+      execEnv.setExeLabels(exeLabels);
+    }
     if (execVar.internal?.capturedModuleEnv instanceof Map) {
       execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
     }
@@ -743,6 +749,9 @@ async function handleCodeDefinition(
     }
 
     const execEnv = env.createChild();
+    if (exeLabels.length > 0) {
+      execEnv.setExeLabels(exeLabels);
+    }
     if (execVar.internal?.capturedModuleEnv instanceof Map) {
       execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
     }

@@ -19,6 +19,7 @@ export interface WorkspaceProvider {
   getActiveWorkspace(): WorkspaceValue | undefined;
   isToolAllowed?(toolName: string, rawToolName?: string): boolean;
   getExeLabels?(): readonly string[] | undefined;
+  getEnclosingExeLabels?(): readonly string[];
 }
 
 interface SecuritySnapshotLike {
@@ -222,7 +223,10 @@ export class CommandExecutorFactory {
   private isWorkspaceLlmInvocation(context?: CommandExecutionContext): boolean {
     const contextLabels = Array.isArray(context?.exeLabels) ? context!.exeLabels : [];
     const envLabels = this.workspaceProvider.getExeLabels?.() ?? [];
-    const labels = contextLabels.length > 0 ? contextLabels : envLabels;
+    const opStackLabels = this.workspaceProvider.getEnclosingExeLabels?.() ?? [];
+    const labels = contextLabels.length > 0 ? contextLabels
+      : envLabels.length > 0 ? envLabels
+      : opStackLabels;
     return labels.some(label => typeof label === 'string' && label.trim().toLowerCase() === 'llm');
   }
 

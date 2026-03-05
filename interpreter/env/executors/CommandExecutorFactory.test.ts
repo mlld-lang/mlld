@@ -95,4 +95,82 @@ describe('CommandExecutorFactory workspace llm routing', () => {
       expect.objectContaining({ exeLabels: ['llm'] })
     );
   });
+
+  it('falls back to env getExeLabels when context labels are empty', async () => {
+    const workspace = createWorkspace();
+    const deps = createDependencies(workspace);
+    (deps.workspaceProvider as any).getExeLabels = () => ['llm'];
+    const factory = new CommandExecutorFactory(deps);
+
+    const shellExecute = vi.fn().mockResolvedValue('env-fallback-ok');
+    (factory as any).shellExecutor = { execute: shellExecute };
+    (factory as any).captureWorkspaceSnapshot = vi.fn().mockResolvedValue(new Map());
+    (factory as any).recordWorkspaceCommandWrites = vi.fn().mockResolvedValue(undefined);
+
+    const output = await factory.executeCommand(
+      'claude -p "hello"',
+      undefined,
+      { directiveType: 'exec', exeLabels: [] }
+    );
+
+    expect(output).toBe('env-fallback-ok');
+    expect(shellExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to opStack getEnclosingExeLabels when both context and env labels are empty', async () => {
+    const workspace = createWorkspace();
+    const deps = createDependencies(workspace);
+    (deps.workspaceProvider as any).getExeLabels = () => [];
+    (deps.workspaceProvider as any).getEnclosingExeLabels = () => ['llm'];
+    const factory = new CommandExecutorFactory(deps);
+
+    const shellExecute = vi.fn().mockResolvedValue('opstack-fallback-ok');
+    (factory as any).shellExecutor = { execute: shellExecute };
+    (factory as any).captureWorkspaceSnapshot = vi.fn().mockResolvedValue(new Map());
+    (factory as any).recordWorkspaceCommandWrites = vi.fn().mockResolvedValue(undefined);
+
+    const output = await factory.executeCommand(
+      'claude -p "hello"',
+      undefined,
+      { directiveType: 'exec', exeLabels: [] }
+    );
+
+    expect(output).toBe('opstack-fallback-ok');
+    expect(shellExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes to ShellSession when all label sources are empty', async () => {
+    const workspace = createWorkspace();
+    const deps = createDependencies(workspace);
+    (deps.workspaceProvider as any).getExeLabels = () => [];
+    (deps.workspaceProvider as any).getEnclosingExeLabels = () => [];
+    const factory = new CommandExecutorFactory(deps);
+
+    const workspaceExecute = vi.fn().mockResolvedValue('vfs-ok');
+    (factory as any).executeWorkspaceCommand = workspaceExecute;
+
+    const output = await factory.executeCommand(
+      'echo "hello"',
+      undefined,
+      { directiveType: 'exec', exeLabels: [] }
+    );
+
+    expect(output).toBe('vfs-ok');
+    expect(workspaceExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes to ShellSession when no context is provided and no env/opStack labels', async () => {
+    const workspace = createWorkspace();
+    const deps = createDependencies(workspace);
+    (deps.workspaceProvider as any).getExeLabels = () => undefined;
+    const factory = new CommandExecutorFactory(deps);
+
+    const workspaceExecute = vi.fn().mockResolvedValue('no-context-ok');
+    (factory as any).executeWorkspaceCommand = workspaceExecute;
+
+    const output = await factory.executeCommand('echo "hello"');
+
+    expect(output).toBe('no-context-ok');
+    expect(workspaceExecute).toHaveBeenCalledTimes(1);
+  });
 });
