@@ -446,21 +446,40 @@ async function evaluateExecInvocationInternal(
     throw new MlldInterpreterError('ExecInvocation has no command identifier');
   }
 
-  // Check for circular reference before resolving (skip builtin methods and reserved names)
+  // Check for circular reference / recursion depth before resolving
   const isBuiltinCommand = isBuiltinMethod(commandName);
-  const isReservedName = env.hasVariable(commandName) &&
-    (env.getVariable(commandName) as any)?.internal?.isReserved;
+  const existingVar = env.hasVariable(commandName)
+    ? (env.getVariable(commandName) as any)
+    : null;
+  const isReservedName = existingVar?.internal?.isReserved;
+  // exe recursive @fn(...) — the 'recursive' label opts in to bounded self-calls
+  const isRecursiveExe = Array.isArray(existingVar?.mx?.labels)
+    && existingVar.mx.labels.includes('recursive');
   const shouldTrackResolution = !isBuiltinCommand && !isReservedName;
   let resolutionTrackingActive = false;
 
   if (shouldTrackResolution && env.isResolving(commandName)) {
-    throw new CircularReferenceError(
-      `Circular reference detected: executable '@${commandName}' calls itself recursively without a terminating condition`,
-      {
-        identifier: commandName,
-        location: nodeSourceLocation
-      }
-    );
+    if (!isRecursiveExe) {
+      // Non-recursive function calling itself: throw immediately (original behavior)
+      throw new CircularReferenceError(
+        `Circular reference detected: executable '@${commandName}' calls itself recursively without a terminating condition`,
+        {
+          identifier: commandName,
+          location: nodeSourceLocation
+        }
+      );
+    }
+    // Recursive function: enforce depth limit
+    const limit = Number(process.env.MLLD_RECURSION_DEPTH ?? 64);
+    if (env.getCallDepth(commandName) >= limit) {
+      throw new CircularReferenceError(
+        `'@${commandName}' exceeded maximum recursion depth (${limit}). Add a base case or increase the limit with MLLD_RECURSION_DEPTH.`,
+        {
+          identifier: commandName,
+          location: nodeSourceLocation
+        }
+      );
+    }
   }
 
   // Mark this executable as being resolved (skip builtin methods and reserved names)
