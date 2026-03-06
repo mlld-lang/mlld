@@ -5,7 +5,7 @@
 exe @logEvent(runDir, event) = [
   let @eventLog = `@runDir/events.jsonl`
   let @eventWithTs = { ts: @now, ...@event }
-  let @_ = @eventWithTs | append "@eventLog"
+  @eventWithTs | append "@eventLog"
   => @eventWithTs
 ]
 
@@ -104,7 +104,7 @@ exe @logManualReview(runDir, ticketId, phase, reason, details) = [
     reason: @reason,
     details: @details
   }
-  let @_ = @entry | append "@reviewFile"
+  @entry | append "@reviewFile"
   => @entry
 ]
 

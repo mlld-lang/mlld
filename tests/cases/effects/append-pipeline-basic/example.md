@@ -2,11 +2,11 @@
 description: Pipeline append operator forms
 ---
 
-/var @_ = "one" | append "append-pipeline-implicit.txt"
-/var @_ = "two" | append "append-pipeline-implicit.txt"
+"one" | append "append-pipeline-implicit.txt"
+"two" | append "append-pipeline-implicit.txt"
 
 /var @message = "three"
-/var @_ = "ignored" | append @message to "append-pipeline-explicit.txt"
+"ignored" | append @message to "append-pipeline-explicit.txt"
 
 /show "Pipeline appends complete"
 
