@@ -200,7 +200,7 @@ exe @routeTask(task, agents) = [
   >> Fast classification with haiku
   let @outPath = `@root/tmp/router-@task.id\.json`
   let @prompt = @scorePrompt(@task, @agentSummary.join("\n"))
-  let @_ = @claudePoll(@prompt, "haiku", "@root", "Read,Write", @outPath)
+  @claudePoll(@prompt, "haiku", "@root", "Read,Write", @outPath)
   let @result = <@outPath>? | @json
 
   >> Low confidence → refine with stronger model
@@ -226,7 +226,7 @@ The gate checks agent output quality before finalizing:
 exe @checkOutput(task, output) = [
   let @outPath = `@root/tmp/gate-@task.id\.json`
   let @prompt = @checkPrompt(@task, @output)
-  let @_ = @claudePoll(@prompt, "haiku", "@root", "Read,Write", @outPath)
+  @claudePoll(@prompt, "haiku", "@root", "Read,Write", @outPath)
   let @result = <@outPath>? | @json
   when !@result => { pass: true, feedback: null }
   => @result
@@ -299,7 +299,7 @@ var @input = <@p.inputFile> | @json
 
 >> Do work (one or more LLM calls)
 var @prompt = @myPrompt(@input)
-var @_ = @claudePoll(@prompt, "sonnet", "@root", @tools, @outputPath)
+@claudePoll(@prompt, "sonnet", "@root", @tools, @outputPath)
 var @result = <@outputPath>?
 
 >> Write output
@@ -339,12 +339,12 @@ The key pattern for decision jobs. Separating generation from evaluation prevent
 ```mlld
 >> Call 1: Generate options (no bias, no ranking)
 var @genPrompt = @generatePrompt(@context)
-var @_ = @claudePoll(@genPrompt, "sonnet", "@root", @tools, @optionsPath)
+@claudePoll(@genPrompt, "sonnet", "@root", @tools, @optionsPath)
 var @options = <@optionsPath>? | @json
 
 >> Call 2: Evaluate and choose (critical judgment)
 var @evalPrompt = @evaluatePrompt(@context, @options)
-var @_ = @claudePoll(@evalPrompt, "opus", "@root", @tools, @outputPath)
+@claudePoll(@evalPrompt, "opus", "@root", @tools, @outputPath)
 var @decision = <@outputPath>? | @json
 ```
 
