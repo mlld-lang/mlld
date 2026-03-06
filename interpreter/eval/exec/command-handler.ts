@@ -163,6 +163,13 @@ export async function executeCommandExecutable(
     });
   }
 
+  for (const warning of CommandUtils.collectUnsafeInterpolatedFragmentWarnings(
+    definition.commandTemplate,
+    name => execEnv.getVariable(name)
+  )) {
+    env.emitEffect('stderr', `${warning}\n`);
+  }
+
   let command = await services.interpolateWithResultDescriptor(
     definition.commandTemplate,
     execEnv,

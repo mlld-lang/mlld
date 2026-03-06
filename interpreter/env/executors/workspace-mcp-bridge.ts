@@ -175,47 +175,47 @@ class WorkspaceMcpBridgeServer {
         const line = buffer.slice(0, newlineIndex).trim();
         buffer = buffer.slice(newlineIndex + 1);
         if (line.length > 0) {
-          this.handleLine(line)
-            .then(response => {
-              socket.write(`${JSON.stringify(response)}\n`);
-            })
-            .catch(error => {
-              const message = error instanceof Error ? error.message : String(error);
-              const fallback: JsonRpcResponse = {
-                jsonrpc: '2.0',
-                id: null,
-                error: {
-                  code: -32603,
-                  message
+          const parsed = parseJsonRpcRequest(line);
+          if ('error' in parsed) {
+            socket.write(`${JSON.stringify(parsed.error)}\n`);
+          } else {
+            this.handleRequest(parsed.request)
+              .then(response => {
+                if (response) {
+                  socket.write(`${JSON.stringify(response)}\n`);
                 }
-              };
-              socket.write(`${JSON.stringify(fallback)}\n`);
-            });
+              })
+              .catch(error => {
+                if (parsed.request.id === undefined) {
+                  return;
+                }
+                const message = error instanceof Error ? error.message : String(error);
+                const fallback: JsonRpcResponse = {
+                  jsonrpc: '2.0',
+                  id: parsed.request.id,
+                  error: {
+                    code: -32603,
+                    message
+                  }
+                };
+                socket.write(`${JSON.stringify(fallback)}\n`);
+              });
+          }
         }
         newlineIndex = buffer.indexOf('\n');
       }
     });
   }
 
-  private async handleLine(line: string): Promise<JsonRpcResponse> {
-    let request: JsonRpcRequest;
-    try {
-      request = JSON.parse(line) as JsonRpcRequest;
-    } catch (error) {
-      return {
-        jsonrpc: '2.0',
-        id: null,
-        error: {
-          code: -32700,
-          message: error instanceof Error ? error.message : String(error)
-        }
-      };
-    }
-
-    const id = request.id ?? null;
+  private async handleRequest(request: JsonRpcRequest): Promise<JsonRpcResponse | null> {
+    const hasRequestId = request.id !== undefined;
+    const id = hasRequestId ? request.id : null;
 
     switch (request.method) {
       case 'initialize': {
+        if (!hasRequestId) {
+          return null;
+        }
         return {
           jsonrpc: '2.0',
           id,
@@ -230,13 +230,12 @@ class WorkspaceMcpBridgeServer {
         };
       }
       case 'notifications/initialized': {
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: null
-        };
+        return null;
       }
       case 'tools/list': {
+        if (!hasRequestId) {
+          return null;
+        }
         return {
           jsonrpc: '2.0',
           id,
@@ -246,6 +245,9 @@ class WorkspaceMcpBridgeServer {
         };
       }
       case 'tools/call': {
+        if (!hasRequestId) {
+          return null;
+        }
         const toolName = String(request.params?.name ?? '');
         const args =
           request.params && typeof request.params.arguments === 'object' && request.params.arguments
@@ -286,6 +288,9 @@ class WorkspaceMcpBridgeServer {
         }
       }
       default: {
+        if (!hasRequestId) {
+          return null;
+        }
         return {
           jsonrpc: '2.0',
           id,
@@ -391,6 +396,25 @@ class WorkspaceMcpBridgeServer {
     }
 
     return output.join('\n');
+  }
+}
+
+function parseJsonRpcRequest(line: string): { request: JsonRpcRequest } | { error: JsonRpcResponse } {
+  try {
+    return {
+      request: JSON.parse(line) as JsonRpcRequest
+    };
+  } catch (error) {
+    return {
+      error: {
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32700,
+          message: error instanceof Error ? error.message : String(error)
+        }
+      }
+    };
   }
 }
 

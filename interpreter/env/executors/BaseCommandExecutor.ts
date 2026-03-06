@@ -196,6 +196,15 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
       if ('stderr' in error && typeof error.stderr === 'string') {
         return error.stderr;
       }
+      if ('details' in error && error.details && typeof error.details === 'object') {
+        const details = error.details as { stdout?: unknown; stderr?: unknown };
+        if (typeof details.stdout === 'string' && details.stdout.length > 0) {
+          return details.stdout;
+        }
+        if (typeof details.stderr === 'string') {
+          return details.stderr;
+        }
+      }
     }
     return '';
   }

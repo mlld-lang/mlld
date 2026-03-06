@@ -58,6 +58,29 @@ describe('normalizeExecutableDescriptor', () => {
     expect(normalized.paramNames).toEqual(['input']);
   });
 
+  it('rehydrates legacy command executable metadata into commandTemplate form', () => {
+    const commandVar = {
+      type: 'executable',
+      name: 'sayHi',
+      paramNames: [],
+      value: { type: 'command', template: 'printf hello', language: 'sh' },
+      internal: {
+        executableDef: {
+          type: 'command',
+          template: 'printf hello',
+          language: 'sh'
+        }
+      }
+    };
+
+    const normalized = normalizeExecutableDescriptor(commandVar);
+
+    expect(normalized.execDef.commandTemplate).toBe('printf hello');
+    expect(normalized.execDef.paramNames).toEqual([]);
+    expect(normalized.stageLanguage).toBe('sh');
+    expect(normalized.opType).toBe('sh');
+  });
+
   it('preserves non-executable error category and message stem', () => {
     expect(() =>
       normalizeExecutableDescriptor({

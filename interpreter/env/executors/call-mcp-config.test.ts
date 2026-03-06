@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs/promises';
+import * as net from 'node:net';
 import { Environment } from '@interpreter/env/Environment';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -29,6 +30,49 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function sendJsonRpcMaybeResponse(
+  socketPath: string,
+  payload: Record<string, unknown>,
+  timeoutMs = 150
+): Promise<Record<string, unknown> | null> {
+  return await new Promise((resolve, reject) => {
+    const socket = net.createConnection(socketPath);
+    let buffer = '';
+    const timeout = setTimeout(() => {
+      socket.end();
+      resolve(null);
+    }, timeoutMs);
+
+    socket.once('error', error => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    socket.on('data', chunk => {
+      buffer += chunk.toString('utf8');
+      const newlineIndex = buffer.indexOf('\n');
+      if (newlineIndex === -1) {
+        return;
+      }
+      clearTimeout(timeout);
+      const line = buffer.slice(0, newlineIndex).trim();
+      socket.end();
+      if (!line) {
+        reject(new Error('Empty JSON-RPC response'));
+        return;
+      }
+      try {
+        resolve(JSON.parse(line) as Record<string, unknown>);
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    socket.once('connect', () => {
+      socket.write(`${JSON.stringify(payload)}\n`);
+    });
+  });
 }
 
 describe('createCallMcpConfig', () => {
@@ -111,6 +155,44 @@ describe('createCallMcpConfig', () => {
         })
       ).rejects.toThrow(/Tool name collisions detected/);
     } finally {
+      env.cleanup();
+    }
+  });
+
+  it('does not respond to notifications on the filtered VFS bridge', async () => {
+    const env = createEnv();
+    env.pushBridge({
+      mcpConfigPath: '/tmp/mock-vfs-config.json',
+      socketPath: '/tmp/mock-vfs.sock',
+      cleanup: async () => {}
+    });
+
+    const result = await createCallMcpConfig({
+      tools: ['Read'],
+      env
+    });
+
+    try {
+      const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers: {
+          mlld_vfs: {
+            env: { MLLD_FILTERED_VFS_MCP_SOCKET: string };
+          };
+        };
+      };
+      const socketPath = config.mcpServers.mlld_vfs.env.MLLD_FILTERED_VFS_MCP_SOCKET;
+
+      const response = await sendJsonRpcMaybeResponse(socketPath, {
+        jsonrpc: '2.0',
+        method: 'notifications/initialized',
+        params: {}
+      });
+
+      expect(response).toBeNull();
+    } finally {
+      await result.cleanup();
+      env.popBridge();
       env.cleanup();
     }
   });

@@ -21,17 +21,37 @@ async function sendJsonRpc(
   socketPath: string,
   payload: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
+  const response = await sendJsonRpcMaybeResponse(socketPath, payload);
+  if (!response) {
+    throw new Error('Empty JSON-RPC response');
+  }
+  return response;
+}
+
+async function sendJsonRpcMaybeResponse(
+  socketPath: string,
+  payload: Record<string, unknown>,
+  timeoutMs = 150
+): Promise<Record<string, unknown> | null> {
   return await new Promise((resolve, reject) => {
     const socket = net.createConnection(socketPath);
     let buffer = '';
+    const timeout = setTimeout(() => {
+      socket.end();
+      resolve(null);
+    }, timeoutMs);
 
-    socket.once('error', reject);
+    socket.once('error', error => {
+      clearTimeout(timeout);
+      reject(error);
+    });
     socket.on('data', chunk => {
       buffer += chunk.toString('utf8');
       const newlineIndex = buffer.indexOf('\n');
       if (newlineIndex === -1) {
         return;
       }
+      clearTimeout(timeout);
       const line = buffer.slice(0, newlineIndex).trim();
       socket.end();
       if (!line) {
@@ -132,4 +152,35 @@ describe('workspace mcp bridge', () => {
     }
   });
 
+  it('does not respond to notifications', async () => {
+    const workspace = createWorkspace();
+    const bridge = await createWorkspaceMcpBridge({
+      workspace,
+      getShellSession: async () => {
+        throw new Error('Bash should not be invoked in this test');
+      }
+    });
+
+    try {
+      const configRaw = await fs.readFile(bridge.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers: {
+          mlld_vfs: {
+            env: { MLLD_VFS_MCP_SOCKET: string };
+          };
+        };
+      };
+      const socketPath = config.mcpServers.mlld_vfs.env.MLLD_VFS_MCP_SOCKET;
+
+      const response = await sendJsonRpcMaybeResponse(socketPath, {
+        jsonrpc: '2.0',
+        method: 'notifications/initialized',
+        params: {}
+      });
+
+      expect(response).toBeNull();
+    } finally {
+      await bridge.cleanup();
+    }
+  });
 });

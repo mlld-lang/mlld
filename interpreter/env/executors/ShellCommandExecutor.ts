@@ -264,7 +264,12 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     }
 
     // Handle stdin input if provided (exec doesn't support input option like execSync)
-    const { stdout, stderr, duration } = await this.executeBufferedCommand(safeCommand, options, startTime);
+    const { stdout, stderr, duration } = await this.executeBufferedCommand(
+      safeCommand,
+      options,
+      context,
+      startTime
+    );
 
     return {
       output: stdout,
@@ -277,29 +282,52 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
   private async executeBufferedCommand(
     safeCommand: string,
     options: CommandExecutionOptions | undefined,
+    context: CommandExecutionContext | undefined,
     startTime: number
   ): Promise<{ stdout: string; stderr: string; duration: number }> {
+    const workingDirectory = options?.workingDirectory || this.workingDirectory;
+    const suppressStderr = process.env.MLLD_NO_STREAMING === 'true' || process.env.NODE_ENV === 'test';
+    const env = { ...process.env, ...(options?.env || {}) };
+    const directCommand = this.shouldUseDirectArgvSpawn(context)
+      ? CommandUtils.parseDirectCommand(safeCommand)
+      : null;
+
+    if (directCommand) {
+      return this.executeBufferedWithSpawn(
+        directCommand.command,
+        directCommand.args,
+        options?.input,
+        workingDirectory,
+        env,
+        suppressStderr,
+        startTime
+      );
+    }
+
+    if (options?.input) {
+      return this.executeBufferedWithShellSpawn(
+        safeCommand,
+        options.input,
+        workingDirectory,
+        env,
+        suppressStderr,
+        startTime
+      );
+    }
+
     const { exec } = await import('child_process');
     const { promisify } = await import('util');
     const execAsync = promisify(exec);
-    const workingDirectory = options?.workingDirectory || this.workingDirectory;
-
-    // In test environments with MLLD_NO_STREAMING, suppress stderr to keep output clean
-    const suppressStderr = process.env.MLLD_NO_STREAMING === 'true' || process.env.NODE_ENV === 'test';
 
     let finalCommand = safeCommand;
-    if (options?.input) {
-      // Use printf piping for stdin input
-      const escapedInput = options.input.replace(/'/g, "'\\''");
-      finalCommand = `printf '%s' '${escapedInput}' | ${safeCommand}`;
-    } else if (!CommandUtils.hasPipeOperator(safeCommand)) {
+    if (!CommandUtils.hasPipeOperator(safeCommand)) {
       finalCommand = `${safeCommand} < /dev/null`;
     }
 
     const { stdout, stderr } = await execAsync(finalCommand, {
       encoding: 'utf8',
       cwd: workingDirectory,
-      env: { ...process.env, ...(options?.env || {}) },
+      env,
       maxBuffer: 10 * 1024 * 1024 // 10MB limit
     });
 
@@ -309,6 +337,136 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
 
     const duration = Date.now() - startTime;
     return { stdout, stderr, duration };
+  }
+
+  private executeBufferedWithSpawn(
+    command: string,
+    args: string[],
+    input: string | undefined,
+    cwd: string,
+    env: Record<string, string | undefined>,
+    suppressStderr: boolean,
+    startTime: number
+  ): Promise<{ stdout: string; stderr: string; duration: number }> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const child = spawn(command, args, {
+        cwd,
+        env,
+        stdio: [input !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe']
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      if (child.stdin) {
+        child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+          if (err?.code === 'EPIPE') return;
+          if (!settled) { settled = true; reject(err); }
+        });
+      }
+
+      if (input !== undefined && child.stdin) {
+        child.stdin.write(input);
+        child.stdin.end();
+      }
+
+      child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
+      child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+      child.on('error', (err) => {
+        if (!settled) { settled = true; reject(err); }
+      });
+
+      child.on('close', (code) => {
+        if (settled) return;
+        settled = true;
+        if (stderr && !suppressStderr) {
+          process.stderr.write(stderr);
+        }
+        const duration = Date.now() - startTime;
+        if (code !== 0) {
+          reject(new MlldCommandExecutionError(
+            `Command failed: ${command}`,
+            undefined,
+            {
+              command: [command, ...args].join(' '),
+              exitCode: code ?? 1,
+              duration,
+              stderr,
+              stdout,
+              workingDirectory: cwd,
+              directiveType: 'run'
+            }
+          ));
+          return;
+        }
+        resolve({ stdout, stderr, duration });
+      });
+    });
+  }
+
+  private executeBufferedWithShellSpawn(
+    command: string,
+    input: string,
+    cwd: string,
+    env: Record<string, string | undefined>,
+    suppressStderr: boolean,
+    startTime: number
+  ): Promise<{ stdout: string; stderr: string; duration: number }> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const child = spawn(command, {
+        cwd,
+        env,
+        shell: true,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+        if (err?.code === 'EPIPE') return;
+        if (!settled) { settled = true; reject(err); }
+      });
+
+      child.stdin.write(input);
+      child.stdin.end();
+
+      child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
+      child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+      child.on('error', (err) => {
+        if (!settled) { settled = true; reject(err); }
+      });
+
+      child.on('close', (code) => {
+        if (settled) return;
+        settled = true;
+        if (stderr && !suppressStderr) {
+          process.stderr.write(stderr);
+        }
+        const duration = Date.now() - startTime;
+        if (code !== 0) {
+          reject(new MlldCommandExecutionError(
+            `Command failed: ${command}`,
+            undefined,
+            {
+              command,
+              exitCode: code ?? 1,
+              duration,
+              stderr,
+              stdout,
+              workingDirectory: cwd,
+              directiveType: 'run'
+            }
+          ));
+          return;
+        }
+        resolve({ stdout, stderr, duration });
+      });
+    });
   }
 
   private async executeStreamingCommand(
@@ -324,13 +482,21 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     const parallelIndex = context?.parallelIndex;
     const streamId = context?.streamId || randomUUID();
     const env = { ...process.env, ...(options?.env || {}) };
-
-    const child = spawn(safeCommand, {
-      cwd: workingDirectory,
-      env,
-      shell: true,
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
+    const directCommand = this.shouldUseDirectArgvSpawn(context)
+      ? CommandUtils.parseDirectCommand(safeCommand)
+      : null;
+    const child = directCommand
+      ? spawn(directCommand.command, directCommand.args, {
+          cwd: workingDirectory,
+          env,
+          stdio: [options?.input !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe']
+        })
+      : spawn(safeCommand, {
+          cwd: workingDirectory,
+          env,
+          shell: true,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
 
     const stdoutDecoder = new StringDecoder('utf8');
     const stderrDecoder = new StringDecoder('utf8');
@@ -367,17 +533,19 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
         } catch {}
       };
 
-      child.stdin.on('error', (err: NodeJS.ErrnoException) => {
-        if (err?.code === 'EPIPE') {
-          logStdinError(err, 'write');
-          return;
-        }
-        if (settled) return;
-        settled = true;
-        reject(err);
-      });
+      if (child.stdin) {
+        child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+          if (err?.code === 'EPIPE') {
+            logStdinError(err, 'write');
+            return;
+          }
+          if (settled) return;
+          settled = true;
+          reject(err);
+        });
+      }
 
-      if (options?.input) {
+      if (options?.input !== undefined && child.stdin) {
         try {
           child.stdin.write(options.input);
         } catch (err) {
@@ -392,19 +560,21 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
           logStdinError(ioErr, 'write');
         }
       }
-      // Always end stdin to avoid hangs
-      try {
-        child.stdin.end();
-      } catch (err) {
-        const ioErr = err as NodeJS.ErrnoException;
-        if (ioErr?.code !== 'EPIPE') {
-          if (!settled) {
-            settled = true;
-            reject(ioErr);
+      if (child.stdin) {
+        // Always end stdin to avoid hangs
+        try {
+          child.stdin.end();
+        } catch (err) {
+          const ioErr = err as NodeJS.ErrnoException;
+          if (ioErr?.code !== 'EPIPE') {
+            if (!settled) {
+              settled = true;
+              reject(ioErr);
+            }
+            return;
           }
-          return;
+          logStdinError(ioErr, 'end');
         }
-        logStdinError(ioErr, 'end');
       }
 
       child.stdout.on('data', (data: Buffer) => {
@@ -489,5 +659,10 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
         });
       });
     });
+  }
+
+  private shouldUseDirectArgvSpawn(context: CommandExecutionContext | undefined): boolean {
+    const labels = context?.exeLabels ?? [];
+    return labels.some(label => label.trim().toLowerCase() === 'llm');
   }
 }

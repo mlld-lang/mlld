@@ -5,6 +5,7 @@ import type { ExecutableVariable, Variable } from '@core/types/variable';
 import type { ToolCollection, ToolDefinition } from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
+import { normalizeExecutableDescriptor } from '@interpreter/eval/pipeline/command-execution/normalize-executable';
 import { mcpNameToMlldName, mlldNameToMCPName } from '@core/mcp/names';
 import { asData, asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
@@ -79,7 +80,7 @@ export class FunctionRouter {
           throw this.createToolNotFoundError(toolName);
       }
 
-      const execVar = variable as ExecutableVariable;
+      const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
       const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName);
       const invocation = this.buildInvocation(
         execName,
@@ -105,7 +106,7 @@ export class FunctionRouter {
         throw this.createToolNotFoundError(toolName);
       }
 
-      const execVar = variable as ExecutableVariable;
+      const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
       const invocation = this.buildInvocation(
         execName,
         execVar,
@@ -212,6 +213,22 @@ export class FunctionRouter {
     }
 
     return null;
+  }
+
+  private normalizeExecutableVariable(execVar: ExecutableVariable): ExecutableVariable {
+    const { execDef } = normalizeExecutableDescriptor(execVar as any);
+    if (!execDef || execDef === execVar.internal?.executableDef) {
+      return execVar;
+    }
+
+    return {
+      ...execVar,
+      value: execDef,
+      internal: {
+        ...(execVar.internal ?? {}),
+        executableDef: execDef
+      }
+    };
   }
 
   private buildInvocation(

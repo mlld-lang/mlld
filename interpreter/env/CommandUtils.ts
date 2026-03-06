@@ -1,4 +1,5 @@
 import * as shellQuote from 'shell-quote';
+import type { Variable } from '@core/types/variable';
 
 export type CommandGuidanceContext = 'run' | 'exe' | 'generic';
 
@@ -7,6 +8,7 @@ export type CommandGuidanceContext = 'run' | 'exe' | 'generic';
  * These are pure utility functions with no state dependencies.
  */
 export class CommandUtils {
+  private static readonly COMMAND_FRAGMENT_WARNING_PREFIX = '[cmd warning]';
 
   static resolveGuidanceContext(directiveType?: string): CommandGuidanceContext {
     const normalized = (directiveType || '').toLowerCase();
@@ -98,9 +100,79 @@ export class CommandUtils {
         }
       }
     }
+
+    const suspiciousFragment = CommandUtils.findSuspiciousEscapedQuotedFragment(command, parsed);
+    if (suspiciousFragment) {
+      const errorMessage = [
+        'Escaped quoted fragment is not allowed in cmd { } commands',
+        '',
+        'Command rejected:',
+        `  ${command}`,
+        '',
+        'Suspicious fragment:',
+        `  ${suspiciousFragment}`,
+        '',
+        'This usually means a quoted string variable was interpolated back into cmd { }.',
+        'Inline the arguments directly in cmd { ... } or use a shell block when you need shell parsing.'
+      ].join('\n');
+
+      throw new Error(errorMessage);
+    }
     
     // Command passed validation, return as-is
     return command;
+  }
+
+  static collectUnsafeInterpolatedFragmentWarnings(
+    commandNodes: readonly unknown[] | unknown,
+    resolveVariable: (name: string) => Variable | undefined
+  ): string[] {
+    const warnings: string[] = [];
+    const seen = new Set<string>();
+    const nodes = Array.isArray(commandNodes)
+      ? commandNodes
+      : commandNodes === undefined || commandNodes === null
+        ? []
+        : [commandNodes];
+
+    for (const node of nodes) {
+      const identifier = CommandUtils.getInterpolatedVariableIdentifier(node);
+      if (!identifier || seen.has(identifier)) {
+        continue;
+      }
+
+      const variable = resolveVariable(identifier);
+      if (!variable) {
+        continue;
+      }
+
+      const templateRaw = typeof variable.internal?.templateRaw === 'string'
+        ? variable.internal.templateRaw
+        : undefined;
+      const value = typeof variable.value === 'string' ? variable.value : undefined;
+      const hasQuotedTemplate = Boolean(templateRaw && /["']/.test(templateRaw));
+      const hasQuotedValue = Boolean(value && /["']/.test(value));
+      const hasInterpolation = Boolean(variable.source?.hasInterpolation);
+      const looksLikeFragment =
+        Boolean((templateRaw && /\s/.test(templateRaw)) || (value && /\s/.test(value)));
+
+      if (!hasInterpolation || !looksLikeFragment || (!hasQuotedTemplate && !hasQuotedValue)) {
+        continue;
+      }
+
+      const templatePreview = CommandUtils.truncateForDisplay(templateRaw ?? value ?? '', 120);
+      warnings.push(
+        [
+          `${CommandUtils.COMMAND_FRAGMENT_WARNING_PREFIX} @${identifier} is being reused as a cmd fragment,`,
+          'but it was built from an interpolated quoted template.',
+          `Template: ${templatePreview}`,
+          'This often breaks argv splitting. Inline the args in cmd { ... } or switch to sh { ... }.'
+        ].join('\n')
+      );
+      seen.add(identifier);
+    }
+
+    return warnings;
   }
 
   /**
@@ -186,6 +258,43 @@ export class CommandUtils {
   }
 
   /**
+   * Parse a validated simple command into argv for direct spawn/execFile usage.
+   * Returns null when the command still depends on shell semantics such as
+   * redirection, pipes, env assignment objects, or other non-string tokens.
+   */
+  static parseDirectCommand(
+    command: string
+  ): { command: string; args: string[] } | null {
+    const parsed = shellQuote.parse(command);
+    const tokens: string[] = [];
+
+    for (const token of parsed) {
+      if (typeof token === 'string') {
+        if (token.length > 0) {
+          tokens.push(token);
+        }
+        continue;
+      }
+
+      if (typeof token === 'number') {
+        tokens.push(String(token));
+        continue;
+      }
+
+      return null;
+    }
+
+    if (tokens.length === 0) {
+      return null;
+    }
+
+    return {
+      command: tokens[0],
+      args: tokens.slice(1)
+    };
+  }
+
+  /**
    * Check if command requires shell enhancement
    */
   static requiresShellEnhancement(command: string): boolean {
@@ -216,5 +325,85 @@ export class CommandUtils {
       'op' in token &&
       token.op === '|'
     );
+  }
+
+  private static getInterpolatedVariableIdentifier(node: unknown): string | null {
+    if (!node || typeof node !== 'object') {
+      return null;
+    }
+
+    const typed = node as {
+      type?: string;
+      identifier?: string;
+      variable?: { identifier?: string };
+    };
+
+    if ((typed.type === 'VariableReference' || typed.type === 'TemplateVariable') && typed.identifier) {
+      return typed.identifier;
+    }
+
+    if (typed.type === 'VariableReferenceWithTail' && typed.variable?.identifier) {
+      return typed.variable.identifier;
+    }
+
+    return null;
+  }
+
+  private static truncateForDisplay(text: string, maxLength: number): string {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return `${text.slice(0, maxLength - 3)}...`;
+  }
+
+  private static findSuspiciousEscapedQuotedFragment(
+    command: string,
+    parsedTokens: ReturnType<typeof shellQuote.parse>
+  ): string | null {
+    if (!/\\["']/.test(command)) {
+      return null;
+    }
+
+    let activeQuote: '"' | '\'' | null = null;
+    let fragmentTokens: string[] = [];
+
+    const flushFragment = (): string | null => {
+      if (activeQuote && fragmentTokens.length > 1) {
+        return fragmentTokens.join(' ');
+      }
+      activeQuote = null;
+      fragmentTokens = [];
+      return null;
+    };
+
+    for (const token of parsedTokens) {
+      if (typeof token !== 'string' && typeof token !== 'number') {
+        const suspicious = flushFragment();
+        if (suspicious) {
+          return suspicious;
+        }
+        continue;
+      }
+
+      const text = String(token);
+      if (!activeQuote) {
+        const firstChar = text[0];
+        if ((firstChar === '"' || firstChar === '\'') && !text.endsWith(firstChar)) {
+          activeQuote = firstChar;
+          fragmentTokens = [text];
+        }
+        continue;
+      }
+
+      fragmentTokens.push(text);
+      if (text.endsWith(activeQuote)) {
+        const suspicious = flushFragment();
+        if (suspicious) {
+          return suspicious;
+        }
+      }
+    }
+
+    return flushFragment();
   }
 }

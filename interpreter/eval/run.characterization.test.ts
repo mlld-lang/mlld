@@ -141,6 +141,26 @@ describe('evaluateRun phase-0 characterization', () => {
     expect(asText(result.value)).toBe('provider-output');
   });
 
+  it('warns and rejects nested quoted command fragments in /run cmd', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/var @path = "/tmp/a b"',
+        '/var @flags = `--mcp-config "@path"`',
+        '/run cmd {echo @flags}'
+      ].join('\n'),
+      env
+    );
+
+    const result = await evaluateRun(runDirective, env);
+
+    const handler = env.getEffectHandler() as TestEffectHandler;
+    expect(asText(result.value)).toContain('Escaped quoted fragment is not allowed');
+    expect(asText(result.value)).toContain('"/tmp/a b"');
+    expect(handler.getErrors()).toContain('[cmd warning]');
+    expect(handler.getErrors()).toContain('@flags');
+  });
+
   it('keeps command policy denial behavior stable', async () => {
     const env = createEnv();
     const runDirective = await setupSingleRun(

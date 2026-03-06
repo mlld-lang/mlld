@@ -48,6 +48,7 @@ import {
   mergeChunkResults,
   MergedParseResult
 } from './chunk-parsing';
+import { collectUnsafeCommandFragmentDiagnostics } from './unsafe-command-fragment-diagnostics';
 
 /**
  * Determine the parsing mode from a file URI
@@ -722,6 +723,7 @@ export async function startLanguageServer(): Promise<void> {
         // Analyze whatever we could parse
         if (ast.length > 0) {
           analyzeAST(ast, document, variables, imports, exports);
+          errors.push(...collectUnsafeCommandFragmentDiagnostics(ast));
         }
       } else {
         // Full parse succeeded
@@ -740,6 +742,7 @@ export async function startLanguageServer(): Promise<void> {
 
         ast = parsedAst;
         analyzeAST(ast, document, variables, imports, exports);
+        errors.push(...collectUnsafeCommandFragmentDiagnostics(ast));
 
         // In strict mode, check for text nodes that shouldn't be there
         // Skip this for template files which are expected to have text content

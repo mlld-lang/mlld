@@ -3,6 +3,7 @@ import { parse } from '@grammar/parser';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import { evaluate } from '@interpreter/core/interpreter';
 import { Environment } from '@interpreter/env/Environment';
+import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import type { OperationContext, PipelineContextSnapshot } from '@interpreter/env/ContextManager';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -161,6 +162,29 @@ describe('command-execution phase-0 characterization', () => {
     expect(executeCommandSpy).not.toHaveBeenCalled();
     expect(asText(result)).toContain('provider:suite-env:sh -lc');
     expect(asText(result)).toContain('printf');
+  });
+
+  it('warns and rejects nested quoted command fragments in cmd executables', async () => {
+    const env = createEnv();
+    const handler = new TestEffectHandler();
+    env.setEffectHandler(handler);
+    await evaluateSource(
+      [
+        '/var @path = "/tmp/a b"',
+        '/var @flags = `--mcp-config "@path"`',
+        '/exe @run() = cmd { echo @flags }'
+      ].join('\n'),
+      env
+    );
+
+    const commandVar = getExecutableVariable(env, 'run');
+    setPipelineContext(env);
+
+    const result = await runCommand(commandVar, [], env);
+    expect(asText(result)).toContain('Escaped quoted fragment is not allowed');
+    expect(asText(result)).toContain('"/tmp/a b"');
+    expect(handler.getErrors()).toContain('[cmd warning]');
+    expect(handler.getErrors()).toContain('@flags');
   });
 
   it('auto-parses JSON pipeline input for code branches and preserves text fallback hooks', async () => {

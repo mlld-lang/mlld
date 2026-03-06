@@ -37,17 +37,37 @@ async function sendJsonRpc(
   socketPath: string,
   payload: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
+  const response = await sendJsonRpcMaybeResponse(socketPath, payload);
+  if (!response) {
+    throw new Error('Empty JSON-RPC response');
+  }
+  return response;
+}
+
+async function sendJsonRpcMaybeResponse(
+  socketPath: string,
+  payload: Record<string, unknown>,
+  timeoutMs = 150
+): Promise<Record<string, unknown> | null> {
   return await new Promise((resolve, reject) => {
     const socket = net.createConnection(socketPath);
     let buffer = '';
+    const timeout = setTimeout(() => {
+      socket.end();
+      resolve(null);
+    }, timeoutMs);
 
-    socket.once('error', reject);
+    socket.once('error', error => {
+      clearTimeout(timeout);
+      reject(error);
+    });
     socket.on('data', chunk => {
       buffer += chunk.toString('utf8');
       const newlineIndex = buffer.indexOf('\n');
       if (newlineIndex === -1) {
         return;
       }
+      clearTimeout(timeout);
       const line = buffer.slice(0, newlineIndex).trim();
       socket.end();
       if (!line) {
@@ -125,6 +145,31 @@ describe('createFunctionMcpBridge', () => {
       const configRaw = await fs.readFile(bridge.mcpConfigPath, 'utf8');
       const config = JSON.parse(configRaw) as { mcpServers?: Record<string, unknown> };
       expect(config.mcpServers).toEqual({});
+    } finally {
+      const configPath = bridge.mcpConfigPath;
+      await bridge.cleanup();
+      expect(await fileExists(configPath)).toBe(false);
+      env.cleanup();
+    }
+  });
+
+  it('does not respond to notifications', async () => {
+    const env = createEnv();
+    const functionTool = createFunctionTool('sayHi');
+    const mcpName = mlldNameToMCPName(functionTool.name);
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([[mcpName, functionTool]])
+    });
+
+    try {
+      const response = await sendJsonRpcMaybeResponse(bridge.socketPath, {
+        jsonrpc: '2.0',
+        method: 'notifications/initialized',
+        params: {}
+      });
+
+      expect(response).toBeNull();
     } finally {
       const configPath = bridge.mcpConfigPath;
       await bridge.cleanup();

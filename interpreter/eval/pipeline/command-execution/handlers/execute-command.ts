@@ -21,6 +21,7 @@ import {
   extractSecurityDescriptor,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
+import { CommandUtils } from '@interpreter/env/CommandUtils';
 
 export type RetrySignalLike = { value: 'retry'; hint?: any; from?: number };
 
@@ -68,6 +69,12 @@ export async function executeCommandHandler(
 
   const { interpolate } = await import('@interpreter/core/interpreter');
   const { InterpolationContext } = await import('@interpreter/core/interpolation-context');
+  for (const warning of CommandUtils.collectUnsafeInterpolatedFragmentWarnings(
+    execDef.commandTemplate,
+    name => execEnv.getVariable(name)
+  )) {
+    env.emitEffect('stderr', `${warning}\n`);
+  }
   const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
   const scopedEnvConfig = resolveEnvironmentConfig(execEnv, preDecision?.metadata);
   const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, execEnv.getPolicySummary());

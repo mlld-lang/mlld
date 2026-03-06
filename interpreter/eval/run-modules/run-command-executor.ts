@@ -24,6 +24,7 @@ import { parseCommand } from '@core/policy/operation-labels';
 import { MlldCommandExecutionError } from '@core/errors';
 import type { CommandAnalyzer } from '@security/command/analyzer/CommandAnalyzer';
 import type { SecurityManager } from '@security/SecurityManager';
+import { CommandUtils } from '@interpreter/env/CommandUtils';
 import {
   applyRunOperationContext,
   buildRunCommandOperationUpdate,
@@ -261,6 +262,13 @@ export async function executeRunCommand(
   const commandNodes = directive.values?.identifier || directive.values?.command;
   if (!commandNodes) {
     throw new Error('Run command directive missing command');
+  }
+  const commandNodeArray = Array.isArray(commandNodes) ? commandNodes : [commandNodes];
+  for (const warning of CommandUtils.collectUnsafeInterpolatedFragmentWarnings(
+    commandNodeArray,
+    name => env.getVariable(name)
+  )) {
+    env.emitEffect('stderr', `${warning}\n`);
   }
 
   const preExtractedCommand = getPreExtractedRunCommand(context);

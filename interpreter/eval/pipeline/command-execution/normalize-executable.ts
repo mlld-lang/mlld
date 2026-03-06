@@ -66,6 +66,22 @@ function extractExecutableDefinition(commandVar: any): any {
 
     if (storedDef) {
       execDef = storedDef;
+      if (execDef.type === 'code' && execDef.codeTemplate === undefined && execDef.template !== undefined) {
+        execDef = {
+          ...execDef,
+          codeTemplate: execDef.template,
+          language: execDef.language || 'javascript'
+        };
+      } else if (
+        execDef.type === 'command' &&
+        execDef.commandTemplate === undefined &&
+        execDef.template !== undefined
+      ) {
+        execDef = {
+          ...execDef,
+          commandTemplate: execDef.template
+        };
+      }
       if (!execDef.paramNames && commandVar.paramNames) {
         execDef.paramNames = commandVar.paramNames;
       }
