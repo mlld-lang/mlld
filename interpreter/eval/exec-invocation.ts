@@ -443,7 +443,10 @@ async function evaluateExecInvocationInternal(
     throw new MlldInterpreterError('ExecInvocation has no command identifier');
   }
 
-  // Check for circular reference / recursion depth before resolving
+  // Collect metadata needed for the circular-reference / recursion-depth guard.
+  // The guard itself runs AFTER argument evaluation (see below) so that legitimate
+  // nested calls like @f(@f(x)) are not incorrectly blocked — arguments are
+  // evaluated in the caller's scope before the callee's body begins executing.
   const isBuiltinCommand = isBuiltinMethod(commandName);
   const existingVar = env.hasVariable(commandName)
     ? (env.getVariable(commandName) as any)
@@ -453,44 +456,6 @@ async function evaluateExecInvocationInternal(
   const isRecursiveExe = Array.isArray(existingVar?.mx?.labels)
     && existingVar.mx.labels.includes('recursive');
   const shouldTrackResolution = !isBuiltinCommand && !isReservedName;
-  let resolutionTrackingActive = false;
-
-  if (shouldTrackResolution && env.isResolving(commandName)) {
-    if (!isRecursiveExe) {
-      // Non-recursive function calling itself: throw immediately (original behavior)
-      throw new CircularReferenceError(
-        `Circular reference detected: executable '@${commandName}' calls itself recursively without a terminating condition`,
-        {
-          identifier: commandName,
-          location: nodeSourceLocation
-        }
-      );
-    }
-    // Recursive function: enforce depth limit
-    const limit = Number(process.env.MLLD_RECURSION_DEPTH ?? 64);
-    if (env.getCallDepth(commandName) >= limit) {
-      throw new CircularReferenceError(
-        `'@${commandName}' exceeded maximum recursion depth (${limit}). Add a base case or increase the limit with MLLD_RECURSION_DEPTH.`,
-        {
-          identifier: commandName,
-          location: nodeSourceLocation
-        }
-      );
-    }
-  }
-
-  // Mark this executable as being resolved (skip builtin methods and reserved names)
-  if (shouldTrackResolution) {
-    env.beginResolving(commandName);
-    resolutionTrackingActive = true;
-  }
-  endResolutionTrackingIfNeeded = (): void => {
-    if (!resolutionTrackingActive || !commandName) {
-      return;
-    }
-    env.endResolving(commandName);
-    resolutionTrackingActive = false;
-  };
 
   // Check if this is a field access exec invocation (e.g., @obj.method())
   // or a method call on an exec result (e.g., @func(args).method())
@@ -1378,6 +1343,70 @@ async function evaluateExecInvocationInternal(
       mergeResultDescriptor
     }
   });
+
+  // Circular reference / recursion depth guard — runs AFTER argument evaluation.
+  //
+  // Why here and not earlier: arguments are evaluated in the caller's scope before
+  // the callee's body takes over. Placing the guard here means @f(@f(x)) works
+  // correctly — the inner @f(x) resolves and returns before the outer @f begins
+  // executing its body. Placing it before arg eval would falsely flag the inner
+  // call as circular.
+  //
+  // The guard fires when this function's body is already executing (depth > 0)
+  // and it is about to execute again. Non-recursive functions throw immediately.
+  // Functions labelled `recursive` are allowed up to MLLD_RECURSION_DEPTH calls.
+  let resolutionTrackingActive = false;
+  if (shouldTrackResolution && env.isResolving(commandName)) {
+    if (!isRecursiveExe) {
+      throw new CircularReferenceError(
+        `Circular reference detected: executable '@${commandName}' calls itself recursively without a terminating condition`,
+        { identifier: commandName, location: nodeSourceLocation }
+      );
+    }
+    const limit = Number(process.env.MLLD_RECURSION_DEPTH ?? 64);
+    if (env.getCallDepth(commandName) >= limit) {
+      throw new CircularReferenceError(
+        `'@${commandName}' exceeded maximum recursion depth (${limit}). Add a base case or increase the limit with MLLD_RECURSION_DEPTH.`,
+        { identifier: commandName, location: nodeSourceLocation }
+      );
+    }
+  }
+  if (shouldTrackResolution) {
+    env.beginResolving(commandName);
+    resolutionTrackingActive = true;
+  }
+  endResolutionTrackingIfNeeded = (): void => {
+    if (!resolutionTrackingActive || !commandName) return;
+    env.endResolving(commandName);
+    resolutionTrackingActive = false;
+  };
+
+  // Auto-bridge: when an exe llm is invoked with config.tools, create MCP bridges
+  // and expose the result on @mx.llm for the exe body to consume.
+  const variableLabels = variable.mx?.labels;
+  const hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
+  if (hasLlmLabel && evaluatedArgs.length >= 2) {
+    const rawConfig = evaluatedArgs[1];
+    if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig) && 'tools' in rawConfig) {
+      const toolsValue = (rawConfig as Record<string, unknown>).tools;
+      const normalized = normalizeToolsArg(toolsValue);
+      if (normalized.length === 0) {
+        execEnv.setLlmToolConfig(null);
+      } else {
+        const dirValue = (rawConfig as Record<string, unknown>).dir;
+        const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
+          ? dirValue.trim()
+          : execEnv.getProjectRoot();
+        const callConfig = await createCallMcpConfig({
+          tools: normalized,
+          env: execEnv,
+          workingDirectory
+        });
+        execEnv.registerScopeCleanup(callConfig.cleanup);
+        execEnv.setLlmToolConfig(callConfig);
+      }
+    }
+  }
 
   // Track original Variables for arguments
   const originalVariables: (Variable | undefined)[] = new Array(args.length);
