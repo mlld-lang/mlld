@@ -2,6 +2,6 @@
 
 /exe @gen() = js { return "DATA"; }
 
-/var @_ = @gen() with { pipeline: [ output to "inline-file.txt" ] }
+@gen() with { pipeline: [ output to "inline-file.txt" ] }
 
 /show <@base/inline-file.txt>

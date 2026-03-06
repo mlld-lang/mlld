@@ -31,7 +31,7 @@ exe @buildTask(spec, atoms, plan, agentNotes, jobs, eventsFile, iterationId) = t
 >> Log an event
 exe @logEvent(eventsFile, event) = [
   let @eventWithTs = { ts: @now, ...@event }
-  let @_ = @eventWithTs | append "@eventsFile"
+  @eventWithTs | append "@eventsFile"
   => @eventWithTs
 ]
 
