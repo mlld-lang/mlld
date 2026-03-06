@@ -1052,7 +1052,7 @@ Existence checks:
 Helpers:
 - `@keep(obj, [...keys])`: keep only specified keys from an object
 - `@keepStructured(obj, schema)`: keep keys matching a schema structure
-- `@toolbridge(tools, cwd?)`: exec-only helper for LLM module authors; returns `{ config, tools, inBox }` for mixed string/executable tool lists
+- `@mx.llm`: ambient context available inside `exe llm` bodies when `config.tools` is specified; exposes `config`, `allowed`, `inBox`, `hasTools` for building CLI flags
 
 ### File Metadata Fields
 

@@ -8,6 +8,7 @@ import type { ExecutableVariable } from '@core/types/variable';
 import { isExecutableVariable } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
 import { createFunctionMcpBridge } from './function-mcp-bridge';
+import { isStructuredValue, asData } from '@interpreter/utils/structured-value';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FILTERED_VFS_SOCKET_ENV = 'MLLD_FILTERED_VFS_MCP_SOCKET';
@@ -48,8 +49,27 @@ export interface CallMcpConfig {
   readonly mcpConfigPath: string;
   readonly toolsCsv: string;
   readonly mcpAllowedTools: string;
+  readonly nativeAllowedTools: string;
+  readonly unifiedAllowedTools: string;
   readonly inBox: boolean;
   cleanup(): Promise<void>;
+}
+
+export function normalizeToolsArg(value: unknown): unknown[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  let resolved = value;
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+
+  if (Array.isArray(resolved)) {
+    return resolved;
+  }
+
+  return [resolved];
 }
 
 class FilteredVfsBridgeServer {
@@ -549,11 +569,15 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     }
   }
 
+  const nativeAllowedTools = inBox ? '' : builtinTools.join(',');
+
   if (Object.keys(mcpServers).length === 0) {
     return {
       mcpConfigPath: '',
       toolsCsv,
       mcpAllowedTools: '',
+      nativeAllowedTools,
+      unifiedAllowedTools: nativeAllowedTools,
       inBox,
       async cleanup(): Promise<void> {
         // No-op
@@ -583,10 +607,15 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     await removeFileIfExists(configPath);
   };
 
+  const mcpAllowedTools = mcpAllowedToolNames.join(',');
+  const unifiedAllowedTools = [mcpAllowedTools, nativeAllowedTools].filter(Boolean).join(',');
+
   return {
     mcpConfigPath: configPath,
     toolsCsv,
-    mcpAllowedTools: mcpAllowedToolNames.join(','),
+    mcpAllowedTools,
+    nativeAllowedTools,
+    unifiedAllowedTools,
     inBox,
     cleanup
   };

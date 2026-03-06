@@ -28,11 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.4]
 
 ### Added
-- `@toolbridge(tools, cwd?)` exec-only builtin for mixed tool arrays (string + executable refs), returning `{ config, tools, inBox }` for module-side MCP/allowedTools branching
+- `@mx.llm` ambient context for `exe llm` with `config.tools` — runtime auto-creates MCP bridges and exposes `{ config, allowed, inBox, hasTools }` so module authors never touch MCP internals
 - Ambient `@mx.box` context now includes active box MCP bridge metadata (`mcpConfigPath`, `socketPath`)
 
 ### Changed
-- Workspace LLM command execution no longer rewrites CLI tool flags implicitly; tool bridging is now explicit via `@toolbridge(...)`
+- `exe llm` invocations with `config.tools` auto-bridge MCP tools; `@toolbridge` builtin removed
 
 ### Fixed
 - MCP server: handle `notifications/initialized` per protocol spec instead of returning an error that caused clients to restart the server

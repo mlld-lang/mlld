@@ -42,11 +42,11 @@ These forms create a VirtualFS-backed runtime for local execution:
 - `box [ ... ]` (anonymous workspace)
 
 In VFS mode, defaults are applied unless overridden:
-- `tools: ["Bash", "Read", "Write"]`
+- `tools: ["Bash", "Read", "Write", "Glob", "Grep"]`
 - `mcps: []`
 - `net: { allow: [] }`
 
-Active `policy.env` constraints are then applied to the resolved box config. Local box config can only be attenuated by policy (for example, requested tools are intersected with `policy.env.tools.allow`, and denied providers throw).
+VFS defaults apply when the box has a workspace (anonymous `box [...]`, `box @workspace [...]`, or `box { fs: @workspace } [...]`) and no explicit `tools` field is provided. Explicit `with { tools: [...] }` overrides the defaults. Active `policy.env` constraints are then applied to the resolved box config — local box config can only be attenuated by policy (for example, requested tools are intersected with `policy.env.tools.allow`, and denied providers throw).
 
 **Configuration fields:**
 
@@ -57,7 +57,7 @@ Active `policy.env` constraints are then applied to the resolved box config. Loc
 | `net` | `"none"`, `"host"`, `"limited"` | Network restrictions |
 | `limits` | `{ mem, cpu, timeout }` | Resource limits |
 | `auth` | `"credential-name"` | Auth reference from policy |
-| `tools` | `["Read", "Write", "Bash"]` | Runtime tool allowlist for commands and MCP tools |
+| `tools` | `["Read", "Write", "Bash", "Glob", "Grep"]` | Runtime tool allowlist for commands and MCP tools |
 | `mcps` | `[]`, `[server-config]` | Runtime MCP server allowlist |
 
 **Important:** `tools` and `mcps` enforce runtime access inside `box` blocks.

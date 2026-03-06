@@ -388,13 +388,13 @@ export function toJsValue(value: unknown): unknown {
   }
   if (isVariableLike(value)) {
     if (isExecutableVariable(value as any)) {
-      throw new Error('Executable values are not valid node arguments');
+      return value;
     }
     return toJsValue((value as { value: unknown }).value);
   }
   if (value && typeof value === 'object') {
     if ((value as { __executable?: boolean }).__executable) {
-      throw new Error('Executable values are not valid node arguments');
+      return value;
     }
     if (isPlainObject(value)) {
       const result: Record<string, unknown> = {};

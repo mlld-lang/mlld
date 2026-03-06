@@ -68,7 +68,7 @@ policy @p = {
 }
 
 var @sandbox = {
-  tools: ["Read", "Write", "Bash"],  >> Allow Read/Write plus command execution
+  tools: ["Read", "Write", "Bash", "Glob", "Grep"],  >> Allow tools for agent use
   mcps: []                           >> Block MCP servers in this block
 }
 

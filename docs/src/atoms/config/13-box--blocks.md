@@ -86,19 +86,30 @@ Hydration behavior:
 - Imported files are tainted with `src:git` provenance metadata
 - `box.net` allow rules are enforced for remote git hosts
 
-**Return values:**
+**Return values and workspace binding:**
 
 ```mlld
-var @config = { tools: ["Read", "Write"] }
-
-var @result = box @config [
+var @result = box [
+  file "data.txt" = "hello"
   => "completed"
 ]
 
-show @result
+show @result                >> "completed" — box returned a value via =>
 ```
 
-Use `=>` to return a value from the block.
+When a box uses `=>`, the variable gets the returned value, not the workspace.
+
+To access workspace files after the box exits, omit `=>` so the variable binds to the workspace:
+
+```mlld
+var @ws = box [
+  file "data.txt" = "hello"
+]
+
+show <@ws/data.txt>         >> "hello" — reads from workspace via resolver
+```
+
+The `<@name/path>` resolver syntax reads from the workspace VFS after the box exits. Inside the box body, use `run cmd { cat file.txt }` to read via the ShellSession — bare `<file.txt>` reads from the real filesystem, not the active workspace.
 
 **Inline derivation with `with`:**
 
@@ -132,5 +143,34 @@ Child environments can only restrict parent capabilities, never extend them.
 - Environment resources are released when the block exits
 - `with { ... }` is box directive config syntax (`box @cfg with { ... } [ ... ]`), not a general object-modifier expression
 - Ambient `@mx.box` includes active bridge metadata (`mcpConfigPath`, `socketPath`) while inside the box scope
-- Interpreter helper `@toolbridge(tools, cwd?)` can build per-call MCP configs from mixed string/function tool lists
 - See `box-overview` for concepts, `box-config` for configuration fields
+
+**Per-call tool configuration via `config.tools`:**
+
+When an `exe llm` is invoked with a `config.tools` array, the runtime automatically creates MCP bridges and exposes the result on `@mx.llm`:
+
+```mlld
+exe llm @agent(prompt, config) = [
+  let @cfg = @config ? @config : {}
+  >> @mx.llm.config  — MCP config file path (empty string if no bridges)
+  >> @mx.llm.allowed — unified tool names for --allowedTools or equivalent
+  >> @mx.llm.inBox   — true when an active VFS bridge exists
+  >> @mx.llm.hasTools — true when config.tools was specified
+  => @prompt | cmd { claude -p --allowedTools "@mx.llm.allowed" }
+]
+```
+
+Inside a box, string tools (like `"Read"`) route through a filtered VFS bridge proxy. Outside a box, string tools pass through as native CLI tool names. Exe refs always get their own function MCP bridge. The runtime handles all of this — module authors just read `@mx.llm`.
+
+Function tools (exe refs) get their own MCP server:
+
+```mlld
+exe @double(n) = cmd { echo $(( @n * 2 )) }
+
+var @r = box [
+  let @answer = @claude("Double 21", { model: "haiku", tools: ["Read", @double] })
+  => @answer
+]
+```
+
+The runtime combines both the VFS bridge (for Read) and a function bridge (for @double) into a single MCP config file, exposed via `@mx.llm.config`.

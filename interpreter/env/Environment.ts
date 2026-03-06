@@ -111,7 +111,7 @@ import { checkpointPostHook } from '../hooks/checkpoint-post-hook';
 import { guardPreHook } from '../hooks/guard-pre-hook';
 import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
-import { createKeepExecutable, createKeepStructuredExecutable, createToolbridgeExecutable } from './builtins';
+import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { SDKEvent, StreamingResult } from '@sdk/types';
@@ -296,6 +296,9 @@ export class Environment
   private bridgeStack: WorkspaceMcpBridgeHandle[] = [];
   private scopeCleanups: Array<() => Promise<void>> = [];
 
+  // Auto-bridged LLM tool config, set by exe llm invocations with config.tools
+  private llmToolConfig?: import('./executors/call-mcp-config').CallMcpConfig | null;
+
   // Current iteration file for <> placeholder
   private currentIterationFile?: any;
   
@@ -461,7 +464,8 @@ export class Environment
       getSecuritySnapshot: this.getSecuritySnapshot.bind(this),
       getActiveBridge: this.getActiveBridge.bind(this),
       recordSecurityDescriptor: this.recordSecurityDescriptor.bind(this),
-      getContextManager: () => this.contextManager
+      getContextManager: () => this.contextManager,
+      getLlmToolConfig: this.getLlmToolConfig.bind(this)
     });
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -479,8 +483,6 @@ export class Environment
       this.reserveModulePrefixes();
     }
 
-    this.registerToolbridgeBuiltin();
-    
     // Initialize import resolver
     // Child environments get parent's resolver temporarily; createChild/createChildEnvironment
     // replaces it with a proper child resolver. This avoids creating a full ImportResolver
@@ -1859,18 +1861,6 @@ export class Environment
     }
   }
 
-  private registerToolbridgeBuiltin(): void {
-    try {
-      if (this.variableManager.getVariables().has('toolbridge')) {
-        return;
-      }
-      const toolbridgeExec = createToolbridgeExecutable(this);
-      this.variableManager.setVariable('toolbridge', toolbridgeExec as any);
-    } catch (error) {
-      logger.warn('Failed to register toolbridge builtin', error);
-    }
-  }
-
   private getRootEnvironment(): Environment {
     let current: Environment = this;
     while (current.parent) {
@@ -2404,6 +2394,15 @@ export class Environment
       return this.bridgeStack[this.bridgeStack.length - 1];
     }
     return this.parent?.getActiveBridge();
+  }
+
+  setLlmToolConfig(config: import('./executors/call-mcp-config').CallMcpConfig | null): void {
+    this.llmToolConfig = config;
+  }
+
+  getLlmToolConfig(): import('./executors/call-mcp-config').CallMcpConfig | null | undefined {
+    if (this.llmToolConfig !== undefined) return this.llmToolConfig;
+    return this.parent?.getLlmToolConfig();
   }
 
   registerScopeCleanup(fn: () => Promise<void>): void {

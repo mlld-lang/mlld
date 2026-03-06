@@ -110,6 +110,7 @@ interface BuildContextOptions {
   securitySnapshot?: SecuritySnapshotLike;
   testOverride?: unknown;
   boxContext?: { mcpConfigPath?: string; socketPath?: string } | null;
+  llmToolConfig?: import('./executors/call-mcp-config').CallMcpConfig | null;
 }
 
 /**
@@ -368,7 +369,8 @@ export class ContextManager {
       },
       tools: this.getToolsSnapshot(),
       ...(checkpointContext ? { checkpoint: checkpointContext } : {}),
-      ...(options.boxContext ? { box: options.boxContext } : {})
+      ...(options.boxContext ? { box: options.boxContext } : {}),
+      ...(this.buildLlmContext(options.llmToolConfig) ?? {})
     };
 
     if (deniedContext) {
@@ -633,6 +635,23 @@ export class ContextManager {
       });
     }
     return result;
+  }
+
+  private buildLlmContext(
+    config?: import('./executors/call-mcp-config').CallMcpConfig | null
+  ): { llm: Record<string, unknown> } | null {
+    if (config === undefined) return null;
+    if (config === null) {
+      return { llm: { config: '', allowed: '', inBox: false, hasTools: true } };
+    }
+    return {
+      llm: {
+        config: config.mcpConfigPath,
+        allowed: config.unifiedAllowedTools,
+        inBox: config.inBox,
+        hasTools: true
+      }
+    };
   }
 
   private normalizeInput(value: unknown): unknown {

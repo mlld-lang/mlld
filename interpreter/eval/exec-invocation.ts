@@ -80,6 +80,7 @@ import {
   runExecPreGuards,
   stringifyExecGuardArg
 } from './exec/guard-policy';
+import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mcp-config';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -1361,6 +1362,33 @@ async function evaluateExecInvocationInternal(
       mergeResultDescriptor
     }
   });
+
+  // Auto-bridge: when an exe llm is invoked with config.tools, create MCP bridges
+  // and expose the result on @mx.llm for the exe body to consume.
+  const variableLabels = variable.mx?.labels;
+  const hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
+  if (hasLlmLabel && evaluatedArgs.length >= 2) {
+    const rawConfig = evaluatedArgs[1];
+    if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig) && 'tools' in rawConfig) {
+      const toolsValue = (rawConfig as Record<string, unknown>).tools;
+      const normalized = normalizeToolsArg(toolsValue);
+      if (normalized.length === 0) {
+        execEnv.setLlmToolConfig(null);
+      } else {
+        const dirValue = (rawConfig as Record<string, unknown>).dir;
+        const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
+          ? dirValue.trim()
+          : execEnv.getProjectRoot();
+        const callConfig = await createCallMcpConfig({
+          tools: normalized,
+          env: execEnv,
+          workingDirectory
+        });
+        execEnv.registerScopeCleanup(callConfig.cleanup);
+        execEnv.setLlmToolConfig(callConfig);
+      }
+    }
+  }
 
   // Track original Variables for arguments
   const originalVariables: (Variable | undefined)[] = new Array(args.length);

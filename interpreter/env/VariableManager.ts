@@ -62,6 +62,7 @@ export interface VariableManagerDependencies {
   getActiveBridge?(): WorkspaceMcpBridgeHandle | undefined;
   recordSecurityDescriptor?(descriptor: SecurityDescriptor | undefined): void;
   getContextManager?(): ContextManager | undefined;
+  getLlmToolConfig?(): import('./executors/call-mcp-config').CallMcpConfig | null | undefined;
 }
 
 export interface VariableManagerContext {
@@ -305,8 +306,9 @@ export class VariableManager implements IVariableManager {
       const boxContext = bridge
         ? { mcpConfigPath: bridge.mcpConfigPath, socketPath: bridge.socketPath }
         : null;
+      const llmToolConfig = this.deps.getLlmToolConfig?.();
       const mxValue = contextManager
-        ? contextManager.buildAmbientContext({ pipelineContext, securitySnapshot, boxContext })
+        ? contextManager.buildAmbientContext({ pipelineContext, securitySnapshot, boxContext, llmToolConfig })
         : this.buildLegacyContext(pipelineContext, securitySnapshot);
 
       return createObjectVariable('mx', mxValue, false, undefined, {

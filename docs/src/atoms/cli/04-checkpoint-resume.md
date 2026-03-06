@@ -87,3 +87,23 @@ hook @cacheLog after @review = [
 - On hit: execution short-circuits, guards are skipped, post-hooks still run
 - On miss: result is cached after post-hooks complete
 - Cache read/write errors are isolated (logged as warnings, never abort execution)
+
+## Side Effects Are Not Cached
+
+Checkpoint resume caches directive return values, not side effects. If an LLM call writes files to a VFS workspace via tools (Write, Bash), those writes are not replayed on resume. The same applies to any file writes or external mutations performed during execution — only the return value is restored.
+
+Design your pipelines to depend on return values, not side effects, for checkpoint-safe behavior:
+
+```mlld
+>> checkpoint-safe: result carries the data
+var @result = box [
+  let @answer = @claude("Analyze data.txt", { model: "haiku", tools: ["Read"] })
+  => @answer
+]
+
+>> NOT checkpoint-safe: depends on VFS write side effect
+var @ws = box [
+  let @dummy = @claude("Write results to output.txt", { model: "haiku", tools: ["Write"] })
+]
+show <@ws/output.txt>   >> empty on resume — Write tool call was not replayed
+```
