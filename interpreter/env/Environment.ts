@@ -280,7 +280,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private enableFileInterpolation: boolean = true;
 
   // Executable resolution circular detection
-  private resolutionStack: Set<string> = new Set();
+  private resolutionStack: Map<string, number> = new Map();
 
   // Current iteration file for <> placeholder
   private currentIterationFile?: any;
@@ -1232,25 +1232,37 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   /**
-   * Check if an executable is currently being resolved (circular reference detection)
+   * Get the current recursive call depth for an executable.
+   * Sums counts up the parent chain so each branch tracks its own depth independently.
+   */
+  getCallDepth(identifier: string): number {
+    return (this.resolutionStack.get(identifier) ?? 0)
+         + (this.parent?.getCallDepth(identifier) ?? 0);
+  }
+
+  /**
+   * Check if an executable is currently being resolved (circular reference detection).
+   * Returns true if call depth > 0 in any ancestor environment.
    */
   isResolving(identifier: string): boolean {
-    if (this.resolutionStack.has(identifier)) return true;
-    return this.parent?.isResolving(identifier) || false;
+    return this.getCallDepth(identifier) > 0;
   }
 
   /**
-   * Mark an executable as being resolved
+   * Mark an executable as being resolved (increments depth counter)
    */
   beginResolving(identifier: string): void {
-    this.resolutionStack.add(identifier);
+    this.resolutionStack.set(identifier, (this.resolutionStack.get(identifier) ?? 0) + 1);
   }
 
   /**
-   * Mark an executable as finished resolving
+   * Mark an executable as finished resolving (decrements depth counter)
    */
   endResolving(identifier: string): void {
-    this.resolutionStack.delete(identifier);
+    const n = this.resolutionStack.get(identifier) ?? 0;
+    n <= 1
+      ? this.resolutionStack.delete(identifier)
+      : this.resolutionStack.set(identifier, n - 1);
   }
 
   /**
