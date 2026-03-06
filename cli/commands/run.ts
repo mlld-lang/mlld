@@ -24,6 +24,10 @@ import {
   getCheckpointSummaryByScriptName,
   shouldShowCheckpointResumeHint
 } from '../utils/checkpoint-cache';
+import {
+  extractLeadingResumeDirective,
+  DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE
+} from '@core/checkpoint/config';
 
 const ENTRY_POINTS = ['index.mld', 'main.mld', 'index.mld.md', 'main.mld.md'];
 
@@ -349,7 +353,11 @@ export class RunCommand {
       }
     }
 
-    if (shouldShowCheckpointResumeHint(options)) {
+    const source = await fs.readFile(scriptPath, 'utf8');
+    const scriptResumeMode =
+      extractLeadingResumeDirective(source).resumeMode ?? DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE;
+
+    if (scriptResumeMode === 'manual' && shouldShowCheckpointResumeHint(options)) {
       const checkpointSummary = await getCheckpointSummaryByScriptName(
         checkpointCacheRootDir,
         scriptName

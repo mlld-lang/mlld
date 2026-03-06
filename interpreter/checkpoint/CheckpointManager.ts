@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import type { WorkspaceCheckpointSnapshot } from '@core/types/workspace';
 
 const CURRENT_MANIFEST_VERSION = 1;
 const DEFAULT_ARGS_PREVIEW_LIMIT = 160;
@@ -16,7 +17,8 @@ const MANIFEST_CORE_KEYS = new Set([
   'totalCached',
   'totalSizeBytes',
   'forkedFrom',
-  'namedCheckpoints'
+  'namedCheckpoints',
+  'checkpointStates'
 ]);
 
 interface CheckpointManifest {
@@ -29,7 +31,13 @@ interface CheckpointManifest {
   totalSizeBytes: number;
   forkedFrom?: string;
   namedCheckpoints?: Record<string, number>;
+  checkpointStates?: Record<string, CheckpointStateRecord>;
   [key: string]: unknown;
+}
+
+interface CheckpointStateRecord {
+  complete?: boolean;
+  updatedAt?: string;
 }
 
 interface CheckpointRecord {
@@ -49,6 +57,7 @@ interface CheckpointRecord {
 interface StoredResultEnvelope {
   version: number;
   value: unknown;
+  workspaceSnapshot?: WorkspaceCheckpointSnapshot;
 }
 
 export interface CheckpointManagerOptions {
@@ -72,6 +81,14 @@ export interface CheckpointPutEntry {
   invocationIndex?: number;
   invocationOrdinal?: number;
   executionOrder?: number;
+  workspaceSnapshot?: WorkspaceCheckpointSnapshot;
+}
+
+export interface CheckpointStoredResult {
+  value: unknown;
+  ts?: string;
+  workspaceSnapshot?: WorkspaceCheckpointSnapshot;
+  source?: 'local' | 'fork';
 }
 
 export interface CheckpointInvocationMetadata {
@@ -259,6 +276,38 @@ function serializeNamedCheckpoints(checkpoints: Map<string, number>): Record<str
   return serialized;
 }
 
+function parseCheckpointStates(raw: unknown): Map<string, CheckpointStateRecord> {
+  const parsed = new Map<string, CheckpointStateRecord>();
+  if (!isPlainObject(raw)) {
+    return parsed;
+  }
+
+  for (const [name, value] of Object.entries(raw)) {
+    if (typeof name !== 'string' || name.trim().length === 0 || !isPlainObject(value)) {
+      continue;
+    }
+    parsed.set(name.trim(), {
+      ...(typeof value.complete === 'boolean' ? { complete: value.complete } : {}),
+      ...(typeof value.updatedAt === 'string' && value.updatedAt.length > 0
+        ? { updatedAt: value.updatedAt }
+        : {})
+    });
+  }
+
+  return parsed;
+}
+
+function serializeCheckpointStates(
+  states: Map<string, CheckpointStateRecord>
+): Record<string, CheckpointStateRecord> {
+  const serialized: Record<string, CheckpointStateRecord> = {};
+  const entries = Array.from(states.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  for (const [name, state] of entries) {
+    serialized[name] = { ...state };
+  }
+  return serialized;
+}
+
 function keyToResultStem(key: string): string {
   if (key.startsWith('sha256:')) {
     const digest = key.slice('sha256:'.length);
@@ -375,8 +424,8 @@ export class CheckpointManager {
   private loaded = false;
   private localIndex = new Map<string, CheckpointRecord>();
   private forkIndex = new Map<string, CheckpointRecord>();
-  private localResultCache = new Map<string, unknown>();
-  private forkResultCache = new Map<string, unknown>();
+  private localResultCache = new Map<string, StoredResultEnvelope>();
+  private forkResultCache = new Map<string, StoredResultEnvelope>();
   private localManifestExtras: Record<string, unknown> = {};
   private localCreatedAt?: string;
   private forkSizeBytes = 0;
@@ -385,6 +434,7 @@ export class CheckpointManager {
   private invocationOrdinalCounters = new Map<string, number>();
   private executionOrderCounter = 0;
   private namedCheckpointOrders = new Map<string, number>();
+  private checkpointStates = new Map<string, CheckpointStateRecord>();
   private runRegisteredCheckpointNames = new Set<string>();
   private runWrittenKeys = new Set<string>();
 
@@ -509,20 +559,43 @@ export class CheckpointManager {
     };
   }
 
-  async get(key: string): Promise<unknown | null> {
+  async getWithMetadata(key: string): Promise<CheckpointStoredResult | null> {
     await this.ensureLoaded();
     if (!this.readEnabled && !this.runWrittenKeys.has(key)) {
       return null;
     }
 
     if (this.forkScriptName && this.forkResultsDir && this.forkIndex.has(key)) {
-      return this.readCachedResult(key, this.forkResultCache, this.forkResultsDir);
+      const envelope = await this.readCachedResult(key, this.forkResultCache, this.forkResultsDir);
+      if (!envelope) {
+        return null;
+      }
+      return {
+        value: envelope.value,
+        ts: this.forkIndex.get(key)?.ts,
+        ...(envelope.workspaceSnapshot ? { workspaceSnapshot: envelope.workspaceSnapshot } : {}),
+        source: 'fork'
+      };
     }
 
     if (!this.localIndex.has(key)) {
       return null;
     }
-    return this.readCachedResult(key, this.localResultCache, this.resultsDir);
+    const envelope = await this.readCachedResult(key, this.localResultCache, this.resultsDir);
+    if (!envelope) {
+      return null;
+    }
+    return {
+      value: envelope.value,
+      ts: this.localIndex.get(key)?.ts,
+      ...(envelope.workspaceSnapshot ? { workspaceSnapshot: envelope.workspaceSnapshot } : {}),
+      source: 'local'
+    };
+  }
+
+  async get(key: string): Promise<unknown | null> {
+    const result = await this.getWithMetadata(key);
+    return result ? result.value : null;
   }
 
   async put(key: string, entry: CheckpointPutEntry): Promise<void> {
@@ -550,7 +623,8 @@ export class CheckpointManager {
 
     const resultEnvelope: StoredResultEnvelope = {
       version: RESULT_WRAPPER_VERSION,
-      value: normalizeResultForStorage(entry.result)
+      value: normalizeResultForStorage(entry.result),
+      ...(entry.workspaceSnapshot ? { workspaceSnapshot: entry.workspaceSnapshot } : {})
     };
     const resultJson = JSON.stringify(resultEnvelope);
     const resultSize = Buffer.byteLength(resultJson, 'utf8');
@@ -572,7 +646,7 @@ export class CheckpointManager {
       ...(typeof executionOrder === 'number' ? { executionOrder } : {})
     };
 
-    this.localResultCache.set(key, resultEnvelope.value);
+    this.localResultCache.set(key, resultEnvelope);
     this.localIndex.set(key, record);
     this.runWrittenKeys.add(key);
     if (record.invocationSite && typeof record.invocationIndex === 'number') {
@@ -751,6 +825,7 @@ export class CheckpointManager {
     this.invocationOrdinalCounters = new Map();
     this.executionOrderCounter = 0;
     this.namedCheckpointOrders = new Map();
+    this.checkpointStates = new Map();
     this.runRegisteredCheckpointNames = new Set();
     this.runWrittenKeys = new Set();
 
@@ -774,6 +849,29 @@ export class CheckpointManager {
     };
   }
 
+  wasWrittenThisRun(key: string): boolean {
+    return this.runWrittenKeys.has(key);
+  }
+
+  isCheckpointComplete(name: string): boolean | undefined {
+    const state = this.checkpointStates.get(name.trim());
+    return state?.complete;
+  }
+
+  async recordCheckpointState(name: string, state: CheckpointStateRecord): Promise<void> {
+    await this.ensureLoaded();
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      return;
+    }
+
+    this.checkpointStates.set(normalizedName, {
+      ...state,
+      updatedAt: state.updatedAt ?? toIso(this.now)
+    });
+    await this.writeManifest();
+  }
+
   private async ensureLoaded(): Promise<void> {
     if (!this.loaded) {
       await this.load();
@@ -794,6 +892,9 @@ export class CheckpointManager {
       ...(this.forkScriptName ? { forkedFrom: this.forkScriptName } : {}),
       ...(this.namedCheckpointOrders.size > 0
         ? { namedCheckpoints: serializeNamedCheckpoints(this.namedCheckpointOrders) }
+        : {}),
+      ...(this.checkpointStates.size > 0
+        ? { checkpointStates: serializeCheckpointStates(this.checkpointStates) }
         : {})
     };
 
@@ -831,6 +932,7 @@ export class CheckpointManager {
 
     this.localManifestExtras = extractManifestExtras(manifest);
     this.namedCheckpointOrders = parseNamedCheckpoints(manifest.namedCheckpoints);
+    this.checkpointStates = parseCheckpointStates(manifest.checkpointStates);
     const created = manifest.created;
     if (typeof created === 'string' && created.length > 0) {
       this.localCreatedAt = created;
@@ -1030,9 +1132,9 @@ export class CheckpointManager {
 
   private async readCachedResult(
     key: string,
-    cache: Map<string, unknown>,
+    cache: Map<string, StoredResultEnvelope>,
     resultsDir: string
-  ): Promise<unknown | null> {
+  ): Promise<StoredResultEnvelope | null> {
     if (cache.has(key)) {
       return cache.get(key) ?? null;
     }
@@ -1051,13 +1153,17 @@ export class CheckpointManager {
     }
 
     if (isPlainObject(parsed) && parsed.version === RESULT_WRAPPER_VERSION && 'value' in parsed) {
-      const value = (parsed as StoredResultEnvelope).value;
-      cache.set(key, value);
-      return value;
+      const envelope = parsed as StoredResultEnvelope;
+      cache.set(key, envelope);
+      return envelope;
     }
 
-    cache.set(key, parsed);
-    return parsed;
+    const envelope: StoredResultEnvelope = {
+      version: RESULT_WRAPPER_VERSION,
+      value: parsed
+    };
+    cache.set(key, envelope);
+    return envelope;
   }
 
   private sumResultSizes(index: Map<string, CheckpointRecord>): number {

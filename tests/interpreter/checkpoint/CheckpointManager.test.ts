@@ -98,6 +98,58 @@ describe('CheckpointManager', () => {
     expect(second.getStats().localCached).toBe(1);
   });
 
+  it('persists workspace snapshots alongside cached results', async () => {
+    const root = await createTempDir('checkpoint-manager-workspace-snapshot-');
+    const manager = new CheckpointManager('pipeline', createOptions(root));
+    await manager.load();
+
+    const key = CheckpointManager.computeCacheKey('claudePoll', ['review src/a.ts', 'sonnet']);
+    await manager.put(key, {
+      fn: 'claudePoll',
+      args: ['review src/a.ts', 'sonnet'],
+      result: { text: 'persisted' },
+      workspaceSnapshot: {
+        vfsPatch: {
+          version: 1,
+          entries: [{ op: 'write', path: '/output.txt', content: 'hello' }]
+        },
+        descriptions: { '/output.txt': 'generated output' }
+      }
+    });
+
+    const cached = await manager.getWithMetadata(key);
+    expect(cached?.value).toEqual({ text: 'persisted' });
+    expect(cached?.workspaceSnapshot).toEqual({
+      vfsPatch: {
+        version: 1,
+        entries: [{ op: 'write', path: '/output.txt', content: 'hello' }]
+      },
+      descriptions: { '/output.txt': 'generated output' }
+    });
+
+    const reloaded = new CheckpointManager('pipeline', createOptions(root));
+    await reloaded.load();
+    const reloadedCached = await reloaded.getWithMetadata(key);
+    expect(reloadedCached?.workspaceSnapshot?.descriptions['/output.txt']).toBe('generated output');
+  });
+
+  it('persists checkpoint completion state in the manifest', async () => {
+    const root = await createTempDir('checkpoint-manager-state-roundtrip-');
+    const manager = new CheckpointManager('pipeline', createOptions(root));
+    await manager.load();
+
+    await manager.recordCheckpointState('sync', { complete: true });
+    expect(manager.isCheckpointComplete('sync')).toBe(true);
+
+    const manifestRaw = await readFile(path.join(root, 'pipeline', 'manifest.json'), 'utf8');
+    expect(manifestRaw).toContain('"checkpointStates"');
+    expect(manifestRaw).toContain('"sync"');
+
+    const reloaded = new CheckpointManager('pipeline', createOptions(root));
+    await reloaded.load();
+    expect(reloaded.isCheckpointComplete('sync')).toBe(true);
+  });
+
   it('invalidates entries by function and fuzzy argsPreview prefix', async () => {
     const root = await createTempDir('checkpoint-manager-invalidate-');
     const manager = new CheckpointManager('pipeline', createOptions(root));

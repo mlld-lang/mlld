@@ -7,7 +7,7 @@ category: cli
 tags: [cli, run, scripts, payload, checkpoint, resume]
 related: [syntax-payload, config-sdk-dynamic-modules, config-cli-file, checkpoint]
 related-code: [cli/commands/run.ts]
-updated: 2026-02-25
+updated: 2026-03-06
 ---
 
 Run mlld scripts from a configured directory with automatic payload injection.
@@ -42,17 +42,18 @@ var @fast = @payload.fast ? @payload.fast : false
 | `--debug` | Show execution metrics |
 | `--fresh` / `--new` | Clear checkpoint cache before running |
 | `--no-checkpoint` | Disable checkpoint reads/writes for this run |
-| `--resume [target]` | Invalidate checkpoint entries and re-run (see below) |
+| `--resume [target]` | Enable checkpoint replay for this run; optional target invalidates entries |
 | `--fork <script>` | Seed cache from another script's checkpoints (read-only) |
 | `--mlld-env <env>` | Load agent env file(s) or inline KEY=VALUE overrides |
 | `--<name> <value>` | Payload field |
 
-**Checkpoint/resume**: `llm`-labeled exes are automatically cached. Use `--resume` to selectively re-run:
+**Checkpoint/resume**: `llm`-labeled exes are checkpointed automatically. Scripts default to manual replay unless they declare `resume: auto`, so use `--resume` to opt into hits or targeted invalidation:
 
 ```bash
+mlld run pipeline --resume                  # use cached hits for this run
 mlld run pipeline --resume @review          # invalidate all @review entries
 mlld run pipeline --resume @review:2        # invalidate 3rd invocation (0-based)
 mlld run pipeline --resume @review("src/")  # invalidate by arg prefix
 ```
 
-See `mlld howto checkpoint` for cache inspection and named checkpoints.
+See `mlld howto checkpoint` for resume modes, named checkpoints, TTL/complete policies, cache inspection, and workspace VFS replay behavior.

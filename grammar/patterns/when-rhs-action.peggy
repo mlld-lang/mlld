@@ -27,10 +27,19 @@ WhenRHSActionBase "when RHS action base"
   / VarRHSContent  // Pure values (fallback)
 
 WhenRHSCheckpointAction
-  = CheckpointKeyword __ name:CheckpointNameValue {
-      const values = { name };
-      const raw = { name };
-      const meta = { checkpointContext: 'when-expression-action' };
+  = CheckpointKeyword __ name:CheckpointNameValue withClause:CheckpointWithClause? {
+      const values = {
+        name,
+        ...(withClause ? { withClause } : {})
+      };
+      const raw = {
+        name,
+        ...(withClause ? { withClause } : {})
+      };
+      const meta = {
+        checkpointContext: 'when-expression-action',
+        ...(withClause ? { withClause } : {})
+      };
 
       return [helpers.createStructuredDirective(
         DirectiveKind.checkpoint,

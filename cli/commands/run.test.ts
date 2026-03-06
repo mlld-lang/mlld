@@ -379,6 +379,9 @@ describe('RunCommand', () => {
       });
       vi.mocked(fs.readFile).mockImplementation(async (filePath: any) => {
         const value = String(filePath);
+        if (value.endsWith('script.mld')) {
+          return '>> test script\nvar @x = "ok"';
+        }
         if (value.endsWith(path.join('.mlld', 'checkpoints', 'script', 'manifest.json'))) {
           return JSON.stringify({ totalCached: 3 });
         }

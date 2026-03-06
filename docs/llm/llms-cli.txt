@@ -65,20 +65,21 @@ var @fast = @payload.fast ? @payload.fast : false
 | `--debug` | Show execution metrics |
 | `--fresh` / `--new` | Clear checkpoint cache before running |
 | `--no-checkpoint` | Disable checkpoint reads/writes for this run |
-| `--resume [target]` | Invalidate checkpoint entries and re-run (see below) |
+| `--resume [target]` | Enable checkpoint replay for this run; optional target invalidates entries |
 | `--fork <script>` | Seed cache from another script's checkpoints (read-only) |
 | `--mlld-env <env>` | Load agent env file(s) or inline KEY=VALUE overrides |
 | `--<name> <value>` | Payload field |
 
-**Checkpoint/resume**: `llm`-labeled exes are automatically cached. Use `--resume` to selectively re-run:
+**Checkpoint/resume**: `llm`-labeled exes are checkpointed automatically. Scripts default to manual replay unless they declare `resume: auto`, so use `--resume` to opt into hits or targeted invalidation:
 
 ```bash
+mlld run pipeline --resume                  # use cached hits for this run
 mlld run pipeline --resume @review          # invalidate all @review entries
 mlld run pipeline --resume @review:2        # invalidate 3rd invocation (0-based)
 mlld run pipeline --resume @review("src/")  # invalidate by arg prefix
 ```
 
-See `mlld howto checkpoint` for cache inspection and named checkpoints.
+See `mlld howto checkpoint` for resume modes, named checkpoints, TTL/complete policies, cache inspection, and workspace VFS replay behavior.
 </CLI_RUN>
 
 <VALIDATE>
@@ -242,25 +243,48 @@ Returns structured data: `executables`, `exports`, `imports`, `guards`, `needs`,
 </VALIDATE>
 
 <CHECKPOINT_RESUME>
-Checkpointing automatically caches results from `llm`-labeled executables so you can resume interrupted runs without re-calling LLMs.
+Checkpointing automatically persists results from `llm`-labeled executables so you can resume interrupted runs without re-calling LLMs. Cache writes are automatic; cache reads follow the script's resume policy.
 
 **Auto-detection**: `exe` and `run` operations with the `llm` label that make external calls (cmd, sh, prose, node) are checkpoint-eligible. No opt-in flag needed.
 
 ```mlld
+resume: auto
+
 >> This call is automatically checkpointed
 exe llm @review(file, model) = cmd {claude -p "Review @file" --model @model}
 
 var @result = @review("main.ts", "sonnet")
 ```
 
-Second run: `@review("main.ts", "sonnet")` returns the cached result instantly.
+Second run with `resume: auto` or `mlld run ... --resume`: `@review("main.ts", "sonnet")` returns the cached result instantly.
+
+## Resume Modes
+
+Set a top-of-file `resume:` header to control when cached hits are allowed:
+
+```mlld
+resume: manual   >> default if omitted
+resume: auto     >> serve checkpoint hits by default
+resume: never    >> skip checkpoint reads/writes unless --resume is used
+```
+
+Quoted and unquoted forms are both accepted: `resume: auto` and `resume: "auto"`.
+
+| Mode | Behavior |
+|------|----------|
+| `manual` | Default for scripts. Writes checkpoints, but only serves hits when `--resume` is passed |
+| `auto` | Writes checkpoints and serves hits automatically |
+| `never` | Skips checkpoint reads and writes for normal runs |
+
+`--resume` overrides the script-level mode for the current run.
 
 ## CLI Flags
 
 ```bash
-mlld run pipeline                        # auto-caches llm calls
+mlld run pipeline                        # writes checkpoints; default replay is manual unless script says resume:auto
 mlld run pipeline --fresh                # clear cache, rebuild from scratch
 mlld run pipeline --no-checkpoint        # disable caching entirely
+mlld run pipeline --resume               # use existing hits without invalidating a target
 mlld run pipeline --resume @review       # invalidate @review's cache entries, re-run
 mlld run pipeline --fork other-script    # seed cache from another script's results
 ```
@@ -269,6 +293,7 @@ mlld run pipeline --fork other-script    # seed cache from another script's resu
 |------|--------|
 | `--fresh` / `--new` | Clear this script's cache before running |
 | `--no-checkpoint` | Disable all checkpoint reads and writes |
+| `--resume` | Enable checkpoint replay for this run without invalidating a specific target |
 | `--resume @fn` | Invalidate all entries for `@fn`, re-execute |
 | `--resume @fn:2` | Invalidate only the 3rd invocation (0-based) |
 | `--resume @fn("src/")` | Invalidate entries where first arg starts with `"src/"` |
@@ -284,18 +309,30 @@ mlld checkpoint clean <script>      # delete cache for a script
 
 Cache lives in `.mlld/checkpoints/<script-name>/`.
 
-## Named Checkpoints
+## Named Checkpoints & Policies
 
-The `checkpoint` directive registers a named marker for resume targeting:
+The `checkpoint` directive registers a named marker for resume targeting and can override resume behavior for the checkpoint scope that follows it:
 
 ```mlld
-checkpoint "data-loaded"
+checkpoint "fetch-api" with {
+  resume: auto,
+  ttl: 1h,
+  complete: @fetchDone
+}
 
->> Later, resume from this point:
->> mlld run pipeline --resume "data-loaded"
+>> Later:
+>> mlld run pipeline --resume "fetch-api"
 ```
 
+| Field | Effect |
+|-------|--------|
+| `resume: auto|manual|never` | Override the script-level resume mode for that checkpoint scope |
+| `ttl: 1h` | Expire automatic hits after the duration |
+| `complete: <expr>` | Record completion state when the checkpoint scope closes; automatic hits are only served after a prior run marked it complete |
+
 Named checkpoints are discovered from source before execution starts, so `--resume "name"` works even if a prior run failed before that checkpoint was reached.
+
+`--resume` still overrides `resume`, `ttl`, and `complete` for the current run.
 
 ## Context Variables
 
@@ -315,29 +352,30 @@ hook @cacheLog after @review = [
 ## How It Works
 
 - Cache key = SHA-256 hash of function name + normalized args
-- On hit: execution short-circuits, guards are skipped, post-hooks still run
+- On hit: execution short-circuits, guards are skipped, post-hooks still run, and workspace snapshots are restored when available
 - On miss: result is cached after post-hooks complete
+- Automatic hits obey script/checkpoint resume policy, TTL, and completion gates
 - Cache read/write errors are isolated (logged as warnings, never abort execution)
 
-## Side Effects Are Not Cached
+## Workspace VFS Side Effects Are Replayed
 
-Checkpoint resume caches directive return values, not side effects. If an LLM call writes files to a VFS workspace via tools (Write, Bash), those writes are not replayed on resume. The same applies to any file writes or external mutations performed during execution — only the return value is restored.
-
-Design your pipelines to depend on return values, not side effects, for checkpoint-safe behavior:
+Checkpoint resume now captures and restores VFS workspace state for checkpointed operations running inside an active `box` workspace. If an LLM call writes files via tools like `Write` or `Bash`, those files are restored on cache hits.
 
 ```mlld
->> checkpoint-safe: result carries the data
-var @result = box [
-  let @answer = @claude("Analyze data.txt", { model: "haiku", tools: ["Read"] })
-  => @answer
-]
+resume: auto
 
->> NOT checkpoint-safe: depends on VFS write side effect
 var @ws = box [
   let @dummy = @claude("Write results to output.txt", { model: "haiku", tools: ["Write"] })
 ]
-show <@ws/output.txt>   >> empty on resume — Write tool call was not replayed
+show <@ws/output.txt>   >> works on resume — workspace snapshot is restored
 ```
+
+Current limits:
+
+- Restore only applies when the matching workspace is active at replay time
+- Restoring a snapshot clears any stale `shellSession` so later shell commands see the restored VFS state
+- Malformed snapshots fail soft with a warning
+- External side effects outside the workspace are still not replayed
 </CHECKPOINT_RESUME>
 
 <LIVE_STDIO>

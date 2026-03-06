@@ -1,4 +1,10 @@
-import type { MlldNode, SourceLocation, DirectiveNode } from '@core/types';
+import type {
+  MlldNode,
+  SourceLocation,
+  DirectiveNode,
+  ActiveCheckpointScope,
+  CheckpointResumeMode
+} from '@core/types';
 import type { MlldMode } from '@core/types/mode';
 import type { Variable, PipelineInput } from '@core/types/variable';
 import { 
@@ -119,6 +125,7 @@ import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import type { ImportApproval } from '@core/security/ImportApproval';
 import type { ImmutableCache } from '@core/security/ImmutableCache';
 import type { WorkspaceValue, WorkspaceMcpBridgeHandle } from '@core/types/workspace';
+import { DEFAULT_CHECKPOINT_RESUME_MODE } from '@interpreter/checkpoint/policy';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
 
@@ -347,6 +354,9 @@ export class Environment
   private checkpointManager?: CheckpointManager;
   private checkpointManagerFactory?: () => Promise<CheckpointManager | undefined>;
   private checkpointManagerInitPromise?: Promise<CheckpointManager | undefined>;
+  private checkpointScriptResumeMode: CheckpointResumeMode = DEFAULT_CHECKPOINT_RESUME_MODE;
+  private activeCheckpointScope?: ActiveCheckpointScope;
+  private checkpointResumeOverride = false;
 
   // Tracks imported bindings to surface collisions across directives.
   private importBindings: Map<string, ImportBindingInfo> = new Map();
@@ -1539,6 +1549,39 @@ export class Environment
   getCheckpointManager(): CheckpointManager | undefined {
     const root = this.getRootEnvironment();
     return root.checkpointManager;
+  }
+
+  setCheckpointScriptResumeMode(mode: CheckpointResumeMode): void {
+    const root = this.getRootEnvironment();
+    root.checkpointScriptResumeMode = mode;
+    this.checkpointScriptResumeMode = mode;
+  }
+
+  getCheckpointScriptResumeMode(): CheckpointResumeMode {
+    const root = this.getRootEnvironment();
+    return root.checkpointScriptResumeMode;
+  }
+
+  setCheckpointResumeOverride(enabled: boolean): void {
+    const root = this.getRootEnvironment();
+    root.checkpointResumeOverride = enabled;
+    this.checkpointResumeOverride = enabled;
+  }
+
+  hasCheckpointResumeOverride(): boolean {
+    const root = this.getRootEnvironment();
+    return root.checkpointResumeOverride === true;
+  }
+
+  setActiveCheckpointScope(scope: ActiveCheckpointScope | undefined): void {
+    const root = this.getRootEnvironment();
+    root.activeCheckpointScope = scope;
+    this.activeCheckpointScope = scope;
+  }
+
+  getActiveCheckpointScope(): ActiveCheckpointScope | undefined {
+    const root = this.getRootEnvironment();
+    return root.activeCheckpointScope;
   }
 
   /**

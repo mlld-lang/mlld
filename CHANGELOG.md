@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `@mx.llm` ambient context for `exe llm` with `config.tools` — runtime auto-creates MCP bridges and exposes `{ config, allowed, inBox, hasTools }` so module authors never touch MCP internals
 - Ambient `@mx.box` context now includes active box MCP bridge metadata (`mcpConfigPath`, `socketPath`)
+- Checkpoint resume controls: top-level `resume: manual|auto|never`, checkpoint-level `with { resume, ttl, complete }`, and `--resume` replay without a selector
+- Checkpoint replay now restores active `box` workspace VFS state so cached `Write`/`Bash` tool effects remain visible after resume
 
 ### Changed
 - `exe llm` invocations with `config.tools` auto-bridge MCP tools; `@toolbridge` builtin removed
@@ -41,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming `stream` flags now resolve expression values (for example `stream: @config.stream`) across exec/run/show/pipeline paths; only strict boolean `true` enables streaming
 - Per-call MCP config generation now hard-fails on unknown in-box VFS tool names and MCP tool-name collisions
 - Per-invocation scope cleanups now deterministically tear down transient per-call MCP bridge resources
+- `mlld run` checkpoint guidance and resume semantics now match script-level resume policy, named checkpoint policies, and workspace replay behavior
 
 ## [2.0.3]
 

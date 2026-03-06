@@ -3,6 +3,7 @@ import type { OperationContext } from '@interpreter/env/ContextManager';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { logger } from '@core/utils/logger';
+import { resolveCheckpointPolicy, shouldServeCheckpointHit } from '@interpreter/checkpoint/policy';
 import type { PreHook } from './HookManager';
 
 const CHECKPOINT_START_TIME_MS_KEY = 'checkpointStartTimeMs';
@@ -109,14 +110,16 @@ function buildCheckpointMetadata(
   options: {
     hit: boolean;
     cachedResult?: unknown;
+    workspaceSnapshot?: unknown;
     startTimeMs?: number;
   }
 ): Record<string, unknown> {
-  const { hit, cachedResult, startTimeMs } = options;
+  const { hit, cachedResult, workspaceSnapshot, startTimeMs } = options;
   return {
     checkpointHit: hit,
     checkpointKey: cacheKey,
     ...(cachedResult !== undefined ? { cachedResult } : {}),
+    ...(workspaceSnapshot !== undefined ? { checkpointWorkspaceSnapshot: workspaceSnapshot } : {}),
     ...(invocationMetadata.invocationSite ? { checkpointInvocationSite: invocationMetadata.invocationSite } : {}),
     ...(invocationMetadata.invocationIndex !== undefined
       ? { checkpointInvocationIndex: invocationMetadata.invocationIndex }
@@ -144,9 +147,16 @@ export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) 
     operationName,
     resolveInvocationSite(operation, env)
   );
-  let cachedResult: unknown | null = null;
+  let cachedEntry:
+    | { value: unknown; ts?: string; workspaceSnapshot?: unknown; source?: 'local' | 'fork' }
+    | null = null;
   try {
-    cachedResult = await manager.get(cacheKey);
+    if (typeof (manager as CheckpointManager & { getWithMetadata?: unknown }).getWithMetadata === 'function') {
+      cachedEntry = await (manager as CheckpointManager).getWithMetadata(cacheKey);
+    } else {
+      const cachedResult = await manager.get(cacheKey);
+      cachedEntry = cachedResult === null ? null : { value: cachedResult };
+    }
   } catch (error) {
     logger.warn('[checkpoint] cache read failed; treating as cache miss', {
       operation: operationName,
@@ -162,12 +172,43 @@ export const checkpointPreHook: PreHook = async (_node, inputs, env, operation) 
     };
   }
 
-  if (cachedResult !== null) {
+  if (cachedEntry !== null) {
+    const policy = resolveCheckpointPolicy(
+      env.getCheckpointScriptResumeMode?.(),
+      env.getActiveCheckpointScope?.()
+    );
+    const managerRef = manager as CheckpointManager & {
+      wasWrittenThisRun?: (key: string) => boolean;
+      isCheckpointComplete?: (name: string) => boolean | undefined;
+    };
+    const shouldUseCachedResult =
+      managerRef.wasWrittenThisRun?.(cacheKey) === true ||
+      (cachedEntry.source === 'fork' &&
+        policy.resumeMode === 'manual' &&
+        env.hasCheckpointResumeOverride?.() !== true) ||
+      shouldServeCheckpointHit({
+        policy,
+        entryTimestamp: cachedEntry.ts,
+        checkpointComplete: policy.name ? managerRef.isCheckpointComplete?.(policy.name) : undefined,
+        resumeOverride: env.hasCheckpointResumeOverride?.() === true
+      });
+
+    if (shouldUseCachedResult) {
+      return {
+        action: 'fulfill',
+        metadata: buildCheckpointMetadata(cacheKey, invocationMetadata, {
+          hit: true,
+          cachedResult: cachedEntry.value,
+          workspaceSnapshot: cachedEntry.workspaceSnapshot
+        })
+      };
+    }
+
     return {
-      action: 'fulfill',
+      action: 'continue',
       metadata: buildCheckpointMetadata(cacheKey, invocationMetadata, {
-        hit: true,
-        cachedResult
+        hit: false,
+        startTimeMs: Date.now()
       })
     };
   }

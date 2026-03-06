@@ -24,10 +24,12 @@ interface RunFixtureScriptOptions {
   checkpointRoot: string;
   scriptName: string;
   fileSystem?: MemoryFileSystem;
+  fileExtension?: string;
   fresh?: boolean;
   resume?: string | true;
   fork?: string;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
+  mlldMode?: 'strict' | 'markdown';
 }
 
 async function readFixtureFile(...parts: string[]): Promise<string> {
@@ -40,10 +42,10 @@ async function runFixtureScript(
   const fileSystem = options.fileSystem ?? new MemoryFileSystem();
   const result = await interpret(options.source, {
     mode: 'structured',
-    mlldMode: 'strict',
+    mlldMode: options.mlldMode ?? 'strict',
     fileSystem,
     pathService: new PathService(),
-    filePath: path.posix.join('/fixtures', `${options.scriptName}.mld`),
+    filePath: path.posix.join('/fixtures', `${options.scriptName}.${options.fileExtension ?? 'mld'}`),
     checkpoint: true,
     checkpointScriptName: options.scriptName,
     checkpointCacheRootDir: options.checkpointRoot,
@@ -155,6 +157,47 @@ describe('checkpoint integration fixtures', () => {
     expect(run.output).toBe(expected);
     expect(readCounter(counterKey)).toBe(1);
     expect(readCounter(afterCounterKey)).toBe(1);
+  });
+
+  it('covers workspace VFS replay across resumed markdown sections', async () => {
+    const source = await readFixtureFile('workspace-vfs-resume', 'example.md');
+    const expected = (await readFixtureFile('workspace-vfs-resume', 'expected.md')).trim();
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-fixture-workspace-vfs-'));
+    cleanupDirs.push(checkpointRoot);
+
+    const firstRun = await runFixtureScript({
+      source,
+      checkpointRoot,
+      scriptName: 'fixture-workspace-vfs-resume',
+      fileExtension: 'md',
+      fresh: true,
+      mlldMode: 'markdown'
+    });
+    const secondRun = await runFixtureScript({
+      source,
+      checkpointRoot,
+      scriptName: 'fixture-workspace-vfs-resume',
+      fileExtension: 'md',
+      mlldMode: 'markdown'
+    });
+
+    expect(firstRun.output).toBe(expected);
+    expect(secondRun.output).toBe(expected);
+
+    const firstTelemetry = firstRun.structured.stateWrites.filter(write => write.path === 'telemetry');
+    const secondTelemetry = secondRun.structured.stateWrites.filter(write => write.path === 'telemetry');
+    expect(String(firstTelemetry[0]?.value ?? '')).toContain('hit:false');
+    expect(String(secondTelemetry[0]?.value ?? '')).toContain('hit:true');
+
+    const manager = new CheckpointManager('fixture-workspace-vfs-resume', {
+      cacheRootDir: checkpointRoot
+    });
+    await manager.load();
+    expect(manager.getStats().localCached).toBe(1);
+
+    const writeKey = CheckpointManager.computeCacheKey('writeOutput', []);
+    const cached = await manager.getWithMetadata(writeKey);
+    expect(cached?.workspaceSnapshot).toBeDefined();
   });
 
   it('covers resume targeting in parallel loops with fuzzy cursor invalidation', async () => {

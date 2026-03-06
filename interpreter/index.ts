@@ -26,6 +26,9 @@ import { isExeReturnControl } from './eval/exe-return';
 import { materializeDisplayValue } from './utils/display-materialization';
 import { CheckpointManager } from './checkpoint/CheckpointManager';
 import { resolveCheckpointScriptName } from './checkpoint/script-name';
+import { extractLeadingResumeDirective } from '@core/checkpoint/config';
+import { DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE } from '@interpreter/checkpoint/policy';
+import { finalizePendingCheckpointScope } from './eval/checkpoint';
 
 function validateCheckpointOptions(options: InterpretOptions): void {
   if (options.noCheckpoint !== true) {
@@ -385,6 +388,9 @@ export async function interpret(
   const provenanceEnabled = mode === 'debug' ? true : options.provenance === true;
   
   const ast = parseResult.ast;
+  const leadingResumeDirective = extractLeadingResumeDirective(source);
+  const scriptResumeMode =
+    leadingResumeDirective.resumeMode ?? DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE;
   const declaredCheckpointNames = collectDeclaredCheckpointNames(ast);
   
   // Build or use provided PathContext
@@ -428,23 +434,20 @@ export async function interpret(
   );
   env.setStreamingManager(options.streamingManager ?? new StreamingManager());
   env.setProvenanceEnabled(provenanceEnabled);
+  env.setCheckpointScriptResumeMode(scriptResumeMode);
+  env.setCheckpointResumeOverride(options.resume !== undefined);
 
   const checkpointScriptName = resolveCheckpointScriptName(
     options.filePath,
     options.checkpointScriptName
   );
   if (options.noCheckpoint !== true && checkpointScriptName) {
-    const checkpointReadsEnabled =
-      options.resume !== undefined ||
-      (typeof options.fork === 'string' && options.fork.length > 0);
-
     env.setCheckpointManagerFactory(async () => {
       const checkpointManager = new CheckpointManager(checkpointScriptName, {
         scriptPath: options.filePath,
         ...(typeof options.fork === 'string' && options.fork.length > 0
           ? { forkScriptName: options.fork }
           : {}),
-        readEnabled: checkpointReadsEnabled,
         ...(typeof options.checkpointCacheRootDir === 'string' &&
         options.checkpointCacheRootDir.length > 0
           ? { cacheRootDir: options.checkpointCacheRootDir }
@@ -605,6 +608,8 @@ export async function interpret(
       { allowReturn: true, scope: 'script', hasFunctionBoundary: false },
       async () => evaluate(ast, env)
     );
+
+    await finalizePendingCheckpointScope(env);
 
     // Script-level return is explicit final output. Non-return final values are ignored.
     if (isExeReturnControl(evaluationResult.value)) {

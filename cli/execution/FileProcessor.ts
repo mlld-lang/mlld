@@ -23,6 +23,10 @@ import {
   getCheckpointSummaryByFilePath,
   shouldShowCheckpointResumeHint
 } from '../utils/checkpoint-cache';
+import {
+  extractLeadingResumeDirective,
+  DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE
+} from '@core/checkpoint/config';
 
 export interface ProcessingEnvironment {
   fileSystem: NodeFileSystem;
@@ -416,7 +420,10 @@ export class FileProcessor {
       ? await parseInjectOptions(cliOptions.inject, environment.fileSystem, path.dirname(effectivePath))
       : undefined;
 
+    const scriptResumeMode =
+      extractLeadingResumeDirective(content).resumeMode ?? DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE;
     const shouldInspectCheckpointCache =
+      scriptResumeMode === 'manual' &&
       shouldShowCheckpointResumeHint(cliOptions) &&
       cliOptions.eval === undefined &&
       cliOptions.input !== '/dev/stdin' &&
