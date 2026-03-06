@@ -119,24 +119,46 @@ export async function setupIterationContext(
       delete (iterationVar.mx as Record<string, unknown>).mxCache;
     }
   }
-  childEnv.setVariable(
-    params.varName,
-    withIterationMxKey(iterationVar, {
-      key,
-      index: params.index,
-      sourceKind: params.sourceKind
-    })
-  );
+  const iterVarWithForScope = withIterationMxKey(iterationVar, {
+    key,
+    index: params.index,
+    sourceKind: params.sourceKind
+  });
+  // Mark as block-scoped so the parent-scope redefinition check allows shadowing
+  // a variable of the same name in an ancestor environment. This is essential for
+  // recursive functions that contain `for` loops: the outer call's for-loop variable
+  // would otherwise block the inner call's for-loop from using the same name.
+  if (iterVarWithForScope.mx) {
+    (iterVarWithForScope.mx as Record<string, unknown>).importPath = 'for-var';
+  } else {
+    (iterVarWithForScope as any).mx = { importPath: 'for-var' };
+  }
+  childEnv.setVariable(params.varName, iterVarWithForScope);
   if (typeof derivedValue !== 'undefined' && params.fieldPathString) {
     const derivedVar = ensureVariable(`${params.varName}.${params.fieldPathString}`, derivedValue, params.rootEnv);
+    if (derivedVar.mx) {
+      (derivedVar.mx as Record<string, unknown>).importPath = 'for-var';
+    } else {
+      (derivedVar as any).mx = { importPath: 'for-var' };
+    }
     childEnv.setVariable(`${params.varName}.${params.fieldPathString}`, derivedVar);
   }
   if (key !== null && typeof key === 'string') {
     if (params.keyVarName) {
       const keyVar = ensureVariable(params.keyVarName, key, params.rootEnv);
+      if (keyVar.mx) {
+        (keyVar.mx as Record<string, unknown>).importPath = 'for-var';
+      } else {
+        (keyVar as any).mx = { importPath: 'for-var' };
+      }
       childEnv.setVariable(params.keyVarName, keyVar);
     } else {
       const keyVar = ensureVariable(`${params.varName}_key`, key, params.rootEnv);
+      if (keyVar.mx) {
+        (keyVar.mx as Record<string, unknown>).importPath = 'for-var';
+      } else {
+        (keyVar as any).mx = { importPath: 'for-var' };
+      }
       childEnv.setVariable(`${params.varName}_key`, keyVar);
     }
   }

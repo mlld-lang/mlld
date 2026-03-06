@@ -229,7 +229,7 @@ export class VariableManager implements IVariableManager {
         // Only throw collision errors if both variables are legitimate mlld types
         // AND the new variable is not a block-scoped binding that can shadow parent scope
         const importPath = variable.mx?.importPath;
-        const isBlockScoped = importPath === 'let' || importPath === 'exe-param';
+        const isBlockScoped = importPath === 'let' || importPath === 'exe-param' || importPath === 'for-var';
         if (isLegitimateVariable && existingIsLegitimate && !isBlockScoped) {
           const isExistingImported = existing.mx?.isImported || false;
           const importPath = existing.mx?.importPath;
