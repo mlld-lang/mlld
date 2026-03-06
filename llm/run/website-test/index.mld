@@ -6,7 +6,7 @@ var @_mkdir = cmd { mkdir -p @outDir }
 >> Helpers
 exe @atomic(task)            = js { return { ...task, kind: "atomic" } }
 exe @compound(task, planned) = js { return { ...task, kind: "compound", subtasks: planned } }
-exe @slug(str) = js { return String(str).replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40) }
+exe @slug(goal) = js { return String(goal).replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40) }
 exe @nextDepth(n) = js { return n + 1 }
 exe @getLeaves(node) = js {
   function leaves(n) {
@@ -28,7 +28,7 @@ Return JSON only — no markdown, no explanation:
 { "kind": "atomic" | "compound" }
 
 Write your response to @outPath using the Write tool.`
-  let @_       = @claudePoll(@prompt, "sonnet", "@base", "Write", @outPath)
+  let @_poll = @claudePoll(@prompt, "sonnet", "@base", "Write", @outPath)
   => <@outPath>? | @json
 ]
 
@@ -43,7 +43,7 @@ Return JSON only — no markdown, no explanation:
 [{ "goal": "...", "depth": @nd }]
 
 Write your response to @outPath using the Write tool.`
-  let @_       = @claudePoll(@prompt, "sonnet", "@base", "Write", @outPath)
+  let @_poll = @claudePoll(@prompt, "sonnet", "@base", "Write", @outPath)
   => <@outPath>? | @json
 ]
 
@@ -52,7 +52,7 @@ exe llm,recursive @plan(task) = [
   let @kind = @classify(@task)
   when @kind.kind == "atomic" => @atomic(@task)
   let @sub     = @subtasks(@task)
-  let @planned = for parallel(5) @sub_task in @sub => @plan(@sub_task)
+  let @planned = for parallel(5) @s in @sub => @plan(@s)
   => @compound(@task, @planned)
 ]
 

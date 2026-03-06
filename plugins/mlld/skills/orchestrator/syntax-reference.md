@@ -49,7 +49,7 @@ let @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
 
-let @_ = @claudePoll(@fullPrompt, "opus", "@root", @tools, @outputPath)
+@claudePoll(@fullPrompt, "opus", "@root", @tools, @outputPath)
 let @decision = <@outputPath>?
 ```
 
