@@ -1,3 +1,3 @@
-exe @helper() = @f()
-exe @f() = @helper()
-show @f()
+/exe @helper() = @f()
+/exe @f() = @helper()
+/show @f()

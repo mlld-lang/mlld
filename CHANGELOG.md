@@ -19,8 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test harness migration: `MemoryFileSystem` now wraps `VirtualFS.empty()` for semantics parity, with dedicated parity tests and updated test-environment docs
 - VirtualFS final hardening pass: added stress regression coverage for deep merge/delete-mask and repeated `flush`/`discard` lifecycle cycles, plus SDK default `NodeFileSystem` behavior checks when `fileSystem` is omitted
 
+### Added
+- `exe recursive` label — self-calling exe functions with bounded depth. Add `recursive` to any `exe` label list to allow a function to call itself up to a configurable depth limit (default 64, override with `MLLD_RECURSION_DEPTH`). Works with `exe llm`, inside `for`/`for parallel` loops (each branch tracks depth independently), and composes with checkpointing. Non-recursive functions retain existing immediate-throw behavior on self-call.
+
 ### Fixed
 - MCP server: strip namespace prefix from tool calls (e.g., `server-name:tool_name` → `tool_name`) to support clients that send namespaced tool names
+- Circular reference guard now fires after argument evaluation rather than before. This fixes a pre-existing bug where `@f(@f(x))` — a non-recursive nested call of the same function — was incorrectly rejected as circular. Arguments are evaluated in the caller's scope before the callee's body begins, so nesting the same function as an argument is valid and now works correctly.
 
 ### Documentation
 - Completed VirtualFS coverage across dev/user docs and SDK atoms, including architecture placement, no-grammar-impact note, test-harness guidance, SDK usage patterns, and docs-mirroring SDK example tests

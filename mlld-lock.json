@@ -53,10 +53,10 @@
     },
     "@root": {
       "version": "latest",
-      "resolved": "58ad544cf02406e434e705246e2fffa0af2f1ae21d8f1d9fb0cfcfe4f9964030",
+      "resolved": "61c967775e8e00c342c83862fbc8aa79cafd9c5bf48f92877289a27e5c6a18f7",
       "source": "base",
-      "integrity": "sha256:58ad544cf02406e434e705246e2fffa0af2f1ae21d8f1d9fb0cfcfe4f9964030",
-      "fetchedAt": "2026-03-04T06:04:10.608Z"
+      "integrity": "sha256:61c967775e8e00c342c83862fbc8aa79cafd9c5bf48f92877289a27e5c6a18f7",
+      "fetchedAt": "2026-03-06T11:43:39.948Z"
     },
     "@mlld/md-fetch": {
       "version": "latest",
@@ -70,6 +70,6 @@
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-03-04T18:33:29.656Z"
+    "updatedAt": "2026-03-06T11:43:39.949Z"
   }
 }
