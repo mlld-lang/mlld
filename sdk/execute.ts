@@ -67,6 +67,19 @@ export async function execute(
     ...(options.state ? { '@state': options.state } : {})
   };
 
+  const effectiveNoCheckpoint =
+    options.noCheckpoint !== undefined
+      ? options.noCheckpoint
+      : options.checkpoint === false
+        ? true
+        : undefined;
+  const effectiveResume =
+    options.resume !== undefined
+      ? options.resume
+      : options.checkpoint === true && effectiveNoCheckpoint !== true
+        ? true
+        : undefined;
+
   const interpretOptions: InterpretOptions = {
     mode: options.stream ? 'stream' : 'structured',
     filePath,
@@ -78,9 +91,9 @@ export async function execute(
     dynamicModuleSource: options.dynamicModuleSource,
     ast: cacheEntry.ast,
     checkpoint: options.checkpoint,
-    noCheckpoint: options.noCheckpoint,
+    noCheckpoint: effectiveNoCheckpoint,
     fresh: options.fresh,
-    resume: options.resume,
+    resume: effectiveResume,
     fork: options.fork,
     checkpointScriptName: options.checkpointScriptName,
     checkpointCacheRootDir: options.checkpointCacheRootDir

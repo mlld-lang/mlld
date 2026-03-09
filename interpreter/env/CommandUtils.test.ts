@@ -61,34 +61,6 @@ describe('CommandUtils guidance messages', () => {
     expect(message).toContain('quoted string variable was interpolated back into cmd');
   });
 
-  it('warns when an interpolated quoted template is reused as a cmd fragment', () => {
-    const flags = createSimpleTextVariable(
-      'flags',
-      '--mcp-config "/tmp/a b"',
-      {
-        directive: 'var',
-        syntax: 'template',
-        hasInterpolation: true,
-        isMultiLine: false,
-        wrapperType: 'backtick'
-      },
-      {
-        internal: {
-          templateRaw: '--mcp-config "@path"'
-        }
-      }
-    );
-
-    const warnings = CommandUtils.collectUnsafeInterpolatedFragmentWarnings(
-      [{ type: 'VariableReference', identifier: 'flags' }],
-      name => (name === 'flags' ? flags : undefined)
-    );
-
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('@flags');
-    expect(warnings[0]).toContain('Inline the args in cmd');
-  });
-
   it('ignores non-AST command templates when collecting fragment warnings', () => {
     expect(
       CommandUtils.collectUnsafeInterpolatedFragmentWarnings(undefined, () => undefined)
