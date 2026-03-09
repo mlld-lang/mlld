@@ -164,9 +164,12 @@ export class CommandUtils {
       warnings.push(
         [
           `${CommandUtils.COMMAND_FRAGMENT_WARNING_PREFIX} @${identifier} is being reused as a cmd fragment,`,
-          'but it was built from an interpolated quoted template.',
-          `Template: ${templatePreview}`,
-          'This often breaks argv splitting. Inline the args in cmd { ... } or switch to sh { ... }.'
+          'but it was built from an interpolated quoted template:',
+          '',
+          `  \`${templatePreview}\``,
+          '',
+          'Interpolated values with quotes (etc) can break the command.',
+          'Pipe the value in instead: `@var | cmd { ... }`.'
         ].join('\n')
       );
       seen.add(identifier);
