@@ -1,8 +1,8 @@
->> fractals — Recursive Task Decomposer (LLM portion)
+>> Recursive Task Decomposer (LLM portion)
 >> mlld port of https://github.com/TinyAGI/fractals
 >>
 >> Usage:
->>   mlld run fractals -- --task "Build a REST API" [--depth 4]
+>>   mlld run recursive-decompose -- --task "Build a REST API" [--depth 4]
 >>
 >> How it works:
 >>   Uses `while` + frontier accumulation instead of recursion.
