@@ -1,5 +1,5 @@
 exe llm @classify(task) = cmd {
-  claude -p "Atomic or compound? @task.goal
+  claude -p "One focused step, or needs subtasks? @task.goal
   JSON: { kind }"
 }
 exe llm @subtasks(task) = cmd {
