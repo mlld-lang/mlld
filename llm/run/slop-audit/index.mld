@@ -47,19 +47,8 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY
   => @result
 ]
 
-exe llm @callReview(prompt, tools, outPath) = [
-  let @fullPrompt = `@prompt
-
-IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema.`
-  @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
-]
-
-exe llm @callVerify(prompt, tools, outPath) = [
-  let @fullPrompt = `@prompt
-
-IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
-  @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
-]
+exe llm @callReview(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+exe llm @callVerify(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
 
 >> Helpers
 exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => { const d = a.data || a; return d.findings || [] }) }
@@ -119,7 +108,10 @@ var @reviewResults = for parallel(@parallelism) @filePath in @filesToAudit [
   let @outPath = `@runDir/reviews/@flatName\.json`
 
   show `  @filePath: reviewing...`
-  @callReview(@reviewPrompt(@filePath, @file, @antiSlopGuide), @reviewTools, @outPath)
+  let @reviewFullPrompt = `@reviewPrompt(@filePath, @file, @antiSlopGuide)
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema.`
+  @callReview(@reviewFullPrompt, @reviewTools, @outPath)
   let @result = <@outPath>? | @parse
 
   when !@result => [
@@ -151,7 +143,10 @@ var @verificationResults = for parallel(@parallelism) @finding in @allFindings [
 
   show `  @findingId: verifying...`
   let @sourceFile = <@root/@finding.file>?
-  @callVerify(@verifyPrompt(@finding, @sourceFile, @antiSlopGuide), @verifyTools, @outPath)
+  let @verifyFullPrompt = `@verifyPrompt(@finding, @sourceFile, @antiSlopGuide)
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+  @callVerify(@verifyFullPrompt, @verifyTools, @outPath)
   let @result = <@outPath>? | @parse
 
   when !@result => [
