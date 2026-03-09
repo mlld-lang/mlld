@@ -39,21 +39,26 @@ exe @verifyPrompt(finding, fileContent, guide) = template "./prompts/verify.att"
 
 >> LLM wrappers — llm label enables automatic caching, bail on failure
 exe llm @callScope(prompt, tools, outPath) = [
-  let @result = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+  let @result = @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
   when !@result => bail `Scope agent failed to produce output`
   => @result
 ]
 
 exe llm @callReview(prompt, tools, outPath) = [
-  let @result = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
-  when !@result => bail `Review agent failed to produce output`
-  => @result
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema.`
+  @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
 ]
 
 exe llm @callVerify(prompt, tools, outPath) = [
-  let @result = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
-  when !@result => bail `Verify agent failed to produce output`
-  => @result
+  let @fullPrompt = `@prompt
+
+IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
+  @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
 ]
 
 >> Helpers
@@ -79,12 +84,9 @@ var @flags = {
 }
 
 var @scopeOutPath = `@runDir/scope/files.json`
-var @scopeFullPrompt = `@scopePrompt(@flags, @lastRunCommit)
-
-IMPORTANT: Write your JSON response to @scopeOutPath using the Write tool. Write ONLY valid JSON.`
 
 show `  Resolving scope...`
-@callScope(@scopeFullPrompt, @scopeTools, @scopeOutPath)
+@callScope(@scopePrompt(@flags, @lastRunCommit), @scopeTools, @scopeOutPath)
 show `  Scope resolved.`
 var @scopeResult = <@scopeOutPath>? | @parse
 
@@ -117,12 +119,7 @@ var @reviewResults = for parallel(@parallelism) @filePath in @filesToAudit [
   let @outPath = `@runDir/reviews/@flatName\.json`
 
   show `  @filePath: reviewing...`
-  let @prompt = @reviewPrompt(@filePath, @file, @antiSlopGuide)
-  let @fullPrompt = `@prompt
-
-IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema.`
-
-  @callReview(@fullPrompt, @reviewTools, @outPath)
+  @callReview(@reviewPrompt(@filePath, @file, @antiSlopGuide), @reviewTools, @outPath)
   let @result = <@outPath>? | @parse
 
   when !@result => [
@@ -154,12 +151,7 @@ var @verificationResults = for parallel(@parallelism) @finding in @allFindings [
 
   show `  @findingId: verifying...`
   let @sourceFile = <@root/@finding.file>?
-  let @prompt = @verifyPrompt(@finding, @sourceFile, @antiSlopGuide)
-  let @fullPrompt = `@prompt
-
-IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
-
-  @callVerify(@fullPrompt, @verifyTools, @outPath)
+  @callVerify(@verifyPrompt(@finding, @sourceFile, @antiSlopGuide), @verifyTools, @outPath)
   let @result = <@outPath>? | @parse
 
   when !@result => [
