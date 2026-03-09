@@ -27,7 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 - Completed VirtualFS coverage across dev/user docs and SDK atoms, including architecture placement, no-grammar-impact note, test-harness guidance, SDK usage patterns, and docs-mirroring SDK example tests
 
+### Changed
+- `mlld nvim-setup` now auto-updates outdated configs instead of requiring `--force`; shows version transition (e.g. `Updated config v15 → v16`)
+
 ### Fixed
+- Neovim: disable snippet/generic autocompletion (nvim-cmp, blink.cmp) for `.mld` files — mlld scripts are not code and general snippets are noise
+- `mlld nvim-setup` leaked debug output (`true table: 0x...`) when checking for nvim-lspconfig
 - MCP server: handle `notifications/initialized` per protocol spec instead of returning an error that caused clients to restart the server
 - MCP server: suppress responses for JSON-RPC notifications (messages without `id`)
 - MCP server: `tools/call` returned "Tool not found" for exported functions with snake_case names due to incorrect camelCase round-trip in `resolveToolKey`

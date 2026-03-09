@@ -6,7 +6,7 @@ import chalk from 'chalk';
 
 // Config version - bump when making breaking changes
 // nvim-doctor uses this to detect outdated configs
-export const NVIM_CONFIG_VERSION = 15;
+export const NVIM_CONFIG_VERSION = 16;
 
 // File extension semantics:
 // - .mld files → strict mode (bare directives like `var @x = 1`)
@@ -50,6 +50,21 @@ vim.api.nvim_create_autocmd({ 'BufRead', 'BufNewFile' }, {
   callback = function()
     vim.opt_local.wrap = true
     vim.opt_local.linebreak = true
+  end
+})
+
+-- Disable snippet/generic autocompletion for mlld files
+-- (mlld has its own LSP completions; general snippets are noise)
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'mld',
+  callback = function()
+    vim.opt_local.completefunc = ''
+    vim.opt_local.omnifunc = ''
+    -- Disable nvim-cmp for this buffer
+    local cmp_ok, cmp = pcall(require, 'cmp')
+    if cmp_ok then cmp.setup.buffer({ enabled = false }) end
+    -- Disable blink.cmp for this buffer
+    vim.b.completion = false
   end
 })
 
@@ -183,6 +198,21 @@ return {
       end
     })
 
+    -- Disable snippet/generic autocompletion for mlld files
+    -- (mlld has its own LSP completions; general snippets are noise)
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "mld",
+      callback = function()
+        vim.opt_local.completefunc = ""
+        vim.opt_local.omnifunc = ""
+        -- Disable nvim-cmp for this buffer
+        local cmp_ok, cmp = pcall(require, "cmp")
+        if cmp_ok then cmp.setup.buffer({ enabled = false }) end
+        -- Disable blink.cmp for this buffer
+        vim.b.completion = false
+      end
+    })
+
     -- Detect Neovim version and use appropriate API
     local nvim_version = vim.version()
     local use_new_api = nvim_version.major > 0 or (nvim_version.major == 0 and nvim_version.minor >= 10)
@@ -273,15 +303,27 @@ return {
       let setupType: string;
       let created = false;
 
+      // Helper: check existing config version from file contents
+      const getExistingVersion = (filePath: string): number => {
+        if (!fs.existsSync(filePath)) return -1;
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const match = content.match(/Config version:\s*(\d+)/);
+        return match ? parseInt(match[1], 10) : 0;
+      };
+
       // Check for LazyVim (has lua/plugins directory)
       if (fs.existsSync(lazyVimDir)) {
         setupType = 'LazyVim';
         targetFile = path.join(lazyVimDir, 'mlld.lua');
 
-        if (fs.existsSync(targetFile) && !flags.force) {
-          console.log(chalk.yellow(`Config already exists at ${targetFile}`));
-          console.log(chalk.dim('  Use --force to overwrite'));
-          console.log(chalk.dim('  Or run: mlld nvim-doctor'));
+        const existingVersion = getExistingVersion(targetFile);
+
+        if (existingVersion === NVIM_CONFIG_VERSION && !flags.force) {
+          console.log(chalk.green(`Config is up to date (v${NVIM_CONFIG_VERSION}) at ${targetFile}`));
+        } else if (existingVersion >= 0 && existingVersion < NVIM_CONFIG_VERSION) {
+          fs.writeFileSync(targetFile, lazyVimConfig);
+          created = true;
+          console.log(chalk.green(`Updated config v${existingVersion} → v${NVIM_CONFIG_VERSION}`));
         } else {
           fs.writeFileSync(targetFile, lazyVimConfig);
           created = true;
@@ -297,10 +339,14 @@ return {
 
         targetFile = path.join(afterPluginDir, 'mlld-lsp.lua');
 
-        if (fs.existsSync(targetFile) && !flags.force) {
-          console.log(chalk.yellow(`Config already exists at ${targetFile}`));
-          console.log(chalk.dim('  Use --force to overwrite'));
-          console.log(chalk.dim('  Or run: mlld nvim-doctor'));
+        const existingVersion = getExistingVersion(targetFile);
+
+        if (existingVersion === NVIM_CONFIG_VERSION && !flags.force) {
+          console.log(chalk.green(`Config is up to date (v${NVIM_CONFIG_VERSION}) at ${targetFile}`));
+        } else if (existingVersion >= 0 && existingVersion < NVIM_CONFIG_VERSION) {
+          fs.writeFileSync(targetFile, universalConfig);
+          created = true;
+          console.log(chalk.green(`Updated config v${existingVersion} → v${NVIM_CONFIG_VERSION}`));
         } else {
           fs.writeFileSync(targetFile, universalConfig);
           created = true;
@@ -327,9 +373,9 @@ return {
       // Test if nvim has lspconfig
       let hasLspConfig = false;
       try {
-        const result = execSync('nvim --headless -c "lua print(pcall(require, \'lspconfig\'))" -c "q"',
+        const result = execSync('nvim --headless -c "lua print(pcall(require, \'lspconfig\') and \'yes\' or \'no\')" -c "q"',
           { encoding: 'utf-8', timeout: 5000 });
-        if (result.includes('true')) {
+        if (result.includes('yes')) {
           hasLspConfig = true;
           console.log(chalk.green('✓ nvim-lspconfig is installed'));
         }

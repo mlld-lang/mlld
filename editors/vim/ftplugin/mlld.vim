@@ -20,12 +20,6 @@ setlocal shiftwidth=2
 setlocal expandtab
 setlocal autoindent
 
-" Disable autocompletion (mlld scripts are not code)
-setlocal completefunc=
-setlocal omnifunc=
-lua vim.schedule(function() if pcall(require, 'cmp') then require('cmp').setup.buffer({ enabled = false }) end end)
-lua vim.schedule(function() if pcall(require, 'blink.cmp') then vim.b.completion = false end end)
-
 " Enable folding for code blocks and data structures
 setlocal foldmethod=syntax
 setlocal foldlevel=99
