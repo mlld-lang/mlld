@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP server: handle `notifications/initialized` per protocol spec instead of returning an error that caused clients to restart the server
 - MCP server: suppress responses for JSON-RPC notifications (messages without `id`)
 - MCP server: `tools/call` returned "Tool not found" for exported functions with snake_case names due to incorrect camelCase round-trip in `resolveToolKey`
+- Streaming `stream` flags now resolve expression values (for example `stream: @config.stream`) across exec/run/show/pipeline paths; only strict boolean `true` enables streaming
+- Per-call MCP config generation now hard-fails on unknown in-box VFS tool names and MCP tool-name collisions
+- Per-invocation scope cleanups now deterministically tear down transient per-call MCP bridge resources
+- `mlld run` checkpoint guidance and resume semantics now match script-level resume policy, named checkpoint policies, and workspace replay behavior
+- Imported module `/needs { packages: { node: [...] } }` checks now resolve Node packages from the imported module path, including built CLI runs
+- Namespace imports now preserve sibling command-ref scope for top-level exported executables
 
 ## [2.0.3]
 

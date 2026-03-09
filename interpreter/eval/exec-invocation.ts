@@ -630,6 +630,9 @@ async function evaluateExecInvocationInternal(
         {};
       let serializedInternal: Record<string, unknown> = { ...rawInternal };
       let capturedModuleEnv = getCapturedModuleEnv(rawInternal);
+      if (capturedModuleEnv === undefined) {
+        capturedModuleEnv = getCapturedModuleEnv(variable);
+      }
       if (capturedModuleEnv !== undefined) {
         serializedInternal.capturedModuleEnv = capturedModuleEnv;
       }

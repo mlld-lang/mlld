@@ -62,6 +62,24 @@ describe('Shadow Environment Import Tests', () => {
       expect(result.success).toBe(true);
       expect(result.exitCode).toBe(0);
     });
+
+    it('should preserve command-ref helper scope through namespace import of top-level executables', async () => {
+      const result = await testImport(`
+/import "./db-utils.mld" as @db
+/var @result = @db.init("ok")
+/show @result`, {
+        files: {
+          'db-utils.mld': `
+/exe @helper(@value) = js { return value.toUpperCase(); }
+/exe @init(@value) = @helper(@value)
+/export { init }`
+        },
+        expectedOutput: 'OK'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.exitCode).toBe(0);
+    });
   });
   
   describe('Nested Shadow Dependencies', () => {

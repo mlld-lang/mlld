@@ -3,6 +3,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { ModuleNeedsValidator } from './ModuleNeedsValidator';
+import path from 'node:path';
 
 function createEnv(): Environment {
   const env = new Environment(new MemoryFileSystem(), new PathService(), '/project');
@@ -32,5 +33,31 @@ describe('ModuleNeedsValidator', () => {
         { capability: 'python', reason: 'python runtime not available' }
       ])
     );
+  });
+
+  it('resolves node package checks from the imported module path when provided', () => {
+    const validator: any = new ModuleNeedsValidator(createEnv());
+    const seen: Array<{ name: string; basePath: string }> = [];
+    vi.spyOn(validator, 'isNodePackageAvailable').mockImplementation((name: string, basePath: string) => {
+      seen.push({ name, basePath });
+      return true;
+    });
+
+    const unmet = validator.findUnmetNeeds(
+      {
+        packages: {
+          node: [{ name: 'pg' }]
+        }
+      },
+      '/tmp/modules/pg/index.mld'
+    );
+
+    expect(unmet).toEqual([]);
+    expect(seen).toEqual([{ name: 'pg', basePath: '/tmp/modules/pg' }]);
+  });
+
+  it('detects installed node packages from the module directory ancestry', () => {
+    const validator: any = new ModuleNeedsValidator(createEnv());
+    expect(validator.isNodePackageAvailable('chalk', path.join(process.cwd(), 'modules', 'pg'))).toBe(true);
   });
 });

@@ -36,6 +36,22 @@ export function sealCapturedModuleEnv(
   });
 }
 
+export function stashCapturedModuleEnv(
+  target: unknown,
+  capturedModuleEnv: unknown
+): void {
+  if (!isRecord(target)) {
+    return;
+  }
+
+  if (capturedModuleEnv === undefined) {
+    capturedModuleEnvKeychain.delete(target);
+    return;
+  }
+
+  capturedModuleEnvKeychain.set(target, capturedModuleEnv);
+}
+
 export function getCapturedModuleEnv(target: unknown): unknown {
   if (!isRecord(target)) {
     return undefined;
