@@ -11,7 +11,9 @@ mlld is a scripting language designed to make it delightful to work with LLMs in
 
 ### The LLM-First Way
 
-After `npm install -g` run `mlld skill install` and find the `/mlld` skills.
+LLMs are quite skilled at writing mlld.
+
+After `npm install -g` run `mlld skill install` and find the `/mlld` skills, which include common patterns.
 
 You can also point your agent to `mlld quickstart` to get them up and running quickly. (Pairs well with skills; the skill tells them to run this.)
 
