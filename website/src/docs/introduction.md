@@ -7,9 +7,9 @@ order: 1
 
 # Introduction to mlld
 
-mlld is a scripting language designed to make it delightful to work with LLMs in repeatable ways that would be onerous in a chat context.
+mlld is a scripting language for working with LLMs that's both ergonomic and secure. It makes repeatable LLM workflows delightful to write—the kind of thing that's onerous in a chat context—and gives you infrastructure-level tools to control what data flows where.
 
-While you could most certainly use mlld to help build powerful agents, mlld is distinctively a _non_-agentic framework. mlld aims to empower people to ask: "What could we build with LLMs *besides* chatbots?" And it aspires to help both non-devs and grizzled engineers in answering that question.
+mlld aims to empower people to ask: "What could we build with LLMs *besides* chatbots?" And it aspires to help both non-devs and grizzled engineers in answering that question—from simple context-assembly pipelines to full autonomous agent loops.
 
 Philosophically, mlld aims to honor its web dev heritage: Like Rails, mlld is optimized pragmatically for developer happiness over architectural purity. Like Django, mlld is for perfectionists with deadlines: a few lines of mlld can harden the output of an LLM in a way that would take you _way_ more code in nearly any other context. And following Node, mlld has a tiny core and aims to make it easy to share and assemble workflows with community published packages.
 
@@ -142,9 +142,15 @@ Talking about prompt injection sets me up to point out: **mlld can be dangerous 
 
 Thankfully, some of the earliest mlld users are brilliant security researchers who you'll find in our Discord, which is a good place to ask safety questions. And maybe I'll nerdsnipe some into thinking about better defensive strategies against prompt injection!
 
-The vibe-check-and-retry approach above is fine when the worst that happens is an LLM says something silly. But when you're working with LLMs touching private data that you don't want leaving your system, you need more sophistication. mlld has guards for controlling data flow—labeling data by provenance, tracking taint, and blocking operations based on policy. See [security](/docs/security/) for the full picture.
+The vibe-check-and-retry approach above is fine when the worst that happens is an LLM says something silly. But when you're working with LLMs touching private data that you don't want leaving your system, you need more sophistication.
 
-### But as an LLM would put it, *this isn't just a safety lesson--it's a whole new way of thinking about programming!*
+mlld's security model is grounded in the idea that [prompt injection is an infrastructure problem, not an LLM problem](https://disreguard.com/blog/posts/prompt-injection-is-inevitable-disaster-is-optional/)—you can't prompt-engineer your way out of it, so mlld enforces constraints at the runtime level instead. **Labels** track data provenance automatically (and survive any transformation). **Policies** declare what's allowed. **Guards** enforce it—and the LLM doesn't get a vote.
+
+Importantly, security is designed to layer in without cluttering your orchestration. Write your pipeline first. Then add a `policy`, labels, and guards. Your core logic stays readable; the security sits alongside it.
+
+See [security](/docs/security/) for the full picture or [read the philosophy behind mlld's security model](https://disreguard.com/blog/posts/ai-and-security-the-other-bitter-lesson-why-we-need-new-primitives-to-defend-against-prompt-injection/).
+
+### But as an LLM would put it, *this isn't just a safety lesson—it's a whole new way of thinking about programming!*
 
 Since George Boole and Ada Lovelace, computer science has been grounded in ones and zeroes and now we have programs that can vibe check, hallucinate, and get deceived!
 
@@ -256,28 +262,30 @@ This makes documentation executable.
 These are your main building blocks:
 
 ```
-var     << creates { objects } and "strings of text" to pass around
-exe     << defines executable functions and templates for use later
-show    << shows in both the final output and in the terminal
-run     << runs commands/functions silently (no output unless they `show`)
+var         << create values: strings, objects, arrays, loaded files
+exe         << define reusable functions, templates, and LLM calls
+show        << output to terminal and final result
+run         << execute silently; @fn() bare call is shorthand for run @fn()
+import      << bring in modules, packages, or exported values
+for         << iterate over collections (parallel supported)
+when        << first-match conditional branching
+if          << imperative branching with optional else
+guard       << enforce data flow rules at runtime
+policy      << declare capability and label-flow rules
+checkpoint  << cache LLM results; resume mid-script with --resume
 ```
 
-There are more: `import` modules, `output` files, `log` (stderr), `stream` (streaming output), `for` loops, `when` condition/action pairs, `while` loops, and `guard` for security policies. Format data before writing, for example: `output @config.yaml() to "settings.yaml"`.
+There are more: `output` files, `log` (stderr), `stream` (streaming output), `while` loops, `loop` (autonomous loops), `hook` (lifecycle observers), `export`. 
 
 ### `var`, `show`, and `run`
 
-Most anything in mlld can be used to set the value of a `var`, including text strings, functions, objects, for loops, alligators.
+Most anything in mlld can be used to set the value of a `var`, including text strings, functions, objects, for loops, content-loading <alligators>.
 
-`show` is used to add things to the output of your file and your terminal output. You can `show` just about everything in mlld, **including the results of commands and functions.**
+`show` outputs to both your terminal and the final result of your script. You can `show` just about everything in mlld—strings, variables, function results, command output.
 
-`run` will let you run a `cmd {shell command}` or a `@function()` but **it _won't_ produce any output unless its functions `show`**
+`run` executes a command or function silently—no output unless something inside it calls `show`. In `.mld` files, calling `@task()` bare is shorthand for `run @task()`, and that's the most common way to execute something without capturing its result.
 
-Just remember:
-- Anything `run` can do, `show` can do louder
-- `show` is a Swiss Army knife that can show anything
-- `run` runs away, unless its passengers `show`
-
-In `.mld` files, `@task()` alone is shorthand for `run @task()`.
+Quick rule: if you want to see it, `show` it. If you just need it to happen, call it bare or `run` it.
 
 ### `exe` and code types
 
@@ -550,34 +558,19 @@ mlld howto when         # everything about when blocks
 mlld howto grep pattern # search across all help
 ```
 
-## mlld wants to help you write simple, readable code
+## mlld is designed for the weird world we live in.
 
-There are things that Very Serious Programmers dislike about mlld. Here's one!
+mlld has been extensively tested with AI coding agents—and they write it well. Install the skill pack to give your agent the full mlld context:
 
-This is a `when` block: conditions on the left, actions on the right. In mlld, if you want to perform multiple actions based on the same condition, you repeat the condition like this:
-
-```mlld
-when [
-  @conditionA && @conditionB => @action()
-  @conditionA && @conditionB => @otherAction()
-]
+```bash
+mlld skill install
 ```
 
-A lot of languages would want you to write something more like this:
+With the skill loaded, agents in harnesses like Claude Code, Codex, Pi, OpenCode can often one-shot complex orchestrators. mlld's declarative style maps naturally to how LLMs reason about pipelines, and the skill gives them token-efficient patterns for parallel execution, retry logic, and more. (And, yes, they like that all the var and exe values mean mlld scripts have more @s than a hashtag convention!)
 
-```mlld
-when [
-  @conditionA && @conditionB => @action(); @otherAction()
-]
-```
+mlld is okay with disappointing Very Serious Programmers Who Will Certainly Not Take mlld Seriously At All Because Why Is This Not Just Rust Or Go Or At Least Some Python Decorators.
 
-I can see reasons both are elegant! But the first is extremely clear and keeps things unambiguous. And the great thing is that your brain immediately sees that visually as one chunk! "This is the same condition. Got it." mlld will save a lot of typing over implementing some of the same capabilities in another language, so we can get away with a little bit more typing in scenarios like this.
-
-Here's another thing Very Serious Programmers dislike: `if` exists, but `when` handles most branching.
-
-mlld wants to be written and read. Use `when` for branching, blocks for complex logic, and move heavy logic into modules.
-
-mlld is okay with disappointing Very Serious Programmers Who Will Certainly Not Take mlld Seriously At All. We're not here to impress anyone; we want to make doing interesting things with LLMs easy and hopefully fun. And here's the thing: inside every Very Serious Programmer is someone who remembers what it was like to fire up a blinking REPL, type in some words and have a COMPUTER TALK BACK. Now we're in an era where computers can *literally* talk back to us. And they say weird and sometimes unexpected things! So it might be useful to have a weird and unexpected language to work with them.
+We're not here to impress anyone; we want to make doing interesting things with LLMs easy and hopefully fun. And here's the thing: inside every Very Serious Programmer is someone who remembers what it was like to fire up a blinking REPL, type in some words and have a COMPUTER TALK BACK. Now we're in an era where computers can *literally* talk back to us. And they say weird and sometimes unexpected things! So it might be useful to have a weird and unexpected language to work with them.
 
 But will we write code? Isn't code gonna be done forever being written by anyone but Claudes and GPTs and Geminis in sixteen-ish weeks?
 
@@ -594,6 +587,8 @@ A lot of the reasons mlld works like it does is based in three beliefs:
 mlld is made to be written and read by poets and programmers alike.
 
 Can't wait to see what you build.
+
+---
 
 ## Your task
 
