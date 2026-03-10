@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 
 /**
  * Python package information
@@ -86,6 +86,18 @@ export interface IPythonPackageManager {
    * @param options Query options
    */
   resolveVersion(spec: string, options?: PythonPackageOptions): Promise<PythonVersionResolution>;
+}
+
+function isCommandAvailable(command: string, args: string[]): boolean {
+  try {
+    const result = spawnSync(command, args, {
+      stdio: 'pipe',
+      shell: false
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -192,12 +204,7 @@ export class PipPackageManager extends BasePythonPackageManager {
   readonly name = 'pip';
 
   async isAvailable(): Promise<boolean> {
-    try {
-      execSync('python3 -m pip --version', { stdio: 'pipe' });
-      return true;
-    } catch {
-      return false;
-    }
+    return isCommandAvailable('python3', ['-m', 'pip', '--version']);
   }
 
   async install(spec: string, options?: PythonPackageOptions): Promise<PythonInstallResult> {
@@ -311,12 +318,7 @@ export class UvPackageManager extends BasePythonPackageManager {
   readonly name = 'uv';
 
   async isAvailable(): Promise<boolean> {
-    try {
-      execSync('uv --version', { stdio: 'pipe' });
-      return true;
-    } catch {
-      return false;
-    }
+    return isCommandAvailable('uv', ['--version']);
   }
 
   async install(spec: string, options?: PythonPackageOptions): Promise<PythonInstallResult> {

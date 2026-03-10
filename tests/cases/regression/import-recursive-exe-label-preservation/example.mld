@@ -1,0 +1,3 @@
+import { @wrapper } from "./import-recursive-exe-label-preservation-helper.mld"
+
+show @wrapper(5)

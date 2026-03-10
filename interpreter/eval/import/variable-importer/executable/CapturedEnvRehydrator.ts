@@ -1,11 +1,14 @@
-import type { Variable } from '@core/types/variable';
+import { VariableMetadataUtils, type Variable } from '@core/types/variable';
 import type { ShadowEnvironmentCapture } from '@interpreter/env/types/ShadowEnvironmentCapture';
 
 export type CapturedEnvVariableFactory = (
   name: string,
   value: any,
   importPath: string,
-  originalName?: string
+  originalName?: string,
+  options?: {
+    serializedMetadata?: ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>;
+  }
 ) => Variable;
 
 export class CapturedEnvRehydrator {
@@ -35,8 +38,13 @@ export class CapturedEnvRehydrator {
       return result;
     }
 
-    for (const [name, varData] of Object.entries(moduleEnv)) {
-      const variable = createVariableFromValue(name, varData, 'module-env', name);
+    const metadataMap = this.extractMetadataMap(moduleEnv);
+    const moduleEnvEntries = Object.entries(moduleEnv).filter(([name]) => name !== '__metadata__');
+
+    for (const [name, varData] of moduleEnvEntries) {
+      const variable = createVariableFromValue(name, varData, 'module-env', name, {
+        serializedMetadata: metadataMap?.[name]
+      });
       result.set(name, variable);
     }
 
@@ -56,5 +64,27 @@ export class CapturedEnvRehydrator {
         };
       }
     }
+  }
+
+  private extractMetadataMap(
+    moduleEnv: Record<string, unknown>
+  ): Record<
+    string,
+    ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined
+  > | undefined {
+    const metadataContainer = moduleEnv.__metadata__;
+    if (!metadataContainer || typeof metadataContainer !== 'object') {
+      return undefined;
+    }
+
+    const metadataMap: Record<
+      string,
+      ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined
+    > = {};
+    for (const [name, serializedMetadata] of Object.entries(metadataContainer)) {
+      metadataMap[name] =
+        serializedMetadata as ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>;
+    }
+    return metadataMap;
   }
 }

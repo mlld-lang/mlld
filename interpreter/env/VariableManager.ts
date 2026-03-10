@@ -476,7 +476,16 @@ export class VariableManager implements IVariableManager {
 
   hasVariable(name: string): boolean {
     const parent = this.deps.getParent();
-    if (this.variables.has(name) || (parent && parent.hasVariable(name))) {
+    if (this.variables.has(name)) {
+      return true;
+    }
+
+    const capturedEnv = this.deps.getCapturedModuleEnv();
+    if (capturedEnv?.has(name)) {
+      return true;
+    }
+
+    if (parent && parent.hasVariable(name)) {
       return true;
     }
     

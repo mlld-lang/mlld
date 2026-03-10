@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VirtualFS.fileDiff(path)` unified diff inspection with deterministic output; inspection naming finalized with `changes()` canonical and `diff()` compatibility alias
 - SDK/interpreter VirtualFS integration: SDK now exports `VirtualFS` on the public surface, package exports include `mlld/sdk`, and interpreter import workflows are covered against VirtualFS-backed parsing/directory behaviors
 - Test harness migration: `MemoryFileSystem` now wraps `VirtualFS.empty()` for semantics parity, with dedicated parity tests and updated test-environment docs
+- VirtualFS final hardening pass: added stress regression coverage for deep merge/delete-mask and repeated `flush`/`discard` lifecycle cycles, plus SDK default `NodeFileSystem` behavior checks when `fileSystem` is omitted
+
+### Added
+- `exe recursive` label — self-calling exe functions with bounded depth. Add `recursive` to any `exe` label list to allow a function to call itself up to a configurable depth limit (default 64, override with `MLLD_RECURSION_DEPTH`). Works with `exe llm`, inside `for`/`for parallel` loops (each branch tracks depth independently), and composes with checkpointing. Non-recursive functions retain existing immediate-throw behavior on self-call.
+
+### Fixed
+- MCP server: strip namespace prefix from tool calls (e.g., `server-name:tool_name` → `tool_name`) to support clients that send namespaced tool names
+- Circular reference guard now fires after argument evaluation rather than before. This fixes a pre-existing bug where `@f(@f(x))` — a non-recursive nested call of the same function — was incorrectly rejected as circular. Arguments are evaluated in the caller's scope before the callee's body begins, so nesting the same function as an argument is valid and now works correctly.
+- `exe recursive` label now survives module import boundaries. Previously, importing a function that internally called a `recursive`-labelled function (directly or transitively through a wrapper) would drop the `recursive` label during `capturedModuleEnv` rehydration, causing a spurious `CircularReference` error at runtime. Fixed in `CapturedEnvRehydrator` (now threads the `__metadata__` map through deserialization so inner executables retain their labels) and `VariableManager.hasVariable` (now searches `capturedModuleEnv` so the recursion guard resolves correctly for captured-scope executables).
+- `PythonPackageManager` availability probes now use `spawnSync` instead of `execSync`, avoiding `EPERM` errors in sandboxed environments where `execSync` is restricted.
 
 ### Documentation
 - Completed VirtualFS coverage across dev/user docs and SDK atoms, including architecture placement, no-grammar-impact note, test-harness guidance, SDK usage patterns, and docs-mirroring SDK example tests
