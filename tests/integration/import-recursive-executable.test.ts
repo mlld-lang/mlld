@@ -77,6 +77,7 @@ describe('imported recursive executables', () => {
     );
 
     const output = await interpret(await fs.readFile(mainPath, 'utf8'), {
+      mlldMode: 'strict',
       filePath: mainPath,
       fileSystem: new NodeFileSystem(),
       pathService: new PathService(),
