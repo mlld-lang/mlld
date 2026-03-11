@@ -1,10 +1,15 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GitHubResolver } from '../GitHubResolver';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 
 describe('GitHubResolver Auth Integration', () => {
   let resolver: GitHubResolver;
   let mockAuthService: any;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   beforeEach(() => {
     // Mock the GitHubAuthService.getInstance() method

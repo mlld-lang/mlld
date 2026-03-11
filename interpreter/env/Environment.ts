@@ -2755,11 +2755,24 @@ export class Environment
     }
 
     let currentUser: string | undefined;
-    try {
-      const user = await GitHubAuthService.getInstance().getGitHubUser();
-      currentUser = user?.login?.toLowerCase();
-    } catch {
-      currentUser = undefined;
+    const skipGitHubUserLookup =
+      process.env.MLLD_TEST === '1' || process.env.NODE_ENV === 'test';
+
+    if (!skipGitHubUserLookup) {
+      try {
+        const authService = GitHubAuthService.getInstance();
+        if (typeof authService?.getGitHubUser === 'function') {
+          const user = await Promise.race([
+            authService.getGitHubUser(),
+            new Promise<null>(resolve => {
+              setTimeout(() => resolve(null), 1500);
+            })
+          ]);
+          currentUser = user?.login?.toLowerCase();
+        }
+      } catch {
+        currentUser = undefined;
+      }
     }
 
     const prefixes = this.projectConfig?.getResolverPrefixes() ?? [];
