@@ -111,6 +111,24 @@ describe('Environment characterization', () => {
       expect((inputVar as any)?.value?.payload?.ok).toBe(true);
       expect(inputVarCached).toBe(inputVar);
     });
+
+    it('supports ephemeral @base module imports with in-memory cache plumbing', async () => {
+      const basePath = '/tmp/mlld-characterization-ephemeral';
+      const fileSystem = new MemoryFileSystem();
+      await fileSystem.mkdir(basePath, { recursive: true });
+      await fileSystem.writeFile(`${basePath}/package.json`, '{"name":"ephemeral-project"}');
+      await fileSystem.writeFile(`${basePath}/lib.mld`, '/var @name = "lib"');
+      const env = new Environment(fileSystem, new PathService(), basePath);
+      await env.setEphemeralMode(true);
+
+      const resolverManager = (env as any).resolverManager;
+      const first = await resolverManager.resolve('@base/lib.mld', { context: 'import' });
+      const second = await resolverManager.resolve('@base/lib.mld', { context: 'import' });
+
+      expect(first.content.contentType).toBe('module');
+      expect(second.content.contentType).toBe('module');
+      expect(second.resolverName).toBe('cache');
+    });
   });
 
   describe('effect emission behavior', () => {

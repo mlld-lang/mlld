@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import { MlldError } from '@core/errors';
 import type { ModuleCache, CacheEntry, ModuleCacheMetadata, ModuleCacheStoreOptions } from './ModuleCache';
 import { moduleNeedsToSerializable } from './utils/ModuleNeeds';
+import type { ModuleContent } from './utils/HashUtils';
 
 /**
  * In-memory implementation of ModuleCache for ephemeral/CI environments
@@ -77,6 +78,26 @@ export class InMemoryModuleCache implements ModuleCache {
   }
 
   /**
+   * ResolverManager expects the persistent cache `get()` API.
+   */
+  async get(hash: string): Promise<ModuleContent | null> {
+    const entry = this.cache.get(hash);
+    if (!entry) {
+      return null;
+    }
+
+    return {
+      content: entry.content,
+      hash,
+      metadata: {
+        source: entry.metadata.source,
+        timestamp: new Date(entry.timestamp),
+        size: entry.metadata.size
+      }
+    };
+  }
+
+  /**
    * Get metadata for a cached module
    */
   async getMetadata(hash: string): Promise<ModuleCacheMetadata | null> {
@@ -89,6 +110,13 @@ export class InMemoryModuleCache implements ModuleCache {
    */
   async exists(hash: string): Promise<boolean> {
     return this.cache.has(hash);
+  }
+
+  /**
+   * Compatibility alias for the persistent cache API.
+   */
+  async has(hash: string): Promise<boolean> {
+    return this.exists(hash);
   }
 
   /**
