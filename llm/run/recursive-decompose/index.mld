@@ -1,0 +1,253 @@
+>> Recursive Task Decomposer (LLM portion)
+>> mlld port of https://github.com/TinyAGI/fractals
+>>
+>> Usage:
+>>   mlld run recursive-decompose -- --task "Build a REST API" [--depth 4]
+>>
+>> How it works:
+>>   Uses `while` + frontier accumulation instead of recursion.
+>>   Each iteration classifies all frontier tasks in parallel, decomposes
+>>   composites, and continues with their children as the next frontier.
+>>   Terminates naturally when the frontier empties.
+
+import { @claudePoll } from @mlld/claude-poll
+
+/needs { sh }
+
+>> ─── Config ───
+
+var @task     = @payload.task  ? @payload.task        : bail `Usage: mlld run fractals -- --task "your task"`
+var @maxDepth = @payload.depth ? @payload.depth * 1   : 4
+
+>> ─── Output dir ───
+
+var @outputRoot = `@base/llm/output`
+var @today      = js { return new Date().toISOString().slice(0, 10) }
+var @runId      = js { return `fractals-${today}-${Date.now() % 10000}` }
+var @runDir     = `@outputRoot/@runId`
+
+run sh `mkdir -p "@runDir"`
+
+show `=== Fractals: Recursive Task Decomposer ===`
+show ``
+show `  Task:      @task`
+show `  Max depth: @maxDepth`
+show `  Output:    @runDir`
+show ``
+
+>> ─── LLM: Classify ───
+>>
+>> Is this task atomic (directly executable) or composite (needs breaking down)?
+>> Mirrors fractals' classify() in llm.ts.
+
+exe llm @classify(id, description, lineageJson, outPath) = [
+  let @lineage = js { try { return JSON.parse(lineageJson) } catch { return [] } }
+  let @ctx = js {
+    if (!Array.isArray(lineage) || lineage.length === 0) return description;
+    const lines = lineage.map((t, i) => `${'  '.repeat(i)}└─ ${t}`);
+    lines.push(`${'  '.repeat(lineage.length)}└─ ${description} ← classify this`);
+    return lines.join('\n');
+  }
+  let @prompt = `Decide whether this software task is "atomic" or "composite".
+
+- "atomic" = a developer can implement this directly without further planning. May have multiple steps, but they're one coherent unit of work.
+- "composite" = clearly contains 2+ independent concerns that should be worked on separately (e.g., backend + frontend, auth + database + UI).
+
+Heuristics:
+- Single feature, endpoint, component, or module → atomic.
+- Bundles unrelated concerns → composite.
+- At depth 2+ in the hierarchy → almost certainly atomic.
+- When in doubt → atomic. Over-decomposition is worse than under-decomposition.
+
+Task hierarchy:
+@ctx
+
+Write ONLY this JSON to @outPath using the Write tool — no markdown, no explanation:
+{"kind":"atomic"}  OR  {"kind":"composite"}`
+
+  => @claudePoll(@prompt, "sonnet", @base, "Write", @outPath)
+]
+
+>> ─── LLM: Decompose ───
+>>
+>> Break a composite task into minimum independent subtasks.
+>> Mirrors fractals' decompose() in llm.ts.
+
+exe llm @decompose(id, description, lineageJson, outPath) = [
+  let @lineage = js { try { return JSON.parse(lineageJson) } catch { return [] } }
+  let @ctx = js {
+    if (!Array.isArray(lineage) || lineage.length === 0) return description;
+    const lines = lineage.map((t, i) => `${'  '.repeat(i)}└─ ${t}`);
+    lines.push(`${'  '.repeat(lineage.length)}└─ ${description} ← decompose this`);
+    return lines.join('\n');
+  }
+  let @prompt = `Break this composite software task into the MINIMUM number of subtasks.
+
+Rules:
+- 2 subtasks minimum; up to 7 only if each is truly distinct and necessary.
+- No overlapping or redundant subtasks.
+- Each subtask = real, distinct work a developer treats as a separate concern.
+- Never repeat scope already covered by ancestor tasks in the hierarchy.
+
+Task hierarchy:
+@ctx
+
+Write ONLY this JSON to @outPath using the Write tool — no markdown, no explanation:
+{"subtasks":["subtask 1 description","subtask 2 description"]}`
+
+  => @claudePoll(@prompt, "sonnet", @base, "Write", @outPath)
+]
+
+>> ─── JS Helpers ───
+
+exe @mkChildren(parentId, parentDesc, parentLineageJson, decompResult, childDepth) = js {
+  if (!decompResult || !Array.isArray(decompResult.subtasks)) return [];
+  const lineage = (() => { try { return JSON.parse(parentLineageJson) } catch { return [] } })();
+  lineage.push(parentDesc);
+  return decompResult.subtasks.map((desc, i) => ({
+    id: `${parentId}.${i + 1}`,
+    description: desc,
+    depth: childDepth,
+    lineageJson: JSON.stringify(lineage),
+    kind: null,
+    children: []
+  }));
+}
+
+exe @withKind(t, kindResult) = js {
+  return { ...t, kind: (kindResult && kindResult.kind === 'composite') ? 'composite' : 'atomic' };
+}
+
+exe @withChildren(t, children) = js {
+  return { ...t, children: children || [] };
+}
+
+exe @assembleTree(root, allTasks) = js {
+  const byId = {};
+  for (const t of allTasks) byId[t.id] = t;
+  function attach(node) {
+    const n = byId[node.id] || node;
+    if (!n.children || n.children.length === 0) return n;
+    return { ...n, children: n.children.map(attach) };
+  }
+  return attach(root);
+}
+
+exe @getLeaves(node) = js {
+  function leaves(n) {
+    if (!n.children || n.children.length === 0) return [n];
+    return n.children.flatMap(leaves);
+  }
+  return leaves(node);
+}
+
+exe @renderTree(node) = js {
+  function render(n, depth) {
+    const icon = n.kind === 'atomic' ? '✅' : '📦';
+    const lines = [`${'  '.repeat(depth)}${icon} \`${n.id}\` ${n.description}`];
+    for (const child of (n.children || [])) lines.push(render(child, depth + 1));
+    return lines.join('\n');
+  }
+  return render(node, 0);
+}
+
+>> ─── Expansion Processor ───
+>>
+>> Passed to `while` as the iteration function.
+>> State: { frontier, all, maxDepth, runDir }
+>>
+>> Each round:
+>>   1. Bail if frontier is empty → done
+>>   2. Classify all frontier tasks in parallel
+>>   3. Decompose composite tasks in parallel, collect children
+>>   4. Continue with children as next frontier
+
+exe @expand(state) = [
+  let @frontier = @state.frontier
+  let @all      = @state.all
+  let @maxDep   = @state.maxDepth
+  let @rdir     = @state.runDir
+  let @round    = @mx.while.iteration
+
+  when @frontier.length == 0 => done @state
+
+  show `  round @round: @frontier.length tasks`
+
+  >> Step 1: classify in parallel
+  let @classified = for parallel(5) @t in @frontier [
+    let @tid  = @t.id
+    let @desc = @t.description
+    let @lin  = @t.lineageJson
+    let @dep  = @t.depth
+    if @dep >= @maxDep [
+      let @atomic = { kind: "atomic" }
+      => @withKind(@t, @atomic)
+    ]
+    let @kp = `@rdir/class-@tid\.json`
+    let @kr = @classify(@tid, @desc, @lin, @kp)
+    => @withKind(@t, @kr)
+  ]
+
+  >> Step 2: decompose composites in parallel, attach children
+  let @expanded = for parallel(5) @t in @classified [
+    if @t.kind != "composite" [
+      => @t
+    ]
+    let @tid      = @t.id
+    let @desc     = @t.description
+    let @lin      = @t.lineageJson
+    let @dep      = @t.depth
+    let @childDep = js { return dep + 1 }
+    let @dp       = `@rdir/decomp-@tid\.json`
+    let @dr       = @decompose(@tid, @desc, @lin, @dp)
+    let @kids     = @mkChildren(@tid, @desc, @lin, @dr, @childDep)
+    => @withChildren(@t, @kids)
+  ]
+
+  let @nextFrontier = js { return expanded.flatMap(t => t.children || []) }
+  let @nextAll      = js { return [...all, ...expanded] }
+
+  continue { frontier: @nextFrontier, all: @nextAll, maxDepth: @maxDep, runDir: @rdir }
+]
+
+>> ─── Run ───
+
+show `--- Planning ---`
+checkpoint "plan"
+
+var @root    = { id: "1", description: @task, depth: 0, lineageJson: "[]", kind: null, children: [] }
+var @initial = { frontier: [@root], all: [], maxDepth: @maxDepth, runDir: @runDir }
+var @final   = @initial | while(20) @expand
+
+show ``
+
+>> ─── Assemble + Render ───
+
+var @tree     = @assembleTree(@root, @final.all)
+var @leaves   = @getLeaves(@tree)
+var @treeMd   = @renderTree(@tree)
+var @leafList = js {
+  return leaves.map((t, i) => `${i + 1}. \`${t.id}\` ${t.description}`).join('\n');
+}
+
+output @tree to `@runDir/tree.json`
+
+var @report = `# Task Tree: @task
+
+## Structure
+
+@treeMd
+
+## Leaf Tasks (@leaves.length — ready to execute)
+
+@leafList
+`
+output @report to `@runDir/tree.md`
+
+show `=== Done ===`
+show ``
+show `  Leaves: @leaves.length atomic tasks`
+show `  Tree:   @runDir/tree.json`
+show `  Report: @runDir/tree.md`
+show ``
+show @treeMd

@@ -47,6 +47,7 @@ type StrategyKey =
   | 'new-node'
   | 'reference-tail-node'
   | 'env-node'
+  | 'box-node'
   | 'expression-meta'
   | 'literal-node'
   | 'text-default';
@@ -136,7 +137,7 @@ function resolveStrategyKey(
   if (nodeType === 'ExecInvocation' || nodeType === 'ExeBlock') return 'exec-node';
   if (nodeType === 'NewExpression') return 'new-node';
   if (nodeType === 'VariableReferenceWithTail') return 'reference-tail-node';
-  if (nodeType === 'Directive' && (valueNode as any).kind === 'env') return 'env-node';
+  if (nodeType === 'Directive' && (valueNode as any).kind === 'box') return 'box-node';
 
   if (directive.meta?.expressionType) {
     return 'expression-meta';
@@ -476,7 +477,7 @@ export function createVariableBuilder(dependencies: VariableBuilderDependencies)
       return createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
     }
 
-    if (strategyKey === 'env-node') {
+    if (strategyKey === 'env-node' || strategyKey === 'box-node') {
       return buildFromResolvedShape(
         identifier,
         resolvedValue,

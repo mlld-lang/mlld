@@ -12,7 +12,7 @@ import { createSetupCommand } from '../commands/setup';
 import { createAliasCommand } from '../commands/alias';
 import { createKeychainCommand } from '../commands/keychain';
 import { varsCommand } from '../commands/vars';
-import { envCommand } from '../commands/env';
+import { boxCommand } from '../commands/box';
 import { languageServerCommand } from '../commands/language-server';
 import { testCommand } from '../commands/test';
 import { createRunCommand } from '../commands/run';
@@ -63,7 +63,7 @@ export class CommandDispatcher {
     this.commandMap.set('alias', createAliasCommand());
     this.commandMap.set('keychain', createKeychainCommand());
     this.commandMap.set('vars', varsCommand);
-    this.commandMap.set('env', envCommand);
+    this.commandMap.set('box', boxCommand);
     this.commandMap.set('language-server', languageServerCommand);
     this.commandMap.set('lsp', languageServerCommand); // Alias for language-server
     this.commandMap.set('test', testCommand);
@@ -107,11 +107,11 @@ export class CommandDispatcher {
 
     // Handle different command types
     if (typeof handler === 'function') {
-      // Direct function (like registryCommand, envCommand, etc.)
+      // Direct function (like registryCommand, boxCommand, etc.)
       if (handler.name === 'registryCommand' || handler.name === 'testCommand' || handler.name === 'errorTestCommand' || handler.name === 'languageServerCommand' || handler.name === 'mcpDevCommand') {
         await handler(subcommands);
-      } else if (handler.name === 'varsCommand' || handler.name === 'envCommand') {
-        // varsCommand and envCommand expect an options object with _ property
+      } else if (handler.name === 'varsCommand' || handler.name === 'boxCommand') {
+        // varsCommand and boxCommand expect an options object with _ property
         await handler({ _: subcommands });
       } else {
         // Command object with execute method
@@ -237,7 +237,7 @@ export class CommandDispatcher {
       'alias': 'Create path aliases',
       'keychain': 'Manage project keychain entries',
       'vars': 'Manage environment variable permissions',
-      'env': 'Manage AI agent environments',
+      'box': 'Manage AI agent boxes',
       'dev': 'Inspect local module discovery',
       'live': 'Start persistent live RPC server over stdio',
       'language-server': 'Start language server',

@@ -214,7 +214,7 @@ World
       'var', 'show', 'stream', 'run', 'exe', 'checkpoint', 'path',
       'import', 'when', 'if', 'for', 'loop', 'while',
       'output', 'append', 'log', 'guard', 'hook', 'export',
-      'policy', 'sign', 'verify', 'env', 'bail'
+      'policy', 'sign', 'verify', 'box', 'bail'
     ];
 
     for (const directive of directives) {

@@ -20,7 +20,7 @@ import {
   extractSecurityDescriptor,
   normalizeWhenShowEffect
 } from '@interpreter/utils/structured-value';
-import { resolveWorkingDirectory } from '@interpreter/utils/working-directory';
+import { executeInWorkingDirectory } from '@interpreter/utils/working-directory';
 import { mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import {
   buildAuthDescriptor,
@@ -235,9 +235,10 @@ async function handleCommandDefinition(
     bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
   }
 
-  const workingDirectory = await resolveWorkingDirectory(
+  const workingDirectory = await executeInWorkingDirectory(
     (definition as any)?.workingDir,
     tempEnv,
+    async resolvedPath => resolvedPath,
     { sourceLocation: directive.location, directiveType: 'run' }
   );
   const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
@@ -367,7 +368,8 @@ async function handleCommandDefinition(
         ...executionContext,
         streamingEnabled,
         pipelineId,
-        workingDirectory
+        workingDirectory,
+        exeLabels
       },
       sourceLocation: directive.location ?? null,
       directiveType: 'run'
@@ -394,7 +396,8 @@ async function handleCommandDefinition(
     ...executionContext,
     streamingEnabled,
     pipelineId,
-    workingDirectory
+    workingDirectory,
+    exeLabels
   });
   return { value, outputDescriptors, callStack };
 }
@@ -579,9 +582,10 @@ async function handleCodeDefinition(
   for (const [key, value] of Object.entries(argValues)) {
     tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
   }
-  const workingDirectory = await resolveWorkingDirectory(
+  const workingDirectory = await executeInWorkingDirectory(
     (definition as any)?.workingDir,
     tempEnv,
+    async resolvedPath => resolvedPath,
     { sourceLocation: directive.location, directiveType: 'run' }
   );
 
@@ -687,6 +691,9 @@ async function handleCodeDefinition(
     }
 
     const execEnv = env.createChild();
+    if (exeLabels.length > 0) {
+      execEnv.setExeLabels(exeLabels);
+    }
     if (execVar.internal?.capturedModuleEnv instanceof Map) {
       execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
     }
@@ -714,6 +721,9 @@ async function handleCodeDefinition(
     }
 
     const execEnv = env.createChild();
+    if (exeLabels.length > 0) {
+      execEnv.setExeLabels(exeLabels);
+    }
     if (execVar.internal?.capturedModuleEnv instanceof Map) {
       execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
     }
@@ -730,15 +740,18 @@ async function handleCodeDefinition(
     };
   }
 
-  if ((definition as any).language === 'mlld-env') {
+  if ((definition as any).language === 'mlld-box') {
     const envDirectiveNode = Array.isArray((definition as any).codeTemplate)
       ? ((definition as any).codeTemplate[0] as any)
       : undefined;
-    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'env') {
-      throw new Error('mlld-env executable missing env directive');
+    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'box') {
+      throw new Error('mlld-box executable missing box directive');
     }
 
     const execEnv = env.createChild();
+    if (exeLabels.length > 0) {
+      execEnv.setExeLabels(exeLabels);
+    }
     if (execVar.internal?.capturedModuleEnv instanceof Map) {
       execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
     }
@@ -746,10 +759,10 @@ async function handleCodeDefinition(
       bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
     }
 
-    const { evaluateEnv } = await import('@interpreter/eval/env');
-    const envResult = await evaluateEnv(envDirectiveNode, execEnv);
+    const { evaluateBox } = await import('@interpreter/eval/box');
+    const boxResult = await evaluateBox(envDirectiveNode, execEnv);
     return {
-      value: envResult.value,
+      value: boxResult.value,
       outputDescriptors,
       callStack
     };

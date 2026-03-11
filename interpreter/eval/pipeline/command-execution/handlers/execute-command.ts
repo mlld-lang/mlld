@@ -21,6 +21,7 @@ import {
   extractSecurityDescriptor,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
+import { CommandUtils } from '@interpreter/env/CommandUtils';
 
 export type RetrySignalLike = { value: 'retry'; hint?: any; from?: number };
 
@@ -68,6 +69,12 @@ export async function executeCommandHandler(
 
   const { interpolate } = await import('@interpreter/core/interpreter');
   const { InterpolationContext } = await import('@interpreter/core/interpolation-context');
+  for (const warning of CommandUtils.collectUnsafeInterpolatedFragmentWarnings(
+    execDef.commandTemplate,
+    name => execEnv.getVariable(name)
+  )) {
+    env.emitEffect('stderr', `${warning}\n`);
+  }
   const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
   const scopedEnvConfig = resolveEnvironmentConfig(execEnv, preDecision?.metadata);
   const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, execEnv.getPolicySummary());
@@ -98,6 +105,9 @@ export async function executeCommandHandler(
   const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
   const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
   const envInputTaint = descriptorToInputTaint(envInputDescriptor);
+  const execDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
+  const localLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
+  const exeLabels = localLabels.length > 0 ? localLabels : (executionContext?.exeLabels ?? []);
   if (envInputTaint.length > 0) {
     const parsedCommand = parseCommand(command);
     const opLabels = getOperationLabels({
@@ -105,8 +115,6 @@ export async function executeCommandHandler(
       command: parsedCommand.command,
       subcommand: parsedCommand.subcommand
     });
-    const execDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
-    const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
     const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
     policyEnforcer.checkLabelFlow(
       {
@@ -119,6 +127,11 @@ export async function executeCommandHandler(
       { env, sourceLocation: policyLocation }
     );
   }
+
+  const executionContextWithLabels = {
+    ...(executionContext ?? {}),
+    exeLabels
+  } as CommandExecutionContext;
 
   let commandOutput: unknown;
   if (resolvedEnvConfig?.provider) {
@@ -134,9 +147,9 @@ export async function executeCommandHandler(
         ...envAuthSecrets,
         ...usingParts.secrets
       },
-      executionContext,
+      executionContext: executionContextWithLabels,
       sourceLocation: commandVar?.mx?.definedAt ?? null,
-      directiveType: executionContext?.directiveType ?? 'exec'
+      directiveType: executionContextWithLabels.directiveType ?? 'exec'
     });
     commandOutput = providerResult.stdout ?? '';
   } else {
@@ -155,7 +168,7 @@ export async function executeCommandHandler(
     commandOutput = await env.executeCommand(
       command,
       commandOptions as any,
-      executionContext
+      executionContextWithLabels
     );
   }
 

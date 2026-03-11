@@ -594,7 +594,7 @@ Hook body context variables:
 | `@mx.checkpoint.hit` | `before`, `after` | `true` when the current operation was served from checkpoint cache, otherwise `false`. |
 | `@mx.checkpoint.key` | `before`, `after` | Checkpoint cache key for the current operation (when checkpointing is active). |
 
-### `env` - Scoped Execution
+### `box` - Scoped Execution
 
 Create scoped execution contexts with isolation, credential management, and capability control:
 
@@ -607,7 +607,7 @@ var @sandbox = {
   mcps: []
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { claude -p "Analyze the codebase" } using auth:claude
 ]
 ```
@@ -617,7 +617,7 @@ Local execution with different auth (no provider = local):
 ```mlld
 var @cfg = { auth: "claude-alt" }
 
-env @cfg [
+box @cfg [
   run cmd { claude -p @task } using auth:claude_alt
 ]
 ```
@@ -625,16 +625,20 @@ env @cfg [
 Capability attenuation with `with`:
 
 ```mlld
-env @sandbox with { tools: ["Read"] } [
+box @sandbox with { tools: ["Read"] } [
   >> Only Read is available here
   run cmd { claude -p @task }
 ]
 ```
 
-Return values from env blocks:
+Inside a box scope, `@mx.box` exposes active MCP bridge metadata:
+- `@mx.box.mcpConfigPath`
+- `@mx.box.socketPath`
+
+Return values from box blocks:
 
 ```mlld
-var @result = env @config [
+var @result = box @config [
   let @data = run cmd { fetch-data }
   => @data
 ]
@@ -1048,6 +1052,7 @@ Existence checks:
 Helpers:
 - `@keep(obj, [...keys])`: keep only specified keys from an object
 - `@keepStructured(obj, schema)`: keep keys matching a schema structure
+- `@mx.llm`: ambient context available inside `exe llm` bodies when `config.tools` is specified; exposes `config`, `allowed`, `inBox`, `hasTools` for building CLI flags
 
 ### File Metadata Fields
 

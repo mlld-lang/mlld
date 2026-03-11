@@ -89,6 +89,10 @@ describe('executeCommandHandler extraction parity', () => {
     const env = createEnv();
     await evaluateSource('/exe @run(input) = cmd { printf "%s" "@input" }', env);
     const commandVar = getExecutableVariable(env, 'run');
+    commandVar.mx = {
+      ...(commandVar.mx ?? {}),
+      labels: ['llm', 'suite-label']
+    };
     const { execDef } = normalizeExecutableDescriptor(commandVar);
     const execEnv = env.createChild();
     setInputParam(execEnv, 'PIPE-IN');
@@ -105,6 +109,11 @@ describe('executeCommandHandler extraction parity', () => {
     });
 
     expect(executeCommandSpy).toHaveBeenCalledTimes(1);
+    expect(executeCommandSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      expect.objectContaining({ exeLabels: ['llm', 'suite-label'] })
+    );
     expect(asText(result.value as any)).toBe('ok-from-command');
     expect(isStructuredValue(result.value)).toBe(true);
     expect((result.value as any).mx?.labels ?? []).toEqual(expect.arrayContaining(['policy-label']));

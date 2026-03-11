@@ -4,7 +4,7 @@ title: Exporting from Modules
 brief: Control which items are visible to importers
 category: modules
 tags: [modules, exports, encapsulation, api]
-related: [modules-creating, modules-importing-registry, env-overview, policy-auth]
+related: [modules-creating, modules-importing-registry, box-overview, policy-auth]
 related-code: [interpreter/eval/export.ts, grammar/patterns/export.peggy]
 updated: 2026-02-09
 qa_tier: 2
@@ -34,7 +34,7 @@ export { * }
 ```mlld
 policy @p = {
   auth: {
-    claude: { from: "keychain:mlld-env-{projectname}/claude-dev", as: "ANTHROPIC_API_KEY" }
+    claude: { from: "keychain:mlld-box-{projectname}/claude-dev", as: "ANTHROPIC_API_KEY" }
   }
 }
 

@@ -2,6 +2,7 @@ import type { TypedDirectiveNode } from './base';
 import type { BaseMlldNode, DirectiveNode, SourceLocation } from './primitives';
 import type { LetAssignmentNode } from './when';
 import type { DataLabel } from './security';
+import type { PolicyConfig } from '../policy/union';
 
 export type GuardScope = 'perInput' | 'perOperation';
 export type GuardFilterKind = 'data' | 'operation';
@@ -102,6 +103,7 @@ export interface GuardResult {
   replacement?: unknown;
   labelModifications?: GuardLabelModifications;
   envConfig?: unknown;
+  policyFragment?: PolicyConfig;
   metadata?: Record<string, unknown>;
   timing?: 'before' | 'after';
 }

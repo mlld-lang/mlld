@@ -20,7 +20,7 @@ about: Reusable environment module for Claude Code
 
 /var @policyConfig = {
   auth: {
-    claude: { from: "keychain:mlld-env-{projectname}/claude-dev", as: "CLAUDE_CODE_OAUTH_TOKEN" }
+    claude: { from: "keychain:mlld-box-{projectname}/claude-dev", as: "CLAUDE_CODE_OAUTH_TOKEN" }
   }
 }
 /policy @p = union(@policyConfig)

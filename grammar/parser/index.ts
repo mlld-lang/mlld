@@ -10,6 +10,7 @@
 import parser from '../generated/parser/parser.js';
 import { helpers as generatedHelpers } from '../generated/parser/grammar-core.js';
 import type { GrammarWarning } from '../deps/grammar-core.js';
+import { extractLeadingResumeDirective } from '@core/checkpoint/config';
 
 // Import types
 import type { MlldMode, MlldNode } from '@core/types';
@@ -40,6 +41,28 @@ export interface ParseResult {
   warnings: GrammarWarning[];
 }
 
+function trimSyntheticLeadingWhitespace(ast: MlldNode[], strippedResumeDirective: boolean): MlldNode[] {
+  if (!strippedResumeDirective || ast.length === 0) {
+    return ast;
+  }
+
+  let startIndex = 0;
+  while (startIndex < ast.length) {
+    const node = ast[startIndex] as { type?: string; content?: string };
+    if (node.type === 'Newline') {
+      startIndex += 1;
+      continue;
+    }
+    if (node.type === 'Text' && typeof node.content === 'string' && node.content.trim().length === 0) {
+      startIndex += 1;
+      continue;
+    }
+    break;
+  }
+
+  return startIndex === 0 ? ast : ast.slice(startIndex);
+}
+
 /**
  * Parse Mlld source code into an AST
  * 
@@ -51,16 +74,17 @@ export interface ParseResult {
 export async function parse(source: string, options?: ParserOptions): Promise<ParseResult> {
   const warnings: GrammarWarning[] = [];
   generatedHelpers.setWarningCollector(warnings);
+  const preprocessed = extractLeadingResumeDirective(source);
 
   try {
-    const ast = parser.parse(source, {
+    const ast = parser.parse(preprocessed.adjustedSource, {
       startRule: 'Start',
       mode: 'markdown',
       ...options
     });
     
     return {
-      ast,
+      ast: trimSyntheticLeadingWhitespace(ast, preprocessed.removed),
       success: true,
       warnings
     };
@@ -82,12 +106,14 @@ export async function parse(source: string, options?: ParserOptions): Promise<Pa
 export function parseSync(source: string, options?: ParserOptions): MlldNode[] {
   const warnings: GrammarWarning[] = [];
   generatedHelpers.setWarningCollector(warnings);
+  const preprocessed = extractLeadingResumeDirective(source);
   try {
-    return parser.parse(source, {
+    const ast = parser.parse(preprocessed.adjustedSource, {
       startRule: 'Start',
       mode: 'markdown',
       ...options
     });
+    return trimSyntheticLeadingWhitespace(ast, preprocessed.removed);
   } finally {
     generatedHelpers.clearWarningCollector();
   }

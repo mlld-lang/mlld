@@ -199,6 +199,11 @@ export interface TemplateInlineShowNode extends BaseMlldNode {
   meta?: { [key: string]: unknown };
 }
 
+export interface EscapedAngleBracketExpressionNode extends BaseMlldNode {
+  type: 'EscapedAngleBracketExpression';
+  content: BaseMlldNode[];
+}
+
 export interface ConditionalTemplateSnippetNode extends BaseMlldNode {
   type: 'ConditionalTemplateSnippet';
   condition: VariableReferenceNode;
@@ -246,9 +251,11 @@ export type DirectiveKind =
   | 'export'
   | 'var'
   | 'show'
+  | 'file'
+  | 'files'
   | 'exe'
   | 'checkpoint'
-  | 'env'
+  | 'box'
   | 'path'
   | 'output'
   | 'append'
@@ -277,6 +284,9 @@ export type DirectiveSubtype =
   | 'var'
   // Unified show subtypes
   | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
+  // File projection subtypes
+  | 'file'
+  | 'files'
   // Unified exe subtypes
   | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeValue' | 'exeTemplate' | 'exeTemplateFile'
   | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeLoop' | 'exeResolver' | 'exeBlock'
@@ -316,8 +326,8 @@ export type DirectiveSubtype =
   // Signing subtypes
   | 'sign'
   | 'verify'
-  // Env subtype
-  | 'env';
+  // Box subtype
+  | 'box';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

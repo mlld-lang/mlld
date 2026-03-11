@@ -29,6 +29,7 @@ import { inheritExpressionProvenance, setExpressionProvenance } from '../../util
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor, type DataLabel } from '@core/types/security';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { resolveNestedValue } from '../../utils/display-materialization';
+import { resolveStreamFlag } from '@interpreter/eval/stream-flag';
 
 /**
  * Context for pipeline processing
@@ -57,6 +58,9 @@ export interface UnifiedPipelineContext {
   // Metadata
   identifier?: string;           // Variable name for debugging
   location?: any;               // Source location for errors
+
+  // Security
+  exeLabels?: readonly string[]; // Exe labels from enclosing executable (e.g. 'llm')
 }
 
 /**
@@ -74,13 +78,15 @@ export async function processPipeline(
   context: UnifiedPipelineContext
 ): Promise<any> {
   const { value, env, node, directive, identifier, descriptorHint } = context;
-  const streamRequested =
-    context.stream ??
-    Boolean(
-      (node as any)?.withClause?.stream ??
-      (directive as any)?.values?.withClause?.stream ??
-      (directive as any)?.meta?.withClause?.stream
-    );
+  const streamSource =
+    context.stream !== undefined
+      ? context.stream
+      : (
+          (node as any)?.withClause?.stream ??
+          (directive as any)?.values?.withClause?.stream ??
+          (directive as any)?.meta?.withClause?.stream
+        );
+  const streamRequested = await resolveStreamFlag(streamSource, env);
   const sourceNode = getSourceFunctionFromValue(value);
   const descriptorFromValue = extractSecurityDescriptor(value, {
     recursive: true,
@@ -230,7 +236,7 @@ export async function processPipeline(
   const hasSyntheticSource = functionalPipeline[0]?.rawIdentifier === '__source__';
   
   // Execute pipeline with normalized stages
-let executionResult: StructuredValue;
+  let executionResult: StructuredValue;
   try {
     const executor = new PipelineExecutor(
       functionalPipeline,
@@ -240,8 +246,13 @@ let executionResult: StructuredValue;
       sourceFunction,
       hasSyntheticSource,
       detected.parallelCap,
-      detected.delayMs
+      detected.delayMs,
+      undefined,
+      streamRequested
     );
+    if (context.exeLabels && context.exeLabels.length > 0) {
+      executor.setExeLabels(context.exeLabels);
+    }
     executionResult = await executor.execute(input, {
       returnStructured: true,
       stream: streamRequested

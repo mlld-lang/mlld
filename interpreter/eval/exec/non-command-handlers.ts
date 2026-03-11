@@ -51,6 +51,7 @@ export type NonCommandExecutableHandlerOptions = {
   params: string[];
   evaluatedArgs: unknown[];
   resultSecurityDescriptor?: SecurityDescriptor;
+  exeLabels?: readonly string[];
   services: NonCommandExecutableHandlerServices;
 };
 
@@ -116,6 +117,41 @@ function createNonCommandHandlerMap(): Record<NonCommandHandlerKey, NonCommandHa
   };
 }
 
+async function getCapturedModuleEnvMap(
+  variableLike: { internal?: Record<string, unknown> } | undefined
+): Promise<Map<string, Variable> | undefined> {
+  const rawCaptured = variableLike?.internal?.capturedModuleEnv;
+  if (!rawCaptured) {
+    return undefined;
+  }
+  if (rawCaptured instanceof Map) {
+    return rawCaptured as Map<string, Variable>;
+  }
+  if (typeof rawCaptured !== 'object') {
+    return undefined;
+  }
+
+  const { VariableImporter } = await import('@interpreter/eval/import/VariableImporter');
+  const { ObjectReferenceResolver } = await import('@interpreter/eval/import/ObjectReferenceResolver');
+  const importer = new VariableImporter(new ObjectReferenceResolver());
+  const moduleEnvMap = importer.deserializeModuleEnv(rawCaptured);
+
+  for (const [, capturedVar] of moduleEnvMap) {
+    if (capturedVar.type === 'executable') {
+      capturedVar.internal = {
+        ...(capturedVar.internal ?? {}),
+        capturedModuleEnv: moduleEnvMap
+      };
+    }
+  }
+
+  if (variableLike?.internal) {
+    variableLike.internal.capturedModuleEnv = moduleEnvMap;
+  }
+
+  return moduleEnvMap;
+}
+
 async function handleNodeFunctionOrClassExecutable(
   options: NonCommandExecutableHandlerOptions
 ): Promise<unknown> {
@@ -170,6 +206,7 @@ async function handleTemplateExecutable(
     node,
     execEnv,
     resultSecurityDescriptor,
+    exeLabels,
     services
   } = options;
   const templateInterpolationEnv = createTemplateInterpolationEnv(execEnv, definition);
@@ -211,7 +248,8 @@ async function handleTemplateExecutable(
       isRetryable: false,
       identifier: commandName,
       location: node.location,
-      descriptorHint: resultSecurityDescriptor
+      descriptorHint: resultSecurityDescriptor,
+      exeLabels
     });
   }
 
@@ -246,7 +284,7 @@ async function handleDataExecutable(
 async function handlePipelineExecutable(
   options: NonCommandExecutableHandlerOptions
 ): Promise<unknown> {
-  const { definition, commandName, node, execEnv, evaluatedArgs, resultSecurityDescriptor, services } = options;
+  const { definition, commandName, node, execEnv, evaluatedArgs, resultSecurityDescriptor, exeLabels, services } = options;
   const { processPipeline } = await import('@interpreter/eval/pipeline/unified-processor');
   const pipelineInputValue =
     evaluatedArgs.length > 0
@@ -260,7 +298,8 @@ async function handlePipelineExecutable(
     identifier: commandName,
     location: node.location,
     isRetryable: false,
-    descriptorHint: resultSecurityDescriptor
+    descriptorHint: resultSecurityDescriptor,
+    exeLabels
   });
   return typeof pipelineResult === 'string' ? pipelineResult : String(pipelineResult ?? '');
 }
@@ -269,13 +308,14 @@ async function handleCommandRefExecutable(
   options: NonCommandExecutableHandlerOptions
 ): Promise<unknown> {
   const { definition, commandName, node, env, execEnv, variable, params, evaluatedArgs, services } = options;
+  const capturedModuleEnv = await getCapturedModuleEnvMap(variable as { internal?: Record<string, unknown> } | undefined);
   const refAst = (definition as any).commandRefAst;
   if (refAst) {
     const refWithClause = mergeAuthUsingIntoWithClause((definition as any).withClause, node.withClause);
     // Evaluate command-ref AST within invocation scope so executable parameters resolve.
     const refEnv = execEnv.createChild();
-    if (variable?.internal?.capturedModuleEnv instanceof Map) {
-      refEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
+    if (capturedModuleEnv instanceof Map) {
+      refEnv.setCapturedModuleEnv(capturedModuleEnv);
     }
     const baseInvocation =
       (refAst as any).type === 'ExecInvocation'
@@ -297,13 +337,8 @@ async function handleCommandRefExecutable(
   const refWithClause = mergeAuthUsingIntoWithClause((definition as any).withClause, node.withClause);
 
   let refCommand: Variable | null = null;
-  if (variable?.internal?.capturedModuleEnv) {
-    const capturedEnv = variable.internal.capturedModuleEnv as Map<string, Variable> | Record<string, Variable> | undefined;
-    if (capturedEnv instanceof Map) {
-      refCommand = capturedEnv.get(refName) ?? null;
-    } else if (capturedEnv && typeof capturedEnv === 'object') {
-      refCommand = capturedEnv[refName] ?? null;
-    }
+  if (capturedModuleEnv instanceof Map) {
+    refCommand = capturedModuleEnv.get(refName) ?? null;
   }
   if (!refCommand) {
     refCommand = env.getVariable(refName) ?? null;
@@ -368,8 +403,8 @@ async function handleCommandRefExecutable(
     }
 
     const refEnv = env.createChild();
-    if (variable?.internal?.capturedModuleEnv instanceof Map) {
-      refEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
+    if (capturedModuleEnv instanceof Map) {
+      refEnv.setCapturedModuleEnv(capturedModuleEnv);
     }
 
     const refInvocation: ExecInvocation = {
@@ -385,8 +420,8 @@ async function handleCommandRefExecutable(
   }
 
   const refEnv = env.createChild();
-  if (variable?.internal?.capturedModuleEnv instanceof Map) {
-    refEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
+  if (capturedModuleEnv instanceof Map) {
+    refEnv.setCapturedModuleEnv(capturedModuleEnv);
   }
   const securedArgs = evaluatedArgs.map((arg: any, i: number) => {
     const paramName = params[i];

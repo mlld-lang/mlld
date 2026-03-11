@@ -5,6 +5,7 @@ import type { ExecutableVariable, Variable } from '@core/types/variable';
 import type { ToolCollection, ToolDefinition } from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
+import { normalizeExecutableDescriptor } from '@interpreter/eval/pipeline/command-execution/normalize-executable';
 import { mcpNameToMlldName, mlldNameToMCPName } from '@core/mcp/names';
 import { asData, asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
@@ -39,14 +40,16 @@ export class FunctionRouter {
     this.toolCollection = options.toolCollection;
     this.toolNames = options.toolNames;
     this.toolNamesAreMcp = options.toolNamesAreMcp ?? false;
-    this.toolKeyByMcpName = this.toolCollection ? this.buildToolKeyMap(this.toolCollection) : undefined;
     if (this.toolCollection) {
+      this.toolKeyByMcpName = this.buildToolKeyMap(this.toolCollection);
       this.toolNamesMcp = Object.keys(this.toolCollection).map(name => mlldNameToMCPName(name));
     } else if (this.toolNames && this.toolNames.length > 0) {
+      this.toolKeyByMcpName = this.buildToolNameKeyMap(this.toolNames, this.toolNamesAreMcp);
       this.toolNamesMcp = this.toolNamesAreMcp
         ? [...this.toolNames]
         : this.toolNames.map(name => mlldNameToMCPName(name));
     } else {
+      this.toolKeyByMcpName = undefined;
       this.toolNamesMcp = [];
     }
   }
@@ -77,7 +80,7 @@ export class FunctionRouter {
           throw this.createToolNotFoundError(toolName);
       }
 
-      const execVar = variable as ExecutableVariable;
+      const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
       const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName);
       const invocation = this.buildInvocation(
         execName,
@@ -103,7 +106,7 @@ export class FunctionRouter {
         throw this.createToolNotFoundError(toolName);
       }
 
-      const execVar = variable as ExecutableVariable;
+      const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
       const invocation = this.buildInvocation(
         execName,
         execVar,
@@ -165,6 +168,16 @@ export class FunctionRouter {
     return map;
   }
 
+  private buildToolNameKeyMap(toolNames: string[], areMcp: boolean): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const name of toolNames) {
+      const mcpName = areMcp ? name : mlldNameToMCPName(name);
+      map.set(mcpName, name);
+      map.set(name, name);
+    }
+    return map;
+  }
+
   private ensureToolExists(toolName: string): void {
     if (this.toolNamesMcp.length === 0) {
       return;
@@ -200,6 +213,22 @@ export class FunctionRouter {
     }
 
     return null;
+  }
+
+  private normalizeExecutableVariable(execVar: ExecutableVariable): ExecutableVariable {
+    const { execDef } = normalizeExecutableDescriptor(execVar as any);
+    if (!execDef || execDef === execVar.internal?.executableDef) {
+      return execVar;
+    }
+
+    return {
+      ...execVar,
+      value: execDef,
+      internal: {
+        ...(execVar.internal ?? {}),
+        executableDef: execDef
+      }
+    };
   }
 
   private buildInvocation(

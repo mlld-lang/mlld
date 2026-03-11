@@ -12,8 +12,7 @@ import type { SecurityDescriptor } from '@core/types/security';
 import { getOperationLabels } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
-import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
-import { logFileWriteEvent } from '../utils/audit-log';
+import { executeWrite } from './write-executor';
 
 interface AppendOptions {
   location?: SourceLocation;
@@ -111,31 +110,23 @@ export async function appendContentToFile(
   options: AppendOptions
 ): Promise<void> {
   const resolvedPath = await resolveAppendPath(target, env);
-  enforceFilesystemAccess(env, 'write', resolvedPath, options.location ?? undefined);
   const directiveKind = options.directiveKind ?? 'append';
   const { payload, format } = formatAppendPayload(resolvedPath, content, {
     location: options.location,
     directiveKind,
     format: options.format
   });
-
-  const fileSystem = (env as any).fileSystem;
-  if (!fileSystem || typeof fileSystem.appendFile !== 'function') {
-    throw new MlldDirectiveError(
-      'File system not available for append directive',
-      directiveKind,
-      { location: options.location }
-    );
-  }
-
-  await fileSystem.appendFile(resolvedPath, payload);
-  await logFileWriteEvent(env, resolvedPath, options.descriptor);
-
-  env.emitEffect('file', payload, {
-    path: resolvedPath,
-    source: options.location,
+  await executeWrite({
+    env,
+    targetPath: resolvedPath,
+    content: payload,
     mode: 'append',
-    metadata: { format }
+    sourceLocation: options.location,
+    descriptor: options.descriptor,
+    metadata: {
+      format,
+      directive: directiveKind
+    }
   });
 }
 

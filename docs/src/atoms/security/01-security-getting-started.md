@@ -4,7 +4,7 @@ title: Security Getting Started
 brief: Progressive levels of engagement from zero-config to full custom security
 category: security
 tags: [security, onboarding, policy, guards, needs, environments, getting-started]
-related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, env-overview, labels-overview]
+related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview]
 updated: 2026-02-15
 qa_tier: 2
 ---
@@ -163,16 +163,16 @@ var @sandbox = {
   mcps: []
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { claude -p "Analyze the codebase" } using auth:claude
 ]
 ```
 
 Environments encapsulate execution contexts. Credentials flow through sealed paths that bypass string interpolation, preventing prompt injection from extracting secrets. The `provider` field adds process isolation via Docker or cloud sandboxes.
 
-> **Note:** Environment providers (`@mlld/env-docker`, `@mlld/env-sprites`) are spec-defined but not yet shipped. `env` blocks currently run with the local provider.
+> **Note:** Environment providers (`@mlld/env-docker`, `@mlld/env-sprites`) are spec-defined but not yet shipped. `box` blocks currently run with the local provider.
 
-See `env-overview` for concepts. See `env-config` for configuration fields. See `policy-auth` for credential flow. See `pattern-audit-guard` and `pattern-dual-audit` for advanced prompt injection defense patterns.
+See `box-overview` for concepts. See `box-config` for configuration fields. See `policy-auth` for credential flow. See `pattern-audit-guard` and `pattern-dual-audit` for advanced prompt injection defense patterns.
 
 ## Which Level Do You Need?
 

@@ -16,6 +16,7 @@ import {
   BaseMlldNode,
   TimeDurationNode,
   ExecInvocation,
+  EscapedAngleBracketExpressionNode,
   ConditionalTemplateSnippetNode,
   ConditionalStringFragmentNode,
   ConditionalVarOmissionNode,
@@ -43,6 +44,7 @@ export type ContentNodeArray = Array<
   TextNode |
   VariableReferenceNode |
   ExecInvocation |
+  EscapedAngleBracketExpressionNode |
   ConditionalTemplateSnippetNode |
   ConditionalStringFragmentNode |
   ConditionalVarOmissionNode |

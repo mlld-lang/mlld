@@ -6,7 +6,7 @@ import { interpret } from '@interpreter/index';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 
-describe('env tools runtime enforcement', () => {
+describe('box tools runtime enforcement', () => {
   const tempDirs: string[] = [];
 
   afterEach(async () => {
@@ -18,7 +18,7 @@ describe('env tools runtime enforcement', () => {
     }
   });
 
-  it('blocks run cmd when Bash is not present in env tools', async () => {
+  it('blocks run cmd when Bash is not present in box tools', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-env-tools-deny-'));
     tempDirs.push(root);
 
@@ -26,7 +26,7 @@ describe('env tools runtime enforcement', () => {
       path.join(root, 'main.mld'),
       [
         '/var @cfg = { tools: ["Read", "Write"] }',
-        '/env @cfg [',
+        '/box @cfg [',
         '  run cmd { echo blocked }',
         ']'
       ].join('\n'),
@@ -40,10 +40,10 @@ describe('env tools runtime enforcement', () => {
         pathService: new PathService(),
         approveAllImports: true
       })
-    ).rejects.toThrow(/Bash.*env\.tools|ENV_TOOL_DENIED|Tool.*denied/i);
+    ).rejects.toThrow(/Bash.*(box|env)\.tools|ENV_TOOL_DENIED|Tool.*denied/i);
   });
 
-  it('allows run cmd when Bash is present in env tools', async () => {
+  it('allows run cmd when Bash is present in box tools', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-env-tools-allow-'));
     tempDirs.push(root);
 
@@ -51,7 +51,7 @@ describe('env tools runtime enforcement', () => {
       path.join(root, 'main.mld'),
       [
         '/var @cfg = { tools: ["Read", "Write", "Bash"] }',
-        '/env @cfg [',
+        '/box @cfg [',
         '  run cmd { echo allowed }',
         ']'
       ].join('\n'),

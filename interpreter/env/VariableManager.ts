@@ -15,6 +15,7 @@ import type { SourceLocation } from '@core/types';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { ContextManager, PipelineContextSnapshot } from './ContextManager';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import type { WorkspaceMcpBridgeHandle } from '@core/types/workspace';
 
 export interface IVariableManager {
   // Core variable operations
@@ -58,8 +59,10 @@ export interface VariableManagerDependencies {
     policy?: Readonly<Record<string, unknown>>;
     operation?: Readonly<Record<string, unknown>>;
   } | undefined;
+  getActiveBridge?(): WorkspaceMcpBridgeHandle | undefined;
   recordSecurityDescriptor?(descriptor: SecurityDescriptor | undefined): void;
   getContextManager?(): ContextManager | undefined;
+  getLlmToolConfig?(): import('./executors/call-mcp-config').CallMcpConfig | null | undefined;
 }
 
 export interface VariableManagerContext {
@@ -229,7 +232,7 @@ export class VariableManager implements IVariableManager {
         // Only throw collision errors if both variables are legitimate mlld types
         // AND the new variable is not a block-scoped binding that can shadow parent scope
         const importPath = variable.mx?.importPath;
-        const isBlockScoped = importPath === 'let' || importPath === 'exe-param';
+        const isBlockScoped = importPath === 'let' || importPath === 'exe-param' || importPath === 'for-var';
         if (isLegitimateVariable && existingIsLegitimate && !isBlockScoped) {
           const isExistingImported = existing.mx?.isImported || false;
           const importPath = existing.mx?.importPath;
@@ -299,8 +302,13 @@ export class VariableManager implements IVariableManager {
       const contextManager = this.deps.getContextManager?.();
       const pipelineContext = this.deps.getPipelineContext?.();
       const securitySnapshot = this.deps.getSecuritySnapshot?.();
+      const bridge = this.deps.getActiveBridge?.();
+      const boxContext = bridge
+        ? { mcpConfigPath: bridge.mcpConfigPath, socketPath: bridge.socketPath }
+        : null;
+      const llmToolConfig = this.deps.getLlmToolConfig?.();
       const mxValue = contextManager
-        ? contextManager.buildAmbientContext({ pipelineContext, securitySnapshot })
+        ? contextManager.buildAmbientContext({ pipelineContext, securitySnapshot, boxContext, llmToolConfig })
         : this.buildLegacyContext(pipelineContext, securitySnapshot);
 
       return createObjectVariable('mx', mxValue, false, undefined, {
@@ -468,7 +476,16 @@ export class VariableManager implements IVariableManager {
 
   hasVariable(name: string): boolean {
     const parent = this.deps.getParent();
-    if (this.variables.has(name) || (parent && parent.hasVariable(name))) {
+    if (this.variables.has(name)) {
+      return true;
+    }
+
+    const capturedEnv = this.deps.getCapturedModuleEnv();
+    if (capturedEnv?.has(name)) {
+      return true;
+    }
+
+    if (parent && parent.hasVariable(name)) {
       return true;
     }
     

@@ -237,7 +237,7 @@ Directive
     / SlashShow     // NEW: Show directives (content display) - replaces AtAdd
     / SlashLog      // NEW: Log directives (syntactic sugar for /output to stdout)
     / SlashExe      // NEW: Exe directives (define commands/code) - replaces AtExec
-    / SlashEnv      // Env directives (scoped environments)
+    / SlashBox      // Box directives (scoped environments)
     / SlashFor      // For directives (iteration)
     / SlashWhile    // While directives (bounded iteration)
     / SlashLoop     // Loop directives (block iteration)
@@ -249,6 +249,8 @@ Directive
     / SlashExport   // Export directives (explicit exports)
     / SlashOutput   // Output directives (output routing)
     / SlashAppend   // Append directives (incremental file writing)
+    / SlashFile     // File projection directives
+    / SlashFiles    // Multi-file projection directives
     / SlashIf       // If directives (conditional blocks)
     / SlashWhen     // When directives (conditional execution)
     / SlashHook     // Hook directives (user lifecycle hooks)

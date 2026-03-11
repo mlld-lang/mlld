@@ -163,6 +163,13 @@ export async function executeCommandExecutable(
     });
   }
 
+  for (const warning of CommandUtils.collectUnsafeInterpolatedFragmentWarnings(
+    definition.commandTemplate,
+    name => execEnv.getVariable(name)
+  )) {
+    env.emitEffect('stderr', `${warning}\n`);
+  }
+
   let command = await services.interpolateWithResultDescriptor(
     definition.commandTemplate,
     execEnv,
@@ -257,7 +264,8 @@ export async function executeCommandExecutable(
         sourceLocation: node.location,
         emitEffect: chunkEffect,
         workingDirectory,
-        suppressTerminal: hasStreamFormat || suppressTerminal
+        suppressTerminal: hasStreamFormat || suppressTerminal,
+        exeLabels
       },
       sourceLocation: node.location ?? null,
       directiveType: 'exec'
@@ -271,6 +279,7 @@ export async function executeCommandExecutable(
       definition,
       params,
       evaluatedArgs,
+      exeLabels,
       autoverifyVars,
       localEnvVars,
       injectedEnv,
@@ -299,7 +308,8 @@ export async function executeCommandExecutable(
       isRetryable: false,
       identifier: commandName,
       location: variable.mx?.definedAt || node.location,
-      descriptorHint: services.getResultSecurityDescriptor()
+      descriptorHint: services.getResultSecurityDescriptor(),
+      exeLabels
     });
 
     if (typeof pipelineResult === 'string') {
@@ -837,6 +847,7 @@ async function executeLocalCommand(options: {
   definition: CommandExecutable;
   params: readonly string[];
   evaluatedArgs: unknown[];
+  exeLabels: readonly string[];
   autoverifyVars: readonly string[];
   localEnvVars: Record<string, string>;
   injectedEnv: Record<string, string>;
@@ -857,6 +868,7 @@ async function executeLocalCommand(options: {
     definition,
     params,
     evaluatedArgs,
+    exeLabels,
     autoverifyVars,
     localEnvVars,
     injectedEnv,
@@ -882,9 +894,12 @@ async function executeLocalCommand(options: {
     return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 128 * 1024;
   })();
 
-  const needsBashFallback = Object.values(localEnvVars).some(
-    value => Buffer.byteLength(value || '', 'utf8') > perVarMax
-  );
+  const hasLlmLabel = exeLabels.some(label => label.trim().toLowerCase() === 'llm');
+  const needsBashFallback =
+    !hasLlmLabel &&
+    Object.values(localEnvVars).some(
+      value => Buffer.byteLength(value || '', 'utf8') > perVarMax
+    );
   const fallbackDisabled = (() => {
     const raw = (process.env.MLLD_DISABLE_COMMAND_BASH_FALLBACK || '').toLowerCase();
     return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
@@ -945,7 +960,8 @@ async function executeLocalCommand(options: {
       {
         directiveType: 'exec',
         sourceLocation: node.location,
-        workingDirectory
+        workingDirectory,
+        exeLabels
       }
     );
 
@@ -975,7 +991,8 @@ async function executeLocalCommand(options: {
       sourceLocation: node.location,
       emitEffect: chunkEffect,
       workingDirectory,
-      suppressTerminal: hasStreamFormat || suppressTerminal
+      suppressTerminal: hasStreamFormat || suppressTerminal,
+      exeLabels
     }
   );
 

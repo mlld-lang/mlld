@@ -242,6 +242,7 @@ DoubleColonInterpolation
   / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)
+  / EscapedAngleBracketExpression // <<...>>
   / FileReferenceInterpolation   // <file.md>
   / TemplateVariableReference    // @var (with template pipes and fields)
   / UnifiedReferenceNoTail       // Fallback for @var.field without pipes

@@ -11,6 +11,7 @@ related-types: sdk/types { StructuredResult, StreamExecution, SDKEvent, Streamin
 ## tldr
 
 - SDK/runtime entrypoints are `processMlld(...)`, `execute(...)`, `analyzeModule(...)`, and interpreter `interpret(...)`.
+- `VirtualFS` is exported on the SDK surface (`import { VirtualFS } from "mlld"`), with `mlld/sdk` as a public subpath alias.
 - `execute(...)` injects runtime data via dynamic modules (`@payload`, optional `@state`).
 - AST caching is content-based (`source` equality), keyed by `filePath:mode`.
 - `ExecutionEmitter` is an event hub only; StreamBus subscription is wired by `Environment.enableSDKEvents(...)`.
@@ -29,11 +30,32 @@ related-types: sdk/types { StructuredResult, StreamExecution, SDKEvent, Streamin
 
 - `sdk/index.ts`
   - `processMlld(content, options?)`
+  - `VirtualFS` / `NodeFileSystem` exports
   - exports `execute`, `analyzeModule`, `ExecutionEmitter`, `StreamExecution`
 - `sdk/execute.ts`
   - `execute(filePath, payload, options?)` for structured/stream execution with metrics.
 - `sdk/analyze.ts`
   - `analyzeModule(...)` for static module analysis without runtime execution.
+
+### VirtualFS Runtime Overlay
+
+Source: `services/fs/VirtualFS.ts`, `sdk/index.ts`.
+
+Canonical SDK usage:
+
+```ts
+import { VirtualFS, NodeFileSystem } from 'mlld';
+
+const vfs = VirtualFS.over(new NodeFileSystem());
+```
+
+Core lifecycle APIs:
+- `changes()` (canonical inspection API)
+- `diff()` (compatibility alias)
+- `fileDiff(path)` unified diff
+- `discard(path)` and `reset()`
+- `export()` and `apply(patch)`
+- `flush(path?)` (scoped/global apply to backing)
 
 ### `execute(...)` Flow (SDK)
 

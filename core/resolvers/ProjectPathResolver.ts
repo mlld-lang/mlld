@@ -79,8 +79,12 @@ export class ProjectPathResolver implements Resolver {
 
     // Variable context - return the project path as text
     if (!config || !config.context || config.context === 'variable') {
+      const strippedBarePrefix =
+        (ref === '' || ref === '/') &&
+        (((config as { prefix?: string } | undefined)?.prefix === '@base') ||
+          ((config as { prefix?: string } | undefined)?.prefix === '@root'));
       // If it's just @base or @root, return the base path
-      if (ref === '@base' || ref === 'base' || ref === '@root' || ref === 'root') {
+      if (ref === '@base' || ref === 'base' || ref === '@root' || ref === 'root' || strippedBarePrefix) {
         const metadata = {
           source: 'base',
           timestamp: new Date()

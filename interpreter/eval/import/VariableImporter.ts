@@ -121,8 +121,8 @@ export class VariableImporter {
   deserializeModuleEnv(moduleEnv: any): Map<string, Variable> {
     return this.capturedEnvRehydrator.deserializeModuleEnv(
       moduleEnv,
-      (name, varData, importPath, originalName) =>
-        this.createVariableFromValue(name, varData, importPath, originalName)
+      (name, varData, importPath, originalName, options) =>
+        this.createVariableFromValue(name, varData, importPath, originalName, options)
     );
   }
 
@@ -286,8 +286,8 @@ export class VariableImporter {
       source,
       metadata,
       securityLabels,
-      createVariableFromValue: (variableName, variableValue, importPath, originalName) =>
-        this.createVariableFromValue(variableName, variableValue, importPath, originalName)
+      createVariableFromValue: (variableName, variableValue, importPath, originalName, options) =>
+        this.createVariableFromValue(variableName, variableValue, importPath, originalName, options)
     });
   }
 }

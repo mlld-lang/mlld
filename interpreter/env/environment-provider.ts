@@ -7,7 +7,11 @@ import type {
   EnvironmentResult
 } from '@core/types/environment';
 import type { SecurityDescriptor } from '@core/types/security';
-import type { PolicyConfig } from '@core/policy/union';
+import {
+  mergePolicyConfigs,
+  normalizePolicyConfig,
+  type PolicyConfig
+} from '@core/policy/union';
 import type { Environment } from './Environment';
 import type { CommandExecutionContext } from './ErrorUtils';
 import {
@@ -27,7 +31,11 @@ import {
   type VariableSource
 } from '@core/types/variable';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
-import { MlldCommandExecutionError, MlldInterpreterError } from '@core/errors';
+import {
+  MlldCommandExecutionError,
+  MlldInterpreterError,
+  MlldSecurityError
+} from '@core/errors';
 import { deriveCommandTaint } from '@core/security/taint';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
@@ -61,6 +69,174 @@ const PROVIDER_ARG_INTERNAL = {
   }
 };
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeNameList(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const entries: string[] = [];
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (typeof item !== 'string') {
+        continue;
+      }
+      const trimmed = item.trim();
+      if (trimmed) {
+        entries.push(trimmed);
+      }
+    }
+  } else if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed) {
+      entries.push(trimmed);
+    }
+  } else {
+    return undefined;
+  }
+  return entries.length > 0 ? Array.from(new Set(entries)) : [];
+}
+
+function normalizeToolList(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    return normalizeNameList(value);
+  }
+  if (isPlainObject(value)) {
+    const tools = Object.keys(value)
+      .map(entry => entry.trim())
+      .filter(entry => entry.length > 0);
+    return tools.length > 0 ? Array.from(new Set(tools)) : [];
+  }
+  return normalizeNameList(value);
+}
+
+function toNormalizedLookup(list: readonly string[] | undefined): Set<string> {
+  const set = new Set<string>();
+  for (const entry of list ?? []) {
+    const trimmed = entry.trim();
+    if (trimmed) {
+      set.add(trimmed.toLowerCase());
+    }
+  }
+  return set;
+}
+
+function applyListPolicyAttenuation(
+  requested: string[] | undefined,
+  allow: string[] | undefined,
+  deny: string[] | undefined
+): string[] | undefined {
+  const requestedList = requested ? Array.from(new Set(requested.map(v => v.trim()).filter(Boolean))) : undefined;
+  const allowList = allow ? Array.from(new Set(allow.map(v => v.trim()).filter(Boolean))) : undefined;
+  const denySet = new Set((deny ?? []).map(entry => entry.trim()).filter(Boolean));
+
+  if (requestedList) {
+    if (!allowList && denySet.size === 0) {
+      return requestedList;
+    }
+    const allowSet = new Set(allowList ?? []);
+    return requestedList.filter(item => !denySet.has(item) && (allowSet.size === 0 || allowSet.has(item)));
+  }
+
+  if (allowList) {
+    return allowList.filter(item => !denySet.has(item));
+  }
+
+  return undefined;
+}
+
+function applyToolPolicyAttenuation(
+  requested: string[] | undefined,
+  allow: string[] | undefined,
+  deny: string[] | undefined
+): string[] | undefined {
+  const requestedList = requested
+    ? Array.from(new Set(requested.map(v => v.trim()).filter(Boolean)))
+    : undefined;
+  const allowList = allow
+    ? Array.from(new Set(allow.map(v => v.trim()).filter(Boolean)))
+    : undefined;
+  const allowSet = toNormalizedLookup(allowList);
+  const denySet = toNormalizedLookup(deny);
+
+  if (requestedList) {
+    return requestedList.filter(item => {
+      const normalized = item.toLowerCase();
+      if (denySet.has(normalized)) {
+        return false;
+      }
+      if (allowSet.size === 0) {
+        return true;
+      }
+      return allowSet.has(normalized);
+    });
+  }
+
+  if (allowList) {
+    return allowList.filter(item => !denySet.has(item.toLowerCase()));
+  }
+
+  return undefined;
+}
+
+function mergeStringOrListValues(
+  left?: string | string[],
+  right?: string | string[]
+): string | string[] | undefined {
+  const merged = Array.from(
+    new Set([
+      ...(normalizeNameList(left) ?? []),
+      ...(normalizeNameList(right) ?? [])
+    ])
+  );
+  if (merged.length === 0) {
+    return undefined;
+  }
+  if (merged.length === 1) {
+    return merged[0];
+  }
+  return merged;
+}
+
+function mergeTaintLists(
+  left?: string[],
+  right?: string[]
+): string[] | undefined {
+  const merged = Array.from(new Set([...(left ?? []), ...(right ?? [])]));
+  return merged.length > 0 ? merged : undefined;
+}
+
+function extractPolicyFragmentFromConstraints(config?: EnvironmentConfig): PolicyConfig | undefined {
+  if (!config || !isPlainObject(config._policyDerivedConstraints)) {
+    return undefined;
+  }
+  const raw = (config._policyDerivedConstraints as Record<string, unknown>).policyFragment;
+  if (!isPlainObject(raw)) {
+    return undefined;
+  }
+  return normalizePolicyConfig(raw as PolicyConfig);
+}
+
+export function extractEnvironmentPolicyFragment(
+  metadata?: Record<string, unknown>
+): PolicyConfig | undefined {
+  if (!metadata || metadata.policyFragment === undefined || metadata.policyFragment === null) {
+    return undefined;
+  }
+  const raw = metadata.policyFragment;
+  if (!isPlainObject(raw)) {
+    throw new MlldInterpreterError('Guard policy fragment must be an object', {
+      code: 'ENV_POLICY_FRAGMENT_INVALID'
+    });
+  }
+  return normalizePolicyConfig(raw as PolicyConfig);
+}
+
 export function extractEnvironmentConfig(
   metadata?: Record<string, unknown>
 ): EnvironmentConfig | undefined {
@@ -81,25 +257,144 @@ export function resolveEnvironmentConfig(
   metadata?: Record<string, unknown>
 ): EnvironmentConfig | undefined {
   const guardConfig = extractEnvironmentConfig(metadata);
+  const guardPolicyFragment = extractEnvironmentPolicyFragment(metadata);
   const scopedConfig = env.getScopedEnvironmentConfig();
+  let resolved: EnvironmentConfig | undefined;
   if (guardConfig && scopedConfig) {
-    return { ...scopedConfig, ...guardConfig };
+    resolved = { ...scopedConfig, ...guardConfig };
+  } else {
+    resolved = guardConfig ?? scopedConfig;
   }
-  return guardConfig ?? scopedConfig;
+  if (!guardPolicyFragment) {
+    return resolved;
+  }
+  const mergedConstraints = isPlainObject(resolved?._policyDerivedConstraints)
+    ? { ...(resolved!._policyDerivedConstraints as Record<string, unknown>) }
+    : {};
+  return {
+    ...(resolved ?? {}),
+    _policyDerivedConstraints: {
+      ...(mergedConstraints as EnvironmentConfig['_policyDerivedConstraints']),
+      policyFragment: guardPolicyFragment
+    }
+  };
+}
+
+export function deriveEnvironmentConfigFromPolicy(
+  policy: PolicyConfig | undefined,
+  localConfig?: EnvironmentConfig
+): EnvironmentConfig | undefined {
+  const policyFragment = extractPolicyFragmentFromConstraints(localConfig);
+  const effectivePolicy = mergePolicyConfigs(policy, policyFragment);
+  const normalizedPolicy = normalizePolicyConfig(effectivePolicy);
+  const policyEnv = normalizedPolicy.env;
+  const derived: EnvironmentConfig = localConfig ? { ...localConfig } : {};
+
+  if (!policyEnv) {
+    return Object.keys(derived).length > 0 ? derived : undefined;
+  }
+
+  const providerRef =
+    typeof derived.provider === 'string' && derived.provider.trim().length > 0
+      ? derived.provider.trim()
+      : undefined;
+  if (!providerRef && policyEnv.default) {
+    derived.provider = policyEnv.default;
+  } else if (providerRef) {
+    derived.provider = providerRef;
+  }
+
+  const selectedProvider =
+    typeof derived.provider === 'string' && derived.provider.trim().length > 0
+      ? derived.provider.trim()
+      : undefined;
+  const providerRules = selectedProvider ? policyEnv.providers?.[selectedProvider] : undefined;
+  if (selectedProvider && providerRules?.allowed === false) {
+    throw new MlldSecurityError(`Provider '${selectedProvider}' denied by policy`, {
+      code: 'ENV_PROVIDER_DENIED'
+    });
+  }
+  if (providerRules?.auth !== undefined) {
+    const mergedAuth = mergeStringOrListValues(derived.auth, providerRules.auth);
+    if (mergedAuth !== undefined) {
+      derived.auth = mergedAuth;
+    }
+  }
+  if (providerRules?.taint !== undefined) {
+    const mergedTaint = mergeTaintLists(derived.taint as string[] | undefined, providerRules.taint);
+    if (mergedTaint !== undefined) {
+      derived.taint = mergedTaint as any;
+    }
+  }
+  if (providerRules?.profiles && Object.keys(providerRules.profiles).length > 0) {
+    const existingProfiles = isPlainObject(derived.profiles)
+      ? (derived.profiles as Record<string, unknown>)
+      : {};
+    derived.profiles = {
+      ...providerRules.profiles,
+      ...existingProfiles
+    };
+  }
+
+  if (policyEnv.tools) {
+    const requestedTools = normalizeToolList(derived.tools);
+    const attenuatedTools = applyToolPolicyAttenuation(
+      requestedTools,
+      normalizeNameList(policyEnv.tools.allow),
+      normalizeNameList(policyEnv.tools.deny)
+    );
+    if (attenuatedTools !== undefined) {
+      derived.tools = attenuatedTools;
+    }
+  }
+
+  if (policyEnv.mcps) {
+    const currentMcps = normalizeNameList((derived as any).mcps);
+    const attenuatedMcps = applyListPolicyAttenuation(
+      currentMcps,
+      normalizeNameList(policyEnv.mcps.allow),
+      normalizeNameList(policyEnv.mcps.deny)
+    );
+    if (attenuatedMcps !== undefined) {
+      (derived as any).mcps = attenuatedMcps;
+    }
+  }
+
+  if (policyEnv.net) {
+    const existingNet = isPlainObject((derived as any).net)
+      ? { ...((derived as any).net as Record<string, unknown>) }
+      : {};
+    const netAllow = applyListPolicyAttenuation(
+      normalizeNameList(existingNet.allow),
+      normalizeNameList(policyEnv.net.allow),
+      normalizeNameList(policyEnv.net.deny)
+    );
+    if (netAllow !== undefined) {
+      existingNet.allow = netAllow;
+    }
+    if (Object.keys(existingNet).length > 0) {
+      (derived as any).net = existingNet;
+    }
+  }
+
+  const existingConstraints = isPlainObject(derived._policyDerivedConstraints)
+    ? (derived._policyDerivedConstraints as Record<string, unknown>)
+    : {};
+  derived._policyDerivedConstraints = {
+    ...(existingConstraints as EnvironmentConfig['_policyDerivedConstraints']),
+    policy: normalizedPolicy,
+    ...(policyFragment ? { policyFragment } : {}),
+    policyEnv
+  };
+
+  return Object.keys(derived).length > 0 ? derived : undefined;
 }
 
 export function applyEnvironmentDefaults(
   config: EnvironmentConfig | undefined,
   policy: PolicyConfig | undefined
 ): EnvironmentConfig | undefined {
-  const defaultProvider = policy?.env?.default;
-  if (!config) {
-    return defaultProvider ? { provider: defaultProvider } : undefined;
-  }
-  if (!config.provider && defaultProvider) {
-    return { ...config, provider: defaultProvider };
-  }
-  return config;
+  return deriveEnvironmentConfigFromPolicy(policy, config);
 }
 
 export function buildEnvironmentOutputDescriptor(
@@ -216,7 +511,15 @@ function buildProviderExecutionError(options: {
 }
 
 function prepareProviderOptions(config: EnvironmentConfig): EnvironmentCreateOptions {
-  const { provider: _provider, auth: _auth, taint: _taint, keep: _keep, tools: _tools, ...rest } = config as any;
+  const {
+    provider: _provider,
+    auth: _auth,
+    taint: _taint,
+    keep: _keep,
+    tools: _tools,
+    _policyDerivedConstraints: _policyDerivedConstraints,
+    ...rest
+  } = config as any;
   return { ...rest };
 }
 

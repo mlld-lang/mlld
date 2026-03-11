@@ -51,7 +51,7 @@ export function isExecutionValueNode(valueNode: unknown): boolean {
 
   const node = valueNode as { type?: string; kind?: string };
   if (node.type === 'Directive') {
-    return node.kind === 'env';
+    return node.kind === 'box';
   }
 
   return node.type === 'code'
@@ -252,10 +252,10 @@ export function createExecutionEvaluator(
       return { kind: 'resolved', value };
     }
 
-    if (node.type === 'Directive' && node.kind === 'env') {
-      const { evaluateEnv } = await import('../env');
-      const envResult = await evaluateEnv(node, env, context);
-      return { kind: 'resolved', value: envResult.value };
+    if (node.type === 'Directive' && node.kind === 'box') {
+      const { evaluateBox } = await import('../box');
+      const boxResult = await evaluateBox(node, env, context);
+      return { kind: 'resolved', value: boxResult.value };
     }
 
     throw new Error(`Unsupported execution branch for @${assignmentIdentifier}: ${node.type}`);

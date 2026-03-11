@@ -53,10 +53,6 @@ export class ForeachVisitor extends BaseVisitor {
           modifiers: []
         });
         
-        this.debugLog('Tokenized foreach keyword', {
-          offset: foreachOffset,
-          position: foreachPosition
-        });
       }
     }
     

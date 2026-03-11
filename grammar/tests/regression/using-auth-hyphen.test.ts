@@ -2,10 +2,10 @@ import { describe, expect, test } from 'vitest';
 import { parse } from '@grammar/parser';
 
 describe('Using auth hyphenated names regression', () => {
-  test('parses hyphenated auth names in env blocks', async () => {
+  test('parses hyphenated auth names in box blocks', async () => {
     const input = [
       'var @cfg = { auth: "claude-alt" }',
-      'env @cfg [',
+      'box @cfg [',
       '  run cmd { echo "ok" } using auth:claude-alt',
       '  => "done"',
       ']',
@@ -17,7 +17,7 @@ describe('Using auth hyphenated names regression', () => {
       throw result.error;
     }
 
-    const envDirective: any = result.ast[1];
-    expect(envDirective.kind).toBe('env');
+    const boxDirective: any = result.ast[1];
+    expect(boxDirective.kind).toBe('box');
   });
 });

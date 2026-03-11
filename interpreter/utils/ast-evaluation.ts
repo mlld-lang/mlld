@@ -56,6 +56,26 @@ function serializeWrappedTemplateContent(content: unknown[]): string {
  */
 export function createASTAwareJSONReplacer() {
   const replacer = (key: string, val: unknown): unknown => {
+    if (val instanceof Map) {
+      const entries = Array.from(val.entries());
+      const primitiveKeysOnly = entries.every(([entryKey]) => {
+        const keyType = typeof entryKey;
+        return keyType === 'string' || keyType === 'number' || keyType === 'boolean';
+      });
+      if (primitiveKeysOnly) {
+        return Object.fromEntries(
+          entries
+            .map(([entryKey, entryValue]) => [String(entryKey), entryValue] as const)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+        );
+      }
+      return entries;
+    }
+
+    if (val instanceof Set) {
+      return Array.from(val.values());
+    }
+
     if (isStructuredValue(val)) {
       return val.data;
     }

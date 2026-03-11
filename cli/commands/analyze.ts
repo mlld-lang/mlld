@@ -84,7 +84,8 @@ export type AntiPatternWarningCode =
   | 'exe-parameter-shadowing'
   | 'template-strict-for-syntax'
   | 'hyphenated-identifier-in-template'
-  | 'for-when-static-condition';
+  | 'for-when-static-condition'
+  | 'direct-text-data-on-exec-result';
 
 export interface AntiPatternWarning {
   code: AntiPatternWarningCode;
@@ -1003,8 +1004,9 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
       }
     }
 
-    // Increase depth when entering blocks (body, children, or values.action for when blocks)
-    const hasBlock = node.body || node.children || node.values?.action;
+    // Increase depth when entering blocks
+    const blockKeys = new Set(['action', 'then', 'else', 'body']);
+    const hasBlock = node.body || node.children || node.values?.action || node.values?.then || node.values?.else;
     const newDepth = hasBlock ? depth + 1 : depth;
 
     // Recurse into structural properties
@@ -1014,8 +1016,8 @@ function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarni
       for (const key in node.values) {
         // Skip identifier to avoid double-counting
         if (key !== 'identifier') {
-          // action is a block scope (when blocks, for blocks)
-          const scopeDepth = (key === 'action') ? newDepth : depth;
+          // Block-body keys create a new scope
+          const scopeDepth = blockKeys.has(key) ? newDepth : depth;
           walkWithScope(node.values[key], scopeDepth);
         }
       }
@@ -1327,6 +1329,93 @@ function getFirstForWhenCondition(whenExpression: any): { condition: unknown; li
   }
 
   return null;
+}
+
+/**
+ * Detect direct .text or .data access on variables assigned from exec invocations.
+ * These should typically use .mx.text or .mx.data to access wrapper metadata.
+ */
+function detectDirectTextDataOnExecResult(ast: MlldNode[]): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+  const execAssignedVars = new Set<string>();
+
+  // Pass 1: collect variable names assigned from ExecInvocation
+  function collectExecVars(node: any): void {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const child of node) collectExecVars(child);
+      return;
+    }
+
+    // var @x = @fn(...)
+    if (node.type === 'Directive' && node.kind === 'var') {
+      const name = node.values?.identifier?.[0]?.identifier;
+      const value = node.values?.value;
+      if (name && hasExecInvocation(value)) {
+        execAssignedVars.add(name);
+      }
+    }
+
+    // let @x = @fn(...)
+    if (node.type === 'LetAssignment') {
+      const name = node.identifier;
+      const value = node.value;
+      if (name && hasExecInvocation(value)) {
+        execAssignedVars.add(name);
+      }
+    }
+
+    for (const val of Object.values(node as Record<string, unknown>)) {
+      collectExecVars(val);
+    }
+  }
+
+  function hasExecInvocation(value: any): boolean {
+    if (!value) return false;
+    if (Array.isArray(value)) {
+      return value.length === 1 && value[0]?.type === 'ExecInvocation';
+    }
+    return value?.type === 'ExecInvocation';
+  }
+
+  // Pass 2: find @var.text or @var.data where var is exec-assigned
+  function findDirectAccess(node: any): void {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const child of node) findDirectAccess(child);
+      return;
+    }
+
+    if (node.type === 'VariableReference' && Array.isArray(node.fields) && node.fields.length >= 1) {
+      const name = node.identifier;
+      const firstField = node.fields[0];
+      if (
+        execAssignedVars.has(name) &&
+        firstField?.type === 'field' &&
+        (firstField.value === 'text' || firstField.value === 'data')
+      ) {
+        const fieldName = firstField.value;
+        const loc = firstField.location ?? node.location;
+        warnings.push({
+          code: 'direct-text-data-on-exec-result',
+          message: `@${name}.${fieldName} accesses raw data directly — use @${name}.mx.${fieldName} for wrapper metadata.`,
+          line: loc?.start?.line,
+          column: loc?.start?.column,
+          suggestion: `Replace @${name}.${fieldName} with @${name}.mx.${fieldName}. Direct .${fieldName} access on exec results fails when the value is a JSON string.`,
+        });
+      }
+    }
+
+    for (const val of Object.values(node as Record<string, unknown>)) {
+      findDirectAccess(val);
+    }
+  }
+
+  collectExecVars(ast);
+  if (execAssignedVars.size > 0) {
+    findDirectAccess(ast);
+  }
+  return warnings;
 }
 
 function detectForWhenStaticConditionWarnings(ast: MlldNode[]): AntiPatternWarning[] {
@@ -2679,6 +2768,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
           ...detectDeprecatedJsonTransformAntiPatterns(ast),
           ...detectExeParameterShadowingWarnings(ast),
           ...detectForWhenStaticConditionWarnings(ast),
+          ...detectDirectTextDataOnExecResult(ast),
           ...detectHyphenatedIdentifiersInTemplates(ast),
         ].filter(warning => !suppressedWarningCodes.has(warning.code));
         if (antiPatterns.length > 0) {

@@ -9,7 +9,7 @@
   read: { mlld: @guardDenyGetIssue, labels: ["untrusted"] }
 }
 
-/exe @guardDenyReadIssue(tools) = env with { tools: @tools } [
+/exe @guardDenyReadIssue(tools) = box with { tools: @tools } [
   let @issue = @guardDenyGetIssue("mlld-lang", "mlld", 1)
   => @issue
 ]

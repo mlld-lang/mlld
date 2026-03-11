@@ -242,7 +242,8 @@ export enum NodeType {
   NEW_EXPRESSION = 'NewExpression',
   NEGATION = 'Negation',
   EXEC_INVOCATION = 'ExecInvocation',
-  FILE_REFERENCE = 'FileReference'
+  FILE_REFERENCE = 'FileReference',
+  ESCAPED_ANGLE_BRACKET_EXPRESSION = 'EscapedAngleBracketExpression'
 }
 
 /**

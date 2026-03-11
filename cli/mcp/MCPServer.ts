@@ -65,8 +65,11 @@ export class MCPServer {
 
       try {
         const request = JSON.parse(trimmed) as JSONRPCRequest;
+        const isNotification = request.id === undefined || request.id === null;
         const response = await this.handleRequest(request);
-        process.stdout.write(`${JSON.stringify(response)}\n`);
+        if (!isNotification) {
+          process.stdout.write(`${JSON.stringify(response)}\n`);
+        }
       } catch (error) {
         const response: JSONRPCResponse = {
           jsonrpc: '2.0',
@@ -105,6 +108,8 @@ export class MCPServer {
     switch (request.method) {
       case 'initialize':
         return this.handleInitialize(request as InitializeRequest);
+      case 'notifications/initialized':
+        return undefined;
       case 'tools/list':
         return this.handleToolsList();
       case 'tools/call':
@@ -184,9 +189,10 @@ export class MCPServer {
     this.syncToolsContext();
 
     const { name, arguments: args } = request.params;
+    const toolName = this.stripNamespacePrefix(name);
 
     try {
-      const result = await this.router.executeFunction(name, args ?? {});
+      const result = await this.router.executeFunction(toolName, args ?? {});
       return {
         content: [
           {
@@ -254,5 +260,13 @@ export class MCPServer {
       'code' in error &&
       'message' in error
     );
+  }
+
+  private stripNamespacePrefix(name: string): string {
+    const colonIndex = name.indexOf(':');
+    if (colonIndex === -1) {
+      return name;
+    }
+    return name.substring(colonIndex + 1);
   }
 }

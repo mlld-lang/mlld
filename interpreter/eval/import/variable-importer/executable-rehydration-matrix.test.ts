@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Environment } from '@interpreter/env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { ObjectReferenceResolver } from '../ObjectReferenceResolver';
 import { VariableImporter } from '../VariableImporter';
+import { createExecutableVariable } from '@core/types/variable';
+import { VariableMetadataUtils } from '@core/types/variable';
+import { PythonPackageManagerFactory } from '@core/registry/python/PythonPackageManager';
 
 function createEnv(): Environment {
   const env = new Environment(new MemoryFileSystem(), new PathService(), '/project');
@@ -14,6 +17,27 @@ function createEnv(): Environment {
 function createImporter(): VariableImporter {
   return new VariableImporter(new ObjectReferenceResolver());
 }
+
+const SOURCE = {
+  directive: 'var' as const,
+  syntax: 'literal' as const,
+  hasInterpolation: false,
+  isMultiLine: false
+};
+
+const FAKE_PYTHON_MANAGER = {
+  name: 'pip',
+  isAvailable: async () => true,
+  install: async () => ({ package: 'stub', status: 'already-installed' as const }),
+  list: async () => [],
+  checkAvailable: async () => true,
+  getDependencies: async () => ({}),
+  resolveVersion: async (spec: string) => ({
+    name: spec,
+    version: '0.0.0',
+    requires: []
+  })
+};
 
 function createExecutablePayload(template: string) {
   return {
@@ -30,6 +54,16 @@ function createExecutablePayload(template: string) {
 }
 
 describe('Executable rehydration matrix', () => {
+  beforeEach(() => {
+    PythonPackageManagerFactory.reset();
+    vi.spyOn(PythonPackageManagerFactory, 'getDefault').mockResolvedValue(FAKE_PYTHON_MANAGER as any);
+  });
+
+  afterEach(() => {
+    PythonPackageManagerFactory.reset();
+    vi.restoreAllMocks();
+  });
+
   it('keeps nested captured-env stack restoration order stable', () => {
     const importer = createImporter();
     const env = createEnv();
@@ -144,5 +178,31 @@ describe('Executable rehydration matrix', () => {
     expect((restoredWith as any).internal?.capturedModuleEnv instanceof Map).toBe(true);
     expect((restoredWithout as any).internal?.executableDef).toEqual((restoredWith as any).internal?.executableDef);
     expect((restoredWithout as any).paramNames).toEqual((restoredWith as any).paramNames);
+  });
+
+  it('preserves recursive labels for captured module executables during import rehydration', () => {
+    const importer = createImporter();
+    const childVars = new Map<string, any>();
+    childVars.set(
+      'fact',
+      createExecutableVariable('fact', 'command', '', ['n'], 'sh', SOURCE, {
+        metadata: VariableMetadataUtils.applySecurityMetadata(undefined, {
+          labels: ['recursive']
+        })
+      })
+    );
+    childVars.set(
+      'wrapper',
+      createExecutableVariable('wrapper', 'command', '', ['n'], 'sh', SOURCE)
+    );
+
+    const { moduleObject } = importer.processModuleExports(childVars, {}, false, null);
+    const restored = importer.createVariableFromValue('wrapper', moduleObject.wrapper, '/project/module.mld');
+    const capturedEnv = (restored as any).internal?.capturedModuleEnv as Map<string, any>;
+    const restoredFact = capturedEnv.get('fact');
+
+    expect(capturedEnv instanceof Map).toBe(true);
+    expect(restoredFact?.type).toBe('executable');
+    expect(restoredFact?.mx?.labels).toEqual(expect.arrayContaining(['recursive']));
   });
 });

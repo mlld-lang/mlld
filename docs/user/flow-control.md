@@ -618,7 +618,7 @@ Example append usage:
 
 ```mlld
 var @runs = ["alpha", "beta", "gamma"]
-var @_ = for @name in @runs =>
+for @name in @runs =>
   `processed @name` | append "runs.log"
 
 show <runs.log>
@@ -627,7 +627,7 @@ show <runs.log>
 You can pass an explicit source to `append` when you need different content:
 
 ```mlld
-var @_ = "summary" | append @runs to "runs.jsonl"
+"summary" | append @runs to "runs.jsonl"
 ```
 
 ### When-Expressions in `for` RHS

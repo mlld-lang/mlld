@@ -5,6 +5,7 @@ import type { StructuredValue } from '@interpreter/utils/structured-value';
 import { asText } from '@interpreter/utils/structured-value';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import type { Environment } from '@interpreter/env/Environment';
+import { resolveWorkspacePathReference } from '@interpreter/utils/workspace-reference';
 import { processPipeline } from '../pipeline/unified-processor';
 import { LoadContentResultImpl } from '../load-content';
 import type { AstResult, AstPattern } from '../ast-extractor';
@@ -345,7 +346,10 @@ export class ContentLoaderOrchestrator {
     pipes: any[];
     policyEnforcer: PolicyEnforcer;
   }): Promise<ContentLoaderProcessResult> {
-    const resolvedFilePath = await context.env.resolvePath(context.pathOrUrl);
+    const workspaceReference = await resolveWorkspacePathReference(context.pathOrUrl, context.env);
+    const resolvedFilePath = workspaceReference
+      ? workspaceReference.absolutePath
+      : await context.env.resolvePath(context.pathOrUrl);
     const fileSecurityDescriptor = await this.dependencies.securityMetadataHelper.buildFileSecurityDescriptor(
       resolvedFilePath,
       context.env,
@@ -353,13 +357,26 @@ export class ContentLoaderOrchestrator {
     );
     const securityMetadata = this.dependencies.securityMetadataHelper.toFinalizationMetadata(fileSecurityDescriptor);
 
-    const result = await this.dependencies.fileHandler.load({
-      filePath: context.pathOrUrl,
-      options: context.options,
-      env: context.env,
-      resolvedPathOverride: resolvedFilePath,
-      sourceLocation: context.sourceLocation
-    });
+    let workspacePushed = false;
+    if (workspaceReference) {
+      context.env.pushActiveWorkspace(workspaceReference.workspace);
+      workspacePushed = true;
+    }
+
+    let result: LoadContentResult | string | string[];
+    try {
+      result = await this.dependencies.fileHandler.load({
+        filePath: context.pathOrUrl,
+        options: context.options,
+        env: context.env,
+        resolvedPathOverride: resolvedFilePath,
+        sourceLocation: context.sourceLocation
+      });
+    } finally {
+      if (workspacePushed) {
+        context.env.popActiveWorkspace();
+      }
+    }
 
     if (Array.isArray(result)) {
       if (context.hasPipes) {

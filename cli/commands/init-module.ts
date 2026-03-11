@@ -707,7 +707,7 @@ license: CC0
         console.log(chalk.gray(`  3. Publish: mlld publish ${relPath}`));
       } else if (moduleType === 'environment') {
         console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
-        console.log(chalk.gray(`  2. Use: mlld env spawn ${moduleName} -- "your prompt"`));
+        console.log(chalk.gray(`  2. Use: mlld box spawn ${moduleName} -- "your prompt"`));
         console.log(chalk.gray(`  3. Publish: mlld publish ${relPath}`));
       }
 
@@ -1129,7 +1129,7 @@ async function promptModuleType(): Promise<ModuleType | 'single-file'> {
     console.log('  2. library      Importable module with exports       → ./<name>/');
     console.log('  3. command      Claude Code slash command            → .claude/commands/');
     console.log('  4. skill        Claude Code skill                    → .claude/skills/');
-    console.log('  5. environment  AI agent environment                 → .mlld/env/');
+    console.log('  5. environment  AI agent environment                 → .mlld/box/');
     console.log('  6. single-file  All-in-one .mld.md module (legacy)');
     console.log('');
 
@@ -1179,14 +1179,14 @@ Module Types:
   library     Importable module         → ./<name>/
   command     Claude slash command      → .claude/commands/<name>/
   skill       Claude skill              → .claude/skills/<name>/
-  environment AI agent environment      → .mlld/env/<name>/
+  environment AI agent environment      → .mlld/box/<name>/
 
 Examples:
   mlld module app myapp              Create app in ./myapp/
   mlld module library utils          Create library in ./utils/
   mlld module command review         Create command in .claude/commands/review/
   mlld module skill helper           Create skill in .claude/skills/helper/
-  mlld module environment myenv      Create environment in .mlld/env/myenv/
+  mlld module environment myenv      Create environment in .mlld/box/myenv/
   mlld module app myapp --global     Create in ~/.mlld/run/myapp/
 
 Single-file modules (legacy):

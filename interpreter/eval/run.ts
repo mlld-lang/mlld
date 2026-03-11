@@ -20,6 +20,7 @@ import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { executeRunCommand } from './run-modules/run-command-executor';
 import { executeRunCode } from './run-modules/run-code-executor';
 import { resolveRunExecutableReference } from './run-modules/run-exec-resolver';
+import { resolveAnyStreamFlag, resolveStreamFlag } from './stream-flag';
 import {
   dispatchRunExecutableDefinition,
   extractRunExecArguments
@@ -112,7 +113,7 @@ export async function evaluateRun(
 
   let streamingOptions = env.getStreamingOptions();
   let activeStreamingOptions = streamingOptions;
-  let streamingRequested = Boolean(withClause && (withClause as any).stream);
+  let streamingRequested = await resolveStreamFlag((withClause as any)?.stream, env);
   let streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
   const pipelineId = `run-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
 
@@ -128,11 +129,14 @@ export async function evaluateRun(
     streamingOptions = env.getStreamingOptions();
     activeStreamingOptions = streamingOptions;
   };
-  const definitionRequestsStreaming = (definition: any): boolean => {
-    return (
-      definition?.withClause?.stream === true ||
-      definition?.meta?.withClause?.stream === true ||
-      definition?.meta?.isStream === true
+  const definitionRequestsStreaming = async (definition: any): Promise<boolean> => {
+    return resolveAnyStreamFlag(
+      [
+        definition?.withClause?.stream,
+        definition?.meta?.withClause?.stream,
+        definition?.meta?.isStream
+      ],
+      env
     );
   };
   const definitionHasStreamFormat = (definition: any): boolean => {
@@ -282,7 +286,7 @@ export async function evaluateRun(
     callStack = runExecResolution.callStack;
     const { execVar, definition } = runExecResolution;
 
-    const definitionWantsStreaming = definitionRequestsStreaming(definition);
+    const definitionWantsStreaming = await definitionRequestsStreaming(definition);
     const definitionWantsStreamFormat = definitionHasStreamFormat(definition);
     streamingRequested = streamingRequested || definitionWantsStreaming;
     hasStreamFormat = hasStreamFormat || definitionWantsStreamFormat;

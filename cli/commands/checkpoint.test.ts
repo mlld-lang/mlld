@@ -97,4 +97,15 @@ describe('checkpoint command', () => {
 
     await expect(readFile(path.join(scriptDir, 'manifest.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
+
+  it('cleans cache directory when given a script file path', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'mlld-checkpoint-clean-path-'));
+    cleanupDirs.push(root);
+    const { scriptDir } = await createCheckpointFixture(root, 'qa-claude-v3');
+
+    const command = createCheckpointCommand();
+    await command.execute(['clean', 'tmp/qa-claude-v3.mld.md'], { 'base-path': root });
+
+    await expect(readFile(path.join(scriptDir, 'manifest.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
 });

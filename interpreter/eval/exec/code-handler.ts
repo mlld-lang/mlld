@@ -87,6 +87,10 @@ export async function executeCodeExecutable(
   let execEnv = options.execEnv;
   let result: unknown;
 
+  if (exeLabels.length > 0) {
+    execEnv.setExeLabels(exeLabels);
+  }
+
   if (definition.language === 'mlld-when') {
     const activeWhenExpr = whenExprNode;
     if (!activeWhenExpr) {
@@ -144,18 +148,18 @@ export async function executeCodeExecutable(
     const blockResult = await evaluateExeBlock(blockNode, execEnv);
     result = blockResult.value;
     execEnv = blockResult.env;
-  } else if (definition.language === 'mlld-env') {
+  } else if (definition.language === 'mlld-box') {
     const envDirectiveNode = Array.isArray(definition.codeTemplate)
       ? (definition.codeTemplate[0] as any)
       : undefined;
-    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'env') {
-      throw new MlldInterpreterError('mlld-env executable missing env directive');
+    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'box') {
+      throw new MlldInterpreterError('mlld-box executable missing box directive');
     }
 
-    const { evaluateEnv } = await import('@interpreter/eval/env');
-    const envResult = await evaluateEnv(envDirectiveNode, execEnv);
-    result = envResult.value;
-    execEnv = envResult.env;
+    const { evaluateBox } = await import('@interpreter/eval/box');
+    const boxResult = await evaluateBox(envDirectiveNode, execEnv);
+    result = boxResult.value;
+    execEnv = boxResult.env;
   } else {
     let code: string;
     if (definition.language === 'bash' || definition.language === 'sh') {
@@ -442,7 +446,8 @@ export async function executeCodeExecutable(
           isRetryable: false,
           identifier: commandName,
           location: node.location,
-          descriptorHint: services.getResultSecurityDescriptor()
+          descriptorHint: services.getResultSecurityDescriptor(),
+          exeLabels
         });
       } else {
         const withClauseResult = await applyWithClause(result, definition.withClause, execEnv);

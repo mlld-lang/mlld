@@ -285,6 +285,7 @@ export function isTemplateValue(value: unknown): value is ContentNodeArray {
     'type' in node &&
     (node.type === 'Text' ||
       node.type === 'VariableReference' ||
+      node.type === 'EscapedAngleBracketExpression' ||
       node.type === 'ConditionalTemplateSnippet' ||
       node.type === 'ConditionalStringFragment' ||
       node.type === 'ConditionalVarOmission' ||

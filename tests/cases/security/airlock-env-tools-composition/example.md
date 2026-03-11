@@ -21,7 +21,7 @@
   * => `closed with: @data`
 ]
 
-/exe llm @airlockCompAgent(tools, task) = env with { tools: @tools } [
+/exe llm @airlockCompAgent(tools, task) = box with { tools: @tools } [
   let @results = @airlockCompSearch(@task)
   => @results
 ]

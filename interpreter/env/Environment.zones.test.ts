@@ -2,9 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { Environment } from './Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { VirtualFS } from '@services/fs/VirtualFS';
+import type { WorkspaceValue } from '@core/types/workspace';
 
 function createEnvironment(basePath: string = '/tmp/mlld-zones'): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), basePath);
+}
+
+function createWorkspace(): WorkspaceValue {
+  return {
+    type: 'workspace',
+    fs: VirtualFS.empty(),
+    descriptions: new Map<string, string>()
+  };
 }
 
 describe('Environment zones coverage', () => {
@@ -158,5 +168,61 @@ describe('Environment zones coverage', () => {
     (legacy as any).pathContext = undefined;
     expect((legacy as any).resolveChildContext('/tmp/mlld-zones/legacy-child')).toBe('/tmp/mlld-zones/legacy-child');
     expect((legacy as any).resolveChildContext()).toBe('/tmp/mlld-zones/legacy');
+  });
+
+  it('manages workspace stack and copies it for child environments', () => {
+    const parent = createEnvironment('/tmp/mlld-zones/root');
+    const outer = createWorkspace();
+    const inner = createWorkspace();
+
+    expect(parent.getActiveWorkspace()).toBeUndefined();
+
+    parent.pushActiveWorkspace(outer);
+    expect(parent.getActiveWorkspace()).toBe(outer);
+
+    const child = parent.createChild('/tmp/mlld-zones/child');
+    expect(child.getActiveWorkspace()).toBe(outer);
+
+    child.pushActiveWorkspace(inner);
+    expect(child.getActiveWorkspace()).toBe(inner);
+    expect(parent.getActiveWorkspace()).toBe(outer);
+
+    expect(child.popActiveWorkspace()).toBe(inner);
+    expect(child.getActiveWorkspace()).toBe(outer);
+    expect(parent.popActiveWorkspace()).toBe(outer);
+    expect(parent.getActiveWorkspace()).toBeUndefined();
+  });
+
+  it('creates a workspace ShellSession lazily and routes commands through it', async () => {
+    const env = createEnvironment('/tmp/mlld-zones/root');
+    const workspace = createWorkspace();
+
+    expect(workspace.shellSession).toBeUndefined();
+    env.pushActiveWorkspace(workspace);
+
+    const output = await env.executeCommand('echo "workspace-ok"');
+    expect(output).toBe('workspace-ok');
+    expect(workspace.shellSession).toBeDefined();
+
+    await env.executeCommand('echo "created by shell" > /tmp/workspace.txt');
+    expect(await workspace.fs.readFile('/tmp/workspace.txt')).toContain('created by shell');
+  });
+
+  it('switches active shell routing when workspace nesting changes', async () => {
+    const env = createEnvironment('/tmp/mlld-zones/root');
+    const outer = createWorkspace();
+    const inner = createWorkspace();
+
+    await outer.fs.writeFile('/tmp/name.txt', 'outer');
+    await inner.fs.writeFile('/tmp/name.txt', 'inner');
+
+    env.pushActiveWorkspace(outer);
+    expect(await env.executeCommand('cat /tmp/name.txt')).toBe('outer');
+
+    env.pushActiveWorkspace(inner);
+    expect(await env.executeCommand('cat /tmp/name.txt')).toBe('inner');
+
+    env.popActiveWorkspace();
+    expect(await env.executeCommand('cat /tmp/name.txt')).toBe('outer');
   });
 });

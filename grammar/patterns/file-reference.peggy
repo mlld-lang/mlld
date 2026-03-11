@@ -18,6 +18,45 @@ Files without extensions can still be used outside interpolation contexts
 */
 
 // Main file reference pattern for interpolation contexts
+EscapedAngleBracketExpression "escaped angle bracket expression"
+  = "<<" parts:EscapedAngleBracketContentPart* ">>" {
+      return helpers.createEscapedAngleBracketNode(parts, location());
+    }
+
+EscapedAngleBracketContentPart "escaped angle bracket content part"
+  = NullCoalescingTight
+  / ConditionalVariableOmission
+  / ExecResultMethodCall
+  / FieldAccessExec
+  / UnifiedExecInvocation
+  / FileReferenceInterpolation
+  / TemplateVariableReference
+  / UnifiedReferenceNoTail
+  / "@@" {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "\\@" {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "@" !BaseIdentifier char:. {
+      return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
+    }
+  / "@" !BaseIdentifier {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / EscapedAngleBracketTextSegment
+
+EscapedAngleBracketTextSegment "escaped angle bracket text segment"
+  = chars:EscapedAngleBracketChar+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
+    }
+
+EscapedAngleBracketChar "escaped angle bracket character"
+  = StringEscapeSequence
+  / EscapeSequence
+  / !(">>" / "@") char:. { return char; }
+
+// Main file reference pattern for interpolation contexts
 FileReferenceInterpolation "file reference interpolation"
   = "<" &{
       // Semantic lookahead: validate BEFORE attempting to parse content
@@ -159,7 +198,8 @@ FileFieldChain "field chain"
 
 // Unified angle bracket handler - determines file reference vs literal text
 UnifiedAngleBracketContent "Unified angle bracket content"
-  = FileReferenceInterpolation  // Try file reference first (with semantic lookahead)
+  = EscapedAngleBracketExpression
+  / FileReferenceInterpolation  // Try file reference first (with semantic lookahead)
   / AngleBracketLiteral         // Fallback to literal text
 
 // Literal angle brackets when not a file reference

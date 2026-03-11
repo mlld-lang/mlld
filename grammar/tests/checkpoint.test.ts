@@ -119,4 +119,40 @@ describe('Checkpoint directive', () => {
   it('rejects missing checkpoint name', () => {
     expect(() => parseSync('/checkpoint', { mode: 'strict' })).toThrow();
   });
+
+  it('parses checkpoint config with resume, ttl, and complete fields', () => {
+    const ast = parseSync(
+      'checkpoint "phase-1" with { resume: auto, ttl: 1h, complete: @done }',
+      { mode: 'strict' }
+    );
+    const node = ast[0] as DirectiveNode;
+    const withClause = node.values.withClause as Record<string, unknown>;
+
+    expect(node.kind).toBe('checkpoint');
+    expect(withClause.resume).toBe('auto');
+    expect((withClause.ttl as { type?: string }).type).toBe('TimeDuration');
+    expect((withClause.complete as { type?: string }).type).toBe('VariableReference');
+  });
+
+  it('accepts a leading script resume header in strict mode', () => {
+    const ast = parseSync(
+      'resume: auto\n\ncheckpoint "strict-stage"',
+      { mode: 'strict' }
+    );
+    const node = ast[0] as DirectiveNode;
+
+    expect(node.kind).toBe('checkpoint');
+    expect(readLiteralCheckpointName(node)).toBe('strict-stage');
+  });
+
+  it('accepts a leading quoted script resume header in markdown mode', () => {
+    const ast = parseSync(
+      'resume: "manual"\n\n/checkpoint "doc-stage"',
+      { mode: 'markdown' }
+    );
+    const node = ast[0] as DirectiveNode;
+
+    expect(node.kind).toBe('checkpoint');
+    expect(readLiteralCheckpointName(node)).toBe('doc-stage');
+  });
 });

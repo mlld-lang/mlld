@@ -299,7 +299,7 @@ export { * }
 ```mlld
 policy @p = {
   auth: {
-    claude: { from: "keychain:mlld-env-{projectname}/claude-dev", as: "ANTHROPIC_API_KEY" }
+    claude: { from: "keychain:mlld-box-{projectname}/claude-dev", as: "ANTHROPIC_API_KEY" }
   }
 }
 

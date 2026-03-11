@@ -8,7 +8,7 @@ import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { HookableNode } from '@core/types/hooks';
 import type { HookDecision } from '../../hooks/HookManager';
 import type { OperationContext } from '../../env/ContextManager';
-import { resolveWorkingDirectory } from '../../utils/working-directory';
+import { executeInWorkingDirectory } from '../../utils/working-directory';
 import { bindPipelineParameters } from './command-execution/bind-pipeline-params';
 import { resolvePipelineCommandReference } from './command-execution/resolve-command-reference';
 import { normalizeExecutableDescriptor } from './command-execution/normalize-executable';
@@ -152,96 +152,98 @@ export async function executeCommandVariable(
   if (guardPreflightResult.hasFallbackResult) {
     return finalizeResult(guardPreflightResult.fallbackValue ?? '');
   }
-  // Execute based on type
-  let workingDirectory: string | undefined;
-  if (execDef?.workingDir) {
-    workingDirectory = await resolveWorkingDirectory(execDef.workingDir as any, execEnv, {
+  return executeInWorkingDirectory(
+    execDef?.workingDir as any,
+    execEnv,
+    async workingDirectory => {
+      const executionContext = hookOptions?.executionContext
+        ? { ...hookOptions?.executionContext, workingDirectory: workingDirectory ?? hookOptions.executionContext?.workingDirectory }
+        : (workingDirectory ? { workingDirectory } : hookOptions?.executionContext);
+
+      if (execDef.type === 'command' && execDef.commandTemplate) {
+        const commandBranchResult = await executeCommandHandler({
+          env,
+          execEnv,
+          execDef,
+          commandVar,
+          stdinInput,
+          workingDirectory,
+          executionContext,
+          preDecision,
+          outputPolicyDescriptor,
+          policyLocation: operationContext?.location ?? hookOptions?.executionContext?.sourceLocation,
+          finalizeResult
+        });
+        return commandBranchResult.value as CommandExecutionResult;
+      } else if (execDef.type === 'code' && execDef.codeTemplate) {
+        const codeResult = await executeCodeHandler({
+          env,
+          execEnv,
+          execDef,
+          stdinInput,
+          workingDirectory,
+          executionContext,
+          pipelineCtx,
+          format,
+          stageLanguage,
+          finalizeResult
+        });
+        return codeResult as CommandExecutionResult;
+      } else if (execDef.type === 'nodeFunction' || execDef.type === 'nodeClass') {
+        const nodeResult = await executeNodeHandler({
+          execDef,
+          execEnv,
+          commandVar,
+          args,
+          boundArgs,
+          baseParamNames,
+          pipelineCtx,
+          stdinInput,
+          structuredInput,
+          errorLocation: hookOptions?.executionContext?.sourceLocation ?? commandVar?.mx?.definedAt,
+          finalizeResult
+        });
+        return nodeResult as CommandExecutionResult;
+      } else if (execDef.type === 'template' && execDef.template) {
+        const templateResult = await executeTemplateHandler({
+          execEnv,
+          execDef
+        });
+        return templateResult as CommandExecutionResult;
+      } else if (execDef.type === 'commandRef') {
+        const commandRefResult = await executeCommandRefHandler({
+          env,
+          execEnv,
+          execDef,
+          stdinInput,
+          structuredInput,
+          hookOptions,
+          finalizeResult,
+          executeCommandVariable: (
+            nextCommandVar,
+            nextArgs,
+            nextEnv,
+            nextStdinInput,
+            nextStructuredInput,
+            nextHookOptions
+          ) =>
+            executeCommandVariable(
+              nextCommandVar,
+              nextArgs,
+              nextEnv,
+              nextStdinInput,
+              nextStructuredInput,
+              nextHookOptions as CommandExecutionHookOptions | undefined
+            )
+        });
+        return commandRefResult as CommandExecutionResult;
+      }
+
+      throw new Error(`Unsupported executable type in pipeline: ${execDef.type}`);
+    },
+    {
       sourceLocation: commandVar?.mx?.definedAt,
       directiveType: hookOptions?.executionContext?.directiveType || 'exec'
-    });
-  }
-  const executionContext = hookOptions?.executionContext
-    ? { ...hookOptions?.executionContext, workingDirectory: workingDirectory ?? hookOptions.executionContext?.workingDirectory }
-    : (workingDirectory ? { workingDirectory } : hookOptions?.executionContext);
-
-  if (execDef.type === 'command' && execDef.commandTemplate) {
-    const commandBranchResult = await executeCommandHandler({
-      env,
-      execEnv,
-      execDef,
-      commandVar,
-      stdinInput,
-      workingDirectory,
-      executionContext,
-      preDecision,
-      outputPolicyDescriptor,
-      policyLocation: operationContext?.location ?? hookOptions?.executionContext?.sourceLocation,
-      finalizeResult
-    });
-    return commandBranchResult.value as CommandExecutionResult;
-  } else if (execDef.type === 'code' && execDef.codeTemplate) {
-    const codeResult = await executeCodeHandler({
-      env,
-      execEnv,
-      execDef,
-      stdinInput,
-      workingDirectory,
-      executionContext,
-      pipelineCtx,
-      format,
-      stageLanguage,
-      finalizeResult
-    });
-    return codeResult as CommandExecutionResult;
-  } else if (execDef.type === 'nodeFunction' || execDef.type === 'nodeClass') {
-    const nodeResult = await executeNodeHandler({
-      execDef,
-      execEnv,
-      commandVar,
-      args,
-      boundArgs,
-      baseParamNames,
-      pipelineCtx,
-      stdinInput,
-      structuredInput,
-      errorLocation: hookOptions?.executionContext?.sourceLocation ?? commandVar?.mx?.definedAt,
-      finalizeResult
-    });
-    return nodeResult as CommandExecutionResult;
-  } else if (execDef.type === 'template' && execDef.template) {
-    const templateResult = await executeTemplateHandler({
-      execEnv,
-      execDef
-    });
-    return templateResult as CommandExecutionResult;
-  } else if (execDef.type === 'commandRef') {
-    const commandRefResult = await executeCommandRefHandler({
-      env,
-      execEnv,
-      execDef,
-      stdinInput,
-      structuredInput,
-      hookOptions,
-      finalizeResult,
-      executeCommandVariable: (
-        nextCommandVar,
-        nextArgs,
-        nextEnv,
-        nextStdinInput,
-        nextStructuredInput,
-        nextHookOptions
-      ) =>
-        executeCommandVariable(
-          nextCommandVar,
-          nextArgs,
-          nextEnv,
-          nextStdinInput,
-          nextStructuredInput,
-          nextHookOptions as CommandExecutionHookOptions | undefined
-        )
-    });
-    return commandRefResult as CommandExecutionResult;
-  }
-  
-  throw new Error(`Unsupported executable type in pipeline: ${execDef.type}`);
+    }
+  );
 }

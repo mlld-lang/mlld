@@ -3,6 +3,7 @@ import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { Variable } from '@core/types/variable';
 import type { SecurityDescriptor } from '@core/types/security';
+import type { WorkspaceMcpBridgeHandle } from '@core/types/workspace';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { SecurityManager } from '@security';
@@ -72,8 +73,10 @@ export interface VariableManagerDependencyContext {
   getExecutionDirectory(): string;
   getPipelineContext(): PipelineContextSnapshot | undefined;
   getSecuritySnapshot(): SecuritySnapshotLike | undefined;
+  getActiveBridge?(): WorkspaceMcpBridgeHandle | undefined;
   recordSecurityDescriptor(descriptor: SecurityDescriptor | undefined): void;
   getContextManager(): ContextManager | undefined;
+  getLlmToolConfig?(): import('../executors/call-mcp-config').CallMcpConfig | null | undefined;
 }
 
 export interface ImportResolverDependencyContext {
@@ -263,8 +266,10 @@ export function buildVariableManagerDependencies(
     getExecutionDirectory: context.getExecutionDirectory,
     getPipelineContext: context.getPipelineContext,
     getSecuritySnapshot: context.getSecuritySnapshot,
+    getActiveBridge: context.getActiveBridge,
     recordSecurityDescriptor: context.recordSecurityDescriptor,
-    getContextManager: context.getContextManager
+    getContextManager: context.getContextManager,
+    getLlmToolConfig: context.getLlmToolConfig
   };
 }
 

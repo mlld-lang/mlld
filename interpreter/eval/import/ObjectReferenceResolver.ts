@@ -3,7 +3,8 @@ import { logger } from '@core/utils/logger';
 import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
 import {
   getCapturedModuleEnv,
-  sealCapturedModuleEnv
+  sealCapturedModuleEnv,
+  stashCapturedModuleEnv
 } from './variable-importer/executable/CapturedModuleEnvKeychain';
 
 /**
@@ -154,6 +155,7 @@ export class ObjectReferenceResolver {
         mx: serializedCtx,
         internal: serializedInternal
       };
+      stashCapturedModuleEnv(result, getCapturedModuleEnv(serializedInternal));
       return result;
     } else {
       // For all other variable types (including arrays), return the value directly

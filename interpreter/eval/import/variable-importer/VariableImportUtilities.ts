@@ -169,7 +169,7 @@ export class VariableImportUtilities {
     }
 
     if (value.__executable) {
-      return true;
+      return false;
     }
 
     if (Array.isArray(value)) {

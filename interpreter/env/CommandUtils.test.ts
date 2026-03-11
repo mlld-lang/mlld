@@ -40,4 +40,25 @@ describe('CommandUtils guidance messages', () => {
     expect(message).toContain('exe @fn(path) = sh');
     expect(message).not.toContain('sh(@myVar)');
   });
+
+  it('allows inline quoted arguments in cmd commands', () => {
+    expect(
+      CommandUtils.validateAndParseCommand('claude -p --mcp-config "/tmp/a b"')
+    ).toBe('claude -p --mcp-config "/tmp/a b"');
+  });
+
+  it('rejects escaped quoted fragments that shell would split apart', () => {
+    expect(() =>
+      CommandUtils.validateAndParseCommand('claude -p --mcp-config \\"/tmp/a b\\"')
+    ).toThrow();
+  });
+
+  it('ignores non-AST command templates when collecting fragment warnings', () => {
+    expect(
+      CommandUtils.collectUnsafeInterpolatedFragmentWarnings(undefined, () => undefined)
+    ).toEqual([]);
+    expect(
+      CommandUtils.collectUnsafeInterpolatedFragmentWarnings('printf hello', () => undefined)
+    ).toEqual([]);
+  });
 });

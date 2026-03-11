@@ -353,12 +353,14 @@ In production use, mlld normalizes markdown output by default. Users can disable
 ### Environment Setup
 
 Each test gets a clean environment with:
-- Virtual file system (`MemoryFileSystem`)
+- Virtual file system (`MemoryFileSystem`, implemented as a compatibility wrapper over `VirtualFS.empty()`)
 - Path service for file resolution
 - Shared test files copied from `tests/cases/files/`
 - Example-specific files as needed
 - Markdown formatter disabled for exact output matching
 - Blank line normalization enabled (can be tested separately)
+
+`MemoryFileSystem` remains the test-facing API for compatibility, but VirtualFS now owns the underlying read/write/delete semantics. This keeps fixture harness behavior stable while aligning test/runtime filesystem behavior.
 
 ## Examples Integration
 

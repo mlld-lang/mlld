@@ -1,0 +1,1 @@
+Circular reference detected: executable '@helper' calls itself recursively

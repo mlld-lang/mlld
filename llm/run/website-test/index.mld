@@ -1,0 +1,61 @@
+import { @claudePoll } from @mlld/claude-poll
+
+var @outDir = `@base/llm/output/website-test`
+var @_mkdir = cmd { mkdir -p @outDir }
+
+>> Helpers
+exe @atomic(task)            = js { return { ...task, kind: "atomic" } }
+exe @compound(task, planned) = js { return { ...task, kind: "compound", subtasks: planned } }
+exe @slug(goal) = js { return String(goal).replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40) }
+exe @nextDepth(n) = js { return n + 1 }
+exe @getLeaves(node) = js {
+  function leaves(n) {
+    if (n.kind === "atomic") return [n];
+    if (!n.subtasks || !n.subtasks.length) return [n];
+    return n.subtasks.flatMap(leaves);
+  }
+  return leaves(node);
+}
+
+>> LLM calls
+exe llm @classify(task) = [
+  let @id      = @slug(@task.goal)
+  let @outPath = `@outDir/classify-@id\.json`
+  let @prompt  = `Is this task atomic (completable in one focused step) or compound (must be broken into subtasks)?
+Task: @task.goal
+
+Return JSON only — no markdown, no explanation:
+{ "kind": "atomic" | "compound" }
+
+Write your response to @outPath using the Write tool.`
+  let @_poll = @claudePoll(@prompt, "sonnet", "@base", "Write", @outPath)
+  => <@outPath>? | @json
+]
+
+exe llm @subtasks(task) = [
+  let @id      = @slug(@task.goal)
+  let @nd      = @nextDepth(@task.depth)
+  let @outPath = `@outDir/subtasks-@id\.json`
+  let @prompt  = `Break this task into 2-3 concrete, independent subtasks.
+Task: @task.goal
+
+Return JSON only — no markdown, no explanation:
+[{ "goal": "...", "depth": @nd }]
+
+Write your response to @outPath using the Write tool.`
+  let @_poll = @claudePoll(@prompt, "sonnet", "@base", "Write", @outPath)
+  => <@outPath>? | @json
+]
+
+exe llm,recursive @plan(task) = [
+  when @task.depth >= 3    => @atomic(@task)
+  let @kind = @classify(@task)
+  when @kind.kind == "atomic" => @atomic(@task)
+  let @sub     = @subtasks(@task)
+  let @planned = for parallel(5) @s in @sub => @plan(@s)
+  => @compound(@task, @planned)
+]
+
+var @tree   = @plan({ goal: "Build OAuth login flow", depth: 0 })
+var @leaves = @getLeaves(@tree)
+show @leaves

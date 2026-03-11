@@ -117,6 +117,51 @@ describe('guard block/action evaluator integration slices', () => {
     expect(asVariableText(transformedInputs?.[0])).toBe('echo cleaned');
   });
 
+  it('emits guard policy fragments from env actions', async () => {
+    const env = createEnv();
+    const directives = parseSync(`
+/var @envConfig = { tools: ["Read", "Write"] }
+/var @policyFragment = { env: { tools: { allow: ["Read"] } } }
+/var @guardDecision = { env: @envConfig, policy: @policyFragment }
+/guard @pickEnv for op:run = when [
+  * => env @guardDecision
+]
+    `).filter(isDirectiveNode) as DirectiveNode[];
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    const runDirective = parseSync('/run {echo raw-secret}')[0] as DirectiveNode;
+    const inputVariable = createSecretInput('input', 'echo raw-secret');
+    const operation: OperationContext = {
+      type: 'run',
+      subtype: 'runCommand',
+      opLabels: ['op:cmd'],
+      metadata: { runSubtype: 'runCommand' }
+    };
+
+    const decision = await guardPreHook(runDirective, [inputVariable], env, operation);
+    expect(decision.action).toBe('continue');
+    expect(decision.metadata?.envConfig).toEqual({ tools: ['Read', 'Write'] });
+    expect(decision.metadata?.policyFragment).toMatchObject({
+      env: {
+        tools: {
+          allow: ['Read']
+        }
+      }
+    });
+    const guardResults = decision.metadata?.guardResults as Array<{ decision: string; policyFragment?: unknown }> | undefined;
+    expect(guardResults?.[0]?.decision).toBe('env');
+    expect(guardResults?.[0]?.policyFragment).toMatchObject({
+      env: {
+        tools: {
+          allow: ['Read']
+        }
+      }
+    });
+  });
+
   it('keeps let and augmented replacement flows aligned on downstream value', async () => {
     const letEnv = createEnv();
     const letEffects = letEnv.getEffectHandler() as TestEffectHandler;

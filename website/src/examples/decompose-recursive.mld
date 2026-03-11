@@ -1,0 +1,20 @@
+exe llm @classify(task) = cmd {
+  claude -p "One focused step, or needs subtasks? @task.goal
+  JSON: { kind }"
+}
+exe llm @subtasks(task) = cmd {
+  claude -p "Break into 2-4 subtasks: @task.goal
+  JSON: [{ goal, depth }]"
+}
+
+exe llm,recursive @plan(task) = [
+  when @task.depth >= 4    => @atomic(@task)
+  let @kind = @classify(@task)
+  when @kind.kind == "atomic" => @atomic(@task)
+  let @sub     = @subtasks(@task)
+  let @planned = for parallel(5) @s in @sub => @plan(@s)
+  => @compound(@task, @planned)
+]
+
+var @tree = @plan({ goal: "Build OAuth login", depth: 0 })
+show @tree.leaves

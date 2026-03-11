@@ -1,11 +1,12 @@
 import type { DataLabel } from '@core/types/security';
 import {
-  VariableMetadataUtils,
   type Variable,
   type VariableTypeDiscriminator
-} from '@core/types/variable';
+} from '@core/types/variable/VariableTypes';
 import type { Environment } from '@interpreter/env/Environment';
-import { ImportVariableMetadataBuilder } from './ImportVariableMetadataBuilder';
+import {
+  ImportVariableMetadataBuilder
+} from './ImportVariableMetadataBuilder';
 import { StructuredValueImportStrategy } from './StructuredValueImportStrategy';
 import { ExecutableImportStrategy } from './ExecutableImportStrategy';
 import { TemplateImportStrategy } from './TemplateImportStrategy';
@@ -21,7 +22,9 @@ import type {
 
 export interface ImportVariableFactoryOptions {
   securityLabels?: DataLabel[];
-  serializedMetadata?: ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined;
+  serializedMetadata?: ReturnType<
+    (typeof import('@core/types/variable/VariableMetadata').VariableMetadataUtils)['serializeSecurityMetadata']
+  > | undefined;
   env?: Environment;
 }
 

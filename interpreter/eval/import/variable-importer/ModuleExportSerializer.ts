@@ -3,7 +3,8 @@ import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } fro
 import type { ObjectReferenceResolver } from '../ObjectReferenceResolver';
 import {
   getCapturedModuleEnv,
-  sealCapturedModuleEnv
+  sealCapturedModuleEnv,
+  stashCapturedModuleEnv
 } from './executable/CapturedModuleEnvKeychain';
 import {
   type ExecutableVariable,
@@ -171,12 +172,14 @@ export class ModuleExportSerializer {
       }
     }
 
-    return {
+    const result = {
       __executable: true,
       value: execVar.value,
       executableDef: execVar.internal?.executableDef,
       internal: serializedInternal
     };
+    stashCapturedModuleEnv(result, getCapturedModuleEnv(serializedInternal));
+    return result;
   }
 
   private getEnvironmentDescriptor(childEnv?: Environment): SecurityDescriptor | undefined {

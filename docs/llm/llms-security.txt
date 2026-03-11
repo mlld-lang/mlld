@@ -155,16 +155,16 @@ var @sandbox = {
   mcps: []
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { claude -p "Analyze the codebase" } using auth:claude
 ]
 ```
 
 Environments encapsulate execution contexts. Credentials flow through sealed paths that bypass string interpolation, preventing prompt injection from extracting secrets. The `provider` field adds process isolation via Docker or cloud sandboxes.
 
-> **Note:** Environment providers (`@mlld/env-docker`, `@mlld/env-sprites`) are spec-defined but not yet shipped. `env` blocks currently run with the local provider.
+> **Note:** Environment providers (`@mlld/env-docker`, `@mlld/env-sprites`) are spec-defined but not yet shipped. `box` blocks currently run with the local provider.
 
-See `env-overview` for concepts. See `env-config` for configuration fields. See `policy-auth` for credential flow. See `pattern-audit-guard` and `pattern-dual-audit` for advanced prompt injection defense patterns.
+See `box-overview` for concepts. See `box-config` for configuration fields. See `policy-auth` for credential flow. See `pattern-audit-guard` and `pattern-dual-audit` for advanced prompt injection defense patterns.
 
 ## Which Level Do You Need?
 
@@ -502,6 +502,8 @@ Now `@mcpData` has both `src:mcp` taint AND the `untrusted` label, so built-in r
 
 **Policy denials are hard errors** — the operation fails immediately. Unlike guard denials, they cannot be caught with `denied =>` handlers. Use policy for absolute constraints and guards for cases needing graceful fallback. See `security-denied-handlers` for guard denial handling.
 
+**Environment policy alignment:** `policy.env` constraints (provider allow/deny, tools, mcps, network) are enforced when runtime env config is derived. Guard `env` actions may return a policy fragment, and that fragment is merged into active policy before execution. This lets guards tighten runtime environment constraints without mutating the declared policy source.
+
 See `security-policies` for general policy structure and `labels-source-auto` for source label details.
 
 Guards catch labeled data flowing to MCP calls. A bare label trigger like `for secret` matches both data labels on inputs and operation labels on exes (see `guards-basics`). Since MCP tool calls execute as exe operations, use `@mx.op.type == "exe"` to narrow to MCP/exe context, or guard directly on the tool's operation labels (e.g., `guard before destructive`).
@@ -637,7 +639,7 @@ var @cfg = {
 
 policy @p = { deny: { sh: true } }
 
-env @cfg with { profile: "full" } [
+box @cfg with { profile: "full" } [
   show @mx.profile
 ]
 ```
@@ -658,7 +660,7 @@ var @cfg = {
   }
 }
 
-env @cfg [
+box @cfg [
   show @mx.profile
 ]
 ```
@@ -684,7 +686,7 @@ Use plain `when` checks on capabilities when:
 - You only need a single feature toggle
 - The degradation logic is localized to one spot
 
-See `policy-composition` for how composed policies affect selection, `env-config` for profile-based MCP configuration, `needs-declaration` for hard capability requirements.
+See `policy-composition` for how composed policies affect selection, `box-config` for profile-based MCP configuration, `needs-declaration` for hard capability requirements.
 </PROFILES>
 
 <NEEDS_DECLARATION>
@@ -888,7 +890,7 @@ exe @smartFetch(url) = when [
 Calls are tracked within the current execution context. `env` blocks with tool restrictions get their own scope.
 
 ```mlld
-env @agent with { tools: @agentTools } [
+box @agent with { tools: @agentTools } [
   >> @mx.tools.calls scoped to this env block
   >> only tracks exe invocations the agent makes
   var @result = @fetchData("input")

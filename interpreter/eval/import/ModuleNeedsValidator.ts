@@ -19,7 +19,7 @@ export class ModuleNeedsValidator {
       return;
     }
 
-    const unmet = this.findUnmetNeeds(needs);
+    const unmet = this.findUnmetNeeds(needs, source);
     if (unmet.length === 0) {
       return;
     }
@@ -41,7 +41,7 @@ export class ModuleNeedsValidator {
     });
   }
 
-  findUnmetNeeds(needs: NeedsDeclaration): UnmetNeed[] {
+  findUnmetNeeds(needs: NeedsDeclaration, source?: string): UnmetNeed[] {
     const unmet: UnmetNeed[] = [];
 
     if (needs.sh && !this.isCommandAvailable('sh')) {
@@ -58,7 +58,9 @@ export class ModuleNeedsValidator {
 
     if (needs.packages) {
       const basePath = this.env.getBasePath ? this.env.getBasePath() : process.cwd();
-      const moduleDir = this.env.getCurrentFilePath ? path.dirname(this.env.getCurrentFilePath() ?? basePath) : basePath;
+      const currentFilePath = this.env.getCurrentFilePath ? this.env.getCurrentFilePath() ?? basePath : basePath;
+      const sourcePath = typeof source === 'string' && source.length > 0 ? source : currentFilePath;
+      const moduleDir = path.dirname(sourcePath);
       for (const [ecosystem, packages] of Object.entries(needs.packages)) {
         if (!Array.isArray(packages)) {
           continue;
@@ -130,8 +132,8 @@ export class ModuleNeedsValidator {
 
   private isNodePackageAvailable(name: string, basePath: string): boolean {
     try {
-      const esmRequire = createRequire(import.meta.url);
-      esmRequire.resolve(name, { paths: [basePath] });
+      const requireFromBase = createRequire(path.resolve(basePath, '__mlld_needs__.cjs'));
+      requireFromBase.resolve(name);
       return true;
     } catch {
       return false;

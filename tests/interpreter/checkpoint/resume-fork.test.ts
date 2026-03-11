@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -56,6 +56,32 @@ function buildSingleCallScript(counterKey: string): string {
   return "call:" + globalThis.${counterKey} + ":" + rawPrompt + ":" + rawModel;
 }
 /var @result = @llm("alpha", "sonnet")
+/show @result
+`.trim();
+}
+
+function buildScopedCheckpointScript(
+  counterKey: string,
+  options: {
+    resumeHeader?: 'auto' | 'manual' | 'never';
+    checkpointWithClause?: string;
+    prelude?: string;
+  } = {}
+): string {
+  const header = options.resumeHeader ? `resume: ${options.resumeHeader}\n\n` : '';
+  const prelude = options.prelude ? `${options.prelude.trim()}\n` : '';
+  const checkpointLine = options.checkpointWithClause
+    ? `/checkpoint "phase" with { ${options.checkpointWithClause} }\n`
+    : '';
+
+  return `
+${header}/exe llm @llm(prompt, model) = js {
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  const rawPrompt = prompt && typeof prompt === "object" && "value" in prompt ? prompt.value : prompt;
+  const rawModel = model && typeof model === "object" && "value" in model ? model.value : model;
+  return "call:" + globalThis.${counterKey} + ":" + rawPrompt + ":" + rawModel;
+}
+${prelude}${checkpointLine}/var @result = @llm("alpha", "sonnet")
 /show @result
 `.trim();
 }
@@ -214,6 +240,28 @@ function buildResumeAfterFailureScript(counterKey: string, failFlagKey: string):
 `.trim();
 }
 
+function buildPartialFailureScript(counterKey: string, failFlagKey: string): string {
+  return `
+/exe llm @llm(prompt, model) = js {
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  const rawPrompt = prompt && typeof prompt === "object" && "value" in prompt ? prompt.value : prompt;
+  const rawModel = model && typeof model === "object" && "value" in model ? model.value : model;
+  return "call:" + globalThis.${counterKey} + ":" + rawPrompt + ":" + rawModel;
+}
+/exe @gate() = js {
+  if (globalThis.${failFlagKey}) {
+    throw new Error("forced-failure-mid-run");
+  }
+  return "ok";
+}
+/var @first = @llm("alpha", "sonnet")
+/run @gate()
+/var @second = @llm("beta", "sonnet")
+/show @first
+/show @second
+`.trim();
+}
+
 afterEach(async () => {
   for (const key of cleanupGlobals.splice(0)) {
     delete (globalThis as Record<string, unknown>)[key];
@@ -222,7 +270,7 @@ afterEach(async () => {
 });
 
 describe('checkpoint resume + fork runtime semantics', () => {
-  it('auto-enables checkpointing for llm-labeled calls when --checkpoint is omitted', async () => {
+  it('auto-enables checkpoint persistence for llm-labeled calls when --checkpoint is omitted', async () => {
     const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-auto-enable-'));
     cleanupDirs.push(checkpointRoot);
     const counterKey = '__checkpointAutoEnableCounter';
@@ -240,8 +288,8 @@ describe('checkpoint resume + fork runtime semantics', () => {
       scriptName: 'auto-enable'
     });
 
-    expect(first).toBe(second);
-    expect(readCounter(counterKey)).toBe(1);
+    expect(first).not.toBe(second);
+    expect(readCounter(counterKey)).toBe(2);
   });
 
   it('disables checkpointing when --no-checkpoint is enabled', async () => {
@@ -291,6 +339,181 @@ describe('checkpoint resume + fork runtime semantics', () => {
     expect(readCounter(counterKey)).toBe(1);
   });
 
+  it('auto-resumes by default when the script declares resume: auto', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-script-auto-resume-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointScriptAutoResumeCounter';
+    registerCounter(counterKey);
+
+    const source = buildScopedCheckpointScript(counterKey, {
+      resumeHeader: 'auto'
+    });
+
+    const first = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'script-auto-resume'
+    });
+    const second = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'script-auto-resume'
+    });
+
+    expect(first).toBe(second);
+    expect(readCounter(counterKey)).toBe(1);
+  });
+
+  it('skips checkpoint writes and hits when the script declares resume: never', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-script-never-resume-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointScriptNeverResumeCounter';
+    registerCounter(counterKey);
+
+    const source = buildScopedCheckpointScript(counterKey, {
+      resumeHeader: 'never'
+    });
+
+    const first = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'script-never-resume'
+    });
+    const second = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'script-never-resume'
+    });
+
+    expect(first).not.toBe(second);
+    expect(readCounter(counterKey)).toBe(2);
+
+    const manager = new CheckpointManager('script-never-resume', { cacheRootDir: checkpointRoot });
+    await manager.load();
+    expect(manager.getStats().localCached).toBe(0);
+  });
+
+  it('lets checkpoint resume:auto override a manual script default', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-scope-auto-override-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointScopeAutoOverrideCounter';
+    registerCounter(counterKey);
+
+    const source = buildScopedCheckpointScript(counterKey, {
+      resumeHeader: 'manual',
+      checkpointWithClause: 'resume: auto'
+    });
+
+    const first = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'scope-auto-override'
+    });
+    const second = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'scope-auto-override'
+    });
+
+    expect(first).toBe(second);
+    expect(readCounter(counterKey)).toBe(1);
+  });
+
+  it('expires checkpoint hits when ttl has elapsed', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-ttl-expiry-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointTtlExpiryCounter';
+    registerCounter(counterKey);
+
+    const source = buildScopedCheckpointScript(counterKey, {
+      resumeHeader: 'auto',
+      checkpointWithClause: 'ttl: 1h'
+    });
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-03-05T12:00:00.000Z'));
+      const first = await runScript({
+        source,
+        checkpointRoot,
+        scriptName: 'ttl-expiry'
+      });
+
+      vi.setSystemTime(new Date('2026-03-05T12:30:00.000Z'));
+      const withinTtl = await runScript({
+        source,
+        checkpointRoot,
+        scriptName: 'ttl-expiry'
+      });
+
+      vi.setSystemTime(new Date('2026-03-05T13:01:00.000Z'));
+      const expired = await runScript({
+        source,
+        checkpointRoot,
+        scriptName: 'ttl-expiry'
+      });
+
+      expect(first).toBe(withinTtl);
+      expect(expired).not.toBe(withinTtl);
+      expect(readCounter(counterKey)).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('requires a checkpoint scope to record complete=true before serving auto hits', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-complete-gate-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointCompleteGateCounter';
+    const completeFlagKey = '__checkpointCompleteGateFlag';
+    registerCounter(counterKey);
+    cleanupGlobals.push(completeFlagKey);
+    (globalThis as Record<string, unknown>)[completeFlagKey] = false;
+
+    const source = buildScopedCheckpointScript(counterKey, {
+      resumeHeader: 'auto',
+      checkpointWithClause: 'complete: @done',
+      prelude: `
+/exe @readComplete() = js {
+  return Boolean(globalThis.${completeFlagKey});
+}
+/var @done = @readComplete()
+`
+    });
+
+    const first = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'complete-gate'
+    });
+    const second = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'complete-gate'
+    });
+
+    (globalThis as Record<string, unknown>)[completeFlagKey] = true;
+    const third = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'complete-gate'
+    });
+    const fourth = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'complete-gate'
+    });
+
+    expect(first).not.toBe(second);
+    expect(second).not.toBe(third);
+    expect(third).toBe(fourth);
+    expect(readCounter(counterKey)).toBe(3);
+
+    const manager = new CheckpointManager('complete-gate', { cacheRootDir: checkpointRoot });
+    await manager.load();
+    expect(manager.isCheckpointComplete('phase')).toBe(true);
+  });
+
   it('--resume without explicit --checkpoint still enables caching', async () => {
     const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-implies-checkpoint-'));
     cleanupDirs.push(checkpointRoot);
@@ -318,6 +541,46 @@ describe('checkpoint resume + fork runtime semantics', () => {
 
     expect(first).toBe(second);
     expect(readCounter(counterKey)).toBe(1);
+  });
+
+  it('preserves unreached cached entries when a non-resume rerun fails mid-script', async () => {
+    const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-preserve-mid-failure-'));
+    cleanupDirs.push(checkpointRoot);
+    const counterKey = '__checkpointPreserveMidFailureCounter';
+    const failFlagKey = '__checkpointPreserveMidFailureFlag';
+    registerCounter(counterKey);
+    cleanupGlobals.push(failFlagKey);
+    (globalThis as Record<string, unknown>)[failFlagKey] = false;
+
+    const source = buildPartialFailureScript(counterKey, failFlagKey);
+    await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'preserve-mid-failure'
+    });
+    expect(readCounter(counterKey)).toBe(2);
+
+    (globalThis as Record<string, unknown>)[failFlagKey] = true;
+    await expect(
+      runScript({
+        source,
+        checkpointRoot,
+        scriptName: 'preserve-mid-failure'
+      })
+    ).rejects.toThrow('forced-failure-mid-run');
+    expect(readCounter(counterKey)).toBe(3);
+
+    (globalThis as Record<string, unknown>)[failFlagKey] = false;
+    const resumed = await runScript({
+      source,
+      checkpointRoot,
+      scriptName: 'preserve-mid-failure',
+      resume: true
+    });
+
+    expect(readCounter(counterKey)).toBe(3);
+    expect(resumed).toContain('call:3:alpha:sonnet');
+    expect(resumed).toContain('call:2:beta:sonnet');
   });
 
   it('allows --resume "name" for checkpoints declared after a prior failure point', async () => {

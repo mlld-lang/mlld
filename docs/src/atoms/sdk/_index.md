@@ -6,4 +6,4 @@ category: sdk
 updated: 2026-02-25
 ---
 
-The mlld SDK embeds the interpreter in Node.js applications. Four execution modes cover file-based runs, string evaluation, dynamic module injection, and static analysis. State management enables multi-turn workflows. Language SDKs wrap the core for Go, Python, Rust, Ruby, and Elixir.
+The mlld SDK embeds the interpreter in Node.js applications. Four execution modes cover file-based runs, string evaluation, dynamic module injection, and static analysis. State management enables multi-turn workflows. `VirtualFS` adds copy-on-write file overlays for sandboxed and review-first workflows. Language SDKs wrap the core for Go, Python, Rust, Ruby, and Elixir.

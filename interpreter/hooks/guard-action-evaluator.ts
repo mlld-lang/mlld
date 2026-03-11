@@ -1,6 +1,8 @@
 import { astLocationToSourceLocation } from '@core/types';
 import { MlldWhenExpressionError } from '@core/errors';
 import type { GuardActionNode } from '@core/types/guard';
+import type { PolicyConfig } from '@core/policy/union';
+import { normalizePolicyConfig } from '@core/policy/union';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
@@ -30,6 +32,15 @@ export interface BuildDecisionMetadataExtras {
   tries?: GuardAttemptEntry[];
   inputVariable?: Variable;
   contextSnapshot?: GuardContextSnapshot;
+}
+
+export interface GuardEnvActionResolution {
+  envConfig?: unknown;
+  policyFragment?: PolicyConfig;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 export async function evaluateGuardReplacement(
@@ -81,6 +92,14 @@ export async function resolveGuardEnvConfig(
   action: GuardActionNode,
   guardEnv: Environment
 ): Promise<unknown> {
+  const resolved = await resolveGuardEnvDecision(action, guardEnv);
+  return resolved.envConfig;
+}
+
+export async function resolveGuardEnvDecision(
+  action: GuardActionNode,
+  guardEnv: Environment
+): Promise<GuardEnvActionResolution> {
   if (!action.value || action.value.length === 0) {
     const location = astLocationToSourceLocation(action.location, guardEnv.getCurrentFilePath());
     throw new MlldWhenExpressionError(
@@ -97,9 +116,53 @@ export async function resolveGuardEnvConfig(
     value = await extractVariableValue(value as Variable, guardEnv);
   }
   if (isStructuredValue(value)) {
-    return value.data;
+    value = value.data;
   }
-  return value;
+
+  let envConfig: unknown = value;
+  let policyFragment: PolicyConfig | undefined;
+  if (isPlainObject(value) && Object.prototype.hasOwnProperty.call(value, 'policy')) {
+    const rawPolicy = (value as Record<string, unknown>).policy;
+    if (rawPolicy !== undefined && rawPolicy !== null) {
+      if (!isPlainObject(rawPolicy)) {
+        const location = astLocationToSourceLocation(action.location, guardEnv.getCurrentFilePath());
+        throw new MlldWhenExpressionError(
+          'Guard env policy fragment must be an object',
+          location,
+          location?.filePath
+            ? { filePath: location.filePath, sourceContent: guardEnv.getSource(location.filePath) }
+            : undefined,
+          { env: guardEnv }
+        );
+      }
+      policyFragment = normalizePolicyConfig(rawPolicy as PolicyConfig);
+    }
+
+    const explicitEnv = (value as Record<string, unknown>).env;
+    if (explicitEnv !== undefined) {
+      envConfig = explicitEnv;
+    } else {
+      const { policy: _policy, ...rest } = value as Record<string, unknown>;
+      envConfig = Object.keys(rest).length > 0 ? rest : undefined;
+    }
+  }
+
+  if (envConfig === undefined && !policyFragment) {
+    const location = astLocationToSourceLocation(action.location, guardEnv.getCurrentFilePath());
+    throw new MlldWhenExpressionError(
+      'Guard env actions require either env config or policy fragment',
+      location,
+      location?.filePath
+        ? { filePath: location.filePath, sourceContent: guardEnv.getSource(location.filePath) }
+        : undefined,
+      { env: guardEnv }
+    );
+  }
+
+  return {
+    ...(envConfig !== undefined ? { envConfig } : {}),
+    ...(policyFragment ? { policyFragment } : {})
+  };
 }
 
 export function buildDecisionMetadata(

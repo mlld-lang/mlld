@@ -1,99 +1,93 @@
-import type { LockFile, LockEntry, LockFileData } from './LockFile';
+import { LockFile, type LockFileData, type ModuleLockEntry } from './LockFile';
+import { normalizeModuleName } from './utils/moduleNames';
 
 /**
- * No-operation implementation of LockFile for ephemeral/CI environments
- * Does not persist any data - always returns empty/not found
+ * In-memory LockFile implementation for ephemeral/CI environments.
+ * It preserves the current LockFile module API without writing to disk.
  */
-export class NoOpLockFile implements LockFile {
+export class NoOpLockFile extends LockFile {
   private inMemoryLock: LockFileData = {
-    version: '1.0.0',
-    imports: {}
+    lockfileVersion: 1,
+    modules: {},
+    metadata: {
+      createdAt: new Date().toISOString()
+    }
   };
 
   constructor(public readonly path: string) {
-    // Path is stored but never used
+    super(path);
   }
 
-  /**
-   * Always returns empty lock file data
-   */
   async load(): Promise<LockFileData> {
-    return this.inMemoryLock;
+    return {
+      ...this.inMemoryLock,
+      modules: { ...this.inMemoryLock.modules },
+      metadata: this.inMemoryLock.metadata ? { ...this.inMemoryLock.metadata } : undefined
+    };
   }
 
-  /**
-   * No-op - doesn't persist anything
-   */
   async save(): Promise<void> {
-    // Intentionally empty - no persistence
+    // Intentionally empty.
   }
 
-  /**
-   * Adds import to in-memory store only
-   */
-  async addImport(importPath: string, entry: LockEntry): Promise<void> {
-    this.inMemoryLock.imports[importPath] = entry;
+  getModule(moduleName: string): ModuleLockEntry | undefined {
+    return this.inMemoryLock.modules[normalizeModuleName(moduleName)];
   }
 
-  /**
-   * Gets import from in-memory store
-   */
-  async getImport(importPath: string): Promise<LockEntry | undefined> {
-    return this.inMemoryLock.imports[importPath];
+  async addModule(moduleName: string, entry: ModuleLockEntry): Promise<void> {
+    this.inMemoryLock.modules[normalizeModuleName(moduleName)] = { ...entry };
+    this.touchMetadata();
   }
 
-  /**
-   * Removes import from in-memory store
-   */
-  async removeImport(importPath: string): Promise<void> {
-    delete this.inMemoryLock.imports[importPath];
-  }
-
-  /**
-   * Updates import in in-memory store
-   */
-  async updateImport(importPath: string, updates: Partial<LockEntry>): Promise<void> {
-    const existing = this.inMemoryLock.imports[importPath];
-    if (existing) {
-      this.inMemoryLock.imports[importPath] = {
-        ...existing,
-        ...updates
-      };
+  async updateModule(moduleName: string, updates: Partial<ModuleLockEntry>): Promise<void> {
+    const key = normalizeModuleName(moduleName);
+    const existing = this.inMemoryLock.modules[key];
+    if (!existing) {
+      return;
     }
+
+    this.inMemoryLock.modules[key] = {
+      ...existing,
+      ...updates
+    };
+    this.touchMetadata();
   }
 
-  /**
-   * Check if import exists in in-memory store
-   */
-  async hasImport(importPath: string): Promise<boolean> {
-    return importPath in this.inMemoryLock.imports;
+  async removeModule(moduleName: string): Promise<void> {
+    delete this.inMemoryLock.modules[normalizeModuleName(moduleName)];
+    this.touchMetadata();
   }
 
-  /**
-   * List all imports from in-memory store
-   */
-  async listImports(): Promise<string[]> {
-    return Object.keys(this.inMemoryLock.imports);
+  getAllModules(): Record<string, ModuleLockEntry> {
+    return { ...this.inMemoryLock.modules };
   }
 
-  /**
-   * Clear all imports from in-memory store
-   */
+  getModuleEntries(): Array<{ moduleName: string; entry: ModuleLockEntry }> {
+    return Object.entries(this.inMemoryLock.modules).map(([moduleName, entry]) => ({
+      moduleName,
+      entry: { ...entry }
+    }));
+  }
+
   async clear(): Promise<void> {
-    this.inMemoryLock.imports = {};
+    this.inMemoryLock.modules = {};
+    this.touchMetadata();
   }
 
-  /**
-   * Always returns false - no file exists
-   */
   async exists(): Promise<boolean> {
     return false;
   }
 
-  /**
-   * Get lock file data (in-memory only)
-   */
   getData(): LockFileData {
-    return this.inMemoryLock;
+    return {
+      ...this.inMemoryLock,
+      modules: { ...this.inMemoryLock.modules },
+      metadata: this.inMemoryLock.metadata ? { ...this.inMemoryLock.metadata } : undefined
+    };
+  }
+
+  private touchMetadata(): void {
+    const metadata = this.inMemoryLock.metadata ?? (this.inMemoryLock.metadata = {});
+    metadata.updatedAt = new Date().toISOString();
   }
 }

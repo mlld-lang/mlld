@@ -27,6 +27,17 @@ export { ExecutionEmitter } from './execution-emitter';
 export { StreamExecution } from './stream-execution';
 export { execute, TimeoutError, MemoryAstCache } from './execute';
 export { ExecuteError, type ExecuteErrorCode } from './types';
+export { NodeFileSystem } from '@services/fs/NodeFileSystem';
+export type { IFileSystemService } from '@services/fs/IFileSystemService';
+export {
+  VirtualFS,
+  type VirtualFSChange,
+  type VirtualFSChangeType,
+  type VirtualFSChangeEntity,
+  type VirtualFSPatch,
+  type VirtualFSPatchEntry,
+  type VirtualFSPatchOperation
+} from '@services/fs/VirtualFS';
 
 // Export static analysis
 export { analyzeModule } from './analyze';

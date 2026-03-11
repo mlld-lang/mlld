@@ -56,4 +56,33 @@ describe('ShellCommandExecutor – E2BIG safeguards', () => {
       executor.execute(`echo "${pad}" "$IGNORED"`, { env: { IGNORED: envVal } })
     ).rejects.toBeInstanceOf(MlldCommandExecutionError);
   });
+
+  it('executes quoted commands via direct argv spawn', async () => {
+    const output = await executor.execute(
+      `node -e "process.stdout.write(process.argv[1])" "hello world"`,
+      undefined,
+      { exeLabels: ['llm'] }
+    );
+
+    expect(output).toBe('hello world');
+  });
+
+  it('writes stdin directly when using argv spawn', async () => {
+    const output = await executor.execute(
+      `node -e "process.stdin.setEncoding('utf8'); let data=''; process.stdin.on('data', chunk => data += chunk); process.stdin.on('end', () => process.stdout.write(data));"`,
+      { input: 'ping' },
+      { exeLabels: ['llm'] }
+    );
+
+    expect(output).toBe('ping');
+  });
+
+  it('preserves shell semantics for non-llm commands', async () => {
+    const output = await executor.execute(
+      `printf "%s" "$CUSTOM_VALUE"`,
+      { env: { CUSTOM_VALUE: 'hello-shell' } }
+    );
+
+    expect(output).toBe('hello-shell');
+  });
 });

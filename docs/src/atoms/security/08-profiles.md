@@ -4,8 +4,8 @@ title: Profiles
 brief: Tiered capability bundles for graceful degradation
 category: security
 tags: [profiles, capabilities, degradation, policy, needs, environments]
-related: [policy-composition, env-config, env-blocks, policy-capabilities, security-needs-declaration]
-related-code: [interpreter/eval/profiles.ts, core/policy/needs.ts, interpreter/eval/env.ts]
+related: [policy-composition, box-config, box-blocks, policy-capabilities, security-needs-declaration]
+related-code: [interpreter/eval/profiles.ts, core/policy/needs.ts, interpreter/eval/box.ts]
 updated: 2026-02-15
 qa_tier: 2
 ---
@@ -89,7 +89,7 @@ var @cfg = {
 
 policy @p = { deny: { sh: true } }
 
-env @cfg with { profile: "full" } [
+box @cfg with { profile: "full" } [
   show @mx.profile
 ]
 ```
@@ -110,7 +110,7 @@ var @cfg = {
   }
 }
 
-env @cfg [
+box @cfg [
   show @mx.profile
 ]
 ```
@@ -136,4 +136,4 @@ Use plain `when` checks on capabilities when:
 - You only need a single feature toggle
 - The degradation logic is localized to one spot
 
-See `policy-composition` for how composed policies affect selection, `env-config` for profile-based MCP configuration, `needs-declaration` for hard capability requirements.
+See `policy-composition` for how composed policies affect selection, `box-config` for profile-based MCP configuration, `needs-declaration` for hard capability requirements.

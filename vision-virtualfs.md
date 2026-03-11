@@ -40,7 +40,7 @@ const env = createEnvironment({ fs: vfs });
 await env.run('/agent/refactor.md');
 
 // Inspect what the agent wants to change
-const changes = vfs.diff();
+const changes = await vfs.changes();
 // [
 //   { path: '/src/api.ts', type: 'modified', additions: 12, deletions: 3 },
 //   { path: '/src/utils/new-helper.ts', type: 'created' },
@@ -54,7 +54,7 @@ const fileDiff = vfs.fileDiff('/src/api.ts');
 // ...
 
 // Apply approved changes to disk
-vfs.flush();
+await vfs.flush();
 ```
 
 ### Selective flush
@@ -62,11 +62,11 @@ vfs.flush();
 Don't flush everything. Review and apply changes one at a time.
 
 ```js
-const changes = vfs.diff();
+const changes = await vfs.changes();
 
 for (const change of changes) {
   if (await reviewApproved(change)) {
-    vfs.flush(change.path);
+    await vfs.flush(change.path);
   } else {
     vfs.discard(change.path);
   }
@@ -99,7 +99,7 @@ vfs.flushUnflagged();
 // Flagged changes wait for review
 for (const item of flagged) {
   if (await humanReview(item)) {
-    vfs.flush(item.path);
+    await vfs.flush(item.path);
   }
 }
 ```
@@ -148,6 +148,8 @@ test('deploy script writes manifest', async () => {
 
 The shadow layer is a changeset. You can diff it, serialize it, or apply it later.
 
+`changes()` is the canonical inspection API; `diff()` remains as a compatibility alias.
+
 ```js
 const vfs = VirtualFS.over('/path/to/project');
 const env = createEnvironment({ fs: vfs });
@@ -161,7 +163,7 @@ const patch = vfs.export();
 // Apply it later, or on a different machine
 const vfs2 = VirtualFS.over('/path/to/project');
 vfs2.apply(patch);
-vfs2.flush();
+await vfs2.flush();
 ```
 
 ## How it fits together

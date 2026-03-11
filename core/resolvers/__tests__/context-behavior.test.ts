@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ResolverManager } from '@core/resolvers/ResolverManager';
 import { NowResolver, DebugResolver, InputResolver } from '@core/resolvers/builtin';
 import { LocalResolver } from '@core/resolvers/LocalResolver';
@@ -293,6 +293,33 @@ describe('Context-Dependent Behavior', () => {
       const result = await resolverManager.resolve('@base/lib.mld', { context: 'import' });
       
       expect(result.content.contentType).toBe('module');
+    });
+
+    it('skips module cache plumbing for variable context lookups', async () => {
+      const lockFile = {
+        getModule: vi.fn(),
+        addModule: vi.fn(),
+        removeModule: vi.fn()
+      };
+      const moduleCache = {
+        get: vi.fn(),
+        store: vi.fn()
+      };
+      const manager = new ResolverManager(undefined, moduleCache as any, lockFile as any);
+      manager.registerResolver(new ProjectPathResolver(fileSystem));
+      manager.configurePrefixes([{
+        prefix: '@base',
+        resolver: 'base',
+        config: { basePath: '/project' }
+      }]);
+
+      const result = await manager.resolve('@base', { context: 'variable' });
+
+      expect(result.content.contentType).toBe('text');
+      expect(result.content.content).toBe('/project');
+      expect(lockFile.getModule).not.toHaveBeenCalled();
+      expect(moduleCache.get).not.toHaveBeenCalled();
+      expect(moduleCache.store).not.toHaveBeenCalled();
     });
   });
 

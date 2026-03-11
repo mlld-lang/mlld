@@ -101,10 +101,10 @@ export function buildControlFlowExecutableDefinition(
     } satisfies CodeExecutable;
   }
 
-  if (directive.subtype === 'exeEnv') {
+  if (directive.subtype === 'exeBox') {
     const blockNode = (directive.values as any)?.block as ExeBlockNode | undefined;
     if (!blockNode || blockNode.type !== 'ExeBlock') {
-      throw new Error('Exec env directive missing env block');
+      throw new Error('Exec box directive missing box block');
     }
 
     const params = directive.values?.params || [];
@@ -112,25 +112,25 @@ export function buildControlFlowExecutableDefinition(
     const envConfig = Array.isArray((directive.values as any)?.config)
       ? ((directive.values as any).config as any[])
       : undefined;
-    const envWithClause = (directive.values as any)?.envWithClause;
+    const boxWithClause = (directive.values as any)?.boxWithClause;
 
     const envDirective = {
       type: 'Directive',
-      kind: 'env',
-      subtype: 'env',
-      source: 'env',
+      kind: 'box',
+      subtype: 'box',
+      source: 'box',
       nodeId: directive.nodeId,
       values: {
         ...(envConfig && envConfig.length > 0 ? { config: envConfig } : {}),
-        ...(envWithClause ? { withClause: envWithClause } : {}),
+        ...(boxWithClause ? { withClause: boxWithClause } : {}),
         block: blockNode
       },
       raw: {
         ...((directive.raw as any)?.config !== undefined
           ? { config: (directive.raw as any).config }
           : {}),
-        ...((directive.raw as any)?.envWithClause !== undefined
-          ? { withClause: (directive.raw as any).envWithClause }
+        ...((directive.raw as any)?.boxWithClause !== undefined
+          ? { withClause: (directive.raw as any).boxWithClause }
           : {})
       },
       meta: {
@@ -140,7 +140,7 @@ export function buildControlFlowExecutableDefinition(
           blockNode?.values?.statements?.length ??
           0,
         hasReturn: (directive.meta as any)?.hasReturn ?? blockNode?.meta?.hasReturn === true,
-        ...(envWithClause ? { withClause: envWithClause } : {})
+        ...(boxWithClause ? { withClause: boxWithClause } : {})
       },
       location: directive.location
     } as DirectiveNode;
@@ -148,7 +148,7 @@ export function buildControlFlowExecutableDefinition(
     return {
       type: 'code',
       codeTemplate: [envDirective],
-      language: 'mlld-env',
+      language: 'mlld-box',
       paramNames,
       sourceDirective: 'exec'
     } satisfies CodeExecutable;

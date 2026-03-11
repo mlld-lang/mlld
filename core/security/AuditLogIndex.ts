@@ -5,7 +5,7 @@ import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 
 export type AuditFileRecord = {
   taint: string[];
-  writer?: string;
+  writers: string[];
 };
 
 type AuditIndexState = {
@@ -65,7 +65,30 @@ async function loadAuditIndex(
       }
       const taint = Array.isArray(record.taint) ? record.taint.map(String) : [];
       const writer = typeof record.writer === 'string' ? record.writer : undefined;
-      records.set(normalizePath(recordPath), { taint, writer });
+      const normalizedPath = normalizePath(recordPath);
+      const existing = records.get(normalizedPath);
+      if (!existing) {
+        records.set(normalizedPath, {
+          taint,
+          writers: writer ? [writer] : []
+        });
+        continue;
+      }
+
+      const taintSet = new Set<string>(existing.taint);
+      for (const label of taint) {
+        taintSet.add(label);
+      }
+
+      const writers = [...existing.writers];
+      if (writer && !writers.includes(writer)) {
+        writers.push(writer);
+      }
+
+      records.set(normalizedPath, {
+        taint: Array.from(taintSet),
+        writers
+      });
     } catch {
       continue;
     }
@@ -96,6 +119,6 @@ export async function getAuditFileDescriptor(
   return makeSecurityDescriptor({
     labels,
     taint: record.taint,
-    sources: record.writer ? [record.writer] : []
+    sources: record.writers
   });
 }

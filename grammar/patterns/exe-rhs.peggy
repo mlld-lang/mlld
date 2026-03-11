@@ -34,7 +34,7 @@ ExeRHSContent "exe assignment value"
   / ForExpressionExe            // for @var in @collection => action (exe-specific with directive support)
   / LoopExpressionExe           // loop(...) [ ... ]
   / ExeForeachPattern           // foreach @command(@arrays) as executable body
-  / ExeEnvPattern               // env @config [...] or env with { ... } [...]
+  / ExeBoxPattern               // box @config [...] or box with { ... } [...]
   / ExeRunCommandWithStdin      // run {command} with { stdin: @var } - explicit run with stdin
   / ExeRunCommandPipeStdin      // run @var | {command} - pipe sugar stdin syntax
   / ExeStreamCommandPattern     // stream cmd {command} - streaming shell command with optional tail
@@ -526,11 +526,11 @@ ExeForeachPattern "exe foreach pattern"
       };
     }
 
-ExeEnvPattern "exe env pattern"
-  = "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock {
+ExeBoxPattern "exe box pattern"
+  = "box" _ config:BoxConfigExpression withClause:WithClause? _ block:ExeStatementBlock {
       const values = {
         ...(config ? { config: [config] } : {}),
-        ...(withClause ? { envWithClause: withClause } : {}),
+        ...(withClause ? { boxWithClause: withClause } : {}),
         block
       };
 
@@ -539,7 +539,7 @@ ExeEnvPattern "exe env pattern"
         raw.config = helpers.reconstructRawString([config]);
       }
       if (withClause) {
-        raw.envWithClause = withClause;
+        raw.boxWithClause = withClause;
       }
 
       const meta = {
@@ -549,27 +549,62 @@ ExeEnvPattern "exe env pattern"
       };
 
       if (withClause) {
-        meta.envWithClause = withClause;
+        meta.boxWithClause = withClause;
       }
 
       return {
-        subtype: 'exeEnv',
-        source: 'env',
+        subtype: 'exeBox',
+        source: 'box',
         values,
         raw,
         meta
       };
     }
-  / "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
-      helpers.mlldError(
-        'env requires a config expression or with clause. Expected: env @config [ ... ] or env with { ... } [ ... ]',
-        '@config or with { ... }',
-        location()
-      );
+  / "box" _ withClause:WithClause _ block:ExeStatementBlock {
+      const values = {
+        boxWithClause: withClause,
+        block
+      };
+
+      const raw = {
+        boxWithClause: withClause
+      };
+
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true,
+        hasConfig: false,
+        boxWithClause: withClause
+      };
+
+      return {
+        subtype: 'exeBox',
+        source: 'box',
+        values,
+        raw,
+        meta
+      };
     }
-  / "env" _ config:EnvConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
+  / "box" _ block:ExeStatementBlock {
+      const values = { block };
+      const raw = {};
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true,
+        hasConfig: false
+      };
+
+      return {
+        subtype: 'exeBox',
+        source: 'box',
+        values,
+        raw,
+        meta
+      };
+    }
+  / "box" _ !("[" / BlockComments) {
       helpers.mlldError(
-        'env requires a block. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        'box requires a block. Expected: box [ ... ], box @config [ ... ], or box with { ... } [ ... ]',
         '[',
         location()
       );
@@ -727,6 +762,9 @@ ExeBlockStatement
   / AugmentedAssignment
   / WhenExpressionAny
   / ForNestedDirective
+  / SlashBox
+  / SlashFile
+  / SlashFiles
   / SlashIf
   / SlashBail
   / SlashCheckpoint

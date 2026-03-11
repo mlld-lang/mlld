@@ -1,15 +1,21 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { parseSync } from '@grammar/parser';
 import type { DirectiveNode } from '@core/types';
+import type { WorkspaceValue } from '@core/types/workspace';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { VirtualFS } from '@services/fs/VirtualFS';
 import { Environment } from '@interpreter/env/Environment';
 import { CheckpointManager, type CheckpointInvocationMetadata } from '@interpreter/checkpoint/CheckpointManager';
 import { evaluateDirective } from '@interpreter/eval/directive';
 import { asText } from '@interpreter/utils/structured-value';
+import { interpret } from '@interpreter/index';
+import { logger } from '@core/utils/logger';
+import type { StructuredResult } from '@sdk/types';
+import { checkpointPostHook } from '@interpreter/hooks/checkpoint-post-hook';
 
 const cleanupDirs: string[] = [];
 const cleanupGlobals: string[] = [];
@@ -43,6 +49,33 @@ async function createEnvWithCheckpoint(
   await manager.load();
   env.setCheckpointManager(manager);
   return { env, manager };
+}
+
+async function runStructuredScript(
+  source: string,
+  root: string,
+  scriptName = 'pipeline'
+): Promise<{ output: string; structured: StructuredResult }> {
+  const result = await interpret(source, {
+    mode: 'structured',
+    mlldMode: 'strict',
+    fileSystem: new MemoryFileSystem(),
+    pathService: new PathService(),
+    filePath: path.join(root, `${scriptName}.mld`),
+    checkpoint: true,
+    checkpointScriptName: scriptName,
+    checkpointCacheRootDir: root,
+    useMarkdownFormatter: false
+  });
+
+  if (typeof result === 'string') {
+    throw new Error('Expected structured result');
+  }
+
+  return {
+    output: String(result.output ?? '').trim(),
+    structured: result
+  };
 }
 
 function registerGlobalCounter(key: string): void {
@@ -99,6 +132,38 @@ function buildParallelScript(counterKey: string, items: readonly string[]): stri
 /var @items = ${JSON.stringify(items)}
 /var @result = for parallel(2) @item in @items => @llm(@item, "sonnet")
 `;
+}
+
+function buildWorkspaceResumeScript(): string {
+  return `
+resume: auto
+
+/exe llm @writeOutput() = sh {
+  printf "warm" > warmup.txt
+  printf "hello" > output.txt
+  printf "wrote"
+}
+
+/hook @telemetry after @writeOutput = [
+  output \`hit:@mx.checkpoint.hit\` to "state://telemetry"
+]
+
+/var @ws = box [
+  file "seed.txt" = "seed"
+  let @warm = run sh { printf "stale-shell" > stale.txt }
+  let @status = @writeOutput()
+]
+
+/show <@ws/output.txt>
+`.trim();
+}
+
+function createWorkspace(): WorkspaceValue {
+  return {
+    type: 'workspace',
+    fs: VirtualFS.empty(),
+    descriptions: new Map<string, string>()
+  };
 }
 
 afterEach(async () => {
@@ -183,6 +248,27 @@ describe('checkpoint runtime semantics', () => {
     expect(getGlobalCounter(counterKey)).toBe(4);
   });
 
+  it('restores box workspace snapshots on checkpoint hits and clears stale shell sessions', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-runtime-workspace-resume-'));
+    cleanupDirs.push(root);
+
+    const source = buildWorkspaceResumeScript();
+    const firstRun = await runStructuredScript(source, root, 'workspace-resume');
+    const secondRun = await runStructuredScript(source, root, 'workspace-resume');
+
+    expect(firstRun.output).toBe('hello');
+    expect(secondRun.output).toBe('hello');
+
+    const firstTelemetry = firstRun.structured.stateWrites.filter(write => write.path === 'telemetry');
+    const secondTelemetry = secondRun.structured.stateWrites.filter(write => write.path === 'telemetry');
+    expect(String(firstTelemetry[0]?.value ?? '')).toContain('hit:false');
+    expect(String(secondTelemetry[0]?.value ?? '')).toContain('hit:true');
+
+    const restoredWorkspace = secondRun.structured.environment.getVariableValue('ws') as WorkspaceValue;
+    expect(await restoredWorkspace.fs.readFile(path.join(root, 'output.txt'))).toBe('hello');
+    expect(restoredWorkspace.shellSession).toBeUndefined();
+  });
+
   it('degrades checkpoint pre-hook read failures to cache-miss behavior', async () => {
     const counterKey = '__mlldCheckpointReadFailure';
     registerGlobalCounter(counterKey);
@@ -213,6 +299,81 @@ describe('checkpoint runtime semantics', () => {
     expect(readTextVariable(env, 'result')).toContain('call:1');
     expect(readCalls).toBe(1);
     expect(writeCalls).toBe(1);
+  });
+
+  it('treats cache-hit workspace snapshots as a no-op when no active workspace exists', async () => {
+    const counterKey = '__mlldCheckpointNoWorkspaceReplay';
+    registerGlobalCounter(counterKey);
+
+    const manager = {
+      assignInvocationMetadata(): CheckpointInvocationMetadata {
+        return {
+          invocationOrdinal: 0,
+          executionOrder: 0
+        };
+      },
+      async getWithMetadata(): Promise<unknown> {
+        return {
+          value: 'cached:no-workspace',
+          ts: '2026-03-05T12:00:00.000Z',
+          workspaceSnapshot: {
+            vfsPatch: {
+              version: 1,
+              entries: [{ op: 'write', path: '/output.txt', content: 'hello' }]
+            },
+            descriptions: { '/output.txt': 'cached output' }
+          }
+        };
+      },
+      wasWrittenThisRun(): boolean {
+        return false;
+      }
+    } as unknown as CheckpointManager;
+
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    env.setCheckpointManager(manager);
+    env.setCheckpointScriptResumeMode('auto');
+
+    await evaluateDirectives(buildLlmScript(counterKey), env);
+    expect(getGlobalCounter(counterKey)).toBe(0);
+    expect(readTextVariable(env, 'result')).toBe('cached:no-workspace');
+  });
+
+  it('warns and continues when a checkpoint hit carries a malformed workspace snapshot', async () => {
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    env.setCheckpointManager({} as CheckpointManager);
+    const workspace = createWorkspace();
+    env.pushActiveWorkspace(workspace);
+
+    try {
+      const result = await checkpointPostHook(
+        {} as any,
+        { value: 'cached:malformed-workspace', env },
+        [],
+        env,
+        {
+          type: 'exe',
+          name: 'llm',
+          labels: ['llm'],
+          metadata: {
+            sourceRetryable: true,
+            checkpointHit: true,
+            checkpointWorkspaceSnapshot: { nope: true }
+          }
+        } as any
+      );
+
+      expect(result.value).toBe('cached:malformed-workspace');
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[checkpoint] ignoring malformed workspace snapshot on cache hit',
+        expect.any(Object)
+      );
+      expect(workspace.shellSession).toBeUndefined();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('degrades checkpoint post-hook write failures without aborting execution', async () => {

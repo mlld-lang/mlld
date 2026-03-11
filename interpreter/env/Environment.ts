@@ -1,4 +1,10 @@
-import type { MlldNode, SourceLocation, DirectiveNode } from '@core/types';
+import type {
+  MlldNode,
+  SourceLocation,
+  DirectiveNode,
+  ActiveCheckpointScope,
+  CheckpointResumeMode
+} from '@core/types';
 import type { MlldMode } from '@core/types/mode';
 import type { Variable, PipelineInput } from '@core/types/variable';
 import { 
@@ -70,7 +76,8 @@ import { ErrorUtils, type CollectedError, type CommandExecutionContext } from '.
 import {
   CommandExecutorFactory,
   type CommandExecutionOptions,
-  type ExecutorDependencies
+  type ExecutorDependencies,
+  type WorkspaceProvider
 } from './executors';
 import type { VariableProvider } from './executors/BashExecutor';
 import { VariableManager, type IVariableManager, type VariableManagerContext } from './VariableManager';
@@ -117,6 +124,8 @@ import type { SDKEvent, StreamingResult } from '@sdk/types';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import type { ImportApproval } from '@core/security/ImportApproval';
 import type { ImmutableCache } from '@core/security/ImmutableCache';
+import type { WorkspaceValue, WorkspaceMcpBridgeHandle } from '@core/types/workspace';
+import { DEFAULT_CHECKPOINT_RESUME_MODE } from '@interpreter/checkpoint/policy';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
 
@@ -185,7 +194,13 @@ type ShadowFunctions = Map<string, any>;
  * Environment holds all state and provides capabilities for evaluation.
  * This replaces StateService, ResolutionService, and capability injection.
  */
-export class Environment implements VariableManagerContext, ImportResolverContext, ShadowEnvironmentProvider {
+export class Environment
+  implements
+    VariableManagerContext,
+    ImportResolverContext,
+    ShadowEnvironmentProvider,
+    WorkspaceProvider
+{
   private nodes: MlldNode[] = [];
   private parent?: Environment;
   // Note: importStack is now handled by ImportResolver
@@ -199,6 +214,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private standaloneAuthSummary?: Record<string, AuthConfig>;
   private allowedTools?: Set<string>;
   private allowedMcpServers?: Set<string>;
+  private _exeLabels?: readonly string[];
   private moduleNeeds?: NeedsDeclaration;
   private moduleProfiles?: ProfilesDeclaration;
   private scopedEnvironmentConfig?: EnvironmentConfig;
@@ -280,7 +296,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private enableFileInterpolation: boolean = true;
 
   // Executable resolution circular detection
-  private resolutionStack: Set<string> = new Set();
+  private resolutionStack: Map<string, number> = new Map();
+
+  // Active workspace stack for nested workspace-aware execution contexts.
+  private workspaceStack: WorkspaceValue[] = [];
+  private bridgeStack: WorkspaceMcpBridgeHandle[] = [];
+  private scopeCleanups: Array<() => Promise<void>> = [];
+
+  // Auto-bridged LLM tool config, set by exe llm invocations with config.tools
+  private llmToolConfig?: import('./executors/call-mcp-config').CallMcpConfig | null;
 
   // Current iteration file for <> placeholder
   private currentIterationFile?: any;
@@ -330,6 +354,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private checkpointManager?: CheckpointManager;
   private checkpointManagerFactory?: () => Promise<CheckpointManager | undefined>;
   private checkpointManagerInitPromise?: Promise<CheckpointManager | undefined>;
+  private checkpointScriptResumeMode: CheckpointResumeMode = DEFAULT_CHECKPOINT_RESUME_MODE;
+  private activeCheckpointScope?: ActiveCheckpointScope;
+  private checkpointResumeOverride = false;
 
   // Tracks imported bindings to surface collisions across directives.
   private importBindings: Map<string, ImportBindingInfo> = new Map();
@@ -445,8 +472,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getExecutionDirectory: this.getExecutionDirectory.bind(this),
       getPipelineContext: this.getPipelineContext.bind(this),
       getSecuritySnapshot: this.getSecuritySnapshot.bind(this),
+      getActiveBridge: this.getActiveBridge.bind(this),
       recordSecurityDescriptor: this.recordSecurityDescriptor.bind(this),
-      getContextManager: () => this.contextManager
+      getContextManager: () => this.contextManager,
+      getLlmToolConfig: this.getLlmToolConfig.bind(this)
     });
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -463,7 +492,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       // Reserve module prefixes from resolver configuration and create path variables
       this.reserveModulePrefixes();
     }
-    
+
     // Initialize import resolver
     // Child environments get parent's resolver temporarily; createChild/createChildEnvironment
     // replaces it with a proper child resolver. This avoids creating a full ImportResolver
@@ -819,6 +848,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return;
     }
     this.scopedEnvironmentConfig = config;
+  }
+
+  setExeLabels(labels: readonly string[]): void {
+    this._exeLabels = labels;
+  }
+
+  getExeLabels(): readonly string[] | undefined {
+    if (this._exeLabels) return this._exeLabels;
+    return this.parent?.getExeLabels();
   }
 
   getAllowedTools(): Set<string> | undefined {
@@ -1232,25 +1270,37 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   /**
-   * Check if an executable is currently being resolved (circular reference detection)
+   * Get the current recursive call depth for an executable.
+   * Sums counts up the parent chain so each branch tracks its own depth independently.
+   */
+  getCallDepth(identifier: string): number {
+    return (this.resolutionStack.get(identifier) ?? 0)
+         + (this.parent?.getCallDepth(identifier) ?? 0);
+  }
+
+  /**
+   * Check if an executable is currently being resolved (circular reference detection).
+   * Returns true if call depth > 0 in any ancestor environment.
    */
   isResolving(identifier: string): boolean {
-    if (this.resolutionStack.has(identifier)) return true;
-    return this.parent?.isResolving(identifier) || false;
+    return this.getCallDepth(identifier) > 0;
   }
 
   /**
-   * Mark an executable as being resolved
+   * Mark an executable as being resolved (increments depth counter)
    */
   beginResolving(identifier: string): void {
-    this.resolutionStack.add(identifier);
+    this.resolutionStack.set(identifier, (this.resolutionStack.get(identifier) ?? 0) + 1);
   }
 
   /**
-   * Mark an executable as finished resolving
+   * Mark an executable as finished resolving (decrements depth counter)
    */
   endResolving(identifier: string): void {
-    this.resolutionStack.delete(identifier);
+    const n = this.resolutionStack.get(identifier) ?? 0;
+    n <= 1
+      ? this.resolutionStack.delete(identifier)
+      : this.resolutionStack.set(identifier, n - 1);
   }
 
   /**
@@ -1511,6 +1561,39 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   getCheckpointManager(): CheckpointManager | undefined {
     const root = this.getRootEnvironment();
     return root.checkpointManager;
+  }
+
+  setCheckpointScriptResumeMode(mode: CheckpointResumeMode): void {
+    const root = this.getRootEnvironment();
+    root.checkpointScriptResumeMode = mode;
+    this.checkpointScriptResumeMode = mode;
+  }
+
+  getCheckpointScriptResumeMode(): CheckpointResumeMode {
+    const root = this.getRootEnvironment();
+    return root.checkpointScriptResumeMode;
+  }
+
+  setCheckpointResumeOverride(enabled: boolean): void {
+    const root = this.getRootEnvironment();
+    root.checkpointResumeOverride = enabled;
+    this.checkpointResumeOverride = enabled;
+  }
+
+  hasCheckpointResumeOverride(): boolean {
+    const root = this.getRootEnvironment();
+    return root.checkpointResumeOverride === true;
+  }
+
+  setActiveCheckpointScope(scope: ActiveCheckpointScope | undefined): void {
+    const root = this.getRootEnvironment();
+    root.activeCheckpointScope = scope;
+    this.activeCheckpointScope = scope;
+  }
+
+  getActiveCheckpointScope(): ActiveCheckpointScope | undefined {
+    const root = this.getRootEnvironment();
+    return root.activeCheckpointScope;
   }
 
   /**
@@ -2048,8 +2131,59 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   // --- Capabilities ---
+
+  private isIgnorableWorkspaceReadError(error: unknown): boolean {
+    const code = (error as { code?: string } | undefined)?.code;
+    return code === 'ENOENT' || code === 'EISDIR';
+  }
+
+  private buildWorkspaceReadCandidates(pathOrUrl: string): string[] {
+    const candidate = String(pathOrUrl ?? '').trim();
+    if (!candidate) {
+      return [];
+    }
+
+    if (candidate.startsWith('@base/') || candidate.startsWith('@root/')) {
+      const projectRoot = this.getProjectRoot();
+      return [path.resolve(projectRoot, candidate.slice(6))];
+    }
+
+    if (path.isAbsolute(candidate)) {
+      return [path.resolve(candidate)];
+    }
+
+    if (candidate.startsWith('@')) {
+      return [];
+    }
+
+    return [path.resolve(this.getFileDirectory(), candidate)];
+  }
+
+  private async readFromActiveWorkspace(pathOrUrl: string): Promise<string | undefined> {
+    const workspace = this.getActiveWorkspace();
+    if (!workspace || this.isURL(pathOrUrl)) {
+      return undefined;
+    }
+
+    for (const candidatePath of this.buildWorkspaceReadCandidates(pathOrUrl)) {
+      try {
+        return await workspace.fs.readFile(candidatePath);
+      } catch (error) {
+        if (this.isIgnorableWorkspaceReadError(error)) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return undefined;
+  }
   
   async readFile(pathOrUrl: string): Promise<string> {
+    const workspaceRead = await this.readFromActiveWorkspace(pathOrUrl);
+    if (workspaceRead !== undefined) {
+      return workspaceRead;
+    }
     return this.importResolver.readFile(pathOrUrl);
   }
   
@@ -2282,10 +2416,64 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.childEnvironments.add(child);
     }
 
+    child.workspaceStack = [...this.workspaceStack];
+    child.bridgeStack = [...this.bridgeStack];
+
     return child;
   }
   
   // --- Scope Management ---
+
+  pushActiveWorkspace(workspace: WorkspaceValue): void {
+    this.workspaceStack.push(workspace);
+  }
+
+  popActiveWorkspace(): WorkspaceValue | undefined {
+    return this.workspaceStack.pop();
+  }
+
+  getActiveWorkspace(): WorkspaceValue | undefined {
+    return this.workspaceStack[this.workspaceStack.length - 1];
+  }
+
+  pushBridge(bridge: WorkspaceMcpBridgeHandle): void {
+    this.bridgeStack.push(bridge);
+  }
+
+  popBridge(): WorkspaceMcpBridgeHandle | undefined {
+    return this.bridgeStack.pop();
+  }
+
+  getActiveBridge(): WorkspaceMcpBridgeHandle | undefined {
+    if (this.bridgeStack.length > 0) {
+      return this.bridgeStack[this.bridgeStack.length - 1];
+    }
+    return this.parent?.getActiveBridge();
+  }
+
+  setLlmToolConfig(config: import('./executors/call-mcp-config').CallMcpConfig | null): void {
+    this.llmToolConfig = config;
+  }
+
+  getLlmToolConfig(): import('./executors/call-mcp-config').CallMcpConfig | null | undefined {
+    if (this.llmToolConfig !== undefined) return this.llmToolConfig;
+    return this.parent?.getLlmToolConfig();
+  }
+
+  registerScopeCleanup(fn: () => Promise<void>): void {
+    this.scopeCleanups.push(fn);
+  }
+
+  async runScopeCleanups(): Promise<void> {
+    const cleanups = this.scopeCleanups.splice(0);
+    for (const cleanup of cleanups) {
+      try {
+        await cleanup();
+      } catch {
+        // Best-effort cleanup.
+      }
+    }
+  }
   
   /**
    * Create a child environment with isolated variable scope
@@ -2567,11 +2755,24 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
 
     let currentUser: string | undefined;
-    try {
-      const user = await GitHubAuthService.getInstance().getGitHubUser();
-      currentUser = user?.login?.toLowerCase();
-    } catch {
-      currentUser = undefined;
+    const skipGitHubUserLookup =
+      process.env.MLLD_TEST === '1' || process.env.NODE_ENV === 'test';
+
+    if (!skipGitHubUserLookup) {
+      try {
+        const authService = GitHubAuthService.getInstance();
+        if (typeof authService?.getGitHubUser === 'function') {
+          const user = await Promise.race([
+            authService.getGitHubUser(),
+            new Promise<null>(resolve => {
+              setTimeout(() => resolve(null), 1500);
+            })
+          ]);
+          currentUser = user?.login?.toLowerCase();
+        }
+      } catch {
+        currentUser = undefined;
+      }
     }
 
     const prefixes = this.projectConfig?.getResolverPrefixes() ?? [];
@@ -3067,7 +3268,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         nodeShadowProvider: this,
         pythonShadowProvider: this,
         variableProvider: this.variableManager as VariableProvider,
-        getStreamingBus: () => this.getStreamingBus()
+        getStreamingBus: () => this.getStreamingBus(),
+        workspaceProvider: this
       };
       this.commandExecutorFactory = new CommandExecutorFactory(dependencies);
     }
@@ -3089,11 +3291,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
     try {
       const testCtxVar = this.getVariable('test_mx');
+      const bridge = this.getActiveBridge();
+      const boxContext = bridge
+        ? { mcpConfigPath: bridge.mcpConfigPath, socketPath: bridge.socketPath }
+        : null;
       const mxValue = testCtxVar
         ? (testCtxVar.value as any)
         : this.getContextManager().buildAmbientContext({
             pipelineContext: this.getPipelineContext(),
-            securitySnapshot: this.getSecuritySnapshot()
+            securitySnapshot: this.getSecuritySnapshot(),
+            boxContext
           });
       if (!('mx' in finalParams)) {
         finalParams = { ...finalParams, mx: Object.freeze(mxValue) };
@@ -3442,6 +3649,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    */
   cleanup(): void {
     logger.debug('Environment cleanup called');
+    void this.runScopeCleanups();
     
     if (!this.parent) {
       try {

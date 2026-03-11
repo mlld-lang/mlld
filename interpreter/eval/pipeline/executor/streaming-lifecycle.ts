@@ -15,19 +15,24 @@ export class PipelineStreamingLifecycle {
   private readonly streamingManager: StreamingManager;
   private readonly pipelineId: string;
   private readonly pipeline: PipelineStage[];
+  private readonly streamRequested: boolean;
+  private readonly hasResolvedStreamOverride: boolean;
 
   constructor(
     pipeline: PipelineStage[],
     env: Environment,
     pipelineId: string,
-    streamingManager?: StreamingManager
+    streamingManager?: StreamingManager,
+    resolvedStreamRequested?: boolean
   ) {
     this.pipeline = pipeline;
     this.pipelineId = pipelineId;
     this.streamingOptions = env.getStreamingOptions();
+    this.hasResolvedStreamOverride = resolvedStreamRequested !== undefined;
+    this.streamRequested = resolvedStreamRequested ?? this.pipelineHasStreamingStage(pipeline);
     this.streamingEnabled =
       this.streamingOptions.enabled !== false &&
-      this.pipelineHasStreamingStage(pipeline);
+      this.streamRequested;
     this.streamingManager = streamingManager ?? env.getStreamingManager();
 
     if (this.streamingEnabled && !this.streamingOptions.skipDefaultSinks) {
@@ -44,7 +49,13 @@ export class PipelineStreamingLifecycle {
   }
 
   isStageExecutionStreaming(stage: PipelineStageEntry | PipelineStageEntry[]): boolean {
-    return this.streamingEnabled && this.isStageStreaming(stage);
+    if (!this.streamingEnabled) {
+      return false;
+    }
+    if (this.hasResolvedStreamOverride) {
+      return this.streamRequested;
+    }
+    return this.isStageStreaming(stage);
   }
 
   emit(event: StreamEventInput): void {

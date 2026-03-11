@@ -24,7 +24,8 @@ describe('guard decision reducer', () => {
       guardResult({
         decision: 'env',
         guardName: 'env-first',
-        envConfig: { mode: 'safe' }
+        envConfig: { mode: 'safe' },
+        policyFragment: { env: { tools: { allow: ['Read'] } } }
       }),
       { retryOverridesDeny: false }
     );
@@ -70,6 +71,14 @@ describe('guard decision reducer', () => {
     expect(state.primaryMetadata).toEqual({ source: 'retry' });
     expect(state.selectedEnvConfig).toEqual({ mode: 'safe' });
     expect(state.selectedEnvGuard).toBe('env-first');
+    expect(state.selectedPolicyFragment).toMatchObject({
+      env: {
+        tools: {
+          allow: ['Read']
+        }
+      }
+    });
+    expect(state.selectedPolicyGuard).toBe('env-first');
   });
 
   it('allows retry to override deny when configured for per-operation semantics', () => {

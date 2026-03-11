@@ -93,6 +93,34 @@ policy @p = {
 
 **`capabilities`** controls what operations are allowed at all. `allow` whitelists command patterns. `danger` marks capabilities that require explicit opt-in.
 
+**`env`** defines execution-environment constraints as policy (provider defaults, provider allow/deny rules, tools/mcps/network allowlists). These constraints attenuate runtime box/env configs and cannot be bypassed by local config.
+
+```mlld
+policy @p = {
+  env: {
+    default: "@provider/sandbox",
+    providers: {
+      "@provider/sandbox": { allowed: true },
+      "@provider/raw": { allowed: false }
+    },
+    tools: { allow: ["Read", "Write"] },
+    mcps: { allow: [] },
+    net: { allow: ["github.com"] }
+  }
+}
+```
+
+Guards can also return policy fragments through `env` actions. The fragment is merged into active policy for that operation before environment config is derived:
+
+```mlld
+guard before op:run = when [
+  * => env {
+    env: { tools: ["Read", "Write"] },
+    policy: { env: { tools: { allow: ["Read"] } } }
+  }
+]
+```
+
 `danger: ["@keychain"]` is required for keychain sources declared in `policy.auth`. Standalone top-level `auth` declarations do not require `danger`.
 
 `needs` declarations are module requirement checks. They do not replace capability policy rules.
@@ -192,7 +220,7 @@ Keychain allow/deny patterns live under `policy.keychain` and match `service/acc
 - Keychain access requires both `danger: ["@keychain"]` in capabilities AND `projectname` in `mlld-config.json`
 - `no-secret-exfil` doesn't block `show`/`log` — add label flow rules for `op:show` and `op:log` (see `policy-auth`)
 
-See `policy-auth` for credential flow, `env-config` for environment restrictions.
+See `policy-auth` for credential flow, `box-config` for environment restrictions.
 
 Classify operations by risk using the two-step pattern: label exe functions with semantic labels describing WHAT they do, then map those to risk categories in policy.
 
@@ -398,8 +426,8 @@ policy @p = {
 ```
 
 Expansion rules:
-- `"BRAVE_API_KEY"` -> `{ from: "keychain:mlld-env-{projectname}/BRAVE_API_KEY", as: "BRAVE_API_KEY" }`
-- `{ from: "keychain", as: "ANTHROPIC_API_KEY" }` -> `{ from: "keychain:mlld-env-{projectname}/ANTHROPIC_API_KEY", as: "ANTHROPIC_API_KEY" }`
+- `"BRAVE_API_KEY"` -> `{ from: "keychain:mlld-box-{projectname}/BRAVE_API_KEY", as: "BRAVE_API_KEY" }`
+- `{ from: "keychain", as: "ANTHROPIC_API_KEY" }` -> `{ from: "keychain:mlld-box-{projectname}/ANTHROPIC_API_KEY", as: "ANTHROPIC_API_KEY" }`
 
 ## Resolution order
 
@@ -430,10 +458,10 @@ Linux keychain access uses `secret-tool` (libsecret). Ensure `secret-tool` is on
 ```mlld
 policy @p = {
   auth: {
-    claude: { from: "keychain:mlld-env-{projectname}/claude", as: "ANTHROPIC_API_KEY" }
+    claude: { from: "keychain:mlld-box-{projectname}/claude", as: "ANTHROPIC_API_KEY" }
   },
   keychain: {
-    allow: ["mlld-env-{projectname}/*"],
+    allow: ["mlld-box-{projectname}/*"],
     deny: ["system/*"]
   },
   capabilities: { danger: ["@keychain"] }
@@ -475,8 +503,8 @@ policy @p = {
 ```
 </POLICY>
 
-<ENV>
-Environments are mlld's primitive for execution contexts. They encapsulate credentials, isolation, capabilities, and state.
+<BOX>
+Boxes are mlld's primitive for scoped execution contexts. They encapsulate credentials, isolation, capabilities, and state.
 
 ```mlld
 var @sandbox = {
@@ -485,30 +513,30 @@ var @sandbox = {
   net: "none"                        >> No network access
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { npm test }
 ]
 ```
 
-**Why environments matter for security:**
+**Why boxes matter for security:**
 
 - **Credential isolation** - Auth injected via sealed paths, not exposed as strings
 - **Capability restriction** - Limit what tools and operations agents can use
-- **Blast radius** - Contain failures within environment boundaries
+- **Blast radius** - Contain failures within box boundaries
 
-**Environments are values:**
+**Boxes are values:**
 
 ```mlld
 var @task = "Review code"
 var @cfg = { auth: "claude", tools: ["Read", "Write"] }
 var @readonly = { ...@cfg, tools: ["Read"] }
 
-env @readonly [ run cmd { claude -p @task } ]
+box @readonly [ run cmd { claude -p @task } ]
 ```
 
-Compute, compose, and pass environments like any other value.
-Use object spread for plain object derivation. The `with { ... }` clause is env-directive config syntax (for `env @cfg with { ... } [ ... ]`).
-For enforcement boundaries (what mlld enforces locally vs what requires a sandbox provider), see the table in `env-config`.
+Compute, compose, and pass boxes like any other value.
+Use object spread for plain object derivation. The `with { ... }` clause is box-directive config syntax (for `box @cfg with { ... } [ ... ]`).
+For enforcement boundaries (what mlld enforces locally vs what requires a sandbox provider), see the table in `box-config`.
 
 **Providers add isolation:**
 
@@ -522,7 +550,7 @@ Without a provider, commands run locally with specified credentials.
 
 **Complete sandbox example:**
 
-Combine environment config with policy to restrict an agent:
+Combine box config with policy to restrict an agent:
 
 ```mlld
 policy @p = {
@@ -533,22 +561,22 @@ policy @p = {
 }
 
 var @sandbox = {
-  tools: ["Read", "Write", "Bash"],  >> Allow Read/Write plus command execution
+  tools: ["Read", "Write", "Bash", "Glob", "Grep"],  >> Allow tools for agent use
   mcps: []                           >> Block MCP servers in this block
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { claude -p "Analyze code" }
 ]
 ```
 
 For a complete working example with Docker isolation, credentials, and guards, see `sandbox-demo` in `llm/run/j2bd/security/impl/sandbox-demo.mld`.
 
-Reading order: `env-config` for configuration fields, `env-blocks` for scoped execution, `policy-capabilities` for restrictions, `policy-auth` for credentials.
+Reading order: `box-config` for configuration fields, `box-blocks` for scoped execution, `policy-capabilities` for restrictions, `policy-auth` for credentials.
 
-The `env` directive creates scoped execution contexts that combine process isolation, credential management, and capability control.
+The `box` directive creates scoped execution contexts that combine process isolation, credential management, and capability control.
 
-For concepts and configuration details, see `env-overview`, `env-config`, and `env-blocks`.
+For concepts and configuration details, see `box-overview`, `box-config`, and `box-blocks`.
 
 **Sandboxed execution with credentials:**
 
@@ -561,7 +589,7 @@ var @sandbox = {
   mcps: []
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { claude -p "Analyze the codebase" } using auth:claude
 ]
 ```
@@ -573,7 +601,7 @@ The provider runs commands in a Docker container. `fs` restricts filesystem moun
 ```mlld
 var @cfg = { auth: "claude-alt" }
 
-env @cfg [
+box @cfg [
   run cmd { claude -p @task } using auth:claude-alt
 ]
 ```
@@ -602,7 +630,7 @@ var @sandbox = {
   tools: ["Read", "Write", "Bash"]
 }
 
-env @sandbox with { tools: ["Read"] } [
+box @sandbox with { tools: ["Read"] } [
   >> Only Read is available here
   run cmd { claude -p @task }
 ]
@@ -610,15 +638,38 @@ env @sandbox with { tools: ["Read"] } [
 
 `with` derives a restricted child inline. Children can only narrow parent capabilities, never extend them.
 
+**VFS resolver shorthand:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "checklist" }]
+
+box @workspace [
+  run cmd { cat task.md }
+]
+```
+
+`box @workspace` is shorthand for `box { fs: @workspace } [...]`.
+
+**Anonymous VFS box:**
+
+```mlld
+box [
+  file "task.md" = "inside box"
+  run cmd { cat task.md }
+]
+```
+
+All box forms provide an in-memory workspace. `box { tools: ["Read", "Bash"] } [ ... ]` restricts tools while still using workspace VFS. Use `box { fs: @workspace } [ ... ]` to bind an existing resolver-backed filesystem instead.
+
 **Tool scope formats:**
 
 ```mlld
-env @config with { tools: ["read", "write"] } [...]
-env @config with { tools: "read, write" } [...]
-env @config with { tools: "*" } [...]
+box @config with { tools: ["read", "write"] } [...]
+box @config with { tools: "read, write" } [...]
+box @config with { tools: "*" } [...]
 
 var @subset = { read: @readTool, write: @writeTool }
-env @config with { tools: @subset } [...]
+box @config with { tools: @subset } [...]
 ```
 
 **Profile selection:**
@@ -631,7 +682,7 @@ var @cfg = {
   }
 }
 
-env @cfg with { profile: "readonly" } [
+box @cfg with { profile: "readonly" } [
   run cmd { claude -p @task }
 ]
 ```
@@ -641,7 +692,7 @@ When no profile is specified, the first profile whose requirements are satisfied
 **Return values:**
 
 ```mlld
-var @result = env @config [
+var @result = box @config [
   let @data = run cmd { fetch-data }
   => @data
 ]
@@ -649,18 +700,18 @@ var @result = env @config [
 
 **Scoped environment:**
 
-The env block creates a child environment. Variables defined inside don't leak out, but the block can access parent scope variables.
+The box block creates a child environment. Variables defined inside don't leak out, but the block can access parent scope variables.
 
 ```mlld
 var @input = "test"
 
-env @config [
+box @config [
   let @processed = @input | @transform
   => @processed
 ]
 ```
 
-Environment configuration objects control isolation, credentials, and resource limits.
+Box configuration objects control isolation, credentials, and resource limits.
 
 ```mlld
 var @sandbox = {
@@ -670,10 +721,32 @@ var @sandbox = {
   limits: { mem: "512m", cpu: 1.0, timeout: 30000 }
 }
 
-env @sandbox [
+box @sandbox [
   run cmd { npm test }
 ]
 ```
+
+**VFS-backed local mode:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "todo" }]
+
+box @workspace [
+  run cmd { cat @root/task.md }
+]
+```
+
+These forms create a VirtualFS-backed runtime for local execution:
+- `box @workspace [ ... ]`
+- `box { fs: @workspace } [ ... ]`
+- `box [ ... ]` (anonymous workspace)
+
+In VFS mode, defaults are applied unless overridden:
+- `tools: ["Bash", "Read", "Write", "Glob", "Grep"]`
+- `mcps: []`
+- `net: { allow: [] }`
+
+VFS defaults apply when the box has a workspace (anonymous `box [...]`, `box @workspace [...]`, or `box { fs: @workspace } [...]`) and no explicit `tools` field is provided. Explicit `with { tools: [...] }` overrides the defaults. Active `policy.env` constraints are then applied to the resolved box config — local box config can only be attenuated by policy (for example, requested tools are intersected with `policy.env.tools.allow`, and denied providers throw).
 
 **Configuration fields:**
 
@@ -684,10 +757,10 @@ env @sandbox [
 | `net` | `"none"`, `"host"`, `"limited"` | Network restrictions |
 | `limits` | `{ mem, cpu, timeout }` | Resource limits |
 | `auth` | `"credential-name"` | Auth reference from policy |
-| `tools` | `["Read", "Write", "Bash"]` | Runtime tool allowlist for commands and MCP tools |
+| `tools` | `["Read", "Write", "Bash", "Glob", "Grep"]` | Runtime tool allowlist for commands and MCP tools |
 | `mcps` | `[]`, `[server-config]` | Runtime MCP server allowlist |
 
-**Important:** `tools` and `mcps` enforce runtime access inside `env` blocks.
+**Important:** `tools` and `mcps` enforce runtime access inside `box` blocks.
 
 | Field | Enforced locally by mlld? | Notes |
 |-------|--------------------------|-------|
@@ -723,12 +796,12 @@ exe @mcpConfig() = when [
   * => { servers: [] }
 ]
 
-env @cfg with { profile: "readonly" } [
+box @cfg with { profile: "readonly" } [
   show @list()
 ]
 ```
 
-The function is called when an `env` block spawns, with `@mx.profile` set from the `with { profile }` clause. When no profile is specified, the first profile whose requirements are satisfied by the active policy is selected. Explicit `with { profile: "name" }` overrides this automatic selection.
+The function is called when a `box` block spawns, with `@mx.profile` set from the `with { profile }` clause. When no profile is specified, the first profile whose requirements are satisfied by the active policy is selected. Explicit `with { profile: "name" }` overrides this automatic selection.
 
 **Compose with object spread:**
 
@@ -739,40 +812,114 @@ var @readonly = {
 }
 ```
 
-See `env-overview` for concepts, `env-directive` for block syntax.
+See `box-overview` for concepts, `box-directive` for block syntax.
 
-Execute directives within a scoped environment using `env @config [ ... ]`.
+Execute directives within a scoped environment using `box @config [ ... ]`.
 
 ```mlld
 var @sandbox = { tools: ["Read", "Write", "Bash"] }
 
-env @sandbox [
+box @sandbox [
   run cmd { echo "inside sandbox" }
 ]
 ```
 
 The environment is active only within the block and released on exit.
 
-**Return values:**
+**Anonymous workspace block:**
 
 ```mlld
-var @config = { tools: ["Read", "Write"] }
+box [
+  file "task.md" = "inside box"
+  run cmd { cat task.md }
+]
+```
 
-var @result = env @config [
+All box blocks create an in-memory workspace for the block. `box [ ... ]`, `box @config [ ... ]`, and `box @workspace [ ... ]` all support `file`/`files` directives and shell commands via ShellSession with cwd at the project root.
+
+**Named workspace block:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "from resolver" }]
+
+box @workspace [
+  run cmd { cat task.md }
+]
+```
+
+Use `box @workspace` to bind an existing resolver-backed workspace as the active box filesystem.
+
+**Inspect workspace edits and diffs:**
+
+```mlld
+files <@workspace/> = [{ "task.md": "draft" }]
+
+box @workspace [
+  file "notes.md" = "review complete"
+]
+
+show @workspace.mx.edits
+show <@workspace/notes.md>.mx.diff
+```
+
+- `@workspace.mx.edits` — array of `{path, type, entity}` where type is `created`/`modified`/`deleted`
+- `<@workspace/path>.mx.diff` — unified diff string for a single file
+
+**Git hydration with `files = git`:**
+
+```mlld
+files <@workspace/> = git "https://github.com/mlld-lang/mlld" branch:"main" path:"docs/" depth:1
+
+box @workspace with { tools: ["Read", "Bash"], net: { allow: ["github.com"] } } [
+  run cmd { ls . }
+]
+```
+
+Use `git` as a `files` source to clone text files into workspace VFS.
+
+Supported git options:
+- `auth:` token or keychain ref (for private repos)
+- `branch:` branch/tag/commit
+- `path:` subdirectory within the repo
+- `depth:` shallow clone depth (default `1`)
+
+Hydration behavior:
+- Text files are imported into workspace VFS
+- Binary files and symlinks are skipped with warnings
+- Imported files are tainted with `src:git` provenance metadata
+- `box.net` allow rules are enforced for remote git hosts
+
+**Return values and workspace binding:**
+
+```mlld
+var @result = box [
+  file "data.txt" = "hello"
   => "completed"
 ]
 
-show @result
+show @result                >> "completed" — box returned a value via =>
 ```
 
-Use `=>` to return a value from the block.
+When a box uses `=>`, the variable gets the returned value, not the workspace.
+
+To access workspace files after the box exits, omit `=>` so the variable binds to the workspace:
+
+```mlld
+var @ws = box [
+  file "data.txt" = "hello"
+]
+
+show <@ws/data.txt>         >> "hello" — reads from workspace via resolver
+```
+
+The `<@name/path>` resolver syntax reads from the workspace VFS after the box exits. Inside the box body, use `run cmd { cat file.txt }` to read via the ShellSession — bare `<file.txt>` reads from the real filesystem, not the active workspace.
 
 **Inline derivation with `with`:**
 
 ```mlld
 var @sandbox = { tools: ["Read", "Write", "Bash"] }
 
-var @result = env @sandbox with { tools: ["Read"] } [
+var @result = box @sandbox with { tools: ["Read"] } [
   => "read-only mode"
 ]
 
@@ -787,7 +934,7 @@ Derives a restricted environment inline without naming it.
 var @sandbox = { tools: ["Read", "Write", "Bash"] }
 var @readOnly = { ...@sandbox, tools: ["Read"] }
 
-env @readOnly [
+box @readOnly [
   run cmd { cat README.md }
 ]
 ```
@@ -797,9 +944,40 @@ Child environments can only restrict parent capabilities, never extend them.
 **Notes:**
 - Directives inside blocks use bare syntax (no `/` prefix)
 - Environment resources are released when the block exits
-- `with { ... }` is env directive config syntax (`env @cfg with { ... } [ ... ]`), not a general object-modifier expression
-- See `env-overview` for concepts, `env-config` for configuration fields
-</ENV>
+- `with { ... }` is box directive config syntax (`box @cfg with { ... } [ ... ]`), not a general object-modifier expression
+- Ambient `@mx.box` includes active bridge metadata (`mcpConfigPath`, `socketPath`) while inside the box scope
+- See `box-overview` for concepts, `box-config` for configuration fields
+
+**Per-call tool configuration via `config.tools`:**
+
+When an `exe llm` is invoked with a `config.tools` array, the runtime automatically creates MCP bridges and exposes the result on `@mx.llm`:
+
+```mlld
+exe llm @agent(prompt, config) = [
+  let @cfg = @config ? @config : {}
+  >> @mx.llm.config  — MCP config file path (empty string if no bridges)
+  >> @mx.llm.allowed — unified tool names for --allowedTools or equivalent
+  >> @mx.llm.inBox   — true when an active VFS bridge exists
+  >> @mx.llm.hasTools — true when config.tools was specified
+  => @prompt | cmd { claude -p --allowedTools "@mx.llm.allowed" }
+]
+```
+
+Inside a box, string tools (like `"Read"`) route through a filtered VFS bridge proxy. Outside a box, string tools pass through as native CLI tool names. Exe refs always get their own function MCP bridge. The runtime handles all of this — module authors just read `@mx.llm`.
+
+Function tools (exe refs) get their own MCP server:
+
+```mlld
+exe @double(n) = cmd { echo $(( @n * 2 )) }
+
+var @r = box [
+  let @answer = @claude("Double 21", { model: "haiku", tools: ["Read", @double] })
+  => @answer
+]
+```
+
+The runtime combines both the VFS bridge (for Read) and a function bridge (for @double) into a single MCP config file, exposed via `@mx.llm.config`.
+</BOX>
 
 <AUTH>
 Use `auth` to declare credentials at module scope without requiring callers to import policy objects.
@@ -813,7 +991,7 @@ exe @search(q) = js { /* uses process.env.BRAVE_API_KEY */ } using auth:brave
 ```
 
 Short form expands to:
-- `from: "keychain:mlld-env-{projectname}/BRAVE_API_KEY"`
+- `from: "keychain:mlld-box-{projectname}/BRAVE_API_KEY"`
 - `as: "BRAVE_API_KEY"`
 - runtime resolution: keychain first, then `process.env.BRAVE_API_KEY`
 
@@ -825,7 +1003,7 @@ auth @brave = { from: "keychain:custom-service/custom-account", as: "BRAVE_API_K
 auth @brave = { from: "env:SOME_OTHER_VAR", as: "BRAVE_API_KEY" }
 ```
 
-`from: "keychain"` expands to `keychain:mlld-env-{projectname}/<as>`.
+`from: "keychain"` expands to `keychain:mlld-box-{projectname}/<as>`.
 
 Unknown provider schemes (for example `op://...`) fail with a clear error until provider support is added.
 
@@ -859,7 +1037,7 @@ mlld keychain rm BRAVE_API_KEY
 mlld keychain import .env
 ```
 
-Entries are stored as `service=mlld-env-{projectname}` / `account=<name>`.
+Entries are stored as `service=mlld-box-{projectname}` / `account=<name>`.
 </AUTH>
 
 </MLLD_CONFIG>

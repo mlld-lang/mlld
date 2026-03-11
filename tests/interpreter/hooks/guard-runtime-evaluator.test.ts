@@ -106,7 +106,7 @@ function createDeps(
     injectGuardHelpers: () => {},
     evaluateGuardBlock: async () => undefined,
     evaluateGuardReplacement: async () => undefined,
-    resolveGuardEnvConfig: async () => ({ mode: 'strict' }),
+    resolveGuardEnvConfig: async () => ({ envConfig: { mode: 'strict' } }),
     buildDecisionMetadata: (action, _guard, extras) => ({
       reason: action.message ?? null,
       attempt: extras?.attempt ?? null,

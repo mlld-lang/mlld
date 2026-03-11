@@ -18,6 +18,15 @@ import { URLLoader } from '../utils/url-loader';
 import { parseInjectOptions } from '../utils/inject-parser';
 import { parseDuration, formatDuration } from '@core/config/utils';
 import chalk from 'chalk';
+import {
+  formatCheckpointResumeHint,
+  getCheckpointSummaryByFilePath,
+  shouldShowCheckpointResumeHint
+} from '../utils/checkpoint-cache';
+import {
+  extractLeadingResumeDirective,
+  DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE
+} from '@core/checkpoint/config';
 
 export interface ProcessingEnvironment {
   fileSystem: NodeFileSystem;
@@ -410,6 +419,24 @@ export class FileProcessor {
     const dynamicModules = cliOptions.inject
       ? await parseInjectOptions(cliOptions.inject, environment.fileSystem, path.dirname(effectivePath))
       : undefined;
+
+    const scriptResumeMode =
+      extractLeadingResumeDirective(content).resumeMode ?? DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE;
+    const shouldInspectCheckpointCache =
+      scriptResumeMode === 'manual' &&
+      shouldShowCheckpointResumeHint(cliOptions) &&
+      cliOptions.eval === undefined &&
+      cliOptions.input !== '/dev/stdin' &&
+      cliOptions.input !== '-';
+
+    if (shouldInspectCheckpointCache) {
+      const checkpointCacheRoot = path.join(pathContext.projectRoot, '.mlld', 'checkpoints');
+      const checkpointSummary = await getCheckpointSummaryByFilePath(checkpointCacheRoot, effectivePath);
+      if (checkpointSummary) {
+        console.log(chalk.yellow(formatCheckpointResumeHint('file', checkpointSummary.cachedCount)));
+        console.log();
+      }
+    }
 
     let resultEnvironment: Environment | null = null;
     const interpretResult = await interpret(content, {

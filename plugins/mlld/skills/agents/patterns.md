@@ -48,12 +48,12 @@ Separate generation from evaluation for high-quality decisions. Prevents anchori
 ```mlld
 >> Call 1: Explore option space (Sonnet — fast, broad)
 >> Prompt says: "Generate 3-5 options. Do NOT rank them."
-var @_ = @claudePoll(@genPrompt, "sonnet", ...)
+@claudePoll(@genPrompt, "sonnet", ...)
 var @options = <@optionsPath>? | @json
 
 >> Call 2: Critical evaluation (Opus — careful, expensive)
 >> Prompt says: "Evaluate each option. Choose one. Explain why."
-var @_ = @claudePoll(@evalPrompt, "opus", ...)
+@claudePoll(@evalPrompt, "opus", ...)
 var @decision = <@outputPath>? | @json
 ```
 

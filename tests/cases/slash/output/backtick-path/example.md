@@ -2,8 +2,6 @@
 
 /var @dir = "output-bt"
 /var @name = "result"
-/exe @mkdirp(dir) = sh { mkdir -p "$dir" }
-/run @mkdirp(@dir)
 
 /output "static content" to `@dir/@name\.txt`
 /output "variable dir" to `@dir/fixed\.txt`

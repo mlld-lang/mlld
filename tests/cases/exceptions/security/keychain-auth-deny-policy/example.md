@@ -1,10 +1,10 @@
 /policy @config = {
   auth: {
-    claude: { from: "keychain:mlld-env-{projectname}/blocked", as: "TOKEN" }
+    claude: { from: "keychain:mlld-box-{projectname}/blocked", as: "TOKEN" }
   },
   keychain: {
-    allow: ["mlld-env-{projectname}/*"],
-    deny: ["mlld-env-{projectname}/blocked"]
+    allow: ["mlld-box-{projectname}/*"],
+    deny: ["mlld-box-{projectname}/blocked"]
   },
   capabilities: { danger: ["@keychain"] }
 }

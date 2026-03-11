@@ -27,7 +27,8 @@ import { evaluateAppend } from './append';
 import { evaluateVar, prepareVarAssignment, type VarAssignmentResult } from './var';
 import { evaluateShow } from './show';
 import { evaluateExe } from './exe';
-import { evaluateEnv } from './env';
+import { evaluateBox } from './box';
+import { evaluateFile, evaluateFiles } from './file';
 import { evaluateForDirective } from './for';
 import { evaluateLoopDirective } from './loop';
 import { evaluateExport } from './export';
@@ -149,6 +150,14 @@ function extractTraceInfo(directive: DirectiveNode): {
         info.varName = directive.values.name;
       }
       break;
+    case 'file':
+    case 'files': {
+      const rawTarget = (directive.raw as any)?.target;
+      if (typeof rawTarget === 'string' && rawTarget.length > 0) {
+        info.varName = rawTarget;
+      }
+      break;
+    }
   }
   
   return info;
@@ -818,8 +827,14 @@ async function dispatchDirective(
     case 'exe':
       return await evaluateExe(directive, env);
 
-    case 'env':
-      return await evaluateEnv(directive as any, env, evaluationContext);
+    case 'box':
+      return await evaluateBox(directive as any, env, evaluationContext);
+
+    case 'file':
+      return await evaluateFile(directive as any, env, evaluationContext);
+
+    case 'files':
+      return await evaluateFiles(directive as any, env, evaluationContext);
 
     case 'for':
       return await evaluateForDirective(directive as any, env);

@@ -651,10 +651,19 @@ WhenAction
   / WhenActionDirective
 
 WhenCheckpointAction
-  = CheckpointKeyword __ name:CheckpointNameValue {
-      const values = { name };
-      const raw = { name };
-      const meta = { checkpointContext: 'top-level-when-direct' };
+  = CheckpointKeyword __ name:CheckpointNameValue withClause:CheckpointWithClause? {
+      const values = {
+        name,
+        ...(withClause ? { withClause } : {})
+      };
+      const raw = {
+        name,
+        ...(withClause ? { withClause } : {})
+      };
+      const meta = {
+        checkpointContext: 'top-level-when-direct',
+        ...(withClause ? { withClause } : {})
+      };
 
       return [helpers.createStructuredDirective(
         DirectiveKind.checkpoint,
@@ -795,10 +804,19 @@ WhenActionBlockStatement "when action block statement"
   / WhenBlockAction
 
 WhenCheckpointActionInBlock
-  = CheckpointKeyword __ name:CheckpointNameValue {
-      const values = { name };
-      const raw = { name };
-      const meta = { checkpointContext: 'when-action-block' };
+  = CheckpointKeyword __ name:CheckpointNameValue withClause:CheckpointWithClause? {
+      const values = {
+        name,
+        ...(withClause ? { withClause } : {})
+      };
+      const raw = {
+        name,
+        ...(withClause ? { withClause } : {})
+      };
+      const meta = {
+        checkpointContext: 'when-action-block',
+        ...(withClause ? { withClause } : {})
+      };
 
       return [helpers.createStructuredDirective(
         DirectiveKind.checkpoint,

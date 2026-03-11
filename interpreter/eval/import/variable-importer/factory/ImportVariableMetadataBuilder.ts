@@ -1,10 +1,10 @@
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import type { DataLabel } from '@core/types/security';
 import {
-  VariableMetadataUtils,
   type VariableMetadata,
   type VariableSource
-} from '@core/types/variable';
+} from '@core/types/variable/VariableTypes';
+import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 import type { Environment } from '@interpreter/env/Environment';
 import type { ImportVariableMetadataContext } from './types';
 

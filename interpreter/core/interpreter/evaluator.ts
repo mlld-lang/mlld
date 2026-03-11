@@ -64,11 +64,17 @@ interface PipelineStageLike {
   };
 }
 
-interface BarePipelineNodeLike {
+interface PipelineCarrierNodeLike {
   type: string;
   withClause?: {
     pipeline?: PipelineStageLike[];
   };
+  values?: {
+    withClause?: {
+      pipeline?: PipelineStageLike[];
+    };
+  };
+  kind?: string;
 }
 
 type InterpolateWithSecurityRecording = (
@@ -95,16 +101,27 @@ function isBuiltinEffectStage(stage: unknown): stage is PipelineStageLike {
   return (stage as PipelineStageLike).meta?.isBuiltinEffect === true;
 }
 
-function isBareBuiltinEffectPipelineNode(node: unknown): node is BarePipelineNodeLike {
+function readPipelineFromNode(node: PipelineCarrierNodeLike): PipelineStageLike[] | undefined {
+  const directPipeline = node.withClause?.pipeline;
+  if (Array.isArray(directPipeline) && directPipeline.length > 0) {
+    return directPipeline;
+  }
+
+  const directivePipeline = node.values?.withClause?.pipeline;
+  if (Array.isArray(directivePipeline) && directivePipeline.length > 0) {
+    return directivePipeline;
+  }
+
+  return undefined;
+}
+
+function isBareBuiltinEffectPipelineNode(node: unknown): node is PipelineCarrierNodeLike {
   if (typeof node !== 'object' || node === null) {
     return false;
   }
-  const candidate = node as BarePipelineNodeLike;
-  if (candidate.type !== 'VariableReferenceWithTail') {
-    return false;
-  }
-  const pipeline = candidate.withClause?.pipeline;
-  if (!Array.isArray(pipeline) || pipeline.length === 0) {
+  const candidate = node as PipelineCarrierNodeLike;
+  const pipeline = readPipelineFromNode(candidate);
+  if (!pipeline) {
     return false;
   }
   return pipeline.every(isBuiltinEffectStage);
@@ -115,9 +132,10 @@ function parseBareBuiltinEffectPipelines(content: string): MlldNode[] | null {
   if (!trimmed) {
     return null;
   }
-  if (!trimmed.startsWith('@') || !trimmed.includes('|')) {
+  if (!trimmed.includes('|') && !/\bwith\s*\{/.test(trimmed)) {
     return null;
   }
+
   try {
     const parsed = parseSync(trimmed, {
       startRule: 'ForBlockStatementList',
@@ -127,11 +145,49 @@ function parseBareBuiltinEffectPipelines(content: string): MlldNode[] | null {
       return null;
     }
     if (!parsed.every(isBareBuiltinEffectPipelineNode)) {
-      return null;
+      throw new Error('Parsed nodes are not bare builtin-effect pipelines');
     }
     return parsed;
   } catch {
-    return null;
+    // Literal pipelines like `"x" | append "out.txt"` are not accepted by
+    // ForBlockStatementList. Reparse each line as a synthetic var assignment
+    // so we can execute builtin-effect tails without rendering prose text.
+    const lines = trimmed
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+    if (lines.length === 0) {
+      return null;
+    }
+
+    const parsedLines: MlldNode[] = [];
+    for (let index = 0; index < lines.length; index += 1) {
+      const wrapped = `/var @__mlld_inline_effect_${index} = ${lines[index]}`;
+      let wrappedAst: unknown;
+      try {
+        wrappedAst = parseSync(wrapped, {
+          startRule: 'Start',
+          mode: 'markdown'
+        });
+      } catch {
+        return null;
+      }
+
+      if (!Array.isArray(wrappedAst) || wrappedAst.length !== 1) {
+        return null;
+      }
+
+      const [single] = wrappedAst as MlldNode[];
+      if (!isDirective(single) || single.kind !== 'var') {
+        return null;
+      }
+      if (!isBareBuiltinEffectPipelineNode(single)) {
+        return null;
+      }
+      parsedLines.push(single);
+    }
+
+    return parsedLines;
   }
 }
 

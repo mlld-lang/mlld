@@ -392,8 +392,15 @@ export class ResolverManager {
       supportedContentTypes.includes('module') || legacyResourceType === 'module';
     const isLocal = ref.startsWith('@local/') || ref.startsWith('local://') || resolver.name === 'LOCAL';
     const isDynamic = resolver.name.toLowerCase() === 'dynamic';
-    const cacheEligible = supportsModuleContent && this.lockFile && this.moduleCache && !isLocal && !isDynamic;
-    const shouldRequireCache = supportsModuleContent && !isLocal && !isDynamic;
+    const usesModuleCacheContext = !options?.context || options.context === 'import';
+    const cacheEligible =
+      usesModuleCacheContext &&
+      supportsModuleContent &&
+      this.lockFile &&
+      this.moduleCache &&
+      !isLocal &&
+      !isDynamic;
+    const shouldRequireCache = usesModuleCacheContext && supportsModuleContent && !isLocal && !isDynamic;
 
     // 2. Check if we have a hash for this module in lock file (skip for local files)
     if (cacheEligible) {
@@ -498,6 +505,7 @@ export class ResolverManager {
       // 4. Cache the content if cache is available (but skip local files)
       if (
         this.moduleCache &&
+        usesModuleCacheContext &&
         supportsModuleContent &&
         content.content &&
         resolver.name !== 'LOCAL' &&

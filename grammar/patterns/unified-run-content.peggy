@@ -364,7 +364,11 @@ UnifiedCommandQuotedString
       for (const item of content) {
         if (typeof item === 'string') {
           currentText += item;
-        } else if (item.type === NodeType.VariableReference || item.type === 'FileReference') {
+        } else if (
+          item.type === NodeType.VariableReference ||
+          item.type === 'FileReference' ||
+          item.type === NodeType.EscapedAngleBracketExpression
+        ) {
           // Flush current text if any
           if (currentText) {
             nodes.push(helpers.createNode(NodeType.Text, { content: currentText, location: location() }));
@@ -400,6 +404,9 @@ UnifiedDoubleQuotedContent
   = varRef:UnifiedVariableInDoubleQuotes {
       // Variable interpolation inside double quotes - return the unified pattern result
       return varRef;
+    }
+  / escaped:EscapedAngleBracketExpression {
+      return escaped;
     }
   / fileRef:FileReferenceInterpolation {
       // File reference interpolation inside double quotes

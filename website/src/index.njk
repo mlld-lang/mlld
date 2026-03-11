@@ -206,10 +206,10 @@ layout: base.njk
 
       <div class="example-row" data-reveal>
         <div class="example-label">
-          <h3>{{ (examples.default['decompose-query'] or examples['decompose-query']).heading }}</h3>
+          <h3>{{ (examples.default['decompose-recursive'] or examples['decompose-recursive']).heading }}</h3>
         </div>
         <div class="example-content">
-          {% set example = examples.default['decompose-query'] or examples['decompose-query'] %}
+          {% set example = examples.default['decompose-recursive'] or examples['decompose-recursive'] %}
           {% include "components/mlld-example.njk" %}
         </div>
       </div>

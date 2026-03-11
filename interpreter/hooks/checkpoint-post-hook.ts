@@ -3,6 +3,15 @@ import type { OperationContext } from '@interpreter/env/ContextManager';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { logger } from '@core/utils/logger';
+import {
+  isWorkspaceCheckpointSnapshot,
+  type WorkspaceCheckpointSnapshot,
+  type WorkspaceValue
+} from '@core/types/workspace';
+import {
+  resolveCheckpointPolicy,
+  shouldPersistCheckpointEntry
+} from '@interpreter/checkpoint/policy';
 import type { PostHook } from './HookManager';
 
 const CHECKPOINT_START_TIME_MS_KEY = 'checkpointStartTimeMs';
@@ -112,6 +121,30 @@ function computeDurationMs(startTimeMs: number | undefined): number | undefined 
   return Math.max(0, Date.now() - startTimeMs);
 }
 
+function readWorkspaceSnapshot(
+  metadata: Record<string, unknown>
+): WorkspaceCheckpointSnapshot | undefined {
+  const value = metadata.checkpointWorkspaceSnapshot;
+  return isWorkspaceCheckpointSnapshot(value) ? value : undefined;
+}
+
+function captureWorkspaceSnapshot(workspace: WorkspaceValue): WorkspaceCheckpointSnapshot {
+  return {
+    vfsPatch: workspace.fs.export(),
+    descriptions: Object.fromEntries(workspace.descriptions.entries())
+  };
+}
+
+function restoreWorkspaceSnapshot(
+  workspace: WorkspaceValue,
+  snapshot: WorkspaceCheckpointSnapshot
+): void {
+  workspace.fs.reset();
+  workspace.fs.apply(snapshot.vfsPatch);
+  workspace.descriptions = new Map(Object.entries(snapshot.descriptions));
+  workspace.shellSession = undefined;
+}
+
 export const checkpointPostHook: PostHook = async (_node, result, inputs, env, operation) => {
   if (!isCheckpointEligibleOperation(operation)) {
     return result;
@@ -125,6 +158,30 @@ export const checkpointPostHook: PostHook = async (_node, result, inputs, env, o
   const metadata = getCheckpointMetadata(operation);
   const checkpointHit = metadata.checkpointHit === true;
   if (checkpointHit) {
+    const snapshot = readWorkspaceSnapshot(metadata);
+    if (metadata.checkpointWorkspaceSnapshot !== undefined && !snapshot) {
+      logger.warn('[checkpoint] ignoring malformed workspace snapshot on cache hit', {
+        operation: resolveOperationName(operation)
+      });
+      return result;
+    }
+    if (!snapshot) {
+      return result;
+    }
+
+    const workspace = env.getActiveWorkspace();
+    if (!workspace) {
+      return result;
+    }
+
+    try {
+      restoreWorkspaceSnapshot(workspace, snapshot);
+    } catch (error) {
+      logger.warn('[checkpoint] workspace snapshot restore failed; continuing without restore', {
+        operation: resolveOperationName(operation),
+        error
+      });
+    }
     return result;
   }
 
@@ -139,6 +196,16 @@ export const checkpointPostHook: PostHook = async (_node, result, inputs, env, o
   const invocationOrdinal = readCheckpointInvocationOrdinal(metadata);
   const executionOrder = readCheckpointExecutionOrder(metadata);
   const durationMs = computeDurationMs(readCheckpointStartTimeMs(metadata));
+  const policy = resolveCheckpointPolicy(
+    env.getCheckpointScriptResumeMode?.(),
+    env.getActiveCheckpointScope?.()
+  );
+  const resumeOverride = env.hasCheckpointResumeOverride?.() === true;
+  if (!shouldPersistCheckpointEntry({ policy, resumeOverride })) {
+    return result;
+  }
+
+  const workspace = env.getActiveWorkspace();
   try {
     await manager.put(checkpointKey, {
       fn: resolveOperationName(operation),
@@ -146,6 +213,7 @@ export const checkpointPostHook: PostHook = async (_node, result, inputs, env, o
       argsHash: CheckpointManager.computeArgsHash(normalizedInputs),
       argsPreview: CheckpointManager.buildArgsPreview(normalizedInputs),
       result: normalizeCheckpointResult(result.value),
+      ...(workspace ? { workspaceSnapshot: captureWorkspaceSnapshot(workspace) } : {}),
       ...(durationMs !== undefined ? { durationMs } : {}),
       ...(invocationSite ? { invocationSite } : {}),
       ...(invocationIndex !== undefined ? { invocationIndex } : {}),

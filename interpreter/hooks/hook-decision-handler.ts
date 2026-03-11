@@ -29,6 +29,7 @@ interface GuardDecisionInfo {
 const CHECKPOINT_HIT_KEY = 'checkpointHit';
 const CHECKPOINT_KEY_KEY = 'checkpointKey';
 const CHECKPOINT_CACHED_RESULT_KEY = 'cachedResult';
+const CHECKPOINT_WORKSPACE_SNAPSHOT_KEY = 'checkpointWorkspaceSnapshot';
 const CHECKPOINT_INVOCATION_SITE_KEY = 'checkpointInvocationSite';
 const CHECKPOINT_INVOCATION_INDEX_KEY = 'checkpointInvocationIndex';
 const CHECKPOINT_INVOCATION_ORDINAL_KEY = 'checkpointInvocationOrdinal';
@@ -40,6 +41,7 @@ export interface CheckpointDecisionState {
   key?: string;
   hasCachedResult: boolean;
   cachedResult?: unknown;
+  workspaceSnapshot?: unknown;
   invocationSite?: string;
   invocationIndex?: number;
   invocationOrdinal?: number;
@@ -91,6 +93,9 @@ export function getCheckpointDecisionState(decision?: HookDecision): CheckpointD
   const hasCachedResult = Object.prototype.hasOwnProperty.call(metadata, CHECKPOINT_CACHED_RESULT_KEY);
   const hit = normalizedDecision.action === 'fulfill' || metadata[CHECKPOINT_HIT_KEY] === true;
   const key = typeof metadata[CHECKPOINT_KEY_KEY] === 'string' ? (metadata[CHECKPOINT_KEY_KEY] as string) : undefined;
+  const workspaceSnapshot = Object.prototype.hasOwnProperty.call(metadata, CHECKPOINT_WORKSPACE_SNAPSHOT_KEY)
+    ? metadata[CHECKPOINT_WORKSPACE_SNAPSHOT_KEY]
+    : undefined;
   const invocationSite =
     typeof metadata[CHECKPOINT_INVOCATION_SITE_KEY] === 'string'
       ? (metadata[CHECKPOINT_INVOCATION_SITE_KEY] as string)
@@ -128,6 +133,7 @@ export function getCheckpointDecisionState(decision?: HookDecision): CheckpointD
     key,
     hasCachedResult,
     ...(hasCachedResult ? { cachedResult: metadata[CHECKPOINT_CACHED_RESULT_KEY] } : {}),
+    ...(workspaceSnapshot !== undefined ? { workspaceSnapshot } : {}),
     ...(invocationSite ? { invocationSite } : {}),
     ...(invocationIndex !== undefined ? { invocationIndex } : {}),
     ...(invocationOrdinal !== undefined ? { invocationOrdinal } : {}),
@@ -156,6 +162,11 @@ export function applyCheckpointDecisionToOperation(
     metadata[CHECKPOINT_KEY_KEY] = checkpointState.key;
   } else {
     delete metadata[CHECKPOINT_KEY_KEY];
+  }
+  if (checkpointState.workspaceSnapshot !== undefined) {
+    metadata[CHECKPOINT_WORKSPACE_SNAPSHOT_KEY] = checkpointState.workspaceSnapshot;
+  } else {
+    delete metadata[CHECKPOINT_WORKSPACE_SNAPSHOT_KEY];
   }
   if (checkpointState.invocationSite) {
     metadata[CHECKPOINT_INVOCATION_SITE_KEY] = checkpointState.invocationSite;

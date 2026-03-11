@@ -19,6 +19,15 @@ import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { parseInjectOptions, type DynamicModuleMap } from '../utils/inject-parser';
 import { analyzeDeep, type AnalyzeResult } from './analyze';
+import {
+  formatCheckpointResumeHint,
+  getCheckpointSummaryByScriptName,
+  shouldShowCheckpointResumeHint
+} from '../utils/checkpoint-cache';
+import {
+  extractLeadingResumeDirective,
+  DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE
+} from '@core/checkpoint/config';
 
 const ENTRY_POINTS = ['index.mld', 'main.mld', 'index.mld.md', 'main.mld.md'];
 
@@ -289,6 +298,7 @@ export class RunCommand {
   async run(scriptName: string, options: RunOptions = {}): Promise<void> {
     const scriptPath = await this.findScript(scriptName);
     const projectRoot = await findProjectRoot(process.cwd(), this.fileSystem);
+    const checkpointCacheRootDir = path.join(projectRoot, '.mlld', 'checkpoints');
 
     if (!scriptPath) {
       const availableScripts = await this.listScripts();
@@ -343,6 +353,21 @@ export class RunCommand {
       }
     }
 
+    const source = await fs.readFile(scriptPath, 'utf8');
+    const scriptResumeMode =
+      extractLeadingResumeDirective(source).resumeMode ?? DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE;
+
+    if (scriptResumeMode === 'manual' && shouldShowCheckpointResumeHint(options)) {
+      const checkpointSummary = await getCheckpointSummaryByScriptName(
+        checkpointCacheRootDir,
+        scriptName
+      );
+      if (checkpointSummary) {
+        console.log(chalk.yellow(formatCheckpointResumeHint('script', checkpointSummary.cachedCount)));
+        console.log();
+      }
+    }
+
     if (options.debug) {
       console.error(chalk.gray(`Pre-flight validation: ${preflightDurationMs.toFixed(1)}ms`));
     }
@@ -372,7 +397,7 @@ export class RunCommand {
         resume: options.resume,
         fork: options.fork,
         checkpointScriptName: scriptName,
-        checkpointCacheRootDir: path.join(projectRoot, '.mlld', 'checkpoints')
+        checkpointCacheRootDir
       }) as StructuredResult;
 
       // Check if streaming was enabled - if so, skip final output since it was already streamed

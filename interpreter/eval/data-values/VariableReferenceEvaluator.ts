@@ -318,7 +318,8 @@ export class VariableReferenceEvaluator {
         env,
         node: value,
         identifier: varRef.identifier,
-        descriptorHint: variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
+        descriptorHint: variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined,
+        exeLabels: env.getExeLabels()
       });
     }
 

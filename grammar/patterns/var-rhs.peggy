@@ -14,7 +14,7 @@ VarRHSContent "var assignment value"
   / ExecInvocationWithFields    // Exec invocations followed by field/index access (must come before FieldAccessExecPattern)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
-  / EnvExpression               // env @config [...] - scoped environment with return value
+  / BoxExpression               // box @config [...] - scoped environment with return value
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateWithPipeline        // Template content with pipeline support - MUST come before PrimitiveValue
   / VarBlock                    // Statement block for var evaluation
@@ -69,6 +69,42 @@ ExpressionWithOperator
       // Only look within the current line/directive context
       const endOfContext = rest.search(/[\n\r]|(?:^|\s)\/\w+|(?:^|\s)(?:>>|<<)/);
       const contextToSearch = endOfContext === -1 ? rest : rest.substring(0, endOfContext);
+
+      // If RHS starts with a quoted literal/template and no operator follows
+      // outside the closing quote, don't force expression parsing.
+      const trimmed = contextToSearch.trimStart();
+      if (trimmed.length > 0 && (trimmed[0] === '"' || trimmed[0] === '\'' || trimmed[0] === '`')) {
+        const quote = trimmed[0];
+        let i = 1;
+        let escaped = false;
+        while (i < trimmed.length) {
+          const ch = trimmed[i];
+          if (escaped) {
+            escaped = false;
+            i += 1;
+            continue;
+          }
+          if (ch === '\\') {
+            escaped = true;
+            i += 1;
+            continue;
+          }
+          if (ch === quote) break;
+          i += 1;
+        }
+
+        // Unclosed quote: let literal/template parsing surface the real error.
+        if (i >= trimmed.length) return false;
+
+        const after = trimmed.substring(i + 1).trimStart();
+        if (
+          after.length === 0 ||
+          /^(with\b|pipeline\b|as\b|#|>>|<<)/.test(after)
+        ) {
+          return false;
+        }
+      }
+
       return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?\?|!|[-+*/%]))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
     }
     expr:Expression {
@@ -497,10 +533,10 @@ CodeExecution "code execution"
       };
     }
 
-// ENV EXPRESSION - env @config [...] for scoped environment with return value
+// BOX EXPRESSION - box @config [...] for scoped environment with return value
 // Used in /var assignments to execute code in a scoped environment and return the result
-EnvExpression "env expression"
-  = "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !!config || !!withClause; } _ block:ExeStatementBlock {
+BoxExpression "box expression"
+  = "box" _ config:BoxConfigExpression withClause:WithClause? _ block:ExeStatementBlock {
       const values = {
         ...(config ? { config: [config] } : {}),
         ...(withClause ? { withClause } : {}),
@@ -523,25 +559,62 @@ EnvExpression "env expression"
       }
 
       return helpers.createStructuredDirective(
-        'env',
-        'env',
+        'box',
+        'box',
         values,
         raw,
         meta,
         location(),
-        'env'
+        'box'
       );
     }
-  / "env" _ config:EnvConfigExpression? withClause:WithClause? &{ return !config && !withClause; } {
-      helpers.mlldError(
-        'env requires a config expression or with clause. Expected: env @config [ ... ] or env with { ... } [ ... ]',
-        '@config or with { ... }',
-        location()
+  / "box" _ withClause:WithClause _ block:ExeStatementBlock {
+      const values = {
+        withClause,
+        block
+      };
+
+      const raw = {
+        withClause
+      };
+
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true,
+        withClause
+      };
+
+      return helpers.createStructuredDirective(
+        'box',
+        'box',
+        values,
+        raw,
+        meta,
+        location(),
+        'box'
       );
     }
-  / "env" _ config:EnvConfigExpression? withClause:WithClause? _ !("[" / BlockComments) {
+  / "box" _ block:ExeStatementBlock {
+      const values = { block };
+      const raw = {};
+      const meta = {
+        statementCount: block?.meta?.statementCount ?? (block?.values?.statements?.length || 0),
+        hasReturn: block?.meta?.hasReturn === true
+      };
+
+      return helpers.createStructuredDirective(
+        'box',
+        'box',
+        values,
+        raw,
+        meta,
+        location(),
+        'box'
+      );
+    }
+  / "box" _ !("[" / BlockComments) {
       helpers.mlldError(
-        'env requires a block. Expected: env @config [ ... ] or env with { ... } [ ... ]',
+        'box requires a block. Expected: box [ ... ], box @config [ ... ], or box with { ... } [ ... ]',
         '[',
         location()
       );
