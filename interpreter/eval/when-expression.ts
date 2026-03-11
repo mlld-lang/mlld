@@ -201,6 +201,15 @@ function isNoneCondition(condition: any): boolean {
   return condition?.type === 'Literal' && condition?.valueType === 'none';
 }
 
+function isAstNodeLike(value: unknown): value is BaseMlldNode {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'type' in value &&
+    'nodeId' in value
+  );
+}
+
 async function normalizeActionValue(value: unknown, actionEnv: Environment): Promise<unknown> {
   let normalized = value;
 
@@ -222,19 +231,23 @@ async function normalizeActionValue(value: unknown, actionEnv: Environment): Pro
     return normalized;
   }
 
-  if (normalized && typeof normalized === 'object' && 'type' in (normalized as Record<string, unknown>)) {
-    const nodeType = (normalized as Record<string, unknown>).type;
+  if (isVariable(normalized)) {
+    normalized = await extractVariableValue(normalized, actionEnv);
+  }
+
+  if (isAstNodeLike(normalized)) {
+    const nodeType = normalized.type;
 
     // Handle Literal nodes directly - extract the value
-    if (nodeType === 'Literal' && 'value' in (normalized as Record<string, unknown>)) {
-      const valueType = (normalized as Record<string, unknown>).valueType;
+    if (nodeType === 'Literal' && 'value' in normalized) {
+      const literalNode = normalized as { valueType?: string; value: unknown };
+      const valueType = literalNode.valueType;
       if (valueType === 'done' || valueType === 'continue') {
         return normalized;
       }
-      normalized = (normalized as { value: unknown }).value;
+      normalized = literalNode.value;
     } else {
       // Try to extract variable value for other node types
-      const { extractVariableValue } = await import('../utils/variable-resolution');
       try {
         normalized = await extractVariableValue(normalized as any, actionEnv);
       } catch (error) {

@@ -579,4 +579,18 @@ describe('when evaluator characterization', () => {
     expect(emitted).toContain('A');
     expect(emitted).not.toContain('"type": "WhenExpression"');
   });
+
+  it('keeps object-literal when-expression results with user type keys stable', async () => {
+    const { ast } = await parse([
+      '/var @x = when "a" [',
+      '  "a" => { type: "hello" }',
+      '  * => { type: "bye" }',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    const value = await extractVariableValue(env.getVariable('x')!, env);
+    expect(value).toEqual({ type: 'hello' });
+  });
 });
