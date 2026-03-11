@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `when` expressions no longer misclassify plain object results that happen to include a `type` key as internal AST nodes. Inline object literals like `{ type: "response" }` now return correctly instead of collapsing to `undefined`.
+- Live transport (`mlld live --stdio`): `stdout` effects no longer write raw text to stdout when streaming is disabled, which was corrupting the NDJSON protocol. Content is now captured in the document buffer instead. Fixes SDK `execute()`/`process()` calls failing with `invalid live response` when scripts produce multiline output (e.g. via `claude -p`).
+- Python SDK: `_reader_loop` now buffers incomplete JSON lines instead of failing all pending requests. Provides defense-in-depth against any stdout contamination reaching the transport.
 
 ## [2.0.4]
 

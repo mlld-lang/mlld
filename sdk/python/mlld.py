@@ -718,6 +718,7 @@ class Client:
         if process is None or process.stdout is None:
             return
 
+        buf = ""
         try:
             while True:
                 line = process.stdout.readline()
@@ -728,13 +729,25 @@ class Client:
                 if not line:
                     continue
 
+                # If we are not buffering, start fresh with this line.
+                # If we are already buffering (incomplete JSON from prior
+                # lines), check whether this line looks like the start of
+                # a new top-level message.  If so, the previous buffer was
+                # corrupt -- discard it and start over.
+                if buf and line.startswith("{"):
+                    buf = ""
+
+                buf += line
                 try:
-                    envelope = json.loads(line)
-                except json.JSONDecodeError as error:
-                    self._fail_all_pending(
-                        MlldError(f"invalid live response: {error}", code="TRANSPORT_ERROR")
-                    )
+                    envelope = json.loads(buf)
+                except json.JSONDecodeError:
+                    # The JSON may span multiple lines (e.g. when the
+                    # output field contains literal newlines that were
+                    # not escaped in the transport).  Keep buffering
+                    # until we assemble a complete object.
                     continue
+
+                buf = ""
 
                 event = envelope.get("event")
                 if isinstance(event, dict):

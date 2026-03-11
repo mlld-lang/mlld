@@ -76,9 +76,17 @@ export class DefaultEffectHandler implements EffectHandler {
         break;
 
       case 'stdout':
-        // Only write to stdout (bypasses document)
-        const stdoutOnly = this.processContent(content, 'stdout', keepAnsi);
-        process.stdout.write(stdoutOnly);
+        // Only write to stdout (bypasses document).
+        // When streaming is disabled (e.g. live transport protocol mode),
+        // fall back to the document buffer so the content is still
+        // captured in the result without corrupting the NDJSON transport.
+        if (this.streamingEnabled) {
+          const stdoutOnly = this.processContent(content, 'stdout', keepAnsi);
+          process.stdout.write(stdoutOnly);
+        } else {
+          const stdoutDoc = this.processContent(content, 'doc', keepAnsi);
+          this.documentBuffer.push(stdoutDoc);
+        }
         break;
 
       case 'stderr':
