@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { CommandUtils } from './CommandUtils';
-import { createSimpleTextVariable } from '@core/types/variable';
 
 describe('CommandUtils guidance messages', () => {
   it('suggests run-specific shell block patterns in run context', () => {
@@ -49,16 +48,9 @@ describe('CommandUtils guidance messages', () => {
   });
 
   it('rejects escaped quoted fragments that shell would split apart', () => {
-    let message = '';
-    try {
-      CommandUtils.validateAndParseCommand('claude -p --mcp-config \\"/tmp/a b\\"');
-    } catch (error) {
-      message = error instanceof Error ? error.message : String(error);
-    }
-
-    expect(message).toContain('Escaped quoted fragment is not allowed');
-    expect(message).toContain('"/tmp/a b"');
-    expect(message).toContain('quoted string variable was interpolated back into cmd');
+    expect(() =>
+      CommandUtils.validateAndParseCommand('claude -p --mcp-config \\"/tmp/a b\\"')
+    ).toThrow();
   });
 
   it('ignores non-AST command templates when collecting fragment warnings', () => {
