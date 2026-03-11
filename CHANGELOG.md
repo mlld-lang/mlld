@@ -7,16 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- `exe recursive` label — self-calling exe functions with bounded depth. Add `recursive` to any `exe` label list to allow a function to call itself up to a configurable depth limit (default 64, override with `MLLD_RECURSION_DEPTH`). Works with `exe llm`, inside `for`/`for parallel` loops (each branch tracks depth independently), and composes with checkpointing. Non-recursive functions retain existing immediate-throw behavior on self-call.
-
-### Fixed
-- Circular reference guard now fires after argument evaluation rather than before. This fixes a pre-existing bug where `@f(@f(x))` — a non-recursive nested call of the same function — was incorrectly rejected as circular. Arguments are evaluated in the caller's scope before the callee's body begins, so nesting the same function as an argument is valid and now works correctly.
-- For-loop variables (`@varName`, `@varName_key`, `@varName.field`) are now marked as block-scoped and can shadow parent-scope variables with the same name. This fixes a bug where `exe recursive` functions containing `for`/`for parallel` loops would throw `VariableRedefinitionError` on the recursive call when the loop variable name matched one in an ancestor scope.
-
 ## [2.0.4]
 
 ### Added
+- `exe recursive` label — self-calling exe functions with bounded depth. Add `recursive` to any `exe` label list to allow a function to call itself up to a configurable depth limit (default 64, override with `MLLD_RECURSION_DEPTH`). Works with `exe llm`, inside `for`/`for parallel` loops (each branch tracks depth independently), and composes with checkpointing. Non-recursive functions retain existing immediate-throw behavior on self-call.
 - VirtualFS contract freeze baseline: finalized public API/migration decisions, phase plan, and regression checklist artifacts (`plan-virtualfs.md`, `docs/dev/VIRTUALFS-CONTRACT.md`, `tests/virtualfs/REGRESSION-CHECKLIST.md`)
 - `VirtualFS` core `IFileSystemService` implementation with copy-on-write overlay semantics (`empty`/`over`, shadow-first reads, delete masking, directory merge behavior) plus new core/integration test coverage
 - `VirtualFS` lifecycle APIs for inspect/apply/revert workflows: `changes`/`diff`, `discard`, `reset`, scoped/global `flush`, deterministic `export`, and `apply` with strict patch typings
@@ -25,33 +19,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test harness migration: `MemoryFileSystem` now wraps `VirtualFS.empty()` for semantics parity, with dedicated parity tests and updated test-environment docs
 - VirtualFS final hardening pass: added stress regression coverage for deep merge/delete-mask and repeated `flush`/`discard` lifecycle cycles, plus SDK default `NodeFileSystem` behavior checks when `fileSystem` is omitted
 
-### Added
-- `exe recursive` label — self-calling exe functions with bounded depth. Add `recursive` to any `exe` label list to allow a function to call itself up to a configurable depth limit (default 64, override with `MLLD_RECURSION_DEPTH`). Works with `exe llm`, inside `for`/`for parallel` loops (each branch tracks depth independently), and composes with checkpointing. Non-recursive functions retain existing immediate-throw behavior on self-call.
-
-### Fixed
-- MCP server: strip namespace prefix from tool calls (e.g., `server-name:tool_name` → `tool_name`) to support clients that send namespaced tool names
-- Circular reference guard now fires after argument evaluation rather than before. This fixes a pre-existing bug where `@f(@f(x))` — a non-recursive nested call of the same function — was incorrectly rejected as circular. Arguments are evaluated in the caller's scope before the callee's body begins, so nesting the same function as an argument is valid and now works correctly.
-- `exe recursive` label now survives module import boundaries. Previously, importing a function that internally called a `recursive`-labelled function (directly or transitively through a wrapper) would drop the `recursive` label during `capturedModuleEnv` rehydration, causing a spurious `CircularReference` error at runtime. Fixed in `CapturedEnvRehydrator` (now threads the `__metadata__` map through deserialization so inner executables retain their labels) and `VariableManager.hasVariable` (now searches `capturedModuleEnv` so the recursion guard resolves correctly for captured-scope executables).
-- `PythonPackageManager` availability probes now use `spawnSync` instead of `execSync`, avoiding `EPERM` errors in sandboxed environments where `execSync` is restricted.
-
-### Documentation
-- Completed VirtualFS coverage across dev/user docs and SDK atoms, including architecture placement, no-grammar-impact note, test-harness guidance, SDK usage patterns, and docs-mirroring SDK example tests
-
 ### Changed
 - `mlld nvim-setup` now auto-updates outdated configs instead of requiring `--force`; shows version transition (e.g. `Updated config v15 → v16`)
 
 ### Fixed
-- Neovim: disable snippet/generic autocompletion (nvim-cmp, blink.cmp) for `.mld` files — mlld scripts are not code and general snippets are noise
-- `mlld nvim-setup` leaked debug output (`true table: 0x...`) when checking for nvim-lspconfig
+- Circular reference guard now fires after argument evaluation rather than before. This fixes a pre-existing bug where `@f(@f(x))` — a non-recursive nested call of the same function — was incorrectly rejected as circular. Arguments are evaluated in the caller's scope before the callee's body begins, so nesting the same function as an argument is valid and now works correctly.
+- For-loop variables (`@varName`, `@varName_key`, `@varName.field`) are now marked as block-scoped and can shadow parent-scope variables with the same name. This fixes a bug where `exe recursive` functions containing `for`/`for parallel` loops would throw `VariableRedefinitionError` on the recursive call when the loop variable name matched one in an ancestor scope.
+- `exe recursive` label now survives module import boundaries. Previously, importing a function that internally called a `recursive`-labelled function (directly or transitively through a wrapper) would drop the `recursive` label during `capturedModuleEnv` rehydration, causing a spurious `CircularReference` error at runtime. Fixed in `CapturedEnvRehydrator` (now threads the `__metadata__` map through deserialization so inner executables retain their labels) and `VariableManager.hasVariable` (now searches `capturedModuleEnv` so the recursion guard resolves correctly for captured-scope executables).
+- MCP server: strip namespace prefix from tool calls (e.g., `server-name:tool_name` → `tool_name`) to support clients that send namespaced tool names
 - MCP server: handle `notifications/initialized` per protocol spec instead of returning an error that caused clients to restart the server
 - MCP server: suppress responses for JSON-RPC notifications (messages without `id`)
 - MCP server: `tools/call` returned "Tool not found" for exported functions with snake_case names due to incorrect camelCase round-trip in `resolveToolKey`
+- `PythonPackageManager` availability probes now use `spawnSync` instead of `execSync`, avoiding `EPERM` errors in sandboxed environments where `execSync` is restricted.
+- Neovim: disable snippet/generic autocompletion (nvim-cmp, blink.cmp) for `.mld` files — mlld scripts are not code and general snippets are noise
+- `mlld nvim-setup` leaked debug output (`true table: 0x...`) when checking for nvim-lspconfig
 - Streaming `stream` flags now resolve expression values (for example `stream: @config.stream`) across exec/run/show/pipeline paths; only strict boolean `true` enables streaming
 - Per-call MCP config generation now hard-fails on unknown in-box VFS tool names and MCP tool-name collisions
 - Per-invocation scope cleanups now deterministically tear down transient per-call MCP bridge resources
 - `mlld run` checkpoint guidance and resume semantics now match script-level resume policy, named checkpoint policies, and workspace replay behavior
 - Imported module `/needs { packages: { node: [...] } }` checks now resolve Node packages from the imported module path, including built CLI runs
 - Namespace imports now preserve sibling command-ref scope for top-level exported executables
+
+### Documentation
+- Completed VirtualFS coverage across dev/user docs and SDK atoms, including architecture placement, no-grammar-impact note, test-harness guidance, SDK usage patterns, and docs-mirroring SDK example tests
 
 ## [2.0.3]
 
