@@ -895,6 +895,29 @@ Control keywords:
 
 `@input` is null on the first iteration.
 
+**Important:** `done` exits only the loop — execution continues with the next statement after the loop block. This is analogous to `break` in other languages, not an early return from the enclosing scope.
+
+To act conditionally on the loop result, capture it with `var`:
+
+```mlld
+var @result = loop(10) [
+  let @count = (@input ?? 0) + 1
+  when @count >= 3 => done @count
+  continue @count
+]
+>> @result is 3 — execution continues here
+when @result => show "Converged at @result"
+```
+
+To halt the entire script from inside a loop, use `bail` instead:
+
+```mlld
+loop(10) [
+  when @mx.loop.iteration > 5 => bail "Exceeded iteration budget"
+  continue
+]
+```
+
 Use `until` to stop before running the body:
 
 ```mlld
