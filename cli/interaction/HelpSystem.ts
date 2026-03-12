@@ -599,6 +599,8 @@ Options:
   --inject, --payload KEY=VALUE
                           Inject dynamic module (can use multiple times)
                           VALUE formats: JSON object, @file.json, or mlld source
+  --state <value>         Inject JSON object data into @state (can use multiple times)
+                          VALUE formats: @file.json, KEY=VALUE, or JSON object
   --no-stream             Disable streaming (document mode only)
   -w, --watch             Watch for changes and reprocess
   -h, --help              Display this help message

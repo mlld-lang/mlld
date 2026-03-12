@@ -16,6 +16,7 @@ import type { OptionProcessor } from '../parsers/OptionProcessor';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 import { URLLoader } from '../utils/url-loader';
 import { parseInjectOptions } from '../utils/inject-parser';
+import { parseStateOptions } from '../utils/state-parser';
 import { parseDuration, formatDuration } from '@core/config/utils';
 import chalk from 'chalk';
 import {
@@ -416,9 +417,26 @@ export class FileProcessor {
     );
     const modeConfig = resolveInterpretMode(cliOptions);
     const detachLogging = modeConfig.emitter ? attachEmitterLogging(modeConfig.emitter) : undefined;
-    const dynamicModules = cliOptions.inject
+    const injectModules = cliOptions.inject
       ? await parseInjectOptions(cliOptions.inject, environment.fileSystem, path.dirname(effectivePath))
       : undefined;
+    const stateModule = cliOptions.state
+      ? await parseStateOptions(cliOptions.state, environment.fileSystem, path.dirname(effectivePath))
+      : undefined;
+    let dynamicModules = injectModules ? { ...injectModules } : undefined;
+
+    if (stateModule) {
+      const mergedModules = dynamicModules ?? {};
+      const existingState = mergedModules['@state'];
+
+      if (existingState && typeof existingState === 'object' && !Array.isArray(existingState)) {
+        mergedModules['@state'] = { ...(existingState as Record<string, unknown>), ...stateModule };
+      } else {
+        mergedModules['@state'] = stateModule;
+      }
+
+      dynamicModules = mergedModules;
+    }
 
     const scriptResumeMode =
       extractLeadingResumeDirective(content).resumeMode ?? DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE;

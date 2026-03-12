@@ -33,6 +33,32 @@ describe('ArgumentParser --payload alias', () => {
   });
 });
 
+describe('ArgumentParser --state', () => {
+  it('parses file reference form', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--state', '@state.json']);
+
+    expect(options.state).toEqual(['@state.json']);
+    expect(options.inject).toEqual(['@payload={}']);
+  });
+
+  it('parses inline JSON form', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--state', '{"messages":[]}']);
+
+    expect(options.state).toEqual(['{"messages":[]}']);
+    expect(options.inject).toEqual(['@payload={}']);
+  });
+
+  it('parses KEY=VALUE form', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--state', 'conversationId=abc123']);
+
+    expect(options.state).toEqual(['conversationId=abc123']);
+    expect(options.inject).toEqual(['@payload={}']);
+  });
+});
+
 describe('ArgumentParser custom payload flags', () => {
   it('collects unknown flags as @payload for file input', () => {
     const parser = new ArgumentParser();

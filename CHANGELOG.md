@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SDK/runtime error serialization now strips internal manager/environment state from wrapped causes and live-transport event payloads, so Python and JS callers see the real runtime failure without multi-kilobyte environment dumps.
 - Registry/module resolution now invalidates stale lockfile cache entries when a versioned import requests a different version, and refreshed lock entries persist the resolved `registryVersion` so subsequent versioned imports reuse the correct cache entry.
 - Pipe inside ternary branches (`var @x = @val ? @val | @filter : null`) now produces an actionable parse error explaining the limitation and showing two workarounds (exe block wrapper or split into separate steps) instead of a generic "Text content not allowed in strict mode" message.
+- CLI: added `--state` so scripts can populate `@state` from `@file.json`, inline JSON objects, or `KEY=VALUE` flags without routing through `--inject`.
+- `mlld info` now builds source URLs correctly for directory-backed registry modules, fixing broken `# tldr` lookups that previously produced `undefined` paths.
 
 ## [2.0.4]
 

@@ -116,6 +116,8 @@ export interface CLIOptions {
   metrics?: boolean;
   // Dynamic module injection
   inject?: string[];  // ['@module=value', '@data=@file.json']
+  // Raw @state inputs from CLI (resolved during execution)
+  state?: string[];   // ['@file.json', '{"messages":[]}', 'key=value']
   _?: string[]; // Remaining args after command
 }
 const globalErrorHandler = new ErrorHandler();

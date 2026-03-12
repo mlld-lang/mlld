@@ -277,8 +277,20 @@ export class ArgumentParser {
         case '--payload': {
           // Multiple flags allowed: --inject @config={"key":"val"} --payload @data=@file.json
           const injectValue = args[++i];
+          if (injectValue === undefined) {
+            throw new Error(`${arg} requires a value`);
+          }
           if (!options.inject) options.inject = [];
           options.inject.push(injectValue);
+          break;
+        }
+        case '--state': {
+          const stateValue = args[++i];
+          if (stateValue === undefined) {
+            throw new Error('--state requires a value');
+          }
+          if (!options.state) options.state = [];
+          options.state.push(stateValue);
           break;
         }
         case '--append-json': {

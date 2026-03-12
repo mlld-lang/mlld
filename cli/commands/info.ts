@@ -1,4 +1,5 @@
 import { formatModuleReference } from '../utils/output';
+import type { ModuleSource } from '@core/registry/types';
 import { interpret } from '@interpreter/index';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -34,10 +35,7 @@ interface RegistryModule {
   keywords?: string[];
   license: string;
   repo?: string;
-  source: {
-    url: string;
-    contentHash: string;
-  };
+  source: ModuleSource;
   publishedAt?: string;
 }
 
@@ -79,7 +77,9 @@ export async function getModuleInfo(moduleRef: string): Promise<ModuleInfo & { s
     keywords: entry.keywords,
     license: entry.license,
     repository: entry.repo,
-    sourceUrl: entry.source.url,
+    sourceUrl: entry.source.type === 'directory'
+      ? `${entry.source.baseUrl}/${entry.source.entryPoint}`
+      : entry.source.url,
     publishedAt: entry.publishedAt
   };
 }
