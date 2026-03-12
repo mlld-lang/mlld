@@ -4,7 +4,7 @@
 >> Stateless: reads input, calls LLM, writes output, exits.
 >> Invoke from any external system that can pass CLI arguments.
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 import "@payload" as @p
 
 var @inputPath = @p.input
@@ -29,7 +29,7 @@ var @fullPrompt = `@prompt
 IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
 
 >> Single LLM call — analysis is read-only
-@claudePoll(@fullPrompt, "sonnet", "@root", "Read,Write,Glob,Grep", @outputPath)
+@claudePoll(@fullPrompt, { model: "sonnet", tools: ["Read", "Write", "Glob", "Grep"], poll: @outputPath })
 var @result = <@outputPath>?
 
 if @result [

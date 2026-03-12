@@ -2,7 +2,7 @@
 >> @meta.name = Reviewer Agent
 >> @meta.capabilities = Reviews and critiques work products: code, documents, proposals
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 
 exe @taskPrompt(task) = template "./prompts/agents/review.att"
 

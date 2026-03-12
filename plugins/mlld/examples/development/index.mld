@@ -15,7 +15,7 @@
 >>   mlld run development --resume @callWorker  # re-run all worker calls
 >>   mlld run development --new           # fresh run
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 import { @logEvent, @loadRunState, @saveRunState, @buildContext } from "./lib/context.mld"
 import { @writeQuestionsFile } from "./lib/questions.mld"
 import "@payload" as @p
@@ -26,8 +26,8 @@ var @repoDir = @p.repo ?? "."
 var @maxIterations = @p.max ? @p.max * 1 : 100
 
 >> Tool permissions
-var @decisionTools = "Read,Write,Glob,Grep"
-var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(gh:*)"
+var @decisionTools = ["Read", "Write", "Glob", "Grep"]
+var @workerTools = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(git:*)", "Bash(npm:*)", "Bash(gh:*)"]
 
 >> Prompt templates
 exe @decisionPrompt(goal, issues, recentEvents, lastWorkerResult, lastError, humanAnswers) = template "./prompts/decision/core.att"
@@ -36,7 +36,7 @@ exe @invalidatePrompt(issue, guidance, goal, evidenceRules) = template "./prompt
 exe @reviewPrompt(issue, guidance, goal, evidenceRules) = template "./prompts/workers/review.att"
 
 >> LLM call wrappers — llm label enables automatic caching
-exe llm @callWorker(prompt, model, dir, tools, outPath) = @claudePoll(@prompt, @model, @dir, @tools, @outPath)
+exe llm @callWorker(prompt, config) = @claudePoll(@prompt, @config)
 
 >> Load shared prompt fragments
 var @evidenceRules = <./prompts/shared/evidence-rules.md>
@@ -95,7 +95,7 @@ loop(@maxIterations) [
 IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool. Write ONLY valid JSON.`
 
   @logEvent(@runDir, "decision_call", {})
-  @claudePoll(@fullPrompt, "opus", "@root", @decisionTools, @decisionOutputPath)
+  @claudePoll(@fullPrompt, { model: "opus", tools: @decisionTools, poll: @decisionOutputPath })
   let @decision = <@decisionOutputPath>?
 
   if !@decision [
@@ -149,7 +149,7 @@ IMPORTANT: Write your JSON response to @workerOutputPath using the Write tool. W
         prompt_path: @workerPromptPath
       })
 
-      @callWorker(@workerFullPrompt, @model, "@repoDir", @workerTools, @workerOutputPath)
+      @callWorker(@workerFullPrompt, { model: @model, tools: @workerTools, poll: @workerOutputPath })
       let @result = <@workerOutputPath>?
 
       if !@result [

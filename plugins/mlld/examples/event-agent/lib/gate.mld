@@ -1,6 +1,6 @@
 >> Gate — checks output quality before finalizing
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 
 exe @checkPrompt(task, agentOutput) = template "./prompts/gate/check.att"
 
@@ -12,7 +12,7 @@ exe @checkOutput(task, agentOutput) = [
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
-  @claudePoll(@fullPrompt, "haiku", "@root", "Read,Write", @outPath)
+  @claudePoll(@fullPrompt, { model: "haiku", tools: ["Read", "Write"], poll: @outPath })
   let @result = <@outPath>? | @parse
 
   >> Default to pass if gate itself fails

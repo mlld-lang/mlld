@@ -13,7 +13,7 @@
 >>   mlld run audit --resume "verify"     # skip to verification phase
 >>   mlld run audit --new                 # fresh run
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 import "@payload" as @p
 
 >> Parse arguments
@@ -23,17 +23,17 @@ var @outputPath = @p.output ?? "findings.json"
 
 >> Tool permissions — escalation between phases
 >> Phase 1: reviewer sees only the file (Read to load, Write for output)
-var @reviewTools = "Read,Write"
+var @reviewTools = ["Read", "Write"]
 >> Phase 2: verifier can explore the codebase for surrounding context
-var @verifyTools = "Read,Write,Glob,Grep"
+var @verifyTools = ["Read", "Write", "Glob", "Grep"]
 
 >> Prompt templates
 exe @reviewPrompt(file, fileContent) = template "./prompts/review.att"
 exe @verifyPrompt(finding, fileContent) = template "./prompts/verify.att"
 
 >> LLM call wrappers — llm label enables automatic caching
-exe llm @callReview(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
-exe llm @callVerify(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+exe llm @callReview(prompt, config) = @claudePoll(@prompt, @config)
+exe llm @callVerify(prompt, config) = @claudePoll(@prompt, @config)
 
 >> Array helpers
 exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => (a.data || a).findings || []) }
@@ -73,7 +73,7 @@ var @reviewResults = for parallel(@parallelism) @file in @files [
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema in the prompt.`
 
   >> Call reviewer (limited tools) — cache handles idempotency
-  @callReview(@fullPrompt, @reviewTools, @outPath)
+  @callReview(@fullPrompt, { model: "sonnet", tools: @reviewTools, poll: @outPath })
   let @result = <@outPath>?
 
   if !@result [
@@ -107,7 +107,7 @@ var @verificationResults = for parallel(@parallelism) @finding in @allFindings [
 IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
 
   >> Call verifier (expanded tools) — cache handles idempotency
-  @callVerify(@fullPrompt, @verifyTools, @outPath)
+  @callVerify(@fullPrompt, { model: "sonnet", tools: @verifyTools, poll: @outPath })
   let @result = <@outPath>?
 
   if !@result [

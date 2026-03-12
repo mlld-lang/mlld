@@ -54,7 +54,7 @@ Each iteration, you make a fresh call with full context. The LLM reads the conte
 ```mlld
 >> Each iteration is a fresh call with fresh context
 let @context = @buildContext(@runDir)
-let @decision = @claudePoll(@fullPrompt, "opus", "@root", @tools, @outputPath)
+let @decision = @claudePoll(@fullPrompt, { model: "opus", tools: @tools, poll: @outputPath })
 ```
 
 > **Example**: [`examples/development/index.mld:81-109`](../../examples/development/index.mld) — Fresh `@buildContext` + `@claudePoll` each iteration. No conversation history carried forward.
@@ -293,7 +293,7 @@ let @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
 
-@claudePoll(@fullPrompt, "opus", "@root", @tools, @outputPath)
+@claudePoll(@fullPrompt, { model: "opus", tools: @tools, poll: @outputPath })
 let @decision = <@outputPath>?
 ```
 
@@ -342,7 +342,7 @@ loop(endless) [
   let @context = @buildContext(@runDir)
 
   >> 2. Decision call
-  let @decision = @claudePoll(@fullPrompt, "opus", "@root", @tools, @outputPath)
+  let @decision = @claudePoll(@fullPrompt, { model: "opus", tools: @tools, poll: @outputPath })
 
   >> 3. Execute action (mechanical switch)
   when @decision.action [
