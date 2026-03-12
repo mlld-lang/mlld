@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2026-02-23T20:02:15.743Z
+// Generated from grammar at 2026-03-12T07:13:50.952Z
 
 const Prism = require('prismjs');
 
@@ -10,11 +10,19 @@ Prism.languages.mlld = {
     greedy: true
   },
   'directive': {
-    pattern: /\b(var|show|stream|run|exe|import|when|if|output|append|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|while|env)\b/,
+    pattern: /\b(var|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\b/,
     alias: 'keyword'
   },
   'when-keyword': {
     pattern: /when\s*:/,
+    alias: 'keyword'
+  },
+  'directive-form': {
+    pattern: /\b(loop|while)\b(?=\s*\()|\bif\b(?=\s*[@\[(])|\bbox\b(?=\s*(with\b|\[|@))|\b(file|files)\b(?=\s*(<|"|@))|\b(needs|profiles)\b(?=\s*\{)|\bauth\b(?=\s+@)/,
+    alias: 'keyword'
+  },
+  'control-keyword': {
+    pattern: /\b(until|endless|else)\b/,
     alias: 'keyword'
   },
   // Alligator MUST come before comparison operators to match <file.md> as one token
@@ -147,7 +155,7 @@ Prism.languages.mlld = {
   },
   // Object keys in literals (file:, review:, etc) - word followed by : but not ::
   'object-key': {
-    pattern: /[\w]+(?=\s*:(?!:))/,
+    pattern: /[A-Za-z_][A-Za-z0-9_-]*(?=\s*:(?!:))/,
     greedy: true,
     alias: 'property'
   },
@@ -163,7 +171,7 @@ Prism.languages.mlld = {
     pattern: /\.([A-Za-z_][A-Za-z0-9_-]*|\d+)/,
     alias: 'property'
   },
-  'operator': /\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new)\b/,
+  'operator': /\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new|tools|mcp|git|using)\b/,
   'pipe-operator': {
     pattern: /\|/,
     alias: 'operator'

@@ -108,7 +108,11 @@ describe('Highlighting Rules', () => {
       expect(current).toContain('when');
       expect(current).toContain('if');
       expect(current).toContain('output');
-      expect(current).toContain('path');
+      expect(current).toContain('file');
+      expect(current).toContain('files');
+      expect(current).toContain('box');
+      expect(current).toContain('needs');
+      expect(current).toContain('profiles');
       expect(current).toContain('hook');
       expect(current).toContain('checkpoint');
     });
@@ -119,6 +123,7 @@ describe('Highlighting Rules', () => {
       expect(deprecated).toContain('data');
       expect(deprecated).toContain('add');
       expect(deprecated).toContain('exec');
+      expect(deprecated).toContain('path');
     });
   });
   
@@ -147,21 +152,30 @@ describe('Highlighting Rules', () => {
     it('should have command keywords', () => {
       expect(HIGHLIGHTING_RULES.keywords.commands).toContain('run');
       expect(HIGHLIGHTING_RULES.keywords.commands).toContain('sh');
+      expect(HIGHLIGHTING_RULES.keywords.commands).toContain('cmd');
     });
     
     it('should have language keywords', () => {
       expect(HIGHLIGHTING_RULES.keywords.languages).toContain('js');
       expect(HIGHLIGHTING_RULES.keywords.languages).toContain('python');
       expect(HIGHLIGHTING_RULES.keywords.languages).toContain('node');
+      expect(HIGHLIGHTING_RULES.keywords.languages).toContain('sh');
     });
     
     it('should have special keywords', () => {
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('when');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('if');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('else');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('until');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('endless');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('done');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('continue');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('foreach');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('from');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('as');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('tools');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('mcp');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('git');
     });
   });
 });

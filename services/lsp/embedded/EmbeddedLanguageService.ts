@@ -1,6 +1,9 @@
 import Parser from 'web-tree-sitter';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { ISemanticToken } from '@services/lsp/types';
+
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Service for parsing and tokenizing embedded language code blocks
@@ -233,14 +236,14 @@ export class EmbeddedLanguageService {
       const possiblePaths = [
         // Production: relative to bundle location (works for global install)
         // cli.cjs is at dist/cli.cjs, wasm is at dist/wasm/*.wasm
-        path.join(__dirname, 'wasm', `tree-sitter-${name}.wasm`),
+        path.join(MODULE_DIR, 'wasm', `tree-sitter-${name}.wasm`),
         // Development: from project root
         path.join(process.cwd(), 'dist', 'wasm', `tree-sitter-${name}.wasm`),
         // Development: from node_modules
         path.join(process.cwd(), 'node_modules', `tree-sitter-${name}`, `tree-sitter-${name}.wasm`),
         // Fallback: go up from bundle
-        path.join(__dirname, '..', 'wasm', `tree-sitter-${name}.wasm`),
-        path.join(__dirname, '..', '..', 'wasm', `tree-sitter-${name}.wasm`),
+        path.join(MODULE_DIR, '..', 'wasm', `tree-sitter-${name}.wasm`),
+        path.join(MODULE_DIR, '..', '..', 'wasm', `tree-sitter-${name}.wasm`),
       ];
       
       let language: Parser.Language | null = null;
