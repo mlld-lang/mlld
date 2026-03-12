@@ -1,0 +1,2 @@
+var @raw = "hello"
+var @x = @raw ? @raw | @parse.llm : null
