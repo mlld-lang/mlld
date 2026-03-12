@@ -678,8 +678,8 @@ export async function interpret(
       abort: () => {
         env.cleanup();
       },
-      updateState: async (path: string, value: unknown) => {
-        env.applyExternalStateUpdate(path, value);
+      updateState: async (path: string, value: unknown, labels?: string[]) => {
+        env.applyExternalStateUpdate(path, value, labels);
       }
     });
     env.enableSDKEvents(emitter);

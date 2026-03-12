@@ -77,6 +77,7 @@ interface StateUpdateRequestParams {
   requestId: RequestId;
   path: string;
   value: unknown;
+  labels?: string[];
 }
 
 const SDK_EVENT_TYPES: SDKEvent['type'][] = [
@@ -380,7 +381,7 @@ export class LiveStdioServer {
     }
 
     try {
-      await active.updateState(parsed.path, parsed.value);
+      await active.updateState(parsed.path, parsed.value, parsed.labels);
       await this.writeResult(requestId, {
         requestId: parsed.requestId,
         path: parsed.path
@@ -601,10 +602,15 @@ export class LiveStdioServer {
       throw new Error('state:update params.path must be a non-empty string');
     }
 
+    const labels = Array.isArray(params.labels)
+      ? params.labels.filter((l: unknown) => typeof l === 'string')
+      : undefined;
+
     return {
       requestId,
       path: params.path.trim(),
-      value: params.value
+      value: params.value,
+      labels: labels && labels.length > 0 ? labels : undefined
     };
   }
 

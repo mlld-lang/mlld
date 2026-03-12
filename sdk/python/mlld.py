@@ -28,6 +28,7 @@ class StateWrite:
     path: str
     value: Any
     timestamp: str | None = None
+    security: dict[str, Any] | None = None
 
 
 @dataclass
@@ -168,15 +169,25 @@ class _BaseHandle:
         path: str,
         value: Any,
         *,
+        labels: list[str] | None = None,
         timeout: float | None = None,
     ) -> None:
-        """Send a state:update request for this in-flight execution."""
+        """Send a state:update request for this in-flight execution.
+
+        Args:
+            path: Dot-separated state path (e.g., "tool_result").
+            value: The value to set.
+            labels: Optional security labels to apply (e.g., ["untrusted"]).
+                    These propagate through mlld's taint tracking system.
+            timeout: Override the handle default timeout.
+        """
 
         self._client._send_state_update(
             self.request_id,
             path,
             value,
             timeout if timeout is not None else self._timeout,
+            labels=labels,
         )
 
     def next_event(self, timeout: float | None = None) -> HandleEvent | None:
@@ -703,6 +714,8 @@ class Client:
         path: str,
         value: Any,
         timeout: float | None,
+        *,
+        labels: list[str] | None = None,
     ) -> None:
         if not isinstance(path, str) or not path.strip():
             raise MlldError("state update path is required", code="INVALID_REQUEST")
@@ -710,13 +723,13 @@ class Client:
         max_wait = timeout if timeout is not None else 2.0
         deadline = time.monotonic() + max_wait
 
+        params: dict[str, Any] = {"requestId": request_id, "path": path, "value": value}
+        if labels is not None:
+            params["labels"] = labels
+
         while True:
             try:
-                self._request(
-                    "state:update",
-                    {"requestId": request_id, "path": path, "value": value},
-                    timeout,
-                )
+                self._request("state:update", params, timeout)
                 return
             except MlldError as error:
                 if error.code != "REQUEST_NOT_FOUND":
@@ -878,6 +891,7 @@ def _state_write_from_payload(write: Any) -> StateWrite | None:
         path=path,
         value=_decode_state_write_value(write.get("value")),
         timestamp=write.get("timestamp") if isinstance(write.get("timestamp"), str) else None,
+        security=write.get("security") if isinstance(write.get("security"), dict) else None,
     )
 
 

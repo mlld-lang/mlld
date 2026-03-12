@@ -1181,7 +1181,7 @@ export class Environment
     return this.getRootEnvironment().stateSnapshot !== undefined;
   }
 
-  applyExternalStateUpdate(path: string, value: unknown): void {
+  applyExternalStateUpdate(path: string, value: unknown, labels?: string[]): void {
     const root = this.getRootEnvironment();
     if (!root.stateSnapshot) {
       throw new Error('No dynamic @state snapshot is available for this execution');
@@ -1189,6 +1189,15 @@ export class Environment
 
     if (!root.setStateSnapshotValue(path, value)) {
       throw new Error('State update path is required');
+    }
+
+    // Merge caller-provided labels into stateLabels (additive, never removed)
+    if (labels && labels.length > 0) {
+      for (const label of labels) {
+        if (!root.stateLabels.includes(label as DataLabel)) {
+          root.stateLabels.push(label as DataLabel);
+        }
+      }
     }
 
     root.refreshStateVariable();

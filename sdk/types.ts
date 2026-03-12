@@ -369,7 +369,7 @@ export interface StreamExecution extends AsyncIterable<SDKEvent> {
   result: () => Promise<StructuredResult>;
   isComplete: () => boolean;
   abort?: () => void;
-  updateState?: (path: string, value: unknown) => Promise<void>;
+  updateState?: (path: string, value: unknown, labels?: string[]) => Promise<void>;
 }
 
 export interface DebugResult extends StructuredResult {
