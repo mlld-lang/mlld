@@ -123,4 +123,28 @@ describe('DynamicModuleResolver', () => {
     expect(result.mx?.labels).toEqual(['src:dynamic']);
     expect(result.mx?.taint).toEqual(['src:dynamic']);
   });
+
+  it('serializes per-field labels for object modules when provided', async () => {
+    const resolver = new DynamicModuleResolver(
+      {
+        '@payload': {
+          query: 'hello',
+          tool_result: 'external'
+        }
+      },
+      {
+        moduleFieldLabels: {
+          '@payload': {
+            query: ['trusted'],
+            tool_result: ['untrusted']
+          }
+        },
+        literalStrings: true
+      }
+    );
+
+    const result = await resolver.resolve('@payload');
+    expect(result.content).toContain("/var trusted @query = 'hello'");
+    expect(result.content).toContain("/var untrusted @tool_result = 'external'");
+  });
 });

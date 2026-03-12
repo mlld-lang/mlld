@@ -185,6 +185,52 @@ describe('execute', () => {
     expect(stateModule?.content).toContain("@greeting = 'hi'");
   });
 
+  it('applies per-field payload labels to imports and direct payload access', async () => {
+    await fileSystem.writeFile(
+      routePath,
+      [
+        '/import "@payload" as @p',
+        '/import { @query, @tool_result } from @payload',
+        '/show @query.mx.labels.includes("trusted")',
+        '/show @tool_result.mx.labels.includes("untrusted")',
+        '/show @p.query.mx.labels.includes("trusted")',
+        '/show @p.tool_result.mx.labels.includes("untrusted")',
+        '/show @payload.query.mx.labels.includes("trusted")',
+        '/show @payload.tool_result.mx.labels.includes("untrusted")'
+      ].join('\n')
+    );
+
+    const result = await execute(
+      routePath,
+      { query: 'hello', tool_result: 'external' },
+      {
+        fileSystem,
+        pathService,
+        payloadLabels: {
+          query: ['trusted'],
+          tool_result: ['untrusted']
+        }
+      }
+    );
+
+    expect(
+      result.output
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+    ).toEqual(['true', 'true', 'true', 'true', 'true', 'true']);
+
+    const resolverManager = (result as any).environment?.getResolverManager();
+    const dynamicResolver = resolverManager
+      ?.getResolversForContext('import')
+      ?.find((resolver: any) => resolver.name === 'dynamic');
+
+    const payloadModule = await dynamicResolver?.resolve('@payload');
+    expect(payloadModule?.content).toContain("/var trusted @query = 'hello'");
+    expect(payloadModule?.content).toContain("/var untrusted @tool_result = 'external'");
+  });
+
   it('applies checkpoint options through SDK execute into interpreter runtime', async () => {
     const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'sdk-execute-checkpoint-'));
     cleanupDirs.push(checkpointRoot);

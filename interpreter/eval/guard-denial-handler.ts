@@ -1,6 +1,5 @@
 import { GuardError } from '@core/errors/GuardError';
 import type { GuardErrorDetails } from '@core/errors/GuardError';
-import { MlldDenialError } from '@core/errors/denial';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { WhenExpressionNode } from '@core/types/when';
@@ -26,16 +25,6 @@ function extractDenialInfo(error: unknown): {
       guardInput: details.guardInput,
       guardName: details.guardName ?? null,
       guardFilter: details.guardFilter ?? null
-    };
-  }
-  if (error instanceof MlldDenialError && error.context.code === 'POLICY_LABEL_FLOW_DENIED') {
-    const ctx = error.context;
-    return {
-      reason: ctx.reason,
-      guardContext: undefined,
-      guardInput: undefined,
-      guardName: ctx.blocker.name ?? null,
-      guardFilter: ctx.blocker.rule ?? null
     };
   }
   return null;

@@ -576,7 +576,10 @@ export class Environment
   registerDynamicModules(
     modules: Record<string, string | Record<string, unknown>>,
     source?: string,
-    options?: { literalStrings?: boolean }
+    options?: {
+      literalStrings?: boolean;
+      moduleFieldLabels?: Record<string, Record<string, readonly string[]>>;
+    }
   ): void {
     if (!this.resolverManager) {
       throw new Error('ResolverManager not available');
@@ -588,7 +591,8 @@ export class Environment
     if (existing instanceof DynamicModuleResolver) {
       const normalized = new DynamicModuleResolver(modules, {
         source,
-        literalStrings: options?.literalStrings
+        literalStrings: options?.literalStrings,
+        moduleFieldLabels: options?.moduleFieldLabels
       });
 
       for (const [path, content] of normalized.getSerializedModules()) {
@@ -598,7 +602,11 @@ export class Environment
       resolver = existing;
       logger.debug(`Updated dynamic modules: ${Object.keys(modules).length}${source ? ` (source: ${source})` : ''}`);
     } else {
-      resolver = new DynamicModuleResolver(modules, { source, literalStrings: options?.literalStrings });
+      resolver = new DynamicModuleResolver(modules, {
+        source,
+        literalStrings: options?.literalStrings,
+        moduleFieldLabels: options?.moduleFieldLabels
+      });
       this.resolverManager.registerResolver(resolver);
       logger.debug(`Registered dynamic modules: ${Object.keys(modules).length}${source ? ` (source: ${source})` : ''}`);
     }

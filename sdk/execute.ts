@@ -32,6 +32,7 @@ export interface ExecuteOptions {
   state?: Record<string, unknown>;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
   dynamicModuleSource?: string;
+  payloadLabels?: Record<string, string[]>;
   timeoutMs?: number;
   signal?: AbortSignal;
   stream?: boolean;
@@ -90,6 +91,7 @@ export async function execute(
     allowAbsolutePaths: options.allowAbsolutePaths,
     dynamicModules,
     dynamicModuleSource: options.dynamicModuleSource,
+    payloadLabels: options.payloadLabels,
     ast: cacheEntry.ast,
     checkpoint: options.checkpoint,
     noCheckpoint: effectiveNoCheckpoint,

@@ -5,7 +5,7 @@ import time
 import unittest
 from pathlib import Path
 
-from mlld import Client, MlldError
+from mlld import Client, MlldError, trusted, untrusted
 
 
 class LiveIntegrationTest(unittest.TestCase):
@@ -165,6 +165,37 @@ class LiveIntegrationTest(unittest.TestCase):
             self.assertIn("count=2 flag=true", result.output)
             self.assertEqual(_state_write_value(result.state_writes, "payload"), {"enabled": True, "nested": {"count": 2}})
             self.assertIs(_state_write_value(result.state_writes, "flag"), True)
+
+    def test_execute_applies_per_field_payload_labels(self) -> None:
+        script = (
+            '/import "@payload" as @p\n'
+            '/import { @query, @tool_result } from "@payload"\n'
+            '/show @query.mx.labels.includes("trusted")\n'
+            '/show @tool_result.mx.labels.includes("untrusted")\n'
+            '/show @p.query.mx.labels.includes("trusted")\n'
+            '/show @p.tool_result.mx.labels.includes("untrusted")\n'
+            '/show @payload.query.mx.labels.includes("trusted")\n'
+            '/show @payload.tool_result.mx.labels.includes("untrusted")\n'
+        )
+
+        with tempfile.TemporaryDirectory(prefix="mlld-python-sdk-") as tmp_dir:
+            script_path = Path(tmp_dir) / "payload-labels.mld"
+            script_path.write_text(script)
+
+            result = self.client.execute(
+                str(script_path),
+                {
+                    "query": trusted("user task"),
+                    "tool_result": untrusted("tool output"),
+                },
+                mode="markdown",
+                timeout=10,
+            )
+
+            self.assertEqual(
+                [line.strip() for line in result.output.splitlines() if line.strip()],
+                ["true", "true", "true", "true", "true", "true"],
+            )
 
     def test_state_update_fails_after_completion(self) -> None:
         handle = self.client.process_async(

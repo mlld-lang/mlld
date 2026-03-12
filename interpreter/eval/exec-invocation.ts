@@ -257,23 +257,25 @@ async function evaluateExecInvocationInternal(
 
     try {
       const { extractVariableValue } = await import('../utils/variable-resolution');
-      let objectValue = await extractVariableValue(objectVar, env);
+      let objectValue: unknown;
 
       if (objectRef.fields && objectRef.fields.length > 0) {
         const { accessFields } = await import('../utils/field-access');
-        objectValue = await accessFields(objectValue, normalizeFields(objectRef.fields), {
+        objectValue = await accessFields(objectVar, normalizeFields(objectRef.fields), {
           env,
           preserveContext: false,
           returnUndefinedForMissing: true,
           sourceLocation: objectRef.location ?? sourceLocation
         });
+      } else {
+        objectValue = await extractVariableValue(objectVar, env);
       }
 
       if (!objectValue || typeof objectValue !== 'object') {
         return { found: false };
       }
 
-      if (!(methodName in (objectValue as Record<string, unknown>))) {
+      if (!Object.prototype.hasOwnProperty.call(objectValue, methodName)) {
         return { found: false };
       }
 
@@ -583,15 +585,12 @@ async function evaluateExecInvocationInternal(
         throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
       }
       
-      // Extract Variable value for object field access - WHY: Need raw object to access fields
       const { extractVariableValue } = await import('../utils/variable-resolution');
-      const objectValue = await extractVariableValue(objectVar, env);
+      let objectValue: unknown;
       
-      
-      // Access the field
       if (objectRef.fields && objectRef.fields.length > 0) {
         const { accessFields } = await import('../utils/field-access');
-        const accessedObject = await accessFields(objectValue, normalizeFields(objectRef.fields), {
+        const accessedObject = await accessFields(objectVar, normalizeFields(objectRef.fields), {
           env,
           preserveContext: false,
           returnUndefinedForMissing: true,
@@ -603,6 +602,8 @@ async function evaluateExecInvocationInternal(
           variable = fieldValue;
         }
       } else {
+        objectValue = await extractVariableValue(objectVar, env);
+
         // Direct field access on the object
         if (typeof objectValue === 'object' && objectValue !== null) {
           // Handle AST object structure with type and properties

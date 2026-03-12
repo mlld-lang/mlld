@@ -67,6 +67,7 @@ export interface InterpretOptions {
   emitter?: ExecutionEmitter;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
   dynamicModuleSource?: string;
+  payloadLabels?: Record<string, string[]>;
   dynamicModuleMode?: MlldMode;
   ast?: any;
   streamingManager?: any;

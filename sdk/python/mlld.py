@@ -162,6 +162,14 @@ class ContentSignature:
     metadata: dict[str, str] | None = None
 
 
+@dataclass(frozen=True)
+class LabeledValue:
+    """Wrapper used to attach security labels to individual payload fields."""
+
+    value: Any
+    labels: tuple[str, ...]
+
+
 class MlldError(Exception):
     """Error from mlld execution."""
 
@@ -434,6 +442,7 @@ class Client:
         *,
         file_path: str | None = None,
         payload: Any = None,
+        payload_labels: dict[str, list[str]] | None = None,
         state: dict[str, Any] | None = None,
         dynamic_modules: dict[str, Any] | None = None,
         dynamic_module_source: str | None = None,
@@ -448,6 +457,7 @@ class Client:
             script: The mlld script to execute.
             file_path: Provides context for relative imports.
             payload: Data injected as @payload.
+            payload_labels: Optional per-field security labels for @payload object fields.
             state: Data injected as @state.
             dynamic_modules: Additional modules to inject.
             dynamic_module_source: Source label for dynamic modules.
@@ -466,6 +476,7 @@ class Client:
             script,
             file_path=file_path,
             payload=payload,
+            payload_labels=payload_labels,
             state=state,
             dynamic_modules=dynamic_modules,
             dynamic_module_source=dynamic_module_source,
@@ -480,6 +491,7 @@ class Client:
         *,
         file_path: str | None = None,
         payload: Any = None,
+        payload_labels: dict[str, list[str]] | None = None,
         state: dict[str, Any] | None = None,
         dynamic_modules: dict[str, Any] | None = None,
         dynamic_module_source: str | None = None,
@@ -491,11 +503,14 @@ class Client:
         Start an mlld script execution and return an in-flight request handle.
         """
 
+        payload, payload_labels = _normalize_payload_and_labels(payload, payload_labels)
         params: dict[str, Any] = {"script": script}
         if file_path is not None:
             params["filePath"] = file_path
         if payload is not None:
             params["payload"] = payload
+        if payload_labels is not None:
+            params["payloadLabels"] = payload_labels
         if state is not None:
             params["state"] = state
         if dynamic_modules is not None:
@@ -520,6 +535,7 @@ class Client:
         filepath: str,
         payload: Any = None,
         *,
+        payload_labels: dict[str, list[str]] | None = None,
         state: dict[str, Any] | None = None,
         dynamic_modules: dict[str, Any] | None = None,
         dynamic_module_source: str | None = None,
@@ -533,6 +549,7 @@ class Client:
         Args:
             filepath: Path to the mlld file.
             payload: Data injected as @payload.
+            payload_labels: Optional per-field security labels for @payload object fields.
             state: Data injected as @state.
             dynamic_modules: Additional modules to inject.
             dynamic_module_source: Source label for dynamic modules.
@@ -550,6 +567,7 @@ class Client:
         return self.execute_async(
             filepath,
             payload,
+            payload_labels=payload_labels,
             state=state,
             dynamic_modules=dynamic_modules,
             dynamic_module_source=dynamic_module_source,
@@ -563,6 +581,7 @@ class Client:
         filepath: str,
         payload: Any = None,
         *,
+        payload_labels: dict[str, list[str]] | None = None,
         state: dict[str, Any] | None = None,
         dynamic_modules: dict[str, Any] | None = None,
         dynamic_module_source: str | None = None,
@@ -574,9 +593,12 @@ class Client:
         Start an mlld file execution and return an in-flight request handle.
         """
 
+        payload, payload_labels = _normalize_payload_and_labels(payload, payload_labels)
         params: dict[str, Any] = {"filepath": filepath}
         if payload is not None:
             params["payload"] = payload
+        if payload_labels is not None:
+            params["payloadLabels"] = payload_labels
         if state is not None:
             params["state"] = state
         if dynamic_modules is not None:
@@ -1290,7 +1312,6 @@ def fs_status(glob: str | None = None, **kwargs) -> list[FilesystemStatus]:
     return _get_client().fs_status(glob, **kwargs)
 
 
-
 def sign(path: str, **kwargs) -> FileVerifyResult:
     """Sign a file. See Client.sign() for details."""
     return _get_client().sign(path, **kwargs)
@@ -1304,3 +1325,85 @@ def verify(path: str, **kwargs) -> FileVerifyResult:
 def sign_content(content: str, identity: str, **kwargs) -> ContentSignature:
     """Sign runtime content. See Client.sign_content() for details."""
     return _get_client().sign_content(content, identity, **kwargs)
+
+
+def labeled(value: Any, *labels: str) -> LabeledValue:
+    """Attach one or more labels to a payload field value."""
+    return LabeledValue(value=value, labels=tuple(_normalize_label_list(labels)))
+
+
+def trusted(value: Any) -> LabeledValue:
+    """Mark a payload field as trusted."""
+    return labeled(value, "trusted")
+
+
+def untrusted(value: Any) -> LabeledValue:
+    """Mark a payload field as untrusted."""
+    return labeled(value, "untrusted")
+
+
+def _normalize_label_list(labels: Any) -> list[str]:
+    if labels is None:
+        return []
+
+    if isinstance(labels, (list, tuple, set)):
+        raw_labels = list(labels)
+    else:
+        raw_labels = [labels]
+
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for label in raw_labels:
+        if not isinstance(label, str):
+            raise TypeError("payload labels must be strings")
+        trimmed = label.strip()
+        if not trimmed or trimmed in seen:
+            continue
+        seen.add(trimmed)
+        normalized.append(trimmed)
+    return normalized
+
+
+def _normalize_payload_and_labels(
+    payload: Any,
+    payload_labels: dict[str, list[str]] | None,
+) -> tuple[Any, dict[str, list[str]] | None]:
+    merged_labels: dict[str, list[str]] = {}
+
+    normalized_payload = payload
+    if isinstance(payload, dict):
+        normalized_payload = {}
+        for key, value in payload.items():
+            if isinstance(value, LabeledValue):
+                normalized_payload[key] = value.value
+                labels = _normalize_label_list(value.labels)
+                if labels:
+                    merged_labels[key] = labels
+            else:
+                normalized_payload[key] = value
+    elif payload_labels is not None:
+        raise ValueError("payload_labels requires payload to be a dict")
+
+    if payload_labels is not None:
+        if not isinstance(normalized_payload, dict):
+            raise ValueError("payload_labels requires payload to be a dict")
+        for key, labels in payload_labels.items():
+            if key not in normalized_payload:
+                raise ValueError(f"payload_labels contains unknown field: {key}")
+            normalized = _normalize_label_list(labels)
+            if not normalized:
+                continue
+            merged_labels[key] = _merge_labels(merged_labels.get(key), normalized)
+
+    return normalized_payload, (merged_labels or None)
+
+
+def _merge_labels(existing: list[str] | None, incoming: list[str]) -> list[str]:
+    merged = list(existing or [])
+    seen = set(merged)
+    for label in incoming:
+        if label in seen:
+            continue
+        seen.add(label)
+        merged.append(label)
+    return merged

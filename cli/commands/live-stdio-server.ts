@@ -64,6 +64,7 @@ interface ProcessRequestParams {
   filePath?: string;
   mode?: MlldMode;
   payload?: unknown;
+  payloadLabels?: Record<string, string[]>;
   state?: Record<string, unknown>;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
   dynamicModuleSource?: string;
@@ -74,6 +75,7 @@ interface ProcessRequestParams {
 interface ExecuteRequestParams {
   filepath: string;
   payload?: unknown;
+  payloadLabels?: Record<string, string[]>;
   state?: Record<string, unknown>;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
   dynamicModuleSource?: string;
@@ -551,6 +553,7 @@ export class LiveStdioServer {
       ),
       dynamicModules: Object.keys(dynamicModules).length > 0 ? dynamicModules : undefined,
       dynamicModuleSource: parsed.dynamicModuleSource,
+      payloadLabels: parsed.payloadLabels,
       dynamicModuleMode: parsed.dynamicModuleMode,
       allowAbsolutePaths: parsed.allowAbsolutePaths
     })) as StreamExecution;
@@ -572,6 +575,7 @@ export class LiveStdioServer {
       state: parsed.state,
       dynamicModules: parsed.dynamicModules,
       dynamicModuleSource: parsed.dynamicModuleSource,
+      payloadLabels: parsed.payloadLabels,
       timeoutMs: parsed.timeoutMs,
       allowAbsolutePaths: parsed.allowAbsolutePaths,
       mode: parsed.mode,
@@ -703,6 +707,7 @@ export class LiveStdioServer {
       filePath: typeof params.filePath === 'string' ? params.filePath : undefined,
       mode: this.parseMode(params.mode),
       payload: params.payload,
+      payloadLabels: this.parsePayloadLabels(params.payloadLabels),
       state: isRecord(params.state) ? (params.state as Record<string, unknown>) : undefined,
       dynamicModules: this.parseDynamicModules(params.dynamicModules),
       dynamicModuleSource:
@@ -725,6 +730,7 @@ export class LiveStdioServer {
     return {
       filepath: params.filepath,
       payload: params.payload,
+      payloadLabels: this.parsePayloadLabels(params.payloadLabels),
       state: isRecord(params.state) ? (params.state as Record<string, unknown>) : undefined,
       dynamicModules: this.parseDynamicModules(params.dynamicModules),
       dynamicModuleSource:
@@ -894,6 +900,39 @@ export class LiveStdioServer {
         parsed[key] = entry;
       } else if (isRecord(entry)) {
         parsed[key] = entry;
+      }
+    }
+
+    return Object.keys(parsed).length > 0 ? parsed : undefined;
+  }
+
+  private parsePayloadLabels(value: unknown): Record<string, string[]> | undefined {
+    if (!isRecord(value)) {
+      return undefined;
+    }
+
+    const parsed: Record<string, string[]> = {};
+    for (const [key, rawLabels] of Object.entries(value)) {
+      if (!Array.isArray(rawLabels)) {
+        continue;
+      }
+
+      const seen = new Set<string>();
+      const labels: string[] = [];
+      for (const label of rawLabels) {
+        if (typeof label !== 'string') {
+          continue;
+        }
+        const trimmed = label.trim();
+        if (!trimmed || seen.has(trimmed)) {
+          continue;
+        }
+        seen.add(trimmed);
+        labels.push(trimmed);
+      }
+
+      if (labels.length > 0) {
+        parsed[key] = labels;
       }
     }
 

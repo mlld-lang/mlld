@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filesystem integrity rollout across phases 1-3: write-executor outputs are signed, content-loader verifies raw file bytes on read, signer policies assign file trust labels, and `filesystem_integrity` rules add identity-aware write protection on top of normal filesystem capability checks.
 - Filesystem integrity phase 4: `mlld status` reports verified/modified/unsigned files with signer labels and taint metadata, runtime reads populate `@mx.sig` (including `@mx.sig.files("glob")`), and the Python/live SDK surface now exposes `fs:status` via `client.fs_status()`.
 - Filesystem integrity phase 5: the Python SDK and live stdio transport now expose `sign`, `verify`, and `sign_content`, and `ExecuteHandle.write_file()` writes execution-scoped files that are auto-signed as `agent:{script}` with taint/provenance metadata.
+- Per-field payload labels: `payloadLabels` option on SDK `execute()` and live transport attaches security labels to individual `@payload` fields. Python SDK adds `trusted()`, `untrusted()`, and `labeled()` helpers for inline use.
 
 ### Fixed
 - Policy object keys that interpolate path-like values such as `@base/docs/*.txt` now materialize to their string form instead of degrading to `"[object Object]"`, which fixes config-imported `filesystem_integrity` globs in `mlld status`.
@@ -25,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `state://` writes now preserve structured objects and booleans as native values instead of flattening them through the text surface first. This also fixes live `@state` snapshots and SDK payloads receiving `"[object Object]"` or stringified booleans in affected flows.
 - Structured-value text fallbacks no longer silently degrade plain or circular objects to `"[object Object]"`. Objects now prefer JSON serialization, and genuinely unserializable values surface as `[unserializable object]` instead.
 - Python SDK state-write decoding now normalizes composite JSON payloads from both streamed `state:write` events and final `stateWrites` results, avoiding manual `json.loads(...)` for object values and preventing mixed-type duplicate entries during merge.
+- `when` expressions no longer swallow hard policy denials (`MlldDenialError`). Previously, a policy-denied action inside a `when` arm was silently caught and mishandled as a soft guard denial, allowing execution to continue. Hard denials now propagate correctly.
+- Field access on `@payload` and other object variables now preserves security metadata (labels, taint) when resolving nested fields via method calls and builtins. Previously, extracting the raw value before field traversal dropped per-field descriptors.
 
 ### Documentation
 - Python SDK README now documents editable installs for local development (`uv pip install -e ./sdk/python`) so SDK changes apply immediately in downstream projects.

@@ -5,6 +5,8 @@
 import { FieldAccessNode } from '@core/types/primitives';
 import { FieldAccessError } from '@core/errors';
 import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
+import { mergeDescriptors } from '@core/types/security';
+import { VariableMetadataUtils } from '@core/types/variable';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import path from 'node:path';
 import { isVariable } from './variable-resolution';
@@ -19,7 +21,7 @@ import {
   type StructuredValue
 } from './structured-value';
 import { wrapExecResult } from './structured-exec';
-import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { inheritExpressionProvenance, setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import type { DataObjectValue } from '@core/types/var';
 import type { WorkspaceValue } from '@core/types/workspace';
 import { isWorkspaceValue } from '@core/types/workspace';
@@ -280,6 +282,30 @@ function getWorkspaceMxContext(value: unknown): WorkspaceMxContext | undefined {
     ...(workspace ? { workspace } : {}),
     ...(path ? { path } : {})
   };
+}
+
+function getFieldMetadataDescriptor(
+  parentVariable: Variable | undefined,
+  fieldName: string
+) {
+  const namespaceMetadata = parentVariable?.internal &&
+    typeof parentVariable.internal === 'object' &&
+    'namespaceMetadata' in parentVariable.internal
+      ? (parentVariable.internal as Record<string, unknown>).namespaceMetadata
+      : undefined;
+
+  if (!namespaceMetadata || typeof namespaceMetadata !== 'object') {
+    return undefined;
+  }
+
+  const serialized = (namespaceMetadata as Record<string, unknown>)[fieldName];
+  if (!serialized || typeof serialized !== 'object') {
+    return undefined;
+  }
+
+  return VariableMetadataUtils.deserializeSecurityMetadata(
+    serialized as ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>
+  ).security;
 }
 
 function isIgnorableWorkspaceDiffError(error: unknown): boolean {
@@ -978,16 +1004,27 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   }
 
   const provenanceSource = parentVariable ?? structuredWrapper ?? value;
-  if (provenanceSource) {
-    const secDescriptor = extractSecurityDescriptor(provenanceSource);
-    if (secDescriptor && ((secDescriptor.labels?.length ?? 0) > 0 || (secDescriptor.taint?.length ?? 0) > 0)
-        && accessedValue != null && typeof accessedValue !== 'object') {
-      // Primitive values can't be keyed in WeakMap, so wrap in StructuredValue to carry security labels
+  const provenanceDescriptor = provenanceSource
+    ? extractSecurityDescriptor(provenanceSource)
+    : undefined;
+  const fieldDescriptor = getFieldMetadataDescriptor(parentVariable, fieldName);
+  const effectiveDescriptor =
+    provenanceDescriptor && fieldDescriptor
+      ? mergeDescriptors(provenanceDescriptor, fieldDescriptor)
+      : fieldDescriptor ?? provenanceDescriptor;
+
+  if (effectiveDescriptor && ((effectiveDescriptor.labels?.length ?? 0) > 0 || (effectiveDescriptor.taint?.length ?? 0) > 0)) {
+    if (accessedValue != null && typeof accessedValue !== 'object') {
+      // Primitive values can't be keyed in WeakMap, so wrap in StructuredValue to carry security labels.
       accessedValue = wrapExecResult(accessedValue);
-      applySecurityDescriptorToStructuredValue(accessedValue, secDescriptor);
+      applySecurityDescriptorToStructuredValue(accessedValue, effectiveDescriptor);
+    } else if (isStructuredValue(accessedValue)) {
+      applySecurityDescriptorToStructuredValue(accessedValue, effectiveDescriptor);
     } else {
-      inheritExpressionProvenance(accessedValue, provenanceSource);
+      setExpressionProvenance(accessedValue, effectiveDescriptor);
     }
+  } else if (provenanceSource) {
+    inheritExpressionProvenance(accessedValue, provenanceSource);
   }
 
   // Check if we need to return context-preserving result

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GuardError } from '@core/errors/GuardError';
+import { MlldDenialError } from '@core/errors/denial';
 import { handleExecGuardDenial } from './guard-denial-handler';
 
 const evaluateWhenExpressionMock = vi.fn();
@@ -88,5 +89,30 @@ describe('handleExecGuardDenial', () => {
       'stderr',
       expect.stringContaining('[Guard Warning] blocked')
     );
+  });
+
+  it('does not handle hard policy denials', async () => {
+    const execEnv = createMockExecEnv();
+    const env = {
+      emitEffect: vi.fn(),
+      recordSecurityDescriptor: vi.fn()
+    } as any;
+
+    const error = new MlldDenialError({
+      code: 'POLICY_LABEL_FLOW_DENIED',
+      operation: { type: 'exe', description: 'write' },
+      blocker: { type: 'policy', name: '@policy', rule: 'no-untrusted-destructive' },
+      reason: 'hard deny'
+    });
+
+    const result = await handleExecGuardDenial(error, {
+      execEnv,
+      env,
+      whenExprNode: {} as any
+    });
+
+    expect(result).toBeNull();
+    expect(evaluateWhenExpressionMock).not.toHaveBeenCalled();
+    expect(env.emitEffect).not.toHaveBeenCalled();
   });
 });

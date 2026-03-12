@@ -4,6 +4,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { MlldDenialError } from '@core/errors';
 import { createSimpleTextVariable } from '@core/types/variable';
 import type { WhenBlockNode, WhenMatchNode, WhenSimpleNode, AugmentedAssignmentNode } from '@core/types/when';
 import type { ExeBlockNode, ExeReturnNode, ExecInvocation } from '@core/types';
@@ -592,5 +593,52 @@ describe('when evaluator characterization', () => {
 
     const value = await extractVariableValue(env.getVariable('x')!, env);
     expect(value).toEqual({ type: 'hello' });
+  });
+
+  it('propagates policy denials from matched when-expression actions inside executables', async () => {
+    const { ast } = await parse([
+      '/var @policyConfig = { labels: { "untrusted": { deny: ["destructive"] } } }',
+      '/policy @p = union(@policyConfig)',
+      '/exe destructive @writeOp(data) = `wrote: @data`',
+      '/exe @dispatch(name, data) = when @name [',
+      '  "write" => @writeOp(@data)',
+      '  * => "unknown"',
+      ']',
+      '/var untrusted @data = "external"',
+      '/show @dispatch("write", @data)'
+    ].join('\n'));
+
+    const evaluation = evaluate(ast, env);
+    await expect(evaluation).rejects.toBeInstanceOf(MlldDenialError);
+    await expect(evaluation).rejects.toMatchObject({
+      context: expect.objectContaining({
+        code: 'POLICY_LABEL_FLOW_DENIED'
+      })
+    });
+  });
+
+  it('propagates policy denials from matched when-expression actions inside loop bodies', async () => {
+    const { ast } = await parse([
+      '/var @policyConfig = { labels: { "untrusted": { deny: ["destructive"] } } }',
+      '/policy @p = union(@policyConfig)',
+      '/exe destructive @writeOp(data) = `wrote: @data`',
+      '/var untrusted @data = "external"',
+      '/var @result = loop(1) [',
+      '  let @next = when @data [',
+      '    "external" => @writeOp(@data)',
+      '    * => "unknown"',
+      '  ]',
+      '  done @next',
+      ']',
+      '/show @result'
+    ].join('\n'));
+
+    const evaluation = evaluate(ast, env);
+    await expect(evaluation).rejects.toBeInstanceOf(MlldDenialError);
+    await expect(evaluation).rejects.toMatchObject({
+      context: expect.objectContaining({
+        code: 'POLICY_LABEL_FLOW_DENIED'
+      })
+    });
   });
 });

@@ -10,7 +10,7 @@ import { isLetAssignment, isAugmentedAssignment, isConditionPair, isDirectAction
 import { astLocationToSourceLocation, type BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
-import { isBailError, MlldWhenExpressionError } from '@core/errors';
+import { GuardError, isBailError, MlldDenialError, MlldWhenExpressionError } from '@core/errors';
 import { evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { evaluateCondition, conditionTargetsDenied, evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
@@ -160,6 +160,10 @@ function getConditionPairText(pair: WhenConditionPair, source?: string): string 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+function isHardDenial(error: unknown): error is MlldDenialError {
+  return error instanceof MlldDenialError && !(error instanceof GuardError);
 }
 
 async function evaluateActionNodes(
@@ -752,6 +756,9 @@ async function evaluateWhenExpressionInternal(
           if (isBailError(actionError)) {
             throw actionError;
           }
+          if (isHardDenial(actionError)) {
+            throw actionError;
+          }
 
           if (!denyMode) {
             const { handleExecGuardDenial } = await import('./guard-denial-handler');
@@ -793,6 +800,9 @@ async function evaluateWhenExpressionInternal(
       }
     } catch (conditionError) {
       if (isBailError(conditionError)) {
+        throw conditionError;
+      }
+      if (isHardDenial(conditionError)) {
         throw conditionError;
       }
       if (conditionError instanceof MlldWhenExpressionError && conditionError.details?.phase === 'action') {
@@ -889,6 +899,9 @@ async function evaluateWhenExpressionInternal(
         return buildResult(value, accumulatedEnv);
       } catch (actionError) {
         if (isBailError(actionError)) {
+          throw actionError;
+        }
+        if (isHardDenial(actionError)) {
           throw actionError;
         }
         const conditionText = getConditionText(pair.condition, sourceInfo.source);
