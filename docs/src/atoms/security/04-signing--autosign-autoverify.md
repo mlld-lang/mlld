@@ -111,7 +111,7 @@ Hello from the autoverify demo.
 </text>
 ::
 
-exe llm @audit() = @claude(@auditPrompt, "haiku", @root)
+exe llm @audit() = @claude(@auditPrompt, { model: "haiku" })
 show @audit()
 ```
 

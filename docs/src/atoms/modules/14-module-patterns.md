@@ -13,9 +13,10 @@ updated: 2026-01-05
 **Module patterns:**
 
 ```mlld
->> Library module
-exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku }
-exe @sonnet(prompt) = @prompt | cmd { claude -p --model sonnet }
+>> Library module (wraps a core exe with shortcuts)
+import { @claude } from @mlld/claude
+exe llm @haiku(prompt) = @claude(@prompt, { model: "haiku" })
+exe llm @sonnet(prompt) = @claude(@prompt, { model: "sonnet" })
 export { @haiku, @sonnet }
 
 >> Config/agent module

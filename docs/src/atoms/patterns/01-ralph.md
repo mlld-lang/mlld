@@ -15,9 +15,9 @@ Autonomous coding loop based on the [Ralph Wiggum technique](https://ghuntley.co
 ```mlld
 >> ralph.mld - autonomous coding agent loop
 
-import { @claudePoll } from "@mlld/claude-poll"
+import { @claudePoll } from @mlld/claude
 
-var @tools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*)"
+var @tools = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(git:*)", "Bash(npm:*)"]
 
 >> Cheap model picks the most important task from current plan
 exe llm @pickTask(plan, specs) = [
@@ -34,7 +34,11 @@ Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }
 </specs>
 
 IMPORTANT: Write your JSON response to @mx.outPath using the Write tool.`
-  @claudePoll(@prompt, "haiku", ".", "Read,Glob,Grep,Write", @mx.outPath)
+  @claudePoll(@prompt, {
+    model: "haiku",
+    tools: ["Read", "Glob", "Grep", "Write"],
+    poll: @mx.outPath
+  })
   => <@mx.outPath>? | @parse.llm
 ]
 
@@ -50,7 +54,11 @@ Implement this task. Search the codebase before assuming anything is
 not implemented. After implementing, run tests for just this change.
 
 IMPORTANT: Write your result JSON to @mx.outPath using the Write tool.`
-  @claudePoll(@prompt, "sonnet", ".", @tools, @mx.outPath)
+  @claudePoll(@prompt, {
+    model: "sonnet",
+    tools: @tools,
+    poll: @mx.outPath
+  })
   => <@mx.outPath>?
 ]
 
