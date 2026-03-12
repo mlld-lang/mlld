@@ -18,6 +18,8 @@ import type {
 } from '@sdk/types';
 import { getExpressionProvenance } from './utils/expression-provenance';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { SigService } from '@core/security';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { ExecutionEmitter } from '@sdk/execution-emitter';
 import { StreamExecution } from '@sdk/stream-execution';
 import { evaluateDirective } from './eval/directive';
@@ -29,6 +31,7 @@ import { resolveCheckpointScriptName } from './checkpoint/script-name';
 import { extractLeadingResumeDirective } from '@core/checkpoint/config';
 import { DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE } from '@interpreter/checkpoint/policy';
 import { finalizePendingCheckpointScope } from './eval/checkpoint';
+import { VirtualFS } from '@services/fs/VirtualFS';
 
 function validateCheckpointOptions(options: InterpretOptions): void {
   if (options.noCheckpoint !== true) {
@@ -213,6 +216,23 @@ function collectDeclaredCheckpointNames(ast: readonly unknown[]): string[] {
 
   visit(ast, false);
   return names;
+}
+
+function hasPolicyDirective(ast: readonly unknown[]): boolean {
+  return ast.some((node) => {
+    if (!node || typeof node !== 'object') {
+      return false;
+    }
+    const directive = node as { type?: unknown; kind?: unknown };
+    return directive.type === 'Directive' && directive.kind === 'policy';
+  });
+}
+
+function resolveSigFileSystem(fileSystem: IFileSystemService): IFileSystemService {
+  if (fileSystem instanceof VirtualFS) {
+    return fileSystem.getBackingFileSystem() ?? fileSystem;
+  }
+  return fileSystem;
 }
 
 async function applyResumeTargetInvalidation(
@@ -432,6 +452,7 @@ export async function interpret(
     undefined,
     effectHandler
   );
+  env.setSigService(new SigService(pathContext.projectRoot, resolveSigFileSystem(options.fileSystem)));
   env.setStreamingManager(options.streamingManager ?? new StreamingManager());
   env.setProvenanceEnabled(provenanceEnabled);
   env.setCheckpointScriptResumeMode(scriptResumeMode);
@@ -507,6 +528,10 @@ export async function interpret(
 
   // Register built-in resolvers (async initialization)
   await env.registerBuiltinResolvers();
+
+  if (hasPolicyDirective(ast)) {
+    await env.getSigService()?.init();
+  }
 
   if (options.dynamicModules && Object.keys(options.dynamicModules).length > 0) {
     const userDataModules: Record<string, string | Record<string, unknown>> = {};

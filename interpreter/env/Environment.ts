@@ -18,6 +18,7 @@ import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { isDirectiveNode, isVariableReferenceNode, isTextNode } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
+import { VirtualFS, type VirtualFSSigningContext } from '@services/fs/VirtualFS';
 import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { DirectiveTrace } from '@core/types/trace';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
@@ -28,7 +29,12 @@ import * as path from 'path';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldInterpreterError, MlldSecurityError } from '@core/errors';
 import { SecurityManager } from '@security';
-import { TaintTracker } from '@core/security';
+import {
+  TaintTracker,
+  appendAuditEvent,
+  buildFileSigningMetadata,
+  type SigService
+} from '@core/security';
 import {
   makeSecurityDescriptor,
   mergeDescriptors,
@@ -302,6 +308,9 @@ export class Environment
   private workspaceStack: WorkspaceValue[] = [];
   private bridgeStack: WorkspaceMcpBridgeHandle[] = [];
   private scopeCleanups: Array<() => Promise<void>> = [];
+  private sigService?: SigService;
+  private signerIdentity = 'unknown';
+  private readonly registeredSigAwareFileSystems = new WeakSet<VirtualFS>();
 
   // Auto-bridged LLM tool config, set by exe llm invocations with config.tools
   private llmToolConfig?: import('./executors/call-mcp-config').CallMcpConfig | null;
@@ -1231,6 +1240,85 @@ export class Environment
 
   getFileSystemService(): IFileSystemService {
     return this.fileSystem;
+  }
+
+  setSigService(service: SigService | undefined): void {
+    const root = this.getRootEnvironment();
+    root.sigService = service;
+    if (!service) {
+      return;
+    }
+    root.registerSigAwareFileSystem(root.fileSystem);
+    for (const workspace of root.workspaceStack) {
+      root.registerSigAwareFileSystem(workspace.fs);
+    }
+  }
+
+  getSigService(): SigService | undefined {
+    return this.getRootEnvironment().sigService;
+  }
+
+  setSignerIdentity(identity: string): void {
+    const root = this.getRootEnvironment();
+    const normalized = identity.trim();
+    root.signerIdentity = normalized.length > 0 ? normalized : 'unknown';
+  }
+
+  getSignerIdentity(): string {
+    return this.getRootEnvironment().signerIdentity;
+  }
+
+  canDirectlySignFileSystem(fileSystem: IFileSystemService): boolean {
+    if (fileSystem.isVirtual?.()) {
+      return false;
+    }
+    return fileSystem === this.getRootEnvironment().fileSystem;
+  }
+
+  registerSigAwareFileSystem(fileSystem?: IFileSystemService): void {
+    const root = this.getRootEnvironment();
+    if (!root.sigService) {
+      return;
+    }
+    if (!(fileSystem instanceof VirtualFS)) {
+      return;
+    }
+    if (root.registeredSigAwareFileSystems.has(fileSystem)) {
+      return;
+    }
+
+    root.registeredSigAwareFileSystems.add(fileSystem);
+    fileSystem.onFlush(async (targetPath, signingContext) => {
+      if (!signingContext) {
+        return;
+      }
+      await root.signFileIntegrity(targetPath, signingContext);
+    });
+  }
+
+  async signFileIntegrity(
+    filePath: string,
+    signingContext: VirtualFSSigningContext
+  ): Promise<void> {
+    const root = this.getRootEnvironment();
+    const sigService = root.sigService;
+    if (!sigService || sigService.isExcluded(filePath)) {
+      return;
+    }
+
+    try {
+      await sigService.sign(
+        filePath,
+        signingContext.identity,
+        buildFileSigningMetadata(signingContext.taint)
+      );
+    } catch (error: any) {
+      await appendAuditEvent(root.fileSystem, root.getProjectRoot(), {
+        event: 'sign-error',
+        path: filePath,
+        detail: error?.message ?? 'Unknown signing error'
+      });
+    }
   }
   
   // --- File Interpolation Support ---
@@ -2435,6 +2523,7 @@ export class Environment
 
   pushActiveWorkspace(workspace: WorkspaceValue): void {
     this.workspaceStack.push(workspace);
+    this.registerSigAwareFileSystem(workspace.fs);
   }
 
   popActiveWorkspace(): WorkspaceValue | undefined {

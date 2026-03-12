@@ -18,6 +18,7 @@ export type AuditEvent = {
   writer?: string;
   labels?: string[];
   resolved?: string;
+  detail?: string;
 };
 
 export async function appendAuditEvent(
@@ -40,7 +41,8 @@ export async function appendAuditEvent(
     ...(event.taint !== undefined ? { taint: event.taint } : {}),
     ...(event.writer ? { writer: event.writer } : {}),
     ...(event.labels ? { labels: event.labels } : {}),
-    ...(event.resolved ? { resolved: event.resolved } : {})
+    ...(event.resolved ? { resolved: event.resolved } : {}),
+    ...(event.detail ? { detail: event.detail } : {})
   };
   const logPath = path.join(projectRoot, '.mlld', 'sec', 'audit.jsonl');
   const dirPath = path.dirname(logPath);

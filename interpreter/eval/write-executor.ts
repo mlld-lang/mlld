@@ -5,6 +5,8 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { Environment } from '@interpreter/env/Environment';
 import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
 import { logFileWriteEvent } from '@interpreter/utils/audit-log';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { VirtualFS } from '@services/fs/VirtualFS';
 
 export type WriteMode = 'write' | 'append';
 
@@ -79,6 +81,26 @@ export async function executeWrite({
     changeType,
     writer
   });
+
+  const sigService = env.getSigService();
+  if (sigService) {
+    const signingContext = {
+      identity: env.getSignerIdentity(),
+      taint: descriptorToInputTaint(descriptor)
+    };
+
+    if (targetFileSystem instanceof VirtualFS) {
+      env.registerSigAwareFileSystem(targetFileSystem);
+      if (!sigService.isExcluded(targetPath)) {
+        targetFileSystem.setSigningContext(targetPath, signingContext);
+      }
+    } else if (
+      env.canDirectlySignFileSystem(targetFileSystem) &&
+      !sigService.isExcluded(targetPath)
+    ) {
+      await env.signFileIntegrity(targetPath, signingContext);
+    }
+  }
 
   env.emitEffect('file', content, {
     path: targetPath,
