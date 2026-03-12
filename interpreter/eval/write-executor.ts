@@ -3,7 +3,7 @@ import type { SourceLocation } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { Environment } from '@interpreter/env/Environment';
-import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
+import { enforceFileIntegrity, enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
 import { logFileWriteEvent } from '@interpreter/utils/audit-log';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { VirtualFS } from '@services/fs/VirtualFS';
@@ -60,6 +60,7 @@ export async function executeWrite({
   metadata
 }: ExecuteWriteOptions): Promise<void> {
   enforceFilesystemAccess(env, 'write', targetPath, sourceLocation);
+  enforceFileIntegrity(env, targetPath, env.getSignerIdentity(), sourceLocation);
 
   const targetFileSystem = resolveWriteFileSystem(env, fileSystem);
   const hostFileSystem = env.getFileSystemService();

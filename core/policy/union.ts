@@ -70,6 +70,13 @@ export type PolicyFilesystemRules = {
   write?: string[];
 };
 
+export type PolicySignerRule = string[];
+
+export type PolicyFileIntegrityRule = {
+  mutable?: boolean;
+  authorizedIdentities?: string[];
+};
+
 export type PolicyNetworkRules = {
   domains?: string[];
 };
@@ -101,6 +108,8 @@ export type PolicyConfig = {
   capabilities?: PolicyCapabilitiesConfig;
   labels?: PolicyLabels;
   operations?: PolicyOperations;
+  signers?: Record<string, PolicySignerRule>;
+  filesystem_integrity?: Record<string, PolicyFileIntegrityRule>;
   env?: PolicyEnvironmentConfig;
   limits?: PolicyLimits;
 };
@@ -148,6 +157,11 @@ export function mergePolicyConfigs(
 
   const labels = mergePolicyLabels(normalizedBase.labels, normalizedIncoming.labels);
   const operations = mergePolicyOperations(normalizedBase.operations, normalizedIncoming.operations);
+  const signers = mergePolicySigners(normalizedBase.signers, normalizedIncoming.signers);
+  const filesystemIntegrity = mergePolicyFilesystemIntegrity(
+    normalizedBase.filesystem_integrity,
+    normalizedIncoming.filesystem_integrity
+  );
   const auth = mergePolicyAuth(normalizedBase.auth, normalizedIncoming.auth);
   const keychain = mergePolicyKeychain(normalizedBase.keychain, normalizedIncoming.keychain);
   const defaultStance = mergePolicyDefault(normalizedBase.default, normalizedIncoming.default);
@@ -166,6 +180,8 @@ export function mergePolicyConfigs(
     ...(danger && danger.length > 0 ? { danger } : {}),
     ...(labels ? { labels } : {}),
     ...(operations ? { operations } : {}),
+    ...(signers ? { signers } : {}),
+    ...(filesystemIntegrity ? { filesystem_integrity: filesystemIntegrity } : {}),
     ...(envConfig ? { env: envConfig } : {}),
     ...(limits ? { limits } : {})
   };
@@ -212,6 +228,8 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     : undefined;
   const labels = normalizePolicyLabels(config.labels);
   const operations = normalizePolicyOperations(config.operations);
+  const signers = normalizePolicySigners(config.signers);
+  const filesystemIntegrity = normalizePolicyFilesystemIntegrity(config.filesystem_integrity);
   const auth = normalizePolicyAuth(config.auth);
   const keychain = normalizePolicyKeychain(config.keychain);
   const defaultStance = normalizePolicyDefault(config.default);
@@ -229,6 +247,8 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     ...(danger ? { danger } : {}),
     ...(labels ? { labels } : {}),
     ...(operations ? { operations } : {}),
+    ...(signers ? { signers } : {}),
+    ...(filesystemIntegrity ? { filesystem_integrity: filesystemIntegrity } : {}),
     ...(envConfig ? { env: envConfig } : {}),
     ...(limits ? { limits } : {})
   };
@@ -1447,6 +1467,70 @@ function normalizePolicyOperations(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function normalizePolicySigners(
+  signers?: PolicyConfig['signers']
+): PolicyConfig['signers'] | undefined {
+  if (!signers || typeof signers !== 'object' || Array.isArray(signers)) {
+    return undefined;
+  }
+
+  const result: Record<string, PolicySignerRule> = {};
+  for (const [identityPattern, labels] of Object.entries(signers)) {
+    const normalizedPattern = String(identityPattern).trim();
+    const normalizedLabels = normalizeLabelList(labels);
+    if (normalizedPattern && normalizedLabels && normalizedLabels.length > 0) {
+      result[normalizedPattern] = normalizedLabels;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizePolicyFilesystemIntegrityRule(
+  raw: unknown
+): PolicyFileIntegrityRule | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined;
+  }
+
+  const mutable =
+    typeof (raw as PolicyFileIntegrityRule).mutable === 'boolean'
+      ? (raw as PolicyFileIntegrityRule).mutable
+      : undefined;
+  const authorizedIdentities = normalizeStringList(
+    (raw as PolicyFileIntegrityRule).authorizedIdentities
+  );
+
+  const result: PolicyFileIntegrityRule = {};
+  if (mutable !== undefined) {
+    result.mutable = mutable;
+  }
+  if (authorizedIdentities !== undefined) {
+    result.authorizedIdentities = authorizedIdentities;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizePolicyFilesystemIntegrity(
+  rules?: PolicyConfig['filesystem_integrity']
+): PolicyConfig['filesystem_integrity'] | undefined {
+  if (!rules || typeof rules !== 'object' || Array.isArray(rules)) {
+    return undefined;
+  }
+
+  const result: Record<string, PolicyFileIntegrityRule> = {};
+  for (const [pathPattern, rawRule] of Object.entries(rules)) {
+    const normalizedPattern = String(pathPattern).trim();
+    const normalizedRule = normalizePolicyFilesystemIntegrityRule(rawRule);
+    if (normalizedPattern && normalizedRule) {
+      result[normalizedPattern] = normalizedRule;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 function mergePolicyOperations(
   base?: PolicyConfig['operations'],
   incoming?: PolicyConfig['operations']
@@ -1466,6 +1550,53 @@ function mergePolicyOperations(
       continue;
     }
     result[riskCategory] = mergeLabelListUnion(result[riskCategory], labels) ?? [];
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function mergePolicySigners(
+  base?: PolicyConfig['signers'],
+  incoming?: PolicyConfig['signers']
+): PolicyConfig['signers'] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+
+  const result: Record<string, PolicySignerRule> = {};
+  for (const [identityPattern, labels] of Object.entries(base ?? {})) {
+    if (labels.length > 0) {
+      result[identityPattern] = [...labels];
+    }
+  }
+  for (const [identityPattern, labels] of Object.entries(incoming ?? {})) {
+    if (labels.length === 0) {
+      continue;
+    }
+    result[identityPattern] = mergeLabelListUnion(result[identityPattern], labels) ?? [];
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function mergePolicyFilesystemIntegrity(
+  base?: PolicyConfig['filesystem_integrity'],
+  incoming?: PolicyConfig['filesystem_integrity']
+): PolicyConfig['filesystem_integrity'] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+
+  const result: Record<string, PolicyFileIntegrityRule> = {
+    ...(base ?? {})
+  };
+
+  for (const [pathPattern, rule] of Object.entries(incoming ?? {})) {
+    const current = result[pathPattern] ?? {};
+    result[pathPattern] = {
+      ...current,
+      ...rule
+    };
   }
 
   return Object.keys(result).length > 0 ? result : undefined;

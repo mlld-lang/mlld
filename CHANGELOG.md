@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.5]
 
+### Added
+- Filesystem integrity rollout across phases 1-3: write-executor outputs are signed, content-loader verifies raw file bytes on read, signer policies assign file trust labels, and `filesystem_integrity` rules add identity-aware write protection on top of normal filesystem capability checks.
+
 ### Fixed
 - `when` expressions no longer misclassify plain object results that happen to include a `type` key as internal AST nodes. Inline object literals like `{ type: "response" }` now return correctly instead of collapsing to `undefined`.
 - Live transport (`mlld live --stdio`): `stdout` effects no longer write raw text to stdout when streaming is disabled, which was corrupting the NDJSON protocol. Content is now captured in the document buffer instead. Fixes SDK `execute()`/`process()` calls failing with `invalid live response` when scripts produce multiline output (e.g. via `claude -p`).

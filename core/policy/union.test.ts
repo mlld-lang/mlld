@@ -313,3 +313,74 @@ describe('PolicyConfig auth', () => {
     });
   });
 });
+
+describe('PolicyConfig filesystem integrity', () => {
+  it('normalizes signers and filesystem_integrity rules', () => {
+    const config = normalizePolicyConfig({
+      signers: {
+        ' agent:* ': ['trusted', ' trusted ', 'internal']
+      },
+      filesystem_integrity: {
+        ' @base/config/** ': {
+          mutable: false,
+          authorizedIdentities: [' user:* ', 'user:*', 'agent:deploy']
+        }
+      }
+    } as PolicyConfig);
+
+    expect(config.signers).toEqual({
+      'agent:*': ['trusted', 'internal']
+    });
+    expect(config.filesystem_integrity).toEqual({
+      '@base/config/**': {
+        mutable: false,
+        authorizedIdentities: ['user:*', 'agent:deploy']
+      }
+    });
+  });
+
+  it('merges signer labels by union and filesystem_integrity fields by override', () => {
+    const base: PolicyConfig = {
+      signers: {
+        'agent:*': ['trusted'],
+        'user:*': ['reviewed']
+      },
+      filesystem_integrity: {
+        '@base/config/**': {
+          mutable: false,
+          authorizedIdentities: ['user:*']
+        }
+      }
+    };
+    const incoming: PolicyConfig = {
+      signers: {
+        'agent:*': ['internal'],
+        'system:*': ['trusted']
+      },
+      filesystem_integrity: {
+        '@base/config/**': {
+          authorizedIdentities: ['user:*', 'agent:release']
+        },
+        '@base/tmp/**': {
+          mutable: true
+        }
+      }
+    };
+
+    const merged = mergePolicyConfigs(base, incoming);
+    expect(merged.signers).toEqual({
+      'agent:*': ['trusted', 'internal'],
+      'user:*': ['reviewed'],
+      'system:*': ['trusted']
+    });
+    expect(merged.filesystem_integrity).toEqual({
+      '@base/config/**': {
+        mutable: false,
+        authorizedIdentities: ['user:*', 'agent:release']
+      },
+      '@base/tmp/**': {
+        mutable: true
+      }
+    });
+  });
+});

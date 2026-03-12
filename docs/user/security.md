@@ -104,6 +104,52 @@ policy @p = {
 
 When autoverify is enabled and a signed prompt reaches an `llm` exe, mlld injects `MLLD_VERIFY_VARS` and prepends verification instructions to the prompt. `MLLD_VERIFY_VARS` lists variable names without the `@` sigil. Autoverify implicitly allows `cmd:mlld:verify`.
 
+### Filesystem Integrity
+
+Files written by mlld are now signed on write and verified on read through the normal file-loading path.
+
+Use `signers` to map verified signer identities to labels:
+
+```mlld
+policy @p = {
+  defaults: { unlabeled: "untrusted" },
+  signers: {
+    "user:*": ["trusted"],
+    "agent:release": ["release-authored"]
+  }
+}
+```
+
+Use `filesystem_integrity` to control who may mutate specific paths:
+
+```mlld
+policy @p = {
+  filesystem_integrity: {
+    "@base/config/**": {
+      mutable: false
+    },
+    "@base/releases/**": {
+      authorizedIdentities: ["user:*", "agent:release"]
+    }
+  }
+}
+```
+
+Read behavior:
+
+- Verified file with matching signer rule: gets that rule's labels
+- Verified file with no signer rule: gets `defaults.unlabeled`
+- Modified or corrupted file: becomes `untrusted`
+- Unsigned file: gets `defaults.unlabeled`
+
+Write behavior:
+
+- `allow.filesystem` still controls whether the path is writable at all
+- `filesystem_integrity` is an additional gate for mutability and signer identity
+- Failed signing leaves the file in place but unsigned, which means the next read falls back to the unlabeled trust stance
+
+Signer-derived trust labels replace old inherited `trusted` / `untrusted` labels from audit or signature metadata. Path/source labels such as `src:file` and `dir:*` still propagate.
+
 ## Named Policies
 
 Define a policy object and export it:

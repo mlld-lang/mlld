@@ -6,12 +6,39 @@ import { labelsForPath } from '@core/security/paths';
 import { getAuditFileDescriptor } from '@core/security/AuditLogIndex';
 import type { Environment } from '@interpreter/env/Environment';
 import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { resolveSignerLabels } from '@interpreter/policy/signer-labels';
 import type { StructuredValueMetadata } from '../../utils/structured-value';
+
+function isTrustLabel(label: string): boolean {
+  return label === 'trusted' || label === 'untrusted';
+}
 
 function extractCustomLabels(taint: readonly string[]): string[] {
   return taint
     .map((label) => String(label).trim())
-    .filter((label) => label.length > 0 && !label.startsWith('src:') && !label.startsWith('dir:'));
+    .filter(
+      (label) =>
+        label.length > 0 &&
+        !isTrustLabel(label) &&
+        !label.startsWith('src:') &&
+        !label.startsWith('dir:')
+    );
+}
+
+function sanitizeInheritedDescriptor(
+  descriptor?: SecurityDescriptor
+): SecurityDescriptor | undefined {
+  if (!descriptor) {
+    return undefined;
+  }
+
+  const labels = descriptor.labels.filter((label) => !isTrustLabel(label));
+  const taint = descriptor.taint.filter((label) => !isTrustLabel(label));
+  return makeSecurityDescriptor({
+    labels,
+    taint,
+    sources: descriptor.sources
+  });
 }
 
 function buildSigMetadataDescriptor(
@@ -27,9 +54,24 @@ function buildSigMetadataDescriptor(
 
   return makeSecurityDescriptor({
     labels: extractCustomLabels(taint),
-    taint,
+    taint: taint.filter((label) => !isTrustLabel(label)),
     ...(verifyResult?.signer ? { sources: [verifyResult.signer] } : {})
   });
+}
+
+function buildTrustDescriptor(
+  env: Environment,
+  verifyResult?: FileVerifyResult
+): SecurityDescriptor | undefined {
+  const policy = env.getPolicySummary();
+  const labels = resolveSignerLabels(
+    verifyResult?.signer ?? null,
+    verifyResult?.status ?? 'unsigned',
+    policy?.signers,
+    policy?.defaults?.unlabeled
+  );
+
+  return labels.length > 0 ? makeSecurityDescriptor({ labels }) : undefined;
 }
 
 export class ContentLoaderSecurityMetadataHelper {
@@ -49,21 +91,27 @@ export class ContentLoaderSecurityMetadataHelper {
   async buildFileSecurityDescriptor(
     filePath: string,
     env: Environment,
-    policyEnforcer: PolicyEnforcer,
+    _policyEnforcer: PolicyEnforcer,
     verifyResult?: FileVerifyResult
   ): Promise<SecurityDescriptor> {
     const fileDescriptor = makeSecurityDescriptor({
       taint: ['src:file', ...labelsForPath(filePath)],
       sources: [filePath]
     });
-    const sigDescriptor = buildSigMetadataDescriptor(verifyResult);
-    const inheritedDescriptor = sigDescriptor
-      ? sigDescriptor
-      : await getAuditFileDescriptor(env.getFileSystemService(), env.getProjectRoot(), filePath);
-    const mergedDescriptor = inheritedDescriptor
-      ? mergeDescriptors(fileDescriptor, inheritedDescriptor)
-      : fileDescriptor;
-    return policyEnforcer.applyDefaultTrustLabel(mergedDescriptor) ?? mergedDescriptor;
+    const sigDescriptor = sanitizeInheritedDescriptor(buildSigMetadataDescriptor(verifyResult));
+    const auditDescriptor = sigDescriptor
+      ? undefined
+      : sanitizeInheritedDescriptor(
+          await getAuditFileDescriptor(env.getFileSystemService(), env.getProjectRoot(), filePath)
+        );
+    const trustDescriptor = buildTrustDescriptor(env, verifyResult);
+
+    return mergeDescriptors(
+      fileDescriptor,
+      sigDescriptor,
+      auditDescriptor,
+      trustDescriptor
+    );
   }
 
   attachSecurity<T extends LoadContentResult>(
