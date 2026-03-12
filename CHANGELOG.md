@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Filesystem integrity rollout across phases 1-3: write-executor outputs are signed, content-loader verifies raw file bytes on read, signer policies assign file trust labels, and `filesystem_integrity` rules add identity-aware write protection on top of normal filesystem capability checks.
 - Filesystem integrity phase 4: `mlld status` reports verified/modified/unsigned files with signer labels and taint metadata, runtime reads populate `@mx.sig` (including `@mx.sig.files("glob")`), and the Python/live SDK surface now exposes `fs:status` via `client.fs_status()`.
+- Filesystem integrity phase 5: the Python SDK and live stdio transport now expose `sign`, `verify`, and `sign_content`, and `ExecuteHandle.write_file()` writes execution-scoped files that are auto-signed as `agent:{script}` with taint/provenance metadata.
 
 ### Fixed
 - Policy object keys that interpolate path-like values such as `@base/docs/*.txt` now materialize to their string form instead of degrading to `"[object Object]"`, which fixes config-imported `filesystem_integrity` globs in `mlld status`.

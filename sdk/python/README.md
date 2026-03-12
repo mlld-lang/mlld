@@ -51,6 +51,30 @@ print(result.output)
 client.close()
 ```
 
+## Filesystem Integrity
+
+```python
+from mlld import Client
+
+client = Client()
+
+signed = client.sign("docs/note.txt", identity="user:alice")
+verified = client.verify("docs/note.txt")
+content_sig = client.sign_content(
+    "runtime payload",
+    "user:alice",
+    signature_id="payload-1",
+    metadata={"channel": "sdk"},
+)
+
+handle = client.execute_async("./agent.mld", state={"exit": False})
+file_sig = handle.write_file("out.txt", "hello from sdk")
+handle.update_state("exit", True)
+handle.result()
+```
+
+`client.sign_content()` stores signatures under `.sig/content/`. `ExecuteHandle.write_file()` writes relative to the executing script and auto-signs the output as `agent:{script}` with provenance metadata from the live request.
+
 ## In-Flight State Updates
 
 ```python
@@ -76,6 +100,10 @@ print(handle.result())
 - `execute(filepath, payload=None, *, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, timeout=None)`
 - `execute_async(...) -> ExecuteHandle`
 - `analyze(filepath)`
+- `sign(path, *, identity=None, metadata=None, base_path=None, timeout=None) -> FileVerifyResult`
+- `verify(path, *, base_path=None, timeout=None) -> FileVerifyResult`
+- `sign_content(content, identity, *, metadata=None, signature_id=None, base_path=None, timeout=None) -> ContentSignature`
+- `fs_status(glob=None, *, base_path=None, timeout=None) -> list[FilesystemStatus]`
 - `close()`
 
 ### Handle Methods
@@ -88,6 +116,10 @@ print(handle.result())
 - `wait()`
 - `result()`
 
+`ExecuteHandle` also provides:
+
+- `write_file(path, content, *, timeout=None) -> FileVerifyResult`
+
 ### Module-level Convenience Functions
 
 - `mlld.process(...)`
@@ -95,6 +127,10 @@ print(handle.result())
 - `mlld.execute(...)`
 - `mlld.execute_async(...)`
 - `mlld.analyze(...)`
+- `mlld.sign(...)`
+- `mlld.verify(...)`
+- `mlld.sign_content(...)`
+- `mlld.fs_status(...)`
 
 ## Notes
 

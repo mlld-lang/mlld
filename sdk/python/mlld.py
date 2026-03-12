@@ -133,6 +133,35 @@ class FilesystemStatus:
     error: str | None = None
 
 
+@dataclass
+class FileVerifyResult:
+    """Verification status for a signed file."""
+
+    path: str
+    relative_path: str
+    status: str
+    verified: bool
+    signer: str | None = None
+    signed_at: str | None = None
+    hash: str | None = None
+    expected_hash: str | None = None
+    metadata: dict[str, Any] | None = None
+    error: str | None = None
+
+
+@dataclass
+class ContentSignature:
+    """Signature metadata for stored runtime content."""
+
+    id: str
+    hash: str
+    algorithm: str
+    signed_by: str
+    signed_at: str
+    content_length: int
+    metadata: dict[str, str] | None = None
+
+
 class MlldError(Exception):
     """Error from mlld execution."""
 
@@ -302,6 +331,22 @@ class ExecuteHandle(_BaseHandle):
 
         result, state_write_events = self._await_raw()
         return _execute_result_from_payload(result, state_write_events)
+
+    def write_file(
+        self,
+        path: str,
+        content: str,
+        *,
+        timeout: float | None = None,
+    ) -> FileVerifyResult:
+        """Write a file within the active execution context and return its signature status."""
+
+        return self._client._send_file_write(
+            self.request_id,
+            path,
+            content,
+            timeout if timeout is not None else self._timeout,
+        )
 
 
 class Client:
@@ -658,6 +703,100 @@ class Client:
             if isinstance(item, dict)
         ]
 
+    def sign(
+        self,
+        path: str,
+        *,
+        identity: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        base_path: str | None = None,
+        timeout: float | None = None,
+    ) -> FileVerifyResult:
+        """
+        Sign a file and return its current verification status.
+
+        Args:
+            path: File path to sign.
+            identity: Optional signer identity. Defaults to the live server's user identity resolution.
+            metadata: Optional signature metadata to persist alongside the file signature.
+            base_path: Optional project-relative resolution base.
+            timeout: Override the client default timeout.
+        """
+
+        params: dict[str, Any] = {"path": path}
+        if identity is not None:
+            params["identity"] = identity
+        if metadata is not None:
+            params["metadata"] = metadata
+        if base_path is not None:
+            params["basePath"] = base_path
+
+        result, _ = self._request("sig:sign", params, timeout if timeout is not None else self.timeout)
+        return _file_verify_result_from_payload(_unwrap_live_result(result))
+
+    def verify(
+        self,
+        path: str,
+        *,
+        base_path: str | None = None,
+        timeout: float | None = None,
+    ) -> FileVerifyResult:
+        """
+        Verify a file and return its signature status.
+
+        Args:
+            path: File path to verify.
+            base_path: Optional project-relative resolution base.
+            timeout: Override the client default timeout.
+        """
+
+        params: dict[str, Any] = {"path": path}
+        if base_path is not None:
+            params["basePath"] = base_path
+
+        result, _ = self._request("sig:verify", params, timeout if timeout is not None else self.timeout)
+        return _file_verify_result_from_payload(_unwrap_live_result(result))
+
+    def sign_content(
+        self,
+        content: str,
+        identity: str,
+        *,
+        metadata: dict[str, str] | None = None,
+        signature_id: str | None = None,
+        base_path: str | None = None,
+        timeout: float | None = None,
+    ) -> ContentSignature:
+        """
+        Sign runtime content and persist it in the project's sig content store.
+
+        Args:
+            content: Content to sign and persist.
+            identity: Signer identity to attach to the content signature.
+            metadata: Optional string metadata stored with the content signature.
+            signature_id: Optional stable content signature id.
+            base_path: Optional project-relative resolution base.
+            timeout: Override the client default timeout.
+        """
+
+        params: dict[str, Any] = {
+            "content": content,
+            "identity": identity,
+        }
+        if metadata is not None:
+            params["metadata"] = metadata
+        if signature_id is not None:
+            params["id"] = signature_id
+        if base_path is not None:
+            params["basePath"] = base_path
+
+        result, _ = self._request(
+            "sig:sign-content",
+            params,
+            timeout if timeout is not None else self.timeout,
+        )
+        return _content_signature_from_payload(_unwrap_live_result(result))
+
     def _request(
         self,
         method: str,
@@ -778,6 +917,33 @@ class Client:
             try:
                 self._request("state:update", params, timeout)
                 return
+            except MlldError as error:
+                if error.code != "REQUEST_NOT_FOUND":
+                    raise
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.025)
+
+    def _send_file_write(
+        self,
+        request_id: int,
+        path: str,
+        content: str,
+        timeout: float | None,
+    ) -> FileVerifyResult:
+        if not isinstance(path, str) or not path.strip():
+            raise MlldError("file write path is required", code="INVALID_REQUEST")
+        if not isinstance(content, str):
+            raise MlldError("file write content must be a string", code="INVALID_REQUEST")
+
+        max_wait = timeout if timeout is not None else 2.0
+        deadline = time.monotonic() + max_wait
+        params = {"requestId": request_id, "path": path, "content": content}
+
+        while True:
+            try:
+                result, _ = self._request("file:write", params, timeout)
+                return _file_verify_result_from_payload(_unwrap_live_result(result))
             except MlldError as error:
                 if error.code != "REQUEST_NOT_FOUND":
                     raise
@@ -1013,6 +1179,51 @@ def _execute_result_from_payload(
     )
 
 
+def _unwrap_live_result(result: dict[str, Any]) -> dict[str, Any]:
+    value = result.get("value", result)
+    if not isinstance(value, dict):
+        raise MlldError("invalid live result payload", code="TRANSPORT_ERROR")
+    return value
+
+
+def _file_verify_result_from_payload(payload: dict[str, Any]) -> FileVerifyResult:
+    return FileVerifyResult(
+        path=str(payload.get("path", "")),
+        relative_path=str(payload.get("relativePath", payload.get("relative_path", ""))),
+        status=str(payload.get("status", "")),
+        verified=bool(payload.get("verified", False)),
+        signer=payload.get("signer") if isinstance(payload.get("signer"), str) else None,
+        signed_at=payload.get("signedAt") if isinstance(payload.get("signedAt"), str) else None,
+        hash=payload.get("hash") if isinstance(payload.get("hash"), str) else None,
+        expected_hash=payload.get("expectedHash")
+        if isinstance(payload.get("expectedHash"), str)
+        else None,
+        metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None,
+        error=payload.get("error") if isinstance(payload.get("error"), str) else None,
+    )
+
+
+def _content_signature_from_payload(payload: dict[str, Any]) -> ContentSignature:
+    metadata = payload.get("metadata")
+    normalized_metadata = None
+    if isinstance(metadata, dict):
+        normalized_metadata = {
+            str(key): str(value)
+            for key, value in metadata.items()
+            if isinstance(key, str) and isinstance(value, str)
+        }
+
+    return ContentSignature(
+        id=str(payload.get("id", "")),
+        hash=str(payload.get("hash", "")),
+        algorithm=str(payload.get("algorithm", "")),
+        signed_by=str(payload.get("signedBy", payload.get("signed_by", ""))),
+        signed_at=str(payload.get("signedAt", payload.get("signed_at", ""))),
+        content_length=int(payload.get("contentLength", payload.get("content_length", 0)) or 0),
+        metadata=normalized_metadata,
+    )
+
+
 def _filesystem_status_from_payload(payload: dict[str, Any]) -> FilesystemStatus:
     labels = payload.get("labels", [])
     taint = payload.get("taint", [])
@@ -1077,3 +1288,19 @@ def analyze(filepath: str) -> AnalyzeResult:
 def fs_status(glob: str | None = None, **kwargs) -> list[FilesystemStatus]:
     """List filesystem signature/integrity status. See Client.fs_status() for details."""
     return _get_client().fs_status(glob, **kwargs)
+
+
+
+def sign(path: str, **kwargs) -> FileVerifyResult:
+    """Sign a file. See Client.sign() for details."""
+    return _get_client().sign(path, **kwargs)
+
+
+def verify(path: str, **kwargs) -> FileVerifyResult:
+    """Verify a file. See Client.verify() for details."""
+    return _get_client().verify(path, **kwargs)
+
+
+def sign_content(content: str, identity: str, **kwargs) -> ContentSignature:
+    """Sign runtime content. See Client.sign_content() for details."""
+    return _get_client().sign_content(content, identity, **kwargs)

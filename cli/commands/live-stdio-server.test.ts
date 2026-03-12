@@ -96,6 +96,10 @@ type HarnessDeps = {
   executeFile?: any;
   analyze?: any;
   fsStatus?: any;
+  signFile?: any;
+  verifyFile?: any;
+  signContent?: any;
+  createExecutionFileWriter?: any;
 };
 
 function createServerHarness(
@@ -140,6 +144,16 @@ function createServerHarness(
           fsStatus: deps.fsStatus ?? (async () => {
             throw new Error('fsStatus not stubbed');
           }),
+          signFile: deps.signFile ?? (async () => {
+            throw new Error('signFile not stubbed');
+          }),
+          verifyFile: deps.verifyFile ?? (async () => {
+            throw new Error('verifyFile not stubbed');
+          }),
+          signContent: deps.signContent ?? (async () => {
+            throw new Error('signContent not stubbed');
+          }),
+          createExecutionFileWriter: deps.createExecutionFileWriter ?? (async () => undefined),
           makeFileSystem: () => ({}) as any,
           makePathService: () => ({}) as any
         }
@@ -296,6 +310,121 @@ describe('LiveStdioServer', () => {
         signer: 'user:alice'
       })
     ]);
+
+    await harness.close();
+  });
+
+  it('handles sig:sign requests', async () => {
+    const harness = createServerHarness({
+      signFile: async () => ({
+        path: '/repo/docs/a.txt',
+        relativePath: 'docs/a.txt',
+        status: 'verified',
+        verified: true,
+        signer: 'user:alice'
+      })
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'sig:sign', id: 22, params: { path: 'docs/a.txt' } })}\n`
+    );
+
+    await harness.waitForLineCount(1);
+    const [line] = harness.jsonLines();
+
+    expect(line.result.id).toBe(22);
+    expect(line.result).toEqual(
+      expect.objectContaining({
+        relativePath: 'docs/a.txt',
+        status: 'verified',
+        signer: 'user:alice'
+      })
+    );
+
+    await harness.close();
+  });
+
+  it('handles sig:verify and sig:sign-content requests', async () => {
+    const harness = createServerHarness({
+      verifyFile: async () => ({
+        path: '/repo/docs/a.txt',
+        relativePath: 'docs/a.txt',
+        status: 'verified',
+        verified: true,
+        signer: 'user:alice'
+      }),
+      signContent: async () => ({
+        id: 'sig-1',
+        hash: 'sha256:abc',
+        algorithm: 'sha256',
+        signedBy: 'user:alice',
+        signedAt: '2026-03-12T00:00:00.000Z',
+        contentLength: 4
+      })
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'sig:verify', id: 23, params: { path: 'docs/a.txt' } })}\n`
+    );
+    harness.input.write(
+      `${JSON.stringify({ method: 'sig:sign-content', id: 24, params: { content: 'test', identity: 'user:alice' } })}\n`
+    );
+
+    await harness.waitForLineCount(2);
+    const [verifyLine, signContentLine] = harness.jsonLines();
+
+    expect(verifyLine.result).toEqual(
+      expect.objectContaining({
+        relativePath: 'docs/a.txt',
+        status: 'verified'
+      })
+    );
+    expect(signContentLine.result.value).toEqual(
+      expect.objectContaining({
+        id: 'sig-1',
+        signedBy: 'user:alice'
+      })
+    );
+
+    await harness.close();
+  });
+
+  it('handles file:write requests for active executions', async () => {
+    const handle = new FakeStreamExecution();
+    const harness = createServerHarness({
+      executeFile: async () => handle,
+      createExecutionFileWriter: async () =>
+        async (targetPath: string, content: string) => ({
+          path: `/repo/${targetPath}`,
+          relativePath: targetPath,
+          status: 'verified',
+          verified: true,
+          signer: 'agent:route',
+          content
+        })
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'execute', id: 31, params: { filepath: '/repo/route.mld' } })}\n`
+    );
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'file:write', id: 32, params: { requestId: 31, path: 'out.txt', content: 'hello' } })}\n`
+    );
+
+    await harness.waitForLineCount(1);
+    const [writeLine] = harness.jsonLines();
+    expect(writeLine.result.id).toBe(32);
+    expect(writeLine.result).toEqual(
+      expect.objectContaining({
+        relativePath: 'out.txt',
+        signer: 'agent:route'
+      })
+    );
+
+    handle.resolve({ output: 'ok', effects: [], exports: {}, stateWrites: [] } as any);
+    await harness.waitForLineCount(2);
 
     await harness.close();
   });
