@@ -67,8 +67,8 @@ run stream @raw("Hello") with { streamFormat: "claude-code" }
 Definition-level `stream` and `streamFormat` are inherited by both `run @exe()` and `show @exe()`.
 
 ```mlld
-import { @haiku } from @mlld/claude-stream
-show @haiku("Explain TCP/IP")        >> streams + parses by default
+import { @claude } from @mlld/claude
+show @claude("Explain TCP/IP", { model: "haiku", stream: true })
 ```
 
 ## Format Adapters
