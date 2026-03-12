@@ -2,6 +2,7 @@ import type { SourceLocation } from '@core/types';
 import { MlldSecurityError } from '@core/errors';
 import type { LoadContentResult } from '@core/types/load-content';
 import type { SecurityDescriptor } from '@core/types/security';
+import type { FileVerifyResult } from '@core/security';
 import type { Environment } from '@interpreter/env/Environment';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { glob } from 'tinyglobby';
@@ -28,9 +29,19 @@ export interface GlobLoaderDependencies {
   buildFileSecurityDescriptor: (
     filePath: string,
     env: Environment,
-    policyEnforcer: PolicyEnforcer
+    policyEnforcer: PolicyEnforcer,
+    verifyResult?: FileVerifyResult
   ) => Promise<SecurityDescriptor>;
-  attachSecurity: <T extends LoadContentResult>(result: T, descriptor: SecurityDescriptor) => T;
+  verifyFileIntegrity: (
+    filePath: string,
+    rawContent: string,
+    env: Environment
+  ) => Promise<FileVerifyResult | undefined>;
+  attachSecurity: (
+    result: LoadContentResult,
+    descriptor: SecurityDescriptor,
+    verifyResult?: FileVerifyResult
+  ) => LoadContentResult;
 }
 
 export interface GlobLoaderInput {
@@ -66,7 +77,13 @@ export class ContentLoaderGlobHandler {
     for (const filePath of matches) {
       try {
         const rawContent = await this.dependencies.readContent(filePath, input.env, input.sourceLocation);
-        const fileSecurityDescriptor = await this.dependencies.buildFileSecurityDescriptor(filePath, input.env, policyEnforcer);
+        const fileVerifyResult = await this.dependencies.verifyFileIntegrity(filePath, rawContent, input.env);
+        const fileSecurityDescriptor = await this.dependencies.buildFileSecurityDescriptor(
+          filePath,
+          input.env,
+          policyEnforcer,
+          fileVerifyResult
+        );
         const relativePath = this.dependencies.formatRelativePath(input.env, filePath);
 
         if (filePath.endsWith('.html') || filePath.endsWith('.htm')) {
@@ -77,6 +94,7 @@ export class ContentLoaderGlobHandler {
             options: input.options,
             env: input.env,
             descriptor: fileSecurityDescriptor,
+            verifyResult: fileVerifyResult,
             results
           });
           continue;
@@ -89,6 +107,7 @@ export class ContentLoaderGlobHandler {
           options: input.options,
           env: input.env,
           descriptor: fileSecurityDescriptor,
+          verifyResult: fileVerifyResult,
           results
         });
       } catch (error: any) {
@@ -125,6 +144,7 @@ export class ContentLoaderGlobHandler {
     options: any;
     env: Environment;
     descriptor: SecurityDescriptor;
+    verifyResult?: FileVerifyResult;
     results: Array<LoadContentResult | string>;
   }): Promise<void> {
     const markdownContent = await this.dependencies.convertHtmlToMarkdown(args.rawContent, `file://${args.filePath}`);
@@ -169,7 +189,7 @@ export class ContentLoaderGlobHandler {
           title: metadata.title,
           description: metadata.description
         });
-        args.results.push(this.dependencies.attachSecurity(result, args.descriptor));
+        args.results.push(this.dependencies.attachSecurity(result, args.descriptor, args.verifyResult));
       } catch {
         // Skip files that do not contain the requested section.
       }
@@ -186,7 +206,7 @@ export class ContentLoaderGlobHandler {
       title: metadata.title,
       description: metadata.description
     });
-    args.results.push(this.dependencies.attachSecurity(result, args.descriptor));
+    args.results.push(this.dependencies.attachSecurity(result, args.descriptor, args.verifyResult));
   }
 
   private async collectTextFileResult(args: {
@@ -196,6 +216,7 @@ export class ContentLoaderGlobHandler {
     options: any;
     env: Environment;
     descriptor: SecurityDescriptor;
+    verifyResult?: FileVerifyResult;
     results: Array<LoadContentResult | string>;
   }): Promise<void> {
     if (args.options?.section) {
@@ -235,7 +256,7 @@ export class ContentLoaderGlobHandler {
           absolute: args.filePath,
           _rawContent: args.rawContent
         });
-        args.results.push(this.dependencies.attachSecurity(result, args.descriptor));
+        args.results.push(this.dependencies.attachSecurity(result, args.descriptor, args.verifyResult));
       } catch {
         // Skip files that do not contain the requested section.
       }
@@ -248,7 +269,7 @@ export class ContentLoaderGlobHandler {
       relative: args.relativePath,
       absolute: args.filePath
     });
-    args.results.push(this.dependencies.attachSecurity(result, args.descriptor));
+    args.results.push(this.dependencies.attachSecurity(result, args.descriptor, args.verifyResult));
   }
 
   private createFileContext(rawContent: string, absolutePath: string, relativePath: string): LoadContentResultImpl {

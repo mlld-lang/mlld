@@ -386,7 +386,7 @@ export class RunCommand {
       }
 
       // Use execute for AST caching and metrics
-      const result = await execute(scriptPath, undefined, {
+      const executeOptions = {
         fileSystem: this.fileSystem,
         pathService: new PathService(),
         timeoutMs: options.timeoutMs, // undefined = no timeout
@@ -397,8 +397,10 @@ export class RunCommand {
         resume: options.resume,
         fork: options.fork,
         checkpointScriptName: scriptName,
-        checkpointCacheRootDir
-      }) as StructuredResult;
+        checkpointCacheRootDir,
+        signingContext: { tier: 'user' }
+      };
+      const result = await execute(scriptPath, undefined, executeOptions as any) as StructuredResult;
 
       // Check if streaming was enabled - if so, skip final output since it was already streamed
       const effectHandler = result.environment?.getEffectHandler?.();

@@ -83,9 +83,12 @@ const globHandler = new ContentLoaderGlobHandler({
     sectionHelper.extractSection(content, sectionName, renamedTitle, fileContext, env),
   getRelativeBasePath,
   formatRelativePath,
-  buildFileSecurityDescriptor: (filePath, targetEnv, policyEnforcer) =>
-    securityMetadataHelper.buildFileSecurityDescriptor(filePath, targetEnv, policyEnforcer),
-  attachSecurity: (result, descriptor) => securityMetadataHelper.attachSecurity(result, descriptor)
+  buildFileSecurityDescriptor: (filePath, targetEnv, policyEnforcer, verifyResult) =>
+    securityMetadataHelper.buildFileSecurityDescriptor(filePath, targetEnv, policyEnforcer, verifyResult),
+  verifyFileIntegrity: (filePath, rawContent, targetEnv) =>
+    securityMetadataHelper.verifyFileIntegrity(filePath, rawContent, targetEnv),
+  attachSecurity: (result, descriptor, verifyResult) =>
+    securityMetadataHelper.attachSecurity(result, descriptor, verifyResult)
 });
 
 const orchestrator = new ContentLoaderOrchestrator({

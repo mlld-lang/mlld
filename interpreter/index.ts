@@ -18,7 +18,7 @@ import type {
 } from '@sdk/types';
 import { getExpressionProvenance } from './utils/expression-provenance';
 import { makeSecurityDescriptor } from '@core/types/security';
-import { SigService } from '@core/security';
+import { resolveIdentity, SigService } from '@core/security';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { ExecutionEmitter } from '@sdk/execution-emitter';
 import { StreamExecution } from '@sdk/stream-execution';
@@ -453,6 +453,19 @@ export async function interpret(
     effectHandler
   );
   env.setSigService(new SigService(pathContext.projectRoot, resolveSigFileSystem(options.fileSystem)));
+  const signingIdentity = (options as { signingIdentity?: unknown }).signingIdentity;
+  const signingContext = (options as { signingContext?: Record<string, unknown> | undefined }).signingContext;
+  env.setSignerIdentity(
+    typeof signingIdentity === 'string' && signingIdentity.trim().length > 0
+      ? signingIdentity.trim()
+      : await resolveIdentity({
+          tier: 'agent',
+          projectRoot: pathContext.projectRoot,
+          fileSystem: resolveSigFileSystem(options.fileSystem),
+          scriptPath: options.filePath,
+          ...(signingContext && typeof signingContext === 'object' ? signingContext : {})
+        })
+  );
   env.setStreamingManager(options.streamingManager ?? new StreamingManager());
   env.setProvenanceEnabled(provenanceEnabled);
   env.setCheckpointScriptResumeMode(scriptResumeMode);

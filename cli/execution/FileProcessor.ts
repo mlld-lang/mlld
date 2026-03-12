@@ -457,7 +457,7 @@ export class FileProcessor {
     }
 
     let resultEnvironment: Environment | null = null;
-    const interpretResult = await interpret(content, {
+    const interpretOptions = {
       pathContext,
       filePath: effectivePath,
       format: this.normalizeFormat(cliOptions.format),
@@ -486,8 +486,10 @@ export class FileProcessor {
       },
       mode: modeConfig.mode,
       streaming: modeConfig.streaming ?? (cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined),
-      emitter: modeConfig.emitter
-    });
+      emitter: modeConfig.emitter,
+      signingContext: { tier: 'user' as const }
+    };
+    const interpretResult = await interpret(content, interpretOptions as any);
 
     return {
       interpretResult,

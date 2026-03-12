@@ -99,6 +99,14 @@ export async function execute(
     checkpointScriptName: options.checkpointScriptName,
     checkpointCacheRootDir: options.checkpointCacheRootDir
   } as InterpretOptions;
+  const signingContext = (options as { signingContext?: unknown }).signingContext;
+  if (signingContext !== undefined) {
+    (interpretOptions as InterpretOptions & { signingContext?: unknown }).signingContext = signingContext;
+  }
+  const signingIdentity = (options as { signingIdentity?: unknown }).signingIdentity;
+  if (typeof signingIdentity === 'string' && signingIdentity.trim().length > 0) {
+    (interpretOptions as InterpretOptions & { signingIdentity?: string }).signingIdentity = signingIdentity.trim();
+  }
 
   const metricsContext = {
     startTime: overallStart,

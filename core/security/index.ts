@@ -15,6 +15,12 @@ export {
   type FileVerifyResult,
   type FileSigningMetadata,
 } from './sig-service';
+export {
+  resolveIdentity,
+  resolveUserIdentity,
+  type IdentityResolutionContext,
+  type SignerTier,
+} from './identity';
 export { appendAuditEvent, type AuditEvent } from './AuditLogger';
 export {
   TaintTracker,
