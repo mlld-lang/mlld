@@ -144,6 +144,24 @@ export function stringifyStructured(value: unknown, space?: number): string {
   return JSON.stringify(value, structuredValueJsonReplacer, space);
 }
 
+function stringifyTextValue(value: unknown): string {
+  try {
+    const text = stringifyStructured(value);
+    if (typeof text === 'string') {
+      return text;
+    }
+  } catch {}
+
+  try {
+    const text = JSON.stringify(value);
+    if (typeof text === 'string') {
+      return text;
+    }
+  } catch {}
+
+  return '[unserializable object]';
+}
+
 function structuredValueJsonReplacer(_key: string, val: unknown): unknown {
   if (isStructuredValue(val)) {
     return val.data;
@@ -168,6 +186,9 @@ export function asText(value: unknown): string {
   }
   if (value === null || value === undefined) {
     return '';
+  }
+  if (typeof value === 'object') {
+    return stringifyTextValue(value);
   }
   return String(value);
 }
@@ -381,12 +402,10 @@ function deriveText(value: unknown): string {
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
     return String(value);
   }
-
-  try {
-    return stringifyStructured(value);
-  } catch {
-    return String(value);
+  if (typeof value === 'object') {
+    return stringifyTextValue(value);
   }
+  return String(value);
 }
 
 export const structuredValueUtils = {

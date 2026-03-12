@@ -52,6 +52,41 @@ describe('execute', () => {
     expect(metrics.effectCount).toBeGreaterThan(0);
   });
 
+  it('preserves object and boolean values for state:// writes', async () => {
+    await fileSystem.writeFile(
+      routePath,
+      `
+/var @payload = {"enabled": true, "nested": {"count": 2}}
+/var @flag = true
+/output @payload to "state://payload"
+/output @flag to "state://flag"
+/show \`count=@state.payload.nested.count flag=@state.flag\`
+      `.trim()
+    );
+
+    const result = await execute(routePath, undefined, {
+      fileSystem,
+      pathService,
+      state: { payload: null, flag: false }
+    });
+
+    expect(result.output).toContain('count=2 flag=true');
+    expect((result as any).stateWrites).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'payload',
+          value: { enabled: true, nested: { count: 2 } },
+          operation: 'set'
+        }),
+        expect.objectContaining({
+          path: 'flag',
+          value: true,
+          operation: 'set'
+        })
+      ])
+    );
+  });
+
   it('marks cache hits on subsequent executions', async () => {
     await fileSystem.writeFile(routePath, '/show "cached"');
 

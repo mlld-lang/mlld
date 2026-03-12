@@ -130,6 +130,14 @@ class MlldError(Exception):
 PendingQueue = queue.Queue[tuple[str, Any]]
 
 
+@dataclass
+class HandleEvent:
+    """An event from an in-flight execution."""
+
+    type: str  # "state_write" or "complete"
+    state_write: StateWrite | None = None
+
+
 class _BaseHandle:
     """In-flight request handle for live transport operations."""
 
@@ -170,6 +178,50 @@ class _BaseHandle:
             value,
             timeout if timeout is not None else self._timeout,
         )
+
+    def next_event(self, timeout: float | None = None) -> HandleEvent | None:
+        """Block until next event. Returns HandleEvent with type="state_write"
+        for state:// writes, type="complete" when execution finishes.
+        Returns None on timeout."""
+
+        if self._is_complete:
+            return HandleEvent(type="complete")
+
+        effective_timeout = timeout if timeout is not None else self._timeout
+        deadline = None if effective_timeout is None else time.monotonic() + effective_timeout
+
+        while True:
+            remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+            if remaining is not None and remaining <= 0:
+                return None
+
+            try:
+                kind, payload = self._response_queue.get(timeout=remaining)
+            except queue.Empty:
+                return None
+
+            if kind == "event":
+                write = _state_write_from_event(payload)
+                if write is not None:
+                    self._state_write_events.append(write)
+                    return HandleEvent(type="state_write", state_write=write)
+                continue
+
+            if kind == "transport_error":
+                self._error = payload
+                self._is_complete = True
+                raise payload
+
+            if kind == "result" and isinstance(payload, dict):
+                error_payload = payload.get("error")
+                if isinstance(error_payload, dict):
+                    self._error = _error_from_payload(error_payload)
+                    self._is_complete = True
+                    raise self._error
+                payload.pop("id", None)
+                self._raw_result = payload
+                self._is_complete = True
+                return HandleEvent(type="complete")
 
     def _await_raw(self) -> tuple[dict[str, Any], list[StateWrite]]:
         with self._lock:
@@ -795,11 +847,26 @@ def _error_from_payload(error_payload: dict[str, Any]) -> MlldError:
     return MlldError(message=message, code=code if isinstance(code, str) else None)
 
 
-def _state_write_from_event(event: dict[str, Any]) -> StateWrite | None:
-    if event.get("type") != "state:write":
-        return None
+def _looks_like_json_composite(value: str) -> bool:
+    trimmed = value.strip()
+    if len(trimmed) < 2:
+        return False
+    return (trimmed.startswith("{") and trimmed.endswith("}")) or (
+        trimmed.startswith("[") and trimmed.endswith("]")
+    )
 
-    write = event.get("write")
+
+def _decode_state_write_value(value: Any) -> Any:
+    if not isinstance(value, str) or not _looks_like_json_composite(value):
+        return value
+
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, ValueError):
+        return value
+
+
+def _state_write_from_payload(write: Any) -> StateWrite | None:
     if not isinstance(write, dict):
         return None
 
@@ -809,9 +876,16 @@ def _state_write_from_event(event: dict[str, Any]) -> StateWrite | None:
 
     return StateWrite(
         path=path,
-        value=write.get("value"),
+        value=_decode_state_write_value(write.get("value")),
         timestamp=write.get("timestamp") if isinstance(write.get("timestamp"), str) else None,
     )
+
+
+def _state_write_from_event(event: dict[str, Any]) -> StateWrite | None:
+    if event.get("type") != "state:write":
+        return None
+
+    return _state_write_from_payload(event.get("write"))
 
 
 def _state_write_key(state_write: StateWrite) -> str:
@@ -842,15 +916,11 @@ def _execute_result_from_payload(
     result: dict[str, Any],
     state_write_events: list[StateWrite],
 ) -> ExecuteResult:
-    state_writes = [
-        StateWrite(
-            path=sw.get("path", ""),
-            value=sw.get("value"),
-            timestamp=sw.get("timestamp"),
-        )
-        for sw in result.get("stateWrites", [])
-        if isinstance(sw, dict)
-    ]
+    state_writes: list[StateWrite] = []
+    for raw_write in result.get("stateWrites", []):
+        state_write = _state_write_from_payload(raw_write)
+        if state_write is not None:
+            state_writes.append(state_write)
 
     state_writes = _merge_state_writes(state_writes, state_write_events)
 

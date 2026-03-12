@@ -92,6 +92,80 @@ class LiveIntegrationTest(unittest.TestCase):
         output = handle.result()
         self.assertIn("loop-stopped", output)
 
+    def test_next_event_state_write_roundtrip(self) -> None:
+        """Test next_event() yields state:write events and supports update_state() injection."""
+        script = (
+            'output "ping" to "state://pending"\n'
+            'loop(600, 50ms) until @state.result [\n'
+            '  continue\n'
+            ']\n'
+            'show @state.result\n'
+        )
+
+        handle = self.client.process_async(
+            script,
+            state={"pending": None, "result": None},
+            timeout=10,
+        )
+
+        # First event should be the state:write for "pending"
+        event = handle.next_event(timeout=5)
+        self.assertIsNotNone(event)
+        self.assertEqual(event.type, "state_write")
+        self.assertEqual(event.state_write.path, "pending")
+        self.assertEqual(event.state_write.value, "ping")
+
+        # Inject the result
+        handle.update_state("result", "pong")
+
+        # Next event should be completion
+        event = handle.next_event(timeout=5)
+        self.assertIsNotNone(event)
+        self.assertEqual(event.type, "complete")
+
+        # result() should work after complete
+        output = handle.result()
+        self.assertIn("pong", output)
+
+    def test_next_event_returns_complete_on_simple_script(self) -> None:
+        """Test next_event() returns complete for scripts without state writes."""
+        handle = self.client.process_async(
+            'show "hello"\n',
+            mode="strict",
+            timeout=5,
+        )
+
+        event = handle.next_event(timeout=5)
+        self.assertIsNotNone(event)
+        self.assertEqual(event.type, "complete")
+
+        output = handle.result()
+        self.assertIn("hello", output)
+
+    def test_execute_preserves_structured_state_write_values(self) -> None:
+        script = (
+            '/var @payload = {"enabled": true, "nested": {"count": 2}}\n'
+            '/var @flag = true\n'
+            '/output @payload to "state://payload"\n'
+            '/output @flag to "state://flag"\n'
+            '/show `count=@state.payload.nested.count flag=@state.flag`\n'
+        )
+
+        with tempfile.TemporaryDirectory(prefix="mlld-python-sdk-") as tmp_dir:
+            script_path = Path(tmp_dir) / "structured-state.mld"
+            script_path.write_text(script)
+
+            result = self.client.execute(
+                str(script_path),
+                state={"payload": None, "flag": False},
+                mode="markdown",
+                timeout=10,
+            )
+
+            self.assertIn("count=2 flag=true", result.output)
+            self.assertEqual(_state_write_value(result.state_writes, "payload"), {"enabled": True, "nested": {"count": 2}})
+            self.assertIs(_state_write_value(result.state_writes, "flag"), True)
+
     def test_state_update_fails_after_completion(self) -> None:
         handle = self.client.process_async(
             'show "done"\n',
@@ -109,10 +183,10 @@ class LiveIntegrationTest(unittest.TestCase):
         self.assertEqual(getattr(error, "code", None), "REQUEST_NOT_FOUND")
 
 
-def _state_write_value(state_writes, path: str) -> int:
+def _state_write_value(state_writes, path: str):
     for state_write in state_writes:
         if state_write.path == path:
-            return int(state_write.value)
+            return state_write.value
     raise AssertionError(f"missing state write for path={path}")
 
 

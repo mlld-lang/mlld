@@ -18,7 +18,7 @@ import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
 import { asText, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
-import { materializeDisplayValue } from '../utils/display-materialization';
+import { materializeDisplayValue, resolveNestedValue } from '../utils/display-materialization';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, type DataLabel, type SecurityDescriptor } from '@core/types/security';
@@ -225,9 +225,10 @@ export async function evaluateOutput(
           : '';
       if (rawTarget.startsWith('state://')) {
         const statePath = rawTarget.replace(/^state:\/\//, '');
+        const stateValue = resolveNestedValue(descriptorSource ?? content);
         env.recordStateWrite({
           path: statePath,
-          value: content,
+          value: stateValue,
           operation: 'set',
           security: securityDescriptor ?? makeSecurityDescriptor()
         });

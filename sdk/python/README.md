@@ -8,6 +8,16 @@ Python wrapper for mlld using a persistent NDJSON RPC transport over `mlld live 
 pip install mlld-sdk
 ```
 
+## Development
+
+For local SDK work, use an editable install so changes in `mlld.py` apply immediately:
+
+```bash
+uv pip install -e /path/to/mlld/sdk/python
+```
+
+If you are already in the repo root, `uv pip install -e ./sdk/python` works too.
+
 ## Requirements
 
 - Python 3.10+

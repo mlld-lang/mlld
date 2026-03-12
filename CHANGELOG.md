@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pipe inside ternary branches (`var @x = @val ? @val | @filter : null`) now produces an actionable parse error explaining the limitation and showing two workarounds (exe block wrapper or split into separate steps) instead of a generic "Text content not allowed in strict mode" message.
 - CLI: added `--state` so scripts can populate `@state` from `@file.json`, inline JSON objects, or `KEY=VALUE` flags without routing through `--inject`.
 - `mlld info` now builds source URLs correctly for directory-backed registry modules, fixing broken `# tldr` lookups that previously produced `undefined` paths.
+- `state://` writes now preserve structured objects and booleans as native values instead of flattening them through the text surface first. This also fixes live `@state` snapshots and SDK payloads receiving `"[object Object]"` or stringified booleans in affected flows.
+- Structured-value text fallbacks no longer silently degrade plain or circular objects to `"[object Object]"`. Objects now prefer JSON serialization, and genuinely unserializable values surface as `[unserializable object]` instead.
+- Python SDK state-write decoding now normalizes composite JSON payloads from both streamed `state:write` events and final `stateWrites` results, avoiding manual `json.loads(...)` for object values and preventing mixed-type duplicate entries during merge.
+
+### Documentation
+- Python SDK README now documents editable installs for local development (`uv pip install -e ./sdk/python`) so SDK changes apply immediately in downstream projects.
 
 ## [2.0.4]
 
