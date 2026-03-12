@@ -11,6 +11,7 @@ import type { MlldMode } from '@core/types/mode';
 import { interpret } from '@interpreter/index';
 import type { SDKEvent, StreamExecution, StructuredResult } from '@sdk/types';
 import { sanitizeSerializableValue, serializeError } from '@core/errors/errorSerialization';
+import { collectFilesystemStatus } from './status';
 
 type RequestId = string | number;
 
@@ -32,6 +33,7 @@ interface LiveStdioServerDependencies {
   interpret: typeof interpret;
   executeFile: typeof execute;
   analyze: typeof analyzeModule;
+  fsStatus: typeof collectFilesystemStatus;
   makeFileSystem: () => IFileSystemService;
   makePathService: () => IPathService;
 }
@@ -73,6 +75,11 @@ interface AnalyzeRequestParams {
   filepath: string;
 }
 
+interface FsStatusRequestParams {
+  basePath?: string;
+  glob?: string;
+}
+
 interface StateUpdateRequestParams {
   requestId: RequestId;
   path: string;
@@ -108,6 +115,7 @@ const defaultDependencies: LiveStdioServerDependencies = {
   interpret,
   executeFile: execute,
   analyze: analyzeModule,
+  fsStatus: collectFilesystemStatus,
   makeFileSystem: () => new NodeFileSystem(),
   makePathService: () => new PathService()
 };
@@ -405,6 +413,9 @@ export class LiveStdioServer {
         case 'analyze':
           await this.runAnalyze(requestId, params);
           break;
+        case 'fs:status':
+          await this.runFsStatus(requestId, params);
+          break;
         default:
           await this.writeResult(requestId, {
             error: this.buildError('METHOD_NOT_FOUND', `Method '${method}' is not supported`)
@@ -472,6 +483,15 @@ export class LiveStdioServer {
   private async runAnalyze(requestId: RequestId, params: unknown): Promise<void> {
     const parsed = this.parseAnalyzeParams(params);
     const result = await this.deps.analyze(parsed.filepath);
+    await this.writeResult(requestId, this.toResultPayload(result));
+  }
+
+  private async runFsStatus(requestId: RequestId, params: unknown): Promise<void> {
+    const parsed = this.parseFsStatusParams(params);
+    const result = await this.deps.fsStatus({
+      basePath: parsed.basePath,
+      glob: parsed.glob
+    });
     await this.writeResult(requestId, this.toResultPayload(result));
   }
 
@@ -586,6 +606,21 @@ export class LiveStdioServer {
     }
 
     return { filepath: params.filepath };
+  }
+
+  private parseFsStatusParams(params: unknown): FsStatusRequestParams {
+    if (typeof params === 'string') {
+      return { glob: params };
+    }
+
+    if (!isRecord(params)) {
+      return {};
+    }
+
+    return {
+      basePath: typeof params.basePath === 'string' ? params.basePath : undefined,
+      glob: typeof params.glob === 'string' ? params.glob : undefined
+    };
   }
 
   private parseStateUpdateParams(params: unknown): StateUpdateRequestParams {

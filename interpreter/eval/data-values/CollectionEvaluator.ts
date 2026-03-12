@@ -159,6 +159,7 @@ export class CollectionEvaluator {
       for (const entry of (value as any).entries) {
         if (entry.type === 'pair') {
           // Regular key-value pair
+          const resolvedKey = await this.resolveObjectKey(entry.key, env);
           let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
           collectDescriptorFromValue(evaluated, descriptors);
           // For primitive results, extract security from the source AST node
@@ -168,8 +169,9 @@ export class CollectionEvaluator {
           if (isStructuredValue(evaluated)) {
             evaluated = unwrapStructuredPrimitive(evaluated);
           }
-          evaluatedObj[entry.key] = evaluated;
+          evaluatedObj[resolvedKey] = evaluated;
         } else if (entry.type === 'conditionalPair') {
+          const resolvedKey = await this.resolveObjectKey(entry.key, env);
           try {
             let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
             if (isStructuredValue(evaluated)) {
@@ -181,7 +183,7 @@ export class CollectionEvaluator {
               if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
                 collectDescriptorFromSource(entry.value, env, descriptors);
               }
-              evaluatedObj[entry.key] = evaluated;
+              evaluatedObj[resolvedKey] = evaluated;
             }
           } catch (error) {
             if (this.isConditionalOmissionError(error)) {
@@ -256,6 +258,44 @@ export class CollectionEvaluator {
     }
 
     return evaluatedObj;
+  }
+
+  private async resolveObjectKey(key: unknown, env: Environment): Promise<string> {
+    if (typeof key === 'string' || typeof key === 'number' || typeof key === 'boolean') {
+      return String(key);
+    }
+
+    if (Array.isArray(key)) {
+      return interpolateAndRecord(key, env);
+    }
+
+    if (!key || typeof key !== 'object') {
+      return String(key);
+    }
+
+    const keyNode = key as Record<string, unknown>;
+    if (keyNode.needsInterpolation === true && Array.isArray(keyNode.parts)) {
+      return interpolateAndRecord(keyNode.parts, env);
+    }
+
+    if (keyNode.type === 'Literal') {
+      return String(keyNode.value ?? '');
+    }
+
+    if (keyNode.type === 'Text') {
+      return String(keyNode.content ?? '');
+    }
+
+    if (Array.isArray(keyNode.content)) {
+      return interpolateAndRecord(keyNode.content, env);
+    }
+
+    const evaluated = await this.evaluateDataValue(keyNode as DataValue, env, { suppressErrors: true });
+    if (isStructuredValue(evaluated)) {
+      return String(unwrapStructuredPrimitive(evaluated) ?? '');
+    }
+
+    return String(evaluated ?? '');
   }
 
   /**

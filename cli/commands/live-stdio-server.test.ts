@@ -95,6 +95,7 @@ type HarnessDeps = {
   interpret?: any;
   executeFile?: any;
   analyze?: any;
+  fsStatus?: any;
 };
 
 function createServerHarness(
@@ -135,6 +136,9 @@ function createServerHarness(
           }),
           analyze: deps.analyze ?? (async () => {
             throw new Error('analyze not stubbed');
+          }),
+          fsStatus: deps.fsStatus ?? (async () => {
+            throw new Error('fsStatus not stubbed');
           }),
           makeFileSystem: () => ({}) as any,
           makePathService: () => ({}) as any
@@ -258,6 +262,40 @@ describe('LiveStdioServer', () => {
     expect(eventLine).not.toContain('resolverManager');
     expect(eventLine).not.toContain('variableManager');
     expect(eventLine).not.toContain('top-secret');
+
+    await harness.close();
+  });
+
+  it('handles fs:status requests', async () => {
+    const harness = createServerHarness({
+      fsStatus: async () => [
+        {
+          path: '/repo/docs/a.txt',
+          relativePath: 'docs/a.txt',
+          status: 'verified',
+          verified: true,
+          signer: 'user:alice',
+          labels: ['trusted'],
+          taint: []
+        }
+      ]
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'fs:status', id: 21, params: { glob: 'docs/*.txt' } })}\n`
+    );
+
+    await harness.waitForLineCount(1);
+    const [line] = harness.jsonLines();
+
+    expect(line.result.id).toBe(21);
+    expect(line.result.value).toEqual([
+      expect.objectContaining({
+        relativePath: 'docs/a.txt',
+        status: 'verified',
+        signer: 'user:alice'
+      })
+    ]);
 
     await harness.close();
   });

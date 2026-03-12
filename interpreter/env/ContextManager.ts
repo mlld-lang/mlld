@@ -105,6 +105,8 @@ export interface ToolsContextSnapshot {
   results: Readonly<Record<string, unknown>>;
 }
 
+type SigFilesResolver = (pattern: string) => Promise<unknown[]>;
+
 interface BuildContextOptions {
   pipelineContext?: PipelineContextSnapshot;
   securitySnapshot?: SecuritySnapshotLike;
@@ -129,6 +131,8 @@ export class ContextManager {
   private toolAllowed: string[] = [];
   private toolDenied: string[] = [];
   private toolResults: Record<string, unknown> = {};
+  private sigStatuses: Record<string, unknown> = {};
+  private sigFilesResolver?: SigFilesResolver;
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
@@ -296,6 +300,28 @@ export class ContextManager {
     };
   }
 
+  recordSigStatus(keys: readonly string[], status: unknown): void {
+    if (!Array.isArray(keys) || keys.length === 0) {
+      return;
+    }
+
+    const snapshot = this.cloneToolResult(status);
+    for (const key of keys) {
+      if (typeof key !== 'string') {
+        continue;
+      }
+      const normalized = key.trim();
+      if (!normalized) {
+        continue;
+      }
+      this.sigStatuses[normalized] = snapshot;
+    }
+  }
+
+  setSigFilesResolver(resolver?: SigFilesResolver): void {
+    this.sigFilesResolver = resolver;
+  }
+
   buildAmbientContext(options: BuildContextOptions = {}): Record<string, unknown> {
     if (options.testOverride !== undefined) {
       return options.testOverride as Record<string, unknown>;
@@ -368,6 +394,7 @@ export class ContextManager {
         errors: Array.isArray(hookErrors) ? [...hookErrors] : []
       },
       tools: this.getToolsSnapshot(),
+      sig: this.buildSigContext(),
       ...(checkpointContext ? { checkpoint: checkpointContext } : {}),
       ...(options.boxContext ? { box: options.boxContext } : {}),
       ...(this.buildLlmContext(options.llmToolConfig) ?? {})
@@ -447,6 +474,14 @@ export class ContextManager {
       return output;
     }
     return String(value);
+  }
+
+  private buildSigContext(): Record<string, unknown> {
+    const snapshot = { ...this.sigStatuses };
+    if (this.sigFilesResolver) {
+      snapshot.files = async (pattern: string) => await this.sigFilesResolver?.(pattern) ?? [];
+    }
+    return snapshot;
   }
 
   private normalizeOperationContext(

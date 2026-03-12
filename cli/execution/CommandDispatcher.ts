@@ -31,6 +31,7 @@ import { createHowtoCommand, createQuickstartCommand } from '../commands/howto';
 import { createValidateCommand } from '../commands/analyze';
 import { createVerifyCommand } from '../commands/verify';
 import { createSignCommand } from '../commands/sign';
+import { createStatusCommand } from '../commands/status';
 import { createPluginCommand } from '../commands/plugin';
 import { createSkillCommand } from '../commands/skill';
 import type { CLIOptions } from '../index';
@@ -91,6 +92,7 @@ export class CommandDispatcher {
     this.commandMap.set('analyze', createValidateCommand()); // Alias
     this.commandMap.set('verify', createVerifyCommand());
     this.commandMap.set('sign', createSignCommand());
+    this.commandMap.set('status', createStatusCommand());
     this.commandMap.set('plugin', createPluginCommand());
     this.commandMap.set('skill', createSkillCommand());
     this.commandMap.set('skills', createSkillCommand()); // Alias
@@ -248,6 +250,7 @@ export class CommandDispatcher {
       'checkpoint': 'Manage script checkpoint caches',
       'verify': 'Verify signed variables from MLLD_VERIFY_VARS',
       'sign': 'Sign files and globs with the current user identity',
+      'status': 'Show filesystem signature and integrity status',
       'error-test': 'Test error handling',
       'clean': 'Remove modules from lock file and cache',
       'update': 'Update installed modules to latest versions',

@@ -150,6 +150,30 @@ Write behavior:
 
 Signer-derived trust labels replace old inherited `trusted` / `untrusted` labels from audit or signature metadata. Path/source labels such as `src:file` and `dir:*` still propagate.
 
+Inspect current file status from the CLI:
+
+```bash
+mlld status
+mlld status --glob 'docs/*.txt'
+mlld status --taint
+mlld status --json
+```
+
+Runtime reads also expose a signature snapshot on `@mx.sig`:
+
+```mlld
+/var @doc = <docs/output.md>
+
+/when @mx.sig["docs/output.md"].verified [
+  true => /show `signed by @mx.sig["docs/output.md"].signer`
+  * => /show "unsigned or modified"
+]
+
+/var @allDocs = @mx.sig.files("docs/*.md")
+```
+
+`@mx.sig["path"]` returns the cached verification result for files already read in the current execution. `@mx.sig.files("glob")` verifies matching files on demand and returns an array of `{ path, relativePath, status, signer, labels, taint }` objects.
+
 ## Named Policies
 
 Define a policy object and export it:

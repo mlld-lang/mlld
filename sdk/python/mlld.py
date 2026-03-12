@@ -118,6 +118,21 @@ class AnalyzeResult:
     needs: Needs | None = None
 
 
+@dataclass
+class FilesystemStatus:
+    """Filesystem signature/integrity status for a single file."""
+
+    path: str
+    relative_path: str
+    status: str
+    verified: bool
+    signer: str | None = None
+    labels: list[str] = field(default_factory=list)
+    taint: list[str] = field(default_factory=list)
+    signed_at: str | None = None
+    error: str | None = None
+
+
 class MlldError(Exception):
     """Error from mlld execution."""
 
@@ -611,6 +626,38 @@ class Client:
             needs=needs,
         )
 
+    def fs_status(
+        self,
+        glob: str | None = None,
+        *,
+        base_path: str | None = None,
+        timeout: float | None = None,
+    ) -> list[FilesystemStatus]:
+        """
+        Return filesystem signature/integrity status for tracked files.
+
+        Args:
+            glob: Optional filter pattern.
+            base_path: Optional project-relative resolution base.
+            timeout: Override the client default timeout.
+        """
+
+        params: dict[str, Any] = {}
+        if glob is not None:
+            params["glob"] = glob
+        if base_path is not None:
+            params["basePath"] = base_path
+
+        result, _ = self._request("fs:status", params, timeout if timeout is not None else self.timeout)
+        raw_items = result.get("value", result.get("result", []))
+        if not isinstance(raw_items, list):
+            raise MlldError("invalid fs:status payload", code="TRANSPORT_ERROR")
+        return [
+            _filesystem_status_from_payload(item)
+            for item in raw_items
+            if isinstance(item, dict)
+        ]
+
     def _request(
         self,
         method: str,
@@ -966,6 +1013,22 @@ def _execute_result_from_payload(
     )
 
 
+def _filesystem_status_from_payload(payload: dict[str, Any]) -> FilesystemStatus:
+    labels = payload.get("labels", [])
+    taint = payload.get("taint", [])
+    return FilesystemStatus(
+        path=str(payload.get("path", "")),
+        relative_path=str(payload.get("relativePath", payload.get("relative_path", ""))),
+        status=str(payload.get("status", "")),
+        verified=bool(payload.get("verified", False)),
+        signer=payload.get("signer"),
+        labels=[str(label) for label in labels] if isinstance(labels, list) else [],
+        taint=[str(label) for label in taint] if isinstance(taint, list) else [],
+        signed_at=payload.get("signedAt") if isinstance(payload.get("signedAt"), str) else None,
+        error=payload.get("error") if isinstance(payload.get("error"), str) else None,
+    )
+
+
 # Convenience functions using default client
 _default_client: Client | None = None
 
@@ -1009,3 +1072,8 @@ def execute_async(filepath: str, payload: Any = None, **kwargs) -> ExecuteHandle
 def analyze(filepath: str) -> AnalyzeResult:
     """Analyze an mlld module. See Client.analyze() for details."""
     return _get_client().analyze(filepath)
+
+
+def fs_status(glob: str | None = None, **kwargs) -> list[FilesystemStatus]:
+    """List filesystem signature/integrity status. See Client.fs_status() for details."""
+    return _get_client().fs_status(glob, **kwargs)

@@ -18,4 +18,13 @@ describe('CommandDispatcher', () => {
     expect(flags['mlld-env']).toEqual(['KEY1=val1', 'KEY2=val2']);
     expect(flags.topic).toBe('security');
   });
+
+  it('registers the status command', () => {
+    const dispatcher = new CommandDispatcher();
+
+    expect(dispatcher.supportsCommand('status')).toBe(true);
+    expect(dispatcher.getCommandDescription('status')).toBe(
+      'Show filesystem signature and integrity status'
+    );
+  });
 });

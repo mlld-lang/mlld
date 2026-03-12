@@ -1,5 +1,10 @@
 import { sha256 } from '@disreguard/sig';
 import type { FileVerifyResult } from '@core/security';
+import {
+  getSigStatusAliases,
+  toSigStatusEntry,
+  verifyPatternStatuses
+} from '@core/security/file-status';
 import type { LoadContentResult } from '@core/types/load-content';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
@@ -74,6 +79,36 @@ function buildTrustDescriptor(
   return labels.length > 0 ? makeSecurityDescriptor({ labels }) : undefined;
 }
 
+function registerSigContext(
+  env: Environment,
+  verifyResult: FileVerifyResult
+): void {
+  const sigService = env.getSigService();
+  if (!sigService) {
+    return;
+  }
+
+  const contextManager = env.getContextManager();
+  const entry = toSigStatusEntry(verifyResult, env.getPolicySummary());
+  contextManager.recordSigStatus(getSigStatusAliases(entry), entry);
+  contextManager.setSigFilesResolver(async (pattern: string) => {
+    const entries = await verifyPatternStatuses({
+      sigService,
+      fileSystem: env.getFileSystemService(),
+      projectRoot: env.getProjectRoot(),
+      policy: env.getPolicySummary(),
+      pattern,
+      basePath: env.getFileDirectory()
+    });
+
+    for (const nextEntry of entries) {
+      contextManager.recordSigStatus(getSigStatusAliases(nextEntry), nextEntry);
+    }
+
+    return entries;
+  });
+}
+
 export class ContentLoaderSecurityMetadataHelper {
   async verifyFileIntegrity(
     filePath: string,
@@ -85,7 +120,9 @@ export class ContentLoaderSecurityMetadataHelper {
       return undefined;
     }
 
-    return await sigService.verifyHash(filePath, sha256(rawContent));
+    const verifyResult = await sigService.verifyHash(filePath, sha256(rawContent));
+    registerSigContext(env, verifyResult);
+    return verifyResult;
   }
 
   async buildFileSecurityDescriptor(
