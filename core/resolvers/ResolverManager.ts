@@ -12,10 +12,12 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { MlldResolutionError } from '@core/errors';
 import { logger } from '@core/utils/logger';
-import { ModuleCache, LockFile, type ModuleCacheStoreOptions } from '@core/registry';
+import { ModuleCache, LockFile, type ModuleCacheStoreOptions, type ModuleLockEntry } from '@core/registry';
 import { HashUtils } from '@core/registry/utils/HashUtils';
 import { parseModuleMetadata, formatDependencyMap } from '@core/registry/utils/ModuleMetadata';
+import { splitModuleNameVersion } from '@core/registry/utils/moduleNames';
 import { hasUncommittedChanges, getGitStatus } from '@core/utils/gitStatus';
+import { satisfiesVersion } from '@core/utils/version-checker';
 
 /**
  * Information about a local module for dev mode
@@ -401,12 +403,24 @@ export class ResolverManager {
       !isLocal &&
       !isDynamic;
     const shouldRequireCache = usesModuleCacheContext && supportsModuleContent && !isLocal && !isDynamic;
+    const requestedModule = cacheEligible ? this.parseRequestedModuleRef(ref) : undefined;
+    let lockEntry = requestedModule && this.lockFile
+      ? this.lockFile.getModule(requestedModule.moduleName)
+      : undefined;
 
     // 2. Check if we have a hash for this module in lock file (skip for local files)
     if (cacheEligible) {
-      // Convert reference to module name format
-      const moduleName = this.refToModuleName(ref);
-      const lockEntry = this.lockFile.getModule(moduleName);
+      const moduleName = requestedModule!.moduleName;
+      if (!this.isLockEntryVersionCompatible(requestedModule?.requestedVersion, lockEntry)) {
+        logger.info(
+          `Ignoring stale lock entry for ${ref}: locked version ${
+            lockEntry?.registryVersion || lockEntry?.version || 'unknown'
+          } does not satisfy requested version ${requestedModule?.requestedVersion}`
+        );
+        await this.lockFile.removeModule(moduleName);
+        lockEntry = undefined;
+      }
+
       if (lockEntry?.integrity) {
         // Extract hash from integrity (format: "sha256:hash")
         const hash = lockEntry.integrity.split(':')[1];
@@ -531,14 +545,19 @@ export class ResolverManager {
           };
           
           // 5. Update lock file with new hash
-          if (this.lockFile) {
-            const moduleName = this.refToModuleName(ref);
-            await this.lockFile.addModule(moduleName, {
-              version: 'latest', // TODO: Get actual version from resolver
+          if (this.lockFile && requestedModule) {
+            const resolvedVersion = typeof content.metadata?.version === 'string'
+              ? content.metadata.version
+              : typeof content.metadata?.registryVersion === 'string'
+                ? content.metadata.registryVersion
+                : requestedModule.requestedVersion;
+            await this.lockFile.addModule(requestedModule.moduleName, {
+              version: requestedModule.requestedVersion ?? lockEntry?.version ?? 'latest',
               resolved: cacheEntry.hash,
               source: content.metadata.source || ref,
               integrity: `sha256:${cacheEntry.hash}`,
-              fetchedAt: new Date().toISOString()
+              fetchedAt: new Date().toISOString(),
+              registryVersion: resolvedVersion
             });
           }
           
@@ -912,5 +931,39 @@ export class ResolverManager {
     }
     // Assume it's author/module format
     return `@${ref}`;
+  }
+
+  private parseRequestedModuleRef(ref: string): { moduleName: string; requestedVersion?: string } {
+    const parsed = splitModuleNameVersion(this.refToModuleName(ref));
+    return {
+      moduleName: parsed.name,
+      requestedVersion: parsed.version
+    };
+  }
+
+  private isLockEntryVersionCompatible(
+    requestedVersion: string | undefined,
+    lockEntry: ModuleLockEntry | undefined
+  ): boolean {
+    if (!requestedVersion || !lockEntry) {
+      return true;
+    }
+
+    const lockedConstraint = lockEntry.version;
+    const lockedVersion = lockEntry.registryVersion;
+
+    if (requestedVersion === lockedConstraint || requestedVersion === lockedVersion) {
+      return true;
+    }
+
+    if (!lockedVersion) {
+      return false;
+    }
+
+    try {
+      return satisfiesVersion(lockedVersion, requestedVersion);
+    } catch {
+      return false;
+    }
   }
 }

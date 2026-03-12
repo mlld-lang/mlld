@@ -16,6 +16,7 @@ import { SourceLocation } from '@core/types';
 
 import type { DirectiveTrace } from '@core/types/trace';
 import type { Environment } from '@interpreter/env/Environment';
+import { sanitizeErrorDetails } from './errorSerialization';
 
 /**
  * Base interface for mlld error details.
@@ -181,7 +182,7 @@ export class MlldError extends Error {
     };
 
     if (this.details) {
-      result.details = this.details;
+      result.details = sanitizeErrorDetails(this.details);
     }
 
     if (this.sourceLocation) {

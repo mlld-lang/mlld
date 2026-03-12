@@ -2,6 +2,8 @@ import { PassThrough } from 'stream';
 import { describe, expect, it } from 'vitest';
 import { LiveStdioServer } from './live-stdio-server';
 import type { SDKEvent, SDKEventHandler, StreamExecution, StructuredResult } from '@sdk/types';
+import { ExecuteError } from '@sdk/types';
+import { MlldDirectiveError } from '@core/errors/MlldDirectiveError';
 
 class FakeStreamExecution implements StreamExecution {
   private readonly listeners = new Map<SDKEvent['type'], Set<SDKEventHandler>>();
@@ -204,6 +206,58 @@ describe('LiveStdioServer', () => {
     expect(lines[1].event.write.path).toBe('foo');
     expect(lines[2].result.id).toBe(1);
     expect(lines[2].result.output).toBe('hi');
+
+    await harness.close();
+  });
+
+  it('sanitizes nested error causes in streamed events', async () => {
+    const handle = new FakeStreamExecution();
+    const harness = createServerHarness({
+      interpret: async () => handle
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'process', id: 11, params: { script: '/show "hi"' } })}\n`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const leakedState = {
+      securityManager: { activePolicies: ['strict'], secretToken: 'top-secret' },
+      resolverManager: { caches: { registry: '@mlld/claude@2.1.0' } },
+      variableManager: { vars: { model: 'haiku' } }
+    };
+    const directiveError = new MlldDirectiveError(
+      'Cannot access field "model" on non-object value',
+      'show',
+      {
+        context: {
+          environment: leakedState,
+          baseValue: leakedState
+        }
+      }
+    );
+
+    handle.emit({
+      type: 'command:complete',
+      command: '@demo',
+      error: new ExecuteError(directiveError.message, 'RUNTIME_ERROR', '/tmp/test.mld', {
+        cause: directiveError
+      }),
+      timestamp: Date.now()
+    } as any);
+    handle.resolve({ output: 'ignored', effects: [], exports: {}, stateWrites: [] } as any);
+
+    await harness.waitForLineCount(2);
+    const [eventLine] = harness.lines;
+    const [event] = harness.jsonLines();
+
+    expect(event.event.type).toBe('command:complete');
+    expect(event.event.error.message).toContain('Cannot access field "model"');
+    expect(eventLine).not.toContain('securityManager');
+    expect(eventLine).not.toContain('resolverManager');
+    expect(eventLine).not.toContain('variableManager');
+    expect(eventLine).not.toContain('top-secret');
 
     await harness.close();
   });

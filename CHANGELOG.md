@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `when` expressions no longer misclassify plain object results that happen to include a `type` key as internal AST nodes. Inline object literals like `{ type: "response" }` now return correctly instead of collapsing to `undefined`.
 - Live transport (`mlld live --stdio`): `stdout` effects no longer write raw text to stdout when streaming is disabled, which was corrupting the NDJSON protocol. Content is now captured in the document buffer instead. Fixes SDK `execute()`/`process()` calls failing with `invalid live response` when scripts produce multiline output (e.g. via `claude -p`).
 - Python SDK: `_reader_loop` now buffers incomplete JSON lines instead of failing all pending requests. Provides defense-in-depth against any stdout contamination reaching the transport.
+- SDK/runtime error serialization now strips internal manager/environment state from wrapped causes and live-transport event payloads, so Python and JS callers see the real runtime failure without multi-kilobyte environment dumps.
+- Registry/module resolution now invalidates stale lockfile cache entries when a versioned import requests a different version, and refreshed lock entries persist the resolved `registryVersion` so subsequent versioned imports reuse the correct cache entry.
+- Pipe inside ternary branches (`var @x = @val ? @val | @filter : null`) now produces an actionable parse error explaining the limitation and showing two workarounds (exe block wrapper or split into separate steps) instead of a generic "Text content not allowed in strict mode" message.
 
 ## [2.0.4]
 

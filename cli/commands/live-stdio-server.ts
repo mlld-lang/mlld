@@ -10,6 +10,7 @@ import { resolveMlldMode } from '@core/utils/mode';
 import type { MlldMode } from '@core/types/mode';
 import { interpret } from '@interpreter/index';
 import type { SDKEvent, StreamExecution, StructuredResult } from '@sdk/types';
+import { sanitizeSerializableValue, serializeError } from '@core/errors/errorSerialization';
 
 type RequestId = string | number;
 
@@ -120,54 +121,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function safeStringify(value: unknown): string {
-  const seen = new WeakSet<object>();
-  const text = JSON.stringify(value, (_key, candidate) => {
-    if (typeof candidate === 'function') {
-      return undefined;
+  const text = JSON.stringify(sanitizeSerializableValue(value, {
+    maxDepth: 8,
+    maxObjectKeys: 100,
+    maxArrayLength: 200,
+    errorOptions: {
+      includeStack: true,
+      includeDetails: false,
+      maxCauseDepth: 2,
+      maxDepth: 6,
+      maxObjectKeys: 50,
+      maxArrayLength: 50,
+      maxStringLength: 4000,
+      maxStackLength: 12000
     }
-
-    if (typeof candidate === 'bigint') {
-      return candidate.toString();
-    }
-
-    if (candidate instanceof Map) {
-      return Object.fromEntries(candidate);
-    }
-
-    if (candidate instanceof Set) {
-      return Array.from(candidate);
-    }
-
-    if (candidate instanceof Error) {
-      const errorObject: Record<string, unknown> = {
-        name: candidate.name,
-        message: candidate.message
-      };
-      if (candidate.stack) {
-        errorObject.stack = candidate.stack;
-      }
-      const withMeta = candidate as Error & { code?: unknown; filePath?: unknown; cause?: unknown };
-      if (typeof withMeta.code === 'string') {
-        errorObject.code = withMeta.code;
-      }
-      if (typeof withMeta.filePath === 'string') {
-        errorObject.filePath = withMeta.filePath;
-      }
-      if (withMeta.cause !== undefined) {
-        errorObject.cause = withMeta.cause;
-      }
-      return errorObject;
-    }
-
-    if (candidate && typeof candidate === 'object') {
-      if (seen.has(candidate as object)) {
-        return '[Circular]';
-      }
-      seen.add(candidate as object);
-    }
-
-    return candidate;
-  });
+  }));
 
   return text ?? 'null';
 }
@@ -706,13 +674,18 @@ export class LiveStdioServer {
 
   private normalizeError(error: unknown): LiveErrorPayload {
     if (error instanceof Error) {
-      const withMeta = error as Error & { code?: unknown; filePath?: unknown };
+      const summary = serializeError(error, {
+        includeStack: true,
+        includeDetails: false,
+        maxCauseDepth: 0
+      });
+      const withMeta = summary as Record<string, unknown>;
       return {
         code: this.resolveErrorCode(error, withMeta.code),
-        message: error.message || 'Unknown error',
-        name: error.name,
+        message: typeof withMeta.message === 'string' ? withMeta.message : 'Unknown error',
+        name: typeof withMeta.name === 'string' ? withMeta.name : error.name,
         ...(typeof withMeta.filePath === 'string' ? { filePath: withMeta.filePath } : {}),
-        ...(typeof error.stack === 'string' ? { stack: error.stack } : {})
+        ...(typeof withMeta.stack === 'string' ? { stack: withMeta.stack } : {})
       };
     }
 
