@@ -71,6 +71,28 @@ describe('PolicyConfig defaults', () => {
     expect(config.defaults?.autoverify).toBe(true);
     expect(config.defaults?.trustconflict).toBe('warn');
   });
+
+  it('preserves locked and merges it as sticky', () => {
+    const normalized = normalizePolicyConfig({
+      locked: true,
+      defaults: {
+        rules: ['no-untrusted-destructive']
+      }
+    } as PolicyConfig);
+    expect(normalized.locked).toBe(true);
+
+    const merged = mergePolicyConfigs(
+      {
+        defaults: {
+          rules: ['no-secret-exfil']
+        }
+      },
+      {
+        locked: true
+      }
+    );
+    expect(merged.locked).toBe(true);
+  });
 });
 
 describe('PolicyConfig capabilities', () => {

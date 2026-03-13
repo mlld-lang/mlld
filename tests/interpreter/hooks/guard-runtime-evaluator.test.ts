@@ -139,7 +139,18 @@ describe('guard runtime evaluator', () => {
         action: { ...createAction('allow'), warning: 'heads-up' } as any,
         expectedDecision: 'allow',
         expectedTopLevelKeys: ['decision', 'guardName', 'hint', 'metadata', 'replacement', 'timing'],
-        expectedMetadataKeys: ['guardContext', 'guardFilter', 'guardInput', 'guardName', 'inputPreview', 'scope'],
+        expectedMetadataKeys: [
+          'guardActionMatched',
+          'guardContext',
+          'guardFilter',
+          'guardInput',
+          'guardName',
+          'guardPrivileged',
+          'guardScopeKey',
+          'inputPreview',
+          'policyGuard',
+          'scope'
+        ],
         expectedHint: 'heads-up'
       },
       {
@@ -164,7 +175,20 @@ describe('guard runtime evaluator', () => {
         action: createAction('env'),
         expectedDecision: 'env',
         expectedTopLevelKeys: ['decision', 'envConfig', 'guardName', 'metadata', 'timing'],
-        expectedMetadataKeys: ['decision', 'envConfig', 'guardContext', 'guardFilter', 'guardInput', 'guardName', 'inputPreview', 'scope']
+        expectedMetadataKeys: [
+          'decision',
+          'envConfig',
+          'guardActionMatched',
+          'guardContext',
+          'guardFilter',
+          'guardInput',
+          'guardName',
+          'guardPrivileged',
+          'guardScopeKey',
+          'inputPreview',
+          'policyGuard',
+          'scope'
+        ]
       }
     ];
 
@@ -197,6 +221,7 @@ describe('guard runtime evaluator', () => {
         reason: 'policy-block',
         policyName: 'default',
         rule: 'r1',
+        locked: true,
         suggestions: ['fix']
       })
     });
@@ -219,6 +244,7 @@ describe('guard runtime evaluator', () => {
     expect(result.decision).toBe('deny');
     expect(result.reason).toBe('policy-block');
     expect(result.metadata?.policyName).toBe('default');
+    expect(result.metadata?.policyLocked).toBe(true);
     expect(evaluateGuardBlock).not.toHaveBeenCalled();
   });
 

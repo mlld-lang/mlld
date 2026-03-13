@@ -21,6 +21,7 @@ import { extractVariableValue, isVariable } from '../../utils/variable-resolutio
 import { GuardError, type GuardErrorDetails } from '@core/errors/GuardError';
 import { isGuardRetrySignal } from '@core/errors/GuardRetrySignal';
 import type { EvalResult } from '../../core/interpreter';
+import { hasManagedPolicyLabelFlow } from '@core/policy/label-flow';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { collectInputDescriptor, descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { executeWrite } from '../write-executor';
@@ -254,7 +255,7 @@ export async function runBuiltinEffect(
     guardInputs.length > 0 ? guardInputs : [payload]
   );
   const inputTaint = descriptorToInputTaint(inputDescriptor);
-  if (inputTaint.length > 0) {
+  if (inputTaint.length > 0 && !hasManagedPolicyLabelFlow(env.getPolicySummary())) {
     policyEnforcer.checkLabelFlow(
       {
         inputTaint,

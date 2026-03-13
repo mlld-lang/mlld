@@ -10,7 +10,14 @@ import type { Variable } from '@core/types/variable';
 
 export type PolicyConditionResult =
   | { decision: 'allow' }
-  | { decision: 'deny'; reason: string; policyName?: string; rule?: string; suggestions?: string[] };
+  | {
+      decision: 'deny';
+      reason: string;
+      policyName?: string;
+      rule?: string;
+      suggestions?: string[];
+      locked?: boolean;
+    };
 
 export type PolicyConditionContext = {
   operation: {

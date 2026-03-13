@@ -1,12 +1,17 @@
 import type { HookDecision, PreHook } from './HookManager';
 import type { GuardResult } from '@core/types/guard';
 import type { Variable } from '@core/types/variable';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import {
+  checkExplicitLabelFlowRules
+} from '@core/policy/label-flow';
 import { guardSnapshotDescriptor } from './guard-utils';
 import { isVariable } from '../utils/variable-resolution';
 import { MlldSecurityError } from '@core/errors';
 import { isDirectiveHookTarget } from '@core/types/hooks';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { appendGuardHistory } from './guard-shared-history';
 import {
   extractGuardOverride,
@@ -18,7 +23,12 @@ import {
   type PerInputCandidate
 } from './guard-candidate-selection';
 import { buildOperationSnapshot } from './guard-operation-keys';
-import { normalizeGuardReplacements } from './guard-materialization';
+import {
+  buildVariablePreview,
+  hasSecretLabel,
+  normalizeGuardReplacements,
+  redactVariableForErrorOutput
+} from './guard-materialization';
 import {
   applyGuardDecisionResult,
   createGuardDecisionState,
@@ -40,6 +50,10 @@ import {
 } from './guard-pre-logging';
 import { evaluatePreHookGuard } from './guard-pre-runtime';
 import { getExpressionProvenance } from '../utils/expression-provenance';
+import {
+  buildGuardArgsSnapshot,
+  getGuardArgNamesFromMetadata
+} from '../utils/guard-args';
 
 function applyCurrentInputToCandidate(
   candidate: PerInputCandidate,
@@ -66,6 +80,66 @@ function collectCandidateGuardIds(candidates: readonly PerInputCandidate[]): Set
     }
   }
   return ids;
+}
+
+function getActivePolicyName(env: Parameters<PreHook>[2]): string {
+  const policyContext = env.getPolicyContext() as { activePolicies?: unknown } | undefined;
+  const activePolicies = Array.isArray(policyContext?.activePolicies)
+    ? policyContext.activePolicies.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  return activePolicies.length > 0 ? activePolicies.join(', ') : 'policy';
+}
+
+function buildLabelPolicyGuardResult(options: {
+  env: Parameters<PreHook>[2];
+  operation: NonNullable<Parameters<PreHook>[3]>;
+  input: Variable;
+  index: number;
+  locked: boolean;
+}): GuardResult | null {
+  const inputDescriptor = options.input.mx ? varMxToSecurityDescriptor(options.input.mx) : undefined;
+  const inputTaint = descriptorToInputTaint(inputDescriptor);
+  if (inputTaint.length === 0) {
+    return null;
+  }
+
+  const policy = options.env.getPolicySummary();
+  const result = checkExplicitLabelFlowRules(
+    {
+      inputTaint,
+      opLabels: options.operation.opLabels ?? [],
+      exeLabels: options.operation.labels ?? []
+    },
+    policy
+  );
+  if (result.allowed) {
+    return null;
+  }
+
+  return {
+    guardName: null,
+    decision: 'deny',
+    reason: result.reason,
+    timing: 'before',
+    metadata: {
+      guardName: null,
+      guardFilter: result.rule ?? 'policy.labels',
+      scope: 'perInput',
+      inputPreview: buildVariablePreview(options.input),
+      guardInput: hasSecretLabel(options.input)
+        ? redactVariableForErrorOutput(options.input)
+        : options.input,
+      reason: result.reason,
+      decision: 'deny',
+      policyName: getActivePolicyName(options.env),
+      policyRule: result.rule ?? null,
+      policyLocked: options.locked,
+      guardPrivileged: false,
+      policyGuard: true,
+      guardScopeKey: `perInput:${options.index}`,
+      guardActionMatched: true
+    }
+  };
 }
 
 export const guardPreHook: PreHook = async (
@@ -114,8 +188,12 @@ export const guardPreHook: PreHook = async (
       excludeGuardIds: collectCandidateGuardIds(perInputCandidates),
       includeDataIndexForOperationKeys: variableInputs.length > 0
     });
+    const policySummary = env.getPolicySummary();
+    const hasSyntheticLabelPolicies = Boolean(
+      policySummary?.labels && Object.keys(policySummary.labels).length > 0
+    );
 
-    if (perInputCandidates.length === 0 && operationGuards.length === 0) {
+    if (perInputCandidates.length === 0 && operationGuards.length === 0 && !hasSyntheticLabelPolicies) {
       return { action: 'continue' };
     }
 
@@ -125,6 +203,7 @@ export const guardPreHook: PreHook = async (
     const decisionState = createGuardDecisionState();
 
     const transformedInputs: Variable[] = [...variableInputs];
+    const guardArgNames = getGuardArgNamesFromMetadata(operation.metadata);
 
     for (const candidate of perInputCandidates) {
       const attemptKey = buildGuardAttemptKey(operation, 'perInput', candidate.variable);
@@ -136,6 +215,8 @@ export const guardPreHook: PreHook = async (
 
       for (const guard of candidate.guards) {
         const candidateWithCurrentInput = applyCurrentInputToCandidate(candidate, currentInput);
+        const currentArgs = transformedInputs.slice();
+        currentArgs[candidate.index] = currentInput;
         const result = await evaluatePreHookGuard({
           node,
           env,
@@ -147,7 +228,8 @@ export const guardPreHook: PreHook = async (
           attemptHistory,
           attemptKey,
           attemptStore,
-          inputHelper: helpers?.guard
+          inputHelper: helpers?.guard,
+          args: buildGuardArgsSnapshot(currentArgs, guardArgNames)
         });
         guardTrace.push(result);
         applyGuardDecisionResult(decisionState, result, { retryOverridesDeny: false });
@@ -162,6 +244,27 @@ export const guardPreHook: PreHook = async (
       }
 
       transformedInputs[candidate.index] = currentInput;
+    }
+
+    if (policySummary?.labels && Object.keys(policySummary.labels).length > 0) {
+      for (let index = 0; index < transformedInputs.length; index += 1) {
+        const input = transformedInputs[index];
+        if (!input) {
+          continue;
+        }
+        const labelPolicyResult = buildLabelPolicyGuardResult({
+          env,
+          operation,
+          input,
+          index,
+          locked: policySummary.locked === true
+        });
+        if (!labelPolicyResult) {
+          continue;
+        }
+        guardTrace.push(labelPolicyResult);
+        applyGuardDecisionResult(decisionState, labelPolicyResult, { retryOverridesDeny: false });
+      }
     }
 
     if (operationGuards.length > 0) {
@@ -184,7 +287,8 @@ export const guardPreHook: PreHook = async (
           attemptHistory,
           attemptKey,
           attemptStore,
-          inputHelper: helpers?.guard
+          inputHelper: helpers?.guard,
+          args: buildGuardArgsSnapshot(transformedInputs, guardArgNames)
         });
         guardTrace.push(result);
         applyGuardDecisionResult(decisionState, result, { retryOverridesDeny: true });

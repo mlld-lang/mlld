@@ -22,6 +22,13 @@ export interface LabelFlowCheckResult {
 
 type MatchResult = { match: string; specificity: number };
 
+const LABEL_FLOW_BUILTIN_RULES = new Set([
+  'no-secret-exfil',
+  'no-sensitive-exfil',
+  'no-untrusted-destructive',
+  'no-untrusted-privileged'
+]);
+
 function normalizeList(values?: readonly string[]): string[] {
   if (!values) {
     return [];
@@ -92,7 +99,17 @@ export function expandOperationLabels(
   return Array.from(expanded);
 }
 
-export function checkLabelFlow(
+export function hasManagedPolicyLabelFlow(policy?: PolicyConfig): boolean {
+  if (!policy) {
+    return false;
+  }
+  if (policy.labels && Object.keys(policy.labels).length > 0) {
+    return true;
+  }
+  return normalizeRuleList(policy.defaults?.rules).some(rule => LABEL_FLOW_BUILTIN_RULES.has(rule));
+}
+
+export function checkExplicitLabelFlowRules(
   ctx: FlowContext,
   policy?: PolicyConfig
 ): LabelFlowCheckResult {
@@ -115,16 +132,6 @@ export function checkLabelFlow(
   }
 
   const opTargets = expandOperationLabels(rawOpTargets, policy.operations);
-
-  const builtInResult = checkBuiltinPolicyRules(
-    inputTaint,
-    opTargets,
-    normalizeRuleList(policy.defaults?.rules)
-  );
-  if (builtInResult) {
-    return builtInResult;
-  }
-
   const labelRules: PolicyLabels = policy.labels ?? {};
 
   for (const label of inputTaint) {
@@ -171,6 +178,42 @@ export function checkLabelFlow(
   }
 
   return { allowed: true };
+}
+
+export function checkLabelFlow(
+  ctx: FlowContext,
+  policy?: PolicyConfig
+): LabelFlowCheckResult {
+  if (!policy) {
+    return { allowed: true };
+  }
+
+  const resolvedInput = resolveInputTaint(ctx.inputTaint, policy);
+  const inputTaint = resolvedInput.effective;
+  if (inputTaint.length === 0) {
+    return { allowed: true };
+  }
+
+  const rawOpTargets = normalizeList([
+    ...(ctx.opLabels ?? []),
+    ...(ctx.exeLabels ?? [])
+  ]);
+  if (rawOpTargets.length === 0) {
+    return { allowed: true };
+  }
+
+  const opTargets = expandOperationLabels(rawOpTargets, policy.operations);
+
+  const builtInResult = checkBuiltinPolicyRules(
+    inputTaint,
+    opTargets,
+    normalizeRuleList(policy.defaults?.rules)
+  );
+  if (builtInResult) {
+    return builtInResult;
+  }
+
+  return checkExplicitLabelFlowRules(ctx, policy);
 }
 
 function normalizeRuleList(value: unknown): string[] {

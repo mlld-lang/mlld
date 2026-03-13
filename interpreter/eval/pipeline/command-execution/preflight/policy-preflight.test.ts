@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { MlldDenialError } from '@core/errors/denial';
 import { Environment } from '@interpreter/env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -30,7 +29,7 @@ function createUntrustedInput() {
 }
 
 describe('policy preflight extraction parity', () => {
-  it('preserves policy label-flow denial behavior for destructive code operations', async () => {
+  it('defers managed policy label-flow checks to the guard preflight path', async () => {
     const env = createEnv();
     const execEnv = env.createChild();
     env.recordPolicyConfig('test-policy', {
@@ -58,31 +57,7 @@ describe('policy preflight extraction parity', () => {
         guardInputs: [untrustedInput],
         opType: 'sh'
       })
-    ).rejects.toBeInstanceOf(MlldDenialError);
-
-    await expect(
-      runPolicyPreflight({
-        env,
-        execEnv,
-        execDef: { type: 'code', codeTemplate: ['echo'] },
-        commandVar: {
-          type: 'executable',
-          name: 'stage',
-          mx: {
-            labels: [],
-            taint: [],
-            sources: [],
-            policy: null
-          }
-        },
-        guardInputs: [untrustedInput],
-        opType: 'sh'
-      })
-    ).rejects.toMatchObject({
-      context: {
-        code: 'POLICY_LABEL_FLOW_DENIED'
-      }
-    });
+    ).resolves.toBeUndefined();
   });
 
   it('initializes output policy descriptor labels for influenced outputs', async () => {

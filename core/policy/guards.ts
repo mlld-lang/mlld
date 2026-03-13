@@ -74,6 +74,7 @@ function makeGuardBlock(): GuardBlockNode {
 export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: string): PolicyGuardSpec[] {
   const guards: PolicyGuardSpec[] = [];
   const enabledRules = normalizeRuleList(policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
+  const policyLocked = policy.locked === true;
 
   for (const rule of enabledRules) {
     if (rule === 'no-secret-exfil') {
@@ -82,11 +83,13 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         label: 'secret',
         operationLabel: 'exfil',
         reason: "Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'",
-        operations: policy.operations
+        operations: policy.operations,
+        policyDisplayName,
+        locked: policyLocked
       }));
     }
     if (rule === 'no-sensitive-exfil') {
-      guards.push(makeSensitiveExfilGuard(policy.operations));
+      guards.push(makeSensitiveExfilGuard(policy.operations, policyDisplayName, policyLocked));
     }
     if (rule === 'no-untrusted-destructive') {
       guards.push(makeDataRuleGuard({
@@ -94,7 +97,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         label: 'untrusted',
         operationLabel: 'destructive',
         reason: "Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'",
-        operations: policy.operations
+        operations: policy.operations,
+        policyDisplayName,
+        locked: policyLocked
       }));
     }
     if (rule === 'no-untrusted-privileged') {
@@ -103,7 +108,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         label: 'untrusted',
         operationLabel: 'privileged',
         reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'",
-        operations: policy.operations
+        operations: policy.operations,
+        policyDisplayName,
+        locked: policyLocked
       }));
     }
   }
@@ -126,6 +133,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         reason: 'All operations denied by policy',
         policyName: policyDisplayName,
         rule: 'deny',
+        locked: policyLocked,
         suggestions: [
           'Review active policies with @mx.policy.activePolicies'
         ]
@@ -157,6 +165,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         reason,
         policyName: policyDisplayName,
         rule,
+        locked: policyLocked,
         suggestions
       };
     }
@@ -177,6 +186,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
           reason: 'Shell access denied by policy',
           policyName: policyDisplayName,
           rule: 'deny.sh',
+          locked: policyLocked,
           suggestions: [
             'Remove sh from deny list to allow shell access',
             'Review active policies with @mx.policy.activePolicies'
@@ -204,6 +214,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
             reason: 'Network access denied by policy',
             policyName: policyDisplayName,
             rule: 'deny.network',
+            locked: policyLocked,
             suggestions: [
               'Remove network from deny list to allow network commands',
               'Review active policies with @mx.policy.activePolicies'
@@ -664,6 +675,8 @@ function makeDataRuleGuard(options: {
   operationLabel: string;
   reason: string;
   operations?: PolicyOperations;
+  policyDisplayName?: string;
+  locked?: boolean;
 }): PolicyGuardSpec {
   return {
     name: options.name,
@@ -680,14 +693,23 @@ function makeDataRuleGuard(options: {
       ];
       const opLabels = expandOperationLabels(rawOpLabels, options.operations);
       if (hasMatchingLabel(opLabels, options.operationLabel)) {
-        return { decision: 'deny', reason: options.reason };
+        return {
+          decision: 'deny',
+          reason: options.reason,
+          policyName: options.policyDisplayName,
+          locked: options.locked === true
+        };
       }
       return { decision: 'allow' };
     }
   };
 }
 
-function makeSensitiveExfilGuard(operations?: PolicyOperations): PolicyGuardSpec {
+function makeSensitiveExfilGuard(
+  operations?: PolicyOperations,
+  policyDisplayName?: string,
+  locked?: boolean
+): PolicyGuardSpec {
   return {
     name: '__policy_rule_no_sensitive_exfil',
     filterKind: 'data',
@@ -707,7 +729,9 @@ function makeSensitiveExfilGuard(operations?: PolicyOperations): PolicyGuardSpec
       }
       return {
         decision: 'deny',
-        reason: "Rule 'no-sensitive-exfil': label 'sensitive' cannot flow to 'exfil'"
+        reason: "Rule 'no-sensitive-exfil': label 'sensitive' cannot flow to 'exfil'",
+        policyName: policyDisplayName,
+        locked: locked === true
       };
     }
   };

@@ -163,7 +163,13 @@ function getErrorMessage(error: unknown): string {
 }
 
 function isHardDenial(error: unknown): error is MlldDenialError {
-  return error instanceof MlldDenialError && !(error instanceof GuardError);
+  if (!(error instanceof MlldDenialError)) {
+    return false;
+  }
+  if (!(error instanceof GuardError)) {
+    return true;
+  }
+  return error.context?.blocker?.type === 'policy';
 }
 
 async function evaluateActionNodes(

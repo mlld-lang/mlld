@@ -97,6 +97,7 @@ export type PolicyOperations = Record<string, string[]>;
 
 export type PolicyConfig = {
   verify_all_instructions?: boolean;
+  locked?: boolean;
   defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
   auth?: Record<string, AuthConfig>;
@@ -169,8 +170,10 @@ export function mergePolicyConfigs(
   const envConfig = mergePolicyEnv(normalizedBase.env, normalizedIncoming.env);
   const limits = mergeLimits(normalizedBase.limits, normalizedIncoming.limits);
   const danger = mergePolicyDanger(normalizedBase.danger as string[] | undefined, normalizedIncoming.danger as string[] | undefined);
+  const locked = normalizedBase.locked === true || normalizedIncoming.locked === true;
 
   return {
+    ...(locked ? { locked: true } : {}),
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
     ...(auth ? { auth } : {}),
@@ -238,6 +241,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   const limits = config.limits ? normalizeLimits(config.limits) : undefined;
   const danger = normalizePolicyDanger(config.capabilities?.danger ?? config.danger);
   return {
+    ...(config.locked === true ? { locked: true } : {}),
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
     ...(auth ? { auth } : {}),
