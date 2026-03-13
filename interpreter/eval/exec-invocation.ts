@@ -313,6 +313,14 @@ async function evaluateExecInvocationInternal(
         return { found: false };
       }
 
+      // If the resolved value is a native JS function (e.g., Array.prototype.includes
+      // picked up from the prototype chain) and the method name collides with a
+      // builtin, defer to the builtin handler which dispatches properly.
+      // Namespace-exported mlld executables (objects with __executable) take priority.
+      if (isBuiltinMethod(methodName) && typeof resolved === 'function') {
+        return { found: false };
+      }
+
       return { found: true, value: resolved };
     } catch {
       return { found: false };
