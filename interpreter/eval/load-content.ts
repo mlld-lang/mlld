@@ -286,7 +286,9 @@ export class LoadContentResultURLImpl extends LoadContentResultImpl implements L
       description: this.description,
       status: this.status,
       headers: this.headers,
-      html: this.html
+      html: this.html,
+      text: this.text,
+      md: this.md
     };
   }
   

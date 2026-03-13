@@ -585,20 +585,32 @@ async function evaluateExecInvocationInternal(
         throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
       }
       
-      const { extractVariableValue } = await import('../utils/variable-resolution');
+      const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
       let objectValue: unknown;
       
       if (objectRef.fields && objectRef.fields.length > 0) {
+        objectValue = await extractVariableValue(objectVar, env);
         const { accessFields } = await import('../utils/field-access');
-        const accessedObject = await accessFields(objectVar, normalizeFields(objectRef.fields), {
+        const accessedObject = await accessFields(objectValue, normalizeFields(objectRef.fields), {
           env,
           preserveContext: false,
           returnUndefinedForMissing: true,
           sourceLocation: objectRef.location
         });
 
-        if (typeof accessedObject === 'object' && accessedObject !== null) {
-          const fieldValue = (accessedObject as any)[commandName];
+        objectValue = accessedObject;
+        if (isVariable(objectValue)) {
+          objectValue = await extractVariableValue(objectValue, env);
+        }
+        if (isStructuredValue(objectValue)) {
+          objectValue = objectValue.data;
+        }
+
+        if (typeof objectValue === 'object' && objectValue !== null) {
+          const fieldValue =
+            objectValue.type === 'object' && objectValue.properties
+              ? objectValue.properties[commandName]
+              : (objectValue as any)[commandName];
           variable = fieldValue;
         }
       } else {

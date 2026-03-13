@@ -181,6 +181,10 @@ function extractLoadContentMetadata(result: LoadContentResult): StructuredValueM
     if (urlResult.description) metadata.description = urlResult.description;
     if (urlResult.status !== undefined) metadata.status = urlResult.status;
     if (urlResult.headers) metadata.headers = urlResult.headers;
+    const urlImpl = urlResult as any;
+    if (urlImpl.html !== undefined) metadata.html = urlImpl.html;
+    if (urlImpl.text !== undefined) metadata.text = urlImpl.text;
+    if (urlImpl.md !== undefined) metadata.md = urlImpl.md;
   }
 
   if ('html' in result && !(result as LoadContentResultURL).url) {

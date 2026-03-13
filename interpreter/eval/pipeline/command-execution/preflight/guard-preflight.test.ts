@@ -7,6 +7,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { createSimpleTextVariable } from '@core/types/variable';
+import { makeSecurityDescriptor } from '@core/types/security';
 import type { VariableSource } from '@core/types/variable';
 import {
   buildGuardPreflightContext,
@@ -129,5 +130,32 @@ describe('guard preflight extraction parity', () => {
     expect(result.hasFallbackResult).toBe(true);
     expect(result.fallbackValue).toBe('Denied fallback');
     expect(execEnv.getVariable('input')?.value).toBe('sk-live');
+  });
+
+  it('prefers bound parameter variables over duplicate raw pipeline aliases', () => {
+    const env = createEnv();
+    const execEnv = env.createChild();
+    const secretDescriptor = makeSecurityDescriptor({ labels: ['secret'] });
+
+    const stageInputVar = createSimpleTextVariable('input', 's3cr3t', TEXT_SOURCE, {
+      security: secretDescriptor
+    });
+    const paramVar = createSimpleTextVariable('value', 's3cr3t', TEXT_SOURCE, {
+      security: secretDescriptor
+    });
+
+    env.setParameterVariable('input', stageInputVar);
+    execEnv.setParameterVariable('value', paramVar);
+
+    const { guardInputs } = buildGuardPreflightContext({
+      env,
+      execEnv,
+      stageInputs: ['s3cr3t'],
+      baseParamNames: ['value']
+    });
+
+    expect(guardInputs).toHaveLength(1);
+    expect(guardInputs[0]?.name).toBe('input');
+    expect(guardInputs[0]?.mx?.labels).toEqual(['secret']);
   });
 });

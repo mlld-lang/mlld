@@ -1,8 +1,5 @@
 import { formatModuleReference } from '../utils/output';
 import type { ModuleSource } from '@core/registry/types';
-import { interpret } from '@interpreter/index';
-import { NodeFileSystem } from '@services/fs/NodeFileSystem';
-import { PathService } from '@services/fs/PathService';
 import chalk from 'chalk';
 
 const REGISTRY_URL = 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules.json';
@@ -325,6 +322,15 @@ function highlightMarkdown(text: string): string {
 }
 
 async function fetchSection(sourceUrl: string, section: string, basePath: string): Promise<string | null> {
+  const [
+    { interpret },
+    { NodeFileSystem },
+    { PathService }
+  ] = await Promise.all([
+    import('@interpreter/index'),
+    import('@services/fs/NodeFileSystem'),
+    import('@services/fs/PathService')
+  ]);
   const fileSystem = new NodeFileSystem();
   const pathService = new PathService(basePath, fileSystem);
 

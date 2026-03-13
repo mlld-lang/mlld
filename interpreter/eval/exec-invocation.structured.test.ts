@@ -145,6 +145,43 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(asText(result.value)).toBe('false');
   });
 
+  it('resolves executable methods through nested object fields', async () => {
+    const src = `
+/exe @deep() = js { return "nested-ok" }
+/var @nested = {
+  child: {
+    func: @deep
+  }
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'nested-field-method',
+      commandRef: {
+        name: 'func',
+        objectReference: {
+          type: 'VariableReference',
+          nodeId: 'nested-field-ref',
+          identifier: 'nested',
+          fields: [
+            {
+              type: 'Field',
+              nodeId: 'nested-child-field',
+              value: 'child'
+            }
+          ]
+        },
+        args: []
+      } as any
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('nested-ok');
+  });
+
   it('pipes RHS variable through inline command pipeline', async () => {
     const src = '/exe @pipe(value) = @value | cmd { cat }';
     const { ast } = await parse(src);

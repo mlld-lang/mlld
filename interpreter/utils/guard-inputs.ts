@@ -4,7 +4,6 @@ import { materializeExpressionValue } from '@core/types/provenance/ExpressionPro
 import { isVariable } from './variable-resolution';
 import { resolveNestedValue } from './display-materialization';
 import { extractSecurityDescriptor } from './structured-value';
-import { makeSecurityDescriptor } from '@core/types/security';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 
 const FALLBACK_SOURCE: VariableSource = {
@@ -29,24 +28,7 @@ export function materializeGuardInputs(
 ): Variable[] {
   const nameHint = options?.nameHint ?? '__guard_input__';
   return values
-    .map(value => {
-      if (isVariable(value)) {
-        return value;
-      }
-      const normalized = resolveNestedValue(value, { preserveProvenance: true });
-      const materialized = materializeExpressionValue(normalized, { name: nameHint });
-      if (materialized) {
-        return materialized;
-      }
-      const fallback = createSimpleTextVariable(
-        nameHint,
-        formatGuardInputValue(normalized),
-        FALLBACK_SOURCE,
-        { mx: {} }
-      );
-      applyDescriptorFromValue(normalized, fallback);
-      return fallback;
-    })
+    .map(value => materializeGuardInput(value, nameHint))
     .filter((value): value is Variable => Boolean(value));
 }
 
@@ -59,24 +41,7 @@ export function materializeGuardInputsWithMapping(
 
   for (let index = 0; index < values.length; index++) {
     const value = values[index];
-    const variable = (() => {
-      if (isVariable(value)) {
-        return value;
-      }
-      const normalized = resolveNestedValue(value, { preserveProvenance: true });
-      const materialized = materializeExpressionValue(normalized, { name: nameHint });
-      if (materialized) {
-        return materialized;
-      }
-      const fallback = createSimpleTextVariable(
-        nameHint,
-        formatGuardInputValue(normalized),
-        FALLBACK_SOURCE,
-        { mx: {} }
-      );
-      applyDescriptorFromValue(normalized, fallback);
-      return fallback;
-    })();
+    const variable = materializeGuardInput(value, nameHint);
 
     if (variable) {
       results.push({ index, variable });
@@ -106,10 +71,33 @@ function formatGuardInputValue(value: unknown): string {
   return String(value);
 }
 
+function materializeGuardInput(value: unknown, nameHint: string): Variable | undefined {
+  if (isVariable(value)) {
+    return value;
+  }
+
+  const normalized = resolveNestedValue(value, { preserveProvenance: true });
+  const materialized = materializeExpressionValue(normalized, { name: nameHint });
+  if (materialized) {
+    applyDescriptorFromValue(value, materialized);
+    return materialized;
+  }
+
+  const fallback = createSimpleTextVariable(
+    nameHint,
+    formatGuardInputValue(normalized),
+    FALLBACK_SOURCE,
+    { mx: {} }
+  );
+  applyDescriptorFromValue(value, fallback);
+  return fallback;
+}
+
 function applyDescriptorFromValue(value: unknown, target: Variable): void {
-  const descriptor =
-    extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true }) ??
-    makeSecurityDescriptor();
+  const descriptor = extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true });
+  if (!descriptor) {
+    return;
+  }
   if (!target.mx) {
     target.mx = {};
   }

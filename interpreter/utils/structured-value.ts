@@ -101,6 +101,7 @@ export interface StructuredValueContext {
   status?: number;
   headers?: Record<string, unknown>;
   html?: string;
+  md?: string;
   source?: string;
   command?: string;
   exitCode?: number;
@@ -557,6 +558,7 @@ function buildVarMxFromMetadata(
   const flattenedLength =
     (metadata?.length as number | undefined) ?? metrics?.length ?? loadResult?.content?.length;
   const flattenedHtml = metadata?.html as string | undefined;
+  const flattenedMd = metadata?.md as string | undefined;
   const labels = normalizeLabelArray(normalizedDescriptor.labels);
   const taint = normalizeLabelArray(normalizedDescriptor.taint);
   const sources = normalizedDescriptor.sources ?? EMPTY_SOURCES;
@@ -580,6 +582,7 @@ function buildVarMxFromMetadata(
     status: flattenedStatus,
     headers: flattenedHeaders,
     html: flattenedHtml,
+    md: flattenedMd,
     source: metadata?.source,
     command: metadata?.command,
     exitCode: metadata?.exitCode,

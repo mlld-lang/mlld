@@ -5403,11 +5403,11 @@ This test verifies URL content conversion features.
 ## Access different content formats via .mx
 
 ### Raw HTML
-Has HTML: false
+Has HTML: true
 ### Plain text (HTML stripped)
-Has text: false
+Has text: true
 ### Markdown conversion
-Has md: false
+Has md: true
 ## Show URL metadata
 
 URL: https://example.com
@@ -22195,7 +22195,7 @@ value: final-hint:second hint tries:2
 ```mlld
 # After guard retry non-pipeline success
 
-/guard after @retryFlaky for retryable = when [
+/guard after @retryFlaky for guarded = when [
   @output != "ok" && @mx.guard.try < 3 => retry "need ok"
   @output != "ok" => deny "still bad"
   * => allow
@@ -22206,15 +22206,15 @@ value: final-hint:second hint tries:2
   return globalThis.__afterFlaky === 1 ? "bad" : "ok";
 }
 
-/var retryable @value = @flaky()
-/show `value: @value`
+/var guarded @value = @flaky()
+/show @value
 ```
 
 **Expected Output:**
 ```markdown
 # After guard retry non-pipeline success
 
-value: ok
+ok
 ```
 
 #### Security / After guard retry / Nonpipeline after guard retry transform
@@ -22292,7 +22292,7 @@ result: ok
 ```mlld
 # After guard retry pipeline success
 
-/guard after @pipelineRetry for retryable = when [
+/guard after @pipelineRetry for guarded = when [
   @output != "ok" && @mx.guard.try < 3 => retry "need ok from pipeline"
   @output != "ok" => deny "still invalid"
   * => allow
@@ -22303,15 +22303,15 @@ result: ok
   return globalThis.__pipelineAfterFlaky === 1 ? "bad" : "ok";
 }
 
-/var retryable @pipelineValue = "seed" with { pipeline: [@flakyStage] }
-/show `pipeline value: @pipelineValue`
+/var guarded @pipelineValue = "seed" with { pipeline: [@flakyStage] }
+/show @pipelineValue
 ```
 
 **Expected Output:**
 ```markdown
 # After guard retry pipeline success
 
-pipeline value: ok
+ok
 ```
 
 ### Security / Airlock env tools composition

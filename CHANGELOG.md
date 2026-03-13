@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Python SDK state-write decoding now normalizes composite JSON payloads from both streamed `state:write` events and final `stateWrites` results, avoiding manual `json.loads(...)` for object values and preventing mixed-type duplicate entries during merge.
 - `when` expressions no longer swallow hard policy denials (`MlldDenialError`). Previously, a policy-denied action inside a `when` arm was silently caught and mishandled as a soft guard denial, allowing execution to continue. Hard denials now propagate correctly.
 - Field access on `@payload` and other object variables now preserves security metadata (labels, taint) when resolving nested fields via method calls and builtins. Previously, extracting the raw value before field traversal dropped per-field descriptors.
+- URL alligator results now expose `.mx.text`, `.mx.html`, and `.mx.md` correctly. Previously, the content-type-derived accessors on `LoadContentResultURLImpl` were not propagated through the StructuredValue metadata path, so `.mx.html.isDefined()` and `.mx.md.isDefined()` returned `false` for HTML pages.
 
 ### Documentation
 - Python SDK README now documents editable installs for local development (`uv pip install -e ./sdk/python`) so SDK changes apply immediately in downstream projects.

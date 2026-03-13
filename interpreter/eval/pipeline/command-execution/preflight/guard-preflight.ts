@@ -25,18 +25,25 @@ export function buildGuardPreflightContext(
   const { env, execEnv, stageInputs, baseParamNames } = options;
   const guardInputCandidates: unknown[] = [];
   const stageInputVar = env.getVariable?.('input');
-  if (stageInputVar) {
-    guardInputCandidates.push(stageInputVar);
-  }
-  if (stageInputs.length > 0) {
-    guardInputCandidates.push(...stageInputs);
-  }
   if (baseParamNames.length > 0) {
-    for (const paramName of baseParamNames) {
+    if (stageInputVar) {
+      guardInputCandidates.push(stageInputVar);
+    }
+
+    const paramStartIndex = stageInputVar ? 1 : 0;
+    for (let i = paramStartIndex; i < baseParamNames.length; i++) {
+      const paramName = baseParamNames[i];
       const paramVar = execEnv.getVariable(paramName);
       if (paramVar) {
         guardInputCandidates.push(paramVar);
       }
+    }
+  } else {
+    if (stageInputVar) {
+      guardInputCandidates.push(stageInputVar);
+    }
+    if (stageInputs.length > 0) {
+      guardInputCandidates.push(...stageInputs);
     }
   }
 

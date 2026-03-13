@@ -232,6 +232,32 @@ describe('structured value mx accessors', () => {
     expect(mxData).toBe('hello');
   });
 
+  it('falls back to wrapper text/data/type for primitive structured wrappers', async () => {
+    const structured = wrapStructured('hello', 'text', 'hello');
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const topText = await accessField(variable, { type: 'field', value: 'text' }, { preserveContext: false });
+    const topData = await accessField(variable, { type: 'field', value: 'data' }, { preserveContext: false });
+    const topType = await accessField(variable, { type: 'field', value: 'type' }, { preserveContext: false });
+
+    expect(topText).toBe('hello');
+    expect(topData).toBe('hello');
+    expect(topType).toBe('text');
+  });
+
+  it('keeps top-level text/data/type user-data-first for structured object wrappers', async () => {
+    const structured = wrapStructured({ stance: 'approved' }, 'object', '{"stance":"approved"}');
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const topText = await accessField(variable, { type: 'field', value: 'text' }, { preserveContext: false });
+    const topData = await accessField(variable, { type: 'field', value: 'data' }, { preserveContext: false });
+    const topType = await accessField(variable, { type: 'field', value: 'type' }, { preserveContext: false });
+
+    expect(topText).toBeNull();
+    expect(topData).toBeNull();
+    expect(topType).toBe('structured');
+  });
+
   it('does not expose wrapper metadata as top-level fields', async () => {
     const structured = wrapStructured(
       { status: 'user-status' },

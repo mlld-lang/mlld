@@ -454,6 +454,11 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     const fieldName = String(field.value);
     const isStructuredVariable = Boolean(structuredWrapper);
     const isUserDataContainer = value.type === 'object' || value.type === 'array';
+    const structuredFieldFallbacks = new Set(['type', 'text', 'data']);
+    const shouldUseStructuredTopLevelFallback =
+      isStructuredVariable &&
+      structuredFieldFallbacks.has(fieldName) &&
+      !(rawValue && typeof rawValue === 'object');
 
     // Core metadata properties always come from Variable, never from data
     const CORE_METADATA = [
@@ -534,17 +539,33 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     }
 
     // For guard quantifiers and 'type' on user data containers, check data first
-    const shouldCheckDataFirst = GUARD_QUANTIFIERS.includes(fieldName) || fieldName === 'type';
+    const shouldCheckDataFirst =
+      GUARD_QUANTIFIERS.includes(fieldName) ||
+      fieldName === 'type' ||
+      shouldUseStructuredTopLevelFallback;
 
     if (shouldCheckDataFirst) {
       // Check if this field exists in the actual data first
       const fieldExistsInData = rawValue && typeof rawValue === 'object' && fieldName in rawValue;
 
       if (!fieldExistsInData) {
-        if (fieldName === 'type' && isStructuredVariable) {
-          // Structured values expose wrapper type via .mx.type.
-          // Top-level .type resolves through user data only.
-          // Fall through to regular field access behavior.
+        if (shouldUseStructuredTopLevelFallback) {
+          const metadataValue =
+            fieldName === 'type'
+              ? structuredWrapper.type
+              : fieldName === 'text'
+                ? structuredWrapper.text
+                : structuredWrapper.data;
+
+          if (options?.preserveContext) {
+            return {
+              value: metadataValue,
+              parentVariable: value,
+              accessPath: [...(options.parentPath || []), fieldName],
+              isVariable: false
+            };
+          }
+          return metadataValue;
         } else {
         // Field doesn't exist in data, so return metadata property
           const metadataValue = value[fieldName as keyof typeof value];
