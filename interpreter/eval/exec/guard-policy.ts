@@ -410,6 +410,11 @@ export async function createExecOperationContextAndEnforcePolicy(
     const inputTaint = descriptorToInputTaint(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
+    if (inputTaint.length > 0) {
+      const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
+      metadata.policyInputTaint = inputTaint;
+      operationContext.metadata = metadata;
+    }
     if (inputTaint.length > 0 && !deferManagedLabelFlow) {
       policyEnforcer.checkLabelFlow(
         {

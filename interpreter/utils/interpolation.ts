@@ -136,6 +136,46 @@ function serializeInterpolationReference(node: InterpolationNode): string | null
   return `@${node.identifier}${formatInterpolationFieldAccess(node.fields)}`;
 }
 
+function hasComplexInterpolationBase(fields?: FieldAccessNode[]): boolean {
+  if (!Array.isArray(fields) || fields.length === 0) {
+    return false;
+  }
+
+  return fields.some(field => {
+    if (!field) {
+      return false;
+    }
+    return field.type !== 'field' && field.type !== 'numericField';
+  });
+}
+
+function shouldReparseSyntheticInterpolationTail(
+  node: InterpolationNode,
+  tail: string
+): boolean {
+  if (typeof tail !== 'string' || tail.length === 0) {
+    return false;
+  }
+
+  if (tail.startsWith('[')) {
+    return true;
+  }
+
+  if (!hasComplexInterpolationBase(node.fields)) {
+    return false;
+  }
+
+  if (/^\.[A-Za-z_]/.test(tail)) {
+    return true;
+  }
+
+  if (tail.startsWith('(')) {
+    return true;
+  }
+
+  return false;
+}
+
 function extractSyntheticShowNode(directive: any): InterpolationNode | null {
   return (
     directive?.values?.invocation ??
@@ -222,10 +262,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         const nextNode = nodes[nodeIndex + 1];
         const serialized = serializeInterpolationReference(node);
         const tail = nextNode?.type === 'Text' ? nextNode.content ?? '' : '';
-        const startsWithTail =
-          typeof tail === 'string' &&
-          tail.length > 0 &&
-          (tail.startsWith('[') || tail.startsWith('.') || tail.startsWith('('));
+        const startsWithTail = shouldReparseSyntheticInterpolationTail(node, tail);
 
         if (serialized && startsWithTail) {
           try {

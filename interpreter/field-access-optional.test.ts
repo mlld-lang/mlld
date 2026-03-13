@@ -56,6 +56,18 @@ describe('optional field access syntax', () => {
     expect(out).toBe('tmp/reviews/report.json');
   });
 
+  it('preserves ordinary punctuation after interpolation', async () => {
+    const src = [
+      '/var @age = 30',
+      '/var @item = "A"',
+      '/show `John is @age.`',
+      '/show `Calling API for @item...`'
+    ].join('\n');
+
+    const out = await run(src);
+    expect(out).toBe('John is 30.\nCalling API for A...');
+  });
+
   it('treats missing source fields as falsy in ternary and @exists', async () => {
     const src = [
       '/var @group = { atoms: ["a"], standalone: true }',

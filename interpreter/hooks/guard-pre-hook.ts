@@ -3,6 +3,7 @@ import type { GuardResult } from '@core/types/guard';
 import type { Variable } from '@core/types/variable';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import {
+  checkLabelFlow,
   checkExplicitLabelFlowRules
 } from '@core/policy/label-flow';
 import { guardSnapshotDescriptor } from './guard-utils';
@@ -142,6 +143,49 @@ function buildLabelPolicyGuardResult(options: {
   };
 }
 
+function buildInterpolatedPolicyGuardResult(options: {
+  env: Parameters<PreHook>[2];
+  operation: NonNullable<Parameters<PreHook>[3]>;
+  inputTaint: readonly string[];
+  locked: boolean;
+}): GuardResult | null {
+  const policy = options.env.getPolicySummary();
+  const result = checkLabelFlow(
+    {
+      inputTaint: options.inputTaint,
+      opLabels: options.operation.opLabels ?? [],
+      exeLabels: options.operation.labels ?? []
+    },
+    policy
+  );
+  if (result.allowed) {
+    return null;
+  }
+
+  return {
+    guardName: null,
+    decision: 'deny',
+    reason: result.reason,
+    timing: 'before',
+    metadata: {
+      guardName: null,
+      guardFilter: result.rule ?? 'policy.defaults.rules',
+      scope: 'perOperation',
+      inputPreview: '[interpolated operation input]',
+      guardInput: '[interpolated operation input]',
+      reason: result.reason,
+      decision: 'deny',
+      policyName: getActivePolicyName(options.env),
+      policyRule: result.rule ?? null,
+      policyLocked: options.locked,
+      guardPrivileged: false,
+      policyGuard: true,
+      guardScopeKey: 'perOperation',
+      guardActionMatched: true
+    }
+  };
+}
+
 export const guardPreHook: PreHook = async (
   node,
   inputs,
@@ -192,8 +236,20 @@ export const guardPreHook: PreHook = async (
     const hasSyntheticLabelPolicies = Boolean(
       policySummary?.labels && Object.keys(policySummary.labels).length > 0
     );
+    const policyInputTaint =
+      Array.isArray(operation.metadata?.policyInputTaint)
+        ? operation.metadata.policyInputTaint.filter(
+            (entry): entry is string => typeof entry === 'string' && entry.length > 0
+          )
+        : [];
+    const hasInterpolatedPolicyInputs = policyInputTaint.length > 0;
 
-    if (perInputCandidates.length === 0 && operationGuards.length === 0 && !hasSyntheticLabelPolicies) {
+    if (
+      perInputCandidates.length === 0 &&
+      operationGuards.length === 0 &&
+      !hasSyntheticLabelPolicies &&
+      !hasInterpolatedPolicyInputs
+    ) {
       return { action: 'continue' };
     }
 
@@ -264,6 +320,32 @@ export const guardPreHook: PreHook = async (
         }
         guardTrace.push(labelPolicyResult);
         applyGuardDecisionResult(decisionState, labelPolicyResult, { retryOverridesDeny: false });
+      }
+    }
+
+    if (policyInputTaint.length > 0) {
+      const coveredTaint = new Set<string>();
+      for (const input of transformedInputs) {
+        const descriptor = input?.mx ? varMxToSecurityDescriptor(input.mx) : undefined;
+        for (const taint of descriptorToInputTaint(descriptor)) {
+          coveredTaint.add(taint);
+        }
+      }
+
+      const syntheticTaint = policyInputTaint.filter(taint => !coveredTaint.has(taint));
+      if (syntheticTaint.length > 0) {
+        const interpolatedPolicyResult = buildInterpolatedPolicyGuardResult({
+          env,
+          operation,
+          inputTaint: syntheticTaint,
+          locked: policySummary?.locked === true
+        });
+        if (interpolatedPolicyResult) {
+          guardTrace.push(interpolatedPolicyResult);
+          applyGuardDecisionResult(decisionState, interpolatedPolicyResult, {
+            retryOverridesDeny: false
+          });
+        }
       }
     }
 
