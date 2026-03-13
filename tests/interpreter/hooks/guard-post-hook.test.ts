@@ -561,6 +561,32 @@ describe('guard post-hook integration', () => {
     });
   });
 
+  it('skips data-label after-guard selection for template-style show output', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after @retryFlaky for secret = when [ * => deny "should not match show template" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const outputVar = createLabeledVariable('showOutput', 'value: ok', ['secret']);
+    const inputVar = createSecretVariable('secretInput', 'ok');
+    const result = { value: outputVar, env };
+    const directive = parseSync('/show `value: @secretInput`')[0] as DirectiveNode;
+
+    const guarded = await guardPostHook(directive, result, [inputVar], env, {
+      type: 'show',
+      subtype: 'showTemplate',
+      metadata: {
+        trace: '/show',
+        showSubtype: 'showTemplate',
+        sourceRetryable: true
+      },
+      opLabels: ['op:show']
+    });
+
+    expect(guarded).toBe(result);
+  });
+
   it('keeps deny precedence when retry and deny actions both match', async () => {
     const env = createEnv();
     const retryGuard = parseSync(
