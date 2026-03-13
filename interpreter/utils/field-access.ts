@@ -7,6 +7,7 @@ import { FieldAccessError } from '@core/errors';
 import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
 import { mergeDescriptors } from '@core/types/security';
 import { VariableMetadataUtils } from '@core/types/variable';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import path from 'node:path';
 import { isVariable } from './variable-resolution';
@@ -619,6 +620,21 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = createObjectUtilityMxView(structuredWrapper.mx, rawValue, structuredWrapper);
           break;
         }
+      }
+      if (
+        !structuredWrapper &&
+        name === 'mx' &&
+        rawValue &&
+        typeof rawValue === 'object' &&
+        !('mx' in (rawValue as Record<string, unknown>))
+      ) {
+        const descriptor = extractSecurityDescriptor(rawValue) ?? extractSecurityDescriptor(value);
+        const syntheticMx = descriptor ? {} : undefined;
+        if (syntheticMx) {
+          updateVarMxFromDescriptor(syntheticMx as any, descriptor);
+        }
+        accessedValue = createObjectUtilityMxView(syntheticMx, rawValue);
+        break;
       }
       if (typeof rawValue === 'string') {
         // Support .length on strings (like JavaScript)

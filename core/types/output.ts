@@ -104,11 +104,19 @@ export interface OutputSourceLiteral {
   raw: string;
 }
 
+export interface OutputSourceData {
+  type: 'data';
+  subtype: 'outputData';
+  values: BaseMlldNode;
+  raw: string;
+}
+
 export type OutputSource = 
   | OutputSourceVariable
   | OutputSourceExec
   | OutputSourceCommand
-  | OutputSourceLiteral;
+  | OutputSourceLiteral
+  | OutputSourceData;
 
 // Base output directive interface
 export interface OutputDirectiveBase extends TypedDirectiveNode<'output', OutputSubtype> {

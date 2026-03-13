@@ -7,7 +7,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
-import { createSimpleTextVariable } from '@core/types/variable';
+import { createObjectVariable, createSimpleTextVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
@@ -1451,6 +1451,73 @@ it('applies op:exe guards to bare run-exec statements and var-assigned exec call
 
   const assignedInvocation = parseSync('/var @result = @handler(@key)')[0] as DirectiveNode;
   await expect(evaluateDirective(assignedInvocation, env)).rejects.toThrow(/blocked exec/);
+});
+
+it('fires before guards for exec arguments reached through field access', async () => {
+  const env = createEnv();
+  const labelGuard = parseSync(
+    '/guard before @byLabel for untrusted = when [ * => deny "blocked untrusted" ]'
+  )[0] as DirectiveNode;
+  const exeDirective = parseSync('/exe @emit(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(labelGuard, env);
+  await evaluateDirective(exeDirective, env);
+  env.setVariable(
+    'bad',
+    createSimpleTextVariable(
+      'bad',
+      'danger',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['untrusted'] })
+      }
+    )
+  );
+  env.setVariable(
+    'args',
+    createObjectVariable(
+      'args',
+      { data: 'danger' },
+      false,
+      {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['untrusted'] })
+      }
+    )
+  );
+
+  const bareInvocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'bad' }]
+    }
+  };
+  const fieldInvocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [
+        {
+          type: 'VariableReference',
+          identifier: 'args',
+          fields: [{ type: 'field', value: 'data', optional: false }]
+        }
+      ]
+    }
+  };
+
+  await expect(evaluateExecInvocation(bareInvocation, env)).rejects.toThrow('blocked untrusted');
+  await expect(evaluateExecInvocation(fieldInvocation, env)).rejects.toThrow('blocked untrusted');
 });
 
 describe('secret redaction in guard error messages', () => {

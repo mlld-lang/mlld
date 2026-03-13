@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { accessField, accessFields } from './field-access';
+import { makeSecurityDescriptor } from '@core/types/security';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 import {
   createObjectVariable,
   createSimpleTextVariable,
   createStructuredValueVariable
 } from '@core/types/variable/VariableFactories';
-import { wrapStructured } from './structured-value';
+import { applySecurityDescriptorToStructuredValue, wrapStructured } from './structured-value';
 import { Environment } from '@interpreter/env/Environment';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
@@ -76,6 +77,27 @@ describe('object mx utilities', () => {
       { type: 'field', value: 'entries' } as const
     ], { preserveContext: false });
     expect(entries).toEqual([['a', 1], ['b', 2], ['c', 3]]);
+  });
+
+  it('exposes labels on nested object results backed by provenance', async () => {
+    const structured = wrapStructured(
+      { nested: { value: 1 } },
+      'object',
+      '{"nested":{"value":1}}'
+    );
+    applySecurityDescriptorToStructuredValue(
+      structured,
+      makeSecurityDescriptor({ labels: ['untrusted'] })
+    );
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const labels = await accessFields(variable, [
+      { type: 'field', value: 'nested' } as const,
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'labels' } as const
+    ], { preserveContext: false });
+
+    expect(labels).toEqual(['untrusted']);
   });
 });
 

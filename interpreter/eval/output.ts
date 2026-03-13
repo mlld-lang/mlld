@@ -308,6 +308,9 @@ export async function evaluateOutputSource(
       console.warn('Unexpected literal source format:', source);
       const fallback = String(source);
       return { rawValue: fallback, text: fallback };
+
+    case 'data':
+      return await evaluateDataSource(directive, env);
       
     case 'variable':
       return await evaluateVariableSource(directive, env, context);
@@ -326,6 +329,33 @@ export async function evaluateOutputSource(
         { sourceLocation: directive.location, env }
       );
   }
+}
+
+async function evaluateDataSource(
+  directive: DirectiveNode,
+  env: Environment
+): Promise<OutputSourceResult> {
+  const source = directive.values.source;
+  const rawValue = await evaluateDataValue(source as any, env);
+  const { extractDescriptorsFromDataAst } = await import('./var');
+  const descriptor = extractDescriptorsFromDataAst(source as any, env);
+  if (descriptor) {
+    env.recordSecurityDescriptor(descriptor);
+  }
+
+  if (rawValue === null || rawValue === undefined) {
+    return { rawValue, text: '' };
+  }
+  if (typeof rawValue === 'string') {
+    return { rawValue, text: rawValue };
+  }
+  if (isStructuredValue(rawValue)) {
+    return { rawValue, text: asText(rawValue) };
+  }
+  if (typeof rawValue === 'object') {
+    return { rawValue, text: stringifyStructured(rawValue, 2) };
+  }
+  return { rawValue, text: String(rawValue) };
 }
 
 /**

@@ -268,7 +268,10 @@ export async function evaluateExecInvocationArgs(options: {
 
             let value = variable.value;
             const { isTemplate } = await import('@core/types/variable');
-            if (isTemplate(variable)) {
+            if (varRef.fields && varRef.fields.length > 0) {
+              const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+              value = await resolveVariable(variable, env, ResolutionContext.FieldAccess);
+            } else if (isTemplate(variable)) {
               if (Array.isArray(value)) {
                 value = await services.interpolate(value, env, InterpolationContext.Default);
               } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
@@ -282,11 +285,12 @@ export async function evaluateExecInvocationArgs(options: {
 
             if (varRef.fields && varRef.fields.length > 0) {
               const { accessFields } = await import('@interpreter/utils/field-access');
-              value = await accessFields(value, varRef.fields, {
+              const fieldResult = await accessFields(value, varRef.fields, {
                 env,
-                preserveContext: false,
+                preserveContext: true,
                 sourceLocation: (varRef as any).location
               });
+              value = (fieldResult as { value: unknown }).value;
             }
 
             if (isStructuredValue(value)) {

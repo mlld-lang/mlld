@@ -1472,6 +1472,8 @@ async function evaluateExecInvocationInternal(
           originalVariables[i] = variable;
           guardVariableCandidates[i] = variable;
         }
+      } else if (variable && varRef.fields && varRef.fields.length > 0) {
+        expressionSourceVariables[i] = variable;
       }
     } else if (
       arg &&
