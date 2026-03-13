@@ -83,6 +83,32 @@ import {
 import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mcp-config';
 
 /**
+ * Resolve a method/field on an object, handling AST-shaped objects
+ * that store fields in `.entries` (pair array) or `.properties` (record).
+ * Returns undefined when the field does not exist.
+ */
+function resolveObjectMethod(obj: unknown, name: string): unknown {
+  if (!obj || typeof obj !== 'object') {
+    return undefined;
+  }
+  const record = obj as Record<string, unknown>;
+  // AST entry-based objects (new grammar format)
+  if (Array.isArray(record.entries)) {
+    for (const entry of record.entries) {
+      if (entry && typeof entry === 'object' && entry.type === 'pair' && entry.key === name) {
+        return entry.value;
+      }
+    }
+  }
+  // AST property-based objects (legacy format) — only when entries aren't present
+  if (!Array.isArray(record.entries) && record.type === 'object' && record.properties && typeof record.properties === 'object') {
+    return (record.properties as Record<string, unknown>)[name];
+  }
+  // Plain objects
+  return record[name];
+}
+
+/**
  * Resolve stdin input from expression using shared shell classification.
  */
 type ResolvedStdinInput = {
@@ -256,7 +282,7 @@ async function evaluateExecInvocationInternal(
     }
 
     try {
-      const { extractVariableValue } = await import('../utils/variable-resolution');
+      const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
       let objectValue: unknown;
 
       if (objectRef.fields && objectRef.fields.length > 0) {
@@ -267,6 +293,13 @@ async function evaluateExecInvocationInternal(
           returnUndefinedForMissing: true,
           sourceLocation: objectRef.location ?? sourceLocation
         });
+        // accessFields may return wrapped values — unwrap to the plain object
+        if (isVariable(objectValue)) {
+          objectValue = await extractVariableValue(objectValue as Variable, env);
+        }
+        if (isStructuredValue(objectValue)) {
+          objectValue = objectValue.data;
+        }
       } else {
         objectValue = await extractVariableValue(objectVar, env);
       }
@@ -275,11 +308,7 @@ async function evaluateExecInvocationInternal(
         return { found: false };
       }
 
-      if (!Object.prototype.hasOwnProperty.call(objectValue, methodName)) {
-        return { found: false };
-      }
-
-      const resolved = (objectValue as Record<string, unknown>)[methodName];
+      const resolved = resolveObjectMethod(objectValue, methodName);
       if (typeof resolved === 'undefined') {
         return { found: false };
       }
@@ -607,26 +636,13 @@ async function evaluateExecInvocationInternal(
         }
 
         if (typeof objectValue === 'object' && objectValue !== null) {
-          const fieldValue =
-            objectValue.type === 'object' && objectValue.properties
-              ? objectValue.properties[commandName]
-              : (objectValue as any)[commandName];
-          variable = fieldValue;
+          variable = resolveObjectMethod(objectValue, commandName);
         }
       } else {
         objectValue = await extractVariableValue(objectVar, env);
 
-        // Direct field access on the object
         if (typeof objectValue === 'object' && objectValue !== null) {
-          // Handle AST object structure with type and properties
-          let fieldValue;
-          if (objectValue.type === 'object' && objectValue.properties) {
-            fieldValue = objectValue.properties[commandName];
-          } else {
-            fieldValue = (objectValue as any)[commandName];
-          }
-          
-          variable = fieldValue;
+          variable = resolveObjectMethod(objectValue, commandName);
         }
       }
       
