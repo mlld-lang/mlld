@@ -342,6 +342,8 @@ policy @p = {
 | `no-untrusted-destructive` | `untrusted` → `destructive` operations |
 | `no-untrusted-privileged` | `untrusted` → `privileged` operations |
 
+These rules generate managed label-flow denials that can be overridden by an explicit privileged guard `allow` for specific operations — enabling a "broad rule + specific exception" pattern. Use `locked: true` on the policy to make them absolute.
+
 **Flow blocked:**
 
 ```mlld
@@ -816,17 +818,48 @@ All guards have access to the full operation context:
 
 | Guard scope | `@input` | `@output` | `@mx` highlights |
 |---|---|---|---|
-| per-operation | Array of operation inputs | String view of the first input | `@mx.op.type`, `@mx.op.name`, `@mx.op.labels`, `@mx.guard.try` |
-| per-operation (after) | Array of operation outputs in the current guard scope | String view of the current output | `@mx.op.*`, `@mx.guard.try`, `@mx.guard.reasons`, `@mx.guard.hintHistory` |
-| per-input | The current labeled value (`string`, `object`, `array`, etc.) | String view of the current value | `@mx.op.*`, `@mx.labels`, `@mx.taint`, `@mx.sources`, `@mx.guard.try` |
+| per-operation | Array of operation inputs | String view of the first input | `@mx.op.type`, `@mx.op.name`, `@mx.op.labels`, `@mx.args.*`, `@mx.guard.try` |
+| per-operation (after) | Array of operation outputs in the current guard scope | String view of the current output | `@mx.op.*`, `@mx.args.*`, `@mx.guard.try`, `@mx.guard.reasons`, `@mx.guard.hintHistory` |
+| per-input | The current labeled value (`string`, `object`, `array`, etc.) | String view of the current value | `@mx.op.*`, `@mx.args.*`, `@mx.labels`, `@mx.taint`, `@mx.sources`, `@mx.guard.try` |
 
-Per-operation guard inputs expose helper metadata for aggregate checks:
+Per-operation guards can access individual arguments by index:
+
+- `@input[0]`, `@input[1]`, etc. — individual argument values
+- `@input[0].mx.labels`, `@input[0].mx.taint` — per-arg security metadata
+
+Per-operation and per-input guards can also access named operation inputs through `@mx.args`:
+
+- `@mx.args.value` — named arg access for identifier-safe parameter names
+- `@mx.args.value.mx.labels`, `@mx.args.value.mx.taint` — per-arg metadata by name
+- `@mx.args["repo-name"]` — bracket access for names that are not dot-safe
+- `@mx.args.names` — list of available arg names
+- `@mx.args["names"]` — access an actual arg named `names` even though `@mx.args.names` is reserved
+
+Per-operation guard inputs also expose helper metadata for aggregate checks:
 
 - `@input.any.mx.labels.includes("secret")`
 - `@input.all.mx.taint.includes("src:file")`
 - `@input.none.mx.labels.includes("pii")`
 - `@input.mx.labels`, `@input.mx.taint`, `@input.mx.sources`
 - `@input.any.text.includes("SSN")` for content-level text inspection
+
+**Per-arg label inspection:**
+
+```mlld
+>> Check whether the first argument to an exe is labeled 'secret'
+guard before op:exe = when [
+  @input[0].mx.labels.includes("secret") => deny "First argument must not be secret"
+  * => allow
+]
+```
+
+```mlld
+>> Check whether a named argument is labeled 'secret'
+guard before op:exe = when [
+  @input.length() > 0 && @mx.args.value.mx.labels.includes("secret") => deny "Named arg must not be secret"
+  * => allow
+]
+```
 
 **Two ways to guard the same flow:**
 
@@ -893,7 +926,7 @@ These rules apply to **all guards** (per-operation and per-input):
 
 1. Guards run top-to-bottom in declaration order.
 2. `always` timing participates in both phases (`before` and `after`).
-3. Decision precedence is `deny` > `retry` > `allow @value` > `allow`.
+3. Decision precedence is `deny` > `retry` > `allow @value` > `allow`. Exception: an explicit privileged guard `allow` can override a managed policy label-flow denial (from `defaults.rules` or `labels`), unless the policy is `locked: true`.
 4. Before-phase transforms are last-wins: each guard evaluates against the original input independently, and the last guard's replacement becomes the operation input.
 5. After-phase transforms chain sequentially; each guard receives the previous guard's output.
 6. `retry` actions apply only in retryable operation contexts (for example pipeline stages). In non-retryable contexts, retry resolves as a deny.
@@ -903,7 +936,7 @@ Guards are non-reentrant (won't trigger on their own operations).
 
 Per-input guards (matched via data labels) fire once per matching input and participate in the same decision pipeline — their `deny`/`allow`/`retry` results compose with per-operation guard results using the same precedence rules above.
 
-Privileged guards cannot be bypassed with `{ guards: false }` and can remove protected labels.
+Privileged guards cannot be bypassed with `{ guards: false }`, can remove protected labels, and can override managed policy label-flow denials.
 
 ```mlld
 >> Mark a user-defined guard as privileged (prefix form)
@@ -930,6 +963,33 @@ exe net:w @send(data) = run cmd { printf "%s" "@data" }
 >> Privileged guard still blocks — { guards: false } only disables user guards
 show @send(@customerList) with { guards: false }
 >> Error: Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'
+```
+
+**Overriding policy denials:**
+
+An explicit privileged guard `allow` can override managed label-flow denials from `defaults.rules` and `labels` deny/allow:
+
+```mlld
+policy @p = {
+  defaults: { rules: ["no-untrusted-destructive"] },
+  operations: { destructive: ["tool:w"] }
+}
+
+>> Privileged guard punches a specific hole in the policy
+guard privileged @taskAllow before tool:w = when [
+  @mx.op.name == "@sendEmail" && @mx.args.to == "john@gmail.com" => allow
+  * => allow  >> non-matching calls fall through to policy denial
+]
+```
+
+To make a policy denial non-overridable even by privileged guards, use `locked: true`:
+
+```mlld
+policy @p = {
+  defaults: { rules: ["no-secret-exfil"] },
+  locked: true
+}
+>> No privileged guard can override this policy's denials
 ```
 
 **What privileged guards can do:**
@@ -993,7 +1053,7 @@ exe @safe(value) = when [
 ]
 ```
 
-`denied` handlers catch denials from guards in both per-operation and per-input scope. When a guard denies an operation, the exe's `when` block can match `denied` and provide a fallback value.
+`denied` handlers catch denials from guards and managed policy label-flow denials (`defaults.rules`, `labels` deny/allow) in both per-operation and per-input scope. When a guard or policy denies an operation, the exe's `when` block can match `denied` and provide a fallback value. Capability denials (`capabilities.deny`, environment constraints) are hard errors and cannot be caught.
 
 **Accessing guard context:**
 
@@ -1003,6 +1063,15 @@ exe @handler(value) = when [
   denied => show "Guard: @mx.guard.name"
   denied => show "Labels: @mx.labels.join(', ')"
   * => show @value
+]
+```
+
+Named operation inputs are available in denied handlers through `@mx.args`, just like in guard bodies:
+
+```mlld
+exe @send(url, payload) = when [
+  denied => show "Denied sending to @mx.args.url: @mx.guard.reason"
+  * => cmd curl -X POST @url -d @payload
 ]
 ```
 

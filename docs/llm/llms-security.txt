@@ -110,7 +110,7 @@ guard @noSecretExfil before op:exe = when [
 ]
 ```
 
-Policy denials are hard errors. Guard denials can be caught with `denied =>` handlers for graceful fallback. Use policy for absolute constraints; use guards when you need inspection, transformation, or recovery logic.
+Capability denials (e.g., `capabilities.deny`) are hard errors. Managed label-flow denials from `defaults.rules` and `labels` flow through the guard pipeline — an explicit privileged guard can override them with `allow`, and `denied =>` handlers can catch them for graceful fallback. To make a label-flow denial absolute, add `locked: true` to the policy. Use policy for broad restrictions and privileged guards for task-specific exceptions.
 
 See `guards-basics` for syntax, timing, and security context. See `guard-composition` for ordering rules.
 
@@ -500,7 +500,7 @@ var untrusted @mcpData = @echo("external data")
 
 Now `@mcpData` has both `src:mcp` taint AND the `untrusted` label, so built-in rules like `no-untrusted-destructive` apply.
 
-**Policy denials are hard errors** — the operation fails immediately. Unlike guard denials, they cannot be caught with `denied =>` handlers. Use policy for absolute constraints and guards for cases needing graceful fallback. See `security-denied-handlers` for guard denial handling.
+**Capability denials** (from `capabilities.deny`) are hard errors — the operation fails immediately and cannot be caught. **Managed label-flow denials** (from `defaults.rules` and `labels` deny/allow) flow through the guard pipeline — an explicit privileged guard can override them with `allow`, and `denied =>` handlers can catch them. To make a label-flow denial absolute, add `locked: true` to the policy. See `security-denied-handlers` for guard denial handling.
 
 **Environment policy alignment:** `policy.env` constraints (provider allow/deny, tools, mcps, network) are enforced when runtime env config is derived. Guard `env` actions may return a policy fragment, and that fragment is merged into active policy before execution. This lets guards tighten runtime environment constraints without mutating the declared policy source.
 
@@ -552,9 +552,13 @@ Inside a guard triggered by an MCP tool call:
 - `@mx.op.type` — `"exe"`
 - `@mx.op.name` — the tool function name (e.g., `@createIssue`)
 - `@mx.op.labels` — any labels from the tool definition (e.g., `destructive`)
+- `@mx.args.<param>` — named tool parameters (from the tool's JSON Schema)
+- `@mx.args.names` — list of available parameter names
 - `@mx.guard.try` — current guard retry attempt (1-based)
 - `@mx.taint` — includes `src:mcp`
 - `@mx.sources` — includes `mcp:<toolName>`
+
+MCP tool parameters often have non-dot-safe names from JSON Schema property keys. Use bracket access for these: `@mx.args["repo-name"]`.
 
 See `security-guards-basics` for general guard syntax and `mcp-security` for taint details.
 </MCP_SECURITY>
