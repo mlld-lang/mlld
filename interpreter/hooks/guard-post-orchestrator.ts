@@ -55,6 +55,10 @@ import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
 import { getExpressionProvenance } from '../utils/expression-provenance';
 import { formatGuardWarning } from '../eval/guard-denial-handler';
+import {
+  buildGuardArgsSnapshot,
+  getGuardArgNamesFromMetadata
+} from '../utils/guard-args';
 
 const GUARD_INPUT_SOURCE: VariableSource = {
   directive: 'var',
@@ -112,6 +116,10 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
   const baseOutputValue = normalizeRawOutput(result.value);
   const outputVariables = materializeGuardInputs([result.value], { nameHint: '__guard_output__' });
   const inputVariables = materializeGuardInputs(inputs ?? [], { nameHint: '__guard_input__' });
+  const guardArgs = buildGuardArgsSnapshot(
+    inputVariables,
+    getGuardArgNamesFromMetadata(operation.metadata)
+  );
   const showSubtype =
     operation?.metadata && typeof operation.metadata === 'object'
       ? (operation.metadata as Record<string, unknown>).showSubtype
@@ -227,6 +235,7 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
     buildOperationSnapshot,
     resolveGuardValue: resolvePostGuardValue,
     buildVariablePreview: buildPostVariablePreview,
+    guardArgs,
     logLabelModifications: async (guard, labelModifications, targets) => {
       await logGuardLabelModifications(env, guard, labelModifications, targets);
     }

@@ -15,11 +15,13 @@ const FALLBACK_SOURCE: VariableSource = {
 
 export interface GuardInputOptions {
   nameHint?: string;
+  argNames?: readonly (string | null | undefined)[];
 }
 
 export interface GuardInputMappingEntry {
   index: number;
   variable: Variable;
+  name?: string | null;
 }
 
 export function materializeGuardInputs(
@@ -37,14 +39,22 @@ export function materializeGuardInputsWithMapping(
   options?: GuardInputOptions
 ): GuardInputMappingEntry[] {
   const nameHint = options?.nameHint ?? '__guard_input__';
+  const argNames = options?.argNames;
   const results: GuardInputMappingEntry[] = [];
 
   for (let index = 0; index < values.length; index++) {
     const value = values[index];
     const variable = materializeGuardInput(value, nameHint);
+    const argName = (() => {
+      if (!Array.isArray(argNames)) {
+        return null;
+      }
+      const candidate = argNames[index];
+      return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
+    })();
 
     if (variable) {
-      results.push({ index, variable });
+      results.push({ index, variable, name: argName });
     }
   }
 

@@ -12,6 +12,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { VirtualFS } from '@services/fs/VirtualFS';
+import { buildGuardArgsSnapshot, createGuardArgsView } from './guard-args';
 
 const source = {
   directive: 'var' as const,
@@ -192,6 +193,39 @@ describe('missing field access', () => {
       expect((error as Error).message).toContain('Cannot access field "custom" on non-object value (string)');
       expect((error as Error).message).not.toContain('looks like field access');
     }
+  });
+});
+
+describe('guard args field access', () => {
+  it('resolves dot-safe named args through field access', async () => {
+    const variable = createSimpleTextVariable('value', 'classified', source);
+    variable.mx = { labels: ['secret'] } as any;
+    const view = createGuardArgsView(buildGuardArgsSnapshot([variable], ['value']));
+
+    const argValue = await accessField(view, { type: 'field', value: 'value' }, { preserveContext: false });
+    const labels = await accessFields(view, [
+      { type: 'field', value: 'value' } as const,
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'labels' } as const
+    ], { preserveContext: false });
+
+    expect(argValue).toBe(variable);
+    expect(labels).toEqual(['secret']);
+  });
+
+  it('resolves reserved and bracket-only guard arg names', async () => {
+    const reserved = createSimpleTextVariable('names', 'classified', source);
+    reserved.mx = { labels: ['secret'] } as any;
+    const dashed = createSimpleTextVariable('repo-name', 'docs', source);
+    const view = createGuardArgsView(buildGuardArgsSnapshot([reserved, dashed], ['names', 'repo-name']));
+
+    const names = await accessField(view, { type: 'field', value: 'names' }, { preserveContext: false });
+    const reservedValue = await accessField(view, { type: 'bracketAccess', value: 'names' }, { preserveContext: false });
+    const dashedValue = await accessField(view, { type: 'bracketAccess', value: 'repo-name' }, { preserveContext: false });
+
+    expect(names).toEqual(['names', 'repo-name']);
+    expect(reservedValue).toBe(reserved);
+    expect(dashedValue).toBe(dashed);
   });
 });
 

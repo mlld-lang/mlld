@@ -88,6 +88,63 @@ export interface InterpolationDependencies {
   evaluate: EvaluateFn;
 }
 
+function formatInterpolationFieldAccess(fields?: FieldAccessNode[]): string {
+  if (!fields || fields.length === 0) {
+    return '';
+  }
+
+  let output = '';
+  for (const field of fields) {
+    if (!field) {
+      continue;
+    }
+    const optionalSuffix = field.optional ? '?' : '';
+    switch (field.type) {
+      case 'field':
+      case 'numericField':
+        output += `.${String(field.value ?? '')}${optionalSuffix}`;
+        break;
+      case 'stringIndex':
+      case 'arrayIndex':
+        output += `[${String(field.value ?? '')}]${optionalSuffix}`;
+        break;
+      case 'bracketAccess':
+        output += `[${JSON.stringify(field.value ?? '')}]${optionalSuffix}`;
+        break;
+      case 'variableIndex': {
+        const ref = (field as any).value;
+        const identifier =
+          ref && typeof ref === 'object' && typeof ref.identifier === 'string'
+            ? `@${ref.identifier}${formatInterpolationFieldAccess((ref as any).fields)}`
+            : String(field.value ?? '');
+        output += `[${identifier}]${optionalSuffix}`;
+        break;
+      }
+      default:
+        return output;
+    }
+  }
+
+  return output;
+}
+
+function serializeInterpolationReference(node: InterpolationNode): string | null {
+  if (node.type !== 'VariableReference' || typeof node.identifier !== 'string') {
+    return null;
+  }
+
+  return `@${node.identifier}${formatInterpolationFieldAccess(node.fields)}`;
+}
+
+function extractSyntheticShowNode(directive: any): InterpolationNode | null {
+  return (
+    directive?.values?.invocation ??
+    directive?.values?.variable ??
+    directive?.values?.execInvocation ??
+    null
+  );
+}
+
 export type Interpolator = (
   nodes: InterpolationNode[],
   env: Environment,
@@ -156,8 +213,35 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
 
     const { evaluate } = getDeps();
 
+    for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex += 1) {
+      let node = nodes[nodeIndex];
 
-    for (const node of nodes) {
+      // Some nested template contexts split bracket/dot tails into a following Text node.
+      // Reparse the combined reference so @mx.args["name"] and chained forms work uniformly.
+      if (node.type === 'VariableReference') {
+        const nextNode = nodes[nodeIndex + 1];
+        const serialized = serializeInterpolationReference(node);
+        const tail = nextNode?.type === 'Text' ? nextNode.content ?? '' : '';
+        const startsWithTail =
+          typeof tail === 'string' &&
+          tail.length > 0 &&
+          (tail.startsWith('[') || tail.startsWith('.') || tail.startsWith('('));
+
+        if (serialized && startsWithTail) {
+          try {
+            const { parseSync } = await import('@grammar/parser');
+            const syntheticDirective = parseSync(`/show ${serialized}${tail}`)[0] as any;
+            const syntheticNode = extractSyntheticShowNode(syntheticDirective);
+            if (syntheticNode) {
+              node = syntheticNode;
+              nodeIndex += 1;
+            }
+          } catch {
+            // Fall back to normal interpolation when the tail is ordinary text.
+          }
+        }
+      }
+
       if (node.type === 'Text') {
         // Handle Text nodes - directly use string content
         pushPart(node.content || '');

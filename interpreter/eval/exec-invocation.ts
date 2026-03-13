@@ -1608,7 +1608,8 @@ async function evaluateExecInvocationInternal(
       evaluatedArgStrings,
       guardVariableCandidates,
       expressionSourceVariables,
-      mcpSecurityDescriptor
+      mcpSecurityDescriptor,
+      argNames: params
     });
     let postHookInputs: readonly Variable[] = guardInputs;
     const execDescriptor = getVariableSecurityDescriptor(variable);
@@ -1624,12 +1625,13 @@ async function evaluateExecInvocationInternal(
       toolLabels,
       env,
       execEnv,
-      policyEnforcer,
-      mcpSecurityDescriptor,
-      execDescriptor,
-      services: {
-        interpolateWithResultDescriptor,
-        getResultSecurityDescriptor: () => resultSecurityDescriptor,
+        policyEnforcer,
+        mcpSecurityDescriptor,
+        execDescriptor,
+        guardArgNames: guardInputsWithMapping.map(entry => entry.name ?? null),
+        services: {
+          interpolateWithResultDescriptor,
+          getResultSecurityDescriptor: () => resultSecurityDescriptor,
         resolveStdinInput
       }
     });

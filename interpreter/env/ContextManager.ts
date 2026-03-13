@@ -1,6 +1,10 @@
 import type { SourceLocation } from '@core/types';
 import type { DataLabel } from '@core/types/security';
 import type { GuardHint, GuardResult } from '@core/types/guard';
+import {
+  createGuardArgsView,
+  type GuardArgsSnapshot
+} from '../utils/guard-args';
 
 const DEFAULT_GUARD_MAX = 3;
 
@@ -63,6 +67,7 @@ export interface GuardContextSnapshot {
   hints?: ReadonlyArray<GuardHint>;
   reasons?: ReadonlyArray<string>;
   decision?: 'allow' | 'deny' | 'retry';
+  args?: GuardArgsSnapshot;
 }
 
 export interface DeniedContextSnapshot {
@@ -412,6 +417,9 @@ export class ContextManager {
     if (guardContext?.output !== undefined) {
       mxValue.output = guardContext.output;
     }
+    if (guardContext) {
+      mxValue.args = createGuardArgsView(guardContext.args);
+    }
 
     if (guardContext || deniedContext) {
       mxValue.guard = this.normalizeGuardContext(guardContext, deniedContext);
@@ -593,6 +601,7 @@ export class ContextManager {
 
     return {
       ...(guardContext ?? {}),
+      ...(guardContext ? { args: createGuardArgsView(guardContext.args) } : {}),
       trace,
       hints,
       reasons,

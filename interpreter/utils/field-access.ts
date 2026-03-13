@@ -8,6 +8,10 @@ import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-co
 import { mergeDescriptors } from '@core/types/security';
 import { VariableMetadataUtils } from '@core/types/variable';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import {
+  isGuardArgsView,
+  resolveGuardArgsViewProperty
+} from './guard-args';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import path from 'node:path';
 import { isVariable } from './variable-resolution';
@@ -448,6 +452,31 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     rawValue = structuredWrapper.data;
   }
 
+  const fieldValue = field.value;
+  const fieldName = String(fieldValue);
+  const missingValue = options?.returnUndefinedForMissing ? undefined : null;
+  const guardArgsMode =
+    field.type === 'field'
+      ? 'field'
+      : field.type === 'stringIndex' || field.type === 'bracketAccess'
+        ? 'bracket'
+        : null;
+
+  if (guardArgsMode && isGuardArgsView(rawValue)) {
+    const resolved = resolveGuardArgsViewProperty(rawValue, fieldName, guardArgsMode);
+    if (resolved.found) {
+      if (options?.preserveContext) {
+        return {
+          value: resolved.value,
+          parentVariable,
+          accessPath: [...(options.parentPath || []), fieldName],
+          isVariable: isVariable(resolved.value)
+        };
+      }
+      return resolved.value;
+    }
+  }
+
   // Special handling for Variable metadata properties
   // IMPORTANT: Check metadata for core properties (.type, .mx, etc.),
   // but allow data precedence for guard quantifiers (.all, .any, .none)
@@ -584,12 +613,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
     }
   }
-  const fieldValue = field.value;
-  const missingValue = options?.returnUndefinedForMissing ? undefined : null;
-
   // Perform the actual field access
   let accessedValue: any;
-  const fieldName = String(fieldValue);
   
   switch (field.type) {
     case 'field':

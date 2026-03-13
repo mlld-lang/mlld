@@ -23,6 +23,7 @@ import { executeCodeHandler } from './command-execution/handlers/execute-code';
 import { executeNodeHandler } from './command-execution/handlers/execute-node';
 import { executeTemplateHandler } from './command-execution/handlers/execute-template';
 import { executeCommandRefHandler } from './command-execution/handlers/execute-command-ref';
+import { mergeGuardArgNamesIntoMetadata } from '@interpreter/utils/guard-args';
 
 export type RetrySignal = { value: 'retry'; hint?: any; from?: number };
 type CommandExecutionPrimitive = string | number | boolean | null | undefined;
@@ -121,12 +122,18 @@ export async function executeCommandVariable(
   const operationContext = hookOptions?.operationContext;
   let preDecision: HookDecision | undefined;
   const stageInputs = hookOptions?.stageInputs ?? [];
-  const { guardInputs } = buildGuardPreflightContext({
+  const { guardInputs, guardArgNames } = buildGuardPreflightContext({
     env,
     execEnv,
     stageInputs,
     baseParamNames
   });
+  if (operationContext) {
+    operationContext.metadata = mergeGuardArgNamesIntoMetadata(
+      operationContext.metadata,
+      guardArgNames
+    );
+  }
 
   outputPolicyDescriptor = await runPolicyPreflight({
     env,

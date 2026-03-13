@@ -20,6 +20,7 @@ import {
   type PostGuardReplacementDependencies
 } from './guard-post-runtime-actions';
 import { extractGuardLabelModifications } from './guard-utils';
+import type { GuardArgsSnapshot } from '../utils/guard-args';
 
 const DEFAULT_GUARD_MAX = 3;
 
@@ -42,6 +43,7 @@ export interface EvaluatePostGuardRuntimeOptions {
   attemptHistory?: Array<{ attempt?: number; decision?: string; hint?: string | null }>;
   maxAttempts?: number;
   hintHistory?: Array<string | null>;
+  args?: GuardArgsSnapshot;
 }
 
 export interface EvaluatePostGuardRuntimeDependencies {
@@ -197,7 +199,8 @@ export async function evaluatePostGuardRuntime(
     inputPreview,
     outputPreview: dependencies.buildVariablePreview(guardOutputVariable),
     hintHistory,
-    timing: 'after'
+    timing: 'after',
+    args: options.args
   } as GuardContextSnapshot;
 
   const contextSnapshotForMetadata = { ...guardContext };

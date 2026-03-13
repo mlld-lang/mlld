@@ -5,11 +5,13 @@ import type { OperationContext } from '@interpreter/env/ContextManager';
 import type { Environment } from '@interpreter/env/Environment';
 import type { HookDecision } from '@interpreter/hooks/HookManager';
 import { handleGuardDecision } from '@interpreter/hooks/hook-decision-handler';
-import { materializeGuardInputs } from '@interpreter/utils/guard-inputs';
+import { materializeGuardInputsWithMapping } from '@interpreter/utils/guard-inputs';
+import type { GuardArgName } from '@interpreter/utils/guard-args';
 import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 
 export interface GuardPreflightContext {
   guardInputs: unknown[];
+  guardArgNames: readonly GuardArgName[];
 }
 
 export interface BuildGuardPreflightContextOptions {
@@ -24,10 +26,12 @@ export function buildGuardPreflightContext(
 ): GuardPreflightContext {
   const { env, execEnv, stageInputs, baseParamNames } = options;
   const guardInputCandidates: unknown[] = [];
+  const guardArgNames: GuardArgName[] = [];
   const stageInputVar = env.getVariable?.('input');
   if (baseParamNames.length > 0) {
     if (stageInputVar) {
       guardInputCandidates.push(stageInputVar);
+      guardArgNames.push(baseParamNames[0] ?? null);
     }
 
     const paramStartIndex = stageInputVar ? 1 : 0;
@@ -36,19 +40,28 @@ export function buildGuardPreflightContext(
       const paramVar = execEnv.getVariable(paramName);
       if (paramVar) {
         guardInputCandidates.push(paramVar);
+        guardArgNames.push(paramName);
       }
     }
   } else {
     if (stageInputVar) {
       guardInputCandidates.push(stageInputVar);
+      guardArgNames.push(null);
     }
     if (stageInputs.length > 0) {
       guardInputCandidates.push(...stageInputs);
+      guardArgNames.push(...Array.from({ length: stageInputs.length }, () => null));
     }
   }
 
+  const guardInputsWithMapping = materializeGuardInputsWithMapping(guardInputCandidates, {
+    nameHint: '__pipeline_stage_input__',
+    argNames: guardArgNames
+  });
+
   return {
-    guardInputs: materializeGuardInputs(guardInputCandidates, { nameHint: '__pipeline_stage_input__' })
+    guardInputs: guardInputsWithMapping.map(entry => entry.variable),
+    guardArgNames: guardInputsWithMapping.map(entry => entry.name ?? null)
   };
 }
 

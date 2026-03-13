@@ -213,6 +213,77 @@ describe('handleExecGuardDenial', () => {
     expect(String(injectedInput?.value)).toContain('trimmed-secret');
   });
 
+  it('exposes named args inside denied handlers with reserved and bracket access', async () => {
+    const { env, execEnv, effects } = createEnv();
+    const whenExpr = parseWhenExpression(`
+/exe @process() = when [
+  denied => [
+    show "Arg names: @mx.args.names.join(',')"
+    show "Reserved arg: @mx.args[\\"names\\"]"
+    show "Reserved labels: @mx.args[\\"names\\"].mx.labels.join(',')"
+    show "Bracket arg: @mx.args[\\"repo-name\\"]"
+    show "Guard arg names: @mx.guard.args.names.join(',')"
+    show "Guard reserved arg: @mx.guard.args[\\"names\\"]"
+  ]
+  * => show "Process"
+]
+    `);
+
+    const source: VariableSource = {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    const reservedArg = createSimpleTextVariable('names', 'classified', source, {
+      security: makeSecurityDescriptor({ labels: ['secret'] })
+    });
+    const dashedArg = createSimpleTextVariable('repo-name', 'mlld-core', source, {
+      security: makeSecurityDescriptor({ labels: ['repo'] })
+    });
+
+    const guardContext = {
+      name: '@namedArgs',
+      attempt: 1,
+      try: 1,
+      tries: [],
+      max: 3,
+      input: reservedArg,
+      output: reservedArg,
+      labels: ['secret'],
+      sources: [],
+      hintHistory: [],
+      args: {
+        names: ['names', 'repo-name'],
+        values: {
+          names: reservedArg,
+          'repo-name': dashedArg
+        }
+      }
+    };
+
+    const error = new GuardError({
+      decision: 'deny',
+      reason: 'Blocked',
+      guardFilter: 'op:exe',
+      guardContext,
+      guardInput: reservedArg
+    });
+
+    const result = await handleExecGuardDenial(error, { execEnv, env, whenExprNode: whenExpr });
+    expect(result).not.toBeNull();
+    const outputs = effects
+      .getAll()
+      .filter(effect => effect.type === 'both')
+      .map(effect => effect.content.trim());
+    expect(outputs).toContain('Arg names: names,repo-name');
+    expect(outputs).toContain('Reserved arg: classified');
+    expect(outputs).toContain('Reserved labels: secret');
+    expect(outputs).toContain('Bracket arg: mlld-core');
+    expect(outputs).toContain('Guard arg names: names,repo-name');
+    expect(outputs).toContain('Guard reserved arg: classified');
+  });
+
   it('formats guard warnings with fallback identifier', () => {
     expect(formatGuardWarning(undefined, 'op:show', null)).toBe(
       '[Guard Warning] Guard for op:show prevented operation due to policy violation'
