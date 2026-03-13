@@ -28,7 +28,7 @@ exe @safe(value) = when [
 ]
 ```
 
-`denied` handlers catch denials from guards in both per-operation and per-input scope. When a guard denies an operation, the exe's `when` block can match `denied` and provide a fallback value.
+`denied` handlers catch denials from guards and managed policy label-flow denials (`defaults.rules`, `labels` deny/allow) in both per-operation and per-input scope. When a guard or policy denies an operation, the exe's `when` block can match `denied` and provide a fallback value. Capability denials (`capabilities.deny`, environment constraints) are hard errors and cannot be caught.
 
 **Accessing guard context:**
 
@@ -38,6 +38,15 @@ exe @handler(value) = when [
   denied => show "Guard: @mx.guard.name"
   denied => show "Labels: @mx.labels.join(', ')"
   * => show @value
+]
+```
+
+Named operation inputs are available in denied handlers through `@mx.args`, just like in guard bodies:
+
+```mlld
+exe @send(url, payload) = when [
+  denied => show "Denied sending to @mx.args.url: @mx.guard.reason"
+  * => cmd curl -X POST @url -d @payload
 ]
 ```
 

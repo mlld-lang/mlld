@@ -15,7 +15,7 @@ These rules apply to **all guards** (per-operation and per-input):
 
 1. Guards run top-to-bottom in declaration order.
 2. `always` timing participates in both phases (`before` and `after`).
-3. Decision precedence is `deny` > `retry` > `allow @value` > `allow`.
+3. Decision precedence is `deny` > `retry` > `allow @value` > `allow`. Exception: an explicit privileged guard `allow` can override a managed policy label-flow denial (from `defaults.rules` or `labels`), unless the policy is `locked: true`.
 4. Before-phase transforms are last-wins: each guard evaluates against the original input independently, and the last guard's replacement becomes the operation input.
 5. After-phase transforms chain sequentially; each guard receives the previous guard's output.
 6. `retry` actions apply only in retryable operation contexts (for example pipeline stages). In non-retryable contexts, retry resolves as a deny.

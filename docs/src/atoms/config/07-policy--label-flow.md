@@ -37,6 +37,8 @@ Label-flow policy evaluates declared labels and taint labels (`src:*`, `dir:*`) 
 
 **Built-in rules vs. explicit deny lists:** For common protection patterns, use `defaults.rules` with built-in rules like `no-secret-exfil` instead of writing explicit deny lists. See `policy-operations` for the two-step classification pattern where semantic labels (e.g., `net:w`) are mapped to risk categories (e.g., `exfil`) via `policy.operations`.
 
+**Privileged guard overrides:** Managed label-flow denials can be overridden by an explicit privileged guard `allow` for specific operations. This enables a pattern where policy sets a broad restriction and a privileged guard punches specific holes. To prevent this, use `locked: true` on the policy.
+
 **In composed policies:** Label deny/allow rules from all composed policy layers merge via union. A `deny` on `secret → op:cmd` from ANY layer blocks that flow in the merged policy. See `policy-composition` for merge rules.
 
 **Complete denial example:**

@@ -119,7 +119,7 @@ policy @p = {
 
 **Policy composition**: `union()` merges configs with intersection for `allow`, union for `deny`, minimum for `limits` — always resolving toward more restrictive.
 
-**Policy vs. guards:** Policy denials are hard errors — immediate, uncatchable. Guard denials can be handled with `denied =>` handlers for graceful fallback. Use policy for absolute constraints; use guards when you need inspection, transformation, or recovery logic.
+**Policy vs. guards:** Capability denials (`capabilities.deny`, environment constraints) are hard errors — immediate, uncatchable. Managed label-flow denials (`defaults.rules`, `labels` deny/allow) flow through the guard pipeline and can be overridden by explicit privileged guard `allow` decisions, or caught with `denied =>` handlers. To make a label-flow denial absolute, use `locked: true` on the policy. Use policy for broad restrictions; use privileged guards to punch specific holes.
 
 **Atoms:** `security-policies` (start here), `policy-capabilities`, `policy-operations`, `policy-label-flow`, `policy-composition`, `policy-auth`
 

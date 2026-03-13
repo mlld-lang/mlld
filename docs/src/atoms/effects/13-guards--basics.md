@@ -62,9 +62,9 @@ All guards have access to the full operation context:
 
 | Guard scope | `@input` | `@output` | `@mx` highlights |
 |---|---|---|---|
-| per-operation | Array of operation inputs | String view of the first input | `@mx.op.type`, `@mx.op.name`, `@mx.op.labels`, `@mx.guard.try` |
-| per-operation (after) | Array of operation outputs in the current guard scope | String view of the current output | `@mx.op.*`, `@mx.guard.try`, `@mx.guard.reasons`, `@mx.guard.hintHistory` |
-| per-input | The current labeled value (`string`, `object`, `array`, etc.) | String view of the current value | `@mx.op.*`, `@mx.labels`, `@mx.taint`, `@mx.sources`, `@mx.guard.try` |
+| per-operation | Array of operation inputs | String view of the first input | `@mx.op.type`, `@mx.op.name`, `@mx.op.labels`, `@mx.args.*`, `@mx.guard.try` |
+| per-operation (after) | Array of operation outputs in the current guard scope | String view of the current output | `@mx.op.*`, `@mx.args.*`, `@mx.guard.try`, `@mx.guard.reasons`, `@mx.guard.hintHistory` |
+| per-input | The current labeled value (`string`, `object`, `array`, etc.) | String view of the current value | `@mx.op.*`, `@mx.args.*`, `@mx.labels`, `@mx.taint`, `@mx.sources`, `@mx.guard.try` |
 
 Per-operation guards can access individual arguments by index:
 

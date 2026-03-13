@@ -11,7 +11,7 @@ related-code: [core/policy/guards.ts, interpreter/hooks/guard-pre-hook.ts, inter
 updated: 2026-02-09
 ---
 
-Privileged guards cannot be bypassed with `{ guards: false }` and can remove protected labels.
+Privileged guards cannot be bypassed with `{ guards: false }`, can remove protected labels, and can override managed policy label-flow denials.
 
 ```mlld
 >> Mark a user-defined guard as privileged (prefix form)
@@ -38,6 +38,33 @@ exe net:w @send(data) = run cmd { printf "%s" "@data" }
 >> Privileged guard still blocks — { guards: false } only disables user guards
 show @send(@customerList) with { guards: false }
 >> Error: Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'
+```
+
+**Overriding policy denials:**
+
+An explicit privileged guard `allow` can override managed label-flow denials from `defaults.rules` and `labels` deny/allow:
+
+```mlld
+policy @p = {
+  defaults: { rules: ["no-untrusted-destructive"] },
+  operations: { destructive: ["tool:w"] }
+}
+
+>> Privileged guard punches a specific hole in the policy
+guard privileged @taskAllow before tool:w = when [
+  @mx.op.name == "@sendEmail" && @mx.args.to == "john@gmail.com" => allow
+  * => allow  >> non-matching calls fall through to policy denial
+]
+```
+
+To make a policy denial non-overridable even by privileged guards, use `locked: true`:
+
+```mlld
+policy @p = {
+  defaults: { rules: ["no-secret-exfil"] },
+  locked: true
+}
+>> No privileged guard can override this policy's denials
 ```
 
 **What privileged guards can do:**

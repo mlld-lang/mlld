@@ -118,7 +118,7 @@ guard @noSecretExfil before op:exe = when [
 ]
 ```
 
-Policy denials are hard errors. Guard denials can be caught with `denied =>` handlers for graceful fallback. Use policy for absolute constraints; use guards when you need inspection, transformation, or recovery logic.
+Capability denials (e.g., `capabilities.deny`) are hard errors. Managed label-flow denials from `defaults.rules` and `labels` flow through the guard pipeline — an explicit privileged guard can override them with `allow`, and `denied =>` handlers can catch them for graceful fallback. To make a label-flow denial absolute, add `locked: true` to the policy. Use policy for broad restrictions and privileged guards for task-specific exceptions.
 
 See `guards-basics` for syntax, timing, and security context. See `guard-composition` for ordering rules.
 

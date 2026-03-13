@@ -57,8 +57,12 @@ Inside a guard triggered by an MCP tool call:
 - `@mx.op.type` — `"exe"`
 - `@mx.op.name` — the tool function name (e.g., `@createIssue`)
 - `@mx.op.labels` — any labels from the tool definition (e.g., `destructive`)
+- `@mx.args.<param>` — named tool parameters (from the tool's JSON Schema)
+- `@mx.args.names` — list of available parameter names
 - `@mx.guard.try` — current guard retry attempt (1-based)
 - `@mx.taint` — includes `src:mcp`
 - `@mx.sources` — includes `mcp:<toolName>`
+
+MCP tool parameters often have non-dot-safe names from JSON Schema property keys. Use bracket access for these: `@mx.args["repo-name"]`.
 
 See `security-guards-basics` for general guard syntax and `mcp-security` for taint details.
