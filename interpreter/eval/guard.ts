@@ -10,6 +10,8 @@ export async function evaluateGuard(
 ): Promise<EvalResult> {
   const guardNode = directive as GuardDirectiveNode;
   const registry = env.getGuardRegistry();
-  registry.register(guardNode, directive.location ?? null);
+  registry.register(guardNode, directive.location ?? null, {
+    emitWarning: message => env.emitEffect('stderr', `${message}\n`)
+  });
   return { value: undefined, env };
 }

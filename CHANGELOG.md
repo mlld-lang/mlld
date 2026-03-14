@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Parsed JSON nested objects now expose direct `.mx.labels` access consistently, instead of only preserving labels after reassignment or on primitive leaves.
 - Before-guards on exe invocations now fire for field-access arguments such as `@args.data`, matching bare-variable behavior and policy label-flow enforcement.
 - URL alligator results now expose `.mx.text`, `.mx.html`, and `.mx.md` correctly. Previously, the content-type-derived accessors on `LoadContentResultURLImpl` were not propagated through the StructuredValue metadata path, so `.mx.html.isDefined()` and `.mx.md.isDefined()` returned `false` for HTML pages.
+- Guard `op:` prefix now accepts colon-compound labels (e.g., `op:tool:w`, `op:net:r`). Previously `GuardOpIdentifier` only allowed dot-separated segments, so `op:tool:w` failed to parse. Guards also now warn when a data filter like `guard before tool:w` matches a known operation label, suggesting `op:tool:w` instead.
 
 ### Documentation
 - Python SDK README now documents editable installs for local development (`uv pip install -e ./sdk/python`) so SDK changes apply immediately in downstream projects.

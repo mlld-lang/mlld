@@ -171,8 +171,13 @@ GuardDataFilter
     }
 
 GuardOpIdentifier
-  = first:BaseIdentifier rest:("." part:BaseIdentifier { return part; })* {
+  = first:GuardOpSegment rest:("." part:GuardOpSegment { return part; })* {
       return [first, ...rest].join('.');
+    }
+
+GuardOpSegment
+  = base:BaseIdentifier suffix:(':' BaseIdentifier)? {
+      return suffix ? base + ':' + suffix[1] : base;
     }
 
 GuardWhenClause

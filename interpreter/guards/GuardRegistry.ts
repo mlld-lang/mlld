@@ -67,6 +67,10 @@ export interface SerializedGuardDefinition {
   capturedModuleEnv?: Map<string, Variable>;
 }
 
+export interface RegisterGuardOptions {
+  emitWarning?: (message: string) => void;
+}
+
 export class GuardRegistry {
   private readonly parent?: GuardRegistry;
   private readonly root: GuardRegistry;
@@ -98,7 +102,7 @@ export class GuardRegistry {
     return new GuardRegistry(this);
   }
 
-  register(node: GuardDirectiveNode, location?: SourceLocation | null): GuardDefinition {
+  register(node: GuardDirectiveNode, location?: SourceLocation | null, options?: RegisterGuardOptions): GuardDefinition {
     const filterNode = node.values.filter?.[0];
     if (!filterNode) {
       throw new Error('Guard directive missing filter');
@@ -137,6 +141,7 @@ export class GuardRegistry {
       privileged: node.meta?.privileged === true
     };
 
+    this.validateFilter(filterNode.filterKind, filterNode.value, options?.emitWarning);
     this.registerDefinition(definition);
     this.guardNames.add(guardName ?? guardId);
     return definition;
@@ -305,6 +310,22 @@ export class GuardRegistry {
       }
     }
     return undefined;
+  }
+
+  private validateFilter(
+    filterKind: GuardFilterKind,
+    filterValue: string,
+    emitWarning?: (message: string) => void
+  ): void {
+    if (!emitWarning || filterKind !== 'data') {
+      return;
+    }
+    if (this.opIndex.has(filterValue)) {
+      emitWarning(
+        `Warning: Guard uses data filter "${filterValue}", but "${filterValue}" is an operation label. ` +
+          `Did you mean "op:${filterValue}"? Without the op: prefix, the guard matches data labeled "${filterValue}", not operations.`
+      );
+    }
   }
 
   private collectGuards(value: string, kind: GuardFilterKind): GuardDefinition[] {
