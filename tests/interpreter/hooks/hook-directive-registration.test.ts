@@ -34,7 +34,7 @@ describe('/hook directive evaluation', () => {
     await expect(evaluateDirective(duplicate, env)).rejects.toThrow(/already exists/);
   });
 
-  it('emits a warning effect for unknown operation hook filters', async () => {
+  it('does not emit warnings for custom operation label filters', async () => {
     const env = createEnv();
     const effects = new TestEffectHandler();
     env.setEffectHandler(effects);
@@ -42,19 +42,7 @@ describe('/hook directive evaluation', () => {
 
     await evaluateDirective(directive, env);
 
-    expect(effects.getErrors()).toContain(
-      'Warning: Hook "op:nonsense" uses unknown operation type "nonsense".'
-    );
-  });
-
-  it('does not emit warning effects for known operation hook filters', async () => {
-    const env = createEnv();
-    const effects = new TestEffectHandler();
-    env.setEffectHandler(effects);
-    const directive = parseSync('/hook after op:exe = [ => @output ]')[0] as DirectiveNode;
-
-    await evaluateDirective(directive, env);
-
+    // Custom labels (e.g., op:tool:w) are valid — they match exe/operation labels
     expect(effects.getErrors()).toBe('');
   });
 });

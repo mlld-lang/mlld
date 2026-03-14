@@ -162,6 +162,7 @@ function collectMatchingUserHooks(
       continue;
     }
     addUniqueHooks(matches, registry.getDataHooks(label, timing), seen);
+    addUniqueHooks(matches, registry.getOperationHooks(label, timing), seen);
   }
 
   const functionName = resolveFunctionName(node, operation);

@@ -142,8 +142,27 @@ GuardDirectivePrivilegedValue
     }
 
 GuardFilterClause
-  = filter:GuardOperationFilter { return filter; }
+  = filter:GuardFunctionFilter { return filter; }
+  / filter:GuardOperationFilter { return filter; }
   / filter:GuardDataFilter { return filter; }
+
+GuardFunctionFilter
+  = "@" identifier:GuardFunctionIdentifier {
+      const raw = `@${identifier}`;
+      const node = helpers.createNode('GuardFilter', {
+        filterKind: 'function',
+        scope: 'perOperation',
+        value: identifier,
+        raw,
+        location: location()
+      });
+      return { node, raw };
+    }
+
+GuardFunctionIdentifier
+  = first:BaseIdentifier rest:("." part:BaseIdentifier { return part; })* {
+      return [first, ...rest].join('.');
+    }
 
 GuardOperationFilter
   = "op:" identifier:GuardOpIdentifier {
