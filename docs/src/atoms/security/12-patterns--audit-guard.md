@@ -7,7 +7,7 @@ parent: patterns
 tags: [pattern, audit, guard, signing, verification, influenced, security, prompt-injection]
 related: [signing-overview, sign-verify, autosign-autoverify, labels-influenced, security-guards-basics, security-denied-handlers, tool-call-tracking, pattern-dual-audit]
 related-code: [llm/run/j2bd/security/impl/main.mld]
-updated: 2026-02-04
+updated: 2026-03-15
 qa_tier: 2
 ---
 
@@ -65,6 +65,7 @@ show @result
 - `autosign: ["templates"]` signs `::` templates on creation
 - `autoverify: true` injects verification for `exe llm` functions
 - `untrusted-llms-get-influenced` labels LLM outputs processing untrusted data
+- In real agent loops, that untrusted data often arrives through `messages`, `system`, or tool config rather than the top-level prompt string; those inputs still trigger `influenced`
 - **Warning:** Define guards BEFORE the `exe llm` calls they protect. Guards only apply to operations that execute after registration — a guard defined after an `exe llm` call silently won't fire for that call.
 - `autoverify` injects verification instructions but cannot enforce compliance. The enforcement guard requires it — use both together.
 - Mock exes use plain `exe` (no `llm` label) for deterministic output. In production, `exe llm` triggers both autoverify and the enforcement guard. See `main.mld` for the complete flow.

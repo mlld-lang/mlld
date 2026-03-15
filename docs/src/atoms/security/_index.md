@@ -34,7 +34,7 @@ Labels are strings attached to values. They are the foundation — guards and po
 |----------|----------|-------------|---------|
 | Sensitivity | `secret`, `sensitive`, `pii` | Declared by developer; `secret` auto-applied from keychain | Classify what data IS |
 | Trust | `trusted`, `untrusted` | Declared by developer or via `defaults.unlabeled` | Classify data reliability |
-| Influence | `influenced` | Auto-applied when LLM produces output with untrusted data in context | Track LLM exposure to tainted data |
+| Influence | `influenced` | Auto-applied when an `llm` executable sees untrusted data in any input, including prompt/config fields like `messages` or `system` | Track LLM exposure to tainted data |
 | Source | `src:mcp`, `src:cmd`, `src:js`, `src:sh`, `src:py`, `src:file`, `src:network`, `src:keychain`, `dir:/path` | Auto-applied by runtime | Track where data CAME FROM |
 
 Labels propagate through all transformations — template interpolation, method calls, pipelines, collections. You cannot accidentally strip a label by transforming data.

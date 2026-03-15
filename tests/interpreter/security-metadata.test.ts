@@ -196,6 +196,24 @@ describe('Security metadata propagation', () => {
     expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
+  it('applies influenced when untrusted data reaches an llm exe through a later config argument', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const directives = [
+      '/policy @p = { defaults: { rules: ["untrusted-llms-get-influenced"] } }',
+      '/var untrusted @messages = [{"role": "user", "content": "hello"}]',
+      '/exe llm @process(prompt, config) = js { return "ok" }',
+      '/var @result = @process("Say OK.", {"model": "gpt-4o", "messages": @messages})'
+    ];
+
+    for (const source of directives) {
+      const directive = parseSync(source)[0] as DirectiveNode;
+      await evaluateDirective(directive, env);
+    }
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['llm', 'untrusted', 'influenced']));
+  });
+
   it('applies return label modifications with trust asymmetry', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
     const sourceDirective = parseSync('/var trusted @data = "ok"')[0] as DirectiveNode;

@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 - Completed VirtualFS coverage across dev/user docs and SDK atoms, including architecture placement, no-grammar-impact note, test-harness guidance, SDK usage patterns, and docs-mirroring SDK example tests
+- Clarified the `untrusted-llms-get-influenced` contract in policy/security docs: any `llm` input can trigger `influenced`, including structured config fields such as `messages`, `system`, and tool definitions, and added regression coverage for that path
 
 ## [2.0.3]
 
