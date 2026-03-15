@@ -12,8 +12,8 @@ class FakeStreamExecution implements StreamExecution {
   private resolveResult!: (value: StructuredResult) => void;
   private rejectResult!: (error: unknown) => void;
   private complete = false;
-  readonly stateUpdates: Array<{ path: string; value: unknown }> = [];
-  readonly updateState?: (path: string, value: unknown) => Promise<void>;
+  readonly stateUpdates: Array<{ path: string; value: unknown; labels?: string[] }> = [];
+  readonly updateState?: (path: string, value: unknown, labels?: string[]) => Promise<void>;
 
   constructor(options: { enableStateUpdates?: boolean } = {}) {
     this.resultPromise = new Promise<StructuredResult>((resolve, reject) => {
@@ -22,8 +22,8 @@ class FakeStreamExecution implements StreamExecution {
     });
 
     if (options.enableStateUpdates !== false) {
-      this.updateState = async (path: string, value: unknown): Promise<void> => {
-        this.stateUpdates.push({ path, value });
+      this.updateState = async (path: string, value: unknown, labels?: string[]): Promise<void> => {
+        this.stateUpdates.push(labels ? { path, value, labels } : { path, value });
       };
     }
 
@@ -504,7 +504,7 @@ describe('LiveStdioServer', () => {
       `${JSON.stringify({
         method: 'state:update',
         id: 'u1',
-        params: { requestId: 7, path: 'exit', value: true }
+        params: { requestId: 7, path: 'exit', value: true, labels: ['untrusted', 'pii'] }
       })}\n`
     );
 
@@ -515,7 +515,7 @@ describe('LiveStdioServer', () => {
 
     expect(updateResult.result.requestId).toBe(7);
     expect(updateResult.result.path).toBe('exit');
-    expect(handle.stateUpdates).toEqual([{ path: 'exit', value: true }]);
+    expect(handle.stateUpdates).toEqual([{ path: 'exit', value: true, labels: ['untrusted', 'pii'] }]);
 
     handle.resolve({ output: 'ok', effects: [], exports: {}, stateWrites: [] } as any);
     await harness.close();

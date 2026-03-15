@@ -57,8 +57,8 @@ module Mlld
       @client.send_cancel(@request_id)
     end
 
-    def update_state(path, value, timeout: nil)
-      @client.send_state_update(@request_id, path, value, timeout || @timeout)
+    def update_state(path, value, labels: nil, timeout: nil)
+      @client.send_state_update(@request_id, path, value, timeout || @timeout, labels: labels)
     end
 
     protected
@@ -200,6 +200,7 @@ module Mlld
       script,
       file_path: nil,
       payload: nil,
+      payload_labels: nil,
       state: nil,
       dynamic_modules: nil,
       dynamic_module_source: nil,
@@ -211,6 +212,7 @@ module Mlld
         script,
         file_path: file_path,
         payload: payload,
+        payload_labels: payload_labels,
         state: state,
         dynamic_modules: dynamic_modules,
         dynamic_module_source: dynamic_module_source,
@@ -224,6 +226,7 @@ module Mlld
       script,
       file_path: nil,
       payload: nil,
+      payload_labels: nil,
       state: nil,
       dynamic_modules: nil,
       dynamic_module_source: nil,
@@ -234,6 +237,8 @@ module Mlld
       params = { 'script' => script }
       params['filePath'] = file_path if file_path
       params['payload'] = payload unless payload.nil?
+      normalized_payload_labels = normalize_payload_labels(payload_labels)
+      params['payloadLabels'] = normalized_payload_labels if normalized_payload_labels
       params['state'] = state if state
       params['dynamicModules'] = dynamic_modules if dynamic_modules
       params['dynamicModuleSource'] = dynamic_module_source if dynamic_module_source
@@ -252,6 +257,7 @@ module Mlld
     def execute(
       filepath,
       payload = nil,
+      payload_labels: nil,
       state: nil,
       dynamic_modules: nil,
       dynamic_module_source: nil,
@@ -262,6 +268,7 @@ module Mlld
       execute_async(
         filepath,
         payload,
+        payload_labels: payload_labels,
         state: state,
         dynamic_modules: dynamic_modules,
         dynamic_module_source: dynamic_module_source,
@@ -274,6 +281,7 @@ module Mlld
     def execute_async(
       filepath,
       payload = nil,
+      payload_labels: nil,
       state: nil,
       dynamic_modules: nil,
       dynamic_module_source: nil,
@@ -283,6 +291,8 @@ module Mlld
     )
       params = { 'filepath' => filepath }
       params['payload'] = payload unless payload.nil?
+      normalized_payload_labels = normalize_payload_labels(payload_labels)
+      params['payloadLabels'] = normalized_payload_labels if normalized_payload_labels
       params['state'] = state if state
       params['dynamicModules'] = dynamic_modules if dynamic_modules
       params['dynamicModuleSource'] = dynamic_module_source if dynamic_module_source
@@ -309,7 +319,7 @@ module Mlld
       nil
     end
 
-    def send_state_update(request_id, path, value, timeout)
+    def send_state_update(request_id, path, value, timeout, labels: nil)
       unless path.is_a?(String) && !path.strip.empty?
         raise Error.new('state update path is required', code: 'INVALID_REQUEST')
       end
@@ -317,14 +327,17 @@ module Mlld
       resolved_timeout = resolve_timeout(timeout)
       max_wait = resolved_timeout || 2.0
       deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + max_wait
+      normalized_labels = normalize_label_list(labels)
 
       loop do
         begin
-          request('state:update', {
+          params = {
             'requestId' => request_id,
             'path' => path,
             'value' => value
-          }, resolved_timeout)
+          }
+          params['labels'] = normalized_labels if normalized_labels
+          request('state:update', params, resolved_timeout)
           return nil
         rescue Error => error
           raise unless error.code == 'REQUEST_NOT_FOUND'
@@ -333,6 +346,31 @@ module Mlld
           sleep(0.025)
         end
       end
+    end
+
+    def normalize_payload_labels(payload_labels)
+      return nil if payload_labels.nil?
+      return nil unless payload_labels.is_a?(Hash)
+
+      normalized = {}
+      payload_labels.each do |key, labels|
+        deduped = normalize_label_list(labels)
+        normalized[key] = deduped if deduped
+      end
+      normalized.empty? ? nil : normalized
+    end
+
+    def normalize_label_list(labels)
+      return nil if labels.nil?
+
+      raw = labels.is_a?(Array) ? labels : [labels]
+      normalized = raw
+        .select { |label| label.is_a?(String) }
+        .map(&:strip)
+        .reject(&:empty?)
+        .uniq
+
+      normalized.empty? ? nil : normalized
     end
 
     def await_request(request_id, response_queue, timeout)

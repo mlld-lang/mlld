@@ -14,6 +14,7 @@ import {
   isPipelineInput,
   isTextLike,
 } from '@core/types/variable';
+import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { isDirectiveNode, isVariableReferenceNode, isTextNode } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
@@ -273,6 +274,7 @@ export class Environment
   private stateSnapshot?: Record<string, any>;
   private stateResolver?: DynamicModuleResolver;
   private stateLabels: DataLabel[] = [];
+  private statePathLabels: Record<string, DataLabel[]> = {};
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
@@ -1208,14 +1210,7 @@ export class Environment
       throw new Error('State update path is required');
     }
 
-    // Merge caller-provided labels into stateLabels (additive, never removed)
-    if (labels && labels.length > 0) {
-      for (const label of labels) {
-        if (!root.stateLabels.includes(label as DataLabel)) {
-          root.stateLabels.push(label as DataLabel);
-        }
-      }
-    }
+    root.setStatePathLabels(path, root.normalizeStateUpdateLabels(labels));
 
     root.refreshStateVariable();
   }
@@ -3139,6 +3134,7 @@ export class Environment
       labels.push(`src:${source}` as DataLabel);
     }
     root.stateLabels = labels;
+    root.statePathLabels = {};
     root.refreshStateVariable();
   }
 
@@ -3151,6 +3147,7 @@ export class Environment
       return;
     }
 
+    this.setStatePathLabels(write.path, this.normalizeStateUpdateLabels(write.security?.labels));
     this.refreshStateVariable();
   }
 
@@ -3178,10 +3175,89 @@ export class Environment
     return true;
   }
 
+  private normalizeStateUpdateLabels(labels?: readonly string[]): DataLabel[] {
+    if (!Array.isArray(labels)) {
+      return [];
+    }
+
+    const seen = new Set<string>();
+    const normalized: DataLabel[] = [];
+    for (const label of labels) {
+      if (typeof label !== 'string') {
+        continue;
+      }
+      const trimmed = label.trim();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      normalized.push(trimmed as DataLabel);
+    }
+
+    return normalized;
+  }
+
+  private setStatePathLabels(pathValue: string, labels: readonly DataLabel[]): void {
+    const normalizedPath = (pathValue || '').trim();
+    if (!normalizedPath) {
+      return;
+    }
+
+    if (labels.length === 0) {
+      delete this.statePathLabels[normalizedPath];
+      return;
+    }
+
+    this.statePathLabels[normalizedPath] = [...labels];
+  }
+
+  private buildStateFieldLabelMap(): Record<string, DataLabel[]> {
+    const fieldLabels: Record<string, DataLabel[]> = {};
+
+    for (const [pathValue, labels] of Object.entries(this.statePathLabels)) {
+      const topLevelField = (pathValue || '').split('.').filter(Boolean)[0];
+      if (!topLevelField || labels.length === 0) {
+        continue;
+      }
+
+      const existing = fieldLabels[topLevelField] ?? [];
+      const seen = new Set(existing);
+      const merged = [...existing];
+      for (const label of labels) {
+        if (seen.has(label)) {
+          continue;
+        }
+        seen.add(label);
+        merged.push(label);
+      }
+      fieldLabels[topLevelField] = merged;
+    }
+
+    return fieldLabels;
+  }
+
+  private buildStateNamespaceMetadataMap(fieldLabels: Record<string, DataLabel[]>) {
+    const metadataMap = Object.fromEntries(
+      Object.entries(fieldLabels)
+        .map(([field, labels]) => [
+          field,
+          VariableMetadataUtils.serializeSecurityMetadata({
+            security: makeSecurityDescriptor({ labels })
+          })
+        ])
+        .filter((entry): entry is [string, NonNullable<ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>>] => Boolean(entry[1]))
+    );
+
+    return Object.keys(metadataMap).length > 0 ? metadataMap : undefined;
+  }
+
   private refreshStateVariable(): void {
     if (!this.stateSnapshot) {
       return;
     }
+
+    const fieldLabels = this.buildStateFieldLabelMap();
+    const namespaceMetadata = this.buildStateNamespaceMetadataMap(fieldLabels);
 
     const stateVar = createObjectVariable(
       'state',
@@ -3203,6 +3279,7 @@ export class Environment
 
     stateVar.internal = {
       ...(stateVar.internal ?? {}),
+      ...(namespaceMetadata ? { namespaceMetadata } : {}),
       isReserved: true,
       isSystem: true
     };
@@ -3215,6 +3292,7 @@ export class Environment
 
     if (this.stateResolver) {
       try {
+        this.stateResolver.setModuleFieldLabels('@state', fieldLabels);
         this.stateResolver.updateModule('@state', this.stateSnapshot);
       } catch (error) {
         logger.warn('Failed to update dynamic @state module after state write', { error });

@@ -93,6 +93,33 @@ class LiveIntegrationTest < Minitest::Test
     assert_includes(output, 'loop-stopped')
   end
 
+  def test_sdk_labels_flow_through_payload_and_state_updates
+    script = <<~MLLD
+      loop(99999, 50ms) until @state.exit [
+        continue
+      ]
+      show @payload.history.mx.labels.includes("untrusted")
+      show @state.tool_result.mx.labels.includes("untrusted")
+      show @state.tool_result
+    MLLD
+
+    handle = @client.process_async(
+      script,
+      payload: { 'history' => 'tool transcript' },
+      payload_labels: { 'history' => ['untrusted'] },
+      state: { 'exit' => false, 'tool_result' => nil },
+      mode: 'strict',
+      timeout: 20
+    )
+
+    sleep(0.12)
+    handle.update_state('tool_result', 'tool output', labels: ['untrusted'])
+    handle.update_state('exit', true)
+
+    lines = handle.result.lines.map(&:strip).reject(&:empty?)
+    assert_equal(['true', 'true', 'tool output'], lines)
+  end
+
   def test_state_update_fails_after_completion
     handle = @client.process_async(
       "show \"done\"\n",

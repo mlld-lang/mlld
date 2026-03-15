@@ -259,6 +259,47 @@ describe('execute', () => {
     expect(payloadModule?.content).toContain("/var untrusted @tool_result = 'external'");
   });
 
+  it('applies payload labels and labeled state updates during stream execution', async () => {
+    await fileSystem.writeFile(
+      routePath,
+      [
+        'loop(99999, 10ms) until @state.exit [',
+        '  continue',
+        ']',
+        '/show @payload.history.mx.labels.includes("untrusted")',
+        '/show @state.tool_result.mx.labels.includes("untrusted")',
+        '/show @state.tool_result'
+      ].join('\n')
+    );
+
+    const handle = (await execute(
+      routePath,
+      { history: 'tool transcript' },
+      {
+        fileSystem,
+        pathService,
+        stream: true,
+        state: { exit: false, tool_result: null },
+        payloadLabels: {
+          history: ['untrusted']
+        }
+      }
+    )) as any;
+
+    await handle.updateState('tool_result', 'tool output', ['untrusted']);
+    await handle.updateState('exit', true);
+
+    const result = await handle.result();
+
+    expect(
+      result.output
+        .trim()
+        .split('\n')
+        .map((line: string) => line.trim())
+        .filter(Boolean)
+    ).toEqual(['true', 'true', 'tool output']);
+  });
+
   it('applies checkpoint options through SDK execute into interpreter runtime', async () => {
     const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'sdk-execute-checkpoint-'));
     cleanupDirs.push(checkpointRoot);

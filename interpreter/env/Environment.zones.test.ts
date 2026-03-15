@@ -48,10 +48,11 @@ describe('Environment zones coverage', () => {
   it('tracks state writes and mirrors updates into @state', () => {
     const env = createEnvironment();
     const updateModule = vi.fn();
+    const setModuleFieldLabels = vi.fn();
 
     (env as any).registerDynamicStateSnapshot(
       { value: 'old', nested: { count: 1 } },
-      { updateModule },
+      { updateModule, setModuleFieldLabels },
       'user-data'
     );
 
@@ -73,12 +74,18 @@ describe('Environment zones coverage', () => {
     expect(writes[0].index).toBe(0);
     expect(writes[1].index).toBe(1);
 
-    env.applyExternalStateUpdate('value', 'external');
-    env.applyExternalStateUpdate('nested.count', 3);
+    env.applyExternalStateUpdate('value', 'external', ['untrusted']);
+    env.applyExternalStateUpdate('nested.count', 3, ['pii']);
 
     expect(env.getVariable('state')?.value?.value).toBe('external');
     expect((env.getVariable('state') as any)?.value?.nested?.count).toBe(3);
+    expect((env.getVariable('state') as any)?.internal?.namespaceMetadata?.value?.security?.labels).toEqual(['untrusted']);
+    expect((env.getVariable('state') as any)?.internal?.namespaceMetadata?.nested?.security?.labels).toEqual(['pii']);
     expect(env.getStateWrites()).toHaveLength(2);
+    expect(setModuleFieldLabels).toHaveBeenLastCalledWith('@state', {
+      value: ['untrusted'],
+      nested: ['pii']
+    });
 
     const sdkTypes = emitter.emit.mock.calls.map(([event]) => event.type);
     expect(sdkTypes).toContain('state:write');

@@ -2,13 +2,13 @@
 id: sdk-language-sdks
 qa_tier: 3
 title: Language SDKs
-brief: Thin wrappers for Go, Python, Rust, Ruby, and Elixir
+brief: Thin wrappers for Go, Python, Rust, Ruby, and Elixir, including boundary-label APIs
 category: sdk
 parent: sdk
 tags: [sdk, go, python, rust, ruby, elixir]
 related: [sdk-basics, sdk-execute, sdk-state, cli-live-stdio]
 related-code: [sdk/go, sdk/python, sdk/rust, sdk/ruby, sdk/elixir]
-updated: 2026-02-24
+updated: 2026-03-15
 ---
 
 Thin wrappers around the mlld CLI for Go, Python, Rust, Ruby, and Elixir. Each keeps a persistent `mlld live --stdio` subprocess for repeated calls via NDJSON RPC.
@@ -26,6 +26,22 @@ All SDKs provide:
 - Handle: `wait`, `result`, `cancel`, `update_state(path, value)`
 
 `ExecuteResult.state_writes` merges final-result writes and streamed `state:write` events in all languages.
+
+## Boundary Labels
+
+All SDKs now support labels on values crossing into the runtime:
+
+- Payload labels:
+  TypeScript/live transport use `payloadLabels`
+  Python, Ruby, and Elixir use `payload_labels`
+  Go uses `PayloadLabels`
+  Rust uses `payload_labels` on `ProcessOptions` / `ExecuteOptions`
+- State update labels:
+  Python, Ruby, and Elixir use `update_state(..., labels=[...])`
+  Go uses variadic labels: `UpdateState(path, value, "untrusted")`
+  Rust exposes `update_state_with_labels(...)`
+
+Those labels surface on `@payload.*.mx.labels` and `@state.*.mx.labels`, then propagate through normal mlld policy/guard flow.
 
 ## Installation
 

@@ -147,4 +147,27 @@ describe('DynamicModuleResolver', () => {
     expect(result.content).toContain("/var trusted @query = 'hello'");
     expect(result.content).toContain("/var untrusted @tool_result = 'external'");
   });
+
+  it('updates object module field labels after registration', async () => {
+    const resolver = new DynamicModuleResolver(
+      {
+        '@state': {
+          tool_result: 'external'
+        }
+      },
+      {
+        literalStrings: true
+      }
+    );
+
+    resolver.setModuleFieldLabels('@state', {
+      tool_result: ['untrusted']
+    });
+    resolver.updateModule('@state', {
+      tool_result: 'external'
+    });
+
+    const result = await resolver.resolve('@state');
+    expect(result.content).toContain("/var untrusted @tool_result = 'external'");
+  });
 });

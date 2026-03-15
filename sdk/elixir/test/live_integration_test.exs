@@ -105,6 +105,38 @@ defmodule Mlld.LiveIntegrationTest do
     assert output =~ "loop-stopped"
   end
 
+  test "sdk labels flow through payload and state updates", %{client: client} do
+    script = """
+    loop(99999, 50ms) until @state.exit [
+      continue
+    ]
+    show @payload.history.mx.labels.includes("untrusted")
+    show @state.tool_result.mx.labels.includes("untrusted")
+    show @state.tool_result
+    """
+
+    assert {:ok, handle} =
+             Client.process_async(
+               client,
+               script,
+               payload: %{"history" => "tool transcript"},
+               payload_labels: %{"history" => ["untrusted"]},
+               state: %{"exit" => false, "tool_result" => nil},
+               mode: :strict,
+               timeout: 10_000
+             )
+
+    Process.sleep(120)
+    assert :ok = Handle.update_state(handle, "tool_result", "tool output", labels: ["untrusted"])
+    assert :ok = Handle.update_state(handle, "exit", true)
+
+    assert {:ok, output} = Handle.result(handle)
+
+    assert output
+           |> String.split("\n", trim: true)
+           |> Enum.map(&String.trim/1) == ["true", "true", "tool output"]
+  end
+
   test "update_state fails after completion", %{client: client} do
     assert {:ok, handle} =
              Client.process_async(

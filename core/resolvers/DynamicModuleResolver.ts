@@ -238,6 +238,28 @@ export class DynamicModuleResolver implements Resolver {
     this.modules.set(path, serialized);
   }
 
+  setModuleFieldLabels(path: string, fieldLabels: Record<string, readonly string[]> | undefined): void {
+    if (!fieldLabels || typeof fieldLabels !== 'object') {
+      delete this.moduleFieldLabels[path];
+      return;
+    }
+
+    const normalized: Record<string, readonly string[]> = {};
+    for (const [field, labels] of Object.entries(fieldLabels)) {
+      const deduped = this.normalizeFieldLabels(labels);
+      if (deduped.length > 0) {
+        normalized[field] = deduped;
+      }
+    }
+
+    if (Object.keys(normalized).length === 0) {
+      delete this.moduleFieldLabels[path];
+      return;
+    }
+
+    this.moduleFieldLabels[path] = normalized;
+  }
+
   private normalizeFieldLabels(labels: readonly string[] | undefined): string[] {
     if (!Array.isArray(labels)) {
       return [];

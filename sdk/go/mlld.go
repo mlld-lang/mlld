@@ -90,6 +90,9 @@ type ProcessOptions struct {
 	// Payload is injected as @payload in the script.
 	Payload any
 
+	// PayloadLabels applies per-field security labels to @payload object fields.
+	PayloadLabels map[string][]string
+
 	// State is injected as @state in the script.
 	State map[string]any
 
@@ -111,6 +114,9 @@ type ProcessOptions struct {
 
 // ExecuteOptions configures an Execute call.
 type ExecuteOptions struct {
+	// PayloadLabels applies per-field security labels to @payload object fields.
+	PayloadLabels map[string][]string
+
 	// State is injected as @state in the script.
 	State map[string]any
 
@@ -224,8 +230,8 @@ func (h *requestHandle) cancel() {
 	h.client.sendCancel(h.requestID)
 }
 
-func (h *requestHandle) updateState(path string, value any) error {
-	return h.client.updateState(h.requestID, path, value, h.timeout)
+func (h *requestHandle) updateState(path string, value any, labels ...string) error {
+	return h.client.updateState(h.requestID, path, value, h.timeout, labels)
 }
 
 // ProcessHandle represents an in-flight process request.
@@ -244,8 +250,8 @@ func (h *ProcessHandle) Cancel() {
 }
 
 // UpdateState sends a state:update request for this in-flight execution.
-func (h *ProcessHandle) UpdateState(path string, value any) error {
-	return h.request.updateState(path, value)
+func (h *ProcessHandle) UpdateState(path string, value any, labels ...string) error {
+	return h.request.updateState(path, value, labels...)
 }
 
 // Wait blocks until completion and returns the process output.
@@ -278,8 +284,8 @@ func (h *ExecuteHandle) Cancel() {
 }
 
 // UpdateState sends a state:update request for this in-flight execution.
-func (h *ExecuteHandle) UpdateState(path string, value any) error {
-	return h.request.updateState(path, value)
+func (h *ExecuteHandle) UpdateState(path string, value any, labels ...string) error {
+	return h.request.updateState(path, value, labels...)
 }
 
 // Wait blocks until completion and returns the execute result.
@@ -319,6 +325,9 @@ func (c *Client) ProcessAsync(script string, opts *ProcessOptions) (*ProcessHand
 	}
 	if opts.Payload != nil {
 		params["payload"] = opts.Payload
+	}
+	if payloadLabels := normalizeLabelMap(opts.PayloadLabels); len(payloadLabels) > 0 {
+		params["payloadLabels"] = payloadLabels
 	}
 	if opts.State != nil {
 		params["state"] = opts.State
@@ -371,6 +380,9 @@ func (c *Client) ExecuteAsync(filepath string, payload any, opts *ExecuteOptions
 	}
 	if payload != nil {
 		params["payload"] = payload
+	}
+	if payloadLabels := normalizeLabelMap(opts.PayloadLabels); len(payloadLabels) > 0 {
+		params["payloadLabels"] = payloadLabels
 	}
 	if opts.State != nil {
 		params["state"] = opts.State
@@ -513,7 +525,7 @@ func (c *Client) awaitRequest(requestID uint64, responseCh <-chan liveMessage, t
 	}
 }
 
-func (c *Client) updateState(requestID uint64, path string, value any, timeout time.Duration) error {
+func (c *Client) updateState(requestID uint64, path string, value any, timeout time.Duration, labels []string) error {
 	if strings.TrimSpace(path) == "" {
 		return &Error{Code: "INVALID_REQUEST", Message: "state update path is required"}
 	}
@@ -522,6 +534,9 @@ func (c *Client) updateState(requestID uint64, path string, value any, timeout t
 		"requestId": requestID,
 		"path":      path,
 		"value":     value,
+	}
+	if normalized := normalizeLabels(labels); len(normalized) > 0 {
+		params["labels"] = normalized
 	}
 
 	resolvedTimeout := c.resolveTimeout(timeout)
@@ -548,6 +563,52 @@ func (c *Client) updateState(requestID uint64, path string, value any, timeout t
 
 		time.Sleep(25 * time.Millisecond)
 	}
+}
+
+func normalizeLabelMap(input map[string][]string) map[string][]string {
+	if len(input) == 0 {
+		return nil
+	}
+
+	normalized := make(map[string][]string)
+	for key, labels := range input {
+		deduped := normalizeLabels(labels)
+		if len(deduped) > 0 {
+			normalized[key] = deduped
+		}
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
+}
+
+func normalizeLabels(labels []string) []string {
+	if len(labels) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(labels))
+	normalized := make([]string, 0, len(labels))
+	for _, label := range labels {
+		trimmed := strings.TrimSpace(label)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
 }
 
 func (c *Client) sendCancel(requestID uint64) {

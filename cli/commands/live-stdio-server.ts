@@ -55,7 +55,7 @@ interface LiveStdioServerIO {
 
 interface ActiveExecution {
   abort: () => void;
-  updateState?: (path: string, value: unknown) => Promise<void>;
+  updateState?: (path: string, value: unknown, labels?: string[]) => Promise<void>;
   writeFile?: (path: string, content: string) => Promise<unknown>;
 }
 
@@ -660,8 +660,8 @@ export class LiveStdioServer {
     this.active.set(requestId, {
       abort: () => execution.abort?.(),
       updateState: execution.updateState
-        ? async (path: string, value: unknown) => {
-            await execution.updateState?.(path, value);
+        ? async (path: string, value: unknown, labels?: string[]) => {
+            await execution.updateState?.(path, value, labels);
           }
         : undefined,
       ...activeExtensions
