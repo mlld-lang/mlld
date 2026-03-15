@@ -4,12 +4,19 @@ import { resolveInputTaint } from './input-taint';
 
 export type FlowChannel = 'arg' | 'stdin' | 'using';
 
+export interface FlowInputDescriptor {
+  labels?: readonly string[];
+  taint?: readonly string[];
+  sources?: readonly string[];
+}
+
 export interface FlowContext {
   inputTaint: readonly string[];
   opLabels: readonly string[];
   exeLabels: readonly string[];
   flowChannel?: FlowChannel;
   command?: string;
+  inputs?: readonly FlowInputDescriptor[];
 }
 
 export interface LabelFlowCheckResult {
@@ -25,6 +32,8 @@ type MatchResult = { match: string; specificity: number };
 const LABEL_FLOW_BUILTIN_RULES = new Set([
   'no-secret-exfil',
   'no-sensitive-exfil',
+  'no-send-to-unknown',
+  'no-send-to-external',
   'no-untrusted-destructive',
   'no-untrusted-privileged'
 ]);
@@ -205,6 +214,7 @@ export function checkLabelFlow(
   const opTargets = expandOperationLabels(rawOpTargets, policy.operations);
 
   const builtInResult = checkBuiltinPolicyRules(
+    ctx,
     inputTaint,
     opTargets,
     normalizeRuleList(policy.defaults?.rules)
@@ -231,6 +241,7 @@ function hasTargetLabel(targets: readonly string[], label: string): boolean {
 }
 
 function checkBuiltinPolicyRules(
+  ctx: FlowContext,
   inputTaint: readonly string[],
   opTargets: readonly string[],
   rules: readonly string[]
@@ -244,8 +255,16 @@ function checkBuiltinPolicyRules(
   const hasSensitive = inputTaint.includes('sensitive');
   const hasUntrusted = inputTaint.includes('untrusted');
   const hasExfil = hasTargetLabel(opTargets, 'exfil');
+  const hasSend = hasTargetLabel(opTargets, 'exfil:send');
   const hasDestructive = hasTargetLabel(opTargets, 'destructive');
   const hasPrivileged = hasTargetLabel(opTargets, 'privileged');
+  const primaryInput = ctx.inputs?.[0];
+  const primaryInputTaint = normalizeList([
+    ...(primaryInput?.labels ?? []),
+    ...(primaryInput?.taint ?? [])
+  ]);
+  const primaryInputKnown = hasTargetLabel(primaryInputTaint, 'known');
+  const primaryInputKnownInternal = hasTargetLabel(primaryInputTaint, 'known:internal');
 
   for (const rule of enabledRules) {
     if (rule === 'no-secret-exfil' && hasSecret && hasExfil) {
@@ -264,6 +283,24 @@ function checkBuiltinPolicyRules(
         rule: 'policy.defaults.rules.no-sensitive-exfil',
         label: 'sensitive',
         matched: 'exfil'
+      };
+    }
+    if (rule === 'no-send-to-unknown' && hasSend && !primaryInputKnown) {
+      return {
+        allowed: false,
+        reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
+        rule: 'policy.defaults.rules.no-send-to-unknown',
+        label: 'known',
+        matched: 'exfil:send'
+      };
+    }
+    if (rule === 'no-send-to-external' && hasSend && !primaryInputKnownInternal) {
+      return {
+        allowed: false,
+        reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
+        rule: 'policy.defaults.rules.no-send-to-external',
+        label: 'known:internal',
+        matched: 'exfil:send'
       };
     }
     if (rule === 'no-untrusted-destructive' && hasUntrusted && hasDestructive) {

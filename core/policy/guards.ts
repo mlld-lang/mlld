@@ -91,6 +91,26 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     if (rule === 'no-sensitive-exfil') {
       guards.push(makeSensitiveExfilGuard(policy.operations, policyDisplayName, policyLocked));
     }
+    if (rule === 'no-send-to-unknown') {
+      guards.push(makeSendDestinationGuard({
+        name: '__policy_rule_no_send_to_unknown',
+        requiredLabel: 'known',
+        reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
+        operations: policy.operations,
+        policyDisplayName,
+        locked: policyLocked
+      }));
+    }
+    if (rule === 'no-send-to-external') {
+      guards.push(makeSendDestinationGuard({
+        name: '__policy_rule_no_send_to_external',
+        requiredLabel: 'known:internal',
+        reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
+        operations: policy.operations,
+        policyDisplayName,
+        locked: policyLocked
+      }));
+    }
     if (rule === 'no-untrusted-destructive') {
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_untrusted_destructive',
@@ -669,6 +689,16 @@ function hasMatchingLabel(values: readonly string[] | undefined, label: string):
   return values.some(value => matchesPrefix(label, value));
 }
 
+function collectPolicyInputLabels(input: {
+  labels?: readonly string[];
+  taint?: readonly string[];
+} | undefined): string[] {
+  return normalizeList([
+    ...(input?.labels ?? []),
+    ...(input?.taint ?? [])
+  ]);
+}
+
 function makeDataRuleGuard(options: {
   name: string;
   label: string;
@@ -701,6 +731,57 @@ function makeDataRuleGuard(options: {
         };
       }
       return { decision: 'allow' };
+    }
+  };
+}
+
+function makeSendDestinationGuard(options: {
+  name: string;
+  requiredLabel: string;
+  reason: string;
+  operations?: PolicyOperations;
+  policyDisplayName?: string;
+  locked?: boolean;
+}): PolicyGuardSpec {
+  return {
+    name: options.name,
+    filterKind: 'operation',
+    filterValue: 'exe',
+    scope: 'perOperation',
+    block: makeGuardBlock(),
+    timing: 'before',
+    privileged: true,
+    policyCondition: ({ operation, inputs }) => {
+      if (typeof operation.name !== 'string' || operation.name.length === 0) {
+        return { decision: 'allow' };
+      }
+
+      const rawOpLabels = [
+        ...(operation.opLabels ?? []),
+        ...(operation.labels ?? [])
+      ];
+      const opLabels = expandOperationLabels(rawOpLabels, options.operations);
+      if (!hasMatchingLabel(opLabels, 'exfil:send')) {
+        return { decision: 'allow' };
+      }
+
+      const destinationLabels = collectPolicyInputLabels(inputs?.[0]);
+      if (hasMatchingLabel(destinationLabels, options.requiredLabel)) {
+        return { decision: 'allow' };
+      }
+
+      return {
+        decision: 'deny',
+        reason: options.reason,
+        policyName: options.policyDisplayName,
+        locked: options.locked === true,
+        suggestions: [
+          options.requiredLabel === 'known:internal'
+            ? "Mark the destination with 'known:internal' or use an approved internal destination source"
+            : "Mark the destination with 'known' or use an approved destination source",
+          'Review active policies with @mx.policy.activePolicies'
+        ]
+      };
     }
   };
 }

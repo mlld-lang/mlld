@@ -5,7 +5,7 @@ brief: Progressive levels of engagement from zero-config to full custom security
 category: security
 tags: [security, onboarding, policy, guards, needs, environments, getting-started]
 related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview]
-updated: 2026-02-15
+updated: 2026-03-15
 qa_tier: 2
 ---
 
@@ -88,6 +88,8 @@ exe net:w @postToSlack(channel, msg) = run cmd { curl -X POST @channel -d @msg }
 ```
 
 `defaults.unlabeled` treats all data without explicit labels as `untrusted`. `operations` groups semantic exe labels (`net:w`) under risk categories (`exfil`). The built-in rules then block flows like `secret` data reaching an `exfil` operation.
+
+For destination-aware sends, use the narrower `exfil:send` label and put the destination first. `no-send-to-unknown` requires `@input[0]` to carry `known`, which works well for contact lists, directory lookups, or user-provided recipient fields you explicitly trust.
 
 See `policy-operations` for the two-step labeling pattern. See `policy-label-flow` for custom deny/allow rules.
 

@@ -40,6 +40,7 @@ File-based execution with state management.
 ```typescript
 const result = await execute('./agent.mld', payload, {
   state: { conversationId: '123', messages: [...] },
+  payloadLabels: { history: ['untrusted'] },
   timeout: 30000
 });
 
@@ -51,8 +52,9 @@ for (const write of result.stateWrites) {
 Features:
 - In-memory AST caching (mtime-based invalidation)
 - State hydration via `@state` module
-- Payload injection via `@payload`
+- Payload injection via `@payload`, including per-field labels via `payloadLabels`
 - State writes via `state://` protocol
+- Stream handles can apply labeled in-flight state updates with `updateState(path, value, labels?)`
 
 ## @state Module
 
@@ -123,6 +125,28 @@ output, _ := handle.Result()
 
 All language SDKs support `update_state` with retry semantics on `REQUEST_NOT_FOUND`.
 
+## Labeled State Updates
+
+Boundary values injected through `update_state` can carry security labels, just like labeled values declared in mlld source.
+
+```python
+handle.update_state("tool_result", result_text, labels=["untrusted"])
+```
+
+```go
+handle.UpdateState("tool_result", resultText, "untrusted")
+```
+
+```rust
+handle.update_state_with_labels("tool_result", result_text, ["untrusted"])?;
+```
+
+Labels applied through SDK state updates:
+
+- are visible on `@state.some_path.mx.labels`
+- propagate through normal mlld label flow
+- are optional; omitting labels preserves unlabeled behavior for that updated path
+
 Inject runtime context without filesystem I/O.
 
 ```typescript
@@ -190,6 +214,45 @@ show `Topic: @topic, Count: @count`
 execute('./script.mld', { topic: 'foo', count: 5 });
 ```
 
+## Per-Field Payload Labels
+
+SDK payload fields can carry security labels at the boundary.
+
+```typescript
+await execute('./agent.mld', {
+  history: 'external tool output',
+  query: 'user request'
+}, {
+  payloadLabels: {
+    history: ['untrusted']
+  }
+});
+```
+
+```python
+result = client.execute(
+    "./agent.mld",
+    {"history": "external tool output"},
+    payload_labels={"history": ["untrusted"]},
+)
+```
+
+Python also supports inline helpers:
+
+```python
+from mlld import trusted, untrusted
+
+result = client.execute(
+    "./agent.mld",
+    {
+        "query": trusted("approved request"),
+        "history": untrusted("external tool output"),
+    },
+)
+```
+
+Per-field payload labels work for both direct `@payload.field` access and imports from `@payload`.
+
 **CLI usage** — `mlld run`, direct invocation, and `-e` all support payload:
 
 ```bash
@@ -217,6 +280,22 @@ All SDKs provide:
 - Handle: `wait`, `result`, `cancel`, `update_state(path, value)`
 
 `ExecuteResult.state_writes` merges final-result writes and streamed `state:write` events in all languages.
+
+## Boundary Labels
+
+All SDKs now support labels on values crossing into the runtime:
+
+- Payload labels:
+  TypeScript/live transport use `payloadLabels`
+  Python, Ruby, and Elixir use `payload_labels`
+  Go uses `PayloadLabels`
+  Rust uses `payload_labels` on `ProcessOptions` / `ExecuteOptions`
+- State update labels:
+  Python, Ruby, and Elixir use `update_state(..., labels=[...])`
+  Go uses variadic labels: `UpdateState(path, value, "untrusted")`
+  Rust exposes `update_state_with_labels(...)`
+
+Those labels surface on `@payload.*.mx.labels` and `@state.*.mx.labels`, then propagate through normal mlld policy/guard flow.
 
 ## Installation
 

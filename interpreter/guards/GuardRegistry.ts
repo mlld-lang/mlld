@@ -33,6 +33,11 @@ export type PolicyConditionContext = {
     taint?: readonly string[];
     sources?: readonly string[];
   };
+  inputs?: ReadonlyArray<{
+    labels?: readonly string[];
+    taint?: readonly string[];
+    sources?: readonly string[];
+  }>;
 };
 
 export type PolicyConditionFn = (context: PolicyConditionContext) => PolicyConditionResult;

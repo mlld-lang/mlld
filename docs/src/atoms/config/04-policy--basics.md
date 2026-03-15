@@ -7,7 +7,7 @@ parent: policy
 tags: [security, policies, guards]
 related: [security-guards-basics, policy-operations, policy-composition, policy-capabilities, policy-label-flow, policy-auth, auth, box-config]
 related-code: [interpreter/eval/policy.ts, interpreter/env/environment-provider.ts]
-updated: 2026-03-04
+updated: 2026-03-15
 qa_tier: 2
 ---
 
@@ -39,6 +39,8 @@ policy @p = {
 ```
 
 **`defaults`** sets baseline behavior. `rules` enables built-in security rules that block dangerous label-to-operation flows. `unlabeled` optionally auto-labels all data that has no user-assigned labels -- set to `"untrusted"` to treat unlabeled data as untrusted, or `"trusted"` to treat it as trusted. This is opt-in; without it, unlabeled data has no trust label.
+
+Built-in send rules use the same `defaults.rules` list. `no-send-to-unknown` checks operations labeled `exfil:send` and requires the first positional argument to carry `known`. `no-send-to-external` is the stricter variant and requires `known:internal`.
 
 **`locked`** makes all managed label-flow denials from this policy non-overridable, even by explicit privileged guards. Without `locked: true` (the default), a privileged guard can override policy label-flow denials with `allow` for specific operations. Use `locked: true` for absolute constraints that nothing should bypass.
 

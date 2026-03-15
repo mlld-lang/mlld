@@ -8,7 +8,7 @@ parent: policy
 tags: [labels, operations, exfil, destructive, privileged, security]
 related: [labels-sensitivity, labels-trust, security-guards-basics]
 related-code: [core/policy/label-flow.ts, core/policy/builtin-rules.ts]
-updated: 2026-02-09
+updated: 2026-03-15
 ---
 
 Classify operations by risk using the two-step pattern: label exe functions with semantic labels describing WHAT they do, then map those to risk categories in policy.
@@ -43,6 +43,8 @@ Now `secret` data cannot flow to `@postToSlack` (exfil rule) and `untrusted` dat
 | `exfil` | Sends data outside the system |
 | `destructive` | Deletes or modifies data irreversibly |
 | `privileged` | Requires elevated permissions |
+
+Risk labels can be hierarchical. `exfil:send` is a child of `exfil`, so `no-secret-exfil` still blocks secrets sent through it, while `no-send-to-unknown` can add a destination check on `@input[0]`.
 
 **Multiple labels:** Combine when an operation has multiple risks:
 

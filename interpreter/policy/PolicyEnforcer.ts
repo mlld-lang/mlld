@@ -146,6 +146,10 @@ function buildLabelFlowSuggestions(label?: string): string[] {
     if (!label.startsWith('src:')) {
       if (label === 'untrusted') {
         suggestions.push(`Remove '${label}' label if data has been validated`);
+      } else if (label === 'known') {
+        suggestions.push("Add the 'known' label only to approved destinations");
+      } else if (label === 'known:internal') {
+        suggestions.push("Add the 'known:internal' label only to approved internal destinations");
       } else if (label === 'secret' || label === 'sensitive' || label === 'pii') {
         suggestions.push(`Remove '${label}' label if data is not sensitive`);
       } else {

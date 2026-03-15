@@ -278,6 +278,7 @@ describe('execute', () => {
       {
         fileSystem,
         pathService,
+        mode: 'strict',
         stream: true,
         state: { exit: false, tool_result: null },
         payloadLabels: {

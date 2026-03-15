@@ -218,4 +218,82 @@ describe('checkLabelFlow operations mapping', () => {
     expect(result.allowed).toBe(false);
     expect(result.matched).toBe('exfil');
   });
+
+  it('requires the first exfil:send argument to carry known', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: ['known'],
+        opLabels: ['exfil:send'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['untrusted'], taint: ['untrusted'] },
+          { labels: ['known'], taint: ['known'] }
+        ]
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.rule).toBe('policy.defaults.rules.no-send-to-unknown');
+    expect(result.matched).toBe('exfil:send');
+  });
+
+  it('treats known:internal as satisfying no-send-to-unknown', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: ['known:internal'],
+        opLabels: ['exfil:send'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['known:internal'], taint: ['known:internal'] }
+        ]
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(true);
+  });
+
+  it('requires known:internal when no-send-to-external is enabled', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-external'] }
+    };
+
+    const denied = checkLabelFlow(
+      {
+        inputTaint: ['known'],
+        opLabels: ['exfil:send'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['known'], taint: ['known'] }
+        ]
+      },
+      policy
+    );
+
+    expect(denied.allowed).toBe(false);
+    expect(denied.rule).toBe('policy.defaults.rules.no-send-to-external');
+
+    const allowed = checkLabelFlow(
+      {
+        inputTaint: ['known:internal'],
+        opLabels: ['exfil:send'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['known:internal'], taint: ['known:internal'] }
+        ]
+      },
+      policy
+    );
+
+    expect(allowed.allowed).toBe(true);
+  });
 });

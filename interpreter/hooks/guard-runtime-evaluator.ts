@@ -216,7 +216,20 @@ export async function evaluateGuardRuntime(
           sources: options.perInput.sources
         }
       : undefined;
-    const policyResult = guard.policyCondition({ operation, input: policyInput });
+    const policyInputs = options.perInput
+      ? [policyInput]
+      : options.operationSnapshot
+        ? options.operationSnapshot.variables.map(variable => ({
+            labels: Array.isArray(variable.mx?.labels) ? variable.mx.labels : [],
+            taint: Array.isArray(variable.mx?.taint) ? variable.mx.taint : [],
+            sources: Array.isArray(variable.mx?.sources) ? variable.mx.sources : []
+          }))
+        : undefined;
+    const policyResult = guard.policyCondition({
+      operation,
+      input: policyInput,
+      inputs: policyInputs
+    });
     if (policyResult.decision === 'deny') {
       const metadataBase: Record<string, unknown> = {
         guardName: guard.name ?? null,
