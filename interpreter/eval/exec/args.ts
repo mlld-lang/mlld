@@ -55,6 +55,17 @@ function cloneGuardCandidateForParameter(
   return cloned;
 }
 
+function hasDescriptorSignals(descriptor: SecurityDescriptor | undefined): boolean {
+  if (!descriptor) {
+    return false;
+  }
+  return (
+    (descriptor.labels?.length ?? 0) > 0 ||
+    (descriptor.taint?.length ?? 0) > 0 ||
+    (descriptor.sources?.length ?? 0) > 0
+  );
+}
+
 export function bindExecParameterVariables(options: {
   params: string[];
   evaluatedArgs: unknown[];
@@ -261,8 +272,33 @@ export async function evaluateExecInvocationArgs(options: {
             const { varMxToSecurityDescriptor } = await import('@core/types/variable/VarMxHelpers');
             if (variable.mx) {
               const varDescriptor = varMxToSecurityDescriptor(variable.mx as any);
-              if (varDescriptor) {
+              if (hasDescriptorSignals(varDescriptor)) {
                 services.mergeResultDescriptor(varDescriptor);
+              }
+            }
+
+            const isWholeVariableReference = !Array.isArray(varRef.fields) || varRef.fields.length === 0;
+            if (
+              isWholeVariableReference &&
+              variable.value &&
+              typeof variable.value === 'object' &&
+              (
+                (variable.value as any).type === 'object' ||
+                (variable.value as any).type === 'array'
+              )
+            ) {
+              const fallbackDescriptor = extractSecurityDescriptor(variable.value, {
+                recursive: true,
+                mergeArrayElements: true
+              });
+              if (hasDescriptorSignals(fallbackDescriptor)) {
+                services.mergeResultDescriptor(fallbackDescriptor);
+              } else {
+                const { extractDescriptorsFromDataAst } = await import('@interpreter/eval/var');
+                const astDescriptor = extractDescriptorsFromDataAst(variable.value, env);
+                if (hasDescriptorSignals(astDescriptor)) {
+                  services.mergeResultDescriptor(astDescriptor);
+                }
               }
             }
 

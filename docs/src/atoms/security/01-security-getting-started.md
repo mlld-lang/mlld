@@ -5,7 +5,7 @@ brief: Progressive levels of engagement from zero-config to full custom security
 category: security
 tags: [security, onboarding, policy, guards, needs, environments, getting-started]
 related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview]
-updated: 2026-03-15
+updated: 2026-03-16
 qa_tier: 2
 ---
 
@@ -172,7 +172,7 @@ box @sandbox [
 
 Environments encapsulate execution contexts. Credentials flow through sealed paths that bypass string interpolation, preventing prompt injection from extracting secrets. The `provider` field adds process isolation via Docker or cloud sandboxes.
 
-`untrusted-llms-get-influenced` is not prompt-only. If untrusted conversation history or tool output is passed to an `exe llm` via later config fields such as `messages`, `system`, or tool config, the result still receives `influenced`.
+`untrusted-llms-get-influenced` is not prompt-only. If untrusted conversation history or tool output is passed to an `exe llm` via later config fields such as `messages`, `system`, or tool config, the result still receives `influenced`. That includes named wrapper objects like `var @config = { messages: @history }`: the object carries the union of labels from its nested fields, so policy and guards still see the taint when `@config` is passed around.
 
 > **Note:** Environment providers (`@mlld/env-docker`, `@mlld/env-sprites`) are spec-defined but not yet shipped. `box` blocks currently run with the local provider.
 

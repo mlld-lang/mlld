@@ -214,6 +214,41 @@ describe('Security metadata propagation', () => {
     expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['llm', 'untrusted', 'influenced']));
   });
 
+  it('falls back to object-ast descriptors when a config variable loses aggregate labels', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const directives = [
+      '/policy @p = { defaults: { rules: ["untrusted-llms-get-influenced"] } }',
+      '/var untrusted @messagesJson = "[{\\"role\\": \\"user\\", \\"content\\": \\"hello\\"}]"',
+      '/var @messages = @messagesJson | @parse',
+      '/var @config = {"model": "gpt-4o", "messages": @messages}',
+      '/exe llm @process(prompt, config) = js { return "ok" }'
+    ];
+
+    for (const source of directives) {
+      const directive = parseSync(source)[0] as DirectiveNode;
+      await evaluateDirective(directive, env);
+    }
+
+    const configVar = env.getVariable('config');
+    expect(configVar?.mx.labels).toEqual(expect.arrayContaining(['untrusted']));
+    if (!configVar?.mx) {
+      throw new Error('Expected @config to have metadata');
+    }
+    configVar.mx.labels = [];
+    configVar.mx.taint = [];
+    configVar.mx.sources = [];
+    if ((configVar.mx as any).mxCache) {
+      delete (configVar.mx as any).mxCache;
+    }
+
+    const invokeDirective = parseSync('/var @result = @process("Say OK.", @config)')[0] as DirectiveNode;
+    await evaluateDirective(invokeDirective, env);
+
+    const resultVar = env.getVariable('result');
+    expect(configVar.mx.labels).toEqual([]);
+    expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['llm', 'untrusted', 'influenced']));
+  });
+
   it('applies return label modifications with trust asymmetry', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
     const sourceDirective = parseSync('/var trusted @data = "ok"')[0] as DirectiveNode;
