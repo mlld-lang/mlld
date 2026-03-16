@@ -6,6 +6,7 @@ export const BUILTIN_POLICY_RULES = [
   'no-sensitive-exfil',
   'no-send-to-unknown',
   'no-send-to-external',
+  'no-destroy-unknown',
   'no-untrusted-destructive',
   'no-untrusted-privileged',
   'untrusted-llms-get-influenced'

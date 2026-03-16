@@ -226,7 +226,7 @@ describe('checkLabelFlow operations mapping', () => {
 
     const result = checkLabelFlow(
       {
-        inputTaint: ['known'],
+        inputTaint: [],
         opLabels: ['exfil:send'],
         exeLabels: [],
         inputs: [
@@ -249,7 +249,7 @@ describe('checkLabelFlow operations mapping', () => {
 
     const result = checkLabelFlow(
       {
-        inputTaint: ['known:internal'],
+        inputTaint: [],
         opLabels: ['exfil:send'],
         exeLabels: [],
         inputs: [
@@ -269,7 +269,7 @@ describe('checkLabelFlow operations mapping', () => {
 
     const denied = checkLabelFlow(
       {
-        inputTaint: ['known'],
+        inputTaint: [],
         opLabels: ['exfil:send'],
         exeLabels: [],
         inputs: [
@@ -284,7 +284,7 @@ describe('checkLabelFlow operations mapping', () => {
 
     const allowed = checkLabelFlow(
       {
-        inputTaint: ['known:internal'],
+        inputTaint: [],
         opLabels: ['exfil:send'],
         exeLabels: [],
         inputs: [
@@ -295,5 +295,68 @@ describe('checkLabelFlow operations mapping', () => {
     );
 
     expect(allowed.allowed).toBe(true);
+  });
+
+  it('requires the first destructive:targeted argument to carry known', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-destroy-unknown'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: [],
+        opLabels: ['destructive:targeted'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['untrusted'], taint: ['untrusted'] },
+          { labels: ['known'], taint: ['known'] }
+        ]
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.rule).toBe('policy.defaults.rules.no-destroy-unknown');
+    expect(result.matched).toBe('destructive:targeted');
+  });
+
+  it('treats known:internal as satisfying no-destroy-unknown', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-destroy-unknown'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: [],
+        opLabels: ['destructive:targeted:file'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['known:internal'], taint: ['known:internal'] }
+        ]
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(true);
+  });
+
+  it('does not apply no-destroy-unknown to destructive:untargeted operations', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-destroy-unknown'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: [],
+        opLabels: ['destructive:untargeted'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['untrusted'], taint: ['untrusted'] }
+        ]
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(true);
   });
 });

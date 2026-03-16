@@ -89,7 +89,7 @@ exe net:w @postToSlack(channel, msg) = run cmd { curl -X POST @channel -d @msg }
 
 `defaults.unlabeled` treats all data without explicit labels as `untrusted`. `operations` groups semantic exe labels (`net:w`) under risk categories (`exfil`). The built-in rules then block flows like `secret` data reaching an `exfil` operation.
 
-For destination-aware sends, use the narrower `exfil:send` label and put the destination first. `no-send-to-unknown` requires `@input[0]` to carry `known`, which works well for contact lists, directory lookups, or user-provided recipient fields you explicitly trust.
+For destination-aware sends, use the narrower `exfil:send` label and put the destination first. `no-send-to-unknown` requires `@input[0]` to carry `known`, which works well for contact lists, directory lookups, or user-provided recipient fields you explicitly trust. For targeted destructive actions such as delete/cancel/remove, label the operation `destructive:targeted` and enable `no-destroy-unknown` to require the first argument to be a `known` pinned target.
 
 See `policy-operations` for the two-step labeling pattern. See `policy-label-flow` for custom deny/allow rules.
 

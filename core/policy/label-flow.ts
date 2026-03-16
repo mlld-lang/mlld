@@ -34,6 +34,7 @@ const LABEL_FLOW_BUILTIN_RULES = new Set([
   'no-sensitive-exfil',
   'no-send-to-unknown',
   'no-send-to-external',
+  'no-destroy-unknown',
   'no-untrusted-destructive',
   'no-untrusted-privileged'
 ]);
@@ -199,10 +200,6 @@ export function checkLabelFlow(
 
   const resolvedInput = resolveInputTaint(ctx.inputTaint, policy);
   const inputTaint = resolvedInput.effective;
-  if (inputTaint.length === 0) {
-    return { allowed: true };
-  }
-
   const rawOpTargets = normalizeList([
     ...(ctx.opLabels ?? []),
     ...(ctx.exeLabels ?? [])
@@ -211,16 +208,24 @@ export function checkLabelFlow(
     return { allowed: true };
   }
 
-  const opTargets = expandOperationLabels(rawOpTargets, policy.operations);
-
-  const builtInResult = checkBuiltinPolicyRules(
-    ctx,
-    inputTaint,
-    opTargets,
-    normalizeRuleList(policy.defaults?.rules)
+  const enabledRules = normalizeRuleList(policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
+  const requiresPrimaryInputCheck = enabledRules.some(rule =>
+    rule === 'no-send-to-unknown' ||
+    rule === 'no-send-to-external' ||
+    rule === 'no-destroy-unknown'
   );
+  if (inputTaint.length === 0 && !requiresPrimaryInputCheck) {
+    return { allowed: true };
+  }
+
+  const opTargets = expandOperationLabels(rawOpTargets, policy.operations);
+  const builtInResult = checkBuiltinPolicyRules(ctx, inputTaint, opTargets, enabledRules);
   if (builtInResult) {
     return builtInResult;
+  }
+
+  if (inputTaint.length === 0) {
+    return { allowed: true };
   }
 
   return checkExplicitLabelFlowRules(ctx, policy);
@@ -257,6 +262,7 @@ function checkBuiltinPolicyRules(
   const hasExfil = hasTargetLabel(opTargets, 'exfil');
   const hasSend = hasTargetLabel(opTargets, 'exfil:send');
   const hasDestructive = hasTargetLabel(opTargets, 'destructive');
+  const hasTargetedDestructive = hasTargetLabel(opTargets, 'destructive:targeted');
   const hasPrivileged = hasTargetLabel(opTargets, 'privileged');
   const primaryInput = ctx.inputs?.[0];
   const primaryInputTaint = normalizeList([
@@ -301,6 +307,15 @@ function checkBuiltinPolicyRules(
         rule: 'policy.defaults.rules.no-send-to-external',
         label: 'known:internal',
         matched: 'exfil:send'
+      };
+    }
+    if (rule === 'no-destroy-unknown' && hasTargetedDestructive && !primaryInputKnown) {
+      return {
+        allowed: false,
+        reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
+        rule: 'policy.defaults.rules.no-destroy-unknown',
+        label: 'known',
+        matched: 'destructive:targeted'
       };
     }
     if (rule === 'no-untrusted-destructive' && hasUntrusted && hasDestructive) {

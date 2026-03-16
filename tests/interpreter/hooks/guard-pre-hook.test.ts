@@ -1611,6 +1611,32 @@ it('lets a privileged allow override an unlocked policy defaults denial', async 
   expect(String(value)).toBe('allow-me');
 });
 
+it('lets a privileged allow override an unlocked no-destroy-unknown denial', async () => {
+  const env = createEnv();
+  await evaluateDirective(
+    parseSync('/policy @task = { defaults: { rules: ["no-destroy-unknown"] } }')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(
+    parseSync('/guard privileged @allowKnown before destructive:targeted = when [ @input[0] == "allow-me" => allow ]')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(parseSync('/var @payload = "allow-me"')[0] as DirectiveNode, env);
+  await evaluateDirective(parseSync('/exe destructive:targeted @destroy(value) = ::@value::')[0] as DirectiveNode, env);
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'destroy' }],
+      args: [{ type: 'VariableReference', identifier: 'payload' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  expect(String(value)).toBe('allow-me');
+});
+
 it('lets a privileged allow override an unlocked policy label denial', async () => {
   const env = createEnv();
   await evaluateDirective(
@@ -1660,6 +1686,32 @@ it('keeps locked policy denials above privileged allows', async () => {
 
   await expect(evaluateExecInvocation(invocation, env)).rejects.toThrow(
     "Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'"
+  );
+});
+
+it('keeps locked no-destroy-unknown denials above privileged allows', async () => {
+  const env = createEnv();
+  await evaluateDirective(
+    parseSync('/policy @task = { locked: true, defaults: { rules: ["no-destroy-unknown"] } }')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(
+    parseSync('/guard privileged @allowKnown before destructive:targeted = when [ @input[0] == "allow-me" => allow ]')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(parseSync('/var @payload = "allow-me"')[0] as DirectiveNode, env);
+  await evaluateDirective(parseSync('/exe destructive:targeted @destroy(value) = ::@value::')[0] as DirectiveNode, env);
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'destroy' }],
+      args: [{ type: 'VariableReference', identifier: 'payload' }]
+    }
+  };
+
+  await expect(evaluateExecInvocation(invocation, env)).rejects.toThrow(
+    "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'"
   );
 });
 

@@ -10,6 +10,7 @@ describe('generatePolicyGuards defaults rules', () => {
           'no-secret-exfil',
           'no-send-to-unknown',
           'no-send-to-external',
+          'no-destroy-unknown',
           'no-untrusted-destructive'
         ]
       }
@@ -21,6 +22,7 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(names).toContain('__policy_rule_no_secret_exfil');
     expect(names).toContain('__policy_rule_no_send_to_unknown');
     expect(names).toContain('__policy_rule_no_send_to_external');
+    expect(names).toContain('__policy_rule_no_destroy_unknown');
     expect(names).toContain('__policy_rule_no_untrusted_destructive');
 
     const secretGuard = guards.find(guard => guard.name === '__policy_rule_no_secret_exfil');
@@ -32,6 +34,11 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(sendGuard?.filterKind).toBe('operation');
     expect(sendGuard?.filterValue).toBe('exe');
     expect(sendGuard?.privileged).toBe(true);
+
+    const destroyGuard = guards.find(guard => guard.name === '__policy_rule_no_destroy_unknown');
+    expect(destroyGuard?.filterKind).toBe('operation');
+    expect(destroyGuard?.filterValue).toBe('exe');
+    expect(destroyGuard?.privileged).toBe(true);
   });
 
   it('checks the first positional input for send destination labels', () => {
@@ -75,6 +82,40 @@ describe('generatePolicyGuards defaults rules', () => {
       sendExternal?.policyCondition?.({
         operation: { name: 'send', labels: ['mail:send'] },
         inputs: [{ labels: ['known:internal'] }]
+      })
+    ).toEqual({ decision: 'allow' });
+  });
+
+  it('checks the first positional input for destructive:targeted labels', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-destroy-unknown'] },
+      operations: { 'destructive:targeted': ['tool:w:delete'] }
+    };
+
+    const guards = generatePolicyGuards(policy);
+    const destroyGuard = guards.find(guard => guard.name === '__policy_rule_no_destroy_unknown');
+
+    expect(
+      destroyGuard?.policyCondition?.({
+        operation: { name: 'delete', labels: ['tool:w:delete'] },
+        inputs: [{ labels: ['known'] }]
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      destroyGuard?.policyCondition?.({
+        operation: { name: 'delete', labels: ['tool:w:delete'] },
+        inputs: [{ labels: [] }, { labels: ['known'] }]
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'"
+    });
+
+    expect(
+      destroyGuard?.policyCondition?.({
+        operation: { name: 'rotatePassword', labels: ['destructive:untargeted'] },
+        inputs: [{ labels: [] }]
       })
     ).toEqual({ decision: 'allow' });
   });

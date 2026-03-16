@@ -92,20 +92,37 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
       guards.push(makeSensitiveExfilGuard(policy.operations, policyDisplayName, policyLocked));
     }
     if (rule === 'no-send-to-unknown') {
-      guards.push(makeSendDestinationGuard({
+      guards.push(makeFirstInputLabelGuard({
         name: '__policy_rule_no_send_to_unknown',
+        operationLabel: 'exfil:send',
         requiredLabel: 'known',
         reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
+        missingLabelSuggestion: "Mark the destination with 'known' or use an approved destination source",
         operations: policy.operations,
         policyDisplayName,
         locked: policyLocked
       }));
     }
     if (rule === 'no-send-to-external') {
-      guards.push(makeSendDestinationGuard({
+      guards.push(makeFirstInputLabelGuard({
         name: '__policy_rule_no_send_to_external',
+        operationLabel: 'exfil:send',
         requiredLabel: 'known:internal',
         reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
+        missingLabelSuggestion:
+          "Mark the destination with 'known:internal' or use an approved internal destination source",
+        operations: policy.operations,
+        policyDisplayName,
+        locked: policyLocked
+      }));
+    }
+    if (rule === 'no-destroy-unknown') {
+      guards.push(makeFirstInputLabelGuard({
+        name: '__policy_rule_no_destroy_unknown',
+        operationLabel: 'destructive:targeted',
+        requiredLabel: 'known',
+        reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
+        missingLabelSuggestion: "Mark the target with 'known' or use an approved target source",
         operations: policy.operations,
         policyDisplayName,
         locked: policyLocked
@@ -735,10 +752,12 @@ function makeDataRuleGuard(options: {
   };
 }
 
-function makeSendDestinationGuard(options: {
+function makeFirstInputLabelGuard(options: {
   name: string;
+  operationLabel: string;
   requiredLabel: string;
   reason: string;
+  missingLabelSuggestion: string;
   operations?: PolicyOperations;
   policyDisplayName?: string;
   locked?: boolean;
@@ -761,12 +780,12 @@ function makeSendDestinationGuard(options: {
         ...(operation.labels ?? [])
       ];
       const opLabels = expandOperationLabels(rawOpLabels, options.operations);
-      if (!hasMatchingLabel(opLabels, 'exfil:send')) {
+      if (!hasMatchingLabel(opLabels, options.operationLabel)) {
         return { decision: 'allow' };
       }
 
-      const destinationLabels = collectPolicyInputLabels(inputs?.[0]);
-      if (hasMatchingLabel(destinationLabels, options.requiredLabel)) {
+      const primaryInputLabels = collectPolicyInputLabels(inputs?.[0]);
+      if (hasMatchingLabel(primaryInputLabels, options.requiredLabel)) {
         return { decision: 'allow' };
       }
 
@@ -776,9 +795,7 @@ function makeSendDestinationGuard(options: {
         policyName: options.policyDisplayName,
         locked: options.locked === true,
         suggestions: [
-          options.requiredLabel === 'known:internal'
-            ? "Mark the destination with 'known:internal' or use an approved internal destination source"
-            : "Mark the destination with 'known' or use an approved destination source",
+          options.missingLabelSuggestion,
           'Review active policies with @mx.policy.activePolicies'
         ]
       };

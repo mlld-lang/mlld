@@ -3,7 +3,7 @@ id: security
 title: Security
 brief: Guards, labels, policies, signing, environments, and audit logging
 category: security
-updated: 2026-03-15
+updated: 2026-03-16
 ---
 
 mlld's security model prevents the consequences of prompt injection from manifesting. LLMs can be tricked — but labels track facts about data that the runtime enforces regardless of LLM intent.
@@ -39,7 +39,7 @@ Labels are strings attached to values. They are the foundation — guards and po
 
 Labels propagate through all transformations — template interpolation, method calls, pipelines, collections. You cannot accidentally strip a label by transforming data.
 
-Custom labels are common too. A frequent pattern is `known` / `known:internal` for approved send destinations, which pairs with the built-in send rules below.
+Custom labels are common too. A frequent pattern is `known` / `known:internal` for approved send destinations and targeted destructive operations, which pairs with the built-in positional-argument rules below.
 
 **Operation labels** (`op:cmd`, `op:sh`, `op:cmd:git:status`) are ephemeral — they exist only during the operation and do not propagate to the result. This is different from the categories above.
 
@@ -111,7 +111,7 @@ policy @p = {
 
 | Section | Purpose |
 |---------|---------|
-| `defaults.rules` | Enable built-in rules: `no-secret-exfil`, `no-sensitive-exfil`, `no-send-to-unknown`, `no-send-to-external`, `no-untrusted-destructive`, `no-untrusted-privileged`, `untrusted-llms-get-influenced` |
+| `defaults.rules` | Enable built-in rules: `no-secret-exfil`, `no-sensitive-exfil`, `no-send-to-unknown`, `no-send-to-external`, `no-destroy-unknown`, `no-untrusted-destructive`, `no-untrusted-privileged`, `untrusted-llms-get-influenced` |
 | `defaults.unlabeled` | Auto-label data with no user labels (`"untrusted"` or `"trusted"`) |
 | `operations` | Group semantic exe labels (`net:w`) under risk categories (`exfil`, `destructive`, `privileged`) |
 | `capabilities.allow` | Allowlist command patterns (general gate) |
@@ -123,7 +123,7 @@ policy @p = {
 
 **Policy vs. guards:** Capability denials (`capabilities.deny`, environment constraints) are hard errors — immediate, uncatchable. Managed label-flow denials (`defaults.rules`, `labels` deny/allow) flow through the guard pipeline and can be overridden by explicit privileged guard `allow` decisions, or caught with `denied =>` handlers. To make a label-flow denial absolute, use `locked: true` on the policy. Use policy for broad restrictions; use privileged guards to punch specific holes.
 
-Send-specific rules use the same model: label a send operation as `exfil:send`, put the destination in `@input[0]`, and require that value to carry `known` (or `known:internal` for internal-only destinations).
+Positional built-in rules use the same model: label a send operation as `exfil:send` or a targeted destructive operation as `destructive:targeted`, put the destination/target in `@input[0]`, and require that value to carry `known` (or `known:internal` for internal-only send destinations).
 
 **Atoms:** `security-policies` (start here), `policy-capabilities`, `policy-operations`, `policy-label-flow`, `policy-composition`, `policy-auth`
 

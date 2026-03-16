@@ -87,7 +87,7 @@ policy @p = {
 
 **`defaults`** sets baseline behavior. `rules` enables built-in security rules that block dangerous label-to-operation flows. `unlabeled` optionally auto-labels all data that has no user-assigned labels -- set to `"untrusted"` to treat unlabeled data as untrusted, or `"trusted"` to treat it as trusted. This is opt-in; without it, unlabeled data has no trust label.
 
-Built-in send rules use the same `defaults.rules` list. `no-send-to-unknown` checks operations labeled `exfil:send` and requires the first positional argument to carry `known`. `no-send-to-external` is the stricter variant and requires `known:internal`.
+Built-in positional rules use the same `defaults.rules` list. `no-send-to-unknown` checks operations labeled `exfil:send` and requires the first positional argument to carry `known`. `no-send-to-external` is the stricter send variant and requires `known:internal`. `no-destroy-unknown` checks operations labeled `destructive:targeted` and requires the first positional argument to carry `known`, which is useful for delete/cancel/remove flows where the target must be explicitly approved.
 
 **`locked`** makes all managed label-flow denials from this policy non-overridable, even by explicit privileged guards. Without `locked: true` (the default), a privileged guard can override policy label-flow denials with `allow` for specific operations. Use `locked: true` for absolute constraints that nothing should bypass.
 
@@ -266,7 +266,7 @@ Now `secret` data cannot flow to `@postToSlack` (exfil rule) and `untrusted` dat
 | `destructive` | Deletes or modifies data irreversibly |
 | `privileged` | Requires elevated permissions |
 
-Risk labels can be hierarchical. `exfil:send` is a child of `exfil`, so `no-secret-exfil` still blocks secrets sent through it, while `no-send-to-unknown` can add a destination check on `@input[0]`.
+Risk labels can be hierarchical. `exfil:send` is a child of `exfil`, so `no-secret-exfil` still blocks secrets sent through it, while `no-send-to-unknown` can add a destination check on `@input[0]`. `destructive:targeted` is a child of `destructive`, so `no-untrusted-destructive` still applies while `no-destroy-unknown` adds a positive check that the target in `@input[0]` is `known`.
 
 **Multiple labels:** Combine when an operation has multiple risks:
 
