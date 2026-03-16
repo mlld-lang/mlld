@@ -118,16 +118,54 @@ export function isTruthy(value: any): boolean {
  * Extract the raw value from a Variable or return the value as-is
  */
 function extractValue(value: unknown): unknown {
-  if (value && typeof value === 'object' && 'type' in value && 'value' in value) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    'name' in value &&
+    'source' in value &&
+    'value' in value
+  ) {
     const variable = value as Variable;
     return extractValue(variable.value);
   }
   if (isStructuredValue(value)) {
-    return value.data ?? value.text;
+    return extractValue(value.data ?? value.text);
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => extractValue(item));
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  if ((value as { type?: string }).type === 'Literal' && 'value' in value) {
+    return extractValue((value as { value: unknown }).value);
+  }
+  if ((value as { type?: string }).type === 'Text' && 'content' in value) {
+    const content = (value as { content: unknown }).content;
+    if (typeof content === 'string') {
+      return content;
+    }
+    if (Array.isArray(content)) {
+      return content.map(part => String(extractValue(part) ?? '')).join('');
+    }
+  }
+  if ((value as { type?: string }).type === 'array') {
+    const items = ((value as { items?: unknown[]; elements?: unknown[] }).items ??
+      (value as { items?: unknown[]; elements?: unknown[] }).elements ??
+      []);
+    return items.map(item => extractValue(item));
   }
   return value;
 }
 
+function arraysAreEqual(a: readonly unknown[], b: readonly unknown[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((item, index) => isEqual(item, b[index]));
+}
 /**
  * mlld equality comparison
  * Follows mlld's type coercion rules:
@@ -148,6 +186,11 @@ export function isEqual(a: unknown, b: unknown): boolean {
   }
   if (bValue === null || bValue === undefined) {
     return false;
+  }
+
+  // Collections compare structurally so literal equality works in guards and expressions.
+  if (Array.isArray(aValue) || Array.isArray(bValue)) {
+    return Array.isArray(aValue) && Array.isArray(bValue) && arraysAreEqual(aValue, bValue);
   }
 
   // Handle boolean string coercion

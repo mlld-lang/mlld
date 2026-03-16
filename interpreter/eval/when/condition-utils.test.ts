@@ -29,6 +29,20 @@ describe('when condition utilities', () => {
     await expect(compareValues(true, 1, env)).resolves.toBe(false);
   });
 
+  it('supports deep array equality for when comparisons', async () => {
+    const env = createEnvironment();
+
+    await expect(compareValues(['alice@example.com'], ['alice@example.com'], env)).resolves.toBe(true);
+    await expect(
+      compareValues([['alice@example.com'], '5', false], [['alice@example.com'], 5, 'false'], env)
+    ).resolves.toBe(true);
+    await expect(compareValues(['alice@example.com'], ['bob@example.com'], env)).resolves.toBe(false);
+    await expect(compareValues([['alice@example.com']], [['bob@example.com']], env)).resolves.toBe(false);
+    await expect(
+      compareValues(['alice@example.com'], ['alice@example.com', 'ops@example.com'], env)
+    ).resolves.toBe(false);
+  });
+
   it('keeps denied-target detection stable for denied literals and mx.denied fields', () => {
     const deniedLiteral = [
       {

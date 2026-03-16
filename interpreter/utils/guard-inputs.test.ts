@@ -36,4 +36,16 @@ describe('materializeGuardInputs', () => {
     expect(entry?.variable.value).toBe('secret-log');
     expect(entry?.variable.mx?.labels).toContain('secret');
   });
+
+  it('keeps inline array args structured in mapping mode', () => {
+    const [entry] = materializeGuardInputsWithMapping(
+      [['john@gmail.com', 'ops@example.com']],
+      { nameHint: '__guard_input__', argNames: ['recipients'] }
+    );
+
+    expect(entry?.index).toBe(0);
+    expect(entry?.name).toBe('recipients');
+    expect(entry?.variable.type).toBe('array');
+    expect(entry?.variable.value).toEqual(['john@gmail.com', 'ops@example.com']);
+  });
 });

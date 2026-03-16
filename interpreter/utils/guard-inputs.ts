@@ -1,5 +1,9 @@
 import type { Variable, VariableSource } from '@core/types/variable';
-import { createSimpleTextVariable } from '@core/types/variable';
+import {
+  createArrayVariable,
+  createObjectVariable,
+  createSimpleTextVariable
+} from '@core/types/variable';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 import { isVariable } from './variable-resolution';
 import { resolveNestedValue } from './display-materialization';
@@ -81,12 +85,33 @@ function formatGuardInputValue(value: unknown): string {
   return String(value);
 }
 
+function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 function materializeGuardInput(value: unknown, nameHint: string): Variable | undefined {
   if (isVariable(value)) {
     return value;
   }
 
   const normalized = resolveNestedValue(value, { preserveProvenance: true });
+  if (Array.isArray(normalized)) {
+    const variable = createArrayVariable(nameHint, normalized, false, FALLBACK_SOURCE, { mx: {} });
+    applyDescriptorFromValue(value, variable);
+    return variable;
+  }
+
+  if (isPlainObjectValue(normalized)) {
+    const variable = createObjectVariable(nameHint, normalized, false, FALLBACK_SOURCE, { mx: {} });
+    applyDescriptorFromValue(value, variable);
+    return variable;
+  }
+
   const materialized = materializeExpressionValue(normalized, { name: nameHint });
   if (materialized) {
     applyDescriptorFromValue(value, materialized);
