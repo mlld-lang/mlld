@@ -20,6 +20,7 @@ export interface ModuleInfo {
   license?: string;
   repository?: string;
   sourceUrl?: string;
+  docsUrl?: string;
   publishedAt?: string;
 }
 
@@ -54,6 +55,23 @@ async function fetchRegistry(): Promise<Record<string, RegistryModule>> {
   return data.modules;
 }
 
+function buildSourceUrl(source: ModuleSource): string {
+  return source.type === 'directory'
+    ? `${source.baseUrl}/${source.entryPoint}`
+    : source.url;
+}
+
+function buildDocsUrl(source: ModuleSource): string {
+  if (source.type !== 'directory') {
+    return source.url;
+  }
+
+  const readmePath = source.files.find(file => file === 'README.md')
+    ?? source.files.find(file => file.toLowerCase() === 'readme.md');
+
+  return `${source.baseUrl}/${readmePath || source.entryPoint}`;
+}
+
 export async function getModuleInfo(moduleRef: string): Promise<ModuleInfo & { sourceUrl: string }> {
   const { username, moduleName } = formatModuleReference(moduleRef);
   const moduleKey = `@${username}/${moduleName}`;
@@ -74,9 +92,8 @@ export async function getModuleInfo(moduleRef: string): Promise<ModuleInfo & { s
     keywords: entry.keywords,
     license: entry.license,
     repository: entry.repo,
-    sourceUrl: entry.source.type === 'directory'
-      ? `${entry.source.baseUrl}/${entry.source.entryPoint}`
-      : entry.source.url,
+    sourceUrl: buildSourceUrl(entry.source),
+    docsUrl: buildDocsUrl(entry.source),
     publishedAt: entry.publishedAt
   };
 }
@@ -377,7 +394,7 @@ async function displayInfo(moduleRef: string, options: InfoOptions = {}): Promis
 
   // Fetch and display tldr
   const basePath = options.basePath || process.cwd();
-  const tldr = await fetchSection(info.sourceUrl, 'tldr', basePath);
+  const tldr = await fetchSection(info.docsUrl || info.sourceUrl, 'tldr', basePath);
   if (tldr) {
     console.log();
     console.log(highlightMarkdown(tldr));

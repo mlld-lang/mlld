@@ -43,10 +43,11 @@ export async function docsCommand(moduleRef: string, options: DocsOptions = {}):
 
   try {
     const info = await getModuleInfo(moduleRef);
+    const docsUrl = info.docsUrl || info.sourceUrl;
 
     // Fetch tldr and docs sections
-    const tldr = await fetchSection(info.sourceUrl, 'tldr', basePath);
-    const docs = await fetchSection(info.sourceUrl, 'docs', basePath);
+    const tldr = await fetchSection(docsUrl, 'tldr', basePath);
+    const docs = await fetchSection(docsUrl, 'docs', basePath);
 
     if (!tldr && !docs) {
       console.log(chalk.yellow(`No documentation found for @${info.author}/${info.name}`));
