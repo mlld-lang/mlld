@@ -156,7 +156,7 @@ exe @collect() = when [
 `+=` works with arrays (concat), strings (append), objects (merge).
 
 **Operators in conditions:**
-- Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
+- Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`, `~=`, `!~=`
 - Logical: `&&`, `||`, `!`
 - Parentheses: `(@a || @b) && @c`
 
@@ -165,6 +165,26 @@ when [
   @role == "admin" || @role == "mod" => show "Privileged"
   @active && @verified => show "Active user"
   !@banned => show "Allowed"
+  * => show "Blocked"
+]
+```
+
+**Tolerant comparison (`~=`):**
+
+Use `~=` when the left side is LLM-produced or otherwise format-unstable. It keeps strict `==` available, but tolerates common representation drift:
+
+- String ↔ single-element array: `"alice@example.com" ~= ["alice@example.com"]`
+- Order-independent arrays: `["b", "a"] ~= ["a", "b"]`
+- Subset matching for arrays: `["alice@example.com"] ~= ["alice@example.com", "bob@example.com"]`
+- Null/empty equivalence when the expected side is empty: `"null" ~= []`
+- Numeric string coercion: `"11" ~= 11`
+
+`!~=` is the negation.
+
+```mlld
+when [
+  @mx.args.recipients ~= ["alice@example.com", "bob@example.com"] => show "Authorized recipients"
+  @mx.args.cc !~= [] => show "Unexpected CC"
   * => show "Blocked"
 ]
 ```

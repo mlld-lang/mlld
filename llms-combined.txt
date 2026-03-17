@@ -1471,7 +1471,7 @@ exe @collect() = when [
 `+=` works with arrays (concat), strings (append), objects (merge).
 
 **Operators in conditions:**
-- Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
+- Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`, `~=`, `!~=`
 - Logical: `&&`, `||`, `!`
 - Parentheses: `(@a || @b) && @c`
 
@@ -1480,6 +1480,26 @@ when [
   @role == "admin" || @role == "mod" => show "Privileged"
   @active && @verified => show "Active user"
   !@banned => show "Allowed"
+  * => show "Blocked"
+]
+```
+
+**Tolerant comparison (`~=`):**
+
+Use `~=` when the left side is LLM-produced or otherwise format-unstable. It keeps strict `==` available, but tolerates common representation drift:
+
+- String ↔ single-element array: `"alice@example.com" ~= ["alice@example.com"]`
+- Order-independent arrays: `["b", "a"] ~= ["a", "b"]`
+- Subset matching for arrays: `["alice@example.com"] ~= ["alice@example.com", "bob@example.com"]`
+- Null/empty equivalence when the expected side is empty: `"null" ~= []`
+- Numeric string coercion: `"11" ~= 11`
+
+`!~=` is the negation.
+
+```mlld
+when [
+  @mx.args.recipients ~= ["alice@example.com", "bob@example.com"] => show "Authorized recipients"
+  @mx.args.cc !~= [] => show "Unexpected CC"
   * => show "Blocked"
 ]
 ```
@@ -2941,11 +2961,15 @@ policy @p = {
 }
 
 >> Privileged guard punches a specific hole in the policy
-guard privileged @taskAllow before tool:w = when [
-  @mx.op.name == "@sendEmail" && @mx.args.to == "john@gmail.com" => allow
-  * => allow  >> non-matching calls fall through to policy denial
+guard privileged @taskAllow before op:tool:w = when [
+  @mx.op.name == "sendEmail" && @mx.args.recipients ~= ["john@gmail.com"] => allow
+  @mx.op.name == "sendEmail" => deny "recipient not authorized"
 ]
 ```
+
+Avoid `* => allow` in privileged guards. It overrides policy for every matching operation, and `mlld validate` warns with `privileged-wildcard-allow`.
+
+When authoring privileged guards against a tool module, use `mlld validate --context tools.mld --format json` to confirm the guarded exe exists, the `op:` label matches a declared tool label, and `@mx.args.*` references match the exe signature.
 
 To make a policy denial non-overridable even by privileged guards, use `locked: true`:
 
@@ -4970,6 +4994,8 @@ mlld validate ./my-project/                   # Validate all files recursively (
 mlld validate ./my-project/ --verbose         # Full details for all files
 mlld validate module.mld                      # Validate a single module
 mlld validate template.att                    # Validate a template
+mlld validate app/index.mld --deep            # Follow imports and templates from an entry file
+mlld validate guards.mld --context tools.mld  # Validate guards against tool declarations
 mlld validate module.mld --error-on-warnings  # Fail on warnings
 mlld validate module.mld --format json        # JSON output
 ```
@@ -5054,7 +5080,56 @@ Add `mlld-config.json` to suppress intentional patterns:
 }
 ```
 
-Suppressible codes: `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`.
+Suppressible codes include `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`, `privileged-wildcard-allow`, `guard-unreachable-arm`, `unknown-policy-rule`, `privileged-guard-without-policy-operation`, `guard-context-missing-exe`, `guard-context-missing-op-label`, and `guard-context-missing-arg`.
+
+**Policy / guard validation:**
+
+`mlld validate --format json` now surfaces policy declarations, exe labels, and richer guard structure:
+
+```json
+{
+  "executables": [{ "name": "send_email", "params": ["recipients"], "labels": ["tool:w"] }],
+  "policies": [{ "name": "task", "rules": ["no-send-to-unknown"], "operations": { "destructive": ["tool:w"] }, "locked": false }],
+  "guards": [{
+    "name": "authSendEmail",
+    "timing": "before",
+    "filter": "op:tool:w",
+    "privileged": true,
+    "arms": [
+      { "condition": "@mx.args.recipients ~= [\"alice@example.com\"]", "action": "allow" },
+      { "condition": "@mx.op.name == \"send_email\"", "action": "deny", "reason": "recipients not authorized" }
+    ]
+  }]
+}
+```
+
+This is useful when validating LLM-generated policies/guards before execution.
+
+**Semantic guard/policy warnings:**
+
+`mlld validate` also warns about likely-authoring mistakes that are syntactically valid:
+
+- `unknown-policy-rule` for typos in built-in rule names
+- `privileged-wildcard-allow` for `guard privileged ... when [ * => allow ]`
+- `guard-unreachable-arm` when an earlier guard arm already covers a later one
+- `privileged-guard-without-policy-operation` when a privileged `op:` guard does not match any policy operation label
+
+These stay warnings, not errors.
+
+**Context-aware guard validation:**
+
+Use `--context` to validate guards against one or more tool modules:
+
+```bash
+mlld validate guards.mld --context tools/workspace.mld
+mlld validate guards.mld --context tools/,shared/tooling.mld --format json
+```
+
+With context, validation warns when:
+
+- a function filter references an exe that does not exist
+- an `op:` filter does not match any exe label in the context
+- `@mx.args.someName` references a parameter not declared on the guarded exe
 
 **Template validation (.att / .mtt):**
 
@@ -5119,7 +5194,7 @@ Use `--verbose` for full per-file details. Exit code 1 if any file fails.
 mlld validate module.mld --format json
 ```
 
-Returns structured data: `executables`, `exports`, `imports`, `guards`, `needs`, `warnings`, `redefinitions`, `antiPatterns`. For templates, includes `template` with `type`, `variables`, and `discoveredParams`.
+Returns structured data: `executables`, `exports`, `imports`, `guards`, `policies`, `needs`, `warnings`, `redefinitions`, `antiPatterns`. For templates, includes `template` with `type`, `variables`, and `discoveredParams`.
 </VALIDATE>
 
 <CHECKPOINT_RESUME>
@@ -5380,27 +5455,35 @@ Configure in `claude_desktop_config.json`:
 
 **Tools provided:**
 
-`mlld_validate` — Validate syntax, return errors and warnings:
+`mlld_validate` — Validate syntax and static semantics, including context-aware guard checks:
 
 ```json
 {
   "code": "var @x = \"hello\"",
-  "mode": "strict"
+  "mode": "strict",
+  "context": ["./tools.mld"]
 }
 ```
 
-Returns `{ valid: true/false, errors: [...], warnings: [...] }`.
+Returns the same structured validation shape as `mlld validate --format json`, including `errors`, `warnings`, `redefinitions`, `antiPatterns`, and module metadata such as `executables`, `guards`, `policies`, and `needs`.
 
-`mlld_analyze` — Full module analysis with exports, executables, imports, guards, and statistics:
+`mlld_analyze` — Full module analysis with exports, executables, imports, guards, policies, and statistics:
 
 ```json
 {
   "code": "exe @greet(name) = cmd { echo \"hello\" }\nexport { @greet }",
-  "includeAst": false
+  "includeAst": false,
+  "context": ["./tools.mld"]
 }
 ```
 
-Returns structured data about the module: `{ exports: [...], executables: [...], imports: [...], guards: [...], variables: [...], stats: {...} }`.
+Returns structured data about the module: `{ exports: [...], executables: [...], imports: [...], guards: [...], policies: [...], variables: [...], stats: {...} }`.
+
+For guard/policy authoring, `mlld_analyze` now includes:
+
+- exe `labels`
+- guard `privileged`, `filter`, and `arms`
+- policy `rules`, `operations`, `locked`, and `refs`
 
 `mlld_ast` — Get the raw parsed AST:
 
@@ -5546,6 +5629,8 @@ policy @p = {
 
 Built-in positional rules use the same `defaults.rules` list. `no-send-to-unknown` checks operations labeled `exfil:send` and requires the first positional argument to carry `known`. `no-send-to-external` is the stricter send variant and requires `known:internal`. `no-destroy-unknown` checks operations labeled `destructive:targeted` and requires the first positional argument to carry `known`, which is useful for delete/cancel/remove flows where the target must be explicitly approved.
 
+`mlld validate` warns on unknown built-in rule names in `defaults.rules` and suggests the closest known rule when it can.
+
 **`locked`** makes all managed label-flow denials from this policy non-overridable, even by explicit privileged guards. Without `locked: true` (the default), a privileged guard can override policy label-flow denials with `allow` for specific operations. Use `locked: true` for absolute constraints that nothing should bypass.
 
 ```mlld
@@ -5556,6 +5641,8 @@ policy @p = {
 ```
 
 **`operations`** groups semantic exe labels under risk categories. You label functions with what they DO (`net:w`, `fs:w`), and policy classifies those as risk types (`exfil`, `destructive`). This is the two-step pattern -- see `policy-operations`.
+
+`mlld analyze --format json` surfaces these mappings under `policies[].operations`, and `mlld validate --context ...` can warn when privileged `op:` guards do not match any declared operation labels in the validation context.
 
 **`auth`** defines caller-side credential mappings for `using auth:name`. It accepts short form (`"API_KEY"`) and object form (`{ from, as }`). Policy auth composes with standalone `auth`; caller policy entries override same-name module bindings.
 
