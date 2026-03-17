@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { ErrorSeverity, MlldError } from '@core/errors';
+import { execute } from './execute';
+import { ExecuteError } from './types';
 
 const interpretMock = vi.hoisted(() => vi.fn());
 
@@ -23,9 +25,6 @@ describe('execute error wrapping', () => {
   });
 
   it('sanitizes large runtime error causes before wrapping them for SDK consumers', async () => {
-    const { execute } = await import('./execute');
-    const { ExecuteError } = await import('./types');
-
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
     await fileSystem.writeFile('/routes/route.mlld', '/show "boom"');
