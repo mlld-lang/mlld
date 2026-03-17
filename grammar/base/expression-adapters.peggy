@@ -56,7 +56,7 @@ ComparisonAdapter
         meta: {
           ...expr.meta,
           isComparison: true,
-          isEquality: ['==', '!=', '~='].includes(expr.operator),
+          isEquality: ['==', '!=', '~=', '!~='].includes(expr.operator),
           isRelational: ['<', '>', '<=', '>='].includes(expr.operator)
         }
       };

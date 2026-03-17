@@ -72,7 +72,7 @@ export const HIGHLIGHTING_RULES: HighlightingRules = {
   
   operators: {
     logical: ['&&', '||', '!'],
-    comparison: ['==', '!=', '<', '>', '<=', '>='],
+    comparison: ['==', '!=', '~=', '!~=', '<', '>', '<=', '>='],
     ternary: ['?', ':'],
     pipe: ['|'],
     assignment: ['='],

@@ -1,0 +1,20 @@
+/when [
+  @recipients ~= ["alice@example.com"] => "allowed"
+  @recipients !~= ["mallory@example.com"] => "blocked"
+]
+
+=== START TOKENS ===
+when --> keyword
+[ --> operator
+@recipients --> variable
+~= --> operator
+"alice@example.com" --> string
+=> --> operator
+"allowed" --> string
+@recipients --> variable
+!~= --> operator
+"mallory@example.com" --> string
+=> --> operator
+"blocked" --> string
+] --> operator
+=== END TOKENS ===

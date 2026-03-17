@@ -6,7 +6,7 @@ category: cli
 tags: [validation, warnings, static-analysis, undefined-variables, templates]
 related: [config-files, config-cli-run]
 related-code: [cli/commands/analyze.ts, core/registry/ConfigFile.ts]
-updated: 2026-02-24
+updated: 2026-03-16
 qa_tier: 2
 ---
 
@@ -17,6 +17,8 @@ mlld validate ./my-project/                   # Validate all files recursively (
 mlld validate ./my-project/ --verbose         # Full details for all files
 mlld validate module.mld                      # Validate a single module
 mlld validate template.att                    # Validate a template
+mlld validate app/index.mld --deep            # Follow imports and templates from an entry file
+mlld validate guards.mld --context tools.mld  # Validate guards against tool declarations
 mlld validate module.mld --error-on-warnings  # Fail on warnings
 mlld validate module.mld --format json        # JSON output
 ```
@@ -101,7 +103,56 @@ Add `mlld-config.json` to suppress intentional patterns:
 }
 ```
 
-Suppressible codes: `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`.
+Suppressible codes include `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`, `privileged-wildcard-allow`, `guard-unreachable-arm`, `unknown-policy-rule`, `privileged-guard-without-policy-operation`, `guard-context-missing-exe`, `guard-context-missing-op-label`, and `guard-context-missing-arg`.
+
+**Policy / guard validation:**
+
+`mlld validate --format json` now surfaces policy declarations, exe labels, and richer guard structure:
+
+```json
+{
+  "executables": [{ "name": "send_email", "params": ["recipients"], "labels": ["tool:w"] }],
+  "policies": [{ "name": "task", "rules": ["no-send-to-unknown"], "operations": { "destructive": ["tool:w"] }, "locked": false }],
+  "guards": [{
+    "name": "authSendEmail",
+    "timing": "before",
+    "filter": "op:tool:w",
+    "privileged": true,
+    "arms": [
+      { "condition": "@mx.args.recipients ~= [\"alice@example.com\"]", "action": "allow" },
+      { "condition": "@mx.op.name == \"send_email\"", "action": "deny", "reason": "recipients not authorized" }
+    ]
+  }]
+}
+```
+
+This is useful when validating LLM-generated policies/guards before execution.
+
+**Semantic guard/policy warnings:**
+
+`mlld validate` also warns about likely-authoring mistakes that are syntactically valid:
+
+- `unknown-policy-rule` for typos in built-in rule names
+- `privileged-wildcard-allow` for `guard privileged ... when [ * => allow ]`
+- `guard-unreachable-arm` when an earlier guard arm already covers a later one
+- `privileged-guard-without-policy-operation` when a privileged `op:` guard does not match any policy operation label
+
+These stay warnings, not errors.
+
+**Context-aware guard validation:**
+
+Use `--context` to validate guards against one or more tool modules:
+
+```bash
+mlld validate guards.mld --context tools/workspace.mld
+mlld validate guards.mld --context tools/,shared/tooling.mld --format json
+```
+
+With context, validation warns when:
+
+- a function filter references an exe that does not exist
+- an `op:` filter does not match any exe label in the context
+- `@mx.args.someName` references a parameter not declared on the guarded exe
 
 **Template validation (.att / .mtt):**
 
@@ -166,4 +217,4 @@ Use `--verbose` for full per-file details. Exit code 1 if any file fails.
 mlld validate module.mld --format json
 ```
 
-Returns structured data: `executables`, `exports`, `imports`, `guards`, `needs`, `warnings`, `redefinitions`, `antiPatterns`. For templates, includes `template` with `type`, `variables`, and `discoveredParams`.
+Returns structured data: `executables`, `exports`, `imports`, `guards`, `policies`, `needs`, `warnings`, `redefinitions`, `antiPatterns`. For templates, includes `template` with `type`, `variables`, and `discoveredParams`.

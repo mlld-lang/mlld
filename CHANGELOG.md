@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.5]
 
 ### Added
+- Tolerant comparison operators `~=` and `!~=` for guard/`when`/expression conditions. The new matcher handles string vs single-item array coercion, order-independent flat arrays, subset matching for array expectations, null/empty equivalence when the expected side is empty, numeric string coercion, and comma-separated string to array matching. This makes LLM-produced guard args much easier to validate without hand-written normalization logic.
+- `mlld validate` / `mlld analyze` now surface policy declarations (`policies`), executable labels, richer guard metadata (`filter`, `privileged`, `arms`), and a new `--context` option for validating guards against tool modules. Context-aware validation warns on missing exe filters, missing operation labels, and `@mx.args.*` references that do not match the guarded executable signature.
 - Filesystem integrity rollout across phases 1-3: write-executor outputs are signed, content-loader verifies raw file bytes on read, signer policies assign file trust labels, and `filesystem_integrity` rules add identity-aware write protection on top of normal filesystem capability checks.
 - Filesystem integrity phase 4: `mlld status` reports verified/modified/unsigned files with signer labels and taint metadata, runtime reads populate `@mx.sig` (including `@mx.sig.files("glob")`), and the Python/live SDK surface now exposes `fs:status` via `client.fs_status()`.
 - Filesystem integrity phase 5: the Python SDK and live stdio transport now expose `sign`, `verify`, and `sign_content`, and `ExecuteHandle.write_file()` writes execution-scoped files that are auto-signed as `agent:{script}` with taint/provenance metadata.
@@ -19,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hooks now match `op:` filters against operation labels (e.g., `hook before op:tool:w`), not just built-in operation types. This aligns hook and guard trigger semantics — both now treat custom labels as valid `op:` targets.
 
 ### Fixed
+- Policy extraction in `mlld analyze` / `mlld validate` now includes `operations` mappings and `locked` state consistently, privileged-guard validation now catches missing policy operation mappings, and the MCP built-ins `mlld_validate` / `mlld_analyze` now route through the same analyzer surface as the CLI so inline validation sees the same semantic/context warnings.
 - Array equality now compares list values structurally in shared expression/`when`/guard matching, so conditions like `@mx.args.recipients == ["john@gmail.com"]` work for privileged policy exceptions and other pinned-argument checks. Added regression coverage for nested array coercion and guard-level array arg matching.
 - Privileged guard `allow` decisions can now override policy label-flow denials and built-in label-flow rules by default, which enables policy-plus-guard exception envelopes for destructive/exfil/privileged flows. Policies can opt back into absolute denial behavior with `locked: true`, and managed label-flow checks now run through the guard pipeline so denied handlers and `when` expressions preserve the correct policy denial semantics.
 - Executable argument evaluation now falls back to object/array literal descriptors when a wrapper variable loses its aggregate `mx` labels, so nested `untrusted` values in config objects still trigger `untrusted-llms-get-influenced` and `no-untrusted-destructive`. Added regression coverage for parsed `messages` config objects, nested object field label access, and destructive-policy enforcement through object wrappers.
@@ -44,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Live SDK state updates now preserve their labels on the updated `@state` path/top-level export instead of collapsing those labels onto the entire reserved `@state` object, and `mlld live --stdio` now forwards `state:update.labels` through to the runtime.
 
 ### Documentation
+- Added/updated docs for tolerant comparison (`~=` / `!~=`), privileged-guard validation guidance, and the expanded `mlld validate` JSON/context workflow.
 - Python SDK README now documents editable installs for local development (`uv pip install -e ./sdk/python`) so SDK changes apply immediately in downstream projects.
 
 ## [2.0.4]

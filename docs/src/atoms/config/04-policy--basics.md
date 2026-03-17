@@ -42,6 +42,8 @@ policy @p = {
 
 Built-in positional rules use the same `defaults.rules` list. `no-send-to-unknown` checks operations labeled `exfil:send` and requires the first positional argument to carry `known`. `no-send-to-external` is the stricter send variant and requires `known:internal`. `no-destroy-unknown` checks operations labeled `destructive:targeted` and requires the first positional argument to carry `known`, which is useful for delete/cancel/remove flows where the target must be explicitly approved.
 
+`mlld validate` warns on unknown built-in rule names in `defaults.rules` and suggests the closest known rule when it can.
+
 **`locked`** makes all managed label-flow denials from this policy non-overridable, even by explicit privileged guards. Without `locked: true` (the default), a privileged guard can override policy label-flow denials with `allow` for specific operations. Use `locked: true` for absolute constraints that nothing should bypass.
 
 ```mlld
@@ -52,6 +54,8 @@ policy @p = {
 ```
 
 **`operations`** groups semantic exe labels under risk categories. You label functions with what they DO (`net:w`, `fs:w`), and policy classifies those as risk types (`exfil`, `destructive`). This is the two-step pattern -- see `policy-operations`.
+
+`mlld analyze --format json` surfaces these mappings under `policies[].operations`, and `mlld validate --context ...` can warn when privileged `op:` guards do not match any declared operation labels in the validation context.
 
 **`auth`** defines caller-side credential mappings for `using auth:name`. It accepts short form (`"API_KEY"`) and object form (`{ from, as }`). Policy auth composes with standalone `auth`; caller policy entries override same-name module bindings.
 

@@ -19,7 +19,7 @@
   }
 
   function isComparisonOperator(op) {
-    return ['==', '!=', '~=', '<', '>', '<=', '>='].includes(op);
+    return ['==', '!=', '~=', '!~=', '<', '>', '<=', '>='].includes(op);
   }
 
   function extractConditionVariables(expr) {

@@ -8,7 +8,7 @@ parent: guards
 tags: [guards, privileged, policy, labels, trust, security]
 related: [security-guards-basics, label-modification, pattern-audit-guard, security-policies]
 related-code: [core/policy/guards.ts, interpreter/hooks/guard-pre-hook.ts, interpreter/hooks/guard-post-hook.ts]
-updated: 2026-02-09
+updated: 2026-03-16
 ---
 
 Privileged guards cannot be bypassed with `{ guards: false }`, can remove protected labels, and can override managed policy label-flow denials.
@@ -51,11 +51,15 @@ policy @p = {
 }
 
 >> Privileged guard punches a specific hole in the policy
-guard privileged @taskAllow before tool:w = when [
-  @mx.op.name == "@sendEmail" && @mx.args.to == "john@gmail.com" => allow
-  * => allow  >> non-matching calls fall through to policy denial
+guard privileged @taskAllow before op:tool:w = when [
+  @mx.op.name == "sendEmail" && @mx.args.recipients ~= ["john@gmail.com"] => allow
+  @mx.op.name == "sendEmail" => deny "recipient not authorized"
 ]
 ```
+
+Avoid `* => allow` in privileged guards. It overrides policy for every matching operation, and `mlld validate` warns with `privileged-wildcard-allow`.
+
+When authoring privileged guards against a tool module, use `mlld validate --context tools.mld --format json` to confirm the guarded exe exists, the `op:` label matches a declared tool label, and `@mx.args.*` references match the exe signature.
 
 To make a policy denial non-overridable even by privileged guards, use `locked: true`:
 

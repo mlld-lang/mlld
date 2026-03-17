@@ -10,11 +10,12 @@
  */
 
 import { promises as fs } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve as resolvePath } from 'node:path';
 import { parse } from '@grammar/parser';
-import { analyzeModule, type ModuleAnalysis } from '@sdk/analyze';
+import type { ModuleAnalysis } from '@sdk/analyze';
 import { analyze as analyzeFile } from '@cli/commands/analyze';
-import { inferMlldMode, inferStartRule, isTemplateFile, type MlldMode } from '@core/utils/mode';
+import { inferMlldMode, inferStartRule, type MlldMode } from '@core/utils/mode';
 import type { MCPToolSchema, ToolsCallResult } from './types';
 
 // =============================================================================
@@ -39,6 +40,13 @@ export const BUILTIN_TOOL_SCHEMAS: MCPToolSchema[] = [
         mode: {
           type: 'string',
           description: 'Parsing mode: "strict" or "markdown" (default: inferred from file extension, or "strict" for inline code)'
+        },
+        context: {
+          description: 'Optional file(s)/dir(s) used to validate guard filters, operation labels, and @mx.args references',
+          oneOf: [
+            { type: 'string' },
+            { type: 'array', items: { type: 'string' } }
+          ]
         }
       },
       required: []
@@ -65,6 +73,13 @@ export const BUILTIN_TOOL_SCHEMAS: MCPToolSchema[] = [
         includeAst: {
           type: 'boolean',
           description: 'Include full AST in response (default: false)'
+        },
+        context: {
+          description: 'Optional file(s)/dir(s) used to validate guard filters, operation labels, and @mx.args references',
+          oneOf: [
+            { type: 'string' },
+            { type: 'array', items: { type: 'string' } }
+          ]
         }
       },
       required: []
@@ -103,6 +118,7 @@ interface ToolInput {
   code?: string;
   mode?: string;
   includeAst?: boolean;
+  context?: string | string[];
 }
 
 interface ResolvedInput {
@@ -157,30 +173,56 @@ function parseMode(mode?: string): MlldMode | undefined {
 // Tool Implementations
 // =============================================================================
 
+function parseContext(value?: string | string[]): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const rawValues = Array.isArray(value) ? value : [value];
+  const parsed = rawValues
+    .flatMap(entry => entry.split(','))
+    .map(entry => entry.trim())
+    .filter(entry => entry.length > 0);
+
+  return parsed.length > 0 ? parsed : undefined;
+}
+
+async function withInlineSourceFile<T>(
+  source: string,
+  mode: MlldMode,
+  callback: (filepath: string) => Promise<T>
+): Promise<T> {
+  const tempDir = await fs.mkdtemp(resolvePath(tmpdir(), 'mlld-mcp-inline-'));
+  const extension = mode === 'markdown' ? '.mld.md' : '.mld';
+  const filepath = resolvePath(tempDir, `inline${extension}`);
+
+  try {
+    await fs.writeFile(filepath, source, 'utf8');
+    return await callback(filepath);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 async function executeValidate(args: ToolInput): Promise<ToolsCallResult> {
   try {
-    const { source, mode, filepath, startRule } = await resolveInput(args);
-    const result = await parse(source, { mode, ...(startRule ? { startRule } : {}) });
-
-    const response: Record<string, unknown> = {
-      valid: result.success,
-      errors: result.success ? [] : [{
-        message: result.error?.message ?? 'Parse failed',
-        location: extractLocation(result.error)
-      }],
-      warnings: (result.warnings ?? []).map(w => ({
-        message: w.message,
-        location: w.location
-      }))
-    };
-
-    if (filepath) {
-      response.filepath = filepath;
+    const { source, mode, filepath } = await resolveInput(args);
+    const analyzed = filepath
+      ? await analyzeFile(filepath, { context: parseContext(args.context) })
+      : await withInlineSourceFile(source, mode, tempFilepath =>
+          analyzeFile(tempFilepath, { context: parseContext(args.context) })
+        );
+    const response = filepath ? analyzed : { ...analyzed, filepath: '<inline>' };
+    if (response.errors === undefined) {
+      response.errors = [];
+    }
+    if (response.warnings === undefined) {
+      response.warnings = [];
     }
 
     return {
       content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-      isError: !result.success
+      isError: !response.valid
     };
   } catch (error) {
     return errorResult(error);
@@ -190,76 +232,33 @@ async function executeValidate(args: ToolInput): Promise<ToolsCallResult> {
 async function executeAnalyze(args: ToolInput): Promise<ToolsCallResult> {
   try {
     const { source, mode, filepath, startRule } = await resolveInput(args);
+    const analyzed = filepath
+      ? await analyzeFile(filepath, {
+          ast: args.includeAst === true,
+          context: parseContext(args.context)
+        })
+      : await withInlineSourceFile(source, mode, tempFilepath =>
+          analyzeFile(tempFilepath, {
+            ast: args.includeAst === true,
+            context: parseContext(args.context)
+          })
+        );
+    let response: Record<string, unknown> = filepath ? analyzed : { ...analyzed, filepath: '<inline>' };
 
-    // For template files, use CLI analyze which handles templates
-    if (filepath && isTemplateFile(filepath)) {
-      const result = await analyzeFile(filepath);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-        isError: !result.valid
-      };
+    const parseResult = await parse(source, { mode, ...(startRule ? { startRule } : {}) });
+    if (parseResult.success) {
+      const ast = parseResult.ast;
+      if (!('variables' in response)) {
+        response.variables = extractVariablesFromAst(ast);
+      }
+      if (!('stats' in response)) {
+        response.stats = computeStats(source, ast);
+      }
     }
 
-    // For module file inputs, use existing analyzeModule
-    if (filepath) {
-      const analysis = await analyzeModule(filepath);
-      const response = formatAnalysis(analysis, args.includeAst);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-        isError: !analysis.valid
-      };
-    }
-
-    // For inline code, parse and extract what we can
-    const parseResult = await parse(source, { mode });
-
-    if (!parseResult.success) {
-      const response = {
-        filepath: '<inline>',
-        valid: false,
-        errors: [{
-          code: 'PARSE_ERROR',
-          message: parseResult.error?.message ?? 'Parse failed',
-          location: extractLocation(parseResult.error)
-        }],
-        warnings: [],
-        exports: [],
-        executables: [],
-        guards: [],
-        imports: [],
-        variables: [],
-        stats: { lines: source.split('\n').length, directives: 0, executables: 0, guards: 0, imports: 0, exports: 0 }
-      };
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-        isError: true
-      };
-    }
-
-    // Build a simplified analysis for inline code
-    const ast = parseResult.ast;
-    const analysis: ModuleAnalysis = {
-      filepath: '<inline>',
-      valid: true,
-      errors: [],
-      warnings: (parseResult.warnings ?? []).map(w => ({
-        code: 'GRAMMAR_WARNING',
-        message: w.message,
-        location: w.location
-      })),
-      exports: extractExportsFromAst(ast),
-      executables: extractExecutablesFromAst(ast),
-      guards: extractGuardsFromAst(ast),
-      imports: extractImportsFromAst(ast),
-      variables: extractVariablesFromAst(ast),
-      ast: () => ast,
-      stats: computeStats(source, ast)
-    };
-
-    const response = formatAnalysis(analysis, args.includeAst);
     return {
       content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-      isError: false
+      isError: !response.valid
     };
   } catch (error) {
     return errorResult(error);

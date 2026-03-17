@@ -166,6 +166,149 @@ function arraysAreEqual(a: readonly unknown[], b: readonly unknown[]): boolean {
 
   return a.every((item, index) => isEqual(item, b[index]));
 }
+
+function isNullLikeForTolerantMatch(value: unknown): boolean {
+  const extracted = extractValue(value);
+
+  if (extracted === null || extracted === undefined) {
+    return true;
+  }
+
+  if (Array.isArray(extracted)) {
+    return extracted.length === 0;
+  }
+
+  return typeof extracted === 'string' && extracted.trim().toLowerCase() === 'null';
+}
+
+function coerceNumericString(value: unknown): number | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const numeric = Number(trimmed);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function toTolerantArray(value: unknown): unknown[] | null {
+  const extracted = extractValue(value);
+
+  if (Array.isArray(extracted)) {
+    return extracted.map(item => extractValue(item));
+  }
+
+  if (extracted === null || extracted === undefined) {
+    return [];
+  }
+
+  if (typeof extracted === 'string') {
+    const trimmed = extracted.trim();
+
+    if (trimmed.toLowerCase() === 'null') {
+      return [];
+    }
+
+    if (trimmed.includes(',')) {
+      return trimmed
+        .split(',')
+        .map(part => part.trim())
+        .filter(part => part.length > 0);
+    }
+
+    return [trimmed];
+  }
+
+  return null;
+}
+
+function isTolerantScalarMatch(actual: unknown, expected: unknown): boolean {
+  const actualValue = extractValue(actual);
+  const expectedValue = extractValue(expected);
+
+  if (actualValue === null || actualValue === undefined || expectedValue === null || expectedValue === undefined) {
+    return actualValue === expectedValue;
+  }
+
+  if (typeof actualValue === 'number' && typeof expectedValue === 'string') {
+    const expectedNumber = coerceNumericString(expectedValue);
+    return expectedNumber !== null && actualValue === expectedNumber;
+  }
+
+  if (typeof actualValue === 'string' && typeof expectedValue === 'number') {
+    const actualNumber = coerceNumericString(actualValue);
+    return actualNumber !== null && actualNumber === expectedValue;
+  }
+
+  if (Array.isArray(actualValue) || Array.isArray(expectedValue)) {
+    return Array.isArray(actualValue) && Array.isArray(expectedValue) && arraysAreEqual(actualValue, expectedValue);
+  }
+
+  return Object.is(actualValue, expectedValue);
+}
+
+function isTolerantArrayMatch(actualItems: readonly unknown[], expectedItems: readonly unknown[]): boolean {
+  if (expectedItems.length === 0) {
+    return actualItems.length === 0;
+  }
+
+  if (actualItems.length === 0) {
+    return false;
+  }
+
+  const remainingExpected = [...expectedItems];
+
+  for (const actualItem of actualItems) {
+    const matchIndex = remainingExpected.findIndex(expectedItem => isTolerantScalarMatch(actualItem, expectedItem));
+    if (matchIndex === -1) {
+      return false;
+    }
+    remainingExpected.splice(matchIndex, 1);
+  }
+
+  return true;
+}
+
+/**
+ * Tolerant semantic comparison for LLM-produced values.
+ *
+ * Differences from ==:
+ * - string <-> array coercion for flat lists
+ * - comma-separated string <-> array coercion
+ * - order-independent array matching
+ * - subset semantics for actual ~= expected array comparisons
+ * - null / [] / "null" equivalence only when the expected side is empty
+ */
+export function isTolerantMatch(actual: unknown, expected: unknown): boolean {
+  if (isNullLikeForTolerantMatch(expected)) {
+    return isNullLikeForTolerantMatch(actual);
+  }
+
+  if (isNullLikeForTolerantMatch(actual)) {
+    return false;
+  }
+
+  const expectedArray = toTolerantArray(expected);
+  if (expectedArray) {
+    const actualArray = toTolerantArray(actual);
+    if (actualArray) {
+      return isTolerantArrayMatch(actualArray, expectedArray);
+    }
+
+    return expectedArray.length === 1 && isTolerantScalarMatch(actual, expectedArray[0]);
+  }
+
+  const actualArray = toTolerantArray(actual);
+  if (actualArray) {
+    return actualArray.length === 1 && isTolerantScalarMatch(actualArray[0], expected);
+  }
+
+  return isTolerantScalarMatch(actual, expected);
+}
 /**
  * mlld equality comparison
  * Follows mlld's type coercion rules:
@@ -358,7 +501,7 @@ export async function evaluateUnifiedExpression(
 }
 
 /**
- * Evaluate binary expressions (&&, ||, ==, !=, <, >, <=, >=, ~=)
+ * Evaluate binary expressions (&&, ||, ==, !=, ~=, !~=, <, >, <=, >=)
  */
 async function evaluateBinaryExpression(
   node: any,
@@ -434,9 +577,9 @@ async function evaluateBinaryExpression(
     case '!=':
       return createEvaluatorResult(!isEqual(leftValue, rightValue), mergedDescriptor);
     case '~=':
-      // Regex match operator
-      const regex = new RegExp(String(rightValue));
-      return createEvaluatorResult(regex.test(String(leftValue)), mergedDescriptor);
+      return createEvaluatorResult(isTolerantMatch(leftValue, rightValue), mergedDescriptor);
+    case '!~=':
+      return createEvaluatorResult(!isTolerantMatch(leftValue, rightValue), mergedDescriptor);
     case '<':
       const leftNum = toNumber(leftValue);
       const rightNum = toNumber(rightValue);

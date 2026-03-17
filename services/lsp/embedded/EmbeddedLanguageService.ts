@@ -73,6 +73,8 @@ export class EmbeddedLanguageService {
       '===': 'operator',
       '!=': 'operator',
       '!==': 'operator',
+      '~=': 'operator',
+      '!~=': 'operator',
       '<': 'operator',
       '>': 'operator',
       '<=': 'operator',

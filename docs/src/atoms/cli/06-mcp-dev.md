@@ -6,7 +6,7 @@ category: cli
 tags: [cli, mcp, development, validation, ast, analysis]
 related: [mcp, mcp-export, mcp-import, config-plugin, config-cli-run]
 related-code: [cli/commands/mcp-dev.ts, cli/mcp/DevMCPServer.ts, cli/mcp/BuiltinTools.ts, cli/mcp/BuiltinTools.test.ts]
-updated: 2026-02-16
+updated: 2026-03-16
 qa_tier: 2
 ---
 
@@ -31,27 +31,35 @@ Configure in `claude_desktop_config.json`:
 
 **Tools provided:**
 
-`mlld_validate` — Validate syntax, return errors and warnings:
+`mlld_validate` — Validate syntax and static semantics, including context-aware guard checks:
 
 ```json
 {
   "code": "var @x = \"hello\"",
-  "mode": "strict"
+  "mode": "strict",
+  "context": ["./tools.mld"]
 }
 ```
 
-Returns `{ valid: true/false, errors: [...], warnings: [...] }`.
+Returns the same structured validation shape as `mlld validate --format json`, including `errors`, `warnings`, `redefinitions`, `antiPatterns`, and module metadata such as `executables`, `guards`, `policies`, and `needs`.
 
-`mlld_analyze` — Full module analysis with exports, executables, imports, guards, and statistics:
+`mlld_analyze` — Full module analysis with exports, executables, imports, guards, policies, and statistics:
 
 ```json
 {
   "code": "exe @greet(name) = cmd { echo \"hello\" }\nexport { @greet }",
-  "includeAst": false
+  "includeAst": false,
+  "context": ["./tools.mld"]
 }
 ```
 
-Returns structured data about the module: `{ exports: [...], executables: [...], imports: [...], guards: [...], variables: [...], stats: {...} }`.
+Returns structured data about the module: `{ exports: [...], executables: [...], imports: [...], guards: [...], policies: [...], variables: [...], stats: {...} }`.
+
+For guard/policy authoring, `mlld_analyze` now includes:
+
+- exe `labels`
+- guard `privileged`, `filter`, and `arms`
+- policy `rules`, `operations`, `locked`, and `refs`
 
 `mlld_ast` — Get the raw parsed AST:
 
