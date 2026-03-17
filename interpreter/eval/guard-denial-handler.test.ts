@@ -27,7 +27,8 @@ describe('handleExecGuardDenial', () => {
     const execEnv = createMockExecEnv();
     const env = {
       emitEffect: vi.fn(),
-      recordSecurityDescriptor: vi.fn()
+      recordSecurityDescriptor: vi.fn(),
+      recordGuardDenialFromError: vi.fn()
     } as any;
 
     evaluateWhenExpressionMock.mockResolvedValue({
@@ -59,7 +60,8 @@ describe('handleExecGuardDenial', () => {
     const execEnv = createMockExecEnv();
     const env = {
       emitEffect: vi.fn(),
-      recordSecurityDescriptor: vi.fn()
+      recordSecurityDescriptor: vi.fn(),
+      recordGuardDenialFromError: vi.fn()
     } as any;
 
     evaluateWhenExpressionMock.mockResolvedValue({
@@ -95,7 +97,8 @@ describe('handleExecGuardDenial', () => {
     const execEnv = createMockExecEnv();
     const env = {
       emitEffect: vi.fn(),
-      recordSecurityDescriptor: vi.fn()
+      recordSecurityDescriptor: vi.fn(),
+      recordGuardDenialFromError: vi.fn()
     } as any;
 
     const error = new MlldDenialError({

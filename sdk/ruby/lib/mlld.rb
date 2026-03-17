@@ -19,7 +19,8 @@ module Mlld
   StateWrite = Struct.new(:path, :value, :timestamp, keyword_init: true)
   Metrics = Struct.new(:total_ms, :parse_ms, :evaluate_ms, keyword_init: true)
   Effect = Struct.new(:type, :content, :security, keyword_init: true)
-  ExecuteResult = Struct.new(:output, :state_writes, :exports, :effects, :metrics, keyword_init: true)
+  GuardDenial = Struct.new(:guard, :operation, :reason, :rule, :labels, :args, keyword_init: true)
+  ExecuteResult = Struct.new(:output, :state_writes, :exports, :effects, :denials, :metrics, keyword_init: true)
 
   Executable = Struct.new(:name, :params, :labels, keyword_init: true)
   Import = Struct.new(:from, :names, keyword_init: true)
@@ -450,11 +451,25 @@ module Mlld
         )
       end.compact
 
+      denials = Array(result['denials']).map do |entry|
+        next unless entry.is_a?(Hash)
+
+        GuardDenial.new(
+          guard: entry['guard'],
+          operation: entry['operation'].to_s,
+          reason: entry['reason'].to_s,
+          rule: entry['rule'],
+          labels: Array(entry['labels']).select { |label| label.is_a?(String) },
+          args: entry['args'].is_a?(Hash) ? entry['args'] : nil
+        )
+      end.compact
+
       ExecuteResult.new(
         output: result['output'].to_s,
         state_writes: state_writes,
         exports: result.fetch('exports', []),
         effects: effects,
+        denials: denials,
         metrics: metrics
       )
     end

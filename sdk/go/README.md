@@ -132,4 +132,5 @@ fmt.Println(output)
 
 - Each `Client` keeps one live RPC subprocess for repeated calls.
 - `ExecuteResult.StateWrites` merges final-result writes and streamed `state:write` events.
+- `ExecuteResult.Denials` collects structured guard/policy label-flow denials observed during execution.
 - Sync methods remain as wrappers around async handle methods.

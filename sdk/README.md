@@ -65,6 +65,8 @@ Each SDK exposes handle APIs for long-running process/execute calls:
 - Start request: `process_async(...)` / `execute_async(...)`
 - Handle operations: `wait`/`result`, `cancel`, `update_state(path, value)`
 
+Live transports can also emit structured `guard_denial` events before a request finishes. The Python SDK exposes these directly via `handle.next_event()`.
+
 `update_state` sends live `state:update` requests to mutate in-flight `@state` for that request.
 
 ## State Writes
@@ -73,6 +75,8 @@ Each SDK exposes handle APIs for long-running process/execute calls:
 
 - final `stateWrites` from the completion payload
 - streamed `state:write` events emitted during execution
+
+Structured execute results also expose `denials`, a list of structured guard/policy label-flow denials observed during the run.
 
 ## Requirements
 

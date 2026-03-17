@@ -181,6 +181,45 @@ describe('StreamExecution', () => {
     expect(received.length).toBe(0);
   });
 
+  it('emits guard_denial events before rejecting unhandled guarded execution', async () => {
+    const emitter = new ExecutionEmitter();
+    const denials: any[] = [];
+    emitter.on('guard_denial', event => denials.push(event));
+
+    const handle = (await interpret(
+      `
+/guard @blocker before op:exe = when [
+  @mx.op.name == "danger" => deny "blocked by policy"
+  * => allow
+]
+/exe @danger(value) = \`danger: @value\`
+/show @danger("hello")
+      `.trim(),
+      {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        mode: 'stream',
+        emitter,
+        streaming: { enabled: true }
+      }
+    )) as StreamHandle;
+
+    await expect(handle.result()).rejects.toThrow(/blocked by policy/i);
+    await expect(handle.done()).rejects.toThrow(/blocked by policy/i);
+    expect(denials).toEqual([
+      expect.objectContaining({
+        type: 'guard_denial',
+        guard_denial: expect.objectContaining({
+          guard: 'blocker',
+          operation: 'danger',
+          reason: 'blocked by policy',
+          args: { value: 'hello' }
+        })
+      })
+    ]);
+  });
+
   it('rejects handle on execution error', async () => {
     const emitter = new ExecutionEmitter();
     const handle = (await interpret(

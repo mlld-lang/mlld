@@ -43,6 +43,8 @@ export async function handleExecGuardDenial(
     return null;
   }
 
+  options.env.recordGuardDenialFromError(error);
+
   const { reason, guardContext, guardInput, guardName, guardFilter } = denialInfo;
   const deniedContext = {
     denied: true,

@@ -86,6 +86,15 @@ export interface StructuredEffect extends Effect {
   provenance?: SecurityDescriptor;
 }
 
+export interface SDKGuardDenial {
+  guard: string | null;
+  operation: string;
+  reason: string;
+  rule: string | null;
+  labels: string[];
+  args: Record<string, unknown> | null;
+}
+
 export interface ExportMetadata {
   capability?: CapabilityContext;
   security?: SecurityDescriptor;
@@ -105,6 +114,7 @@ export interface StructuredResult {
   effects: StructuredEffect[];
   exports: ExportMap;
   stateWrites: StateWrite[];
+  denials: SDKGuardDenial[];
   metrics?: ExecuteMetrics;
   environment?: Environment;
   streaming?: StreamingResult;
@@ -183,6 +193,12 @@ export type SDKExecutionEvent = {
 export type SDKStateWriteEvent = {
   type: 'state:write';
   write: StateWrite;
+  timestamp: number;
+};
+
+export type SDKGuardDenialEvent = {
+  type: 'guard_denial';
+  guard_denial: SDKGuardDenial;
   timestamp: number;
 };
 
@@ -357,6 +373,7 @@ export type SDKEvent =
   | SDKStreamEvent
   | SDKExecutionEvent
   | SDKStateWriteEvent
+  | SDKGuardDenialEvent
   | SDKDebugEvent
   | SDKStreamingEvent;
 

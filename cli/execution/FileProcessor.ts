@@ -717,7 +717,8 @@ export class FileProcessor {
         } : undefined
       })),
       exports: Object.keys(rest.exports ?? {}),
-      stateWrites: rest.stateWrites ?? []
+      stateWrites: rest.stateWrites ?? [],
+      denials: rest.denials ?? []
     };
 
     return JSON.stringify(structured, null, 2);
@@ -754,6 +755,12 @@ function attachEmitterLogging(emitter: ExecutionEmitter): () => void {
   });
   register('execution:complete', () => {
     log('[execution:complete]');
+  });
+  register('guard_denial', event => {
+    const denial = (event as any).guard_denial;
+    log(
+      `[guard_denial] operation=${denial?.operation ?? ''} guard=${denial?.guard ?? ''} rule=${denial?.rule ?? ''} reason=${denial?.reason ?? ''}`
+    );
   });
 
   return () => {

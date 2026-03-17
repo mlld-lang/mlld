@@ -105,6 +105,7 @@ export class StreamExecution implements StreamExecutionInterface {
       'stream:progress',
       'execution:complete',
       'state:write',
+      'guard_denial',
       'debug:directive:start',
       'debug:directive:complete',
       'debug:variable:create',

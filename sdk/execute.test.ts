@@ -126,6 +126,37 @@ describe('execute', () => {
     expect(metrics.parseMs).toBe(0);
   });
 
+  it('collects structured guard denials in execute results when the script handles them', async () => {
+    await fileSystem.writeFile(
+      routePath,
+      `
+/guard @blocker before op:exe = when [
+  @mx.op.name == "send" => deny "blocked by policy"
+  * => allow
+]
+/exe @send(value) = when [
+  denied => "fallback"
+  * => \`sent: @value\`
+]
+/show @send("hello")
+      `.trim()
+    );
+
+    const result = await execute(routePath, undefined, { fileSystem, pathService });
+
+    expect(result.output).toContain('fallback');
+    expect(result.denials).toEqual([
+      expect.objectContaining({
+        guard: 'blocker',
+        operation: 'send',
+        reason: 'blocked by policy',
+        rule: null,
+        labels: [],
+        args: { value: 'hello' }
+      })
+    ]);
+  });
+
   it('propagates metrics in stream mode', async () => {
     await fileSystem.writeFile(routePath, '/show "stream"');
 

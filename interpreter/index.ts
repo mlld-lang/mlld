@@ -894,6 +894,7 @@ export async function interpret(
         emitter.emit({ type: 'execution:complete', result: structured, timestamp: Date.now() });
         streamExecution.resolve(structured);
       } catch (error) {
+        env.recordGuardDenialFromError(error);
         streamExecution.reject(error);
       }
     })();
@@ -915,6 +916,7 @@ export async function interpret(
       'stream:progress',
       'execution:complete',
       'state:write',
+      'guard_denial',
       'debug:directive:start',
       'debug:directive:complete',
       'debug:variable:create',
@@ -930,7 +932,13 @@ export async function interpret(
     env.enableSDKEvents(debugEmitter);
   }
 
-  const output = await runExecution();
+  let output: string;
+  try {
+    output = await runExecution();
+  } catch (error) {
+    env.recordGuardDenialFromError(error);
+    throw error;
+  }
 
   if (mode === 'structured') {
     return buildStructuredResult(env, output, provenanceEnabled);
@@ -973,6 +981,7 @@ function buildStructuredResult(env: Environment, output: string, provenanceEnabl
     effects,
     exports,
     stateWrites: env.getStateWrites(),
+    denials: env.getGuardDenials(),
     environment: env,
     ...(streaming ? { streaming } : {})
   };

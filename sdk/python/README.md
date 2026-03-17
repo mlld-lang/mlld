@@ -113,6 +113,7 @@ print(handle.result())
 - `request_id`
 - `cancel()`
 - `update_state(path, value, *, timeout=None)`
+- `next_event(timeout=None) -> HandleEvent | None`
 - `wait()`
 - `result()`
 
@@ -136,4 +137,6 @@ print(handle.result())
 
 - Each `Client` keeps one live RPC subprocess for repeated calls.
 - `ExecuteResult.state_writes` merges final-result writes and streamed `state:write` events.
+- `ExecuteResult.denials` collects structured guard/policy label-flow denials seen during execution.
+- `handle.next_event()` can yield `guard_denial` before completion, alongside `state_write` and `complete`.
 - Sync methods remain as wrappers around async handle methods.

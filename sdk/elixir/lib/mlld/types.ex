@@ -31,15 +31,30 @@ defmodule Mlld.Effect do
         }
 end
 
+defmodule Mlld.GuardDenial do
+  @moduledoc "Structured information about a denied guard/policy decision."
+  defstruct guard: nil, operation: "", reason: "", rule: nil, labels: [], args: nil
+
+  @type t :: %__MODULE__{
+          guard: String.t() | nil,
+          operation: String.t(),
+          reason: String.t(),
+          rule: String.t() | nil,
+          labels: [String.t()],
+          args: map() | nil
+        }
+end
+
 defmodule Mlld.ExecuteResult do
   @moduledoc "Structured output from `execute/3`."
-  defstruct output: "", state_writes: [], exports: [], effects: [], metrics: nil
+  defstruct output: "", state_writes: [], exports: [], effects: [], denials: [], metrics: nil
 
   @type t :: %__MODULE__{
           output: String.t(),
           state_writes: [Mlld.StateWrite.t()],
           exports: term(),
           effects: [Mlld.Effect.t()],
+          denials: [Mlld.GuardDenial.t()],
           metrics: Mlld.Metrics.t() | nil
         }
 end
@@ -124,7 +139,7 @@ end
 defmodule Mlld.Types do
   @moduledoc false
 
-  alias Mlld.{AnalysisError, AnalyzeResult, Effect, Executable, ExecuteResult, Guard, Import, Metrics, Needs, StateWrite}
+  alias Mlld.{AnalysisError, AnalyzeResult, Effect, Executable, ExecuteResult, Guard, GuardDenial, Import, Metrics, Needs, StateWrite}
   alias Mlld.JSON
 
   @spec decode_execute_result(map(), [StateWrite.t()]) :: ExecuteResult.t()
@@ -142,11 +157,17 @@ defmodule Mlld.Types do
       |> Map.get("effects", [])
       |> Enum.flat_map(&decode_effect/1)
 
+    denials =
+      result
+      |> Map.get("denials", [])
+      |> Enum.flat_map(&decode_guard_denial/1)
+
     %ExecuteResult{
       output: decode_output(result),
       state_writes: state_writes,
       exports: Map.get(result, "exports", []),
       effects: effects,
+      denials: denials,
       metrics: metrics
     }
   end
@@ -242,6 +263,28 @@ defmodule Mlld.Types do
   end
 
   defp decode_effect(_), do: []
+
+  defp decode_guard_denial(entry) when is_map(entry) do
+    operation = entry |> Map.get("operation", "") |> to_string()
+    reason = entry |> Map.get("reason", "") |> to_string()
+
+    if operation == "" or reason == "" do
+      []
+    else
+      [
+        %GuardDenial{
+          guard: normalize_optional_string(Map.get(entry, "guard")),
+          operation: operation,
+          reason: reason,
+          rule: normalize_optional_string(Map.get(entry, "rule")),
+          labels: decode_string_list(Map.get(entry, "labels", [])),
+          args: normalize_map(Map.get(entry, "args"))
+        }
+      ]
+    end
+  end
+
+  defp decode_guard_denial(_), do: []
 
   defp decode_analysis_errors(entries) do
     entries

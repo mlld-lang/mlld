@@ -228,6 +228,51 @@ describe('LiveStdioServer', () => {
     await harness.close();
   });
 
+  it('forwards guard_denial events and preserves result denials', async () => {
+    const handle = new FakeStreamExecution();
+
+    const harness = createServerHarness({
+      executeFile: async () => handle
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'execute', id: 12, params: { filepath: '/tmp/agent.mld' } })}\n`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const denial = {
+      guard: 'blocker',
+      operation: 'send_email',
+      reason: 'recipient not authorized',
+      rule: null,
+      labels: ['untrusted'],
+      args: { recipients: ['attacker@evil.com'] }
+    };
+
+    handle.emit({
+      type: 'guard_denial',
+      guard_denial: denial,
+      timestamp: Date.now()
+    } as any);
+    handle.resolve({
+      output: 'blocked',
+      effects: [],
+      exports: {},
+      stateWrites: [],
+      denials: [denial]
+    } as any);
+
+    await harness.waitForLineCount(2);
+    const lines = harness.jsonLines();
+
+    expect(lines[0].event.type).toBe('guard_denial');
+    expect(lines[0].event.guard_denial).toEqual(denial);
+    expect(lines[1].result.denials).toEqual([denial]);
+
+    await harness.close();
+  });
+
   it('sanitizes nested error causes in streamed events', async () => {
     const handle = new FakeStreamExecution();
     const harness = createServerHarness({

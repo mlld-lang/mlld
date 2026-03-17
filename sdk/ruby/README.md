@@ -94,3 +94,4 @@ puts handle.result
 
 - Each `Client` keeps one live RPC subprocess for repeated calls.
 - `ExecuteResult.state_writes` merges final-result writes and streamed `state:write` events.
+- `ExecuteResult.denials` collects structured guard/policy label-flow denials observed during execution.

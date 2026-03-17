@@ -50,6 +50,18 @@ class Effect:
 
 
 @dataclass
+class GuardDenial:
+    """Structured information about a denied guard/policy decision."""
+
+    guard: str | None
+    operation: str
+    reason: str
+    rule: str | None = None
+    labels: list[str] = field(default_factory=list)
+    args: dict[str, Any] | None = None
+
+
+@dataclass
 class ExecuteResult:
     """Structured output from execute()."""
 
@@ -57,6 +69,7 @@ class ExecuteResult:
     state_writes: list[StateWrite] = field(default_factory=list)
     exports: Any = field(default_factory=list)  # Can be list or dict depending on mlld output
     effects: list[Effect] = field(default_factory=list)
+    denials: list[GuardDenial] = field(default_factory=list)
     metrics: Metrics | None = None
 
 
@@ -187,8 +200,9 @@ PendingQueue = queue.Queue[tuple[str, Any]]
 class HandleEvent:
     """An event from an in-flight execution."""
 
-    type: str  # "state_write" or "complete"
+    type: str  # "state_write", "guard_denial", or "complete"
     state_write: StateWrite | None = None
+    guard_denial: GuardDenial | None = None
 
 
 class _BaseHandle:
@@ -209,6 +223,7 @@ class _BaseHandle:
         self._is_complete = False
         self._raw_result: dict[str, Any] | None = None
         self._state_write_events: list[StateWrite] = []
+        self._guard_denial_events: list[GuardDenial] = []
         self._error: MlldError | None = None
 
     def cancel(self) -> None:
@@ -244,7 +259,8 @@ class _BaseHandle:
 
     def next_event(self, timeout: float | None = None) -> HandleEvent | None:
         """Block until next event. Returns HandleEvent with type="state_write"
-        for state:// writes, type="complete" when execution finishes.
+        for state:// writes, type="guard_denial" for structured denials,
+        and type="complete" when execution finishes.
         Returns None on timeout."""
 
         if self._is_complete:
@@ -268,6 +284,10 @@ class _BaseHandle:
                 if write is not None:
                     self._state_write_events.append(write)
                     return HandleEvent(type="state_write", state_write=write)
+                denial = _guard_denial_from_event(payload)
+                if denial is not None:
+                    self._guard_denial_events.append(denial)
+                    return HandleEvent(type="guard_denial", guard_denial=denial)
                 continue
 
             if kind == "transport_error":
@@ -286,11 +306,11 @@ class _BaseHandle:
                 self._is_complete = True
                 return HandleEvent(type="complete")
 
-    def _await_raw(self) -> tuple[dict[str, Any], list[StateWrite]]:
+    def _await_raw(self) -> tuple[dict[str, Any], list[StateWrite], list[GuardDenial]]:
         with self._lock:
             if not self._is_complete:
                 try:
-                    self._raw_result, self._state_write_events = self._client._await_request(
+                    self._raw_result, self._state_write_events, self._guard_denial_events = self._client._await_request(
                         self.request_id,
                         self._response_queue,
                         self._timeout,
@@ -305,7 +325,11 @@ class _BaseHandle:
             if self._raw_result is None:
                 raise MlldError("missing live result payload", code="TRANSPORT_ERROR")
 
-            return self._raw_result, list(self._state_write_events)
+            return (
+                self._raw_result,
+                list(self._state_write_events),
+                list(self._guard_denial_events),
+            )
 
 
 class ProcessHandle(_BaseHandle):
@@ -319,7 +343,7 @@ class ProcessHandle(_BaseHandle):
     def result(self) -> str:
         """Wait for completion and return output."""
 
-        result, _ = self._await_raw()
+        result, _, _ = self._await_raw()
         output = result.get("output")
         if output is None:
             output = result.get("value", "")
@@ -337,8 +361,8 @@ class ExecuteHandle(_BaseHandle):
     def result(self) -> ExecuteResult:
         """Wait for completion and return structured output."""
 
-        result, state_write_events = self._await_raw()
-        return _execute_result_from_payload(result, state_write_events)
+        result, state_write_events, guard_denial_events = self._await_raw()
+        return _execute_result_from_payload(result, state_write_events, guard_denial_events)
 
     def write_file(
         self,
@@ -632,7 +656,7 @@ class Client:
             MlldError: If analysis fails.
         """
 
-        result, _ = self._request("analyze", {"filepath": filepath}, None)
+        result, _, _ = self._request("analyze", {"filepath": filepath}, None)
 
         errors = [
             AnalysisError(
@@ -715,7 +739,7 @@ class Client:
         if base_path is not None:
             params["basePath"] = base_path
 
-        result, _ = self._request("fs:status", params, timeout if timeout is not None else self.timeout)
+        result, _, _ = self._request("fs:status", params, timeout if timeout is not None else self.timeout)
         raw_items = result.get("value", result.get("result", []))
         if not isinstance(raw_items, list):
             raise MlldError("invalid fs:status payload", code="TRANSPORT_ERROR")
@@ -753,7 +777,7 @@ class Client:
         if base_path is not None:
             params["basePath"] = base_path
 
-        result, _ = self._request("sig:sign", params, timeout if timeout is not None else self.timeout)
+        result, _, _ = self._request("sig:sign", params, timeout if timeout is not None else self.timeout)
         return _file_verify_result_from_payload(_unwrap_live_result(result))
 
     def verify(
@@ -776,7 +800,7 @@ class Client:
         if base_path is not None:
             params["basePath"] = base_path
 
-        result, _ = self._request("sig:verify", params, timeout if timeout is not None else self.timeout)
+        result, _, _ = self._request("sig:verify", params, timeout if timeout is not None else self.timeout)
         return _file_verify_result_from_payload(_unwrap_live_result(result))
 
     def sign_content(
@@ -812,7 +836,7 @@ class Client:
         if base_path is not None:
             params["basePath"] = base_path
 
-        result, _ = self._request(
+        result, _, _ = self._request(
             "sig:sign-content",
             params,
             timeout if timeout is not None else self.timeout,
@@ -824,7 +848,7 @@ class Client:
         method: str,
         params: dict[str, Any],
         timeout: float | None,
-    ) -> tuple[dict[str, Any], list[StateWrite]]:
+    ) -> tuple[dict[str, Any], list[StateWrite], list[GuardDenial]]:
         request_id, response_queue = self._send_request(method, params)
         return self._await_request(request_id, response_queue, timeout)
 
@@ -833,8 +857,9 @@ class Client:
         request_id: int,
         response_queue: PendingQueue,
         timeout: float | None,
-    ) -> tuple[dict[str, Any], list[StateWrite]]:
+    ) -> tuple[dict[str, Any], list[StateWrite], list[GuardDenial]]:
         state_write_events: list[StateWrite] = []
+        guard_denial_events: list[GuardDenial] = []
 
         deadline = None if timeout is None else time.monotonic() + timeout
 
@@ -856,6 +881,9 @@ class Client:
                 write = _state_write_from_event(payload)
                 if write is not None:
                     state_write_events.append(write)
+                denial = _guard_denial_from_event(payload)
+                if denial is not None:
+                    guard_denial_events.append(denial)
                 continue
 
             if kind == "transport_error":
@@ -869,7 +897,7 @@ class Client:
                 raise _error_from_payload(error_payload)
 
             payload.pop("id", None)
-            return payload, state_write_events
+            return payload, state_write_events, guard_denial_events
 
     def _send_request(self, method: str, params: dict[str, Any]) -> tuple[int, PendingQueue]:
         with self._lock:
@@ -964,7 +992,7 @@ class Client:
 
         while True:
             try:
-                result, _ = self._request("file:write", params, timeout)
+                result, _, _ = self._request("file:write", params, timeout)
                 return _file_verify_result_from_payload(_unwrap_live_result(result))
             except MlldError as error:
                 if error.code != "REQUEST_NOT_FOUND":
@@ -1137,6 +1165,37 @@ def _state_write_from_event(event: dict[str, Any]) -> StateWrite | None:
     return _state_write_from_payload(event.get("write"))
 
 
+def _guard_denial_from_payload(payload: Any) -> GuardDenial | None:
+    if not isinstance(payload, dict):
+        return None
+
+    operation = payload.get("operation")
+    reason = payload.get("reason")
+    if not isinstance(operation, str) or not operation:
+        return None
+    if not isinstance(reason, str) or not reason:
+        return None
+
+    labels = payload.get("labels")
+    args = payload.get("args")
+
+    return GuardDenial(
+        guard=payload.get("guard") if isinstance(payload.get("guard"), str) else None,
+        operation=operation,
+        reason=reason,
+        rule=payload.get("rule") if isinstance(payload.get("rule"), str) else None,
+        labels=[label for label in labels if isinstance(label, str)] if isinstance(labels, list) else [],
+        args=args if isinstance(args, dict) else None,
+    )
+
+
+def _guard_denial_from_event(event: dict[str, Any]) -> GuardDenial | None:
+    if event.get("type") != "guard_denial":
+        return None
+
+    return _guard_denial_from_payload(event.get("guard_denial"))
+
+
 def _state_write_key(state_write: StateWrite) -> str:
     value_json = json.dumps(state_write.value, sort_keys=True, separators=(",", ":"), default=str)
     return f"{state_write.path}|{value_json}"
@@ -1161,9 +1220,45 @@ def _merge_state_writes(primary: list[StateWrite], secondary: list[StateWrite]) 
     return merged
 
 
+def _guard_denial_key(denial: GuardDenial) -> str:
+    return json.dumps(
+        {
+            "guard": denial.guard,
+            "operation": denial.operation,
+            "reason": denial.reason,
+            "rule": denial.rule,
+            "labels": sorted(denial.labels),
+            "args": denial.args,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+
+def _merge_guard_denials(primary: list[GuardDenial], secondary: list[GuardDenial]) -> list[GuardDenial]:
+    if not secondary:
+        return primary
+    if not primary:
+        return secondary
+
+    merged: list[GuardDenial] = []
+    seen: set[str] = set()
+
+    for denial in [*primary, *secondary]:
+        key = _guard_denial_key(denial)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(denial)
+
+    return merged
+
+
 def _execute_result_from_payload(
     result: dict[str, Any],
     state_write_events: list[StateWrite],
+    guard_denial_events: list[GuardDenial],
 ) -> ExecuteResult:
     state_writes: list[StateWrite] = []
     for raw_write in result.get("stateWrites", []):
@@ -1172,6 +1267,15 @@ def _execute_result_from_payload(
             state_writes.append(state_write)
 
     state_writes = _merge_state_writes(state_writes, state_write_events)
+    denials = [
+        denial
+        for denial in (
+            _guard_denial_from_payload(raw_denial)
+            for raw_denial in result.get("denials", [])
+        )
+        if denial is not None
+    ]
+    denials = _merge_guard_denials(denials, guard_denial_events)
 
     metrics = None
     if isinstance(result.get("metrics"), dict):
@@ -1197,6 +1301,7 @@ def _execute_result_from_payload(
         state_writes=state_writes,
         exports=result.get("exports", []),
         effects=effects,
+        denials=denials,
         metrics=metrics,
     )
 

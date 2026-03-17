@@ -138,11 +138,12 @@ type ExecuteOptions struct {
 
 // ExecuteResult contains structured output from Execute.
 type ExecuteResult struct {
-	Output      string       `json:"output"`
-	StateWrites []StateWrite `json:"stateWrites,omitempty"`
-	Exports     any          `json:"exports,omitempty"` // Can be array or object depending on mlld output
-	Effects     []Effect     `json:"effects,omitempty"`
-	Metrics     *Metrics     `json:"metrics,omitempty"`
+	Output      string        `json:"output"`
+	StateWrites []StateWrite  `json:"stateWrites,omitempty"`
+	Exports     any           `json:"exports,omitempty"` // Can be array or object depending on mlld output
+	Effects     []Effect      `json:"effects,omitempty"`
+	Denials     []GuardDenial `json:"denials,omitempty"`
+	Metrics     *Metrics      `json:"metrics,omitempty"`
 }
 
 // Effect represents an output effect from execution.
@@ -150,6 +151,16 @@ type Effect struct {
 	Type     string         `json:"type"`
 	Content  string         `json:"content,omitempty"`
 	Security map[string]any `json:"security,omitempty"`
+}
+
+// GuardDenial represents a structured denied guard/policy decision.
+type GuardDenial struct {
+	Guard     *string        `json:"guard,omitempty"`
+	Operation string         `json:"operation"`
+	Reason    string         `json:"reason"`
+	Rule      *string        `json:"rule,omitempty"`
+	Labels    []string       `json:"labels,omitempty"`
+	Args      map[string]any `json:"args,omitempty"`
 }
 
 // StateWrite represents a write to the state:// protocol.

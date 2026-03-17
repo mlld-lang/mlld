@@ -1049,6 +1049,9 @@ pub struct ExecuteResult {
     #[serde(default)]
     pub effects: Vec<Effect>,
 
+    #[serde(default)]
+    pub denials: Vec<GuardDenial>,
+
     pub metrics: Option<Metrics>,
 }
 
@@ -1059,6 +1062,20 @@ pub struct Effect {
     pub effect_type: String,
     pub content: Option<String>,
     pub security: Option<Value>,
+}
+
+/// Structured information about a denied guard/policy decision.
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct GuardDenial {
+    pub guard: Option<String>,
+    pub operation: String,
+    pub reason: String,
+    pub rule: Option<String>,
+
+    #[serde(default)]
+    pub labels: Vec<String>,
+
+    pub args: Option<Value>,
 }
 
 /// A write to the state:// protocol.

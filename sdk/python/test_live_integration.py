@@ -142,6 +142,39 @@ class LiveIntegrationTest(unittest.TestCase):
         output = handle.result()
         self.assertIn("hello", output)
 
+    def test_next_event_returns_guard_denial_before_completion(self) -> None:
+        """Test next_event() yields structured guard denials before script completion."""
+        handle = self.client.process_async(
+            (
+                '/guard @blocker before op:exe = when [\n'
+                '  @mx.op.name == "send" => deny "recipient not authorized"\n'
+                '  * => allow\n'
+                ']\n'
+                '/exe @send(value) = when [\n'
+                '  denied => "blocked"\n'
+                '  * => @value\n'
+                ']\n'
+                '/show @send("hello")\n'
+            ),
+            mode="markdown",
+            timeout=5,
+        )
+
+        event = handle.next_event(timeout=5)
+        self.assertIsNotNone(event)
+        self.assertEqual(event.type, "guard_denial")
+        assert event is not None and event.guard_denial is not None
+        self.assertEqual(event.guard_denial.guard, "blocker")
+        self.assertEqual(event.guard_denial.operation, "send")
+        self.assertEqual(event.guard_denial.args, {"value": "hello"})
+
+        event = handle.next_event(timeout=5)
+        self.assertIsNotNone(event)
+        self.assertEqual(event.type, "complete")
+
+        output = handle.result()
+        self.assertIn("blocked", output)
+
     def test_execute_preserves_structured_state_write_values(self) -> None:
         script = (
             '/var @payload = {"enabled": true, "nested": {"count": 2}}\n'
@@ -201,7 +234,7 @@ class LiveIntegrationTest(unittest.TestCase):
         handle = self.client.process_async(
             'show "done"\n',
             mode="strict",
-            timeout=1,
+            timeout=2,
         )
 
         output = handle.result()

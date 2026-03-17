@@ -127,12 +127,13 @@ import { taintPostHook } from '../hooks/taint-post-hook';
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
-import type { SDKEvent, StreamingResult } from '@sdk/types';
+import type { SDKEvent, SDKGuardDenial, StreamingResult } from '@sdk/types';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import type { ImportApproval } from '@core/security/ImportApproval';
 import type { ImmutableCache } from '@core/security/ImmutableCache';
 import type { WorkspaceValue, WorkspaceMcpBridgeHandle } from '@core/types/workspace';
 import { DEFAULT_CHECKPOINT_RESUME_MODE } from '@interpreter/checkpoint/policy';
+import { extractGuardDenial } from '@interpreter/eval/guard-denial-events';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
 
@@ -271,6 +272,8 @@ export class Environment
 
   private stateWrites: StateWrite[] = [];
   private stateWriteIndex = 0;
+  private guardDenials: SDKGuardDenial[] = [];
+  private readonly recordedGuardDenialErrors = new WeakSet<object>();
   private stateSnapshot?: Record<string, any>;
   private stateResolver?: DynamicModuleResolver;
   private stateLabels: DataLabel[] = [];
@@ -1194,6 +1197,52 @@ export class Environment
 
   getStateWrites(): StateWrite[] {
     return this.getRootEnvironment().stateWrites;
+  }
+
+  recordGuardDenial(denial: SDKGuardDenial): void {
+    const root = this.getRootEnvironment();
+    const entry: SDKGuardDenial = {
+      ...denial,
+      labels: Array.isArray(denial.labels) ? [...denial.labels] : [],
+      args: denial.args ? { ...denial.args } : null
+    };
+    root.guardDenials.push(entry);
+
+    if (root.hasSDKEmitter()) {
+      root.emitSDKEvent({
+        type: 'guard_denial',
+        guard_denial: entry,
+        timestamp: Date.now()
+      } as SDKEvent);
+    }
+  }
+
+  recordGuardDenialFromError(error: unknown): void {
+    if (!error || typeof error !== 'object') {
+      return;
+    }
+
+    const root = this.getRootEnvironment();
+    if (root.recordedGuardDenialErrors.has(error as object)) {
+      return;
+    }
+
+    const denial = extractGuardDenial(error);
+    if (!denial) {
+      return;
+    }
+
+    root.recordedGuardDenialErrors.add(error as object);
+    root.recordGuardDenial(denial);
+  }
+
+  getGuardDenials(): SDKGuardDenial[] {
+    const root = this.getRootEnvironment();
+    return root.guardDenials.map(denial => ({
+      ...denial,
+      labels: [...denial.labels],
+      args: denial.args ? { ...denial.args } : null
+    }));
   }
 
   hasDynamicStateSnapshot(): boolean {

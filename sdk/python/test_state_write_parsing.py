@@ -35,6 +35,7 @@ class StateWriteParsingTest(unittest.TestCase):
                 ],
             },
             [streamed],
+            [],
         )
 
         self.assertEqual(len(result.state_writes), 1)
@@ -54,6 +55,55 @@ class StateWriteParsingTest(unittest.TestCase):
         self.assertIsNotNone(write)
         assert write is not None
         self.assertEqual(write.value, "true")
+
+    def test_guard_denial_parser_decodes_stream_event(self) -> None:
+        denial = mlld._guard_denial_from_event(
+            {
+                "type": "guard_denial",
+                "guard_denial": {
+                    "guard": "blocker",
+                    "operation": "send_email",
+                    "reason": "recipient not authorized",
+                    "rule": None,
+                    "labels": ["untrusted"],
+                    "args": {"recipients": ["attacker@evil.com"]},
+                },
+            }
+        )
+
+        self.assertIsNotNone(denial)
+        assert denial is not None
+        self.assertEqual(denial.guard, "blocker")
+        self.assertEqual(denial.operation, "send_email")
+        self.assertEqual(denial.args, {"recipients": ["attacker@evil.com"]})
+
+    def test_execute_result_merges_guard_denials_without_duplicates(self) -> None:
+        streamed = mlld.GuardDenial(
+            guard="blocker",
+            operation="send_email",
+            reason="recipient not authorized",
+            labels=["untrusted"],
+            args={"recipients": ["attacker@evil.com"]},
+        )
+        result = mlld._execute_result_from_payload(
+            {
+                "output": "blocked",
+                "denials": [
+                    {
+                        "guard": "blocker",
+                        "operation": "send_email",
+                        "reason": "recipient not authorized",
+                        "labels": ["untrusted"],
+                        "args": {"recipients": ["attacker@evil.com"]},
+                    }
+                ],
+            },
+            [],
+            [streamed],
+        )
+
+        self.assertEqual(len(result.denials), 1)
+        self.assertEqual(result.denials[0].operation, "send_email")
 
 
 if __name__ == "__main__":

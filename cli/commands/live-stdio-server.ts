@@ -134,6 +134,7 @@ const SDK_EVENT_TYPES: SDKEvent['type'][] = [
   'stream:progress',
   'execution:complete',
   'state:write',
+  'guard_denial',
   'debug:directive:start',
   'debug:directive:complete',
   'debug:variable:create',
