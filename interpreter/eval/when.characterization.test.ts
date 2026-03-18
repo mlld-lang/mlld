@@ -238,6 +238,19 @@ describe('when evaluator characterization', () => {
     expect(textResult).toBe(true);
   });
 
+  it('fails closed when a condition receives error marker payloads', async () => {
+    const { ast } = await parse([
+      '/exe @maybeFail(n) = js {',
+      '  if (Number(n) === 2) throw new Error("boom");',
+      '  return "ok";',
+      '}',
+      '/var @items = for parallel(2) @n in [1, 2] => @maybeFail(@n)',
+      '/when @items => show "should not run"'
+    ].join('\n'));
+
+    await expect(evaluate(ast, env)).rejects.toThrow('Condition evaluation received an error-like value');
+  });
+
   it('keeps denied literal condition handling stable', async () => {
     const deniedLiteral = [{
       type: 'Literal',

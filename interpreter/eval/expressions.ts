@@ -7,6 +7,7 @@ import {
   type EvaluatorResult
 } from '../utils/evaluator-result';
 import { executeParallelExecInvocations } from './helpers/parallel-exec';
+import { assertNoErrorLikeBooleanValue } from './truthiness-guard';
 import type { Variable } from '@core/types/variable';
 import {
   isTextLike,
@@ -500,6 +501,36 @@ export async function evaluateUnifiedExpression(
   }
 }
 
+function normalizeBinaryOperator(operator: unknown): string {
+  return Array.isArray(operator) ? operator[0] : String(operator);
+}
+
+function isParallelStreamExecInvocation(node: any): boolean {
+  return node?.type === 'ExecInvocation' && node?.withClause?.stream === true;
+}
+
+function collectParallelStreamExecInvocations(node: any): any[] | null {
+  if (isParallelStreamExecInvocation(node)) {
+    return [node];
+  }
+
+  if (!node || node.type !== 'BinaryExpression') {
+    return null;
+  }
+
+  if (normalizeBinaryOperator(node.operator) !== '||') {
+    return null;
+  }
+
+  const left = collectParallelStreamExecInvocations(node.left);
+  const right = collectParallelStreamExecInvocations(node.right);
+  if (!left || !right) {
+    return null;
+  }
+
+  return [...left, ...right];
+}
+
 /**
  * Evaluate binary expressions (&&, ||, ==, !=, ~=, !~=, <, >, <=, >=)
  */
@@ -508,24 +539,16 @@ async function evaluateBinaryExpression(
   env: Environment,
   context: EvaluationContext
 ): Promise<EvaluatorResult> {
-  let { operator } = node;
-  
-  // Handle operator being an array (from PEG.js negative lookahead)
-  if (Array.isArray(operator)) {
-    operator = operator[0];
-  }
-  
+  const operator = normalizeBinaryOperator(node.operator);
+
   const isConditionContext =
     Boolean(context?.isCondition) ||
     Boolean(node?.meta?.isWhenCondition) ||
     Boolean(node?.meta?.isBooleanContext);
-  const isExecParallel =
-    operator === '||' &&
-    !isConditionContext &&
-    node.left?.type === 'ExecInvocation' &&
-    node.right?.type === 'ExecInvocation';
-  if (isExecParallel) {
-    const { value, descriptor } = await executeParallelExecInvocations(node.left, node.right, env);
+  const parallelStreamNodes =
+    operator === '||' && !isConditionContext ? collectParallelStreamExecInvocations(node) : null;
+  if (parallelStreamNodes && parallelStreamNodes.length > 1) {
+    const { value, descriptor } = await executeParallelExecInvocations(parallelStreamNodes, env);
     return createEvaluatorResult(value, descriptor);
   }
   
@@ -534,6 +557,7 @@ async function evaluateBinaryExpression(
   
   // Short-circuit evaluation for logical operators  
   if (operator === '&&') {
+    assertNoErrorLikeBooleanValue(leftValue, 'Logical && evaluation');
     const leftTruthy = isTruthy(leftValue);
     if (!leftTruthy) {
       // Short-circuit: if left is falsy, return left value
@@ -545,6 +569,7 @@ async function evaluateBinaryExpression(
   }
   
   if (operator === '||') {
+    assertNoErrorLikeBooleanValue(leftValue, 'Logical || evaluation');
     const leftTruthy = isTruthy(leftValue);
     if (leftTruthy) {
       // Short-circuit: if left is truthy, return left value
@@ -648,6 +673,7 @@ async function evaluateUnaryExpression(
   
   switch (node.operator) {
     case '!':
+      assertNoErrorLikeBooleanValue(operandValue, 'Unary ! evaluation');
       return createEvaluatorResult(!isTruthy(operandValue), operandResult.descriptor);
     case '-':
       return createEvaluatorResult(-toNumber(operandValue), operandResult.descriptor);
@@ -669,6 +695,7 @@ async function evaluateTernaryExpression(
   // Pass isCondition: true so missing field access returns undefined instead of throwing
   const conditionResult = await evaluateUnifiedExpression(node.condition, env, { ...context, isCondition: true });
   const conditionValue = conditionResult.value;
+  assertNoErrorLikeBooleanValue(conditionValue, 'Ternary condition evaluation');
   
   return isTruthy(conditionValue)
     ? await evaluateUnifiedExpression(node.trueBranch, env, context)

@@ -48,15 +48,14 @@ function toPipelineCommand(node: any): PipelineStageEntry {
 }
 
 /**
- * Execute two ExecInvocations in parallel using pipeline semantics.
+ * Execute a streamed ExecInvocation `||` chain in parallel using pipeline semantics.
  * Returns the aggregated result (array string/StructuredValue) plus any descriptor.
  */
 export async function executeParallelExecInvocations(
-  left: any,
-  right: any,
+  nodes: any[],
   env: Environment
 ): Promise<ParallelExecResult> {
-  const stage = [toPipelineCommand(left), toPipelineCommand(right)] as PipelineStage;
+  const stage = nodes.map(node => toPipelineCommand(node)) as PipelineStage;
   const pipeline: PipelineStage[] = [stage];
 
   const executor = new PipelineExecutor(pipeline, env);
