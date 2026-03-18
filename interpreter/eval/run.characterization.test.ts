@@ -425,6 +425,40 @@ describe('evaluateRun phase-0 characterization', () => {
     await expect(evaluateRun(runDirective, env)).rejects.toThrow("Pipeline function '@parse.missing' is not defined");
   });
 
+  it('preserves labels for variable arguments in /run executables', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/var untrusted @data = "secret"',
+        '/exe @labels(a) = [',
+        '  => @a.mx.labels',
+        ']',
+        '/run @labels(@data)'
+      ].join('\n'),
+      env
+    );
+
+    const result = await evaluateRun(runDirective, env);
+    expect(asText(result.value)).toBe('["untrusted"]');
+  });
+
+  it('preserves labels for inline object arguments in /run executables', async () => {
+    const env = createEnv();
+    const runDirective = await setupSingleRun(
+      [
+        '/var untrusted @data = "secret"',
+        '/exe @labels(a) = [',
+        '  => @a.mx.labels',
+        ']',
+        '/run @labels({ value: @data })'
+      ].join('\n'),
+      env
+    );
+
+    const result = await evaluateRun(runDirective, env);
+    expect(asText(result.value)).toBe('["untrusted"]');
+  });
+
   it('keeps runExec commandRef recursion behavior and circular-call detection', async () => {
     const successEnv = createEnv();
     const successRun = await setupSingleRun(

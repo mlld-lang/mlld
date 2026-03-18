@@ -46,6 +46,7 @@ import {
   enforceRunCapabilityPolicy,
   enforceRunCommandPolicy
 } from './run-policy-context';
+import { VariableMetadataUtils, type Variable } from '@core/types/variable';
 
 export type RunExecInterpolateWithPendingDescriptor = (
   nodes: any,
@@ -80,6 +81,8 @@ export type RunExecDefinitionDispatchParams = {
   argValues: Record<string, string>;
   argRuntimeValues: Record<string, unknown>;
   argDescriptors: SecurityDescriptor[];
+  argOriginalVariables: Record<string, Variable | undefined>;
+  argBindingDescriptors: Record<string, SecurityDescriptor | undefined>;
   exeLabels: string[];
   services: RunExecDispatcherServices;
 };
@@ -94,7 +97,46 @@ export type RunExecArgumentExtractionResult = {
   argValues: Record<string, string>;
   argRuntimeValues: Record<string, unknown>;
   argDescriptors: SecurityDescriptor[];
+  argOriginalVariables: Record<string, Variable | undefined>;
+  argBindingDescriptors: Record<string, SecurityDescriptor | undefined>;
 };
+
+async function resolveRunArgumentOriginalVariable(
+  arg: unknown,
+  env: Environment,
+  evaluatedValue: unknown
+): Promise<Variable | undefined> {
+  if (!arg || typeof arg !== 'object' || !('type' in arg) || (arg as any).type !== 'VariableReference') {
+    return undefined;
+  }
+
+  const varRef = arg as any;
+  const variable = env.getVariable(varRef.identifier);
+  const isWholeVariableReference = !Array.isArray(varRef.fields) || varRef.fields.length === 0;
+  if (!variable || !isWholeVariableReference) {
+    return undefined;
+  }
+
+  const { isTemplate } = await import('@core/types/variable');
+  if (isTemplate(variable) && typeof evaluatedValue === 'string') {
+    return undefined;
+  }
+
+  return variable;
+}
+
+function mergeRunArgumentDescriptors(
+  env: Environment,
+  descriptors: readonly SecurityDescriptor[]
+): SecurityDescriptor | undefined {
+  if (descriptors.length === 0) {
+    return undefined;
+  }
+  if (descriptors.length === 1) {
+    return descriptors[0];
+  }
+  return env.mergeSecurityDescriptors(...descriptors);
+}
 
 export async function extractRunExecArguments(params: {
   directive: DirectiveNode;
@@ -107,39 +149,53 @@ export async function extractRunExecArguments(params: {
   const argValues: Record<string, string> = {};
   const argRuntimeValues: Record<string, unknown> = {};
   const argDescriptors: SecurityDescriptor[] = [];
+  const argOriginalVariables: Record<string, Variable | undefined> = {};
+  const argBindingDescriptors: Record<string, SecurityDescriptor | undefined> = {};
   const paramNames = (definition as any).paramNames as string[] | undefined;
   if (!paramNames || paramNames.length === 0) {
-    return { argValues, argRuntimeValues, argDescriptors };
+    return {
+      argValues,
+      argRuntimeValues,
+      argDescriptors,
+      argOriginalVariables,
+      argBindingDescriptors
+    };
   }
 
   const { evaluateExecInvocationArgs } = await import('@interpreter/eval/exec/args');
   const { evaluateExecInvocation } = await import('@interpreter/eval/exec-invocation');
-  const collectedDescriptors: SecurityDescriptor[] = [];
-  const evaluated = await evaluateExecInvocationArgs({
-    args,
-    env,
-    commandName: ((directive.values as any)?.command as string) || 'run',
-    services: {
-      interpolate: async (nodes: any[], targetEnv: Environment, context?: InterpolationContext) => {
-        return interpolateWithPendingDescriptor(
-          nodes,
-          context ?? InterpolationContext.Default,
-          targetEnv
-        );
-      },
-      evaluateExecInvocation: async (node, targetEnv) => evaluateExecInvocation(node, targetEnv),
-      mergeResultDescriptor: descriptor => {
-        if (descriptor) {
-          collectedDescriptors.push(descriptor);
-        }
-      }
-    }
-  });
-
   for (let i = 0; i < paramNames.length; i++) {
     const paramName = paramNames[i];
-    const evaluatedString = evaluated.evaluatedArgStrings[i];
-    const evaluatedRuntime = evaluated.evaluatedArgs[i];
+    const arg = args[i];
+    if (arg === undefined) {
+      argValues[paramName] = '';
+      argRuntimeValues[paramName] = '';
+      continue;
+    }
+
+    const collectedDescriptors: SecurityDescriptor[] = [];
+    const evaluated = await evaluateExecInvocationArgs({
+      args: [arg],
+      env,
+      commandName: ((directive.values as any)?.command as string) || 'run',
+      services: {
+        interpolate: async (nodes: any[], targetEnv: Environment, context?: InterpolationContext) => {
+          return interpolateWithPendingDescriptor(
+            nodes,
+            context ?? InterpolationContext.Default,
+            targetEnv
+          );
+        },
+        evaluateExecInvocation: async (node, targetEnv) => evaluateExecInvocation(node, targetEnv),
+        mergeResultDescriptor: descriptor => {
+          if (descriptor) {
+            collectedDescriptors.push(descriptor);
+          }
+        }
+      }
+    });
+    const evaluatedString = evaluated.evaluatedArgStrings[0];
+    const evaluatedRuntime = evaluated.evaluatedArgs[0];
 
     if (evaluatedString === undefined) {
       argValues[paramName] = '';
@@ -149,13 +205,22 @@ export async function extractRunExecArguments(params: {
 
     argValues[paramName] = evaluatedString;
     argRuntimeValues[paramName] = evaluatedRuntime;
+    argOriginalVariables[paramName] = await resolveRunArgumentOriginalVariable(arg, env, evaluatedRuntime);
+
+    const mergedDescriptor = mergeRunArgumentDescriptors(env, collectedDescriptors);
+    if (mergedDescriptor) {
+      argDescriptors.push(mergedDescriptor);
+      argBindingDescriptors[paramName] = mergedDescriptor;
+    }
   }
 
-  if (collectedDescriptors.length > 0) {
-    argDescriptors.push(...collectedDescriptors);
-  }
-
-  return { argValues, argRuntimeValues, argDescriptors };
+  return {
+    argValues,
+    argRuntimeValues,
+    argDescriptors,
+    argOriginalVariables,
+    argBindingDescriptors
+  };
 }
 
 type RunExecDispatchContext = RunExecDefinitionDispatchParams;
@@ -173,14 +238,26 @@ function bindRunParameterVariable(
   targetEnv: Environment,
   name: string,
   value: unknown,
-  stringValue: string
+  stringValue: string,
+  options?: {
+    originalVariable?: Variable;
+    descriptor?: SecurityDescriptor;
+  }
 ): void {
+  const metadata = options?.descriptor
+    ? VariableMetadataUtils.applySecurityMetadata(undefined, {
+        existingDescriptor: options.descriptor
+      })
+    : undefined;
   const parameter = createParameterVariable({
     name,
     value,
     stringValue,
+    originalVariable: options?.originalVariable,
+    allowOriginalReuse: Boolean(options?.originalVariable),
     origin: 'directive',
     metadataFactory: () => ({
+      ...(metadata ? { metadata } : {}),
       internal: {
         isSystem: true,
         isParameter: true
@@ -194,6 +271,21 @@ function bindRunParameterVariable(
   }
 
   targetEnv.setParameterVariable(name, createSimpleTextVariable(name, stringValue));
+}
+
+function bindRunParameterVariables(
+  targetEnv: Environment,
+  argValues: Record<string, string>,
+  argRuntimeValues: Record<string, unknown>,
+  argOriginalVariables: Record<string, Variable | undefined>,
+  argBindingDescriptors: Record<string, SecurityDescriptor | undefined>
+): void {
+  for (const [key, stringValue] of Object.entries(argValues)) {
+    bindRunParameterVariable(targetEnv, key, argRuntimeValues[key], stringValue, {
+      originalVariable: argOriginalVariables[key],
+      descriptor: argBindingDescriptors[key]
+    });
+  }
 }
 
 async function handleCommandDefinition(
@@ -214,6 +306,8 @@ async function handleCommandDefinition(
     argValues,
     argRuntimeValues,
     argDescriptors,
+    argOriginalVariables,
+    argBindingDescriptors,
     exeLabels,
     callStack,
     services
@@ -231,9 +325,7 @@ async function handleCommandDefinition(
   if (execVar.internal?.capturedModuleEnv instanceof Map) {
     tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
   }
-  for (const [key, stringValue] of Object.entries(argValues)) {
-    bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
-  }
+  bindRunParameterVariables(tempEnv, argValues, argRuntimeValues, argOriginalVariables, argBindingDescriptors);
 
   const workingDirectory = await executeInWorkingDirectory(
     (definition as any)?.workingDir,
@@ -413,6 +505,9 @@ async function handleCommandRefDefinition(
     definition,
     execVar,
     argValues,
+    argRuntimeValues,
+    argOriginalVariables,
+    argBindingDescriptors,
     callStack,
     services
   } = ctx;
@@ -424,9 +519,13 @@ async function handleCommandRefDefinition(
     if (execVar.internal?.capturedModuleEnv instanceof Map) {
       execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
     }
-    for (const [key, value] of Object.entries(argValues)) {
-      execEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
-    }
+    bindRunParameterVariables(
+      execEnv,
+      argValues,
+      argRuntimeValues,
+      argOriginalVariables,
+      argBindingDescriptors
+    );
     const mergedAuthUsing = mergeAuthUsing((definition as any).withClause as WithClause | undefined, withClause);
     const refWithClause = mergedAuthUsing
       ? { ...(withClause || {}), ...mergedAuthUsing }
@@ -561,6 +660,8 @@ async function handleCodeDefinition(
     argValues,
     argRuntimeValues,
     argDescriptors,
+    argOriginalVariables,
+    argBindingDescriptors,
     exeLabels,
     callStack,
     services
@@ -579,9 +680,7 @@ async function handleCodeDefinition(
   if (execVar.internal?.capturedModuleEnv instanceof Map) {
     tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
   }
-  for (const [key, value] of Object.entries(argValues)) {
-    tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
-  }
+  bindRunParameterVariables(tempEnv, argValues, argRuntimeValues, argOriginalVariables, argBindingDescriptors);
   const workingDirectory = await executeInWorkingDirectory(
     (definition as any)?.workingDir,
     tempEnv,
@@ -698,7 +797,10 @@ async function handleCodeDefinition(
       execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
     }
     for (const [key, value] of Object.entries(codeParams)) {
-      bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
+      bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '', {
+        originalVariable: argOriginalVariables[key],
+        descriptor: argBindingDescriptors[key]
+      });
     }
 
     const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
@@ -728,7 +830,10 @@ async function handleCodeDefinition(
       execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
     }
     for (const [key, value] of Object.entries(codeParams)) {
-      bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
+      bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '', {
+        originalVariable: argOriginalVariables[key],
+        descriptor: argBindingDescriptors[key]
+      });
     }
 
     const { evaluateExeBlock } = await import('@interpreter/eval/exe');
@@ -756,7 +861,10 @@ async function handleCodeDefinition(
       execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
     }
     for (const [key, value] of Object.entries(codeParams)) {
-      bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '');
+      bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '', {
+        originalVariable: argOriginalVariables[key],
+        descriptor: argBindingDescriptors[key]
+      });
     }
 
     const { evaluateBox } = await import('@interpreter/eval/box');
@@ -830,14 +938,22 @@ async function handleCodeDefinition(
 async function handleTemplateDefinition(
   ctx: RunExecDispatchContext
 ): Promise<RunExecDefinitionDispatchResult> {
-  const { env, definition, argValues, argRuntimeValues, callStack, services, execVar } = ctx;
+  const {
+    env,
+    definition,
+    argValues,
+    argRuntimeValues,
+    argOriginalVariables,
+    argBindingDescriptors,
+    callStack,
+    services,
+    execVar
+  } = ctx;
   const tempEnv = createTemplateInterpolationEnv(env.createChild(), definition);
   if (execVar.internal?.capturedModuleEnv instanceof Map) {
     tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
   }
-  for (const [key, stringValue] of Object.entries(argValues)) {
-    bindRunParameterVariable(tempEnv, key, argRuntimeValues[key], stringValue);
-  }
+  bindRunParameterVariables(tempEnv, argValues, argRuntimeValues, argOriginalVariables, argBindingDescriptors);
 
   const templateOutput = await services.interpolateWithPendingDescriptor(
     (definition as any).template,

@@ -7,6 +7,10 @@ import { MlldDirectiveError } from '@core/errors';
 import { evaluateCondition, evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
 import { createExeReturnControl, isExeReturnControl, resolveExeReturnValue } from './exe-return';
+import {
+  applySecurityDescriptorToCurrentVariables,
+  attachSecurityDescriptorToValue
+} from './control-flow-security';
 
 export async function evaluateIf(
   node: IfNode,
@@ -22,23 +26,30 @@ export async function evaluateIf(
     );
   }
 
-  const conditionResult = await evaluateCondition(node.values.condition, env);
+  const conditionEnv = env.createChild();
+  const conditionResult = await evaluateCondition(node.values.condition, conditionEnv);
+  const conditionDescriptor = conditionEnv.getLocalSecurityDescriptor();
   const branch = conditionResult ? node.values.then : node.values.else;
   if (!branch || branch.length === 0) {
     return { value: '', env };
   }
 
   let blockEnv = env.createChild();
+  if (conditionDescriptor) {
+    blockEnv.recordSecurityDescriptor(conditionDescriptor);
+  }
   let lastValue: unknown = '';
 
   for (const stmt of branch as BaseMlldNode[]) {
     if (isLetAssignment(stmt)) {
       blockEnv = await evaluateLetAssignment(stmt, blockEnv);
+      applySecurityDescriptorToCurrentVariables(blockEnv, conditionDescriptor);
       lastValue = undefined;
       continue;
     }
     if (isAugmentedAssignment(stmt)) {
       blockEnv = await evaluateAugmentedAssignment(stmt, blockEnv);
+      applySecurityDescriptorToCurrentVariables(blockEnv, conditionDescriptor);
       lastValue = undefined;
       continue;
     }
@@ -52,20 +63,34 @@ export async function evaluateIf(
       }
       const returnResult = await resolveExeReturnValue(stmt as ExeReturnNode, blockEnv);
       blockEnv = returnResult.env;
+      applySecurityDescriptorToCurrentVariables(blockEnv, conditionDescriptor);
       env.mergeChild(blockEnv);
-      return { value: createExeReturnControl(returnResult.value), env };
+      return {
+        value: createExeReturnControl(
+          attachSecurityDescriptorToValue(returnResult.value, conditionDescriptor)
+        ),
+        env
+      };
     }
 
     const result = await evaluate(stmt, blockEnv);
     blockEnv = result.env || blockEnv;
-    lastValue = result.value;
+    applySecurityDescriptorToCurrentVariables(blockEnv, conditionDescriptor);
+    lastValue = attachSecurityDescriptorToValue(result.value, conditionDescriptor);
 
     if (isExeReturnControl(result.value)) {
       env.mergeChild(blockEnv);
-      return { value: result.value, env };
+      return {
+        value: attachSecurityDescriptorToValue(result.value, conditionDescriptor),
+        env
+      };
     }
   }
 
+  applySecurityDescriptorToCurrentVariables(blockEnv, conditionDescriptor);
   env.mergeChild(blockEnv);
-  return { value: lastValue ?? '', env };
+  return {
+    value: attachSecurityDescriptorToValue(lastValue ?? '', conditionDescriptor),
+    env
+  };
 }

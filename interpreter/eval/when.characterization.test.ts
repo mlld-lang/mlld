@@ -595,6 +595,34 @@ describe('when evaluator characterization', () => {
     expect(value).toEqual({ type: 'hello' });
   });
 
+  it('propagates conditional when-expression labels onto matched branches', async () => {
+    const { ast } = await parse([
+      '/var untrusted @x = "hello"',
+      '/var @result = when [',
+      '  @x == "hello" => "matched"',
+      '  * => "fallback"',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    expect(env.getVariable('result')?.mx?.labels).toContain('untrusted');
+  });
+
+  it('propagates conditional when-expression labels onto fallback branches', async () => {
+    const { ast } = await parse([
+      '/var untrusted @x = "goodbye"',
+      '/var @result = when [',
+      '  @x == "hello" => "matched"',
+      '  * => "fallback"',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    expect(env.getVariable('result')?.mx?.labels).toContain('untrusted');
+  });
+
   it('propagates policy denials from matched when-expression actions inside executables', async () => {
     const { ast } = await parse([
       '/var @policyConfig = { labels: { "untrusted": { deny: ["destructive"] } } }',

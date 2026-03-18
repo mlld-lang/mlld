@@ -320,7 +320,13 @@ export async function evaluateRun(
     const exeOutputDescriptor =
       exeOutputLabels.length > 0 ? makeSecurityDescriptor({ labels: exeOutputLabels }) : undefined;
     
-    const { argValues, argRuntimeValues, argDescriptors } = await extractRunExecArguments({
+    const {
+      argValues,
+      argRuntimeValues,
+      argDescriptors,
+      argOriginalVariables,
+      argBindingDescriptors
+    } = await extractRunExecArguments({
       directive,
       definition,
       env,
@@ -343,6 +349,8 @@ export async function evaluateRun(
       argValues,
       argRuntimeValues,
       argDescriptors,
+      argOriginalVariables,
+      argBindingDescriptors,
       exeLabels,
       services: {
         interpolateWithPendingDescriptor,

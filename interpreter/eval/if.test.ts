@@ -1,14 +1,22 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { parse } from '@grammar/parser';
 import { Environment } from '../env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { evaluate } from '../core/interpreter';
 import { evaluateIf } from './if';
 import { evaluateExeBlock } from './exe';
 import type { IfNode } from '@core/types/if';
 import type { ExeBlockNode, ExeReturnNode } from '@core/types';
 import type { AugmentedAssignmentNode } from '@core/types/when';
 import { createSimpleTextVariable } from '@core/types/variable';
+import { extractSecurityDescriptor } from '../utils/structured-value';
 import { extractVariableValue } from '../utils/variable-resolution';
+
+async function evaluateSource(source: string, env: Environment): Promise<void> {
+  const { ast } = await parse(source);
+  await evaluate(ast, env);
+}
 
 describe('evaluateIf', () => {
   let env: Environment;
@@ -173,5 +181,43 @@ describe('evaluateIf', () => {
     await expect(evaluateIf(node, env)).rejects.toThrow(
       'Return statements are only allowed inside exe blocks.'
     );
+  });
+
+  it('propagates condition labels to the returned branch value', async () => {
+    await evaluateSource('/var untrusted @x = "hello"', env);
+
+    const node: IfNode = {
+      type: 'Directive',
+      kind: 'if',
+      subtype: 'ifBlock',
+      values: {
+        condition: [{
+          type: 'VariableReference',
+          identifier: 'x',
+          nodeId: 'if-condition-x',
+          valueType: 'variable'
+        } as any],
+        then: [{ type: 'Text', content: 'matched' } as any],
+        else: [{ type: 'Text', content: 'fallback' } as any]
+      },
+      meta: {
+        hasElse: true
+      }
+    };
+
+    const result = await evaluateIf(node, env);
+    expect(extractSecurityDescriptor(result.value)?.labels).toContain('untrusted');
+  });
+
+  it('propagates condition labels to augmented assignments in the taken branch', async () => {
+    await evaluateSource([
+      '/var untrusted @x = "hello"',
+      '/var @branch = "seed"',
+      '/if @x == "hello" [',
+      '  @branch += "-matched"',
+      ']'
+    ].join('\n'), env);
+
+    expect(env.getVariable('branch')?.mx?.labels).toContain('untrusted');
   });
 });
