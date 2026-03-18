@@ -30,6 +30,7 @@ import {
 import { cloneGuardContextSnapshot } from './guard-context-snapshot';
 import { attachGuardHelper } from './guard-helper-injection';
 import type { GuardArgsSnapshot } from '../utils/guard-args';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
 interface BuildDecisionMetadataExtras {
   hint?: string | null;
@@ -110,6 +111,24 @@ function buildGuardScopeKey(options: EvaluateGuardRuntimeOptions): string {
     return `perInput:${options.perInput.index}`;
   }
   return 'perOperation';
+}
+
+function snapshotPolicyArgs(args?: GuardArgsSnapshot): Readonly<Record<string, unknown>> | undefined {
+  if (!args || args.names.length === 0) {
+    return undefined;
+  }
+
+  const values = Object.create(null) as Record<string, unknown>;
+  for (const name of args.names) {
+    const variable = args.values[name];
+    if (!variable) {
+      continue;
+    }
+    const rawValue = variable.value;
+    values[name] = isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
+  }
+
+  return Object.freeze(values);
 }
 
 export async function evaluateGuardRuntime(
@@ -209,6 +228,7 @@ export async function evaluateGuardRuntime(
   });
 
   if (guard.policyCondition) {
+    const policyGuardMode = guard.policyGuardMode ?? 'policy';
     const policyInput = options.perInput
       ? {
           labels: options.perInput.labels,
@@ -227,6 +247,7 @@ export async function evaluateGuardRuntime(
         : undefined;
     const policyResult = guard.policyCondition({
       operation,
+      args: snapshotPolicyArgs(options.args),
       input: policyInput,
       inputs: policyInputs
     });
@@ -246,6 +267,7 @@ export async function evaluateGuardRuntime(
         policyLocked: policyResult.locked === true,
         guardPrivileged: guard.privileged === true,
         policyGuard: true,
+        authorizationGuard: policyGuardMode === 'authorization',
         guardScopeKey: scopeKey,
         guardActionMatched: true
       };
@@ -285,9 +307,10 @@ export async function evaluateGuardRuntime(
         guardContext: contextSnapshotForMetadata,
         guardInput: hasSecretLabel(inputVariable!) ? redactVariableForErrorOutput(inputVariable!) : inputVariable!,
         guardPrivileged: guard.privileged === true,
-        policyGuard: true,
+        policyGuard: policyGuardMode === 'policy',
+        authorizationGuard: policyGuardMode === 'authorization',
         guardScopeKey: scopeKey,
-        guardActionMatched: false
+        guardActionMatched: policyGuardMode === 'authorization'
       }
     };
   }

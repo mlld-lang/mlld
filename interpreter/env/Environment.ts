@@ -841,6 +841,10 @@ export class Environment
     return this.parent?.getPolicySummary();
   }
 
+  setPolicySummary(policy?: PolicyConfig | null): void {
+    this.policySummary = policy ?? undefined;
+  }
+
   getStandaloneAuthSummary(): Record<string, AuthConfig> | undefined {
     if (this.standaloneAuthSummary) {
       return this.standaloneAuthSummary;

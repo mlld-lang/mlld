@@ -90,6 +90,7 @@ export type CreateExecOperationPolicyContextOptions = {
   commandName: string;
   operationName?: string;
   toolLabels: readonly string[];
+  authorizationControlArgs?: readonly string[];
   env: Environment;
   execEnv: Environment;
   policyEnforcer: PolicyEnforcer;
@@ -360,7 +361,10 @@ export async function createExecOperationContextAndEnforcePolicy(
     metadata: {
       executableType: definition.type,
       command: commandName,
-      sourceRetryable: true
+      sourceRetryable: true,
+      ...(options.authorizationControlArgs
+        ? { authorizationControlArgs: [...options.authorizationControlArgs] }
+        : {})
     }
   };
   operationContext.metadata = mergeGuardArgNamesIntoMetadata(operationContext.metadata, guardArgNames);

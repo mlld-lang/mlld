@@ -80,7 +80,14 @@ import {
   runExecPreGuards,
   stringifyExecGuardArg
 } from './exec/guard-policy';
+import {
+  createPolicyAuthorizationValidationError,
+  createInvocationPolicyScope,
+  resolveInvocationPolicyFragment,
+  validateRuntimePolicyAuthorizations
+} from './exec/policy-fragment';
 import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mcp-config';
+import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -226,6 +233,78 @@ function normalizeToolCallError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isToolWriteLabelSet(labels: readonly string[]): boolean {
+  return labels.some(label => label === 'tool:w' || label.startsWith('tool:w:'));
+}
+
+function collectScopedToolMetadata(
+  env: Environment,
+  execName: string
+): {
+  labels: string[];
+  controlArgs?: string[];
+  hasControlArgsMetadata: boolean;
+} {
+  const tools = env.getScopedEnvironmentConfig()?.tools;
+  if (!tools || typeof tools !== 'object' || Array.isArray(tools)) {
+    return {
+      labels: [],
+      hasControlArgsMetadata: false
+    };
+  }
+
+  const labelSet = new Set<string>();
+  const controlArgSet = new Set<string>();
+  let hasControlArgsMetadata = false;
+
+  for (const entry of Object.values(tools as Record<string, any>)) {
+    if (!entry || typeof entry !== 'object' || entry.mlld !== execName) {
+      continue;
+    }
+
+    if (Array.isArray(entry.labels)) {
+      for (const label of entry.labels) {
+        if (typeof label === 'string' && label.length > 0) {
+          labelSet.add(label);
+        }
+      }
+    }
+
+    if (Array.isArray(entry.controlArgs)) {
+      hasControlArgsMetadata = true;
+      for (const controlArg of entry.controlArgs) {
+        if (typeof controlArg === 'string' && controlArg.length > 0) {
+          controlArgSet.add(controlArg);
+        }
+      }
+    }
+  }
+
+  return {
+    labels: Array.from(labelSet),
+    ...(hasControlArgsMetadata ? { controlArgs: Array.from(controlArgSet) } : {}),
+    hasControlArgsMetadata
+  };
+}
+
+function normalizeInvocationWithClause(node: ExecInvocation): Record<string, any> | undefined {
+  const withClause = node.withClause as any;
+  if (!withClause) {
+    return undefined;
+  }
+
+  if (!Array.isArray(withClause)) {
+    return withClause;
+  }
+
+  const inlineValue = withClause[0];
+  if (inlineValue?.type !== 'inlineValue' || inlineValue?.value?.type !== 'object') {
+    return undefined;
+  }
+
+  return convertEntriesToProperties(inlineValue.value.entries ?? []);
+}
+
 /**
  * Evaluate an ExecInvocation node
  * This executes a previously defined exec command with arguments and optional tail modifiers
@@ -252,6 +331,7 @@ async function evaluateExecInvocationInternal(
   let commandName: string | undefined; // Declare at function scope for finally block
   let endResolutionTrackingIfNeeded: () => void = () => {};
   const skipInternalToolCallTracking = (node as any)?.meta?.toolCallTracking === 'router';
+  const invocationWithClause = normalizeInvocationWithClause(node);
 
   const normalizeFields = (fields?: Array<{ type: string; value: any }>) =>
     (fields || []).map(field => {
@@ -342,7 +422,7 @@ async function evaluateExecInvocationInternal(
 
 
   try {
-    const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
+    let policyEnforcer: PolicyEnforcer | undefined;
     let resultSecurityDescriptor: SecurityDescriptor | undefined;
     const mergeResultDescriptor = (descriptor?: SecurityDescriptor): void => {
       if (!descriptor) {
@@ -418,8 +498,8 @@ async function evaluateExecInvocationInternal(
     value: unknown,
     wrapOptions?: { type?: string; text?: string }
   ): Promise<EvalResult> => {
-    if (node.withClause) {
-      if (node.withClause.pipeline) {
+    if (invocationWithClause) {
+      if (invocationWithClause.pipeline) {
         const { processPipeline } = await import('./pipeline/unified-processor');
         const pipelineInputValue = toPipelineInput(value, wrapOptions);
         const pipelineResult = await processPipeline({
@@ -429,9 +509,13 @@ async function evaluateExecInvocationInternal(
           identifier: node.identifier,
           descriptorHint: resultSecurityDescriptor
         });
-        return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
+        return applyWithClause(
+          pipelineResult,
+          { ...invocationWithClause, pipeline: undefined },
+          env
+        );
       }
-      return applyWithClause(value, node.withClause, env);
+      return applyWithClause(value, invocationWithClause, env);
     }
     return createEvalResult(value, env, wrapOptions);
   };
@@ -601,7 +685,7 @@ async function evaluateExecInvocationInternal(
 
       chainDebug('applying builtin pipeline', {
         commandName,
-        pipelineLength: node.withClause?.pipeline?.length ?? 0
+        pipelineLength: invocationWithClause?.pipeline?.length ?? 0
       });
       return applyInvocationWithClause(resolvedValue, wrapOptions);
     }
@@ -1247,8 +1331,8 @@ async function evaluateExecInvocationInternal(
 
       endResolutionTrackingIfNeeded();
 
-      if (node.withClause) {
-        if (node.withClause.pipeline) {
+      if (invocationWithClause) {
+        if (invocationWithClause.pipeline) {
           const { processPipeline } = await import('./pipeline/unified-processor');
           const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
           const pipelineResult = await processPipeline({
@@ -1258,9 +1342,13 @@ async function evaluateExecInvocationInternal(
             identifier: node.identifier,
             descriptorHint: resultSecurityDescriptor
           });
-          return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
+          return applyWithClause(
+            pipelineResult,
+            { ...invocationWithClause, pipeline: undefined },
+            env
+          );
         } else {
-          return applyWithClause(resolvedValue, node.withClause, env);
+          return applyWithClause(resolvedValue, invocationWithClause, env);
         }
       }
       return { value: resolvedValue ?? '', wrapOptions };
@@ -1365,14 +1453,6 @@ async function evaluateExecInvocationInternal(
     }
     whenExprNode = candidate;
   }
-  
-  // Create a child environment for parameter substitution
-  let execEnv = env.createChild();
-
-  // Set captured module environment for variable lookup fallback
-  if (variable?.internal?.capturedModuleEnv instanceof Map) {
-    execEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
-  }
 
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
@@ -1386,6 +1466,26 @@ async function evaluateExecInvocationInternal(
       mergeResultDescriptor
     }
   });
+
+  let runtimeEnv = env;
+  const resolvedPolicyFragment =
+    invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'policy')
+      ? await resolveInvocationPolicyFragment(invocationWithClause.policy, env)
+      : undefined;
+  if (resolvedPolicyFragment) {
+    const policyScope = createInvocationPolicyScope(env, resolvedPolicyFragment);
+    runtimeEnv = policyScope.env;
+  }
+
+  policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
+
+  // Create a child environment for parameter substitution
+  let execEnv = runtimeEnv.createChild();
+
+  // Set captured module environment for variable lookup fallback
+  if (variable?.internal?.capturedModuleEnv instanceof Map) {
+    execEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
+  }
 
   // Circular reference / recursion depth guard — runs AFTER argument evaluation.
   //
@@ -1557,20 +1657,24 @@ async function evaluateExecInvocationInternal(
   let toolLabels = Array.isArray(mcpToolLabels)
     ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
     : [];
-  if (toolLabels.length === 0) {
-    const scopedConfig = env.getScopedEnvironmentConfig();
-    const tools = scopedConfig?.tools;
-    if (tools && typeof tools === 'object' && !Array.isArray(tools)) {
-      const exeName = variable.name ?? commandName;
-      for (const entry of Object.values(tools as Record<string, any>)) {
-        if (entry && typeof entry === 'object' && entry.mlld === exeName) {
-          const labels = entry.labels;
-          if (Array.isArray(labels)) {
-            toolLabels = labels.filter((l: unknown) => typeof l === 'string' && (l as string).length > 0);
-          }
-          break;
-        }
-      }
+  const scopedToolMetadata = collectScopedToolMetadata(runtimeEnv, variable.name ?? commandName);
+  if (toolLabels.length === 0 && scopedToolMetadata.labels.length > 0) {
+    toolLabels = scopedToolMetadata.labels;
+  }
+  const authorizationControlArgs = scopedToolMetadata.controlArgs;
+  const shouldValidatePolicyAuthorizations =
+    Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
+    (
+      isToolWriteLabelSet(toolLabels) ||
+      (
+        resolvedPolicyFragment !== undefined &&
+        runtimeEnv.getScopedEnvironmentConfig()?.tools !== undefined
+      )
+    );
+  if (shouldValidatePolicyAuthorizations) {
+    const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
+    if (validation && validation.errors.length > 0) {
+      throw createPolicyAuthorizationValidationError(validation);
     }
   }
   const trackedMcpName =
@@ -1602,8 +1706,9 @@ async function evaluateExecInvocationInternal(
   };
 
   try {
+    const activePolicyEnforcer = policyEnforcer ?? new PolicyEnforcer(runtimeEnv.getPolicySummary());
     const { guardInputsWithMapping, guardInputs } = prepareExecGuardInputs({
-      env,
+      env: runtimeEnv,
       evaluatedArgs,
       evaluatedArgStrings,
       guardVariableCandidates,
@@ -1623,22 +1728,23 @@ async function evaluateExecInvocationInternal(
       commandName,
       operationName: variable.name ?? commandName,
       toolLabels,
-      env,
+      authorizationControlArgs,
+      env: runtimeEnv,
       execEnv,
-        policyEnforcer,
-        mcpSecurityDescriptor,
-        execDescriptor,
-        guardArgNames: guardInputsWithMapping.map(entry => entry.name ?? null),
-        services: {
-          interpolateWithResultDescriptor,
-          getResultSecurityDescriptor: () => resultSecurityDescriptor,
+      policyEnforcer: activePolicyEnforcer,
+      mcpSecurityDescriptor,
+      execDescriptor,
+      guardArgNames: guardInputsWithMapping.map(entry => entry.name ?? null),
+      services: {
+        interpolateWithResultDescriptor,
+        getResultSecurityDescriptor: () => resultSecurityDescriptor,
         resolveStdinInput
       }
     });
 
     const finalizeResult = async (result: EvalResult): Promise<EvalResult> =>
       runExecPostGuards({
-        env,
+        env: runtimeEnv,
         execEnv,
         node,
         operationContext,
@@ -1647,14 +1753,14 @@ async function evaluateExecInvocationInternal(
         whenExprNode
       });
 
-    const invocationResult = await env.withOpContext(operationContext, async () => {
+    const invocationResult = await runtimeEnv.withOpContext(operationContext, async () => {
       return AutoUnwrapManager.executeWithPreservation(async () => {
       const {
         preDecision,
         postHookInputs: nextPostHookInputs,
         transformedGuardSet
       } = await runExecPreGuards({
-        env,
+        env: runtimeEnv,
         node,
         operationContext,
         guardInputs,
@@ -1700,17 +1806,17 @@ async function evaluateExecInvocationInternal(
         const descriptorFromPieces =
           descriptorPieces.length === 1
             ? descriptorPieces[0]
-            : env.mergeSecurityDescriptors(...descriptorPieces);
+            : runtimeEnv.mergeSecurityDescriptors(...descriptorPieces);
         resultSecurityDescriptor = resultSecurityDescriptor
-          ? env.mergeSecurityDescriptors(resultSecurityDescriptor, descriptorFromPieces)
+          ? runtimeEnv.mergeSecurityDescriptors(resultSecurityDescriptor, descriptorFromPieces)
           : descriptorFromPieces;
       }
       const paramFlowHandled = await enforceExecParamLabelFlow({
-        env,
+        env: runtimeEnv,
         execEnv,
         node,
         whenExprNode,
-        policyEnforcer,
+        policyEnforcer: activePolicyEnforcer,
         operationContext,
         exeLabels,
         resultSecurityDescriptor
@@ -1719,18 +1825,18 @@ async function evaluateExecInvocationInternal(
         return finalizeResult(paramFlowHandled);
       }
       resultSecurityDescriptor = applyExecOutputPolicyLabels({
-        policyEnforcer,
+        policyEnforcer: activePolicyEnforcer,
         exeLabels,
         resultSecurityDescriptor
       });
       if (resultSecurityDescriptor) {
-        env.recordSecurityDescriptor(resultSecurityDescriptor);
+        runtimeEnv.recordSecurityDescriptor(resultSecurityDescriptor);
       }
 
       const preGuardHandled = await handleExecPreGuardDecision({
         preDecision,
         node,
-        env,
+        env: runtimeEnv,
         execEnv,
         operationContext,
         postHookInputs,
@@ -1764,7 +1870,7 @@ async function evaluateExecInvocationInternal(
     commandName,
     node,
     nodeSourceLocation,
-    env,
+    env: runtimeEnv,
     execEnv,
     variable,
     params,
@@ -1786,7 +1892,7 @@ async function evaluateExecInvocationInternal(
       definition,
       commandName,
       node,
-      env,
+      env: runtimeEnv,
       execEnv,
       variable,
       params,
@@ -1795,7 +1901,7 @@ async function evaluateExecInvocationInternal(
       originalVariables,
       exeLabels,
       preDecisionMetadata: preDecision?.metadata,
-      policyEnforcer,
+      policyEnforcer: activePolicyEnforcer,
       operationContext,
       mergePolicyInputDescriptor,
       workingDirectory,
@@ -1818,14 +1924,14 @@ async function evaluateExecInvocationInternal(
       definition,
       commandName,
       node,
-      env,
+      env: runtimeEnv,
       execEnv,
       variable,
       params,
       evaluatedArgs,
       evaluatedArgStrings,
       exeLabels,
-      policyEnforcer,
+      policyEnforcer: activePolicyEnforcer,
       operationContext,
       mergePolicyInputDescriptor,
       workingDirectory,
@@ -1854,7 +1960,10 @@ async function evaluateExecInvocationInternal(
       const { accessField } = await import('../utils/field-access');
       let current: any = result;
       for (const f of postFields) {
-        current = await accessField(current, f, { env, sourceLocation: nodeSourceLocation });
+        current = await accessField(current, f, {
+          env: runtimeEnv,
+          sourceLocation: nodeSourceLocation
+        });
       }
       result = current;
     } catch (e) {
@@ -1897,7 +2006,7 @@ async function evaluateExecInvocationInternal(
     const structured = wrapExecResult(result);
     const existing = getStructuredSecurityDescriptor(structured);
     const merged = existing
-      ? env.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
+      ? runtimeEnv.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
       : resultSecurityDescriptor;
     setStructuredSecurityDescriptor(structured, merged);
     result = structured;
@@ -1909,8 +2018,8 @@ async function evaluateExecInvocationInternal(
   endResolutionTrackingIfNeeded();
 
   // Apply withClause transformations if present
-  if (node.withClause) {
-    if (node.withClause.pipeline) {
+  if (invocationWithClause) {
+    if (invocationWithClause.pipeline) {
       // When an ExecInvocation has a pipeline, we need to create a special pipeline
       // where the ExecInvocation itself becomes stage 0, retryable
       const { executePipeline } = await import('./pipeline');
@@ -1919,7 +2028,10 @@ async function evaluateExecInvocationInternal(
       const sourceFunction = async () => {
         // Re-execute this same ExecInvocation but without the pipeline
         // IMPORTANT: Use execEnv not env, so the function parameters are available
-        const nodeWithoutPipeline = { ...node, withClause: undefined };
+        const nodeWithoutPipeline = {
+          ...node,
+          withClause: { ...invocationWithClause, pipeline: undefined }
+        };
         const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, execEnv);
         return wrapExecResult(freshResult.value);
       };
@@ -1935,7 +2047,7 @@ async function evaluateExecInvocationInternal(
 
       // Attach builtin effects BEFORE prepending synthetic source
       // This ensures effects are attached to user-defined stages, not to __source__
-      let userPipeline = node.withClause.pipeline;
+      let userPipeline = invocationWithClause.pipeline;
       try {
         const { attachBuiltinEffects } = await import('./pipeline/effects-attachment');
         const { functionalPipeline } = attachBuiltinEffects(userPipeline as any);
@@ -1955,7 +2067,7 @@ async function evaluateExecInvocationInternal(
         normalizedPipeline,
         execEnv,  // Use execEnv which has merged nodes
         node.location,
-        node.withClause.format,
+        invocationWithClause.format,
         true,  // isRetryable
         sourceFunction,
         true,  // hasSyntheticSource
@@ -1969,7 +2081,7 @@ async function evaluateExecInvocationInternal(
       const pipelineDescriptor = getStructuredSecurityDescriptor(pipelineValue);
       const combinedDescriptor = pipelineDescriptor
         ? (resultSecurityDescriptor
-            ? env.mergeSecurityDescriptors(pipelineDescriptor, resultSecurityDescriptor)
+            ? runtimeEnv.mergeSecurityDescriptors(pipelineDescriptor, resultSecurityDescriptor)
             : pipelineDescriptor)
         : resultSecurityDescriptor;
       if (combinedDescriptor) {
@@ -1978,13 +2090,13 @@ async function evaluateExecInvocationInternal(
       }
       const withClauseResult = await applyWithClause(
         pipelineValue,
-        { ...node.withClause, pipeline: undefined },
+        { ...invocationWithClause, pipeline: undefined },
         execEnv
       );
       const finalWithClauseResult = await finalizeResult(withClauseResult);
       return finalWithClauseResult;
     } else {
-      const withClauseResult = await applyWithClause(result, node.withClause, execEnv);
+      const withClauseResult = await applyWithClause(result, invocationWithClause, execEnv);
       const finalWithClauseResult = await finalizeResult(withClauseResult);
       return finalWithClauseResult;
     }

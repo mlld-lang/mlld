@@ -66,7 +66,8 @@ describe('tool scope helpers', () => {
             owner: 'mlld',
             repo: 'mlld'
           },
-          expose: ['title', 'body']
+          expose: ['title', 'body'],
+          controlArgs: ['title']
         }
       },
       env
@@ -80,7 +81,8 @@ describe('tool scope helpers', () => {
         owner: 'mlld',
         repo: 'mlld'
       },
-      expose: ['title', 'body']
+      expose: ['title', 'body'],
+      controlArgs: ['title']
     });
   });
 
@@ -136,6 +138,28 @@ describe('tool scope helpers', () => {
         env
       )
     ).toThrow(/cover required parameters/i);
+  });
+
+  it('rejects controlArgs that are not visible parameters', () => {
+    const env = createEnvWithExecutables({
+      createIssue: ['owner', 'repo', 'title']
+    });
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@createIssue',
+            bind: {
+              owner: 'mlld'
+            },
+            expose: ['repo', 'title'],
+            controlArgs: ['owner']
+          }
+        },
+        env
+      )
+    ).toThrow(/controlArgs must reference visible parameters/i);
   });
 
   it('returns literal tools values unchanged when withClause.tools is not an AST node', async () => {

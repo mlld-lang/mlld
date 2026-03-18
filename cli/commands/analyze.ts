@@ -20,6 +20,11 @@ import {
 } from '@interpreter/eval/template-fence-literals';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { BUILTIN_POLICY_RULES, isBuiltinPolicyRuleName } from '@core/policy/builtin-rules';
+import {
+  validatePolicyAuthorizations,
+  type AuthorizationToolContext,
+  type PolicyAuthorizationIssue
+} from '@core/policy/authorizations';
 import * as yaml from 'js-yaml';
 import type { MlldNode, ImportDirectiveNode, ExportDirectiveNode, GuardDirectiveNode, ExecutableDirectiveNode, RunDirective, ExecDirective } from '@core/types';
 
@@ -113,7 +118,9 @@ export type AntiPatternWarningCode =
   | 'privileged-guard-without-policy-operation'
   | 'guard-context-missing-exe'
   | 'guard-context-missing-op-label'
-  | 'guard-context-missing-arg';
+  | 'guard-context-missing-arg'
+  | 'policy-authorizations-empty-entry'
+  | 'policy-authorizations-unconstrained-tool';
 
 export interface AntiPatternWarning {
   code: AntiPatternWarningCode;
@@ -304,7 +311,9 @@ const SUPPRESSIBLE_WARNING_CODES = new Set<AntiPatternWarningCode>([
   'privileged-guard-without-policy-operation',
   'guard-context-missing-exe',
   'guard-context-missing-op-label',
-  'guard-context-missing-arg'
+  'guard-context-missing-arg',
+  'policy-authorizations-empty-entry',
+  'policy-authorizations-unconstrained-tool'
 ]);
 const GENERIC_EXE_PARAMETER_SUGGESTIONS = new Map<string, string>([
   ['result', 'status'],
@@ -1775,6 +1784,32 @@ function getObjectEntryValue(node: unknown, key: string): unknown {
   return undefined;
 }
 
+function containsDynamicStaticValueReference(node: unknown): boolean {
+  if (Array.isArray(node)) {
+    return node.some(entry => containsDynamicStaticValueReference(entry));
+  }
+
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+
+  const typedNode = node as Record<string, unknown>;
+  const nodeType = typeof typedNode.type === 'string' ? typedNode.type : null;
+  if (
+    nodeType &&
+    nodeType !== 'Literal' &&
+    nodeType !== 'Text' &&
+    nodeType !== 'array' &&
+    nodeType !== 'object' &&
+    nodeType !== 'pair' &&
+    nodeType !== 'conditionalPair'
+  ) {
+    return true;
+  }
+
+  return Object.values(typedNode).some(value => containsDynamicStaticValueReference(value));
+}
+
 function extractPolicies(ast: MlldNode[]): PolicyInfo[] {
   const policies: PolicyInfo[] = [];
 
@@ -2111,10 +2146,109 @@ function detectPrivilegedGuardWithoutPolicyOperationWarnings(
   return warnings;
 }
 
-interface ValidationContextExecutable {
-  name: string;
-  params: Set<string>;
+interface ValidationContextExecutable extends AuthorizationToolContext {
   labels: Set<string>;
+}
+
+function getOrCreateValidationExecutable(
+  byName: Map<string, ValidationContextExecutable>,
+  name: string
+): ValidationContextExecutable {
+  const existing = byName.get(name);
+  if (existing) {
+    return existing;
+  }
+
+  const created: ValidationContextExecutable = {
+    name,
+    params: new Set<string>(),
+    labels: new Set<string>(),
+    controlArgs: new Set<string>(),
+    hasControlArgsMetadata: false
+  };
+  byName.set(name, created);
+  return created;
+}
+
+function mergeValidationContextAst(
+  ast: MlldNode[],
+  byName: Map<string, ValidationContextExecutable>
+): void {
+  for (const executable of extractExecutables(ast)) {
+    const target = getOrCreateValidationExecutable(byName, executable.name);
+    for (const param of executable.params ?? []) {
+      target.params.add(param);
+    }
+    for (const label of executable.labels ?? []) {
+      target.labels.add(label);
+    }
+  }
+
+  walkAST(ast, (node) => {
+    const directiveNode = node as any;
+    if (
+      directiveNode.type !== 'Directive' ||
+      directiveNode.kind !== 'var' ||
+      directiveNode.meta?.isToolsCollection !== true
+    ) {
+      return;
+    }
+
+    const toolObjectNode = Array.isArray(directiveNode.values?.value)
+      ? directiveNode.values.value[0]
+      : undefined;
+    if (!toolObjectNode || typeof toolObjectNode !== 'object' || (toolObjectNode as any).type !== 'object') {
+      return;
+    }
+
+    for (const entry of (toolObjectNode as any).entries as Array<Record<string, unknown>>) {
+      if ((entry.type !== 'pair' && entry.type !== 'conditionalPair') || typeof entry.key !== 'string') {
+        continue;
+      }
+
+      const toolValue = entry.value;
+      const mlldValue = extractStaticValue(getObjectEntryValue(toolValue, 'mlld'));
+      if (typeof mlldValue !== 'string' || mlldValue.trim().length === 0) {
+        continue;
+      }
+
+      const execName = mlldValue.trim().replace(/^@/, '');
+      if (!execName) {
+        continue;
+      }
+
+      const target = byName.get(execName);
+      if (!target) {
+        continue;
+      }
+
+      const labelsValue = extractStaticValue(getObjectEntryValue(toolValue, 'labels'));
+      if (Array.isArray(labelsValue)) {
+        for (const label of labelsValue) {
+          if (typeof label === 'string' && label.trim().length > 0) {
+            target.labels.add(label.trim());
+          }
+        }
+      }
+
+      const controlArgsNode = getObjectEntryValue(toolValue, 'controlArgs');
+      if (controlArgsNode === undefined) {
+        continue;
+      }
+
+      const controlArgsValue = extractStaticValue(controlArgsNode);
+      if (!Array.isArray(controlArgsValue)) {
+        continue;
+      }
+
+      target.hasControlArgsMetadata = true;
+      for (const controlArg of controlArgsValue) {
+        if (typeof controlArg === 'string' && controlArg.trim().length > 0) {
+          target.controlArgs.add(controlArg.trim());
+        }
+      }
+    }
+  });
 }
 
 async function buildValidationContextExecutables(
@@ -2123,18 +2257,7 @@ async function buildValidationContextExecutables(
   contextPaths: readonly string[] | undefined
 ): Promise<Map<string, ValidationContextExecutable>> {
   const byName = new Map<string, ValidationContextExecutable>();
-
-  const addExecutables = (executables: readonly ExecutableInfo[]): void => {
-    for (const executable of executables) {
-      byName.set(executable.name, {
-        name: executable.name,
-        params: new Set(executable.params ?? []),
-        labels: new Set(executable.labels ?? [])
-      });
-    }
-  };
-
-  addExecutables(extractExecutables(ast));
+  mergeValidationContextAst(ast, byName);
 
   if (!contextPaths || contextPaths.length === 0) {
     return byName;
@@ -2150,7 +2273,7 @@ async function buildValidationContextExecutables(
     try {
       const content = await fs.readFile(resolvedPath, 'utf8');
       const mode = resolvedPath.endsWith('.mld.md') ? 'markdown' : 'strict';
-      addExecutables(extractExecutables(parseSync(content, { mode })));
+      mergeValidationContextAst(parseSync(content, { mode }), byName);
     } catch {
       // Ignore invalid context files here; validate() will already report their own failures separately.
     }
@@ -2324,6 +2447,88 @@ function detectGuardContextWarnings(
   });
 
   return warnings;
+}
+
+function mapPolicyAuthorizationWarningCode(
+  issue: PolicyAuthorizationIssue
+): AntiPatternWarningCode | null {
+  switch (issue.code) {
+    case 'authorizations-empty-entry':
+      return 'policy-authorizations-empty-entry';
+    case 'authorizations-unconstrained-tool':
+      return 'policy-authorizations-unconstrained-tool';
+    default:
+      return null;
+  }
+}
+
+function collectPolicyAuthorizationDiagnostics(
+  ast: MlldNode[],
+  contextExecutables: ReadonlyMap<string, ValidationContextExecutable>
+): {
+  errors: AnalysisError[];
+  warnings: AntiPatternWarning[];
+} {
+  const errors: AnalysisError[] = [];
+  const warnings: AntiPatternWarning[] = [];
+  const seen = new Set<string>();
+
+  walkAST(ast, (node) => {
+    if (node.type !== 'object') {
+      return;
+    }
+
+    const authorizationsNode = getObjectEntryValue(node, 'authorizations');
+    if (authorizationsNode === undefined || containsDynamicStaticValueReference(authorizationsNode)) {
+      return;
+    }
+
+    const rawAuthorizations = extractStaticValue(authorizationsNode);
+    if (rawAuthorizations === undefined) {
+      return;
+    }
+
+    const validation = validatePolicyAuthorizations(rawAuthorizations, contextExecutables, {
+      requireKnownTools: contextExecutables.size > 0,
+      requireControlArgsMetadata: contextExecutables.size > 0
+    });
+    const line = (authorizationsNode as any)?.location?.start?.line ?? (node as any)?.location?.start?.line;
+    const column =
+      (authorizationsNode as any)?.location?.start?.column ?? (node as any)?.location?.start?.column;
+
+    for (const issue of validation.errors) {
+      const key = `error:${issue.code}:${line ?? 0}:${column ?? 0}:${issue.message}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      errors.push({
+        message: issue.message,
+        line,
+        column
+      });
+    }
+
+    for (const issue of validation.warnings) {
+      const warningCode = mapPolicyAuthorizationWarningCode(issue);
+      if (!warningCode) {
+        continue;
+      }
+      const key = `warning:${warningCode}:${line ?? 0}:${column ?? 0}:${issue.message}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      warnings.push({
+        code: warningCode,
+        message: issue.message,
+        line,
+        column
+      });
+    }
+  });
+
+  return { errors, warnings };
 }
 
 /**
@@ -3615,6 +3820,15 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       const policies = extractPolicies(ast);
       const needs = extractNeeds(content, ast);
       const checkpointErrors = detectCheckpointDirectiveErrors(ast);
+      const contextExecutables = await buildValidationContextExecutables(
+        filepath,
+        ast,
+        options.context
+      );
+      const policyAuthorizationDiagnostics = collectPolicyAuthorizationDiagnostics(
+        ast,
+        contextExecutables
+      );
 
       if (executables.length > 0) result.executables = executables;
       if (exports.length > 0) result.exports = exports;
@@ -3626,6 +3840,13 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         result.valid = false;
         result.errors = checkpointErrors;
         return result;
+      }
+      if (policyAuthorizationDiagnostics.errors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...policyAuthorizationDiagnostics.errors
+        ];
       }
 
       const suppressedWarningCodes = await loadSuppressedWarningCodes(filepath);
@@ -3656,10 +3877,6 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         }
       }
 
-      const contextExecutables =
-        options.context && options.context.length > 0
-          ? await buildValidationContextExecutables(filepath, ast, options.context)
-          : new Map<string, ValidationContextExecutable>();
       const antiPatterns = dedupeAntiPatternWarnings([
         ...detectDeprecatedJsonTransformAntiPatterns(ast),
         ...detectExeParameterShadowingWarnings(ast),
@@ -3670,7 +3887,8 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         ...detectUnreachableGuardArmWarnings(ast, content),
         ...detectUnknownPolicyRuleWarnings(ast),
         ...detectPrivilegedGuardWithoutPolicyOperationWarnings(ast, policies),
-        ...(contextExecutables.size > 0 ? detectGuardContextWarnings(ast, contextExecutables) : [])
+        ...(contextExecutables.size > 0 ? detectGuardContextWarnings(ast, contextExecutables) : []),
+        ...policyAuthorizationDiagnostics.warnings
       ]).filter(warning => !suppressedWarningCodes.has(warning.code));
       if (antiPatterns.length > 0) {
         result.antiPatterns = antiPatterns;

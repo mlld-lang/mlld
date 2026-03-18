@@ -484,6 +484,65 @@ guard @missingOpName before op:tool:w = when [
     expect(missingArgWarnings[0]?.message).toContain('@mx.args.cc');
   });
 
+  it('fails validation when policy.authorizations lacks trusted controlArgs metadata in context', async () => {
+    const contextPath = await writeModule('analyze-authz-context.mld', `exe tool:w @send_email(recipients, cc, bcc, subject) = cmd { echo "ok" }
+`);
+    const modulePath = await writeModule('analyze-authz-invalid.mld', `var @taskPolicy = {
+  authorizations: {
+    allow: {
+      send_email: true
+    }
+  }
+}
+show @taskPolicy
+`);
+
+    const result = await analyze(modulePath, {
+      checkVariables: false,
+      context: [contextPath]
+    });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
+      'missing trusted controlArgs metadata'
+    );
+  });
+
+  it('accepts policy.authorizations with trusted tool metadata and surfaces normalization warnings', async () => {
+    const modulePath = await writeModule('analyze-authz-valid.mld', `exe tool:w @create_file(title) = cmd { echo "ok" }
+var tools @agentTools = {
+  create_file: {
+    mlld: @create_file,
+    expose: ["title"],
+    controlArgs: []
+  }
+}
+var @taskPolicy = {
+  authorizations: {
+    allow: {
+      create_file: {}
+    }
+  }
+}
+show @taskPolicy
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    const warnings = (result.antiPatterns ?? []).filter(
+      entry =>
+        entry.code === 'policy-authorizations-empty-entry' ||
+        entry.code === 'policy-authorizations-unconstrained-tool'
+    );
+    expect(warnings.map(entry => entry.code)).toEqual(
+      expect.arrayContaining([
+        'policy-authorizations-empty-entry',
+        'policy-authorizations-unconstrained-tool'
+      ])
+    );
+  });
+
   it('populates needs.cmd with shell commands detected from run directives', async () => {
     const modulePath = await writeModule('analyze-needs-shell-commands.mld', `/run sh {
 curl https://example.com | jq ".ok"

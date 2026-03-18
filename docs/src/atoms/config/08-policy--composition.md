@@ -5,9 +5,9 @@ brief: How multiple policies combine their rules
 category: config
 parent: policy
 tags: [policy, composition, import, profiles]
-related: [security-policies, policy-capabilities, policy-auth, policy-label-flow]
+related: [security-policies, policy-capabilities, policy-auth, policy-label-flow, policy-authorizations]
 related-code: [interpreter/eval/policy.ts]
-updated: 2026-02-09
+updated: 2026-03-18
 qa_tier: 2
 ---
 
@@ -59,4 +59,13 @@ Multiple policies compose automatically when imported or declared.
 
 Label deny rules and auth configs from all layers merge via union — a `deny` on `secret → op:cmd` from ANY layer blocks that flow in the merged policy.
 
-See `security-policies` for basic definition, `policy-capabilities` for capability syntax, `policy-label-flow` for label rules.
+**Authorizations** merge with the same "most restrictive wins" principle. In the current phase this only governs `tool:w` operations:
+
+| Field | Rule | Effect |
+|-------|------|--------|
+| `allow` (operations) | Intersection | Must be authorized by ALL layers |
+| `args` (constraints) | Conjunction | All constraints from every layer must pass |
+
+`true` merged with a constrained entry becomes the constrained entry (stricter wins). Incompatible constraints on the same arg remain valid config but no runtime value can satisfy them — the call is denied.
+
+See `security-policies` for basic definition, `policy-capabilities` for capability syntax, `policy-label-flow` for label rules, `policy-authorizations` for authorization syntax.

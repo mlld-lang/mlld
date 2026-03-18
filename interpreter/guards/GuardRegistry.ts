@@ -28,6 +28,7 @@ export type PolicyConditionContext = {
     opLabels?: readonly string[];
     labels?: readonly string[];
   };
+  args?: Readonly<Record<string, unknown>>;
   input?: {
     labels?: readonly string[];
     taint?: readonly string[];
@@ -55,6 +56,7 @@ export interface GuardDefinition {
   timing: GuardTiming;
   privileged?: boolean;
   policyCondition?: PolicyConditionFn;
+  policyGuardMode?: 'policy' | 'authorization';
   capturedModuleEnv?: Map<string, Variable>;
 }
 
@@ -69,6 +71,7 @@ export interface SerializedGuardDefinition {
   registrationOrder?: number;
   timing?: GuardTiming;
   privileged?: boolean;
+  policyGuardMode?: 'policy' | 'authorization';
   capturedModuleEnv?: Map<string, Variable>;
 }
 
@@ -212,6 +215,7 @@ export class GuardRegistry {
         registrationOrder: def.registrationOrder ?? registrationOrder,
         timing: def.timing ?? 'before',
         privileged: def.privileged,
+        policyGuardMode: def.policyGuardMode,
         capturedModuleEnv: def.capturedModuleEnv
       };
       this.registerDefinition(copy);
@@ -281,6 +285,7 @@ export class GuardRegistry {
       registrationOrder: def.registrationOrder,
       timing: def.timing,
       privileged: def.privileged,
+      policyGuardMode: def.policyGuardMode,
       capturedModuleEnv: def.capturedModuleEnv
     };
   }
@@ -303,7 +308,8 @@ export class GuardRegistry {
       existing.scope === incoming.scope &&
       existing.modifier === incoming.modifier &&
       existing.timing === (incoming.timing ?? 'before') &&
-      existing.privileged === incoming.privileged
+      existing.privileged === incoming.privileged &&
+      existing.policyGuardMode === incoming.policyGuardMode
     );
   }
 

@@ -5,9 +5,9 @@ brief: Define and import policy objects
 category: config
 parent: policy
 tags: [security, policies, guards]
-related: [security-guards-basics, policy-operations, policy-composition, policy-capabilities, policy-label-flow, policy-auth, auth, box-config]
+related: [security-guards-basics, policy-operations, policy-composition, policy-capabilities, policy-label-flow, policy-auth, policy-authorizations, auth, box-config]
 related-code: [interpreter/eval/policy.ts, interpreter/env/environment-provider.ts]
-updated: 2026-03-16
+updated: 2026-03-18
 qa_tier: 2
 ---
 
@@ -92,6 +92,23 @@ guard before op:run = when [
 `danger: ["@keychain"]` is required for keychain sources declared in `policy.auth`. Standalone top-level `auth` declarations do not require `danger`.
 
 `needs` declarations are module requirement checks. They do not replace capability policy rules.
+
+**`authorizations`** declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. It compiles to internal privileged guards that enforce a default-deny envelope. In the current phase this applies only to `tool:w`, and trusted control-arg metadata comes from the active `var tools` collection via `controlArgs`. Use this for planner-authorized agent execution: the planner produces a JSON fragment containing `authorizations`, and the host injects it via `with { policy }`. Invalid authorization fragments fail closed during activation.
+
+```mlld
+var @taskPolicy = {
+  authorizations: {
+    allow: {
+      send_email: { args: { recipients: ["mark@example.com"] } },
+      create_file: true
+    }
+  }
+}
+
+var @result = @worker(@prompt) with { policy: @taskPolicy }
+```
+
+See `policy-authorizations` for full syntax including control-arg enforcement and validation.
 
 **Export/import:** Share policies across scripts:
 

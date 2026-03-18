@@ -4,8 +4,8 @@ title: Security Getting Started
 brief: Progressive levels of engagement from zero-config to full custom security
 category: security
 tags: [security, onboarding, policy, guards, needs, environments, getting-started]
-related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview]
-updated: 2026-03-16
+related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview, policy-authorizations]
+updated: 2026-03-18
 qa_tier: 2
 ---
 
@@ -124,6 +124,50 @@ Capability denials (e.g., `capabilities.deny`) are hard errors. Managed label-fl
 
 See `guards-basics` for syntax, timing, and security context. See `guard-composition` for ordering rules.
 
+## Level 3b: Task-Scoped Authorization
+
+For planner-worker agent architectures, use `authorizations` to declaratively control which tools a worker can use and with what arguments.
+
+```mlld
+policy @base = {
+  defaults: {
+    rules: ["no-send-to-unknown", "no-destroy-unknown"],
+    unlabeled: "untrusted"
+  },
+  operations: {
+    "exfil:send": ["tool:w:send_email"],
+    "destructive:targeted": ["tool:w:delete_file"]
+  }
+}
+
+>> Planner produces authorization data (JSON, not code)
+var @plannerOutput = @planner(@task) | @parse
+
+>> Worker runs under combined policy
+var @result = @agent(@prompt) with { policy: @plannerOutput }
+```
+
+The planner's output is a JSON fragment like:
+
+```json
+{
+  "authorizations": {
+    "allow": {
+      "send_email": { "args": { "recipients": ["mark@example.com"] } },
+      "create_file": true
+    }
+  }
+}
+```
+
+Tools not listed in `allow` are denied by default. Argument constraints use tolerant comparison (`~=`). Args not mentioned in the constraint are enforced as empty/null at runtime, so silent omission never becomes an open hole. With tool context, `mlld validate` additionally catches unconstrained control args as errors before execution. The host validates planner output before injection.
+
+In phase 1, that tool context comes from the worker's trusted `var tools` collection via `controlArgs`. Invalid authorization fragments fail closed during `with { policy }` activation, so no partial authorization envelope is installed.
+
+Authorization entries generate privileged guards that can override managed label-flow denials for matching calls. `locked: true` on the base policy prevents all overrides.
+
+See `policy-authorizations` for full syntax and control-arg enforcement.
+
 ## Level 4: Full Custom Security with Environments
 
 Combine policies, guards, and environments for complete isolation with credential management.
@@ -186,4 +230,5 @@ See `box-overview` for concepts. See `box-config` for configuration fields. See 
 | 1 | You know what commands your script needs and want to restrict access |
 | 2 | You handle sensitive data and need to control how it flows |
 | 3 | You need runtime inspection, transformation, or graceful denial handling |
-| 4 | You run untrusted code, manage credentials, or orchestrate multiple agents |
+| 3b | You orchestrate agents where a planner authorizes specific tools per task |
+| 4 | You run untrusted code, manage credentials, or need process isolation |

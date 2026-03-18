@@ -120,6 +120,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     const labels = normalizeStringArray(toolValue.labels, toolName, 'labels');
     const expose = normalizeStringArray(toolValue.expose, toolName, 'expose');
     const optional = normalizeStringArray(toolValue.optional, toolName, 'optional');
+    const controlArgs = normalizeStringArray(toolValue.controlArgs, toolName, 'controlArgs');
     const bind = toolValue.bind;
     const boundKeys =
       bind && isPlainObject(bind)
@@ -199,13 +200,27 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       }
     }
 
+    const visibleParams = expose
+      ? expose
+      : paramNames.filter(paramName => !boundKeys.includes(paramName));
+    if (controlArgs) {
+      const visibleSet = new Set(visibleParams);
+      const invalidControlArgs = controlArgs.filter(name => !visibleSet.has(name));
+      if (invalidControlArgs.length > 0) {
+        throw new Error(
+          `Tool '${toolName}' controlArgs must reference visible parameters: ${invalidControlArgs.join(', ')}`
+        );
+      }
+    }
+
     collection[toolName] = {
       mlld: mlldName,
       ...(labels ? { labels } : {}),
       ...(description ? { description } : {}),
       ...(bind ? { bind } : {}),
       ...(expose ? { expose } : {}),
-      ...(optional ? { optional } : {})
+      ...(optional ? { optional } : {}),
+      ...(controlArgs ? { controlArgs } : {})
     };
   }
 
@@ -231,7 +246,7 @@ function resolveToolMlldName(value: unknown, toolName: string): string {
 function normalizeStringArray(
   value: unknown,
   toolName: string,
-  field: 'labels' | 'expose' | 'optional'
+  field: 'labels' | 'expose' | 'optional' | 'controlArgs'
 ): string[] | undefined {
   if (value === undefined) {
     return undefined;

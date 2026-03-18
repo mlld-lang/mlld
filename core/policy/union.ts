@@ -1,4 +1,9 @@
 import { normalizeCommandPatternEntry, parseFsPatternEntry } from './capability-patterns';
+import {
+  mergePolicyAuthorizations,
+  normalizePolicyAuthorizations,
+  type PolicyAuthorizations
+} from './authorizations';
 import type { DataLabel } from '@core/types/security';
 
 export type PolicyLimits = {
@@ -100,6 +105,7 @@ export type PolicyConfig = {
   locked?: boolean;
   defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
+  authorizations?: PolicyAuthorizations;
   auth?: Record<string, AuthConfig>;
   keychain?: PolicyKeychainConfig;
   allow?: Record<string, PolicyCapabilityValue> | string[] | true;
@@ -167,6 +173,10 @@ export function mergePolicyConfigs(
   const keychain = mergePolicyKeychain(normalizedBase.keychain, normalizedIncoming.keychain);
   const defaultStance = mergePolicyDefault(normalizedBase.default, normalizedIncoming.default);
   const defaults = mergePolicyDefaults(normalizedBase.defaults, normalizedIncoming.defaults);
+  const authorizations = mergePolicyAuthorizations(
+    normalizedBase.authorizations,
+    normalizedIncoming.authorizations
+  );
   const envConfig = mergePolicyEnv(normalizedBase.env, normalizedIncoming.env);
   const limits = mergeLimits(normalizedBase.limits, normalizedIncoming.limits);
   const danger = mergePolicyDanger(normalizedBase.danger as string[] | undefined, normalizedIncoming.danger as string[] | undefined);
@@ -176,6 +186,7 @@ export function mergePolicyConfigs(
     ...(locked ? { locked: true } : {}),
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
+    ...(authorizations ? { authorizations } : {}),
     ...(auth ? { auth } : {}),
     ...(keychain ? { keychain } : {}),
     allow: fromAllowShape(mergedAllow),
@@ -233,6 +244,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   const operations = normalizePolicyOperations(config.operations);
   const signers = normalizePolicySigners(config.signers);
   const filesystemIntegrity = normalizePolicyFilesystemIntegrity(config.filesystem_integrity);
+  const authorizations = normalizePolicyAuthorizations(config.authorizations);
   const auth = normalizePolicyAuth(config.auth);
   const keychain = normalizePolicyKeychain(config.keychain);
   const defaultStance = normalizePolicyDefault(config.default);
@@ -244,6 +256,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     ...(config.locked === true ? { locked: true } : {}),
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
+    ...(authorizations ? { authorizations } : {}),
     ...(auth ? { auth } : {}),
     ...(keychain ? { keychain } : {}),
     allow,

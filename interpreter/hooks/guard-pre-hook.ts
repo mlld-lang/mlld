@@ -3,6 +3,10 @@ import type { GuardResult } from '@core/types/guard';
 import type { Variable } from '@core/types/variable';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import {
+  evaluatePolicyAuthorizationDecision,
+  hasToolWriteAuthorizationPolicy
+} from '@core/policy/authorizations';
+import {
   checkLabelFlow,
   checkExplicitLabelFlowRules
 } from '@core/policy/label-flow';
@@ -23,6 +27,7 @@ import {
   collectOperationGuards,
   type PerInputCandidate
 } from './guard-candidate-selection';
+import type { GuardDefinition } from '../guards';
 import { buildOperationSnapshot } from './guard-operation-keys';
 import {
   buildVariablePreview,
@@ -186,6 +191,74 @@ function buildInterpolatedPolicyGuardResult(options: {
   };
 }
 
+function isToolWriteOperation(operation: NonNullable<Parameters<PreHook>[3]>): boolean {
+  const labels = Array.isArray(operation.labels) ? operation.labels : [];
+  return labels.some(label => label === 'tool:w' || label.startsWith('tool:w:'));
+}
+
+function getAuthorizationControlArgs(operation: NonNullable<Parameters<PreHook>[3]>): string[] {
+  const controlArgs = operation.metadata?.authorizationControlArgs;
+  if (!Array.isArray(controlArgs)) {
+    return [];
+  }
+  return controlArgs.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+}
+
+function createAuthorizationGuard(
+  env: Parameters<PreHook>[2],
+  operation: NonNullable<Parameters<PreHook>[3]>
+): GuardDefinition | null {
+  const policy = env.getPolicySummary();
+  if (!policy?.authorizations || !hasToolWriteAuthorizationPolicy(policy.authorizations)) {
+    return null;
+  }
+  if (!operation.name || !isToolWriteOperation(operation)) {
+    return null;
+  }
+
+  const controlArgs = getAuthorizationControlArgs(operation);
+  return {
+    id: '__policy_authorizations__',
+    name: '__policy_authorizations__',
+    filterKind: 'operation',
+    filterValue: 'tool:w',
+    scope: 'perOperation',
+    modifier: 'default',
+    block: {
+      type: 'GuardBlock',
+      nodeId: '__policy_authorizations__',
+      location: null as any,
+      modifier: 'default',
+      rules: []
+    },
+    registrationOrder: Number.MAX_SAFE_INTEGER,
+    timing: 'before',
+    privileged: true,
+    policyGuardMode: policy.locked === true ? 'policy' : 'authorization',
+    policyCondition: ({ args }) => {
+      const decision = evaluatePolicyAuthorizationDecision({
+        authorizations: policy.authorizations!,
+        operationName: operation.name!,
+        args: args ?? {},
+        controlArgs
+      });
+      if (decision.decision === 'allow') {
+        return { decision: 'allow' };
+      }
+      return {
+        decision: 'deny',
+        reason: decision.reason,
+        policyName: getActivePolicyName(env),
+        rule:
+          decision.code === 'unlisted'
+            ? 'policy.authorizations.unlisted'
+            : 'policy.authorizations.args',
+        locked: true
+      };
+    }
+  };
+}
+
 export const guardPreHook: PreHook = async (
   node,
   inputs,
@@ -232,6 +305,10 @@ export const guardPreHook: PreHook = async (
       excludeGuardIds: collectCandidateGuardIds(perInputCandidates),
       includeDataIndexForOperationKeys: variableInputs.length > 0
     });
+    const authorizationGuard = createAuthorizationGuard(env, operation);
+    if (authorizationGuard) {
+      operationGuards.push(authorizationGuard);
+    }
     const policySummary = env.getPolicySummary();
     const hasSyntheticLabelPolicies = Boolean(
       policySummary?.labels && Object.keys(policySummary.labels).length > 0
