@@ -15,7 +15,7 @@ function nonNullResults(results: Array<AstResult | null>): AstResult[] {
 }
 
 describe('ast extractor phase-0 characterization', () => {
-  it('keeps wildcard matching, null placeholders, and output ordering behavior stable', () => {
+  it('keeps wildcard matching, null placeholders, and output ordering behavior stable', async () => {
     const source = [
       'const seed = 1;',
       'function alphaHelper() { return seed; }',
@@ -32,7 +32,7 @@ describe('ast extractor phase-0 characterization', () => {
       { type: 'definition', name: 'create*' }
     ];
 
-    const results = extractAst(source, 'service.ts', patterns);
+    const results = await extractAst(source, 'service.ts', patterns);
     expect(resultNames(results)).toEqual([
       'alphaHelper',
       'betaHelper',
@@ -42,7 +42,7 @@ describe('ast extractor phase-0 characterization', () => {
     ]);
   });
 
-  it('keeps sequence stability and duplicate suppression behavior stable', () => {
+  it('keeps sequence stability and duplicate suppression behavior stable', async () => {
     const source = [
       'function alphaHelper() { return 1; }',
       'function betaHelper() { return 2; }'
@@ -54,11 +54,11 @@ describe('ast extractor phase-0 characterization', () => {
       { type: 'definition', name: 'alphaHelper' }
     ];
 
-    const results = extractAst(source, 'dupes.ts', patterns);
+    const results = await extractAst(source, 'dupes.ts', patterns);
     expect(resultNames(results)).toEqual(['alphaHelper', 'betaHelper']);
   });
 
-  it('keeps containment-pruning behavior stable when container and member are both selected', () => {
+  it('keeps containment-pruning behavior stable when container and member are both selected', async () => {
     const source = [
       'class Service {',
       '  create() {',
@@ -67,7 +67,7 @@ describe('ast extractor phase-0 characterization', () => {
       '}'
     ].join('\n');
 
-    const results = extractAst(source, 'containment.ts', [
+    const results = await extractAst(source, 'containment.ts', [
       { type: 'definition', name: 'create' },
       { type: 'definition', name: 'Service' }
     ]);
@@ -75,7 +75,7 @@ describe('ast extractor phase-0 characterization', () => {
     expect(resultNames(results)).toEqual(['Service']);
   });
 
-  it('keeps usage-pattern behavior stable for wildcard, legacy usage, and type-filter usage', () => {
+  it('keeps usage-pattern behavior stable for wildcard, legacy usage, and type-filter usage', async () => {
     const source = [
       'const seed = 1;',
       'function readSeed() { return seed; }',
@@ -86,23 +86,23 @@ describe('ast extractor phase-0 characterization', () => {
       'function unrelated() { return 0; }'
     ].join('\n');
 
-    const wildcardUsageResults = extractAst(source, 'usage.ts', [
+    const wildcardUsageResults = await extractAst(source, 'usage.ts', [
       { type: 'definition', name: 'read*', usage: true }
     ]);
     expect(resultNames(wildcardUsageResults)).toEqual(['compute', 'buildRequest']);
 
-    const legacyUsageResults = extractAst(source, 'usage.ts', [
+    const legacyUsageResults = await extractAst(source, 'usage.ts', [
       { type: 'usage', name: 'readSeed' }
     ]);
     expect(resultNames(legacyUsageResults)).toEqual(['compute', 'buildRequest']);
 
-    const typeFilterUsageResults = extractAst(source, 'usage.ts', [
+    const typeFilterUsageResults = await extractAst(source, 'usage.ts', [
       { type: 'type-filter', filter: 'var', usage: true }
     ]);
     expect(resultNames(typeFilterUsageResults)).toEqual(['readSeed']);
   });
 
-  it('keeps type-filter and extractNames behavior stable', () => {
+  it('keeps type-filter and extractNames behavior stable', async () => {
     const source = [
       'const seed = 1;',
       'function topLevel() { return seed; }',
@@ -112,12 +112,12 @@ describe('ast extractor phase-0 characterization', () => {
       'interface Shape { id: string; }'
     ].join('\n');
 
-    const fnResults = extractAst(source, 'types.ts', [
+    const fnResults = await extractAst(source, 'types.ts', [
       { type: 'type-filter', filter: 'fn' }
     ]);
     expect(resultNames(fnResults)).toEqual(['topLevel', 'methodOne']);
 
-    const allResults = extractAst(source, 'types.ts', [
+    const allResults = await extractAst(source, 'types.ts', [
       { type: 'type-filter-all' }
     ]);
     expect(resultNames(allResults)).toEqual([
@@ -127,14 +127,14 @@ describe('ast extractor phase-0 characterization', () => {
       'Shape'
     ]);
 
-    const topLevelNames = extractNames(source, 'types.ts');
+    const topLevelNames = await extractNames(source, 'types.ts');
     expect(topLevelNames).toEqual(['Service', 'Shape', 'seed', 'topLevel']);
 
-    const functionNames = extractNames(source, 'types.ts', 'fn');
+    const functionNames = await extractNames(source, 'types.ts', 'fn');
     expect(functionNames).toEqual(['methodOne', 'topLevel']);
   });
 
-  it('keeps extension-based extractor routing stable for representative languages', () => {
+  it('keeps extension-based extractor routing stable for representative languages', async () => {
     const cases: Array<{
       filePath: string;
       source: string;
@@ -198,7 +198,7 @@ describe('ast extractor phase-0 characterization', () => {
     ];
 
     for (const testCase of cases) {
-      const results = extractAst(testCase.source, testCase.filePath, [
+      const results = await extractAst(testCase.source, testCase.filePath, [
         { type: 'definition', name: testCase.symbol }
       ]);
       const extracted = nonNullResults(results);

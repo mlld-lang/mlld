@@ -44,8 +44,8 @@ const AST_EXTRACTOR_REGISTRY: AstExtractorRegistry = {
   csharp: extractCSharpDefinitions
 };
 
-export function extractAst(content: string, filePath: string, patterns: AstPattern[]): Array<AstResult | null> {
-  const definitions = extractDefinitionsForFile(content, filePath, AST_EXTRACTOR_REGISTRY);
+export async function extractAst(content: string, filePath: string, patterns: AstPattern[]): Promise<Array<AstResult | null>> {
+  const definitions = await extractDefinitionsForFile(content, filePath, AST_EXTRACTOR_REGISTRY);
   return evaluatePatternResults(definitions, patterns);
 }
 
@@ -53,8 +53,8 @@ export function extractAst(content: string, filePath: string, patterns: AstPatte
  * Extract definition names from a file (for name-list patterns: ??, fn??, etc.)
  * Returns an array of definition names as strings
  */
-export function extractNames(content: string, filePath: string, filter?: string): string[] {
-  const definitions = extractDefinitionsForFile(content, filePath, AST_EXTRACTOR_REGISTRY);
+export async function extractNames(content: string, filePath: string, filter?: string): Promise<string[]> {
+  const definitions = await extractDefinitionsForFile(content, filePath, AST_EXTRACTOR_REGISTRY);
 
   const filtered: Definition[] = filter
     ? definitions.filter(definition => matchesTypeFilter(definition.type, filter))

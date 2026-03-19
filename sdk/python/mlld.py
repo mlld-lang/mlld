@@ -1049,7 +1049,10 @@ class Client:
         buf = ""
         try:
             while True:
-                line = process.stdout.readline()
+                try:
+                    line = process.stdout.readline()
+                except ValueError:
+                    break
                 if line == "":
                     break
 
@@ -1104,8 +1107,11 @@ class Client:
         if process is None or process.stderr is None:
             return
 
-        for line in process.stderr:
-            self._stderr_lines.append(line)
+        try:
+            for line in process.stderr:
+                self._stderr_lines.append(line)
+        except ValueError:
+            pass
 
     def _fail_all_pending(self, error: MlldError) -> None:
         with self._lock:

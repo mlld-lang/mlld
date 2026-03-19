@@ -8,7 +8,7 @@ function onlyResult(results: Array<{ name: string; type: string } | null>): { na
 }
 
 describe('ast extractor language group C (C/C++)', () => {
-  it('keeps class context, out-of-class method parsing, and enum/variable extraction stable', () => {
+  it('keeps class context, out-of-class method parsing, and enum/variable extraction stable', async () => {
     const source = [
       'class Widget {',
       'public:',
@@ -27,24 +27,24 @@ describe('ast extractor language group C (C/C++)', () => {
       'static int globalCount = 3;'
     ].join('\n');
 
-    const classMatch = onlyResult(extractAst(source, 'widget.cpp', [{ type: 'definition', name: 'Widget' }]));
+    const classMatch = onlyResult(await extractAst(source, 'widget.cpp', [{ type: 'definition', name: 'Widget' }]));
     expect(classMatch.type).toBe('class');
 
-    const methodMatch = onlyResult(extractAst(source, 'widget.cpp', [{ type: 'definition', name: 'compute' }]));
+    const methodMatch = onlyResult(await extractAst(source, 'widget.cpp', [{ type: 'definition', name: 'compute' }]));
     expect(methodMatch.type).toBe('method');
 
-    const enumMatch = onlyResult(extractAst(source, 'widget.cpp', [{ type: 'definition', name: 'Kind' }]));
+    const enumMatch = onlyResult(await extractAst(source, 'widget.cpp', [{ type: 'definition', name: 'Kind' }]));
     expect(enumMatch.type).toBe('enum');
 
-    const variableMatch = onlyResult(extractAst(source, 'widget.cpp', [{ type: 'definition', name: 'globalCount' }]));
+    const variableMatch = onlyResult(await extractAst(source, 'widget.cpp', [{ type: 'definition', name: 'globalCount' }]));
     expect(variableMatch.type).toBe('variable');
 
-    const usageMatch = onlyResult(extractAst(source, 'widget.cpp', [{ type: 'definition', name: 'helper', usage: true }]));
+    const usageMatch = onlyResult(await extractAst(source, 'widget.cpp', [{ type: 'definition', name: 'helper', usage: true }]));
     expect(usageMatch.name).toBe('compute');
     expect(usageMatch.type).toBe('method');
   });
 
-  it('keeps comment stripping, false-positive guards, and multiline signature parsing stable', () => {
+  it('keeps comment stripping, false-positive guards, and multiline signature parsing stable', async () => {
     const source = [
       '/*',
       'int fake_from_comment() { return 0; }',
@@ -65,13 +65,13 @@ describe('ast extractor language group C (C/C++)', () => {
       '}'
     ].join('\n');
 
-    const functionMatch = onlyResult(extractAst(source, 'free.cpp', [{ type: 'definition', name: 'free_func' }]));
+    const functionMatch = onlyResult(await extractAst(source, 'free.cpp', [{ type: 'definition', name: 'free_func' }]));
     expect(functionMatch.type).toBe('function');
 
-    const commentMatch = extractAst(source, 'free.cpp', [{ type: 'definition', name: 'fake_from_comment' }]);
+    const commentMatch = await extractAst(source, 'free.cpp', [{ type: 'definition', name: 'fake_from_comment' }]);
     expect(commentMatch).toEqual([null]);
 
-    const keywordMatch = extractAst(source, 'free.cpp', [{ type: 'definition', name: 'if' }]);
+    const keywordMatch = await extractAst(source, 'free.cpp', [{ type: 'definition', name: 'if' }]);
     expect(keywordMatch).toEqual([null]);
   });
 });

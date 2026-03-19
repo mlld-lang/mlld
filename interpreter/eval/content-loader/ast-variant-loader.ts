@@ -43,7 +43,7 @@ export class AstVariantLoader {
       for (const filePath of matches) {
         try {
           const content = await this.transport.readContent(filePath, context.sourceLocation);
-          const names = extractNames(content, filePath, context.filter);
+          const names = await extractNames(content, filePath, context.filter);
           if (names.length > 0) {
             results.push({
               names,
@@ -63,7 +63,7 @@ export class AstVariantLoader {
     }
 
     const content = await this.transport.readContent(context.source, context.sourceLocation);
-    return extractNames(content, context.source, context.filter);
+    return await extractNames(content, context.source, context.filter);
   }
 
   async loadContent(
@@ -76,7 +76,7 @@ export class AstVariantLoader {
         try {
           const relativePath = this.transport.formatRelativePath(filePath);
           const content = await this.transport.readContent(filePath, context.sourceLocation);
-          const extracted = extractAst(content, filePath, context.patterns);
+          const extracted = await extractAst(content, filePath, context.patterns);
           aggregated.push(
             ...this.mapAstResultsWithMetadata(extracted, {
               file: filePath,
@@ -94,7 +94,7 @@ export class AstVariantLoader {
     }
 
     const content = await this.transport.readContent(context.source, context.sourceLocation);
-    return this.mapAstResultsWithMetadata(extractAst(content, context.source, context.patterns));
+    return this.mapAstResultsWithMetadata(await extractAst(content, context.source, context.patterns));
   }
 
   private mapAstResultsWithMetadata(

@@ -307,19 +307,22 @@ ${code}
         emitChunk(text, 'stderr');
       });
 
-      child.on('error', (err) => {
+      child.on('error', (err: NodeJS.ErrnoException) => {
         if (settled) return;
         settled = true;
         const duration = Date.now() - startTime;
         fs.promises.unlink(tmpFile).catch(() => {});
+        const message = err.code === 'ENOENT'
+          ? 'Node.js is not installed or not in PATH. Install it to use node { } blocks: https://nodejs.org'
+          : `Node.js execution failed: ${err.message}`;
         reject(
           new MlldCommandExecutionError(
-            `Node.js execution failed: ${err.message}`,
+            message,
             context?.sourceLocation,
             {
               command: 'node',
               exitCode: 1,
-              stderr: err.message,
+              stderr: message,
               duration,
               workingDirectory: workingDirectory || this.workingDirectory,
               directiveType: context?.directiveType || 'exec',

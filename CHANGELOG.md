@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Guard and managed policy label-flow denials now surface as structured SDK observability data. Streamed executions emit immediate `guard_denial` events, structured execute results collect `denials`, and the live stdio / Python / Ruby / Go / Rust / Elixir SDK layers now preserve that payload without string parsing.
 
 ### Fixed
+- TypeScript AST extractor is now lazy-loaded, so `npm install -g mlld` no longer requires a globally installed `typescript` package. The `typescript` module is only imported when extracting definitions from `.ts` files.
+- Python package resolver no longer eagerly detects pip/uv during environment bootstrap. Detection is deferred until a `@py/` or `@python/` import is actually resolved, so scripts that don't use Python imports work without Python installed.
+- `py { }`, `bash { }`, and `node { }` blocks now show actionable error messages when the required binary is missing (e.g. "Python 3 is not installed. Install it to use py { } blocks") instead of the raw `spawn ENOENT` error.
 - Logical `||` now preserves normal boolean semantics for ordinary exec/method-call expressions such as `@model.includes(...) || ...` instead of misrouting them through parallel exec handling. Explicit streamed chains (`stream @a() || stream @b()`) still run in parallel, and longer streamed chains now include every operand.
 - Truthiness evaluation now fails closed when it receives error-like payloads from runtime evaluation or parallel-loop error markers, preventing `when`, `&&`, `||`, `!`, and ternary conditions from accidentally treating errors as truthy values.
 - Standalone executable invocation (`@fn(...)` / `/run @fn(...)`) now preserves per-argument security descriptors through the `runExec` dispatcher, so callee parameters keep labels for both bare variable arguments and inline object/array literals instead of dropping `mx.labels` at the exe boundary.

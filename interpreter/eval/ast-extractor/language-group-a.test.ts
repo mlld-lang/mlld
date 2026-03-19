@@ -8,7 +8,7 @@ function onlyResult(results: Array<{ name: string; type: string } | null>): { na
 }
 
 describe('ast extractor language group A (TS/Python/Ruby)', () => {
-  it('keeps TypeScript nested member extraction and usage matching stable', () => {
+  it('keeps TypeScript nested member extraction and usage matching stable', async () => {
     const source = [
       'const seed = 1;',
       'function helper() { return seed; }',
@@ -17,15 +17,15 @@ describe('ast extractor language group A (TS/Python/Ruby)', () => {
       '}'
     ].join('\n');
 
-    const methodMatch = onlyResult(extractAst(source, 'service.ts', [{ type: 'definition', name: 'build' }]));
+    const methodMatch = onlyResult(await extractAst(source, 'service.ts', [{ type: 'definition', name: 'build' }]));
     expect(methodMatch.type).toBe('method');
 
-    const usageMatch = onlyResult(extractAst(source, 'service.ts', [{ type: 'definition', name: 'helper', usage: true }]));
+    const usageMatch = onlyResult(await extractAst(source, 'service.ts', [{ type: 'definition', name: 'helper', usage: true }]));
     expect(usageMatch.name).toBe('build');
     expect(usageMatch.type).toBe('method');
   });
 
-  it('keeps Python class/method extraction and usage matching stable', () => {
+  it('keeps Python class/method extraction and usage matching stable', async () => {
     const source = [
       'class Service:',
       '    def process(self):',
@@ -37,18 +37,18 @@ describe('ast extractor language group A (TS/Python/Ruby)', () => {
       'counter = 1'
     ].join('\n');
 
-    const classMatch = onlyResult(extractAst(source, 'service.py', [{ type: 'definition', name: 'Service' }]));
+    const classMatch = onlyResult(await extractAst(source, 'service.py', [{ type: 'definition', name: 'Service' }]));
     expect(classMatch.type).toBe('class');
 
-    const methodMatch = onlyResult(extractAst(source, 'service.py', [{ type: 'definition', name: 'process' }]));
+    const methodMatch = onlyResult(await extractAst(source, 'service.py', [{ type: 'definition', name: 'process' }]));
     expect(methodMatch.type).toBe('method');
 
-    const usageMatch = onlyResult(extractAst(source, 'service.py', [{ type: 'definition', name: 'helper', usage: true }]));
+    const usageMatch = onlyResult(await extractAst(source, 'service.py', [{ type: 'definition', name: 'helper', usage: true }]));
     expect(usageMatch.name).toBe('process');
     expect(usageMatch.type).toBe('method');
   });
 
-  it('keeps Ruby module/class qualification and method usage matching stable', () => {
+  it('keeps Ruby module/class qualification and method usage matching stable', async () => {
     const source = [
       'module Billing',
       '  class Service',
@@ -63,10 +63,10 @@ describe('ast extractor language group A (TS/Python/Ruby)', () => {
       'end'
     ].join('\n');
 
-    const classMatch = onlyResult(extractAst(source, 'service.rb', [{ type: 'definition', name: 'Billing::Service' }]));
+    const classMatch = onlyResult(await extractAst(source, 'service.rb', [{ type: 'definition', name: 'Billing::Service' }]));
     expect(classMatch.type).toBe('class');
 
-    const usageMatch = onlyResult(extractAst(source, 'service.rb', [{ type: 'definition', name: 'calculate_total', usage: true }]));
+    const usageMatch = onlyResult(await extractAst(source, 'service.rb', [{ type: 'definition', name: 'calculate_total', usage: true }]));
     expect(usageMatch.name).toBe('build_invoice');
     expect(usageMatch.type).toBe('method');
   });

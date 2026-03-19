@@ -28,7 +28,7 @@ describe('ast extractor language dispatch', () => {
     }
   });
 
-  it('routes to the resolved extractor with content and file path', () => {
+  it('routes to the resolved extractor with content and file path', async () => {
     const calls: Array<{ key: string; filePath: string; content: string }> = [];
     const makeExtractor = (key: string) => vi.fn((content: string, filePath: string) => {
       calls.push({ key, content, filePath });
@@ -47,9 +47,9 @@ describe('ast extractor language dispatch', () => {
       csharp: makeExtractor('csharp')
     };
 
-    extractDefinitionsForFile('content-a', 'alpha.py', registry);
-    extractDefinitionsForFile('content-b', 'beta.go', registry);
-    extractDefinitionsForFile('content-c', 'gamma.txt', registry);
+    await extractDefinitionsForFile('content-a', 'alpha.py', registry);
+    await extractDefinitionsForFile('content-b', 'beta.go', registry);
+    await extractDefinitionsForFile('content-c', 'gamma.txt', registry);
 
     expect(calls).toEqual([
       { key: 'python', content: 'content-a', filePath: 'alpha.py' },
