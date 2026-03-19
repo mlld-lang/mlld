@@ -6,7 +6,7 @@ brief: Label exe functions with risk categories for policy enforcement
 category: config
 parent: policy
 tags: [labels, operations, exfil, destructive, privileged, security]
-related: [labels-sensitivity, labels-trust, security-guards-basics]
+related: [labels-sensitivity, labels-trust, security-guards-basics, policy-authorizations]
 related-code: [core/policy/label-flow.ts, core/policy/builtin-rules.ts]
 updated: 2026-03-16
 ---
@@ -64,6 +64,8 @@ exe destructive @deleteFile(path) = run cmd { rm -rf "@path" }
 ```
 
 This is simpler but couples exe definitions to risk categories. The two-step pattern is preferred for maintainability.
+
+See `policy-authorizations` for how operations interact with per-tool authorization and control-arg enforcement.
 
 **Complete example:**
 

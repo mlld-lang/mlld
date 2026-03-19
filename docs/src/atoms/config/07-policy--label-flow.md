@@ -5,7 +5,7 @@ brief: Deny/allow rules controlling which data labels can flow to which operatio
 category: config
 parent: policy
 tags: [policy, labels, deny, allow, flow, prefix-matching]
-related: [labels-sensitivity, labels-source-auto, policy-capabilities, security-policies, policy-composition]
+related: [labels-sensitivity, labels-source-auto, policy-capabilities, security-policies, policy-composition, policy-authorizations]
 related-code: [interpreter/eval/policy.ts, core/security/taint.ts]
 updated: 2026-02-09
 qa_tier: 2
@@ -55,5 +55,7 @@ show @customerList
 ```
 
 Error: `Label 'secret' cannot flow to 'op:show'` -- the policy blocks secret-labeled data from reaching show.
+
+For per-tool authorization with argument constraints (rather than label-flow rules), see `policy-authorizations`.
 
 See `labels-sensitivity` for declaring labels, `labels-source-auto` for source label rules.
