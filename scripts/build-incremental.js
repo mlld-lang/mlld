@@ -283,6 +283,20 @@ function checkGrammar(lastBuildTime, dirtyFiles) {
     return true;
   }
 
+  // Dirty-file checks miss clean git pulls and fresh checkouts. Fall back to
+  // direct output-vs-source freshness checks so generated parsers cannot lag
+  // behind tracked grammar sources.
+  const grammarInputs = globSync('grammar/**/*.{peggy,ts,mjs}', {
+    ignore: ['grammar/generated/**', '**/*.test.*']
+  });
+  for (const output of grammarOutputs) {
+    const staleInput = findNewerInputThanOutput(output, grammarInputs);
+    if (staleInput) {
+      console.log(`${cyan}  Grammar:${reset} ${output} older than ${staleInput}`);
+      return true;
+    }
+  }
+
   return false;
 }
 

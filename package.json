@@ -111,7 +111,7 @@
   },
   "homepage": "https://github.com/mlld-lang/mlld#readme",
   "dependencies": {
-    "@disreguard/sig": "^0.3.0",
+    "@disreguard/sig": "^0.4.0",
     "@mozilla/readability": "^0.6.0",
     "@octokit/rest": "^22.0.0",
     "@types/js-yaml": "^4.0.9",
